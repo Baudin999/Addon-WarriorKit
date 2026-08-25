@@ -246,6 +246,16 @@ function Region:SetAllPoints(other)
 	self.points = { { "TOPLEFT", self.allPoints, "TOPLEFT", 0, 0 },
 		{ "BOTTOMRIGHT", self.allPoints, "BOTTOMRIGHT", 0, 0 } }
 end
+-- Stored rather than swallowed by the metatable, because a secure button's
+-- macro is written as an attribute and reading it back is the only way to
+-- assert what a key press would actually send.
+function Region:SetAttribute(key, value)
+	self.attributes = self.attributes or {}
+	self.attributes[key] = value
+end
+function Region:GetAttribute(key)
+	return self.attributes and self.attributes[key]
+end
 function Region:IsProtected() return false end
 function Region:SetShown(v) self.shown = v and true or false end
 -- Recorded rather than swallowed by the metatable above, because which bar is
@@ -348,14 +358,69 @@ _G.GetSpellTexture = function(id) return "Interface\\Icons\\A" .. id end
 _G.GetSpellCooldown = function() return 0, 0 end
 _G.IsUsableSpell, _G.IsSpellInRange, _G.IsSpellKnown = constant(true), constant(1), constant(true)
 _G.GetNumSpellTabs = constant(0)
-_G.GetInventoryItemLink, _G.GetItemInfo, _G.GetItemInfoInstant = constant(nil), constant(nil), constant(nil)
-_G.GetContainerNumSlots, _G.GetContainerItemLink = constant(0), constant(nil)
+-- Three items in the backpack and empty hands. Enough for the gear scan to
+-- have something to offer, and chosen so all three rules it enforces are
+-- reachable: a main hander, a shield, and a two hander that must keep the
+-- off hand line out of a stance macro.
+local ITEMS = {
+	["Bloodspiller"]    = { equip = "INVTYPE_WEAPONMAINHAND", icon = "Interface\\Icons\\Sword" },
+	["Aegis"]           = { equip = "INVTYPE_SHIELD", icon = "Interface\\Icons\\Shield" },
+	["Arcanite Reaper"] = { equip = "INVTYPE_2HWEAPON", icon = "Interface\\Icons\\Axe" },
+}
+local BAG = { "Bloodspiller", "Aegis", "Arcanite Reaper" }
+
+local function itemLink(name)
+	return ("|cffff8000|Hitem:1::::::::60:::::|h[%s]|h|r"):format(name)
+end
+_G.WarriorKitItemLink = itemLink
+
+_G.GetInventoryItemLink, _G.GetItemInfo = constant(nil), constant(nil)
+-- The fourth and fifth returns are the two ns.ItemInfo reads, the equip
+-- location and the icon.
+_G.GetItemInfoInstant = function(link)
+	local name = type(link) == "string" and link:match("%\[(.-)%\]")
+	local item = name and ITEMS[name]
+	if not item then
+		return nil
+	end
+	return 1, name, nil, item.equip, item.icon
+end
+_G.GetContainerNumSlots = function(bag) return bag == 0 and #BAG or 0 end
+_G.GetContainerItemLink = function(bag, slot)
+	return bag == 0 and BAG[slot] and itemLink(BAG[slot]) or nil
+end
 _G.GetCursorInfo, _G.ClearCursor = constant(nil), function() end
+_G.CursorHasItem = constant(false)
+-- id and the empty-slot art, the two the gear slots read. The path is shaped
+-- like the client's so a slot that draws it can be told from one that does not.
+_G.GetInventorySlotInfo = function(name)
+	return 16, "Interface\\PaperDoll\\UI-PaperDoll-Slot-" .. tostring(name)
+end
 _G.HasAction, _G.GetActionInfo, _G.GetBonusBarOffset = constant(false), constant(nil), constant(0)
 _G.GetMacroIndexByName, _G.GetMacroInfo = constant(0), constant(nil)
 _G.GetNumMacros = function() return 0, 0 end
-_G.RegisterStateDriver, _G.ClearOverrideBindings = function() end, function() end
-_G.SetOverrideBindingClick, _G.GetBindingAction = constant(true), constant("")
+_G.RegisterStateDriver = function() end
+-- The override layer, modelled rather than accepted. Every part that takes a
+-- key reads GetBindingAction back afterwards rather than believing its own
+-- SetOverrideBindingClick, because a client that takes the call and does
+-- nothing with it leaves no other trace. A stub that answered "" to every
+-- readback would make all three of them report a client that refused the key.
+local overrides = {}
+_G.ClearOverrideBindings = function(owner)
+	for key, held in pairs(overrides) do
+		if held.owner == owner then
+			overrides[key] = nil
+		end
+	end
+end
+_G.SetOverrideBindingClick = function(owner, _, key, name, suffix)
+	overrides[key] = { owner = owner, action = ("CLICK %s:%s"):format(name, suffix) }
+	return true
+end
+_G.GetBindingAction = function(key, checkOverride)
+	local held = checkOverride and overrides[key]
+	return held and held.action or ""
+end
 _G.IsControlKeyDown, _G.IsShiftKeyDown, _G.IsAltKeyDown = constant(false), constant(false), constant(false)
 _G.GetShapeshiftForm = constant(1)
 _G.UISpecialFrames, _G.SlashCmdList, _G.Enum = {}, {}, {}
@@ -1033,6 +1098,91 @@ do
 		fire("DISPLAY_SIZE_CHANGED")
 	end
 end
+
+--------------------------------------------------------------------------
+-- Stance dancing
+--
+-- The macro is the whole feature. Everything else in this part is a panel row
+-- or an override binding, and what a key press actually sends is one string on
+-- one attribute, so that string is what is asserted: the lines, their order,
+-- the two rules that drop a line, and the fight that defers the lot.
+--
+-- What this cannot prove: that the client runs two /equipslot lines off one
+-- press, or what it does with a full bag when a two hander comes off. Nothing
+-- installed on either client calls /equipslot, so those two answers are a key
+-- press in game and nothing else.
+--------------------------------------------------------------------------
+
+local function StanceMacro(key)
+	return _G[ns.Stances.Entry(key).button]:GetAttribute("macrotext") or ""
+end
+
+local link = _G.WarriorKitItemLink
+
+ns.Stances.SetItem("defensive", ns.Gear.MAINHAND, link("Bloodspiller"))
+ns.Stances.SetItem("defensive", ns.Gear.OFFHAND, link("Aegis"))
+
+-- Main hand before off hand, because going from a two hander to a one hander
+-- and a shield the first line is what frees the hand the second one needs.
+check(StanceMacro("defensive") == table.concat({
+	"/cast [nostance:2] " .. ns.Stance.Name(2),
+	"/equipslot 16 Bloodspiller",
+	"/equipslot 17 Aegis",
+}, "\n"), "the defensive macro is not the three lines in order:\n" .. StanceMacro("defensive"))
+
+-- A shield is not a main hand and a two hander is not an off hand. Both are
+-- refused with a reason rather than saved and left to fail as a macro line.
+check(ns.Stances.SetItem("battle", ns.Gear.MAINHAND, link("Aegis")) == nil,
+	"a shield was accepted into the main hand")
+check(ns.Stances.SetItem("battle", ns.Gear.OFFHAND, link("Arcanite Reaper")) == nil,
+	"a two hander was accepted into the off hand")
+
+-- A two hander in the main hand takes the off hand line out, whatever is saved
+-- in that slot, because both hands are already spoken for.
+ns.Stances.SetItem("battle", ns.Gear.OFFHAND, link("Aegis"))
+ns.Stances.SetItem("battle", ns.Gear.MAINHAND, link("Arcanite Reaper"))
+check(not StanceMacro("battle"):find("equipslot 17", 1, true),
+	"a two hander left the off hand line in the macro:\n" .. StanceMacro("battle"))
+
+-- The combat rule is a conditional on the equip lines and nothing else. The
+-- stance still swaps mid fight; only the hands wait.
+ns.dbc.stanceSwapCombat = false
+ns.Stances.Apply()
+check(StanceMacro("defensive") == table.concat({
+	"/cast [nostance:2] " .. ns.Stance.Name(2),
+	"/equipslot [nocombat] 16 Bloodspiller",
+	"/equipslot [nocombat] 17 Aegis",
+}, "\n"), "the combat rule did not reach both equip lines:\n" .. StanceMacro("defensive"))
+ns.dbc.stanceSwapCombat = true
+ns.Stances.Apply()
+
+-- One key cannot be two stances. The second claim is refused, and refused
+-- without taking the key off the first, because two stances on one key is the
+-- mistake the panel cannot show you afterwards.
+check(ns.Stances.Bind("battle", "SHIFT-1") ~= nil, "the client would not take SHIFT-1")
+check(ns.Stances.Bind("defensive", "SHIFT-1") == nil,
+	"two stances were allowed to claim SHIFT-1")
+check(ns.Stances.Describe("battle") == "SHIFT-1",
+	"a refused claim moved the key off the stance that already held it")
+
+-- An attribute cannot be written under lockdown, so a loadout changed in a
+-- fight is held and written when the fight ends. Both halves are asserted,
+-- because a part that only did the first would silently lose the change.
+do
+	local realLockdown = _G.InCombatLockdown
+	_G.InCombatLockdown = function() return true end
+	ns.Stances.SetItem("berserker", ns.Gear.MAINHAND, link("Bloodspiller"))
+	check(not StanceMacro("berserker"):find("Bloodspiller", 1, true),
+		"a secure macro was rewritten in combat")
+	_G.InCombatLockdown = realLockdown
+	fire("PLAYER_REGEN_ENABLED")
+	check(StanceMacro("berserker"):find("Bloodspiller", 1, true) ~= nil,
+		"the loadout changed in combat never landed after it:\n" .. StanceMacro("berserker"))
+end
+
+print(("stance %d keys, defensive sends %d lines in %d characters")
+	:format(3, select(2, StanceMacro("defensive"):gsub("\n", "")) + 1,
+		#StanceMacro("defensive")))
 
 if failures > 0 then
 	print(("harness: %d failed"):format(failures))

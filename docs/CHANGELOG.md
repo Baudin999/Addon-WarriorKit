@@ -1,5 +1,67 @@
 # Changelog
 
+## 1.6
+
+Stance dancing. One key per stance, and per stance a pair of weapons.
+
+A press puts you in the stance and puts that stance's main hand and off hand in
+your hands, off one hardware event, out of one macro:
+
+    /cast [nostance:2] Defensive Stance
+    /equipslot 16 Bloodspiller
+    /equipslot 17 Aegis of the Blood God
+
+Nothing in the part calls `EquipItemByName`. Equipping during a fight is
+something ordinary Lua may not do, and an `/equipslot` line off a key press is
+the path that is allowed to, so all three stances are secure buttons carrying
+`macrotext`, the shape `Targeting/Switch.lua` already had.
+
+The macro is written out of combat and left alone. Nothing rewrites it on the
+press, so a key works in a fight for the same reason the charge button's in
+combat half does: every decision the press makes is a macro conditional, not a
+decision the addon makes while lockdown is up. Changing a loadout mid fight is
+the one thing that waits, and it waits until PLAYER_REGEN_ENABLED rather than
+being lost. The harness asserts both halves.
+
+The main hand line is written before the off hand line, and the order is the
+feature. Going from a two hander to a one hander and a shield, the first line is
+what frees the hand the second one needs. A two hander in the main hand takes
+the off hand line out of the macro entirely, because both hands are already
+spoken for and an `/equipslot 17` under one would take the two hander back off.
+A blank slot means leave that hand alone: there is no `/equipslot` for an empty
+hand, so a loadout cannot strip a shield, and the panel says so rather than
+leaving you to work it out.
+
+Swaps fire in combat by default, swing timer reset and all, because that is most
+of the point of dancing. `stance combat off` puts a `nocombat` conditional on
+every equip line and leaves the stance change alone.
+
+Weapons are dragged in rather than typed. `kit.ItemSlot` is a new widget in the
+UI layer: an item slot in the addon's own box, drawn with the client's
+empty-slot art asked for by slot name rather than by texture path, that takes a
+drop and clears on a right click. It knows nothing about inventory slots or
+shields. The rule that a shield does not go in a main hand lives in
+`Core/Gear.lua`, which is `Charge/Weapons.lua` promoted to the shared layer:
+one hand was one part's private knowledge, two hands is not.
+
+`Core/Stance.lua` is the same move for the three stance spells and their
+localised names, which the charge macro and the stance macros both bake in and
+could otherwise disagree about.
+
+The harness grew a client to test against. Secure attributes are stored rather
+than swallowed, so a macro can be read back; the override binding layer is
+modelled, so the readback every part does after taking a key is answering
+something rather than reporting a refusal; and there are three items in the
+stub's backpack, so the gear scan has something to find. Eight assertions on the
+macro itself: the lines, their order, the two rules that drop a line, the
+combat conditional, the refused second claim on one key, and the loadout changed
+in combat that has to land after it.
+
+What the harness cannot settle, and only a key press in game can: whether the
+client runs two `/equipslot` lines off one press, and what it does when a two
+hander comes off into a full bag. Nothing installed on either client calls
+`/equipslot`, so there is nothing to read that would answer either.
+
 ## 1.5
 
 A drawing layer, `UI/`, and everything the addon draws rebuilt on it. Eight

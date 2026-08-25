@@ -77,7 +77,7 @@ local function MacroText(unit)
 	-- would otherwise reset your swing timer for nothing.
 	local weapon = ns.db.chargeWeapon
 	if weapon and weapon ~= "" then
-		lines[#lines + 1] = ("/equipslot [nocombat] %d %s"):format(ns.ChargeWeapons.SLOT, weapon)
+		lines[#lines + 1] = ("/equipslot [nocombat] %d %s"):format(ns.Gear.MAINHAND, weapon)
 	end
 	lines[#lines + 1] = "/startattack"
 

@@ -267,17 +267,17 @@ ns.Register({
 				ns.db.chargeWeapon = value
 				ApplyChargeChange()
 			end,
-			function() return ns.ChargeWeapons.List(ns.db.chargeWeapon) end)
+			function() return ns.Gear.List(ns.Gear.MAINHAND, ns.db.chargeWeapon, "|cff909090no weapon swap|r") end)
 		ui.Note(function()
 			if ns.db.chargeWeapon == "" then
 				return "The macro carries no /equipslot line. Pick a weapon and a charge draws it first."
 			end
-			if not ns.ChargeWeapons.Carried(ns.db.chargeWeapon) then
+			if not ns.Gear.Held(ns.Gear.MAINHAND, ns.db.chargeWeapon) then
 				return ("|cffd08040%s is not in your bags, so the swap does nothing until it is.|r")
 					:format(ns.db.chargeWeapon)
 			end
 			return ("A charge equips %s into slot %d first, out of combat only, so a press mid-fight cannot reset your swing timer.")
-				:format(ns.db.chargeWeapon, ns.ChargeWeapons.SLOT)
+				:format(ns.db.chargeWeapon, ns.Gear.MAINHAND)
 		end)
 	end,
 })

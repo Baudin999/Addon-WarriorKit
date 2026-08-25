@@ -19,6 +19,10 @@ globals = {
 	"WarriorKitOptions",
 	"WarriorKitChargeButton",
 	"WarriorKitSwitchButton",
+	-- one per stance, each a secure button carrying that stance's macro
+	"WarriorKitStanceBattleButton",
+	"WarriorKitStanceDefensiveButton",
+	"WarriorKitStanceBerserkerButton",
 	"WarriorKitChargeCooldown",
 	"WarriorKitChargeMarker",
 	"WarriorKitChargeMarkerCooldown",
@@ -76,6 +80,12 @@ read_globals = {
 	-- probed in Core rather than named anywhere else.
 	"GetInventoryItemLink", "GetContainerNumSlots", "GetContainerItemLink",
 	"GetItemInfo", "GetItemInfoInstant", "C_Container",
+	-- the empty-slot art each hand draws when nothing is set, and whether the
+	-- cursor is carrying something as it arrives over a slot. Baganator calls
+	-- GetInventorySlotInfo unguarded on the TBC client and TitanAmmo calls it on
+	-- both; CursorHasItem is read through an existence test in UI/Widgets.lua
+	-- rather than trusted, because nothing installed here calls it.
+	"GetInventorySlotInfo", "CursorHasItem",
 	"UnitExists", "UnitGUID", "UnitClass", "UnitAffectingCombat", "UnitCanAttack",
 	"UnitIsDead", "UnitIsGroupLeader", "UnitIsGroupAssistant", "IsInRaid",
 	"IsControlKeyDown", "IsShiftKeyDown",

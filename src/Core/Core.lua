@@ -1,6 +1,6 @@
 local ADDON, ns = ...
 
-ns.version = "1.5"
+ns.version = "1.6"
 
 -- Core knows nothing about any feature. It holds the saved variables, the API
 -- shims, the two drawing helpers every part uses, and the one registry every
@@ -10,7 +10,7 @@ ns.version = "1.5"
 --------------------------------------------------------------------------
 -- The registry
 --
--- Each of the seven parts calls ns.Register once, from its Feature.lua, and
+-- Each of the eight parts calls ns.Register once, from its Feature.lua, and
 -- hands over everything Core or the panel could want from it. Nothing else in
 -- the addon reaches across parts to find out what exists.
 --
@@ -88,7 +88,7 @@ function ns.Register(feature)
 end
 
 -- Walks the registry so callers never name a feature. Used by lock, reset and
--- anything else that has to reach all six parts at once.
+-- anything else that has to reach every part at once.
 function ns.Each(hook, ...)
 	for _, feature in ipairs(ns.features) do
 		if feature[hook] then

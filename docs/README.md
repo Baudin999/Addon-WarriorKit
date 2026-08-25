@@ -1,11 +1,12 @@
 # WarriorKit
 
-A personal warrior addon for WoW TBC Anniversary. Seven parts: ctrl-click raid
+A personal warrior addon for WoW TBC Anniversary. Eight parts: ctrl-click raid
 marking, one button that casts Charge, Intervene or Intercept depending on what
-you are looking at, one key that takes the next enemy and swings at it, a
-warrior loadout that fills the action bars, enemy bars that replace the Blizzard
-nameplate, a strip of the Blizzard bar art, and one Edit Mode layout carried
-inside the addon folder. Settings live in a panel
+you are looking at, one key that takes the next enemy and swings at it, one key
+per stance that swaps you into it and puts that stance's pair of weapons in your
+hands, a warrior loadout that fills the action bars, enemy bars that replace the
+Blizzard nameplate, a strip of the Blizzard bar art, and one Edit Mode layout
+carried inside the addon folder. Settings live in a panel
 opened with `/wk`.
 
 This file is written for whoever picks the addon up next, human or agent. The
@@ -61,10 +62,14 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is seven parts and a core. Each part is a folder, and Core knows the
+The addon is eight parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
+    Core/Gear.lua        what the client will let into each hand, and the two
+                         slot numbers those hands are
+    Core/Stance.lua      the three stance spells, their names, and which one
+                         you are standing in
     Core/Command.lua     slash dispatch, built from the registry
     Core/Panel.lua       the options window and the widget kit
 
@@ -82,7 +87,6 @@ name of none of them.
     Marking/Feature.lua
 
     Charge/Charge.lua        which ability, which unit, what state; shared colours
-    Charge/Weapons.lua       what the client will let into slot 16, and where 16 lives
     Charge/Icon.lua          the HUD icon, which is also the secure button that casts
     Charge/Marker.lua        the icon in the world above the mob the button will hit
     Charge/SoftTarget.lua    action targeting, held on out of combat and off in it
@@ -90,6 +94,10 @@ name of none of them.
 
     Targeting/Switch.lua     the secure button behind the switch key, and its binding
     Targeting/Feature.lua
+
+    Stances/Stances.lua      three secure buttons, one per stance, each carrying
+                             that stance's cast and its pair of /equipslot lines
+    Stances/Feature.lua
 
     Buttons/Layout.lua       the warrior loadout, and the backup of what it replaced
     Buttons/Ranks.lua        moves bar slots up to the best rank you know
@@ -239,10 +247,28 @@ goes through `Feature.lua` or through the shared surface below:
                                  it back; returns what that key was bound to
     ns.Switch.Describe()         the switch key, or "unbound", or the key plus
                                  what the readback said when it did not take
-    ns.ChargeWeapons.List(current)   picker rows: no swap, then everything that
-                                     could go in slot 16, then the saved name
-                                     when it is in neither
-    ns.ChargeWeapons.Carried(name)   whether the client could equip it right now
+    ns.Gear.MAINHAND / ns.Gear.OFFHAND   16 and 17, the two numbers an
+                                 /equipslot line counts in
+    ns.Gear.List(slot, current, empty)   picker rows: an empty row, then
+                                 everything that could go in that slot, then
+                                 the saved name when it is in neither
+    ns.Gear.Find(slot, name)     the carried item's row, or nil
+    ns.Gear.Held(slot, name)     whether the client could equip it right now
+    ns.Gear.Accepts(slot, link)  the name to save for an item link, or nil and
+                                 the reason that hand will not take it
+    ns.Gear.Art(slot)            the client's own empty-slot art for that hand
+    ns.Stance.Name(index)        that stance's name in this client's language
+    ns.Stance.Current()          the stance you are in, or nil when the client
+                                 will not say
+    ns.Stance.Epoch()            a number that moves when a stance name might
+    ns.Stances.Gear(stance)      the pair of names saved for one stance
+    ns.Stances.SetItem(stance, slot, link)   save a dropped item into one hand,
+                                 or nil and the reason it does not go there
+    ns.Stances.Bind(stance, key) take a key for one stance, or "" to hand it
+                                 back; returns what that key was bound to
+    ns.Stances.Macro(stance)     the macro that stance's button is carrying
+    ns.Stances.TwoHanded(stance) whether its main hand fills both hands, or nil
+                                 when the item is not on this character
     ns.SoftTarget.Apply()        put the CVar where combat says it should be
     ns.SoftTarget.Restore()      hand the CVar back at the value it had before
     ns.SoftTarget.Describe()     "auto, on out of combat" and the other two
@@ -255,7 +281,7 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Options.Refresh()         put the panel back in step with the database
     ns.Options.SelectTab(index)  show one part's page
     ns.Register(feature)         sign a part into the registry, from Feature.lua only
-    ns.Each(hook, ...)           run one registry hook across all five parts
+    ns.Each(hook, ...)           run one registry hook across every part
     ns.DefaultFor(key)           the registered default for a setting, for reset
     ns.Command.Toggle(arg)       "off" is off, anything else is on
     ns.Command.Number(v, lo, hi, what)  parse and range-check, or complain and return nil
@@ -574,6 +600,26 @@ outright while `ns.Blocked` says lockdown, rather than doing the unprotected
 two-thirds and leaving a frame half skinned, and PLAYER_REGEN_ENABLED runs it
 for real.
 
+**An addon may not put a weapon in your hand during a fight.** Not with
+`EquipItemByName`, not with `PickupInventoryItem`. The one path that works is an
+`/equipslot` line inside a macro run off a hardware key press, which is why both
+the charge button and the three stance buttons are secure buttons carrying
+`macrotext` rather than Lua calling a function. `/equipslot` takes an item name,
+so an item this character is not carrying builds a line that does nothing and
+says nothing, and `Core/Gear.lua` exists to make that name unpickable rather
+than merely unlikely.
+
+Two things about it are still unproven here and only a key press in game can
+settle them: whether the client runs two `/equipslot` lines off one press, and
+what it does when a two hander comes off into a full bag. No addon in either
+install calls `/equipslot`, so there is nothing to read that would answer
+either. The macro itself is asserted by `scripts/harness.lua` down to the
+character; what the server does with it is not.
+
+**The 255 character macro limit is the macro editor's, not this one's.** The
+charge button already carries about 430 characters of `macrotext` and works. A
+three line stance macro is around 75.
+
 **Nothing installed here writes to an action bar.** `PlaceAction`,
 `PickupSpell`, `PickupMacro`, `CreateMacro` and the rest of that set are the
 only APIs the addon uses that no installed addon confirms. Details references
@@ -784,7 +830,10 @@ typed by hand builds an `/equipslot` line that silently does nothing, and
 nothing on screen used to say so. A saved name that is not in your bags is kept
 rather than dropped, and the row under it says in orange that the swap will not
 fire, which is what you want to read when the weapon is in the bank.
-`Charge/Weapons.lua` owns that list, and owns the number 16. Unlocking the icon clears the `type` attribute so dragging it cannot
+`Core/Gear.lua` owns that list and owns both slot numbers. It was
+`Charge/Weapons.lua` and knew about one hand, because one part needed one
+weapon; the stance keys need two, so it moved to the shared layer rather than
+being reached across a folder boundary. Unlocking the icon clears the `type` attribute so dragging it cannot
 cast.
 
 Two ways to press it. `/wk bind X` takes the key with an override binding, or
@@ -921,6 +970,75 @@ so putting it on TAB leaves TAB alone in the binding set and clearing it hands
 TAB straight back. `Switch.Describe` reads `GetBindingAction` back rather than
 reporting what it meant to set, so `/wk status` can say the client did not take
 the key.
+
+**Stance dancing.** Three secure buttons, one per stance, each carrying a macro
+of at most three lines:
+
+    /cast [nostance:2] Defensive Stance
+    /equipslot 16 Bloodspiller
+    /equipslot 17 Aegis of the Blood God
+
+Nothing here calls `EquipItemByName`, and nothing here needs to. Putting a
+weapon in your hand during a fight is something ordinary Lua may not do, and an
+`/equipslot` line run off a hardware key press is the path that is allowed to,
+which is the same argument that makes `Targeting/Switch.lua` a secure button
+rather than two function calls.
+
+`nostance` on the cast means a press while you are already standing there spends
+itself on the weapons instead of on a stance you are in.
+
+**The order of the two equip lines is load bearing.** Going from a two hander to
+a one hander and a shield, the main hand line is what frees the hand the off
+hand line needs. The other way round the client clears the off hand itself and
+the loadout has nothing in that slot to say. Main hand first, always.
+
+**A loadout cannot say "take that off".** There is no `/equipslot` for an empty
+hand, so a blank slot means leave whatever is there alone rather than strip it.
+The panel says so under the slot rather than leaving you to work out why nothing
+came off.
+
+**A two hander drops the off hand line.** Both hands are already spoken for, so
+an `/equipslot 17` under a two hander would either be refused or take the two
+hander back off. The line is left out of the macro and the panel greys that slot
+and says why. Only when the client can be asked: a weapon in the bank has no
+equip type to read, and guessing at one would silently drop a line you set on
+purpose.
+
+**A swap mid fight resets your swing timer.** That is the price of dancing and
+it is usually worth paying, so `stanceSwapCombat` is on by default. Off, every
+equip line takes a `nocombat` conditional and a key pressed in a fight changes
+stance and leaves your hands alone. The charge button makes the opposite choice
+for the opposite reason: its swap is a convenience on the pull, so its line
+carries `nocombat` always.
+
+**Changing a loadout in combat lands when the fight ends.** A secure button's
+attributes cannot be written under lockdown, so `Stances.Apply` sets `pending`
+and returns false, and PLAYER_REGEN_ENABLED runs it for real. This is the
+`ApplySecure` shape from `Charge/Icon.lua` and the harness asserts both halves,
+because a part that only did the first would lose the change silently.
+
+The keys are override bindings, the same as the charge key, the marking keys and
+the switch key, so your saved bindings are untouched and clearing a key hands it
+straight back. Two stances cannot claim one key: the second claim is refused
+with a reason and the first keeps the key, because two stances on one key is the
+mistake the panel cannot show you afterwards. Or put
+`/click WarriorKitStanceBattleButton` in an ordinary macro and drag that to a
+bar.
+
+**Where the weapons come from.** The panel does not offer a text field. You drag
+a weapon or a shield out of your bags onto a slot and right click a slot to
+clear it, which is `kit.ItemSlot` in `UI/Widgets.lua` over `ns.Gear`. A name
+typed by hand builds an `/equipslot` line that silently does nothing, which is
+the failure `Core/Gear.lua` exists to make impossible: it offers what you are
+carrying and nothing else, and a saved name that is not on this character keeps
+its slot and goes orange rather than being dropped by a panel that cannot see
+into your bank.
+
+The slot is drawn out of the widget layer like every other row, in the addon's
+own sunken box with its own hairline. The one thing borrowed from Blizzard is
+the empty-slot art, asked for by slot name through `GetInventorySlotInfo` rather
+than written down as a texture path, drawn inside our box rather than in place
+of it.
 
 **Buttons.** Fills the action bars with a warrior loadout and can put back
 exactly what was there before. Two jobs it deliberately does not do:

@@ -10,10 +10,6 @@ ns.Charge = Charge
 
 local GCD = 1.5
 
--- Stance index is what the `stance:` macro conditional uses, so the numbers
--- here are the numbers in the generated macro.
-local STANCE_SPELLS = { 2457, 71, 2458 } -- 1 Battle, 2 Defensive, 3 Berserker
-
 Charge.ABILITIES = {
 	charge = {
 		ranks = { 100, 6178, 11578 },
@@ -61,7 +57,7 @@ function Charge.Look(status)
 	return LOOKS[outcome], outcome == "no", outcome == "go" and 1 or 0.6
 end
 
-local names, textures, stanceNames = {}, {}, {}
+local names, textures = {}, {}
 local isWarrior -- nil until the class resolves, class data is not reliable while files load
 local rangeAnswered, rangeSilent = false, 0
 
@@ -93,18 +89,19 @@ function Charge.Texture(key)
 	return textures[key]
 end
 
+-- Forwarded rather than resolved here. The three stances are shared knowledge
+-- now: this part swaps into them on the way to an ability and the stance keys
+-- are the whole of what they do, so ns.Stance owns the ids and the names and
+-- the two cannot disagree about what stance 2 is called.
 function Charge.StanceName(index)
-	if not stanceNames[index] then
-		stanceNames[index] = ns.SpellName(STANCE_SPELLS[index])
-	end
-	return stanceNames[index]
+	return ns.Stance.Name(index)
 end
 
 -- A number that changes when any name this file hands out might have. The
 -- only caller is the macro guard, and what it needs is not the names but the
 -- answer to "could they have moved since I last looked".
 function Charge.NameEpoch()
-	return nameEpoch
+	return nameEpoch + ns.Stance.Epoch()
 end
 
 local function IsPlayerWarrior()
@@ -131,15 +128,6 @@ function Charge.Known(key)
 		end
 	end
 	return false
-end
-
--- Nil when the client will not say, which sends the verdict back to
--- IsUsableSpell rather than guessing a stance.
-local function CurrentStance()
-	if GetShapeshiftForm then
-		return GetShapeshiftForm()
-	end
-	return nil
 end
 
 --------------------------------------------------------------------------
@@ -344,7 +332,7 @@ function Charge.State(key, unit)
 	-- The macro swaps stance for you, so a stance mismatch clears itself on the
 	-- next press rather than blocking. IsUsableSpell knows the stance rule too,
 	-- and is the only thing that knows about rage.
-	local form = CurrentStance()
+	local form = ns.Stance.Current()
 	if form and form ~= info.stance then
 		return "stance"
 	end
@@ -377,6 +365,5 @@ events:SetScript("OnEvent", function()
 	-- A new rank changes nothing, but a locale reload would.
 	wipe(names)
 	wipe(textures)
-	wipe(stanceNames)
 	nameEpoch = nameEpoch + 1
 end)

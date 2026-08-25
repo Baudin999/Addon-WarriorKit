@@ -2,7 +2,7 @@
 ## Title: WarriorKit
 ## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, square class-coloured player and target frames, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
-## Version: 1.5
+## Version: 1.6
 ## SavedVariables: WarriorKitDB
 ## SavedVariablesPerCharacter: WarriorKitCharDB
 ## X-Category: Combat
@@ -14,6 +14,14 @@
 # Core first. It creates ns.db, the API shims and the registry every feature
 # signs into, and the panel walks that registry at PLAYER_LOGIN.
 Core\Core.lua
+
+# Two shared files that wrap a client API and own no setting, the same shape
+# ns.ItemInfo has. Gear is what the client will let into each hand and which
+# number that hand is; Stance is the three stance spells, their localised names
+# and which one you are standing in. Both were a part's private knowledge until
+# a second part needed the same answer, and both load before anything that asks.
+Core\Gear.lua
+Core\Stance.lua
 
 # The drawing layer, between Core and everything that draws. It owns the pixel
 # grid, so it loads before the panel and before any part that puts a frame up.
@@ -35,14 +43,13 @@ UI\Window.lua
 Core\Command.lua
 Core\Panel.lua
 
-# The seven parts. Within each, behaviour first and Feature.lua last, because
+# The eight parts. Within each, behaviour first and Feature.lua last, because
 # Feature.lua is the only file that names anything outside its own folder.
 Marking\Marking.lua
 Marking\Keys.lua
 Marking\Feature.lua
 
 Charge\Charge.lua
-Charge\Weapons.lua
 Charge\Icon.lua
 Charge\Marker.lua
 Charge\SoftTarget.lua
@@ -50,6 +57,9 @@ Charge\Feature.lua
 
 Targeting\Switch.lua
 Targeting\Feature.lua
+
+Stances\Stances.lua
+Stances\Feature.lua
 
 Buttons\Layout.lua
 Buttons\Ranks.lua

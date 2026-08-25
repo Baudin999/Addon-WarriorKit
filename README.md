@@ -5,9 +5,12 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
 - **One Charge button.** It casts Charge, Intervene or Intercept depending on
   what you are looking at, and out of combat it aims by camera rather than by
   target.
-- **Ctrl-click raid marking.** Ctrl-click a unit to mark it. No menu.
+- **Easy raid marking.** Bind your raid target icons to simple buttons.
 - **One key that switches target and swings.** TAB cycles and stops there. Bind
   a key in `/wk` and it takes the next enemy and starts the attack on it.
+- **Stance dancing.** One key per stance. It puts you in that stance and puts
+  that stance's pair of weapons in your hands, in one press. Drag a weapon or a
+  shield onto a slot in `/wk` to set the pair.
 - **Threat-coloured enemy bars.** They replace the Blizzard nameplate and carry
   a tag saying what the kill is worth.
 - **A warrior bar loadout**, with a backup of whatever it replaced, plus an

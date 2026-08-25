@@ -8,7 +8,8 @@ local C, M = UI.Color, UI.Metric
 --
 -- Everything the interface is made of that is not a rectangle. A push button, a
 -- tick box, a stepper, a cycling value, a value picked off a list, a key
--- capture field, and a paragraph of prose that sizes itself.
+-- capture field, a slot you drop an item into, and a paragraph of prose that
+-- sizes itself.
 --
 -- Two rules run through all of them and they are the two the panel this
 -- replaced broke.
@@ -743,6 +744,101 @@ function UI.Kit(host)
 				field.text:SetText(getText())
 				UI.Tint(field.bg, C.sunken)
 			end
+		end)
+	end
+
+	-- An item slot you drop something into
+	--
+	-- get() returns the icon to draw and the text beside it, and either may be
+	-- nil: no icon draws the empty-slot art opts.empty hands over, no text
+	-- leaves the line blank. set(link) is given the item link the cursor was
+	-- carrying and returns whether it took it, which is where the rule that a
+	-- shield does not go in a main hand lives. This file knows about neither
+	-- inventory slots nor shields, the same as it knows nothing about settings.
+	--
+	-- A drop arrives two ways because neither is reliable on its own.
+	-- OnReceiveDrag does not fire when the drop replaced something already on
+	-- the cursor, and OnMouseUp does not fire when the press that started the
+	-- drag happened somewhere else. OPie's ring editor registers both and then
+	-- polls on top; the poll is an OnUpdate, which this layer is not allowed to
+	-- add, so the two handlers are where it stops.
+	--
+	-- The highlight asks CursorHasItem rather than watching the cursor, for the
+	-- same reason. A slot lights up when the mouse arrives carrying something,
+	-- not the moment the item is picked up across the screen.
+	function kit.ItemSlot(label, get, set, opts)
+		opts = opts or {}
+		local size, nameWidth = 32, 150
+		local row, text = Paired(size + M.gutter + nameWidth, size)
+		text:SetText(label)
+
+		local slot = UI.Box(row, C.sunken, C.edge)
+		slot:SetSize(size, size)
+		slot:SetPoint("TOPRIGHT", row, "TOPRIGHT", -(nameWidth + M.gutter), 0)
+
+		-- Two textures rather than one. An item icon is a 64 texel square and
+		-- wants the crop and the snapping fix UI.Icon applies; the empty-slot art
+		-- is Blizzard's own frame for that hand and is already the shape it draws
+		-- at, so cropping it eats its border.
+		local icon = UI.Icon(slot, "ARTWORK")
+		icon:SetPoint("TOPLEFT", 2, -2)
+		icon:SetPoint("BOTTOMRIGHT", -2, 2)
+		local empty = slot:CreateTexture(nil, "ARTWORK")
+		empty:SetPoint("TOPLEFT", 2, -2)
+		empty:SetPoint("BOTTOMRIGHT", -2, 2)
+		empty:SetVertexColor(1, 1, 1, 0.35)
+
+		local value = UI.Label(row, M.font, C.text, "LEFT", UI.FLAT)
+		UI.Wrap(value, false)
+		value:SetPoint("LEFT", slot, "RIGHT", M.gutter, 0)
+		value:SetPoint("RIGHT", row, "RIGHT")
+
+		local function Drop()
+			local kind, _, link = GetCursorInfo()
+			if kind ~= "item" or type(link) ~= "string" then
+				return
+			end
+			if set(link) then
+				ClearCursor()
+			end
+			Changed()
+		end
+
+		local button = CreateFrame("Button", nil, row)
+		button:SetAllPoints(slot)
+		button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+		button:SetScript("OnReceiveDrag", Drop)
+		button:SetScript("OnClick", function(_, which)
+			UI.CloseDropdown()
+			UI.StopCapture()
+			if which == "RightButton" then
+				set(nil)
+				Changed()
+				return
+			end
+			Drop()
+		end)
+		button:SetScript("OnEnter", function()
+			-- CursorHasItem rather than the accepts test alone, so a slot lights
+			-- up only while something is being carried into it.
+			local carrying = CursorHasItem and CursorHasItem()
+			UI.Tint(slot.bg, carrying and C.selected or C.control)
+		end)
+		button:SetScript("OnLeave", function()
+			UI.Tint(slot.bg, C.sunken)
+		end)
+
+		return Remember(row, function()
+			local texture, shown = get()
+			icon:SetTexture(texture)
+			icon:SetShown(texture and true or false)
+			local fallback = (not texture) and opts.empty and opts.empty() or nil
+			empty:SetTexture(fallback)
+			empty:SetShown(fallback and true or false)
+			value:SetText(shown or "")
+			local usable = (opts.enabled == nil) or opts.enabled()
+			Enable(button, usable)
+			slot:SetAlpha(usable and 1 or 0.4)
 		end)
 	end
 
