@@ -66,7 +66,11 @@ cp -R src/. "$stage/WarriorKit/"
 for name in "${IGNORE[@]}"; do
 	rm -rf "$stage/WarriorKit/${name:?}"
 done
-if [ -f README.md ]; then cp README.md "$stage/WarriorKit/README.md"; fi
+# The licence travels with the copy, which is the whole point of MIT's
+# "included in all copies" clause, and CurseForge shows a licence per project.
+for extra in README.md LICENSE; do
+	if [ -f "$extra" ]; then cp "$extra" "$stage/WarriorKit/$extra"; fi
+done
 
 mkdir -p dist
 zip_path="dist/WarriorKit-$version.zip"

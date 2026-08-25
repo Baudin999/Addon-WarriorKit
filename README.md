@@ -44,6 +44,17 @@ and zero errors is the bar, and it passes, so any finding is yours.
 Builds `dist/WarriorKit-<version>.zip`. Add `--upload` to publish it to
 CurseForge. It refuses to build anything if `check.sh` fails.
 
+Commits run the gate. `scripts/hooks/pre-commit` is tracked, and wired up with
+
+    git config core.hooksPath scripts/hooks
+
+which is already set in this clone. A broken tree cannot be committed without
+`--no-verify`.
+
 Version lives in three places on purpose, `ns.version` in `src/Core/Core.lua`
 and `## Version:` in both TOCs. `check.sh` fails if they drift, which is how
 the 1.1-versus-1.2 split got caught.
+
+## Licence
+
+MIT. See `LICENSE`.
