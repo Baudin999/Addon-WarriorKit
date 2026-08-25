@@ -1,6 +1,6 @@
 local ADDON, ns = ...
 
-ns.version = "1.6"
+ns.version = "1.7"
 
 -- Core knows nothing about any feature. It holds the saved variables, the API
 -- shims, the two drawing helpers every part uses, and the one registry every
@@ -346,6 +346,11 @@ end
 
 local C_Container = _G.C_Container
 
+-- Newer builds moved the item lookups into C_Item and kept the old globals
+-- working. Resolved here beside C_Container so ns.ItemValue asks one question
+-- rather than probing two namespaces per bag slot per tick.
+local C_Item = _G.C_Item
+
 function ns.ContainerSlots(bag)
 	if C_Container and C_Container.GetContainerNumSlots then
 		return C_Container.GetContainerNumSlots(bag) or 0
@@ -364,6 +369,61 @@ function ns.ContainerItemLink(bag, slot)
 		return _G.GetContainerItemLink(bag, slot)
 	end
 	return nil
+end
+
+-- How many are in a bag slot and whether the client has it locked, which is
+-- what a sale in flight looks like from the outside. Multiple returns rather
+-- than a table, because the vendor sweep asks this once per slot per tick and
+-- a table per slot is garbage the collector walks in the middle of a frame.
+--
+-- C_Container answers one table with named fields and the old global answers
+-- eleven values in a fixed order; both are read here so no caller has to know
+-- which client it is on.
+function ns.ContainerItem(bag, slot)
+	if C_Container and C_Container.GetContainerItemInfo then
+		local info = C_Container.GetContainerItemInfo(bag, slot)
+		if not info then
+			return nil
+		end
+		return info.stackCount, info.isLocked
+	end
+	if type(_G.GetContainerItemInfo) == "function" then
+		local _, count, locked = _G.GetContainerItemInfo(bag, slot)
+		return count, locked
+	end
+	return nil
+end
+
+-- Use what is in a bag slot. At a merchant that sells it; anywhere else it
+-- eats, equips or opens the thing, which is why every caller has to prove the
+-- merchant window is up before it calls this. False where the client has
+-- neither API, so a caller can say so rather than believe a sale happened.
+function ns.UseContainerItem(bag, slot)
+	if C_Container and C_Container.UseContainerItem then
+		C_Container.UseContainerItem(bag, slot)
+		return true
+	end
+	if type(_G.UseContainerItem) == "function" then
+		_G.UseContainerItem(bag, slot)
+		return true
+	end
+	return false
+end
+
+-- Put what is in a bag slot on the cursor. The only caller is the clutter
+-- window, which picks an item up so it can ask the cursor what it is really
+-- holding before destroying it. False where the client has neither API, so the
+-- caller stops rather than carrying on to a delete it cannot aim.
+function ns.PickupContainerItem(bag, slot)
+	if C_Container and C_Container.PickupContainerItem then
+		C_Container.PickupContainerItem(bag, slot)
+		return true
+	end
+	if type(_G.PickupContainerItem) == "function" then
+		_G.PickupContainerItem(bag, slot)
+		return true
+	end
+	return false
 end
 
 -- Name, icon, equip location and the link's own colour code, for an item link.
@@ -395,6 +455,56 @@ function ns.ItemInfo(link)
 	end
 
 	return name, icon, equip, color
+end
+
+-- Quality and what a vendor pays, for an item link. Quality is the number the
+-- client grades an item on, 0 being the grey a vendor exists to take off you.
+--
+-- Nil where the client has not cached the item yet, and a caller has to treat
+-- that as "do not know" rather than as zero. Selling on a guessed quality is
+-- how something that is not trash ends up at a vendor, so the vendor sweep
+-- leaves an item it cannot grade alone and asks again on its next pass, by
+-- which point the client has answered.
+function ns.ItemValue(link)
+	if type(link) ~= "string" then
+		return nil
+	end
+
+	local lookup = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+	if type(lookup) ~= "function" then
+		return nil
+	end
+
+	local _, _, quality, _, _, _, _, _, _, _, sellPrice = lookup(link)
+	if type(quality) ~= "number" then
+		return nil
+	end
+	return quality, sellPrice or 0
+end
+
+-- The item's id, and the class and subclass the client files it under. Class 12
+-- is a quest item, which is the one the clutter scan turns on, and Baganator
+-- categorises on the same number on this client.
+--
+-- GetItemInfoInstant rather than GetItemInfo, because this reads the client's
+-- own item database and cannot miss the way a cache lookup can. That matters
+-- here more than it does for a sell price: an item whose class came back nil
+-- would be an item the scan silently never considered.
+function ns.ItemKind(link)
+	if type(link) ~= "string" then
+		return nil
+	end
+
+	local lookup = (C_Item and C_Item.GetItemInfoInstant) or _G.GetItemInfoInstant
+	if type(lookup) ~= "function" then
+		return nil
+	end
+
+	local itemId, _, _, _, _, classId, subClassId = lookup(link)
+	if type(itemId) ~= "number" then
+		return nil
+	end
+	return itemId, classId, subClassId
 end
 
 --------------------------------------------------------------------------

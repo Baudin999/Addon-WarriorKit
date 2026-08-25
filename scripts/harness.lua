@@ -102,7 +102,22 @@ function Region:GetRegions() return unpack(self.regions) end
 function Region:GetChildren() return unpack(self.children) end
 function Region:GetName() return self.name end
 
-function Region:CreateTexture(name) return child("texture", self, name) end
+-- The draw layer is data here, not a no-op, because the gauge is drawn as
+-- three textures inside one of Blizzard's bars and which of them is on top is
+-- decided by layer and sublevel alone. That ordering used to be decided by
+-- frame level between two frames, the client did not keep the order this file
+-- wrote, and the target's gauge came out at 28 percent of its own colour. A
+-- stub that dropped the layer could not tell the fixed version from the broken
+-- one.
+function Region:CreateTexture(name, layer, _, sublevel)
+	local texture = child("texture", self, name)
+	texture.layer, texture.sublevel = layer or "ARTWORK", sublevel or 0
+	return texture
+end
+function Region:SetDrawLayer(layer, sublevel)
+	self.layer, self.sublevel = layer, sublevel or 0
+end
+function Region:GetDrawLayer() return self.layer, self.sublevel end
 function Region:CreateFontString() return child("fontstring", self) end
 function Region:SetScript(name, fn) self.scripts[name] = fn end
 function Region:GetScript(name) return self.scripts[name] end
@@ -181,6 +196,20 @@ function Region:GetEffectiveScale()
 	end
 	return self.scale * (self.parent and self.parent:GetEffectiveScale() or 1)
 end
+-- The mouse region, real rather than the metatable's no-op, because the skin
+-- pulls it back off the strip of frame the client's aura row hangs in and a
+-- stub that dropped the call would pass a target frame taking clicks in empty
+-- space under the block.
+function Region:SetHitRectInsets(l, r, t, b)
+	self.insets = { l, r, t, b } -- a stub, and this runs on a relayout rather than a tick
+end
+function Region:GetHitRectInsets()
+	local insets = self.insets
+	if not insets then
+		return 0, 0, 0, 0
+	end
+	return insets[1], insets[2], insets[3], insets[4]
+end
 function Region:SetParent(p) self.parent = p end
 function Region:GetParent() return self.parent end
 function Region:SetFrameLevel(l) self.frameLevel = l end
@@ -210,7 +239,11 @@ function Region:SetStatusBarTexture(t)
 	if type(t) == "table" then
 		self.fill = t
 	else
+		-- On ARTWORK, which is where every client builds a status bar's own
+		-- fill and what the two textures the skin puts under it are measured
+		-- against.
 		self.fill = self.fill or region("texture", self)
+		self.fill.layer, self.fill.sublevel = "ARTWORK", 0
 		self.fill.texture = t
 	end
 end
@@ -245,7 +278,7 @@ function Region:SetPoint(point, relative, relativePoint, x, y)
 	self.points = self.points or {}
 	self.points[#self.points + 1] = { point, relative, relativePoint, x or 0, y or 0 }
 end
-function Region:ClearAllPoints() self.points = nil end
+function Region:ClearAllPoints() self.points, self.allPoints = nil, nil end
 function Region:GetNumPoints() return self.points and #self.points or 0 end
 function Region:GetPoint(index)
 	local pt = self.points and self.points[index or 1]
@@ -285,6 +318,30 @@ function Region:Hide() self.shown = false end
 function Region:RegisterEvent(e)
 	events[e] = events[e] or {}
 	events[e][#events[e] + 1] = self
+end
+
+-- The filtered form, which the skin uses for UNIT_AURA so a raid's worth of
+-- other units never reaches its handler. Modelled as the plain registration it
+-- is: the filter is the client's business and every fire() here names its unit
+-- anyway, so what this proves is that the addon took the filtered path at all.
+function Region:RegisterUnitEvent(e)
+	self:RegisterEvent(e)
+end
+
+-- Real, rather than the metatable's no-op. Two parts turn an event off when
+-- their setting goes off, and that the addon leaves the path entirely is the
+-- assertion; a no-op here would pass a feature that only ever branches inside
+-- a handler the client is still calling.
+function Region:UnregisterEvent(e)
+	local list = events[e]
+	if not list then
+		return
+	end
+	for index = #list, 1, -1 do
+		if list[index] == self then
+			table.remove(list, index)
+		end
+	end
 end
 
 _G.UIParent = region("frame")
@@ -385,7 +442,15 @@ _G.UnitIsGroupLeader, _G.UnitIsGroupAssistant = constant(true), constant(false)
 _G.GetNumGroupMembers, _G.IsInRaid = constant(0), constant(false)
 _G.GetRaidTargetIndex, _G.SetRaidTarget = constant(nil), function() end
 _G.SetRaidTargetIconTexture = function() end
-_G.GetTime, _G.GetQuestGreenRange, _G.InCombatLockdown = constant(100), constant(8), constant(false)
+-- The wall clock, which the tests move rather than wait out. It starts where
+-- the old constant sat, so everything written against a fixed 100 still sees
+-- one, and the loot throttle can be stepped past a tenth of a second at a time.
+local wall = 100
+local function advance(seconds)
+	wall = wall + seconds
+end
+_G.GetTime = function() return wall end
+_G.GetQuestGreenRange, _G.InCombatLockdown = constant(8), constant(false)
 _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 _G.tinsert, _G.date = table.insert, os.date
 _G.GetBuildInfo = function() return "2.5.6", "69110", "2025-01-01", 20506 end
@@ -399,19 +464,88 @@ _G.GetNumSpellTabs = constant(0)
 -- have something to offer, and chosen so all three rules it enforces are
 -- reachable: a main hander, a shield, and a two hander that must keep the
 -- off hand line out of a loadout's macro.
+-- Every item carries its own id and the class the client files it under, both
+-- of which the addon reads. The id matters more than it looks: the clutter
+-- window asks the cursor which item it picked up and compares ids, so a stub
+-- that gave every item the same one would make that check pass by accident.
+-- Class 12 is a quest item and is the only class the clutter scan considers.
 local ITEMS = {
-	["Bloodspiller"]    = { equip = "INVTYPE_WEAPONMAINHAND", icon = "Interface\\Icons\\Sword" },
-	["Aegis"]           = { equip = "INVTYPE_SHIELD", icon = "Interface\\Icons\\Shield" },
-	["Arcanite Reaper"] = { equip = "INVTYPE_2HWEAPON", icon = "Interface\\Icons\\Axe" },
+	["Bloodspiller"]    = { id = 1001, classId = 2, equip = "INVTYPE_WEAPONMAINHAND", icon = "Interface\\Icons\\Sword", quality = 3, price = 4200 },
+	["Aegis"]           = { id = 1002, classId = 4, equip = "INVTYPE_SHIELD", icon = "Interface\\Icons\\Shield", quality = 3, price = 3800 },
+	["Arcanite Reaper"] = { id = 1003, classId = 2, equip = "INVTYPE_2HWEAPON", icon = "Interface\\Icons\\Axe", quality = 4, price = 9100 },
+	-- What the second bag holds, which is what a vendor is for. Two greys a
+	-- vendor pays for, one grey it will not, and a green. None of the four
+	-- carries an equip location, so the gear scan still sees the three weapons
+	-- in the first bag and nothing else.
+	["Chipped Boar Tusk"] = { id = 2001, classId = 7, quality = 0, price = 47 },
+	["Tattered Cloth"]    = { id = 2002, classId = 7, quality = 0, price = 12 },
+	["Broken Twig"]       = { id = 2003, classId = 7, quality = 0, price = 0 },
+	["Emerald Pigment"]   = { id = 2004, classId = 7, quality = 2, price = 1900 },
+	-- The third bag, one item per branch the clutter verdict can take. Which of
+	-- them is clutter and which is not is decided by the quest fixtures below,
+	-- not here.
+	["Hogger's Claw"]     = { id = 3001, classId = 12, quality = 1, price = 0 },
+	["Diplomat's Ring"]   = { id = 3002, classId = 12, quality = 1, price = 0 },
+	["Sealed Letter"]     = { id = 3003, classId = 12, quality = 1, price = 0 },
+	["Zul'Mamwe Fetish"]  = { id = 3004, classId = 12, quality = 1, price = 0 },
+	["Rogue's Token"]     = { id = 3005, classId = 12, quality = 1, price = 0 },
+	["Old Cipher"]        = { id = 3006, classId = 12, quality = 1, price = 0 },
+	["Unknown Trinket"]   = { id = 3007, classId = 12, quality = 1, price = 0 },
 }
+
 local BAG = { "Bloodspiller", "Aegis", "Arcanite Reaper" }
+local JUNK = { "Chipped Boar Tusk", "Tattered Cloth", "Broken Twig", "Emerald Pigment" }
+local QUESTBAG = {
+	"Hogger's Claw", "Diplomat's Ring", "Sealed Letter", "Zul'Mamwe Fetish",
+	"Rogue's Token", "Old Cipher", "Unknown Trinket",
+}
+
+-- Bag 0 is the gear the loadouts pick from, bag 1 is the trash, bag 2 is the
+-- quest items. Kept apart so a sale never moves what the paperdoll tests are
+-- counting and a destroy never moves what the vendor tests are counting.
+local CARRIED = { [0] = BAG, [1] = JUNK, [2] = QUESTBAG }
+
+local function reset(bag, ...)
+	local held = { ... }
+	for index = 1, #held do
+		bag[index] = held[index]
+	end
+end
+
+local function refill()
+	reset(JUNK, "Chipped Boar Tusk", "Tattered Cloth", "Broken Twig", "Emerald Pigment")
+end
+
+local function refillQuests()
+	reset(QUESTBAG, "Hogger's Claw", "Diplomat's Ring", "Sealed Letter",
+		"Zul'Mamwe Fetish", "Rogue's Token", "Old Cipher", "Unknown Trinket")
+end
+
+-- A sold slot is left as false rather than removed, because the client does
+-- not renumber a bag when something leaves it and neither may this.
+local function carrying(bag, slot)
+	local held = CARRIED[bag] and CARRIED[bag][slot]
+	return held or nil
+end
 
 local function itemLink(name)
 	return ("|cffff8000|Hitem:1::::::::60:::::|h[%s]|h|r"):format(name)
 end
 _G.WarriorKitItemLink = itemLink
 
-_G.GetInventoryItemLink, _G.GetItemInfo = constant(nil), constant(nil)
+_G.GetInventoryItemLink = constant(nil)
+-- Quality is the third value and the sell price the eleventh, which is the
+-- order ns.ItemValue reads them in. Answering nil for a name this stub does not
+-- carry is the client's "not cached yet", and the vendor sweep has to treat
+-- that as a reason to leave the item alone.
+_G.GetItemInfo = function(link)
+	local name = type(link) == "string" and link:match("%\[(.-)%\]")
+	local item = name and ITEMS[name]
+	if not item then
+		return nil
+	end
+	return name, link, item.quality, 60, 60, nil, nil, 1, item.equip, item.icon, item.price
+end
 -- The fourth and fifth returns are the two ns.ItemInfo reads, the equip
 -- location and the icon.
 _G.GetItemInfoInstant = function(link)
@@ -420,13 +554,184 @@ _G.GetItemInfoInstant = function(link)
 	if not item then
 		return nil
 	end
-	return 1, name, nil, item.equip, item.icon
+	return item.id, name, nil, item.equip, item.icon, item.classId
 end
-_G.GetContainerNumSlots = function(bag) return bag == 0 and #BAG or 0 end
+_G.GetContainerNumSlots = function(bag) return CARRIED[bag] and #CARRIED[bag] or 0 end
 _G.GetContainerItemLink = function(bag, slot)
-	return bag == 0 and BAG[slot] and itemLink(BAG[slot]) or nil
+	local held = carrying(bag, slot)
+	return held and itemLink(held) or nil
 end
-_G.GetCursorInfo, _G.ClearCursor = constant(nil), function() end
+-- Texture, count, locked, quality, in the order the loose global answers them.
+-- Nothing is ever locked here: a locked slot is a sale the server has not
+-- finished, and modelling that would be modelling latency rather than the
+-- addon.
+_G.GetContainerItemInfo = function(bag, slot)
+	local held = carrying(bag, slot)
+	if not held then
+		return nil
+	end
+	return ITEMS[held].icon, 1, false, ITEMS[held].quality
+end
+
+-- The call the whole vendor part is built around, and the reason it checks the
+-- merchant window before every sweep. With the window up the item is sold and
+-- the money arrives. With it down the same call *uses* the item, which here
+-- means it is gone and nothing was paid for it. A stub that sold either way
+-- would pass the one bug in this part worth catching.
+local purse = 0
+local misused = 0
+_G.UseContainerItem = function(bag, slot)
+	local held = carrying(bag, slot)
+	if not held then
+		return
+	end
+	CARRIED[bag][slot] = false
+	if _G.MerchantFrame:IsShown() then
+		purse = purse + ITEMS[held].price
+	else
+		misused = misused + 1
+	end
+end
+
+_G.GetMoney = function() return purse end
+_G.GetCoinText = function(amount) return ("%dc"):format(amount) end
+_G.MerchantFrame = region("frame")
+_G.MerchantFrame:Hide()
+
+-- A corpse, with a quality on each slot so a master loot threshold has
+-- something to sort by: two under a threshold of 2 and two at or above it.
+local CORPSE = { 0, 1, 3, 2 }
+local looted = {}
+local lootMethod = "group"
+
+_G.GetNumLootItems = function() return #CORPSE end
+_G.GetLootSlotInfo = function(slot)
+	return "Interface\\Icons\\Coin", "Something", 1, nil, CORPSE[slot]
+end
+_G.LootSlot = function(slot) looted[slot] = true end
+_G.GetLootThreshold = constant(2)
+_G.GetLootMethod = function() return lootMethod end
+-- No C_PartyInfo here on purpose, so Comfort/Loot.lua resolves through the
+-- loose global and the fallback half of that probe is the half being tested.
+_G.IsModifiedClick = constant(false)
+
+--------------------------------------------------------------------------
+-- Quests, Questie and the cursor
+--
+-- Everything the clutter window rests on. The quest fixtures are chosen so
+-- there is exactly one item per branch the verdict can take, and the cursor is
+-- modelled rather than stubbed away: the window picks an item up and asks the
+-- client what it is really holding before destroying anything, and a stub that
+-- always agreed would make that check pass without ever being tested.
+--------------------------------------------------------------------------
+
+local QUESTS = {
+	[101] = { name = "Wanted: Hogger", completed = true },
+	[102] = { name = "The Missing Diplomat", completed = false },
+	[103] = { name = "A Rogue's Deal", completed = false },
+	[104] = { name = "Ruins of Zul'Mamwe", completed = true },
+}
+
+-- What you are on right now. One quest, and the item that belongs to it must
+-- never be offered.
+local QUEST_LOG = { 102 }
+
+-- Questie's item rows, one per branch:
+--   3001 one completed quest                       clutter, certain
+--   3002 a quest in your log                       kept
+--   3003 starts a quest you have not done          kept, and this is the one
+--        that matters most
+--   3004 two completed quests                      clutter, certain
+--   3005 a quest neither taken nor completed       clutter, uncertain
+--   3006 starts a quest you have completed         clutter, certain
+--   3007 absent from the database entirely         kept
+local QUESTIE_ITEMS = {
+	[3001] = { relatedQuests = { 101 } },
+	[3002] = { relatedQuests = { 102 } },
+	[3003] = { startQuest = 103 },
+	[3004] = { relatedQuests = { 104, 101 } },
+	[3005] = { relatedQuests = { 103 } },
+	[3006] = { startQuest = 101 },
+}
+
+local questieModules = {
+	QuestieDB = {
+		QueryItemSingle = function(itemId, field)
+			local row = QUESTIE_ITEMS[itemId]
+			return row and row[field] or nil
+		end,
+		QueryQuestSingle = function(questId, field)
+			local row = QUESTS[questId]
+			return row and row[field] or nil
+		end,
+	},
+}
+
+-- ImportModule hands back a fresh empty table for a module it has never heard
+-- of rather than nil, which is why "the module came back" proves nothing and
+-- why Clutter.lua checks for the query functions instead. The stub does the
+-- same thing, so that trap is reachable from a test.
+_G.QuestieLoader = {
+	ImportModule = function(_, name)
+		questieModules[name] = questieModules[name] or {}
+		return questieModules[name]
+	end,
+}
+
+_G.GetNumQuestLogEntries = function() return #QUEST_LOG end
+_G.GetQuestLogTitle = function(index)
+	local questId = QUEST_LOG[index]
+	if not questId then
+		return nil
+	end
+	-- The quest id is the eighth value, which is where Questie reads it from.
+	return QUESTS[questId].name, 60, nil, false, false, false, nil, questId
+end
+_G.IsQuestFlaggedCompleted = function(questId)
+	local quest = QUESTS[questId]
+	return quest ~= nil and quest.completed or false
+end
+
+local cursor
+local destroyed = {}
+
+_G.GetCursorInfo = function()
+	if not cursor then
+		return nil
+	end
+	return "item", cursor.id, cursor.link
+end
+
+_G.ClearCursor = function() cursor = nil end
+
+-- Counted, because the window has two independent guards against destroying
+-- the wrong item and the counter is the only way to tell which one fired. The
+-- slot re-read happens before the cursor is touched at all, so a stale card
+-- that still reaches a pickup means that first guard is gone even though the
+-- second one caught it.
+local pickups = 0
+
+_G.PickupContainerItem = function(bag, slot)
+	pickups = pickups + 1
+	local held = carrying(bag, slot)
+	if not held then
+		cursor = nil
+		return
+	end
+	cursor = { id = ITEMS[held].id, link = itemLink(held), bag = bag, slot = slot }
+end
+
+-- The end of the line, and the only call in the addon with no way back. It
+-- takes whatever the cursor is holding, which is exactly why the window checks
+-- what that is first.
+_G.DeleteCursorItem = function()
+	if not cursor then
+		return
+	end
+	destroyed[#destroyed + 1] = cursor.link
+	CARRIED[cursor.bag][cursor.slot] = false
+	cursor = nil
+end
 _G.CursorHasItem = constant(false)
 -- id and the empty-slot art, the two the gear slots read. The path is shaped
 -- like the client's so a slot that draws it can be told from one that does not.
@@ -539,6 +844,29 @@ local totFrame = unitFrame("TargetFrameToT", 120, 50, targetFrame, {})
 -- tall. That offset is the whole reason the skin has to place this frame
 -- itself once the target frame is the height of the block instead.
 totFrame:SetPoint("TOPLEFT", targetFrame, "TOPLEFT", -35, -70)
+
+-- The head of each of the target's two aura rows, anchored the way the client
+-- anchors them: to the frame's bottom left corner, lifted by the height of the
+-- art that hangs under the bars on a frame 100 units tall. Everything after
+-- the head hangs off the head, so these two are the whole of the row's
+-- position, and the lift is the number the skin has to measure and cannot
+-- read, because the client keeps it in a local.
+--
+-- Standing them up unanchored first and anchoring them below, the way the
+-- client does: the buttons exist from the moment the frame does and are
+-- re-anchored on every aura the target gains or loses.
+local AURA_LIFT = 32
+local auraHeads = {}
+for _, name in ipairs({ "TargetFrameBuff1", "TargetFrameDebuff1" }) do
+	auraHeads[#auraHeads + 1] = child("button", targetFrame, name)
+end
+
+local function anchorAuras()
+	for _, head in ipairs(auraHeads) do
+		head:ClearAllPoints()
+		head:SetPoint("TOPLEFT", targetFrame, "BOTTOMLEFT", 5, AURA_LIFT)
+	end
+end
 
 -- What each unit frame was built as, taken before PLAYER_LOGIN and so before
 -- the skin has fitted any of them. The fit is only reversible if these are the
@@ -751,6 +1079,22 @@ local TINT = {
 	tot = { 0.88, 0.25, 0.28 },
 }
 
+-- The two textures the skin draws inside each of Blizzard's bars, found the
+-- way everything else here is found: by what they are, not by reaching into
+-- the module's tables. The track fills its bar, so it is the one with
+-- SetAllPoints on it; the slice is pinned to the fill texture instead, which
+-- is what makes it start exactly where the bar stops.
+local function barTexture(bar, filling)
+	for _, region in ipairs(bar.regions) do
+		if region.kind == "texture" and (region.allPoints ~= nil) == filling then
+			return region
+		end
+	end
+end
+
+local function skinTrack(bar) return barTexture(bar, true) end
+local function skinSlice(bar) return barTexture(bar, false) end
+
 -- entry.top is the only frame the skin pins to the whole of the box, which is
 -- how it is found without this file reaching into the module's own tables.
 local function textFrame(box)
@@ -836,23 +1180,48 @@ for _, block in ipairs(blocks) do
 		check(frame.manabar.allPoints == powerRail,
 			key .. ": the power bar is not pinned to its rail")
 
-		-- Stacking order, written end to end rather than inherited anywhere.
-		-- The rail carries the spent part of the gauge and Blizzard's bar
-		-- carries the fill, so a rail level with its bar is not a cosmetic
-		-- difference: the tie goes to whichever frame was built later, which is
-		-- ours, and the track then draws over the fill at nine tenths alpha. A
-		-- target at full health came out at 28 percent of its own colour.
-		for name, rail in pairs({ health = healthRail, power = powerRail }) do
-			local bar = name == "health" and frame.healthbar or frame.manabar
-			check(rail and rail:GetFrameLevel() > box:GetFrameLevel(),
-				("%s: the %s rail is on level %s, not above the block's %s")
-					:format(key, name, tostring(rail and rail:GetFrameLevel()),
-						tostring(box:GetFrameLevel())))
-			check(rail and bar:GetFrameLevel() > rail:GetFrameLevel(),
-				("%s: the %s bar is on level %d and its rail on %s, so the track "
-					.. "draws over the fill"):format(key, name, bar:GetFrameLevel(),
-						tostring(rail and rail:GetFrameLevel())))
+		-- Stacking order, and the whole reason it is asserted this way.
+		--
+		-- The spent track used to be a texture on the rail, one frame under
+		-- Blizzard's bar, and this file checked the two levels. Both clients
+		-- took the writes and one of them did not keep them: the target frame
+		-- came out with its rails level with its bars, the tie went to
+		-- whichever was built later, which is ours, and the track drew over
+		-- the fill at nine tenths alpha. A target at full health read at 28
+		-- percent of its own colour. The player frame, one line of the same
+		-- code away, was correct, and every level this file compared was the
+		-- number the addon had asked for rather than the one on the screen.
+		--
+		-- So the order is no longer between two frames. The track and the heal
+		-- slice are regions of Blizzard's own bar and sit under its fill by
+		-- draw layer, which is settled inside one frame and cannot be a
+		-- disagreement. What is asserted is that: same frame, and the layers
+		-- in the order track, slice, fill.
+		local LAYERS = { BACKGROUND = 1, BORDER = 2, ARTWORK = 3, OVERLAY = 4 }
+		local function depth(texture)
+			if not texture or not LAYERS[texture.layer] then
+				return nil
+			end
+			return LAYERS[texture.layer] * 16 + (texture.sublevel or 0)
 		end
+		for name, bar in pairs({ health = frame.healthbar, power = frame.manabar }) do
+			local track = skinTrack(bar)
+			check(track ~= nil and track.parent == bar,
+				("%s: the spent part of the %s gauge is not a region of the bar it"
+					.. " belongs to, so what draws on top is two frame levels arguing")
+					:format(key, name))
+			local under, over = depth(track), depth(bar.fill)
+			check(under and over and under < over,
+				("%s: the %s track is on %s and the fill on %s, so the track draws"
+					.. " over the fill"):format(key, name, tostring(track and track.layer),
+						tostring(bar.fill and bar.fill.layer)))
+		end
+		local slice = skinSlice(frame.healthbar)
+		check(slice and slice.parent == frame.healthbar,
+			key .. ": the heal slice is not a region of the health bar")
+		check(depth(skinTrack(frame.healthbar)) < depth(slice)
+			and depth(slice) < depth(frame.healthbar.fill),
+			key .. ": the heal slice is not between the spent track and the fill")
 
 		-- What the block is actually painted. The fill is the unit's colour at
 		-- full brightness, the spent part of each gauge is that colour at a
@@ -871,7 +1240,7 @@ for _, block in ipairs(blocks) do
 			("%s: the health bar is painted %s,%s,%s and not the unit's %.2f,%.2f,%.2f")
 				:format(key, tostring(frame.healthbar.barR), tostring(frame.healthbar.barG),
 					tostring(frame.healthbar.barB), tint[1], tint[2], tint[3]))
-		check(paints(healthRail.regions[1], tint[1] * TRACK, tint[2] * TRACK,
+		check(paints(skinTrack(frame.healthbar), tint[1] * TRACK, tint[2] * TRACK,
 			tint[3] * TRACK, 0.9), key .. ": the spent part of the health gauge is not "
 				.. "the unit's colour at a fifth")
 		local dimmed = 0
@@ -992,17 +1361,8 @@ check(flattenWrites == 0,
 -- not the answer.
 --------------------------------------------------------------------------
 
-local healthRail = playerBox.children[1]
-local healSlice
-for _, region in ipairs(healthRail.regions) do
-	-- The track fills the rail, so it is the one region here with allPoints
-	-- set. The slice is pinned to the health bar's fill texture instead, which
-	-- is what makes it start exactly where the bar stops.
-	if not region.allPoints then
-		healSlice = region
-	end
-end
-check(healSlice ~= nil, "the skin drew no incoming heal slice on the health rail")
+local healSlice = skinSlice(_G.PlayerFrame.healthbar)
+check(healSlice ~= nil, "the skin drew no incoming heal slice on the health bar")
 
 local sliceAnchor = healSlice and healSlice.points and healSlice.points[1]
 check(sliceAnchor ~= nil and sliceAnchor[2] == _G.PlayerFrame.healthbar.fill,
@@ -1015,7 +1375,16 @@ check(sliceAnchor ~= nil and sliceAnchor[2] == _G.PlayerFrame.healthbar.fill,
 local function healTick(amount)
 	incomingHeals = amount
 	skinTicker.scripts.OnUpdate(skinTicker, 0.25)
-	return healSlice.shown and healSlice:GetWidth() or 0
+	if not healSlice.shown then
+		return 0
+	end
+	-- Back into pixels, because the slice is a region of Blizzard's health bar
+	-- and its width is written in that bar's units. That is the boundary this
+	-- part is built on and the reason the number is asserted here at all: the
+	-- span is worked out in whole pixels of the gauge and multiplied by one
+	-- pixel in the bar's units on the way out, so dividing by the same figure
+	-- is what the client will have drawn.
+	return healSlice:GetWidth() / ns.UI.Pixel(_G.PlayerFrame.healthbar)
 end
 
 -- The gauge is the block less the portrait's square and the one pixel it is
@@ -1028,14 +1397,15 @@ check(healTick(0) == 0, "a unit with no heal on the way still draws a slice")
 
 local fits = math.floor(1800 / 9000 * railPixels + 0.5)
 local drawn = healTick(1800)
-check(drawn == fits,
+check(math.abs(drawn - fits) < 1e-9,
 	("a 1800 heal on a 9000 unit drew %.2f px of a %d px gauge, expected %d")
 		:format(drawn, railPixels, fits))
-check(drawn == math.floor(drawn), "the heal slice is a fraction of a pixel wide")
+check(math.abs(drawn - math.floor(drawn + 0.5)) < 1e-9,
+	"the heal slice is a fraction of a pixel wide")
 
 local capped = math.floor(MISSING / 9000 * railPixels + 0.5)
 local over = healTick(999999)
-check(over == capped,
+check(math.abs(over - capped) < 1e-9,
 	("a heal far past what the unit is missing drew %.2f px, expected the %d px it is down")
 		:format(over, capped))
 check(capped < railPixels,
@@ -1045,6 +1415,67 @@ check(healTick(0) == 0, "the slice stayed up after the heal it predicted landed"
 
 print(("heals  gauge %d px, 1800 of 9000 draws %d px, an overheal clamps to %d px")
 	:format(railPixels, fits, capped))
+
+--------------------------------------------------------------------------
+-- The aura row
+--
+-- The client hangs the target's buffs and debuffs off the frame's bottom left
+-- corner, lifted by the height of the art that used to hang under the bars.
+-- Fitting the frame to the block took that art away and the same lift then put
+-- the row inside the gauge, which is where a screenshot found it.
+--
+-- The row is not moved by the addon and this asserts that it is not. Every
+-- icon in it is a child of a secure unit button, so it can only be anchored
+-- out of combat, and the client re-anchors the head of each row on every aura
+-- the target gains or loses: a row placed by the addon would be back inside
+-- the gauge on the first refresh of the first fight. What the addon moves is
+-- the edge the client measures from, which it may do whenever it is allowed
+-- to and which then holds for the rest of the session.
+--
+-- So the three numbers here are the whole contract. The heads keep the anchor
+-- the client wrote, the frame is the block plus that lift, and the mouse
+-- region is pulled back off the strip so the block is still all you can click.
+--------------------------------------------------------------------------
+
+local targetBox = _G.WarriorKitSkinTarget
+
+local function screenHeight(frame)
+	return frame:GetHeight() * frame:GetEffectiveScale()
+end
+
+-- Before any aura exists there is nothing to measure and the frame is the
+-- block exactly, which is what the fit assertions above have already checked.
+check(math.abs(screenHeight(targetFrame) - screenHeight(targetBox)) < 1e-6,
+	"the target frame carries a tail before the client has placed a single aura")
+
+anchorAuras()
+fire("UNIT_AURA", "target")
+
+local lift = AURA_LIFT * targetFrame:GetEffectiveScale()
+check(math.abs(screenHeight(targetFrame) - (screenHeight(targetBox) + lift)) < 1e-6,
+	("the target frame is %.2f of screen and the block plus the client's %d unit"
+		.. " lift is %.2f, so the aura row does not land under the block")
+		:format(screenHeight(targetFrame), AURA_LIFT, screenHeight(targetBox) + lift))
+
+for _, head in ipairs(auraHeads) do
+	local point = head.points and head.points[1]
+	check(point ~= nil and point[2] == targetFrame and point[5] == AURA_LIFT,
+		head.name .. " was re-anchored by the addon, which is a write the client"
+		.. " undoes on the next aura and combat refuses outright")
+end
+
+local _, _, _, bottom = targetFrame:GetHitRectInsets()
+check(math.abs((bottom or 0) - AURA_LIFT) < 1e-6,
+	("the target frame takes clicks %s units below the block, where the aura row"
+		.. " hangs and there is nothing to click"):format(tostring(bottom)))
+
+local _, _, _, playerBottom = playerFrame:GetHitRectInsets()
+check((playerBottom or 0) == 0,
+	"the player frame had its mouse region inset, and it has no aura row to make"
+	.. " room for")
+
+print(("auras  the client lifts the row %d units, the target frame is the block"
+	.. " plus that and takes no clicks in it"):format(AURA_LIFT))
 
 --------------------------------------------------------------------------
 -- The fit, off and back on
@@ -1065,8 +1496,12 @@ local function screenSize(frame)
 		frame:GetHeight() * frame:GetEffectiveScale()
 end
 
+-- Under the target's block and not under the target's frame. Those two have
+-- the same bottom edge on every frame but this one, where the frame carries
+-- the strip the client's aura row hangs in, and hanging target of target off
+-- the frame would leave a row of icons' worth of gap above it.
 local perch = totFrame.points and totFrame.points[1]
-check(perch ~= nil and perch[2] == targetFrame and perch[1] == "TOPRIGHT"
+check(perch ~= nil and perch[2] == _G.WarriorKitSkinTarget and perch[1] == "TOPRIGHT"
 	and perch[3] == "BOTTOMRIGHT" and perch[5] < 0,
 	"target of target is not parked under the target block, so it is still"
 	.. " anchored against a target frame that is no longer that size")
@@ -1086,6 +1521,14 @@ for _, block in ipairs(blocks) do
 		("%s: the skin came off and left the frame %.0fx%.0f, not the %.0fx%.0f it found")
 			:format(key, frame:GetWidth(), frame:GetHeight(), built[1], built[2]))
 end
+
+-- And the mouse region with it. A frame handed back its size while still
+-- refusing clicks along its bottom edge is a frame the user cannot use and
+-- cannot see why.
+local _, _, _, offInset = targetFrame:GetHitRectInsets()
+check((offInset or 0) == 0,
+	("the skin came off and left the target frame refusing clicks %s units above"
+		.. " its own bottom edge"):format(tostring(offInset)))
 
 local back = totFrame.points and totFrame.points[1]
 local was = BUILT[totFrame.name][3]
@@ -1469,6 +1912,337 @@ end
 
 print(("loadout %d of %d rows, %d secure buttons, defensive sends %d characters")
 	:format(ns.Loadouts.Count(), ns.Loadouts.MAX, ns.Loadouts.MAX, #LoadoutMacro(DEFENSIVE)))
+
+--------------------------------------------------------------------------
+-- The three chores
+--
+-- Two of these are conveniences and one of them can destroy what you own. The
+-- container call the vendor part is built on sells a grey while a merchant
+-- window is up and eats, equips or opens the same item when one is not, so the
+-- assertions that carry the weight here are the negative ones: that a sweep
+-- which loses its window moves nothing, that a green is still in the bag on the
+-- last pass, and that the money that arrived is the money those two greys were
+-- worth and not a copper more.
+--------------------------------------------------------------------------
+
+do
+	local function lootedCount()
+		local count = 0
+		for _ in pairs(looted) do
+			count = count + 1
+		end
+		return count
+	end
+
+	local function clearCorpse()
+		for slot in pairs(looted) do
+			looted[slot] = nil
+		end
+	end
+
+	local function junkLeft()
+		local count = 0
+		for index = 1, #JUNK do
+			if JUNK[index] then
+				count = count + 1
+			end
+		end
+		return count
+	end
+
+	_G.SetCVar("autoLootDefault", 1)
+
+	----------------------------------------------------------------------
+	-- Looting
+	----------------------------------------------------------------------
+
+	-- Solo, group loot, auto loot on: the whole corpse in one pass.
+	clearCorpse()
+	advance(1)
+	fire("LOOT_READY")
+	check(lootedCount() == 4, ("fast loot took %d of 4 slots"):format(lootedCount()))
+
+	-- LOOT_READY fires again as each slot clears, and a second pass over slots
+	-- the first one already took is at best wasted work.
+	clearCorpse()
+	fire("LOOT_READY")
+	check(lootedCount() == 0, "the loot throttle let a second burst straight through")
+
+	clearCorpse()
+	advance(1)
+	fire("LOOT_READY")
+	check(lootedCount() == 4, "the loot throttle never released")
+
+	-- Master loot, threshold 2. Slots 1 and 2 are under it and are taken; slots
+	-- 3 and 4 are the master looter's to assign, and taking one of those on
+	-- someone's behalf is the failure this guard exists for.
+	clearCorpse()
+	advance(1)
+	lootMethod = "master"
+	fire("LOOT_READY")
+	check(looted[1] and looted[2], "master loot skipped a slot under the threshold")
+	check(not looted[3] and not looted[4],
+		"master loot took a slot the master looter has to hand out")
+	lootMethod = "group"
+
+	-- Off is unregistered, not a branch inside a handler the client still calls.
+	clearCorpse()
+	advance(1)
+	ns.db.fastLoot = false
+	ns.Loot.Apply()
+	check(#(events["LOOT_READY"] or {}) == 0,
+		"fast loot off left the addon sitting on the loot path")
+	fire("LOOT_READY")
+	check(lootedCount() == 0, "fast loot off still emptied the corpse")
+	ns.db.fastLoot = true
+	ns.Loot.Apply()
+
+	----------------------------------------------------------------------
+	-- The vendor
+	----------------------------------------------------------------------
+
+	local vendorFrame = (events["MERCHANT_SHOW"] or {})[1]
+	check(vendorFrame ~= nil, "nothing registered MERCHANT_SHOW")
+
+	local function sweep()
+		local ticks = 0
+		while ns.Vendor.Running() and ticks < 60 do
+			vendorFrame.scripts.OnUpdate(vendorFrame, 0.2)
+			ticks = ticks + 1
+		end
+		return ticks
+	end
+
+	-- The one that matters. A sale that starts and then loses its window has to
+	-- touch nothing at all, because with the window shut every sale is a use.
+	refill()
+	_G.MerchantFrame:Show()
+	fire("MERCHANT_SHOW")
+	_G.MerchantFrame:Hide()
+	sweep()
+	check(junkLeft() == 4, "the sweep emptied the bag with the merchant window shut")
+	check(misused == 0, "something in the bags was used rather than sold")
+
+	-- And the sale itself. Two greys a vendor pays for go, the grey it will not
+	-- pay for stays, and so does the green.
+	refill()
+	local before = _G.GetMoney()
+	_G.MerchantFrame:Show()
+	fire("MERCHANT_SHOW")
+	check(ns.Vendor.Running(), "the merchant opened and no sweep started")
+
+	local ticks = sweep()
+	local sale = _G.GetMoney() - before
+	check(not ns.Vendor.Running(), "the sweep never stopped on its own")
+	check(sale == 47 + 12, ("the vendor paid %d for two greys worth 59"):format(sale))
+	check(junkLeft() == 2,
+		("%d left in the bag; the worthless grey and the green make 2"):format(junkLeft()))
+	check(misused == 0, "the sale used something instead of selling it")
+
+	-- Shift is the override, the same key that already means "let me do this
+	-- myself" everywhere else at a merchant.
+	refill()
+	_G.MerchantFrame:Show()
+	_G.IsShiftKeyDown = constant(true)
+	fire("MERCHANT_SHOW")
+	check(not ns.Vendor.Running(), "shift did not hold the sale off")
+	_G.IsShiftKeyDown = constant(false)
+
+	ns.db.sellTrash = false
+	ns.Vendor.Apply()
+	check(#(events["MERCHANT_SHOW"] or {}) == 0,
+		"selling off left the addon sitting on the merchant")
+	ns.db.sellTrash = true
+	ns.Vendor.Apply()
+	_G.MerchantFrame:Hide()
+
+	----------------------------------------------------------------------
+	-- The camera
+	----------------------------------------------------------------------
+
+	ns.db.maxZoom = true
+	ns.Camera.Apply()
+	check(ns.Camera.Current() == 4, "max zoom never reached the CVar")
+
+	-- Off hands the CVar back at whatever this client calls its default. With no
+	-- GetCVarDefault, which is the client the fallback exists for, that is the
+	-- documented 1.9.
+	ns.db.maxZoom = false
+	ns.Camera.Apply()
+	check(ns.Camera.Current() == 1.9, "turning max zoom off did not hand the CVar back")
+
+	-- And where the client does state a default, that is the number used.
+	_G.GetCVarDefault = function() return "2.4" end
+	ns.Camera.Apply()
+	check(ns.Camera.Current() == 2.4, "the client's own default was ignored")
+	_G.GetCVarDefault = nil
+
+	ns.db.maxZoom = true
+	ns.Camera.Apply()
+
+	print(("chores corpse of %d in one pass, vendor paid %s over %d passes for 2 of 4 slots, camera %s")
+		:format(#CORPSE, _G.GetCoinText(sale), ticks, ns.Camera.Describe()))
+end
+
+--------------------------------------------------------------------------
+-- The clutter window
+--
+-- The only thing in the addon with nothing behind it. A grey sold to a vendor
+-- is in the buyback tab; an item destroyed here is gone. So most of what is
+-- asserted below is the window refusing: a slot that moved under the card, a
+-- cursor holding the wrong thing, a client with no delete call, a second click
+-- landing on the card that replaced the one you meant. Each of those is a way
+-- to destroy the wrong item, and each one has to end with nothing destroyed.
+--------------------------------------------------------------------------
+
+do
+	local function byName(list)
+		local out = {}
+		for index = 1, #list do
+			out[list[index].name] = list[index]
+		end
+		return out
+	end
+
+	----------------------------------------------------------------------
+	-- The verdict
+	----------------------------------------------------------------------
+
+	refillQuests()
+	local found = ns.Clutter.Scan()
+	local seen = byName(found)
+
+	check(#found == 4,
+		("the scan offered %d of 7 quest items; 4 of them are finished with"):format(#found))
+	check(seen["Diplomat's Ring"] == nil, "an item wanted by a quest in your log was offered")
+	check(seen["Sealed Letter"] == nil, "an item that starts a quest you have not done was offered")
+	check(seen["Unknown Trinket"] == nil, "an item the database has never heard of was offered")
+	check(seen["Hogger's Claw"] ~= nil and ns.Clutter.Certain(seen["Hogger's Claw"]),
+		"an item whose only quest is behind you was not offered as certain")
+	check(seen["Zul'Mamwe Fetish"] ~= nil and ns.Clutter.Certain(seen["Zul'Mamwe Fetish"]),
+		"an item whose two quests are both behind you was not offered as certain")
+	check(seen["Old Cipher"] ~= nil and ns.Clutter.Certain(seen["Old Cipher"]),
+		"a starter for a quest you have already completed was not offered")
+	check(seen["Rogue's Token"] ~= nil and not ns.Clutter.Certain(seen["Rogue's Token"]),
+		"an item for a quest still out there was not flagged as the uncertain one")
+
+	-- Certain first, so the window never opens on the hard question.
+	check(ns.Clutter.Certain(found[1]), "the queue did not put a certain item first")
+	check(not ns.Clutter.Certain(found[#found]), "the queue did not put the uncertain one last")
+
+	-- And the card names the quest, which is the whole reason the window exists
+	-- rather than a list of item names.
+	check(seen["Hogger's Claw"].reason:find("Wanted: Hogger", 1, true) ~= nil,
+		"the card does not name the quest the item came from")
+	check(seen["Rogue's Token"].reason:find("A Rogue's Deal", 1, true) ~= nil,
+		"the uncertain card does not name the quest that still wants the item")
+
+	----------------------------------------------------------------------
+	-- Cycling
+	----------------------------------------------------------------------
+
+	ns.Destroy.Show()
+
+	local clutter
+	for _, held in ipairs(ns.UI.Windows) do
+		if held.frame and held.frame:GetName() == "WarriorKitClutter" then
+			clutter = held
+		end
+	end
+	check(clutter ~= nil, "the clutter window was never built")
+
+	local card = clutter.card
+	check(card.count:GetText() == "1 of 4",
+		("the counter opened on %q rather than 1 of 4"):format(tostring(card.count:GetText())))
+
+	local before = #destroyed
+	card.skip.scripts.OnClick()
+	check(#destroyed == before, "skip destroyed something")
+	check(card.count:GetText() == "2 of 4",
+		("skip left the counter on %q"):format(tostring(card.count:GetText())))
+
+	advance(1)
+	card.destroy.scripts.OnClick()
+	check(#destroyed == before + 1, "the destroy button destroyed nothing")
+	check(destroyed[#destroyed]:find("Old Cipher", 1, true) ~= nil,
+		"destroy took an item other than the one on the card")
+
+	-- Two clicks in the same instant is one destroy. The window replaces the
+	-- card the moment the first lands, so without the debounce the second falls
+	-- on an item nobody looked at.
+	local held = #destroyed
+	card.destroy.scripts.OnClick()
+	check(#destroyed == held, "a second click in the same instant destroyed another item")
+
+	----------------------------------------------------------------------
+	-- Every way it has to refuse
+	----------------------------------------------------------------------
+
+	-- The slot moved under the card. Something looted, the vendor sweep sold,
+	-- a stack split and everything after it shifted by one.
+	refillQuests()
+	ns.Destroy.Show()
+	QUESTBAG[1] = "Unknown Trinket"
+	held = #destroyed
+	local touched = pickups
+	advance(1)
+	card.destroy.scripts.OnClick()
+	check(#destroyed == held, "the window destroyed whatever had replaced the item on the card")
+	check(QUESTBAG[1] == "Unknown Trinket", "the replacement item was destroyed")
+	-- And it never reached the cursor. The cursor check would have caught this
+	-- too, so counting pickups is the only way to say the slot re-read in front
+	-- of it is still there.
+	check(pickups == touched, "a stale card still put an item on the cursor")
+
+	-- The cursor came up holding something else, which is the client
+	-- contradicting the bag scan. It is a second opinion and it gets to win.
+	refillQuests()
+	ns.Destroy.Show()
+	local realPickup = _G.PickupContainerItem
+	_G.PickupContainerItem = function() realPickup(2, 7) end
+	held = #destroyed
+	advance(1)
+	card.destroy.scripts.OnClick()
+	check(#destroyed == held, "a cursor holding the wrong item was deleted anyway")
+	check(_G.GetCursorInfo() == nil, "the cursor was left holding an item")
+	_G.PickupContainerItem = realPickup
+
+	-- A client with no DeleteCursorItem. Nothing installed on either client
+	-- calls it, Questie only hooks it, so this is the client the probe exists
+	-- for and it has to refuse rather than raise.
+	refillQuests()
+	ns.Destroy.Show()
+	local realDelete = _G.DeleteCursorItem
+	_G.DeleteCursorItem = nil
+	held = #destroyed
+	advance(1)
+	card.destroy.scripts.OnClick()
+	check(#destroyed == held, "something was destroyed on a client with no delete call")
+	check(_G.GetCursorInfo() == nil, "the cursor was left holding an item")
+	_G.DeleteCursorItem = realDelete
+
+	----------------------------------------------------------------------
+	-- Without Questie
+	----------------------------------------------------------------------
+
+	local realLoader = _G.QuestieLoader
+	_G.QuestieLoader = nil
+	local none, why = ns.Clutter.Scan()
+	check(#none == 0 and why == "questie", "a missing Questie did not stop the scan")
+	check(not ns.Clutter.Ready(), "a missing Questie still reported a working database")
+
+	-- The trap. ImportModule answers a fresh empty table for a module it does
+	-- not carry, so the module coming back is no proof of anything.
+	_G.QuestieLoader = { ImportModule = function() return {} end }
+	check(not ns.Clutter.Ready(), "an empty Questie module was taken for a working database")
+	_G.QuestieLoader = realLoader
+
+	ns.Destroy.Hide()
+	refillQuests()
+
+	print(("clutter %d of %d quest items finished with, %d destroyed and %d refusals held")
+		:format(#found, #QUESTBAG, #destroyed, 3))
+end
 
 --------------------------------------------------------------------------
 -- What the addon costs

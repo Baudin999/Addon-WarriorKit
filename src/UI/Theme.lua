@@ -36,6 +36,12 @@ UI.Color = {
 	hover    = { 0.21, 0.21, 0.26, 1 },
 	selected = { 0.17, 0.17, 0.21, 1 },
 	accent   = { 0.25, 0.62, 0.95, 1 },
+	-- The first destructive control in the addon, and the only one. A button
+	-- that deletes an item you cannot get back has to be a different colour
+	-- from the button next to it that does nothing, and hover has its own
+	-- entry because UI.Button repaints its background on the way in and out.
+	danger   = { 0.40, 0.13, 0.13, 1 },
+	dangerHover = { 0.57, 0.18, 0.18, 1 },
 	tick     = { 0.34, 0.80, 0.44, 1 },
 	shadow   = { 0, 0, 0, 0.55 },
 

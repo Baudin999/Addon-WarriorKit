@@ -223,6 +223,10 @@ local SPECS = {
 		scale = 1, global = "WarriorKitSkinTarget",
 		frames = { "TargetFrame" },
 		art = { "TargetFrameTextureFrame" },
+		-- The first icon of each aura row, which is the only one the client
+		-- anchors to the frame itself. Everything after it hangs off one of
+		-- these two, so these two are where the row's position is measured.
+		auras = { "TargetFrameBuff1", "TargetFrameDebuff1" },
 		names = {
 			portrait = { "TargetFramePortrait" },
 			name = { "TargetName", "TargetFrameTextureFrameName" },
@@ -597,6 +601,13 @@ local function StripArt(entry)
 		mark(skip, other.top)
 		mark(skip, other.slot)
 		mark(keep, other.portrait)
+		-- Ours, on a bar of theirs. The walk that strips a bar's decoration
+		-- reaches every texture on it, and three of them are the gauge this
+		-- file drew. Kept across every entry rather than this one, for the
+		-- reason the skip set is: these frames nest.
+		mark(keep, other.healthTrack)
+		mark(keep, other.powerTrack)
+		mark(keep, other.healSlice)
 	end
 	wipe(entry.badges)
 
@@ -728,6 +739,13 @@ local function RememberFrame(entry)
 		for index = 1, frame:GetNumPoints() do
 			shot.points[index] = { frame:GetPoint(index) }
 		end
+		-- The mouse region, which the fit pulls back off the strip the aura
+		-- row hangs in. Recorded rather than assumed to be four zeroes: the
+		-- client insets its own unit frames, and handing back zeroes would
+		-- widen the target's hit region past anything it ever had.
+		if frame.GetHitRectInsets then
+			shot.insets = { frame:GetHitRectInsets() }
+		end
 	end)
 	entry.frameShot = shot
 end
@@ -750,8 +768,13 @@ local function RestoreFrame(entry)
 					point[3], point[4], point[5])
 			end
 		end
+		if shot.insets and #shot.insets == 4 and frame.SetHitRectInsets then
+			frame:SetHitRectInsets(shot.insets[1], shot.insets[2],
+				shot.insets[3], shot.insets[4])
+		end
 	end)
 	entry.perched = false
+	entry.auraLift = nil
 end
 
 -- Whether the unit frame refuses to be touched right now, which is what a
@@ -762,29 +785,114 @@ local function Blocked(entry)
 	return ns.Blocked(entry.frame)
 end
 
--- The unit frame, given the block's rectangle in the unit frame's own units.
+--------------------------------------------------------------------------
+-- The aura row
+--
+-- The client hangs the target's buffs and debuffs off the target frame's
+-- bottom left corner and lifts the first icon of each row by the height of
+-- the art that used to hang under the bars: a target frame is 100 units tall
+-- and the portrait and the two gauges stop about a third of the way up it.
+-- Fitting the frame to the block took that third away, so the same lift now
+-- puts the row inside the gauge, which is where a screenshot found it.
+--
+-- The row is not moved, and that is deliberate. Every icon in it is a child
+-- of a secure unit button and is protected with it, so an addon may only
+-- anchor one out of combat, and the client re-anchors the head of each row on
+-- every aura the target gains or loses. A row placed by this file would be
+-- back inside the gauge on the first refresh of the first fight and stay
+-- there until it ended, which is the half of the day the row matters.
+--
+-- What moves is the edge they hang from. The frame is fitted to the block
+-- plus the lift, so its bottom edge sits exactly one lift below the block and
+-- the client's own arithmetic lands the row against the block's bottom. It
+-- holds in combat because nothing has to be written in combat: the client
+-- does the anchoring it always did, against an edge this file put in the
+-- right place while it was allowed to.
+--
+-- The lift is measured, not assumed. Both clients write it into
+-- TargetFrame.lua as a local, so it cannot be read, but where the client put
+-- the icon can be: an anchor whose relative frame is the unit frame and whose
+-- relative point is a bottom one carries the lift as its Y offset. Until an
+-- aura has been seen there is no tail and the frame is the block exactly, and
+-- a client that anchors its row below the frame rather than above it measures
+-- as no lift and gets no tail either.
+--
+-- A tail is a strip of frame under the block, and a strip of frame takes
+-- clicks and draws an Edit Mode selection. Both are pulled back off it: the
+-- hit rect is inset by the tail and the selection is pinned to the block, so
+-- what you can click and what you can drag are still the thing you can see.
+--------------------------------------------------------------------------
+
+-- Past this, in the frame's own units, the number did not come from the layout
+-- this file is reading and is not going to be believed.
+local AURA_CEILING = 96
+
+-- The first of a region's anchors, or nothing where it has none. Written out
+-- rather than called inline so the pcall below takes a function that is
+-- already there: a closure per aura per relayout is garbage for nothing, and
+-- an icon that has never been anchored answers zero points rather than nil.
+local function AnchorOf(region)
+	if region:GetNumPoints() < 1 then
+		return nil
+	end
+	return region:GetPoint(1)
+end
+
+local function AuraLift(entry)
+	local lift = 0
+	-- Two of the three frames have no aura row of their own, and an empty list
+	-- built to walk zero times is still a table the collector has to see.
+	if not entry.spec.auras then
+		return lift
+	end
+	for _, name in ipairs(entry.spec.auras) do
+		local button = _G[name]
+		if button and button.GetNumPoints and button.GetPoint then
+			local ok, point, relative, relativePoint, _, y = pcall(AnchorOf, button)
+			if ok and relative == entry.frame and y and y > lift
+				and y <= AURA_CEILING and point and relativePoint
+				and point:find("TOP") and relativePoint:find("BOTTOM") then
+				lift = y
+			end
+		end
+	end
+	return lift
+end
+
+-- The unit frame, given the block's rectangle in the unit frame's own units
+-- and whatever the client hangs under it.
 --
 -- Read back before it is written for the reason the tick reads a bar back:
 -- this runs on every relayout and a SetSize is a resize of every anchor
 -- underneath it, which on a unit frame is the aura row and the cast bar.
-local function Fit(entry, width, height)
+local function Fit(entry, width, height, tail)
 	local frame, box = entry.frame, entry.box
 	local wide = ns.UI.Convert(width, box, frame)
 	local tall = ns.UI.Convert(height, box, frame)
 	if not wide or not tall or wide <= 0 or tall <= 0 then
 		return
 	end
+	-- The tail is already in the frame's units, because it was read off one of
+	-- the frame's own anchors. It is the one number here that does not cross
+	-- the boundary, so it is added after the conversion and not before it.
+	tall = tall + (tail or 0)
 	if frame:GetWidth() ~= wide or frame:GetHeight() ~= tall then
 		frame:SetSize(wide, tall)
+	end
+	-- The mouse stops at the block. Nothing else this file does needs the
+	-- insets, so they go back to zero on a frame with no tail rather than
+	-- being left wherever the last layout put them.
+	if frame.SetHitRectInsets then
+		frame:SetHitRectInsets(0, 0, 0, tail or 0)
 	end
 end
 
 -- Edit Mode draws its selection over the system it is dragging, and on this
--- client the box it drew was not the one on the screen. The default anchor is
--- the whole frame, which the fit above has now made right on its own; a
--- client that insets it instead is insetting it by the size of art this file
--- has already hidden. Pinned to the frame either way, so nothing has to be
--- assumed about which of the two this client does.
+-- client the box it drew was not the one on the screen. Pinned to the block
+-- rather than to the frame, because those two are the same rectangle on every
+-- frame but the target, where the frame is the block plus the strip of empty
+-- the client's aura row hangs in. A selection drawn around that strip is
+-- drawn around nothing you can see.
 --
 -- Every step is probed and nothing here exists on a client without Edit Mode,
 -- where all three functions answer false and the skin is unchanged.
@@ -795,7 +903,7 @@ local function PinSelection(entry)
 	end
 	local ok = pcall(function()
 		selection:ClearAllPoints()
-		selection:SetAllPoints(entry.frame)
+		selection:SetAllPoints(entry.box or entry.frame)
 	end)
 	return ok
 end
@@ -822,6 +930,34 @@ end
 -- The block we draw
 --------------------------------------------------------------------------
 
+-- A texture of ours, drawn inside a bar of Blizzard's and under its fill.
+--
+-- Under it by draw layer, not by frame level, and that is the whole reason
+-- these two textures live on the client's bar rather than on our own rail.
+-- Two frames agree on an order only while their levels do, and this file
+-- writes both of those levels and can still be wrong about them: on the live
+-- client the target frame came out with its rails level with its bars, the
+-- tie went to whichever was built later, which is ours, and the spent track
+-- drew over the fill at nine tenths alpha. A target at full health read at 28
+-- percent of its own colour, which is what a dead one looks like. The player
+-- frame, one line of the same code away, was correct.
+--
+-- Inside one frame there is nothing to disagree about. Layer beats level and
+-- BACKGROUND is the bottom one, so a sublevel there is below every layer a
+-- status bar's fill can be built on, on any client, and no number this file
+-- writes can move it. The sublevels are the two lowest the client allows,
+-- which leaves the track under the slice and both under the fill.
+local TRACK_LAYER, SLICE_LAYER = -8, -7
+
+local function Underlay(bar, sublevel, r, g, b, a)
+	local texture = ns.Fill(bar, "BACKGROUND", r or 0, g or 0, b or 0, a or 1)
+	texture:SetAllPoints()
+	if texture.SetDrawLayer then
+		texture:SetDrawLayer("BACKGROUND", sublevel)
+	end
+	return texture
+end
+
 -- One box, one divider, one text frame. It used to be two outlined boxes
 -- pushed together, and two edges meeting down the middle is what made the
 -- border read as furniture rather than as a frame. The portrait and the gauge
@@ -830,10 +966,11 @@ end
 --
 -- Three frame levels, and they are the whole z-order:
 --
---   box  the unit frame's own level. Backdrop, edge, divider and the two
---        tracks. It has to stay at the parent's level because the portrait is
---        a region of the parent, and a box one level up would cover it.
---   bar  two levels up. Blizzard's health and power bars.
+--   box  the unit frame's own level. Backdrop, edge and divider. It has to
+--        stay at the parent's level because the portrait is a region of the
+--        parent, and a box one level up would cover it.
+--   bar  two levels up. Blizzard's health and power bars, carrying the two
+--        spent tracks and the heal slice as regions of their own.
 --   top  three levels up. Every piece of text, because font strings under a
 --        status bar is exactly what the first version shipped.
 local function Build(entry)
@@ -885,25 +1022,22 @@ local function Build(entry)
 
 	-- The spent part of each bar, in the bar's own hue at a fifth of the
 	-- brightness, so a unit at ten percent still reads as itself rather than
-	-- as an empty box. Filling its rail, so it is placed once here rather than
+	-- as an empty box. Filling the bar, so it is placed once here rather than
 	-- re-anchored on every relayout.
-	entry.healthTrack = ns.Fill(entry.healthRail, "BACKGROUND", 0, 0, 0, 1)
-	entry.healthTrack:SetAllPoints()
-	entry.powerTrack = ns.Fill(entry.powerRail, "BACKGROUND", 0, 0, 0, 1)
-	entry.powerTrack:SetAllPoints()
+	entry.healthTrack = Underlay(entry.healthbar, TRACK_LAYER)
+	entry.powerTrack = Underlay(entry.manabar, TRACK_LAYER)
 
-	-- The incoming heal, between the track and the fill. It is a texture on our
-	-- own rail, which is two frame levels below the health bar, so the slice
-	-- draws over the spent part of the gauge and under everything Blizzard's
-	-- bar fills. That ordering is the clamp doing itself a favour: a heal that
-	-- overruns what is missing is covered by the fill rather than drawn past
-	-- it, and the arithmetic below only has to be right, not defensive.
+	-- The incoming heal, between the track and the fill, on the sublevel
+	-- between them. That ordering is the clamp doing itself a favour: a heal
+	-- that overruns what is missing is covered by the fill rather than drawn
+	-- past it, and the arithmetic below only has to be right, not defensive.
 	--
 	-- Anchored nowhere yet. Where it starts is where the fill stops, and that
 	-- is a region the client owns and may hand back a different object for, so
 	-- HealSlice pins it on the first tick and re-pins it if the object moves.
-	entry.healSlice = ns.Fill(entry.healthRail, "ARTWORK",
+	entry.healSlice = Underlay(entry.healthbar, SLICE_LAYER,
 		HEAL[1], HEAL[2], HEAL[3], HEAL[4])
+	entry.healSlice:ClearAllPoints()
 	entry.healSlice:Hide()
 
 	entry.top = CreateFrame("Frame", nil, frame)
@@ -964,7 +1098,12 @@ local function Place(entry)
 	entry.box:SetFrameLevel(frame:GetFrameLevel())
 	ns.EdgeSize(entry.box.edges, px)
 
-	Fit(entry, (side + width) * px, side * px)
+	-- Measured every time rather than once, because the first target this
+	-- addon sees may carry no aura at all and the number is only readable off
+	-- an icon the client has already placed. It settles on the first target
+	-- that has one and never moves again.
+	entry.auraLift = AuraLift(entry)
+	Fit(entry, (side + width) * px, side * px, entry.auraLift)
 	PinSelection(entry)
 
 	-- The portrait's square, which used to be the fixed point the whole block
@@ -1010,15 +1149,13 @@ local function Place(entry)
 	-- rather than given a width, so it fills what is left exactly, and its
 	-- height is a whole number of pixels measured down from the top of the box.
 	--
-	-- The level is written rather than inherited. A rail is built as a child of
-	-- the box, which at that moment is still on the level the client handed it,
-	-- and Place then lowers the box out from under it. What the rail is left on
-	-- is whatever the client does with a descendant when its parent moves, and
-	-- the two clients do not agree. Left unwritten it landed level with the
-	-- bars, and a tie is broken by creation order, which the rail wins because
-	-- Blizzard's bar was built years earlier. That put the track over the fill:
-	-- nine tenths of a 20 percent track and one tenth of the gauge, so a target
-	-- at full health drew at 28 percent of its own colour and read as dead.
+	-- A rail carries no texture of its own any more, only the rectangle its bar
+	-- is pinned to. It used to hold the spent track as well, which made the
+	-- order between two frames part of what the gauge looked like, and that is
+	-- an order this file wrote correctly and the client did not keep: see the
+	-- note on Underlay. The level is still written and still says what it
+	-- said, that the block is under the gauge and the gauge is under the text,
+	-- but nothing you can see now depends on the client agreeing.
 	local function Rail(rail, top, height)
 		local y = (top and -1 or -(2 + health)) * px
 		rail:ClearAllPoints()
@@ -1036,7 +1173,11 @@ local function Place(entry)
 	-- ticks. The rail is the gauge less the one pixel it is inset by on its
 	-- outer edge, and that is the full width a heal is a fraction of.
 	entry.railPixels = math.max(width - 1, 1)
-	entry.pixel = px
+	-- One pixel in the units the slice is drawn in, which are the bar's and no
+	-- longer the block's: the slice is a region of Blizzard's health bar now,
+	-- so a width written on it crosses the boundary like every other number
+	-- that lands on something of theirs.
+	entry.pixel = theirs
 	-- Which end of the bar the fill stops at. This file mirrors the target
 	-- frame and Blizzard does not mirror the bar inside it, so the two disagree
 	-- on which side is which and the bar is the one that is right. Asked rather
@@ -1162,7 +1303,11 @@ local function Perch(entry)
 		local edge = "TOP" .. (host.spec.mirror and "RIGHT" or "LEFT")
 		local corner = "BOTTOM" .. (host.spec.mirror and "RIGHT" or "LEFT")
 		frame:ClearAllPoints()
-		frame:SetPoint(edge, host.frame, corner, 0, -TOT_GAP * ns.Pixel(frame))
+		-- Under the target's block, not under the target's frame. On the target
+		-- those two have different bottom edges: the frame carries the strip
+		-- the client's aura row hangs in, and hanging target of target off
+		-- that would leave a gap the size of a row of icons.
+		frame:SetPoint(edge, host.box or host.frame, corner, 0, -TOT_GAP * ns.Pixel(frame))
 		entry.perched = true
 	else
 		local shot = entry.frameShot
@@ -1297,6 +1442,12 @@ local function Style(entry)
 	Place(entry)
 	entry.box:Show()
 	entry.top:Show()
+	-- The two tracks are regions of Blizzard's bars rather than of the box, so
+	-- hiding the box no longer takes them with it and showing it does not
+	-- bring them back. The slice stays hidden until the tick has a heal to
+	-- draw, which Place has just told it to work out again.
+	entry.healthTrack:Show()
+	entry.powerTrack:Show()
 	entry.tint, entry.power, entry.levelTag = nil, nil, nil
 	entry.shownPercent, entry.shownPower, entry.shownName = nil, nil, nil
 	entry.styled = true
@@ -1315,6 +1466,9 @@ local function Unstyle(entry)
 	if entry.box then
 		entry.box:Hide()
 		entry.top:Hide()
+		entry.healthTrack:Hide()
+		entry.powerTrack:Hide()
+		entry.healSlice:Hide()
 	end
 
 	for _, key in ipairs(BARS) do
@@ -1576,10 +1730,20 @@ local function FitText(entry)
 	local shot = entry.frameShot
 	local was = shot and shot.width and shot.width > 0
 		and ("was %dx%d, "):format(shot.width, shot.height) or ""
-	return ("%sedit mode selection %s%s"):format(was,
+	-- The aura row, which is the one piece of the layout this file places by
+	-- resizing the frame rather than by anchoring anything. A row in the wrong
+	-- place is either a lift that was never measured, which this says, or a
+	-- lift that measured wrong, which this prints the number of.
+	local row = ""
+	if entry.spec.auras then
+		row = entry.auraLift and entry.auraLift > 0
+			and (", aura row lifted %.1f, frame tailed by the same"):format(entry.auraLift)
+			or ", aura row not measured yet, no tail on the frame"
+	end
+	return ("%sedit mode selection %s%s%s"):format(was,
 		type(entry.frame.Selection) == "table" and "pinned to the block"
 			or "not on this client",
-		entry.perched and (", parked under the " .. entry.spec.under) or "")
+		entry.perched and (", parked under the " .. entry.spec.under) or "", row)
 end
 
 function Skin.Probe()
@@ -1665,6 +1829,17 @@ events:RegisterEvent("PLAYER_REGEN_ENABLED")
 -- Blizzard_EditMode is load on demand, so the selection this file pins may not
 -- exist until the first time the user opens Edit Mode.
 events:RegisterEvent("ADDON_LOADED")
+-- How far above the frame's bottom edge the client starts the target's aura
+-- row is a number that can only be read off an icon it has already placed, so
+-- the first target carrying an aura is what settles it. Filtered to the target
+-- where the client can filter: unfiltered, this is every aura on every unit in
+-- range and in a raid that is thousands of calls a fight to answer a question
+-- whose answer changes once.
+if type(events.RegisterUnitEvent) == "function" then
+	events:RegisterUnitEvent("UNIT_AURA", "target")
+else
+	events:RegisterEvent("UNIT_AURA")
+end
 
 events:SetScript("OnEvent", function(_, event, arg1)
 	if event == "PLAYER_LOGIN" then
@@ -1692,6 +1867,18 @@ events:SetScript("OnEvent", function(_, event, arg1)
 
 	if event == "ADDON_LOADED" then
 		if arg1 == "Blizzard_EditMode" then
+			Skin.Relayout()
+		end
+		return
+	end
+
+	if event == "UNIT_AURA" then
+		-- Guarded on the number and not on the event. This fires on every aura
+		-- the target gains and loses, a relayout is a full pass over three
+		-- frames, and the lift it is watching for changes once and then never
+		-- again. The read is two anchors and no allocation.
+		local target = EntryFor("target")
+		if target and target.styled and target.auraLift ~= AuraLift(target) then
 			Skin.Relayout()
 		end
 		return

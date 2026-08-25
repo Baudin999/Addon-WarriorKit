@@ -1,5 +1,179 @@
 # Changelog
 
+## 1.7
+
+### Three chores the client makes you do by hand
+
+A ninth part, `Comfort`, one rail entry in `/wk` with a tab per chore. All three
+are on by default, because every one of them is something you would otherwise do
+every few minutes and off is not a state anyone would choose to start in. The
+implementations are Leatrix Plus's, which is loaded on both of these clients and
+is what proves every API involved.
+
+**Fast loot.** The client's auto loot opens the loot window and then takes one
+slot per frame, which is where the pause over each corpse comes from.
+`LOOT_READY` fires before any of that, so the corpse is emptied there and the
+window never draws. It runs only when auto loot is what your click asked for, so
+a shift-click to open the window still opens it, and it is throttled to 0.3
+seconds because the event fires again as each slot clears.
+
+Under master loot only the slots below the threshold are taken. `LootSlot` on a
+slot at or above it does nothing if you are not the master looter and quietly
+assigns it to yourself if you are, and an addon should not do that on your
+behalf. Where the client names no loot method at all the corpse is still emptied
+solo and the job is handed back to the client in a group.
+
+**Selling trash.** Grey items go at every merchant, and holding shift as you open
+one skips that visit. Only grey, and only what a vendor will pay something for.
+An item the client has not cached yet is left alone rather than sold on a guess,
+and asked about again a fifth of a second later.
+
+The sweep is a ticker rather than a single pass, because a sale is not instant:
+the slot locks, the server clears it, and only then does the item leave the bag.
+It repeats until a pass finds nothing left, backstopped at 25 passes, and it
+stops early on the two vendor refusals worth naming. What it made is the
+difference in your purse across the sweep rather than the sell prices added up,
+which is the number that is still right when a vendor refuses something halfway
+down the list.
+
+The safety is the point. `UseContainerItem` sells a bag slot while a merchant
+window is up and *uses* it when one is not, so the same call that sells your
+greys eats your food and equips your weapons anywhere else. Every path into it is
+behind a check that the window is still open, and the harness models the
+difference: its stub sells with the window up and destroys with it down, so a
+sweep that forgets to look fails the run rather than passing it.
+
+**Max camera zoom.** `cameraDistanceMaxZoomFactor` goes to 4.0 instead of the
+1.9 the client ships. The CVar is read straight back after it is written, so a
+client that clamps reports what it clamped to in `/wk status` and in the panel
+rather than being taken at its word. Off hands the CVar back at the client's own
+default. It is written at every entry to the world rather than once at login,
+because the CVar is the client's and anything that puts it back would otherwise
+leave the setting saying one thing and the camera doing another.
+
+### /wk destroy, for quest items you are finished with
+
+Quest items for quests you have completed sit in your bags forever. Most cannot
+be sold, so the vendor sweep is no help and the only way out is to destroy them.
+`/wk destroy` opens a small window that shows one at a time: the item, the quest
+it came from, a destroy and a skip.
+
+The client will tell you an item is a quest item and will not tell you which
+quest. There is no API for it. So this reads Questie's item database, which
+carries the quest an item starts and every quest that wants it, and without
+Questie the window says so and offers nothing rather than listing every quest
+item in your bags.
+
+Three things are never offered. An item that starts a quest you have not
+provably finished, because starters look exactly like orphans and destroying one
+loses a chain you never knew existed. An item tied to a quest in your log. And
+anything the database has never heard of. What is left is sorted with the certain
+ones first, and an item whose quest is still out there to pick up says "destroy
+anyway" on the button rather than "destroy".
+
+Four guards stand between the press and the delete: the slot is re-read against
+the card, the item is picked up and the cursor is asked what it is really
+holding, `DeleteCursorItem` is probed and pcalled because nothing installed on
+either client calls it, and a 0.4 second debounce stops a double click landing on
+the card that replaced the one you meant. The queue is rebuilt on every press
+rather than advanced, because bags move under an open window.
+
+None of this can know about repeatable quests, which never flag as completed, or
+about a chain dropping part three's item while you are on part one. That is why
+it asks instead of acting, and the panel tab says so above the button.
+
+### Gates
+
+`Comfort/Vendor.lua` names both of its ticker functions in check.sh's `HOT`
+list, so the sweep is held to the same no-unguarded-writes, no-allocation rule
+as the other four tickers. The harness gained a merchant, a corpse, a quest log,
+a model of Questie, a cursor and two more bags, and asserts the negative cases:
+a sweep that loses its window moves nothing, master loot leaves the master
+looter's slots alone, both settings unregister their events rather than branching
+inside a handler the client still calls, a stale clutter card never reaches the
+cursor, a cursor holding the wrong item is not deleted, a client with no delete
+call refuses, and an empty Questie module is not taken for a working database.
+
+Ten mutations were applied to check those assertions bite, and one did not. The
+"slot moved under the card" test was being caught by the cursor check rather than
+by the slot re-read it claimed to cover, so both guards passed with the first one
+deleted. The harness counts pickups now, which separates them: a stale card that
+reaches a pickup means the first guard is gone even though the second one held.
+
+The rail order had two parts sharing `order = 8`, which left `table.sort` to
+decide between them. Perf and EditMode now have their own.
+
+### The target's gauge, and the row of icons in it
+
+Two bugs on the target frame, both of them the fit from 1.6 meeting something
+the client measures off the frame's rectangle.
+
+**The colour.** The target's health bar drew at 28 percent of its own colour at
+any health, which on a tan warrior is the grey-brown of a corpse. The spent
+track was a texture on our rail, one frame level under Blizzard's bar, and 1.6
+had already written that level explicitly after the same bug appeared once
+before. Both clients took the write. The target frame did not keep it: its
+rails came out level with its bars, a tie goes to whichever frame was built
+later, which is ours, and a 20 percent track at nine tenths alpha over the fill
+is 28 percent. The player frame, one line of the same code away, was correct.
+
+So the order is no longer between two frames. The spent track and the heal
+slice are regions of Blizzard's own bar now, on the two lowest BACKGROUND
+sublevels, and the fill is on ARTWORK above both. Inside one frame the layer
+decides and there is nothing for a client to disagree with. Nothing else moved:
+the rails still carry the geometry, the bars are still pinned to them corner to
+corner, and the heal slice is still pinned to the fill texture, one boundary
+crossing further out because its width is now written in the bar's units.
+
+**The aura row.** The client hangs the target's buffs and debuffs off the
+frame's bottom left corner and lifts the first icon of each row by the height
+of the art that hangs under the bars on a frame 100 units tall. Fitting the
+frame to the block took that art away and the lift then put the icons inside
+the gauge.
+
+The icons are not moved, and that is the design rather than a shortcut. Every
+one of them is a child of a secure unit button, so an addon may only anchor one
+out of combat, and the client re-anchors the head of each row on every aura the
+target gains or loses. A row placed by this addon would be back in the gauge on
+the first refresh of the first pull and stay there until it ended.
+
+What moves is the edge the client measures from. The target frame is fitted to
+the block plus the lift, so its bottom edge sits one lift below the block and
+the client's own arithmetic lands the row against the block's bottom. It holds
+in combat because nothing has to be written in combat. The lift itself is
+measured rather than assumed: both clients keep it in a local, but the anchor
+the client wrote on the icon carries the number, so the first target with an
+aura settles it and a `UNIT_AURA` on the target is what catches that moment.
+Until then there is no tail and the frame is the block, and a client that hangs
+its row below the frame rather than above it measures as no lift and gets no
+tail either.
+
+A tail is a strip of frame under the block and a strip of frame takes clicks,
+so `SetHitRectInsets` pulls the mouse region back off it, the Edit Mode
+selection is pinned to the block rather than to the frame, and target of target
+parks under the block rather than under the frame. What you can click and what
+you can drag are still the thing you can see. `/wk skin probe` prints the lift
+and says so when it has not measured one yet, and the insets go back with the
+frame's size when the skin comes off.
+
+### Gates for both
+
+The harness stub now records a texture's draw layer and sublevel, which it
+dropped before, so the ordering that decides what the gauge looks like is
+asserted rather than assumed: the track and the slice are regions of the bar,
+and the three layers run track, slice, fill. The old assertion compared two
+frame levels, which is exactly the number the addon asked for rather than the
+one that reached the screen, and it passed while the target was drawing at 28
+percent.
+
+The stub also stands up the head of each aura row, anchored the way the client
+anchors it, and models hit rect insets and `RegisterUnitEvent`. Four things are
+asserted from that: the frame carries no tail before an aura has been seen, it
+is the block plus the client's lift afterwards, the addon has not touched the
+anchors on either row head, and the mouse region stops at the block. Both
+halves were checked by breaking the code and watching them fail.
+
+
 ## 1.6
 
 ### A performance tab

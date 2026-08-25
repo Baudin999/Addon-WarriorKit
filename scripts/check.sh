@@ -144,6 +144,8 @@ UnitFrames/EnemyBars.lua:UpdateList
 UnitFrames/EnemyBars.lua:Collect
 UnitFrames/EnemyBars.lua:CollectUnits
 UnitFrames/EnemyBars.lua:EnemyBars.Update
+Comfort/Vendor.lua:Sweep
+Comfort/Vendor.lua:Tick
 Perf/Perf.lua:Perf.Start
 Perf/Perf.lua:Perf.Stop
 Perf/Perf.lua:Perf.Sample

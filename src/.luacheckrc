@@ -17,6 +17,7 @@ globals = {
 	"WarriorKitChargeBinder",
 	"WarriorKitMarkButton",
 	"WarriorKitOptions",
+	"WarriorKitClutter",
 	"WarriorKitChargeButton",
 	"WarriorKitSwitchButton",
 	-- one per loadout, each a secure button carrying that loadout's macro. All
@@ -80,10 +81,14 @@ read_globals = {
 	"GetSpellInfo", "GetSpellTexture", "GetSpellCooldown", "IsUsableSpell",
 	"IsSpellInRange", "IsSpellKnown",
 	"GetTime", "GetRaidTargetIndex", "SetRaidTarget",
-	-- items, for the weapon the charge button equips. The container API is
-	-- C_Container on one client and loose globals on the other, so both are
-	-- probed in Core rather than named anywhere else.
+	-- items, for the weapon the charge button equips and the trash the Comfort
+	-- part sells. The container API is C_Container on one client and loose
+	-- globals on the other, so both are probed in Core rather than named
+	-- anywhere else. C_Item is the newer home for the item lookups and is
+	-- reached through _G in Core beside C_Container, so it is not an entry
+	-- here.
 	"GetInventoryItemLink", "GetContainerNumSlots", "GetContainerItemLink",
+	"GetContainerItemInfo", "UseContainerItem",
 	"GetItemInfo", "GetItemInfoInstant", "C_Container",
 	-- the empty-slot art each hand draws when nothing is set, and whether the
 	-- cursor is carrying something as it arrives over a slot. Baganator calls
@@ -112,6 +117,36 @@ read_globals = {
 	-- the CVar out of combat and hands it back in. Both calls are pcalled: no
 	-- addon here proves SetCVar takes that name on 2.5.6.
 	"GetCVarBool", "GetCVar", "SetCVar",
+	-- Looting, for the Comfort part. Leatrix Plus is loaded on both of these
+	-- clients and calls all five unguarded inside its own faster-looting
+	-- feature, which is the same feature and so the same proof;
+	-- GetLootThreshold is also called unguarded by TitanLootType on both.
+	-- GetLootMethod is the one that is not here: C_PartyInfo carries it on one
+	-- client and the loose global on the other, so Comfort/Loot.lua probes for
+	-- both and treats neither answering as "do not know" rather than "no".
+	"IsModifiedClick", "GetNumLootItems", "GetLootSlotInfo", "LootSlot",
+	"GetLootThreshold",
+	-- The merchant, for the same part. MerchantFrame is read to prove the
+	-- window is still up before anything is sold, because the container call
+	-- behind it uses the item instead when it is not. Leatrix calls the frame
+	-- and GetCoinText unguarded, Auctionator calls GetCoinText, and GetMoney is
+	-- called unguarded by TitanGold, TitanRepair and Titan itself. The two
+	-- ERR_ constants are reached through _G rather than named, because a client
+	-- missing one would compare a message against nil and stop a sale that was
+	-- fine.
+	"MerchantFrame", "GetMoney", "GetCoinText",
+	-- The quest log, for the clutter scan. Questie calls both of these
+	-- unguarded on both clients and reads the quest id out of the eighth value
+	-- exactly as Clutter.lua does. IsQuestFlaggedCompleted is not here: it lives
+	-- on the loose global on one client and under C_QuestLog on the other, so it
+	-- is resolved through _G the way Questie resolves it.
+	"GetNumQuestLogEntries", "GetQuestLogTitle",
+	-- QuestieLoader, PickupContainerItem's loose fallback and DeleteCursorItem
+	-- are deliberately absent. Questie is another addon and may not be
+	-- installed; the container call goes through C_Container in Core; and
+	-- nothing here calls DeleteCursorItem, Questie only hooks it, which proves
+	-- the global exists and is not the same as proving the call is ours to make.
+	-- All three are probed and pcalled at their use sites.
 	-- profiling, read by the Perf part. Every one of these is called unguarded
 	-- by an addon in this install: debugprofilestop by Details, Questie and
 	-- Auctionator, the memory pair by Details, TitanPerformance and Leatrix,

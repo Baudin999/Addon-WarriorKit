@@ -1,13 +1,13 @@
 # WarriorKit
 
-A personal warrior addon for WoW TBC Anniversary. Eight parts: ctrl-click raid
+A personal warrior addon for WoW TBC Anniversary. Nine parts: ctrl-click raid
 marking, one button that casts Charge, Intervene or Intercept depending on what
 you are looking at, one key that takes the next enemy and swings at it, weapon
 loadouts with a key each that swap your stance and both your hands, a warrior
 loadout that fills the action bars, enemy bars that replace the
-Blizzard nameplate, a strip of the Blizzard bar art, and one Edit Mode layout
-carried inside the addon folder. Settings live in a panel
-opened with `/wk`.
+Blizzard nameplate, a strip of the Blizzard bar art, three chores the client
+makes you do by hand, and one Edit Mode layout carried inside the addon folder.
+Settings live in a panel opened with `/wk`.
 
 This file is written for whoever picks the addon up next, human or agent. The
 first half is what it does, the second half is what the client will and will
@@ -62,7 +62,7 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is eight parts and a core. Each part is a folder, and Core knows the
+The addon is nine parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
@@ -113,6 +113,13 @@ name of none of them.
 
     Artwork/Artwork.lua      strips the gryphons and the metal strip off the bars
     Artwork/Feature.lua
+
+    Comfort/Loot.lua         empties a corpse on LOOT_READY, before the window draws
+    Comfort/Vendor.lua       sells grey items while a merchant window is up
+    Comfort/Camera.lua       how far cameraDistanceMaxZoomFactor lets you pull back
+    Comfort/Clutter.lua      which quest items are finished with, and why
+    Comfort/Destroy.lua      the one-card-at-a-time window that acts on that
+    Comfort/Feature.lua
 
     EditMode/EditMode.lua    probes Edit Mode, captures a layout, imports the baked one
     EditMode/Saved.lua       generated, the baked layout, written by bake-ui.sh
@@ -246,6 +253,23 @@ goes through `Feature.lua` or through the shared surface below:
     ns.ItemInfo(link)            name, icon, equip slot and the link's own colour
     ns.ContainerSlots(bag) / ns.ContainerItemLink(bag, slot)   bags, on either
                                         container API, and 0 or nil on neither
+    ns.ContainerItem(bag, slot)  how many are in that slot and whether the
+                                 client has it locked, as two returns rather
+                                 than a table, because the vendor sweep asks
+                                 once per slot per tick
+    ns.UseContainerItem(bag, slot)   sell it if a merchant window is up, use it
+                                 if one is not, so every caller has to prove the
+                                 window first; false where the client has
+                                 neither API
+    ns.ItemValue(link)           quality and what a vendor pays, and nil where
+                                 the client has not cached the item, which is
+                                 "do not know" rather than "worth nothing"
+    ns.ItemKind(link)            the item's id and the class and subclass the
+                                 client files it under, read from the client's
+                                 own database rather than the cache
+    ns.PickupContainerItem(bag, slot)   put a bag slot on the cursor, so the
+                                 caller can ask the client what it is really
+                                 holding; false where neither API is here
     ns.Charge.Pick()             ability key, the unit it takes, that unit's nameplate
     ns.Charge.SoftUnit()         the softenemy token when it resolves, whatever is under it
     ns.Charge.State(key, unit)   a status string, plus cooldown times
@@ -313,6 +337,24 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Blocked(region)           whether a region is protected and in lockdown,
                                  so the caller can queue the work for regen
     ns.Artwork.Apply()           re-run the bar art strip from ns.db.blizzArt
+    ns.Loot.Apply() / ns.Loot.Describe()   put the addon on or off the loot
+                                 path, and one line on which it is
+    ns.Vendor.Apply() / ns.Vendor.Stop() / ns.Vendor.Running() / Describe()
+                                 the same for the merchant, plus a way to end a
+                                 sale in flight and a way to ask if one is
+    ns.Camera.Apply() / ns.Camera.Current() / ns.Camera.Describe()
+                                 write the zoom CVar, read back what the client
+                                 actually kept, and say so
+    ns.Clutter.Scan()            every quest item in your bags that is finished
+                                 with, each with the reason, plus a word saying
+                                 why the list is empty when it is not "clean"
+    ns.Clutter.Certain(entry) / Ready() / Describe()   whether that entry is a
+                                 straightforward yes, whether Questie is
+                                 answering at all, and one line on which
+    ns.Destroy.Show() / Hide() / Toggle() / Describe()
+                                 the clutter window, and one line for /wk status
+    ns.Destroy.Take() / ns.Destroy.Skip()   the two buttons, which is the only
+                                 route to a delete in the whole addon
 
 Anything that changes a setting outside the panel ends by calling
 `ns.Options.Refresh()`. The slash handler already does.
@@ -1523,8 +1565,34 @@ the thing you could see sat somewhere inside it, and the empty three quarters
 went on eating clicks. So the block is anchored to the frame's own top corner
 now, the one the portrait is on, and `PlayerFrame`, `TargetFrame` and
 `TargetFrameToT` are each resized to the block over them. What Edit Mode drags
-is what is drawn, the hit region is the block, and Blizzard's aura row follows
-the frame in rather than hanging where a 232 by 100 frame left it.
+is what is drawn and the hit region is the block.
+
+The target frame is the one exception, and the client's aura row is why. The
+row hangs off the frame's bottom left corner, lifted by the height of the art
+that sits under the bars on a frame 100 units tall, so a frame fitted to the
+block puts the icons inside the gauge. The icons themselves cannot be the
+answer: each one is a child of a secure unit button, an addon may only anchor
+one out of combat, and the client re-anchors the head of each row on every aura
+the target gains or loses, so a row placed here would be back in the gauge one
+refresh into the first pull. What moves instead is the edge the client measures
+from. The target frame is fitted to the block plus that lift, so its bottom
+edge sits one lift below the block and the client's own arithmetic lands the
+row against the block's bottom, in combat as well as out of it, because nothing
+has to be written in combat.
+
+The lift is measured, not assumed. Both clients keep it in a local in
+`TargetFrame.lua`, but the anchor the client wrote on the icon carries it as a
+Y offset, so the first target with an aura settles the number and a `UNIT_AURA`
+filtered to the target is what catches that moment. Before that there is no
+tail and the frame is the block exactly, and a client that hangs its row below
+the frame rather than above it measures as no lift and gets no tail either.
+`/wk skin probe` prints the number, or says it has not seen one.
+
+A strip of frame under the block would take clicks and draw an Edit Mode
+selection around nothing, so `SetHitRectInsets` pulls the mouse region back off
+the tail, the selection is pinned to the block, and target of target parks
+under the block. The insets go back with the frame's size when the skin comes
+off.
 
 A resize is not a free change, so three things carry it. The original size is
 recorded before the first fit and `/wk skin off` writes it back, without a
@@ -1538,7 +1606,7 @@ parked three pixels under the target block, on the edge the two share, and it
 goes back to Blizzard's anchor the moment either frame is unskinned.
 
 Edit Mode also draws a selection frame over the system it is dragging. Where
-this client puts one, the skin pins it to the frame, and it post-hooks that
+this client puts one, the skin pins it to the block, and it post-hooks that
 frame's own `AnchorSelectionFrame` so a re-anchor when the user next opens Edit
 Mode gets pinned again. Both halves are probed by name and neither exists on a
 client without Edit Mode, where the fit alone is the whole of the answer. The
@@ -1621,12 +1689,29 @@ same reason. The edge takes the fill's colour at 60% brightness: at full
 strength a hostile target ringed the whole block in saturated red and the
 border shouted louder than anything inside it.
 
-**Three frame levels, and they are the whole z-order.** The box sits at the
-unit frame's own level, because the portrait is a region of that frame and a
-box one level up would cover it. The two status bars sit two levels up. Every
-piece of text sits three levels up, on `entry.top`, because font strings
-underneath a status bar is exactly what the first version shipped: the player's
-name and level were drawn and then painted over by the health bar.
+**Three frame levels, and one thing they are no longer allowed to decide.**
+The box sits at the unit frame's own level, because the portrait is a region of
+that frame and a box one level up would cover it. The two status bars sit two
+levels up. Every piece of text sits three levels up, on `entry.top`, because
+font strings underneath a status bar is exactly what the first version shipped:
+the player's name and level were drawn and then painted over by the health bar.
+
+What no longer rides on those levels is the gauge itself. The spent track used
+to be a texture on the rail, one level under Blizzard's bar, and the target
+frame came back from the client with its rails level with its bars anyway. A
+tie goes to whichever frame was built later, which is ours, so a 20 percent
+track at nine tenths alpha covered the fill and a target at full health drew at
+28 percent of its own colour. The player frame, one line of the same code away,
+was correct, and every level this addon could read back was the number it had
+asked for rather than the one on the screen.
+
+So the spent track and the heal slice are regions of Blizzard's own bar now, on
+the two lowest `BACKGROUND` sublevels, with the fill on `ARTWORK` above them.
+Inside one frame the draw layer decides and there is nothing for a client to
+disagree with. The rails still carry the geometry and the bars are still pinned
+to them corner to corner; what changed is that the two textures moved across
+the boundary, so the heal slice's width is now written in the bar's units like
+every other number that lands on something of Blizzard's.
 
 **The text is ours, not Blizzard's.** Their name and level font strings are
 hidden along with the status bar numbers, and this file draws its own pair.
@@ -1789,6 +1874,155 @@ which one rather than erroring. Unlike the Buttons probe this one is not cached,
 because `Blizzard_EditMode` can be load on demand and an answer taken at login
 would go stale.
 
+**Comfort.** Three chores the client makes you do by hand, lifted from Leatrix
+Plus, which is loaded on both of these clients and is where every API here is
+proved. They share a part because the alternative is three rail entries carrying
+one tick box each; the panel's second level does the rest, so it is one rail
+entry with a tab per chore.
+
+**Fast loot is a race the client loses on purpose.** Its auto loot opens the
+window, then takes one slot per frame with a pause between each, and the window
+is drawn through all of it. `LOOT_READY` fires once the server has said what is
+on the corpse and before any of that starts, so taking every slot there empties
+it without the window appearing. The throttle is 0.3 seconds, because
+`LOOT_READY` fires again as each slot clears and a second pass over slots the
+first one already took is at best wasted work.
+
+It only runs when auto loot is what the click asked for, which is
+`GetCVarBool("autoLootDefault") ~= IsModifiedClick("AUTOLOOTTOGGLE")`: the
+setting, inverted by the modifier that exists to invert it. A shift-click to
+open the window still opens the window.
+
+**Master loot is the one case where fast looting is theft.** Every slot at or
+above the threshold belongs to the master looter to assign. `LootSlot` on one of
+those does nothing if you are not the master looter and quietly assigns it to
+yourself if you are, which is a way to ninja your own raid without meaning to.
+So under master loot only the slots below the threshold are taken.
+
+Which loot method this is comes from `C_PartyInfo.GetLootMethod`, an enum where
+2 is master looter, or from the old `GetLootMethod` global, which answers the
+string `"master"`. Neither is proved on both clients, so both are probed and
+neither answering is a third state: solo the corpse is still emptied, because
+there is nobody to take a slot from, and in a group it falls back to the
+client's own auto loot, which is slower and correct.
+
+**The vendor part can destroy what you own, and that is the whole design.**
+`ns.UseContainerItem` sells a bag slot while a merchant window is up and *uses*
+it when one is not. It eats the food, equips the weapon, opens the box. So the
+sweep asks `MerchantFrame:IsShown()` before it touches anything and stops the
+moment the answer is no, and `MERCHANT_CLOSED` stays registered even with the
+setting off, because turning selling off mid-sale still has to end the sale.
+
+**Only grey, and only what a vendor pays for.** Quality comes from
+`ns.ItemValue`, which is `GetItemInfo` and answers nil for an item the client has
+not cached yet. Nil is treated as "do not know" and the item is left alone, then
+asked about again a fifth of a second later. Selling on a guessed quality is how
+something that is not trash ends up at a vendor, and there is no undo.
+
+**A sale is not instant, so the sweep is a ticker rather than a pass.**
+`UseContainerItem` locks the slot, the server clears it, and only then does the
+item leave the bag, so one pass cannot see the result of its own work. It repeats
+at 0.2 seconds until a pass finds nothing left, which is also what catches a sale
+the server dropped. The backstop is 25 passes, five seconds, which is longer
+than any real bagful and short enough that a vendor who silently refuses
+everything does not leave a ticker running behind the window.
+
+Two refusals are listened for by name, `ERR_VENDOR_DOESNT_BUY` and
+`ERR_TOO_MUCH_GOLD` on `UI_ERROR_MESSAGE`, because both mean every remaining sale
+fails the same way. Both constants are reached through `_G`: a client missing one
+would compare a message against nil and stop a sale that was fine.
+
+**What it made is measured, not predicted.** Adding up sell prices says what the
+bags were worth. The difference in your purse across the sweep says what the
+vendor actually paid, which is the number still right when a vendor refuses an
+item halfway down the list. Holding shift as you open a merchant skips the whole
+thing for that visit, the same key that already means "let me do this myself"
+everywhere else at a vendor.
+
+**Max zoom is one CVar and a readback.** `cameraDistanceMaxZoomFactor` ships at
+1.9 and Leatrix has been writing 4.0 into it on both of these clients for years,
+which is what says the ceiling here is 4 rather than the 2.6 a retail client
+clamps to. It is believed only as far as `Camera.Current`, which reads the CVar
+back: a client that quietly clamps is reported as clamping rather than as having
+taken the number, and that readback is what the panel note and the status line
+print.
+
+Off hands the CVar back at `GetCVarDefault`, probed by name because nothing
+installed here calls it, and at 1.9 where the client will not say. The CVar is
+the client's and survives a logout, so it is written at every
+`PLAYER_ENTERING_WORLD` rather than once at login: anything that put it back
+would otherwise leave the setting saying one thing and the camera doing another.
+
+**Clutter.** Quest items for quests you have finished sit in your bags forever.
+Most of them cannot be sold, so the vendor sweep is no help and the only way out
+is to destroy them, which is why this is a window you open rather than anything
+that runs on its own.
+
+**The client will not tell you which quest an item belongs to.** There is no API
+for it. It will tell you an item is a quest item, `GetItemInfoInstant`'s sixth
+value is 12 and Baganator files its own Quest category on the same number here,
+and that is the end of what the client knows. So `Clutter.lua` asks Questie,
+which is loaded on both of these clients and whose item database carries
+`startQuest` and `relatedQuests` per item. Without Questie the window says so and
+offers nothing, because "every quest item in your bags" is not the question.
+
+`QuestieLoader:ImportModule` hands back a fresh empty table for a module it has
+never heard of rather than nil, so the module coming back proves nothing. What
+is checked is that `QueryItemSingle` and `QueryQuestSingle` are on it, and the
+answer is not cached, for the reason `EditMode.CanApply` is not cached: the
+database is compiled after login and an answer taken too early would be wrong
+for the session.
+
+**Three ways an item is kept, and the first one is the one that matters.** An
+item that starts a quest you have not provably finished is never offered.
+Starters look exactly like orphans sitting in your bags and destroying one is how
+a chain you never knew existed is lost. "Not provably finished" includes the case
+where the client will not say whether you finished it: `Completed` answers true,
+false or nil, and only true is good enough. An item tied to a quest in your log
+is kept, and an item the database has never heard of is kept.
+
+What is left gets one of two verdicts. `spent` means every quest it belongs to is
+behind you, and `open` means one of them is still out there to pick up. The queue
+puts spent first so the window never opens on the hard question, and the button
+reads "destroy anyway" rather than "destroy" on an open one.
+
+**The queue is rebuilt on every press, never advanced.** Bags move under an open
+window: something loots, the vendor sweep sells, a stack splits and every slot
+after it shifts by one. A window holding index 4 of a list it took thirty seconds
+ago is a window pointing at whatever is in that slot now. Skips are remembered by
+item link rather than by slot, for the same reason, and they are cleared every
+time the window opens.
+
+**Four guards stand between a press and a delete**, and the harness proves each
+one by breaking it:
+
+- the slot is re-read and compared against the link on the card, so a stale card
+  never reaches the cursor at all;
+- the item is picked up and the cursor is asked what it is actually holding,
+  which is the client contradicting the bag scan and getting to win;
+- `DeleteCursorItem` is probed and pcalled, because nothing installed on either
+  client calls it. Questie hooks it, which proves the global exists and is not
+  the same as proving the call is ours to make;
+- a 0.4 second debounce, because the card is replaced the instant the first
+  press lands and without it a double click falls on an item nobody looked at.
+
+The first two overlap on purpose. The cursor check catches everything the slot
+re-read catches, so the harness counts pickups rather than deletes to tell them
+apart: a stale card that still reaches a pickup means the first guard is gone
+even though the second one held.
+
+**What this cannot know.** Repeatable quests never flag as completed, so their
+turn-in items read as finished with forever. A chain can drop part three's item
+while you are on part one, and Questie's database is expansion scoped, so the
+Anniversary client reads the TBC rows and Era reads the Classic ones. All three
+are reasons the window asks rather than acts, and the panel tab says so above the
+button that opens it.
+
+**No reset hook.** The registry's `reset` means "put this part's frames back
+where they started" and this part has no frames. Registering one would make
+`/wk reset`, which is what you type when a window has wandered off screen,
+quietly turn selling back on for someone who had deliberately turned it off.
+
 ## Commands
 
     /wk                          open the settings panel
@@ -1833,6 +2067,10 @@ would go stale.
     /wk ranks                    how many bar slots are holding an older rank
     /wk ranks refresh            move them all up to your best rank
     /wk art on|off               Blizzard bar art, off by default
+    /wk loot on|off              empty a corpse in one go
+    /wk sell on|off              grey items at every merchant, shift to skip one
+    /wk zoom on|off              how far the camera pulls back
+    /wk destroy                  the clutter window, one quest item at a time
     /wk ui                       what is baked in, and whether Edit Mode answers
     /wk ui save                  capture the active Edit Mode layout
     /wk ui apply                 import the baked layout and make it active
@@ -1901,6 +2139,18 @@ and zero errors.
    and turning the skin off hands every frame back the size the stub built it
    and target of target back its own anchor.
 
+   Two things the skin got wrong on the live client are gated there now. The
+   stub records a texture's draw layer, which it used to drop, so the order that
+   decides what a gauge looks like is asserted rather than assumed: the spent
+   track and the heal slice are regions of Blizzard's bar and the layers run
+   track, slice, fill. The old assertion compared two frame levels and passed
+   while the target drew at 28 percent of its colour, because a level read back
+   is the number the addon asked for and not the one the client used. And the
+   stub stands up the head of each aura row, anchored the way the client anchors
+   it, so the tail on the target frame is asserted from both sides: no tail
+   before an aura has been seen, the block plus the client's lift after one, the
+   row's own anchors untouched, and the mouse region stopping at the block.
+
    It opens the options window and walks it: every rail entry, every tab under
    it, every row on every tab. It asserts that the window is on the grid and
    sized in whole pixels, that no row is fractional, that no row is shorter than
@@ -1958,6 +2208,44 @@ Aiming at a mob out of combat with no target selected is the whole test.
 ## Untested against the live client
 
 Everything below was written from the API contract and has never executed:
+
+- Whether `LOOT_READY` fires before the loot window draws on 2.5.6. Leatrix
+  Plus hangs its own faster looting on that event and is loaded on both clients,
+  so the event is here; that taking every slot on it beats the window to the
+  screen is the part taken on trust. The failure it degrades to is the window
+  appearing and then closing itself, which is what the client does anyway.
+- Whether `C_PartyInfo.GetLootMethod` is on either client. `Comfort/Loot.lua`
+  probes it, falls back to the `GetLootMethod` global, and treats neither
+  answering as "do not know": solo it still empties the corpse, grouped it hands
+  the job back to the client rather than guessing there is no master looter.
+- Whether `GetContainerItemInfo` answers a table on 2.5.6 or eleven loose
+  values. Both are read in `ns.ContainerItem`, the same way `ns.ContainerSlots`
+  already reads both container APIs.
+- Whether `ERR_VENDOR_DOESNT_BUY` and `ERR_TOO_MUCH_GOLD` are the constants this
+  client raises, and whether `UI_ERROR_MESSAGE` hands the message first or
+  second. Both positions are compared and both constants are reached through
+  `_G`, so a client that names them something else costs the early stop and
+  leaves the 25 pass backstop doing the work.
+- Whether `cameraDistanceMaxZoomFactor` really accepts 4.0 on 2.5.6. Leatrix
+  writes it on the Era client here. `Camera.Current` reads the CVar straight back
+  after writing it, so a client that clamps says what it clamped to in `/wk
+  status` rather than being believed.
+- Whether `DeleteCursorItem` actually deletes when an addon calls it here, and
+  whether the client raises its own confirmation over the top. Questie hooks the
+  global, which proves it exists, and nothing installed calls it. It is probed
+  and pcalled, so a client that refuses costs the window and leaves the item.
+- Whether `GetCursorInfo` answers the item id as its second value on 2.5.6. The
+  destroy path compares that id against the one the bag scan read and refuses on
+  a mismatch, so a client that answers something else refuses every delete rather
+  than aiming one wrongly. That is the right way round to be wrong.
+- Whether Questie's `QueryItemSingle` is stable to call from another addon.
+  Questie's own tooltip handler calls it exactly this way, but it is another
+  addon's internal surface rather than an API, so every call is pcalled and the
+  window degrades to offering nothing.
+- Whether `GetCVarDefault` is on either client. Nothing installed here calls it,
+  so it is probed and 1.9 is the documented default it falls back to. Getting
+  this wrong costs nothing while the setting is on and parks the CVar on 1.9
+  instead of the client's own number when it goes off.
 
 - Whether `GetPhysicalScreenSize` is on 2.5.6. Nothing installed here calls it.
   `UI/Pixel.lua` probes it by name and falls back to parsing
@@ -2169,8 +2457,24 @@ Everything below was written from the API contract and has never executed:
   has already hidden, the pin is what corrects it. `/wk skin probe` says which
   of the two this client is.
 - Whether Edit Mode's magnetism snaps against the frame's rectangle or against
-  the selection's. Both are the block now, so this only matters on a client
-  where the pin did not take.
+  the selection's. They are the same rectangle on the player and on target of
+  target, and on the target the frame is the block plus the strip the aura row
+  hangs in, so a client that snaps by the frame snaps the target a row of icons
+  low.
+- Whether this client names the head of each aura row `TargetFrameBuff1` and
+  `TargetFrameDebuff1`. Both are the Classic names. A client that names them
+  something else measures no lift, gets no tail, and puts its icons back inside
+  the gauge, which is where they were before this; `/wk skin probe` says which
+  happened.
+- Whether the lift read off that anchor is the whole of what the client adds.
+  It is the Y offset of the icon's own anchor against the frame, which is the
+  number `TargetFrame.lua` keeps in a local, but a client that also insets the
+  row inside a container frame would need that measured too. The row landing a
+  few pixels off the block's bottom edge is what that looks like.
+- Where the target's cast bar lands. `Target_Spellbar_AdjustPosition` anchors it
+  under the last aura row where there are auras, which now follows the block in,
+  and against the frame where there are none. The second case has not been
+  watched. Nothing here moves that bar.
 - Whether `0.15` is the right crop for a unit portrait on 2.5.6. Blizzard hides
   that dead space under the ring rather than cropping it, so there is no value
   to copy. Too small shows the render's empty border, too large cuts the chin.

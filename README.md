@@ -18,6 +18,12 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   Edit Mode layout carried inside the addon.
 - **Stripped bar art**, so the bars read as a row of icons. `/wk art on` puts
   the Blizzard art back.
+- **Three chores done for you.** Corpses empty in one go instead of one slot at
+  a time. Grey items sell themselves at every merchant, and hold shift to skip
+  one. The camera pulls back four times the base distance instead of 1.9.
+- **`/wk destroy` clears out finished quest items.** One card at a time, with
+  the quest it came from written on it, and a destroy and a skip. It reads
+  Questie's database to work out which quest, so it needs Questie installed.
 
 `/wk` opens the settings panel. Everything in it has a slash command too.
 
