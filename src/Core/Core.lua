@@ -220,6 +220,38 @@ function ns.Threat(source, unit)
 end
 
 --------------------------------------------------------------------------
+-- Incoming heals
+--
+-- What every heal in flight on a unit adds up to. It is the number that says
+-- whether a health bar is about to fill itself or whether the only thing
+-- coming is your own cooldown, and it is the one thing a warrior frame cannot
+-- work out by looking at health.
+--
+-- Both clients register UnitGetIncomingHeals and both fire
+-- UNIT_HEAL_PREDICTION, so this is a client API rather than the combat log
+-- estimate every Classic healing addon has to build for itself. Probed all the
+-- same, because nothing installed here calls it and that is the bar the rest of
+-- this section is held to.
+--------------------------------------------------------------------------
+
+local UnitGetIncomingHeals = _G.UnitGetIncomingHeals
+
+function ns.HasHealPrediction()
+	return type(UnitGetIncomingHeals) == "function"
+end
+
+-- Nil where the client has no prediction at all, 0 where it has it and nothing
+-- is on the way. The caller has to tell those apart the way it does with
+-- threat: one is a feature that cannot run, the other is a quiet moment.
+function ns.IncomingHeals(unit)
+	if type(UnitGetIncomingHeals) ~= "function" then
+		return nil
+	end
+	local amount = UnitGetIncomingHeals(unit)
+	return type(amount) == "number" and amount or 0
+end
+
+--------------------------------------------------------------------------
 -- Levels
 --
 -- What a mob is worth is a level question, and the client answers it in two

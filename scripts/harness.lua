@@ -354,6 +354,12 @@ _G.UnitClass = function() return "Warrior", "WARRIOR" end
 _G.UnitDetailedThreatSituation = function() return true, 3, 100, 0, 1200 end
 _G.UnitIsDead, _G.UnitCanAttack = constant(false), constant(true)
 _G.UnitName, _G.UnitHealth, _G.UnitHealthMax = constant("Target Dummy"), constant(4200), constant(9000)
+-- Heal prediction, which both clients register and both back with an event.
+-- Written as a variable rather than a constant because the skin has to be
+-- driven through three states to be worth testing: nothing on the way, a heal
+-- that fits inside what is missing, and one that does not.
+local incomingHeals = 0
+_G.UnitGetIncomingHeals = function() return incomingHeals end
 _G.UnitLevel, _G.UnitReaction = constant(62), constant(2)
 -- True for exactly one unit, so the skin's player frame takes the class colour
 -- through ClassTint and the other two fall to the reaction colour. Both halves
@@ -864,6 +870,74 @@ check(blockChurn <= SKIN_CHURN_KB,
 check(flattenWrites == 0,
 	("the skin flattened one bar %d times in 50 idle ticks, and nothing had unflattened it")
 		:format(flattenWrites))
+
+--------------------------------------------------------------------------
+-- The incoming heal on the health gauge
+--
+-- Three states, because the arithmetic is only worth testing at its edges:
+-- nothing on the way draws nothing, a heal that fits inside what is missing
+-- draws its own share of the gauge, and a heal that does not fit draws what is
+-- missing and not one pixel further.
+--
+-- The rail is measured off the block that landed rather than off the setting
+-- that asked for it, which is the same rule the rest of this section works
+-- under: the block is as wide as the frame left room for, and a test written
+-- against skinWidth would be asserting the request.
+--------------------------------------------------------------------------
+
+local healthRail = playerBox.children[1]
+local healSlice
+for _, region in ipairs(healthRail.regions) do
+	-- The track fills the rail, so it is the one region here with allPoints
+	-- set. The slice is pinned to the health bar's fill texture instead, which
+	-- is what makes it start exactly where the bar stops.
+	if not region.allPoints then
+		healSlice = region
+	end
+end
+check(healSlice ~= nil, "the skin drew no incoming heal slice on the health rail")
+
+local sliceAnchor = healSlice and healSlice.points and healSlice.points[1]
+check(sliceAnchor ~= nil and sliceAnchor[2] == _G.PlayerFrame.healthbar.fill,
+	"the heal slice is not pinned to the health bar's own fill texture, so it starts"
+	.. " wherever the two scales happen to agree rather than where the bar stops")
+
+-- A whole refresh interval per call, because the ticker only does the work
+-- every fifth of a second and a heal set between two of those is a heal the
+-- frame has not been told about yet.
+local function healTick(amount)
+	incomingHeals = amount
+	skinTicker.scripts.OnUpdate(skinTicker, 0.25)
+	return healSlice.shown and healSlice:GetWidth() or 0
+end
+
+-- The gauge is the block less the portrait's square and the one pixel it is
+-- inset by on its outer edge. Whole pixels, because the player block is on the
+-- grid and that was asserted above.
+local railPixels = playerBox:GetWidth() - playerBox:GetHeight() - 1
+local MISSING = 9000 - 4200
+
+check(healTick(0) == 0, "a unit with no heal on the way still draws a slice")
+
+local fits = math.floor(1800 / 9000 * railPixels + 0.5)
+local drawn = healTick(1800)
+check(drawn == fits,
+	("a 1800 heal on a 9000 unit drew %.2f px of a %d px gauge, expected %d")
+		:format(drawn, railPixels, fits))
+check(drawn == math.floor(drawn), "the heal slice is a fraction of a pixel wide")
+
+local capped = math.floor(MISSING / 9000 * railPixels + 0.5)
+local over = healTick(999999)
+check(over == capped,
+	("a heal far past what the unit is missing drew %.2f px, expected the %d px it is down")
+		:format(over, capped))
+check(capped < railPixels,
+	"the clamp let an overheal cover the whole gauge, which says the unit is at full")
+
+check(healTick(0) == 0, "the slice stayed up after the heal it predicted landed")
+
+print(("heals  gauge %d px, 1800 of 9000 draws %d px, an overheal clamps to %d px")
+	:format(railPixels, fits, capped))
 
 --------------------------------------------------------------------------
 -- The options window

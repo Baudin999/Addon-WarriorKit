@@ -305,6 +305,9 @@ goes through `Feature.lua` or through the shared surface below:
     ns.EditMode.CanApply / Capture / Apply / Saved / IndexOf
     ns.interface / ns.vanilla    the interface number, and whether this is 1.x
     ns.HasThreat() / ns.Threat(source, unit)   the threat API, or nil on vanilla
+    ns.HasHealPrediction() / ns.IncomingHeals(unit)   what is already in the air
+                                 for that unit, 0 when nothing is, nil when the
+                                 client has no prediction at all
     ns.Strip(region) / ns.Unstrip(region)   hide a Blizzard region so its own code
                                             cannot show it again, or give it back
     ns.Blocked(region)           whether a region is protected and in lockdown,
@@ -1488,6 +1491,30 @@ every unit change, so `SetStatusBarColor` is swapped for a no-op and the
 original kept beside it as `wkSetStatusBarColor`, which is what `ns.Strip` does
 to `Show`. `Paint` calls the original. Nothing in that is a protected action.
 
+**Incoming heals are a slice of the gauge, and they are clamped.** A pale green
+slice runs from where the health fill stops to where the heals already in the
+air will take that unit. `/wk skin heals off` drops it. Two decisions carry it.
+
+It is clamped to what the unit is missing, so a 2,000 heal on a warrior who is
+down 300 draws 300. An unclamped slice runs past the end of the bar and lies
+about both numbers.
+
+It is pinned to Blizzard's own fill texture rather than measured along the rail.
+The fill's inner edge is exactly where the bar stops, whichever end the client
+fills from and whatever the scale between us comes to, so the slice starts on
+the fill rather than a pixel off it and stands as tall as the bar without this
+file knowing how tall that is. Its width is ours, in whole pixels, like every
+other number in `Place`. The slice is a texture on our rail, two frame levels
+below the health bar, and that ordering does the clamp a second favour: the
+moment a heal lands, Blizzard's fill draws straight over the slice that
+predicted it.
+
+`UnitGetIncomingHeals` is a client API on both flavours, not a combat log
+estimate. Both binaries register it and both fire `UNIT_HEAL_PREDICTION`, which
+is why there is no LibHealComm here and no scan of anyone else's casts. It is
+still probed rather than trusted, so a client that drops it draws nothing and
+says so in `/wk status`.
+
 **The anchor is measured, the size is a setting, and the size is now pixels.**
 Only the client knows where the frame sits, so the block is placed on the
 portrait's own first anchor. Only you know how tall you want it, so the height
@@ -1766,6 +1793,7 @@ would go stale.
     /wk skin player|target|tot on|off   one frame at a time
     /wk skin height 34           18 to 56, the block's height
     /wk skin width 168           90 to 280, the gauge's width
+    /wk skin heals on|off        the incoming heal slice on the health gauge
     /wk skin probe               what this client answered for each frame
     /wk buttons apply            fill the bars with the warrior loadout
     /wk buttons restore          put back exactly what was there before
@@ -2108,6 +2136,11 @@ Everything below was written from the API contract and has never executed:
   names, nothing installed here reads one, and a pattern that matches nothing
   is a state icon that stays hidden rather than an error. `/wk skin probe`
   lists every region the walk removed, so a miss names itself.
+- Whether the server actually sends heal prediction for a TBC-era heal. The
+  Lua function and the event are both in both client binaries, which is what
+  says the API is there, but only a healer casting on you proves the data
+  behind it arrives. If it never does, `UnitGetIncomingHeals` answers 0 forever
+  and the slice simply never draws.
 - Whether Blizzard re-anchors any of these regions after the skin has run.
   PLAYER_TARGET_CHANGED and PLAYER_ENTERING_WORLD re-place the block, and the
   portrait's crop is re-applied every tick, but a re-anchor on some other event

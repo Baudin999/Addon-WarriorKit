@@ -149,6 +149,7 @@ Perf/Perf.lua:Perf.Stop
 Perf/Perf.lua:Perf.Sample
 Perf/Feature.lua:Paint
 UnitFrames/Skin.lua:Refresh
+UnitFrames/Skin.lua:HealSlice
 UnitFrames/Skin.lua:Tint
 UnitFrames/Skin.lua:ClassTint
 UnitFrames/Skin.lua:LevelTag

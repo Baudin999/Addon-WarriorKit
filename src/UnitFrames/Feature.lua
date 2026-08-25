@@ -131,6 +131,18 @@ local function SkinWord(arg)
 		return
 	end
 
+	if option == "heals" then
+		ns.db.skinHeals = ns.Command.Toggle(value)
+		ns.FrameSkin.Apply()
+		ns.Print("incoming heals " .. (ns.db.skinHeals and "on" or "off")
+			.. ": the green slice on the gauge is what is already in the air"
+			.. " for that unit, clamped to what it is actually missing.")
+		if ns.db.skinHeals and not ns.HasHealPrediction() then
+			ns.Print("this client answers no UnitGetIncomingHeals, so nothing will draw.")
+		end
+		return
+	end
+
 	if FRAME_WORDS[option] then
 		ns.db.skinFrames[option] = ns.Command.Toggle(value)
 		ns.FrameSkin.Apply()
@@ -222,6 +234,12 @@ ns.Register({
 		-- is the point of the grid and also the whole of what it costs.
 		skinHeight = 34,
 		skinWidth = 168,
+
+		-- The incoming heal slice on the health gauge. On by default, and it
+		-- costs nothing on a client that answers no prediction: the shim in
+		-- Core hands back nil and the tick draws the same nothing it draws for
+		-- a unit nobody is healing.
+		skinHeals = true,
 	},
 
 	words = {
@@ -241,6 +259,7 @@ ns.Register({
 		"skin on|off, the square player, target and target of target frames",
 		"skin player|target|tot on|off, one frame at a time",
 		"skin height <18-72>, skin width <90-360>, both in screen pixels",
+		"skin heals on|off, the incoming heal on the health gauge",
 		"skin probe, what this client answered for each frame",
 	},
 
@@ -275,6 +294,7 @@ ns.Register({
 		ns.db.skinFrames = { player = true, target = true, tot = true }
 		ns.db.skinHeight = ns.DefaultFor("skinHeight")
 		ns.db.skinWidth = ns.DefaultFor("skinWidth")
+		ns.db.skinHeals = ns.DefaultFor("skinHeals")
 		ns.FrameSkin.Apply()
 	end,
 
@@ -421,6 +441,27 @@ ns.Register({
 					ns.FrameSkin.Apply()
 				end)
 		end
+		ui.Check("show incoming heals on the health gauge",
+			function() return ns.db.skinHeals end,
+			function(value)
+				ns.db.skinHeals = value
+				ns.FrameSkin.Apply()
+			end)
+		ui.Note(function()
+			if not ns.HasHealPrediction() then
+				return "This client answers no UnitGetIncomingHeals, so the slice never"
+					.. " draws. Nothing else about the frames changes."
+			end
+			if not ns.db.skinHeals then
+				return "Off, so the gauge shows what the unit has and nothing about what"
+					.. " is on the way to it."
+			end
+			return "A green slice from where the gauge stops to where the heals already"
+				.. " in the air will take it, clamped to what the unit is actually"
+				.. " missing, so an overheal reads as a full bar rather than as a bar"
+				.. " and a half. It is drawn under Blizzard's fill: the moment a heal"
+				.. " lands, the fill covers the slice that predicted it."
+		end)
 		ui.Note(function()
 			if not ns.db.skin then
 				return "Blizzard's own frames, exactly as they shipped. "

@@ -101,6 +101,15 @@ local TRACK = 0.20 -- the spent part of a bar is its own colour, this dark
 local NAME_TEXT = { 0.97, 0.97, 1.00 }
 local VALUE_TEXT = { 0.74, 0.76, 0.82 }
 
+-- Incoming heals, laid over the part of the gauge the heal is about to reach.
+-- A pale green rather than the class colour, and half transparent, because the
+-- whole job of the slice is to read as not yours yet: what is filled is what
+-- you have, what is behind this is what somebody has already spent a cast on.
+-- Green because that is what heal prediction has been in every unit frame that
+-- draws it, and a colour the game has already taught is worth more than a
+-- prettier one it has not.
+local HEAL = { 0.42, 0.86, 0.52, 0.55 }
+
 -- What the gauge and the edge around it are coloured by. A player wears their
 -- class colour, which is the whole point of the setting. Anything else has no
 -- class, so it falls back to what it thinks of you, on the same three colours
@@ -771,6 +780,20 @@ local function Build(entry)
 	entry.powerTrack = ns.Fill(entry.powerRail, "BACKGROUND", 0, 0, 0, 1)
 	entry.powerTrack:SetAllPoints()
 
+	-- The incoming heal, between the track and the fill. It is a texture on our
+	-- own rail, which is two frame levels below the health bar, so the slice
+	-- draws over the spent part of the gauge and under everything Blizzard's
+	-- bar fills. That ordering is the clamp doing itself a favour: a heal that
+	-- overruns what is missing is covered by the fill rather than drawn past
+	-- it, and the arithmetic below only has to be right, not defensive.
+	--
+	-- Anchored nowhere yet. Where it starts is where the fill stops, and that
+	-- is a region the client owns and may hand back a different object for, so
+	-- HealSlice pins it on the first tick and re-pins it if the object moves.
+	entry.healSlice = ns.Fill(entry.healthRail, "ARTWORK",
+		HEAL[1], HEAL[2], HEAL[3], HEAL[4])
+	entry.healSlice:Hide()
+
 	entry.top = CreateFrame("Frame", nil, frame)
 	entry.top:EnableMouse(false)
 	ns.UI.Adopt(entry.top)
@@ -909,6 +932,26 @@ local function Place(entry)
 
 	Rail(entry.healthRail, true, health)
 	Rail(entry.powerRail, false, power)
+
+	-- What the tick needs to draw an incoming heal, worked out here because all
+	-- three answers change with the layout and none of them changes between two
+	-- ticks. The rail is the gauge less the one pixel it is inset by on its
+	-- outer edge, and that is the full width a heal is a fraction of.
+	entry.railPixels = math.max(width - 1, 1)
+	entry.pixel = px
+	-- Which end of the bar the fill stops at. This file mirrors the target
+	-- frame and Blizzard does not mirror the bar inside it, so the two disagree
+	-- on which side is which and the bar is the one that is right. Asked rather
+	-- than assumed, because a slice drawn off the wrong end of the fill is not
+	-- a pixel out, it is on the wrong side of the number it is describing.
+	local healthbar = entry.healthbar
+	entry.healReverse = (healthbar and healthbar.GetReverseFill
+		and healthbar:GetReverseFill()) or false
+	-- The tick guards every write on the width it last drew, and that width is
+	-- now a different number of pixels. Forgetting it here is what makes a
+	-- resolution change leave a slice at the old scale until the heal changes.
+	entry.healSpan = nil
+	entry.healAnchor = nil
 
 	-- Blizzard's bars take the rails corner to corner. No size is written on
 	-- either one, so nothing about them has to be converted or rounded: the
@@ -1144,6 +1187,49 @@ end
 -- guards, because anything a ticker does has to be incapable of raising.
 --------------------------------------------------------------------------
 
+-- The slice of the gauge an incoming heal is about to fill, drawn from where
+-- the bar stops to where it is headed.
+--
+-- Pinned to the health bar's own fill texture rather than measured along the
+-- rail. The fill's inner edge is exactly where the bar stops, whichever end the
+-- client fills from and whatever the scale between us comes to, so the slice
+-- starts on the fill rather than a pixel off it and stands as tall as the bar
+-- without this file having to know how tall that is. The width is ours, in
+-- whole pixels, the same way every other number here is.
+--
+-- Every write is guarded on the span last drawn. This runs five times a second
+-- on three frames, and on all three the common case is that nobody is healing
+-- anybody, which should cost a comparison and nothing else.
+local function HealSlice(entry, span)
+	local slice = entry.healSlice
+	local bar = entry.healthbar
+	local fill = bar and bar.GetStatusBarTexture and bar:GetStatusBarTexture()
+	if not fill then
+		span = 0
+	end
+	-- Re-pinned only when the client hands back a different texture object.
+	-- That is the readback Flatten does, for the reason Flatten gives. A cached
+	-- one would be pointing at nothing.
+	if fill and entry.healAnchor ~= fill then
+		entry.healAnchor = fill
+		local mine = entry.healReverse and "RIGHT" or "LEFT"
+		local theirs = entry.healReverse and "LEFT" or "RIGHT"
+		slice:ClearAllPoints()
+		slice:SetPoint("TOP" .. mine, fill, "TOP" .. theirs, 0, 0)
+		slice:SetPoint("BOTTOM" .. mine, fill, "BOTTOM" .. theirs, 0, 0)
+	end
+	if entry.healSpan == span then
+		return
+	end
+	entry.healSpan = span
+	if span > 0 then
+		slice:SetWidth(span * entry.pixel)
+		slice:Show()
+	else
+		slice:Hide()
+	end
+end
+
 local function Refresh(entry)
 	local unit = entry.spec.unit
 	if not entry.styled or not UnitExists(unit) then
@@ -1178,6 +1264,25 @@ local function Refresh(entry)
 		entry.shownPercent = percent
 		entry.healthText:SetText(percent >= 0 and (percent .. "%") or "")
 	end
+
+	-- Incoming heals, in whole pixels of the rail, measured from where the
+	-- fill stops. Clamped to what is missing: a 2,000 heal landing on a warrior
+	-- who is down 300 would otherwise run off the end of the gauge, and a slice
+	-- that overshoots the bar is saying something untrue about both numbers.
+	-- Nil out of ns.IncomingHeals is a client with no prediction at all, and it
+	-- takes the same road as a quiet moment, which is to draw nothing.
+	local span = 0
+	if ns.db.skinHeals and maxHealth > 0 and health > 0 then
+		local incoming = ns.IncomingHeals(unit) or 0
+		if incoming > 0 then
+			local missing = maxHealth - health
+			if incoming > missing then
+				incoming = missing
+			end
+			span = math.floor(incoming / maxHealth * entry.railPixels + 0.5)
+		end
+	end
+	HealSlice(entry, span)
 
 	local shownPower = maxPower > 0 and (UnitPower(unit) or 0) or -1
 	if entry.shownPower ~= shownPower then
@@ -1367,6 +1472,10 @@ function Skin.Describe()
 		end
 	end
 	local line = ("square frames, %d regions hidden"):format(Skin.Hidden())
+	if ns.db.skinHeals then
+		line = line .. (ns.HasHealPrediction() and ", incoming heals on the gauge"
+			or ", incoming heals asked for and this client has no prediction api")
+	end
 	if missing > 0 then
 		line = line .. (", %d of 3 frames had no bars to skin"):format(missing)
 	end

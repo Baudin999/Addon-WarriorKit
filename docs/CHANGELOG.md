@@ -120,6 +120,40 @@ hander comes off into a full bag. Nothing installed on either client calls
 `/equipslot`, so there is nothing to read that would answer either.
 
 
+### Incoming heals on the skinned frames
+
+The health gauge on the player, target and target of target frames now shows
+what is already in the air. A pale green slice runs from where the fill stops to
+where the heals in flight will take that unit. `/wk skin heals off` drops it, and
+there is a checkbox on the same page.
+
+It is clamped to what the unit is missing. A 2,000 heal on a warrior who is down
+300 draws 300, because a slice that runs past the end of the bar is lying about
+both numbers. The slice is drawn on our rail, two frame levels under Blizzard's
+health bar, which clamps it a second time and for free: when the heal lands, the
+fill draws straight over the prediction.
+
+Where it starts is Blizzard's answer rather than ours. The slice is pinned to
+the health bar's own fill texture, so its inner edge is exactly where the bar
+stops whichever end the client fills from, and it stands as tall as the bar
+without this file knowing how tall the bar is. The width is ours and is a whole
+number of pixels, like everything else the skin draws.
+
+`UnitGetIncomingHeals` is a real API on both clients. Both binaries register it
+and both fire `UNIT_HEAL_PREDICTION`, so there is no LibHealComm here and
+nothing parses anyone else's casts. It is probed the way the threat API is:
+`ns.HasHealPrediction` answers, a client without it draws nothing, and
+`/wk status` says which of those two things is happening.
+
+The gates moved with it. `HealSlice` is in `HOT`, so the scan holds every write
+in it to a guard, and it guards on the span it last drew rather than on the heal,
+which means a fight where nothing is healing costs three comparisons a tick and
+no widget writes. The harness stubs the API and drives three states through the
+tick: nothing on the way draws nothing, 1,800 of 9,000 draws 33 pixels of a 167
+pixel gauge, and a heal far past what the unit is missing draws the 89 pixels it
+is down and stops there.
+
+
 ## 1.5
 
 A drawing layer, `UI/`, and everything the addon draws rebuilt on it. Eight
