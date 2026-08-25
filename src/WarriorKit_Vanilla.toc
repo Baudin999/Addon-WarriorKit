@@ -47,6 +47,13 @@ Core\Panel.lua
 
 # The eight parts. Within each, behaviour first and Feature.lua last, because
 # Feature.lua is the only file that names anything outside its own folder.
+# Perf first among the parts, because Charge/Icon.lua and the three other
+# tickers call ns.Perf.Start by name. They resolve it at tick time rather than
+# at load, so the order is belt and braces, and belt and braces is what a nil
+# namespace on a ticker is worth: that is 1,189 errors in two minutes.
+Perf\Perf.lua
+Perf\Feature.lua
+
 Marking\Marking.lua
 Marking\Keys.lua
 Marking\Feature.lua

@@ -145,6 +145,16 @@ local function SkinWord(arg)
 		.. ", " .. ns.FrameSkin.Describe() .. ".")
 end
 
+-- What the bars cost is one number and what they cost per mob is another, and
+-- the performance tab cannot tell them apart without being told how many are
+-- up. Registered from here rather than from EnemyBars, because a behaviour file
+-- names nothing outside its own folder.
+if ns.Perf then
+	ns.Perf.Gauge("enemy bars on screen", function()
+		return ns.EnemyBars.Count()
+	end)
+end
+
 ns.Register({
 	name = "unit frames",
 	order = 6,

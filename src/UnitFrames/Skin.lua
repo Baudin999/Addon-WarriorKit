@@ -1402,9 +1402,11 @@ events:SetScript("OnEvent", function(_, event)
 			elapsed = elapsed + delta
 			if elapsed >= REFRESH then
 				elapsed = 0
+				ns.Perf.Start("skin")
 				for _, entry in ipairs(entries) do
 					Refresh(entry)
 				end
+				ns.Perf.Stop("skin")
 			end
 		end)
 		return

@@ -112,6 +112,14 @@ read_globals = {
 	-- the CVar out of combat and hands it back in. Both calls are pcalled: no
 	-- addon here proves SetCVar takes that name on 2.5.6.
 	"GetCVarBool", "GetCVar", "SetCVar",
+	-- profiling, read by the Perf part. Every one of these is called unguarded
+	-- by an addon in this install: debugprofilestop by Details, Questie and
+	-- Auctionator, the memory pair by Details, TitanPerformance and Leatrix,
+	-- the CPU pair and GetFramerate by Details and TitanPerformance. The CPU
+	-- pair is read only where someone else has already turned scriptProfile on.
+	"debugprofilestop", "GetFramerate",
+	"UpdateAddOnMemoryUsage", "GetAddOnMemoryUsage",
+	"UpdateAddOnCPUUsage", "GetAddOnCPUUsage",
 	"RAID_CLASS_COLORS", "wipe", "InCombatLockdown",
 	"date", "GetBuildInfo",
 	-- Edit Mode. Titan calls EditModeManagerFrame:GetActiveLayoutInfo()

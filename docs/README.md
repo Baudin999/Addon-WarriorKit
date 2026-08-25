@@ -82,6 +82,9 @@ name of none of them.
     UI/Widgets.lua       the widget kit a page is built out of
     UI/Window.lua        window chrome, the side rail and the tab strip
 
+    Perf/Perf.lua        what each ticker costs and what the addon is holding
+    Perf/Feature.lua
+
     Marking/Marking.lua      ctrl-click raid marking, keybinding entry points
     Marking/Keys.lua         the override binding behind each marking key
     Marking/Feature.lua
@@ -229,6 +232,13 @@ goes through `Feature.lua` or through the shared surface below:
     ns.UI.Button / ns.UI.Kit(host)   a push button, and the widget kit a page
                                  is built out of
     ns.UI.Window(opts) / ns.UI.Rail / ns.UI.TabStrip / ns.UI.Windows
+    ns.Perf.Start(key) / ns.Perf.Stop(key)   bracket a tick body
+    ns.Perf.Slot(key)            average ms, worst ms, and how many ticks
+    ns.Perf.Memory()             KB held and KB per second being allocated
+    ns.Perf.Gauge(label, read)   a count shown beside a timing, from a Feature
+    ns.Perf.Watch(on) / Watching() / Sample() / Reset() / Ready() / ClientCPU()
+    ns.Perf.OnSample             set by whoever is displaying the numbers
+    ns.EnemyBars.Count()         how many bars are drawn right now
     ns.Plates.SetFootprint(w, h)  how much room one bar wants, in UIParent units
     ns.Plates.Measure(plate)     what a plate was before the addon touched it
     ns.Plates.Apply / Restore / Flush / Stacking / Describe / Warn
@@ -429,14 +439,57 @@ over more of the screen, which is more room to click a mob and more of a camera
 drag swallowed, and that trade is why this is a setting rather than something
 the part does quietly.
 
+### What the addon costs
+
+`GetAddOnMemoryUsage` answers one number for the whole addon, and one number for
+the whole addon is close to useless: "WarriorKit, 341 KB" names nothing you can
+switch off. What is worth measuring is the four tickers, because each one maps
+to a setting on the page next to the one reporting it.
+
+So the tickers time themselves. `debugprofilestop` is a millisecond clock with a
+fractional part, two calls bracket a tick body outside the functions `HOT`
+names, and forty ticks a second across the whole addon makes that free by any
+measure that matters. The tab reports what the measuring costs anyway, because a
+performance tab that will not account for itself is asking to be believed rather
+than read. Each figure is given twice: per tick, which is the spike you feel,
+and per second, which is the share of the frame budget it actually takes.
+Neither one alone answers "is this expensive".
+
+Two things the client cannot tell you, both written into the tab and not only
+here. It attributes Lua allocation to an addon and nothing else, so frames and
+textures live on the C side and never appear in the figure, and for a UI addon
+those are most of the real footprint: read it as churn rather than as size. And
+the allocation rate counts rises only, because Lua's collector runs whenever it
+likes and a fall in the resident number is that happening rather than anything
+the addon handed back.
+
+Per addon CPU through `GetAddOnCPUUsage` needs the `scriptProfile` CVar and a
+reload, and it slows the whole client while it is on. TitanPerformance owns that
+setting in this install. `Perf.ClientCPU` reads the number where someone else has
+already turned it on and never turns it on itself.
+
+This is the field instrument and the harness is the gate. The harness measures
+allocation against a stub, deterministically, and fails the build on a
+regression. The tab measures the thing a stub cannot, which is real frame time
+at fifteen plates in a real raid. Numbers the tab surfaces are candidates to
+become new ratchets.
+
 ### Ticker discipline
 
-Four `OnUpdate` tickers run at once and none of them ever stops.
+Four `OnUpdate` tickers run at once and none of them ever stops. A fifth runs
+only while you are looking at it.
 
     Charge/Marker.lua        20 Hz   it tracks the camera
     Charge/Icon.lua          10 Hz   the HUD icon and the macro
     UnitFrames/EnemyBars.lua  5 Hz   every bar on screen
     UnitFrames/Skin.lua       5 Hz   the three Blizzard unit frames
+    Perf/Perf.lua             1 Hz   only while the performance tab is on screen
+
+The fifth one is the exception that proves the rule rather than a loosening of
+it. `UpdateAddOnMemoryUsage` walks every addon the client has loaded, which
+would make the file that measures the cost the most expensive thing in the
+addon. So it is started by the tab's `OnShow` and stopped by its `OnHide`, and
+nothing samples memory when nobody is reading it.
 
 The rule on those paths is that nothing writes to a frame without comparing
 against the value already there. `SetText` costs a string measure and a

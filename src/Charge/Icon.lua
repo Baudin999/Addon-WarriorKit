@@ -411,8 +411,10 @@ local function OnUpdate(_, delta)
 	elapsed = elapsed + delta
 	if elapsed >= UPDATE_INTERVAL then
 		elapsed = 0
+		ns.Perf.Start("icon")
 		ChargeIcon.SyncMacro()
 		ChargeIcon.Update()
+		ns.Perf.Stop("icon")
 	end
 end
 

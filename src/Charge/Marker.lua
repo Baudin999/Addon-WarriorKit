@@ -229,7 +229,9 @@ events:SetScript("OnEvent", function(_, event)
 		elapsed = elapsed + delta
 		if elapsed >= UPDATE_INTERVAL then
 			elapsed = 0
+			ns.Perf.Start("marker")
 			ChargeMarker.Update()
+			ns.Perf.Stop("marker")
 		end
 	end)
 end)

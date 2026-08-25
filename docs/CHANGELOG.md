@@ -2,6 +2,41 @@
 
 ## 1.6
 
+### A performance tab
+
+`/wk` has a Performance page, and `/wk perf` prints the same thing to chat.
+
+The four tickers time themselves with `debugprofilestop`, two clock reads
+bracketing each tick body. Each one reports per tick, which is the spike you
+feel, and per second, which is the share of a 60 fps frame it actually takes,
+plus the worst single tick since the counters were cleared. A part can register
+a gauge beside its timing, because 0.31 ms means one thing at two nameplates and
+another at fifteen, and the enemy bars register their own count.
+
+Memory is the expensive half and it runs on a fifth ticker that exists only
+while the tab is on screen. `UpdateAddOnMemoryUsage` walks every addon the
+client has loaded, so sampling it on a ticker that never stops would make the
+file measuring the cost the most expensive thing in the addon. The tab's row
+starts it on `OnShow` and stops it on `OnHide`.
+
+Two limits are written into the tab itself rather than buried here. The client
+attributes Lua allocation and nothing else, so frames and textures never appear
+in the figure and it should be read as churn rather than size. And per addon CPU
+needs the `scriptProfile` CVar plus a reload and slows the whole client;
+TitanPerformance owns that setting in this install, so the tab reads the number
+where someone else has turned it on and never turns it on itself.
+
+The tab accounts for itself. Its own sampling cost is a row in it, measured the
+same way as everything else.
+
+The harness proves the measurement is free rather than claiming it. Its clock is
+stubbed before the addon loads, so every allocation figure it already gates on
+was taken with the brackets live, and the bars still measure 0.17 KB per fifty
+ticks. It also asserts that the counters move, that switching timing off stops
+them accumulating rather than merely zeroing them, and that the sampler runs
+only between `Watch(true)` and `Watch(false)`.
+
+
 Weapon loadouts, one key each.
 
 A loadout is a name, a pair of weapons, an optional stance and a key. A press

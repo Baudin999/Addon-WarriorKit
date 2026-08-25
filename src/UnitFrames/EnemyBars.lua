@@ -1288,6 +1288,26 @@ end
 -- Public
 --------------------------------------------------------------------------
 
+-- How many bars are actually drawn right now, in whichever mode is running.
+-- Read by the performance tab, which cannot say whether 0.31 ms is cheap
+-- without it.
+function EnemyBars.Count()
+	if EnemyBars.Mode() ~= "plates" then
+		local shown = 0
+		for _, widget in ipairs(listWidgets) do
+			if widget:IsShown() then
+				shown = shown + 1
+			end
+		end
+		return shown
+	end
+	local count = 0
+	for _ in pairs(attached) do
+		count = count + 1
+	end
+	return count
+end
+
 -- The charge marker anchors above our bar when there is one on the plate.
 function EnemyBars.WidgetFor(unit)
 	return attached[unit]
@@ -1473,7 +1493,9 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		elapsed = elapsed + delta
 		if elapsed >= REFRESH then
 			elapsed = 0
+			ns.Perf.Start("bars")
 			EnemyBars.Update()
+			ns.Perf.Stop("bars")
 		end
 	end)
 end)

@@ -1,0 +1,256 @@
+local ADDON, ns = ...
+
+local Perf = {}
+ns.Perf = Perf
+
+--------------------------------------------------------------------------
+-- What the addon costs
+--
+-- GetAddOnMemoryUsage answers one number for the whole addon, and one number
+-- for the whole addon is close to useless: "WarriorKit, 341 KB" names nothing
+-- you can switch off. What is worth measuring is the four tickers, because each
+-- one maps to a setting on the page next to this one.
+--
+-- So the tickers time themselves. debugprofilestop is a millisecond clock with
+-- a fractional part, two calls per tick bracket a tick body, and forty ticks a
+-- second across the whole addon makes that free by any measure that matters.
+-- The tab reports what it costs anyway, because a performance tab that will not
+-- account for itself is asking to be believed rather than read.
+--
+-- Memory is the other half and it is not free. UpdateAddOnMemoryUsage walks
+-- every addon the client has loaded, so it runs at 1 Hz and only while the tab
+-- is actually on screen. Nothing samples memory when you are not looking at it.
+--
+-- Two things this cannot see, both written into the tab rather than only here.
+-- The client attributes Lua allocation to an addon and nothing else, so frames
+-- and textures, which live on the C side and are most of what a UI addon really
+-- costs, never appear in the figure. And per-addon CPU through GetAddOnCPUUsage
+-- needs the scriptProfile CVar and a reload, and it slows the whole client while
+-- it is on. TitanPerformance owns that CVar in this install. This file reads the
+-- number when someone else has turned it on and never turns it on itself.
+--------------------------------------------------------------------------
+
+-- Ring of recent samples per slot, so a spike is visible rather than averaged
+-- away. Sized once at load and written in place forever after: an allocation on
+-- a measuring path would be measuring itself.
+local WINDOW = 64
+local SAMPLE_RATE = 1.0
+
+-- Declared here, in the order they are shown, because a table built per frame is
+-- the thing this file exists to catch.
+local ORDER = { "marker", "icon", "bars", "skin" }
+local slots = {}
+local gauges, gaugeOrder = {}, {}
+
+local watching = false   -- the tab is on screen
+local elapsed = 0
+local lastMemory, memoryRate, memoryNow = nil, 0, 0
+local selfCost = 0       -- what the bracketing itself costs, in ms per second
+local clock                -- debugprofilestop, or nil where the client has none
+
+for index = 1, #ORDER do
+	local slot = {
+		key = ORDER[index],
+		ring = {},
+		at = 0,
+		count = 0,
+		total = 0,
+		peak = 0,
+		ticks = 0,
+		started = nil,
+	}
+	for i = 1, WINDOW do
+		slot.ring[i] = 0
+	end
+	slots[ORDER[index]] = slot
+end
+
+--------------------------------------------------------------------------
+
+-- Probed rather than assumed, though four addons in this install call it
+-- unguarded. Absent, every timing figure reads as unavailable and the memory
+-- half still works.
+function Perf.Ready()
+	if clock == nil then
+		clock = (type(debugprofilestop) == "function") and debugprofilestop or false
+	end
+	return clock ~= false
+end
+
+-- Bracketed around a tick body, outside the functions HOT names, because what
+-- is being measured is the whole tick and not one function inside it.
+--
+-- Off costs a table index and a comparison. On costs that plus two clock reads
+-- and a handful of arithmetic, and no allocation in either case.
+function Perf.Start(key)
+	if not ns.db or not ns.db.perf or not Perf.Ready() then
+		return
+	end
+	local slot = slots[key]
+	if slot then
+		slot.started = clock()
+	end
+end
+
+function Perf.Stop(key)
+	local slot = slots[key]
+	if not slot or not slot.started then
+		return
+	end
+	local taken = clock() - slot.started
+	slot.started = nil
+	if taken < 0 then
+		return -- the clock wrapped, which it does on a long session
+	end
+
+	slot.at = slot.at % WINDOW + 1
+	slot.total = slot.total - slot.ring[slot.at] + taken
+	slot.ring[slot.at] = taken
+	if slot.count < WINDOW then
+		slot.count = slot.count + 1
+	end
+	if taken > slot.peak then
+		slot.peak = taken
+	end
+	slot.ticks = slot.ticks + 1
+end
+
+-- A count a part wants shown beside its timing, because 0.31 ms means one thing
+-- at two nameplates and another at fifteen. Registered from a Feature.lua, so
+-- this file still names no part.
+function Perf.Gauge(label, read)
+	if gauges[label] then
+		gauges[label] = read
+		return
+	end
+	gauges[label] = read
+	gaugeOrder[#gaugeOrder + 1] = label
+end
+
+--------------------------------------------------------------------------
+-- Reading it back
+--------------------------------------------------------------------------
+
+-- Average over the window and the worst single tick since the last reset, both
+-- in milliseconds, plus what that works out to per second of wall clock at the
+-- rate this ticker actually ran.
+function Perf.Slot(key)
+	local slot = slots[key]
+	if not slot or slot.count == 0 then
+		return nil
+	end
+	return slot.total / slot.count, slot.peak, slot.ticks
+end
+
+function Perf.Memory()
+	return memoryNow, memoryRate
+end
+
+function Perf.SelfCost()
+	return selfCost
+end
+
+function Perf.Gauges()
+	return gaugeOrder, gauges
+end
+
+function Perf.Reset()
+	for index = 1, #ORDER do
+		local slot = slots[ORDER[index]]
+		slot.at, slot.count, slot.total, slot.peak, slot.ticks = 0, 0, 0, 0, 0
+		for i = 1, WINDOW do
+			slot.ring[i] = 0
+		end
+	end
+	lastMemory, memoryRate = nil, 0
+end
+
+-- Only when scriptProfile is already on, which is a client wide setting with a
+-- client wide cost. Answering nil is the normal case and the tab says why.
+function Perf.ClientCPU()
+	if type(GetAddOnCPUUsage) ~= "function" or type(UpdateAddOnCPUUsage) ~= "function" then
+		return nil
+	end
+	if not (type(GetCVarBool) == "function" and GetCVarBool("scriptProfile")) then
+		return nil
+	end
+	local ok = pcall(UpdateAddOnCPUUsage)
+	if not ok then
+		return nil
+	end
+	local read, used = pcall(GetAddOnCPUUsage, ADDON)
+	return (read and type(used) == "number") and used or nil
+end
+
+--------------------------------------------------------------------------
+-- The sampler
+--
+-- Runs only while the tab is on screen. This is the expensive half and it is
+-- the reason there is a Watch at all: UpdateAddOnMemoryUsage walks every addon
+-- the client has loaded, and doing that on a ticker that never stops would make
+-- this file the most expensive thing it measures.
+--------------------------------------------------------------------------
+
+local sampler = CreateFrame("Frame")
+
+-- The allocation figure counts rises only. Lua's collector runs whenever it
+-- likes and a fall in the resident number is that happening, not memory being
+-- handed back by anything the addon did, so averaging the two together reports
+-- a quiet addon as a busy one that gets collected often.
+function Perf.Sample()
+	if type(UpdateAddOnMemoryUsage) ~= "function" or type(GetAddOnMemoryUsage) ~= "function" then
+		return
+	end
+
+	local before = Perf.Ready() and clock() or nil
+	UpdateAddOnMemoryUsage()
+	local kb = GetAddOnMemoryUsage(ADDON)
+	if type(kb) ~= "number" then
+		return
+	end
+
+	memoryNow = kb
+	if lastMemory then
+		local risen = kb - lastMemory
+		memoryRate = (risen > 0) and (risen / SAMPLE_RATE) or 0
+	end
+	lastMemory = kb
+
+	if before then
+		-- Charged against the addon honestly: this walk is work the tab causes.
+		selfCost = clock() - before
+	end
+
+	-- Set by whoever is displaying the numbers. Perf.lua does not know that a
+	-- panel exists and must not: it is measured by three tickers that were here
+	-- before the tab was and will outlive it.
+	if Perf.OnSample then
+		Perf.OnSample()
+	end
+end
+
+function Perf.Watch(on)
+	if watching == on then
+		return false
+	end
+	watching = on
+	elapsed = 0
+	if on then
+		lastMemory = nil
+		Perf.Sample()
+		sampler:SetScript("OnUpdate", function(_, delta)
+			elapsed = elapsed + delta
+			if elapsed >= SAMPLE_RATE then
+				elapsed = 0
+				Perf.Sample()
+			end
+		end)
+	else
+		sampler:SetScript("OnUpdate", nil)
+	end
+	return true
+end
+
+function Perf.Watching()
+	return watching
+end

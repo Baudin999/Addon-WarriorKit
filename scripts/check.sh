@@ -144,6 +144,10 @@ UnitFrames/EnemyBars.lua:UpdateList
 UnitFrames/EnemyBars.lua:Collect
 UnitFrames/EnemyBars.lua:CollectUnits
 UnitFrames/EnemyBars.lua:EnemyBars.Update
+Perf/Perf.lua:Perf.Start
+Perf/Perf.lua:Perf.Stop
+Perf/Perf.lua:Perf.Sample
+Perf/Feature.lua:Paint
 UnitFrames/Skin.lua:Refresh
 UnitFrames/Skin.lua:Tint
 UnitFrames/Skin.lua:ClassTint
