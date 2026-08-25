@@ -146,4 +146,6 @@ file:close()
 io.write(("baked %q into %s\n"):format(name, target))
 LUA
 
-./check.sh
+# Saved.lua is a Lua file in a TOC, so a bad bake is a broken addon. cwd is
+# src/, and check.sh is a sibling of this script, not of the code.
+../scripts/check.sh
