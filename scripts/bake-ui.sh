@@ -25,9 +25,14 @@ if [ -z "$saved" ]; then
 	# Every client the addon is linked into keeps its own saved variables, and
 	# only the one you ran /wk ui save on holds a layout. So a file without a
 	# capture in it is not a candidate, rather than an ambiguity to ask about.
+	#
+	# The test is a non-empty uiLayoutName, not the presence of uiLayout. The
+	# defaults table carries uiLayout = {} and uiLayoutName = "", so every client
+	# that has ever loaded the addon writes both keys out, and matching the key
+	# alone matches clients that captured nothing.
 	found=()
 	while IFS= read -r f; do
-		grep -q 'uiLayout' "$f" && found+=("$f")
+		grep -qE '\["uiLayoutName"\] = "[^"]' "$f" && found+=("$f")
 	done < <(find "$WOW_ROOT"/_*_/WTF/Account -maxdepth 3 -path '*/SavedVariables/WarriorKit.lua' 2>/dev/null | sort)
 
 	if [ "${#found[@]}" -eq 0 ]; then
