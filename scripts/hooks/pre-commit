@@ -22,3 +22,14 @@ if ! ./scripts/check.sh; then
 	echo "Fix it, or run git commit --no-verify if you know why you are bypassing it." >&2
 	exit 1
 fi
+
+# check.sh reads the source. The harness runs it, which is the half that catches
+# a stacking order, a colour or an allocation, and it costs about twenty
+# milliseconds. A gate that only one of the two layers enforces is a gate that
+# is off on whichever machine forgot to run the other one.
+if ! lua5.1 scripts/harness.lua src; then
+	echo >&2
+	echo "commit blocked: scripts/harness.lua failed." >&2
+	echo "Fix it, or run git commit --no-verify if you know why you are bypassing it." >&2
+	exit 1
+fi
