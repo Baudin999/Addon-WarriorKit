@@ -126,6 +126,35 @@ function UI.Pixel(frame)
 	return BASE / (scale * physical)
 end
 
+-- How many units one pixel of the *design* occupies inside a frame.
+--
+-- This is not UI.Pixel, and the difference is not a nicety: confusing the two is
+-- what made `bars zoom` do nothing for its entire life. UI.Pixel answers "how
+-- many units is one physical pixel", which on the grid is 1/zoom. A design that
+-- multiplies every one of its own numbers by that has divided itself by the
+-- zoom, and the scale the zoom put on the frame multiplies it straight back. The
+-- widget comes out the same physical size at zoom 1, 2 and 3, and the setting is
+-- inert. That is exactly what the enemy bars did.
+--
+-- A design pixel is not a physical pixel. On the grid one design pixel is one
+-- unit, and the zoom is what turns that unit into a 1x1, 2x2 or 3x3 block of
+-- screen pixels, which is the entire point of having a zoom. Off the grid, on a
+-- client with no SetIgnoreParentScale, there is no zoom and no block to make, so
+-- the honest conversion is the fractional one and UI.Pixel is already it.
+--
+-- The rule for a caller: UI.Pixel for a hairline, an inset or anything else that
+-- means one screen pixel and should stay one screen pixel when the design grows.
+-- UI.Unit for every number that is a size in the design.
+--
+-- Answers for the frame that was adopted. Children inherit its scale, so a
+-- layout asks the widget it is laying out rather than each region inside it.
+function UI.Unit(frame)
+	if grid[frame] then
+		return 1
+	end
+	return UI.Pixel(frame)
+end
+
 -- A measurement snapped to a whole number of pixels. Anything that grows to fit
 -- its own text goes through this: a font string is measured in fractions, and a
 -- box sized to one lands its border half on a pixel and half off, which is the
@@ -152,12 +181,17 @@ function UI.Convert(size, from, to)
 	return size * fromScale / toScale
 end
 
--- Put a frame on the grid. Zoom multiplies the whole thing by a whole number,
--- which is the only way to make a pixel grid bigger without leaving it: at zoom
--- 2 one unit is a 2x2 block of pixels and every edge still lands on a boundary.
--- It exists because the pixel sizes below are absolute now. A 21 pixel bar is
--- 21 pixels on every monitor, which is the point, and on a 4K panel that is
--- small.
+-- Put a frame on the grid. Zoom multiplies the whole thing, and one unit
+-- becomes zoom physical pixels. It exists because the pixel sizes below are
+-- absolute: a 21 pixel bar is 21 pixels on every monitor, which is the point,
+-- and on a 4K panel that is small.
+--
+-- A whole zoom keeps the grid. At 2 one unit is a 2x2 block of pixels and every
+-- edge still lands on a boundary. A fractional one does not, and the addon
+-- allows it in exactly one place: UI.Size, the size slider in the settings
+-- panel, where the player has asked for a window between the whole steps and
+-- softer edges are the price they chose to pay. Nothing else passes a fraction
+-- here, and the enemy bars refuse one outright.
 function UI.Adopt(frame, zoom)
 	if supported == nil then
 		supported = type(frame.SetIgnoreParentScale) == "function"
@@ -193,9 +227,7 @@ function UI.Flush()
 	for frame, zoom in pairs(deferred) do
 		Rescale(frame, zoom)
 	end
-	for i = 1, #listeners do
-		listeners[i]()
-	end
+	UI.Notify()
 	return true
 end
 
@@ -203,6 +235,17 @@ end
 -- again. Registered once at load, never removed.
 function UI.OnRescale(callback)
 	listeners[#listeners + 1] = callback
+end
+
+-- Tell every listener the ground moved. Three things move it and all three
+-- mean the same thing to a window: lay yourself out again. The screen changes
+-- size, combat lets go of a frame that refused to be rescaled, or the player
+-- drags the UI size slider. Exported rather than left as a local loop because
+-- the third of those is a setting and settings live outside this file.
+function UI.Notify()
+	for i = 1, #listeners do
+		listeners[i]()
+	end
 end
 
 -- Both halves matter. The screen height moves the grid itself, so every
@@ -227,9 +270,7 @@ function UI.Refresh()
 	end
 	parentScale = scale
 
-	for i = 1, #listeners do
-		listeners[i]()
-	end
+	UI.Notify()
 	return true
 end
 

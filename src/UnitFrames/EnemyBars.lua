@@ -3,10 +3,45 @@ local ADDON, ns = ...
 local EnemyBars = {}
 ns.EnemyBars = EnemyBars
 
--- Rank 1 IDs. Matching happens on the localised name, so every rank counts and
--- another warrior's Sunder shows up too. Add Hamstring (1715), Piercing Howl
--- (12323) or Mocking Blow (694) here if you want them on the bars.
-local TRACKED_SPELLS = { 7386, 1160, 6343, 772 } -- Sunder Armor, Demoralizing Shout, Thunder Clap, Rend
+-- The debuff row, as it ships. Rank 1 IDs, because matching happens on the
+-- localised name: every rank counts, another warrior's Sunder shows up, and
+-- one entry covers a spell you will re-rank six times.
+--
+-- This is the starting list and not the list. What a bar tracks is
+-- ns.db.barsSpells, which the panel and `bars debuff` edit, because which
+-- debuffs matter is a spec question and a fight question. An arms warrior
+-- watches Deep Wounds and Mortal Strike; a protection one watches neither and
+-- wants the room back.
+local DEFAULT_SPELLS = { 7386, 1160, 6343, 772 } -- Sunder Armor, Demoralizing Shout, Thunder Clap, Rend
+
+-- The most a bar will track. The aura scan is forty slots against every name on
+-- the list, per mob, five times a second, and the row still has to fit above a
+-- bar that is 120 pixels wide at its narrowest. Ten is past anything a warrior
+-- applies and cheap enough not to be worth arguing about.
+local MAX_SPELLS = 10
+
+-- What the panel's picker offers: every debuff a warrior puts on a mob on these
+-- two clients. It is a shortlist and not a limit, because the panel also takes
+-- a bare spell ID and so does `bars debuff add`. An ID this client cannot name
+-- is dropped from the offer rather than shown as a blank row.
+local SUGGESTED = {
+	7386,  -- Sunder Armor
+	1160,  -- Demoralizing Shout
+	6343,  -- Thunder Clap
+	772,   -- Rend
+	12162, -- Deep Wounds
+	12294, -- Mortal Strike
+	1715,  -- Hamstring
+	12323, -- Piercing Howl
+	355,   -- Taunt
+	694,   -- Mocking Blow
+	1161,  -- Challenging Shout
+	676,   -- Disarm
+	12809, -- Concussion Blow
+	5246,  -- Intimidating Shout
+	7922,  -- Charge Stun
+	20253, -- Intercept
+}
 
 local REFRESH = 0.2
 
@@ -20,13 +55,43 @@ local REFRESH = 0.2
 -- answer to that, and it is a whole number because a fractional one would put
 -- everything back on half pixels.
 --
--- ICON_SIZE is the one number here with a right answer rather than a chosen
--- one. The client keeps half sized copies of every texture and picks the
--- nearest, so a 64 texel spell icon is sharp at 64, 32 and 16 and is a blend of
--- two copies at anything in between. 20 is a compromise with the old size; 16
--- is the sharpest this row can be.
-local ICON_SIZE = 20
+-- The icon's edge is ns.db.barsIconSize and only the gap between icons is
+-- fixed, because the row is as long as the list now and the list is yours.
+--
+-- This used to say 16 and 32 were the two sizes with a right answer. They are
+-- not, and the square has never been drawn at either of them, for two reasons
+-- that both live in this part of the addon.
+--
+-- The square carries a one pixel border and the art is inset inside it, so a
+-- 20 pixel setting draws 18 pixels of icon. And ns.UI.Icon crops five texels
+-- off each edge to lose the border the client bakes into the art, so 54 texels
+-- are sampled and not 64. The client keeps half sized copies and picks the pair
+-- nearest what was asked for, so the exact sizes are the ones 54 halves down
+-- to, which is 54 and 27 rather than 32 and 16.
+--
+-- Add the border back and the only setting in the 16 to 32 range that draws one
+-- texel per pixel is 29. 20 draws 18 pixels from 54 texels, which is 58 percent
+-- of the way between two stored copies and about as blended as it gets.
+-- EnemyBars.IconAdvice is where that arithmetic lives, the panel and the slash
+-- word both read it, and the harness checks the number it names is really
+-- exact rather than trusting a comment.
 local ICON_GAP = 4
+
+-- What the square's edge may be set to. Named here rather than written into the
+-- panel and the slash word separately, because EnemyBars.IconAdvice has to
+-- search the same range those two offer or it will name a size neither reaches.
+--
+-- The ceiling is 56 rather than a round number. 54 texels survive the crop, the
+-- border takes two pixels, so 56 is the largest square where a stored texel
+-- still lands on a screen pixel. Above it the client is stretching a 54 texel
+-- picture over more pixels than it has and the art goes soft again, so a higher
+-- ceiling would only offer sizes that look worse than the one below them.
+--
+-- It was 32, which was chosen when the row was four fixed icons on a 180 pixel
+-- bar. That put the whole top half of the useful range out of reach: `bars zoom`
+-- did not work, so the only way to get a big icon was this number, and this
+-- number stopped well short of one.
+local ICON_MIN, ICON_MAX = 16, 56
 local PLATE_BAR_HEIGHT = 21
 local LIST_BAR_HEIGHT = 28
 local TOP_TEXT = 15
@@ -116,7 +181,15 @@ local pool, attached, listWidgets = {}, {}, {}
 -- events. GetNamePlates builds a fresh table on every call, and both the list
 -- collector and the attach walk wanted one five times a second.
 local plateUnits = {}
+-- ns.db.barsSpells, resolved. Names because the aura scan matches on the
+-- localised name, textures because the row draws them, and both indexed by slot
+-- so the tick reads two arrays rather than calling into the spell API. Rebuilt
+-- by Retrack whenever the list changes, which is the only time it can.
 local trackedNames, trackedIcons = {}, {}
+-- IDs on the list this client will not name. Kept rather than deleted, because
+-- an account plays both flavours and a spell Era has never heard of should come
+-- back when you log into the TBC character it was added on.
+local unresolved = {}
 local targeters, groupUnits = {}, {}
 local haveTarget = false -- gathered once a tick, read by every widget
 local firstSeen, seenCounter = {}, 0
@@ -127,6 +200,219 @@ local stripped, pending = {}, {}
 local layoutEpoch = 0
 local warnedNameplates = false
 local warnedThreat = false
+
+--------------------------------------------------------------------------
+-- The tracked list
+--
+-- Which debuffs the row above a bar shows, as an array of spell IDs in the
+-- order they are drawn. It lives in ns.db, so it is one setting the panel edits
+-- and `bars debuff` edits and neither owns; everything below is the only code
+-- allowed to write it, because every write has to be followed by a re-resolve
+-- and a relayout and a caller that forgot one would leave a row of blank
+-- squares.
+--
+-- Matching is by localised name, which is what makes rank 1 enough. That is
+-- also why two IDs that resolve to the same name are refused: they would be two
+-- identical icons lighting up and going out together.
+--------------------------------------------------------------------------
+
+-- A fresh table every time. The saved list is mutated in place by Add and
+-- Remove, so a caller handed the module's own copy would be editing the
+-- default, and the next reset would restore whatever it had been edited into.
+-- The border the square draws round its art, one pixel on each of four sides,
+-- so the art is two pixels smaller than the number in the panel.
+local ICON_BORDER = 2
+
+-- What a debuff square really draws on screen at a given setting, and whether
+-- the client has to blend two stored copies to do it.
+--
+-- Three numbers decide it and two of them are not the setting. The square is
+-- barsIconSize design pixels, so the zoom multiplies it. The border is one
+-- screen pixel a side and does not scale, so it takes two off whatever that
+-- comes to. And ns.UI.Icon crops the art to 54 texels, so the sizes where one
+-- stored texel lands on one pixel are 54 and 27 rather than the powers of two
+-- everybody expects.
+--
+-- Returns the drawn size in screen pixels, whether it is exact, and the nearest
+-- setting in the range that would be. That last one moves with the zoom: at 1x
+-- it is 29, which draws 27 off the half size copy, and at 2x it is 28, which
+-- draws 54 off the full size copy and is the sharpest a spell icon gets.
+--
+-- Read out of ns.UI.IconSizes rather than typed, so changing the crop in
+-- UI/Draw.lua moves the advice instead of leaving a stale number in a note.
+function EnemyBars.IconAdvice(size, zoom, low, high)
+	size = size or ns.db.barsIconSize
+	zoom = zoom or ns.db.barsZoom or 1
+	low, high = low or ICON_MIN, high or ICON_MAX
+
+	local function drawnAt(setting)
+		return setting * zoom - ICON_BORDER
+	end
+
+	local wanted = {}
+	for _, drawn in ipairs(ns.UI.IconSizes()) do
+		wanted[drawn] = true
+	end
+
+	local nearest = nil
+	for setting = low, high do
+		if wanted[drawnAt(setting)] then
+			if not nearest or math.abs(setting - size) < math.abs(nearest - size) then
+				nearest = setting
+			end
+		end
+	end
+
+	return drawnAt(size), wanted[drawnAt(size)] or false, nearest
+end
+
+-- The range the panel and the slash word both offer, so neither writes it out.
+function EnemyBars.IconRange()
+	return ICON_MIN, ICON_MAX
+end
+
+-- The same answer as a sentence, because three callers want to say it and none
+-- of them should be re-deriving it.
+function EnemyBars.DescribeIcon(size, zoom)
+	local drawn, exact, nearest = EnemyBars.IconAdvice(size, zoom)
+	if exact then
+		return ("%d screen pixels of art inside the border, one stored texel per pixel")
+			:format(drawn)
+	end
+	if not nearest then
+		return ("%d screen pixels of art inside the border, blended from two stored copies, and nothing in this range is exact at this zoom")
+			:format(drawn)
+	end
+	return ("%d screen pixels of art inside the border, blended from two stored copies. %d is the size that is not")
+		:format(drawn, nearest)
+end
+
+function EnemyBars.DefaultSpells()
+	local list = {}
+	for index, spellID in ipairs(DEFAULT_SPELLS) do
+		list[index] = spellID
+	end
+	return list
+end
+
+function EnemyBars.Spells()
+	return ns.db.barsSpells
+end
+
+function EnemyBars.Suggestions()
+	return SUGGESTED
+end
+
+function EnemyBars.MaxSpells()
+	return MAX_SPELLS
+end
+
+-- Which slot a spell is in, or nil. The panel asks so it can leave a debuff you
+-- already track out of the picker.
+function EnemyBars.Slot(spellID)
+	for index, id in ipairs(ns.db.barsSpells) do
+		if id == spellID then
+			return index
+		end
+	end
+	return nil
+end
+
+-- The IDs the list carries that this client cannot name, so the panel and
+-- /wk status can say so rather than leaving a row silently short.
+function EnemyBars.Unresolved()
+	return unresolved
+end
+
+local function Resolve()
+	local count = 0
+	wipe(unresolved)
+	for _, spellID in ipairs(ns.db.barsSpells) do
+		local name = ns.SpellName(spellID)
+		if name then
+			count = count + 1
+			trackedNames[count] = name
+			trackedIcons[count] = ns.SpellTexture(spellID)
+		else
+			unresolved[#unresolved + 1] = spellID
+		end
+	end
+	-- Trimmed rather than left long, because #trackedNames is what the row
+	-- length, the aura scan and the tick all count in.
+	for index = #trackedNames, count + 1, -1 do
+		trackedNames[index] = nil
+		trackedIcons[index] = nil
+	end
+end
+
+-- The list moved, so every widget's row is the wrong length and every widget is
+-- the wrong height. ApplyLayout bumps the epoch and re-lays the bars that are
+-- up; the ones in the pool take theirs when they next attach, which is what the
+-- epoch is for.
+function EnemyBars.Retrack()
+	Resolve()
+	EnemyBars.ApplyLayout()
+	EnemyBars.Rebuild()
+end
+
+-- Returns true and the spell's name, or false and the sentence to print.
+function EnemyBars.AddSpell(spellID)
+	spellID = tonumber(spellID)
+	if not spellID or spellID <= 0 or spellID ~= math.floor(spellID) then
+		return false, "a spell id is a whole number. It is the last part of the spell's Wowhead address."
+	end
+
+	local name = ns.SpellName(spellID)
+	if not name then
+		return false, ("this client does not know spell %d."):format(spellID)
+	end
+
+	local list = ns.db.barsSpells
+	for _, id in ipairs(list) do
+		if id == spellID or ns.SpellName(id) == name then
+			return false, name .. " is already on the bar."
+		end
+	end
+	if #list >= MAX_SPELLS then
+		return false, ("the bar tracks %d debuffs at most. Take one off first."):format(MAX_SPELLS)
+	end
+
+	list[#list + 1] = spellID
+	EnemyBars.Retrack()
+	return true, name
+end
+
+-- Returns true and the name it took off, or false when the list never had it.
+function EnemyBars.RemoveSpell(spellID)
+	spellID = tonumber(spellID)
+	local list = ns.db.barsSpells
+	for index, id in ipairs(list) do
+		if id == spellID then
+			table.remove(list, index)
+			EnemyBars.Retrack()
+			return true, ns.SpellName(id) or ("spell " .. id)
+		end
+	end
+	return false
+end
+
+function EnemyBars.ResetSpells()
+	ns.db.barsSpells = EnemyBars.DefaultSpells()
+	EnemyBars.Retrack()
+end
+
+-- One line for the panel note and for /wk status: the names, in order, or what
+-- is wrong with the list.
+function EnemyBars.DescribeSpells()
+	if #trackedNames == 0 then
+		return "nothing tracked, so the row above each bar is empty"
+	end
+	local line = table.concat(trackedNames, ", ")
+	if #unresolved > 0 then
+		line = line .. (", and %d this client cannot name"):format(#unresolved)
+	end
+	return line
+end
 
 -- Cut on a character, not on a byte. Names arrive as UTF-8 and sub() counts
 -- bytes, so a plain slice through a two or three byte sequence on a non-English
@@ -375,8 +661,12 @@ end
 -- whether this mob has it. A fresh table per matched debuff per mob per tick
 -- is the kind of garbage that shows up as a stutter on a pull rather than as a
 -- number on a frame counter.
+--
+-- A shorter list leaves the tail of `found` behind rather than trimming it. The
+-- entries past #trackedNames are never read and never cleared, which costs one
+-- table each and saves the tick from caring that the list can move.
 local function ScanDebuffs(unit, found)
-	for i = 1, #TRACKED_SPELLS do
+	for i = 1, #trackedNames do
 		local slotData = found[i]
 		if not slotData then
 			slotData = {}
@@ -434,6 +724,48 @@ end
 
 local Text = ns.UI.Label
 
+-- One debuff square. Sized, positioned and given its fonts by LayoutWidget,
+-- because all three follow settings that move while the addon is up.
+local function IconHolder(widget)
+	local holder = CreateFrame("Frame", nil, widget)
+	holder.edges = ns.Outline(holder, EDGE[1], EDGE[2], EDGE[3], EDGE[4])
+	holder.texture = ns.UI.Icon(holder)
+	-- Timer along the bottom edge and stacks in the corner, which leaves the
+	-- middle of the art readable. A number across the icon does not.
+	holder.timer = Text(holder, PLATE_TEXT, NAME_TEXT, "CENTER")
+	holder.timer:SetPoint("BOTTOM", holder, "BOTTOM", 0, 0)
+	holder.count = Text(holder, COUNT_TEXT_SIZE, COUNT_TEXT, "RIGHT")
+	holder.count:SetPoint("TOPRIGHT", holder, "TOPRIGHT", -1, -1)
+	return holder
+end
+
+-- The row, fitted to the list. A frame cannot be destroyed on this client, so a
+-- shorter list hides its tail rather than freeing it and a longer one grows into
+-- squares that are already there: a widget that has carried eight and now
+-- carries three keeps five hidden holders for the next time you add one.
+--
+-- Widgets are pooled and their drawn state survives pooling, so a slot whose art
+-- changed has to forget what the tick last put on it. Otherwise slot 2 keeps
+-- Rend's stack count after Rend moved to slot 3.
+local function FitIcons(widget)
+	for index = 1, #trackedNames do
+		local holder = widget.icons[index]
+		if not holder then
+			holder = IconHolder(widget)
+			widget.icons[index] = holder
+		end
+		if holder.shownIcon ~= trackedIcons[index] then
+			holder.shownIcon = trackedIcons[index]
+			holder.texture:SetTexture(trackedIcons[index])
+			holder.shownState, holder.shownSeconds, holder.shownCount = nil, nil, nil
+		end
+		holder:Show()
+	end
+	for index = #trackedNames + 1, #widget.icons do
+		widget.icons[index]:Hide()
+	end
+end
+
 local function CreateWidget()
 	local widget = CreateFrame("Frame", nil, UIParent)
 	widget:EnableMouse(false) -- never steal a click from the nameplate underneath
@@ -486,20 +818,9 @@ local function CreateWidget()
 	widget.marker:SetTexture(RAID_ICON_TEXTURE)
 	widget.marker:Hide()
 
+	-- Empty. The row is as long as the list and the list is a setting, so
+	-- FitIcons builds it and LayoutWidget calls FitIcons.
 	widget.icons = {}
-	for i = 1, #TRACKED_SPELLS do
-		local holder = CreateFrame("Frame", nil, widget)
-		holder.edges = ns.Outline(holder, EDGE[1], EDGE[2], EDGE[3], EDGE[4])
-		holder.texture = ns.UI.Icon(holder)
-		holder.texture:SetTexture(trackedIcons[i])
-		-- Timer along the bottom edge and stacks in the corner, which leaves
-		-- the middle of the art readable. A number across the icon does not.
-		holder.timer = Text(holder, PLATE_TEXT, NAME_TEXT, "CENTER")
-		holder.timer:SetPoint("BOTTOM", holder, "BOTTOM", 0, 0)
-		holder.count = Text(holder, COUNT_TEXT_SIZE, COUNT_TEXT, "RIGHT")
-		holder.count:SetPoint("TOPRIGHT", holder, "TOPRIGHT", -1, -1)
-		widget.icons[i] = holder
-	end
 
 	widget.targetedBy = Text(widget, PLATE_TEXT, HEALTH_TEXT, "CENTER")
 
@@ -531,28 +852,96 @@ end
 -- gauge is shared: threat on the left, debuff icons packed to the right, so
 -- neither has to be centred into the other's way.
 --
--- Every number the constants above hand over is a pixel count, and `px` is what
--- turns it into the units this widget is drawn in. On the grid px is exactly 1
--- and the multiply costs nothing. Off it, on a client with no
--- SetIgnoreParentScale, px is the fraction that keeps the bar the same physical
--- size and the edges one pixel wide, which is as close as that client gets.
+-- Two conversions, and telling them apart is the whole of why `bars zoom` works
+-- now and did not before.
+--
+-- `unit` turns a number from the constants above into the units this widget is
+-- drawn in. On the grid it is 1: a design pixel is a unit, and the zoom on the
+-- frame's scale is what makes that unit a 1x1, 2x2 or 3x3 block of screen
+-- pixels. Off the grid, on a client with no SetIgnoreParentScale, it is the
+-- fraction that keeps the bar the same physical size, which is as close as that
+-- client gets.
+--
+-- `px` is one screen pixel, and it is for hairlines, insets and nothing else.
+-- An edge is one pixel at every zoom, the same as every rule in the options
+-- window. A design that grows does not want a border that grows with it.
+--
+-- Every size below used to go through `px`, including the ones that are sizes
+-- in the design. On the grid that is a divide by the zoom, the frame's scale
+-- multiplies it straight back, and the bar measured 180 by 62 screen pixels at
+-- zoom 1, 2 and 3 alike. The setting had never done anything.
 local function LayoutWidget(widget, width, onPlate)
 	-- Measured here rather than baked into a constant, because the same widget
 	-- is laid out on a nameplate and in the list and a reparent can move the
 	-- scale under it. Everything below is in these units.
 	local px = ns.Pixel(widget)
-	local barHeight = (onPlate and PLATE_BAR_HEIGHT or LIST_BAR_HEIGHT) * px
+	local unit = ns.UI.Unit(widget)
+	local barHeight = (onPlate and PLATE_BAR_HEIGHT or LIST_BAR_HEIGHT) * unit
 	local boxHeight = barHeight + px * 2 -- the gauge, plus the hairline around it
-	local iconSize = ICON_SIZE * px
-	local iconGap = ICON_GAP * px
-	local iconRow = #TRACKED_SPELLS * iconSize + (#TRACKED_SPELLS - 1) * iconGap
-	local rowHeight = boxHeight + iconGap + iconSize
-	local pad = 4 * px
-	local font = ns.UI.Font(math.floor((onPlate and PLATE_TEXT or LIST_TEXT) * px + 0.5))
-	local countFont = ns.UI.Font(math.floor(COUNT_TEXT_SIZE * px + 0.5))
+	local iconSize = ns.db.barsIconSize * unit
+	local iconGap = ICON_GAP * unit
+	local pad = 4 * unit
+	local fontSize = math.floor((onPlate and PLATE_TEXT or LIST_TEXT) * unit + 0.5)
+	local font = ns.UI.Font(fontSize)
+
+	-- Two strings on this widget have nothing behind them.
+	--
+	-- The name, the health number and the level tag all sit on an opaque fill, so
+	-- an outline is a choice there and contrast is the argument for keeping it.
+	-- The threat line and the targeted-by line sit in the gap above the gauge,
+	-- over whatever the player happens to be standing on, so the outline is not a
+	-- choice: without it a pale number over pale ground is gone.
+	--
+	-- That makes the outline floor a hard minimum for these two rather than the
+	-- switch point ns.UI.NumberFont applies over art. There is no graceful
+	-- degradation available, so the size has to come up instead. They were 12,
+	-- outlined, which is the one combination that is bad in both directions at
+	-- once: too small to carry a rim, and unable to drop it.
+	local openFont = ns.UI.Font(math.max(fontSize, ns.UI.OutlineFloor()))
+
+	-- The row, packed right and wrapped.
+	--
+	-- Right against the gauge's right edge is where it has always been and where
+	-- it stays: the icons are what you glance at, the gauge's right end is where
+	-- the health number already is, and a row that grew rightwards would walk
+	-- off the bar. What is new is that the length is yours, and ten icons at
+	-- thirty two pixels is 356 and wider than any bar this addon will draw. So
+	-- the row wraps upwards instead of overflowing, every row right aligned
+	-- under the one above it, and the bottom row is the one nearest the gauge
+	-- and the one that fills first.
+	FitIcons(widget)
+	local count = #trackedNames
+	local perRow = math.max(1, math.floor((width + iconGap) / (iconSize + iconGap)))
+	local iconRows = count > 0 and math.ceil(count / perRow) or 0
+
+	-- The strip between the gauge and whatever is above it. The threat number
+	-- shares it with the bottom row of icons, so it is an icon tall; with
+	-- nothing tracked there are no icons to share it with and it is as tall as
+	-- its own text, which is the whole of what an empty list costs in height.
+	local lineHeight = iconRows > 0 and iconSize
+		or math.max(fontSize, ns.UI.OutlineFloor())
+	local rowHeight = boxHeight + iconGap + lineHeight
+		+ math.max(iconRows - 1, 0) * (iconGap + iconSize)
+
+	-- Only the bottom row is beside the threat number, so only the bottom row
+	-- takes width away from it.
+	local bottom = math.min(count, perRow)
+	local bottomWidth = bottom > 0 and (bottom * iconSize + (bottom - 1) * iconGap) or 0
+
+	-- Both numbers on an icon are sized off the icon rather than off the bar,
+	-- because the icon is a setting now: a fourteen pixel timer on a sixteen
+	-- pixel square covers the art it is annotating.
+	-- Both numbers sit on the icon's own art, which is opaque, so they go through
+	-- ns.UI.NumberFont: it keeps the outline while the glyph is big enough to
+	-- carry one and drops it when it is not. These were outlined at every size,
+	-- and at the sizes a small square forces that is a blob rather than a digit.
+	local timerFont = ns.UI.NumberFont(math.max(8,
+		math.min(fontSize, math.floor(iconSize * 0.6))))
+	local countFont = ns.UI.NumberFont(math.max(7,
+		math.min(math.floor(COUNT_TEXT_SIZE * unit + 0.5), math.floor(iconSize * 0.5))))
 
 	widget:SetWidth(width)
-	widget:SetHeight(rowHeight + TOP_TEXT * px)
+	widget:SetHeight(rowHeight + TOP_TEXT * unit)
 	widget.onPlate = onPlate -- PlaceOnPlate centres on a plate and not in the list
 
 	widget.box:ClearAllPoints()
@@ -578,7 +967,13 @@ local function LayoutWidget(widget, width, onPlate)
 	widget.level:SetFrameLevel(widget.health:GetFrameLevel() + 1)
 	widget.level.text:SetFontObject(font)
 	widget.level.text:ClearAllPoints()
-	widget.level.text:SetPoint("CENTER", widget.level, "CENTER", STRIPE_WIDTH * px / 2, 0)
+	-- Shifted right by half the stripe, so the number centres in the space the
+	-- stripe leaves rather than in the whole tag. Rounded, because the stripe is
+	-- five pixels wide and half of five is half a pixel: the number was landing
+	-- across two columns on every bar the addon has ever drawn. Half a pixel off
+	-- centre and sharp beats dead centre and smeared.
+	widget.level.text:SetPoint("CENTER", widget.level, "CENTER",
+		ns.UI.Round(widget, STRIPE_WIDTH * unit / 2), 0)
 	widget.level:ClearAllPoints()
 	-- Flush against the box and the same height as it, so the tag and the bar
 	-- read as one strip with the box's own hairline between them. Pinned by
@@ -586,11 +981,11 @@ local function LayoutWidget(widget, width, onPlate)
 	-- gauge never moves under it.
 	widget.level:SetPoint("TOPRIGHT", widget.box, "TOPLEFT", 0, 0)
 	widget.level:SetPoint("BOTTOMRIGHT", widget.box, "BOTTOMLEFT", 0, 0)
-	widget.level:SetWidth(LEVEL_WIDTH * px)
+	widget.level:SetWidth(LEVEL_WIDTH * unit)
 	widget.level.stripe:ClearAllPoints()
 	widget.level.stripe:SetPoint("TOPLEFT", widget.level, "TOPLEFT", 0, 0)
 	widget.level.stripe:SetPoint("BOTTOMLEFT", widget.level, "BOTTOMLEFT", 0, 0)
-	widget.level.stripe:SetWidth(STRIPE_WIDTH * px)
+	widget.level.stripe:SetWidth(STRIPE_WIDTH * unit)
 	widget.levelTag = nil -- the next update sizes the tag to its own text
 
 	-- The whole inside of the gauge belongs to the name now, left edge to
@@ -600,25 +995,36 @@ local function LayoutWidget(widget, width, onPlate)
 	widget.name:SetPoint("LEFT", widget.health, "LEFT", pad, 0)
 	widget.name:SetPoint("RIGHT", widget.healthText, "LEFT", -pad, 0)
 
-	widget.threatText:SetFontObject(font)
+	widget.threatText:SetFontObject(openFont)
 	widget.threatText:ClearAllPoints()
-	widget.threatText:SetPoint("LEFT", widget, "BOTTOMLEFT", px, boxHeight + iconGap + iconSize / 2)
-	widget.threatText:SetWidth(math.max(24 * px, width - iconRow - 8 * px))
+	-- Rounded for the same reason: lineHeight is the icon's edge when anything is
+	-- tracked, and half of an odd icon is half a pixel.
+	widget.threatText:SetPoint("LEFT", widget, "BOTTOMLEFT", px,
+		boxHeight + iconGap + ns.UI.Round(widget, lineHeight / 2))
+	widget.threatText:SetWidth(math.max(24 * unit, width - bottomWidth - 8 * unit))
 
-	for i, holder in ipairs(widget.icons) do
+	for index = 1, count do
+		local holder = widget.icons[index]
 		holder:SetSize(iconSize, iconSize)
 		ns.EdgeSize(holder.edges, px)
-		holder.timer:SetFontObject(font)
+		holder.timer:SetFontObject(timerFont)
 		holder.count:SetFontObject(countFont)
 		holder.texture:ClearAllPoints()
 		holder.texture:SetPoint("TOPLEFT", px, -px)
 		holder.texture:SetPoint("BOTTOMRIGHT", -px, px)
+
+		-- Every square is anchored to the gauge's top right corner rather than
+		-- to the square before it, so each row lands on the right edge by
+		-- construction and a partial row hangs its gap on the left where it
+		-- belongs. A chain of LEFT anchors could only align the row it started.
+		local row = math.floor((index - 1) / perRow) -- 0 is the row on the gauge
+		local column = (index - 1) % perRow
+		local inRow = math.min(perRow, count - row * perRow)
+		local rowWidth = inRow * iconSize + (inRow - 1) * iconGap
 		holder:ClearAllPoints()
-		if i == 1 then
-			holder:SetPoint("BOTTOMLEFT", widget.box, "TOPRIGHT", -iconRow, iconGap)
-		else
-			holder:SetPoint("LEFT", widget.icons[i - 1], "RIGHT", iconGap, 0)
-		end
+		holder:SetPoint("BOTTOMLEFT", widget.box, "TOPRIGHT",
+			column * (iconSize + iconGap) - rowWidth,
+			iconGap + row * (iconGap + iconSize))
 	end
 
 	-- Outside the tag when there is a tag, so the two do not want the same
@@ -627,15 +1033,15 @@ local function LayoutWidget(widget, width, onPlate)
 	widget.marker:ClearAllPoints()
 	widget.marker:SetSize(barHeight + pad, barHeight + pad)
 	if showLevel then
-		widget.marker:SetPoint("RIGHT", widget.level, "LEFT", -3 * px, 0)
+		widget.marker:SetPoint("RIGHT", widget.level, "LEFT", -3 * unit, 0)
 	else
-		widget.marker:SetPoint("RIGHT", widget.box, "LEFT", -3 * px, 0)
+		widget.marker:SetPoint("RIGHT", widget.box, "LEFT", -3 * unit, 0)
 	end
 
-	widget.targetedBy:SetFontObject(font)
+	widget.targetedBy:SetFontObject(openFont)
 	widget.targetedBy:ClearAllPoints()
 	widget.targetedBy:SetPoint("TOP", widget, "TOP", 0, 0)
-	widget.targetedBy:SetWidth(width + 60 * px)
+	widget.targetedBy:SetWidth(width + 60 * unit)
 
 	-- What the client needs to know to stop two of these landing on each other.
 	-- Sent in UIParent's units because that is what the nameplate driver counts
@@ -690,11 +1096,25 @@ local function PlaceOnPlate(widget)
 		-- Sit where the Blizzard bar was, so the bar still reads as the mob's.
 		-- The gauge sits one pixel inside the box, so the gauge and not the
 		-- frame around it is what lands on the centre.
-		local px = ns.Pixel(widget)
+		--
+		-- Rounded, and this is the one that mattered. PLATE_BAR_HEIGHT is 21, so
+		-- half of it plus one is 11.5, and replace is the default style: every
+		-- bar the addon has ever drawn had its own origin half a pixel below a
+		-- pixel boundary, and a widget offset by half a pixel has every edge,
+		-- every glyph and every icon inside it drawn across two rows. That is
+		-- the whole of "the bar does not look crisp". The comment three lines up
+		-- from here has said so since the tag shift was rounded; the number
+		-- underneath it was never put through the same treatment.
+		--
+		-- An odd bar cannot be centred on a point and land on a boundary, so
+		-- half a pixel of centring is what is given up. It is not visible. The
+		-- smear was.
+		local unit = ns.UI.Unit(widget)
 		widget:SetPoint("BOTTOM", host, "CENTER", shift,
-			(-(PLATE_BAR_HEIGHT / 2 + 1) + ns.db.barsOffset) * px)
+			-ns.UI.Round(widget, (PLATE_BAR_HEIGHT / 2 + 1) * unit)
+				+ ns.db.barsOffset * unit)
 	else
-		widget:SetPoint("BOTTOM", host, "TOP", shift, ns.db.barsOffset * ns.Pixel(widget))
+		widget:SetPoint("BOTTOM", host, "TOP", shift, ns.db.barsOffset * ns.UI.Unit(widget))
 	end
 end
 
@@ -758,9 +1178,12 @@ local function UpdateWidget(widget, unit, guid)
 		if widget.levelTag ~= tag then
 			widget.levelTag = tag
 			widget.level.text:SetText(tag)
-			local px = ns.Pixel(widget)
+			-- ns.UI.Unit inline rather than in a local, because `unit` in this
+			-- function is the unit token the tick is about and two meanings of
+			-- one word inside one function is how the wrong one gets used.
 			widget.level:SetWidth(ns.UI.Round(widget,
-				widget.level.text:GetStringWidth() + (LEVEL_PAD + STRIPE_WIDTH) * px))
+				widget.level.text:GetStringWidth()
+					+ (LEVEL_PAD + STRIPE_WIDTH) * ns.UI.Unit(widget)))
 			PlaceOnPlate(widget) -- the tag changed width, so the centre moved
 		end
 		if widget.levelColor ~= xp then
@@ -833,7 +1256,12 @@ local function UpdateWidget(widget, unit, guid)
 	-- guarded on it and not on the aura. The timer and the stack count move on
 	-- their own and carry their own guards, both on the integer that is drawn.
 	ScanDebuffs(unit, scratch)
-	for slot, holder in ipairs(widget.icons) do
+	-- Bounded by the widget as well as by the list. FitIcons makes the row as
+	-- long as the list and LayoutWidget calls it, but this runs five times a
+	-- second whether or not a layout has happened since the list last moved, and
+	-- a nil index on a ticker is a thousand errors a minute rather than one.
+	for slot = 1, math.min(#trackedNames, #widget.icons) do
+		local holder = widget.icons[slot]
 		local aura = scratch[slot]
 		local active = aura and aura.active
 		local state = active and (aura.mine and "mine" or "theirs") or "none"
@@ -1122,7 +1550,7 @@ local function Attach(unit)
 	-- second. The epoch is what keeps it off that path: anything that changes
 	-- the shape bumps it, so a widget coming back out of the pool is laid out
 	-- again only when the shape it already has is out of date.
-	local width = ns.db.barsWidth * ns.Pixel(widget)
+	local width = ns.db.barsWidth * ns.UI.Unit(widget)
 	if widget.laidWidth ~= width or widget.laidEpoch ~= layoutEpoch then
 		widget.laidWidth, widget.laidEpoch = width, layoutEpoch
 		LayoutWidget(widget, width, true)
@@ -1260,7 +1688,7 @@ end
 
 local function UpdateList()
 	local shown = math.min(CollectUnits(), ns.db.barsMax)
-	local width = ns.db.barsWidth * ns.Pixel(anchor)
+	local width = ns.db.barsWidth * ns.UI.Unit(anchor)
 
 	for index = 1, shown do
 		local widget = listWidgets[index]
@@ -1329,11 +1757,14 @@ function EnemyBars.ApplyLayout()
 	anchor:ClearAllPoints()
 	anchor:SetPoint(point[1], UIParent, point[3], point[4], point[5])
 	ns.UI.Rezoom(anchor, ns.db.barsZoom)
-	local px = ns.Pixel(anchor)
-	anchor:SetSize(ns.db.barsWidth * px, 20 * px)
+	-- Rezoomed first, because the unit a design pixel occupies is read off the
+	-- frame and the zoom is what decides it. Sizing before the rezoom lays the
+	-- list out for the zoom it is leaving.
+	local unit = ns.UI.Unit(anchor)
+	anchor:SetSize(ns.db.barsWidth * unit, 20 * unit)
 	for _, widget in ipairs(listWidgets) do
 		ns.UI.Rezoom(widget, ns.db.barsZoom)
-		LayoutWidget(widget, ns.db.barsWidth * px, false)
+		LayoutWidget(widget, ns.db.barsWidth * ns.UI.Unit(widget), false)
 	end
 	-- The bars already sitting on plates take the same width, and nothing else
 	-- would reach them: a widget on a plate is laid out when it attaches, and
@@ -1341,7 +1772,7 @@ function EnemyBars.ApplyLayout()
 	-- because a plate widget can be on a zoom of its own until Rebuild runs.
 	for _, widget in pairs(attached) do
 		ns.UI.Rezoom(widget, ns.db.barsZoom)
-		widget.laidWidth = ns.db.barsWidth * ns.Pixel(widget)
+		widget.laidWidth = ns.db.barsWidth * ns.UI.Unit(widget)
 		widget.laidEpoch = layoutEpoch
 		LayoutWidget(widget, widget.laidWidth, true)
 		PlaceOnPlate(widget)
@@ -1456,9 +1887,10 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	end
 
 	-- PLAYER_LOGIN
-	for slot, spellID in ipairs(TRACKED_SPELLS) do
-		trackedNames[slot] = ns.SpellName(spellID)
-		trackedIcons[slot] = ns.SpellTexture(spellID)
+	Resolve()
+	if #unresolved > 0 then
+		ns.Print("these ids on the debuff list are not spells this client knows, so they draw"
+			.. " nothing and keep their place: " .. table.concat(unresolved, ", ") .. ".")
 	end
 
 	anchor = CreateFrame("Frame", "WarriorKitEnemyBarsAnchor", UIParent)

@@ -21,10 +21,12 @@ local C, M = UI.Color, UI.Metric
 -- size and position, and every number in UI.Metric is then a count of physical
 -- pixels. The cost is the cost the enemy bars already pay: a window 540 pixels
 -- wide is 540 pixels on a laptop and 540 on a 4K panel, which on the 4K panel
--- is small. Zoom is the answer there, it is a whole number for the reason it is
--- a whole number everywhere else, and it is picked off the screen height rather
--- than made a setting, because a setting nothing has asked for is a setting
--- that rots.
+-- is small. Zoom is the answer there, and it comes from two places that
+-- multiply: UI.ScreenZoom, a whole step the screen height picks on its own, and
+-- UI.Size, the slider the player drags in the settings panel. A screen that
+-- doubles everything and a player who halves it land back on the design size,
+-- which is the arithmetic you want and the reason they are one number by the
+-- time a window sees them.
 --
 -- **The size is deliberate and the window does not resize.** The old panel grew
 -- to whatever its tallest page needed, which on this screen was 773 physical
@@ -43,16 +45,60 @@ local C, M = UI.Color, UI.Metric
 -- the harness's benefit.
 UI.Windows = {}
 
--- Whole steps only. Below a 1600 pixel tall screen the pixel metrics are
--- already comfortable; above 2000 they are half the size they should be. There
--- is no half step, because a fractional zoom puts every edge back on a half
--- pixel and undoes the grid.
-function UI.WindowZoom()
+-- What the screen asks for, before the player has said anything. Whole steps
+-- only: below a 1600 pixel tall screen the pixel metrics are already
+-- comfortable, above 2000 they are half the size they should be, and a
+-- fractional step chosen on the player's behalf would put every edge in the
+-- window onto a half pixel to buy a size nobody asked for.
+function UI.ScreenZoom()
 	local height = UI.ScreenHeight()
 	if height >= 2000 then
 		return 2
 	end
 	return 1
+end
+
+-- What the player asked for on top of that, which is the UI size slider in the
+-- settings panel. It is held here rather than read out of ns.db, because this
+-- layer is not allowed to know the name of a setting: Settings/Settings.lua
+-- reads the saved value and pushes it in, the same way a widget takes a getter
+-- rather than a key.
+--
+-- The two multiply. On a 4K panel the screen has already doubled everything, so
+-- half size lands back on the design size and is exact; on a 1080p panel the
+-- screen contributes 1 and half size is genuinely half. That is the behaviour
+-- you want from a control called "UI size": it says how big this looks to you,
+-- not how many pixels went into it.
+local chosen = 1
+
+function UI.Size()
+	return chosen
+end
+
+-- Every window on the grid is re-zoomed by its own rescale listener, which is
+-- the same path a monitor swap takes, so this only has to say that the ground
+-- moved. Returns whether it did: an unchanged size relays out nothing.
+function UI.SetSize(scale)
+	scale = tonumber(scale) or 1
+	if scale == chosen then
+		return false
+	end
+	chosen = scale
+	UI.Notify()
+	return true
+end
+
+function UI.WindowZoom()
+	return UI.ScreenZoom() * chosen
+end
+
+-- Whether one unit is a whole number of physical pixels at the zoom in force.
+-- The window is exact only when the product is, which is why the screen's own
+-- step is whole and why the panel says out loud which stops of the slider are
+-- and which are not.
+function UI.Exact(zoom)
+	zoom = zoom or UI.WindowZoom()
+	return math.abs(zoom - math.floor(zoom + 0.5)) < 1e-6
 end
 
 local Window = {}

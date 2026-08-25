@@ -33,6 +33,10 @@ globals = {
 	"WarriorKitChargeMarker",
 	"WarriorKitChargeMarkerCooldown",
 	"WarriorKitEnemyBarsAnchor",
+	-- the meter frame. Named so the two panes can be found from a macro or from
+	-- scripts/harness.lua without Meter/Window.lua handing out a reference to its
+	-- own row pool.
+	"WarriorKitMeter",
 	-- the block the skin draws over each of the three Blizzard unit frames.
 	-- Named so a block that lands in the wrong place can be measured from a
 	-- macro or from scripts/harness.lua without Skin.lua handing out a

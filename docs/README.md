@@ -62,7 +62,7 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is nine parts and a core. Each part is a folder, and Core knows the
+The addon is eleven parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
@@ -111,6 +111,16 @@ name of none of them.
     UnitFrames/Skin.lua      the square skin on player, target and target of target
     UnitFrames/Feature.lua
 
+    Meter/Roster.lua         who is in the group, whose pet is whose, and what a
+                             GUID was called when it last was
+    Meter/Spec.lua           the icon beside a name: a talent tree where the
+                             client will say which, a class icon where it will not
+    Meter/Meter.lua          damage and healing per player, out of the combat log
+    Meter/Threat.lua         each member's threat on your target, and how fast it
+                             is climbing
+    Meter/Window.lua         the two panes, their rows, and the tick that paints them
+    Meter/Feature.lua        the tab, the slash words and the settings
+
     Artwork/Artwork.lua      strips the gryphons and the metal strip off the bars
     Artwork/Feature.lua
 
@@ -124,6 +134,9 @@ name of none of them.
     EditMode/EditMode.lua    probes Edit Mode, captures a layout, imports the baked one
     EditMode/Saved.lua       generated, the baked layout, written by bake-ui.sh
     EditMode/Feature.lua
+
+    Settings/Settings.lua    how big the addon's own windows are drawn
+    Settings/Feature.lua
 
     Bindings.xml         keybindings, loaded automatically, not listed in the TOC
     WarriorKit.toc       load order, TBC Anniversary and the fallback for anything else
@@ -395,8 +408,20 @@ Three consequences worth knowing before changing anything under it:
 
 - **Sizes are absolute now.** A 21 pixel bar is 21 pixels on a laptop and 21 on
   a 4K panel. That is the point and it is also the cost, which is what
-  `bars zoom` is for. Zoom is a whole number because a fractional one puts every
-  edge back on a half pixel.
+  `bars zoom` and `uisize` are for. `bars zoom` is a whole number and refuses to
+  be anything else, because a bar you read at a glance mid-pull is worth keeping
+  exact. `uisize` runs in quarters and lets you off the grid on purpose, because
+  a settings window is read deliberately and a soft hairline is a price you are
+  allowed to choose. The panel prints which of the two states you are in.
+- **`ns.UI.Pixel` and `ns.UI.Unit` are not the same question, and mixing them up
+  makes a zoom setting inert.** `Pixel` answers "how many units is one screen
+  pixel", which on the grid is `1 / zoom`. `Unit` answers "how many units is one
+  pixel of the design", which on the grid is 1 whatever the zoom, because the
+  zoom is what turns that unit into a 1x1, 2x2 or 3x3 block. A layout that runs
+  its own design numbers through `Pixel` has divided itself by the zoom, and the
+  scale multiplies it straight back. Use `Pixel` for a hairline or an inset,
+  which is one screen pixel and stays one when the design grows. Use `Unit` for
+  every number that is a size.
 - **A measurement from outside the grid means nothing until it is converted.**
   A nameplate is not on the grid and never will be. `ns.UI.Convert` takes a size
   from one frame's units into another's, and `ns.UI.Round` snaps what comes out.
@@ -406,6 +431,15 @@ Three consequences worth knowing before changing anything under it:
   the mob is standing, which is a moving fraction of a pixel no addon can read.
   Its geometry is exact; where that geometry lands is the client's business.
   Bars in the list anchor to UIParent and are exact in both.
+- **An anchor offset is a number a person typed, and half of an odd number is
+  half a pixel.** The grid makes sizes exact and does nothing at all about
+  position. A frame whose own origin sits half a pixel off a boundary has every
+  edge, glyph and icon inside it rasterised across two rows, and the arithmetic
+  that produces it looks like centring, because it is. Three of these were live
+  at once in the enemy bars, including one on the widget itself in the default
+  style, which meant every bar the addon had ever drawn was half a pixel low.
+  The harness now walks every frame on the grid and fails on any offset that is
+  not a whole number of pixels.
 
 Icons are a separate fix in the same file. A flat colour is one texel stretched
 over a rectangle and there is nothing to get wrong. A spell icon is a 64 texel
@@ -432,6 +466,10 @@ first thing built on them and is not meant to be the last.
     ns.UI.Stack(parent, width)     a column, :Add, :Space, :Reflow
     ns.UI.ScrollView(parent)       :Resize, :Update(extent), :ScrollTo
     ns.UI.Button(parent, opts)     a push button
+    ns.UI.Pixel(frame)             one screen pixel, in that frame's units
+    ns.UI.Unit(frame)              one design pixel, in that frame's units
+    ns.UI.Size / ns.UI.SetSize     what the player dragged the size slider to
+    ns.UI.ScreenZoom / WindowZoom  the screen's whole step, and it times the size
     ns.UI.Kit(host)                the widget kit
     ns.UI.Window(opts)             chrome, adopted onto the grid
     ns.UI.Rail / ns.UI.TabStrip    the two levels of navigation
@@ -451,10 +489,22 @@ host where sections go. A host that answers nothing gets the rule back.
 
 **The window is adopted, so it is exact.** Unlike a nameplate it is a frame the
 addon owns and anchors to UIParent, so every number in `UI.Metric` is a count of
-physical pixels and the window is 544 by 452 of them. It does not resize and it
-does not grow: a section that does not fit scrolls. Zoom is a whole number
-picked off the screen height, 1 below 2000 pixels tall and 2 above, for the same
-reason `bars zoom` is a whole number.
+physical pixels and the window is 544 by 452 of them. It does not resize itself
+to its content and it does not grow: a section that does not fit scrolls.
+
+**Zoom comes from two numbers that multiply.** `UI.ScreenZoom` is a whole step
+read off the screen height, 1 below 2000 pixels tall and 2 above. `UI.Size` is
+whatever the player dragged the size slider to, 0.5 to 3 in quarters, and
+`Settings/Settings.lua` pushes it in. `UI.WindowZoom` is the product, and it is
+what every window is adopted at. A 4K screen that has already doubled everything
+and a player who halves it land back on the design size with the grid intact,
+which is the arithmetic you want from a control called "UI size".
+
+`UI.SetSize` stores the number and calls `UI.Notify`, which runs the same
+listeners a monitor swap runs. Each window's own `OnRescale` handler re-zooms
+it, re-clamps its height against the screen and lays it out again. There is no
+second path for a size change, and adding a window means registering that
+handler and nothing else.
 
 **Three client questions, all probed.** Clipping is `SetClipsChildren` where it
 answers, the `ScrollFrame` frame type where it does not, and nothing at all
@@ -1298,7 +1348,9 @@ box holds one gauge and the gauge is pinned to all four of its corners, so the
 fill covers the whole inside however the numbers round. The spent part keeps the
 hue at a fifth of the brightness so a mob at ten percent still reads as yours,
 and the row above the gauge is split rather than stacked, threat text left and
-debuff icons packed right.
+debuff icons packed right. The icon row wraps upwards when it stops fitting, so
+a long list on a narrow bar becomes two rows rather than icons hanging off the
+left edge.
 
 The edge around the gauge carries the threat colour, the same colour the fill
 uses, so aggro is legible off a bar that is nearly empty. Your current target
@@ -1478,10 +1530,57 @@ scanned across the roster. Colour follows that number: green clear, yellow past
 70, orange past 90, red whenever the mob is on someone else, grey with no
 threat data.
 
-Tracked debuffs are Sunder Armor, Demoralizing Shout, Thunder Clap and Rend,
-matched on localised name so all ranks count and another warrior's Sunder shows
-up desaturated rather than missing. Add Hamstring (1715), Piercing Howl (12323)
-or Mocking Blow (694) to `TRACKED_SPELLS`.
+**The debuff row is a setting, not a constant.** It ships tracking Sunder Armor,
+Demoralizing Shout, Thunder Clap and Rend, and `ns.db.barsSpells` is what it
+actually draws: an array of spell IDs in the order they appear, up to ten of
+them. The panel has a tab for it and `bars debuff add|remove` does the same job
+from a macro. Which debuffs matter is a spec question, and hard-coding four of
+them answered it for an arms warrior who wants Deep Wounds and a protection one
+who wants the room back.
+
+Matching is on the localised name rather than the ID, which is why rank 1 is
+enough: every rank of Sunder resolves to the same string, and another warrior's
+Sunder shows up desaturated rather than missing. It is also why two IDs that
+resolve to one name are refused. They would be two identical squares lighting up
+and going out together.
+
+`EnemyBars.AddSpell` and `EnemyBars.RemoveSpell` are the only writes to that
+list. Both re-resolve the names and textures and then relayout, because a caller
+that forgot either half would leave a row of blank squares behind. An ID this
+client cannot name is kept on the list and drawn as nothing, since an account
+plays both flavours and a spell Era has never heard of should come back on the
+character it was added on. The panel and `/wk status` name the ones that are in
+that state rather than leaving the row silently short.
+
+`bars icon` sizes one square, 16 to 32 pixels, and **29 is the only size in that
+range that draws sharp.** That is not the answer anyone expects, and the two
+reasons for it sit in different files.
+
+The client keeps each texture at half the size of the one above it and picks the
+pair nearest the size asked for, so a draw is exact only where the texels being
+sampled halve down to the pixels being drawn. For an uncropped 64 texel icon
+that would be 64, 32 and 16, which is what this file used to claim. But
+`ns.UI.Icon` crops five texels off each edge to lose the border baked into the
+art, so 54 texels are sampled, and the square draws a one pixel border with the
+art inset inside it, so a 20 pixel setting draws 18 pixels of icon. 54 halves to
+27, 27 plus the border is 29, and 13.5 is not a number of pixels. Nothing else
+in the range lands.
+
+The shipped 20 draws 18 pixels from 54 texels, which is 58 percent of the way
+between two stored copies. That is close to the worst place in the range to
+stand, because a blend weighted near half and half is neither picture. The
+default has not moved, since moving it rewrites a setting nobody touched, but
+the panel now names 29 and the stepper steps by one instead of two. It stepped
+by two before, so the one size worth having was not reachable from the panel at
+all.
+
+`EnemyBars.IconAdvice` is where that arithmetic lives and the panel, the slash
+word and the harness all read it, so changing the crop in `UI/Draw.lua` moves
+the advice rather than leaving a stale number in a note.
+
+The timer and the stack count are sized off the square rather than off the bar,
+because a fourteen pixel number on a sixteen pixel icon covers the art it is
+annotating.
 
 **Bar art.** Strips the 2007 furniture off the action bars at PLAYER_LOGIN: the
 two gryphons, the riveted metal strip behind bar 1, the page arrows and the page
@@ -1839,6 +1938,177 @@ skin on is the answer that matters: it means the walk found no textures on
 these frames, which says this client builds them out of something else rather
 than that they were already bare.
 
+**Meters.** Two panes in one frame: damage or healing on the left, threat on the right. No
+window around either, no backdrop, no title bar and nothing to open. A row is a
+spec icon, a name, a number and a class-coloured bar as long as that player's
+share of the top row, and the bars are the only surface the part draws at all.
+
+That is a deliberate difference from Details rather than a simplification of it.
+Details draws a window because it is a tool you go and use: you open segments,
+you click a row to break it down by spell, you compare pulls. None of that is
+what a warrior wants mid-fight. What a warrior wants is two columns readable out
+of the corner of one eye, and every pixel of chrome around them is a pixel of
+the fight underneath.
+
+**What a segment is.** It opens when combat starts and closes when combat drops,
+and the numbers stay up after it closes until the next one opens. It opens on
+the combat log as well as on `PLAYER_REGEN_DISABLED`, because in a group the
+pull is often somebody else's: a meter that starts its clock when *you* are hit
+reads the puller as having done their first four seconds of damage in no time.
+`Fighting` is the guard on that, and it asks about the source as well as about
+you. Without it a bleed ticking twice after the mob is down would open a fresh
+segment and replace the fight you were still reading.
+
+**One clock, not one per player.** Every row is divided by the segment's own
+elapsed time. Details gives each player their own activity window, which
+flatters whoever stopped early and is the right answer to "how hard did they hit
+while they were hitting". This answers "what did they contribute to this fight",
+which is the question a five second pull actually has, and it is the only
+version where the rows add up to the total on the header. Rows that do not add
+up are rows that get argued about.
+
+**Effective healing only.** Overheal is subtracted. A healer who lands 40k into
+a full health bar has healed nothing.
+
+**The group filter is the whole of the parsing risk.** The combat log carries
+every fight in range: the party next door, both sides of the duel by the
+mailbox, every mob in the pack. `Roster.Owner` is the filter and it answers
+three things at once. A pet's damage is its owner's, which is why a hunter does
+not read as half a hunter. Anything a member summoned is theirs, taken from
+`SPELL_SUMMON`, because a totem is not a pet and no unit token ever points at
+one. And a GUID that is neither is nobody's, which is how the party next door
+stays off the pane.
+
+`Roster` also remembers name and class for every GUID that has ever been in the
+group, and never forgets. The combat log carries neither, and somebody who
+leaves mid-fight keeps their row until the segment ends.
+
+**Spec icons, on clients that have no specs.** There is no
+`GetSpecialization` here and no spec id on a unit. A TBC character is three
+talent trees with points in them, and which tree has the most is the whole of
+what anyone means by a spec. Details resolves its own player that way and shows
+a class icon for everyone else; this goes one step further, because the tree
+icon is a better row and the client will hand it over if asked properly.
+
+    yourself      GetTalentTabInfo, any time, free. Re-read on every point spent.
+    anyone else   NotifyInspect, then GetTalentTabInfo with the inspect flag once
+                  INSPECT_READY names them. Inside about 28 yards, out of combat,
+                  one in flight, and never the same person twice inside a minute.
+    neither       the class icon, which is always right and always available.
+
+So a row is drawn from the first swing that lands, with whatever is known then,
+and the icons sharpen from class to spec over the first minute in a group
+without ever blocking anything.
+
+Two traps in that. `GetTalentTabInfo` has two signatures across these clients,
+one leading with a numeric tab id and one with the tree's name; they are told
+apart on the type of the first return rather than on how far down the tail a nil
+appears, which is what the Details framework does and which breaks on the older
+shape's trailing boolean. And there is no event for an inspect the client
+decided not to answer. The target walks out of range, or zones, or the client
+simply drops it, and `INSPECT_READY` never comes. `TIMEOUT` is what stands
+between one dropped request and a queue parked on that GUID for the rest of the
+session.
+
+**The threat pane does the half the client will not.** The client already
+computes the hard part: `UnitDetailedThreatSituation`'s third return is threat
+scaled against the amount needed to take the mob off whoever is holding it, so
+100 means that player pulls, with the melee and ranged thresholds and every
+talent that moves either already folded in. Nothing here recomputes any of that.
+
+What it adds is the derivative. A percentage says where someone is; the rate of
+change says where they are going, and where they are going is the reason to
+watch threat at all. 82% and falling is a rogue who stopped. 82% and climbing
+four points a second is a rogue who takes the mob in four and a half seconds.
+
+The rate is smoothed because the raw one is unusable: threat arrives in lumps
+the size of a Sinister Strike, and the denominator is a tank whose own total
+steps up every swing, so two consecutive samples can differ by twenty points in
+either direction. The reference sample moves on its own half second clock and
+four tenths of each delta goes into an exponential average. Projections past a
+minute are dropped: "they overtake you eventually" is not information.
+
+On Classic Era there is no threat API at all, so the pane says so and stays
+empty. Vanilla computes no threat, which is why every Classic threat meter is a
+combat log simulation carrying a table of every spell's coefficient. That is a
+different addon, and a made up number here would be worse than an honest blank.
+
+**Every number in the layout follows the icon, and the icon is 27.** Not a size
+anyone picked for looking right. The client stores a spell icon at 64 texels,
+the crop in `UI/Draw.lua` takes the five texel border off each edge, and 54 are
+left to sample. A draw is exact only where those 54 halve onto whole pixels,
+which is 54 and 27 and nothing between. `ns.UI.IconSizes` is where that list
+comes from and `MeterWindow.IconAdvice` reads it rather than carrying a copy.
+At zoom 1 a row icon draws 27 off the half size copy and at zoom 2 it draws 54
+off the full one, which is the sharpest a spell icon gets. Zoom 3 draws 81 and
+is blended, and the panel says so.
+
+The row is then the icon with a pixel above and below it, 29, so the icon
+decides the height rather than the text. Six rows and a header is 196 pixels and
+two panes and their gap is 408.
+
+**And every string is 14, because every string is outlined.** They have to be:
+the meter has no background, and the outline is the only thing between a number
+and a pale floor behind it. That is the difference between this and a timer on a
+debuff square, which sits on opaque art and can fall back to flat when it gets
+small. `ns.UI.NumberFont` does exactly that and is deliberately not used here,
+because flat over the world is not softer, it is gone.
+
+What that leaves is a hard minimum rather than a preference. An outline costs a
+pixel on every stroke, and below `ns.UI.OutlineFloor` a 3 and an 8 stop being
+different shapes. Both sizes here sit at the floor, and the harness reads the
+floor out of `UI/Text.lua` rather than carrying its own copy, so one number
+governs the meters and the bars together.
+
+`UI/Theme.lua` states the same fact from the other direction, which is why panel
+text is flat: over an opaque window an outline only thickens a glyph until it
+closes itself up. Same fact, opposite conclusion, because one of them sits over
+the world and the other does not.
+
+All three of those shipped wrong first, a 12 pixel icon and 11 pixel row text,
+and the report was two words: shrunken, and not sharp. The third was the pane
+headers at 12, which nobody reported because nobody reads a header twice; they
+were the same defect one line above the rows and the gate is what found them.
+The harness now fails if a row icon draws a size the client does not store, at
+either zoom that can be exact, and fails on any outlined string under the
+floor.
+
+**The mouse, and what the header costs.** The frame takes the mouse only while
+it is unlocked, the same rule the charge button follows: a mouse enabled frame
+swallows every button that lands on it, including the right button drag that
+turns the camera. The one exception is the damage pane's header, which is the
+DPS/HPS toggle and takes the mouse always, because a control you cannot click
+while the frame is locked is not a control. The price is exact and worth
+stating: a camera drag begun on that one strip, fourteen pixels tall, will not
+turn the camera. Nothing else on the meter has that problem.
+
+**Five defects the harness caught, four of them before any of this ran in a
+client.**
+
+    a nan in the header    Before the first fight of a session nothing has been
+                           recorded and the clock reads zero, so the group total
+                           was 0/0. The nan survives math.floor and the client's
+                           string.format renders it -9223372036854775808. That
+                           was the first tick of every login.
+    a header never written A guard on "has the projection changed" whose
+                           unchanged case, no eta and nobody converging, is
+                           identical to the state the pane starts in with nothing
+                           drawn yet. The threat header stayed empty until
+                           somebody first pulled ahead. A guard whose "nothing
+                           changed" matches "nothing has happened yet" skips the
+                           first write, every time.
+    a header stuck         The two early exits, no API and no target, left behind
+                           what they had last shown, so a target that came back
+                           to the same quiet state found the guard satisfied and
+                           the header went on reading "no target" over a full
+                           list of rows.
+    a parked queue         An inspect the client never answered, above.
+    soft and shrunken      The fifth, and the one the harness did not catch,
+                           because there was no gate for it until a person
+                           looked at the thing. The icon and the font, above.
+
+Each has a test that fails without its fix.
+
 **Interface.** One Edit Mode layout, carried inside the addon folder. This
 client has Edit Mode: the backported retail manager, with the layouts written to
 `WTF/Account/<account>/edit-mode-cache-account.txt`. That file is per install,
@@ -2023,6 +2293,59 @@ where they started" and this part has no frames. Registering one would make
 `/wk reset`, which is what you type when a window has wandered off screen,
 quietly turn selling back on for someone who had deliberately turned it off.
 
+### UI size
+
+Every size in this addon is a count of physical pixels, decided once and true on
+every monitor. That is the right default and it answers the wrong question for
+one setting, which is how big a window should look to the person reading it. A
+544 pixel panel is comfortable on a 1080p monitor and a postage stamp on a 27
+inch 4K one, and no measurement the addon can take separates the two, because
+the difference is how far your eyes are from the glass.
+
+So `Settings/` is a preference and not a calculation. One rail entry, one row,
+`uiSize` in the account file. It multiplies the whole step `UI.ScreenZoom`
+already picks, so a 4K screen at 0.5x lands back on the design size with every
+edge exact.
+
+**Quarters, and what they cost.** The stops are 0.5 through 3, eleven of them. A
+stop keeps the pixel grid when the size times the screen's own step comes out
+whole, so on most screens that is 1x, 2x and 3x, and on one tall enough that the
+addon already zooms 2x it is every half step. The rest do not: at 1.25x on a
+1080p screen a one pixel hairline is asked for at 1.25 pixels and the renderer
+lays down something soft, which is the exact defect `bars zoom` refuses to
+allow.
+Allowing it here is a deliberate split rather than an oversight. A bar over a
+mob's head is the addon deciding what you see in a fight and is worth keeping
+exact; a settings window is you deciding how you want to read it. The panel
+prints which stop you are on and what it costs, and `Settings.Describe` is the
+one function that sentence comes from, so the panel cannot claim a grid it does
+not have.
+
+**A drag shows and does not commit.** The client works a slider's value out from
+where the cursor sits against where the track sits, every frame. The size setter
+resizes the window the slider is in, the window is centred, so growing it walks
+the track sideways by a good fraction of its own width and the next frame reads
+a value off geometry that has already moved. The two then feed each other and
+the thumb slams between the ends of the range for as long as the button is down.
+`kit.Slider` therefore updates its readout on every step of a drag and calls the
+setter once, on the way up. A click on the track and a keyboard nudge are not
+drags and commit straight away. The harness holds the button, moves the thumb,
+asserts nothing was saved, lets go and asserts the value landed.
+
+**What it covers.** The windows this addon draws, which today are the `/wk`
+panel and the Clutter window. Not the enemy bars, which have `bars zoom` in
+whole steps, and not the skinned unit frames or the charge button, which are
+sized in pixels where they sit and have their own settings for it.
+
+**The fallback is a real branch and it is tested.** Nothing installed on 2.5.6
+proves the `Slider` frame type takes a thumb texture from a stranger, so
+`kit.Slider` probes it the way `UI/Scroll.lua` probes the scrollbar and falls
+back to a pair of nudge buttons. That branch was wrong when it was written:
+`pcall` hands back the error message where the frame would be, and the fallback
+called `Hide` on a string. The harness now builds the row a second time with
+`CreateFrame` refusing `Slider` and clicks both buttons, because a branch
+nothing ever runs is a branch that is wrong.
+
 ## Commands
 
     /wk                          open the settings panel
@@ -2055,6 +2378,17 @@ quietly turn selling back on for someone who had deliberately turned it off.
     /wk bars level on|off        the mob tag, XP colour and reaction stripe
     /wk bars max 8               list mode only, 1 to 15
     /wk bars width 180           a bar on a plate and in the list, 120 to 400
+    /wk bars debuff              what the icon row tracks, in order
+    /wk bars debuff add 12162    a spell id, up to ten of them
+    /wk bars debuff remove 772   by the same id
+    /wk bars debuff reset        back to the four it ships with
+    /wk bars icon 20             one debuff square's edge, 16 to 32, sharp at 29
+    /wk meter on|off             the two meters
+    /wk meter dps|hps            what the left pane counts
+    /wk meter threat on|off      the right pane
+    /wk meter rows 6             3 to 10, per pane
+    /wk meter width 150          one pane, 90 to 320
+    /wk meter zoom 1             1 to 3
     /wk skin on|off              square class-coloured player and target frames
     /wk skin player|target|tot on|off   one frame at a time
     /wk skin height 34           18 to 56, the block's height
@@ -2075,6 +2409,8 @@ quietly turn selling back on for someone who had deliberately turned it off.
     /wk ui save                  capture the active Edit Mode layout
     /wk ui apply                 import the baked layout and make it active
     /wk ui auto on|off           import it on a client that does not have it
+    /wk uisize                   how big the addon's windows are, and what it costs
+    /wk uisize 1.5               0.5 to 3 in quarters, refused off a step
 
 **The key field takes mouse buttons.** `ui.KeyField` maps left and right onto
 `BUTTON1` and `BUTTON2` so a modified click can be captured, which is the whole
@@ -2246,6 +2582,38 @@ Everything below was written from the API contract and has never executed:
   so it is probed and 1.9 is the documented default it falls back to. Getting
   this wrong costs nothing while the setting is on and parks the CVar on 1.9
   instead of the client's own number when it goes off.
+
+- Whether the combat log puts the amount in the twelfth value for a swing and
+  the fifteenth for everything with a spell in front of it, on these two
+  clients. `CombatLogGetCurrentEventInfo` itself is not in doubt, Details calls
+  it unguarded on both, but the whole of `Meter/Meter.lua`'s parsing is
+  positional and the positions are read from the contract rather than from a
+  client. A wrong slot reads as every number being zero or absurd, which is
+  loud rather than subtle, and the harness models the sixteen values in order so
+  a slot that moves in the addon is caught even though a slot that moves in the
+  client is not.
+- Whether `GetTalentTabInfo` leads with a numeric tab id or with the tree's name
+  on each of these clients. Both shapes are read and told apart on the type of
+  the first return. Getting it wrong costs the spec icon and falls back to the
+  class icon.
+- Whether `INSPECT_READY` fires here and carries the inspected GUID. Details
+  calls `NotifyInspect` and `ClearInspectPlayer` on both, which proves the
+  request half. The answer half is taken from the contract, and a client that
+  never answers costs one request per member per minute and leaves every row on
+  its class icon, because of the timeout.
+- Whether index 1 is the inspect range for `CheckInteractDistance` here. Wrong
+  either way it is a range test that is too strict or too loose, and the cost is
+  an inspect that would have worked being skipped, or one going out that the
+  server refuses.
+- Whether `CLASS_ICON_TCOORDS` carries every class on Era. Read through `_G` and
+  indexed by the class token, so a class it does not carry draws the question
+  mark rather than raising.
+- Whether `UnitDetailedThreatSituation`'s third return really is scaled to the
+  pull threshold on the Anniversary client rather than to the tank's raw total.
+  Both are percentages and both look plausible on a pane; if it is the raw
+  ratio, the percentages are right relative to each other and the projection
+  fires slightly late for a ranged attacker. `Details_TinyThreat` reads the same
+  return the same way on the same clients.
 
 - Whether `GetPhysicalScreenSize` is on 2.5.6. Nothing installed here calls it.
   `UI/Pixel.lua` probes it by name and falls back to parsing

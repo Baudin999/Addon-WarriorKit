@@ -115,11 +115,38 @@ function Command.Toggle(arg)
 end
 
 -- Shared number parsing, so the range message reads the same everywhere.
+--
+-- Whole numbers only, and refused rather than rounded. Every caller is a pixel
+-- count, a bar count or a zoom step, and all three sit on the pixel grid in
+-- UI/Pixel.lua where a fraction puts every edge inside the frame onto a half
+-- pixel. Rounding a typo into something that nearly works is the kind of help
+-- that gets found six months later as a soft edge nobody can explain.
 function Command.Number(value, low, high, what)
 	local number = tonumber(value)
-	if number and number >= low and number <= high then
+	if number and number == math.floor(number) and number >= low and number <= high then
 		return number
 	end
-	ns.Print(("%s takes a number between %d and %d."):format(what, low, high))
+	ns.Print(("%s takes a whole number between %d and %d."):format(what, low, high))
+	return nil
+end
+
+-- The same refusal on a coarser ruler, for the one setting that is not a count
+-- of anything: the UI size, which runs in quarters because a quarter is as fine
+-- as a size control can be before the stops stop meaning anything.
+--
+-- Refused rather than rounded, for the reason above. The stops the panel offers
+-- and the stops a macro can reach have to be the same set, or /wk uisize 1.3
+-- silently becomes 1.25 and the next person to read the macro believes the
+-- window is at 1.3.
+function Command.Step(value, low, high, step, what)
+	local number = tonumber(value)
+	if number and number >= low and number <= high then
+		local steps = (number - low) / step
+		if math.abs(steps - math.floor(steps + 0.5)) < 1e-6 then
+			return low + math.floor(steps + 0.5) * step
+		end
+	end
+	ns.Print(("%s takes a number between %s and %s in steps of %s.")
+		:format(what, tostring(low), tostring(high), tostring(step)))
 	return nil
 end

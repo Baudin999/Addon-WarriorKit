@@ -156,6 +156,22 @@ UnitFrames/Skin.lua:Tint
 UnitFrames/Skin.lua:ClassTint
 UnitFrames/Skin.lua:LevelTag
 UnitFrames/Skin.lua:Flatten
+Meter/Meter.lua:Meter.Rank
+Meter/Meter.lua:Meter.Total
+Meter/Spec.lua:Spec.Request
+Meter/Threat.lua:Sample
+Meter/Threat.lua:ThreatMeter.Update
+Meter/Threat.lua:ThreatMeter.Rank
+Meter/Threat.lua:ThreatMeter.Soonest
+Meter/Window.lua:Short
+Meter/Window.lua:Blank
+Meter/Window.lua:PaintRow
+Meter/Window.lua:PaintBar
+Meter/Window.lua:SetLeft
+Meter/Window.lua:SetRight
+Meter/Window.lua:PaintDamage
+Meter/Window.lua:PaintThreat
+Meter/Window.lua:MeterWindow.Update
 "
 
 hot_scan='

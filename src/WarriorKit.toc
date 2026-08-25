@@ -1,6 +1,6 @@
 ## Interface: 20506
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, square class-coloured player and target frames, fast looting, trash selling, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, square class-coloured player and target frames, fast looting, trash selling, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## Version: 1.7
 ## SavedVariables: WarriorKitDB
@@ -77,6 +77,19 @@ UnitFrames\EnemyBars.lua
 UnitFrames\Skin.lua
 UnitFrames\Feature.lua
 
+# The meters. A damage and healing readout and a threat readout, two panes in
+# one frame with no window round them. Roster first, because the other four all
+# ask it who is in the group and whose pet is whose. Spec before Window, which
+# is the only file that draws an icon. Meter and Threat are independent of each
+# other: one reads the combat log and one samples the client's threat API, and
+# neither knows the other exists. Feature.lua last, as everywhere else.
+Meter\Roster.lua
+Meter\Spec.lua
+Meter\Meter.lua
+Meter\Threat.lua
+Meter\Window.lua
+Meter\Feature.lua
+
 Artwork\Artwork.lua
 Artwork\Feature.lua
 
@@ -96,3 +109,10 @@ Comfort\Feature.lua
 EditMode\EditMode.lua
 EditMode\Saved.lua
 EditMode\Feature.lua
+
+# The addon's own settings, which belong to no feature. Last, because the only
+# one of them today is how big a window is drawn and it is applied at
+# ADDON_LOADED, by which point every file in this list has run. Behaviour first
+# and Feature.lua last, as everywhere else.
+Settings\Settings.lua
+Settings\Feature.lua

@@ -88,7 +88,41 @@ end
 -- 2.5.6, and an icon that is merely soft is better than a widget that raises.
 --------------------------------------------------------------------------
 
+-- What the client stores a spell icon at, and how much of it the crop leaves.
+-- Both are needed by anything that wants to know how big an icon can be drawn
+-- before the sampler has to blend, so they are named rather than inlined.
+local ICON_SOURCE = 64
 local ICON_CROP = 5 / 64
+
+-- How many texels of the stored icon actually get sampled. 54, not 64, and that
+-- number is the whole reason the sizes everybody assumes are sharp are not.
+function UI.IconTexels()
+	return ICON_SOURCE * (1 - ICON_CROP * 2)
+end
+
+-- The drawn sizes where one stored texel lands on exactly one pixel, largest
+-- first.
+--
+-- The client keeps each texture at half the size of the one above it and picks
+-- the pair nearest the size asked for, so a draw is exact only where the texels
+-- the crop leaves halve down to it. Everyone reaches for 64, 32 and 16, and
+-- those are the answer for an uncropped texture. Cropping to 54 makes the
+-- answer 54 and 27, because 13.5 is not a number of pixels.
+--
+-- Anything not on this list is a blend of two stored copies, and the worst
+-- place to stand is halfway between two of them, where both are weighted
+-- equally and neither is the picture.
+function UI.IconSizes()
+	local sizes = {}
+	local size = UI.IconTexels()
+	while size >= 8 do
+		if size == math.floor(size) then
+			sizes[#sizes + 1] = size
+		end
+		size = size / 2
+	end
+	return sizes
+end
 
 function UI.Crisp(texture)
 	if texture.SetSnapToPixelGrid then
