@@ -2,9 +2,9 @@
 
 A personal warrior addon for WoW TBC Anniversary. Eight parts: ctrl-click raid
 marking, one button that casts Charge, Intervene or Intercept depending on what
-you are looking at, one key that takes the next enemy and swings at it, one key
-per stance that swaps you into it and puts that stance's pair of weapons in your
-hands, a warrior loadout that fills the action bars, enemy bars that replace the
+you are looking at, one key that takes the next enemy and swings at it, weapon
+loadouts with a key each that swap your stance and both your hands, a warrior
+loadout that fills the action bars, enemy bars that replace the
 Blizzard nameplate, a strip of the Blizzard bar art, and one Edit Mode layout
 carried inside the addon folder. Settings live in a panel
 opened with `/wk`.
@@ -95,9 +95,9 @@ name of none of them.
     Targeting/Switch.lua     the secure button behind the switch key, and its binding
     Targeting/Feature.lua
 
-    Stances/Stances.lua      three secure buttons, one per stance, each carrying
-                             that stance's cast and its pair of /equipslot lines
-    Stances/Feature.lua
+    Loadouts/Loadouts.lua    ten secure buttons, one per loadout, each carrying
+                             that loadout's cast and its pair of /equipslot lines
+    Loadouts/Feature.lua     the paperdoll page and the loadout tab strip
 
     Buttons/Layout.lua       the warrior loadout, and the backup of what it replaced
     Buttons/Ranks.lua        moves bar slots up to the best rank you know
@@ -261,14 +261,18 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Stance.Current()          the stance you are in, or nil when the client
                                  will not say
     ns.Stance.Epoch()            a number that moves when a stance name might
-    ns.Stances.Gear(stance)      the pair of names saved for one stance
-    ns.Stances.SetItem(stance, slot, link)   save a dropped item into one hand,
-                                 or nil and the reason it does not go there
-    ns.Stances.Bind(stance, key) take a key for one stance, or "" to hand it
+    ns.Loadouts.All() / Get(i) / Count()   the list, one row, its length
+    ns.Loadouts.Add(name) / Remove(i) / Rename(i, name)
+    ns.Loadouts.Shown() / Show(i)   which one the panel is on
+    ns.Loadouts.SetStance(i, n)  the stance it casts, or nil for none
+    ns.Loadouts.SetItem(i, slot, link)   save a dropped item into one hand, or
+                                 nil and the reason it does not go there
+    ns.Loadouts.Bind(i, key)     take a key for one loadout, or "" to hand it
                                  back; returns what that key was bound to
-    ns.Stances.Macro(stance)     the macro that stance's button is carrying
-    ns.Stances.TwoHanded(stance) whether its main hand fills both hands, or nil
+    ns.Loadouts.Macro(i)         the macro that loadout's button is carrying
+    ns.Loadouts.TwoHanded(i)     whether its main hand fills both hands, or nil
                                  when the item is not on this character
+    ns.Loadouts.ButtonName(i)    the secure button that loadout is bound to
     ns.SoftTarget.Apply()        put the CVar where combat says it should be
     ns.SoftTarget.Restore()      hand the CVar back at the value it had before
     ns.SoftTarget.Describe()     "auto, on out of combat" and the other two
@@ -971,26 +975,39 @@ TAB straight back. `Switch.Describe` reads `GetBindingAction` back rather than
 reporting what it meant to set, so `/wk status` can say the client did not take
 the key.
 
-**Stance dancing.** Three secure buttons, one per stance, each carrying a macro
-of at most three lines:
+**Loadouts.** A loadout is a name, a pair of weapons, an optional stance and a
+key. One press puts you in the stance and puts that pair in your hands.
+
+Three are made for you, one per stance, because that is what this started as and
+a warrior wants those three whatever else they want. Nothing in the code treats
+them as special: they are rows in the same list as anything you add, they can be
+renamed, unbound from their stance and deleted, and a loadout with no stance is a
+weapon set with a key on it. Ten is the cap, one secure button each. The seed
+runs once and is recorded in `loadoutsSeeded`, so deleting Berserker does not
+bring it back at the next login.
+
+Each button carries a macro of at most three lines:
 
     /cast [nostance:2] Defensive Stance
     /equipslot 16 Bloodspiller
     /equipslot 17 Aegis of the Blood God
 
-Nothing here calls `EquipItemByName`, and nothing here needs to. Putting a
-weapon in your hand during a fight is something ordinary Lua may not do, and an
+Nothing here calls `EquipItemByName`, and nothing here needs to. Putting a weapon
+in your hand during a fight is something ordinary Lua may not do, and an
 `/equipslot` line run off a hardware key press is the path that is allowed to,
 which is the same argument that makes `Targeting/Switch.lua` a secure button
-rather than two function calls.
+rather than two function calls. `nostance` on the cast means a press while you
+are already standing there spends itself on the weapons.
 
-`nostance` on the cast means a press while you are already standing there spends
-itself on the weapons instead of on a stance you are in.
+**The macro is written out of combat and never on the press.** Every decision a
+press makes is a macro conditional, which is what lets a key work in a fight at
+all. `Loadouts.Apply` is the only writer, its callers are a settings change and
+two events, and there is no `OnClick` on any of the ten buttons.
 
 **The order of the two equip lines is load bearing.** Going from a two hander to
-a one hander and a shield, the main hand line is what frees the hand the off
-hand line needs. The other way round the client clears the off hand itself and
-the loadout has nothing in that slot to say. Main hand first, always.
+a one hander and a shield, the main hand line is what frees the hand the off hand
+line needs. The other way round the client clears the off hand itself and the
+loadout has nothing in that slot to say. Main hand first, always.
 
 **A loadout cannot say "take that off".** There is no `/equipslot` for an empty
 hand, so a blank slot means leave whatever is there alone rather than strip it.
@@ -1004,41 +1021,59 @@ and says why. Only when the client can be asked: a weapon in the bank has no
 equip type to read, and guessing at one would silently drop a line you set on
 purpose.
 
-**A swap mid fight resets your swing timer.** That is the price of dancing and
-it is usually worth paying, so `stanceSwapCombat` is on by default. Off, every
+**A swap mid fight resets your swing timer.** That is the price of dancing and it
+is usually worth paying, so `loadoutSwapCombat` is on by default. Off, every
 equip line takes a `nocombat` conditional and a key pressed in a fight changes
 stance and leaves your hands alone. The charge button makes the opposite choice
 for the opposite reason: its swap is a convenience on the pull, so its line
 carries `nocombat` always.
 
 **Changing a loadout in combat lands when the fight ends.** A secure button's
-attributes cannot be written under lockdown, so `Stances.Apply` sets `pending`
+attributes cannot be written under lockdown, so `Loadouts.Apply` sets `pending`
 and returns false, and PLAYER_REGEN_ENABLED runs it for real. This is the
 `ApplySecure` shape from `Charge/Icon.lua` and the harness asserts both halves,
 because a part that only did the first would lose the change silently.
 
+**Every button is rewritten on every apply, not the one that moved.** Deleting a
+row shifts every row under it onto a different secure button. A partial pass
+would leave a key bound to the button the deleted row was on, quietly doing
+somebody else's job, which is what the delete assertion in the harness exists to
+catch.
+
 The keys are override bindings, the same as the charge key, the marking keys and
 the switch key, so your saved bindings are untouched and clearing a key hands it
-straight back. Two stances cannot claim one key: the second claim is refused
-with a reason and the first keeps the key, because two stances on one key is the
-mistake the panel cannot show you afterwards. Or put
-`/click WarriorKitStanceBattleButton` in an ordinary macro and drag that to a
-bar.
+straight back. Two loadouts cannot claim one key: the second claim is refused
+with a reason and the first keeps the key. Or put
+`/click WarriorKitLoadout1Button` in an ordinary macro and drag that to a bar.
 
-**Where the weapons come from.** The panel does not offer a text field. You drag
-a weapon or a shield out of your bags onto a slot and right click a slot to
-clear it, which is `kit.ItemSlot` in `UI/Widgets.lua` over `ns.Gear`. A name
-typed by hand builds an `/equipslot` line that silently does nothing, which is
-the failure `Core/Gear.lua` exists to make impossible: it offers what you are
-carrying and nothing else, and a saved name that is not on this character keeps
-its slot and goes orange rather than being dropped by a panel that cannot see
-into your bank.
+**The page is a paperdoll.** `kit.Paperdoll` draws Blizzard's own `PlayerModel`
+of your character in the addon's own box, with a gear square per hand under it
+wearing Blizzard's empty-slot art and Blizzard's slot ring, which is the layout
+the client's own character sheet uses. Under that is `kit.Tabs`, one button per
+loadout and a `+` at the end, which is the strip Blizzard puts under its
+paperdoll. A weapon set is something you look at rather than a pair of names in
+a list.
 
-The slot is drawn out of the widget layer like every other row, in the addon's
-own sunken box with its own hairline. The one thing borrowed from Blizzard is
-the empty-slot art, asked for by slot name through `GetInventorySlotInfo` rather
-than written down as a texture path, drawn inside our box rather than in place
-of it.
+`PlayerModel` is a frame type rather than a template, so it costs nothing to
+exist on 2.5.6, and `SetUnit` is probed anyway. A client that will not draw a
+model leaves an empty box and the slots underneath still work. `SetUnit` is
+called once and again on show, never on a refresh, because it reloads the model
+and a refresh is every click anywhere in the window.
+
+**Why the loadout strip is not the window's tab strip.** The window's strip is
+chrome: `Core/Panel.lua` builds it once at PLAYER_LOGIN out of the headers each
+feature writes, and it cannot grow. A loadout list is a setting that changes
+while the window is open, so it is a control instead, pooled inside one row.
+That is the whole reason no rebuild path had to be cut into the panel, and the
+reason adding a loadout costs no frames after the first time.
+
+**Where the weapons come from.** The panel does not offer a text field for them.
+You drag a weapon or a shield out of your bags onto a hand and right click a hand
+to clear it. A name typed by hand builds an `/equipslot` line that silently does
+nothing, which is the failure `Core/Gear.lua` exists to make impossible: it
+offers what you are carrying and nothing else, and a saved name that is not on
+this character keeps its slot and goes orange rather than being dropped by a
+panel that cannot see into your bank.
 
 **Buttons.** Fills the action bars with a warrior loadout and can put back
 exactly what was there before. Two jobs it deliberately does not do:

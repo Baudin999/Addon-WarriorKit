@@ -19,10 +19,15 @@ globals = {
 	"WarriorKitOptions",
 	"WarriorKitChargeButton",
 	"WarriorKitSwitchButton",
-	-- one per stance, each a secure button carrying that stance's macro
-	"WarriorKitStanceBattleButton",
-	"WarriorKitStanceDefensiveButton",
-	"WarriorKitStanceBerserkerButton",
+	-- one per loadout, each a secure button carrying that loadout's macro. All
+	-- ten are made at load: a button cannot be given attributes in combat, and a
+	-- name is what SetOverrideBindingClick binds to, so they are named and they
+	-- exist before anyone needs one.
+	"WarriorKitLoadout1Button", "WarriorKitLoadout2Button",
+	"WarriorKitLoadout3Button", "WarriorKitLoadout4Button",
+	"WarriorKitLoadout5Button", "WarriorKitLoadout6Button",
+	"WarriorKitLoadout7Button", "WarriorKitLoadout8Button",
+	"WarriorKitLoadout9Button", "WarriorKitLoadout10Button",
 	"WarriorKitChargeCooldown",
 	"WarriorKitChargeMarker",
 	"WarriorKitChargeMarkerCooldown",

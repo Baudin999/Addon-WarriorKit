@@ -8,8 +8,9 @@ local C, M = UI.Color, UI.Metric
 --
 -- Everything the interface is made of that is not a rectangle. A push button, a
 -- tick box, a stepper, a cycling value, a value picked off a list, a key
--- capture field, a slot you drop an item into, and a paragraph of prose that
--- sizes itself.
+-- capture field, a line of text you type, a strip of buttons where one is
+-- chosen, a slot you drop an item into, a character with those slots under it,
+-- and a paragraph of prose that sizes itself.
 --
 -- Two rules run through all of them and they are the two the panel this
 -- replaced broke.
@@ -747,13 +748,17 @@ function UI.Kit(host)
 		end)
 	end
 
-	-- An item slot you drop something into
+	----------------------------------------------------------------------
+	-- Gear
 	--
-	-- get() returns the icon to draw and the text beside it, and either may be
-	-- nil: no icon draws the empty-slot art opts.empty hands over, no text
-	-- leaves the line blank. set(link) is given the item link the cursor was
-	-- carrying and returns whether it took it, which is where the rule that a
-	-- shield does not go in a main hand lives. This file knows about neither
+	-- One square you drop an item onto, and the two things built out of it: a
+	-- labelled row, and a character with its hands under it.
+	--
+	-- get() returns the icon to draw and the text to say about it, and either
+	-- may be nil: no icon draws the empty-slot art opts.empty hands over, no
+	-- text leaves the line blank. set(link) is given the item link the cursor
+	-- was carrying and returns whether it took it, which is where the rule that
+	-- a shield does not go in a main hand lives. This file knows about neither
 	-- inventory slots nor shields, the same as it knows nothing about settings.
 	--
 	-- A drop arrives two ways because neither is reliable on its own.
@@ -766,32 +771,39 @@ function UI.Kit(host)
 	-- The highlight asks CursorHasItem rather than watching the cursor, for the
 	-- same reason. A slot lights up when the mouse arrives carrying something,
 	-- not the moment the item is picked up across the screen.
-	function kit.ItemSlot(label, get, set, opts)
-		opts = opts or {}
-		local size, nameWidth = 32, 150
-		local row, text = Paired(size + M.gutter + nameWidth, size)
-		text:SetText(label)
+	----------------------------------------------------------------------
 
-		local slot = UI.Box(row, C.sunken, C.edge)
-		slot:SetSize(size, size)
-		slot:SetPoint("TOPRIGHT", row, "TOPRIGHT", -(nameWidth + M.gutter), 0)
+	-- Blizzard's own item slot ring, over the addon's own box. It is the one
+	-- borrowed thing in the widget layer and it is borrowed on purpose: a slot
+	-- you drag a weapon into should look like the slot the weapon came out of.
+	-- 64 texels of art around a 36 pixel slot is the ratio the client draws it
+	-- at, so the ring is that much larger than the square it rings.
+	local RING = "Interface\\Buttons\\UI-Quickslot2"
+	local RING_SCALE = 64 / 36
+
+	local function GearSquare(parent, size, get, set, opts)
+		opts = opts or {}
+		local square = UI.Box(parent, C.sunken, C.edge)
+		square:SetSize(size, size)
 
 		-- Two textures rather than one. An item icon is a 64 texel square and
 		-- wants the crop and the snapping fix UI.Icon applies; the empty-slot art
 		-- is Blizzard's own frame for that hand and is already the shape it draws
 		-- at, so cropping it eats its border.
-		local icon = UI.Icon(slot, "ARTWORK")
+		local icon = UI.Icon(square, "ARTWORK")
 		icon:SetPoint("TOPLEFT", 2, -2)
 		icon:SetPoint("BOTTOMRIGHT", -2, 2)
-		local empty = slot:CreateTexture(nil, "ARTWORK")
+		local empty = square:CreateTexture(nil, "ARTWORK")
 		empty:SetPoint("TOPLEFT", 2, -2)
 		empty:SetPoint("BOTTOMRIGHT", -2, 2)
 		empty:SetVertexColor(1, 1, 1, 0.35)
 
-		local value = UI.Label(row, M.font, C.text, "LEFT", UI.FLAT)
-		UI.Wrap(value, false)
-		value:SetPoint("LEFT", slot, "RIGHT", M.gutter, 0)
-		value:SetPoint("RIGHT", row, "RIGHT")
+		if opts.ring then
+			local ring = square:CreateTexture(nil, "OVERLAY")
+			ring:SetTexture(RING)
+			ring:SetPoint("CENTER")
+			ring:SetSize(UI.Round(square, size * RING_SCALE), UI.Round(square, size * RING_SCALE))
+		end
 
 		local function Drop()
 			local kind, _, link = GetCursorInfo()
@@ -804,8 +816,8 @@ function UI.Kit(host)
 			Changed()
 		end
 
-		local button = CreateFrame("Button", nil, row)
-		button:SetAllPoints(slot)
+		local button = CreateFrame("Button", nil, parent)
+		button:SetAllPoints(square)
 		button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 		button:SetScript("OnReceiveDrag", Drop)
 		button:SetScript("OnClick", function(_, which)
@@ -822,23 +834,277 @@ function UI.Kit(host)
 			-- CursorHasItem rather than the accepts test alone, so a slot lights
 			-- up only while something is being carried into it.
 			local carrying = CursorHasItem and CursorHasItem()
-			UI.Tint(slot.bg, carrying and C.selected or C.control)
+			UI.Tint(square.bg, carrying and C.selected or C.control)
 		end)
 		button:SetScript("OnLeave", function()
-			UI.Tint(slot.bg, C.sunken)
+			UI.Tint(square.bg, C.sunken)
 		end)
 
-		return Remember(row, function()
+		square.button = button
+		square.Refresh = function()
 			local texture, shown = get()
 			icon:SetTexture(texture)
 			icon:SetShown(texture and true or false)
 			local fallback = (not texture) and opts.empty and opts.empty() or nil
 			empty:SetTexture(fallback)
 			empty:SetShown(fallback and true or false)
-			value:SetText(shown or "")
 			local usable = (opts.enabled == nil) or opts.enabled()
 			Enable(button, usable)
-			slot:SetAlpha(usable and 1 or 0.4)
+			square:SetAlpha(usable and 1 or 0.4)
+			return shown
+		end
+		return square
+	end
+
+	-- A labelled row with one slot on the right and whatever the getter says
+	-- about it beside that.
+	function kit.ItemSlot(label, get, set, opts)
+		local size, nameWidth = 32, 150
+		local row, text = Paired(size + M.gutter + nameWidth, size)
+		text:SetText(label)
+
+		local square = GearSquare(row, size, get, set, opts)
+		square:SetPoint("TOPRIGHT", row, "TOPRIGHT", -(nameWidth + M.gutter), 0)
+
+		local value = UI.Label(row, M.font, C.text, "LEFT", UI.FLAT)
+		UI.Wrap(value, false)
+		value:SetPoint("LEFT", square, "RIGHT", M.gutter, 0)
+		value:SetPoint("RIGHT", row, "RIGHT")
+
+		return Remember(row, function()
+			value:SetText(square.Refresh() or "")
+		end)
+	end
+
+	-- The character, and the hands under it
+	--
+	-- Blizzard's own model of the player, framed in the addon's own box, with a
+	-- gear square per hand below it wearing Blizzard's slot art and slot ring.
+	-- This is the paperdoll and it is meant to read as one: a weapon set is
+	-- something you look at rather than a pair of names in a list.
+	--
+	-- PlayerModel is a frame type rather than a template, so it costs nothing
+	-- to exist on 2.5.6, and SetUnit is probed anyway. A client that will not
+	-- draw a model leaves an empty box and the slots underneath still work,
+	-- which is the honest degradation.
+	--
+	-- SetUnit is called once and again when the model is shown, never on a
+	-- refresh, because it reloads the model and a refresh is every click
+	-- anywhere in the window.
+	function kit.Paperdoll(opts)
+		opts = opts or {}
+		local slots = opts.slots or {}
+		local modelW, modelH, size = 132, 156, 40
+		local caption = M.small + 3
+		local height = modelH + M.gutter + size + caption
+
+		local row = CreateFrame("Frame", nil, Parent())
+		local stack = Stack()
+
+		local frame = UI.Box(row, C.sunken, C.edge)
+		frame:SetSize(modelW, modelH)
+		frame:SetPoint("TOP")
+
+		local model = CreateFrame("PlayerModel", nil, frame)
+		model:SetPoint("TOPLEFT", 2, -2)
+		model:SetPoint("BOTTOMRIGHT", -2, 2)
+		local function Dress()
+			if model.SetUnit then
+				pcall(model.SetUnit, model, "player")
+			end
+		end
+		model:SetScript("OnShow", Dress)
+		Dress()
+
+		-- Laid out from the middle out, so two slots straddle the model's centre
+		-- line the way the client's own hand row does.
+		local squares = {}
+		local span = #slots * size + math.max(#slots - 1, 0) * M.gutter
+		for index, slot in ipairs(slots) do
+			local square = GearSquare(row, size, slot.get, slot.set,
+				{ empty = slot.empty, enabled = slot.enabled, ring = true })
+			square:SetPoint("TOP", frame, "BOTTOM", -span / 2 + (index - 1) * (size + M.gutter) + size / 2, -M.gutter)
+
+			local label = UI.Label(row, M.small, C.dim, "CENTER", UI.FLAT)
+			UI.Wrap(label, false)
+			label:SetPoint("TOP", square, "BOTTOM", 0, -2)
+			label:SetWidth(size + M.gutter * 2)
+			label:SetText(slot.label or "")
+			squares[index] = square
+		end
+
+		stack:Add(row, { indent = M.indent, height = height, stretch = true })
+
+		return Remember(row, function()
+			for index = 1, #squares do
+				squares[index].Refresh()
+			end
+		end)
+	end
+
+	-- A strip of buttons where one is chosen
+	--
+	-- The window's own tab strip is chrome: it is built once at login out of
+	-- the headers a feature writes, and it cannot grow. This one is a control.
+	-- The list it shows is a setting, so it grows and shrinks while the window
+	-- is open, and it lays out from a pool rather than making a button per
+	-- refresh. Blizzard's character sheet puts the same strip along the foot of
+	-- the paperdoll, which is where this one is meant to sit.
+	--
+	-- getOptions returns the labels, get returns the chosen index, set takes
+	-- one. opts.onAdd puts a + at the end and calls back when it is pressed.
+	function kit.Tabs(getOptions, get, set, opts)
+		opts = opts or {}
+		local row = CreateFrame("Frame", nil, Parent())
+		local stack = Stack()
+		local pool, add, width = {}, nil, 0
+
+		local function Paint(button, chosen)
+			button.mark:SetShown(chosen)
+			UI.Tint(button.bg, chosen and C.selected or C.chrome)
+			local color = chosen and C.text or C.dim
+			button.text:SetTextColor(color[1], color[2], color[3])
+		end
+
+		local function Make(onClick)
+			local button = CreateFrame("Button", nil, row)
+			button:SetHeight(M.tab)
+			button.bg = ns.Fill(button, "BACKGROUND", C.chrome[1], C.chrome[2], C.chrome[3], 1)
+			button.bg:SetAllPoints()
+			button.mark = ns.Fill(button, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
+			button.mark:SetPoint("TOPLEFT")
+			button.mark:SetPoint("TOPRIGHT")
+			button.mark:SetHeight(2)
+			button.text = UI.Label(button, M.small, C.dim, "CENTER", UI.FLAT)
+			button.text:SetPoint("CENTER")
+			UI.Wrap(button.text, false)
+			button:SetScript("OnClick", onClick)
+			return button
+		end
+
+		-- Every button is placed on every layout rather than only the ones that
+		-- moved, because one label getting longer moves every button after it.
+		local function Layout(room)
+			width = room
+			local options = getOptions()
+			local chosen = get()
+			local x, lines = 0, 1
+
+			local function Place(button)
+				local size = UI.Round(row, (button.text:GetStringWidth() or 0) + M.gutter * 2)
+				if size > room then
+					size = room
+				end
+				if x > 0 and x + size > room then
+					x = 0
+					lines = lines + 1
+				end
+				button:SetWidth(math.max(size, 1))
+				button:ClearAllPoints()
+				button:SetPoint("TOPLEFT", row, "TOPLEFT", x, -((lines - 1) * (M.tab + M.rowGap)))
+				button:Show()
+				x = x + size + M.rowGap
+			end
+
+			for index = 1, #options do
+				local button = pool[index]
+				if not button then
+					button = Make(function(this)
+						set(this.index)
+						Changed()
+					end)
+					pool[index] = button
+				end
+				button.index = index
+				button.text:SetText(options[index])
+				Paint(button, index == chosen)
+				Place(button)
+			end
+			for index = #options + 1, #pool do
+				pool[index]:Hide()
+			end
+
+			if opts.onAdd then
+				if not add then
+					add = Make(function()
+						opts.onAdd()
+						Changed()
+					end)
+					add.text:SetText("+")
+				end
+				Paint(add, false)
+				Place(add)
+			end
+
+			return lines * M.tab + (lines - 1) * M.rowGap
+		end
+
+		stack:Add(row, {
+			indent = M.indent,
+			measure = function(this)
+				return Layout(math.max(1, stack.width - this.indent))
+			end,
+		})
+
+		return Remember(row, function()
+			if width > 0 then
+				Layout(width)
+			end
+		end)
+	end
+
+	-- A line of text you type
+	--
+	-- An EditBox with no template, the way everything else here is a frame with
+	-- no template. It commits on enter and on losing focus rather than on every
+	-- keystroke, because the setter is a saved variable and a half typed name is
+	-- not one.
+	function kit.TextField(label, get, set)
+		local fieldWidth = 168
+		local row, text = Paired(fieldWidth, M.control)
+		text:SetText(label)
+
+		local box = UI.Box(row, C.sunken, C.edge)
+		box:SetSize(fieldWidth, M.control)
+		box:SetPoint("TOPRIGHT")
+
+		local edit = CreateFrame("EditBox", nil, box)
+		edit:SetPoint("TOPLEFT", 4, 0)
+		edit:SetPoint("BOTTOMRIGHT", -4, 0)
+		edit:SetFontObject(UI.Font(M.font, UI.FLAT))
+		edit:SetTextColor(C.text[1], C.text[2], C.text[3])
+		edit:SetAutoFocus(false)
+		edit:SetMaxLetters(24)
+
+		local function Commit(self)
+			set(self:GetText())
+			Changed()
+		end
+		edit:SetScript("OnEnterPressed", function(self)
+			self:ClearFocus()
+			Commit(self)
+		end)
+		edit:SetScript("OnEscapePressed", function(self)
+			self:ClearFocus()
+			Changed()
+		end)
+		edit:SetScript("OnEditFocusLost", Commit)
+		edit:SetScript("OnEditFocusGained", function()
+			UI.CloseDropdown()
+			UI.StopCapture()
+			UI.Tint(box.bg, C.selected)
+		end)
+		edit:SetScript("OnHide", function(self)
+			self:ClearFocus()
+		end)
+
+		return Remember(row, function()
+			-- Never while it is being typed into, or every refresh would put the
+			-- saved value back under the cursor.
+			if not edit:HasFocus() then
+				edit:SetText(get() or "")
+				UI.Tint(box.bg, C.sunken)
+			end
 		end)
 	end
 

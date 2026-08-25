@@ -2,65 +2,88 @@
 
 ## 1.6
 
-Stance dancing. One key per stance, and per stance a pair of weapons.
+Weapon loadouts, one key each.
 
-A press puts you in the stance and puts that stance's main hand and off hand in
-your hands, off one hardware event, out of one macro:
+A loadout is a name, a pair of weapons, an optional stance and a key. A press
+puts you in the stance and puts that pair in your hands, off one hardware event,
+out of one macro:
 
     /cast [nostance:2] Defensive Stance
     /equipslot 16 Bloodspiller
     /equipslot 17 Aegis of the Blood God
 
+Three are made for you, one per stance, because stance dancing is what this
+started as and a warrior wants those three whatever else they want. Nothing in
+the code treats them as special. They are rows in the same list as anything you
+add, they can be renamed, unbound from their stance and deleted, and a loadout
+with no stance at all is a weapon set with a key on it. Ten is the cap, one
+secure button each, and the seed runs once rather than every login, so deleting
+Berserker does not bring it back.
+
 Nothing in the part calls `EquipItemByName`. Equipping during a fight is
 something ordinary Lua may not do, and an `/equipslot` line off a key press is
-the path that is allowed to, so all three stances are secure buttons carrying
+the path that is allowed to, so every loadout is a secure button carrying
 `macrotext`, the shape `Targeting/Switch.lua` already had.
 
-The macro is written out of combat and left alone. Nothing rewrites it on the
-press, so a key works in a fight for the same reason the charge button's in
-combat half does: every decision the press makes is a macro conditional, not a
-decision the addon makes while lockdown is up. Changing a loadout mid fight is
-the one thing that waits, and it waits until PLAYER_REGEN_ENABLED rather than
-being lost. The harness asserts both halves.
+The macro is written out of combat and never on the press. Every decision a
+press makes is a macro conditional, which is what lets a key work in a fight at
+all. Changing a loadout mid fight is the one thing that waits, and it waits
+until PLAYER_REGEN_ENABLED rather than being lost. Every button is rewritten on
+every apply rather than the one that moved, because deleting a row shifts every
+row under it onto a different button and a partial pass would leave a key bound
+to somebody else's macro. Both are asserted.
 
 The main hand line is written before the off hand line, and the order is the
 feature. Going from a two hander to a one hander and a shield, the first line is
-what frees the hand the second one needs. A two hander in the main hand takes
-the off hand line out of the macro entirely, because both hands are already
-spoken for and an `/equipslot 17` under one would take the two hander back off.
-A blank slot means leave that hand alone: there is no `/equipslot` for an empty
-hand, so a loadout cannot strip a shield, and the panel says so rather than
-leaving you to work it out.
+what frees the hand the second one needs. A two hander in the main hand takes the
+off hand line out of the macro entirely, because an `/equipslot 17` under one
+would take the two hander back off. A blank hand means leave it alone: there is
+no `/equipslot` for an empty hand, so a loadout cannot strip a shield, and the
+panel says so rather than leaving you to work it out.
 
 Swaps fire in combat by default, swing timer reset and all, because that is most
-of the point of dancing. `stance combat off` puts a `nocombat` conditional on
-every equip line and leaves the stance change alone.
+of the point. `loadout combat off` puts a `nocombat` conditional on every equip
+line and leaves the stance change alone.
 
-Weapons are dragged in rather than typed. `kit.ItemSlot` is a new widget in the
-UI layer: an item slot in the addon's own box, drawn with the client's
-empty-slot art asked for by slot name rather than by texture path, that takes a
-drop and clears on a right click. It knows nothing about inventory slots or
-shields. The rule that a shield does not go in a main hand lives in
-`Core/Gear.lua`, which is `Charge/Weapons.lua` promoted to the shared layer:
-one hand was one part's private knowledge, two hands is not.
+The page is a paperdoll. Blizzard's own model of your character sits in the
+addon's own box with a gear square per hand under it, wearing Blizzard's
+empty-slot art and Blizzard's slot ring, which is the layout the client's own
+character sheet uses. Under that is the loadout strip, one button per loadout
+and a `+` at the end, in the place Blizzard puts its own tabs. You drag a weapon
+or a shield onto a hand and right click a hand to clear it.
 
-`Core/Stance.lua` is the same move for the three stance spells and their
-localised names, which the charge macro and the stance macros both bake in and
-could otherwise disagree about.
+Four widgets are new in the UI layer and none of them knows what a setting is: a
+gear square, the paperdoll built out of two of them, a pooled tab strip, and a
+line of text you type. The loadout strip is a control rather than the window's
+own tab strip on purpose. The window's strip is chrome, built once at login out
+of the headers each feature writes, and it cannot grow; a loadout list changes
+while the window is open. That is why no rebuild path had to be cut into
+`Core/Panel.lua`, and why adding a loadout costs no frames after the first time.
+
+A name typed by hand builds an `/equipslot` line that silently does nothing, so
+the panel offers no text field for one. `Core/Gear.lua` is `Charge/Weapons.lua`
+promoted to the shared layer: one hand was one part's private knowledge, two
+hands is not. It offers what you are carrying and nothing else, and a saved name
+that is not on this character keeps its slot and goes orange rather than being
+dropped by a panel that cannot see into your bank. `Core/Stance.lua` is the same
+move for the three stance spells and their localised names, which the charge
+macro and the loadout macros both bake in and could otherwise disagree about.
 
 The harness grew a client to test against. Secure attributes are stored rather
 than swallowed, so a macro can be read back; the override binding layer is
 modelled, so the readback every part does after taking a key is answering
 something rather than reporting a refusal; and there are three items in the
-stub's backpack, so the gear scan has something to find. Eight assertions on the
-macro itself: the lines, their order, the two rules that drop a line, the
-combat conditional, the refused second claim on one key, and the loadout changed
-in combat that has to land after it.
+stub's backpack, so the gear scan has something to find. Sixteen assertions on
+the macros: the lines, their order, the two rules that drop a line, the combat
+conditional, the refused second claim on one key, the delete that has to move
+every binding under it, and the loadout changed in combat that has to land after
+it.
 
 What the harness cannot settle, and only a key press in game can: whether the
 client runs two `/equipslot` lines off one press, and what it does when a two
 hander comes off into a full bag. Nothing installed on either client calls
 `/equipslot`, so there is nothing to read that would answer either.
+
 
 ## 1.5
 
