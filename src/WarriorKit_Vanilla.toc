@@ -2,7 +2,7 @@
 ## Title: WarriorKit
 ## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, square class-coloured player and target frames, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
-## Version: 1.3
+## Version: 1.4
 ## SavedVariables: WarriorKitDB
 ## SavedVariablesPerCharacter: WarriorKitCharDB
 ## X-Category: Combat
@@ -19,7 +19,7 @@ Core\Core.lua
 Core\Command.lua
 Core\Panel.lua
 
-# The six parts. Within each, behaviour first and Feature.lua last, because
+# The seven parts. Within each, behaviour first and Feature.lua last, because
 # Feature.lua is the only file that names anything outside its own folder.
 Marking\Marking.lua
 Marking\Keys.lua
@@ -31,6 +31,9 @@ Charge\Icon.lua
 Charge\Marker.lua
 Charge\SoftTarget.lua
 Charge\Feature.lua
+
+Targeting\Switch.lua
+Targeting\Feature.lua
 
 Buttons\Layout.lua
 Buttons\Ranks.lua

@@ -65,7 +65,7 @@ end
 
 ns.Register({
 	name = "buttons",
-	order = 3,
+	order = 4,
 
 	-- Per character, all three of them. These describe one character's action
 	-- bars and one character's macros. Held account-wide, the first character to

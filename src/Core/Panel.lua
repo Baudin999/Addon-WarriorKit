@@ -829,7 +829,7 @@ local function Build()
 	end)
 	reset:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -PAD, PAD - 4)
 
-	-- The rail is a page of its own as far as the window is concerned: six
+	-- The rail is a page of its own as far as the window is concerned: seven
 	-- tabs are taller than a short page and the window has to hold them.
 	SetContent(math.max(tallest, #tabs * (TAB_H + 2) + PAD * 2))
 	Options.SelectTab(active)

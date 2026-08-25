@@ -1,10 +1,11 @@
 # WarriorKit
 
-A personal warrior addon for WoW TBC Anniversary. Six parts: ctrl-click raid
+A personal warrior addon for WoW TBC Anniversary. Seven parts: ctrl-click raid
 marking, one button that casts Charge, Intervene or Intercept depending on what
-you are looking at, a warrior loadout that fills the action bars, enemy bars
-that replace the Blizzard nameplate, a strip of the Blizzard bar art, and one
-Edit Mode layout carried inside the addon folder. Settings live in a panel
+you are looking at, one key that takes the next enemy and swings at it, a
+warrior loadout that fills the action bars, enemy bars that replace the Blizzard
+nameplate, a strip of the Blizzard bar art, and one Edit Mode layout carried
+inside the addon folder. Settings live in a panel
 opened with `/wk`.
 
 This file is written for whoever picks the addon up next, human or agent. The
@@ -60,7 +61,7 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is six parts and a core. Each part is a folder, and Core knows the
+The addon is seven parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, drawing, the feature registry
@@ -77,6 +78,9 @@ name of none of them.
     Charge/Marker.lua        the icon in the world above the mob the button will hit
     Charge/SoftTarget.lua    action targeting, held on out of combat and off in it
     Charge/Feature.lua
+
+    Targeting/Switch.lua     the secure button behind the switch key, and its binding
+    Targeting/Feature.lua
 
     Buttons/Layout.lua       the warrior loadout, and the backup of what it replaced
     Buttons/Ranks.lua        moves bar slots up to the best rank you know
@@ -188,6 +192,10 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Charge.NameEpoch()        a number that moves when a cached spell name might
                                  have, so the macro guard can compare one value
     ns.ChargeIcon.CanRelease()   whether the state driver path came up
+    ns.Switch.Bind(key)          take a key for the switch button, or "" to hand
+                                 it back; returns what that key was bound to
+    ns.Switch.Describe()         the switch key, or "unbound", or the key plus
+                                 what the readback said when it did not take
     ns.ChargeWeapons.List(current)   picker rows: no swap, then everything that
                                      could go in slot 16, then the saved name
                                      when it is in neither
@@ -709,6 +717,38 @@ addon is driving is advice that fights itself.
 `action targeting auto, on out of combat` is what the CVar is doing, and
 `token on | off | unproven` is whether `softenemy` resolves on this client at
 all.
+
+**Switching target.** One key, one macro, two lines: `/targetenemy` and
+`/startattack [harm,nodead]`. TAB is already the first line. The second is the
+whole reason this part exists, because cycling picks the next mob and leaves it
+standing there untouched, so switching mid-fight otherwise costs a second press
+that is easy to forget while something is hitting you.
+
+`Targeting/Switch.lua` builds `WarriorKitSwitchButton`, a
+`SecureActionButtonTemplate` with no size and no anchor, the shape
+`Marking/Keys.lua` uses for its own button. Starting an attack is protected, so
+the two commands have to run as a macro off a hardware key press rather than as
+two Lua calls. That is also why the key is not a `Bindings.xml` entry: a binding
+listed there runs ordinary Lua, and ordinary Lua may not start an attack.
+
+The macro is a constant, which is the one way this button is simpler than the
+charge button. That one rewrites its macro out of combat because it resolves a
+unit token in Lua. This one resolves nothing, so the macro is written once at
+load and combat can refuse only a rebind. `harm` and `nodead` are on the attack
+line because the cycle can land on nothing when there is nothing in range, and a
+bare `/startattack` then answers back in chat for a press that did nothing.
+They do not belong on the target line. A bare `[harm,nodead]` tests the target
+you already have rather than the one the cycle is about to pick, so on
+`/targetenemy` it would decide whether the cycle runs at all, and the press
+right after your mob dies would do nothing. Nothing filters what
+`TargetNearestEnemy` picks: it takes a reverse flag and hands out no candidate
+list.
+
+The key is an override binding, the same as the charge key and the marking keys,
+so putting it on TAB leaves TAB alone in the binding set and clearing it hands
+TAB straight back. `Switch.Describe` reads `GetBindingAction` back rather than
+reporting what it meant to set, so `/wk status` can say the client did not take
+the key.
 
 **Buttons.** Fills the action bars with a warrior loadout and can put back
 exactly what was there before. Two jobs it deliberately does not do:
@@ -1266,6 +1306,8 @@ would go stale.
     /wk charge weapon Bloodspiller   equipped into slot 16, "none" to drop the line
     /wk bind SHIFT-Q             take a key, override binding only
     /wk bind none                hand the key back
+    /wk switch TAB               next enemy and swing at it, override binding only
+    /wk switch none              hand that key back
     /wk bars on|off
     /wk bars mode auto|plates|list
     /wk bars style replace|attach
@@ -1369,6 +1411,10 @@ Everything below was written from the API contract and has never executed:
 - Whether `/equipslot` takes macro conditionals. It goes through SecureCmdList,
   which gets `SecureCmdOptionParse` applied before the handler runs, so
   `[nocombat]` should work. If the weapon stops swapping on the pull, that is
+  why, and dropping the conditional is the fix.
+- Whether `/startattack` takes macro conditionals here. It goes through
+  SecureCmdList the same as `/equipslot`, so `[harm,nodead]` should be parsed
+  before the handler runs. If the switch key cycles and never swings, that is
   why, and dropping the conditional is the fix.
 - Whether `SecureHandlerStateTemplate` and `RegisterStateDriver` exist here. The
   probe in `BuildBinder` handles it either way, but if they are missing the

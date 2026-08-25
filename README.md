@@ -6,6 +6,8 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   what you are looking at, and out of combat it aims by camera rather than by
   target.
 - **Ctrl-click raid marking.** Ctrl-click a unit to mark it. No menu.
+- **One key that switches target and swings.** TAB cycles and stops there. Bind
+  a key in `/wk` and it takes the next enemy and starts the attack on it.
 - **Threat-coloured enemy bars.** They replace the Blizzard nameplate and carry
   a tag saying what the kill is worth.
 - **A warrior bar loadout**, with a backup of whatever it replaced, plus an

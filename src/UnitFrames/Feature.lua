@@ -127,7 +127,7 @@ end
 
 ns.Register({
 	name = "unit frames",
-	order = 4,
+	order = 5,
 
 	defaults = {
 		bars = true,

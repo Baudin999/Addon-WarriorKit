@@ -18,6 +18,7 @@ globals = {
 	"WarriorKitMarkButton",
 	"WarriorKitOptions",
 	"WarriorKitChargeButton",
+	"WarriorKitSwitchButton",
 	"WarriorKitChargeCooldown",
 	"WarriorKitChargeMarker",
 	"WarriorKitChargeMarkerCooldown",

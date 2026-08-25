@@ -24,7 +24,7 @@ end
 
 ns.Register({
 	name = "artwork",
-	order = 5,
+	order = 6,
 
 	defaults = {
 		-- False means the gryphons and the metal strip are gone, which is the
