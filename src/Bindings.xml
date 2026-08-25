@@ -1,0 +1,11 @@
+<Bindings>
+	<Binding name="WARRIORKIT_MARK_SKULL" header="WARRIORKIT" category="WarriorKit">
+		WarriorKit_MarkSkull()
+	</Binding>
+	<Binding name="WARRIORKIT_MARK_CROSS" category="WarriorKit">
+		WarriorKit_MarkCross()
+	</Binding>
+	<Binding name="WARRIORKIT_MARK_MOON" category="WarriorKit">
+		WarriorKit_MarkMoon()
+	</Binding>
+</Bindings>

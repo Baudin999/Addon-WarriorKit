@@ -1,0 +1,283 @@
+local ADDON, ns = ...
+
+-- Everything Core and the panel need to know about the charge button. The
+-- three Charge files hold the behaviour and never talk to either.
+
+local function ApplyChargeChange()
+	ns.ChargeIcon.ApplySecure()
+	ns.ChargeIcon.SyncMacro()
+	ns.ChargeIcon.Update()
+	ns.ChargeMarker.Update()
+	ns.SoftTarget.Apply()
+end
+
+local function SoftWord(sub)
+	local want = ns.Command.Toggle(sub)
+	if want == ns.db.softAuto then
+		ns.Print("action targeting is already " .. (want and "automatic" or "yours") .. ".")
+		return
+	end
+	ns.db.softAuto = want
+	if want then
+		ns.SoftTarget.Apply()
+		ns.Print("action targeting is the addon's now: on out of combat, off in it.")
+	else
+		-- Hand the CVar back at the value it had before the addon took it,
+		-- rather than leaving it wherever the last combat transition put it.
+		ns.SoftTarget.Restore()
+		ns.Print("action targeting is yours again, back at what it was.")
+	end
+end
+
+local function MarkerWord(sub, number)
+	if sub == "size" then
+		local size = ns.Command.Number(number, 16, 96, "charge marker size")
+		if size then
+			ns.db.chargeMarkerSize = size
+			ns.ChargeMarker.ApplyLayout()
+			ns.Print("charge marker size " .. size .. ".")
+		end
+	elseif sub == "offset" then
+		local offset = ns.Command.Number(number, -60, 60, "charge marker offset")
+		if offset then
+			ns.db.chargeMarkerOffset = offset
+			ns.ChargeMarker.ApplyLayout()
+			ns.Print("charge marker offset " .. offset .. ".")
+		end
+	else
+		ns.db.chargeMarker = ns.Command.Toggle(sub)
+		ns.Print("charge marker " .. (ns.db.chargeMarker and "on" or "off") .. ".")
+	end
+end
+
+ns.Register({
+	name = "charge",
+	order = 2,
+
+	defaults = {
+		charge = true,
+		chargeMode = "always", -- "always" keeps the icon on screen, "ready" only shows it when Charge can be used
+		chargeMarker = true,   -- the icon in the world over the mob the Charge macro would pick
+		chargeMarkerSize = 40,
+		chargeMarkerOffset = 0, -- nudge the marker up or down the nameplate, -60 to 60
+		-- Action targeting, driven off combat. Charge is an out of combat
+		-- ability and Pick reads the cursor once combat is up, so the token
+		-- earns its keep on the pull and gets in the way after it.
+		softAuto = true,
+		-- Empty by default. A name here builds an /equipslot line into the
+		-- macro, and a weapon nobody on this account owns builds a line that
+		-- silently does nothing. Set it from the Charge tab's picker, which
+		-- only offers what you are carrying.
+		chargeWeapon = "",
+		chargeKey = "",        -- key the charge button takes over, set in the UI or with /wk bind
+		chargeKeyRelease = false, -- hand the key back during combat instead of casting Intervene
+		chargeKeyDisplaced = "",  -- what that key was bound to, kept so the UI can show it
+		size = 44,
+		point = { "CENTER", "UIParent", "CENTER", 0, -160 },
+	},
+
+	-- SoftTargetEnemy is a character scoped CVar, so what it was before the
+	-- addon took it over is character scoped memory. Empty means not yet taken.
+	charDefaults = {
+		softPrior = "",
+	},
+
+	words = {
+		charge = function(arg, rawArg)
+			local option, value = arg:match("^(%S*)%s*(.-)$")
+			if option == "always" or option == "ready" then
+				ns.db.chargeMode = option
+				ns.Print("charge icon and marker show "
+					.. (option == "ready" and "only when usable" or "at all times") .. ".")
+			elseif option == "weapon" then
+				local weapon = rawArg:match("^%S*%s*(.-)%s*$") or ""
+				ns.db.chargeWeapon = (weapon == "" or weapon:lower() == "none") and "" or weapon
+				ns.Print(ns.db.chargeWeapon == "" and "the charge button no longer swaps weapons."
+					or ("the charge button equips " .. ns.db.chargeWeapon .. " into slot 16."))
+			elseif option == "marker" then
+				MarkerWord(value:match("^(%S*)%s*(.-)$"))
+			elseif option == "soft" then
+				SoftWord((value:match("^(%S*)")))
+			else
+				ns.db.charge = ns.Command.Toggle(option)
+				ns.Print("charge icon " .. (ns.db.charge and "on" or "off") .. ".")
+			end
+			ApplyChargeChange()
+		end,
+
+		size = function(arg)
+			local size = ns.Command.Number(arg, 16, 128, "size")
+			if size then
+				ns.db.size = size
+				ns.ChargeIcon.ApplyLayout()
+				ns.Print("icon size " .. size .. ".")
+			end
+		end,
+
+		bind = function(_, rawArg)
+			local key = rawArg:upper()
+			if key == "NONE" then
+				key = ""
+			end
+			local displaced, why = ns.ChargeIcon.Bind(key)
+			if not displaced then
+				ns.Print(why)
+			elseif key == "" then
+				ns.Print("charge key cleared, nothing is intercepted now.")
+			elseif displaced ~= "" then
+				ns.Print(("charge takes %s out of combat. %s keeps it in combat, and your saved bindings are untouched.")
+					:format(key, displaced))
+			else
+				ns.Print(("charge takes %s out of combat. Nothing else was bound to it."):format(key))
+			end
+		end,
+	},
+
+	help = {
+		"charge on|off, charge always|ready, charge marker on|off",
+		"charge marker size <16-96>, charge marker offset <-60-60>",
+		"charge soft on|off, action targeting driven off combat",
+		"charge weapon <name|none>, size <16-128>, bind <key|none>",
+	},
+
+	status = function()
+		return ("icon %s (%s), marker %s, key %s, action targeting %s, token %s")
+			:format(ns.db.charge and "on" or "off", ns.db.chargeMode,
+				ns.db.chargeMarker and "on" or "off",
+				ns.db.chargeKey == "" and "unbound" or ns.db.chargeKey,
+				ns.SoftTarget.Describe(),
+				ns.Charge.SoftTargetState())
+	end,
+
+	lock = function()
+		ns.ChargeIcon.ApplyLock()
+		ns.ChargeMarker.ApplyLock()
+	end,
+
+	reset = function()
+		-- A fresh table, not ns.DefaultFor: dragging mutates the anchor in place.
+		ns.db.point = { "CENTER", "UIParent", "CENTER", 0, -160 }
+		ns.db.size = ns.DefaultFor("size")
+		ns.db.chargeMarkerSize = ns.DefaultFor("chargeMarkerSize")
+		ns.db.chargeMarkerOffset = ns.DefaultFor("chargeMarkerOffset")
+		ns.ChargeIcon.ApplyLayout()
+		ns.ChargeMarker.ApplyLayout()
+	end,
+
+	panel = function(ui)
+		ui.Header("Charge key")
+		ui.KeyField("key",
+			function()
+				if ns.db.chargeKey ~= "" then
+					return ns.db.chargeKey
+				end
+				return "|cff808080not bound|r"
+			end,
+			function(combo)
+				local ok, why = ns.ChargeIcon.Bind(combo)
+				if not ok then
+					ns.Print(why)
+				end
+			end,
+			function() ns.ChargeIcon.Bind("") end)
+		ui.Note(function()
+			if ns.db.chargeKey == "" then
+				return "Unbound. Or put /click WarriorKitChargeButton in a macro on a bar."
+			end
+			if ns.db.chargeKeyDisplaced ~= "" then
+				return "Shadows " .. ns.db.chargeKeyDisplaced .. ". Your saved bindings are untouched."
+			end
+			return "Nothing else was bound to it."
+		end)
+		local release = ui.Check("hand the key back in combat",
+			function() return ns.db.chargeKeyRelease end,
+			function(value)
+				ns.db.chargeKeyRelease = value
+				ns.ChargeIcon.ApplyBinding()
+			end)
+		release.IsAvailable = function() return ns.ChargeIcon.CanRelease() end
+		ui.Note(function()
+			if not ns.ChargeIcon.CanRelease() then
+				return "This client has no state driver, so the key is held the whole time."
+			end
+			return "Off means the key also casts Intervene and Intercept on your mouseover."
+		end)
+
+		ui.Header("Charge")
+		ui.Check("show the icon",
+			function() return ns.db.charge end,
+			function(value)
+				ns.db.charge = value
+				ns.ChargeIcon.ApplySecure()
+			end)
+		ui.Check("only while it can be cast",
+			function() return ns.db.chargeMode == "ready" end,
+			function(value) ns.db.chargeMode = value and "ready" or "always" end)
+		ui.Stepper("icon size", 16, 128, 2,
+			function() return ns.db.size end,
+			function(value)
+				ns.db.size = value
+				ns.ChargeIcon.ApplyLayout()
+			end)
+		ui.Check("icon in the world over the mob",
+			function() return ns.db.chargeMarker end,
+			function(value) ns.db.chargeMarker = value end)
+		ui.Stepper("world icon size", 16, 96, 2,
+			function() return ns.db.chargeMarkerSize end,
+			function(value)
+				ns.db.chargeMarkerSize = value
+				ns.ChargeMarker.ApplyLayout()
+			end)
+		ui.Stepper("world icon height", -60, 60, 2,
+			function() return ns.db.chargeMarkerOffset end,
+			function(value)
+				ns.db.chargeMarkerOffset = value
+				ns.ChargeMarker.ApplyLayout()
+			end)
+
+		ui.Gap()
+		ui.Header("Action targeting")
+		ui.Check("on out of combat, off in combat",
+			function() return ns.db.softAuto end,
+			function(value)
+				ns.db.softAuto = value
+				if value then
+					ns.SoftTarget.Apply()
+				else
+					ns.SoftTarget.Restore()
+				end
+			end)
+		ui.Note(function()
+			if not ns.db.softAuto then
+				return ("The CVar is yours, %s. The marker falls back to your target and your cursor whenever it is off.")
+					:format(ns.SoftTarget.Describe())
+			end
+			local state = ns.Charge.SoftTargetState()
+			if state == "on" then
+				return "The token answers on this client, so the marker follows your camera on the pull and hands the aim back to your cursor in the fight."
+			end
+			return "Set for you on every combat transition, so the camera aims the pull and nothing re-aims you mid-fight. The token has not answered yet: aim at a mob out of combat with no target and watch the marker."
+		end)
+
+		ui.Gap()
+		ui.Header("Weapon")
+		ui.Picker("main hand",
+			function() return ns.db.chargeWeapon end,
+			function(value)
+				ns.db.chargeWeapon = value
+				ApplyChargeChange()
+			end,
+			function() return ns.ChargeWeapons.List(ns.db.chargeWeapon) end)
+		ui.Note(function()
+			if ns.db.chargeWeapon == "" then
+				return "The macro carries no /equipslot line. Pick a weapon and a charge draws it first."
+			end
+			if not ns.ChargeWeapons.Carried(ns.db.chargeWeapon) then
+				return ("|cffd08040%s is not in your bags, so the swap does nothing until it is.|r")
+					:format(ns.db.chargeWeapon)
+			end
+			return ("A charge equips %s into slot %d first, out of combat only, so a press mid-fight cannot reset your swing timer.")
+				:format(ns.db.chargeWeapon, ns.ChargeWeapons.SLOT)
+		end)
+	end,
+})
