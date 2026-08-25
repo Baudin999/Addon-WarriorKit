@@ -154,6 +154,55 @@ pixel gauge, and a heal far past what the unit is missing draws the 89 pixels it
 is down and stops there.
 
 
+### The skinned frames are the size Edit Mode thinks they are
+
+The block the skin draws used to hang off Blizzard's portrait anchor inside a
+frame five times its size. Everything that reads a unit frame's rectangle read
+that one. Edit Mode selected it, snapped it against the other frames and saved
+it, while the thing you can see sat somewhere inside it, and the empty three
+quarters went on eating clicks. Lining the player frame up with anything was
+guesswork.
+
+So the block is anchored to the frame's own top corner now, the one the
+portrait is on, and `PlayerFrame`, `TargetFrame` and `TargetFrameToT` are each
+resized to the block over them. On this monitor the player frame goes from 232
+by 100 of Blizzard's units to 165.74 by 27.90, which is the 202 by 34 pixels
+the block already was. What Edit Mode drags is what is drawn, the hit region is
+the block, and the target's aura row follows the frame in rather than hanging
+where a 232 by 100 frame left it.
+
+Three things carry the resize. The original size is recorded before the first
+fit and `/wk skin off` writes it back without a reload. `SetSize` on a secure
+unit button is a protected action, so it sits behind the same lockdown guard as
+the rest of `Place` and finishes at `PLAYER_REGEN_ENABLED`. And target of
+target is placed by this addon once the target frame is fitted, three pixels
+under the target block on the edge the two share, because Blizzard's anchor for
+it was written against a target frame 100 units tall and points at a corner
+that has moved. It goes back to that anchor the moment either frame is
+unskinned.
+
+Edit Mode draws a selection frame over the system it is dragging. Where this
+client puts one, the skin pins it to the frame and post-hooks that frame's own
+`AnchorSelectionFrame`, so the next time Edit Mode re-anchors it, it is pinned
+again. Both names are retail's and both are probed before they are touched. A
+client with neither still gets the fit, which is what Edit Mode draws over by
+default. `/wk skin probe` says which of the two this client is, and prints what
+each frame measured before the fit.
+
+Two clamps went with it. The gauge was clamped to what was left of the frame's
+width and the square to the frame's height, both because the space around the
+block was not empty. The frame is the block now, so the two settings are the
+whole of the size and there is nothing left to clamp against.
+
+The harness asserts the fit in screen space, which is the only space the block
+and the unit frame share: one is on the pixel grid and the other is on the
+client's scale, so a comparison of the raw numbers would pass on a fit that
+never converted. Each frame covers exactly the piece of screen its block does,
+target of target is parked under the target block, and turning the skin off
+hands all three frames back the size they were built at and target of target
+back its own anchor.
+
+
 ## 1.5
 
 A drawing layer, `UI/`, and everything the addon draws rebuilt on it. Eight

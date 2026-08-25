@@ -126,4 +126,9 @@ read_globals = {
 	-- unguarded, which is what proves the frame is here. The methods the
 	-- EditMode part uses past that one are probed by name before every call.
 	"EditModeManagerFrame", "Enum",
+	-- Post-hooked onto a unit frame's own AnchorSelectionFrame, so Edit Mode's
+	-- selection lands on the block rather than on the rectangle the frame used
+	-- to be. Type-checked before it is called, like every other method the
+	-- skin borrows from a client it cannot be sure of.
+	"hooksecurefunc",
 }

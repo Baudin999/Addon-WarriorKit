@@ -471,7 +471,12 @@ ns.Register({
 				.. " gauge and its edge take the class colour, or the reaction colour on"
 				.. " anything without a class. The raid marker stays. Nothing is rebuilt:"
 				.. " clicking, the dropdown, auras and the cast bar are still Blizzard's,"
-				.. " and turning this off puts every piece back without a reload. "
+				.. " and turning this off puts every piece back without a reload."
+				.. " Each Blizzard frame is resized to the block over it, so the"
+				.. " rectangle Edit Mode selects and snaps is the one you can see and"
+				.. " the empty space around it no longer takes clicks. The two sizes"
+				.. " above move that rectangle, so a frame you have already placed"
+				.. " needs placing again. "
 				.. ns.FrameSkin.Describe() .. "."
 		end)
 	end,

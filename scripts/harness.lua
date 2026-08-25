@@ -215,7 +215,20 @@ function Region:SetStatusBarTexture(t)
 	end
 end
 function Region:GetStatusBarTexture() return self.fill end
-function Region:GetStatusBarColor() return 1, 1, 1, 1 end
+-- Recorded rather than dropped. This was a no-op falling through to the
+-- PascalCase catch-all, and GetStatusBarColor answered a constant white, which
+-- between them meant nothing here could see a colour the skin painted. A bug
+-- that drew every gauge at a third of its brightness passed this file.
+function Region:SetStatusBarColor(r, g, b, a)
+	self.barR, self.barG, self.barB, self.barA = r, g, b, a or 1
+	self.barWrites = (self.barWrites or 0) + 1
+end
+function Region:GetStatusBarColor()
+	if self.barR then
+		return self.barR, self.barG, self.barB, self.barA
+	end
+	return 1, 1, 1, 1
+end
 function Region:SetSnapToPixelGrid(v) self.snapped = v end
 function Region:SetTexelSnappingBias(v) self.bias = v end
 function Region:SetFontObject(o) self.fontObject = o end
@@ -521,7 +534,20 @@ child("fontstring", playerFrame, "PlayerLevelText")
 local targetFrame = unitFrame("TargetFrame", 232, 100, nil,
 	{ "TargetFrameRaidTargetIcon", "TargetFramePVPIcon" })
 child("fontstring", targetFrame, "TargetLevelText")
-unitFrame("TargetFrameToT", 120, 50, targetFrame, {})
+local totFrame = unitFrame("TargetFrameToT", 120, 50, targetFrame, {})
+-- Anchored the way the client anchors it: against a target frame 100 units
+-- tall. That offset is the whole reason the skin has to place this frame
+-- itself once the target frame is the height of the block instead.
+totFrame:SetPoint("TOPLEFT", targetFrame, "TOPLEFT", -35, -70)
+
+-- What each unit frame was built as, taken before PLAYER_LOGIN and so before
+-- the skin has fitted any of them. The fit is only reversible if these are the
+-- numbers that come back.
+local BUILT = {}
+for _, frame in ipairs({ playerFrame, targetFrame, totFrame }) do
+	BUILT[frame.name] = { frame:GetWidth(), frame:GetHeight(),
+		frame.points and frame.points[1] }
+end
 
 _G.WarriorKitDB, _G.WarriorKitCharDB = {}, {}
 fire("ADDON_LOADED", "WarriorKit")
@@ -713,6 +739,18 @@ local blocks = {
 	{ "tot", _G.WarriorKitSkinToT, _G.TargetFrameToT },
 }
 
+-- The palette, restated rather than reached for. Skin.lua keeps these local and
+-- that is right; a gate that imported the number it is checking would pass on
+-- the day somebody changed it by accident. UnitIsPlayer above is true for the
+-- player alone, so the player wears the stubbed warrior colour and the other
+-- two fall to the hostile one on a reaction of 2.
+local TRACK, EDGE_DIM = 0.20, 0.60
+local TINT = {
+	player = { 0.78, 0.61, 0.43 },
+	target = { 0.88, 0.25, 0.28 },
+	tot = { 0.88, 0.25, 0.28 },
+}
+
 -- entry.top is the only frame the skin pins to the whole of the box, which is
 -- how it is found without this file reaching into the module's own tables.
 local function textFrame(box)
@@ -741,25 +779,47 @@ for _, block in ipairs(blocks) do
 				("%s: block %s is %.4f, not a whole pixel"):format(key, axis, size))
 		end
 
-		-- The block hangs off the portrait's own anchor, and the offset in
-		-- that anchor was written by the client in the client's units. Two
-		-- things are asserted about what came out: it is a whole pixel, and it
-		-- is not the number that went in. The second is the one with teeth,
-		-- because Blizzard writes whole units and a whole unit is a whole
-		-- number in either space, so a conversion quietly dropped would still
-		-- pass the first test and put the block a fifth of its width out.
-		local slot = box.points and box.points[1] and box.points[1][2]
-		check(slot ~= nil, key .. ": the block is not hung on the portrait's square")
-		local offset = slot and slot.points and slot.points[1]
-		check(offset ~= nil, key .. ": the square was never anchored")
-		for _, axis in ipairs({ { "x", 4, PORTRAIT_X }, { "y", 5, PORTRAIT_Y } }) do
-			local value = offset and offset[axis[2]] or 0
-			check(math.abs(value - math.floor(value + 0.5)) < 1e-9,
-				("%s: the anchor's %s offset is %.4f, not a whole pixel")
-					:format(key, axis[1], value))
-			check(value ~= axis[3],
-				("%s: the anchor's %s offset is still Blizzard's %d, unconverted")
-					:format(key, axis[1], axis[3]))
+		-- The fit, which is the whole of what makes Edit Mode's rectangle the
+		-- one on the screen. The block sits on the frame's own corner, the
+		-- portrait's square sits on the block, and the frame covers exactly
+		-- the piece of screen the block does.
+		--
+		-- The last is the one with teeth, and it is asserted in screen space
+		-- rather than in either frame's units because that is the only space
+		-- the two share: the block is on the pixel grid and the unit frame is
+		-- on the client's scale, so a fit that never converted would pass a
+		-- comparison of the raw numbers and be out by the ratio between them.
+		-- A fit dropped altogether leaves the frame at the 232 by 100 the stub
+		-- built and fails by a mile.
+		local corner = key == "target" and "TOPRIGHT" or "TOPLEFT"
+		local anchor = box.points and box.points[1]
+		check(anchor and anchor[2] == frame and anchor[1] == corner
+			and anchor[3] == corner and anchor[4] == 0 and anchor[5] == 0,
+			key .. ": the block is not pinned to the frame's own " .. corner)
+
+		-- The square is the one frame the block parents nothing to and pins
+		-- nothing over: the two rails are children of the box and the text
+		-- frame covers the whole of it.
+		local slot
+		for _, f in ipairs(frame.children) do
+			if not f.allPoints and f.points and f.points[1] and f.points[1][2] == box then
+				slot = f
+			end
+		end
+		check(slot ~= nil, key .. ": the portrait's square is not hung on the block")
+		local square = slot and slot.points[1]
+		check(square and square[1] == corner and square[3] == corner
+			and square[4] == 0 and square[5] == 0,
+			key .. ": the square is not on the block's " .. corner)
+		check(slot and slot:GetWidth() == slot:GetHeight() and slot:GetHeight() == box:GetHeight(),
+			key .. ": the portrait's square is not the block's height squared")
+
+		for _, axis in ipairs({ { "width", "GetWidth" }, { "height", "GetHeight" } }) do
+			local ours = box[axis[2]](box) * box:GetEffectiveScale()
+			local theirs = frame[axis[2]](frame) * frame:GetEffectiveScale()
+			check(math.abs(ours - theirs) < 1e-6,
+				("%s: the block is %.2f of screen %s and the frame Edit Mode drags is %.2f")
+					:format(key, ours, axis[1], theirs))
 		end
 
 		-- The two rails are the only frames the block parents, and Blizzard's
@@ -775,6 +835,53 @@ for _, block in ipairs(blocks) do
 			key .. ": the health bar is not pinned to its rail")
 		check(frame.manabar.allPoints == powerRail,
 			key .. ": the power bar is not pinned to its rail")
+
+		-- Stacking order, written end to end rather than inherited anywhere.
+		-- The rail carries the spent part of the gauge and Blizzard's bar
+		-- carries the fill, so a rail level with its bar is not a cosmetic
+		-- difference: the tie goes to whichever frame was built later, which is
+		-- ours, and the track then draws over the fill at nine tenths alpha. A
+		-- target at full health came out at 28 percent of its own colour.
+		for name, rail in pairs({ health = healthRail, power = powerRail }) do
+			local bar = name == "health" and frame.healthbar or frame.manabar
+			check(rail and rail:GetFrameLevel() > box:GetFrameLevel(),
+				("%s: the %s rail is on level %s, not above the block's %s")
+					:format(key, name, tostring(rail and rail:GetFrameLevel()),
+						tostring(box:GetFrameLevel())))
+			check(rail and bar:GetFrameLevel() > rail:GetFrameLevel(),
+				("%s: the %s bar is on level %d and its rail on %s, so the track "
+					.. "draws over the fill"):format(key, name, bar:GetFrameLevel(),
+						tostring(rail and rail:GetFrameLevel())))
+		end
+
+		-- What the block is actually painted. The fill is the unit's colour at
+		-- full brightness, the spent part of each gauge is that colour at a
+		-- fifth, and the five hairlines are it at three fifths. All three are
+		-- read back, because a gauge is only as good as the colour that reaches
+		-- it and every one of these numbers used to be invisible here.
+		local tint = TINT[key]
+		local function near(a, b) return a and math.abs(a - b) < 1e-6 end
+		local function paints(region, r, g, b, a)
+			return region and near(region.r, r) and near(region.g, g)
+				and near(region.b, b) and near(region.a, a)
+		end
+		check(paints(frame.healthbar, tint[1], tint[2], tint[3], 1)
+			or (near(frame.healthbar.barR, tint[1]) and near(frame.healthbar.barG, tint[2])
+				and near(frame.healthbar.barB, tint[3]) and near(frame.healthbar.barA, 1)),
+			("%s: the health bar is painted %s,%s,%s and not the unit's %.2f,%.2f,%.2f")
+				:format(key, tostring(frame.healthbar.barR), tostring(frame.healthbar.barG),
+					tostring(frame.healthbar.barB), tint[1], tint[2], tint[3]))
+		check(paints(healthRail.regions[1], tint[1] * TRACK, tint[2] * TRACK,
+			tint[3] * TRACK, 0.9), key .. ": the spent part of the health gauge is not "
+				.. "the unit's colour at a fifth")
+		local dimmed = 0
+		for _, region in ipairs(box.regions) do
+			if paints(region, tint[1] * EDGE_DIM, tint[2] * EDGE_DIM, tint[3] * EDGE_DIM, 1) then
+				dimmed = dimmed + 1
+			end
+		end
+		check(dimmed == 5, ("%s: %d of the block's five hairlines carry the unit's "
+			.. "colour at three fifths, not all of them"):format(key, dimmed))
 
 		-- Sampled art. The crop is on a texel boundary and the client's own
 		-- snapping is off, the same two fixes a spell icon takes.
@@ -881,8 +988,8 @@ check(flattenWrites == 0,
 --
 -- The rail is measured off the block that landed rather than off the setting
 -- that asked for it, which is the same rule the rest of this section works
--- under: the block is as wide as the frame left room for, and a test written
--- against skinWidth would be asserting the request.
+-- under: a test written against skinWidth would be asserting the request and
+-- not the answer.
 --------------------------------------------------------------------------
 
 local healthRail = playerBox.children[1]
@@ -938,6 +1045,64 @@ check(healTick(0) == 0, "the slice stayed up after the heal it predicted landed"
 
 print(("heals  gauge %d px, 1800 of 9000 draws %d px, an overheal clamps to %d px")
 	:format(railPixels, fits, capped))
+
+--------------------------------------------------------------------------
+-- The fit, off and back on
+--
+-- The skin resizes three frames it does not own and re-anchors one of them,
+-- and that is the change in this part that has to be reversible without a
+-- reload: everything else it does to a unit frame is a texture hidden or a
+-- region moved, and the frame's own rectangle is what Edit Mode saves against.
+--
+-- Turned off, every frame is the size the stub built and target of target is
+-- back on the anchor the stub wrote. Turned back on, all three fit again,
+-- which is what catches a restore that handed back the fitted size as though
+-- it were the original.
+--------------------------------------------------------------------------
+
+local function screenSize(frame)
+	return frame:GetWidth() * frame:GetEffectiveScale(),
+		frame:GetHeight() * frame:GetEffectiveScale()
+end
+
+local perch = totFrame.points and totFrame.points[1]
+check(perch ~= nil and perch[2] == targetFrame and perch[1] == "TOPRIGHT"
+	and perch[3] == "BOTTOMRIGHT" and perch[5] < 0,
+	"target of target is not parked under the target block, so it is still"
+	.. " anchored against a target frame that is no longer that size")
+
+local fitted = {}
+for _, block in ipairs(blocks) do
+	fitted[block[1]] = { screenSize(block[3]) }
+end
+
+ns.db.skin = false
+ns.FrameSkin.Apply()
+
+for _, block in ipairs(blocks) do
+	local key, frame = block[1], block[3]
+	local built = BUILT[frame.name]
+	check(frame:GetWidth() == built[1] and frame:GetHeight() == built[2],
+		("%s: the skin came off and left the frame %.0fx%.0f, not the %.0fx%.0f it found")
+			:format(key, frame:GetWidth(), frame:GetHeight(), built[1], built[2]))
+end
+
+local back = totFrame.points and totFrame.points[1]
+local was = BUILT[totFrame.name][3]
+check(back ~= nil and back[1] == was[1] and back[2] == was[2] and back[3] == was[3]
+	and back[4] == was[4] and back[5] == was[5],
+	"target of target did not get its own anchor back when the skin came off")
+
+ns.db.skin = true
+ns.FrameSkin.Apply()
+
+for _, block in ipairs(blocks) do
+	local key, frame = block[1], block[3]
+	local wide, tall = screenSize(frame)
+	check(math.abs(wide - fitted[key][1]) < 1e-6 and math.abs(tall - fitted[key][2]) < 1e-6,
+		("%s: the second fit came out %.2f x %.2f of screen, the first %.2f x %.2f")
+			:format(key, wide, tall, fitted[key][1], fitted[key][2]))
+end
 
 --------------------------------------------------------------------------
 -- The options window

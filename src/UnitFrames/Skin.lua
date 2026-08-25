@@ -30,11 +30,17 @@ ns.FrameSkin = Skin
 --   still named is the short keep list and the level text, and an absent name
 --   costs one hidden icon rather than an error.
 --
---   Measure Blizzard's layout rather than guessing it. The block is placed on
---   the portrait's own anchor, sized off the portrait's own height and given
---   the health bar's own width, so it lands where the frame already sat on
---   whatever numbers this client uses. The constants in SPECS are the fallback
---   for a client that answers none of those, not the plan.
+--   Fit the frame to the block, not the block to the frame. The block used
+--   to hang off the portrait's own anchor inside a frame five times its size,
+--   and everything that reads a unit frame's rectangle read that one: Edit
+--   Mode selected it, snapped it against other frames and saved it, while
+--   what you could see sat somewhere inside it, and the empty three quarters
+--   went on eating clicks. So the block is anchored to the frame's own corner
+--   now and the frame is sized to the block. What Edit Mode drags is what is
+--   drawn, the hit region is the block, and Blizzard's auras and target of
+--   target follow the frame in rather than hanging where a 232 by 100 frame
+--   left them. The frame's size is put back by `/wk skin off`, like every
+--   other change here.
 --
 --   Draw on the grid, measure off it. Everything this file creates goes on
 --   the pixel grid in UI/Pixel.lua, so a size written here as 34 means 34
@@ -43,10 +49,10 @@ ns.FrameSkin = Skin
 --   button and the addon must not scale, reparent or hide one of them. So
 --   the boundary runs between what we made and what we borrowed, and every
 --   number that crosses it is converted and snapped. What cannot cross is
---   position. The block hangs off the portrait's own anchor on a frame that
---   is not on the grid, so where the whole block lands is a fraction of a
---   pixel no addon can read, exactly as a bar on a nameplate is. The
---   geometry is exact; the origin is Blizzard's.
+--   position. The block sits on a corner of a frame that is not on the grid
+--   and that Edit Mode positions in its own units, so where the whole block
+--   lands is a fraction of a pixel no addon can read, exactly as a bar on a
+--   nameplate is. The geometry is exact; the origin is Blizzard's.
 
 local REFRESH = 0.2
 
@@ -69,6 +75,12 @@ local HEALTH_SHARE = 0.70
 -- read, and Blizzard parks it across the target's aura row, so it is the one
 -- that has to stay out of the way.
 local TOT_SCALE = 0.62
+
+-- The gap between the target block and target of target under it, in pixels.
+-- Blizzard's own anchor for that frame was written against a 232 by 100
+-- target frame and means nothing once the frame is the size of the block, so
+-- this file places it and this is the whole of the placement.
+local TOT_GAP = 3
 
 -- The edge takes the fill's colour at this much of its brightness. At full
 -- strength a hostile target ringed the whole block in saturated red and the
@@ -179,6 +191,9 @@ local CLASSIFICATION = {
 -- level   the level text, which has no parent key on any of them
 -- scale   this frame's share of the height and width settings
 -- mirror  the gauge sits left of the portrait rather than right of it
+-- under   the key of the frame this one is parked beneath once both are
+--         fitted, because its own anchor was written against the size the
+--         frame no longer is
 -- global  what the block this file draws over that frame is called. Named
 --         rather than anonymous for one reason: the box is the frame every
 --         measurement in this file is taken in, so a block that lands wrong
@@ -217,7 +232,7 @@ local SPECS = {
 		level = { "TargetLevelText", "TargetFrameTextureFrameLevelText" },
 	},
 	{
-		key = "tot", unit = "targettarget", mirror = false,
+		key = "tot", unit = "targettarget", mirror = false, under = "target",
 		scale = TOT_SCALE, global = "WarriorKitSkinToT",
 		frames = { "TargetFrameToT", "TargetofTargetFrame" },
 		art = { "TargetFrameToTTextureFrame" },
@@ -682,28 +697,125 @@ end
 -- which are on the pixel grid and are counted in pixels. On the other are the
 -- portrait, the two bars and the state icons, which are Blizzard's, are on
 -- whatever scale the unit frame carries, and are counted in that frame's own
--- units. Two numbers cross the line and each has its own direction.
+-- units. Two numbers cross the line, both of them outbound, because nothing
+-- this file reads off the client decides a size any more.
 --
--- Pixels() brings a measurement in: a width read off a unit frame is not a
--- pixel count until it has been through the scale between us, and a number
--- read off the client and used directly is a bug that looks like a rendering
--- artefact.
---
--- ns.Pixel(frame) takes one out: it is one physical pixel expressed in that
--- frame's units, so a size we want to be N pixels is written on one of
+-- ns.Pixel(frame) takes a length out: it is one physical pixel expressed in
+-- that frame's units, so a size we want to be N pixels is written on one of
 -- Blizzard's regions as N times that.
+--
+-- Fit() takes the whole block out. The block is the size the settings ask
+-- for, in pixels, and the unit frame under it is given that same rectangle in
+-- its own units, which is the one number in this file whose exactness is the
+-- client's business rather than ours.
 --------------------------------------------------------------------------
 
-local function Pixels(size, from, to)
-	if not size then
-		return nil
+-- The frame's own geometry, taken before the first fit and put back by
+-- Unstyle. Deliberately not the Snapshot table every region goes through:
+-- that records anchors too, and the anchors on the player and target frames
+-- belong to Edit Mode. Handing one of those back would drag a frame the user
+-- moved while the skin was on to wherever it stood at login. The anchors are
+-- kept all the same, because target of target is the one frame this file
+-- re-anchors, and it is the only one ever given them back.
+local function RememberFrame(entry)
+	if entry.frameShot then
+		return
 	end
-	local px = ns.Pixel(to)
-	local converted = ns.UI.Convert(size, from, to)
-	if not converted or not px or px <= 0 then
-		return nil
+	local frame, shot = entry.frame, {}
+	pcall(function()
+		shot.width, shot.height = frame:GetWidth(), frame:GetHeight()
+		shot.points = {}
+		for index = 1, frame:GetNumPoints() do
+			shot.points[index] = { frame:GetPoint(index) }
+		end
+	end)
+	entry.frameShot = shot
+end
+
+local function RestoreFrame(entry)
+	local shot = entry.frameShot
+	if not shot then
+		return
 	end
-	return math.floor(converted / px + 0.5)
+	local frame = entry.frame
+	entry.frameShot = nil
+	pcall(function()
+		if shot.width and shot.width > 0 and shot.height and shot.height > 0 then
+			frame:SetSize(shot.width, shot.height)
+		end
+		if entry.perched and shot.points and #shot.points > 0 then
+			frame:ClearAllPoints()
+			for _, point in ipairs(shot.points) do
+				frame:SetPoint(point[1], point[2] or frame:GetParent(),
+					point[3], point[4], point[5])
+			end
+		end
+	end)
+	entry.perched = false
+end
+
+-- Whether the unit frame refuses to be touched right now, which is what a
+-- secure unit button does in combat. Everything below the boundary asks this
+-- before it writes, and the caller carries the refusal to the next
+-- PLAYER_REGEN_ENABLED rather than eating a lockdown error.
+local function Blocked(entry)
+	return ns.Blocked(entry.frame)
+end
+
+-- The unit frame, given the block's rectangle in the unit frame's own units.
+--
+-- Read back before it is written for the reason the tick reads a bar back:
+-- this runs on every relayout and a SetSize is a resize of every anchor
+-- underneath it, which on a unit frame is the aura row and the cast bar.
+local function Fit(entry, width, height)
+	local frame, box = entry.frame, entry.box
+	local wide = ns.UI.Convert(width, box, frame)
+	local tall = ns.UI.Convert(height, box, frame)
+	if not wide or not tall or wide <= 0 or tall <= 0 then
+		return
+	end
+	if frame:GetWidth() ~= wide or frame:GetHeight() ~= tall then
+		frame:SetSize(wide, tall)
+	end
+end
+
+-- Edit Mode draws its selection over the system it is dragging, and on this
+-- client the box it drew was not the one on the screen. The default anchor is
+-- the whole frame, which the fit above has now made right on its own; a
+-- client that insets it instead is insetting it by the size of art this file
+-- has already hidden. Pinned to the frame either way, so nothing has to be
+-- assumed about which of the two this client does.
+--
+-- Every step is probed and nothing here exists on a client without Edit Mode,
+-- where all three functions answer false and the skin is unchanged.
+local function PinSelection(entry)
+	local selection = entry.frame.Selection
+	if type(selection) ~= "table" or type(selection.SetAllPoints) ~= "function" then
+		return false
+	end
+	local ok = pcall(function()
+		selection:ClearAllPoints()
+		selection:SetAllPoints(entry.frame)
+	end)
+	return ok
+end
+
+-- Edit Mode re-anchors its own selection whenever it puts one up, so pinning
+-- it once at style time lasts until the next time the user opens Edit Mode.
+-- The hook is the only piece of this file that cannot be taken off again,
+-- which is why it does nothing at all while the skin is off.
+local function HookSelection(entry)
+	local frame = entry.frame
+	if entry.hooked or type(frame.AnchorSelectionFrame) ~= "function"
+		or type(hooksecurefunc) ~= "function" then
+		return false
+	end
+	entry.hooked = pcall(hooksecurefunc, frame, "AnchorSelectionFrame", function()
+		if entry.styled then
+			PinSelection(entry)
+		end
+	end)
+	return entry.hooked
 end
 
 --------------------------------------------------------------------------
@@ -807,17 +919,17 @@ local function Build(entry)
 	entry.powerText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "RIGHT")
 end
 
--- Placed on the portrait's own anchor, sized off the two settings. The anchor
--- is measured because only the client knows where the frame sits; the size is
--- a setting because only you know how tall you want it, and the first shipped
--- guess was a square as tall as Blizzard's portrait, which crowded the text
--- and dropped target of target straight onto the target's auras.
+-- Sized off the two settings, placed on the frame's own corner, and the frame
+-- resized to what came out.
 --
--- Everything is anchored off `slot`, the portrait's square. The block cannot
--- be anchored by a corner of its own, because the anchor read off the client
--- names the portrait's corner and the portrait is on the left of the player
--- frame and the right of the target frame: the same anchor has to grow the
--- block in opposite directions. The square is the fixed point in both.
+-- The corner is the one the portrait is on, which is the left of the player
+-- frame and the right of the target frame, so the block grows away from it in
+-- opposite directions on the two and every offset below carries the sign that
+-- says which. Nothing is measured off Blizzard's layout any more. The block
+-- used to hang on the portrait's own anchor and be clamped to the room the
+-- frame had left, which put the drawn rectangle somewhere inside a much
+-- bigger invisible one; the frame is the drawn rectangle now, so there is no
+-- room to be left and nothing to clamp against.
 local function Place(entry)
 	local spec, frame = entry.spec, entry.frame
 
@@ -835,23 +947,6 @@ local function Place(entry)
 	local side = math.max(math.floor(ns.db.skinHeight * spec.scale + 0.5), 16)
 	local width = math.max(math.floor(ns.db.skinWidth * spec.scale + 0.5), 60)
 
-	-- Never draw wider or taller than the frame being skinned. The space
-	-- around these rectangles is not empty: the target's auras run along the
-	-- bottom of the target frame and target of target sits in the same strip.
-	--
-	-- The frame is not on the grid, so neither of its measurements is a pixel
-	-- count until it has crossed the scale between us. Comparing 168 pixels
-	-- against 232 of Blizzard's units is comparing two different things, and
-	-- the answer looks like a clamp that fires when it should not.
-	local room = Pixels(ns.Measure(frame, "GetWidth"), frame, entry.box)
-	if room and room > 60 then
-		width = math.max(math.min(width, room - side - 2), 50)
-	end
-	local tall = Pixels(ns.Measure(frame, "GetHeight"), frame, entry.box)
-	if tall and tall > 20 and side > tall then
-		side = tall
-	end
-
 	-- LEFT is the side the portrait is on, RIGHT the side the gauge runs to,
 	-- and pull is the sign that turns an inset into an offset on whichever
 	-- edge that leaves. Mirroring the frame swaps all three and nothing else.
@@ -859,33 +954,25 @@ local function Place(entry)
 	local gaugeEdge = spec.mirror and "LEFT" or "RIGHT"
 	local pull = spec.mirror and 1 or -1
 
-	local shot = entry.portrait and memory[entry.portrait]
-	local anchor = shot and shot.points and shot.points[1]
-
-	entry.slot:ClearAllPoints()
-	if anchor then
-		-- The offsets in there were read off Blizzard's own anchor and are
-		-- measured in Blizzard's units. Hanging the block on them unconverted
-		-- puts it out by the ratio between the two scales, which on this
-		-- machine is a fifth of the block's width. Converted, then snapped:
-		-- the origin under it is still a fraction the client owns, but nothing
-		-- this file adds makes it worse.
-		entry.slot:SetPoint(anchor[1], anchor[2] or frame, anchor[3],
-			(Pixels(anchor[4], frame, entry.box) or 0) * px,
-			(Pixels(anchor[5], frame, entry.box) or 0) * px)
-	else
-		local half = math.floor(side / 2)
-		entry.slot:SetPoint("TOP" .. portraitEdge, frame, "TOP" .. portraitEdge,
-			-pull * half * px, -half * px)
-	end
-	entry.slot:SetSize(side * px, side * px)
-	entry.slot:SetFrameLevel(frame:GetFrameLevel())
-
+	-- The block first, on the frame's corner, then the frame given the block's
+	-- rectangle. In that order: the fit converts the block's size out of the
+	-- grid and into the frame's units, and a block that has not been sized yet
+	-- would hand it last tick's numbers.
 	entry.box:ClearAllPoints()
-	entry.box:SetPoint("TOP" .. portraitEdge, entry.slot, "TOP" .. portraitEdge, 0, 0)
+	entry.box:SetPoint("TOP" .. portraitEdge, frame, "TOP" .. portraitEdge, 0, 0)
 	entry.box:SetSize((side + width) * px, side * px)
 	entry.box:SetFrameLevel(frame:GetFrameLevel())
 	ns.EdgeSize(entry.box.edges, px)
+
+	Fit(entry, (side + width) * px, side * px)
+	PinSelection(entry)
+
+	-- The portrait's square, which used to be the fixed point the whole block
+	-- hung from and is now just the first cell of it.
+	entry.slot:ClearAllPoints()
+	entry.slot:SetPoint("TOP" .. portraitEdge, entry.box, "TOP" .. portraitEdge, 0, 0)
+	entry.slot:SetSize(side * px, side * px)
+	entry.slot:SetFrameLevel(frame:GetFrameLevel())
 
 	entry.top:ClearAllPoints()
 	entry.top:SetAllPoints(entry.box)
@@ -922,12 +1009,23 @@ local function Place(entry)
 	-- The gauge is everything past the divider. A rail is pinned on both sides
 	-- rather than given a width, so it fills what is left exactly, and its
 	-- height is a whole number of pixels measured down from the top of the box.
+	--
+	-- The level is written rather than inherited. A rail is built as a child of
+	-- the box, which at that moment is still on the level the client handed it,
+	-- and Place then lowers the box out from under it. What the rail is left on
+	-- is whatever the client does with a descendant when its parent moves, and
+	-- the two clients do not agree. Left unwritten it landed level with the
+	-- bars, and a tie is broken by creation order, which the rail wins because
+	-- Blizzard's bar was built years earlier. That put the track over the fill:
+	-- nine tenths of a 20 percent track and one tenth of the gauge, so a target
+	-- at full health drew at 28 percent of its own colour and read as dead.
 	local function Rail(rail, top, height)
 		local y = (top and -1 or -(2 + health)) * px
 		rail:ClearAllPoints()
 		rail:SetPoint("TOP" .. gaugeEdge, entry.box, "TOP" .. gaugeEdge, pull * px, y)
 		rail:SetPoint("TOP" .. portraitEdge, entry.slot, "TOP" .. gaugeEdge, 0, y)
 		rail:SetHeight(height * px)
+		rail:SetFrameLevel(entry.box:GetFrameLevel() + 1)
 	end
 
 	Rail(entry.healthRail, true, health)
@@ -1025,6 +1123,61 @@ local function Place(entry)
 	end
 end
 
+local function EntryFor(key)
+	for _, entry in ipairs(entries) do
+		if entry.spec.key == key then
+			return entry
+		end
+	end
+	return nil
+end
+
+-- Target of target, parked under the target block.
+--
+-- It has to be placed by this file once the target frame is fitted, and only
+-- then. Blizzard anchored that frame against a target frame 100 units tall,
+-- so the moment the target frame is the height of the block instead, its own
+-- anchor points at a corner that has moved and it lands across whatever is
+-- there. Anchored by the edge the two blocks share rather than by the
+-- portrait's: the target is mirrored and target of target is not, so aligning
+-- their outer edges is what puts one portrait under the other.
+--
+-- Both halves are conditional on the target being fitted, because a target
+-- frame that is back at Blizzard's size wants Blizzard's anchor back with it.
+local function Perch(entry)
+	local host = entry.spec.under and EntryFor(entry.spec.under)
+	if not host then
+		return true
+	end
+	local want = entry.styled and host.styled and true or false
+	if want == (entry.perched or false) then
+		return true
+	end
+	if Blocked(entry) then
+		return false
+	end
+	local frame = entry.frame
+	if want then
+		RememberFrame(entry)
+		local edge = "TOP" .. (host.spec.mirror and "RIGHT" or "LEFT")
+		local corner = "BOTTOM" .. (host.spec.mirror and "RIGHT" or "LEFT")
+		frame:ClearAllPoints()
+		frame:SetPoint(edge, host.frame, corner, 0, -TOT_GAP * ns.Pixel(frame))
+		entry.perched = true
+	else
+		local shot = entry.frameShot
+		if shot and shot.points and #shot.points > 0 then
+			frame:ClearAllPoints()
+			for _, point in ipairs(shot.points) do
+				frame:SetPoint(point[1], point[2] or frame:GetParent(),
+					point[3], point[4], point[5])
+			end
+		end
+		entry.perched = false
+	end
+	return true
+end
+
 --------------------------------------------------------------------------
 -- Colour
 --------------------------------------------------------------------------
@@ -1100,10 +1253,6 @@ end
 -- Styling and unstyling
 --------------------------------------------------------------------------
 
-local function Blocked(entry)
-	return ns.Blocked(entry.frame)
-end
-
 local function Style(entry)
 	if entry.styled then
 		return true
@@ -1122,6 +1271,9 @@ local function Style(entry)
 	for _, key in ipairs(TOUCHED) do
 		Snapshot(entry[key])
 	end
+	-- Before Place, which is the first thing here that resizes it.
+	RememberFrame(entry)
+	HookSelection(entry)
 
 	if not entry.box then
 		Build(entry)
@@ -1174,6 +1326,7 @@ local function Unstyle(entry)
 
 	local complete = RestoreArt(entry)
 	EachTouched(entry, Revert)
+	RestoreFrame(entry)
 	return complete
 end
 
@@ -1355,6 +1508,14 @@ function Skin.Apply()
 			pending = true
 		end
 	end
+	-- After every frame has settled, not inside the loop above: where target
+	-- of target goes depends on whether the target frame came out fitted, and
+	-- the target is styled after it on a client that names them in that order.
+	for _, entry in ipairs(entries) do
+		if not Perch(entry) then
+			pending = true
+		end
+	end
 	-- Painted here rather than left to the next tick, because up to a fifth of
 	-- a second of a white gauge is exactly long enough to read as a bug.
 	for _, entry in ipairs(entries) do
@@ -1380,6 +1541,9 @@ function Skin.Relayout()
 				pending = true
 			else
 				Place(entry)
+				if not Perch(entry) then
+					pending = true
+				end
 			end
 		end
 	end
@@ -1404,16 +1568,18 @@ end
 -- What the client actually answered, printed rather than guessed at. Every
 -- number the layout is built from comes out here, so a block that lands in the
 -- wrong place is one line of output rather than another round of inference.
-local function AnchorText(entry)
-	local shot = entry.portrait and memory[entry.portrait]
-	local point = shot and shot.points and shot.points[1]
-	if not point then
-		return "no anchor recorded"
-	end
-	local relative = point[2]
-	local name = relative and relative.GetName and relative:GetName() or "parent"
-	return ("%s to %s %s %d,%d"):format(point[1], name, point[3] or "?",
-		math.floor(point[4] or 0), math.floor(point[5] or 0))
+-- The fit, which is the line to read when Edit Mode's box is not the block.
+-- What the frame was before the skin touched it, and whether this client put
+-- an Edit Mode selection on it for the skin to pin: a client with none is one
+-- where the fit is the whole of the answer.
+local function FitText(entry)
+	local shot = entry.frameShot
+	local was = shot and shot.width and shot.width > 0
+		and ("was %dx%d, "):format(shot.width, shot.height) or ""
+	return ("%sedit mode selection %s%s"):format(was,
+		type(entry.frame.Selection) == "table" and "pinned to the block"
+			or "not on this client",
+		entry.perched and (", parked under the " .. entry.spec.under) or "")
 end
 
 function Skin.Probe()
@@ -1438,7 +1604,7 @@ function Skin.Probe()
 			math.floor((entry.healthbar and memory[entry.healthbar]
 				and memory[entry.healthbar].width) or 0),
 			entry.styled and ("skinned, " .. entry.hidden .. " hidden") or "not skinned"))
-		ns.Print("  portrait anchor " .. AnchorText(entry))
+		ns.Print("  " .. FitText(entry))
 		local kept = {}
 		for slot in pairs(entry.badges) do
 			kept[#kept + 1] = slot
@@ -1496,8 +1662,11 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("PLAYER_TARGET_CHANGED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
+-- Blizzard_EditMode is load on demand, so the selection this file pins may not
+-- exist until the first time the user opens Edit Mode.
+events:RegisterEvent("ADDON_LOADED")
 
-events:SetScript("OnEvent", function(_, event)
+events:SetScript("OnEvent", function(_, event, arg1)
 	if event == "PLAYER_LOGIN" then
 		for _, spec in ipairs(SPECS) do
 			local entry = Resolve(spec)
@@ -1518,6 +1687,13 @@ events:SetScript("OnEvent", function(_, event)
 				ns.Perf.Stop("skin")
 			end
 		end)
+		return
+	end
+
+	if event == "ADDON_LOADED" then
+		if arg1 == "Blizzard_EditMode" then
+			Skin.Relayout()
+		end
 		return
 	end
 

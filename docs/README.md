@@ -1515,12 +1515,39 @@ is why there is no LibHealComm here and no scan of anyone else's casts. It is
 still probed rather than trusted, so a client that drops it draws nothing and
 says so in `/wk status`.
 
-**The anchor is measured, the size is a setting, and the size is now pixels.**
-Only the client knows where the frame sits, so the block is placed on the
-portrait's own first anchor. Only you know how tall you want it, so the height
-and the width are `/wk skin height` and `/wk skin width`, and since the block
-went on the pixel grid those two numbers are counts of screen pixels rather than
-of UI units. On a 1440 tall screen at UI scale 0.65 one unit used to buy 1.22
+**The frame is fitted to the block, and the size is a setting in pixels.**
+The block used to hang off the portrait's own anchor inside a frame five times
+its size, and everything that reads a unit frame's rectangle read that one:
+Edit Mode selected it, snapped it against the other frames and saved it, while
+the thing you could see sat somewhere inside it, and the empty three quarters
+went on eating clicks. So the block is anchored to the frame's own top corner
+now, the one the portrait is on, and `PlayerFrame`, `TargetFrame` and
+`TargetFrameToT` are each resized to the block over them. What Edit Mode drags
+is what is drawn, the hit region is the block, and Blizzard's aura row follows
+the frame in rather than hanging where a 232 by 100 frame left it.
+
+A resize is not a free change, so three things carry it. The original size is
+recorded before the first fit and `/wk skin off` writes it back, without a
+reload, like every other change the skin makes. `SetSize` on a secure unit
+button is a protected action, so it sits behind the same lockdown guard as the
+rest of `Place` and finishes at `PLAYER_REGEN_ENABLED`. And target of target is
+placed by this addon once the target frame is fitted: Blizzard's anchor for it
+was written against a target frame 100 units tall, so the moment that frame is
+34 pixels tall instead, the anchor points at a corner that has moved. It is
+parked three pixels under the target block, on the edge the two share, and it
+goes back to Blizzard's anchor the moment either frame is unskinned.
+
+Edit Mode also draws a selection frame over the system it is dragging. Where
+this client puts one, the skin pins it to the frame, and it post-hooks that
+frame's own `AnchorSelectionFrame` so a re-anchor when the user next opens Edit
+Mode gets pinned again. Both halves are probed by name and neither exists on a
+client without Edit Mode, where the fit alone is the whole of the answer. The
+hook is the one piece of this part that cannot be taken off again, so it does
+nothing at all while the skin is off.
+
+Only you know how tall you want the block, so the height and the width are
+`/wk skin height` and `/wk skin width`, and since the block went on the pixel
+grid those two numbers are counts of screen pixels rather than of UI units. On a 1440 tall screen at UI scale 0.65 one unit used to buy 1.22
 pixels, so the same setting draws a smaller square than it did and the ranges
 reach further up to compensate: 18 to 72 and 90 to 360. Sizing it off Blizzard's
 own portrait, which is what the first version did, gave a square as tall as the
@@ -1534,11 +1561,12 @@ one physical pixel and every size in `Place` is a whole number. The portrait,
 the two status bars and the four state icons are not, and never will be. They
 are regions of a secure unit button, and rescaling one is a protected action
 and a change the skin could not honestly hand back. So two numbers cross that
-boundary and each has a direction. `Pixels()` brings a measurement in: a frame
-width read off `TargetFrame` is 232 of Blizzard's units, not 232 pixels, and
-comparing it against a setting that counts pixels is what makes a clamp fire
-when it should not. `ns.Pixel(frame)` takes a size out: a badge that should be
-18 pixels is written on Blizzard's region as 18 times that.
+boundary, both of them outbound, because nothing read off the client decides a
+size any more. `ns.Pixel(frame)` takes a length out: a badge that should be 18
+pixels is written on Blizzard's region as 18 times that. `Fit()` takes the
+whole block out: 202 by 34 pixels is written on `PlayerFrame` as 165.74 by
+27.90 of its units on this monitor, which is the one number here whose
+exactness is the client's business rather than ours.
 
 The two gauges avoid the question entirely. Each bar is pinned corner to corner
 onto a rail, an empty frame inside the box, rather than given a height. The
@@ -1546,10 +1574,12 @@ client resolves an anchor on the screen rather than in either frame's units, so
 the bar's four corners are our whole pixels and nothing about the bar had to be
 converted or rounded to get there.
 
-What the grid cannot fix is where the block starts. It hangs off the portrait's
-own anchor on a frame that is not on the grid, so the origin is a fraction of a
-pixel no addon can read, exactly as a bar on a nameplate takes its origin from
-wherever the mob is standing. The geometry is exact; the origin is Blizzard's.
+What the grid cannot fix is where the block starts. It sits on the corner of a
+frame that is not on the grid and that Edit Mode positions in its own units, so
+the origin is a fraction of a pixel no addon can read, exactly as a bar on a
+nameplate takes its origin from wherever the mob is standing. The geometry is
+exact; the origin is Blizzard's. What the fit buys is that the rectangle you
+line that origin up with in Edit Mode is now the rectangle you can see.
 
 Numbers, on this monitor, before and after: the power bar was 9.54 units tall,
 which is 11.63 pixels, and is 10; the two text baselines sat at -14.41 and
@@ -1643,21 +1673,23 @@ of the target frame and has its own portrait to keep, so every entry's frame,
 plate and gauge is skipped and every entry's portrait and marker is kept,
 across all three rather than per frame.
 
-**The block never draws outside the frame it is skinning.** Blizzard's art can
-overhang its own frame and ours must not, because the space around these
-rectangles is not empty: the target's buffs and debuffs run along the bottom of
-the target frame and target of target sits in the same strip. The gauge is
-clamped to what is left of the frame's width once the portrait has taken its
-square, and the square is clamped to the frame's height.
+**The block is the frame, so there is nothing left to clamp.** The gauge used
+to be clamped to what was left of the frame's width once the portrait had taken
+its square, and the square to the frame's height, because the space around the
+block was not empty: the target's auras run along the bottom of the target
+frame and target of target sat in the same strip. Both are anchored to the
+frame, the frame is now the block, and both follow it in. The two settings are
+the whole of the size.
 
-That clamp is a guard, not a guarantee, because target of target is parked on
-the aura row by Blizzard itself and ours is opaque where theirs is mostly not.
-So each of the three frames has its own switch under the part's switch,
-`/wk skin tot off` being the one to reach for.
+Target of target is still the frame to turn off first. It is a glance rather
+than something you read, it takes a fixed fraction of both settings, and ours
+is opaque where Blizzard's is mostly not. Each of the three frames has its own
+switch under the part's switch, `/wk skin tot off` being the one to reach for.
 
 **`/wk skin probe` prints what the client answered.** Frame size, whether the
-portrait resolved, the portrait's recorded height and first anchor, the health
-bar's recorded width, and the name of every region hidden. Every number the
+portrait resolved, its recorded height, the health bar's recorded width, what
+the frame measured before the fit, whether this client put an Edit Mode
+selection on it, and the name of every region hidden. Every number the
 layout is built from comes out of that one command, so a block landing in the
 wrong place is one line of output rather than another round of inference.
 
@@ -1862,9 +1894,12 @@ and zero errors.
    It also stands up stubbed `PlayerFrame`, `TargetFrame` and `TargetFrameToT`,
    runs the skin against them, and asserts that the blocks the addon owns are on
    the grid and whole, that both gauges are pinned to their rails, that the
-   anchor offset was converted and not used raw, that the badge widths are even,
-   and that the tick writes neither a bar fill nor a crop it has already
-   written.
+   badge widths are even, and that the tick writes neither a bar fill nor a crop
+   it has already written. It asserts the fit in screen space, which is the only
+   space the block and the unit frame share: each frame covers exactly the piece
+   of screen its block does, target of target is parked under the target block,
+   and turning the skin off hands every frame back the size the stub built it
+   and target of target back its own anchor.
 
    It opens the options window and walks it: every rail entry, every tab under
    it, every row on every tab. It asserts that the window is on the grid and
@@ -2120,10 +2155,22 @@ Everything below was written from the API contract and has never executed:
   before the names, but nothing installed here reads one. Each falls back to the
   Classic global, and a piece that resolves to neither leaves that frame
   unskinned and says so in `/wk status` rather than erroring.
-- Whether the portrait's first anchor is a corner. The block is placed on that
-  anchor whatever it is, so a portrait anchored by its centre puts the block's
-  centre where the portrait's was and the square lands a little off. `side` and
-  `bar` in `SPECS` are the only numbers to change if it does.
+- Whether anything on this client writes a size back onto `PlayerFrame`,
+  `TargetFrame` or `TargetFrameToT` after the fit. `Place` re-fits on every
+  target change, every world entry and every resolution change, so a frame that
+  is written once would come back on the next of those, but one written every
+  frame would fight the skin and show as a block that does not match its own
+  outline.
+- Whether this client's Edit Mode calls its selection frame `Selection` and
+  anchors it through `AnchorSelectionFrame`. Both names are retail's and both
+  are probed before they are touched. If neither is there, the fit still makes
+  the frame's own rectangle the block, which is what Edit Mode draws over by
+  default; if the client insets its selection by the size of the art this part
+  has already hidden, the pin is what corrects it. `/wk skin probe` says which
+  of the two this client is.
+- Whether Edit Mode's magnetism snaps against the frame's rectangle or against
+  the selection's. Both are the block now, so this only matters on a client
+  where the pin did not take.
 - Whether `0.15` is the right crop for a unit portrait on 2.5.6. Blizzard hides
   that dead space under the ring rather than cropping it, so there is no value
   to copy. Too small shows the render's empty border, too large cuts the chin.
