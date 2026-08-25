@@ -48,6 +48,31 @@ function UI.Font(size, flags)
 	return font
 end
 
+-- The smallest glyph an outline can go round without eating it.
+--
+-- UI/Theme.lua already states this rule for panel text: over an opaque surface
+-- an outline "only thickens a twelve pixel glyph until it closes up its own
+-- counters". A cooldown number on a debuff square is over an opaque surface too,
+-- and the enemy bars were drawing those at seven to twelve pixels with an
+-- outline on them. At that size a 3 and an 8 stop being different shapes, which
+-- is a timer you cannot read rather than a timer that looks soft.
+local OUTLINE_FLOOR = 14
+
+-- A number drawn over art rather than over the world: the timer and the stack
+-- count on a debuff square. Outlined where the glyph is big enough to carry one,
+-- flat where it is not, because a closed up glyph is worse than one with no rim.
+--
+-- The floor is a property of the typeface and the outline, not of any part, so
+-- it lives here with the font cache rather than in whichever file happens to
+-- draw a small number first.
+function UI.NumberFont(size)
+	return UI.Font(size, size >= OUTLINE_FLOOR and DEFAULT_FLAGS or "")
+end
+
+function UI.OutlineFloor()
+	return OUTLINE_FLOOR
+end
+
 -- Outlined rather than shadowed, because these sit over the world and a drop
 -- shadow disappears against a dark floor.
 function UI.Label(parent, size, color, justify, flags)

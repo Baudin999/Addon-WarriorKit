@@ -7,10 +7,10 @@ local C, M = UI.Color, UI.Metric
 -- The widgets
 --
 -- Everything the interface is made of that is not a rectangle. A push button, a
--- tick box, a stepper, a cycling value, a value picked off a list, a key
--- capture field, a line of text you type, a strip of buttons where one is
--- chosen, a slot you drop an item into, a character with those slots under it,
--- and a paragraph of prose that sizes itself.
+-- tick box, a stepper, a value you drag, a cycling value, a value picked off a
+-- list, a key capture field, a line of text you type, a strip of buttons where
+-- one is chosen, a slot you drop an item into, a character with those slots
+-- under it, and a paragraph of prose that sizes itself.
 --
 -- Two rules run through all of them and they are the two the panel this
 -- replaced broke.
@@ -529,6 +529,164 @@ function UI.Kit(host)
 
 		return Remember(row, function()
 			value:SetText(tostring(get()))
+		end)
+	end
+
+	-- A value you drag
+	--
+	-- The stepper's sibling, for a setting where the range matters more than the
+	-- number: you want it bigger, so you pull it right. A stepper answers "make
+	-- it one more"; this answers "make it about that big", and the readout says
+	-- where you are while you are still deciding.
+	--
+	-- Built on the client's own Slider frame type, for the reason UI/Scroll.lua
+	-- builds the scrollbar on one: following a cursor means an OnUpdate, and an
+	-- OnUpdate is a ticker this addon would then have to defend forever. The
+	-- client already tracks the drag and reports it once per step. Slider is a
+	-- frame type rather than a template, so it needs no Blizzard XML, but nothing
+	-- installed on 2.5.6 proves it takes a thumb texture from a stranger, so it is
+	-- probed exactly the way the scrollbar probes it and the row falls back to a
+	-- pair of nudge buttons when it refuses. A settings row that cannot be dragged
+	-- is worse than one you have to click; a settings row that raises is worse
+	-- than both.
+	--
+	-- format turns the value into what the readout says, so a caller can write
+	-- "1.25x" or "18 px" without this file learning what either means. Left out,
+	-- the number speaks for itself.
+	function kit.Slider(label, low, high, step, get, set, format)
+		local trackWidth, valueWidth = 116, 40
+		local reserved = trackWidth + valueWidth + M.gutter
+		local row, text = Paired(reserved, M.control)
+		text:SetText(label)
+
+		local value = UI.Label(row, M.font, C.heading, "RIGHT", UI.FLAT)
+		value:SetPoint("TOPRIGHT", 0, -math.floor((M.control - M.font) / 2))
+		value:SetWidth(valueWidth)
+
+		local function Show(current)
+			value:SetText(format and format(current) or tostring(current))
+		end
+
+		local function Commit(current)
+			if current < low then
+				current = low
+			elseif current > high then
+				current = high
+			end
+			-- Snapped here as well as by the client, because the fallback path
+			-- has no client to snap it and because a step the slider reports
+			-- back is one the saved variable has to be able to hold exactly.
+			current = low + math.floor((current - low) / step + 0.5) * step
+			if current == get() then
+				return
+			end
+			set(current)
+			Changed()
+		end
+
+		local track = UI.Box(row, C.sunken, C.edge)
+		track:SetSize(trackWidth, M.control)
+		track:SetPoint("TOPRIGHT", row, "TOPRIGHT", -(valueWidth + M.gutter), 0)
+
+		-- Everything past the frame itself in one pcall rather than probed method
+		-- by method, for the reason UI/Scroll.lua does the same: the thumb is the
+		-- one call nothing here can check by asking.
+		local function Dress(slider)
+			slider:SetOrientation("HORIZONTAL")
+			slider:SetPoint("TOPLEFT", track, "TOPLEFT", M.rowGap, 0)
+			slider:SetPoint("BOTTOMRIGHT", track, "BOTTOMRIGHT", -M.rowGap, 0)
+			slider:SetMinMaxValues(low, high)
+			slider:SetValueStep(step)
+			-- Without this a drag reports every fraction between two stops and
+			-- the step applies only to a click, so a slider that is meant to
+			-- have eleven positions has as many as the track has pixels.
+			if slider.SetObeyStepOnDrag then
+				slider:SetObeyStepOnDrag(true)
+			end
+			slider.thumb = ns.Fill(slider, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
+			slider.thumb:SetSize(M.rowGap + 2, M.control - 2)
+			slider:SetThumbTexture(slider.thumb)
+			slider:SetValue(get())
+		end
+
+		-- A refusal puts the error message in the second slot, not a frame, so
+		-- the failure is cleared before anything below can mistake a string for
+		-- something with a Hide method.
+		local made, slider = pcall(CreateFrame, "Slider", nil, track)
+		if not made then
+			slider = nil
+		end
+		if slider and type(slider.SetOrientation) == "function"
+			and type(slider.SetThumbTexture) == "function" and pcall(Dress, slider) then
+			-- Held, and why the setter does not run until it is let go.
+			--
+			-- The client works a slider's value out from where the cursor is
+			-- against where the track is, every frame of the drag. A setter that
+			-- resizes the window this row is sitting in therefore moves the
+			-- track out from under the cursor, and the next frame reads a value
+			-- off the new geometry: the window is centred, so growing it walks
+			-- the track sideways by a good fraction of its own width and the
+			-- reading collapses or saturates. The two then feed each other and
+			-- the thumb slams between the ends of the range for as long as the
+			-- button is down. That is not a hypothetical. The UI size row is the
+			-- first caller and it is exactly that setter.
+			--
+			-- So a drag shows and does not commit. The readout follows the thumb
+			-- the whole way, and the setting takes the value when the button
+			-- comes up, by which point the cursor is no longer arguing with it.
+			-- A click on the track and a keyboard nudge are not drags and commit
+			-- straight away, because nothing is holding the geometry still.
+			slider:SetScript("OnMouseDown", function()
+				row.held = true
+			end)
+			local function Release()
+				if not row.held then
+					return
+				end
+				row.held = nil
+				Commit(slider:GetValue())
+			end
+			slider:SetScript("OnMouseUp", Release)
+			-- The window can be shut with the button still down, by escape or by
+			-- a reload, and the drag then never ends. Committing on the way out
+			-- keeps what the player had chosen rather than silently dropping it.
+			slider:SetScript("OnHide", Release)
+			slider:SetScript("OnValueChanged", function(_, current)
+				-- Refresh writes the saved value back onto the slider and that
+				-- write fires this. Without the latch the two chase each other
+				-- for a frame every time anything else on the page changes.
+				if row.syncing then
+					return
+				end
+				if row.held then
+					Show(current)
+					return
+				end
+				Commit(current)
+			end)
+			row.slider = slider
+		else
+			if slider then
+				slider:Hide()
+			end
+			track:Hide()
+			local minus = UI.Button(row, { label = "-", width = M.control,
+				onClick = function() Commit(get() - step) end })
+			minus:SetPoint("TOPRIGHT", row, "TOPRIGHT",
+				-(M.control + valueWidth + M.gutter + M.rowGap), 0)
+			local plus = UI.Button(row, { label = "+", width = M.control,
+				onClick = function() Commit(get() + step) end })
+			plus:SetPoint("TOPRIGHT", row, "TOPRIGHT", -(valueWidth + M.gutter), 0)
+		end
+
+		return Remember(row, function()
+			local current = get()
+			if row.slider then
+				row.syncing = true
+				row.slider:SetValue(current)
+				row.syncing = nil
+			end
+			Show(current)
 		end)
 	end
 

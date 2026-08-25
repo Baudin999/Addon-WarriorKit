@@ -15,6 +15,7 @@ local ROWS = {
 	{ key = "icon", label = "charge icon", hz = 10 },
 	{ key = "bars", label = "enemy bars", hz = 5 },
 	{ key = "skin", label = "unit frames", hz = 5 },
+	{ key = "meter", label = "meters", hz = 5 },
 }
 
 local lines = {}   -- every font string the sampler writes, and what writes it
@@ -116,7 +117,7 @@ end
 
 ns.Register({
 	name = "performance",
-	order = 9,
+	order = 10,
 
 	defaults = {
 		-- On, because two clock reads on forty ticks a second is not a cost
@@ -201,7 +202,7 @@ ns.Register({
 				return SlotLine(entry)
 			end)
 		end
-		Readout("all four", Total)
+		Readout("all five", Total)
 		Readout("this tab, sampling", function()
 			return Milliseconds(ns.Perf.SelfCost()) .. " per second while open"
 		end)

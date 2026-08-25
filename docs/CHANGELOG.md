@@ -1,5 +1,324 @@
 # Changelog
 
+## Unreleased
+
+### The numbers on a debuff square were outlined into blobs
+
+The threat line and the targeted-by line went up to 14 for the same reason from
+the other direction. Those two sit in the gap above the gauge, over whatever the
+player is standing on, so the outline is not a choice there: with nothing behind
+the glyph, flat is not softer, it is gone. That makes the floor a hard minimum
+rather than a switch point, and 12 outlined was the one combination that is
+wrong both ways at once, too small to carry a rim and unable to drop it. The
+empty bar is two pixels taller as a result, and the harness derives that height
+from `ns.UI.OutlineFloor` rather than carrying a literal, so the two move
+together.
+
+The name, the health number and the level tag are the same 12 and stay outlined.
+They sit on an opaque fill, which makes the outline a contrast judgement rather
+than a necessity, and a pale name on a pale gauge is a real argument for keeping
+it. The gate encodes that distinction rather than flattening it: outlined text
+over the world must reach the floor, text over a fill may be either.
+
+An outline is a rim drawn round a glyph and it costs the same pixels whatever
+the glyph is, so below about fourteen it has eaten the counters: the hole in a
+6, the waist of an 8. UI/Theme.lua has said so since the panel was rebuilt, and
+said it about panel text, which is why panel text is flat. The timer and the
+stack count on a debuff square are over the icon's own opaque art for exactly
+the same reason, and they were being drawn outlined at seven to twelve pixels.
+
+Both go through `ns.UI.NumberFont` now, which keeps the outline while the glyph
+is big enough to carry one and drops it when it is not. The harness sets every
+icon size in the range and reads the size and flags back off the font object,
+so it fails on the old values at every one of them.
+
+Worth saying rather than hiding, because the harness prints it: every number on
+a square comes out flat, at every setting. Both are capped by a design constant
+under the floor, the timer by the bar's own text size and the count by
+`COUNT_TEXT_SIZE`, so no icon setting can lift either to fourteen. That means a
+56 pixel square still carries a 12 pixel timer, which is legible and small for
+the room it has. Left alone for now; it is a look decision rather than a defect.
+
+Found by the other half of this pair working on the meters, which had the same
+bug in its own rows. A number can be arithmetically correct at every zoom and
+still be the wrong number, and the layout is exactly as consistent as it would
+be if it were right.
+
+### two meters, and no window round them
+
+A damage and healing readout and a threat readout, side by side in one
+draggable frame. A row is a spec icon, a name, a number and a class-coloured bar
+as long as that player's share of the top row. Clicking the damage header swaps
+it to healing. There is no breakdown to open, because there is nothing behind a
+row to open.
+
+Nothing is drawn but the rows. No backdrop, no border, no title bar. Details
+draws a window because it is a tool you go and use; this is two columns you read
+out of the corner of one eye during a pull, and every pixel of chrome around
+them is a pixel of the fight underneath.
+
+**The threat pane differentiates.** The percentage is the client's own, where
+100 means that player takes the mob, thresholds and talents already folded in.
+What is new is the rate it is changing at and what that projects to: 82% and
+falling is a rogue who stopped, 82% and climbing four points a second is a rogue
+who takes the mob in four and a half seconds, and the header says which and
+names them. Smoothed over half second samples, because threat arrives in lumps
+the size of a Sinister Strike and two raw samples can differ by twenty points
+either way. Nothing past a minute is projected.
+
+On Classic Era the pane says `no api` and stays empty. Vanilla computes no
+threat, so every Classic threat meter is a combat log simulation carrying a
+table of coefficients, and that is a different addon.
+
+**Spec icons on clients with no specs.** There is no `GetSpecialization` here.
+A character is three talent trees with points in them, and the tree with the
+most is the whole of what anyone means by a spec. Yours is read directly and
+re-read on every point spent. Everybody else's is an inspect, inside about 28
+yards and out of combat, one in flight and never the same person twice inside a
+minute. Until one lands the row draws a class icon, so the icons sharpen over
+the first minute in a group and never block anything while they do.
+
+**One clock for every row.** Details gives each player their own activity
+window, which flatters whoever stopped early. This divides everyone by the
+segment, which is the only version where the rows add up to the total on the
+header. Overheal is subtracted: a healer who lands 40k into a full health bar
+has healed nothing.
+
+**The group filter is the parsing.** The combat log carries the party next door,
+both sides of the duel by the mailbox and every mob in the pack. A pet's damage
+is its owner's, so a hunter does not read as half a hunter. What a member
+summoned is theirs, taken from `SPELL_SUMMON`, because a totem is not a pet and
+no unit token points at one. Everything else is nobody's.
+
+**A new gate.** `METER_CHURN_KB`, measured with the clock running rather than
+frozen. A meter with nothing moving allocates nothing at all, because every
+write is guarded on a number rather than on the string it would make, and a gate
+on that figure would be measuring the guards. With the seconds ticking over it
+measures 0.16 KB per fifty ticks and the gate is 0.20.
+
+Worth knowing which way round the guards pay. In a fight they save almost
+nothing, 0.16 against 0.27, because the numbers move every tick and the string
+gets built either way. What they buy is the meter sitting on screen between
+pulls, which is most of a session, at nothing at all.
+
+**The icon is 27 pixels because that is a size the client stores.** Every other
+number in the layout follows it. A spell icon is kept at 64 texels, the crop
+takes the five texel border off each edge, and the 54 that are left are exact
+only where they halve onto whole pixels: 54 and 27, nothing between. So a row
+icon draws 27 at zoom 1 off the half size copy and 54 at zoom 2 off the full
+one, which is as sharp as a spell icon gets. The row is the icon with a pixel
+above and below, 29, so the icon decides the height rather than the text. Six
+rows and a header is 196 pixels tall, two panes and a gap is 408 wide.
+
+**Every string on it is 14, because every string on it is outlined.** With no
+background behind them the outline is the only thing between a number and a pale
+floor, so unlike a timer on a debuff square this text cannot fall back to flat
+when it shrinks: flat over the world is gone rather than soft. That makes the
+outline floor a hard minimum here, and both sizes sit on it. The number lives in
+`UI/Text.lua` and the harness reads it from there, so the meters and the bars
+are held to one figure.
+
+That is the second version of those numbers. The first drew a 12 pixel icon and
+11 pixel row text, and the report from the client was two words: shrunken, and
+not sharp. The pane headers were wrong too, at 12, and nobody reported those
+because nobody reads a header twice. The harness fails now on an icon size the
+client does not store, at either zoom that can be exact, and on any outlined
+string under the floor.
+
+**Five defects, four of them caught before any of this ran in a client.** The
+group total was `0/0` before the first fight of a session, and the client's
+`string.format` renders that nan as `-9223372036854775808`; that was the first
+tick of every login. The threat header never wrote at all while the state was
+quiet, because the guard's unchanged case was identical to the state the pane
+starts in with nothing drawn. The same header then stuck on `no target` after a
+target came back. An inspect the client never answered parked the queue on that
+GUID for the rest of the session, because there is no failure event for one.
+And the fifth is the sizing above, which no gate caught because there was no
+gate until a person looked at the thing. Each has a test that fails without its
+fix.
+
+### bars zoom does something now
+
+It never has. The setting shipped, the panel offered 1 to 3, the README called
+it the answer to sizes being absolute on a high resolution monitor, and the bar
+measured 180 by 62 screen pixels at zoom 1, 2 and 3 alike. Fonts included.
+
+One line did it. Every design number in `LayoutWidget` was multiplied by
+`ns.Pixel(widget)`, which on the grid is `1 / zoom`, and the scale the zoom put
+on the frame multiplied it straight back. The two cancel exactly, which is why
+nothing looked wrong: the bar was not the wrong size, it was the same size.
+
+The fix is a second conversion with a name of its own. `ns.UI.Pixel` is one
+screen pixel and is for hairlines and insets, which stay one pixel when the
+design grows. `ns.UI.Unit` is one pixel of the design, which on the grid is one
+unit whatever the zoom, because turning that unit into a 2x2 or 3x3 block of
+screen pixels is the entire job of a zoom. Every size in the bars goes through
+`Unit` now and every edge still goes through `Pixel`.
+
+    zoom 1   bar 180 x  62 px, gauge 23, icon 20, hairline 1
+    zoom 2   bar 360 x 122 px, gauge 44, icon 40, hairline 1
+    zoom 3   bar 540 x 182 px, gauge 65, icon 60, hairline 1
+
+At `bars zoom 2` a debuff square draws 38 screen pixels of art, which is about
+what Blizzard's own buff buttons draw and roughly twice what this addon has been
+drawing. If you have ever thought the bars looked small on a big monitor, that
+is the setting, and it works now.
+
+**The sharp icon size moves with the zoom.** The art is the square times the
+zoom, less two pixels for the border, sampled from 54 texels. So one stored
+texel lands on one pixel at `bars icon 29` when the zoom is 1, and at
+`bars icon 28` when the zoom is 2, where it draws the full 54 texel copy one for
+one and is the sharpest a spell icon gets. `EnemyBars.IconAdvice` works that out
+rather than carrying a table, the panel and `bars icon` both read it, and the
+harness checks the number it names against the texel arithmetic at each zoom.
+
+**Two new gates.** The harness converts the bar to screen pixels and compares it
+against what the design asked for at each whole zoom, which is the check that
+was missing: every assertion in that file was written in the widget's own units,
+and in those units the bar genuinely does change size at 2x. It is half as many
+units on twice the scale, the same picture, and no measurement taken in units
+can tell the two apart. The whole-pixel anchor sweep now runs at 1x, 2x and 3x
+as well, because a number that was even before a multiply is not obliged to stay
+even after one.
+
+### The bars were half a pixel low, and the icons were never the size they said
+
+Reported as "the bar does not feel crisp", which it was not, and the cause was
+not the nameplate. Three anchor offsets in the enemy bars were fractions of a
+pixel, and a frame whose own origin sits half a pixel off a boundary has every
+edge, every glyph and every icon inside it drawn across two rows.
+
+The one that mattered: `PLATE_BAR_HEIGHT / 2 + 1` is 11.5, it is the offset that
+puts the widget where Blizzard's bar was, and replace is the style that ships.
+Every bar this addon has ever drawn in its default configuration was half a
+pixel low. The level tag's number was 2.5 pixels off centre, half the width of
+the reaction stripe, on every bar as well. The threat line lands on a half pixel
+at any odd debuff icon size. All three now round, and the comment explaining why
+rounding is necessary was already sitting three lines above the worst of them.
+
+An odd bar cannot be centred on a point and land on a boundary, so half a pixel
+of centring is what this gives up. It is not visible. The smear was.
+
+**The harness walks every anchor now.** Every frame the addon puts on the pixel
+grid, every offset on it, and it fails on anything that is not a whole number of
+physical pixels: 2843 offsets across 1779 regions. This class of bug is
+invisible in review because the arithmetic that causes it looks like centring,
+and it cannot be caught by reading one file, so it is caught by a number
+instead.
+
+**Debuff icons: 29, and nothing else.** The panel said 16 and 32 were the sizes
+that draw sharp. Neither is, and the square has never been drawn at either. The
+client keeps each texture at half the size of the one above and picks the pair
+nearest what was asked for, so a draw is exact only where the sampled texels
+halve down to the drawn pixels. `ns.UI.Icon` crops five texels a side to lose
+the border baked into the art, leaving 54 rather than 64, and the square draws a
+one pixel border with the art inset inside it, so a 20 pixel setting draws 18
+pixels of icon. 54 halves to 27, plus the border is 29, and 13.5 is not a number
+of pixels. Nothing else in the range lands.
+
+The shipped 20 draws 18 from 54, which is 58 percent of the way between two
+stored copies and about as blended as the range gets. The default has not moved,
+because moving it rewrites a setting nobody touched, but the row is a slider
+that steps by one instead of a stepper that stepped by two, so 29 is reachable
+from the panel for the first time, and the note names it. `bars icon` says the
+same thing. `EnemyBars.IconAdvice` is the one place that arithmetic lives and
+the harness checks the size it names is genuinely exact rather than trusting the
+note. 29 is the answer at `bars zoom 1`, which is the default and was the only
+zoom that existed in practice when this was written. See the zoom entry above
+for what the number becomes once the zoom does something.
+
+The ceiling on `bars icon` is 56 now rather than 32. 54 texels survive the crop
+and the border takes two pixels, so 56 is the largest square where a stored
+texel still lands on a screen pixel; above it the client stretches 54 texels
+over more pixels than it has and the art softens again. The old 32 was chosen
+when the row was four fixed icons on a 180 pixel bar, and it put the whole top
+half of the useful range out of reach: with `bars zoom` inert, this number was
+the only way to get a big icon, and it stopped well short of one.
+
+What this does not fix: a nameplate's own origin is wherever the mob is
+standing, which is a moving fraction of a pixel no addon can read. The bar is
+exact in geometry and in its offset from the plate now. Where the plate lands is
+still the client's business.
+
+### A settings tab, and a slider that says how big you want this
+
+An eleventh part, `Settings`, one rail entry in `/wk` holding the preferences
+that belong to no feature. There is one of them so far. `UI size` is a slider
+from 0.5x to 3x in quarters, and it sizes the windows this addon draws: the
+`/wk` panel and the Clutter window. `/wk uisize 1.5` does the same from a macro
+and `/wk uisize` on its own prints where you are.
+
+It multiplies the whole step the screen already picks rather than replacing it,
+which is the arithmetic that makes the control mean what its name says. On a 4K
+panel the addon has been drawing everything at 2x on its own; dragging to 0.5x
+there lands back on the design size with every edge still exact. On a 1080p
+panel 0.5x is genuinely half.
+
+Eleven stops, and they do not all cost the same. A stop keeps the pixel grid
+when the size times the screen's own step comes out whole, which on most
+monitors means 1x, 2x and 3x. The other eight ask for a one pixel hairline at
+1.25 or 1.75 pixels and get a blur. `bars zoom` refuses a fraction outright and
+still does, because a bar over a mob's head is the addon deciding what you see
+in the middle of a pull. A settings window is you deciding how you want to read
+it, so the fraction is allowed here and the panel names the stops that stay
+exact and tells you which one you are on. The slash word refuses anything off a
+step rather than rounding it, so a macro and the slider reach the same values.
+
+`kit.Slider` is new in the widget kit, built on the client's `Slider` frame type
+the way the scrollbar is, with a pair of nudge buttons behind a probe for a
+client that refuses the type. Both paths are in the harness now, which is how
+the fallback turned out to be broken on the day it was written: `pcall` returns
+the error message where the frame would be, and the fallback called `Hide` on a
+string.
+
+A drag updates the readout and commits nothing until the button comes up. The
+client reads a slider's value off where the cursor sits against where the track
+sits, so a setter that resizes the window the slider is in walks the track out
+from under the cursor and the next frame reads a value off geometry that has
+moved. Committing live made the thumb slam between 0.5x and 3x for as long as
+the button was held. The harness holds the button, moves the thumb, asserts
+nothing was saved, lets go and asserts the value landed.
+
+### The debuff row on the enemy bars is yours
+
+It tracked Sunder Armor, Demoralizing Shout, Thunder Clap and Rend, in that
+order, because those are the four an editor once typed into a constant. Which
+debuffs matter is a spec question and a fight question, so the list is a setting
+now. `/wk` has a Debuffs tab under Enemy bars: a row per tracked spell with the
+icon, the name and a button that takes it off, a picker holding every debuff a
+warrior can apply on these clients, and a field that takes any spell ID at all.
+`bars debuff add 12162` does the same from a macro, and `bars debuff` prints
+what is on the bar.
+
+Ten slots. Matching is still on the localised name, so rank 1 is enough, every
+rank counts and another warrior's Sunder still shows up desaturated. Two IDs
+that resolve to one name are refused, because they would be two identical
+squares lighting up and going out together. An ID this client cannot name keeps
+its place and draws nothing, so a spell added on the TBC character comes back
+when you log into it rather than vanishing from an Era session.
+
+`bars icon` sizes one square between 16 and 32 pixels. Those two are the sizes
+the client actually holds a copy of, a 64 texel icon halved and halved again, so
+they are the two that draw sharp and everything between them is a blend of two
+copies. The panel says which of the two you are on rather than pretending the
+stepper is flat. The timer and the stack count now scale with the square: a
+fourteen pixel number on a sixteen pixel icon covered the art it was
+annotating.
+
+The row still ends flush with the right end of the gauge, which is what it was
+always for. What it does when it no longer fits is new: it wraps upwards, one
+right aligned row at a time, so ten 32 pixel icons on a 180 pixel bar become two
+rows of five instead of four icons hanging off the left edge into the mob next
+to it. The bar grows by exactly the rows it gained, and the nameplate driver is
+told the new height, so two mobs standing together still get two bars that do
+not cover each other. An empty list costs the row entirely and leaves the threat
+line its own height.
+
+`Command.Number` now refuses a fraction instead of taking it. Every caller is a
+pixel count, a bar count or a zoom step, all three of which sit on the pixel
+grid, and `bars zoom 1.5` used to be accepted and put every edge in the addon
+onto a half pixel.
+
 ## 1.7
 
 ### Three chores the client makes you do by hand

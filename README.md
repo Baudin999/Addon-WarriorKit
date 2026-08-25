@@ -14,6 +14,13 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   in `/wk`.
 - **Threat-coloured enemy bars.** They replace the Blizzard nameplate and carry
   a tag saying what the kill is worth.
+- **A damage meter and a threat meter, side by side.** One row per player: the
+  spec icon, the name, the number, and a class-coloured bar as long as their
+  share of the top row. Clicking the header swaps damage for healing. The threat
+  side is the client's own percentage, where 100 means that player takes the
+  mob, and beside it the seconds until they get there at the rate they are
+  gaining. Nothing is drawn but the rows, so it sits on the screen rather than
+  over it. There is no breakdown to open, because there is nothing behind a row.
 - **A warrior bar loadout**, with a backup of whatever it replaced, plus an
   Edit Mode layout carried inside the addon.
 - **Stripped bar art**, so the bars read as a row of icons. `/wk art on` puts

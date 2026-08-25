@@ -36,7 +36,7 @@ end
 
 ns.Register({
 	name = "comfort",
-	order = 8,
+	order = 9,
 
 	defaults = {
 		-- All three on. Every one of them is a thing you would otherwise do by

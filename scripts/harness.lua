@@ -30,11 +30,17 @@ local UI_SCALE = 0.65
 -- plate path and the list path both.
 --
 -- A ratchet, not a ceiling. It was 51.76 before the list collector stopped
--- allocating and 4.10 after, so the gate went in at 5.0. It measures 0.17 now,
--- so the gate is 0.5. Anything that improves this lowers the number in the same
--- commit, because a threshold parked at the worst case the codebase ever had is
--- a licence to go back there.
-local LIST_CHURN_KB = 0.5
+-- allocating and 4.10 after, so the gate went in at 5.0. Then it measured 0.17
+-- and the gate came to 0.5. It measures 0.09 now and the gate is 0.25.
+--
+-- What moved it from 0.17 to 0.09 is not something this file can point at. It
+-- was not the zoom section added above it, which measures the same 0.09 with
+-- that section switched off, and it is stable to the digit across runs. Most
+-- likely the scene reaching the measurement is warmer than it was. The number is
+-- lowered anyway, because a threshold parked above what the code actually does
+-- is a licence to go back there, and if the cause turns out to be a scene change
+-- rather than an improvement the gate will say so the next time it moves.
+local LIST_CHURN_KB = 0.25
 
 -- The skin's tick, in KB per fifty ticks across all three unit frames. Same
 -- kind of ratchet. It was 18.75 while the level tag was built and then compared
@@ -42,6 +48,26 @@ local LIST_CHURN_KB = 0.5
 -- that changes when the unit does, and 0.00 once the tags were interned. Set at
 -- the smallest figure that is not a claim the measurement can never move.
 local SKIN_CHURN_KB = 0.5
+
+-- The meters' tick, in KB per fifty ticks, with a party of three, both panes up
+-- and the clock running. Same kind of ratchet as the two above, measured on a
+-- harder scene.
+--
+-- Those two are quoted with nothing moving, and a meter with nothing moving
+-- allocates nothing at all: every write in Meter/Window.lua is guarded on a
+-- number rather than on the string it would make, so a frozen meter measures
+-- 0.00 here. A gate on that figure would be measuring the guards.
+--
+-- So the clock moves inside the loop. The seconds tick over, the rates fall
+-- between them, and the strings that draw both have to be built. That is a
+-- meter's real steady state and it cannot be zero. It measures 0.16 and the
+-- gate is 0.20.
+--
+-- Which is not an argument that the guards are wasted. In a fight they save
+-- very little, because the numbers move every tick and the string gets built
+-- either way. What they buy is the other case entirely: a meter sitting on
+-- screen between pulls, which is most of a session, costs nothing at all.
+local METER_CHURN_KB = 0.2
 
 --------------------------------------------------------------------------
 -- The stub
@@ -77,6 +103,10 @@ local function region(kind, parent, name)
 		kind = kind, parent = parent, name = name, scripts = {}, shown = true,
 		width = 0, height = 0, scale = 1, ignoreScale = false, frameLevel = 0,
 		regions = {}, children = {}, colorWrites = 0,
+		-- The slider and status bar fields, present on every region so the
+		-- writes below never grow the table. A status bar's value is set on the
+		-- enemy bars ticker and the churn gate measures that tick.
+		value = 0, valueMin = nil, valueMax = nil, valueStep = nil,
 	}, Region)
 	if name then
 		_G[name] = self
@@ -265,7 +295,22 @@ end
 function Region:SetSnapToPixelGrid(v) self.snapped = v end
 function Region:SetTexelSnappingBias(v) self.bias = v end
 function Region:SetFontObject(o) self.fontObject = o end
-function Region:GetFont() return self.fontPath, self.fontSize, self.fontFlags end
+
+-- A font string given a font object answers that object's font, which is what
+-- the client does and is the only way to read back a size the addon never set
+-- directly. Every string in this addon takes a shared font object rather than
+-- its own copy, on purpose, so without this fall-through nothing here could
+-- assert what size anything is drawn at.
+function Region:GetFont()
+	if self.fontPath then
+		return self.fontPath, self.fontSize, self.fontFlags
+	end
+	local object = self.fontObject
+	if object then
+		return object.fontPath, object.fontSize, object.fontFlags
+	end
+	return nil
+end
 function Region:SetFont(path, size, flags)
 	self.fontPath, self.fontSize, self.fontFlags = path, size, flags
 	return true
@@ -310,6 +355,48 @@ function Region:SetShown(v) self.shown = v and true or false end
 function Region:SetAlpha(v) self.alpha = v end
 function Region:GetAlpha() return self.alpha or 1 end
 function Region:IsShown() return self.shown end
+
+-- A slider that behaves like one.
+--
+-- Real, rather than the metatable's no-op, because two things in the addon are
+-- built on the client's Slider type and both of them are the client tracking a
+-- drag on the addon's behalf: the scrollbar in UI/Scroll.lua and the UI size row
+-- in UI/Widgets.lua. A no-op here would let a slider that never reports a value,
+-- never snaps to its step and never clamps to its range pass every assertion in
+-- this file, which is the whole widget.
+--
+-- The step is applied on the way in, which is what SetObeyStepOnDrag buys on the
+-- real client: the setting can only ever hold a value the panel can also show.
+-- OnValueChanged fires on every write, including the addon's own, because that
+-- is what the client does and it is exactly what the latches in both callers
+-- exist to survive.
+function Region:SetMinMaxValues(low, high)
+	self.valueMin, self.valueMax = low, high
+end
+function Region:GetMinMaxValues() return self.valueMin, self.valueMax end
+function Region:SetValueStep(step) self.valueStep = step end
+function Region:GetValueStep() return self.valueStep end
+
+function Region:SetValue(value)
+	value = tonumber(value) or 0
+	local low, high = self.valueMin, self.valueMax
+	if low and self.valueStep and self.valueStep > 0 then
+		value = low + math.floor((value - low) / self.valueStep + 0.5) * self.valueStep
+	end
+	if low and value < low then
+		value = low
+	end
+	if high and value > high then
+		value = high
+	end
+	self.value = value
+	local handler = self.scripts.OnValueChanged
+	if handler then
+		handler(self, value)
+	end
+end
+
+function Region:GetValue() return self.value end
 -- Real, rather than the metatable's no-op, because the panel hides every
 -- section but one and a stub that answers shown to all of them would let a
 -- layout that puts seven pages on top of each other pass.
@@ -420,10 +507,34 @@ local function constant(v) return function() return v end end
 _G.UnitExists = function(u) return guids[u] ~= nil end
 _G.UnitGUID = function(u) return guids[u] end
 _G.UnitIsUnit = function(a, b) return a == b end
-_G.UnitClass = function() return "Warrior", "WARRIOR" end
-_G.UnitDetailedThreatSituation = function() return true, 3, 100, 0, 1200 end
+-- Class and name are per unit where a test has said so and the shipped answer
+-- everywhere else. Every module that reads them localises the global at load,
+-- so a test cannot swap the function afterwards; it writes to these tables
+-- instead, which is why they are here rather than in the section that uses them.
+local unitClass, unitName = {}, {}
+_G.UnitClass = function(unit)
+	local class = unitClass[unit]
+	if class then
+		return class, class
+	end
+	return "Warrior", "WARRIOR"
+end
+
+-- Threat, with a hook for the same reason. Core/Core.lua resolves
+-- UnitDetailedThreatSituation once at load and calls the local from then on, so
+-- the meters' section installs a reader here rather than replacing the global,
+-- which would do nothing at all.
+local threatReader
+_G.UnitDetailedThreatSituation = function(source, unit)
+	if threatReader then
+		return threatReader(source, unit)
+	end
+	return true, 3, 100, 0, 1200
+end
+
 _G.UnitIsDead, _G.UnitCanAttack = constant(false), constant(true)
-_G.UnitName, _G.UnitHealth, _G.UnitHealthMax = constant("Target Dummy"), constant(4200), constant(9000)
+_G.UnitName = function(unit) return unitName[unit] or "Target Dummy" end
+_G.UnitHealth, _G.UnitHealthMax = constant(4200), constant(9000)
 -- Heal prediction, which both clients register and both back with an event.
 -- Written as a variable rather than a constant because the skin has to be
 -- driven through three states to be worth testing: nothing on the way, a heal
@@ -434,8 +545,14 @@ _G.UnitLevel, _G.UnitReaction = constant(62), constant(2)
 -- True for exactly one unit, so the skin's player frame takes the class colour
 -- through ClassTint and the other two fall to the reaction colour. Both halves
 -- of Tint run, and the per class cache gets filled once and read after that.
-_G.UnitIsPlayer = function(unit) return unit == "player" end
-_G.UnitAffectingCombat, _G.UnitAura = constant(false), constant(nil)
+local realPlayers = { player = true }
+_G.UnitIsPlayer = function(unit) return realPlayers[unit] == true end
+-- Who is swinging. Table driven because the meters open a segment on the first
+-- damage anyone in the group does, and the whole point of that rule is the pull
+-- somebody else made while you are still walking in.
+local inCombat = {}
+_G.UnitAffectingCombat = function(unit) return inCombat[unit] == true end
+_G.UnitAura = constant(nil)
 _G.UnitPowerType, _G.UnitPower, _G.UnitPowerMax = constant(1), constant(40), constant(100)
 _G.UnitPlayerOrPetInParty, _G.UnitPlayerOrPetInRaid = constant(false), constant(false)
 _G.UnitIsGroupLeader, _G.UnitIsGroupAssistant = constant(true), constant(false)
@@ -454,8 +571,20 @@ _G.GetQuestGreenRange, _G.InCombatLockdown = constant(8), constant(false)
 _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 _G.tinsert, _G.date = table.insert, os.date
 _G.GetBuildInfo = function() return "2.5.6", "69110", "2025-01-01", 20506 end
-_G.RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 } }
-_G.GetSpellInfo = function(id) return "Spell" .. id, nil, "Interface\\Icons\\A" .. id end
+_G.RAID_CLASS_COLORS = {
+	WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
+	HUNTER = { r = 0.67, g = 0.83, b = 0.45 },
+	PRIEST = { r = 1.00, g = 1.00, b = 1.00 },
+}
+-- Every id names a spell except the block above 900000, which names none. The
+-- debuff list has a path for an id this client does not know and a stub that
+-- answered every number would leave that path unreachable.
+_G.GetSpellInfo = function(id)
+	if type(id) == "number" and id >= 900000 then
+		return nil
+	end
+	return "Spell" .. id, nil, "Interface\\Icons\\A" .. id
+end
 _G.GetSpellTexture = function(id) return "Interface\\Icons\\A" .. id end
 _G.GetSpellCooldown = function() return 0, 0 end
 _G.IsUsableSpell, _G.IsSpellInRange, _G.IsSpellKnown = constant(true), constant(1), constant(true)
@@ -768,6 +897,70 @@ _G.GetShapeshiftForm = constant(1)
 _G.UISpecialFrames, _G.SlashCmdList, _G.Enum = {}, {}, {}
 
 --------------------------------------------------------------------------
+-- The combat log, the talent trees and the inspect handshake
+--
+-- Everything the meters are built on. All four are read through a local the
+-- module took at load, so all four are declared here, before the addon runs,
+-- and a test moves the data under them rather than replacing the function.
+--
+-- The log is modelled as the sixteen values the client hands over, because the
+-- addon reads five of them out of fixed positions and the positions are the
+-- whole contract: a stub that answered a named table would let a parser that
+-- reads the wrong slot pass.
+--------------------------------------------------------------------------
+
+local logArgs = {}
+_G.CombatLogGetCurrentEventInfo = function()
+	return unpack(logArgs, 1, 16)
+end
+
+-- Three trees per character, points and an icon each. Two shapes, because
+-- GetTalentTabInfo has two signatures across these clients: one leads with a
+-- numeric tab id and one leads with the tree's name, and the addon tells them
+-- apart on the type of the first value. Both are reachable from a test.
+local talentShape = "modern"
+local talentTrees = {
+	player = {
+		{ name = "Arms", icon = "Interface\\Icons\\Ability_Warrior_SavageBlow", points = 31 },
+		{ name = "Fury", icon = "Interface\\Icons\\Ability_Warrior_InnerRage", points = 20 },
+		{ name = "Protection", icon = "Interface\\Icons\\Ability_Warrior_DefensiveStance", points = 0 },
+	},
+	inspect = {
+		{ name = "Beast Mastery", icon = "Interface\\Icons\\Ability_Hunter_BeastTaming", points = 11 },
+		{ name = "Marksmanship", icon = "Interface\\Icons\\Ability_Marksmanship", points = 40 },
+		{ name = "Survival", icon = "Interface\\Icons\\Ability_Hunter_SwiftStrike", points = 0 },
+	},
+}
+
+_G.GetNumTalentTabs = function() return 3 end
+_G.GetTalentTabInfo = function(index, inspect)
+	local trees = inspect and talentTrees.inspect or talentTrees.player
+	local tree = trees[index]
+	if not tree then
+		return nil
+	end
+	if talentShape == "old" then
+		return tree.name, tree.icon, tree.points
+	end
+	return index, tree.name, "", tree.icon, tree.points, tree.name
+end
+
+local inspecting
+_G.NotifyInspect = function(unit) inspecting = unit end
+_G.ClearInspectPlayer = function() inspecting = nil end
+_G.CheckInteractDistance = constant(true)
+_G.UnitIsConnected = constant(true)
+
+-- The sheet every class icon is cut out of. Only the three classes the meters'
+-- section puts in a group, because a coordinate this file invented for a class
+-- nothing draws would be a fixture proving nothing.
+_G.CLASS_ICON_TCOORDS = {
+	WARRIOR = { 0, 0.25, 0, 0.25 },
+	HUNTER = { 0, 0.25, 0.25, 0.5 },
+	PRIEST = { 0.5, 0.75, 0, 0.25 },
+}
+
+--------------------------------------------------------------------------
 -- Load and drive
 --------------------------------------------------------------------------
 
@@ -1002,6 +1195,232 @@ local art = widget.icons[1].texture
 check(art.texcoord and math.abs(art.texcoord[1] * 64 - 5) < 1e-9,
 	"icon crop is not on a texel boundary")
 check(art.snapped == false and art.bias == 0, "icon texture is still being snapped")
+
+--------------------------------------------------------------------------
+-- The debuff row
+--
+-- Which debuffs it shows and how big they are are both settings, so what is
+-- asserted here is the shape the settings have to keep producing: the row is
+-- as long as the list, it ends flush with the right end of the gauge however
+-- long that is, and when it no longer fits it wraps upwards rather than hanging
+-- icons off the left edge of the bar.
+--
+-- Anchors rather than resolved rectangles. This stub records what a frame was
+-- anchored to and does no layout, which is the honest thing to assert against:
+-- the anchor is the addon's half of the contract and the arithmetic on it is
+-- the client's.
+--------------------------------------------------------------------------
+
+-- Every square hangs off the gauge's top right corner, so the row a square is
+-- in is its y offset and its place in that row is its x. Returns the rows, top
+-- to bottom, each one a list of x offsets.
+local function IconRows(bar)
+	local rows, order = {}, {}
+	for index = 1, #ns.EnemyBars.Spells() do
+		local holder = bar.icons[index]
+		local point, relative, relativePoint, x, y = holder:GetPoint()
+		check(point == "BOTTOMLEFT" and relative == bar.box and relativePoint == "TOPRIGHT",
+			("debuff %d is anchored %s to %s, not BOTTOMLEFT to the gauge's TOPRIGHT")
+				:format(index, point, tostring(relativePoint)))
+		check(holder:IsShown(), ("debuff %d is on the list and hidden"):format(index))
+		if not rows[y] then
+			rows[y] = {}
+			order[#order + 1] = y
+		end
+		local row = rows[y]
+		row[#row + 1] = x
+	end
+	for index = #ns.EnemyBars.Spells() + 1, #bar.icons do
+		check(not bar.icons[index]:IsShown(),
+			("debuff slot %d is off the list and still shown"):format(index))
+	end
+	table.sort(order)
+	local out = {}
+	for _, y in ipairs(order) do
+		out[#out + 1] = rows[y]
+	end
+	return out
+end
+
+-- The whole of the alignment contract: the last square in every row ends on the
+-- gauge's right edge, and the squares in a row are one gap apart.
+local function CheckPacked(what)
+	local bar = ns.EnemyBars.WidgetFor("nameplate1")
+	local px = ns.UI.Pixel(bar)
+	local size, gap = ns.db.barsIconSize * px, 4 * px
+	local rows = IconRows(bar)
+	for index, row in ipairs(rows) do
+		table.sort(row)
+		local right = row[#row] + size
+		check(math.abs(right) < 1e-9,
+			("%s: row %d ends %.0f px from the gauge's right edge, not on it"):format(what, index, right))
+		for column = 2, #row do
+			check(math.abs(row[column] - row[column - 1] - (size + gap)) < 1e-9,
+				("%s: row %d has a %.0f px step between squares, expected %.0f")
+					:format(what, index, row[column] - row[column - 1], size + gap))
+		end
+	end
+	-- The gauge, the strip the icon rows take, and the line above the lot.
+	local wanted = (21 + 2) + #rows * (size + gap) + 15 * px
+	check(math.abs(bar:GetHeight() - wanted) < 1e-9,
+		("%s: the bar is %.0f px tall over %d icon row(s), expected %.0f")
+			:format(what, bar:GetHeight(), #rows, wanted))
+	return rows
+end
+
+check(#ns.EnemyBars.Spells() == 4, "the bar does not ship tracking four debuffs")
+CheckPacked("as it ships")
+
+-- One more, and the row is one longer and still ends where it did.
+check((ns.EnemyBars.AddSpell(12162)), "Deep Wounds would not go on the list")
+check(#ns.EnemyBars.Spells() == 5, "adding a debuff did not lengthen the list")
+local packed = CheckPacked("with a fifth")
+check(#packed == 1 and #packed[1] == 5,
+	("five 20 px squares on a 180 px bar should be one row of five, got %d row(s)"):format(#packed))
+
+-- The same id twice would be two squares lighting up together, and an id this
+-- client cannot name would be a blank square.
+check(not (ns.EnemyBars.AddSpell(12162)), "the same debuff went on the list twice")
+check(not (ns.EnemyBars.AddSpell(900001)), "an id this client cannot name went on the list")
+check(not (ns.EnemyBars.AddSpell("rend")), "a word went on the list as a spell id")
+check(#ns.EnemyBars.Spells() == 5, "a refused add changed the list anyway")
+
+-- Off again, and the row is back where it started.
+check((ns.EnemyBars.RemoveSpell(12162)), "Deep Wounds would not come off the list")
+check(#ns.EnemyBars.Spells() == 4, "removing a debuff did not shorten the list")
+CheckPacked("after a remove")
+
+-- The size reaches the squares, and a longer list on a wider square wraps
+-- upwards rather than running off the left end of the bar.
+ns.db.barsIconSize = 32
+ns.EnemyBars.ApplyLayout()
+ns.EnemyBars.Rebuild()
+check(ns.EnemyBars.WidgetFor("nameplate1").icons[1]:GetWidth()
+		== 32 * ns.UI.Pixel(ns.EnemyBars.WidgetFor("nameplate1")),
+	"bars icon 32 did not reach the squares")
+CheckPacked("at 32 px")
+
+for _, spellID in ipairs({ 1715, 12323, 355, 694, 1161, 676 }) do
+	check((ns.EnemyBars.AddSpell(spellID)), ("%d would not go on the list"):format(spellID))
+end
+check(#ns.EnemyBars.Spells() == 10, "the list did not reach ten")
+check(not (ns.EnemyBars.AddSpell(5246)), "an eleventh debuff went on a list capped at ten")
+local wrapped = CheckPacked("ten at 32 px on a 180 px bar")
+-- 180 holds five 32 px squares with 4 px between them, so ten is two rows.
+check(#wrapped == 2 and #wrapped[1] == 5 and #wrapped[2] == 5,
+	("ten squares should wrap to two rows of five, got %d row(s)"):format(#wrapped))
+
+-- Emptying the list leaves the threat line its own height and nothing else.
+for index = #ns.EnemyBars.Spells(), 1, -1 do
+	ns.EnemyBars.RemoveSpell(ns.EnemyBars.Spells()[index])
+end
+check(#ns.EnemyBars.Spells() == 0, "the list would not empty")
+do
+	local bare = ns.EnemyBars.WidgetFor("nameplate1")
+	local px, unit = ns.UI.Pixel(bare), ns.UI.Unit(bare)
+	-- Built from the design rather than from one number, so the zoom and the
+	-- outline floor both reach it. The gauge is 21 with a hairline each side,
+	-- the strip above it is the threat line's own height, and 15 is the room the
+	-- name over the plate takes. The strip is the floor rather than the bar's
+	-- text size because that line sits over the world and cannot go flat, which
+	-- is the whole reason it is 14 and not 12.
+	local strip = math.max(12, ns.UI.OutlineFloor())
+	local wanted = 21 * unit + 2 * px + (4 + strip + 15) * unit
+	check(math.abs(bare:GetHeight() - wanted) < 1e-9,
+		("with nothing tracked the bar is %.0f px tall, expected %.0f"):format(bare:GetHeight(), wanted))
+	check(not bare.icons[1]:IsShown(), "an empty list still shows a square")
+end
+
+-- Back to the shipped scene, because the churn figure below is quoted against
+-- four debuffs at twenty pixels and a ratchet measured on another list is a
+-- ratchet measuring something else.
+ns.db.barsIconSize = 20
+ns.EnemyBars.ResetSpells()
+check(#ns.EnemyBars.Spells() == 4, "the reset did not put the four back")
+CheckPacked("after a reset")
+widget = ns.EnemyBars.WidgetFor("nameplate1")
+
+--------------------------------------------------------------------------
+-- bars zoom actually scales the bar
+--
+-- It did not, for the whole life of the setting. Every design number in
+-- LayoutWidget was multiplied by ns.Pixel(widget), which on the grid is 1/zoom,
+-- and the scale the zoom put on the frame multiplied it straight back. The bar
+-- measured 180 by 62 screen pixels at zoom 1, 2 and 3 alike, fonts included.
+--
+-- Nothing caught it because every assertion in this file was written in the
+-- widget's own units, and in those units the bar really does change: it is half
+-- as many units at 2x on twice the scale, which is the same picture. The only
+-- way to see it is to convert to screen pixels and compare against what the
+-- design asked for, which is what this does.
+--
+-- The hairline is deliberately not scaled. An edge is one screen pixel at every
+-- zoom, the rule UI/Window.lua already follows for every rule in the options
+-- window, so the box is the gauge plus two pixels rather than the gauge times
+-- the zoom.
+--------------------------------------------------------------------------
+
+do
+	local shipped = ns.db.barsZoom
+	local function screen(frame, units)
+		return units / ns.UI.Pixel(frame)
+	end
+	local function at(zoom)
+		ns.db.barsZoom = zoom
+		ns.EnemyBars.ApplyLayout()
+		ns.EnemyBars.Rebuild()
+	end
+
+	local widthAtOne
+	for _, zoom in ipairs{1, 2, 3} do
+		at(zoom)
+
+		local wide = screen(widget, widget:GetWidth())
+		local gauge = screen(widget, widget.box:GetHeight())
+		local icon = screen(widget, widget.icons[1]:GetWidth())
+		local hair = screen(widget, widget.box.edges[1].height)
+		if zoom == 1 then
+			widthAtOne = wide
+		end
+
+		check(math.abs(wide - ns.db.barsWidth * zoom) < 1e-6,
+			("at %dx the bar is %.1f screen pixels wide, the design asked for %d")
+				:format(zoom, wide, ns.db.barsWidth * zoom))
+		check(math.abs(gauge - (21 * zoom + 2)) < 1e-6,
+			("at %dx the gauge box is %.1f screen pixels, expected %d")
+				:format(zoom, gauge, 21 * zoom + 2))
+		check(math.abs(icon - ns.db.barsIconSize * zoom) < 1e-6,
+			("at %dx a debuff square is %.1f screen pixels, the design asked for %d")
+				:format(zoom, icon, ns.db.barsIconSize * zoom))
+		check(math.abs(hair - 1) < 1e-6,
+			("at %dx the hairline is %.2f screen pixels, not one"):format(zoom, hair))
+
+		for _, measure in ipairs{wide, gauge, icon} do
+			check(math.abs(measure - math.floor(measure + 0.5)) < 1e-6,
+				("at %dx something came out %.3f screen pixels"):format(zoom, measure))
+		end
+
+		-- The assertion the old code would have failed, stated on its own so the
+		-- failure reads as "the zoom does nothing" rather than as a size being
+		-- off by a bit.
+		if zoom == 3 then
+			check(math.abs(wide - widthAtOne) > 1e-6,
+				("the bar is %.1f screen pixels wide at both 1x and 3x, so the zoom does nothing")
+					:format(wide))
+		end
+	end
+
+	at(3)
+	print(("zoom   bar %.0f px wide at 1x and %.0f at 3x, icon %.0f px, hairline stays 1 px")
+		:format(widthAtOne, screen(widget, widget:GetWidth()),
+			screen(widget, widget.icons[1]:GetWidth())))
+	at(shipped)
+end
+
+-- Rebuilt several times by the section above, so the reference the checks below
+-- use is taken again rather than assumed to have survived.
+widget = ns.EnemyBars.WidgetFor("nameplate1")
+check(widget ~= nil, "no bar on nameplate1 after the zoom sweep")
 
 -- The driver has been told how much room a bar wants.
 check(cvars.nameplateMotion == "1", "nameplates were not asked to stack")
@@ -1314,6 +1733,190 @@ skinChurn(200)
 local writesBefore = _G.PlayerFrame.healthbar.fill.colorWrites
 local blockChurn = skinChurn(200)
 local flattenWrites = _G.PlayerFrame.healthbar.fill.colorWrites - writesBefore
+
+--------------------------------------------------------------------------
+-- How big a debuff square can be before the client blends two copies
+--
+-- The file used to say 16 and 32 were the sharp sizes. Nobody could have caught
+-- that by reading, because the two things that make it false are in different
+-- files: UI/Draw.lua crops five texels off each edge of the art, leaving 54 of
+-- 64, and EnemyBars.lua insets the art one pixel inside the square's border, so
+-- the drawn size is two less than the number in the panel. 54 halves to 27, so
+-- the only setting in the range that puts one stored texel on one pixel is 29,
+-- and the stepper stepped by two and could not reach it.
+--
+-- Checked against the arithmetic rather than against a list, so a change to the
+-- crop moves the answer here as well as in the panel.
+--------------------------------------------------------------------------
+
+do
+	local low, high = ns.EnemyBars.IconRange()
+	local texels = ns.UI.IconTexels()
+	check(texels == 54, ("the crop leaves %s texels, not 54"):format(tostring(texels)))
+
+	-- Once per zoom, because the drawn size is the setting times the zoom less
+	-- the border, so which setting is exact moves when the zoom does. At 1x it is
+	-- 29 drawing 27 off the half size copy. At 2x it is 28 drawing 54 off the
+	-- full size copy, which is the sharpest a spell icon can be drawn.
+	local sharpAt = {}
+	for _, zoom in ipairs{1, 2, 3} do
+		local exact = {}
+		for size = low, high do
+			local drawn, isExact = ns.EnemyBars.IconAdvice(size, zoom)
+			check(drawn == size * zoom - 2,
+				("at %dx a %d square draws %d pixels of art, not %d")
+					:format(zoom, size, drawn, size * zoom - 2))
+
+			-- The truth, worked out here from the texel count rather than taken
+			-- from the function under test.
+			--
+			-- Non-negative steps only. A whole number of halvings down from 54
+			-- texels is a stored copy landing one texel to a pixel. A whole
+			-- number the other way is the client stretching 54 texels over 108
+			-- pixels, which is clean magnification and is not the same claim, so
+			-- it does not count as exact and the panel must not offer it as one.
+			local steps = math.log(texels / drawn) / math.log(2)
+			local shouldBeExact = steps > -1e-9
+				and math.abs(steps - math.floor(steps + 0.5)) < 1e-9
+			check(isExact == shouldBeExact,
+				("at %dx, %d draws %d pixels from %d texels, %.3f copies down, and IconAdvice says %s")
+					:format(zoom, size, drawn, texels, steps, isExact and "exact" or "blended"))
+
+			if isExact then
+				exact[#exact + 1] = size
+			end
+		end
+		sharpAt[zoom] = exact
+	end
+
+	local function listed(zoom)
+		return table.concat(sharpAt[zoom], ", ")
+	end
+
+	-- Two at 1x now that the ceiling reaches the second one: 29 draws 27 off the
+	-- half size copy, 56 draws the full 54 and is the sharpest a spell icon gets.
+	-- At 2x the zoom has already doubled the square, so 28 is the same 54 pixels
+	-- and nothing else in the range lands.
+	check(listed(1) == "29, 56", ("1x is sharp at %s, expected 29, 56"):format(listed(1)))
+	check(listed(2) == "28", ("2x is sharp at %s, expected 28"):format(listed(2)))
+	check(ns.EnemyBars.IconAdvice(56, 1) == 54,
+		"56 at 1x does not draw the full 54 texel copy one for one")
+	check(ns.EnemyBars.IconAdvice(28, 2) == 54,
+		"28 at 2x does not draw the full 54 texel copy one for one")
+
+	-- The advice points at the nearer of the two, not simply the largest.
+	local _, _, near20 = ns.EnemyBars.IconAdvice(20, 1)
+	local _, _, near50 = ns.EnemyBars.IconAdvice(50, 1)
+	check(near20 == 29, ("at 20 the panel points at %s, not 29"):format(tostring(near20)))
+	check(near50 == 56, ("at 50 the panel points at %s, not 56"):format(tostring(near50)))
+
+	check(ns.EnemyBars.DescribeIcon(20, 1):find("29", 1, true) ~= nil,
+		"the note at 20 does not name the size that is sharp: " .. ns.EnemyBars.DescribeIcon(20, 1))
+	check(ns.EnemyBars.DescribeIcon(29, 1):find("one stored texel per pixel", 1, true) ~= nil,
+		"the note at 29 does not say it is exact: " .. ns.EnemyBars.DescribeIcon(29, 1))
+
+	local advertised = sharpAt[1][1]
+
+	-- The sharp size is odd, and half of an odd icon is where the threat line
+	-- used to land. Laid out at it here so the anchor check at the end of this
+	-- file sees the odd case as well as the even one it gets from the default.
+	local shipped = ns.db.barsIconSize
+	ns.db.barsIconSize = advertised
+	ns.EnemyBars.ApplyLayout()
+	ns.EnemyBars.Rebuild()
+	local _, _, _, _, threatY = widget.threatText:GetPoint()
+	check(math.abs(threatY - math.floor(threatY + 0.5)) < 1e-6,
+		("an odd icon put the threat line at %.3f pixels"):format(threatY))
+
+	-- Every number on a debuff square, at every size the square can be set to.
+	--
+	-- An outline is a rim drawn round the glyph, so it costs the same number of
+	-- pixels whatever the glyph is, and below about fourteen it has eaten the
+	-- counters: the hole in a 6, the waist of an 8. The bars drew these outlined
+	-- at seven to twelve pixels, which is where a stack count stops being a
+	-- digit. Read back off the font object rather than off the constant, because
+	-- the size a string ends up at is the smaller of the design size and a
+	-- fraction of the icon, and it is the second one that produced the bad
+	-- values.
+	local floor = ns.UI.OutlineFloor()
+	local outlined, flat = 0, 0
+	for size = low, high do
+		ns.db.barsIconSize = size
+		ns.EnemyBars.ApplyLayout()
+		ns.EnemyBars.Rebuild()
+		local holder = widget.icons[1]
+		for _, part in ipairs{ { "timer", holder.timer }, { "count", holder.count } } do
+			local _, drawnAt, flags = part[2]:GetFont()
+			check(drawnAt ~= nil,
+				("the %s on a %d square reports no font"):format(part[1], size))
+			if drawnAt then
+				check(drawnAt >= floor or flags == "",
+					("at icon %d the %s is %d pixels and still outlined, under the %d floor")
+						:format(size, part[1], drawnAt, floor))
+				if flags == "" then
+					flat = flat + 1
+				else
+					outlined = outlined + 1
+				end
+			end
+		end
+	end
+	-- Every one of them comes out flat, and that is the honest result rather than
+	-- a branch that never ran. Both numbers are capped by a design constant
+	-- below the floor, the timer by the bar's own text size and the count by
+	-- COUNT_TEXT_SIZE, so no icon setting can lift either to fourteen. Worth
+	-- knowing rather than hiding: it means a 56 pixel square still carries a 12
+	-- pixel timer, which is legible but small for the room it has.
+	check(outlined == 0,
+		("%d numbers on a debuff square are outlined, and the caps should make that impossible")
+			:format(outlined))
+
+	-- So the branch itself is checked where it lives, rather than through a call
+	-- site that can only ever reach one side of it.
+	local _, small, smallFlags = ns.UI.NumberFont(floor - 1):GetFont()
+	local _, big, bigFlags = ns.UI.NumberFont(floor):GetFont()
+	check(small == floor - 1 and smallFlags == "",
+		("NumberFont at %d came back %s with flags %q"):format(floor - 1,
+			tostring(small), tostring(smallFlags)))
+	check(big == floor and bigFlags == "OUTLINE",
+		("NumberFont at %d came back %s with flags %q"):format(floor,
+			tostring(big), tostring(bigFlags)))
+
+	-- And the other side of the same rule, across every string the bar draws.
+	--
+	-- An outline is not optional over the world: with nothing behind the glyph,
+	-- flat is not softer, it is gone. So outlined text has to be at or above the
+	-- floor, because there is no degradation to fall back on. Text over an opaque
+	-- fill may be either, and which one is a contrast judgement the layout is
+	-- allowed to make.
+	--
+	-- The two that sit in the gap above the gauge were 12 and outlined, which is
+	-- the one combination that is wrong both ways at once: too small to carry a
+	-- rim and unable to drop it. The three over the fill are the same size and
+	-- are not listed here, because an opaque backing makes the outline a choice.
+	local OVER_THE_WORLD = {
+		{ "threat line", function(w) return w.threatText end },
+		{ "targeted by", function(w) return w.targetedBy end },
+	}
+	for _, entry in ipairs(OVER_THE_WORLD) do
+		local _, drawnAt, flags = entry[2](widget):GetFont()
+		check(flags ~= "", ("the %s went flat, and it has no background to be flat over")
+			:format(entry[1]))
+		check(drawnAt and drawnAt >= floor,
+			("the %s is %s pixels over the world, under the %d floor, and cannot drop its outline")
+				:format(entry[1], tostring(drawnAt), floor))
+	end
+
+	print(("fonts  %d numbers on a square, all flat; %d strings over the world, all outlined at %d px or more")
+		:format(flat, #OVER_THE_WORLD, floor))
+
+	print(("icons  %d texels sampled, range %d to %d; sharp at %s square at 1x, %s at 2x")
+		:format(texels, low, high, listed(1), listed(2)))
+
+	ns.db.barsIconSize = shipped
+	ns.EnemyBars.ApplyLayout()
+	ns.EnemyBars.Rebuild()
+end
 
 print(("grid   %s"):format(ns.UI.Describe()))
 print(("bar    %.0f x %.0f px, box %.0f, tag %.0f, icon %.0f, hairline %.0f")
@@ -1676,6 +2279,284 @@ if window then
 		:format(window.width, window.height, window.zoom, #window.parts, tabs, rows, wrapped))
 	print(("panel  viewport %.0f x %.0f, tallest section %.0f, clipping by %s")
 		:format(window.view.width, window.view.height, tallest, window.view.mechanism))
+
+	ns.Options.Hide()
+end
+
+--------------------------------------------------------------------------
+-- The UI size slider
+--
+-- The one control in the addon that resizes the thing you are looking at while
+-- you hold it, which is also the one that can put a window off the bottom of the
+-- screen if the clamp in Window:Resize is ever lost. So it is driven here the
+-- way a player drives it: through the client's own Slider, at every stop, with
+-- the geometry measured after each one.
+--
+-- Three questions, and none of them is answerable by reading the source.
+--
+-- Does the window survive the top of the range. At 3x the panel wants 452 units
+-- of a screen that has 480 of them left after the zoom, so the clamp has to fire
+-- and the result still has to be a whole number of units and still has to fit.
+--
+-- Do the design metrics stay whole. Zoom multiplies the scale, not the numbers,
+-- so every row must still be an integer count of units at 1.25x. A row that came
+-- back fractional would mean the size had leaked into the layout, which is the
+-- bug this arithmetic exists to avoid.
+--
+-- Does the addon tell the truth about the cost. A quarter stop puts a hairline
+-- on a fraction of a pixel and the panel says so; a whole stop does not and the
+-- panel says that instead. Both sentences are read off UI.Exact, so asserting on
+-- them is asserting the panel cannot claim a grid it does not have.
+--------------------------------------------------------------------------
+
+if window then
+	ns.Options.Show()
+
+	local Settings = ns.Settings
+	local screen = ns.UI.ScreenZoom()
+
+	check(ns.db.uiSize == 1, ("the size starts at %s, not 1"):format(tostring(ns.db.uiSize)))
+	check(window.zoom == screen,
+		("the panel opened at zoom %s on a screen that asks for %d")
+			:format(tostring(window.zoom), screen))
+
+	-- The row the player actually drags, found the way the panel finds anything:
+	-- through the parts recorded on the window. Nothing reaches into the feature
+	-- for it.
+	-- Named, not "the last slider on any page". The debuff icon row is a slider
+	-- now too, and picking whichever came last would silently test the wrong
+	-- control the next time a part gains one.
+	local size
+	for _, part in ipairs(window.parts) do
+		if part.name == "Settings" then
+			for _, widget in ipairs(part.kit.widgets) do
+				if widget.slider then
+					size = widget.slider
+				end
+			end
+		end
+	end
+	check(size ~= nil, "no UI size slider was built, so the client refused the Slider type")
+
+	local sliders = 0
+	for _, part in ipairs(window.parts) do
+		for _, widget in ipairs(part.kit.widgets) do
+			if widget.slider then
+				sliders = sliders + 1
+			end
+		end
+	end
+	check(sliders == 2, ("%d sliders in the panel, expected the UI size and the debuff icon")
+		:format(sliders))
+
+	if size then
+		local low, high = size:GetMinMaxValues()
+		check(low == Settings.LOW and high == Settings.HIGH,
+			("the slider runs %s to %s, the setting runs %s to %s")
+				:format(tostring(low), tostring(high),
+					tostring(Settings.LOW), tostring(Settings.HIGH)))
+		check(size:GetValueStep() == Settings.STEP,
+			("the slider steps by %s, the setting steps by %s")
+				:format(tostring(size:GetValueStep()), tostring(Settings.STEP)))
+
+		local stops, widest, tallest = 0, 0, 0
+		local stop = Settings.LOW
+		while stop <= Settings.HIGH + 1e-6 do
+			stops = stops + 1
+			size:SetValue(stop)
+
+			local where = Settings.Label(stop)
+			check(ns.db.uiSize == stop,
+				("%s on the slider saved %s"):format(where, tostring(ns.db.uiSize)))
+			check(window.zoom == screen * stop,
+				("%s left the window at zoom %s, not %s")
+					:format(where, tostring(window.zoom), tostring(screen * stop)))
+			check(whole(window.width) and whole(window.height),
+				("%s left the window %.2f x %.2f, not a whole number of units")
+					:format(where, window.width, window.height))
+			check(window.height * window.zoom <= SCREEN_H,
+				("%s put %.0f pixels of window on a %d pixel screen")
+					:format(where, window.height * window.zoom, SCREEN_H))
+
+			-- The zoom multiplies the scale and must not reach the layout, so
+			-- every row on the section showing is still whole units.
+			local part = window.parts[1]
+			for _, cell in ipairs(part.sections[part.current or 1].stack.cells) do
+				check(whole(cell.height),
+					("%s made a row %.3f units tall"):format(where, cell.height))
+			end
+
+			local said = Settings.Describe()
+			if ns.UI.Exact(screen * stop) then
+				check(said:find("exact", 1, true) ~= nil,
+					("%s is on the grid and the panel does not say so: %s"):format(where, said))
+			else
+				check(said:find("soft", 1, true) ~= nil,
+					("%s is off the grid and the panel does not say so: %s"):format(where, said))
+			end
+			check(said:find(where, 1, true) ~= nil,
+				("%s is set and the panel reads %s"):format(where, said))
+
+			local wide, tall = Settings.Pixels()
+			if wide > widest then
+				widest, tallest = wide, tall
+			end
+			stop = stop + Settings.STEP
+		end
+
+		check(stops == 11, ("%d stops between %s and %s, not 11")
+			:format(stops, tostring(Settings.LOW), tostring(Settings.HIGH)))
+
+		-- Which stops stay on the grid is a property of the monitor, not a
+		-- constant, so the note that names them is generated and asserted rather
+		-- than typed. This screen contributes a whole step of 1, so the exact
+		-- stops are the three whole sizes and nothing else.
+		local grid = Settings.Grid()
+		local named = 0
+		local at = Settings.LOW
+		while at <= Settings.HIGH + 1e-6 do
+			local listed = grid:find(Settings.Label(at), 1, true) ~= nil
+			check(listed == ns.UI.Exact(screen * at),
+				("%s is %s the grid and the note %s it: %s"):format(Settings.Label(at),
+					ns.UI.Exact(screen * at) and "on" or "off",
+					listed and "names" or "leaves out", grid))
+			if listed then
+				named = named + 1
+			end
+			at = at + Settings.STEP
+		end
+		check(named == 3, ("%d stops are exact at screen zoom %d, not 3"):format(named, screen))
+
+		-- A drag, which is the case the widget is shaped around. The setting has
+		-- to sit still while the button is down, because the window this slider
+		-- is sitting in is the window the setting resizes, and a track that
+		-- moves out from under the cursor mid-drag makes the client read the
+		-- next value off geometry that has already changed.
+		Settings.Set(1)
+		size:GetScript("OnMouseDown")(size)
+		size:SetValue(2.75)
+		check(ns.db.uiSize == 1,
+			("a held drag committed %s before the button came up"):format(tostring(ns.db.uiSize)))
+		check(window.zoom == screen,
+			("a held drag resized the window to zoom %s under the cursor")
+				:format(tostring(window.zoom)))
+		size:GetScript("OnMouseUp")(size)
+		check(ns.db.uiSize == 2.75,
+			("letting go saved %s, not the 2.75 the thumb was on"):format(tostring(ns.db.uiSize)))
+		check(window.zoom == screen * 2.75,
+			("letting go left the window at zoom %s"):format(tostring(window.zoom)))
+
+		-- Shut with the button still down, by escape or by a reload. The drag
+		-- never ends and the value would otherwise be dropped.
+		Settings.Set(1)
+		size:GetScript("OnMouseDown")(size)
+		size:SetValue(1.75)
+		size:GetScript("OnHide")(size)
+		check(ns.db.uiSize == 1.75,
+			("a drag interrupted by the window closing saved %s"):format(tostring(ns.db.uiSize)))
+
+		-- Past the end. The client clamps its own slider and Settings.Snap
+		-- clamps everything that never went through one, which is what a saved
+		-- variable edited by hand meets.
+		size:SetValue(Settings.HIGH + 5)
+		check(ns.db.uiSize == Settings.HIGH,
+			("dragging past the end saved %s"):format(tostring(ns.db.uiSize)))
+		check(Settings.Snap(99) == Settings.HIGH and Settings.Snap(-1) == Settings.LOW,
+			"Snap let a value outside the range through")
+		check(Settings.Snap(1.3) == 1.25,
+			("Snap put 1.3 on %s"):format(tostring(Settings.Snap(1.3))))
+
+		-- The macro path refuses what the slider cannot reach, rather than
+		-- rounding it into something that nearly works.
+		check(ns.Command.Step("1.3", Settings.LOW, Settings.HIGH, Settings.STEP, "UI size") == nil,
+			"the slash word rounded an off-step value instead of refusing it")
+		check(ns.Command.Step("2.25", Settings.LOW, Settings.HIGH, Settings.STEP, "UI size") == 2.25,
+			"the slash word refused a value that is on a step")
+
+		-- Every window on the grid, not only the one this section measures. The
+		-- Clutter window is built on first use and inherits the size then.
+		Settings.Set(2)
+		for index = 1, #ns.UI.Windows do
+			check(ns.UI.Windows[index].zoom == screen * 2,
+				("window %d stayed at zoom %s while the size went to 2x")
+					:format(index, tostring(ns.UI.Windows[index].zoom)))
+		end
+
+		Settings.Set(1)
+		check(window.zoom == screen and window.height == 452,
+			("back at 1x the window is %.0f units tall at zoom %s")
+				:format(window.height, tostring(window.zoom)))
+
+		-- The same row on a client that refuses the Slider frame type.
+		--
+		-- Nothing installed on 2.5.6 proves that type takes a thumb texture from
+		-- a stranger, so UI/Widgets.lua probes it and falls back to a pair of
+		-- nudge buttons, and a branch nothing ever runs is a branch that is
+		-- wrong. This one was: pcall hands back the error message where the
+		-- frame would be, and the fallback called Hide on a string.
+		--
+		-- Built as a kit of its own on a stack of its own, rather than by
+		-- rebuilding the panel, because the panel is what every check above has
+		-- been driving and it is not put back afterwards.
+		local realCreate = _G.CreateFrame
+		_G.CreateFrame = function(kind, ...)
+			if kind == "Slider" then
+				error("this client has no Slider frame type")
+			end
+			return realCreate(kind, ...)
+		end
+
+		local held, row = 1, nil
+		local ok, err = pcall(function()
+			local host = { stack = ns.UI.Stack(window.frame, 300) }
+			local kit = ns.UI.Kit(host)
+			row = kit.Slider("UI size", Settings.LOW, Settings.HIGH, Settings.STEP,
+				function() return held end,
+				function(value) held = value end,
+				Settings.Label)
+			host.stack:Reflow()
+		end)
+		_G.CreateFrame = realCreate
+
+		check(ok, "the size row raised on a client with no Slider: " .. tostring(err))
+		if ok and row then
+			check(row.slider == nil, "the row kept a slider on a client that refused the type")
+
+			local down, up
+			for _, kid in ipairs(row.children) do
+				local label = kid.text and kid.text.text
+				if kid:GetScript("OnClick") then
+					if label == "-" then
+						down = kid
+					elseif label == "+" then
+						up = kid
+					end
+				end
+			end
+			check(down ~= nil and up ~= nil, "the fallback row has no nudge buttons")
+
+			if down and up then
+				down:GetScript("OnClick")(down)
+				check(held == 1 - Settings.STEP,
+					("the fallback minus button moved the value to %s"):format(tostring(held)))
+				up:GetScript("OnClick")(up)
+				up:GetScript("OnClick")(up)
+				check(held == 1 + Settings.STEP,
+					("the fallback plus button moved the value to %s"):format(tostring(held)))
+				for _ = 1, 20 do
+					down:GetScript("OnClick")(down)
+				end
+				check(held == Settings.LOW,
+					("the fallback buttons ran past the low end to %s"):format(tostring(held)))
+			end
+		end
+
+		print(("size   %d stops, %s to %s, biggest panel %.0f x %.0f px on a %d pixel screen")
+			:format(stops, Settings.Label(Settings.LOW), Settings.Label(Settings.HIGH),
+				widest, tallest, SCREEN_H))
+		print(("size   exact at %s on this screen, soft on the rest"):format(Settings.Grid()))
+		print("size   " .. Settings.Describe())
+	end
 
 	ns.Options.Hide()
 end
@@ -2245,6 +3126,501 @@ do
 end
 
 --------------------------------------------------------------------------
+-- The meters
+--
+-- Four questions, and only the first of them is about drawing.
+--
+-- Does the frame come up on the grid, in the size the settings ask for, and
+-- does changing a setting reshape it without building a second copy of it. A
+-- frame cannot be destroyed on this client, so a pane rebuilt per setting
+-- change is a leak that never shows up in game and never stops growing.
+--
+-- Does the combat log parser read the right slot. The client hands over
+-- sixteen values in a fixed order and the amount is in a different one for a
+-- swing than for a spell, so the whole of that half is positional and a stub
+-- that answered a named table would prove nothing about it.
+--
+-- Does the group filter hold. The log carries every fight in range: the other
+-- party's pull, both sides of the duel by the mailbox, and every mob in the
+-- pack. A pet's damage has to land on its owner and a stranger's has to land
+-- nowhere, and those two are the same test from opposite ends.
+--
+-- And does a segment start and stop when a fight does, rather than when a
+-- bleed ticks. The tail of the last pull opening a new segment would replace
+-- the numbers you are still reading with two ticks of damage, which is the
+-- kind of defect nobody reports because it looks like the meter resetting for
+-- some reason of its own.
+--------------------------------------------------------------------------
+
+do
+	local meterTicker
+	for _, f in ipairs(frames) do
+		if f.scripts.OnUpdate and f.origin:match("Meter/Window") then
+			meterTicker = f
+		end
+	end
+	check(meterTicker ~= nil, "the meters registered no ticker")
+
+	-- Before anything in this file has ever been in a fight. Nothing has been
+	-- recorded and no segment has ever opened, so the clock reads zero, and
+	-- dividing a total of nothing by it is a nan that reaches the pane as
+	-- -9223372036854775808. This is the first tick of every session and it ran
+	-- that way until Meter.lua stopped dividing by Meter.Elapsed directly.
+	check(ns.Meter.Idle(), "something was recorded before the first fight")
+	check(ns.Meter.Elapsed() == 0,
+		("the clock reads %s before the first fight"):format(tostring(ns.Meter.Elapsed())))
+	check(ns.Meter.Total("dps") == 0,
+		("the group total reads %s before the first fight"):format(tostring(ns.Meter.Total("dps"))))
+	meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+
+	local frame = _G.WarriorKitMeter
+	check(frame ~= nil, "no meter frame came up")
+	local damagePane = ns.MeterWindow.Pane("damage")
+	local threatPane = ns.MeterWindow.Pane("threat")
+	check(damagePane ~= nil and threatPane ~= nil, "the meters built fewer than two panes")
+
+	----------------------------------------------------------------------
+	-- The shape
+	----------------------------------------------------------------------
+
+	check(math.abs(ns.UI.Pixel(frame) - 1) < 1e-9,
+		("the meters are not on the grid: one pixel is %.4f units"):format(ns.UI.Pixel(frame)))
+
+	-- The gap between the two panes, which is the only number in the frame's
+	-- width that is not a setting.
+	local PANE_GAP = 8
+	check(damagePane:GetWidth() == ns.db.meterWidth,
+		("a pane is %.0f px, the setting says %d"):format(damagePane:GetWidth(), ns.db.meterWidth))
+	check(frame:GetWidth() == ns.db.meterWidth * 2 + PANE_GAP,
+		("the frame is %.0f px, two panes and a gap is %d")
+			:format(frame:GetWidth(), ns.db.meterWidth * 2 + PANE_GAP))
+
+	-- A header, a hairline and one row per setting, with the gap only between
+	-- rows and not hanging off the bottom. A row is the icon plus a pixel above
+	-- and below it, which is what makes the icon rather than the text decide
+	-- how tall the meter is.
+	local HEADER, RULE, ROW, ROW_GAP = 16, 1, 29, 1
+	local wanted = HEADER + RULE + ns.db.meterRows * (ROW + ROW_GAP) - ROW_GAP
+	check(frame:GetHeight() == wanted,
+		("the frame is %.0f px tall, a header and %d rows is %d")
+			:format(frame:GetHeight(), ns.db.meterRows, wanted))
+
+	-- A row icon lands one stored texel on one pixel, at the two zooms that can.
+	--
+	-- This is the gate for the defect that reached the user: the icon drew 12
+	-- screen pixels of art out of a 54 texel source, the renderer blended the 27
+	-- copy with the 13.5 copy, and every icon on the meter came out soft. The
+	-- sizes that are exact are not a matter of taste, they are 54 and 27 and
+	-- nothing between, and ns.UI.IconSizes is where they come from, so this
+	-- moves on its own if the crop in UI/Draw.lua ever changes.
+	for _, zoom in ipairs({ 1, 2 }) do
+		local drawn, exact = ns.MeterWindow.IconAdvice(zoom)
+		check(exact, ("a row icon draws %d screen pixels at %dx, which is not a size the client stores")
+			:format(drawn, zoom))
+	end
+
+	-- Every string on the meter is big enough to survive its own outline.
+	--
+	-- All of them are outlined and all of them have to be: the meter has no
+	-- background, so flat text over a pale floor is not softer, it is gone. That
+	-- rules out the fallback ns.UI.NumberFont takes for a number on a debuff
+	-- square, and leaves a hard minimum instead. The floor is read from
+	-- UI/Text.lua rather than written here, so one number governs both parts.
+	--
+	-- The headers were the ones this caught. The rows went to 14 off the report
+	-- from the client; the headers stayed at 12 and were the same defect sitting
+	-- one line above it, unnoticed because nobody reads a header twice.
+	local floor = ns.UI.OutlineFloor()
+	for _, entry in ipairs({
+		{ "a row's number", damagePane.rows[1].value },
+		{ "a row's name", damagePane.rows[1].name },
+		{ "the left header", damagePane.left },
+		{ "the right header", damagePane.right },
+		{ "the threat header", threatPane.left },
+	}) do
+		local _, size, flags = entry[2]:GetFont()
+		check(size and (size >= floor or flags == ""),
+			("%s is outlined at %s pixels and the floor is %d")
+				:format(entry[1], tostring(size), floor))
+	end
+
+	-- Every setting that reshapes it reuses the frames it already made.
+	local built = #frames
+	ns.db.meterRows = 4
+	ns.MeterWindow.Apply()
+	check(#frames == built, ("changing the row count built %d new frames"):format(#frames - built))
+	check(damagePane.visible == 4, "the pane did not take the new row count")
+	check(not damagePane.rows[5]:IsShown(), "a row past the setting was left on screen")
+	check(ns.MeterWindow.Pane("damage") == damagePane, "the pane was replaced rather than resized")
+
+	ns.db.meterThreat = false
+	ns.MeterWindow.Apply()
+	check(frame:GetWidth() == ns.db.meterWidth,
+		"the frame kept the threat pane's width after the pane was turned off")
+	check(not threatPane:IsShown(), "the threat pane was turned off and stayed on screen")
+
+	ns.db.meterThreat = true
+	ns.db.meterRows = 6
+	ns.MeterWindow.Apply()
+	check(#frames == built, "turning the threat pane off and on again built new frames")
+
+	----------------------------------------------------------------------
+	-- The group
+	----------------------------------------------------------------------
+
+	local BAUDIN = "Player-0-00000001"
+	local SNEAKY = "Player-0-00000002"
+	local PET = "Pet-0-00000002"
+	local FROST = "Player-0-00000003"
+	local STRANGER = "Player-0-00000099"
+	local TOTEM = "Creature-0-0000-000-totem"
+
+	guids.player, unitClass.player, unitName.player = BAUDIN, "WARRIOR", "Baudin"
+	guids.party1, unitClass.party1, unitName.party1 = SNEAKY, "HUNTER", "Sneakyman"
+	guids.partypet1 = PET
+	guids.party2, unitClass.party2, unitName.party2 = FROST, "PRIEST", "Frostbite"
+	realPlayers.party1, realPlayers.party2 = true, true
+	fire("GROUP_ROSTER_UPDATE")
+
+	check(ns.MeterRoster.Size() == 3,
+		("the group has %d members in it, expected 3"):format(ns.MeterRoster.Size()))
+	check(ns.MeterRoster.Owner(PET) == SNEAKY, "a pet's damage does not land on its owner")
+	check(ns.MeterRoster.Owner(BAUDIN) == BAUDIN, "your own damage does not land on you")
+	check(ns.MeterRoster.Owner(STRANGER) == nil, "somebody else's fight is inside the group filter")
+	local who, class = ns.MeterRoster.Who(SNEAKY)
+	check(who == "Sneakyman" and class == "HUNTER",
+		("the roster has %s the %s"):format(tostring(who), tostring(class)))
+
+	----------------------------------------------------------------------
+	-- The log
+	--
+	-- Sixteen values in the order the client hands them over. The amount is at
+	-- 12 for a swing and at 15 for everything with a spell in front of it, and
+	-- reading the wrong one is the whole failure mode this models.
+	----------------------------------------------------------------------
+
+	local function log(subevent, source, dest, swing, amount, overheal)
+		for index = 1, 16 do
+			logArgs[index] = nil
+		end
+		logArgs[1] = GetTime()
+		logArgs[2] = subevent
+		logArgs[4] = source
+		logArgs[8] = dest
+		logArgs[12] = swing
+		logArgs[15] = amount
+		logArgs[16] = overheal
+		fire("COMBAT_LOG_EVENT_UNFILTERED")
+	end
+
+	inCombat.player = true
+	fire("PLAYER_REGEN_DISABLED")
+	check(ns.Meter.Running(), "combat started and no segment opened")
+
+	log("SWING_DAMAGE", BAUDIN, nil, 1000)
+	log("SPELL_DAMAGE", SNEAKY, nil, nil, 500)
+	log("SPELL_DAMAGE", PET, nil, nil, 300)
+	log("SPELL_DAMAGE", STRANGER, nil, nil, 9999)
+	log("SPELL_HEAL", FROST, nil, nil, 400, 150)
+	advance(10)
+
+	local ranked = ns.Meter.Rank("dps")
+	check(#ranked == 2, ("%d rows did damage, expected 2"):format(#ranked))
+	check(ranked[1].guid == BAUDIN and ns.Meter.Amount(ranked[1], "dps") == 1000,
+		("the top row is %s on %d"):format(tostring(ns.MeterRoster.Who(ranked[1].guid)),
+			ns.Meter.Amount(ranked[1], "dps")))
+	check(ranked[2].guid == SNEAKY and ns.Meter.Amount(ranked[2], "dps") == 800,
+		("the hunter and their pet came to %d, expected 800")
+			:format(ns.Meter.Amount(ranked[2], "dps")))
+	check(ns.Meter.Rate(ranked[1], "dps") == 100,
+		("1000 damage over ten seconds reads as %.1f"):format(ns.Meter.Rate(ranked[1], "dps")))
+	check(ns.Meter.Total("dps") == 180,
+		("the group total is %.1f, and 1800 over ten seconds is 180"):format(ns.Meter.Total("dps")))
+
+	local healed = ns.Meter.Rank("hps")
+	check(#healed == 1 and healed[1].guid == FROST, "the healer is not the only row with healing on it")
+	check(ns.Meter.Amount(healed[1], "hps") == 250,
+		("400 healed into 150 of overheal counted as %d, expected 250")
+			:format(ns.Meter.Amount(healed[1], "hps")))
+
+	----------------------------------------------------------------------
+	-- The ends of a fight
+	----------------------------------------------------------------------
+
+	inCombat.player = false
+	fire("PLAYER_REGEN_ENABLED")
+	check(not ns.Meter.Running(), "combat dropped and the segment stayed open")
+
+	local frozen = ns.Meter.Elapsed()
+	advance(5)
+	check(ns.Meter.Elapsed() == frozen,
+		("the clock ran on to %ds after the fight ended at %ds"):format(ns.Meter.Elapsed(), frozen))
+
+	-- A bleed ticking on a mob that is already down. Nobody is in combat, so
+	-- this is not a fight and must not be treated as the start of one.
+	log("SPELL_PERIODIC_DAMAGE", BAUDIN, nil, nil, 77)
+	check(not ns.Meter.Running(), "a tick after the fight opened a new segment")
+	check(ns.Meter.Amount(ns.Meter.Rank("dps")[1], "dps") == 1000,
+		"the tail of the last fight was written over the fight itself")
+
+	-- Somebody else's pull. They are in combat and you are not yet, which is
+	-- the case the whole rule exists for.
+	inCombat.party1 = true
+	log("SPELL_DAMAGE", SNEAKY, nil, nil, 250)
+	check(ns.Meter.Running(), "somebody else's pull did not open a segment")
+	local opened = ns.Meter.Rank("dps")
+	check(#opened == 1 and opened[1].guid == SNEAKY,
+		("the new segment came up with %d rows from the old one"):format(#opened - 1))
+
+	-- A totem is not a pet and no unit token ever points at one, so the summon
+	-- in the log is the only place the client says whose it is.
+	log("SPELL_SUMMON", FROST, TOTEM)
+	log("SPELL_DAMAGE", TOTEM, nil, nil, 120)
+	local summoned = nil
+	for _, slot in ipairs(ns.Meter.Rank("dps")) do
+		if slot.guid == FROST then
+			summoned = slot
+		end
+	end
+	check(summoned ~= nil and ns.Meter.Amount(summoned, "dps") == 120,
+		"what a member summoned did not land on the member")
+
+	-- And one heal in this segment, so the toggle below has something to swap
+	-- to. Nobody has healed since the pull opened it, and a pane that is empty
+	-- because the fight was quiet proves nothing about the pane.
+	log("SPELL_HEAL", FROST, nil, nil, 600, 100)
+
+	----------------------------------------------------------------------
+	-- Spec icons
+	----------------------------------------------------------------------
+
+	ns.MeterSpec.Refresh()
+	check(ns.MeterSpec.Known(BAUDIN), "your own spec did not resolve out of your talent trees")
+	local icon = ns.MeterSpec.Icon(BAUDIN, "WARRIOR")
+	check(icon:find("SavageBlow", 1, true) ~= nil,
+		("the spec icon is %q, and 31 points are in Arms"):format(icon))
+
+	-- The other signature. One build leads with a numeric tab id and one leads
+	-- with the tree's name, and the addon tells them apart on the type of the
+	-- first value rather than on how far down the tail a nil turns up.
+	talentShape = "old"
+	ns.MeterSpec.Forget()
+	ns.MeterSpec.Refresh()
+	check(ns.MeterSpec.Known(BAUDIN), "the older GetTalentTabInfo signature was not read")
+	talentShape = "modern"
+
+	-- Nobody has committed to anything yet, so there is no spec to draw and the
+	-- class icon stands in.
+	local spent = talentTrees.player[2].points
+	talentTrees.player[1].points, talentTrees.player[2].points = 2, 1
+	ns.MeterSpec.Forget()
+	ns.MeterSpec.Refresh()
+	check(not ns.MeterSpec.Known(BAUDIN), "three points in a tree were taken for a spec")
+	local sheet, left = ns.MeterSpec.Icon(BAUDIN, "WARRIOR")
+	check(sheet:find("CharacterCreate", 1, true) ~= nil and left == 0,
+		("the fallback drew %q rather than the class sheet"):format(sheet))
+	talentTrees.player[1].points, talentTrees.player[2].points = 31, spent
+
+	-- And somebody else's, which is an inspect and an answer rather than a read.
+	ns.MeterSpec.Forget()
+	ns.MeterSpec.Refresh()
+	check(ns.MeterSpec.Request(SNEAKY), "no inspect went out for a party member in range")
+	check(inspecting == "party1",
+		("the inspect went to %s"):format(tostring(inspecting)))
+	fire("INSPECT_READY", SNEAKY)
+	check(ns.MeterSpec.Known(SNEAKY), "the inspect was answered and no spec came back")
+	local hunter = ns.MeterSpec.Icon(SNEAKY, "HUNTER")
+	check(hunter:find("Marksmanship", 1, true) ~= nil,
+		("the inspected spec icon is %q, and 40 points are in Marksmanship"):format(hunter))
+	check(inspecting == nil, "the inspect was never handed back")
+
+	-- An inspect the client never answers. There is no event for one, so the
+	-- only thing standing between a dropped request and a queue parked forever
+	-- is the expiry. Asked for, never answered, and then the next member has to
+	-- get a request of their own.
+	ns.MeterSpec.Forget()
+	inspecting = nil
+	advance(10)
+	check(ns.MeterSpec.Request(SNEAKY), "the first inspect did not go out")
+	check(inspecting == "party1", "the first inspect went to the wrong unit")
+	inspecting = nil
+	advance(10)
+	check(ns.MeterSpec.Request(FROST), "a dropped inspect parked the queue for good")
+	check(inspecting == "party2",
+		("the second inspect went to %s"):format(tostring(inspecting)))
+	fire("INSPECT_READY", FROST)
+	check(ns.MeterSpec.Known(FROST), "the second inspect was answered and nothing came back")
+
+	----------------------------------------------------------------------
+	-- Threat
+	--
+	-- The percentage is the client's. What is asserted here is the half that is
+	-- not: that the rate of change is measured across a real interval and that
+	-- the projection off it lands where the arithmetic says.
+	----------------------------------------------------------------------
+
+	local threatPct = { player = 100, party1 = 50, party2 = 10 }
+	threatReader = function(source)
+		local pct = threatPct[source]
+		if not pct then
+			return nil
+		end
+		return pct >= 100, 3, pct, pct, pct * 100
+	end
+
+	guids.target = "Creature-0-0000-000-boss"
+	check(ns.MeterThreat.Ready(), "the threat probe says this client has no api")
+	check(ns.MeterThreat.Watching(), "there is a mob targeted and nothing to measure against")
+
+	ns.MeterThreat.Update() -- plants the reference, measures nothing
+	local planted = ns.MeterThreat.Rank()
+	check(#planted == 3, ("%d members have threat on it, expected 3"):format(#planted))
+	check(planted[1].guid == BAUDIN and planted[1].tanking,
+		"the member holding the mob is not top of the list")
+	check(ns.MeterThreat.Soonest() == nil,
+		"a projection came out of the very first sample, which has nothing to compare against")
+
+	advance(1)
+	threatPct.party1 = 70
+	ns.MeterThreat.Update()
+
+	local soonest, when = ns.MeterThreat.Soonest()
+	check(soonest ~= nil and soonest.guid == SNEAKY,
+		"the member climbing towards the pull was not the one picked out")
+	-- Twenty points in a second, four tenths of it into the average, so eight
+	-- points a second against the thirty that are left.
+	check(when and math.abs(when - 3.75) < 0.01,
+		("the projection says %s seconds, the arithmetic says 3.75"):format(tostring(when)))
+	check(ns.MeterThreat.Tanking().guid == BAUDIN, "the wrong member is holding the mob")
+
+	-- Falling threat is not a projection. Somebody who stopped is not on their
+	-- way to taking anything.
+	advance(1)
+	threatPct.party1 = 40
+	ns.MeterThreat.Update()
+	advance(1)
+	threatPct.party1 = 20
+	ns.MeterThreat.Update()
+	check(ns.MeterThreat.Soonest() == nil, "a member whose threat is falling was projected to pull")
+
+	----------------------------------------------------------------------
+	-- What ends up on the rows
+	----------------------------------------------------------------------
+
+	threatPct.party1 = 82
+	ns.db.meterMode = "dps"
+	meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+
+	check(damagePane.rows[1]:IsShown(), "the meter ticked and drew no rows")
+	check(damagePane.rows[1].name:GetText() == "Sneakyman",
+		("the top damage row says %q"):format(tostring(damagePane.rows[1].name:GetText())))
+	check(threatPane.rows[1].value:GetText() == "100%",
+		("the top threat row says %q"):format(tostring(threatPane.rows[1].value:GetText())))
+	check(damagePane.left:GetText() == "DPS", "the damage header is not labelled")
+
+	-- The bar behind the top row fills the pane and everything under it is
+	-- shorter, which is the whole of what a bar says.
+	local top = damagePane.rows[1].bar:GetWidth()
+	check(top == ns.db.meterWidth,
+		("the top bar is %.0f px across a %d px pane"):format(top, ns.db.meterWidth))
+
+	-- One click on the header is the whole of the toggle.
+	check(damagePane.button ~= nil, "the damage header is not clickable")
+	damagePane.button.scripts.OnClick()
+	check(ns.db.meterMode == "hps", "clicking the header did not swap to healing")
+	meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+	check(damagePane.left:GetText() == "HPS", "the pane swapped and the header did not")
+	check(damagePane.rows[1].name:GetText() == "Frostbite",
+		("the healing pane is topped by %q"):format(tostring(damagePane.rows[1].name:GetText())))
+	-- And the two who did damage and no healing are off the pane rather than
+	-- sitting on it at zero.
+	check(not damagePane.rows[2]:IsShown(),
+		"a member who healed nothing kept their row when the pane swapped to healing")
+	damagePane.button.scripts.OnClick()
+
+	-- The projection reaching the header, name and all. Soonest is asserted on
+	-- its own above; this is the other half, that what it works out gets drawn.
+	advance(1)
+	threatPct.party1 = 90
+	ns.MeterThreat.Update()
+	meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+	check(threatPane.right:GetText():find("Sneakyman", 1, true) ~= nil,
+		("the header does not name the member converging on you: %q")
+			:format(tostring(threatPane.right:GetText())))
+
+	-- And back to quiet, which is the state the two exits below are about.
+	advance(1)
+	threatPct.party1 = 30
+	ns.MeterThreat.Update()
+
+	-- Losing the mob and getting it back. Both of the header's early exits leave
+	-- by a different door from the one that draws a projection, so both have to
+	-- forget what they last showed on the way out. While they did not, a target
+	-- that came back to the same quiet state found the projection guard already
+	-- satisfied and the header went on reading "no target" over a full list of
+	-- rows underneath it.
+	meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+	check(threatPane.right:GetText() == "held",
+		("the threat header says %q with the mob held and nobody climbing")
+			:format(tostring(threatPane.right:GetText())))
+
+	guids.target = nil
+	meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+	check(threatPane.right:GetText() == "no target",
+		("the target went away and the header says %q")
+			:format(tostring(threatPane.right:GetText())))
+
+	guids.target = "Creature-0-0000-000-boss"
+	meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+	check(threatPane.right:GetText() ~= "no target",
+		"the target came back and the header was still reading no target")
+
+	----------------------------------------------------------------------
+	-- Allocation
+	----------------------------------------------------------------------
+
+	-- The clock moves inside the loop, which is the difference between this and
+	-- the two churn gates above. A meter with the fight frozen allocates
+	-- literally nothing, because every write in the file is guarded on a number
+	-- and none of the numbers moved; measuring that would be measuring the
+	-- guards and calling it the steady state. A fight is seconds ticking over
+	-- and a DPS figure falling between them, so that is what is measured.
+	local function meterChurn(n)
+		collectgarbage("collect")
+		collectgarbage("stop")
+		local before = collectgarbage("count")
+		for _ = 1, n do
+			advance(0.05)
+			meterTicker.scripts.OnUpdate(meterTicker, 0.05)
+		end
+		local after = collectgarbage("count")
+		collectgarbage("restart")
+		return (after - before) / (n / 50)
+	end
+
+	meterChurn(200)
+	local meterKb = meterChurn(200)
+	check(meterKb <= METER_CHURN_KB,
+		("the meters allocate %.2f KB per 50 ticks, the gate is %.2f"):format(meterKb, METER_CHURN_KB))
+
+	print(("meters %d rows, %.0f x %.0f px, %d damage and %d threat, %.2f KB per 50 ticks, gate is %.2f")
+		:format(ns.db.meterRows, frame:GetWidth(), frame:GetHeight(),
+			#ns.Meter.Rank("dps"), #ns.MeterThreat.Rank(), meterKb, METER_CHURN_KB))
+
+	----------------------------------------------------------------------
+	-- Put the client back the way the sections after this one expect it.
+	----------------------------------------------------------------------
+
+	threatReader = nil
+	guids.player, guids.party1, guids.partypet1, guids.party2, guids.target = nil, nil, nil, nil, nil
+	unitClass.player, unitClass.party1, unitClass.party2 = nil, nil, nil
+	unitName.player, unitName.party1, unitName.party2 = nil, nil, nil
+	realPlayers.party1, realPlayers.party2 = nil, nil
+	inCombat.player, inCombat.party1 = nil, nil
+	fire("GROUP_ROSTER_UPDATE")
+end
+
+--------------------------------------------------------------------------
 -- What the addon costs
 --
 -- The measurement has to be free or it is not a measurement. Every churn figure
@@ -2295,6 +3671,123 @@ do
 
 	print(("perf   bars %.3f ms per tick over %d ticks, %.0f KB held, %d gauge%s")
 		:format(average or 0, ticks or 0, held, #order, #order == 1 and "" or "s"))
+end
+
+--------------------------------------------------------------------------
+-- Every anchor on the grid, in whole pixels
+--
+-- The grid makes one unit one physical pixel inside an adopted frame. That buys
+-- exact sizes, and it buys nothing at all about position: an anchor offset is a
+-- number a person typed, and half of an odd number is half a pixel. A frame
+-- whose own origin sits half a pixel off a boundary has every edge, every glyph
+-- and every icon inside it rasterised across two rows of pixels. It is not
+-- subtle and it is invisible in review, because the arithmetic that produces it
+-- looks like centring, which is what it is.
+--
+-- Three of them were live when this check was written, all in the enemy bars,
+-- and all three had the reason for rounding written in a comment a few lines
+-- above the line that did not round.
+--
+--   PLATE_BAR_HEIGHT / 2 + 1   11.5 pixels, on the widget itself, in the style
+--                              that ships as the default. Every bar the addon
+--                              had ever drawn was half a pixel low.
+--   STRIPE_WIDTH * px / 2      2.5 pixels, on the level tag's number.
+--   lineHeight / 2             half a pixel on the threat line at any odd
+--                              debuff icon size.
+--
+-- Scope is every frame the addon put on the grid and everything under it, found
+-- by walking up for the SetIgnoreParentScale that UI.Adopt calls. A frame that
+-- is not on the grid is not held to this: the charge button rides UIParent's
+-- scale, and Blizzard's own frames are Blizzard's business. UIParent itself is
+-- skipped, because the stub sets the flag on it to model the client.
+--------------------------------------------------------------------------
+
+do
+	local offenders, checked, adopted = 0, 0, 0
+	local note = "at 1x"
+
+	local function onGrid(frame)
+		local node = frame
+		while node and node ~= _G.UIParent do
+			if node.ignoreScale then
+				return true
+			end
+			node = node.parent
+		end
+		return false
+	end
+
+	local function whole(value)
+		return math.abs(value - math.floor(value + 0.5)) < 1e-6
+	end
+
+	local seen = {}
+	local walk
+	function walk(region)
+		if seen[region] then
+			return
+		end
+		seen[region] = true
+
+		-- A frame's own offsets are in its own units. A texture or a font string
+		-- carries no scale and is measured in the frame holding it.
+		local host = region
+		if region.kind == "texture" or region.kind == "fontstring" then
+			host = region.parent
+		end
+
+		if host and region.points and onGrid(host) then
+			adopted = adopted + 1
+			local px = ns.UI.Pixel(host)
+			for _, point in ipairs(region.points) do
+				checked = checked + 1
+				local x, y = (point[4] or 0) / px, (point[5] or 0) / px
+				if not whole(x) or not whole(y) then
+					offenders = offenders + 1
+					check(false, ("%s: a %s anchored %s to %s sits at %.3f, %.3f pixels")
+						:format(note, region.kind, tostring(point[1]), tostring(point[3]), x, y))
+				end
+			end
+		end
+
+		for _, kid in ipairs(region.regions) do
+			walk(kid)
+		end
+		for _, kid in ipairs(region.children) do
+			walk(kid)
+		end
+	end
+
+	local function sweep(where)
+		checked, adopted, offenders = 0, 0, 0
+		seen = {}
+		note = where
+		walk(_G.UIParent)
+		check(adopted > 0, where .. ": nothing on the grid carried an anchor")
+		return checked, adopted, offenders
+	end
+
+	local one, regions, bad = sweep("at 1x")
+
+	-- And again at each whole zoom, because zoom scales every design number and
+	-- a size that was even at 1x is not obliged to stay whole once it has been
+	-- through a multiply. This is the sweep that would catch the bars going half
+	-- a pixel out at 2x, which nothing else here looks at.
+	local shipped = ns.db.barsZoom
+	for _, zoom in ipairs{2, 3} do
+		ns.db.barsZoom = zoom
+		ns.EnemyBars.ApplyLayout()
+		ns.EnemyBars.Rebuild()
+		local _, _, off = sweep(("at %dx"):format(zoom))
+		bad = bad + off
+	end
+	ns.db.barsZoom = shipped
+	ns.EnemyBars.ApplyLayout()
+	ns.EnemyBars.Rebuild()
+	sweep("back at 1x")
+
+	print(("anchors %d offsets across %d regions on the grid, at 1x, 2x and 3x, %d off a whole pixel")
+		:format(one, regions, bad))
 end
 
 if failures > 0 then

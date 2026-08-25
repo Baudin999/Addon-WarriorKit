@@ -5,6 +5,41 @@ local ADDON, ns = ...
 -- target of target frames. EnemyBars.lua and Skin.lua hold the behaviour and
 -- neither talks to Core or to the panel.
 
+-- The two icon sizes the client keeps a copy of. Everything between them draws
+-- a little soft, which is worth saying out loud rather than leaving the stepper
+-- to imply that every step on it is equal.
+
+local function DebuffWord(action, value)
+	if action == "add" then
+		local ok, message = ns.EnemyBars.AddSpell(value)
+		ns.Print(ok and (message .. " is on the bar.") or message)
+	elseif action == "remove" then
+		if value == "" then
+			ns.Print("bars debuff remove takes the spell id. bars debuff lists them.")
+			return
+		end
+		local ok, name = ns.EnemyBars.RemoveSpell(value)
+		ns.Print(ok and (name .. " is off the bar.")
+			or ("nothing on the bar has the id " .. value .. "."))
+	elseif action == "reset" then
+		ns.EnemyBars.ResetSpells()
+		ns.Print("debuff list back to the four it ships with: " .. ns.EnemyBars.DescribeSpells() .. ".")
+	elseif action == "list" or action == "" then
+		local spells = ns.EnemyBars.Spells()
+		if #spells == 0 then
+			ns.Print("nothing tracked. bars debuff add <spell id>, or use the panel.")
+			return
+		end
+		ns.Print("on the bar, left to right:")
+		for index, spellID in ipairs(spells) do
+			ns.Print(("  %d. %s (%d)"):format(index, ns.SpellName(spellID) or "unknown to this client", spellID))
+		end
+		ns.Print(("%d of %d slots used."):format(#spells, ns.EnemyBars.MaxSpells()))
+	else
+		ns.Print("bars debuff takes list, add <spell id>, remove <spell id> or reset.")
+	end
+end
+
 local function BarsWord(option, value)
 	if option == "mode" then
 		if value == "auto" or value == "plates" or value == "list" then
@@ -87,6 +122,18 @@ local function BarsWord(option, value)
 			ns.Print("bars zoom " .. zoom .. ", so one pixel of the design is "
 				.. zoom .. " on screen. " .. ns.UI.Describe() .. ".")
 		end
+	elseif option == "debuff" then
+		DebuffWord(value:match("^(%S*)%s*(.-)$"))
+	elseif option == "icon" then
+		local low, high = ns.EnemyBars.IconRange()
+		local size = ns.Command.Number(value, low, high, "bars icon")
+		if size then
+			ns.db.barsIconSize = size
+			ns.EnemyBars.ApplyLayout()
+			ns.EnemyBars.Rebuild()
+			ns.Print(("debuff icons %d pixels square, %s.")
+				:format(size, ns.EnemyBars.DescribeIcon(size)))
+		end
 	elseif option == "stack" then
 		ns.db.barsStack = ns.Command.Toggle(value)
 		ns.Plates.Apply()
@@ -157,6 +204,62 @@ local function SkinWord(arg)
 		.. ", " .. ns.FrameSkin.Describe() .. ".")
 end
 
+-- One row of the debuff list: the spell's own icon, its name, and the button
+-- that takes it off. There is one per slot, built once at login and shown only
+-- while the list is that long, because the panel is built once and the list is
+-- not: a row that appears when you add a spell has to already exist.
+--
+-- ui.Custom is the seam for this. UI/Widgets.lua has no list widget and should
+-- not grow one for a single caller; what it has is a bare row of the right
+-- width that measures itself, and an unused slot measures to nothing.
+local function DebuffRow(ui, slot)
+	local M, C = ns.UI.Metric, ns.UI.Color
+	local removeWidth = 62
+	local row, art, name
+
+	local function Spell()
+		return ns.EnemyBars.Spells()[slot]
+	end
+
+	ui.Custom(function(frame)
+		row = frame
+
+		art = ns.UI.Icon(frame, "ARTWORK")
+		art:SetSize(M.control, M.control)
+		art:SetPoint("TOPLEFT")
+
+		local remove = ns.UI.Button(frame, { label = "remove", width = removeWidth,
+			onClick = function()
+				local spellID = Spell()
+				if spellID then
+					ns.EnemyBars.RemoveSpell(spellID)
+					ns.Options.Refresh()
+				end
+			end })
+		remove:SetPoint("TOPRIGHT")
+
+		name = ns.UI.Label(frame, M.font, C.text, "LEFT", ns.UI.FLAT)
+		name:SetPoint("LEFT", art, "RIGHT", M.gutter, 0)
+		name:SetPoint("RIGHT", remove, "LEFT", -M.gutter, 0)
+
+		-- An empty slot is not a short row, it is no row: zero height and no
+		-- gap under it, or ten unused slots would leave a hand's width of air
+		-- between the list and the controls below it.
+		return function(cell)
+			local used = Spell() ~= nil
+			cell.gap = used and M.rowGap or 0
+			return used and M.control or 0
+		end
+	end, { height = M.control, refresh = function()
+		local spellID = Spell()
+		row:SetShown(spellID ~= nil)
+		if spellID then
+			art:SetTexture(ns.SpellTexture(spellID))
+			name:SetText(ns.SpellName(spellID) or ("spell " .. spellID .. ", unknown to this client"))
+		end
+	end })
+end
+
 -- What the bars cost is one number and what they cost per mob is another, and
 -- the performance tab cannot tell them apart without being told how many are
 -- up. Registered from here rather than from EnemyBars, because a behaviour file
@@ -193,6 +296,21 @@ ns.Register({
 		-- was a number nobody chose and one that moved every time the driver
 		-- was told how much room a bar wants.
 		barsWidth = 180,
+
+		-- Which debuffs the row above each bar shows, as spell IDs in the order
+		-- they are drawn. A setting rather than a constant, because which
+		-- debuffs matter is a spec question: an arms warrior watches Deep
+		-- Wounds and Mortal Strike, a protection one watches neither and wants
+		-- the room back. EnemyBars owns the list and every write to it.
+		barsSpells = ns.EnemyBars.DefaultSpells(),
+
+		-- One debuff square's edge, in pixels like every other size in the bars.
+		-- 29 is the one size in the range that draws a stored texel on a pixel,
+		-- because the square's border takes two pixels off and the crop leaves
+		-- 54 texels. See the header of EnemyBars.lua. 20 is where this shipped,
+		-- and it is close to the worst place in the range to stand, but a
+		-- default that moves rewrites a setting the player never touched.
+		barsIconSize = 20,
 
 		-- A whole number, because the bars are drawn on a pixel grid and a
 		-- fractional zoom would put every edge back on a half pixel. 1 is the
@@ -255,6 +373,8 @@ ns.Register({
 		"bars offset <-60-60>, bars marker on|off, bars level on|off",
 		"bars clickthrough on|off, bars camera right|left|both|off",
 		"bars max <1-15>, bars width <120-400>, bars zoom <1-3>",
+		"bars debuff list|reset, bars debuff add|remove <spell id>, what the icon row tracks",
+		"bars icon <16-32>, the size of one debuff square",
 		"bars stack on|off, whether the client spaces plates by the size of our bar",
 		"skin on|off, the square player, target and target of target frames",
 		"skin player|target|tot on|off, one frame at a time",
@@ -272,6 +392,7 @@ ns.Register({
 				ns.HasThreat() and "" or ", no threat api so colour is who each mob is hitting",
 				ns.UI.Describe(), ns.Plates.Describe(), ns.UI.FontName(),
 				ns.FrameSkin.Describe())
+			.. ("; debuffs at %dpx: %s"):format(ns.db.barsIconSize, ns.EnemyBars.DescribeSpells())
 	end,
 
 	lock = function()
@@ -286,6 +407,14 @@ ns.Register({
 		ns.db.barsCamera = ns.DefaultFor("barsCamera")
 		ns.db.barsZoom = ns.DefaultFor("barsZoom")
 		ns.db.barsStack = ns.DefaultFor("barsStack")
+		ns.db.barsIconSize = ns.DefaultFor("barsIconSize")
+		-- A fresh table, not ns.DefaultFor: adding and removing a debuff mutates
+		-- the list in place, so by now the registered default is whatever the
+		-- last edit left it as. This relays out on its own and the two calls
+		-- under it do it again, which is one wasted pass on a command nobody
+		-- types twice a minute and is cheaper than a reset that depends on
+		-- what follows it.
+		ns.EnemyBars.ResetSpells()
 		ns.EnemyBars.ApplyLayout()
 		ns.EnemyBars.Rebuild()
 		ns.db.skin = ns.DefaultFor("skin")
@@ -410,6 +539,107 @@ ns.Register({
 				.. " stack rather than overlap. The cost is that a plate takes the mouse over"
 				.. " the whole bar, which is more to click and more of a camera drag swallowed."
 				.. " Turning it off puts all three back. Now: " .. ns.Plates.Describe() .. "."
+		end)
+
+		ui.Header("Debuffs on the bar")
+		ui.Note(function()
+			return "The row above each bar, left to right. Bright is yours, grey is"
+				.. " somebody else's and faint is nobody's, with the seconds left along"
+				.. " the bottom edge and the stack count in the corner. Matching is on"
+				.. " the spell's name rather than its id, so rank 1 covers every rank"
+				.. " and another warrior's Sunder counts."
+		end)
+		for slot = 1, ns.EnemyBars.MaxSpells() do
+			DebuffRow(ui, slot)
+		end
+		ui.Note(function()
+			local spells = ns.EnemyBars.Spells()
+			if #spells == 0 then
+				return "Nothing tracked. The row is empty and each bar is a debuff row shorter."
+			end
+			local unknown = ns.EnemyBars.Unresolved()
+			if #unknown > 0 then
+				return ("%d of %d slots used. This client cannot name %s, so nothing draws"
+					.. " for them. They keep their place in case you log in on the flavour that can.")
+					:format(#spells, ns.EnemyBars.MaxSpells(), table.concat(unknown, ", "))
+			end
+			return ("%d of %d slots used."):format(#spells, ns.EnemyBars.MaxSpells())
+		end)
+		ui.Picker("add a warrior debuff",
+			function() return "pick one" end,
+			function(spellID)
+				if type(spellID) ~= "number" then
+					return
+				end
+				local ok, message = ns.EnemyBars.AddSpell(spellID)
+				if not ok then
+					ns.Print(message)
+				end
+			end,
+			function()
+				local options = {}
+				for _, spellID in ipairs(ns.EnemyBars.Suggestions()) do
+					local name = ns.SpellName(spellID)
+					if name and not ns.EnemyBars.Slot(spellID) then
+						options[#options + 1] = { value = spellID, text = name,
+							icon = ns.SpellTexture(spellID) }
+					end
+				end
+				if #options == 0 then
+					options[1] = { text = "every one of them is already on the bar" }
+				end
+				return options
+			end)
+		ui.TextField("or add any spell by id",
+			function() return "" end,
+			function(text)
+				if text:match("^%s*$") then
+					return
+				end
+				local ok, message = ns.EnemyBars.AddSpell(text)
+				ns.Print(ok and (message .. " is on the bar.") or message)
+			end)
+		ui.Note(function()
+			return "The picker is the warrior's own debuffs and the shortlist, not the"
+				.. " limit. Anything a mob can carry goes on by id, which is the last"
+				.. " part of the spell's address on Wowhead. Rank 1's id, since the"
+				.. " match is by name."
+		end)
+		-- One pixel a step. It used to be two, which stepped straight over the
+		-- sizes that draw sharp, on a range that stopped short of the biggest of
+		-- them.
+		local iconLow, iconHigh = ns.EnemyBars.IconRange()
+		ui.Slider("icon size, in pixels", iconLow, iconHigh, 1,
+			function() return ns.db.barsIconSize end,
+			function(value)
+				ns.db.barsIconSize = value
+				ns.EnemyBars.ApplyLayout()
+				ns.EnemyBars.Rebuild()
+			end,
+			function(value) return value .. " px" end)
+		ui.Note(function()
+			return "|cffd08040Now:|r " .. ns.EnemyBars.DescribeIcon() .. "."
+		end)
+		ui.Note(function()
+			local _, _, nearest = ns.EnemyBars.IconAdvice()
+			return "The client keeps half sized copies of every texture and picks the"
+				.. " pair nearest the size asked for. The square carries a one pixel"
+				.. " border and the art sits inside it, and the art itself is cropped"
+				.. " five texels a side to lose the border the client bakes in, so"
+				.. " what actually gets sampled is 54 texels drawn two pixels smaller"
+				.. " than the number above. " .. (nearest and (nearest .. " is the size")
+					or "No size in this range is one") .. " where that lands one texel"
+				.. " on one pixel. Everything else is a blend of two copies, which is"
+				.. " what soft icons are."
+		end)
+		ui.Note(function()
+			return "The row is packed against the right end of the gauge and wraps"
+				.. " upwards when it no longer fits, so a long list on a narrow bar"
+				.. " becomes two rows rather than icons hanging off the left edge."
+		end)
+		ui.Action(function() return "back to the four it ships with" end, function()
+			ns.EnemyBars.ResetSpells()
+			ns.Options.Refresh()
 		end)
 
 		ui.Header("Player, target and target of target")
