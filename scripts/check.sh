@@ -111,8 +111,18 @@ done
 # the function. A for loop is not a guard: it repeats the write, it does not
 # decide it.
 #
-# To exempt one line, put `-- unguarded: <reason>` on it. A reason is required,
-# because an exemption without one is the same invisible debt as a warning.
+# The same scan bans allocation on those paths, for the same reason one step
+# further out. A table constructor or an anonymous function inside a ticker is
+# garbage the collector has to walk later, and the collector runs in the middle
+# of a frame. The list collector on the enemy bars was building a table for the
+# list, one per mob in it and two closures every fifth of a second, about eighty
+# objects a second to answer a question whose answer almost never changed. An
+# allocation behind an if is a cache being filled once and is fine; an
+# allocation the tick reaches every time is not.
+#
+# To exempt one line, put `-- unguarded: <reason>` or `-- allocates: <reason>`
+# on it. A reason is required, because an exemption without one is the same
+# invisible debt as a warning.
 HOT="
 Charge/Charge.lua:Charge.Pick
 Charge/Charge.lua:Charge.State
@@ -131,11 +141,14 @@ UnitFrames/EnemyBars.lua:Reaction
 UnitFrames/EnemyBars.lua:ScanDebuffs
 UnitFrames/EnemyBars.lua:UpdateWidget
 UnitFrames/EnemyBars.lua:UpdateList
+UnitFrames/EnemyBars.lua:Collect
 UnitFrames/EnemyBars.lua:CollectUnits
 UnitFrames/EnemyBars.lua:EnemyBars.Update
 UnitFrames/Skin.lua:Refresh
 UnitFrames/Skin.lua:Tint
 UnitFrames/Skin.lua:ClassTint
+UnitFrames/Skin.lua:LevelTag
+UnitFrames/Skin.lua:Flatten
 "
 
 hot_scan='
@@ -164,17 +177,21 @@ BEGIN { inside = 0 }
 	else if (body ~ / then$/) opener[indent + 1] = "if"
 	else if (body ~ / do$/) opener[indent + 1] = "loop"
 
-	if (body !~ /:Set[A-Z][A-Za-z]*\(/) next
+	writes = (body ~ /:Set[A-Z][A-Za-z]*\(/)
+	allocates = (body ~ /\{/ || body ~ /function[ ]*\(/)
+	if (!writes && !allocates) next
 
-	if (body ~ /-- unguarded:[ ]*[^ ]/) next
-	if (body ~ /-- unguarded:/) {
-		printf "%s:%d: %s exempts a write with no reason: %s\n", FILENAME, NR, target, body
+	kind = writes ? "writes" : "allocates"
+	tag = writes ? "unguarded" : "allocates"
+	if (body ~ ("-- " tag ":[ ]*[^ ]")) next
+	if (body ~ ("-- " tag ":")) {
+		printf "%s:%d: %s exempts a %s with no reason: %s\n", FILENAME, NR, target, kind, body
 		next
 	}
 
 	guarded = 0
 	for (k = 2; k <= indent; k++) if (opener[k] == "if") guarded = 1
-	if (!guarded) printf "%s:%d: %s writes without a guard: %s\n", FILENAME, NR, target, body
+	if (!guarded) printf "%s:%d: %s %s without a guard: %s\n", FILENAME, NR, target, kind, body
 }
 '
 
@@ -205,6 +222,22 @@ while IFS= read -r f; do
 		*) echo "$f registers an OnUpdate and names no function in HOT"; status=1 ;;
 	esac
 done < <(grep -lE 'SetScript\("OnUpdate"' --include='*.lua' -r . | sort)
+
+# The addon, loaded and driven under a stub of the client. Syntax and lint say
+# the files parse and read cleanly; this is the only layer that says the pixel
+# arithmetic lands where it should and that a tick does not allocate. It runs
+# before luacheck because a stack trace is a more useful first failure than a
+# style warning.
+if [ -f ../scripts/harness.lua ]; then
+	if ! lua5.1 ../scripts/harness.lua .; then
+		echo "harness FAIL"
+		status=1
+	fi
+	echo
+else
+	echo "scripts/harness.lua is missing"
+	status=1
+fi
 
 luacheck=$(command -v luacheck || echo "$HOME/.luarocks/bin/luacheck")
 if [ -x "$luacheck" ]; then

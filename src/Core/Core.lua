@@ -1,6 +1,6 @@
 local ADDON, ns = ...
 
-ns.version = "1.4"
+ns.version = "1.5"
 
 -- Core knows nothing about any feature. It holds the saved variables, the API
 -- shims, the two drawing helpers every part uses, and the one registry every
@@ -172,64 +172,12 @@ end
 --------------------------------------------------------------------------
 -- Drawing
 --
--- A coloured rectangle and a one pixel outline, which between them draw every
--- surface the addon owns. They live here rather than in one part because the
--- panel and the enemy bars both need them, and neither is allowed to reach
--- into the other. SetBackdrop is deliberately not used: it needs a template
--- that may not be on this client, and this is twenty lines.
+-- ns.Fill, ns.Pixel, ns.EdgeSize, ns.Outline and ns.Recolor live in UI/Draw.lua
+-- and UI/Pixel.lua, which load between this file and Core/Panel.lua. They were
+-- here until the pixel grid arrived and turned twenty lines into a layer with
+-- its own scale arithmetic, resolution watcher and font cache. The names on ns
+-- are unchanged, so nothing that draws had to move with them.
 --------------------------------------------------------------------------
-
-function ns.Fill(parent, layer, r, g, b, a)
-	local texture = parent:CreateTexture(nil, layer or "BACKGROUND")
-	texture:SetColorTexture(r, g, b, a or 1)
-	return texture
-end
-
--- One screen pixel, in the units the frame is drawn in. SetHeight(1) is not
--- one pixel: a nameplate carries a scale of its own, so the same edge lands as
--- one and a half pixels on a plate and rounds up along one side and down along
--- the other, which reads as a thick lopsided border. Ask for this wherever an
--- edge is meant to be hairline, and ask again after a reparent.
-function ns.Pixel(frame)
-	local scale = frame and frame.GetEffectiveScale and frame:GetEffectiveScale()
-	if not scale or scale <= 0 then
-		return 1
-	end
-	return 1 / scale
-end
-
-function ns.EdgeSize(edges, size)
-	edges[1]:SetHeight(size)
-	edges[2]:SetHeight(size)
-	edges[3]:SetWidth(size)
-	edges[4]:SetWidth(size)
-end
-
--- Returns the four edges so a caller that recolours on state, the way a bar
--- takes the threat colour, or resizes them to a real pixel, does not have to
--- rebuild them.
-function ns.Outline(frame, r, g, b, a)
-	local edges = {}
-	for i = 1, 4 do
-		edges[i] = ns.Fill(frame, "BORDER", r, g, b, a)
-	end
-	edges[1]:SetPoint("TOPLEFT")
-	edges[1]:SetPoint("TOPRIGHT")
-	edges[2]:SetPoint("BOTTOMLEFT")
-	edges[2]:SetPoint("BOTTOMRIGHT")
-	edges[3]:SetPoint("TOPLEFT")
-	edges[3]:SetPoint("BOTTOMLEFT")
-	edges[4]:SetPoint("TOPRIGHT")
-	edges[4]:SetPoint("BOTTOMRIGHT")
-	ns.EdgeSize(edges, 1)
-	return edges
-end
-
-function ns.Recolor(edges, color)
-	for i = 1, #edges do
-		edges[i]:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
-	end
-end
 
 --------------------------------------------------------------------------
 -- Which client this is

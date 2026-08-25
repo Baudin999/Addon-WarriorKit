@@ -2,7 +2,7 @@
 ## Title: WarriorKit
 ## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, square class-coloured player and target frames, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
-## Version: 1.4
+## Version: 1.5
 ## SavedVariables: WarriorKitDB
 ## SavedVariablesPerCharacter: WarriorKitCharDB
 ## X-Category: Combat
@@ -16,6 +16,24 @@
 # Core first. It creates ns.db, the API shims and the registry every feature
 # signs into, and the panel walks that registry at PLAYER_LOGIN.
 Core\Core.lua
+
+# The drawing layer, between Core and everything that draws. It owns the pixel
+# grid, so it loads before the panel and before any part that puts a frame up.
+UI\Pixel.lua
+UI\Draw.lua
+UI\Text.lua
+
+# The widget library, on top of that grid. Theme is the palette and the pixel
+# metrics, Stack lays a column out and asks every row how tall it is, Scroll
+# clips and scrolls, Widgets is the kit a page is built from, and Window is the
+# chrome with its rail and its tab strip. All five load before Core\Panel.lua,
+# which is the first thing that builds a page out of them.
+UI\Theme.lua
+UI\Stack.lua
+UI\Scroll.lua
+UI\Widgets.lua
+UI\Window.lua
+
 Core\Command.lua
 Core\Panel.lua
 
@@ -39,6 +57,7 @@ Buttons\Layout.lua
 Buttons\Ranks.lua
 Buttons\Feature.lua
 
+UnitFrames\Plates.lua
 UnitFrames\EnemyBars.lua
 UnitFrames\Skin.lua
 UnitFrames\Feature.lua

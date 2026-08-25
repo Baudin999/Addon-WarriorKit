@@ -240,14 +240,17 @@ function Charge.PlateFor(unit)
 	if C_NamePlate.GetNamePlateForUnit then
 		-- pcalled because the marker's ticker calls this 20 times a second
 		-- against unit tokens the client may not accept, and a ticker that
-		-- raises hits the error ceiling in about a minute. The scan below is
-		-- the real answer anyway.
+		-- raises hits the error ceiling in about a minute.
 		local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, unit)
-		if ok and plate then
-			return plate
-		end
+		return (ok and plate) or nil
 	end
-	for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
+
+	-- Only where the client has no GetNamePlateForUnit, which is neither of the
+	-- two this addon targets. It used to run as a fallback whenever that call
+	-- came back empty, which is the ordinary answer for a mob with no plate up,
+	-- so a scan that could not succeed ran twenty times a second and allocated
+	-- a table each time: GetNamePlates builds a fresh one on every call.
+	for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do -- allocates: unreachable on a client with GetNamePlateForUnit, and the early return above is the guard the scan cannot see
 		local plateUnit = PlateUnit(plate)
 		if plateUnit and UnitIsUnit(plateUnit, unit) then
 			return plate

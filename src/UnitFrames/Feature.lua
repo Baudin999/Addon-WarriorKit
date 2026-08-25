@@ -76,8 +76,24 @@ local function BarsWord(option, value)
 		if width then
 			ns.db.barsWidth = width
 			ns.EnemyBars.ApplyLayout()
-			ns.Print("list bar width " .. width .. ".")
+			ns.Print("bar width " .. width .. " pixels, on a plate and in the list.")
 		end
+	elseif option == "zoom" then
+		local zoom = ns.Command.Number(value, 1, 3, "bars zoom")
+		if zoom then
+			ns.db.barsZoom = zoom
+			ns.EnemyBars.ApplyLayout()
+			ns.EnemyBars.Rebuild()
+			ns.Print("bars zoom " .. zoom .. ", so one pixel of the design is "
+				.. zoom .. " on screen. " .. ns.UI.Describe() .. ".")
+		end
+	elseif option == "stack" then
+		ns.db.barsStack = ns.Command.Toggle(value)
+		ns.Plates.Apply()
+		ns.Print(ns.db.barsStack
+			and "asking the client to stack nameplates and sizing a plate to the bar on it, so two mobs standing together get two bars that do not cover each other."
+			or "nameplate motion and plate size handed back to the client.")
+		ns.Print("plates: " .. ns.Plates.Describe() .. ".")
 	else
 		ns.db.bars = ns.Command.Toggle(option)
 		ns.EnemyBars.Rebuild()
@@ -98,9 +114,13 @@ local function SkinWord(arg)
 	end
 
 	if option == "height" or option == "width" then
-		local low, high = 18, 56
+		-- Pixels, not units, since the block went on the grid. The old ceiling
+		-- was written when the numbers were UI units, which on a screen taller
+		-- than 768 buy more than one pixel each, so the same setting draws a
+		-- smaller square now and the range has to reach further to put it back.
+		local low, high = 18, 72
 		if option == "width" then
-			low, high = 90, 280
+			low, high = 90, 360
 		end
 		local size = ns.Command.Number(value, low, high, "skin " .. option)
 		if size then
@@ -146,7 +166,29 @@ ns.Register({
 		-- all-or-nothing behaviour.
 		barsCamera = "right",
 		barsMax = 8,
+		-- Pixels, like every other size in the bars, and one figure for both
+		-- modes. A bar on a plate used to take the plate's own width, which
+		-- was a number nobody chose and one that moved every time the driver
+		-- was told how much room a bar wants.
 		barsWidth = 180,
+
+		-- A whole number, because the bars are drawn on a pixel grid and a
+		-- fractional zoom would put every edge back on a half pixel. 1 is the
+		-- design size, which is the same physical size on every monitor and is
+		-- small on a 4K one.
+		barsZoom = 1,
+
+		-- Whether the addon owns nameplateMotion, nameplateOverlapV and the
+		-- enemy plate size, which between them are what stops two bars landing
+		-- on top of each other. Off means the client's own, untouched.
+		barsStack = true,
+
+		-- What those two CVars were before the addon first wrote to them, so
+		-- turning the setting off puts back what was actually there. Empty is
+		-- the sentinel for "not remembered yet". Account scoped, because the
+		-- CVars are.
+		platesMotionPrior = "",
+		platesOverlapPrior = "",
 		barsPoint = { "CENTER", "UIParent", "CENTER", 280, 120 },
 
 		-- The square skin on the player, target and target of target frames.
@@ -164,6 +206,10 @@ ns.Register({
 		-- that was far too tall in both directions that matter: it crowded the
 		-- text and it dropped target of target onto the target's aura row.
 		-- Target of target takes a fixed fraction of both.
+		--
+		-- Pixels, like every size in the enemy bars, because the block sits on
+		-- the same grid. 34 is 34 pixels on a laptop and 34 on a 4K panel, which
+		-- is the point of the grid and also the whole of what it costs.
 		skinHeight = 34,
 		skinWidth = 168,
 	},
@@ -180,20 +226,22 @@ ns.Register({
 		"bars on|off, bars mode auto|plates|list, bars style replace|attach",
 		"bars offset <-60-60>, bars marker on|off, bars level on|off",
 		"bars clickthrough on|off, bars camera right|left|both|off",
-		"bars max <1-15>, bars width <120-400>",
+		"bars max <1-15>, bars width <120-400>, bars zoom <1-3>",
+		"bars stack on|off, whether the client spaces plates by the size of our bar",
 		"skin on|off, the square player, target and target of target frames",
 		"skin player|target|tot on|off, one frame at a time",
-		"skin height <18-56>, skin width <90-280>",
+		"skin height <18-72>, skin width <90-360>, both in screen pixels",
 		"skin probe, what this client answered for each frame",
 	},
 
 	status = function()
-		return ("bars %s, mode %s (%s), style %s, up to %d, plates %s, camera %s%s; skin %s")
+		return ("bars %s, mode %s (%s), style %s, up to %d, plates %s, camera %s%s; screen %s; %s; font %s; skin %s")
 			:format(ns.db.bars and "on" or "off", ns.db.barsMode,
 				ns.EnemyBars.Mode(), ns.db.barsStyle, ns.db.barsMax,
 				ns.db.barsClickThrough and "click through" or "clickable",
 				ns.EnemyBars.CameraState(),
 				ns.HasThreat() and "" or ", no threat api so colour is who each mob is hitting",
+				ns.UI.Describe(), ns.Plates.Describe(), ns.UI.FontName(),
 				ns.FrameSkin.Describe())
 	end,
 
@@ -207,6 +255,8 @@ ns.Register({
 		ns.db.barsWidth = ns.DefaultFor("barsWidth")
 		ns.db.barsOffset = ns.DefaultFor("barsOffset")
 		ns.db.barsCamera = ns.DefaultFor("barsCamera")
+		ns.db.barsZoom = ns.DefaultFor("barsZoom")
+		ns.db.barsStack = ns.DefaultFor("barsStack")
 		ns.EnemyBars.ApplyLayout()
 		ns.EnemyBars.Rebuild()
 		ns.db.skin = ns.DefaultFor("skin")
@@ -293,12 +343,44 @@ ns.Register({
 		ui.Stepper("list bars", 1, 15, 1,
 			function() return ns.db.barsMax end,
 			function(value) ns.db.barsMax = value end)
-		ui.Stepper("list width", 120, 400, 10,
+		ui.Stepper("bar width, in pixels", 120, 400, 10,
 			function() return ns.db.barsWidth end,
 			function(value)
 				ns.db.barsWidth = value
 				ns.EnemyBars.ApplyLayout()
 			end)
+		ui.Stepper("zoom, whole steps only", 1, 3, 1,
+			function() return ns.db.barsZoom end,
+			function(value)
+				ns.db.barsZoom = value
+				ns.EnemyBars.ApplyLayout()
+				ns.EnemyBars.Rebuild()
+			end)
+		ui.Note(function()
+			return "Every size in the bars is a count of screen pixels, so a bar is the"
+				.. " same physical size on any monitor and its edges are exactly one pixel."
+				.. " Zoom multiplies that by a whole number, which is the only way to make"
+				.. " a pixel grid bigger without leaving it. " .. ns.UI.Describe() .. "."
+		end)
+		ui.Check("let the client space nameplates by the size of our bar",
+			function() return ns.db.barsStack end,
+			function(value)
+				ns.db.barsStack = value
+				ns.Plates.Apply()
+			end)
+		ui.Note(function()
+			if not ns.db.barsStack then
+				return "Off, so nameplate motion, nameplate overlap and plate size are the"
+					.. " client's own. Two mobs standing together will put two bars on top"
+					.. " of each other, because the client is spacing Blizzard's nameplate"
+					.. " and ours is twice the height of it."
+			end
+			return "Blizzard's driver decides where a plate goes, and it spaces them by how"
+				.. " big it thinks a plate is. This tells it the real figure and asks it to"
+				.. " stack rather than overlap. The cost is that a plate takes the mouse over"
+				.. " the whole bar, which is more to click and more of a camera drag swallowed."
+				.. " Turning it off puts all three back. Now: " .. ns.Plates.Describe() .. "."
+		end)
 
 		ui.Header("Player, target and target of target")
 		ui.Check("square frames in your class colour",
@@ -307,13 +389,13 @@ ns.Register({
 				ns.db.skin = value
 				ns.FrameSkin.Apply()
 			end)
-		ui.Stepper("frame height", 18, 56, 2,
+		ui.Stepper("frame height, in pixels", 18, 72, 2,
 			function() return ns.db.skinHeight end,
 			function(value)
 				ns.db.skinHeight = value
 				ns.FrameSkin.Relayout()
 			end)
-		ui.Stepper("frame width", 90, 280, 6,
+		ui.Stepper("frame width, in pixels", 90, 360, 6,
 			function() return ns.db.skinWidth end,
 			function(value)
 				ns.db.skinWidth = value

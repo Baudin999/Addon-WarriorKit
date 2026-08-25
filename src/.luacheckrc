@@ -23,6 +23,15 @@ globals = {
 	"WarriorKitChargeMarker",
 	"WarriorKitChargeMarkerCooldown",
 	"WarriorKitEnemyBarsAnchor",
+	-- the block the skin draws over each of the three Blizzard unit frames.
+	-- Named so a block that lands in the wrong place can be measured from a
+	-- macro or from scripts/harness.lua without Skin.lua handing out a
+	-- reference to its own entry tables. Built by concatenation in SPECS, so
+	-- luacheck never sees the write; listed here because the game makes the
+	-- global and the README says every one of those is written down.
+	"WarriorKitSkinPlayer",
+	"WarriorKitSkinTarget",
+	"WarriorKitSkinToT",
 	"WarriorKit_MarkSkull",
 	"WarriorKit_MarkCross",
 	"WarriorKit_MarkMoon",
@@ -43,6 +52,11 @@ read_globals = {
 	"IsAltKeyDown", "GetShapeshiftForm",
 	"UnitPlayerOrPetInParty", "UnitPlayerOrPetInRaid", "UnitIsPlayer",
 	"C_NamePlate", "C_Spell",
+	-- the pixel grid in UI/Pixel.lua. GetPhysicalScreenSize is the only honest
+	-- source for the monitor's real height; it is probed by name and falls back
+	-- to the resolution CVar, because nothing installed here proves it is on
+	-- 2.5.6. CreateFont backs the shared font objects in UI/Text.lua.
+	"GetPhysicalScreenSize", "CreateFont",
 	-- action bar and macro writing, used by the Buttons part. None of these is
 	-- confirmed to exist on 2.5.6 by an installed addon calling it, so Layout
 	-- probes for them before it writes anything.

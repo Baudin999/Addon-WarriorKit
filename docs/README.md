@@ -64,9 +64,18 @@ the probes that were already there, never by loading different files:
 The addon is seven parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
-    Core/Core.lua        SavedVariables, API shims, drawing, the feature registry
+    Core/Core.lua        SavedVariables, API shims, the feature registry
     Core/Command.lua     slash dispatch, built from the registry
     Core/Panel.lua       the options window and the widget kit
+
+    UI/Pixel.lua         the pixel grid: screen size, scale, snapping, rescale
+    UI/Draw.lua          a filled rectangle, a hairline outline, a crisp icon
+    UI/Text.lua          one shared font object per size, a label, wrapped height
+    UI/Theme.lua         the palette and the pixel metrics, in one table each
+    UI/Stack.lua         a column of rows, each one asked how tall it is
+    UI/Scroll.lua        a viewport that clips, a canvas that moves, a bar
+    UI/Widgets.lua       the widget kit a page is built out of
+    UI/Window.lua        window chrome, the side rail and the tab strip
 
     Marking/Marking.lua      ctrl-click raid marking, keybinding entry points
     Marking/Keys.lua         the override binding behind each marking key
@@ -86,6 +95,7 @@ name of none of them.
     Buttons/Ranks.lua        moves bar slots up to the best rank you know
     Buttons/Feature.lua
 
+    UnitFrames/Plates.lua    the client settings that decide where a plate goes
     UnitFrames/EnemyBars.lua enemy bars, nameplate replacement and list fallback
     UnitFrames/Skin.lua      the square skin on player, target and target of target
     UnitFrames/Feature.lua
@@ -103,8 +113,15 @@ name of none of them.
     check.sh             syntax, TOC coverage and lint gate, exits non-zero on any finding
     bake-ui.sh           bakes a captured Edit Mode layout into EditMode/Saved.lua
 
-TOC order matters twice. `Core/Core.lua` must load first because it creates the
-registry every other file signs into. Within a part, behaviour loads before
+`UI/` is not a part. It has no `Feature.lua`, signs into no registry, owns no
+setting and knows the name of nothing above it. It is a layer, the way Core is:
+everything that puts a frame on the screen draws through it, and it draws
+through the client.
+
+TOC order matters three times. `Core/Core.lua` must load first because it
+creates the registry every other file signs into. `UI/` loads next, before
+`Core/Panel.lua`, because the panel takes `ns.Fill` and `ns.Outline` into
+file-scope locals as it loads. Within a part, behaviour loads before
 `Feature.lua`, because `Feature.lua` is the only file in a part allowed to name
 anything outside its own folder.
 
@@ -181,6 +198,32 @@ goes through `Feature.lua` or through the shared surface below:
                                         and a recolour of an edge already drawn
     ns.Pixel(frame) / ns.EdgeSize(edges, size)   one screen pixel in that
                                         frame's units, and an edge resized to it
+    ns.UI.Adopt(frame, zoom)     put a frame on the pixel grid, so one unit
+                                 inside it is one physical pixel
+    ns.UI.Rezoom(frame, zoom)    change that frame's whole-number zoom
+    ns.UI.Pixel(frame)           what ns.Pixel forwards to
+    ns.UI.Round(frame, size)     a measurement snapped to a whole pixel
+    ns.UI.Convert(size, from, to)   a size measured in one frame's units,
+                                 expressed in another's
+    ns.UI.Scale() / ns.UI.ScreenHeight() / ns.UI.Supported() / ns.UI.Describe()
+    ns.UI.OnRescale(fn)          run when the resolution or the UI scale moves
+    ns.UI.Icon(parent, layer)    a spell icon cropped on a texel boundary with
+                                 the client's own snapping turned off
+    ns.UI.Crisp(texture)         that sampling fix, on a texture you made
+    ns.UI.Font(size, flags) / ns.UI.Label(...) / ns.UI.FontName()
+    ns.UI.Wrap / ns.UI.TextHeight   a string folded to a width, and how tall
+                                 it came out
+    ns.UI.Flush()                every adopted frame combat refused to re-scale
+    ns.UI.Color / ns.UI.Metric   the palette and the pixel measurements
+    ns.UI.Box / ns.UI.Rule       a filled box with a hairline, and a hairline
+    ns.UI.Stack(parent, width)   a column of rows, each asked its own height
+    ns.UI.ScrollView(parent)     a viewport that clips and a bar that moves it
+    ns.UI.Button / ns.UI.Kit(host)   a push button, and the widget kit a page
+                                 is built out of
+    ns.UI.Window(opts) / ns.UI.Rail / ns.UI.TabStrip / ns.UI.Windows
+    ns.Plates.SetFootprint(w, h)  how much room one bar wants, in UIParent units
+    ns.Plates.Measure(plate)     what a plate was before the addon touched it
+    ns.Plates.Apply / Restore / Flush / Stacking / Describe / Warn
     ns.SpellName / ns.SpellTexture / ns.SpellCooldown / ns.SpellUsable / ns.SpellInRange
     ns.ItemInfo(link)            name, icon, equip slot and the link's own colour
     ns.ContainerSlots(bag) / ns.ContainerItemLink(bag, slot)   bags, on either
@@ -204,6 +247,8 @@ goes through `Feature.lua` or through the shared surface below:
     ns.SoftTarget.Restore()      hand the CVar back at the value it had before
     ns.SoftTarget.Describe()     "auto, on out of combat" and the other two
     ns.EnemyBars.WidgetFor(unit) the bar on that unit's plate, if there is one
+    ns.EnemyBars.Describe()      what the grid resolved to and whether the client
+                                 agreed to space plates by the size of a bar
     ns.FrameSkin.Apply()         put the three Blizzard unit frames where
                                  ns.db.skin says they should be
     ns.FrameSkin.Describe()      one line on what the skin did or did not find
@@ -240,6 +285,120 @@ rather than the account. Core merges every part's defaults and backfills missing
 load, so existing saved variables pick it up without a migration step. Two parts
 defining the same key is an assertion at load, not a last-writer-wins surprise.
 
+### The pixel grid
+
+The client draws the interface in a virtual space 768 units tall whatever the
+monitor is. A frame of height H at effective scale S covers `H * S *
+physicalHeight / 768` physical pixels, so one pixel is `768 / (S *
+physicalHeight)` units.
+
+`ns.Pixel` returned `1 / S`, which is that formula with the screen height
+assumed to be 768. On a 1440 tall screen at UI scale 0.65 the true figure is
+0.82 units and the old one was 1.54, so every hairline in the addon was being
+asked for at nearly two pixels and landing as a smear along one edge of a box
+and a line along the other. That was the whole of "nothing looks crisp".
+
+Correcting the arithmetic is not enough, because a correct fractional number of
+units still lands wherever the frame's origin happens to sit. So the addon does
+not work in fractions. `UI.Adopt` calls `SetIgnoreParentScale(true)` and sets
+the frame's scale to `768 / physicalHeight`, and inside that frame one unit is
+one physical pixel. Every size in `EnemyBars.lua` is a whole number of pixels
+written as a whole number, `ns.Pixel` on such a frame returns exactly 1, and
+nothing rounds on a ticker.
+
+Three consequences worth knowing before changing anything under it:
+
+- **Sizes are absolute now.** A 21 pixel bar is 21 pixels on a laptop and 21 on
+  a 4K panel. That is the point and it is also the cost, which is what
+  `bars zoom` is for. Zoom is a whole number because a fractional one puts every
+  edge back on a half pixel.
+- **A measurement from outside the grid means nothing until it is converted.**
+  A nameplate is not on the grid and never will be. `ns.UI.Convert` takes a size
+  from one frame's units into another's, and `ns.UI.Round` snaps what comes out.
+  A width read off a plate and used directly is a bug that looks like a
+  rendering artefact.
+- **A bar on a nameplate cannot be snapped in position.** Its origin is wherever
+  the mob is standing, which is a moving fraction of a pixel no addon can read.
+  Its geometry is exact; where that geometry lands is the client's business.
+  Bars in the list anchor to UIParent and are exact in both.
+
+Icons are a separate fix in the same file. A flat colour is one texel stretched
+over a rectangle and there is nothing to get wrong. A spell icon is a 64 texel
+square resampled to whatever the layout asked for, and it needs two things: a
+crop on a texel boundary, `5/64` and not `0.08`, and the client's own
+`SetSnapToPixelGrid` turned off, because that pulls a texture's corners onto
+whole pixels and stretches the two axes by different amounts. Both methods are
+probed rather than called, and an icon that is merely soft beats a widget that
+raises. `ns.UI.Icon` does all of it.
+
+Text goes through `ns.UI.Font`, which hands out one shared font object per size
+and flag pair. A font string given a font by `SetFont` carries its own copy; one
+given a font object shares. The bars alone put eight strings on a widget and lay
+out a widget per nameplate.
+
+### The widget library
+
+`UI/` was three files and a pixel grid. It is eight now, and the five new ones
+are a widget library rather than a settings panel: the options window is the
+first thing built on them and is not meant to be the last.
+
+    ns.UI.Color / ns.UI.Metric     the palette and the measurements
+    ns.UI.Box / ns.UI.Rule         a filled box with a hairline, and a hairline
+    ns.UI.Stack(parent, width)     a column, :Add, :Space, :Reflow
+    ns.UI.ScrollView(parent)       :Resize, :Update(extent), :ScrollTo
+    ns.UI.Button(parent, opts)     a push button
+    ns.UI.Kit(host)                the widget kit
+    ns.UI.Window(opts)             chrome, adopted onto the grid
+    ns.UI.Rail / ns.UI.TabStrip    the two levels of navigation
+    ns.UI.Windows                  every window the library has made
+
+**Every row is asked its height, never told.** A widget that carries text hands
+its stack a measure function. Reflow sets the row's width first, asks second,
+snaps the answer to a whole pixel and only then places the row under it. Doing
+those two in the other order is the whole of the overflow bug that was in the
+old panel: a note measured against the previous pass's width is a note drawn on
+top of whatever follows it.
+
+**A page has two levels.** The rail is the parts, and each `ui.Header` a feature
+writes opens a tab within that part. Nothing in a `Feature.lua` changed for it:
+`ui.Header` used to draw a rule and now opens a section, and the kit asks its
+host where sections go. A host that answers nothing gets the rule back.
+
+**The window is adopted, so it is exact.** Unlike a nameplate it is a frame the
+addon owns and anchors to UIParent, so every number in `UI.Metric` is a count of
+physical pixels and the window is 544 by 452 of them. It does not resize and it
+does not grow: a section that does not fit scrolls. Zoom is a whole number
+picked off the screen height, 1 below 2000 pixels tall and 2 above, for the same
+reason `bars zoom` is a whole number.
+
+**Three client questions, all probed.** Clipping is `SetClipsChildren` where it
+answers, the `ScrollFrame` frame type where it does not, and nothing at all
+where neither does. The bar is a `Slider` frame type with a thumb the addon
+draws, chosen because following a dragged thumb by hand means an `OnUpdate` and
+this addon does not add a ticker for a settings window. The wheel is
+`EnableMouseWheel`. No Blizzard widget template is used anywhere in the layer.
+
+### Where the client puts a nameplate
+
+Bars piling up when two mobs stand together is not a drawing bug and no care in
+the widget fixes it. Blizzard's driver decides where a plate goes, and it uses
+two things `UnitFrames/Plates.lua` can reach: `nameplateMotion`, which on 0 lets
+plates overlap freely and on 1 makes the driver push them apart, and the plate's
+size, which the driver takes to be Blizzard's nameplate. Ours is twice the
+height of that with a level tag hanging off the left edge.
+
+`SetNamePlateEnemySize` tells it the real figure, sent in UIParent's units
+because that is what the driver counts in. Where that call is missing,
+`nameplateOverlapV` multiplies the height the driver uses instead. Both are
+behind one setting, `bars stack`, and both are the player's, borrowed: the prior
+value is saved on first touch and put back when the setting goes off, the same
+discipline `Charge/SoftTarget.lua` applies to `SoftTargetEnemy`.
+
+Sizing the plate moves the click target with it. A taller plate takes the mouse
+over more of the screen, which is more room to click a mob and more of a camera
+drag swallowed, and that trade is why this is a setting rather than something
+the part does quietly.
+
 ### Ticker discipline
 
 Four `OnUpdate` tickers run at once and none of them ever stops.
@@ -267,9 +426,20 @@ never saved the building: a table, a dozen formatted lines and a concat, thirty
 times a second. It now compares the three inputs instead, the unit, the weapon
 setting and `ns.Charge.NameEpoch()`.
 
+The same rule now covers allocation, which is the same defect one step further
+out. A table constructor or an anonymous function on a ticker is garbage the
+collector has to walk later, and the collector runs in the middle of a frame.
+The list collector was building a table for the list, one per mob in it and two
+closures every fifth of a second, about eighty objects a second to answer a
+question whose answer rarely changed. Measured under the harness at two bars and
+fifty ticks, that was 51.76 KB before and 4.10 KB after. The plate path was
+already clean and measures 0.17 KB. An allocation behind an `if` is a cache
+being filled once and is fine; one the tick reaches every time is not.
+
 `check.sh` enforces this. `HOT` in that file lists every function that runs on
-every tick, and a `:SetSomething(` call inside one fails the build unless an
-`if`, `elseif` or `else` stands between it and the top of the function. A
+every tick, and a `:SetSomething(` call or a table constructor inside one fails
+the build unless an `if`, `elseif` or `else` stands between it and the top of
+the function. A
 function only ever reached from behind a guard, `PlaceOnPlate` for one, is not
 on the list: it already runs on a change rather than on a tick, and its job is
 to do the writing. A `for` loop
@@ -277,8 +447,10 @@ is not a guard: it repeats the write, it does not decide it. Adding an
 `OnUpdate` to a file that names no function in `HOT` also fails, so a new ticker
 cannot arrive unchecked.
 
-To exempt one line, put `-- unguarded: <reason>` on it. The reason is required
-and the gate checks that it is there.
+To exempt one line, put `-- unguarded: <reason>` on a write or
+`-- allocates: <reason>` on an allocation. The reason is required and the gate
+checks that it is there. Two exemptions stand today, both the same shape: a
+memoisation guarded by an early return the scan cannot see.
 
 What is deliberately not guarded: `Skin.lua` re-applies `Flatten` and the
 portrait crop on every tick because Blizzard's own code puts the texture and the
@@ -1110,14 +1282,65 @@ every unit change, so `SetStatusBarColor` is swapped for a no-op and the
 original kept beside it as `wkSetStatusBarColor`, which is what `ns.Strip` does
 to `Show`. `Paint` calls the original. Nothing in that is a protected action.
 
-**The anchor is measured, the size is a setting.** Only the client knows where
-the frame sits, so the block is placed on the portrait's own first anchor. Only
-you know how tall you want it, so the height and the width are `/wk skin
-height` and `/wk skin width`. Sizing it off Blizzard's own portrait, which is
-what the first version did, gave a square as tall as the portrait: it crowded
-the text and it dropped target of target onto the target's aura row. Target of
-target takes a fixed fraction of both settings, because it is a glance rather
-than a frame you read.
+**The anchor is measured, the size is a setting, and the size is now pixels.**
+Only the client knows where the frame sits, so the block is placed on the
+portrait's own first anchor. Only you know how tall you want it, so the height
+and the width are `/wk skin height` and `/wk skin width`, and since the block
+went on the pixel grid those two numbers are counts of screen pixels rather than
+of UI units. On a 1440 tall screen at UI scale 0.65 one unit used to buy 1.22
+pixels, so the same setting draws a smaller square than it did and the ranges
+reach further up to compensate: 18 to 72 and 90 to 360. Sizing it off Blizzard's
+own portrait, which is what the first version did, gave a square as tall as the
+portrait: it crowded the text and it dropped target of target onto the target's
+aura row. Target of target takes a fixed fraction of both settings, because it
+is a glance rather than a frame you read.
+
+**What can go on the grid and what cannot.** The three frames this file creates
+per unit frame, `slot`, `box` and `top`, are adopted: one unit inside them is
+one physical pixel and every size in `Place` is a whole number. The portrait,
+the two status bars and the four state icons are not, and never will be. They
+are regions of a secure unit button, and rescaling one is a protected action
+and a change the skin could not honestly hand back. So two numbers cross that
+boundary and each has a direction. `Pixels()` brings a measurement in: a frame
+width read off `TargetFrame` is 232 of Blizzard's units, not 232 pixels, and
+comparing it against a setting that counts pixels is what makes a clamp fire
+when it should not. `ns.Pixel(frame)` takes a size out: a badge that should be
+18 pixels is written on Blizzard's region as 18 times that.
+
+The two gauges avoid the question entirely. Each bar is pinned corner to corner
+onto a rail, an empty frame inside the box, rather than given a height. The
+client resolves an anchor on the screen rather than in either frame's units, so
+the bar's four corners are our whole pixels and nothing about the bar had to be
+converted or rounded to get there.
+
+What the grid cannot fix is where the block starts. It hangs off the portrait's
+own anchor on a frame that is not on the grid, so the origin is a fraction of a
+pixel no addon can read, exactly as a bar on a nameplate takes its origin from
+wherever the mob is standing. The geometry is exact; the origin is Blizzard's.
+
+Numbers, on this monitor, before and after: the power bar was 9.54 units tall,
+which is 11.63 pixels, and is 10; the two text baselines sat at -14.41 and
+-34.63 pixels and sit at -11 and -28; the rest, combat and raid marker icons
+were 22.79 pixels square and are 18; the PvP icon was 29.84 and is 24, and both
+are even so that centring one on a corner does not put all four of its edges on
+a half pixel.
+
+**Sampled art gets the same two fixes a spell icon gets.** A flat colour is one
+texel stretched over a rectangle. A portrait render and the four state icons
+are not, so each takes `ns.UI.Crisp`: the client's own `SetSnapToPixelGrid`
+off, because it pulls corners onto whole pixels and stretches the two axes by
+different amounts, and the bias at zero. The portrait crop moved from `0.15`,
+which cuts 9.6 texels of a 64 texel image and forces the sampler to interpolate
+across the whole picture to find the edge, to `10/64`. That second number is
+also exact in binary, which is what lets the tick compare what it reads back
+against what it wrote. There is no getter for either half of the snapping fix,
+so `Revert` puts back the client default rather than what was there.
+
+**Text is four shared font objects, not twelve private ones.** Every string went
+through `SetFont`, which gives a font string its own copy of the font, at a size
+in UI units that came out as 17.06 and 8.53 physical pixels. They go through
+`ns.UI.Font` now, at a whole pixel size taken off the bar height, sharing one
+object per size with everything else the addon draws.
 
 **Everything is anchored off the portrait's square**, `entry.slot`, which owns
 no textures and exists only to be that square. The block cannot be anchored by
@@ -1241,8 +1464,25 @@ installed here calls unguarded, so the five colours are constants in the file.
 The tick runs at 5Hz, the same rate the enemy bars run at, and for the reason
 the artwork part does not use events either: the event names carrying health
 and power have been renamed twice between these two clients and a missed one is
-a bar that lies. It also re-applies the portrait's crop every tick, because
-Blizzard's own code sets that back whenever it swaps the art underneath.
+a bar that lies.
+
+**Re-applying is not the same as writing.** The tick still has to be the last
+word on the bar fill and the portrait crop, because Blizzard's code puts both
+back whenever it swaps the art underneath. It reads back first now. A colour
+texture answers no file path, so a bar that is still flat costs one comparison,
+and the moment `UI-StatusBar` comes back the path answers and the write happens.
+The crop compares the left coordinate the same way. Across three frames that was
+300 texture writes and 150 crop writes every fifty ticks, all of them writing
+the value already there, and it is zero. Where a client has no `GetTexture` the
+write stands unguarded, which is what this did before and is the safe half to be
+wrong on.
+
+The level tag was the other one. `Refresh` built the string with a `tostring`
+and a concat and then compared it, so the guard never saved the building: three
+frames five times a second to say a number that changes when the unit does.
+`LevelTag` interns one string per level and classification pair. Measured under
+the harness at fifty ticks across all three frames, that was 18.75 KB before and
+0.00 after.
 
 `/wk status` reports how many regions the last apply hid, and zero with the
 skin on is the answer that matters: it means the walk found no textures on
@@ -1315,7 +1555,7 @@ would go stale.
     /wk bars marker on|off       ours, or hand the marker back to Blizzard
     /wk bars level on|off        the mob tag, XP colour and reaction stripe
     /wk bars max 8               list mode only, 1 to 15
-    /wk bars width 180           list mode only, 120 to 400
+    /wk bars width 180           a bar on a plate and in the list, 120 to 400
     /wk skin on|off              square class-coloured player and target frames
     /wk skin player|target|tot on|off   one frame at a time
     /wk skin height 34           18 to 56, the block's height
@@ -1348,12 +1588,13 @@ point: it is an override, not an entry in the set the panel saves.
 
 ## Verifying a change
 
-Nothing here can run the game's API, so verification stops at syntax and lint.
-Both run from one script:
+Nothing here can run the game's API. What it can do is run the addon against a
+stub of the API, which is a weaker claim and a much better one than syntax
+alone. Everything runs from one script:
 
     ./check.sh
 
-It does five things and exits non-zero on any finding. The bar is zero warnings
+It does six things and exits non-zero on any finding. The bar is zero warnings
 and zero errors.
 
 1. Loads every `.lua` under the addon through lua5.1. It walks the tree with
@@ -1371,7 +1612,48 @@ and zero errors.
 4. Checks that every saved variable table a TOC declares is one some Lua file
    actually touches. An undeclared table is not saved at all, and the symptom is
    settings that vanish on logout rather than an error.
-5. Runs luacheck over the tree.
+5. Bans writes and allocation on ticker paths, described under Ticker
+   discipline above.
+6. Runs `scripts/harness.lua`, which loads every file in TOC order against a
+   stub of the client, puts two nameplates up, drives the enemy bars ticker and
+   then asserts the things reading the source cannot settle: that the grid
+   resolves to one unit per pixel on a screen that is not 768 tall, that a
+   widget's geometry is a whole number of pixels once the client's fractional
+   measurements have been through it, that the icon crop lands on a texel
+   boundary, that the driver was told how much room a bar wants, and that fifty
+   ticks stay under the allocation gate. Those gates are ratchets: each sits
+   just above the current figure and the next improvement lowers it in the same
+   commit. The bars' gate went in at 5.0 covering 4.10 and is 0.5 covering 0.17.
+
+   It also stands up stubbed `PlayerFrame`, `TargetFrame` and `TargetFrameToT`,
+   runs the skin against them, and asserts that the blocks the addon owns are on
+   the grid and whole, that both gauges are pinned to their rails, that the
+   anchor offset was converted and not used raw, that the badge widths are even,
+   and that the tick writes neither a bar fill nor a crop it has already
+   written.
+
+   It opens the options window and walks it: every rail entry, every tab under
+   it, every row on every tab. It asserts that the window is on the grid and
+   sized in whole pixels, that no row is fractional, that no row is shorter than
+   the wrapped text inside it, that exactly one section of a page is visible at
+   a time, and that a section past the viewport turns the scrollbar on and one
+   that fits turns it off with no stub left behind. The text engine it measures
+   against is a model, not the client's: 0.42 em per glyph and a line box of the
+   font size plus two. It has the one property the layout depends on, which is
+   that a longer string in a narrower box is more lines, and it proves nothing
+   about where the game breaks a line.
+
+   Two behaviours are asserted rather than described. Which bar is yours, in all
+   four states, including the one that gets lost in a refactor: with nothing
+   targeted every bar is bright. And a resolution change that lands in combat,
+   where a protected block holds its scale and takes the new one at
+   `PLAYER_REGEN_ENABLED` while an unadopted frame moves straight away.
+7. Runs luacheck over the tree.
+
+The harness is not a client. Every API in it answers what that file says it
+answers, so a stub that returns the wrong thing is a test that passes and a
+client that does not. It proves the code runs and the arithmetic lands; it
+proves nothing about whether the game agrees.
 
 Add any new global you touch to `read_globals` in `.luacheckrc` rather than
 silencing the warning, and if you ever need an `ignore` entry, write the reason
@@ -1407,6 +1689,66 @@ Aiming at a mob out of combat with no target selected is the whole test.
 ## Untested against the live client
 
 Everything below was written from the API contract and has never executed:
+
+- Whether `GetPhysicalScreenSize` is on 2.5.6. Nothing installed here calls it.
+  `UI/Pixel.lua` probes it by name and falls back to parsing
+  `gxWindowedResolution`, then to assuming 768, which is the one screen height
+  where the new arithmetic and the old agree and nothing moves.
+- Whether `SetIgnoreParentScale` is on 2.5.6. Probed on the first adoption. Where
+  it is missing the grid does not happen, sizes stay correct because every
+  constant is multiplied by `ns.Pixel`, and edges are still one pixel wide, they
+  just land wherever the frame does. `/wk status` says which.
+- Whether `SetSnapToPixelGrid` and `SetTexelSnappingBias` are on 2.5.6. Both
+  probed per texture. Absent, icons are as soft as they were.
+- Whether `C_NamePlate.SetNamePlateEnemySize` is on 2.5.6. Probed by name, and
+  `nameplateOverlapV` is the fallback. `/wk status` reports which of the two is
+  doing the work.
+- Whether `SetCVar` takes `nameplateMotion` and `nameplateOverlapV` here. Both
+  pcalled, both retried at PLAYER_REGEN_ENABLED, and `Plates.Warn` says so once
+  in chat if the client is still not stacking.
+- Whether `Fonts\\ARIALN.TTF` is present on both clients. `UI.Font` reads the
+  font back after setting it and falls back to the client default.
+- Whether a frame the addon creates as a child of `PlayerFrame` accepts
+  `SetIgnoreParentScale`, and whether it counts as protected. `Style` and
+  `Relayout` are both behind the lockdown guard, so every call the skin makes is
+  out of combat. `UI.Refresh` is the path that is not, because a monitor swapped
+  or a window resized mid pull reaches every adopted frame with `SetScale`. It
+  asks `ns.Blocked` per frame now and defers the refused ones to
+  `PLAYER_REGEN_ENABLED`, so the exposure is a block that keeps the old scale
+  until combat drops rather than an error.
+- Whether `10/64` is the right crop for a unit portrait on 2.5.6. Blizzard hides
+  that dead space under the ring rather than cropping it, so there is no value
+  to copy. Too small shows the render's empty border, too large cuts the chin,
+  and the only reason to prefer 10 over 9 or 11 is that it is a texel boundary.
+- Whether `Texture:GetTexture` answers nil for a texture set with
+  `SetColorTexture` here. If it answers something the flatten guard never holds
+  and the tick writes every time, which is what it did before. If it answers nil
+  while the bar really does carry a file path, the rage bar keeps its rounded
+  ends. The first is the failure this degrades to.
+- Whether `Texture:GetTexCoord` answers back exactly what `SetTexCoord` wrote. If
+  the client stores it lossily the crop is re-applied every tick, which is the
+  old behaviour rather than a fault.
+- Whether pinning a Blizzard status bar to a frame on a different scale with
+  `SetAllPoints` resolves on the screen rather than in the bar's own units. The
+  whole rail arrangement rests on it, and if it does not both gauges will be
+  wrong by the ratio between the two scales, which is very visible.
+- Whether `SetClipsChildren` is on 2.5.6. The harness answers every method probe,
+  so it only ever exercises the clipping path: the `ScrollFrame` fallback and the
+  no-clipping fallback have never run. `/wk` drawing content over its own footer
+  is the symptom of the third.
+- Whether the `Slider` frame type accepts a `Texture` object in
+  `SetThumbTexture` here, and whether `SetObeyStepOnDrag` exists. The dress-up is
+  pcalled; a refusal costs the bar and leaves the wheel. Without the second, the
+  canvas lands on a fractional pixel while the thumb is held and snaps back on
+  release.
+- Whether `GetStringHeight` answers on a font string inside a hidden window. The
+  panel only measures the section it has just shown, which should make it moot,
+  but a client that refuses on a shown frame inside a hidden window would lay
+  every note out one line tall until the first refresh after `Show`.
+- Where the game actually breaks a line. The harness models 0.42 em per glyph. If
+  Arial Narrow is wider than that in practice, notes wrap to more lines than
+  modelled, which is safe because rows measure at runtime, but the harness's
+  section heights are model numbers rather than measurements.
 
 - Whether `/equipslot` takes macro conditionals. It goes through SecureCmdList,
   which gets `SecureCmdOptionParse` applied before the handler runs, so

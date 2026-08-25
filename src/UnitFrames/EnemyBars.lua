@@ -9,14 +9,33 @@ ns.EnemyBars = EnemyBars
 local TRACKED_SPELLS = { 7386, 1160, 6343, 772 } -- Sunder Armor, Demoralizing Shout, Thunder Clap, Rend
 
 local REFRESH = 0.2
-local ICON_SIZE = 18
-local ICON_GAP = 3
-local PLATE_BAR_HEIGHT = 17
-local LIST_BAR_HEIGHT = 23
-local TOP_TEXT = 12
-local LEVEL_WIDTH = 26 -- until the first update measures the tag's own text
-local LEVEL_PAD = 8
-local STRIPE_WIDTH = 4
+
+-- Pixels, not units.
+--
+-- Every widget here sits on the pixel grid in UI/Pixel.lua, where one unit is
+-- one physical pixel, so these are the sizes the bar actually occupies on the
+-- monitor and they are the same on every monitor. That is the point of the
+-- grid and it is also the one thing it costs: a 21 pixel bar is a fifth of the
+-- screen height on a laptop and a tenth of it on a 4K panel. `bars zoom` is the
+-- answer to that, and it is a whole number because a fractional one would put
+-- everything back on half pixels.
+--
+-- ICON_SIZE is the one number here with a right answer rather than a chosen
+-- one. The client keeps half sized copies of every texture and picks the
+-- nearest, so a 64 texel spell icon is sharp at 64, 32 and 16 and is a blend of
+-- two copies at anything in between. 20 is a compromise with the old size; 16
+-- is the sharpest this row can be.
+local ICON_SIZE = 20
+local ICON_GAP = 4
+local PLATE_BAR_HEIGHT = 21
+local LIST_BAR_HEIGHT = 28
+local TOP_TEXT = 15
+local LEVEL_WIDTH = 32 -- until the first update measures the tag's own text
+local LEVEL_PAD = 10
+local STRIPE_WIDTH = 5
+local PLATE_TEXT = 12
+local LIST_TEXT = 14
+local COUNT_TEXT_SIZE = 11
 local NAME_MAX = 8
 local RAID_ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 
@@ -29,6 +48,25 @@ local EDGE = { 0, 0, 0, 0.90 } -- debuff icons only, the gauge edge follows thre
 local TRACK = 0.20 -- the spent part of a bar is its own colour, this dark
 local NAME_TEXT = { 0.97, 0.97, 1.00 }
 local TARGET_TEXT = { 1.00, 0.90, 0.55 }
+
+-- Which bar is yours, said with the one channel nothing else on the bar is
+-- using. The fill, the edge and the line above all belong to threat, the tag
+-- belongs to what the kill is worth, and the stripe belongs to reaction, so a
+-- fourth colour would be a fourth thing to read on a bar that already has
+-- three. Alpha is free.
+--
+-- Attach calls SetIgnoreParentAlpha, which throws away the client's own
+-- nameplateNotSelectedAlpha, and that is deliberate rather than an oversight to
+-- undo: the plate's alpha also fades with distance and through the plate's own
+-- fade in, and in list mode there is no plate and no alpha to inherit. The bars
+-- answer this themselves so the answer is the same in both modes and means one
+-- thing only.
+--
+-- With nothing targeted every bar is bright. Dimming the whole screen to say
+-- "none of these" is noise, and it is the moment you most want to read threat
+-- off a mob that is not yours yet.
+local TARGET_ALPHA = 1.00
+local OTHER_ALPHA = 0.55
 local HEALTH_TEXT = { 0.74, 0.76, 0.82 }
 local COUNT_TEXT = { 1.00, 0.86, 0.45 }
 
@@ -74,8 +112,13 @@ local CLASSIFICATION = {
 
 local anchor, header
 local pool, attached, listWidgets = {}, {}, {}
+-- Every enemy plate the client currently has up, kept by the add and remove
+-- events. GetNamePlates builds a fresh table on every call, and both the list
+-- collector and the attach walk wanted one five times a second.
+local plateUnits = {}
 local trackedNames, trackedIcons = {}, {}
 local targeters, groupUnits = {}, {}
+local haveTarget = false -- gathered once a tick, read by every widget
 local firstSeen, seenCounter = {}, 0
 local scratch = {}
 local stripped, pending = {}, {}
@@ -201,6 +244,10 @@ end
 local function BuildTargeters()
 	wipe(targeters)
 	wipe(groupUnits)
+	-- Asked once here rather than once per mob in UpdateWidget. It is the same
+	-- answer for every bar on the screen and this already runs exactly once a
+	-- tick in both modes.
+	haveTarget = UnitExists("target")
 
 	Member("player", "pet")
 	if IsInRaid() then
@@ -385,25 +432,19 @@ local function FlatBar(parent)
 	return bar
 end
 
--- Outlined rather than shadowed, because these sit over the world and a drop
--- shadow disappears against a dark floor.
-local function Text(parent, size, color, justify)
-	local text = parent:CreateFontString(nil, "OVERLAY")
-	text:SetFont((GameFontNormal:GetFont()), size, "OUTLINE")
-	text:SetTextColor(color[1], color[2], color[3])
-	text:SetJustifyH(justify or "LEFT")
-	-- Guarded the same way the panel guards it. Nothing installed here proves
-	-- SetWordWrap exists on 2.5.6, and this runs once per nameplate, so an
-	-- absent method would raise per widget rather than once.
-	if text.SetWordWrap then
-		text:SetWordWrap(false)
-	end
-	return text
-end
+local Text = ns.UI.Label
 
 local function CreateWidget()
 	local widget = CreateFrame("Frame", nil, UIParent)
 	widget:EnableMouse(false) -- never steal a click from the nameplate underneath
+
+	-- On the grid, and off whatever scale the plate it ends up parented to
+	-- carries. A nameplate is scaled by three client settings at once and the
+	-- product is never a whole number, so a bar that inherited it would have
+	-- every edge, every icon and every glyph resampled by a fraction. This is
+	-- the single call that makes the rest of the file able to say 21 and mean
+	-- twenty one pixels.
+	ns.UI.Adopt(widget, ns.db.barsZoom)
 
 	-- One framed box, one gauge inside it, and the gauge fills the box. There
 	-- used to be a second three pixel bar for threat stacked above the health
@@ -432,36 +473,35 @@ local function CreateWidget()
 	-- two answer one question between them, what this mob is and what it does
 	-- about you, and one setting turns the pair on and off.
 	level.stripe = ns.Fill(level, "ARTWORK", AGGRO[1], AGGRO[2], AGGRO[3], 1)
-	level.text = Text(level, 10, NO_XP, "CENTER")
-	level.text:SetPoint("CENTER", level, "CENTER", STRIPE_WIDTH / 2, 0)
+	level.text = Text(level, PLATE_TEXT, NO_XP, "CENTER")
 	widget.level = level
 
-	widget.name = Text(widget.health, 10, NAME_TEXT, "LEFT")
-	widget.healthText = Text(widget.health, 10, HEALTH_TEXT, "RIGHT")
-	widget.threatText = Text(widget, 10, HEALTH_TEXT, "LEFT")
+	widget.name = Text(widget.health, PLATE_TEXT, NAME_TEXT, "LEFT")
+	widget.healthText = Text(widget.health, PLATE_TEXT, HEALTH_TEXT, "RIGHT")
+	widget.threatText = Text(widget, PLATE_TEXT, HEALTH_TEXT, "LEFT")
 
-	widget.marker = widget:CreateTexture(nil, "OVERLAY")
+	-- SetRaidTargetIconTexture picks one of eight out of a single sheet, so this
+	-- takes the sampling fix without the crop that comes with a spell icon.
+	widget.marker = ns.UI.Crisp(widget:CreateTexture(nil, "OVERLAY"))
 	widget.marker:SetTexture(RAID_ICON_TEXTURE)
 	widget.marker:Hide()
 
 	widget.icons = {}
 	for i = 1, #TRACKED_SPELLS do
 		local holder = CreateFrame("Frame", nil, widget)
-		holder:SetSize(ICON_SIZE, ICON_SIZE)
 		holder.edges = ns.Outline(holder, EDGE[1], EDGE[2], EDGE[3], EDGE[4])
-		holder.texture = holder:CreateTexture(nil, "ARTWORK")
-		holder.texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		holder.texture = ns.UI.Icon(holder)
 		holder.texture:SetTexture(trackedIcons[i])
 		-- Timer along the bottom edge and stacks in the corner, which leaves
 		-- the middle of the art readable. A number across the icon does not.
-		holder.timer = Text(holder, 10, NAME_TEXT, "CENTER")
+		holder.timer = Text(holder, PLATE_TEXT, NAME_TEXT, "CENTER")
 		holder.timer:SetPoint("BOTTOM", holder, "BOTTOM", 0, 0)
-		holder.count = Text(holder, 9, COUNT_TEXT, "RIGHT")
+		holder.count = Text(holder, COUNT_TEXT_SIZE, COUNT_TEXT, "RIGHT")
 		holder.count:SetPoint("TOPRIGHT", holder, "TOPRIGHT", -1, -1)
 		widget.icons[i] = holder
 	end
 
-	widget.targetedBy = Text(widget, 10, HEALTH_TEXT, "CENTER")
+	widget.targetedBy = Text(widget, PLATE_TEXT, HEALTH_TEXT, "CENTER")
 
 	-- The outline of what actually takes the mouse, drawn only while the frames
 	-- are unlocked.
@@ -490,19 +530,29 @@ end
 -- edge. That way one anchor point places the whole thing. The row above the
 -- gauge is shared: threat on the left, debuff icons packed to the right, so
 -- neither has to be centred into the other's way.
+--
+-- Every number the constants above hand over is a pixel count, and `px` is what
+-- turns it into the units this widget is drawn in. On the grid px is exactly 1
+-- and the multiply costs nothing. Off it, on a client with no
+-- SetIgnoreParentScale, px is the fraction that keeps the bar the same physical
+-- size and the edges one pixel wide, which is as close as that client gets.
 local function LayoutWidget(widget, width, onPlate)
 	-- Measured here rather than baked into a constant, because the same widget
-	-- is laid out on a nameplate and in the list and those two do not share a
-	-- scale. Everything an edge touches is in these units.
+	-- is laid out on a nameplate and in the list and a reparent can move the
+	-- scale under it. Everything below is in these units.
 	local px = ns.Pixel(widget)
-	local barHeight = onPlate and PLATE_BAR_HEIGHT or LIST_BAR_HEIGHT
+	local barHeight = (onPlate and PLATE_BAR_HEIGHT or LIST_BAR_HEIGHT) * px
 	local boxHeight = barHeight + px * 2 -- the gauge, plus the hairline around it
-	local iconRow = #TRACKED_SPELLS * ICON_SIZE + (#TRACKED_SPELLS - 1) * ICON_GAP
-	local textSize = onPlate and 10 or 12
-	local font = (GameFontNormal:GetFont())
+	local iconSize = ICON_SIZE * px
+	local iconGap = ICON_GAP * px
+	local iconRow = #TRACKED_SPELLS * iconSize + (#TRACKED_SPELLS - 1) * iconGap
+	local rowHeight = boxHeight + iconGap + iconSize
+	local pad = 4 * px
+	local font = ns.UI.Font(math.floor((onPlate and PLATE_TEXT or LIST_TEXT) * px + 0.5))
+	local countFont = ns.UI.Font(math.floor(COUNT_TEXT_SIZE * px + 0.5))
 
 	widget:SetWidth(width)
-	widget:SetHeight(boxHeight + ICON_GAP + ICON_SIZE + TOP_TEXT)
+	widget:SetHeight(rowHeight + TOP_TEXT * px)
 	widget.onPlate = onPlate -- PlaceOnPlate centres on a plate and not in the list
 
 	widget.box:ClearAllPoints()
@@ -517,16 +567,18 @@ local function LayoutWidget(widget, width, onPlate)
 	widget.health:SetPoint("TOPLEFT", widget.box, "TOPLEFT", px, -px)
 	widget.health:SetPoint("BOTTOMRIGHT", widget.box, "BOTTOMRIGHT", -px, px)
 
-	widget.healthText:SetFont(font, textSize, "OUTLINE")
+	widget.healthText:SetFontObject(font)
 	widget.healthText:ClearAllPoints()
-	widget.healthText:SetPoint("RIGHT", widget.health, "RIGHT", -4, 0)
+	widget.healthText:SetPoint("RIGHT", widget.health, "RIGHT", -pad, 0)
 
 	-- Levelled here rather than at creation, because Attach sets the widget's
 	-- frame level after the widget exists and this runs after that.
 	local showLevel = ns.db.barsLevel
 	widget.level:SetShown(showLevel)
 	widget.level:SetFrameLevel(widget.health:GetFrameLevel() + 1)
-	widget.level.text:SetFont(font, textSize, "OUTLINE")
+	widget.level.text:SetFontObject(font)
+	widget.level.text:ClearAllPoints()
+	widget.level.text:SetPoint("CENTER", widget.level, "CENTER", STRIPE_WIDTH * px / 2, 0)
 	widget.level:ClearAllPoints()
 	-- Flush against the box and the same height as it, so the tag and the bar
 	-- read as one strip with the box's own hairline between them. Pinned by
@@ -534,34 +586,38 @@ local function LayoutWidget(widget, width, onPlate)
 	-- gauge never moves under it.
 	widget.level:SetPoint("TOPRIGHT", widget.box, "TOPLEFT", 0, 0)
 	widget.level:SetPoint("BOTTOMRIGHT", widget.box, "BOTTOMLEFT", 0, 0)
-	widget.level:SetWidth(LEVEL_WIDTH)
+	widget.level:SetWidth(LEVEL_WIDTH * px)
 	widget.level.stripe:ClearAllPoints()
 	widget.level.stripe:SetPoint("TOPLEFT", widget.level, "TOPLEFT", 0, 0)
 	widget.level.stripe:SetPoint("BOTTOMLEFT", widget.level, "BOTTOMLEFT", 0, 0)
-	widget.level.stripe:SetWidth(STRIPE_WIDTH)
+	widget.level.stripe:SetWidth(STRIPE_WIDTH * px)
 	widget.levelTag = nil -- the next update sizes the tag to its own text
 
 	-- The whole inside of the gauge belongs to the name now, left edge to
 	-- health number, because the tag no longer takes a bite out of it.
-	widget.name:SetFont(font, textSize, "OUTLINE")
+	widget.name:SetFontObject(font)
 	widget.name:ClearAllPoints()
-	widget.name:SetPoint("LEFT", widget.health, "LEFT", 4, 0)
-	widget.name:SetPoint("RIGHT", widget.healthText, "LEFT", -4, 0)
+	widget.name:SetPoint("LEFT", widget.health, "LEFT", pad, 0)
+	widget.name:SetPoint("RIGHT", widget.healthText, "LEFT", -pad, 0)
 
+	widget.threatText:SetFontObject(font)
 	widget.threatText:ClearAllPoints()
-	widget.threatText:SetPoint("LEFT", widget, "BOTTOMLEFT", px, boxHeight + ICON_GAP + ICON_SIZE / 2)
-	widget.threatText:SetWidth(math.max(24, width - iconRow - 8))
+	widget.threatText:SetPoint("LEFT", widget, "BOTTOMLEFT", px, boxHeight + iconGap + iconSize / 2)
+	widget.threatText:SetWidth(math.max(24 * px, width - iconRow - 8 * px))
 
 	for i, holder in ipairs(widget.icons) do
+		holder:SetSize(iconSize, iconSize)
 		ns.EdgeSize(holder.edges, px)
+		holder.timer:SetFontObject(font)
+		holder.count:SetFontObject(countFont)
 		holder.texture:ClearAllPoints()
 		holder.texture:SetPoint("TOPLEFT", px, -px)
 		holder.texture:SetPoint("BOTTOMRIGHT", -px, px)
 		holder:ClearAllPoints()
 		if i == 1 then
-			holder:SetPoint("BOTTOMLEFT", widget.box, "TOPRIGHT", -iconRow, ICON_GAP)
+			holder:SetPoint("BOTTOMLEFT", widget.box, "TOPRIGHT", -iconRow, iconGap)
 		else
-			holder:SetPoint("LEFT", widget.icons[i - 1], "RIGHT", ICON_GAP, 0)
+			holder:SetPoint("LEFT", widget.icons[i - 1], "RIGHT", iconGap, 0)
 		end
 	end
 
@@ -569,16 +625,28 @@ local function LayoutWidget(widget, width, onPlate)
 	-- strip of screen. Anchored to the box when there is not, rather than to a
 	-- hidden frame, which would leave the icon floating a tag's width out.
 	widget.marker:ClearAllPoints()
-	widget.marker:SetSize(barHeight + 4, barHeight + 4)
+	widget.marker:SetSize(barHeight + pad, barHeight + pad)
 	if showLevel then
-		widget.marker:SetPoint("RIGHT", widget.level, "LEFT", -3, 0)
+		widget.marker:SetPoint("RIGHT", widget.level, "LEFT", -3 * px, 0)
 	else
-		widget.marker:SetPoint("RIGHT", widget.box, "LEFT", -3, 0)
+		widget.marker:SetPoint("RIGHT", widget.box, "LEFT", -3 * px, 0)
 	end
 
+	widget.targetedBy:SetFontObject(font)
 	widget.targetedBy:ClearAllPoints()
 	widget.targetedBy:SetPoint("TOP", widget, "TOP", 0, 0)
-	widget.targetedBy:SetWidth(width + 60)
+	widget.targetedBy:SetWidth(width + 60 * px)
+
+	-- What the client needs to know to stop two of these landing on each other.
+	-- Sent in UIParent's units because that is what the nameplate driver counts
+	-- in, and only from the plate layout: the list is anchored to the screen and
+	-- spaces itself.
+	if onPlate then
+		local wide = width + (showLevel and widget.level:GetWidth() or 0)
+		ns.Plates.SetFootprint(
+			ns.UI.Convert(wide, widget, UIParent),
+			ns.UI.Convert(widget:GetHeight(), widget, UIParent))
+	end
 end
 
 -- The tag hangs off the left of the box, so the box on its own is no longer
@@ -595,9 +663,13 @@ local function PlaceOnPlate(widget)
 	if not plate then
 		return
 	end
+	-- Rounded, because half of an odd tag is half a pixel and a widget offset
+	-- by half a pixel has every edge, glyph and icon inside it resampled across
+	-- two. This is the one offset in the file that is not already a whole
+	-- number: it is derived from text the client measured.
 	local shift = 0
 	if widget.onPlate and ns.db.barsLevel then
-		shift = widget.level:GetWidth() / 2
+		shift = ns.UI.Round(widget, widget.level:GetWidth() / 2)
 	end
 
 	-- Anchored to the frame that takes the mouse, not to the plate around it.
@@ -618,9 +690,11 @@ local function PlaceOnPlate(widget)
 		-- Sit where the Blizzard bar was, so the bar still reads as the mob's.
 		-- The gauge sits one pixel inside the box, so the gauge and not the
 		-- frame around it is what lands on the centre.
-		widget:SetPoint("BOTTOM", host, "CENTER", shift, -(PLATE_BAR_HEIGHT / 2 + 1) + ns.db.barsOffset)
+		local px = ns.Pixel(widget)
+		widget:SetPoint("BOTTOM", host, "CENTER", shift,
+			(-(PLATE_BAR_HEIGHT / 2 + 1) + ns.db.barsOffset) * px)
 	else
-		widget:SetPoint("BOTTOM", host, "TOP", shift, ns.db.barsOffset)
+		widget:SetPoint("BOTTOM", host, "TOP", shift, ns.db.barsOffset * ns.Pixel(widget))
 	end
 end
 
@@ -684,7 +758,9 @@ local function UpdateWidget(widget, unit, guid)
 		if widget.levelTag ~= tag then
 			widget.levelTag = tag
 			widget.level.text:SetText(tag)
-			widget.level:SetWidth(widget.level.text:GetStringWidth() + LEVEL_PAD + STRIPE_WIDTH)
+			local px = ns.Pixel(widget)
+			widget.level:SetWidth(ns.UI.Round(widget,
+				widget.level.text:GetStringWidth() + (LEVEL_PAD + STRIPE_WIDTH) * px))
 			PlaceOnPlate(widget) -- the tag changed width, so the centre moved
 		end
 		if widget.levelColor ~= xp then
@@ -725,13 +801,25 @@ local function UpdateWidget(widget, unit, guid)
 		end
 	end
 
-	-- Your current target is marked on the name, because the edge now belongs
-	-- to threat. Guarded for the same reason as the edge.
+	-- Your current target, said twice: brighter than everything else on the
+	-- screen, and warm rather than white on the name. The alpha is what you see
+	-- from across a pull and the name colour is what confirms it once you are
+	-- looking. Both guarded for the same reason as the edge.
+	--
+	-- The alpha guard compares the number and not isTarget, because it moves on
+	-- two things: which mob is yours, and whether you have one at all. Guarding
+	-- on isTarget alone would leave every bar dim after you dropped target.
 	local isTarget = UnitIsUnit(unit, "target")
 	if widget.targeted ~= isTarget then
 		widget.targeted = isTarget
 		local text = isTarget and TARGET_TEXT or NAME_TEXT
 		widget.name:SetTextColor(text[1], text[2], text[3])
+	end
+
+	local alpha = (isTarget or not haveTarget) and TARGET_ALPHA or OTHER_ALPHA
+	if widget.shownAlpha ~= alpha then
+		widget.shownAlpha = alpha
+		widget:SetAlpha(alpha)
 	end
 
 	local by = targeters[guid] or ""
@@ -1000,9 +1088,15 @@ local function Attach(unit)
 		return
 	end
 
+	-- Before StripPlate and before the driver has been told anything, because
+	-- this is the one moment a plate is still the size the client shipped and
+	-- the spacing arithmetic needs that figure.
+	ns.Plates.Measure(plate)
+
 	StripPlate(plate)
 
 	local widget = table.remove(pool) or CreateWidget()
+	ns.UI.Rezoom(widget, ns.db.barsZoom)
 	widget:SetParent(plate)
 	widget:SetFrameStrata(plate:GetFrameStrata())
 	widget:SetFrameLevel(math.min(plate:GetFrameLevel() + 5, 100))
@@ -1010,14 +1104,25 @@ local function Attach(unit)
 		widget:SetIgnoreParentAlpha(true)
 	end
 
+	-- `bars width` pixels, the same figure the list uses, and the same number of
+	-- screen pixels on every monitor because the widget is on the grid.
+	--
+	-- It used to be the width of the plate under it, and that was a loop with no
+	-- fixed point. LayoutWidget hands the driver a footprint a tag wider than
+	-- the bar, so that the level tag hanging off the left edge still counts as
+	-- room; the driver sizes every plate to it; and the next bar measured off a
+	-- plate came back changed. Which way it ran depended on the scale the client
+	-- puts on a nameplate against the scale it puts on UIParent. Wider every
+	-- round on one, narrower every round on another, and a setting change ran it
+	-- again. There was never a width the bars settled on, and no setting that
+	-- chose one.
+	--
 	-- LayoutWidget is around sixty anchor, font and size calls, and this runs
 	-- for every nameplate the game puts up, which in a busy zone is several a
-	-- second. Plates on one client are all the same width, so a widget coming
-	-- back out of the pool is nearly always being laid out to the shape it
-	-- already has. The epoch is what makes that safe: anything that changes
-	-- the shape bumps it, so the cache cannot outlive a setting.
-	local width = ns.Measure(plate, "GetWidth")
-	width = (width and width > 20) and width or 130
+	-- second. The epoch is what keeps it off that path: anything that changes
+	-- the shape bumps it, so a widget coming back out of the pool is laid out
+	-- again only when the shape it already has is out of date.
+	local width = ns.db.barsWidth * ns.Pixel(widget)
 	if widget.laidWidth ~= width or widget.laidEpoch ~= layoutEpoch then
 		widget.laidWidth, widget.laidEpoch = width, layoutEpoch
 		LayoutWidget(widget, width, true)
@@ -1064,62 +1169,98 @@ local function ReleaseAll()
 	end
 end
 
-local function AttachAll()
+-- Walks GetNamePlates, which allocates, so it runs on a rebuild and never on a
+-- tick. Everything after this point reads plateUnits, which the add and remove
+-- events keep current for free.
+local function SyncPlates()
+	wipe(plateUnits)
 	if not C_NamePlate then
 		return
 	end
 	for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
 		local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
 		if unit then
-			Attach(unit)
+			plateUnits[unit] = true
+			ns.Plates.Measure(plate)
 		end
 	end
 end
 
+local function AttachAll()
+	for unit in pairs(plateUnits) do
+		Attach(unit)
+	end
+end
+
+-- Every tick in list mode used to build a table for the list, a table for the
+-- seen set, a table for each mob in it, a closure to add one and a closure to
+-- sort them, and hand all of it to the collector a fifth of a second later. At
+-- five ticks a second and eight mobs that is around seventy tables and ten
+-- closures a second, allocated and dropped, for a list whose contents rarely
+-- change. Nothing here allocates now: the entries are reused in place, the two
+-- helpers are file scope rather than closures, and the plate list is the one
+-- this module already keeps from the add and remove events rather than a fresh
+-- table from GetNamePlates.
+local collected, collectSeen = {}, {}
+local collectCount = 0
+
+local function ByFirstSeen(a, b)
+	return a.order < b.order
+end
+
+local function Collect(unit)
+	if not UnitExists(unit) or UnitIsDead(unit) or not UnitCanAttack("player", unit) then
+		return
+	end
+	local guid = UnitGUID(unit)
+	if not guid or collectSeen[guid] then
+		return
+	end
+	collectSeen[guid] = true
+	if not firstSeen[guid] then
+		seenCounter = seenCounter + 1
+		firstSeen[guid] = seenCounter
+	end
+
+	collectCount = collectCount + 1
+	local entry = collected[collectCount]
+	if not entry then
+		entry = {}
+		collected[collectCount] = entry
+	end
+	entry.unit, entry.guid, entry.order = unit, guid, firstSeen[guid]
+end
+
+-- Returns how many of `collected` are live, not a list. A caller that kept the
+-- table past the next tick would be reading the tick after it.
 local function CollectUnits()
-	local list, seenNow = {}, {}
+	wipe(collectSeen)
+	collectCount = 0
 
-	local function add(unit)
-		if not UnitExists(unit) or UnitIsDead(unit) or not UnitCanAttack("player", unit) then
-			return
-		end
-		local guid = UnitGUID(unit)
-		if not guid or seenNow[guid] then
-			return
-		end
-		seenNow[guid] = true
-		if not firstSeen[guid] then
-			seenCounter = seenCounter + 1
-			firstSeen[guid] = seenCounter
-		end
-		list[#list + 1] = { unit = unit, guid = guid, order = firstSeen[guid] }
+	Collect("target")
+	Collect("focus")
+	for unit in pairs(plateUnits) do
+		Collect(unit)
 	end
 
-	add("target")
-	add("focus")
-	if C_NamePlate then
-		for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
-			local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
-			if unit then
-				add(unit)
-			end
-		end
+	-- Sorting the live prefix of a table that is longer than the prefix would
+	-- sort the stale entries in with it, so the tail is trimmed first. table.sort
+	-- has no length argument.
+	for index = #collected, collectCount + 1, -1 do
+		collected[index] = nil
 	end
+	table.sort(collected, ByFirstSeen)
 
-	table.sort(list, function(a, b)
-		return a.order < b.order
-	end)
-
-	if #list == 0 and seenCounter > 500 then
+	if collectCount == 0 and seenCounter > 500 then
 		wipe(firstSeen)
 		seenCounter = 0
 	end
-	return list
+	return collectCount
 end
 
 local function UpdateList()
-	local list = CollectUnits()
-	local shown = math.min(#list, ns.db.barsMax)
+	local shown = math.min(CollectUnits(), ns.db.barsMax)
+	local width = ns.db.barsWidth * ns.Pixel(anchor)
 
 	for index = 1, shown do
 		local widget = listWidgets[index]
@@ -1127,7 +1268,7 @@ local function UpdateList()
 			widget = CreateWidget()
 			listWidgets[index] = widget
 			widget:SetParent(anchor)
-			LayoutWidget(widget, ns.db.barsWidth, false)
+			LayoutWidget(widget, width, false)
 			widget:ClearAllPoints()
 			if index == 1 then
 				widget:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", 0, 0)
@@ -1135,7 +1276,7 @@ local function UpdateList()
 				widget:SetPoint("BOTTOMLEFT", listWidgets[index - 1], "TOPLEFT", 0, 4)
 			end
 		end
-		UpdateWidget(widget, list[index].unit, list[index].guid)
+		UpdateWidget(widget, collected[index].unit, collected[index].guid)
 		widget:Show()
 	end
 	for index = shown + 1, #listWidgets do
@@ -1152,6 +1293,13 @@ function EnemyBars.WidgetFor(unit)
 	return attached[unit]
 end
 
+-- One line for /wk status, covering the two things about the bars that are the
+-- client's answer rather than a setting: what the grid resolved to, and whether
+-- the driver agreed to space plates the way the bars need.
+function EnemyBars.Describe()
+	return ns.UI.Describe() .. "; " .. ns.Plates.Describe()
+end
+
 function EnemyBars.ApplyLayout()
 	if not anchor then
 		return
@@ -1160,9 +1308,23 @@ function EnemyBars.ApplyLayout()
 	local point = ns.db.barsPoint
 	anchor:ClearAllPoints()
 	anchor:SetPoint(point[1], UIParent, point[3], point[4], point[5])
-	anchor:SetSize(ns.db.barsWidth, 20)
+	ns.UI.Rezoom(anchor, ns.db.barsZoom)
+	local px = ns.Pixel(anchor)
+	anchor:SetSize(ns.db.barsWidth * px, 20 * px)
 	for _, widget in ipairs(listWidgets) do
-		LayoutWidget(widget, ns.db.barsWidth, false)
+		ns.UI.Rezoom(widget, ns.db.barsZoom)
+		LayoutWidget(widget, ns.db.barsWidth * px, false)
+	end
+	-- The bars already sitting on plates take the same width, and nothing else
+	-- would reach them: a widget on a plate is laid out when it attaches, and
+	-- these are attached. Sized off their own pixel rather than the anchor's,
+	-- because a plate widget can be on a zoom of its own until Rebuild runs.
+	for _, widget in pairs(attached) do
+		ns.UI.Rezoom(widget, ns.db.barsZoom)
+		widget.laidWidth = ns.db.barsWidth * ns.Pixel(widget)
+		widget.laidEpoch = layoutEpoch
+		LayoutWidget(widget, widget.laidWidth, true)
+		PlaceOnPlate(widget)
 	end
 end
 
@@ -1185,12 +1347,15 @@ function EnemyBars.Rebuild()
 	end
 	layoutEpoch = layoutEpoch + 1
 	ReleaseAll()
+	SyncPlates()
 	for _, widget in ipairs(listWidgets) do
+		ns.UI.Rezoom(widget, ns.db.barsZoom)
 		widget:Hide()
 	end
 	if ns.db.bars and EnemyBars.Mode() == "plates" then
 		AttachAll()
 	end
+	ns.Plates.Apply()
 	EnemyBars.ApplyLock()
 end
 
@@ -1238,13 +1403,16 @@ end
 
 events:SetScript("OnEvent", function(_, event, arg1)
 	if event == "NAME_PLATE_UNIT_ADDED" then
+		plateUnits[arg1] = true
 		Attach(arg1)
 		return
 	elseif event == "NAME_PLATE_UNIT_REMOVED" then
+		plateUnits[arg1] = nil
 		Release(arg1)
 		return
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		FlushPending()
+		ns.Plates.Flush()
 		return
 	elseif event == "CVAR_UPDATE" then
 		if EnemyBars.Mode() ~= lastMode then
@@ -1255,6 +1423,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	elseif event == "PLAYER_ENTERING_WORLD" then
 		lastMode = EnemyBars.Mode()
 		EnemyBars.Rebuild()
+		ns.Plates.Warn()
 		if not warnedNameplates and ns.db.barsMode == "auto" and not NameplatesEnabled() then
 			warnedNameplates = true
 			ns.Print("enemy nameplates are off, so the bars are running as a panel. Press V for the attached version.")
@@ -1273,6 +1442,11 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	end
 
 	anchor = CreateFrame("Frame", "WarriorKitEnemyBarsAnchor", UIParent)
+	-- On the grid too, so a list bar is snapped in both axes rather than only
+	-- sized in whole pixels. A bar on a nameplate cannot have this: its origin
+	-- is wherever the mob is standing, which is a moving fraction of a pixel no
+	-- addon can read or round.
+	ns.UI.Adopt(anchor, ns.db.barsZoom)
 	anchor:SetMovable(true)
 	anchor:RegisterForDrag("LeftButton")
 	anchor:SetClampedToScreen(true)
@@ -1302,4 +1476,12 @@ events:SetScript("OnEvent", function(_, event, arg1)
 			EnemyBars.Update()
 		end
 	end)
+end)
+
+-- A resolution change moves every size in this file at once, and a UI scale
+-- change moves the nameplates the bars are anchored to. Both come through here
+-- rather than through a ticker noticing.
+ns.UI.OnRescale(function()
+	EnemyBars.ApplyLayout()
+	EnemyBars.Rebuild()
 end)

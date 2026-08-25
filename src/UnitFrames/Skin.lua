@@ -14,7 +14,7 @@ ns.FrameSkin = Skin
 -- moves, resizes, recolours or hides is written down before it is touched and
 -- put back by `/wk skin off`, without a reload.
 --
--- Three rules shape it, and the first two are the artwork part's.
+-- Four rules shape it, and the first two are the artwork part's.
 --
 --   Textures go, frames stay. The ring, the banner and the backdrop are
 --   regions of the unit frame, so they are walked and hidden one at a time.
@@ -35,12 +35,31 @@ ns.FrameSkin = Skin
 --   the health bar's own width, so it lands where the frame already sat on
 --   whatever numbers this client uses. The constants in SPECS are the fallback
 --   for a client that answers none of those, not the plan.
+--
+--   Draw on the grid, measure off it. Everything this file creates goes on
+--   the pixel grid in UI/Pixel.lua, so a size written here as 34 means 34
+--   physical pixels and a hairline is one. Nothing the client owns can go
+--   with it: the portrait and the two bars are regions of a secure unit
+--   button and the addon must not scale, reparent or hide one of them. So
+--   the boundary runs between what we made and what we borrowed, and every
+--   number that crosses it is converted and snapped. What cannot cross is
+--   position. The block hangs off the portrait's own anchor on a frame that
+--   is not on the grid, so where the whole block lands is a fraction of a
+--   pixel no addon can read, exactly as a bar on a nameplate is. The
+--   geometry is exact; the origin is Blizzard's.
 
 local REFRESH = 0.2
 
 -- The portrait render carries dead space around the head. Blizzard hides it
 -- under the ring; with the ring gone it has to be cropped instead.
-local PORTRAIT_TRIM = 0.15
+--
+-- Written as a fraction of 64 rather than as a decimal, for the reason
+-- UI/Draw.lua crops an icon at 5/64: a portrait is sampled art, and a crop
+-- that lands between two texels makes the sampler interpolate across the whole
+-- image to find the edge. 0.15 cut 9.6 texels. Ten is the nearest boundary,
+-- and 10/64 is exact in binary as well, which is what lets the tick compare
+-- what it reads back against what it wrote.
+local PORTRAIT_TRIM = 10 / 64
 
 -- How much of the gauge the health bar takes. The rest is power, less the
 -- three hairlines: one along the top, one along the bottom, one between.
@@ -57,9 +76,22 @@ local TOT_SCALE = 0.62
 -- the edge only has to agree with it.
 local EDGE_DIM = 0.60
 
--- Below this many units tall a power bar cannot hold a readable number, so it
+-- Below this many pixels tall a power bar cannot hold a readable number, so it
 -- carries none. Target of target is the frame that hits it.
 local VALUE_FLOOR = 9
+
+-- The block's own geometry, in pixels, because everything this file draws is
+-- on the grid. Three hairlines cross the square: one along the top of the
+-- gauge, one along the bottom and one between the two bars.
+local HAIRLINES = 3
+local TEXT_PAD = 4
+
+-- Font sizes are taken off the bar heights, because the same code draws a 34
+-- pixel player frame and a 21 pixel target of target and one size cannot serve
+-- both. These are the fraction of the bar a glyph gets and the range it is
+-- allowed to land in.
+local BIG_SHARE, BIG_MIN, BIG_MAX = 0.72, 8, 14
+local SMALL_SHARE, SMALL_MIN, SMALL_MAX = 0.80, 7, 11
 
 -- The look, and deliberately the enemy bars' look: the same flat fills, the
 -- same hairline, no gloss, no gradient and no file path, so there is no art
@@ -138,12 +170,17 @@ local CLASSIFICATION = {
 -- level   the level text, which has no parent key on any of them
 -- scale   this frame's share of the height and width settings
 -- mirror  the gauge sits left of the portrait rather than right of it
+-- global  what the block this file draws over that frame is called. Named
+--         rather than anonymous for one reason: the box is the frame every
+--         measurement in this file is taken in, so a block that lands wrong
+--         can be measured from a macro or a harness without this file
+--         handing out a reference to its own internals.
 --------------------------------------------------------------------------
 
 local SPECS = {
 	{
 		key = "player", unit = "player", mirror = false,
-		scale = 1,
+		scale = 1, global = "WarriorKitSkinPlayer",
 		frames = { "PlayerFrame" },
 		art = { "PlayerFrameTextureFrame" },
 		names = {
@@ -159,7 +196,7 @@ local SPECS = {
 		-- and its portrait has always been on the outside edge. Moving it to
 		-- the left would be a second change nobody asked for.
 		key = "target", unit = "target", mirror = true,
-		scale = 1,
+		scale = 1, global = "WarriorKitSkinTarget",
 		frames = { "TargetFrame" },
 		art = { "TargetFrameTextureFrame" },
 		names = {
@@ -172,7 +209,7 @@ local SPECS = {
 	},
 	{
 		key = "tot", unit = "targettarget", mirror = false,
-		scale = TOT_SCALE,
+		scale = TOT_SCALE, global = "WarriorKitSkinToT",
 		frames = { "TargetFrameToT", "TargetofTargetFrame" },
 		art = { "TargetFrameToTTextureFrame" },
 		names = {
@@ -306,12 +343,35 @@ local function Revert(object)
 			object:SetTexCoord(shot.coords[1], shot.coords[2], shot.coords[3], shot.coords[4],
 				shot.coords[5], shot.coords[6], shot.coords[7], shot.coords[8])
 		end
+		-- The client offers no getter for either half of the sampling fix, so
+		-- what goes back is the client's own default rather than what was read.
+		-- Snapping on and no bias is what every texture ships with, so the only
+		-- way this is wrong is if something else had already turned it off, in
+		-- which case that addon's next draw sets it again.
+		if shot.crisp and object.SetSnapToPixelGrid then
+			object:SetSnapToPixelGrid(true)
+		end
 		if shot.barColor then
 			object:SetStatusBarTexture(shot.barPath or FALLBACK_BAR)
 			object:SetStatusBarColor(shot.barColor[1], shot.barColor[2],
 				shot.barColor[3], shot.barColor[4] or 1)
 		end
 	end)
+end
+
+-- The one piece of Blizzard art this file keeps rather than hides is sampled
+-- art: a portrait render and four state icons, each a texture being resampled
+-- to whatever square the layout asked for. Flat colour has nothing to get
+-- wrong and needs none of this. Recorded in the snapshot so Revert knows it
+-- has something to hand back.
+local function Crisp(object)
+	if not object then
+		return
+	end
+	ns.UI.Crisp(object)
+	if memory[object] then
+		memory[object].crisp = true
+	end
 end
 
 --------------------------------------------------------------------------
@@ -351,9 +411,22 @@ end
 -- object out from under the bar would leave a cached one pointing at nothing,
 -- and re-applied from the tick, because the portrait's crop had to be for the
 -- same reason: their code sets these back and ours has to be the last word.
+--
+-- Being the last word is not the same as writing every tick, which is what
+-- this did. A colour texture answers no file path, so a bar that is still flat
+-- costs one comparison, and the moment Blizzard puts UI-StatusBar back the
+-- path answers and this writes again. Six bars at five ticks a second is
+-- thirty texture writes saved, all of them writing the colour already there.
+-- Where the client has no GetTexture the write stands unguarded, which is what
+-- this file did before and is the safe half to be wrong on.
 local function Flatten(bar)
 	local fill = bar and bar.GetStatusBarTexture and bar:GetStatusBarTexture()
-	if fill and fill.SetColorTexture then
+	if not fill or not fill.SetColorTexture then
+		return nil
+	end
+	local flat = fill.GetTexture and bar.wkFlat == fill and not fill:GetTexture()
+	if not flat then
+		bar.wkFlat = fill
 		fill:SetColorTexture(1, 1, 1, 1)
 	end
 	return fill
@@ -594,19 +667,39 @@ local function RestoreArt(entry)
 end
 
 --------------------------------------------------------------------------
--- The block we draw
+-- The boundary
+--
+-- On one side of it are the three frames this file creates per unit frame,
+-- which are on the pixel grid and are counted in pixels. On the other are the
+-- portrait, the two bars and the state icons, which are Blizzard's, are on
+-- whatever scale the unit frame carries, and are counted in that frame's own
+-- units. Two numbers cross the line and each has its own direction.
+--
+-- Pixels() brings a measurement in: a width read off a unit frame is not a
+-- pixel count until it has been through the scale between us, and a number
+-- read off the client and used directly is a bug that looks like a rendering
+-- artefact.
+--
+-- ns.Pixel(frame) takes one out: it is one physical pixel expressed in that
+-- frame's units, so a size we want to be N pixels is written on one of
+-- Blizzard's regions as N times that.
 --------------------------------------------------------------------------
 
-local function Text(parent, size, color, justify)
-	local text = parent:CreateFontString(nil, "OVERLAY")
-	text:SetFont((GameFontNormal:GetFont()), size, "OUTLINE")
-	text:SetTextColor(color[1], color[2], color[3])
-	text:SetJustifyH(justify or "LEFT")
-	if text.SetWordWrap then
-		text:SetWordWrap(false)
+local function Pixels(size, from, to)
+	if not size then
+		return nil
 	end
-	return text
+	local px = ns.Pixel(to)
+	local converted = ns.UI.Convert(size, from, to)
+	if not converted or not px or px <= 0 then
+		return nil
+	end
+	return math.floor(converted / px + 0.5)
 end
+
+--------------------------------------------------------------------------
+-- The block we draw
+--------------------------------------------------------------------------
 
 -- One box, one divider, one text frame. It used to be two outlined boxes
 -- pushed together, and two edges meeting down the middle is what made the
@@ -625,32 +718,70 @@ end
 local function Build(entry)
 	local frame = entry.frame
 
+	-- Ours, so all three go on the grid. SetIgnoreParentScale takes them off
+	-- whatever scale the unit frame carries and a scale of 768 over the
+	-- monitor's height makes one unit inside them one physical pixel, which is
+	-- what lets every number in Place be a whole one. Blizzard's own regions
+	-- cannot come with them: they are children of a secure unit button and
+	-- rescaling one is both a protected action and a change to a frame the
+	-- addon promised to hand back.
+	--
+	-- What the grid cannot fix here is where the block starts. It hangs off
+	-- the portrait's anchor on a frame that is not on the grid, so the origin
+	-- is a fraction of a pixel, the same way a bar on a nameplate takes its
+	-- origin from wherever the mob is standing.
+	--
+	-- Adopt answers false on a client with no SetIgnoreParentScale, and
+	-- nothing below cares: Place multiplies every constant by ns.Pixel, which
+	-- is exactly 1 on the grid and the honest fraction off it.
+
 	-- No textures of its own. It exists to hold the portrait's square, which
 	-- is the one point on the block whose position the client decides.
 	entry.slot = CreateFrame("Frame", nil, frame)
 	entry.slot:EnableMouse(false)
+	ns.UI.Adopt(entry.slot)
 
-	entry.box = CreateFrame("Frame", nil, frame)
+	entry.box = CreateFrame("Frame", entry.spec.global, frame)
 	entry.box:EnableMouse(false)
+	ns.UI.Adopt(entry.box)
 	local backdrop = ns.Fill(entry.box, "BACKGROUND",
 		BACKDROP[1], BACKDROP[2], BACKDROP[3], BACKDROP[4])
 	backdrop:SetAllPoints()
 	entry.box.edges = ns.Outline(entry.box, IDLE[1], IDLE[2], IDLE[3], 1)
 	entry.divider = ns.Fill(entry.box, "BORDER", IDLE[1], IDLE[2], IDLE[3], 1)
 
+	-- Two rails, one per bar, holding nothing but a rectangle of the right
+	-- size. They are ours and they are on the grid, so their four corners are
+	-- whole pixels; Blizzard's bars are then pinned to them corner to corner
+	-- rather than given a size, and an anchor is resolved on the screen rather
+	-- than in either frame's units. That is the whole trick: a bar whose
+	-- geometry is exact without the bar ever leaving Blizzard's scale, and
+	-- without a height that has to be converted and rounded to get there.
+	entry.healthRail = CreateFrame("Frame", nil, entry.box)
+	entry.healthRail:EnableMouse(false)
+	entry.powerRail = CreateFrame("Frame", nil, entry.box)
+	entry.powerRail:EnableMouse(false)
+
 	-- The spent part of each bar, in the bar's own hue at a fifth of the
 	-- brightness, so a unit at ten percent still reads as itself rather than
-	-- as an empty box.
-	entry.healthTrack = ns.Fill(entry.box, "ARTWORK", 0, 0, 0, 1)
-	entry.powerTrack = ns.Fill(entry.box, "ARTWORK", 0, 0, 0, 1)
+	-- as an empty box. Filling its rail, so it is placed once here rather than
+	-- re-anchored on every relayout.
+	entry.healthTrack = ns.Fill(entry.healthRail, "BACKGROUND", 0, 0, 0, 1)
+	entry.healthTrack:SetAllPoints()
+	entry.powerTrack = ns.Fill(entry.powerRail, "BACKGROUND", 0, 0, 0, 1)
+	entry.powerTrack:SetAllPoints()
 
 	entry.top = CreateFrame("Frame", nil, frame)
 	entry.top:EnableMouse(false)
+	ns.UI.Adopt(entry.top)
 
-	entry.nameText = Text(entry.top, 11, NAME_TEXT, "LEFT")
-	entry.healthText = Text(entry.top, 11, VALUE_TEXT, "RIGHT")
-	entry.levelText = Text(entry.top, 9, VALUE_TEXT, "LEFT")
-	entry.powerText = Text(entry.top, 9, VALUE_TEXT, "RIGHT")
+	-- One shared font object per size rather than a font on each string. Place
+	-- picks the real size off the bar heights a moment later; these are only
+	-- what the strings carry until it does.
+	entry.nameText = ns.UI.Label(entry.top, BIG_MAX, NAME_TEXT, "LEFT")
+	entry.healthText = ns.UI.Label(entry.top, BIG_MAX, VALUE_TEXT, "RIGHT")
+	entry.levelText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "LEFT")
+	entry.powerText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "RIGHT")
 end
 
 -- Placed on the portrait's own anchor, sized off the two settings. The anchor
@@ -666,19 +797,34 @@ end
 -- block in opposite directions. The square is the fixed point in both.
 local function Place(entry)
 	local spec, frame = entry.spec, entry.frame
-	local px = ns.Pixel(frame)
 
-	local side = math.max(math.floor(ns.db.skinHeight * spec.scale), 16)
-	local width = math.max(math.floor(ns.db.skinWidth * spec.scale), 60)
+	-- Every number below this line is a whole count of physical pixels, and px
+	-- is what turns one into the units the block is drawn in. On the grid px is
+	-- exactly 1 and every multiply is free. Off it, on a client with no
+	-- SetIgnoreParentScale, px is the fraction that keeps the block the same
+	-- physical size and its hairlines one pixel wide, which is as close as that
+	-- client gets.
+	local px = ns.Pixel(entry.box)
+	-- And this is one pixel in Blizzard's units, for the handful of sizes and
+	-- offsets that get written onto a region of theirs rather than one of ours.
+	local theirs = ns.Pixel(frame)
+
+	local side = math.max(math.floor(ns.db.skinHeight * spec.scale + 0.5), 16)
+	local width = math.max(math.floor(ns.db.skinWidth * spec.scale + 0.5), 60)
 
 	-- Never draw wider or taller than the frame being skinned. The space
 	-- around these rectangles is not empty: the target's auras run along the
 	-- bottom of the target frame and target of target sits in the same strip.
-	local room = ns.Measure(frame, "GetWidth")
+	--
+	-- The frame is not on the grid, so neither of its measurements is a pixel
+	-- count until it has crossed the scale between us. Comparing 168 pixels
+	-- against 232 of Blizzard's units is comparing two different things, and
+	-- the answer looks like a clamp that fires when it should not.
+	local room = Pixels(ns.Measure(frame, "GetWidth"), frame, entry.box)
 	if room and room > 60 then
 		width = math.max(math.min(width, room - side - 2), 50)
 	end
-	local tall = ns.Measure(frame, "GetHeight")
+	local tall = Pixels(ns.Measure(frame, "GetHeight"), frame, entry.box)
 	if tall and tall > 20 and side > tall then
 		side = tall
 	end
@@ -695,17 +841,26 @@ local function Place(entry)
 
 	entry.slot:ClearAllPoints()
 	if anchor then
-		entry.slot:SetPoint(anchor[1], anchor[2] or frame, anchor[3], anchor[4], anchor[5])
+		-- The offsets in there were read off Blizzard's own anchor and are
+		-- measured in Blizzard's units. Hanging the block on them unconverted
+		-- puts it out by the ratio between the two scales, which on this
+		-- machine is a fifth of the block's width. Converted, then snapped:
+		-- the origin under it is still a fraction the client owns, but nothing
+		-- this file adds makes it worse.
+		entry.slot:SetPoint(anchor[1], anchor[2] or frame, anchor[3],
+			(Pixels(anchor[4], frame, entry.box) or 0) * px,
+			(Pixels(anchor[5], frame, entry.box) or 0) * px)
 	else
+		local half = math.floor(side / 2)
 		entry.slot:SetPoint("TOP" .. portraitEdge, frame, "TOP" .. portraitEdge,
-			-pull * side / 2, -side / 2)
+			-pull * half * px, -half * px)
 	end
-	entry.slot:SetSize(side, side)
+	entry.slot:SetSize(side * px, side * px)
 	entry.slot:SetFrameLevel(frame:GetFrameLevel())
 
 	entry.box:ClearAllPoints()
 	entry.box:SetPoint("TOP" .. portraitEdge, entry.slot, "TOP" .. portraitEdge, 0, 0)
-	entry.box:SetSize(side + width, side)
+	entry.box:SetSize((side + width) * px, side * px)
 	entry.box:SetFrameLevel(frame:GetFrameLevel())
 	ns.EdgeSize(entry.box.edges, px)
 
@@ -713,14 +868,21 @@ local function Place(entry)
 	entry.top:SetAllPoints(entry.box)
 	entry.top:SetFrameLevel(frame:GetFrameLevel() + 3)
 
-	local inner = side - px * 3
+	-- Whole pixels, because the two bars have to add up to the square exactly:
+	-- health plus power plus the three hairlines is the side, and a fractional
+	-- share leaves a seam along one of them that reads as a rendering fault.
+	local inner = side - HAIRLINES
 	local health = math.floor(inner * HEALTH_SHARE)
 	local power = inner - health
 
 	if entry.portrait then
+		-- Inset by one pixel written in Blizzard's units, because a SetPoint
+		-- offset is measured in the units of the region being placed and the
+		-- portrait is theirs. The corner it is inset from is ours and is on a
+		-- pixel boundary, so the square the render lands in is exact.
 		entry.portrait:ClearAllPoints()
-		entry.portrait:SetPoint("TOPLEFT", entry.slot, "TOPLEFT", px, -px)
-		entry.portrait:SetPoint("BOTTOMRIGHT", entry.slot, "BOTTOMRIGHT", -px, px)
+		entry.portrait:SetPoint("TOPLEFT", entry.slot, "TOPLEFT", theirs, -theirs)
+		entry.portrait:SetPoint("BOTTOMRIGHT", entry.slot, "BOTTOMRIGHT", -theirs, theirs)
 		-- Above everything the box draws, because the box sits at the same
 		-- frame level as the frame this portrait is a region of.
 		entry.portrait:SetDrawLayer("OVERLAY")
@@ -734,67 +896,86 @@ local function Place(entry)
 	entry.divider:SetPoint("BOTTOM" .. gaugeEdge, entry.slot, "BOTTOM" .. gaugeEdge, 0, px)
 	entry.divider:SetWidth(px)
 
-	-- The gauge is everything past the divider. Both bars are pinned on both
-	-- sides rather than given a width, so they fill it exactly however the
-	-- numbers round.
-	local function Span(region, top, height)
-		local y = top and -px or -(px * 2 + health)
-		region:ClearAllPoints()
-		region:SetPoint("TOP" .. gaugeEdge, entry.box, "TOP" .. gaugeEdge, pull * px, y)
-		region:SetPoint("TOP" .. portraitEdge, entry.slot, "TOP" .. gaugeEdge, 0, y)
-		region:SetHeight(height)
+	-- The gauge is everything past the divider. A rail is pinned on both sides
+	-- rather than given a width, so it fills what is left exactly, and its
+	-- height is a whole number of pixels measured down from the top of the box.
+	local function Rail(rail, top, height)
+		local y = (top and -1 or -(2 + health)) * px
+		rail:ClearAllPoints()
+		rail:SetPoint("TOP" .. gaugeEdge, entry.box, "TOP" .. gaugeEdge, pull * px, y)
+		rail:SetPoint("TOP" .. portraitEdge, entry.slot, "TOP" .. gaugeEdge, 0, y)
+		rail:SetHeight(height * px)
 	end
 
+	Rail(entry.healthRail, true, health)
+	Rail(entry.powerRail, false, power)
+
+	-- Blizzard's bars take the rails corner to corner. No size is written on
+	-- either one, so nothing about them has to be converted or rounded: the
+	-- client resolves an anchor on the screen, and the corners it is resolving
+	-- to are ours and are whole pixels.
 	for index, key in ipairs(BARS) do
 		entry[key]:SetFrameLevel(entry.box:GetFrameLevel() + 2)
-		Span(entry[key], index == 1, index == 1 and health or power)
+		entry[key]:ClearAllPoints()
+		entry[key]:SetAllPoints(index == 1 and entry.healthRail or entry.powerRail)
 	end
-	Span(entry.healthTrack, true, health)
-	Span(entry.powerTrack, false, power)
 
 	-- Sized off the block rather than off a constant, because the same code
-	-- draws a 34 unit player frame and a 21 unit target of target and one font
-	-- size cannot serve both.
-	local font = (GameFontNormal:GetFont())
-	local big = math.min(math.max(math.floor(health * 0.72), 8), 14)
-	local small = math.min(math.max(math.floor(power * 0.80), 7), 11)
+	-- draws a 34 pixel player frame and a 21 pixel target of target and one
+	-- font size cannot serve both. A font object per size, shared with every
+	-- other string the addon draws at that size, rather than a font on each
+	-- string: a string given a font by SetFont carries its own copy of it.
+	local big = math.min(math.max(math.floor(health * BIG_SHARE), BIG_MIN), BIG_MAX)
+	local small = math.min(math.max(math.floor(power * SMALL_SHARE), SMALL_MIN), SMALL_MAX)
+	local bigFont = ns.UI.Font(math.floor(big * px + 0.5))
+	local smallFont = ns.UI.Font(math.floor(small * px + 0.5))
 
-	entry.nameText:SetFont(font, big, "OUTLINE")
-	entry.healthText:SetFont(font, big, "OUTLINE")
-	entry.levelText:SetFont(font, small, "OUTLINE")
-	entry.powerText:SetFont(font, small, "OUTLINE")
+	entry.nameText:SetFontObject(bigFont)
+	entry.healthText:SetFontObject(bigFont)
+	entry.levelText:SetFontObject(smallFont)
+	entry.powerText:SetFontObject(smallFont)
 
-	local healthMid = -(px + health / 2)
-	local powerMid = -(px * 2 + health + power / 2)
+	-- Floored to a whole pixel rather than left on the bar's exact centre.
+	-- Half of an odd bar is half a pixel, and a glyph asked for at half a pixel
+	-- is rasterised across two, which is what makes small outlined text look
+	-- like it has been breathed on.
+	local pad = TEXT_PAD * px
+	local healthMid = -(1 + math.floor(health / 2)) * px
+	local powerMid = -(2 + health + math.floor(power / 2)) * px
 
 	-- Anchored to the square's inner corner rather than to its side, because a
 	-- side point sits at half height and the vertical offsets here are all
 	-- measured down from the top of the block.
 	entry.healthText:ClearAllPoints()
-	entry.healthText:SetPoint(gaugeEdge, entry.box, "TOP" .. gaugeEdge, pull * 4, healthMid)
+	entry.healthText:SetPoint(gaugeEdge, entry.box, "TOP" .. gaugeEdge, pull * pad, healthMid)
 
 	entry.nameText:ClearAllPoints()
-	entry.nameText:SetPoint(portraitEdge, entry.slot, "TOP" .. gaugeEdge, -pull * 4, healthMid)
-	entry.nameText:SetPoint(gaugeEdge, entry.healthText, portraitEdge, pull * 4, 0)
+	entry.nameText:SetPoint(portraitEdge, entry.slot, "TOP" .. gaugeEdge, -pull * pad, healthMid)
+	entry.nameText:SetPoint(gaugeEdge, entry.healthText, portraitEdge, pull * pad, 0)
 
 	-- The level goes on the power bar's inner end, which is empty on every
 	-- unit in the game, and the power number on its outer end.
 	entry.levelText:ClearAllPoints()
-	entry.levelText:SetPoint(portraitEdge, entry.slot, "TOP" .. gaugeEdge, -pull * 4, powerMid)
+	entry.levelText:SetPoint(portraitEdge, entry.slot, "TOP" .. gaugeEdge, -pull * pad, powerMid)
 
 	entry.powerText:ClearAllPoints()
-	entry.powerText:SetPoint(gaugeEdge, entry.box, "TOP" .. gaugeEdge, pull * 4, powerMid)
+	entry.powerText:SetPoint(gaugeEdge, entry.box, "TOP" .. gaugeEdge, pull * pad, powerMid)
 	entry.powerText:SetShown(power >= VALUE_FLOOR)
 
 	-- On the outer corners of the square, the two the gauge is not against,
 	-- each centred on its corner so it half overhangs the block. Lifted to
 	-- OVERLAY for the portrait's reason: the box sits at the same frame level
 	-- as the frame these are regions of.
+	--
+	-- An even number of pixels, because the badge is centred on a corner and
+	-- half of an odd one puts all four of its edges on a half pixel. The size
+	-- is written in Blizzard's units, since the region is theirs.
 	for _, badge in ipairs(BADGES) do
 		local region = entry.badges[badge.slot]
 		if region then
+			local size = math.floor(side * badge.scale / 2 + 0.5) * 2 * theirs
 			region:ClearAllPoints()
-			region:SetSize(side * badge.scale, side * badge.scale)
+			region:SetSize(size, size)
 			region:SetPoint("CENTER", entry.slot, badge.corner .. portraitEdge, 0, 0)
 			region:SetDrawLayer("OVERLAY")
 		end
@@ -819,7 +1000,7 @@ local function ClassTint(unit)
 	if not color then
 		return nil
 	end
-	classTint[class] = { color.r, color.g, color.b }
+	classTint[class] = { color.r, color.g, color.b } -- allocates: once per class, and the early return above is the guard the scan cannot see
 	return classTint[class]
 end
 
@@ -845,6 +1026,31 @@ local function Tint(unit)
 		return FRIENDLY
 	end
 	return reaction == 4 and NEUTRAL or HOSTILE
+end
+
+-- One string per level and classification pair, built the first time that
+-- pair is seen and kept for the session. The tostring on the level and the
+-- concat under it both allocate, and the guard below them compared the string
+-- after it had already been built, so the guard never saved the building:
+-- three frames at five ticks a second is thirty strings a second handed to the
+-- collector to say a number that changes when the unit does. Levels are
+-- bounded and there are five classifications, so the cache is too.
+local levelTags = {}
+
+local function LevelTag(unit)
+	local level = UnitLevel(unit) or 0
+	local suffix = CLASSIFICATION[ns.Classification(unit) or "normal"] or ""
+	local bySuffix = levelTags[suffix]
+	if not bySuffix then
+		bySuffix = {} -- allocates: once per classification, and the lookup above is the guard the scan cannot see
+		levelTags[suffix] = bySuffix
+	end
+	local tag = bySuffix[level]
+	if not tag then
+		tag = (level > 0 and tostring(level) or "??") .. suffix
+		bySuffix[level] = tag
+	end
+	return tag
 end
 
 --------------------------------------------------------------------------
@@ -884,7 +1090,9 @@ local function Style(entry)
 	-- and Place is about to move them.
 	for _, region in pairs(entry.badges) do
 		Snapshot(region)
+		Crisp(region)
 	end
+	Crisp(entry.portrait)
 
 	for _, key in ipairs(BARS) do
 		Flatten(entry[key])
@@ -916,6 +1124,9 @@ local function Unstyle(entry)
 
 	for _, key in ipairs(BARS) do
 		Thaw(entry[key], "SetStatusBarColor")
+		-- Revert is about to put the file path back on this bar's fill, so the
+		-- flatten guard has to forget that it ever saw it flat.
+		entry[key].wkFlat = nil
 	end
 
 	local complete = RestoreArt(entry)
@@ -980,14 +1191,9 @@ local function Refresh(entry)
 		entry.nameText:SetText(name)
 	end
 
-	-- Guarded on the string, because the level of a unit changes when the unit
-	-- does and this runs five times a second for each of three frames.
-	local level = UnitLevel(unit) or 0
-	local tag = level > 0 and tostring(level) or "??"
-	local suffix = CLASSIFICATION[ns.Classification(unit) or "normal"]
-	if suffix then
-		tag = tag .. suffix
-	end
+	-- Guarded on the string, which LevelTag now hands over already built rather
+	-- than building one per tick to compare.
+	local tag = LevelTag(unit)
 	if entry.levelTag ~= tag then
 		entry.levelTag = tag
 		entry.levelText:SetText(tag)
@@ -995,12 +1201,23 @@ local function Refresh(entry)
 
 	-- Both re-applied rather than set once, because the bars and the portrait
 	-- are Blizzard's and their own code puts a texture and a crop back on them
-	-- whenever it swaps the art underneath.
+	-- whenever it swaps the art underneath. Both now read back first: being the
+	-- last word costs one comparison in the common case, where nothing has
+	-- touched either since the last tick, rather than nine writes across three
+	-- frames five times a second.
+	--
+	-- The comparison is exact because the crop is a power of two fraction. A
+	-- crop written as 0.15 would come back as whatever the client rounded it
+	-- to and this guard would never hold.
 	Flatten(entry.healthbar)
 	Flatten(entry.manabar)
-	if entry.portrait then
-		entry.portrait:SetTexCoord(PORTRAIT_TRIM, 1 - PORTRAIT_TRIM,
-			PORTRAIT_TRIM, 1 - PORTRAIT_TRIM)
+	local portrait = entry.portrait
+	if portrait then
+		local left = portrait.GetTexCoord and portrait:GetTexCoord()
+		if left ~= PORTRAIT_TRIM then
+			portrait:SetTexCoord(PORTRAIT_TRIM, 1 - PORTRAIT_TRIM,
+				PORTRAIT_TRIM, 1 - PORTRAIT_TRIM)
+		end
 	end
 end
 
@@ -1042,13 +1259,23 @@ end
 
 -- Blizzard re-lays a unit frame out when the unit under it changes, so the
 -- block is put back on its anchors then rather than trusted to stay.
+--
+-- Anchoring a region of a secure unit button is what combat forbids, so a
+-- relayout that arrives in lockdown is remembered rather than dropped. That
+-- matters more now than it did: a resolution change comes through here too,
+-- and a block left on the old grid is the wrong size until something else
+-- happens to move it.
 function Skin.Relayout()
 	if not ns.db or not ns.db.skin then
 		return
 	end
 	for _, entry in ipairs(entries) do
-		if entry.styled and not Blocked(entry) then
-			Place(entry)
+		if entry.styled then
+			if Blocked(entry) then
+				pending = true
+			else
+				Place(entry)
+			end
 		end
 	end
 end
@@ -1185,10 +1412,26 @@ events:SetScript("OnEvent", function(_, event)
 
 	if event == "PLAYER_REGEN_ENABLED" then
 		if pending then
+			-- Apply finishes a strip or a style combat refused. Relayout
+			-- finishes a re-anchor it refused, which Apply cannot: Style
+			-- returns early on a frame that is already styled, so a block on
+			-- the wrong grid would stay there.
 			Skin.Apply()
+			Skin.Relayout()
 		end
 		return
 	end
 
+	Skin.Relayout()
+end)
+
+-- A resolution change moves the grid under the whole block at once, and a UI
+-- scale change moves the three Blizzard frames it is anchored to without
+-- moving the block, because the block is off their scale by construction. Both
+-- want the same answer: measure the frames again and lay the block out on what
+-- they say now. Relayout refuses in lockdown and PLAYER_REGEN_ENABLED picks it
+-- up, so a monitor swapped mid pull is a block one fight out of date rather
+-- than an error.
+ns.UI.OnRescale(function()
 	Skin.Relayout()
 end)
