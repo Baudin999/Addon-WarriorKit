@@ -2,6 +2,63 @@
 
 ## Unreleased
 
+### The swing bar still stepped, because there were two throttles on one edge
+
+The last repair deleted a 20 Hz ticker with a broken accumulator, which was a
+real bug and a real fix. The bar still stepped in game. The reason is that the
+rounding to whole pixels was a second throttle sitting behind the first, and
+finding the first is what hid it.
+
+A fill snapped to a whole pixel can only change value as many times as the bar
+has pixels. At the shipped 180 pixels across a 3.4 second swing that is 53 times
+a second and no oftener, whatever rate the tick runs at. So the bar stood still
+on 7 of the 60 frames a 60 Hz screen draws and on 91 of the 144 a fast one
+draws, and every move it did make was a whole design unit, which is three screen
+pixels at `swing zoom 3`. Deleting the ticker raised the drawn rate from 20 to
+53 and changed nothing else.
+
+`DrawHand` now writes the fill as a fraction of a pixel, on every frame, with no
+comparison in front of it. The quantisation is gone and so is the guard it
+doubled as. That is one line of arithmetic and five fewer lines of code.
+
+**This is a second pixel rule, not an exception to the first.** The addon has a
+hard rule that every edge lands on a whole pixel, enforced across 6,836 offsets,
+and it exists so borders and art are sharp. It was written when every edge in
+this addon was static and for that codebase it was the whole truth. A moving
+fill wants the opposite thing: what the eye reads on a moving edge is velocity,
+and velocity lives in where the edge sits between two pixels as much as in which
+pixel it is on. Round it and you have destroyed the only thing being looked at
+to buy a sharpness that cannot be seen on something in motion.
+
+So there are two named rules now rather than one rule and a hole beside it. A
+static edge lands on a whole pixel. A moving fill is not quantised. Both are
+written out under the pixel grid in the README, both cover a category rather
+than a file, and both are gated: the anchor sweep keeps walking every static
+offset, and the swing section now asserts the positive form of the second rule,
+that the fill really does land off a whole pixel on nearly every frame. Put a
+round back around the fill and that fails. The Slam band and its mark move only
+when your weapon speed does, a few times a fight, so they are static edges and
+they stay on whole pixels.
+
+**The old smoothness assertions were the wrong statements.** They said the fill
+never jumps more than one pixel between two frames and that it visits all 180
+positions, and both passed against a bar that visibly stepped, because a
+quantised fill satisfies them exactly. No assertion in this repo can prove that
+a bar looks smooth: smooth is a property of a screen and an eye and the harness
+has neither. What it can prove is the property that leaves the client nothing to
+be blamed for, so the fill is driven across a whole swing at 60 fps and again at
+144, and three things have to hold on every frame with no tolerance allowed. The
+drawn position equals elapsed over duration times the width, exactly. The value
+changes on every frame, with no frame repeating the one before it. And every
+step is the same size as every other, which is what constant velocity means.
+Against the rounded code those read `the fill drew the same position twice on
+309 of 489 frames` and `the widest step was 1.000000 px more than the narrowest`.
+
+**What the unguarded write costs was measured, not assumed.** The swing tick
+allocated 0.03 KB per fifty ticks rounded and guarded, and allocates 0.03 KB per
+fifty ticks written every frame. The gate stays at 0.05. It is the addon's only
+`-- unguarded:` exemption and the reason is on the line.
+
 ### Overpower is a reaction, and the bars say so now
 
 Overpower was drawn ready from the first pull to the last. It is pressable for

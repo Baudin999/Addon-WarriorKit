@@ -12,31 +12,41 @@ ns.SwingGauges = SwingGauges
 -- of the corner of your eye during a pull and every pixel of frame around it
 -- is a pixel of the fight it stands on.
 --
--- The bar counts in pixels rather than in a fraction from zero to one. Its
--- scale is set to its own width, so the fill is always a whole number of
--- physical pixels and the mark is drawn at a whole number too. That is what
--- makes "press on the mark" mean anything: a band placed at 70.4 percent of a
--- 180 pixel bar and a fill drawn at 70.6 percent of it are the same pixel and
--- the eye cannot tell which side of the line it is on.
+-- The bar counts in pixels rather than in a fraction from zero to one, so the
+-- band, the mark and the fill are all measured in the same units. That is what
+-- makes "press on the mark" mean anything: a band at 70.4 percent of a 180
+-- pixel bar and a mark at 70.6 percent of it are the same pixel and the eye
+-- cannot tell which side of the line it is on.
 --
--- It is also the whole of the tick's guard. Quantised to pixels the fill moves
--- at most 180 times across a 3.4 second swing, and between swings it does not
--- move at all. Out of combat the tick writes nothing.
+-- The band and the mark land on whole pixels. The fill does not, and this file
+-- is where the addon's two pixel rules first disagree. Both are in
+-- docs/README.md and both are gated in scripts/harness.lua.
 --
--- Which is why this draws on every frame and not on a ticker, and it is the
--- only thing in the addon that does. Everything else here is a readout, and a
--- readout refreshed twenty times a second is a readout that is never more than
--- fifty milliseconds stale. This is not a readout, it is a moving edge, and a
--- moving edge is an animation: at the shipped width the fill crosses 53 pixels
--- a second, so a draw every fifty milliseconds moves it about three pixels at a
--- time. Three pixels is a step you can see. That was the whole of "the timer
--- jumps in chunks", and no accumulator arithmetic fixes it, because 20 Hz is
--- the wrong number rather than a number being missed.
+-- A static edge lands on a whole pixel. A border, an icon crop or a band drawn
+-- across two rows of pixels reads as blurry, and blurry is what the grid exists
+-- to stop. The band and the mark move only when your weapon speed does, which
+-- is a few times a fight, so they are static edges.
 --
--- What a frame costs here is the guard and nothing else: two fractions, two
--- comparisons and a write only on the frames the drawn pixel actually changed,
--- which at the shipped width is 53 writes a second inside a swing and none at
--- all outside one.
+-- A moving fill is not quantised. What the eye reads on a moving edge is its
+-- velocity, and velocity lives in where the edge sits between two pixels as
+-- much as in which pixel it is on. Rounding throws that away to buy a sharpness
+-- nobody can see on something in motion, and rounding is also a throttle: the
+-- fill crosses 180 units in a 3.4 second swing, so a rounded fill changes value
+-- 53 times a second and no oftener, whatever rate the tick runs at. It stands
+-- still on 7 of the 60 frames a 60 Hz screen draws and on 91 of the 144 a fast
+-- one draws, and each move is a whole unit, which is three screen pixels at
+-- swing zoom 3. Deleting the 20 Hz ticker raised the drawn rate from 20 to 53
+-- and left that second throttle standing, which is why the bar still stepped
+-- after the first repair.
+--
+-- So the fill is written as a fraction, on every frame, with no comparison in
+-- front of it. What that costs was measured rather than argued: the harness
+-- reads 0.03 KB per fifty ticks rounded and guarded, and 0.03 unguarded.
+--
+-- Every other part of this addon draws on a ticker, because every other part is
+-- a readout and a readout fifty milliseconds stale is one nobody can fault.
+-- This one is an animation, and an animation is drawn on the frame the screen
+-- is drawn on or it is drawn in steps.
 --
 -- Mouse only while unlocked, the same as the meters and the charge icon, and
 -- for the same reason: a mouse enabled frame swallows the right button drag
@@ -225,20 +235,17 @@ end
 --------------------------------------------------------------------------
 -- Painting
 --
--- Everything below runs on every frame, so every write is guarded on what is
--- already on the widget and nothing allocates. check.sh's HOT list holds all
--- four to that, and the guard is what pays for the rate.
+-- Everything below runs on every frame and nothing below allocates. Every
+-- write to the band, the mark and the colours is guarded on what is already on
+-- the widget, because those are static edges that change a few times a swing.
+-- The fill is the one exception and check.sh is told why on the line itself.
 --------------------------------------------------------------------------
 
+-- Fraction returns zero for a hand with no swing running, so a bar between
+-- swings draws empty without a branch here.
 local function DrawHand(bar, which)
-	local drawn = 0
-	if ns.Swing.Armed(which) then
-		drawn = Whole(ns.Swing.Fraction(which) * bar.pixels)
-	end
-	if bar.shownValue ~= drawn then
-		bar.shownValue = drawn
-		bar:SetValue(drawn)
-	end
+	bar.shownValue = ns.Swing.Fraction(which) * bar.pixels
+	bar:SetValue(bar.shownValue) -- unguarded: the moving edge, and a frame it does not write is a frame it does not move on
 end
 
 -- The band, the line down the middle of it, and the colour of the whole gauge
@@ -293,8 +300,10 @@ local function DrawWindow(bar)
 		bar.mark:Show()
 	end
 
-	-- Inside the band, compared as pixels rather than as fractions, so the
-	-- flip and the drawn mark cannot land on different sides of one pixel.
+	-- Inside the band, measured against the band's own drawn edges rather than
+	-- against the fractions they were rounded from. The bar flips the instant
+	-- the fill reaches the green the player is aiming at, which is the only
+	-- reading of "inside" that matches what is on the screen.
 	local now = bar.shownValue >= left and bar.shownValue <= right
 		and ns.Swing.Armed(ns.Swing.MAIN)
 	if bar.shownNow ~= now then
