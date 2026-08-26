@@ -124,6 +124,29 @@ function Swing.Speed(which)
 	return hand and hand.speed or 0
 end
 
+-- How long the swing being drawn is, which is not always what the client says
+-- the weapon's speed is.
+--
+-- Fraction divides the time spent by hand.duration, and anything drawing a mark
+-- on that bar has to divide by the same number or the mark and the fill are
+-- answers to two different questions. Retime keeps duration equal to speed
+-- today; this exists so that a caller in another file does not have to know
+-- that, because the day the two come apart is the day the Slam mark lands a
+-- pixel off and nothing says why.
+--
+-- Falls back to the speed while no swing is running, so a bar that has never
+-- been armed still has a length to mark up.
+function Swing.Duration(which)
+	local hand = hands[which]
+	if not hand then
+		return 0
+	end
+	if hand.running and hand.duration > 0 then
+		return hand.duration
+	end
+	return hand.speed
+end
+
 function Swing.Armed(which)
 	local hand = hands[which]
 	return hand ~= nil and hand.running and hand.duration > 0

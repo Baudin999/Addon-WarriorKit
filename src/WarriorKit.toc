@@ -103,6 +103,10 @@ Targeting\Feature.lua
 Loadouts\Loadouts.lua
 Loadouts\Feature.lua
 
+# Which of the two reactive abilities a slot is holding, and whether its window
+# is open. Out of the combat log, warrior only, and read by Slot.lua on the
+# bar's ticker, so it loads before it.
+Buttons\Reaction.lua
 Buttons\Slot.lua
 Buttons\Layout.lua
 Buttons\Ranks.lua

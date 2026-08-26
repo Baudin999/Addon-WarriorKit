@@ -6,8 +6,8 @@ ns.Slot = Slot
 --------------------------------------------------------------------------
 -- What one action slot is doing
 --
--- The same eight answers Charge/Charge.lua works out for the three charge
--- abilities, worked out for an action slot instead. Both hand their answer to
+-- The same answers Charge/Charge.lua works out for the three charge abilities,
+-- worked out for an action slot instead. Both hand their answer to
 -- UI/Ability.lua, which draws it, and neither knows the other exists.
 --
 -- Why two sources and not one. A charge display asks "would a press put this
@@ -15,8 +15,8 @@ ns.Slot = Slot
 -- ability is picked by combat state, so the whole question is resolved in Lua
 -- before any slot is involved. A bar button asks "would a press do what is in
 -- this slot", where the slot is whatever the loadout wrote and the client owns
--- every part of the answer. The ladders look alike because the eight answers
--- are the same eight; the inputs have nothing in common.
+-- every part of the answer. The ladders look alike because they draw on the
+-- same vocabulary; the inputs have nothing in common.
 --
 -- What they do share is the order, and the order is the design. What cannot be
 -- fixed at all comes first, then what a stance swap or a few seconds of rage
@@ -180,11 +180,38 @@ function Slot.State(slot)
 		swipeStart, swipeDuration = start, duration
 	end
 
+	-- Overpower and Revenge are not spells you press, they are spells the fight
+	-- hands you, and the client will not say so. IsUsableAction answers yes for
+	-- Overpower in Battle Stance whether or not anything has dodged you, so
+	-- without this rung the square said "ready" for the whole of every fight.
+	-- Buttons/Reaction.lua owns the window and the combat log line that opens
+	-- it; this asks it one question.
+	--
+	-- Above the usable split rather than below it, and that is the ladder's own
+	-- rule rather than a preference: what cannot be fixed at all comes first.
+	-- A shut window is not something you can do anything about, and a wrong
+	-- stance is. Putting it here also fixes the one square on a warrior's bar
+	-- that shouted all fight for nothing. Overpower sitting in Defensive Stance
+	-- used to draw orange "swap" from the first pull to the last, which is a
+	-- colour saying "swap and press this" over a press that would not land.
+	-- Now the orange appears on the two or three seconds where swapping really
+	-- would let you press it, and the rest of the time the square is quiet.
+	local reactive = ns.Reaction.Of(slot)
+	if reactive and not ns.Reaction.Open(reactive) then
+		return "reaction", swipeStart, swipeDuration
+	end
+
 	-- Two returns, and the second is the whole reason this is not a boolean.
 	-- IsUsableAction says no for a spell you cannot afford and for one you
 	-- cannot cast in this stance, and on a warrior those are the two states a
 	-- bar spends its life in. Collapsing them loses the only distinction worth
 	-- drawing.
+	--
+	-- It is also the whole of the stance rule for the two reactive abilities.
+	-- Overpower is Battle Stance only and Revenge is Defensive Stance only, and
+	-- the client already refuses both in the wrong stance with a "not enough
+	-- power" of false, which is exactly the shape this line splits on. Nothing
+	-- above had to learn about stances.
 	local usable, noPower = IsUsableAction(slot)
 	if not usable then
 		return noPower and "cost" or "stance", swipeStart, swipeDuration

@@ -5,7 +5,7 @@ Seven pieces, in this order. Each is built by one agent in its own worktree unde
 when `./scripts/check.sh` comes back at zero. The worktrees stay after the
 merge.
 
-## 1. Weapon swing timer
+## 1. Weapon swing timer  [merged, STILL BROKEN, parked]
 
 The addon talks about the swing and never draws it. `UI/Ability.lua:48` says
 Heroic Strike is armed and goes off on the next swing, `UI/Ability.lua:229`
@@ -19,14 +19,40 @@ them, `Meter/Meter.lua:54` already reads `SWING_DAMAGE` off the combat log, and
 costs no swing. That window is the point of the feature, so it is drawn rather
 than left to be read off a moving bar.
 
-## 2. Deep Wounds is missing from the enemy bar debuffs
+### Still not fixed. Parked, come back to it.
+
+Tested in game after the first repair. The bar is still chunky. The Slam mark
+was not reported again, so treat that half as unconfirmed rather than fixed.
+
+What the repair changed, so the next attempt does not redo it: the fill was
+drawn on a 50 ms ticker whose accumulator reset to zero instead of subtracting
+the interval, which made the real rate 15 Hz on a 60 fps client and the real
+step 3.5 pixels. It draws every frame now and the accumulator is gone. That was
+a real bug and it was not the whole cause, because the bar still steps.
+
+What was ruled out by reading, and should be re-checked rather than trusted:
+`bar.pixels` is not stale on any reachable path, `Whole()` and
+`SetMinMaxValues` agree on 180 units meaning 180 physical pixels at zoom 1, and
+the quantisation to whole pixels is correct.
+
+What has not been looked at. The gauge is a client `StatusBar` fed whole pixel
+values through `SetValue`, so the next place to look is `UI/Gauge.lua` and what
+the client does with a value between two of its own steps. Also worth checking:
+whether the OnUpdate is attached to a frame that is throttled or hidden, what
+the fill's texture anchoring does at a fractional width, and whether the swing's
+start time comes from an event that arrives in bursts rather than from GetTime.
+Ask the user for a screen recording or a frame by frame description before
+guessing again, because two rounds of reading have now produced one real bug
+and no fix.
+
+## 2. Deep Wounds is missing from the enemy bar debuffs  [merged]
 
 The debuff walk at `UnitFrames/EnemyBars.lua:552` does not show Deep Wounds.
 Find out why and fix it. The likely cause is that the bleed is attributed to a
 source the filter rejects, so the check is on what `sourceUnit` actually comes
 back as for a proc rather than on the aura's name.
 
-## 3. Overpower is drawn as ready when it is not
+## 3. Overpower is drawn as ready when it is not  [merged]
 
 Overpower can only be pressed inside the few seconds after the target dodges,
 and the bars show it as ready all the time. `Buttons/Slot.lua:188` asks

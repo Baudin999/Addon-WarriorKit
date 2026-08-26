@@ -180,6 +180,10 @@ UI/Ability.lua:Ability.Look
 UI/Ability.lua:Ability.Draw
 UI/Ability.lua:Quantum
 Buttons/Bars.lua:Bars.Update
+Buttons/Reaction.lua:Reaction.Of
+Buttons/Reaction.lua:Reaction.Open
+Buttons/Reaction.lua:Reaction.Name
+Buttons/Reaction.lua:KeyForSpell
 Buttons/Slot.lua:Slot.State
 Buttons/Slot.lua:Slot.Active
 Buttons/Slot.lua:Slot.Equipped
@@ -249,6 +253,7 @@ Meter/Window.lua:PaintDamage
 Meter/Window.lua:PaintThreat
 Meter/Window.lua:MeterWindow.Update
 Swing/Swing.lua:Swing.Speed
+Swing/Swing.lua:Swing.Duration
 Swing/Swing.lua:Swing.Armed
 Swing/Swing.lua:Swing.Fraction
 Swing/Slam.lua:Slam.Name

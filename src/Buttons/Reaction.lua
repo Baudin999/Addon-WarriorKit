@@ -1,0 +1,358 @@
+local ADDON, ns = ...
+
+local Reaction = {}
+ns.Reaction = Reaction
+
+--------------------------------------------------------------------------
+-- The two abilities the fight hands you
+--
+-- Overpower is pressable for a few seconds after your target dodges you.
+-- Revenge is the same mechanism seen from the other side: it opens when you
+-- block, dodge or parry. Nothing else a warrior owns works this way.
+--
+-- One file for both, because they are one idea. The trigger differs by which
+-- end of the swing you are on and everything after that is identical: a clock
+-- that starts on a combat log line, runs for a fixed few seconds, and stops
+-- early when you spend it. Two copies of that clock is how the two drift, and
+-- the drift would be silent, because each is right most of the time.
+--
+-- Why this exists at all. IsUsableAction answers yes for Overpower in Battle
+-- Stance whether or not anything has dodged you. It is not lying about a
+-- resource and it is not confused: the client simply has no idea, because the
+-- window lives on the server and nothing is sent down for it. There is no aura
+-- to scan, no cooldown to read, no event that fires when the window opens and
+-- none when it shuts. So the bars drew Overpower as ready for the whole fight,
+-- which is the one square on the bar whose whole point is that it is usually
+-- not.
+--
+-- The combat log is the only source, exactly as it is for the swing timer, so
+-- this file is shaped like Swing/Swing.lua and reads the same event the same
+-- way: one handler, one subevent test, positional reads by index, and no state
+-- the log did not put there.
+--
+-- Warrior only, decided once at PLAYER_LOGIN the way Charge/Feature.lua decides
+-- it. On another class nothing registers, the two clocks never move, and
+-- Reaction.Of answers nil for every square, so no bar anywhere is gated on a
+-- window that could not open.
+--------------------------------------------------------------------------
+
+local CombatLogGetCurrentEventInfo = _G.CombatLogGetCurrentEventInfo
+
+Reaction.OVERPOWER = "overpower"
+Reaction.REVENGE = "revenge"
+
+-- Rank 1 of each. Every other rank is matched by name against these, so the
+-- file carries two ids rather than a rank list that goes stale at the next
+-- trainer visit and is wrong on a client that shipped a rank nobody wrote down.
+--
+-- Matching on the name is locale-proof for the reason the debuff scan in
+-- UnitFrames/EnemyBars.lua is: both sides of the comparison are the client's
+-- own name for a spell, so a localised name is being matched against itself.
+-- Nothing here ever compares against an English string.
+local ROOT = {
+	overpower = 7384, -- Overpower, rank 1
+	revenge = 6572,   -- Revenge, rank 1
+}
+
+-- How long a window stays open, in seconds, and the one number in this file
+-- that is not read off the client.
+--
+-- Five, and the sources do not all agree. The player-facing figure is five
+-- everywhere it is written down: the Vanilla wiki says Overpower is "only
+-- usable if your target dodges, for a short amount of time (5 second period)",
+-- every Classic warrior guide says the same, and both abilities carry a five
+-- second cooldown, so a warrior who presses on every window presses exactly on
+-- the cooldown. Against that, the MaNGOS and TrinityCore server cores both hold
+-- REACTIVE_TIMER_START at 4000 milliseconds, which is where four seconds comes
+-- from when someone quotes it.
+--
+-- Five is the number here because the two errors do not cost the same. Running
+-- a second long means a square says pressable when it is not, which costs a
+-- glance. Running a second short means the square goes grey while a free five
+-- rage attack is still sitting there, which costs the attack. A bar exists to
+-- show you the press, so it errs towards showing it.
+--
+-- Settling this needs the live client and a stopwatch: get something to dodge
+-- you, count, and watch when the client starts refusing the press. Until then
+-- the README lists it under what has never been measured.
+local WINDOW = 5
+
+-- The miss types that open Revenge. Blocking, dodging and parrying are the
+-- three the tooltip names and no others count: a mob that simply misses you has
+-- not been stopped by anything.
+local DEFENDED = {
+	BLOCK = true,
+	DODGE = true,
+	PARRY = true,
+}
+
+-- When each window shuts, on the client's own clock. Two numbers, written in
+-- place forever, because a reaction tracker that built a record per window
+-- would be the shape check.sh's allocation gate exists to refuse.
+local openUntil = {
+	overpower = 0,
+	revenge = 0,
+}
+
+-- nil until PLAYER_LOGIN, then true or the reason nothing is being tracked.
+-- Nil is deliberately not false: before login nothing has looked, and a reader
+-- that treated "not yet" as "no" would be answering about a character whose
+-- class the client has not settled. Reaction.Of returns nil for all three
+-- states, so a square is never greyed on an answer this file does not have.
+local watching
+
+local readAction -- GetActionInfo, resolved once it has been proven to exist
+local playerGUID
+
+--------------------------------------------------------------------------
+-- Which spell a slot is holding
+--------------------------------------------------------------------------
+
+local names = {}  -- key to this client's name for it, or false for no answer
+local keyOf = {}  -- spell id to key, or false for a spell that is neither
+
+-- Resolved on first use rather than at load, so no other file has to load after
+-- this one for it to work. Same shape as Charge.Name.
+function Reaction.Name(key)
+	if names[key] == nil then
+		names[key] = ns.SpellName(ROOT[key]) or false
+	end
+	return names[key] or nil
+end
+
+-- Which reactive ability a spell id is, memoised.
+--
+-- The memo is what keeps this off the tick. ns.SpellName goes through
+-- C_Spell.GetSpellInfo where that exists, which hands back a table, and asking
+-- it per square per tick would allocate forty-eight of them ten times a second.
+-- Asked once per spell id the bars have ever held, it allocates during the
+-- first pass over a bar and never again.
+--
+-- A client that has not answered yet is not cached. Caching a false there would
+-- lock every square out of the window for the rest of the session on the one
+-- pass that ran before the spell data arrived.
+local function KeyForSpell(id)
+	local known = keyOf[id]
+	if known ~= nil then
+		return known or nil
+	end
+	local overpower, revenge = Reaction.Name(Reaction.OVERPOWER), Reaction.Name(Reaction.REVENGE)
+	if not overpower and not revenge then
+		return nil
+	end
+	local name = ns.SpellName(id)
+	if not name then
+		return nil
+	end
+	local found = false
+	if name == overpower then
+		found = Reaction.OVERPOWER
+	elseif name == revenge then
+		found = Reaction.REVENGE
+	end
+	keyOf[id] = found
+	return found or nil
+end
+
+-- Which reactive ability this action slot holds, or nil for the other
+-- twenty-three squares on the bar.
+--
+-- Called from Slot.State, so it runs against every square on every bar ten
+-- times a second. That is one GetActionInfo and one table lookup on top of the
+-- nine client calls the ladder already makes per square, and nothing is cached
+-- about the slot itself. Buttons/Slot.lua's rule is that nothing is held that
+-- the client already holds, and what is in a slot is the client's to hold: a
+-- cache here would need invalidating on every drag, every stance page and every
+-- rank refresh, and would be wrong between the change and the event.
+--
+-- Only a plain spell is recognised. A macro's text is yours and the client will
+-- not say what a `/cast` line resolves to, so an Overpower wrapped in a macro
+-- keeps the old behaviour and draws as ready. That is a real limit and it is
+-- the same one Buttons/Ranks.lua takes for the same reason.
+function Reaction.Of(slot)
+	if watching ~= true or not slot then
+		return nil
+	end
+	local kind, id = readAction(slot)
+	if kind ~= "spell" or not id then
+		return nil
+	end
+	return KeyForSpell(id)
+end
+
+--------------------------------------------------------------------------
+-- Reading a window back
+--------------------------------------------------------------------------
+
+-- Whether that press would land right now, as far as the window is concerned.
+-- Says nothing about stance, rage, range or the ability's own cooldown; four
+-- other rungs of the ladder own those.
+function Reaction.Open(key)
+	return (openUntil[key] or 0) > GetTime()
+end
+
+-- Seconds left, floored at zero. Nothing draws this today. It is here because
+-- the number is the whole state of the file and a status line that cannot show
+-- it cannot be used to check the duration against the live client.
+function Reaction.Remaining(key)
+	local left = (openUntil[key] or 0) - GetTime()
+	return left > 0 and left or 0
+end
+
+function Reaction.Watching()
+	return watching == true
+end
+
+--------------------------------------------------------------------------
+-- The log
+--
+-- The same event Meter/Meter.lua and Swing/Swing.lua read, read the same way.
+-- Five subevents matter and the value this file wants sits in a different slot
+-- in each of them, so every read is by index and none is guessed:
+--
+--   SWING_MISSED    12 is the miss type
+--   SPELL_MISSED    12 is the spell, 15 is the miss type
+--   SWING_DAMAGE    12 is the amount, 16 is how much of it was blocked
+--   SPELL_DAMAGE    12 is the spell, 15 is the amount, 19 is the blocked part
+--   SPELL_CAST_SUCCESS  12 is the spell
+--
+-- The damage pair is not an optimisation. A block that stops the whole hit
+-- arrives as SWING_MISSED with "BLOCK", and a block that stops part of it
+-- arrives as a landed hit carrying a blocked amount. A tank blocks partially
+-- far more often than fully, so a parser that read only the miss events would
+-- have Revenge dark through most of a fight it was open in.
+--------------------------------------------------------------------------
+
+local function OnLog()
+	-- Read again where the two events that own it came up with nothing. That is
+	-- not belt and braces: both of them fire around a loading screen and nowhere
+	-- else, so a client that had no GUID for you at either moment would leave
+	-- this file inert until the next zone, with nothing on screen to say so. In
+	-- the steady state it is one comparison per log line.
+	if not playerGUID then
+		playerGUID = UnitGUID("player")
+		if not playerGUID then
+			return
+		end
+	end
+
+	local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
+		arg12, _, _, arg15, arg16, _, _, arg19 = CombatLogGetCurrentEventInfo()
+
+	if sourceGUID == playerGUID then
+		-- Spending it shuts it. The server takes the window away on the press
+		-- and sends nothing to say so, so without this the square stays lit for
+		-- the rest of the five seconds after the one press it had.
+		if subevent == "SPELL_CAST_SUCCESS" then
+			local key = KeyForSpell(arg12)
+			if key then
+				openUntil[key] = 0
+			end
+			return
+		end
+
+		-- Your attack was dodged, which is the whole of Overpower's condition.
+		-- A dodged special counts as well as a dodged white hit, so both miss
+		-- subevents are read.
+		local missed
+		if subevent == "SWING_MISSED" then
+			missed = arg12
+		elseif subevent == "SPELL_MISSED" then
+			missed = arg15
+		end
+		if missed == "DODGE" then
+			openUntil[Reaction.OVERPOWER] = GetTime() + WINDOW
+		end
+		return
+	end
+
+	if destGUID ~= playerGUID then
+		return
+	end
+
+	-- You stopped something, which is the whole of Revenge's condition.
+	local missed
+	if subevent == "SWING_MISSED" then
+		missed = arg12
+	elseif subevent == "SPELL_MISSED" then
+		missed = arg15
+	end
+	if missed then
+		if DEFENDED[missed] then
+			openUntil[Reaction.REVENGE] = GetTime() + WINDOW
+		end
+		return
+	end
+
+	local blocked
+	if subevent == "SWING_DAMAGE" then
+		blocked = arg16
+	elseif subevent == "SPELL_DAMAGE" then
+		blocked = arg19
+	end
+	if type(blocked) == "number" and blocked > 0 then
+		openUntil[Reaction.REVENGE] = GetTime() + WINDOW
+	end
+end
+
+--------------------------------------------------------------------------
+
+function Reaction.Describe()
+	if watching == nil then
+		return "not decided yet"
+	end
+	if watching ~= true then
+		return watching
+	end
+	local overpower = Reaction.Remaining(Reaction.OVERPOWER)
+	local revenge = Reaction.Remaining(Reaction.REVENGE)
+	if overpower <= 0 and revenge <= 0 then
+		return ("%gs windows, both shut"):format(WINDOW)
+	end
+	return ("%gs windows, Overpower %.1fs, Revenge %.1fs"):format(WINDOW, overpower, revenge)
+end
+
+--------------------------------------------------------------------------
+
+local events = CreateFrame("Frame")
+events:RegisterEvent("PLAYER_LOGIN")
+events:RegisterEvent("PLAYER_ENTERING_WORLD")
+
+-- Decided once, at login, and never at file scope. The README's trap says why:
+-- class data is not reliable while the files load, so a file-scope answer locks
+-- a warrior out for the session.
+local function Arm()
+	playerGUID = UnitGUID("player")
+	if watching ~= nil then
+		return
+	end
+	if not ns.IsWarrior() then
+		watching = "Overpower and Revenge are warrior abilities and you are not a warrior"
+		return
+	end
+	if type(CombatLogGetCurrentEventInfo) ~= "function" then
+		watching = "this client has no combat log to read, so neither window can be seen"
+		return
+	end
+	if type(_G.GetActionInfo) ~= "function" then
+		watching = "GetActionInfo is missing on this client, so no square can be told from another"
+		return
+	end
+	readAction = _G.GetActionInfo
+	watching = true
+	events:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+	events:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
+
+events:SetScript("OnEvent", function(_, event)
+	if event == "COMBAT_LOG_EVENT_UNFILTERED" then
+		OnLog()
+	elseif event == "PLAYER_REGEN_ENABLED" then
+		-- The fight is over, so nothing else is going to dodge you and nothing
+		-- else is going to hit your shield. Shut both rather than let them run
+		-- out, the same way Swing.lua stops a swing that is not coming.
+		openUntil[Reaction.OVERPOWER], openUntil[Reaction.REVENGE] = 0, 0
+	else
+		Arm()
+	end
+end)

@@ -204,22 +204,25 @@ ns.Register({
 			end
 			local _, _, at = Slam.Window()
 			return ("The band sits at %.0f%% of the main hand bar, which is a %.2fs cast"
-				.. " against a %.2fs swing. It moves with your haste and with your"
-				.. " weapon, so it is where it is now rather than where it was."):format(
-					(at or 0) * 100, Slam.Cast(), Swing.Speed(Swing.MAIN))
+				.. " against a %.2fs swing. Your weapon speed is the only thing that"
+				.. " moves it: a shorter swing spends a bigger share of itself on the"
+				.. " same cast, so Flurry landing walks the band back down the bar."):format(
+					(at or 0) * 100, Slam.Cast(), Swing.Duration(Swing.MAIN))
 		end)
 
 		ui.Note(function()
 			local rank = Slam.Rank()
 			if Slam.Measured() then
-				return ("The cast time is the client's own: %.2fs, taken off the last Slam"
-					.. " you actually cast, with haste and talents already in it. Improved"
-					.. " Slam reads as %d point%s and is no longer being guessed at.")
+				return ("The cast time is the client's own: %.2fs, taken off the first Slam"
+					.. " you cast this session and held. Haste does not touch Slam's cast"
+					.. " time on this client, so that number is a constant until you move"
+					.. " a talent point, and re-reading it every cast would only move the"
+					.. " mark you are aiming at. Improved Slam reads as %d point%s.")
 					:format(Slam.Measured(), rank, rank == 1 and "" or "s")
 			end
 			return ("No Slam cast yet this session, so the band is drawn from an estimate:"
 				.. " the spell's own cast time less %.1fs for %d point%s of Improved Slam."
-				.. " Cast one and the client's real number replaces it."):format(
+				.. " Cast one and the client's real number replaces it, once."):format(
 					rank * 0.1, rank, rank == 1 and "" or "s")
 		end)
 

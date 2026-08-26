@@ -117,7 +117,9 @@ name of none of them.
                              that loadout's cast and its pair of /equipslot lines
     Loadouts/Feature.lua     the paperdoll page and the loadout tab strip
 
-    Buttons/Slot.lua         what one action slot is doing, as one of nine statuses
+    Buttons/Reaction.lua     whether the Overpower or Revenge window is open,
+                             tracked off the combat log
+    Buttons/Slot.lua         what one action slot is doing, as one of ten statuses
     Buttons/Layout.lua       the warrior loadout, and the backup of what it replaced
     Buttons/Ranks.lua        moves bar slots up to the best rank you know
     Buttons/Bars.lua         a clone of every action bar you have, on the same
@@ -391,6 +393,9 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Swing.Speed(hand) / Armed / Remaining / Fraction   how long a swing is,
                                  whether one is running, how much of it is left
                                  and how much of it is spent, per hand
+    ns.Swing.Duration(hand)      how long the swing being drawn is, which is
+                                 what Fraction divides by. Anything marking up
+                                 that bar asks this rather than Speed
     ns.Swing.Start(hand) / Stop(hand) / Retime()   a swing landed, a swing is
                                  not coming, and the speed moved under one
     ns.Swing.Ready() / HasMainhand() / HasOffhand()   whether the client will
@@ -421,8 +426,11 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Command.Toggle(arg)       "off" is off, anything else is on
     ns.Command.Number(v, lo, hi, what)  parse and range-check, or complain and return nil
     ns.Slot.State(slot)          what one action slot is doing: a status out of
-                                 UI/Ability.lua's nine, plus the cooldown times
+                                 UI/Ability.lua's ten, plus the cooldown times
     ns.Slot.Texture / Count / CanRead / Describe
+    ns.Reaction.Of(slot)         which reactive ability that slot holds, or nil
+    ns.Reaction.Open(key)        whether that window is open right now
+    ns.Reaction.Remaining(key) / Name(key) / Watching() / Describe()
     ns.Bars.Apply()              stand the cloned bars up, or take them down and
                                  give Blizzard's back; false when combat deferred it
     ns.Bars.CanPage()            whether a state driver came up, so bar 1 pages
@@ -750,20 +758,28 @@ become new ratchets.
 Six `OnUpdate` tickers run at once and none of them ever stops. A seventh runs
 only while you are looking at it.
 
-    Charge/Marker.lua        20 Hz   it tracks the camera
-    Swing/Gauges.lua         20 Hz   two gauges and the Slam band
-    Charge/Icon.lua          10 Hz   the HUD icon and the macro
-    Buttons/Bars.lua         10 Hz   every square on every cloned bar
-    UnitFrames/EnemyBars.lua  5 Hz   every bar on screen
-    UnitFrames/Skin.lua       5 Hz   the three Blizzard unit frames
-    Perf/Perf.lua             1 Hz   only while the performance tab is on screen
+    Swing/Gauges.lua      every frame   two gauges and the Slam band
+    Charge/Marker.lua        20 Hz      it tracks the camera
+    Charge/Icon.lua          10 Hz      the HUD icon and the macro
+    Buttons/Bars.lua         10 Hz      every square on every cloned bar
+    UnitFrames/EnemyBars.lua  5 Hz      every bar on screen
+    UnitFrames/Skin.lua       5 Hz      the three Blizzard unit frames
+    Perf/Perf.lua             1 Hz      only while the performance tab is on screen
 
-The swing timer runs at the marker's rate rather than the icon's on purpose,
-and it is the only readout in the addon where that is worth the cost. What you
-are pressing on is a band two tenths of a second wide: at 10 Hz a tenth of that
-band goes past between frames, which is half the aim you have. The tick pays
-for it by quantising the fill to whole pixels, so between swings it writes
-nothing at all and inside one it writes one number.
+The swing timer has no rate, and it is the only thing here that does not. Every
+other ticker refreshes a readout, and a readout refreshed twenty times a second
+is never more than fifty milliseconds stale, which nobody can see. The swing bar
+is not a readout, it is a moving edge, and a moving edge is an animation. At the
+shipped width the fill crosses 53 pixels a second, so a draw every fifty
+milliseconds moves it about three pixels at a time, and three pixels is a step
+you can see. It shipped at 20 Hz and the report back was that the timer "jumps
+chunks", which is exactly what a 20 Hz animation on a 60 Hz screen is.
+
+Drawing it every frame costs nothing, because the quantisation is the guard.
+The fill is a whole number of pixels compared against the whole number already
+on the bar, so a frame that would draw the same pixel writes nothing: 53 writes
+a second inside a swing, and none at all outside one. Every other rate in the
+table stands, because none of those parts draws motion.
 
 The last one is the exception that proves the rule rather than a loosening of
 it. `UpdateAddOnMemoryUsage` walks every addon the client has loaded, which
@@ -1040,6 +1056,18 @@ one side, only the shim changes.
   in one session hit the client's error ceiling and got the whole addon
   offered up for disabling, which is a far worse failure than the feature
   simply not working.
+- An API that answers yes when the truth is no is worse than one that refuses
+  to answer, because nothing in the code looks wrong. `IsUsableAction` says
+  Overpower is usable in Battle Stance whether or not anything has dodged you.
+  It is not confused and it is not lying about rage: the window lives on the
+  server and the client is never told, so there is no aura to scan, no cooldown
+  to read and no event to catch. The cloned bars drew the one square whose whole
+  point is that it is usually not pressable as ready from the first pull to the
+  last, and every rung of the ladder above it was correct. The fix is
+  `Buttons/Reaction.lua`, which watches the combat log because the combat log is
+  the only place the fact appears. Before trusting a client answer about a
+  reactive ability, work out whether the server ever sent the client the
+  question.
 
 ## Feature notes
 
@@ -1490,6 +1518,55 @@ The stale list is cached and dropped on `LEARNED_SPELL_IN_TAB`,
 count on every refresh. `Apply` reads each slot again before writing it, since
 the cached list can be a click old and a slot that moved underneath must not be
 overwritten.
+
+*The reaction window.* Overpower and Revenge are the two squares on a warrior's
+bar you do not press, you are handed. Overpower opens when your target dodges
+you; Revenge opens when you block, dodge or parry. The client will not say so.
+`IsUsableAction` answers yes for Overpower in Battle Stance for the whole of
+every fight, so the square that is pressable for five seconds an encounter was
+drawn ready for all of it.
+
+`Buttons/Reaction.lua` tracks both off `COMBAT_LOG_EVENT_UNFILTERED`, which is
+the only place the fact appears, and `Slot.State` asks it one question. One file
+for both because they are one idea seen from two ends: the trigger differs by
+which side of the swing you are on and the clock after it is identical. Five
+subevents are read. A dodge of yours off `SWING_MISSED` or `SPELL_MISSED` opens
+Overpower. A block, dodge or parry of yours off the same two opens Revenge, and
+so does a blocked amount on `SWING_DAMAGE` or `SPELL_DAMAGE`, because a block
+that stops only part of a hit arrives as a landed hit and that is the common
+case on a tank. `SPELL_CAST_SUCCESS` shuts the window you just spent, and
+leaving combat shuts both.
+
+The window is five seconds and that number is the one thing here that is not
+read off the client. It is listed under what has never been measured, with the
+argument, at the bottom of this file.
+
+The rung sits above the usable split rather than below it, which is the ladder's
+own rule: what cannot be fixed at all comes first, and a shut window is not
+something you can do anything about while a wrong stance is. That ordering also
+fixes the square that used to shout for nothing. Overpower on a bar in Defensive
+Stance drew orange "swap" from the first pull to the last, which is a colour
+telling you to swap into a stance where the press still would not land. Now the
+orange appears only while the window is open, where swapping really does let you
+press it.
+
+Stances needed no new code. Overpower is Battle Stance only and Revenge is
+Defensive Stance only, and `IsUsableAction` already refuses both in the wrong
+stance with a `notEnoughPower` of false, which is exactly the pair the ladder
+splits `cost` from `stance` on.
+
+Only a plain spell is recognised, matched by asking the client its own name for
+Overpower and Revenge at rank 1 and comparing that against its name for whatever
+is in the slot. Both sides are the client's string, so it holds in every locale
+and at every rank, and the file carries two spell IDs rather than a rank list
+that goes stale at the next trainer visit. An Overpower wrapped in a macro is
+not recognised and keeps the old behaviour, which is the same limit `Ranks.lua`
+takes for the same reason: the client will not say what a `/cast` line resolves
+to.
+
+Warrior only, decided once at `PLAYER_LOGIN`. On another class nothing
+registers, so no square is gated on a window that could not open and no combat
+log line is read to find that out.
 
 The design lives in `Layout.BAR1`, `Layout.BAR2` and `Layout.MACROS`, three
 declarative tables. Changing the loadout is editing data. `BAR1` is twelve rows
@@ -2414,30 +2491,66 @@ side of the line it is on. The whole gauge goes green while the fill is inside
 the band, because four percent of a bar is not enough to catch out of the corner
 of an eye and all of it is.
 
-**The cast time is measured, and estimated only until it can be.**
-`UNIT_SPELLCAST_START` carries what the server actually started, as a start and
-an end in milliseconds, with talents and haste already in it. That number
-replaces the estimate from the first Slam of a session and is re-taken on every
-cast.
+**Exactly one thing is allowed to move the mark, and it is your weapon speed.**
+That is the repair the feature needed after it shipped: the report back was that
+the mark "moves around depending on when I click the spell", and it did, because
+the cast time under it was re-measured on every cast.
 
-Until then it is the spell's own cast time out of `ns.SpellCastTime`, less 0.1
-seconds per point of Improved Slam. The talent is found by name rather than by
-position, because a talent's tab and index are not stable and its name is: every
-"Improved X" talent in this game carries the ability's own localised name inside
-it, in every locale Blizzard ships, so the talent whose name contains the
-localised name of Slam and is not Slam is Improved Slam.
+`D` is the swing being drawn, out of `ns.Swing.Duration`, rather than what
+`UnitAttackSpeed` says right now. Those are the same number today and asking for
+the first is what keeps the mark and the fill two readings of one thing rather
+than two answers that agree by luck.
 
-That rule about naming is the one guess in the feature and it is deliberately
-the shortest lived thing in it. Whether this client already folds Improved Slam
-into `GetSpellInfo` could not be settled without logging in, and the measurement
-means it does not have to be: a first cast one tenth out is the whole cost of
-being wrong.
+`C` is a constant per character. Haste does not touch Slam's cast time on either
+of these clients: Warcraft wiki's patch history dates that to Cataclysm 4.0.1,
+2010-10-12, "Slam can now be cast while moving, and haste now reduces the cast
+time". Before that patch it is 1.5 seconds less the talent and nothing else. So
+a second reading of it carries no information, and every difference a second
+reading could carry is noise the mark would move for.
+
+The mark does still move when the swing speed does, and it has to: the press is
+the moment with a cast time left to run, and a shorter swing spends a bigger
+share of itself on the same cast. Flurry landing walks the band back down the
+bar, not up it. The harness asserts that as the invariant rather than as a
+percentage, at three weapon speeds and across a proc that lands mid swing,
+because the percentage is the number that moves.
+
+**The cast time is measured once and then held.** `UNIT_SPELLCAST_START` carries
+what the server actually started, as a start and an end in milliseconds, with
+the talent already in it. The first Slam of a session replaces the estimate.
+Every Slam after it is ignored.
+
+The reading is snapped to a twentieth of a second, because every value the real
+cast can take is a multiple of a tenth and the milliseconds under that are the
+server's own rounding. It is refused if it snaps to zero, since zero is truthy
+in Lua and a held zero would win over the estimate and then report that this
+character has no Slam. It is refused if it is longer than the spell's own cast
+time, because that reading is some other cast. What drops the held number is
+`CHARACTER_POINTS_CHANGED`, which is the one event that means the answer really
+changed.
+
+Until the first cast it is the spell's own cast time out of `ns.SpellCastTime`,
+less 0.1 seconds per point of Improved Slam. The talent is found by name rather
+than by position, because a talent's tab and index are not stable and its name
+is: every "Improved X" talent in this game carries the ability's own localised
+name inside it, in every locale Blizzard ships, so the talent whose name
+contains the localised name of Slam and is not Slam is Improved Slam.
+
+The 0.1 is a seed and is not trusted. Warcraft wiki's rank table gives 0.1 per
+point over five points for Classic and for Burning Crusade and dates the two
+point, 0.5 per point version to patch 3.0.2, one expansion past both of these
+clients. Wowhead's TBC entry for spell 12330 reads -1000 milliseconds, which
+does not agree. Nothing in the API settles it, the measurement replaces it on
+the first cast, and the panel says "estimated" until it has.
 
 **Slam restarts the swing and nothing in the log says so.** The next log event
 you would see is the swing that lands a full weapon speed later, so a timer
 built on the log alone draws the whole of that swing wrong.
 `UNIT_SPELLCAST_SUCCEEDED` for your own Slam restarts the main hand timer, and
 the spell is matched by name across every shape that event arrives in.
+
+**The bar is drawn every frame and nothing else in the addon is.** See ticker
+discipline above for why, and for why that costs nothing.
 
 **What could not be verified without the client.** That `SWING_DAMAGE` really
 carries the off hand flag in slot 21 on 2.5.6 and 1.15.9, that
@@ -2881,6 +2994,33 @@ and zero errors.
    back on the tick it leaves. Then a completed Slam restarts the swing, a
    cast from 5000 to 6200 milliseconds replaces the estimate with 1.2 seconds,
    and the band moves with it.
+
+   The reaction windows are driven through the same stubbed log. A slot holding
+   Overpower reads `reaction` with nothing having dodged you, `ready` the moment
+   a dodge arrives, and `reaction` again once five seconds have passed. A
+   stranger's dodged swing does not open it, a parry does not open it, pressing
+   the ability shuts it, and combat ending shuts both. Revenge is driven off a
+   full block, a partial block on `SWING_DAMAGE` and a partial block on
+   `SPELL_DAMAGE`, which are three different slots for the same fact, so a
+   parser reading one index for all of them fails here. Where the rungs meet is
+   asserted too: a real cooldown outranks a shut window and a shut window
+   outranks the wrong stance, and an open window hands the wrong stance back so
+   the square can say to swap. On the hunter run nothing is registered, a dodge
+   opens nothing, and an Overpower square reads `ready`.
+
+   All of that passed while the feature was unusable in game, so a second
+   section asserts the two things a person actually sees. The fill is driven
+   across a whole swing one 60 fps frame at a time and has to take a different
+   pixel on nearly every one of them: the assertions are that it never jumps
+   more than one pixel between two frames and that it visits all 180 positions,
+   which is the only pair of statements that means smooth. Then five Slams are
+   cast in a row, each declaring a different length, and the press mark has to
+   stay on the same pixel through all of them, through an aura event that moved
+   no speed, and through readings that are refused for being longer than the
+   spell or for rounding away to nothing. What is allowed to move it is asserted
+   as the invariant it comes from: at 3.4, 2.4 and 1.6 second swings, and across
+   a proc that lands mid swing, the moment the fill reaches the mark is the
+   moment the swing has exactly a cast time left to run.
 7. Runs luacheck over the tree.
 
 The harness runs twice, and the second run comes up as a hunter:
@@ -2968,15 +3108,27 @@ Everything below was written from the API contract and has never executed:
   time, so a client that never fires it leaves the band drawn from the spell's
   own cast time less 0.1 seconds per point of Improved Slam, which is the state
   the first Slam of every session is drawn in anyway.
+
+  What is no longer on this list is whether that start and end are stable from
+  one cast to the next. Only the first reading is taken, so a client that varies
+  it cannot move the mark, and the answer stopped mattering.
 - Whether the server scales a swing already in flight when haste lands, rather
   than restarting it. `Swing.Retime` assumes it scales, which is what every
   swing timer written for these clients assumes and what Flurry visibly does.
   Getting it wrong costs a bar that is out by the difference for one swing after
   every proc.
-- Whether this client folds Improved Slam into `GetSpellInfo`. If it does, the
-  estimate is a tenth of a second per point too short until the first Slam of
-  the session is cast, and the measurement corrects it from then on. This is
-  the one place in the feature where being wrong was designed to be temporary.
+- Whether this client folds Improved Slam into `GetSpellInfo`, and whether the
+  talent is 0.1 seconds a point on 2.5.6 or 0.2. Warcraft wiki's rank table says
+  0.1 for both Classic and Burning Crusade; Wowhead's TBC entry for spell 12330
+  says -1000 milliseconds, which would be 0.2. Either way the estimate is out by
+  at most half a second and only until the first Slam of the session is cast,
+  and the measurement corrects it from then on. This is the one place in the
+  feature where being wrong was designed to be temporary.
+
+  What is settled, and did not need the client: haste does not reduce Slam's
+  cast time on either of these versions. Warcraft wiki's patch history dates
+  that to Cataclysm 4.0.1. The mark is built on the cast being a constant per
+  character, and that is where the constant comes from.
 - Whether `RegisterStateDriver` and `SecureHandlerStateTemplate` re-point bar 1
   at another twelve action slots in combat on 2.5.6. `Charge/Icon.lua` already
   builds a handler and registers a driver on the same client, so the machinery is
@@ -3376,3 +3528,25 @@ Everything below was written from the API contract and has never executed:
   PLAYER_TARGET_CHANGED and PLAYER_ENTERING_WORLD re-place the block, and the
   portrait's crop is re-applied every tick, but a re-anchor on some other event
   would show as a piece drifting out of the square.
+- How long the Overpower and Revenge windows really are. Five seconds is what
+  every player-facing source says: the Vanilla wiki calls Overpower "only usable
+  if your target dodges, for a short amount of time (5 second period)", the
+  Classic guides agree, and both abilities carry a five second cooldown, so a
+  warrior pressing on every window presses on the cooldown. The MaNGOS and
+  TrinityCore server cores both hold `REACTIVE_TIMER_START` at 4000
+  milliseconds, which is where four seconds comes from when somebody quotes it.
+  `Buttons/Reaction.lua` uses five, because running a second long costs a glance
+  at a square that says pressable when it is not, and running a second short
+  greys a free five rage attack that is still sitting there. Settling it needs
+  the live client: get something to dodge you, watch the seconds in `/wk status`
+  and see when the client starts refusing the press.
+- Whether `SPELL_CAST_SUCCESS` is what these clients send when Overpower or
+  Revenge lands. It is the subevent the window is shut on. If a client sends
+  something else, the square stays lit for the rest of the five seconds after
+  the one press it had, which is a smaller version of the bug the file exists to
+  fix rather than a new one.
+- Whether a blocked amount really sits in slot 16 of `SWING_DAMAGE` and slot 19
+  of `SPELL_DAMAGE` on 2.5.6 and 1.15.9. Both are read positionally, the way
+  every other combat log read in this addon is. Reading the wrong slot opens the
+  Revenge window on every hit you take, which looks like a window that never
+  shuts rather than like a parser fault.

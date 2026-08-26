@@ -10,9 +10,15 @@ local ADDON, ns = ...
 -- fixed height and single line by construction, so the sampler writes their
 -- strings directly and nothing is laid out again.
 
+-- hz is what the row's ticker runs at, and it is what turns a per tick figure
+-- into the share of a second the part actually takes. The swing timer has no
+-- rate of its own: it draws on every frame, because it is the only thing in the
+-- addon that draws motion. Its row is costed against 60 frames a second, which
+-- is the same budget Total below measures everything against, and `rate` is
+-- what the heading says instead of a number of hertz.
 local ROWS = {
 	{ key = "marker", label = "charge marker", hz = 20 },
-	{ key = "swing", label = "swing timer", hz = 20 },
+	{ key = "swing", label = "swing timer", hz = 60, rate = "every frame" },
 	{ key = "icon", label = "charge icon", hz = 10 },
 	{ key = "action", label = "action bars", hz = 10 },
 	{ key = "bars", label = "enemy bars", hz = 5 },
@@ -200,7 +206,7 @@ ns.Register({
 		ui.Header("What each ticker costs")
 		for index = 1, #ROWS do
 			local entry = ROWS[index]
-			Readout(("%s, %d Hz"):format(entry.label, entry.hz), function()
+			Readout(("%s, %s"):format(entry.label, entry.rate or ("%d Hz"):format(entry.hz)), function()
 				return SlotLine(entry)
 			end)
 		end

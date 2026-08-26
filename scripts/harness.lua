@@ -843,9 +843,19 @@ _G.WarriorKitSpellCast = {}
 -- the client calls that one Deep Wound. Naming them "Spell12162" and
 -- "Spell12721" would still tell them apart and would say nothing about why they
 -- have to be told apart.
+--
+-- The other four are the two reactive abilities, each at rank 1 and at a later
+-- rank. Buttons/Reaction.lua carries the two rank 1 ids and matches everything
+-- else by asking this client what it calls them, so a bar holding a rank nobody
+-- wrote down has to come back with the same string. A stub that named only rank
+-- 1 would let a rank list pass.
 local SPELL_NAMES = {
 	[12162] = "Deep Wounds",
 	[12721] = "Deep Wound",
+	[7384] = "Overpower",
+	[11585] = "Overpower",
+	[6572] = "Revenge",
+	[25288] = "Revenge",
 }
 _G.GetSpellInfo = function(id)
 	if type(id) == "number" and id >= 900000 then
@@ -1299,7 +1309,6 @@ _G.CursorHasItem = constant(false)
 _G.GetInventorySlotInfo = function(name)
 	return 16, "Interface\\PaperDoll\\UI-PaperDoll-Slot-" .. tostring(name)
 end
-_G.GetActionInfo = constant(nil)
 
 -- One action slot, modelled rather than stubbed flat.
 --
@@ -1316,6 +1325,18 @@ local slots = {}
 _G.WarriorKitSlots = slots
 
 _G.HasAction = function(slot) return slots[slot] ~= nil end
+-- What kind of thing is in the slot and which one, which is how
+-- Buttons/Reaction.lua tells an Overpower square from the other twenty-three.
+-- A slot the test named no spell for answers nothing at all, which is what the
+-- client says for a macro, an item or an empty slot, so the path that ignores
+-- everything but a plain spell is reachable from a test rather than assumed.
+_G.GetActionInfo = function(slot)
+	local held = slots[slot]
+	if not held or not held.spell then
+		return nil
+	end
+	return "spell", held.spell
+end
 _G.GetActionTexture = function(slot)
 	local held = slots[slot]
 	return held and held.texture or nil
@@ -2587,6 +2608,168 @@ do
 	-- action has no range, the unit cannot take it, the client has not decided.
 	put({ texture = ART, range = nil })
 	check(Slot.State(SLOT) == "ready", "an unanswered range check is blocking the square")
+
+	--------------------------------------------------------------------------
+	-- The reaction window
+	--
+	-- Overpower is not a spell you press, it is a spell the fight hands you for
+	-- a few seconds after the mob dodges. The client does not know that:
+	-- IsUsableAction says yes for the whole fight, which is why the square was
+	-- drawn ready for the whole fight, and why nothing in this file could catch
+	-- it until the stub grew a combat log the slot ladder reads.
+	--
+	-- Driven rather than described, because the mechanism is four things and
+	-- every one of them is a place to be wrong: the dodge opens it, the clock
+	-- shuts it, the press shuts it early, and somebody else's dodge is not
+	-- yours. Revenge is the same window off a different line, so it is driven
+	-- through the two shapes a block arrives in and not just the tidy one.
+	--------------------------------------------------------------------------
+
+	local ME = "Player-0-0000000r"
+	local MOB = "Creature-0-0000000r"
+	local OVERPOWER, REVENGE = 11585, 25288 -- a later rank of each, on purpose
+
+	-- Sixteen values matter here and each subevent puts the one this reads in a
+	-- different slot, so the slot is a parameter. Twelve carries an amount on a
+	-- swing and a spell id on anything with a spell in front of it, which is
+	-- what it is left holding when the test is about a later slot.
+	local function logLine(subevent, source, dest, at, value)
+		for index = 1, 21 do
+			logArgs[index] = nil
+		end
+		logArgs[1] = wall
+		logArgs[2] = subevent
+		logArgs[4] = source
+		logArgs[8] = dest
+		logArgs[12] = 300
+		logArgs[at] = value
+		fire("COMBAT_LOG_EVENT_UNFILTERED")
+	end
+
+	guids.target = nil
+	guids.player = ME
+
+	put({ texture = ART, spell = OVERPOWER })
+
+	if not WARRIOR then
+		-- Neither ability exists on another class, so nothing is registered and
+		-- no square is gated. Asserted rather than assumed, because a tracker
+		-- that came up anyway would grey a square this character cannot have and
+		-- would read every line of the combat log in the game to do it.
+		check(not ns.Reaction.Watching(),
+			"a reaction window is tracked on a class that has neither ability: " .. ns.Reaction.Describe())
+		check(ns.Reaction.Of(SLOT) == nil, "a slot is read as a reaction on another class")
+		check(Slot.State(SLOT) == "ready", "a square is gated on a window that could never open")
+		logLine("SWING_MISSED", ME, MOB, 12, "DODGE")
+		check(not ns.Reaction.Open(ns.Reaction.OVERPOWER),
+			"a dodge opened a window on a class with nothing to press")
+		check(Slot.State(SLOT) == "ready", "a dodge changed a square on another class")
+		put({ texture = ART })
+	else
+		check(ns.Reaction.Of(SLOT) == ns.Reaction.OVERPOWER,
+			"a slot holding a later rank of Overpower is not recognised as Overpower")
+		check(Slot.State(SLOT) == "reaction",
+			"Overpower is drawn ready with nothing having dodged you, which is the whole bug")
+
+		-- Somebody else's fight does not arm your button.
+		logLine("SWING_MISSED", "Player-0-0000009r", MOB, 12, "DODGE")
+		check(Slot.State(SLOT) == "reaction", "a stranger's attack being dodged opened your window")
+
+		-- And neither does a miss that is not a dodge.
+		logLine("SWING_MISSED", ME, MOB, 12, "PARRY")
+		check(Slot.State(SLOT) == "reaction", "a parry opened the Overpower window, and only a dodge does")
+
+		logLine("SWING_MISSED", ME, MOB, 12, "DODGE")
+		check(Slot.State(SLOT) == "ready", "the target dodged you and Overpower is still not pressable")
+
+		advance(4.9)
+		check(Slot.State(SLOT) == "ready", "the window shut before its five seconds were up")
+		advance(0.2)
+		check(Slot.State(SLOT) == "reaction", "the window never lapsed, so the square stays lit forever")
+
+		-- A dodged special counts too, and it carries the miss type five slots
+		-- further along. A parser reading one index for both fails here.
+		logLine("SPELL_MISSED", ME, MOB, 15, "DODGE")
+		check(Slot.State(SLOT) == "ready", "only a dodged white hit opens the window")
+
+		-- Spending it shuts it. The server takes the window away on the press and
+		-- says nothing, so without this the square stays lit for the rest of the
+		-- five seconds after the one press it had.
+		logLine("SPELL_CAST_SUCCESS", ME, MOB, 12, OVERPOWER)
+		check(Slot.State(SLOT) == "reaction", "pressing Overpower left its window open")
+
+		-- Revenge is the same window off your own block, dodge or parry. Its own
+		-- clock, so opening one does not open the other.
+		put({ texture = ART, spell = REVENGE })
+		check(Slot.State(SLOT) == "reaction", "Revenge is drawn ready with nothing having hit you")
+		logLine("SWING_MISSED", MOB, ME, 12, "DODGE")
+		check(Slot.State(SLOT) == "ready", "dodging a mob did not open Revenge")
+
+		put({ texture = ART, spell = OVERPOWER })
+		check(Slot.State(SLOT) == "reaction", "your own dodge opened the Overpower window too")
+
+		-- A block that stops the whole hit is a miss event. A block that stops part
+		-- of it is a landed hit carrying a blocked amount, which is the far more
+		-- common one on a tank, and it sits in slot 16 on a swing and slot 19 on a
+		-- special. A parser that read only the miss events would leave Revenge dark
+		-- through most of the fight it was open in.
+		advance(6)
+		put({ texture = ART, spell = REVENGE })
+		check(Slot.State(SLOT) == "reaction", "the Revenge window never lapsed")
+		logLine("SWING_DAMAGE", MOB, ME, 16, 40)
+		check(Slot.State(SLOT) == "ready", "a partial block did not open Revenge")
+
+		advance(6)
+		check(Slot.State(SLOT) == "reaction", "the Revenge window never lapsed")
+		logLine("SPELL_DAMAGE", MOB, ME, 19, 40)
+		check(Slot.State(SLOT) == "ready", "a partially blocked special did not open Revenge")
+
+		-- A hit you did nothing about is not a window. Slot 16 is the blocked part
+		-- and slot 12 is the amount, so a parser reading the wrong one opens Revenge
+		-- on every hit you take.
+		advance(6)
+		logLine("SWING_DAMAGE", MOB, ME, 16, 0)
+		check(Slot.State(SLOT) == "reaction", "an unblocked hit opened the Revenge window")
+
+		-- Where the rungs meet. A real cooldown outranks a shut window, because the
+		-- swipe counts that one down and nothing counts this one down. A shut window
+		-- outranks the wrong stance, because swapping stance would not let you press
+		-- it and an orange square saying "swap" would be telling you to.
+		put({ texture = ART, spell = OVERPOWER, start = wall, duration = 6 })
+		check(Slot.State(SLOT) == "cooldown", "a shut window is being reported ahead of a real cooldown")
+		put({ texture = ART, spell = OVERPOWER, usable = false, noPower = false })
+		check(Slot.State(SLOT) == "reaction", "the wrong stance is being reported ahead of a shut window")
+
+		-- And with the window open the client's own no comes back, which is what
+		-- makes the orange mean something: swap now and the press lands.
+		logLine("SWING_MISSED", ME, MOB, 12, "DODGE")
+		check(Slot.State(SLOT) == "stance",
+			"an open window hides the wrong stance, so the square never says to swap")
+		put({ texture = ART, spell = OVERPOWER, usable = false, noPower = true })
+		check(Slot.State(SLOT) == "cost", "an open window hides having no rage")
+
+		-- Combat dropping shuts both. A window still open after the mob is down is
+		-- a square saying press me at a corpse.
+		inCombat.player = false
+		fire("PLAYER_REGEN_ENABLED")
+		put({ texture = ART, spell = OVERPOWER })
+		check(Slot.State(SLOT) == "reaction", "the window survived the end of the fight")
+
+		-- Everything that is not one of the two is untouched, which is the other
+		-- twenty-three squares on the bar.
+		put({ texture = ART, spell = 1464 })
+		check(ns.Reaction.Of(SLOT) == nil, "an ordinary spell is being tracked as a reaction")
+		check(Slot.State(SLOT) == "ready", "an ordinary spell is gated on a reaction window")
+		put({ texture = ART })
+		check(ns.Reaction.Of(SLOT) == nil, "a slot holding a macro is being tracked as a reaction")
+
+		check(ns.Reaction.Watching(),
+			"no reaction window is tracked on a warrior: " .. ns.Reaction.Describe())
+	end
+
+	guids.player = nil
+
+	print(("react  %s"):format(ns.Reaction.Describe()))
 
 	--------------------------------------------------------------------------
 	-- What a redraw costs
@@ -7408,6 +7591,289 @@ do
 	ns.Swing.Stop(ns.Swing.OFF)
 	ns.SwingGauges.Apply()
 end
+
+end
+do
+--------------------------------------------------------------------------
+-- The swing timer, as a person sees it
+--
+-- The section above asserts the arithmetic and every one of its assertions
+-- passed while the feature was unusable in game. Two things were wrong and
+-- neither is arithmetic.
+--
+-- The bar moved in steps. The fill was drawn on a 20 Hz ticker, and 20 Hz is
+-- the rate a readout is refreshed at rather than the rate a thing that moves
+-- is animated at. At the shipped width the fill crosses 53 pixels a second, so
+-- a draw every 50 milliseconds moves it about three pixels at a time and the
+-- eye reads three pixels as a jump. So the assertion is not "the fill is
+-- right" but "the fill never moves more than one pixel between two frames of a
+-- 60 fps client", which is the only statement that means smooth.
+--
+-- And the mark moved. It was drawn from a cast time re-measured on every cast,
+-- so the number under it changed while the player was aiming at it. The
+-- assertion is that several casts in a row leave the mark on the same pixel.
+--
+-- What is allowed to move it is the swing speed, and that is asserted as the
+-- invariant rather than as a percentage: at every weapon speed, the moment the
+-- fill reaches the mark is the moment the swing has exactly a cast time left
+-- to run. The percentage is the thing that moves; the invariant is the thing
+-- that must not.
+--------------------------------------------------------------------------
+
+-- One frame on a 60 fps client, which is the rate the fill has to be smooth
+-- at because it is the rate the screen is.
+local FRAME = 1 / 60
+local SLAM = 1464
+
+guids.player = "Player-0-0000000f"
+swing.mainhand = itemLink("Arcanite Reaper")
+swing.main, swing.off, swing.offhand = 3.4, nil, nil
+swing.talent = 5
+_G.WarriorKitSpellCast[SLAM] = 1500
+ns.Slam.Forget()
+-- The section above cast a Slam and the number it took off it is still held.
+-- A respec is what drops one, and this section starts from a character who has
+-- never cast the spell.
+fire("CHARACTER_POINTS_CHANGED")
+fire("PLAYER_ENTERING_WORLD")
+ns.SwingGauges.Apply()
+
+local ticker
+for _, f in ipairs(frames) do
+	if f.scripts.OnUpdate and f.origin:match("Swing/Gauges") then
+		ticker = f
+	end
+end
+
+local bar = ns.SwingGauges.Bar(ns.Swing.MAIN)
+local width = ns.db.swingWidth
+
+-- One frame of the client, through whatever the ticker decides to do with it.
+-- Only the fill test below uses this, because it is the only test about the
+-- rate rather than about the drawing.
+local function tick()
+	ticker.scripts.OnUpdate(ticker, FRAME)
+end
+
+-- A draw, taken straight rather than through the ticker, so a test about where
+-- the mark sits cannot pass or fail on when the ticker last ran.
+local function redraw()
+	ns.SwingGauges.Update()
+end
+
+local function markPixel()
+	local point = bar.mark.points and bar.mark.points[1]
+	return point and point[4]
+end
+
+-- The layout has run, so the bar counts in its own width rather than in the
+-- one pixel it was built with. A bar left on the seed draws a whole swing in
+-- two positions.
+check(bar.pixels == width,
+	("the bar counts to %s and the setting says %d"):format(tostring(bar.pixels), width))
+
+--------------------------------------------------------------------------
+-- The fill, frame by frame
+--------------------------------------------------------------------------
+
+do
+	ns.Swing.Start(ns.Swing.MAIN)
+	tick()
+
+	local seen, distinct, biggest, last = {}, 0, 0, bar.shownValue
+	for _ = 1, math.floor(3.4 / FRAME) do
+		advance(FRAME)
+		tick()
+		local step = bar.shownValue - last
+		if step > biggest then
+			biggest = step
+		end
+		last = bar.shownValue
+		if not seen[bar.shownValue] then
+			seen[bar.shownValue] = true
+			distinct = distinct + 1
+		end
+	end
+
+	check(biggest <= 1,
+		("the fill jumped %d pixels in one frame, and one frame of a 3.4s swing is %.2f pixels")
+			:format(biggest, width / 3.4 * FRAME))
+	check(distinct >= width,
+		("the fill took %d positions across a %d pixel swing, and every pixel is one position")
+			:format(distinct, width))
+end
+
+--------------------------------------------------------------------------
+-- The mark
+--------------------------------------------------------------------------
+
+if WARRIOR then
+
+do
+	swing.main = 3.4
+	fire("UNIT_ATTACK_SPEED", "player")
+	ns.Swing.Start(ns.Swing.MAIN)
+	redraw()
+
+	check(ns.Slam.Measured() == nil, "a cast was measured before one was ever made")
+	local estimated = markPixel()
+	check(estimated ~= nil, "no press mark was drawn before the first cast")
+
+	-- The first Slam of the session. The client's own number replaces the
+	-- estimate, which is the whole reason the estimate is allowed to be a guess.
+	swing.cast = { name = ns.Slam.Name(), start = 5000, stop = 6000 }
+	fire("UNIT_SPELLCAST_START", "player", "cast-1", SLAM)
+	swing.cast = nil
+	fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-1", SLAM)
+	redraw()
+
+	local held, at = ns.Slam.Cast(), markPixel()
+	check(math.abs(held - 1.0) < 1e-6,
+		("a cast from 5000 to 6000 milliseconds measured as %.3fs"):format(held))
+
+	-- And every Slam after it. Nothing about this character changed, so nothing
+	-- about the mark may change either, whatever the server declares. Four
+	-- casts, each one a different length, because a mark that follows the last
+	-- cast is a mark that wanders while you are aiming at it.
+	local declared = { { 8000, 9500 }, { 12000, 13040 }, { 16000, 16960 }, { 20000, 21200 } }
+	for index = 1, #declared do
+		swing.cast = {
+			name = ns.Slam.Name(),
+			start = declared[index][1],
+			stop = declared[index][2],
+		}
+		fire("UNIT_SPELLCAST_START", "player", "cast-more", SLAM)
+		swing.cast = nil
+		fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-more", SLAM)
+		redraw()
+		check(math.abs(ns.Slam.Cast() - held) < 1e-9,
+			("cast %d declared %.2fs and the drawn cast time moved to %.3fs from %.3fs")
+				:format(index + 1, (declared[index][2] - declared[index][1]) / 1000,
+					ns.Slam.Cast(), held))
+		check(markPixel() == at,
+			("cast %d moved the press mark from %s px to %s px")
+				:format(index + 1, tostring(at), tostring(markPixel())))
+	end
+
+	-- An aura that moved no speed moves no mark either.
+	fire("UNIT_AURA", "player")
+	redraw()
+	check(markPixel() == at, "an aura event that moved no speed moved the press mark")
+end
+
+do
+	-- A respec is the one thing that makes the held number a reading of a cast
+	-- this character no longer has, so the next cast is measured again. What
+	-- comes back is snapped to a twentieth of a second: the real cast is 1.5
+	-- less a tenth per point of Improved Slam, so the milliseconds under that
+	-- are the server's rounding and nothing else, and a mark that follows them
+	-- moves a pixel per cast.
+	fire("CHARACTER_POINTS_CHANGED")
+	check(ns.Slam.Measured() == nil, "a respec left the old cast time in place")
+
+	-- A reading that is not a Slam. The event carried some other cast, or the
+	-- client answered for one already in flight. Refused rather than held,
+	-- because the held number is held for the session.
+	swing.cast = { name = ns.Slam.Name(), start = 5000, stop = 8000 }
+	fire("UNIT_SPELLCAST_START", "player", "cast-wild", SLAM)
+	swing.cast = nil
+	check(ns.Slam.Measured() == nil,
+		("a 3.00s reading was held against a 1.50s spell: %s"):format(tostring(ns.Slam.Measured())))
+
+	-- And one that rounds away to nothing. Zero is truthy in Lua, so a held
+	-- zero would beat the estimate and then tell the player they have no Slam.
+	swing.cast = { name = ns.Slam.Name(), start = 5000, stop = 5010 }
+	fire("UNIT_SPELLCAST_START", "player", "cast-nothing", SLAM)
+	swing.cast = nil
+	check(ns.Slam.Measured() == nil, "a reading of one hundredth of a second was held")
+	check(ns.Slam.Known(), "a refused reading left the character with no Slam")
+
+	swing.cast = { name = ns.Slam.Name(), start = 5000, stop = 6003 }
+	fire("UNIT_SPELLCAST_START", "player", "cast-respec", SLAM)
+	swing.cast = nil
+	check(math.abs(ns.Slam.Cast() - 1.0) < 1e-9,
+		("1.003s off the server measured as %.4fs, and it is a 1.00s cast")
+			:format(ns.Slam.Cast()))
+end
+
+do
+	-- What the mark is, at any weapon speed: the point where the swing has
+	-- exactly a cast time left to run. The share of the bar that lands on is
+	-- different at every speed and is not what is asserted, because it is the
+	-- number that moves.
+	local speeds = { 3.4, 2.4, 1.6 }
+	for index = 1, #speeds do
+		local speed = speeds[index]
+		swing.main = speed
+		fire("UNIT_ATTACK_SPEED", "player")
+		ns.Swing.Start(ns.Swing.MAIN)
+		local _, _, at = ns.Slam.Window()
+		advance(at * speed)
+		redraw()
+		check(math.abs(ns.Swing.Remaining(ns.Swing.MAIN) - ns.Slam.Cast()) < 1e-6,
+			("on the mark at a %.1fs swing the swing has %.3fs left, and the cast is %.3fs")
+				:format(speed, ns.Swing.Remaining(ns.Swing.MAIN), ns.Slam.Cast()))
+		check(bar.shownNow,
+			("the fill reached the mark at a %.1fs swing and the gauge did not flip")
+				:format(speed))
+	end
+end
+
+do
+	-- Flurry, landing in the middle of a swing. The mark moves back down the
+	-- bar, because a shorter swing spends a bigger share of itself on the same
+	-- cast, and where it lands is still the point with a cast time left.
+	swing.main = 3.4
+	fire("UNIT_ATTACK_SPEED", "player")
+	ns.Swing.Start(ns.Swing.MAIN)
+	local _, _, before = ns.Slam.Window()
+	advance(1.0)
+	swing.main = 2.4
+	fire("UNIT_AURA", "player")
+	local _, _, after = ns.Slam.Window()
+	check(after < before,
+		("a 3.4s swing put the mark at %.4f and a 2.4s swing at %.4f, and the hasted one is earlier")
+			:format(before, after))
+	advance(ns.Swing.Remaining(ns.Swing.MAIN) - ns.Slam.Cast())
+	check(math.abs(ns.Swing.Fraction(ns.Swing.MAIN) - after) < 1e-6,
+		("with a cast time left the fill is at %.4f and the mark is at %.4f")
+			:format(ns.Swing.Fraction(ns.Swing.MAIN), after))
+end
+
+do
+	-- A wider bar is the same mark drawn on more pixels, and both the fill's
+	-- scale and the mark have to follow it in the same layout pass.
+	ns.db.swingWidth = 240
+	ns.SwingGauges.Apply()
+	ns.Swing.Start(ns.Swing.MAIN)
+	advance(0.1)
+	redraw()
+	check(bar.pixels == 240,
+		("the width went to 240 and the bar still counts to %s"):format(tostring(bar.pixels)))
+	local _, _, at = ns.Slam.Window()
+	check(markPixel() == math.floor(at * 240 + 0.5),
+		("the mark is at %s px on a 240 pixel bar and the arithmetic says %d")
+			:format(tostring(markPixel()), math.floor(at * 240 + 0.5)))
+	ns.db.swingWidth = ns.DefaultFor("swingWidth")
+	ns.SwingGauges.Apply()
+end
+
+end
+
+--------------------------------------------------------------------------
+-- Put the client back the way the sections after this one expect it.
+--------------------------------------------------------------------------
+
+guids.player = nil
+swing.mainhand, swing.offhand, swing.off = nil, nil, nil
+swing.main, swing.talent, swing.cast = 3.4, 0, nil
+_G.WarriorKitSpellCast[SLAM] = nil
+ns.Slam.Forget()
+fire("CHARACTER_POINTS_CHANGED")
+fire("UNIT_INVENTORY_CHANGED", "player")
+ns.Swing.Stop(ns.Swing.MAIN)
+ns.Swing.Stop(ns.Swing.OFF)
+ns.SwingGauges.Apply()
 
 end
 --------------------------------------------------------------------------
