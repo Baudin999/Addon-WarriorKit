@@ -118,10 +118,13 @@ local Level = ns.Unit.Level
 local Roster = ns.Unit.Roster
 local Threat = ns.Unit.Threat
 local Flow = ns.UI.Flow
+-- The gauge itself is UI/Gauge.lua's, and the spent part behind it with it.
+-- Both used to be here and the same pair of writes was in Skin.lua as well,
+-- down to the fifth and the nine tenths.
+local Gauge = ns.UI.Gauge
 
 local BACKDROP = Color.backdrop
 local EDGE = Color.iconEdge -- debuff icons only, the gauge edge follows threat
-local TRACK = Color.track -- the spent part of a bar is its own colour, this dark
 local NAME_TEXT = Color.text.name
 local TARGET_TEXT = Color.text.target
 local HEALTH_TEXT = Color.text.value
@@ -580,19 +583,6 @@ end
 -- Widget
 --------------------------------------------------------------------------
 
--- A status bar with a flat fill and a track behind it, both plain colour, so
--- one call recolours the whole gauge.
-local function FlatBar(parent)
-	local bar = CreateFrame("StatusBar", nil, parent)
-	local fill = bar:CreateTexture(nil, "ARTWORK")
-	fill:SetColorTexture(1, 1, 1, 1)
-	bar:SetStatusBarTexture(fill)
-	bar:SetMinMaxValues(0, 1)
-	bar.track = bar:CreateTexture(nil, "BACKGROUND")
-	bar.track:SetAllPoints()
-	return bar
-end
-
 local Text = ns.UI.Label
 
 -- One debuff square. Sized, positioned and given its fonts by LayoutWidget,
@@ -661,7 +651,7 @@ local function CreateWidget()
 	box.edges = ns.Outline(box, idle[1], idle[2], idle[3], 1)
 	widget.box = box
 
-	widget.health = FlatBar(box)
+	widget.health = Gauge.New(box)
 
 	-- The tag sits outside the box, off the gauge's left end, because inside
 	-- the gauge it covered the left end of the fill and that is the end a mob
@@ -1058,13 +1048,14 @@ local function UpdateWidget(widget, unit, guid)
 	--
 	-- The spent part of the bar keeps the hue at a fifth of the brightness, so
 	-- a mob at ten percent still reads as yours instead of as an empty box.
-	-- The edge takes it too, so the frame and the fill say the same thing and
+	-- That fifth is UI/Gauge.lua's now, because the skinned unit frames want
+	-- the same one and the two files each had their own copy of it. The edge
+	-- takes the colour too, so the frame and the fill say the same thing and
 	-- the aggro state is legible at a glance from a bar that is nearly empty.
 	local color, label = ThreatState(unit)
 	if widget.edgeColor ~= color then
 		widget.edgeColor = color
-		widget.health:SetStatusBarColor(color[1], color[2], color[3])
-		widget.health.track:SetColorTexture(color[1] * TRACK, color[2] * TRACK, color[3] * TRACK, 0.9)
+		Gauge.Paint(widget.health, widget.health.track, color)
 		widget.threatText:SetTextColor(color[1], color[2], color[3])
 		ns.Recolor(widget.box.edges, color)
 	end

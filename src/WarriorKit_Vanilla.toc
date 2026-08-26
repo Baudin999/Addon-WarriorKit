@@ -40,6 +40,15 @@ Unit\Threat.lua
 # grid, so it loads before the panel and before any part that puts a frame up.
 UI\Pixel.lua
 UI\Draw.lua
+
+# The gauge, between the drawing primitives and anything that puts a bar up. A
+# status bar with a flat fill and the spent part of it behind, which the enemy
+# bars and the skinned unit frames both draw and both used to draw their own
+# way. After UI\Draw.lua because it builds its underlay out of ns.Fill, and
+# after Unit\Color.lua because the spent part is a fifth of the fill's colour
+# and that fraction belongs to the unit palette.
+UI\Gauge.lua
+
 UI\Text.lua
 UI\Flow.lua
 

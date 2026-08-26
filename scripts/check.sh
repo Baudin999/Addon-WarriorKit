@@ -132,6 +132,8 @@ Charge/Icon.lua:ChargeIcon.Update
 Charge/Icon.lua:Fade
 Charge/Marker.lua:AttachTo
 Charge/Marker.lua:ChargeMarker.Update
+UI/Gauge.lua:Gauge.Flatten
+UI/Gauge.lua:Gauge.Paint
 UnitFrames/EnemyBars.lua:BuildTargeters
 UnitFrames/EnemyBars.lua:Member
 UnitFrames/EnemyBars.lua:Record
@@ -277,7 +279,7 @@ LINE_LIMIT=800
 # path:ceiling:why it is exempt
 LINE_ALLOWED="
 UI/Widgets.lua:1289:the widget kit, one function per control and shared by every page
-UnitFrames/EnemyBars.lua:1844:splits at the settings API, the widget and the plate plumbing
+UnitFrames/EnemyBars.lua:1835:splits at the settings API, the widget and the plate plumbing
 UnitFrames/Skin.lua:1828:splits at the region walk, the block geometry and the tick
 "
 
