@@ -265,6 +265,22 @@ Swing/Gauges.lua:Whole
 Swing/Gauges.lua:DrawHand
 Swing/Gauges.lua:DrawWindow
 Swing/Gauges.lua:SwingGauges.Update
+Buffs/Upkeep.lua:Upkeep.EnchantShape
+Buffs/Upkeep.lua:Upkeep.Enchants
+Buffs/Upkeep.lua:Upkeep.Bare
+Buffs/Upkeep.lua:Upkeep.Missing
+Buffs/Racials.lua:Racials.Mine
+Buffs/Racials.lua:Racials.Spell
+Buffs/Racials.lua:Racials.Name
+Buffs/Racials.lua:Racials.Worth
+Buffs/Racials.lua:Racials.Ready
+Buffs/Racials.lua:Racials.Idle
+Buffs/Nag.lua:Nag.Resting
+Buffs/Nag.lua:Nag.Dead
+Buffs/Nag.lua:Nag.MissingMask
+Buffs/Nag.lua:Pulse
+Buffs/Nag.lua:Paint
+Buffs/Nag.lua:Nag.Update
 "
 
 hot_scan='

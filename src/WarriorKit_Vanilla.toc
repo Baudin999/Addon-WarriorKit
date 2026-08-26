@@ -1,6 +1,6 @@
 ## Interface: 11509
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, square class-coloured player and target frames, a square minimap with the addon buttons collected behind one square, a chat window with a tab for the people you name and a voice channel joined at login, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, square class-coloured player and target frames, a square minimap with the addon buttons collected behind one square, a chat window with a tab for the people you name and a voice channel joined at login, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
@@ -176,6 +176,18 @@ Swing\Swing.lua
 Swing\Slam.lua
 Swing\Gauges.lua
 Swing\Feature.lua
+
+# The buff nag. Upkeep.lua is what should be up and is not, out of your own
+# auras and out of GetWeaponEnchantInfo; Racials.lua is the cooldown you own and
+# have not pressed; Nag.lua draws the row; Feature.lua last as everywhere else.
+# Racials loads after Upkeep for no reason but reading order, because neither
+# knows the other exists and only Nag.lua reads both. After the swing timer
+# because it is the other thing on screen that says what to press next, and it
+# needs UI\Ability.lua, which is far above this line.
+Buffs\Upkeep.lua
+Buffs\Racials.lua
+Buffs\Nag.lua
+Buffs\Feature.lua
 
 Artwork\Artwork.lua
 Artwork\Feature.lua

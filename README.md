@@ -32,6 +32,16 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   client's own, measured off your last Slam, and it follows your haste, so the
   band moves when Flurry lands. The bars are drawn for anybody holding a weapon;
   the band is a warrior's.
+- **A nag for what you forgot.** A row of squares over your character when
+  something that should be up is not: a sharpening stone worn off either hand,
+  Battle Shout lapsed, no food. It is not there at all when nothing is wrong, so
+  seeing it is the whole message, and it is checked out of combat, which is when
+  you can fix it. A shield is never nagged about. Add your flask and your elixirs
+  by spell id, because these clients will not say that an aura came from one.
+  In combat the row turns into the other question: the racial you own and have
+  not pressed. Blood Fury on an orc and Berserking on a troll pulse in the middle
+  of your screen until you spend them, because those are the two that are damage
+  and the rest are cooldowns you spend when something happens.
 - **A warrior bar loadout**, with a backup of whatever it replaced, plus an
   Edit Mode layout carried inside the addon.
 - **Your own action bars, redrawn.** `/wk actionbars on` reads whichever bars

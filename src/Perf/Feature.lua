@@ -24,6 +24,7 @@ local ROWS = {
 	{ key = "bars", label = "enemy bars", hz = 5 },
 	{ key = "skin", label = "unit frames", hz = 5 },
 	{ key = "meter", label = "meters", hz = 5 },
+	{ key = "buffs", label = "buff nag", hz = 10 },
 }
 
 local lines = {}   -- every font string the sampler writes, and what writes it
