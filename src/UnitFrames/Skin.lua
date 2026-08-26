@@ -1234,6 +1234,27 @@ local function Snap(value, low, high)
 	return math.max(low, math.min(high, math.floor(value + 0.5)))
 end
 
+-- The host's facing edge reflected in the middle of the screen, as an offset
+-- from that edge in the units SetPoint takes.
+--
+-- Reflecting a point about the centre moves it 2 * (centre - point). Both
+-- terms are read in screen units, because that is the only space two frames on
+-- different scales share, and the result is divided back into the frame's own
+-- units because that is what an anchor offset counts in.
+--
+-- Nil where the client has not resolved a position yet, and the caller falls
+-- back to the fixed distance rather than deriving a number out of a nil.
+local function Mirrored(frame, block, theirs)
+	local edge = ScreenEdge(block, theirs == "LEFT" and "GetLeft" or "GetRight")
+	local width = ns.Measure(UIParent, "GetWidth")
+	local screen = ns.Measure(UIParent, "GetEffectiveScale")
+	local scale = ns.Measure(frame, "GetEffectiveScale")
+	if not edge or not width or not screen or not scale or scale <= 0 then
+		return nil
+	end
+	return 2 * (width * screen / 2 - edge) / scale
+end
+
 -- The target block on the player block's far side.
 --
 -- The gap is measured inner edge to inner edge, in screen pixels, snapped,
@@ -1268,12 +1289,24 @@ local function Link(entry)
 		RememberFrame(entry)
 		local px = ns.Pixel(frame)
 		local mine, theirs, reach = Facing(host, entry)
+		local block = host.box or host.frame
 		frame:ClearAllPoints()
 		-- On the host's block rather than the host's frame, for the reason the
 		-- perch below is: those two are the same rectangle on the player and
 		-- are not on the target, and the block is the one you can see.
-		frame:SetPoint("TOP" .. mine, host.box or host.frame, "TOP" .. theirs,
-			reach * ns.db.skinGap * px, -ns.db.skinLevel * px)
+		--
+		-- The target's facing edge is the host's facing edge reflected in the
+		-- middle of the screen, so the mirror line is the middle of the screen
+		-- wherever Edit Mode left the player. Anchoring the two blocks a fixed
+		-- distance apart put that line wherever the player happened to be,
+		-- which is two frames facing each other rather than a mirror.
+		--
+		-- Reflecting a point about the centre puts it 2 * (centre - point)
+		-- away from itself, and both terms are read in screen units because
+		-- that is the only space two frames on different scales share.
+		frame:SetPoint("TOP" .. mine, block, "TOP" .. theirs,
+			Mirrored(frame, block, theirs) or reach * ns.db.skinGap * px,
+			-ns.db.skinLevel * px)
 		entry.linked = true
 	else
 		Replant(entry)

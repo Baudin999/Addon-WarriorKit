@@ -109,8 +109,15 @@ do
 		return frame[getter](frame) * frame:GetEffectiveScale()
 	end
 
+	-- The middle of the screen, in the same units every edge below is read in.
+	-- This is the line the pair is a mirror about, so it is the number every
+	-- horizontal assertion here is written against.
+	local function middle()
+		return _G.UIParent:GetWidth() * _G.UIParent:GetEffectiveScale() / 2
+	end
+
 	-- One screen pixel in those same units, which is what turns a distance on
-	-- the screen into the count a person types into `/wk skin gap`.
+	-- the screen into a count a person can read.
 	local function pixel()
 		return ns.UI.Pixel(playerBox) * playerBox:GetEffectiveScale()
 	end
@@ -132,10 +139,16 @@ do
 	for _, scale in ipairs({ 0.65, 1, 0.5 }) do
 		_G.UIParent:SetScale(scale)
 		fire("UI_SCALE_CHANGED")
-		local gap = apart(targetBox, "GetLeft", playerBox, "GetRight")
-		check(math.abs(gap - ns.db.skinGap) < 1e-6,
-			("at ui scale %.2f the two facing edges are %.2f pixels apart and the"
-				.. " setting says %d"):format(scale, gap, ns.db.skinGap))
+		-- The mirror, stated as the thing you can see: the two facing edges
+		-- sit the same distance either side of the middle of the screen, so
+		-- their midpoint is the middle of the screen. A pair anchored a fixed
+		-- distance apart satisfies nothing here unless the player happens to
+		-- be standing exactly where the arithmetic wants it, which is what
+		-- was wrong with the first version of this feature.
+		local axis = (edge(targetBox, "GetLeft") + edge(playerBox, "GetRight")) / 2
+		check(math.abs(axis - middle()) / pixel() < 1e-6,
+			("at ui scale %.2f the mirror line sits %.2f pixels off the middle of"
+				.. " the screen"):format(scale, (axis - middle()) / pixel()))
 		local drop = apart(playerBox, "GetTop", targetBox, "GetTop")
 		check(math.abs(drop) < 1e-6,
 			("at ui scale %.2f level 0 left the target block %.2f pixels off the"
@@ -171,16 +184,20 @@ do
 		(edge(playerBox, "GetRight") + wantGap * px) / scale,
 		(edge(playerBox, "GetTop") - wantLevel * px) / scale)
 	ns.FrameSkin.Landed()
-	check(ns.db.skinGap == wantGap and ns.db.skinLevel == wantLevel,
-		("the drag landed 77 across and 33 down and was read back as %s and %s")
-			:format(tostring(ns.db.skinGap), tostring(ns.db.skinLevel)))
+	check(ns.db.skinLevel == wantLevel,
+		("the drag landed 33 down and was read back as %s")
+			:format(tostring(ns.db.skinLevel)))
 	local landed = targetFrame.points and targetFrame.points[1]
 	check(landed ~= nil and landed[2] == playerBox,
 		"the drop stored its numbers and never re-anchored the target on the player block")
-	local reread = apart(targetBox, "GetLeft", playerBox, "GetRight")
-	check(math.abs(reread - wantGap) < 1e-6,
-		("the re-anchor after the drop put the facing edges %.2f pixels apart")
-			:format(reread))
+	-- The horizontal half of a drop is not kept, and that is the design rather
+	-- than a loss: the target's edge is the player's reflected, so the only
+	-- place it can land is opposite wherever the player is. What the drop is
+	-- still allowed to set is the vertical, which the check above asserts.
+	local axis = (edge(targetBox, "GetLeft") + edge(playerBox, "GetRight")) / 2
+	check(math.abs(axis - middle()) / pixel() < 1e-6,
+		("the re-anchor after the drop put the mirror line %.2f pixels off the"
+			.. " middle of the screen"):format((axis - middle()) / pixel()))
 	ns.db.skinGap, ns.db.skinLevel = ns.DefaultFor("skinGap"), ns.DefaultFor("skinLevel")
 	ns.FrameSkin.Relayout()
 
@@ -223,9 +240,9 @@ do
 		("after a relink target of target sits %.2f pixels under the target block")
 			:format(relinked))
 
-	print(("link   %d px between the facing edges and 3 px under the target block,"
-		.. " exact at ui scale 0.65, 1 and 0.5; a drag reads back as %d and %d")
-		:format(ns.db.skinGap, wantGap, wantLevel))
+	print(("link   the mirror line is the middle of the screen at ui scale 0.65,"
+		.. " 1 and 0.5, 3 px under the target block; a drag reads back %d down")
+		:format(wantLevel))
 end
 
 -- Left for the sections below.
