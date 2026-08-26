@@ -18,6 +18,11 @@ globals = {
 	"WarriorKitMarkButton",
 	"WarriorKitOptions",
 	"WarriorKitClutter",
+	-- the square that holds the other addons' minimap buttons. Named so a
+	-- button that has gone missing can be found from a macro or from
+	-- scripts/harness.lua without Minimap/Corral.lua handing out a reference to
+	-- its own tables.
+	"WarriorKitCorral",
 	"WarriorKitChargeButton",
 	"WarriorKitSwitchButton",
 	-- one per loadout, each a secure button carrying that loadout's macro. All

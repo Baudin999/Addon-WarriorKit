@@ -31,6 +31,15 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   never written, so `off` gives everything back with no reload.
 - **Stripped bar art**, so the bars read as a row of icons. `/wk art on` puts
   the Blizzard art back.
+- **A square minimap, as wide as you asked for.** The mask and the ring come
+  off, the mousewheel zooms, and Blizzard's mail and tracking icons move to the
+  corners. Every addon button on the edge of the map goes behind one square you
+  press to open. Each is borrowed rather than taken: parent, position and the
+  button's own anchoring are handed back the moment you turn it off.
+- **A filter for the red text in the middle of the screen.** Tick the messages
+  you do not need and they stop drawing. Nothing is hidden that you did not
+  tick, the list is shared by every character on the account, and one press
+  silences what a missed charge shouts at you.
 - **Four chores done for you.** Corpses empty in one go instead of one slot at
   a time. Grey items sell themselves at every merchant. Damaged gear pays for
   its own repair at any merchant who mends, out of the guild bank where your

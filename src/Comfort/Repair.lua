@@ -55,11 +55,29 @@ local function Call(name, ...)
 	return value, second
 end
 
--- Whether the merchant window is still up, asked for the reason Vendor.lua
--- asks it: everything below is only correct while the window the client is
--- quoting against is open.
+-- Whether a merchant is open, which is not the same question as whether
+-- MerchantFrame is on screen.
+--
+-- This gate was `MerchantFrame:IsShown()` and that is the defect this file
+-- shipped with. MERCHANT_SHOW is the server saying a merchant session is open;
+-- it is not the client saying the window is drawn. ShowUIPanel defers when
+-- another panel holds the slot, and a client that loads MerchantFrame on
+-- demand has no frame to ask at all. Either way the repair asked a frame that
+-- was not up yet, returned "no merchant window is open", and OnEvent below
+-- swallows every refusal, so it failed in silence at every vendor.
+--
+-- The sale next door never saw it because the sale is a ticker. It asks the
+-- same question again a fifth of a second later, by which time the window is
+-- up, so one of the two parts on this event worked and the other did not.
+--
+-- The session is the answer, and its two edges are the two events. Both stay
+-- registered whatever the setting says, because this flag is what /wk repair
+-- and the panel button read and both of those work with the automatic repair
+-- turned off.
+local session = false
+
 local function Open()
-	return MerchantFrame ~= nil and MerchantFrame:IsShown()
+	return session
 end
 
 --------------------------------------------------------------------------
@@ -174,7 +192,19 @@ end
 --------------------------------------------------------------------------
 
 local function OnEvent(_, event)
-	if event ~= "MERCHANT_SHOW" or not ns.db.autoRepair then
+	if event == "MERCHANT_CLOSED" then
+		session = false
+		return
+	end
+	if event ~= "MERCHANT_SHOW" then
+		return
+	end
+
+	-- Set before the setting is read, so a merchant opened with the automatic
+	-- repair off still leaves /wk repair and the panel button able to answer.
+	session = true
+
+	if not ns.db.autoRepair then
 		return
 	end
 	-- Shift is the override, the same key that already holds the sale off.
@@ -196,11 +226,13 @@ function Repair.Apply()
 	if not frame then
 		frame = CreateFrame("Frame")
 		frame:SetScript("OnEvent", OnEvent)
-	end
-	if ns.db.autoRepair then
+		-- Registered once and never taken off. The setting decides whether the
+		-- handler repairs, not whether the handler runs, because the session
+		-- flag it keeps has to be right for the manual repair either way. It
+		-- used to unregister here, and that is why turning the setting off left
+		-- `/wk repair` at a merchant saying there was no merchant.
 		frame:RegisterEvent("MERCHANT_SHOW")
-	else
-		frame:UnregisterEvent("MERCHANT_SHOW")
+		frame:RegisterEvent("MERCHANT_CLOSED")
 	end
 end
 

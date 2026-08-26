@@ -855,6 +855,34 @@ _G.RepairAllItems = function(onGuild)
 end
 
 _G.CanGuildBankRepair = function() return GUILD.allowed end
+
+-- The error frame, and enough of the client's error constants for a key to
+-- resolve to a name rather than to raw text.
+--
+-- Modelled as a list of what actually drew, because that is the only question
+-- the filter answers: a muted message is one that never reaches AddMessage's
+-- body, and a stub that recorded the call rather than the draw could not tell
+-- a working filter from a broken one.
+--
+-- ERR_ABILITY_COOLDOWN is here unmuted throughout, as the control. A filter
+-- that swallows everything passes every assertion about the messages it was
+-- told to swallow.
+_G.ERR_BADATTACKPOS = "You are too far away!"
+_G.ERR_BADATTACKFACING = "You are facing the wrong way!"
+_G.ERR_ABILITY_COOLDOWN = "Ability is not ready yet."
+_G.SPELL_FAILED_UNIT_NOT_INFRONT = "Target needs to be in front of you."
+-- A format string, which is the case that cannot key on a name because it
+-- prints a different line every time.
+_G.ERR_LEVEL_TOO_LOW = "You must be at least level %d."
+
+-- The list of what drew hangs off the frame rather than sitting beside it,
+-- because the main chunk is at Lua's 200 local ceiling and one more name here
+-- costs a test somewhere else.
+_G.UIErrorsFrame = region("frame")
+_G.UIErrorsFrame.drawn = {}
+_G.UIErrorsFrame.AddMessage = function(self, text)
+	self.drawn[#self.drawn + 1] = text
+end
 _G.GetGuildBankMoney = function() return GUILD.held end
 _G.GetGuildBankWithdrawMoney = function() return GUILD.limit end
 
@@ -1397,6 +1425,64 @@ local BUILT = {}
 for _, frame in ipairs({ playerFrame, targetFrame, totFrame }) do
 	BUILT[frame.name] = { frame:GetWidth(), frame:GetHeight(),
 		frame.points and frame.points[1] }
+end
+
+-- The minimap, shaped the way TBC shapes it: a frame inside a cluster, a ring
+-- of art round it, four of Blizzard's own buttons anchored to points on that
+-- ring, and three addon buttons of the kind that go on it uninvited.
+--
+-- Stood up before PLAYER_LOGIN because that is when Minimap/Shape.lua reads
+-- the width the client drew it at, and the whole of turning the square off
+-- again is handing that number back.
+--
+-- The zoom trio is here because taking the two zoom buttons off the ring means
+-- the wheel has to do their work, and a stub without them would let a square
+-- that cannot be zoomed pass.
+do
+	local map = region("frame", _G.UIParent, "Minimap")
+	map:SetSize(140, 140)
+	map.zoom, map.zoomLevels = 2, 5
+	map.GetZoom = function(self) return self.zoom end
+	map.GetZoomLevels = function(self) return self.zoomLevels end
+	map.SetZoom = function(self, level) self.zoom = level end
+	map.SetMaskTexture = function(self, path) self.mask = path end
+	map.mask = "Textures\\MinimapMask"
+
+	local cluster = region("frame", _G.UIParent, "MinimapCluster")
+	cluster:SetSize(192, 192)
+
+	for _, name in ipairs({ "MinimapBorder", "MinimapBorderTop", "MinimapNorthTag",
+		"MinimapZoomIn", "MinimapZoomOut", "MiniMapWorldMapButton" }) do
+		child("texture", map, name)
+	end
+
+	-- Blizzard's own, each anchored to a point on the arc the way the client
+	-- anchors them. Those offsets are what the square has no room for and what
+	-- has to come back when it goes off.
+	for _, entry in ipairs({
+		{ "MiniMapTracking", "TOPLEFT", 8, -3 },
+		{ "MiniMapMailFrame", "TOPRIGHT", -3, -30 },
+		{ "MiniMapBattlefieldFrame", "BOTTOMRIGHT", -8, 25 },
+		{ "GameTimeFrame", "TOPRIGHT", 12, -8 },
+	}) do
+		local button = child("button", map, entry[1])
+		button:SetPoint(entry[2], map, entry[2], entry[3], entry[4])
+	end
+
+	-- Three addon buttons, of the two shapes that actually turn up. LibDBIcon
+	-- names one way and an addon rolling its own names the other, and both are
+	-- children of the minimap with a point on the arc.
+	for _, name in ipairs({ "LibDBIcon10_Questie", "LibDBIcon10_Details",
+		"TitanMinimapButton" }) do
+		local button = child("button", map, name)
+		button:SetSize(31, 31)
+		button:SetPoint("CENTER", map, "CENTER", 60, 20)
+	end
+
+	-- A child with no name at all, which is what a texture holder or an
+	-- anonymous frame on the minimap looks like. It must never be collected:
+	-- the corral is keyed by name and an unnamed one could not be released.
+	child("frame", map)
 end
 
 _G.WarriorKitDB, _G.WarriorKitCharDB = {}, {}
@@ -4460,10 +4546,16 @@ do
 	-- The vendor
 	----------------------------------------------------------------------
 
-	-- Two parts sit on the merchant now, the sweep and the repair, so the
-	-- sweep's frame is found by the thing only it has rather than by its place
-	-- in the list: a sale is the one of the two that has to be stopped when the
-	-- window shuts, so it is the one that also holds MERCHANT_CLOSED.
+	-- Two parts sit on the merchant, the sweep and the repair, and both hold
+	-- both edges of the window, so neither can be told from the other by what
+	-- it listens to and neither is told apart by its place in the list, which
+	-- is only TOC order and would move the day the TOC does.
+	--
+	-- What tells them apart is the one thing that is still different about
+	-- them. Selling off takes the sweep off MERCHANT_SHOW; repairing off does
+	-- not, because the repair keeps watching the window in order to know that
+	-- one is open. So the setting is flicked once and whichever frame leaves
+	-- the list is the sweep.
 	local function listening(frame, event)
 		for _, f in ipairs(events[event] or {}) do
 			if f == frame then
@@ -4473,16 +4565,32 @@ do
 		return false
 	end
 
-	local vendorFrame, repairFrame = nil, nil
+	local before = {}
 	for _, f in ipairs(events["MERCHANT_SHOW"] or {}) do
-		if listening(f, "MERCHANT_CLOSED") then
-			vendorFrame = f
-		else
+		before[#before + 1] = f
+	end
+	check(#before == 2, ("%d parts are on MERCHANT_SHOW, the sweep and the repair make 2")
+		:format(#before))
+
+	ns.db.sellTrash = false
+	ns.Vendor.Apply()
+	local vendorFrame, repairFrame = nil, nil
+	for _, f in ipairs(before) do
+		if listening(f, "MERCHANT_SHOW") then
 			repairFrame = f
+		else
+			vendorFrame = f
 		end
 	end
-	check(vendorFrame ~= nil, "nothing registered MERCHANT_SHOW and MERCHANT_CLOSED")
-	check(repairFrame ~= nil, "nothing registered MERCHANT_SHOW for the repair")
+	ns.db.sellTrash = true
+	ns.Vendor.Apply()
+
+	check(vendorFrame ~= nil, "selling off took nothing off MERCHANT_SHOW")
+	check(repairFrame ~= nil, "selling off took the repair off MERCHANT_SHOW as well")
+	check(listening(vendorFrame, "MERCHANT_CLOSED"),
+		"the sweep is not listening for the window shutting")
+	check(listening(repairFrame, "MERCHANT_CLOSED"),
+		"the repair is not listening for the window shutting")
 
 	local function sweep()
 		local ticks = 0
@@ -4630,15 +4738,44 @@ do
 	check(repairBill == 400, "shift did not hold the repair off")
 	_G.IsShiftKeyDown = constant(false)
 
-	-- Off is unregistered, not a branch inside a handler the client still calls.
+	-- Off is a branch inside the handler, and deliberately not an unregister.
+	-- The repair keeps both edges of the merchant window whatever the setting
+	-- says, because what it learns from them is whether a merchant is open, and
+	-- `/wk repair` and the panel's button both need that answer with the
+	-- automatic repair turned off.
 	ns.db.autoRepair = false
 	ns.Repair.Apply()
-	check(not listening(repairFrame, "MERCHANT_SHOW"),
-		"repair off left the addon sitting on the merchant")
+	check(listening(repairFrame, "MERCHANT_SHOW"),
+		"repair off stopped the addon watching the merchant open")
 	fire("MERCHANT_SHOW")
 	check(repairBill == 400, "repair off still paid the merchant")
+	check(ns.Repair.Cost() == 400,
+		"repair off left the manual repair unable to see the merchant")
 	ns.db.autoRepair = true
 	ns.Repair.Apply()
+
+	-- The regression, and the reason this file grew a merchant that can be open
+	-- with its window shut. MERCHANT_SHOW is the server opening a session, not
+	-- the client finishing the window: the panel defers behind another panel,
+	-- and a client that loads MerchantFrame on demand has no frame to ask at
+	-- all. The repair gated on MerchantFrame:IsShown() and so did nothing at
+	-- every vendor, in silence, because OnEvent swallows refusals.
+	fire("MERCHANT_CLOSED")
+	damage(400)
+	purse = 1000
+	_G.MerchantFrame:Hide()
+	fire("MERCHANT_SHOW")
+	check(repairBill == 0, "the window was not up yet and the repair gave up")
+	check(purse == 600, "a repair with the window not yet drawn never paid")
+
+	-- And the far edge. With the session closed there is no merchant to quote
+	-- against, whatever any frame on screen says.
+	fire("MERCHANT_CLOSED")
+	check(ns.Repair.Cost() == nil, "the merchant closed and the repair still quoted")
+	check(select(2, ns.Repair.Run()) == "no merchant window is open",
+		"a repair with no merchant open did not say so")
+	_G.MerchantFrame:Show()
+	fire("MERCHANT_SHOW")
 
 	-- The worst piece, not the first one and not an average. A ring answers
 	-- nothing and must not count as a piece at zero.
@@ -4648,6 +4785,7 @@ do
 	check(worst ~= nil and math.floor(worst + 0.5) == 12,
 		"the worst piece is at 12%% and the scan did not say so")
 
+	fire("MERCHANT_CLOSED")
 	_G.MerchantFrame:Hide()
 
 	----------------------------------------------------------------------
@@ -4674,9 +4812,260 @@ do
 	ns.db.maxZoom = true
 	ns.Camera.Apply()
 
-	print(("chores corpse of %d in one pass, vendor paid %s over %d passes for 2 of 4 slots, repair %s, camera %s")
+	----------------------------------------------------------------------
+	-- The error filter
+	--
+	-- One replaced method, and everything below is asked of the screen rather
+	-- than of the list. What is asserted is which lines drew.
+	----------------------------------------------------------------------
+
+	check(ns.Errors.Installed(), "the filter never got in front of UIErrorsFrame")
+
+	local function shout(text)
+		_G.UIErrorsFrame:AddMessage(text)
+	end
+	local function lastDrawn()
+		local drawn = _G.UIErrorsFrame.drawn
+		return drawn[#drawn]
+	end
+	local function drewCount()
+		return #_G.UIErrorsFrame.drawn
+	end
+
+	-- Nothing is muted until something is ticked, and that is the shipping
+	-- state. A filter that is on and eats a message out of the box is the
+	-- failure this default exists to prevent.
+	check(ns.db.errorFilter, "the error filter did not ship on")
+	check(ns.Errors.Count() == 0, "the muted list did not ship empty")
+	shout(_G.ERR_BADATTACKPOS)
+	check(lastDrawn() == _G.ERR_BADATTACKPOS, "an unmuted error did not reach the screen")
+
+	-- The key is the name of the global, not the text. This is what makes a
+	-- list built on one client mean the same thing on another, and what makes
+	-- it worth saving account-wide at all.
+	check(ns.Errors.Key(_G.ERR_BADATTACKPOS) == "ERR_BADATTACKPOS",
+		"the message did not resolve to the constant that holds it")
+	check(ns.Errors.Key("something no constant holds") == "something no constant holds",
+		"an unknown message did not fall back to its own text")
+	check(ns.Errors.Key(("You must be at least level %d."):format(14))
+		== "You must be at least level 14.",
+		"a format-string message resolved to a name it cannot share with its siblings")
+
+	-- Muted, and the screen stops getting it. The control keeps arriving in
+	-- the same breath.
+	ns.Errors.Mute("ERR_BADATTACKPOS", _G.ERR_BADATTACKPOS)
+	local before = drewCount()
+	shout(_G.ERR_BADATTACKPOS)
+	check(drewCount() == before, "a muted error still drew")
+	shout(_G.ERR_ABILITY_COOLDOWN)
+	check(lastDrawn() == _G.ERR_ABILITY_COOLDOWN,
+		"muting one message took an unrelated one with it")
+
+	-- The switch is not the list. Off passes everything and keeps the ticks,
+	-- which is why turning it off and on again is not a way to lose them.
+	ns.db.errorFilter = false
+	shout(_G.ERR_BADATTACKPOS)
+	check(lastDrawn() == _G.ERR_BADATTACKPOS, "the filter off still swallowed a message")
+	check(ns.Errors.Count() == 1, "turning the filter off emptied the list")
+	ns.db.errorFilter = true
+
+	-- Untick and it comes back.
+	ns.Errors.Unmute("ERR_BADATTACKPOS")
+	shout(_G.ERR_BADATTACKPOS)
+	check(lastDrawn() == _G.ERR_BADATTACKPOS, "unmuting did not put the message back")
+
+	-- The list the panel draws. Everything that has come past this session is
+	-- in it whether or not it is muted, because you cannot tick what you cannot
+	-- see, and what is muted sorts to the top.
+	local rows = ns.Errors.Rows()
+	local heard = {}
+	for _, entry in ipairs(rows) do
+		heard[entry.key] = entry.text
+	end
+	check(heard["ERR_BADATTACKPOS"] == _G.ERR_BADATTACKPOS,
+		"a message that came past this session is not offered to tick")
+	check(heard["ERR_ABILITY_COOLDOWN"] == _G.ERR_ABILITY_COOLDOWN,
+		"the control never reached the list either")
+
+	ns.Errors.Mute("ERR_ABILITY_COOLDOWN", _G.ERR_ABILITY_COOLDOWN)
+	check(ns.Errors.Rows()[1].key == "ERR_ABILITY_COOLDOWN",
+		"a muted entry did not sort to the top of the list")
+	ns.Errors.Unmute("ERR_ABILITY_COOLDOWN")
+
+	-- The one preset, and the only thing in the addon that mutes without a tick
+	-- on a row. It is a press, and every name it carries is resolved through
+	-- _G, so a client missing one of them mutes the rest.
+	local added = ns.Errors.SilencePositional()
+	check(added == 3, ("%d of the positional set exist on this stub, three do"):format(added))
+	check(ns.Errors.Muted("ERR_BADATTACKFACING"), "the preset missed the facing message")
+	check(ns.Errors.Muted("SPELL_FAILED_UNIT_NOT_INFRONT"),
+		"the preset missed the server's version of the same refusal")
+	shout(_G.ERR_BADATTACKFACING)
+	check(lastDrawn() ~= _G.ERR_BADATTACKFACING, "the preset ticked a row and drew anyway")
+
+	-- The list is the account's, not the character's. This is the whole reason
+	-- it is in ns.db, and a rename that moved it would pass every assertion
+	-- above and silently reset itself on the next character.
+	check(ns.db.errorMuted ~= nil, "the muted list is not in the account table")
+	check(ns.dbc.errorMuted == nil, "the muted list is in the character table")
+
+	local muted = ns.Errors.Count()
+	check(ns.Errors.Clear() == muted, "clearing did not report what it cleared")
+	check(ns.Errors.Count() == 0, "clearing left something muted")
+	shout(_G.ERR_BADATTACKFACING)
+	check(lastDrawn() == _G.ERR_BADATTACKFACING, "clearing did not put the messages back")
+
+	print(("chores corpse of %d in one pass, vendor paid %s over %d passes for 2 of 4 slots, repair %s, camera %s, errors %s over %d drawn")
 		:format(#CORPSE, _G.GetCoinText(sale), ticks, ns.Repair.Describe(),
-			ns.Camera.Describe()))
+			ns.Camera.Describe(), ns.Errors.Describe(), drewCount()))
+end
+
+--------------------------------------------------------------------------
+-- The minimap
+--
+-- Two files and one question each. Shape.lua takes furniture off a frame the
+-- addon does not own and has to put every piece of it back; Corral.lua borrows
+-- other addons' buttons and has to hand them back the same way. So most of
+-- what is asserted below is the reverse, because the forward direction is the
+-- easy half of both.
+--------------------------------------------------------------------------
+
+do
+	local map = _G.Minimap
+	local mail = _G.MiniMapMailFrame
+
+	-- What the client built. Written down rather than read off the frame,
+	-- because by the time this block runs PLAYER_LOGIN has already applied the
+	-- square and what is on the frame is the addon's own arithmetic. These are
+	-- the numbers the fixture above anchors the map and the mail icon at, and
+	-- the square is only reversible if they are the ones that come back.
+	local BUILT_SIZE = 140
+	local MAIL_POINT, MAIL_X, MAIL_Y = "TOPRIGHT", -3, -30
+
+	-- The defaults, applied at login, so the square is already on.
+	check(ns.db.minimapSquare, "the square did not ship on")
+	check(map:GetWidth() == ns.db.minimapSize,
+		("the map is %d wide and the setting says %d"):format(map:GetWidth(), ns.db.minimapSize))
+	check(map.mask == "Interface\\Buttons\\WHITE8X8",
+		"the round mask is still on a map the addon calls square")
+	check(_G.MinimapBorder.wkStripped, "the ring is still drawn round a square map")
+	check(_G.MinimapZoomIn.wkStripped, "the zoom buttons are still on the arc")
+
+	-- Blizzard's own buttons were anchored to points on the arc, and a square
+	-- has no arc. Each is pulled to a corner of the frame itself.
+	local point, relative = mail:GetPoint()
+	check(point == "TOPRIGHT" and relative == map,
+		"the mail icon was left hanging where the ring used to be")
+
+	-- The wheel does the zoom buttons' job now that they are gone. Both ends
+	-- clamp, because a client asked for a zoom it does not have raises.
+	local wheel = map:GetScript("OnMouseWheel")
+	check(wheel ~= nil, "the zoom buttons came off and nothing took their place")
+	if wheel then
+		map.zoom = 2
+		wheel(map, 1)
+		check(map.zoom == 3, ("a wheel up moved the zoom to %d, not 3"):format(map.zoom))
+		map.zoom = 4
+		wheel(map, 1)
+		check(map.zoom == 4, "a wheel up past the last zoom level was not clamped")
+		map.zoom = 0
+		wheel(map, -1)
+		check(map.zoom == 0, "a wheel down past the first zoom level was not clamped")
+	end
+
+	-- The size is a number rather than a scale, so the frame takes it directly
+	-- and the cluster under it grows by the same amount.
+	local clusterBefore = _G.MinimapCluster:GetWidth()
+	ns.db.minimapSize = 220
+	ns.MinimapShape.Apply()
+	check(map:GetWidth() == 220, ("the map did not take 220, it is %d"):format(map:GetWidth()))
+	check(_G.MinimapCluster:GetWidth() > clusterBefore,
+		"the map grew and the cluster the rest of the interface anchors under did not")
+
+	-- The reverse, and the half that matters. Everything goes back: the mask,
+	-- the ring, the width the client drew it at, and the anchor every moved
+	-- button arrived on.
+	ns.db.minimapSquare = false
+	ns.MinimapShape.Apply()
+	check(map:GetWidth() == BUILT_SIZE,
+		("turning the square off left the map %d wide, the client drew it at %d")
+			:format(map:GetWidth(), BUILT_SIZE))
+	check(map.mask == "Textures\\MinimapMask", "the round mask did not come back")
+	check(not _G.MinimapBorder.wkStripped, "the ring did not come back")
+	check(not _G.MinimapZoomIn.wkStripped, "the zoom buttons did not come back")
+	check(map:GetScript("OnMouseWheel") == nil,
+		"the zoom buttons came back and the wheel is still driving them too")
+
+	local back, backRelative, backPoint, backX, backY = mail:GetPoint()
+	check(back == MAIL_POINT and backRelative == map and backPoint == MAIL_POINT
+		and backX == MAIL_X and backY == MAIL_Y,
+		("the mail icon went back to %s %s %d %d, not %s %s %d %d")
+			:format(tostring(back), tostring(backPoint), backX, backY,
+				MAIL_POINT, MAIL_POINT, MAIL_X, MAIL_Y))
+
+	ns.db.minimapSquare, ns.db.minimapSize = true, 180
+	ns.MinimapShape.Apply()
+
+	----------------------------------------------------------------------
+	-- The corral
+	----------------------------------------------------------------------
+
+	local corral = _G.WarriorKitCorral
+	check(corral ~= nil, "the corral button was never built")
+
+	-- Three addon buttons on the fixture and nothing else. Blizzard's four are
+	-- not addon buttons, and the unnamed child cannot be released so is never
+	-- taken.
+	check(ns.Corral.Count() == 3,
+		("the corral is holding %d buttons, the three addon ones make 3")
+			:format(ns.Corral.Count()))
+	for _, name in ipairs({ "MiniMapMailFrame", "GameTimeFrame", "MiniMapTracking" }) do
+		check(_G[name]:GetParent() == map,
+			("the corral took %s, which is Blizzard's and not an addon's"):format(name))
+	end
+
+	local questie = _G.LibDBIcon10_Questie
+	check(questie:GetParent() ~= map, "an addon button was counted and not reparented")
+
+	-- The pin. A minimap button repositions itself whenever it feels like it,
+	-- so its own SetPoint is replaced with one that does nothing. Without it
+	-- the button sits in the tray for a second and jumps back to the arc.
+	questie:SetPoint("CENTER", map, "CENTER", 60, 20)
+	check(questie:GetParent() ~= map,
+		"the button moved itself back out of the tray")
+
+	-- A second scan takes nothing twice.
+	check(ns.Corral.Scan() == 0, "a second scan collected the same buttons again")
+
+	-- And an addon that loads late is picked up on the event that says so,
+	-- which is the only reason there is no ticker in that file.
+	do
+		local late = child("button", map, "LateLoadingAddonMinimapButton")
+		late:SetSize(31, 31)
+		late:SetPoint("CENTER", map, "CENTER", -60, 20)
+		fire("ADDON_LOADED", "LateLoadingAddon")
+		check(ns.Corral.Count() == 4, "an addon that loaded after login was never collected")
+	end
+
+	-- The release, which is the half that matters here too. Parent, anchor and
+	-- the button's own SetPoint all come back, and a button handed back has to
+	-- be able to move itself again.
+	ns.db.minimapCorral = false
+	ns.Corral.Apply()
+	check(ns.Corral.Count() == 0, "turning the corral off left it holding buttons")
+	check(questie:GetParent() == map, "a released button was not handed back to the minimap")
+	check(questie.wkPinned == nil, "a released button kept the no-op SetPoint")
+	questie:ClearAllPoints()
+	questie:SetPoint("CENTER", map, "CENTER", 11, 22)
+	local qx, qy = select(4, questie:GetPoint())
+	check(qx == 11 and qy == 22, "a released button still cannot move itself")
+
+	ns.db.minimapCorral = true
+	ns.Corral.Apply()
+
+	print(("minimap %s; corral %s, %d of %d children collected")
+		:format(ns.MinimapShape.Describe(), ns.Corral.Describe(),
+			ns.Corral.Count(), select("#", map:GetChildren())))
 end
 
 --------------------------------------------------------------------------

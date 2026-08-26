@@ -136,10 +136,17 @@ name of none of them.
     Artwork/Artwork.lua      strips the gryphons and the metal strip off the bars
     Artwork/Feature.lua
 
+    Minimap/Shape.lua        squares the minimap, resizes it, moves Blizzard's own
+                             icons to the corners, puts the wheel on the zoom
+    Minimap/Corral.lua       borrows the other addons' minimap buttons into one tray
+    Minimap/Feature.lua
+
     Comfort/Loot.lua         empties a corpse on LOOT_READY, before the window draws
     Comfort/Vendor.lua       sells grey items while a merchant window is up
     Comfort/Repair.lua       pays the merchant to mend, guild funds first
     Comfort/Camera.lua       how far cameraDistanceMaxZoomFactor lets you pull back
+    Comfort/Errors.lua       the muted-message list, and the method that stands in
+                             front of UIErrorsFrame
     Comfort/Clutter.lua      which quest items are finished with, and why
     Comfort/Destroy.lua      the one-card-at-a-time window that acts on that
     Comfort/Feature.lua
@@ -2557,6 +2564,14 @@ nothing ever runs is a branch that is wrong.
     /wk repair                   pay the merchant in front of you now
     /wk repair on|off            every merchant who mends, shift to skip one
     /wk zoom on|off              how far the camera pulls back
+    /wk errors on|off            filter the red text through your muted list
+    /wk errors list              what is muted, and what has come past this session
+    /wk errors clear             unmute everything
+    /wk errors charge            mute what a missed positional ability shouts
+    /wk minimap on|off           square rather than round
+    /wk minimap size 180         120 to 300, how wide the map is drawn
+    /wk minimap buttons on|off   collect the addon buttons behind one square
+    /wk minimap scan             look for buttons that appeared since login
     /wk destroy                  the clutter window, one quest item at a time
     /wk ui                       what is baked in, and whether Edit Mode answers
     /wk ui save                  capture the active Edit Mode layout
@@ -2682,7 +2697,7 @@ the run holding the value it went in with. Every check in that section is
 written against the class the run is, so it gates both directions: the warrior
 run proves the same things were built.
 
-The other ten parts are asserted again on that run, which is the point. A part
+Every other part is asserted again on that run, which is the point. A part
 that quietly needed a warrior fails in `check.sh` rather than in someone's
 game. The skin's colour checks are the only ones that had to learn about it,
 because the player's health bar carries the player's class colour.
@@ -2795,6 +2810,27 @@ Everything below was written from the API contract and has never executed:
   second. Both positions are compared and both constants are reached through
   `_G`, so a client that names them something else costs the early stop and
   leaves the 25 pass backstop doing the work.
+- Whether `Minimap:SetMaskTexture` is on 2.5.6 and 1.15.9. Leatrix Plus writes
+  a square mask on both, which is what puts it here rather than in the list of
+  things nothing proves; it is still type-checked before it is called, and a
+  client without it takes the size and keeps its round mask. `Shape.Describe`
+  says which of the two happened rather than claiming a square either way.
+- Whether every name in `Minimap/Shape.lua`'s `ART` and `CORNERS` lists exists.
+  None of them is asserted. Both lists are walked through `_G`, a missing name
+  is a skipped entry, and `MiniMapTracking` is spelled twice because the two
+  clients disagree about which one they have.
+- Whether another addon's minimap button minds being reparented. `Corral.lua`
+  changes a button's parent, clears its points and replaces its `SetPoint` with
+  a no-op, which is what every button bag has done since the first one, and all
+  three are undone on release. What it does not do is touch the button's
+  scripts, textures or size, so a press in the tray is the press it always was.
+  A button that positions itself through something other than `SetPoint` would
+  wander out of the tray, and nothing here can stop that.
+- Whether `UIErrorsFrame` is the frame both clients draw errors on, and whether
+  replacing its `AddMessage` is enough to stop one. Leatrix Plus filters the
+  same frame the same way on both. The method is replaced once and never put
+  back: an addon that hooked after this one would lose its hook to the
+  restore, and a filter is not worth breaking somebody else's.
 - Whether `cameraDistanceMaxZoomFactor` really accepts 4.0 on 2.5.6. Leatrix
   writes it on the Era client here. `Camera.Current` reads the CVar straight back
   after writing it, so a client that clamps says what it clamped to in `/wk

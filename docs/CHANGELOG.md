@@ -2,6 +2,101 @@
 
 ## Unreleased
 
+### The auto repair never repaired
+
+It gated on `MerchantFrame:IsShown()`, and `MERCHANT_SHOW` is the server
+opening a merchant session rather than the client finishing the window.
+`ShowUIPanel` defers when another panel holds the slot, and a client that loads
+`MerchantFrame` on demand has no frame to ask at all. So the repair asked a
+frame that was not up yet, `Repair.Run` answered "no merchant window is open",
+and `OnEvent` swallows every refusal on purpose, because a refusal at a
+merchant is nearly always "nothing is damaged". It failed at every vendor, in
+silence, for four releases.
+
+The sale next door never saw it, and that is the part worth writing down. The
+sweep is a ticker: it asks the same question again a fifth of a second later,
+by which time the window is up. Two parts on one event, one of them working,
+and the difference was that the broken one asked once.
+
+The gate is the session now. `MERCHANT_SHOW` sets a flag and `MERCHANT_CLOSED`
+clears it, both stay registered whatever the setting says, and `autoRepair`
+decides whether the handler repairs rather than whether the handler runs. That
+second half fixes a smaller bug in the same line: with the setting off the
+frame used to unregister, so `/wk repair` at a merchant told you there was no
+merchant.
+
+The harness grew a merchant that can be open with its window shut, which is the
+only shape that catches this. It also had to stop telling the sweep's frame
+from the repair's by which events they hold, because they hold the same two
+now; it flicks `sellTrash` once instead and takes whichever frame leaves
+`MERCHANT_SHOW`.
+
+### A filter for the red text in the middle of the screen
+
+A warrior generates more of it than anyone. Charge, Intercept and Intervene are
+all positional, the charge button in this addon aims by camera and so misses on
+purpose, and every miss costs a line of red text across the middle of the
+screen. While it is up it hides the one message that would have been worth
+reading.
+
+`Comfort/Errors.lua` replaces `UIErrorsFrame.AddMessage` and drops what is on
+your list. Two decisions shape it.
+
+Nothing is muted that you did not tick. The list ships empty, and the panel
+offers what has actually come past this session rather than a guess at what you
+can live without. There is one preset, `/wk errors charge`, and it is a press
+rather than a default.
+
+The list is account-wide, and it is keyed by the name of the global holding the
+message rather than by the message. `ERR_BADATTACKPOS`, not "You are too far
+away!". A name survives a locale, survives a client rewording the string, and
+means the same thing on the character you log into next, which is the whole
+point of it being in `ns.db` rather than `ns.dbc`. Messages built from a format
+string cannot key that way and fall back to their own text; none of them is the
+spam this exists for.
+
+The hook is installed once and never taken off. Turning the setting off makes
+the wrapper pass everything through. Putting the old method back would write
+over whatever addon hooked after this one, and a filter is not worth breaking
+somebody else's.
+
+### The minimap is square, and one button holds the rest
+
+Two files, one part, and they are one decision. The round mask throws away the
+corners of a map the client has already drawn and the ring spends about twenty
+pixels of every edge on rivets, so `Minimap/Shape.lua` takes both off and sizes
+the frame to `minimapSize`, 180 by default against the client's 140. The north
+tag and the two zoom buttons go with the ring and the mousewheel takes over the
+zoom, clamped at both ends because a client asked for a level it does not have
+raises.
+
+Blizzard's own icons were anchored to points on the arc and a square has no
+arc, so the mail, the tracking, the battleground and the calendar are pulled to
+the four corners. Each one's original anchor is recorded the first time it is
+moved and handed back when the square goes off, which is the same contract
+`Artwork.lua` has: off is a state, not a reload.
+
+`Minimap/Corral.lua` is the other half. Every addon that wants to be reachable
+puts a round icon on the edge of the map, and with eight installed the map is a
+ring of icons with a map in the middle. The corral takes every named child of
+the minimap that is not Blizzard's and not ours, parents it to a tray behind
+one square, and replaces the button's own `SetPoint` with a no-op, because a
+minimap button drags itself back to the arc whenever it feels like it. That is
+`ns.Strip` replacing `Show` with `Hide`, on a different method and for the same
+reason. Parent, anchor and the real `SetPoint` all come back on release, and
+nothing else about the button is touched, so a press in the tray is the press
+it always was.
+
+No ticker. Addons load late, so the scan runs at login, on `ADDON_LOADED`
+after login, and whenever you open the tray, and never on a clock.
+
+The harness grew a minimap: a cluster, a ring of art, four of Blizzard's
+buttons anchored the way the client anchors them, three addon buttons of the
+two shapes that actually turn up, and one unnamed child that must never be
+collected because a nameless button could not be released. Most of what it
+asserts is the reverse direction, because the forward one is the easy half of
+both files.
+
 ### The meter bars have an opacity slider
 
 `BAR_ALPHA = 0.15` was a constant in `Meter/Window.lua` and the note beside it

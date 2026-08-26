@@ -13,7 +13,7 @@ local M = UI.Metric
 --
 -- Two levels of navigation, because a part has more in it than a column.
 --
--- The rail down the left is the eight parts. Choosing one puts up that part's
+-- The rail down the left is one entry per part. Choosing one puts up that part's
 -- tab strip, and the tabs are the part's own sections: every `ui.Header` a
 -- feature writes opens one. Charge alone has four of them, Charge key, Charge,
 -- Action targeting and Weapon, and before this they were four rules stacked

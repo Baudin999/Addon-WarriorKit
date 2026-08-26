@@ -1,8 +1,8 @@
 ## Interface: 20506
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, square class-coloured player and target frames, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, square class-coloured player and target frames, a square minimap with the addon buttons collected behind one square, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
-## Version: 1.8
+## Version: 1.9
 ## SavedVariables: WarriorKitDB
 ## SavedVariablesPerCharacter: WarriorKitCharDB
 ## X-Category: Combat
@@ -70,7 +70,7 @@ UI\Window.lua
 Core\Command.lua
 Core\Panel.lua
 
-# The nine parts. Within each, behaviour first and Feature.lua last, because
+# The parts. Within each, behaviour first and Feature.lua last, because
 # Feature.lua is the only file that names anything outside its own folder.
 # Perf first among the parts, because Charge/Icon.lua and the three other
 # tickers call ns.Perf.Start by name. They resolve it at tick time rather than
@@ -140,6 +140,16 @@ Meter\Feature.lua
 Artwork\Artwork.lua
 Artwork\Feature.lua
 
+# The minimap. Shape.lua makes the frame square and as wide as you asked for,
+# Corral.lua holds the other addons' buttons behind one square, and Feature.lua
+# last as everywhere else. Shape first because the corral's default position is
+# a corner of the map and the map has to have been resized before that corner
+# means anything. Next to Artwork because it is the same job on another of
+# Blizzard's frames: furniture off, everything reversible in one call.
+Minimap\Shape.lua
+Minimap\Corral.lua
+Minimap\Feature.lua
+
 # The chores. Nothing here is on the combat path, and the first four draw
 # nothing at all, so they are independent of each other and of load order within
 # the part. Clutter decides what is finished with and Destroy is the window that
@@ -153,6 +163,13 @@ Comfort\Loot.lua
 Comfort\Vendor.lua
 Comfort\Repair.lua
 Comfort\Camera.lua
+
+# The error filter. Not a chore like the four above it, in that nothing runs
+# for you; it is a list of messages you have decided you do not need, and one
+# replaced method standing in front of the frame that would draw them. Here
+# because Comfort is the part that owns the settings that belong to no feature,
+# and because the list is one tab rather than a rail entry of its own.
+Comfort\Errors.lua
 Comfort\Clutter.lua
 Comfort\Destroy.lua
 Comfort\Feature.lua

@@ -1,6 +1,6 @@
 local ADDON, ns = ...
 
-ns.version = "1.8"
+ns.version = "1.9"
 
 -- Core knows nothing about any feature. It holds the saved variables, the API
 -- shims, the two drawing helpers every part uses, and the one registry every
@@ -10,7 +10,7 @@ ns.version = "1.8"
 --------------------------------------------------------------------------
 -- The registry
 --
--- Each of the eight parts calls ns.Register once, from its Feature.lua, and
+-- Each part calls ns.Register once, from its Feature.lua, and
 -- hands over everything Core or the panel could want from it. Nothing else in
 -- the addon reaches across parts to find out what exists.
 --
