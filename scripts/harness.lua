@@ -597,8 +597,19 @@ function Region:AtBottom() return (self.scrollOffset or 0) <= 0 end
 -- layout that puts seven pages on top of each other pass.
 function Region:Show() self.shown = true end
 function Region:Hide() self.shown = false end
+-- Idempotent, the way the client's is. A frame that registers the same event
+-- twice is registered once and is handed the event once, and a stub that
+-- appended instead delivered every line twice to any part that reapplies its
+-- registrations. That is not a small difference: the chat feed reapplies on
+-- every setting change, so the doubling was proportional to how much the
+-- player had touched the panel, and it looked like a routing bug in the addon.
 function Region:RegisterEvent(e)
 	events[e] = events[e] or {}
+	for _, registered in ipairs(events[e]) do
+		if registered == self then
+			return
+		end
+	end
 	events[e][#events[e] + 1] = self
 end
 
@@ -8077,6 +8088,47 @@ do
 		check(held() == quiet, "a line was captured with the part switched off")
 		ns.db.chat = true
 		Feed.Apply()
+
+		----------------------------------------------------------------------
+		-- The claim follows the window
+		--
+		-- The filter takes a line out of Blizzard's frames on the promise that
+		-- this window draws it instead. A closed window keeps no such promise,
+		-- and the first version of this part held the filter anyway: one press
+		-- of the close box deleted every say, party, guild, raid and whisper
+		-- line from the screen, the closed state is saved, and the filters went
+		-- back on at the next login. The only symptom was a chat log that had
+		-- gone quiet, on both windows at once.
+		----------------------------------------------------------------------
+
+		-- Captured while it is installed, so it can be asked what it does once
+		-- the reason for it has gone. The install is an optimisation; the
+		-- filter deciding for itself is what makes a missed reapply cost a
+		-- wasted call instead of the conversation.
+		local stale = chat.filters.CHAT_MSG_PARTY[1]
+		check(stale() == true,
+			"the filter handed a line back to Blizzard's window while ours was open")
+
+		Window.Hide()
+		check(stale() == false,
+			"a filter left behind after the window closed still deleted the line")
+		check(claimed("CHAT_MSG_WHISPER_INFORM") == 0,
+			"the window is closed and Blizzard's frames are still filtered, so the conversation is drawn nowhere")
+		check(claimed("CHAT_MSG_PARTY") == 0,
+			"the window is closed and party chat is still taken out of Blizzard's frames")
+
+		-- Still captured, because the log behind a closed window is the
+		-- scrollback you read when you open it again.
+		local dark = Window.Count(Feed.WHISPER)
+		fire("CHAT_MSG_WHISPER_INFORM", "on my way", "Aria")
+		check(Window.Count(Feed.WHISPER) == dark + 1,
+			"a whisper sent while the window was closed did not reach the log behind it")
+
+		Window.Show()
+		check(claimed("CHAT_MSG_WHISPER_INFORM") == 1,
+			"opening the window again did not take the conversation back off Blizzard's frames")
+		check(claimed("CHAT_MSG_PARTY") == 1,
+			"opening the window again left party chat drawing in both")
 
 		----------------------------------------------------------------------
 		-- What a line looks like
