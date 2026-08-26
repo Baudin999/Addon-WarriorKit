@@ -166,13 +166,16 @@ local Gauge = ns.UI.Gauge
 -- forty more lines in here. It knows nothing about a plate, a list or a pool:
 -- this file hands it a widget and it draws on it.
 local Cast = ns.Cast
+-- One debuff square, drawn. The row on a bar here and the row under the skinned
+-- target block are the same twelve lines and the same four guarded writes, so
+-- they are one file rather than two copies. The palette the square wears,
+-- including the edge this file used to name, is in there with it.
+local Aura = ns.UI.Aura
 
 local BACKDROP = Color.backdrop
-local EDGE = Color.iconEdge -- debuff icons only, the gauge edge follows threat
 local NAME_TEXT = Color.text.name
 local TARGET_TEXT = Color.text.target
 local HEALTH_TEXT = Color.text.value
-local COUNT_TEXT = Color.text.count
 
 -- Which bar is yours, said with the one channel nothing else on the bar is
 -- using. The fill, the track and the number above belong to threat, the level
@@ -660,40 +663,22 @@ end
 
 local Text = ns.UI.Label
 
--- One debuff square. Sized, positioned and given its fonts by LayoutWidget,
--- because all three follow settings that move while the addon is up.
-local function IconHolder(widget)
-	local holder = CreateFrame("Frame", nil, widget)
-	holder.edges = ns.Outline(holder, EDGE[1], EDGE[2], EDGE[3], EDGE[4])
-	holder.texture = ns.UI.Icon(holder)
-	-- Timer along the bottom edge and stacks in the corner, which leaves the
-	-- middle of the art readable. A number across the icon does not.
-	holder.timer = Text(holder, PLATE_TEXT, NAME_TEXT, "CENTER", ns.UI.SHADOW)
-	holder.timer:SetPoint("BOTTOM", holder, "BOTTOM", 0, 0)
-	holder.count = Text(holder, COUNT_TEXT_SIZE, COUNT_TEXT, "RIGHT", ns.UI.SHADOW)
-	holder.count:SetPoint("TOPRIGHT", holder, "TOPRIGHT", -1, -1)
-	return holder
-end
-
 -- The row, fitted to the list. A frame cannot be destroyed on this client, so a
 -- shorter list hides its tail rather than freeing it and a longer one grows into
 -- squares that are already there: a widget that has carried eight and now
 -- carries three keeps five hidden holders for the next time you add one.
 --
--- Widgets are pooled and their drawn state survives pooling, so a slot whose art
--- changed has to forget what the tick last put on it. Otherwise slot 2 keeps
--- Rend's stack count after Rend moved to slot 3.
+-- The square itself is ns.UI.Aura's. It used to be twelve lines here and the
+-- same four guarded writes in UpdateWidget, and the row under the skinned
+-- target block wanted every one of them. The two rows are the same code now,
+-- which is what stops them drifting apart the way this file's palette and
+-- Skin.lua's did before ns.Unit.Color existed.
 local function FitIcons(widget)
 	for index = 1, #trackedNames do
 		local holder = widget.icons[index]
 		if not holder then
-			holder = IconHolder(widget)
+			holder = Aura.New(widget)
 			widget.icons[index] = holder
-		end
-		if holder.shownIcon ~= trackedIcons[index] then
-			holder.shownIcon = trackedIcons[index]
-			holder.texture:SetTexture(trackedIcons[index])
-			holder.shownState, holder.shownSeconds, holder.shownCount = nil, nil, nil
 		end
 		holder:Show()
 	end
@@ -852,14 +837,13 @@ local function LayoutWidget(widget, width, onPlate)
 
 	-- Both numbers on an icon are sized off the icon rather than off the bar,
 	-- because the icon is a setting now: a fourteen pixel timer on a sixteen
-	-- pixel square covers the art it is annotating.
-	-- Both sit on the icon's own art, which is opaque, so they go through
-	-- ns.UI.NumberFont and come back flat with a shadow. That is the whole reason
-	-- a 7 pixel stack count is readable: nothing is spent on a rim.
-	local timerFont = ns.UI.NumberFont(math.max(8,
-		math.min(fontSize, math.floor(iconSize * 0.6))))
-	local countFont = ns.UI.NumberFont(math.max(7,
-		math.min(math.floor(COUNT_TEXT_SIZE * unit + 0.5), math.floor(iconSize * 0.5))))
+	-- pixel square covers the art it is annotating. That arithmetic is
+	-- ns.UI.Aura's, since the row under the skinned target block wants the same
+	-- answer; what stays here is the ceiling, which is this widget's own type
+	-- size and is what stops a large square carrying larger type than the bar
+	-- it sits on.
+	local timerCeiling = fontSize
+	local countCeiling = math.floor(COUNT_TEXT_SIZE * unit + 0.5)
 
 	-- The row, packed right and wrapped.
 	--
@@ -879,12 +863,7 @@ local function LayoutWidget(widget, width, onPlate)
 	}
 	for index = 1, count do
 		local holder = widget.icons[index]
-		ns.EdgeSize(holder.edges, px)
-		holder.timer:SetFontObject(timerFont)
-		holder.count:SetFontObject(countFont)
-		holder.texture:ClearAllPoints()
-		holder.texture:SetPoint("TOPLEFT", px, -px)
-		holder.texture:SetPoint("BOTTOMRIGHT", -px, px)
+		Aura.Size(holder, iconSize, px, timerCeiling, countCeiling)
 		icons[index] = { frame = holder, width = iconSize, height = iconSize }
 	end
 
@@ -1215,42 +1194,24 @@ local function UpdateWidget(widget, unit, guid)
 	end
 
 	-- Three states per holder and not eight: nobody has it, someone else has
-	-- it, you have it. The art and the alpha answer only that, so they are
-	-- guarded on it and not on the aura. The timer and the stack count move on
-	-- their own and carry their own guards, both on the integer that is drawn.
+	-- it, you have it. What each of the three looks like is ns.UI.Aura's, and
+	-- what stays here is which of them this slot is in, which is the only part
+	-- of the answer a tracked list has and a live aura row does not.
 	ScanDebuffs(unit, scratch)
 	-- Bounded by the widget as well as by the list. FitIcons makes the row as
 	-- long as the list and LayoutWidget calls it, but this runs five times a
 	-- second whether or not a layout has happened since the list last moved, and
 	-- a nil index on a ticker is a thousand errors a minute rather than one.
 	for slot = 1, math.min(#trackedNames, #widget.icons) do
-		local holder = widget.icons[slot]
 		local aura = scratch[slot]
 		local active = aura and aura.active
-		local state = active and (aura.mine and "mine" or "theirs") or "none"
-		if holder.shownState ~= state then
-			holder.shownState = state
-			holder.texture:SetDesaturated(state ~= "mine")
-			holder:SetAlpha(state == "mine" and 1 or (state == "theirs" and 0.65 or 0.22))
-		end
-
-		local seconds = 0
-		if active and aura.expires > 0 then
-			seconds = math.floor(aura.expires - now)
-			if seconds < 0 then
-				seconds = 0
-			end
-		end
-		if holder.shownSeconds ~= seconds then
-			holder.shownSeconds = seconds
-			holder.timer:SetText(seconds > 0 and tostring(seconds) or "")
-		end
-
-		local count = active and aura.count or 0
-		if holder.shownCount ~= count then
-			holder.shownCount = count
-			holder.count:SetText(count > 1 and tostring(count) or "")
-		end
+		-- The art is the same texture every tick for the life of the setting,
+		-- because a slot here stands for a spell you asked to watch rather than
+		-- for an aura the mob happens to have. ns.UI.Aura guards it, so passing
+		-- it every pass costs one comparison.
+		Aura.Draw(widget.icons[slot], trackedIcons[slot],
+			active and (aura.mine and "mine" or "theirs") or "none",
+			active and aura.expires or 0, active and aura.count or 0, now)
 	end
 
 	-- What the client says this mob is casting. Last, because it is the one

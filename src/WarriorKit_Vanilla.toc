@@ -51,6 +51,15 @@ UI\Draw.lua
 UI\Gauge.lua
 
 UI\Text.lua
+
+# One aura, drawn: the cropped icon, the hairline round it, the seconds left
+# and the stack count, and whether it is yours. The debuff row on an enemy bar
+# and the row under the skinned target block are both made of these. After
+# UI\Draw.lua for the cropped icon and UI\Text.lua for the shared fonts, and
+# after Unit\Color.lua, because what a debuff of yours looks like belongs to
+# the unit palette and not to either row.
+UI\Aura.lua
+
 UI\Flow.lua
 
 # One ability, drawn: the icon, the cooldown swipe, the timer, the count and
@@ -178,7 +187,23 @@ UnitFrames\Plates.lua
 UnitFrames\Cast.lua
 
 UnitFrames\EnemyBars.lua
+
+# The target's own buff and debuff rows, before the file that builds the block
+# they hang under. Its own file for the reason UnitFrames\Cast.lua is: it knows
+# nothing about a portrait, a gauge or an Edit Mode anchor, and everything in it
+# takes a skinned frame and draws two rows under it. It also hides the client's
+# row, which is the half that cannot be a detail: leaving both up is two answers
+# for where an aura goes.
+UnitFrames\Auras.lua
+
 UnitFrames\Skin.lua
+
+# The part's page in the options window, before Feature.lua, which is the only
+# file that hands it to Core. Split out of Feature.lua at the 800 line gate,
+# along the seam that file already had: everything in here reads a setting,
+# draws a control and writes it back, and nothing in here decides anything.
+UnitFrames\Panel.lua
+
 UnitFrames\Feature.lua
 
 # The meters. A damage and healing readout and a threat readout, two panes in
