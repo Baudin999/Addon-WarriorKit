@@ -82,6 +82,8 @@ name of none of them.
 
     UI/Pixel.lua         the pixel grid: screen size, scale, snapping, rescale
     UI/Draw.lua          a filled rectangle, a hairline outline, a crisp icon
+    UI/Gauge.lua         a status bar with a flat fill and the spent part
+                         of it behind, in the fill's own colour at a fifth
     UI/Text.lua          one shared font object per size, a label, wrapped height
     UI/Flow.lua          a stack panel: rows, columns, wrapping and alignment
     UI/Theme.lua         the palette and the pixel metrics, in one table each
