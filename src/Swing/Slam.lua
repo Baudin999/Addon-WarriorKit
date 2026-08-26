@@ -40,13 +40,22 @@ ns.Slam = Slam
 -- fallback: the moment you cast a Slam, the client tells the truth.
 --
 -- UNIT_SPELLCAST_START carries the cast the server actually started, start and
--- end in milliseconds, talents and haste and everything else already folded
--- in. That measurement replaces the estimate for the rest of the session and
--- is re-taken on every cast. So the first Slam of a session is drawn from an
--- estimate that may be a tenth out, and every Slam after it is drawn from the
--- client's own number. Nothing here has to be right about whether this client
--- folds a talent into GetSpellInfo, which is the one thing about it that could
--- not be settled without logging in.
+-- end in milliseconds, with the talent already folded in. That measurement
+-- replaces the estimate, once, on the first Slam of the session. Nothing here
+-- has to be right about whether this client folds a talent into GetSpellInfo,
+-- which is the one thing about it that could not be settled without logging in.
+--
+-- Once, and not on every cast, and that is the fix for the thing the mark did
+-- in game. Haste does not touch Slam's cast time on either of these clients.
+-- Warcraft wiki's patch history for Slam dates that to Cataclysm 4.0.1,
+-- 2010-10-12, "Slam can now be cast while moving, and haste now reduces the
+-- cast time"; before that patch the cast is 1.5 seconds less the talent and
+-- nothing else moves it. So the number is a constant per character, a second
+-- reading of it can only differ by the server's rounding or by describing some
+-- other cast, and a mark redrawn from every reading is a mark that wanders
+-- while the player is aiming at it. The one thing that really changes it is a
+-- talent point, and CHARACTER_POINTS_CHANGED drops the held number for exactly
+-- that.
 --------------------------------------------------------------------------
 
 local UnitCastingInfo = _G.UnitCastingInfo
@@ -59,12 +68,34 @@ local GetTalentInfo = _G.GetTalentInfo
 -- no table of ranks to keep true.
 local SLAM = 1464
 
--- What one point of Improved Slam takes off the cast, in seconds. The talent
--- is the same 0.1 per point on both of these clients. There is no API that
--- will say so: a talent's effect lives in its tooltip text and parsing that is
--- a worse dependency than this number. It is a seed for the first cast and
--- nothing more, because the measurement below replaces it.
+-- What one point of Improved Slam takes off the cast, in seconds. Warcraft
+-- wiki's rank table gives 0.1 per point across five points for Classic and for
+-- Burning Crusade, and dates the two point, 0.5 per point version to patch
+-- 3.0.2, which is one expansion past both of these clients. Wowhead's TBC entry
+-- for spell 12330 reads -1000 milliseconds, which does not agree with that, and
+-- there is no API that will settle it: a talent's effect lives in its tooltip
+-- text and parsing that is a worse dependency than this number.
+--
+-- Which is why it is a seed for the first cast and nothing more. The
+-- measurement below replaces it the moment the player casts one, and the panel
+-- says "estimated" until it has.
 local PER_POINT = 0.1
+
+-- What a measurement is rounded to, in seconds.
+--
+-- The real cast is 1.5 less a tenth per point, so every value it can take is a
+-- multiple of a tenth and everything under that is the server's own rounding of
+-- a millisecond figure. Snapped to a twentieth, a reading of 1.003 is the 1.00
+-- second cast it obviously is, and two readings of the same cast cannot land on
+-- two different pixels.
+local STEP = 0.05
+
+-- The widest a Slam cast can honestly be, as a multiple of the spell's own cast
+-- time. A reading outside that is not this spell: the event carried some other
+-- cast, or the client answered for one already in flight. Refused rather than
+-- held, because this number is held for the session and a bad one is a mark in
+-- the wrong place until the player logs out.
+local SANE = 1.05
 
 -- Half the width of the drawn band, in seconds.
 --
@@ -172,7 +203,7 @@ end
 -- and no Improved Slam gets to, and there the honest answer is that there is
 -- no window: every press clips something and the mark would be a lie.
 function Slam.Longer()
-	local duration = ns.Swing.Speed(ns.Swing.MAIN)
+	local duration = ns.Swing.Duration(ns.Swing.MAIN)
 	return duration > 0 and Slam.Cast() >= duration
 end
 
@@ -185,13 +216,25 @@ end
 -- over D, and the two edges of the band are the same with the half width added
 -- and taken off. Early is the smaller f, because early means more swing left.
 --
+-- Two numbers go in and exactly one of them is allowed to move. The cast is
+-- held for the session, so the only thing that can move this band is the swing
+-- speed, and when the speed moves the band has to move with it or it stops
+-- being the press it claims to be. A shorter swing spends a bigger share of
+-- itself on the same cast, so Flurry landing walks the mark back down the bar
+-- rather than up it.
+--
+-- The duration is the swing being drawn rather than the weapon's speed, so the
+-- mark and the fill are two readings of one number. Divided by the speed
+-- instead, a swing already in flight when the speed changed would carry a mark
+-- placed on the swing that comes after it.
+--
 -- Nil when there is nothing to draw: another class, no swing speed yet, no
 -- cast time yet, or a cast longer than the swing.
 function Slam.Window()
 	if not Slam.Known() then
 		return nil
 	end
-	local duration = ns.Swing.Speed(ns.Swing.MAIN)
+	local duration = ns.Swing.Duration(ns.Swing.MAIN)
 	local cast = Slam.Cast()
 	if duration <= 0 or cast <= 0 or cast >= duration then
 		return nil
@@ -251,18 +294,40 @@ end
 -- The cast the server actually started, in seconds. This is the number the
 -- estimate above is only trying to guess, and it arrives on the first Slam of
 -- every session.
+--
+-- Taken once and then left alone. Nothing about a character's Slam changes
+-- between two casts on these clients, so a second reading carries no
+-- information and every difference it could carry is noise the mark would move
+-- for. Held until a talent point moves, which is the only thing that really
+-- changes the answer.
 local function Learn()
-	if type(UnitCastingInfo) ~= "function" then
+	if measured or type(UnitCastingInfo) ~= "function" then
 		return
 	end
 	local _, _, _, startTime, endTime = UnitCastingInfo("player")
 	if type(startTime) ~= "number" or type(endTime) ~= "number" then
 		return
 	end
-	local taken = (endTime - startTime) / 1000
-	if taken > 0 then
-		measured = taken
+
+	-- Snapped before it is judged, so what is checked is the number that would
+	-- be drawn. A reading that snaps to zero is refused rather than held: zero
+	-- is a truthy value in Lua, it would win over the estimate for the rest of
+	-- the session, and Known would then say this character has no Slam.
+	local taken = math.floor((endTime - startTime) / 1000 / STEP + 0.5) * STEP
+	if taken <= 0 then
+		return
 	end
+
+	-- Against the spell's own cast time, which is the longest a Slam can be.
+	-- A client with no cast time to give has nothing to compare against and the
+	-- reading is taken on its own, because a bar drawn from a measurement is
+	-- still better than a bar drawn from an estimate of nothing.
+	local base = ns.SpellCastTime(SLAM)
+	if type(base) == "number" and base > 0 and taken > base * SANE then
+		return
+	end
+
+	measured = taken
 end
 
 --------------------------------------------------------------------------

@@ -249,6 +249,7 @@ Meter/Window.lua:PaintDamage
 Meter/Window.lua:PaintThreat
 Meter/Window.lua:MeterWindow.Update
 Swing/Swing.lua:Swing.Speed
+Swing/Swing.lua:Swing.Duration
 Swing/Swing.lua:Swing.Armed
 Swing/Swing.lua:Swing.Fraction
 Swing/Slam.lua:Slam.Name

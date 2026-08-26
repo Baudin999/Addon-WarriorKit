@@ -20,9 +20,23 @@ ns.SwingGauges = SwingGauges
 -- the eye cannot tell which side of the line it is on.
 --
 -- It is also the whole of the tick's guard. Quantised to pixels the fill moves
--- at most 180 times across a 3.4 second swing, the tick runs 68 times in that
--- swing, and between swings it does not move at all. Out of combat the tick
--- writes nothing.
+-- at most 180 times across a 3.4 second swing, and between swings it does not
+-- move at all. Out of combat the tick writes nothing.
+--
+-- Which is why this draws on every frame and not on a ticker, and it is the
+-- only thing in the addon that does. Everything else here is a readout, and a
+-- readout refreshed twenty times a second is a readout that is never more than
+-- fifty milliseconds stale. This is not a readout, it is a moving edge, and a
+-- moving edge is an animation: at the shipped width the fill crosses 53 pixels
+-- a second, so a draw every fifty milliseconds moves it about three pixels at a
+-- time. Three pixels is a step you can see. That was the whole of "the timer
+-- jumps in chunks", and no accumulator arithmetic fixes it, because 20 Hz is
+-- the wrong number rather than a number being missed.
+--
+-- What a frame costs here is the guard and nothing else: two fractions, two
+-- comparisons and a write only on the frames the drawn pixel actually changed,
+-- which at the shipped width is 53 writes a second inside a swing and none at
+-- all outside one.
 --
 -- Mouse only while unlocked, the same as the meters and the charge icon, and
 -- for the same reason: a mouse enabled frame swallows the right button drag
@@ -37,12 +51,6 @@ local FRAME_NAME = "WarriorKitSwing"
 -- One bar to the next. One pixel would put two hairlines against each other
 -- and read as a single thick line between the bars.
 local GAP = 2
-
--- 20 Hz, which is the marker's rate and the fastest thing in the addon. A
--- swing timer is the one readout where the lag between what the client knows
--- and what is drawn is the error you are trying to press inside of: at 10 Hz a
--- tenth of the two tenth wide band goes by between frames.
-local REFRESH = 0.05
 
 -- Gold for the hand that carries the abilities, steel for the one that does
 -- not, so the two are told apart by colour rather than by position. Both sit
@@ -66,11 +74,12 @@ local EDGE_NOW = { 0.40, 0.94, 0.52, 1 }
 local frame, main, off, grab, title
 local built = false
 local dual = false
-local elapsed = 0
 
 -- One pixel of the design in this frame's units, which is exactly 1 once
--- ns.UI.Adopt has taken the frame onto the grid. Read after the adoption and
--- before anything is built, the same as Meter/Window.lua.
+-- ns.UI.Adopt has taken the frame onto the grid. Read again in every layout
+-- pass rather than only at login: on a client with no SetIgnoreParentScale the
+-- answer is a fraction of the screen height, and a monitor swap moves it under
+-- a value read once.
 local unit = 1
 
 -- Nearest whole unit, negatives included, which on the grid is the nearest
@@ -88,7 +97,11 @@ local function BuildBar(parent, fill, banded)
 	local bar = Gauge.New(parent)
 	Gauge.Paint(bar, bar.track, fill)
 	bar.color = fill
-	bar.pixels = 1
+
+	-- No width until the layout has given it one. Not 1: a bar counting to one
+	-- pixel draws a whole swing in two positions, empty and full, which reads
+	-- as a bar that teleports rather than as a bar that has not been laid out.
+	bar.pixels = 0
 
 	-- The band and the press line are the main hand's alone, drawn on OVERLAY
 	-- so they sit over the fill rather than under it. The fill is ARTWORK and a
@@ -140,6 +153,7 @@ function SwingGauges.Apply()
 	frame:ClearAllPoints()
 	frame:SetPoint(point[1], UIParent, point[3], point[4], point[5])
 	ns.UI.Rezoom(frame, db.swingZoom)
+	unit = ns.UI.Unit(frame)
 
 	local width, height = db.swingWidth, db.swingHeight
 	dual = ns.Swing.HasOffhand()
@@ -147,7 +161,7 @@ function SwingGauges.Apply()
 	SizeBar(main, width, height)
 	SizeBar(off, width, height)
 	off:SetShown(dual)
-	main.shownOpen, main.shownClose, main.shownNow = nil, nil, nil
+	main.shownOpen, main.shownClose, main.shownMark, main.shownNow = nil, nil, nil, nil
 
 	local total = dual and (height * 2 + GAP) or height
 	frame:SetSize(width * unit, total * unit)
@@ -211,9 +225,9 @@ end
 --------------------------------------------------------------------------
 -- Painting
 --
--- Everything below runs twenty times a second, so every write is guarded on
--- what is already on the widget and nothing allocates. check.sh's HOT list
--- holds all four to that.
+-- Everything below runs on every frame, so every write is guarded on what is
+-- already on the widget and nothing allocates. check.sh's HOT list holds all
+-- four to that, and the guard is what pays for the rate.
 --------------------------------------------------------------------------
 
 local function DrawHand(bar, which)
@@ -235,7 +249,7 @@ local function DrawWindow(bar)
 	local open, close, at = ns.Slam.Window()
 	if not open then
 		if bar.shownOpen ~= false then
-			bar.shownOpen = false
+			bar.shownOpen, bar.shownMark = false, nil
 			bar.band:Hide()
 			bar.mark:Hide()
 		end
@@ -254,16 +268,27 @@ local function DrawWindow(bar)
 		right = left + 1
 	end
 
-	if bar.shownOpen ~= left or bar.shownClose ~= right then
-		bar.shownOpen, bar.shownClose = left, right
+	-- The line is compared as well as the two edges. Two windows a hair apart
+	-- round to the same pair of edges and to two different lines, and guarded on
+	-- the edges alone the band would be right and the line inside it stale.
+	local line = Whole(at * width)
+	if line < left then
+		line = left
+	end
+	if line > right then
+		line = right
+	end
+
+	if bar.shownOpen ~= left or bar.shownClose ~= right or bar.shownMark ~= line then
+		bar.shownOpen, bar.shownClose, bar.shownMark = left, right, line
 		bar.band:ClearAllPoints()
 		bar.band:SetPoint("TOPLEFT", bar, "TOPLEFT", left * unit, 0)
 		bar.band:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", left * unit, 0)
 		bar.band:SetWidth((right - left) * unit)
 		bar.band:Show()
 		bar.mark:ClearAllPoints()
-		bar.mark:SetPoint("TOPLEFT", bar, "TOPLEFT", Whole(at * width) * unit, 0)
-		bar.mark:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", Whole(at * width) * unit, 0)
+		bar.mark:SetPoint("TOPLEFT", bar, "TOPLEFT", line * unit, 0)
+		bar.mark:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", line * unit, 0)
 		bar.mark:SetWidth(unit)
 		bar.mark:Show()
 	end
@@ -324,14 +349,13 @@ end
 
 local events = CreateFrame("Frame")
 
-local function OnUpdate(_, delta)
-	elapsed = elapsed + delta
-	if elapsed >= REFRESH then
-		elapsed = 0
-		ns.Perf.Start("swing")
-		SwingGauges.Update()
-		ns.Perf.Stop("swing")
-	end
+-- No accumulator, because there is no rate to keep. See the header: this is the
+-- one thing in the addon that draws motion, and motion is drawn on the frame
+-- the screen is drawn on or it is drawn in steps.
+local function OnUpdate()
+	ns.Perf.Start("swing")
+	SwingGauges.Update()
+	ns.Perf.Stop("swing")
 end
 
 events:RegisterEvent("PLAYER_LOGIN")
@@ -395,7 +419,8 @@ events:SetScript("OnEvent", function(_, event, token)
 
 		-- The ticker lives on this frame, which is never hidden. On the gauges
 		-- it would stop the moment the bars hid and never come back, which is
-		-- the trap Charge/Icon.lua already carries a note about.
+		-- the trap Charge/Icon.lua already carries a note about. Update's first
+		-- line is what makes a hidden pair of bars free anyway.
 		events:SetScript("OnUpdate", OnUpdate)
 		return
 	end

@@ -2,6 +2,73 @@
 
 ## Unreleased
 
+### The swing bar jumped, and the Slam mark wandered
+
+Both halves of the report were true and neither was arithmetic. Every assertion
+the feature shipped with passed the whole time.
+
+**The bar jumped because 20 Hz is an animation rate, not a refresh rate.** Every
+other ticker in the addon updates a readout, where fifty milliseconds of staleness
+is invisible. The swing bar is a moving edge. At the shipped width the fill
+crosses 53 pixels a second, so a draw every fifty milliseconds moved it about
+three pixels at a time, and three pixels is a step you can see. The accumulator
+made it worse by resetting to zero instead of subtracting the interval, so on a
+60 fps client it fired every fourth frame rather than every third and the real
+rate was 15 Hz.
+
+So the bar draws on every frame and there is no accumulator left to be wrong.
+That costs nothing, because the pixel quantisation is the guard: the fill is a
+whole number compared against the whole number already on the bar, so a frame
+that would draw the same pixel writes nothing. Inside a swing that is 53 writes a
+second, outside one it is none, and the churn measurement did not move.
+
+The harness now drives a whole swing one 60 fps frame at a time and asserts that
+the fill never jumps more than a pixel between two frames and that it visits all
+180 positions. Against the shipped code those read `the fill jumped 3 pixels in
+one frame` and `the fill took 69 positions across a 180 pixel swing`.
+
+**The mark wandered because the cast time under it was re-measured on every
+cast.** `UNIT_SPELLCAST_START` was read every time and the number it gave was
+drawn straight away, so the mark moved a pixel or twenty depending on what the
+server declared and on which cast the client happened to be describing. That is
+the player's own words: it moved depending on when they clicked the spell.
+
+Haste does not touch Slam's cast time on either of these clients. Warcraft
+wiki's patch history dates that to Cataclysm 4.0.1, "Slam can now be cast while
+moving, and haste now reduces the cast time". Before that patch the cast is 1.5
+seconds less the talent and nothing else moves it, which makes it a constant per
+character and makes a second reading of it worthless. So the first Slam of a
+session is measured and every one after it is ignored, and a talent point is
+what drops the held number. The reading is snapped to a twentieth of a second,
+because every value the real cast can take is a multiple of a tenth and the
+milliseconds under that are the server's rounding. A reading that snaps to zero
+is refused, since zero is truthy in Lua and would have won over the estimate for
+the session and then reported the character has no Slam. A reading longer than
+the spell's own cast time is refused as some other cast.
+
+What is still allowed to move the mark is your weapon speed, and it has to be:
+the press is the moment with a cast time left to run, and a shorter swing spends
+a bigger share of itself on the same cast, so Flurry walks the band back down
+the bar rather than up it. That is asserted as the invariant rather than as a
+percentage, at three weapon speeds and across a proc that lands mid swing.
+
+`ns.Swing.Duration(hand)` is new and is what the band divides by now. It is the
+swing being drawn rather than what `UnitAttackSpeed` says this instant. The two
+are the same number today, and asking for the first is what stops the mark and
+the fill from being two answers that agree by luck.
+
+Three smaller repairs in the same files. `unit` was read once at login and used
+by every layout pass after it, so on a client with no `SetIgnoreParentScale` a
+monitor swap sized the bars off the old screen height. The band's guard compared
+its two edges and not the line down the middle, so two windows a hair apart drew
+the right band with a stale line in it. And a bar built before its layout ran
+seeded its scale at one pixel, which draws a whole swing in two positions; it
+now seeds at nothing and draws an empty bar until the layout gives it a width.
+
+The performance tab's swing row said 20 Hz. It says "every frame" and costs the
+row against 60 of them, which is the budget the rest of that tab already
+measures against.
+
 ### A chat window, and a tab for the people you play with
 
 The complaint was that the chat interface is fiddly and not worth reading, and
@@ -207,11 +274,11 @@ The bars are gated on holding a weapon and not on being a warrior, because a
 swing timer is worth the same to anybody standing in melee. The band is Slam's
 and is warrior only, and the hunter run of the harness asserts both halves.
 
-The tick runs at 20 Hz, which is the marker's rate and the fastest thing in the
-addon, and it pays for that by counting in whole pixels: the bar's scale is its
-own width, so the fill is an integer compared against the integer already on it
-and between swings the tick writes nothing at all. It measures 0.03 KB per fifty
-ticks against a gate of 0.05.
+The tick counts in whole pixels: the bar's scale is its own width, so the fill
+is an integer compared against the integer already on it and between swings the
+tick writes nothing at all. It measures 0.03 KB per fifty ticks against a gate
+of 0.05. It shipped at 20 Hz and does not run at a rate any more; the section at
+the top of this file says why.
 
 `scripts/harness.lua` grew an attack speed, a talent tree, a cast in flight and
 a weapon in each hand, and its combat log stub went from sixteen values to
