@@ -53,6 +53,12 @@ local RETIRED = {
 	softIcon = true,
 	softIconSize = true,
 
+	-- 1.2: the breakdown ranked by damage, casts or hits off a chip on its
+	-- window. The other two rankings were answers to a question that table does
+	-- not ask, and a ranking by press count puts Battle Shout above Mortal
+	-- Strike. It never shipped, but a reload while it existed wrote the key.
+	breakdownSort = true,
+
 	-- 1.2: markKeys was a boolean for one edit before the marking keys became
 	-- one setting per mark in markBinds. It never shipped, but a reload while it
 	-- existed wrote it, and ApplyDefaults keeps whatever it finds, so a boolean

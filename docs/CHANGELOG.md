@@ -54,6 +54,19 @@ ability to look at one rank alone. The pane says the one thing that does not
 survive the roll up, which is that a rate pools across ranks correctly and an
 average hit does not.
 
+**Only what swings at something is listed.** Battle Shout, Charge and every
+stance are counted like everything else and kept out of the table, because in a
+ranking by damage they can only ever be a run of zeroes above the rows you
+opened it to read. They stay in the store, since an ability that does nothing
+today is one damage event away from being worth a row. An ability that has only
+ever been dodged does get listed: no damage across four dodges is not the same
+fact as no damage because the thing does none.
+
+There is one ranking and no control for it. It ranked by casts and by landed
+hits as well for a while, off three chips on the window, and both of those
+answer a question this table does not ask. Ranked by press count Battle Shout
+sits above Mortal Strike, which reads as a bug rather than as a view.
+
 **Only your own hits.** `Meter/Meter.lua` reads the same event and counts
 everybody, deliberately, because it is answering what the group did to this
 pull. Counting the group here would grow the table by every stranger you have

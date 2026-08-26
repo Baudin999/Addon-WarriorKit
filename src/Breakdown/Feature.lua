@@ -6,12 +6,6 @@ local ADDON, ns = ...
 local Breakdown = ns.Breakdown
 local Window = ns.BreakdownWindow
 
--- What a row can be ranked on, as the word shown on the control and the field
--- it reads off the row. Two lists rather than one table, because UI.Kit's Cycle
--- matches on the word it was given and hands the same word back.
-local SORTS = { "damage", "casts", "hits" }
-local SORT_FIELD = { damage = "damage", casts = "casts", hits = "landed" }
-
 -- The band control, with "every band" first. The four words after it come from
 -- Breakdown.lua rather than being typed here, so the pane and the slash word
 -- cannot describe the same band differently.
@@ -58,17 +52,6 @@ local function BreakdownWord(arg)
 		if count then
 			Window.Print(count)
 		end
-		return
-	end
-
-	if option == "sort" then
-		if not SORT_FIELD[value] then
-			ns.Print("sort by damage, casts or hits.")
-			return
-		end
-		ns.db.breakdownSort = SORT_FIELD[value]
-		ns.Options.Refresh()
-		ns.Print("ranked by " .. value .. ".")
 		return
 	end
 
@@ -145,19 +128,6 @@ local function Panel(ui)
 			.. " ever been in a party with."):format(Breakdown.Describe())
 	end)
 
-	ui.Cycle("rank by", SORTS,
-		function()
-			for word, field in pairs(SORT_FIELD) do
-				if field == ns.db.breakdownSort then
-					return word
-				end
-			end
-			return SORTS[1]
-		end,
-		function(word)
-			ns.db.breakdownSort = SORT_FIELD[word] or "damage"
-		end)
-
 	ui.Cycle("targets", BAND_LIST, BandWord,
 		function(word)
 			ns.db.breakdownBand = (word == EVERY) and 0 or BandFor(word)
@@ -192,6 +162,15 @@ local function Panel(ui)
 	end)
 
 	ui.Note(function()
+		return "Only abilities that have swung at something are listed. A shout, a"
+			.. " stance and Charge are counted like everything else, and they are kept"
+			.. " out of a table ranked by damage because there they can only ever be a"
+			.. " run of zeroes above the rows you opened it to read. An ability that has"
+			.. " only ever been dodged does get its row: no damage across four dodges is"
+			.. " not the same fact as no damage because the thing does none."
+	end)
+
+	ui.Note(function()
 		return "Ranks are added up under one name. A rate pools across ranks correctly,"
 			.. " because it is per attempt either way, and an average hit does not: for"
 			.. " an ability you have used at several ranks the average is a blend of the"
@@ -220,10 +199,9 @@ ns.Register({
 	order = 7.8,
 
 	defaults = {
-		-- The switch and the two view settings are the account's, because they
-		-- are preferences about the addon rather than facts about a character.
+		-- The switch and the band are the account's, because they are preferences
+		-- about the addon rather than facts about a character.
 		breakdown = true,
-		breakdownSort = "damage",
 		breakdownBand = 0,
 	},
 
@@ -241,7 +219,7 @@ ns.Register({
 
 	help = {
 		"breakdown on|off, breakdown open for the window, breakdown to print the top ten",
-		"breakdown top 20, sort damage|casts|hits, band all or a level band",
+		"breakdown top 20, band all or a level band",
 		"breakdown reset yes throws away everything counted so far",
 	},
 

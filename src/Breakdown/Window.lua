@@ -76,7 +76,6 @@ local BAR = 0.20
 -- The head of the window: the total, the sentence saying what has been counted,
 -- and the row of controls under both.
 local BIG = 17
-local CHIP_W = 54
 local BAND_W = 140
 local LABEL_W = 46
 local HEAD_Y = M.pad
@@ -85,11 +84,6 @@ local RULE_Y = CHIP_Y + M.row + M.rowGap
 local LIST_Y = RULE_Y + M.hairline + M.rowGap
 
 local HEIGHT = M.title + LIST_Y + ROWS_DRAWN * ROW + M.footer
-
--- What a row can be ranked on, as the word on the chip and the field it reads
--- off the row.
-local SORTS = { "damage", "casts", "hits" }
-local SORT_FIELD = { damage = "damage", casts = "casts", hits = "landed" }
 
 -- The band chip cycles through these, "every band" first. The four words after
 -- it come from Breakdown.lua rather than being typed here, so this window and
@@ -100,7 +94,6 @@ local window
 local rows = {}
 local view
 local head, note, blank
-local sortChips = {}
 local bandChip
 local shown = 0
 local width = 1
@@ -395,33 +388,22 @@ local function Build()
 	note:SetPoint("TOPRIGHT", -M.pad, -(HEAD_Y + math.floor((BIG - M.small) / 2)))
 	note:SetPoint("LEFT", head, "RIGHT", M.gutter, 0)
 
-	local rankLabel = UI.Label(body, M.small, C.quiet, "LEFT", UI.FLAT)
-	rankLabel:SetPoint("TOPLEFT", M.pad, -(CHIP_Y + math.floor((M.row - M.small) / 2)))
-	rankLabel:SetWidth(LABEL_W)
-	rankLabel:SetText("rank by")
-
-	for index, word in ipairs(SORTS) do
-		local chip = Chip(body, word, CHIP_W, function()
-			ns.db.breakdownSort = SORT_FIELD[word]
-			Window.Paint()
-			ns.Options.Refresh()
-		end)
-		chip:SetPoint("TOPLEFT", M.pad + LABEL_W + M.gutter + (index - 1) * (CHIP_W + 2), -CHIP_Y)
-		chip.word = word
-		sortChips[index] = chip
-	end
+	-- The one control on the row, at the left margin where the ranking chips
+	-- were. There were three of those, damage, casts and hits, and a table with
+	-- one ranking does not need a control saying which one. Ranked by press
+	-- count Battle Shout sits above Mortal Strike, which is not a view of your
+	-- damage that anybody was asking for.
+	local bandLabel = UI.Label(body, M.small, C.quiet, "LEFT", UI.FLAT)
+	bandLabel:SetPoint("TOPLEFT", M.pad, -(CHIP_Y + math.floor((M.row - M.small) / 2)))
+	bandLabel:SetWidth(LABEL_W)
+	bandLabel:SetText("targets")
 
 	bandChip = Chip(body, EVERY, BAND_W, function()
 		ns.db.breakdownBand = NextBand()
 		Window.Paint()
 		ns.Options.Refresh()
 	end)
-	bandChip:SetPoint("TOPRIGHT", -M.pad, -CHIP_Y)
-
-	local bandLabel = UI.Label(body, M.small, C.quiet, "RIGHT", UI.FLAT)
-	bandLabel:SetPoint("TOPRIGHT", -(M.pad + BAND_W + M.gutter),
-		-(CHIP_Y + math.floor((M.row - M.small) / 2)))
-	bandLabel:SetText("targets")
+	bandChip:SetPoint("TOPLEFT", M.pad + LABEL_W + M.gutter, -CHIP_Y)
 
 	local rule = UI.Rule(body, C.hairline)
 	rule:SetPoint("TOPLEFT", M.pad, -RULE_Y)
@@ -468,7 +450,7 @@ function Window.Paint()
 		return false
 	end
 
-	local ranked, total = ns.Breakdown.Rank(ns.db.breakdownSort, ns.Breakdown.Band())
+	local ranked, total = ns.Breakdown.Rank(ns.Breakdown.Band())
 	local top = ranked[1] and ranked[1].damage or 0
 
 	shown = 0
@@ -502,11 +484,6 @@ function Window.Paint()
 	head:SetText(("%s damage"):format(Short(total)))
 	note:SetText(ns.Breakdown.Describe())
 
-	for index = 1, #sortChips do
-		local chip = sortChips[index]
-		chip.active = (SORT_FIELD[chip.word] == ns.db.breakdownSort)
-		PaintChip(chip)
-	end
 	bandChip.text:SetText(BandWord())
 	bandChip.active = ns.Breakdown.Band() ~= nil
 	PaintChip(bandChip)
@@ -567,7 +544,7 @@ end)
 -- says in one, because a slash word's answer scrolls past in a chat frame and
 -- the thing you want from it is the ranking rather than the detail.
 function Window.Print(limit)
-	local ranked, total = ns.Breakdown.Rank(ns.db.breakdownSort, ns.Breakdown.Band())
+	local ranked, total = ns.Breakdown.Rank(ns.Breakdown.Band())
 	if #ranked == 0 then
 		ns.Print("nothing counted yet.")
 		return 0

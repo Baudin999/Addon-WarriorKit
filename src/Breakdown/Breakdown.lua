@@ -474,27 +474,36 @@ local function Fold(row, slot)
 	end
 end
 
-local sortBy = "damage"
-
+-- Damage, always, and the name to break a tie so that two rows that have done
+-- the same amount do not swap places every time the pane refreshes.
+--
+-- It ranked by casts and by landed hits too for a while, off a field name held
+-- in an upvalue. Both were answers to a question this table does not ask. What
+-- it is for is where your damage goes, and a ranking by press count puts Battle
+-- Shout above Mortal Strike and reads like a bug.
 local function Bigger(a, b)
-	local left, right = a[sortBy] or 0, b[sortBy] or 0
-	if left == right then
-		-- A stable order, so two abilities that have done nothing yet do not
-		-- swap places every time the pane refreshes.
+	if a.damage == b.damage then
 		return a.name < b.name
 	end
-	return left > right
+	return a.damage > b.damage
 end
 
--- Every ability with something in it, biggest first.
+-- Every ability that has swung at something, biggest damage first.
 --
 -- band is nil for all four bands added together, or one of them on its own.
--- sort is the field to rank on, which is a key on the row rather than a
--- comparison written per option, so adding a column to the pane does not mean
--- adding a sort here.
-function Breakdown.Rank(sort, band)
-	sortBy = sort or "damage"
-
+--
+-- A row has to have attempted damage to be in the ranking: it landed a hit, or
+-- something stopped one. A cast on its own is not enough, which is what keeps
+-- Battle Shout, Charge and every stance out of a table ranked by damage, where
+-- they can only ever be a run of zeroes under the abilities you came to read.
+-- They are still counted and still in the store, because an ability that does
+-- nothing today is one damage event away from being worth a row, and the store
+-- is what decides that rather than a list of spell ids typed here.
+--
+-- Attempts and not damage, so an ability that has only ever been dodged keeps
+-- its row. Zero damage across four dodges is not the same fact as zero damage
+-- because the thing does no damage, and it is the more useful of the two.
+function Breakdown.Rank(band)
 	local store = Store()
 	for _, row in pairs(byName) do
 		Blank(row)
@@ -524,7 +533,7 @@ function Breakdown.Rank(sort, band)
 
 	local total = 0
 	for _, row in pairs(byName) do
-		if row.live and (row.landed > 0 or row.misses > 0 or row.casts > 0) then
+		if row.live and (row.landed > 0 or row.misses > 0) then
 			ranked[#ranked + 1] = row
 			total = total + row.damage
 		end

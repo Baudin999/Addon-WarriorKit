@@ -70,6 +70,8 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   often it crits, what it averages, and what stopped it when it did not land.
   The miss column names the outcome rather than pooling it, because a dodge and
   a parry mean different things and dodge is the one you can do something about.
+  Shouts, stances and Charge are counted but not listed, since in a damage
+  ranking they are a run of zeroes above the rows you came to read.
 
   It answers the questions a meter cannot, because a meter forgets the pull it
   was counting: whether Slam pays for the swing it costs, what share of your

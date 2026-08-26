@@ -10788,7 +10788,7 @@ do
 	-- One row out of the ranked list, by name, so an assertion names the
 	-- ability it is about rather than an index that moves as the sort does.
 	local function row(name, band)
-		local ranked = Breakdown.Rank("damage", band)
+		local ranked = Breakdown.Rank(band)
 		for index = 1, #ranked do
 			if ranked[index].name == name then
 				return ranked[index]
@@ -10885,15 +10885,42 @@ do
 	check(Breakdown.CritRate(ms) == 0.5, "a dodge changed the crit rate")
 
 	----------------------------------------------------------------------
-	-- What you pressed is not what landed
+	-- What is in the ranking, and what is only in the store
+	--
+	-- The table is ranked by damage, so a row has to have attempted damage to
+	-- be in it. An ability that has only ever been pressed is counted and kept
+	-- and not listed, or the top of a damage table is a run of zeroes: Battle
+	-- Shout, Charge and every stance, above the abilities you opened it to
+	-- read. The failure mode of getting this wrong is exactly what shipped
+	-- before it, so it is asserted from both ends.
 	----------------------------------------------------------------------
 
+	local held = Breakdown.Count()
+	log("SPELL_CAST_SUCCESS", ME, UNSEEN, { [12] = 6673, [13] = "Battle Shout" })
+	check(Breakdown.Count() == held + 1, "a cast that does no damage was not counted at all")
+	check(row("Battle Shout") == nil,
+		"an ability that has never attempted damage is in a table ranked by damage")
+
+	-- A cast is still worth counting for an ability that does damage, because
+	-- how often you pressed it is half of whether it paid for itself. The casts
+	-- from before the first landed hit have to survive to that hit.
 	log("SPELL_CAST_SUCCESS", ME, UNSEEN, { [12] = 1464, [13] = "Slam" })
 	log("SPELL_CAST_SUCCESS", ME, UNSEEN, { [12] = 1464, [13] = "Slam" })
+	check(row("Slam") == nil, "a cast alone put a row in the ranking")
+
+	log("SPELL_DAMAGE", ME, UNSEEN, { [12] = 1464, [13] = "Slam", [15] = 400 })
 	local slam = row("Slam")
-	check(slam and slam.casts == 2, "a cast that landed nothing was not counted")
-	check(slam and Breakdown.Attempts(slam) == 0, "a cast was counted as an attempt")
-	check(Breakdown.CritRate(slam) == nil, "a spell with no landed hits reported a crit rate")
+	check(slam and slam.casts == 2, "the casts before the first landed hit were lost")
+	check(slam and Breakdown.Attempts(slam) == 1, "a cast was counted as an attempt")
+
+	-- An ability that has only ever been stopped. No damage across two dodges
+	-- is not the same fact as no damage because the thing does none, and it is
+	-- the more useful of the two, so it keeps its row.
+	log("SPELL_MISSED", ME, UNSEEN, { [12] = 845, [13] = "Cleave", [15] = "DODGE" })
+	local cleave = row("Cleave")
+	check(cleave ~= nil, "an ability that has only ever been dodged lost its row")
+	check(cleave and cleave.damage == 0, "a dodge added damage")
+	check(Breakdown.CritRate(cleave) == nil, "a spell with no landed hits reported a crit rate")
 
 	----------------------------------------------------------------------
 	-- Somebody else's fight
@@ -10902,7 +10929,7 @@ do
 	-- by every stranger you have ever been in a party with.
 	----------------------------------------------------------------------
 
-	local held = Breakdown.Count()
+	held = Breakdown.Count()
 	log("SPELL_DAMAGE", "Player-9", UNSEEN, { [12] = 9999, [13] = "Someone Else", [15] = 4000 })
 	check(Breakdown.Count() == held, "another player's damage was counted as yours")
 
@@ -10966,15 +10993,13 @@ do
 	end
 	check(escapes, "the breakdown window is not in UISpecialFrames, so Escape leaves it open")
 
-	-- Ranking by casts is a different order from ranking by damage, and the chip
-	-- that says so has to move with it.
-	ns.db.breakdownSort = "casts"
-	Pane.Paint()
-	check(Pane.Row(1).name:GetText() == "Slam",
-		("ranked by casts the top row is %s, expected the most pressed ability")
-			:format(tostring(Pane.Row(1).name:GetText())))
-	ns.db.breakdownSort = "damage"
-	Pane.Paint()
+	-- The utility spell in the store is not one of the rows on screen, which is
+	-- the same claim as the ranking check above made through the window rather
+	-- than through Rank.
+	for index = 1, Pane.Shown() do
+		check(Pane.Row(index).name:GetText() ~= "Battle Shout",
+			"the window drew a row for an ability that has never done damage")
+	end
 
 	----------------------------------------------------------------------
 	-- Starting again
