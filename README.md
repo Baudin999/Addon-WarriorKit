@@ -38,6 +38,26 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   corners. Every addon button on the edge of the map goes behind one square you
   press to open. Each is borrowed rather than taken: parent, position and the
   button's own anchoring are handed back the moment you turn it off.
+- **A chat window, and one tab for the people you play with.** Name your wife,
+  your kids or your guild officers in `/wk` and every line any of them says, in
+  any channel, is copied to one tab of its own, together with the whispers you
+  send them. The tab is not drawn until there is a name on the list. Beside it
+  are two more: everything anyone said, and whispers on their own. Nothing else
+  is in it. Loot, experience, system text and every addon's output stay in
+  Blizzard's window, which is not hidden and not unregistered, because there is
+  no safe way to tell those lines apart from the ones this window already drew.
+  The conversation is taken out of Blizzard's frames through FrameXML's own
+  message filter, so one tick box puts it back with no reload. Names are class
+  coloured, a click on one answers it, item links still work, and nothing fades
+  out after two minutes.
+- **A voice channel joined when you log in.** Pick your party or raid channel,
+  or any community or guild stream you are in, the same list the client's own
+  Chat Channels window puts a voice button on. The addon activates it at login
+  and asks again whenever it could have appeared, which for a party channel is
+  when you group up and for a community one is when the first person joins. It only ever joins:
+  nothing here leaves a channel, mutes anyone or moves a volume. Blizzard's
+  voice chat has no channels you can name, so what there is to pick is short,
+  and `/wk` says so.
 - **A filter for the red text in the middle of the screen.** Tick the messages
   you do not need and they stop drawing. Nothing is hidden that you did not
   tick, the list is shared by every character on the account, and one press

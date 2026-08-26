@@ -118,7 +118,7 @@ end
 
 ns.Register({
 	name = "performance",
-	order = 10,
+	order = 11,
 
 	defaults = {
 		-- On, because two clock reads on forty ticks a second is not a cost

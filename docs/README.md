@@ -1,13 +1,14 @@
 # WarriorKit
 
-A personal warrior addon for WoW TBC Anniversary. Nine parts: ctrl-click raid
+A personal warrior addon for WoW TBC Anniversary. Ten parts: ctrl-click raid
 marking, one button that casts Charge, Intervene or Intercept depending on what
 you are looking at, one key that takes the next enemy and swings at it, weapon
 loadouts with a key each that swap your stance and both your hands, a warrior
 loadout that fills the action bars, enemy bars that replace the
-Blizzard nameplate, a strip of the Blizzard bar art, three chores the client
-makes you do by hand, and one Edit Mode layout carried inside the addon folder.
-Settings live in a panel opened with `/wk`.
+Blizzard nameplate, a chat window with a tab for the people you name and a voice
+channel joined at login, a strip of the Blizzard bar art, three chores the
+client makes you do by hand, and one Edit Mode layout carried inside the addon
+folder. Settings live in a panel opened with `/wk`.
 
 This file is written for whoever picks the addon up next, human or agent. The
 first half is what it does, the second half is what the client will and will
@@ -62,7 +63,7 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is eleven parts and a core. Each part is a folder, and Core knows the
+The addon is twelve parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
@@ -89,6 +90,8 @@ name of none of them.
     UI/Theme.lua         the palette and the pixel metrics, in one table each
     UI/Stack.lua         a column of rows, each one asked how tall it is
     UI/Scroll.lua        a viewport that clips, a canvas that moves, a bar
+    UI/Log.lua           a column of lines that grows from the bottom, wraps,
+                         caps itself and scrolls
     UI/Widgets.lua       the widget kit a page is built out of
     UI/Window.lua        window chrome, the side rail and the tab strip
 
@@ -140,6 +143,14 @@ name of none of them.
                              icons to the corners, puts the wheel on the zoom
     Minimap/Corral.lua       borrows the other addons' minimap buttons into one tray
     Minimap/Feature.lua
+
+    Chat/People.lua          the important-people list, matched on the name
+                             with the realm and the case taken off
+    Chat/Feed.lua            every chat event turned into one coloured line,
+                             routed to the tabs it belongs on
+    Chat/Voice.lua           the voice channel pick, and the join it asks for
+    Chat/Window.lua          the window: the tab strip, three logs, the field
+    Chat/Feature.lua
 
     Comfort/Loot.lua         empties a corpse on LOOT_READY, before the window draws
     Comfort/Vendor.lua       sells grey items while a merchant window is up
@@ -290,6 +301,10 @@ goes through `Feature.lua` or through the shared surface below:
     ns.UI.Button / ns.UI.Kit(host)   a push button, and the widget kit a page
                                  is built out of
     ns.UI.Window(opts) / ns.UI.Rail / ns.UI.TabStrip / ns.UI.Windows
+    ns.UI.ScrollBar(parent, onValue)   the bar on its own, for something
+                                 that scrolls in units the view cannot count
+    ns.UI.Log(parent, opts)      a column of lines that grows from the
+                                 bottom, or nil and why this client has none
     ns.Perf.Start(key) / ns.Perf.Stop(key)   bracket a tick body
     ns.Perf.Slot(key)            average ms, worst ms, and how many ticks
     ns.Perf.Memory()             KB held and KB per second being allocated
@@ -390,6 +405,27 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Layout.CanWrite()         the action API is here, combat is not, cursor is empty
     ns.Layout.CanApply()         that, and you are a warrior
     ns.Layout.Apply / Restore    fill the action bars, or put back what was there
+    ns.People.All() / Count() / Get(i) / Shown() / Show(i)
+    ns.People.Add(name) / Remove(i) / Rename(i, name)
+    ns.People.AddGroup()         everyone you are grouped with, in one press
+    ns.People.Key(name)          what two names have to agree on to be the same
+                                 person: the realm off, the case flattened
+    ns.People.Match(sender) / Describe()
+    ns.ChatFeed.Apply()          register or unregister the chat events, and
+                                 claim or hand back Blizzard's frames
+    ns.ChatFeed.Attach(onLine)   set the sink, and get what arrived before it
+    ns.ChatFeed.Installed() / Claimed() / Describe()
+    ns.ChatWindow.Ensure() / Show() / Hide() / Toggle() / Focus()
+    ns.ChatWindow.Apply() / Lock() / Reset() / Built()
+    ns.ChatWindow.Send(text)     a line to the channel the button says, or to
+                                 the client's own parser when it starts with /
+    ns.ChatWindow.Cycle(step) / Channel() / Reply(name)
+    ns.ChatWindow.Tabs() / Count(id) / Held() / Describe()
+    ns.Voice.Supported() / Ready()   whether there is a voice service, and
+                                 whether it has signed in yet
+    ns.Voice.Options() / Label(value) / Set(value)
+    ns.Voice.Apply(force)        join or activate what the setting names
+    ns.Voice.Active() / Describe()
     ns.EditMode.CanApply / Capture / Apply / Saved / IndexOf
     ns.interface / ns.vanilla    the interface number, and whether this is 1.x
     ns.IsWarrior()               whether the charge part and the loadout apply

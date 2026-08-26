@@ -118,7 +118,12 @@ function UI.Window(opts)
 	frame:EnableMouse(true)
 	frame:RegisterForDrag("LeftButton")
 	frame:SetClampedToScreen(true)
-	frame:SetFrameStrata("DIALOG")
+	-- DIALOG unless the caller says otherwise. A settings window is something
+	-- you open over the game and close again, and DIALOG is where that belongs.
+	-- A window that is up while you play, which is what the chat window is, has
+	-- to sit under the tooltip and under anything the client puts over the
+	-- world, so it asks for a lower one.
+	frame:SetFrameStrata(opts.strata or "DIALOG")
 	frame:SetScript("OnDragStart", frame.StartMoving)
 	frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 	-- A listening key field has the keyboard and an open dropdown covers
@@ -139,8 +144,12 @@ function UI.Window(opts)
 	end)
 	frame:Hide()
 
-	local bg = ns.Fill(frame, "BACKGROUND", C.window[1], C.window[2], C.window[3], C.window[4])
-	bg:SetAllPoints()
+	-- Kept on the window rather than left local, because how opaque a window is
+	-- is a property of that window. The panel wants to be read and takes the
+	-- palette's own alpha; a chat window sits over the world all night and the
+	-- player decides how much of the world comes through it.
+	window.bg = ns.Fill(frame, "BACKGROUND", C.window[1], C.window[2], C.window[3], C.window[4])
+	window.bg:SetAllPoints()
 	window.edges = ns.Outline(frame, C.edge[1], C.edge[2], C.edge[3], 1)
 	local px = ns.Pixel(frame)
 	ns.EdgeSize(window.edges, px)
@@ -175,7 +184,11 @@ function UI.Window(opts)
 
 	-- Escape closes it, the same as any Blizzard window. The name is what
 	-- UISpecialFrames holds, so a window that wants the behaviour has to have one.
-	if opts.name then
+	--
+	-- opts.escape = false opts out, and the chat window is why. Escape is the
+	-- key that clears a targeting cursor and steps out of a text field, and a
+	-- window you have up all evening must not be what it closes instead.
+	if opts.name and opts.escape ~= false then
 		tinsert(UISpecialFrames, opts.name)
 	end
 
@@ -207,6 +220,14 @@ end
 
 function Window:SetTitle(text)
 	self.title:SetText(text)
+end
+
+-- How much of the world comes through the window, as a fraction of the
+-- palette's own alpha rather than instead of it. A window at 1 is the window
+-- the theme describes; below that it is the same colour, thinner.
+function Window:SetOpacity(fraction)
+	local alpha = (C.window[4] or 1) * math.max(0, math.min(fraction or 1, 1))
+	self.bg:SetColorTexture(C.window[1], C.window[2], C.window[3], alpha)
 end
 
 function Window:Show()
@@ -338,11 +359,19 @@ local function PaintTab(button)
 	elseif button.hovered then
 		UI.Tint(button.bg, C.hover)
 		button.text:SetTextColor(C.text[1], C.text[2], C.text[3])
+	elseif button.unread then
+		-- A tab you are not on with something on it reads as the selected tab
+		-- reads, minus the accent bar under it. Anything louder is a chat window
+		-- that flashes at you all night; anything quieter is a tab you never
+		-- notice, which is the whole reason the mark exists.
+		UI.Tint(button.bg, C.chrome)
+		button.text:SetTextColor(C.text[1], C.text[2], C.text[3])
 	else
 		UI.Tint(button.bg, C.chrome)
 		button.text:SetTextColor(C.dim[1], C.dim[2], C.dim[3])
 	end
 	button.mark:SetShown(button.selected and true or false)
+	button.dot:SetShown(button.unread and not button.selected)
 end
 
 function UI.TabStrip(parent, opts)
@@ -364,6 +393,13 @@ function Tabs:Add(label)
 	button.mark:SetPoint("BOTTOMLEFT")
 	button.mark:SetPoint("BOTTOMRIGHT")
 	button.mark:SetHeight(2)
+
+	-- What says a tab has something on it. Two pixels in the accent colour in
+	-- the top right corner of the tab, which is a corner nothing else uses.
+	button.dot = ns.Fill(button, "OVERLAY", C.accent[1], C.accent[2], C.accent[3], 1)
+	button.dot:SetSize(3, 3)
+	button.dot:SetPoint("TOPRIGHT", -3, -3)
+	button.dot:Hide()
 
 	button.text = UI.Label(button, M.font, C.dim, "CENTER", UI.FLAT)
 	button.text:SetPoint("CENTER")
@@ -397,22 +433,26 @@ function Tabs:Resize(width)
 
 	for index = 1, #self.buttons do
 		local button = self.buttons[index]
-		shown = shown + 1
-		local text = button.text:GetStringWidth() or 0
-		local size = UI.Round(self.frame, text + TABPAD * 2)
-		if size > width then
-			size = width
+		if button.hidden then
+			button:Hide()
+		else
+			shown = shown + 1
+			local text = button.text:GetStringWidth() or 0
+			local size = UI.Round(self.frame, text + TABPAD * 2)
+			if size > width then
+				size = width
+			end
+			if x > 0 and x + size > width then
+				x = 0
+				y = y + M.tab
+				lines = lines + 1
+			end
+			button:SetWidth(size)
+			button:ClearAllPoints()
+			button:SetPoint("TOPLEFT", self.frame, "TOPLEFT", x, -y)
+			button:Show()
+			x = x + size
 		end
-		if x > 0 and x + size > width then
-			x = 0
-			y = y + M.tab
-			lines = lines + 1
-		end
-		button:SetWidth(size)
-		button:ClearAllPoints()
-		button:SetPoint("TOPLEFT", self.frame, "TOPLEFT", x, -y)
-		button:Show()
-		x = x + size
 	end
 
 	local height = lines * M.tab + M.hairline
@@ -429,6 +469,39 @@ function Tabs:SetLabel(index, label)
 	end
 end
 
+-- A tab that is not there yet.
+--
+-- The strip is built once, because a frame cannot be destroyed on this client
+-- and rebuilding one would leak a button every time the strip changed. So a tab
+-- whose contents do not exist is hidden rather than unmade, and Resize skips it
+-- so the tabs after it close the gap. The chat window's people tab is the only
+-- caller: it is not drawn until there is somebody on the list.
+function Tabs:SetShown(index, shown)
+	local button = self.buttons[index]
+	if not button then
+		return false
+	end
+	button.hidden = not shown
+	return true
+end
+
+function Tabs:IsShown(index)
+	local button = self.buttons[index]
+	return button ~= nil and not button.hidden
+end
+
+-- Whether a tab has something on it you have not looked at. Selecting a tab
+-- clears its own mark, because looking at it is what unread means.
+function Tabs:SetUnread(index, unread)
+	local button = self.buttons[index]
+	if not button or (button.unread and true or false) == (unread and true or false) then
+		return false
+	end
+	button.unread = unread and true or false
+	PaintTab(button)
+	return true
+end
+
 function Tabs:Select(index)
 	if not self.buttons[index] then
 		return false
@@ -436,6 +509,9 @@ function Tabs:Select(index)
 	self.selected = index
 	for i = 1, #self.buttons do
 		self.buttons[i].selected = (i == index)
+		if i == index then
+			self.buttons[i].unread = false
+		end
 		PaintTab(self.buttons[i])
 	end
 	if self.onSelect then

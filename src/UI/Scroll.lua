@@ -105,7 +105,18 @@ local function Dress(slider)
 	slider:SetThumbTexture(slider.thumb)
 end
 
-local function Bar(view, parent)
+-- The bar on its own, with nothing to scroll behind it yet.
+--
+-- Public, because the scroll view is not the only thing in the addon that has
+-- more content than room. The chat log is a ScrollingMessageFrame, which counts
+-- in messages rather than in pixels and does its own clipping, so it cannot use
+-- the view above and still wants exactly this bar: same width, same track, same
+-- thumb, one place to change all three.
+--
+-- Nil rather than an error where the client refuses the Slider type, because
+-- the wheel still scrolls without a bar and a window with no bar is a worse
+-- window rather than a broken one.
+function UI.ScrollBar(parent, onValue)
 	local made, slider = pcall(CreateFrame, "Slider", nil, parent)
 	if not made or not slider or type(slider.SetOrientation) ~= "function"
 		or type(slider.SetThumbTexture) ~= "function" then
@@ -115,8 +126,14 @@ local function Bar(view, parent)
 		slider:Hide()
 		return nil
 	end
+	slider:SetScript("OnValueChanged", function(self, value)
+		onValue(self, value)
+	end)
+	return slider
+end
 
-	slider:SetScript("OnValueChanged", function(_, value)
+local function Bar(view, parent)
+	return UI.ScrollBar(parent, function(_, value)
 		-- Refresh writes the value back when the extent changes, and that write
 		-- fires this. Without the latch the write and the handler chase each
 		-- other for one frame every time the content grows.
@@ -125,8 +142,6 @@ local function Bar(view, parent)
 		end
 		view:ScrollTo(value)
 	end)
-
-	return slider
 end
 
 function UI.ScrollView(parent)

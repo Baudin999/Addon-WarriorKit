@@ -8,4 +8,7 @@
 	<Binding name="WARRIORKIT_MARK_MOON" category="WarriorKit">
 		WarriorKit_MarkMoon()
 	</Binding>
+	<Binding name="WARRIORKIT_CHAT" category="WarriorKit">
+		WarriorKit_ChatEnter()
+	</Binding>
 </Bindings>

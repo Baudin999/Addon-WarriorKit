@@ -81,10 +81,17 @@ globals = {
 	"WarriorKit_MarkSkull",
 	"WarriorKit_MarkCross",
 	"WarriorKit_MarkMoon",
+	-- the chat window, and the key that puts the cursor in its line. The frame
+	-- is named for the same reason the meter is: so a window that has wandered
+	-- off the screen can be found from a macro or from scripts/harness.lua
+	-- without Chat/Window.lua handing out a reference to its own tables.
+	"WarriorKitChat",
+	"WarriorKit_ChatEnter",
 	"BINDING_HEADER_WARRIORKIT",
 	"BINDING_NAME_WARRIORKIT_MARK_SKULL",
 	"BINDING_NAME_WARRIORKIT_MARK_CROSS",
 	"BINDING_NAME_WARRIORKIT_MARK_MOON",
+	"BINDING_NAME_WARRIORKIT_CHAT",
 	"SLASH_WARRIORKIT1",
 	"SLASH_WARRIORKIT2",
 	"SlashCmdList",

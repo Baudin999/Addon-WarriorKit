@@ -57,14 +57,11 @@ local WARRIOR = PLAYER_CLASS == "WARRIOR"
 --
 -- The gate is 0.05 rather than 0.00 because a gate of zero is a claim the
 -- measurement can never move, and this one is a sampled figure.
-local LIST_CHURN_KB = 0.05
-
 -- The skin's tick, in KB per fifty ticks across all three unit frames. Same
 -- kind of ratchet. It was 18.75 while the level tag was built and then compared
 -- on every tick, which is a tostring and a concat per frame to say a number
 -- that changes when the unit does, and 0.00 once the tags were interned. Set at
 -- the smallest figure that is not a claim the measurement can never move.
-local SKIN_CHURN_KB = 0.5
 
 -- The meters' tick, in KB per fifty ticks, with a party of three, both panes up
 -- and the clock running. Same kind of ratchet as the two above, measured on a
@@ -84,7 +81,6 @@ local SKIN_CHURN_KB = 0.5
 -- very little, because the numbers move every tick and the string gets built
 -- either way. What they buy is the other case entirely: a meter sitting on
 -- screen between pulls, which is most of a session, costs nothing at all.
-local METER_CHURN_KB = 0.2
 
 -- The cloned action bars' tick, in KB per fifty ticks across every square on
 -- every bar the stub client has on, which is four bars of twelve.
@@ -101,13 +97,42 @@ local METER_CHURN_KB = 0.2
 -- arguments. At forty-eight squares and ten ticks a second that is four hundred
 -- and eighty throwaway tables a second, which is the number this gate exists to
 -- refuse.
-local BARS_CHURN_KB = 0.05
+
+-- All four in one table rather than one local each. They are one concept and
+-- they are all quoted in the same unit, and this file is a single chunk sitting
+-- on Lua 5.1's two hundred local limit, which is a real ceiling rather than a
+-- style preference: the next part that needs a name at this level cannot have
+-- one until something gives one up.
+local CHURN = { list = 0.05, skin = 0.5, meter = 0.2, bars = 0.05 }
 
 --------------------------------------------------------------------------
 -- The stub
 --------------------------------------------------------------------------
 
 local frames, events = {}, {}
+
+-- Everything the chat and voice stubs record, in one table rather than one
+-- local each. Lua 5.1 gives a function two hundred locals and this file is a
+-- single chunk that is nearly at that limit, so a part that needs a dozen
+-- pieces of state has to bring one name with it. What is in here is written by
+-- the stubs further down and read by the chat section at the end.
+--
+--   insertStrict  which spelling of the insert mode this client will take
+--   groupSize     how many the party tokens go up to
+--   filters       event -> the filters FrameXML's list is holding
+--   sent          every SendChatMessage, in order
+--   slash         every line handed to the client's own parser
+--   classByGuid   what GetPlayerInfoByGUID answers
+--   voice         the voice service: its channels, and every call made to it
+local chat = {
+	insertStrict = nil,
+	groupSize = 0,
+	filters = {},
+	sent = {},
+	slash = {},
+	classByGuid = {},
+	voice = { calls = {}, channels = {}, enabled = true, loggedIn = true, active = nil },
+}
 local currentFile = "?"
 
 local Region = {}
@@ -496,6 +521,37 @@ function Region:SetValue(value)
 end
 
 function Region:GetValue() return self.value end
+-- A message frame that keeps its messages.
+--
+-- Real, rather than the metatable's no-op, for the reason the slider above is:
+-- the chat window is a ScrollingMessageFrame per tab and the whole question
+-- asked of it is which tab a line landed on. A stub that swallowed AddMessage
+-- would let a feed that routes every line to one log, or to none, pass every
+-- assertion in this file.
+--
+-- The insert mode is data rather than a no-op for the same reason and one step
+-- further: UI/Log.lua writes it and reads it back, because the two clients
+-- disagree about which spelling of the token they accept, and a stub that
+-- swallowed the write would make that readback untestable. This one accepts
+-- whichever spelling `insertStrict` says, so both paths through it are
+-- reachable.
+function Region:AddMessage(text, r, g, b)
+	self.messages = self.messages or {}
+	self.messages[#self.messages + 1] = { text = text, r = r, g = g, b = b }
+end
+function Region:GetNumMessages() return self.messages and #self.messages or 0 end
+function Region:Clear() self.messages = {} end
+function Region:SetInsertMode(mode)
+	if chat.insertStrict and mode ~= chat.insertStrict then
+		error("this client will not take " .. tostring(mode))
+	end
+	self.insertMode = mode
+end
+function Region:GetInsertMode() return self.insertMode end
+function Region:SetScrollOffset(offset) self.scrollOffset = offset end
+function Region:GetScrollOffset() return self.scrollOffset or 0 end
+function Region:AtBottom() return (self.scrollOffset or 0) <= 0 end
+
 -- Real, rather than the metatable's no-op, because the panel hides every
 -- section but one and a stub that answers shown to all of them would let a
 -- layout that puts seven pages on top of each other pass.
@@ -667,7 +723,11 @@ _G.UnitAura = constant(nil)
 _G.UnitPowerType, _G.UnitPower, _G.UnitPowerMax = constant(1), constant(40), constant(100)
 _G.UnitPlayerOrPetInParty, _G.UnitPlayerOrPetInRaid = constant(false), constant(false)
 _G.UnitIsGroupLeader, _G.UnitIsGroupAssistant = constant(true), constant(false)
-_G.GetNumGroupMembers, _G.IsInRaid = constant(0), constant(false)
+-- How many are in the group. A variable rather than a constant, because
+-- People.AddGroup walks party tokens up to this number and a constant zero
+-- would make that button untestable. Every section that does not set it sees
+-- the nothing it saw before.
+_G.GetNumGroupMembers, _G.IsInRaid = function() return chat.groupSize end, constant(false)
 _G.GetRaidTargetIndex, _G.SetRaidTarget = constant(nil), function() end
 _G.SetRaidTargetIconTexture = function() end
 -- The wall clock, which the tests move rather than wait out. It starts where
@@ -1391,6 +1451,135 @@ _G.CLASS_ICON_TCOORDS = {
 }
 
 --------------------------------------------------------------------------
+-- Chat and voice
+--
+-- Enough of the client's social surface for the chat part to run against.
+--
+-- The filter list is the one thing here that is not a recording stub. It is
+-- FrameXML's own list, and Chat/Feed.lua both adds to it and takes back out of
+-- it, so a stub that only counted calls could not tell a filter that was
+-- removed from one that was added twice. It is modelled as the list it is, and
+-- the chat section reads what is in it.
+--------------------------------------------------------------------------
+
+-- The client's own per type colours. Two entries with numbers that are not the
+-- theme's, so a line that fell back to the theme is visible as a wrong colour
+-- rather than as a coincidence.
+_G.ChatTypeInfo = {
+	SAY = { r = 1, g = 1, b = 1 },
+	PARTY = { r = 0.67, g = 0.67, b = 1 },
+	GUILD = { r = 0.25, g = 1, b = 0.25 },
+	WHISPER = { r = 1, g = 0.5, b = 1 },
+	WHISPER_INFORM = { r = 1, g = 0.5, b = 1 },
+	CHANNEL = { r = 1, g = 0.75, b = 0.75 },
+}
+
+_G.ChatFrame_AddMessageEventFilter = function(event, fn)
+	chat.filters[event] = chat.filters[event] or {}
+	local list = chat.filters[event]
+	list[#list + 1] = fn
+end
+
+_G.ChatFrame_RemoveMessageEventFilter = function(event, fn)
+	local list = chat.filters[event]
+	if not list then
+		return
+	end
+	for index = #list, 1, -1 do
+		if list[index] == fn then
+			table.remove(list, index)
+		end
+	end
+end
+
+-- Class by GUID, for the class colour on a name. The real one answers seven
+-- values and the English token is the second, which is the whole reason this
+-- returns two: a stub that answered one would let the addon read the localised
+-- class and colour every name white on a French client without anything here
+-- noticing.
+_G.GetPlayerInfoByGUID = function(guid)
+	local class = chat.classByGuid[guid]
+	if not class then
+		return nil
+	end
+	return class:sub(1, 1) .. class:sub(2):lower(), class
+end
+
+_G.SendChatMessage = function(text, kind, language, target)
+	chat.sent[#chat.sent + 1] = { text = text, kind = kind, language = language, target = target }
+end
+
+_G.ChatFrame1EditBox = region("frame")
+_G.ChatEdit_SendText = function(box)
+	chat.slash[#chat.slash + 1] = box:GetText()
+end
+
+_G.SetItemRef = function(link) chat.link = link end
+_G.SOUNDKIT = { TELL_MESSAGE = 3081 }
+_G.PlaySound = function(id) chat.sound = id end
+_G.IsInGuild = function() return chat.inGuild == true end
+
+-- The communities, shaped the way the client's own Chat Channels window reads:
+-- a club with more than one stream, and a second club with one. Every one of
+-- those rows carries a voice button in game, which is the whole reason the
+-- picker offers streams that have no voice channel behind them yet.
+_G.C_Club = {
+	GetSubscribedClubs = function()
+		return {
+			{ clubId = 11, name = "C & F" },
+			{ clubId = 22, name = "Three Musketeers" },
+		}
+	end,
+	GetStreams = function(clubId)
+		if clubId == 11 then
+			return { { streamId = 1, name = "General" }, { streamId = 2, name = "Home" } }
+		end
+		return { { streamId = 1, name = "General" } }
+	end,
+}
+
+-- The voice service. Channels are keyed the way the addon asks for them: by
+-- channel type for a party, and by club and stream for a community, which is
+-- the split the addon makes because one of those pairs survives a logout and a
+-- channelID does not.
+_G.C_VoiceChat = {
+	IsEnabled = function() return chat.voice.enabled end,
+	IsLoggedIn = function() return chat.voice.loggedIn end,
+	GetChannelForChannelType = function(channelType)
+		return chat.voice.channels[channelType]
+	end,
+	GetChannelForCommunityStream = function(clubId, streamId)
+		return chat.voice.channels[("club:%s:%s"):format(tostring(clubId), tostring(streamId))]
+	end,
+	GetActiveChannelID = function() return chat.voice.active end,
+	GetChannel = function(channelID)
+		for _, channel in pairs(chat.voice.channels) do
+			if channel.channelID == channelID then
+				return channel
+			end
+		end
+		return nil
+	end,
+	ActivateChannel = function(channelID)
+		chat.voice.calls[#chat.voice.calls + 1] = { what = "activate", channelID = channelID }
+		chat.voice.active = channelID
+		for _, channel in pairs(chat.voice.channels) do
+			if channel.channelID == channelID then
+				channel.isActive = true
+			end
+		end
+	end,
+	RequestJoinChannelByChannelType = function(channelType, autoActivate)
+		chat.voice.calls[#chat.voice.calls + 1] =
+			{ what = "requestType", channelType = channelType, autoActivate = autoActivate }
+	end,
+	RequestJoinAndActivateCommunityStreamChannel = function(clubId, streamId)
+		chat.voice.calls[#chat.voice.calls + 1] =
+			{ what = "requestClub", clubId = clubId, streamId = streamId }
+	end,
+}
+
+--------------------------------------------------------------------------
 -- Load and drive
 --------------------------------------------------------------------------
 
@@ -1410,8 +1599,25 @@ for _, path in ipairs(order) do
 	currentFile = "runtime"
 end
 
+-- Over a copy of the list, not the list.
+--
+-- Several parts unregister ADDON_LOADED from inside their own handler for it,
+-- which is what the client asks you to do and is what Core does first of all.
+-- Removing an entry from the list this is walking shifts every frame after it
+-- down by one, so ipairs skipped whichever frame was next, and the part that
+-- got skipped depended on the order the TOC happened to load them in. The chat
+-- part registered its events in that handler and did not get one, which is a
+-- feature that would have worked in the game and failed here.
 local function fire(event, ...)
-	for _, f in ipairs(events[event] or {}) do
+	local list = events[event]
+	if not list then
+		return
+	end
+	local watching = {}
+	for index = 1, #list do
+		watching[index] = list[index]
+	end
+	for _, f in ipairs(watching) do
 		if f.scripts.OnEvent then
 			f.scripts.OnEvent(f, event, ...)
 		end
@@ -3060,10 +3266,10 @@ do
 
 	print(("bars   %d bars, %d squares of 27 px, %d keys, pages %s, %.2f KB per 50 ticks, gate is %.2f")
 		:format(#bars, Bars.Count(), claimed, Bars.CanPage() and "in combat" or "out of combat only",
-			barsChurn, BARS_CHURN_KB))
-	check(barsChurn <= BARS_CHURN_KB,
+			barsChurn, CHURN.bars))
+	check(barsChurn <= CHURN.bars,
 		("the bars tick allocated %.2f KB per 50 ticks, over the %.2f KB gate")
-			:format(barsChurn, BARS_CHURN_KB))
+			:format(barsChurn, CHURN.bars))
 end
 
 -- A mob and the plate the client puts up for it, carrying a scale of its own
@@ -4025,19 +4231,19 @@ print(("skin   %s; player block %.0f x %.0f px, gauge %.0f and %.0f, hairline %.
 		playerBox.children[1]:GetHeight(), playerBox.children[2]:GetHeight(),
 		playerBox.edges[1].height))
 print(("churn  %.2f KB per 50 plate ticks, %.2f KB per 50 list ticks, two bars, gate is %.2f")
-	:format(plateChurn, listChurn, LIST_CHURN_KB))
+	:format(plateChurn, listChurn, CHURN.list))
 print(("skin   %.2f KB per 50 ticks across three frames, gate is %.2f; %d bar flattens in 50 ticks")
-	:format(blockChurn, SKIN_CHURN_KB, flattenWrites))
+	:format(blockChurn, CHURN.skin, flattenWrites))
 
-check(listChurn <= LIST_CHURN_KB,
+check(listChurn <= CHURN.list,
 	("the list collector allocates %.2f KB per 50 ticks, over the %.2f gate")
-		:format(listChurn, LIST_CHURN_KB))
-check(plateChurn <= LIST_CHURN_KB,
+		:format(listChurn, CHURN.list))
+check(plateChurn <= CHURN.list,
 	("the plate path allocates %.2f KB per 50 ticks, over the %.2f gate")
-		:format(plateChurn, LIST_CHURN_KB))
-check(blockChurn <= SKIN_CHURN_KB,
+		:format(plateChurn, CHURN.list))
+check(blockChurn <= CHURN.skin,
 	("the skin allocates %.2f KB per 50 ticks, over the %.2f gate")
-		:format(blockChurn, SKIN_CHURN_KB))
+		:format(blockChurn, CHURN.skin))
 -- The bars and the portrait are the two things this file re-applies on every
 -- tick because Blizzard's code puts them back. Re-applying is not the same as
 -- writing: nothing has touched either one here, so the readback should hold and
@@ -4457,9 +4663,9 @@ if window then
 			end
 		end
 	end
-	check(sliders == 3,
-		("%d sliders in the panel, expected the UI size, the debuff icon and the"
-			.. " meter bar opacity"):format(sliders))
+	check(sliders == 7,
+		("%d sliders in the panel, expected the UI size, the debuff icon, the meter"
+			.. " bar opacity and the chat window's four"):format(sliders))
 
 	if size then
 		local low, high = size:GetMinMaxValues()
@@ -6475,12 +6681,12 @@ do
 
 	meterChurn(200)
 	local meterKb = meterChurn(200)
-	check(meterKb <= METER_CHURN_KB,
-		("the meters allocate %.2f KB per 50 ticks, the gate is %.2f"):format(meterKb, METER_CHURN_KB))
+	check(meterKb <= CHURN.meter,
+		("the meters allocate %.2f KB per 50 ticks, the gate is %.2f"):format(meterKb, CHURN.meter))
 
 	print(("meters %d rows, %.0f x %.0f px, %d damage and %d threat, %.2f KB per 50 ticks, gate is %.2f")
 		:format(ns.db.meterRows, frame:GetWidth(), frame:GetHeight(),
-			#ns.Meter.Rank("dps"), #ns.MeterThreat.Rank(), meterKb, METER_CHURN_KB))
+			#ns.Meter.Rank("dps"), #ns.MeterThreat.Rank(), meterKb, CHURN.meter))
 
 	----------------------------------------------------------------------
 	-- Put the client back the way the sections after this one expect it.
@@ -6546,6 +6752,367 @@ do
 
 	print(("perf   bars %.3f ms per tick over %d ticks, %.0f KB held, %d gauge%s")
 		:format(average or 0, ticks or 0, held, #order, #order == 1 and "" or "s"))
+end
+
+--------------------------------------------------------------------------
+-- The social part
+--
+-- Four questions no amount of reading Chat/ will answer.
+--
+-- Does a line reach the tabs it belongs on, and only those. The whole feature
+-- is a routing decision made once per message, and the two ways it can be
+-- wrong, everything on one tab and nothing on the people tab, look identical
+-- in the source and identical on a screenshot of an empty window.
+--
+-- Does the claim on Blizzard's frames come back off. It is a filter added to a
+-- FrameXML list, and a filter that is added twice or never removed is a chat
+-- window that goes quiet and stays quiet until a reload.
+--
+-- Does the voice pick ask the service exactly once for a channel that is not
+-- there, and activate rather than ask for one that is. The events that drive it
+-- arrive in bursts, and a join request per event is an addon hammering a
+-- Battle.net service.
+--
+-- And does a client that refuses a ScrollingMessageFrame, or refuses one of the
+-- two spellings of its insert mode, cost the log rather than the window.
+--------------------------------------------------------------------------
+
+do
+	local Feed, People, Window, Voice = ns.ChatFeed, ns.People, ns.ChatWindow, ns.Voice
+
+	check(_G.WarriorKitChat ~= nil, "no chat window was built at login")
+	check(Window.Built(), "the chat window says it was not built")
+	check(_G.WarriorKitChat:GetWidth() == ns.db.chatWidth,
+		("the chat window is %s wide and the setting says %s")
+			:format(tostring(_G.WarriorKitChat:GetWidth()), tostring(ns.db.chatWidth)))
+
+	----------------------------------------------------------------------
+	-- The people list
+	----------------------------------------------------------------------
+
+	check(People.Count() == 0, "the people list did not ship empty")
+	check(Window.Tabs() == 2,
+		("%d tabs with nobody on the list, expected the people tab not to be drawn")
+			:format(Window.Tabs()))
+
+	check(People.Add("Aria") == 1, "the first name did not go on the list")
+	Window.Apply()
+	check(Window.Tabs() == 3,
+		("%d tabs with somebody on the list, expected the people tab to appear")
+			:format(Window.Tabs()))
+	check(People.Match("aria") ~= nil, "a name matched only in the case it was typed")
+	check(People.Match("Aria-Firemaw") ~= nil, "a realm suffix stopped a name matching")
+	check(People.Match("Ariax") == nil, "a name that is not on the list matched anyway")
+	check(People.Add("ARIA-Nethergarde") == nil,
+		"the same person went on the list twice under a different realm")
+
+	-- Everyone with you, in one press. Three party tokens, one of them already
+	-- on the list, because the button has to be pressable twice.
+	chat.groupSize = 3
+	guids.party1, unitName.party1, unitClass.party1 = "P1", "Bram", "WARRIOR"
+	guids.party2, unitName.party2, unitClass.party2 = "P2", "Aria", "PRIEST"
+	realPlayers.party1, realPlayers.party2 = true, true
+	local added, skipped = People.AddGroup()
+	check(added == 1 and skipped == 1,
+		("adding the group added %d and skipped %d, expected one of each")
+			:format(added, skipped))
+	check(People.Count() == 2, ("the list holds %d, expected 2"):format(People.Count()))
+
+	----------------------------------------------------------------------
+	-- Routing
+	--
+	-- Counted off the tabs themselves rather than off a sink installed for the
+	-- test, because what is being asserted is where a line landed and a test
+	-- sink would be asserting that the feed called the test sink.
+	----------------------------------------------------------------------
+
+	local function held()
+		return Window.Count(Feed.CHAT), Window.Count(Feed.WHISPER), Window.Count(Feed.PEOPLE)
+	end
+
+	local chatLines, whisperLines, peopleLines = held()
+	fire("CHAT_MSG_PARTY", "pull it", "Stranger", nil, nil, nil, nil, nil, nil, nil, nil, nil, "GX")
+	local a, b, c = held()
+	check(a == chatLines + 1, "a party line from a stranger did not reach the chat tab")
+	check(b == whisperLines, "a party line reached the whispers tab")
+	check(c == peopleLines, "a party line from a stranger reached the people tab")
+
+	fire("CHAT_MSG_PARTY", "coming", "Bram", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P1")
+	local d, e, f = held()
+	check(d == a + 1, "a party line from somebody on the list missed the chat tab")
+	check(f == c + 1, "a party line from somebody on the list missed the people tab")
+	check(e == b, "a party line reached the whispers tab")
+
+	fire("CHAT_MSG_WHISPER", "where are you", "Aria", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P2")
+	local g, h, i = held()
+	check(g == d + 1 and h == e + 1 and i == f + 1,
+		"a whisper from somebody on the list did not reach all three tabs")
+
+	-- The one you send, which the client reports with the recipient in the
+	-- sender's place. It belongs on the people tab because the conversation is
+	-- with a person on the list, and half a conversation is not one.
+	fire("CHAT_MSG_WHISPER_INFORM", "on my way", "Aria")
+	local j, k, l = held()
+	check(j == g + 1 and k == h + 1 and l == i + 1,
+		"a whisper sent to somebody on the list did not reach all three tabs")
+
+	-- The numbered channels are a setting and it ships off.
+	fire("CHAT_MSG_CHANNEL", "wts", "Spammer", nil, "1. General", nil, nil, 1, "General")
+	local m = held()
+	check(m == j, "a numbered channel was captured with the setting off")
+
+	ns.db.chatChannels = true
+	Feed.Apply()
+	fire("CHAT_MSG_CHANNEL", "wts", "Spammer", nil, "1. General", nil, nil, 1, "General")
+	check(held() == j + 1, "a numbered channel was not captured with the setting on")
+	ns.db.chatChannels = false
+	Feed.Apply()
+
+	----------------------------------------------------------------------
+	-- The claim
+	----------------------------------------------------------------------
+
+	local function claimed(event)
+		return #(chat.filters[event] or {})
+	end
+
+	check(claimed("CHAT_MSG_PARTY") == 1,
+		("%d filters on party chat, expected exactly one"):format(claimed("CHAT_MSG_PARTY")))
+	check(claimed("CHAT_MSG_CHANNEL") == 0,
+		"the numbered channels are filtered out of Blizzard's window while they are not captured")
+	check(chat.filters.CHAT_MSG_PARTY[1]() == true,
+		"the filter let the message through, so both windows would draw it")
+
+	-- Twice on and once off. The filter is looked up by identity when it is
+	-- removed, so a fresh closure per apply would leave every earlier one in
+	-- FrameXML's list forever.
+	Feed.Apply()
+	Feed.Apply()
+	check(claimed("CHAT_MSG_PARTY") == 1,
+		("applying three times left %d filters on party chat"):format(claimed("CHAT_MSG_PARTY")))
+
+	ns.db.chatClaim = false
+	Feed.Apply()
+	check(claimed("CHAT_MSG_PARTY") == 0,
+		"turning the claim off left Blizzard's window still filtered")
+	ns.db.chatClaim = true
+	Feed.Apply()
+	check(claimed("CHAT_MSG_PARTY") == 1, "turning the claim back on did not filter again")
+
+	-- The part off is the part gone: no events, no filters.
+	ns.db.chat = false
+	Feed.Apply()
+	check(claimed("CHAT_MSG_PARTY") == 0, "the part is off and Blizzard's window is still filtered")
+	local quiet = held()
+	fire("CHAT_MSG_PARTY", "anyone there", "Bram", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P1")
+	check(held() == quiet, "a line was captured with the part switched off")
+	ns.db.chat = true
+	Feed.Apply()
+
+	----------------------------------------------------------------------
+	-- What a line looks like
+	----------------------------------------------------------------------
+
+	chat.classByGuid.P1 = "WARRIOR"
+	local before = Window.Count(Feed.CHAT)
+	fire("CHAT_MSG_PARTY", "ready", "Bram", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P1")
+	check(Window.Count(Feed.CHAT) == before + 1, "the line with a GUID on it was dropped")
+
+	----------------------------------------------------------------------
+	-- Typing in it
+	----------------------------------------------------------------------
+
+	local sent = #chat.sent
+	Window.Send("hello")
+	check(#chat.sent == sent + 1, "a plain line was not sent at all")
+	check(chat.sent[#chat.sent].kind == "SAY",
+		("a plain line went to %s, expected SAY"):format(tostring(chat.sent[#chat.sent].kind)))
+
+	-- A slash goes to the client's own parser rather than to a parser written
+	-- here, because the client's is the one that knows every command in the game
+	-- and every other addon's.
+	local ran = #chat.slash
+	Window.Send("/dance")
+	check(#chat.slash == ran + 1 and chat.slash[#chat.slash] == "/dance",
+		"a slash command was not handed to the client's own parser")
+	check(#chat.sent == sent + 1, "a slash command was also sent as a chat message")
+
+	-- Clicking a name answers it, which is a whisper to that name and nothing
+	-- else.
+	Window.Reply("Aria")
+	local kind, target = Window.Channel()
+	check(kind == "WHISPER" and target == "Aria",
+		("answering a name typed into %s at %s"):format(tostring(kind), tostring(target)))
+	Window.Send("on my way")
+	check(chat.sent[#chat.sent].kind == "WHISPER" and chat.sent[#chat.sent].target == "Aria",
+		"the reply did not go to the person whose name was clicked")
+
+	-- Guild is offered while you are in one and skipped while you are not, so
+	-- the cycle cannot land on a channel the server would refuse.
+	chat.inGuild = false
+	for _ = 1, #({ "say", "party", "raid", "guild", "yell", "reply" }) do
+		Window.Cycle(1)
+		check(select(1, Window.Channel()) ~= "GUILD",
+			"the channel cycled onto guild chat with no guild")
+	end
+
+	----------------------------------------------------------------------
+	-- Voice
+	----------------------------------------------------------------------
+
+	check(Voice.Supported(), "the stub voice service was not recognised")
+
+	local calls = #chat.voice.calls
+	Voice.Set(Voice.NONE)
+	check(#chat.voice.calls == calls, "the voice pick asked for a channel with nothing picked")
+
+	-- Nothing to activate, so exactly one request, and no second one until the
+	-- retry window has passed however many events arrive.
+	Voice.Set(Voice.GROUP)
+	check(#chat.voice.calls == calls + 1,
+		("picking the group channel made %d calls, expected one")
+			:format(#chat.voice.calls - calls))
+	check(chat.voice.calls[#chat.voice.calls].what == "requestType",
+		"the group pick did not ask to join by channel type")
+	check(chat.voice.calls[#chat.voice.calls].autoActivate == true,
+		"the join request did not ask for the channel to be activated")
+
+	local asked = #chat.voice.calls
+	fire("GROUP_ROSTER_UPDATE")
+	fire("GROUP_ROSTER_UPDATE")
+	fire("VOICE_CHAT_LOGIN")
+	check(#chat.voice.calls == asked,
+		("three events in a burst made %d more requests"):format(#chat.voice.calls - asked))
+
+	-- The channel turns up. Now there is something to activate, and asking the
+	-- service again would be the wrong call entirely.
+	chat.voice.channels[2] = { channelID = 7, name = "Party", isActive = false }
+	advance(10)
+	fire("VOICE_CHAT_CHANNEL_JOINED")
+	check(chat.voice.calls[#chat.voice.calls].what == "activate",
+		"a channel that exists was requested again instead of activated")
+	check(chat.voice.calls[#chat.voice.calls].channelID == 7,
+		"the wrong channel was activated")
+
+	-- Already in it, so nothing at all.
+	local settled = #chat.voice.calls
+	advance(10)
+	fire("GROUP_ROSTER_UPDATE")
+	check(#chat.voice.calls == settled, "a channel already active was joined again")
+	check(Voice.Describe():find("Party") ~= nil,
+		("voice says %q with the party channel active"):format(Voice.Describe()))
+
+	-- The communities. Every stream is offered, not only the ones that already
+	-- have a voice channel, because a community channel is made when the first
+	-- person joins it and at login nobody has.
+	local options = Voice.Options()
+	local offered = {}
+	for _, row in ipairs(options) do
+		offered[row.value] = row.text
+	end
+	check(offered["club:11:1"] == "C & F: General",
+		("the picker offered %s for the first community stream")
+			:format(tostring(offered["club:11:1"])))
+	check(offered["club:11:2"] ~= nil and offered["club:22:1"] ~= nil,
+		("%d options offered, expected both clubs and all three streams"):format(#options))
+
+	-- Picking one asks for it by club and stream, which are the two numbers that
+	-- survive a logout.
+	advance(10)
+	Voice.Set("club:11:1")
+	local asked_club = chat.voice.calls[#chat.voice.calls]
+	check(asked_club.what == "requestClub" and asked_club.clubId == 11 and asked_club.streamId == 1,
+		"picking a community channel did not ask for it by club and stream")
+
+	-- And the name it was picked under is kept, so a login that has not loaded
+	-- the communities yet still says what you chose rather than the numbers.
+	check(ns.db.voiceLabel == "C & F: General",
+		("the pick was remembered as %q"):format(tostring(ns.db.voiceLabel)))
+	local clubs = _G.C_Club
+	_G.C_Club = nil
+	check(Voice.Label() == "C & F: General",
+		("with the communities not loaded the pick reads as %q"):format(Voice.Label()))
+	_G.C_Club = clubs
+
+	-- The channel turns up once somebody is in it, and then it is activated
+	-- rather than asked for again.
+	chat.voice.channels["club:11:1"] = { channelID = 9, name = "C & F General", isActive = false }
+	advance(10)
+	fire("VOICE_CHAT_CHANNEL_JOINED")
+	check(chat.voice.calls[#chat.voice.calls].what == "activate"
+		and chat.voice.calls[#chat.voice.calls].channelID == 9,
+		"a community channel that exists was asked for again instead of activated")
+	chat.voice.channels["club:11:1"] = nil
+	chat.voice.active = nil
+	Voice.Set(Voice.GROUP)
+
+	-- A service that is there and has not signed in yet is a different answer
+	-- from one that is not there, and only the second is worth telling anyone
+	-- to go and fix.
+	chat.voice.loggedIn = false
+	chat.voice.channels[2] = nil
+	chat.voice.active = nil
+	advance(10)
+	local ok, why = Voice.Apply(true)
+	check(not ok and why:find("signed in") ~= nil,
+		("a voice service that has not signed in answered %q"):format(tostring(why)))
+	chat.voice.loggedIn = true
+
+	-- Asking forever is not an option. Past the attempt cap the requests stop
+	-- until something changes.
+	for _ = 1, 20 do
+		advance(10)
+		Voice.Apply()
+	end
+	local capped = #chat.voice.calls
+	advance(10)
+	Voice.Apply()
+	check(#chat.voice.calls == capped, "the voice pick kept asking past its own cap")
+
+	Voice.Set(Voice.NONE)
+
+	----------------------------------------------------------------------
+	-- The log, on a client that says no
+	----------------------------------------------------------------------
+
+	-- The insert mode, written and read back. This client takes only the lower
+	-- case spelling, which is one of the two the wiki records, and the log has
+	-- to find that out by reading rather than by assuming.
+	chat.insertStrict = "bottom"
+	local fussy = ns.UI.Log(_G.UIParent)
+	check(fussy ~= nil and fussy.bottomInsert,
+		"the log gave up on a client that takes only one spelling of the insert mode")
+	chat.insertStrict = nil
+
+	-- And no message frame at all, which costs the log and says so rather than
+	-- raising inside the window that was being built.
+	local realCreate = _G.CreateFrame
+	_G.CreateFrame = function(kind, ...)
+		if kind == "ScrollingMessageFrame" then
+			error("this client has no ScrollingMessageFrame")
+		end
+		return realCreate(kind, ...)
+	end
+	local refused, reason = ns.UI.Log(_G.UIParent)
+	_G.CreateFrame = realCreate
+	check(refused == nil and type(reason) == "string",
+		"a client with no message frame did not refuse the log cleanly")
+
+	----------------------------------------------------------------------
+
+	-- Put the scene back. Every section after this one walks the frames on the
+	-- grid, and a party left standing here is a party the next test did not ask
+	-- for.
+	chat.groupSize = 0
+	guids.party1, guids.party2 = nil, nil
+	unitName.party1, unitName.party2 = nil, nil
+	unitClass.party1, unitClass.party2 = nil, nil
+	realPlayers.party1, realPlayers.party2 = nil, nil
+
+	print(("chat   %d tabs, %d lines on chat, %d on whispers, %d on people; %d filters held; voice %s")
+		:format(Window.Tabs(),
+			Window.Count(Feed.CHAT), Window.Count(Feed.WHISPER), Window.Count(Feed.PEOPLE),
+			Feed.Claimed(), Voice.Describe()))
 end
 
 --------------------------------------------------------------------------

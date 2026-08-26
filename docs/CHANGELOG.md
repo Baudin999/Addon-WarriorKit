@@ -2,6 +2,156 @@
 
 ## Unreleased
 
+### A chat window, and a tab for the people you play with
+
+The complaint was that the chat interface is fiddly and not worth reading, and
+both halves of that are true for the same reason. Blizzard's window is one
+column carrying two different things: people talking, and the game reporting
+loot, experience, faction, reputation, skill-ups, errors and every addon's
+output. The conversation is a few lines an hour and the reporting is a few lines
+a second, so the half you would answer is the half that scrolls away.
+
+So the addon draws the conversation and leaves the reporting where it is.
+
+`Chat/Window.lua` is three tabs. People is anyone on your list, in any channel,
+plus the whispers you send them. Chat is every person talking. Whispers is
+whispers. That is the whole design, and the people tab is the reason the part
+exists: a wife in party chat and a son whispering from two zones away land in
+the same place, and neither of them goes past behind an argument about loot.
+
+One tab for all of them, not a tab per person. A tab per person is a row of
+stubs you have to read the labels of, and it splits one conversation between
+three people into three windows. The question you actually have is whether
+anybody you care about has said anything, and that is one question with one
+answer. The tab is not drawn at all until there is a name on the list, which is
+what makes it turn up on its own when you add the first one.
+
+A name is what the list holds, matched with the realm suffix off and the case
+flattened, so `Aria`, `aria` and `Aria-Firemaw` are one person. A GUID would be
+exact and there is nothing to type into a settings panel to get one, and it is
+per character, so a son who rerolls would be a stranger again. `/wk people
+group` puts everyone you are grouped with on the list in one press, which is the
+only reason filling it in is bearable: three names typed by hand, spelled right,
+is the chore this addon exists to remove.
+
+**Blizzard's window is not hidden and nothing of it is unregistered.** That is
+the decision with the longest argument behind it. Hiding it and mirroring
+`AddMessage` into a fourth tab is what a chat replacement usually does, and it
+cannot be made correct here: the lines arriving at `AddMessage` include the ones
+Blizzard's own handler just built from the events this addon already drew, and
+there is no supported way to tell those from an addon's `print`. Every way of
+guessing is a heuristic on formatted text. So the conversation is claimed and
+nothing else is touched, Blizzard's window keeps everything this one does not
+draw, and you shrink it into a corner yourself.
+
+The claim is `ChatFrame_AddMessageEventFilter`, which is FrameXML's own
+extension point for exactly this. One tick box puts the conversation back in
+Blizzard's window on the next line, with no reload and no frame handed back,
+which is the same contract the artwork strip and the minimap corral hold.
+
+The capture is a registration of our own rather than a hook on Blizzard's
+frames, and those are two mechanisms doing two jobs rather than one job twice.
+Which messages a Blizzard chat frame receives is a per character setting the
+player owns, so a guild tab switched off in the client's own chat settings is a
+guild message this window would never see if it listened through that frame.
+
+The numbered channels are a setting and it ships off. General and Trade are most
+of the volume in a city and none of the conversation.
+
+### A log widget, and why it is not built out of the stack
+
+`UI/Log.lua` is the new piece of the widget library: a column of lines that
+grows from the bottom, wraps, caps itself at five hundred and scrolls. Each tab
+holds one.
+
+It is not built out of `UI/Stack.lua` and `UI/Scroll.lua`, which is worth
+writing down because everything else in the interface is. The stack asks every
+row how tall it is and lays the column out again from the top, which is right
+for a settings page and wrong here: a line arrives, the whole column reflows,
+and in a raid that is several hundred measured font strings a second. Worse, a
+font string on a hidden frame does not report its wrapped height on this client,
+which is why the panel reflows a section only after showing it, and a chat tab
+you are not looking at is hidden all evening.
+
+So the log is the client's own `ScrollingMessageFrame`, which is a frame type
+rather than a template, probed with `pcall` exactly as `UI/Scroll.lua` probes
+the Slider and the ScrollFrame. What the client contributes is the buffer and
+the wrap. The font is the addon's shared Arial Narrow, the bar beside it is
+`UI.ScrollBar`, lifted out of the scroll view so both draw the same bar, and the
+colours are the theme's.
+
+Two things it does that Blizzard's does not. Nothing fades: a line stays until
+it falls off the end of the buffer, because a window you are meant to read is
+not a river you glance at. And the insert mode is written and read back, because
+the two clients disagree about which spelling of that token they accept and a
+refused write is silent, which would put the newest line at the top and say
+nothing about it.
+
+### A voice channel, joined when you log in
+
+Pick your party or raid channel in `/wk`, or a community's where this client has
+communities, and the addon activates it at login and again the moment the
+channel appears, which for a party channel is when you group up.
+
+The picker offers what the client's own Chat Channels window draws a voice
+button on: your party or raid, and every stream of every community and guild you
+are in. There is nothing else to offer. Blizzard's voice chat is not the one
+from patch 2.2 with channels you could name; since it was rebuilt on the
+Battle.net service it is attached to the groups you are already in, and the
+panel says so rather than leaving you looking for the button that makes one.
+
+The first version of this listed only the community streams the client already
+had a voice channel for, on the argument that a text stream is not a voice
+channel and offering one that is not there would be a lie. That emptied the
+picker at exactly the moment it is used. A community voice channel does not
+exist until somebody joins it, so at login, which is when you are choosing what
+to join, there is nothing to list. It offers every stream now and asks for the
+one you picked, which is what pressing the voice button in the client's own
+window does.
+
+The pick is saved as the club and the stream behind it, and the name it was
+picked under is saved beside them. Communities load a few seconds after you
+enter the world, and without the name the picker and the status line spell your
+voice channel as a pair of numbers until they do.
+
+**It only ever joins.** Nothing in it leaves a channel, mutes anyone, picks a
+device or moves a volume. Those are the client's own settings, somebody pressed
+something to get them where they are, and an addon undoing one while your hands
+are full is not a feature.
+
+A channelID is deliberately not what is saved: it is handed out per session, so
+saving one would mean joining whatever happens to take that number tomorrow.
+
+The request is rate limited and gives up after five tries. Everything that makes
+this look again is an event, and those arrive in bursts: a roster change, a
+channel appearing, the service signing in. A join request per event is an addon
+hammering a Battle.net service, and a channel that never turns up is a channel
+the player has to sort out in the client's own settings rather than one worth
+asking for forever.
+
+### The harness was skipping an event handler
+
+Found while testing the above, and it had been true for every part that ever
+registered `ADDON_LOADED`.
+
+Several parts unregister that event from inside their own handler for it, which
+is what the client asks you to do and what Core does first of all. The stub's
+`fire` walked the list of registered frames with `ipairs` while
+`UnregisterEvent` removed entries from that same list, so every unregister
+shifted the frames after it down by one and the next one in line never got the
+event. Which part got skipped depended on the order the TOC happened to load
+them in.
+
+The chat part is what caught it: it registers its events in that handler,
+therefore registered none of them, and every line fired at it in the test landed
+nowhere. In the game it would have worked, which is the worst shape a harness
+bug can have. `fire` walks a copy now.
+
+The same section is why `scripts/harness.lua` has one table where it had four
+locals. That file is a single chunk sitting on Lua 5.1's two hundred local
+limit, which turns out to be a real ceiling: the four allocation gates are one
+concept and are one table now, and the chat stubs bring one name between them.
+
 ### The addon has a face
 
 `Media/Icon.tga` is the first art the addon ships: the sword emblem, 64 by 64,
