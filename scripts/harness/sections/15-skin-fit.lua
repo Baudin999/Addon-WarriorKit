@@ -50,9 +50,9 @@ for _, block in ipairs(blocks) do
 			:format(key, frame:GetWidth(), frame:GetHeight(), built[1], built[2]))
 end
 
--- And the mouse region with it. A frame handed back its size while still
--- refusing clicks along its bottom edge is a frame the user cannot use and
--- cannot see why.
+-- And the mouse region with it. The fit zeroes the insets so the whole block
+-- takes clicks, and a frame handed back its size while still carrying somebody
+-- else's idea of where its edge is cannot be used and cannot say why.
 local _, _, _, offInset = targetFrame:GetHitRectInsets()
 check((offInset or 0) == 0,
 	("the skin came off and left the target frame refusing clicks %s units above"

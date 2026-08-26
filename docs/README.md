@@ -140,7 +140,10 @@ name of none of them.
                              casting, how long is left of it, and whether the
                              client says you can stop it
     UnitFrames/EnemyBars.lua enemy bars, nameplate replacement and list fallback
+    UnitFrames/Auras.lua     the target's own buff and debuff rows, and hiding
+                             the client's, which cannot be moved
     UnitFrames/Skin.lua      the square skin on player, target and target of target
+    UnitFrames/Panel.lua     the part's page in the options window
     UnitFrames/Feature.lua
 
     Meter/Spec.lua           the icon beside a name: a talent tree where the
@@ -526,6 +529,13 @@ goes through `Feature.lua` or through the shared surface below:
     ns.FrameSkin.Apply()         put the three Blizzard unit frames where
                                  ns.db.skin says they should be
     ns.FrameSkin.Describe()      one line on what the skin did or did not find
+    ns.FrameAuras.Build/Place/Update/Style/Unstyle(entry)
+                                 the target's aura rows, called only by
+                                 UnitFrames/Skin.lua and in that order
+    ns.FrameAuras.Under(entry, frame)
+                                 what now sits between a block and its first
+                                 row, which Perch is the only thing that knows
+    ns.FrameAuras.Describe() / Probe(entry) / SizeRange() / CountCeiling(key)
     ns.FrameSkin.Landed()        Edit Mode dropped a linked frame: read the gap
                                  and the level back off where it came to rest
     ns.FrameSkin.LinkRange()     gap low, gap high, level low, level high, so the
@@ -2353,10 +2363,11 @@ and the class colour on the gauge and on the edge around it. `/wk skin off`
 puts every piece back without a reload. On by default, for the same reason the
 bar art strip is.
 
-Nothing is rebuilt. Building three frames from scratch would mean earning back
-click targeting, the dropdown, target auras and the cast bar, and it would
-fight the Edit Mode layout this addon already carries, so the skin restyles
-Blizzard's frames in place instead.
+Almost nothing is rebuilt. Building three frames from scratch would mean
+earning back click targeting, the dropdown and the cast bar, and it would fight
+the Edit Mode layout this addon already carries, so the skin restyles
+Blizzard's frames in place instead. The target's aura row is the one thing the
+addon does draw itself, and the next section is why it had no choice.
 
 Non-destructive is a mechanism here, not a claim. `Snapshot` reads a region's
 anchors, size, frame level, draw layer, font, justification, texture
@@ -2406,32 +2417,63 @@ now, the one the portrait is on, and `PlayerFrame`, `TargetFrame` and
 `TargetFrameToT` are each resized to the block over them. What Edit Mode drags
 is what is drawn and the hit region is the block.
 
-The target frame is the one exception, and the client's aura row is why. The
-row hangs off the frame's bottom left corner, lifted by the height of the art
-that sits under the bars on a frame 100 units tall, so a frame fitted to the
-block puts the icons inside the gauge. The icons themselves cannot be the
-answer: each one is a child of a secure unit button, an addon may only anchor
-one out of combat, and the client re-anchors the head of each row on every aura
-the target gains or loses, so a row placed here would be back in the gauge one
-refresh into the first pull. What moves instead is the edge the client measures
-from. The target frame is fitted to the block plus that lift, so its bottom
-edge sits one lift below the block and the client's own arithmetic lands the
-row against the block's bottom, in combat as well as out of it, because nothing
-has to be written in combat.
+**The target's aura rows are ours, and the client's is hidden.** This is the
+one place the addon walks away from a Blizzard frame instead of restyling it,
+and the reason is that the row cannot be moved. Every icon in it is a child of a
+secure unit button, so an addon may anchor one out of combat only, and the
+client re-anchors the head of each row on every aura the target gains or loses.
+Anything placed there is back inside the gauge one refresh into the first pull.
 
-The lift is measured, not assumed. Both clients keep it in a local in
-`TargetFrame.lua`, but the anchor the client wrote on the icon carries it as a
-Y offset, so the first target with an aura settles the number and a `UNIT_AURA`
-filtered to the target is what catches that moment. Before that there is no
-tail and the frame is the block exactly, and a client that hangs its row below
-the frame rather than above it measures as no lift and gets no tail either.
-`/wk skin probe` prints the number, or says it has not seen one.
+The skin used to answer that by moving the edge the client measures from. It
+read the lift off an icon the client had already placed, fitted the target frame
+to the block plus that lift, and let the client's own arithmetic drop the icons
+under the block. It worked. It cost a measured number that only settled on the
+first target carrying an aura, a `UNIT_AURA` handler waiting for that moment, a
+frame that was not the same rectangle as the block, and a mouse region inset to
+pull clicks off the strip underneath. All four are gone and all three frames are
+the block exactly.
 
-A strip of frame under the block would take clicks and draw an Edit Mode
-selection around nothing, so `SetHitRectInsets` pulls the mouse region back off
-the tail, the selection is pinned to the block, and target of target parks
-under the block. The insets go back with the frame's size when the skin comes
-off.
+What draws instead is `UnitFrames/Auras.lua`: `C_UnitAuras` with the `UnitAura`
+fallback every other aura reader here uses, our own squares out of `UI/Aura.lua`,
+laid out by `ns.UI.Flow`. Debuffs against the block and buffs under them, both
+wrapping downwards, both mirrored off the corner the block's portrait is on.
+`/wk skin auras off` leaves the target with no row at all, which is the honest
+answer rather than an oversight: the frame is the block, so handing the client's
+row back would hang it in the gauge. Only `/wk skin off` gives it back, because
+that is what gives the frame its size back.
+
+Your own auras go first, and it is the one opinion in the file. The client's
+order is the order the auras landed in, so on anything with a raid on it a row
+capped at twelve loses your Rend behind a screen of other people's bleeds.
+Sorting would allocate on a ticker; two passes over the same list do not, and
+the answer is the same. What you cast is drawn in colour and everything else is
+drained, which is the same three states the enemy bars' debuff row uses, because
+it is the same square: `UI/Aura.lua` is one file and both rows are made of it.
+
+`ns.UI.Flow` never runs on the ticker. Every square is placed once at layout for
+the longest the row is allowed to be, the tick shows a prefix of them and moves
+none, and the only thing that changes is the row's own height, which is what
+tells the row below where to sit. The gap between rows is folded into each row's
+height, so a target with no debuffs puts the buff row against the block rather
+than one gap below where the debuffs would have been.
+
+Hiding the client's row is a sweep rather than a walk. Those buttons are built
+on demand, so it cannot be done once when the skin goes on, and walking all
+forty-eight names every tick to find that out would be silly. They are built in
+order, so the only one that can have appeared since the last look is the one
+after the last one hidden: one global lookup per row per tick once the row has
+settled. `ns.Strip` refuses on a protected region in combat and says so by
+returning false, so a button the client builds mid fight is retried and lands
+the moment combat drops. Whether these buttons are protected at all on this
+backport is in the untested list below.
+
+Target of target is parked on exactly the corner the rows hang from, so `Perch`
+tells them it is there and the first row hangs under it instead of through it.
+That is on the ticker rather than at layout, because the client shows and hides
+that frame with the unit and a target with nothing targeted would otherwise
+leave a hole the size of it. Writing it there is allowed in combat where
+re-anchoring target of target itself is not, for the one reason that matters
+here: that frame is ours.
 
 A resize is not a free change, so three things carry it. The original size is
 recorded before the first fit and `/wk skin off` writes it back, without a
@@ -2665,15 +2707,16 @@ across all three rather than per frame.
 **The block is the frame, so there is nothing left to clamp.** The gauge used
 to be clamped to what was left of the frame's width once the portrait had taken
 its square, and the square to the frame's height, because the space around the
-block was not empty: the target's auras run along the bottom of the target
-frame and target of target sat in the same strip. Both are anchored to the
-frame, the frame is now the block, and both follow it in. The two settings are
-the whole of the size.
+block was not empty: the client's aura row ran along the bottom of the target
+frame and target of target sat in the same strip. The row is hidden and drawn
+here now, and target of target is anchored by this addon, so nothing is left to
+clamp against. The two settings are the whole of the size.
 
 Target of target is still the frame to turn off first. It is a glance rather
 than something you read, it takes a fixed fraction of both settings, and ours
 is opaque where Blizzard's is mostly not. Each of the three frames has its own
-switch under the part's switch, `/wk skin tot off` being the one to reach for.
+switch under the part's switch, `/wk skin tot off` being the one to reach for,
+and turning it off puts the aura rows straight against the block.
 
 **`/wk skin probe` prints what the client answered.** Frame size, whether the
 portrait resolved, its recorded height, the health bar's recorded width, what
@@ -3568,6 +3611,10 @@ nothing ever runs is a branch that is wrong.
     /wk skin gap 120             0 to 400, between the two facing edges
     /wk skin level 0             -100 to 100, the target's drop from the player
     /wk skin heals on|off        the incoming heal slice on the health gauge
+    /wk skin auras on|off        the target's own buff and debuff rows
+    /wk skin aura 20             12 to 32, the size of one aura square
+    /wk skin debuffs 12          0 to 16, how long the debuff row runs
+    /wk skin buffs 8             0 to 32, how long the buff row runs
     /wk skin probe               what this client answered for each frame
     /wk buttons apply            fill the bars with the warrior loadout
     /wk buttons restore          put back exactly what was there before
@@ -3901,6 +3948,23 @@ Aiming at a mob out of combat with no target selected is the whole test.
 ## Untested against the live client
 
 Everything below was written from the API contract and has never executed:
+
+- Whether the client's own target aura buttons are protected on this backport,
+  and therefore whether hiding one is refused in combat. `UnitFrames/Auras.lua`
+  does not assume either way: it calls `ns.Strip`, which asks
+  `IsProtected` and `InCombatLockdown` and returns false rather than raising, and
+  the sweep retries on the next tick. If they are protected, the cost is one
+  Blizzard icon visible under the block for the rest of a fight, and only the
+  first time a target ever carries that many auras in a session, because the
+  client builds those buttons on demand and in order. If they are not, it is
+  hidden within a fifth of a second and nobody sees it. What would prove it: get
+  a target to nine or more debuffs for the first time in a session while in
+  combat, and watch whether one of Blizzard's icons appears below the block.
+- Whether the two aura rows are the right shape at the size the block actually
+  ends up. Everything about the wrap, the mirroring and the row heights is
+  asserted in `harness/sections/14-aura-row.lua` against a 202 pixel block, and
+  the arithmetic is exact, but whether twelve debuffs over two lines under the
+  target block reads well is a thing you look at rather than measure.
 
 - The whole enemy cast row. `UnitCastingInfo` and `UnitChannelInfo` answering
   for a unit that is not you is inferred from Details deleting its own

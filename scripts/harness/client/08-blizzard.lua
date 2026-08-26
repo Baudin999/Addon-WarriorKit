@@ -76,27 +76,20 @@ local totFrame = unitFrame("TargetFrameToT", 120, 50, targetFrame, {})
 -- itself once the target frame is the height of the block instead.
 totFrame:SetPoint("TOPLEFT", targetFrame, "TOPLEFT", -35, -70)
 
--- The head of each of the target's two aura rows, anchored the way the client
--- anchors them: to the frame's bottom left corner, lifted by the height of the
--- art that hangs under the bars on a frame 100 units tall. Everything after
--- the head hangs off the head, so these two are the whole of the row's
--- position, and the lift is the number the skin has to measure and cannot
--- read, because the client keeps it in a local.
+-- The head of each of the target's two aura rows. Nothing else about them is
+-- stood up here, and where they are anchored has stopped mattering: the addon
+-- hides this row and draws its own, so what the harness has to be able to see
+-- is a button under each of those two names that starts out shown.
 --
--- Standing them up unanchored first and anchoring them below, the way the
--- client does: the buttons exist from the moment the frame does and are
--- re-anchored on every aura the target gains or loses.
-local AURA_LIFT = 32
-local auraHeads = {}
+-- This used to carry a lift of 32 and a function that re-anchored both heads,
+-- because the skin measured that number off the anchor and fitted the target
+-- frame to the block plus it. The addon deletes that machinery in the same
+-- change that deletes this. What replaced it is in 14-aura-row.lua, which
+-- builds TargetFrameDebuff2 through 4 partway through its own run, the way the
+-- client builds them: on demand, in order, and only once a target has carried
+-- that many.
 for _, name in ipairs({ "TargetFrameBuff1", "TargetFrameDebuff1" }) do
-	auraHeads[#auraHeads + 1] = child("button", targetFrame, name)
-end
-
-local function anchorAuras()
-	for _, head in ipairs(auraHeads) do
-		head:ClearAllPoints()
-		head:SetPoint("TOPLEFT", targetFrame, "BOTTOMLEFT", 5, AURA_LIFT)
-	end
+	child("button", targetFrame, name)
 end
 
 -- What each unit frame was built as, taken before PLAYER_LOGIN and so before
@@ -197,5 +190,4 @@ do
 end
 
 H.playerFrame, H.targetFrame, H.totFrame = playerFrame, targetFrame, totFrame
-H.AURA_LIFT, H.auraHeads, H.anchorAuras = AURA_LIFT, auraHeads, anchorAuras
 H.BUILT = BUILT

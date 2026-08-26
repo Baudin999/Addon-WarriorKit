@@ -7,10 +7,12 @@ ns.FrameSkin = Skin
 -- bar's look: flat fills, one pixel edges, a square portrait, and the class
 -- colour on the gauge and on the frame around it.
 --
--- Nothing is rebuilt. Blizzard's frames stay where they are and keep their
--- clicks, their dropdown, their auras and their cast bar, because a frame
--- drawn from scratch here would have to earn all of that back and would fight
--- the Edit Mode layout this addon already carries. Every region this file
+-- Almost nothing is rebuilt. Blizzard's frames stay where they are and keep
+-- their clicks, their dropdown and their cast bar, because a frame drawn from
+-- scratch here would have to earn all of that back and would fight the Edit
+-- Mode layout this addon already carries. The target's aura row is the one
+-- exception and UnitFrames/Auras.lua is where it went, along with the reason
+-- it could not stay. Every region this file
 -- moves, resizes, recolours or hides is written down before it is touched and
 -- put back by `/wk skin off`, without a reload.
 --
@@ -37,9 +39,8 @@ ns.FrameSkin = Skin
 --   what you could see sat somewhere inside it, and the empty three quarters
 --   went on eating clicks. So the block is anchored to the frame's own corner
 --   now and the frame is sized to the block. What Edit Mode drags is what is
---   drawn, the hit region is the block, and Blizzard's auras and target of
---   target follow the frame in rather than hanging where a 232 by 100 frame
---   left them. The frame's size is put back by `/wk skin off`, like every
+--   drawn, the hit region is the block, and target of target follows the
+--   frame in rather than hanging where a 232 by 100 frame left it. The frame's size is put back by `/wk skin off`, like every
 --   other change here.
 --
 --   Draw on the grid, measure off it. Everything this file creates goes on
@@ -72,8 +73,9 @@ local PORTRAIT_TRIM = 10 / 64
 local HEALTH_SHARE = 0.70
 
 -- Target of target against the other two. It is a glance, not a frame you
--- read, and Blizzard parks it across the target's aura row, so it is the one
--- that has to stay out of the way.
+-- read, so it is the one that has to stay out of the way. Blizzard parked it
+-- across the target's aura row, which is where this addon's own rows go now,
+-- so Perch tells them to hang under it rather than through it.
 local TOT_SCALE = 0.62
 
 -- The gap between the target block and target of target under it, in pixels.
@@ -215,10 +217,6 @@ local SPECS = {
 		scale = 1, global = "WarriorKitSkinTarget",
 		frames = { "TargetFrame" },
 		art = { "TargetFrameTextureFrame" },
-		-- The first icon of each aura row, which is the only one the client
-		-- anchors to the frame itself. Everything after it hangs off one of
-		-- these two, so these two are where the row's position is measured.
-		auras = { "TargetFrameBuff1", "TargetFrameDebuff1" },
 		names = {
 			portrait = { "TargetFramePortrait" },
 			name = { "TargetName", "TargetFrameTextureFrameName" },
@@ -695,10 +693,10 @@ local function RememberFrame(entry)
 		for index = 1, frame:GetNumPoints() do
 			shot.points[index] = { frame:GetPoint(index) }
 		end
-		-- The mouse region, which the fit pulls back off the strip the aura
-		-- row hangs in. Recorded rather than assumed to be four zeroes: the
-		-- client insets its own unit frames, and handing back zeroes would
-		-- widen the target's hit region past anything it ever had.
+		-- The mouse region, which the fit zeroes so the whole block takes
+		-- clicks. Recorded rather than assumed to be four zeroes: the client
+		-- insets its own unit frames, and handing back zeroes would widen the
+		-- target's hit region past anything it ever had.
 		if frame.GetHitRectInsets then
 			shot.insets = { frame:GetHitRectInsets() }
 		end
@@ -750,7 +748,6 @@ local function RestoreFrame(entry)
 	end)
 	entry.frameShot = nil
 	entry.perched, entry.linked = false, false
-	entry.auraLift = nil
 end
 
 -- Whether the unit frame refuses to be touched right now, which is what a
@@ -761,114 +758,42 @@ local function Blocked(entry)
 	return ns.Blocked(entry.frame)
 end
 
---------------------------------------------------------------------------
--- The aura row
---
--- The client hangs the target's buffs and debuffs off the target frame's
--- bottom left corner and lifts the first icon of each row by the height of
--- the art that used to hang under the bars: a target frame is 100 units tall
--- and the portrait and the two gauges stop about a third of the way up it.
--- Fitting the frame to the block took that third away, so the same lift now
--- puts the row inside the gauge, which is where a screenshot found it.
---
--- The row is not moved, and that is deliberate. Every icon in it is a child
--- of a secure unit button and is protected with it, so an addon may only
--- anchor one out of combat, and the client re-anchors the head of each row on
--- every aura the target gains or loses. A row placed by this file would be
--- back inside the gauge on the first refresh of the first fight and stay
--- there until it ended, which is the half of the day the row matters.
---
--- What moves is the edge they hang from. The frame is fitted to the block
--- plus the lift, so its bottom edge sits exactly one lift below the block and
--- the client's own arithmetic lands the row against the block's bottom. It
--- holds in combat because nothing has to be written in combat: the client
--- does the anchoring it always did, against an edge this file put in the
--- right place while it was allowed to.
---
--- The lift is measured, not assumed. Both clients write it into
--- TargetFrame.lua as a local, so it cannot be read, but where the client put
--- the icon can be: an anchor whose relative frame is the unit frame and whose
--- relative point is a bottom one carries the lift as its Y offset. Until an
--- aura has been seen there is no tail and the frame is the block exactly, and
--- a client that anchors its row below the frame rather than above it measures
--- as no lift and gets no tail either.
---
--- A tail is a strip of frame under the block, and a strip of frame takes
--- clicks and draws an Edit Mode selection. Both are pulled back off it: the
--- hit rect is inset by the tail and the selection is pinned to the block, so
--- what you can click and what you can drag are still the thing you can see.
---------------------------------------------------------------------------
-
--- Past this, in the frame's own units, the number did not come from the layout
--- this file is reading and is not going to be believed.
-local AURA_CEILING = 96
-
--- The first of a region's anchors, or nothing where it has none. Written out
--- rather than called inline so the pcall below takes a function that is
--- already there: a closure per aura per relayout is garbage for nothing, and
--- an icon that has never been anchored answers zero points rather than nil.
-local function AnchorOf(region)
-	if region:GetNumPoints() < 1 then
-		return nil
-	end
-	return region:GetPoint(1)
-end
-
-local function AuraLift(entry)
-	local lift = 0
-	-- Two of the three frames have no aura row of their own, and an empty list
-	-- built to walk zero times is still a table the collector has to see.
-	if not entry.spec.auras then
-		return lift
-	end
-	for _, name in ipairs(entry.spec.auras) do
-		local button = _G[name]
-		if button and button.GetNumPoints and button.GetPoint then
-			local ok, point, relative, relativePoint, _, y = pcall(AnchorOf, button)
-			if ok and relative == entry.frame and y and y > lift
-				and y <= AURA_CEILING and point and relativePoint
-				and point:find("TOP") and relativePoint:find("BOTTOM") then
-				lift = y
-			end
-		end
-	end
-	return lift
-end
-
--- The unit frame, given the block's rectangle in the unit frame's own units
--- and whatever the client hangs under it.
+-- The unit frame, given the block's rectangle in the unit frame's own units.
 --
 -- Read back before it is written for the reason the tick reads a bar back:
 -- this runs on every relayout and a SetSize is a resize of every anchor
--- underneath it, which on a unit frame is the aura row and the cast bar.
-local function Fit(entry, width, height, tail)
+-- underneath it, which on a unit frame is the cast bar.
+--
+-- It used to take a tail as well. The target frame was fitted to the block
+-- plus the height the client lifts its own aura row by, so the client's
+-- arithmetic dropped the icons under the block instead of inside the gauge.
+-- UnitFrames/Auras.lua draws that row now and hides the client's, so all three
+-- frames are the block exactly and there is one answer to where a row goes.
+local function Fit(entry, width, height)
 	local frame, box = entry.frame, entry.box
 	local wide = ns.UI.Convert(width, box, frame)
 	local tall = ns.UI.Convert(height, box, frame)
 	if not wide or not tall or wide <= 0 or tall <= 0 then
 		return
 	end
-	-- The tail is already in the frame's units, because it was read off one of
-	-- the frame's own anchors. It is the one number here that does not cross
-	-- the boundary, so it is added after the conversion and not before it.
-	tall = tall + (tail or 0)
 	if frame:GetWidth() ~= wide or frame:GetHeight() ~= tall then
 		frame:SetSize(wide, tall)
 	end
-	-- The mouse stops at the block. Nothing else this file does needs the
-	-- insets, so they go back to zero on a frame with no tail rather than
-	-- being left wherever the last layout put them.
+	-- The mouse stops at the block, which is now the whole frame. Written
+	-- rather than left alone: the client insets its own unit frames for art
+	-- that is no longer there, and the recorded values go back on at
+	-- Unstyle.
 	if frame.SetHitRectInsets then
-		frame:SetHitRectInsets(0, 0, 0, tail or 0)
+		frame:SetHitRectInsets(0, 0, 0, 0)
 	end
 end
 
 -- Edit Mode draws its selection over the system it is dragging, and on this
 -- client the box it drew was not the one on the screen. Pinned to the block
--- rather than to the frame, because those two are the same rectangle on every
--- frame but the target, where the frame is the block plus the strip of empty
--- the client's aura row hangs in. A selection drawn around that strip is
--- drawn around nothing you can see.
+-- rather than to the frame. Those two are the same rectangle on all three now
+-- that nothing is tailed, and pinning it is still worth doing: the selection is
+-- what Edit Mode draws and it has to be what you can see, whatever a later
+-- change does to the frame.
 --
 -- Every step is probed and nothing here exists on a client without Edit Mode,
 -- where all three functions answer false and the skin is unchanged.
@@ -1034,6 +959,11 @@ local function Build(entry)
 	entry.healthText = ns.UI.Label(entry.top, BIG_MAX, VALUE_TEXT, "RIGHT", ns.UI.FLAT)
 	entry.levelText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "LEFT", ns.UI.FLAT)
 	entry.powerText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "RIGHT", ns.UI.FLAT)
+
+	-- The target's own aura rows, on the frames that have them. They are
+	-- children of the unit frame like the three above, so they hide with it,
+	-- and everything else about them is UnitFrames/Auras.lua's.
+	ns.FrameAuras.Build(entry)
 end
 
 -- Sized off the two settings, placed on the frame's own corner, and the frame
@@ -1082,11 +1012,7 @@ local function Place(entry)
 	entry.box:SetFrameLevel(frame:GetFrameLevel())
 	ns.EdgeSize(entry.box.edges, px)
 
-	-- Measured every time rather than once, because the first target this addon
-	-- sees may carry no aura at all and the number is only readable off an icon
-	-- the client has already placed. It settles on the first target that has one.
-	entry.auraLift = AuraLift(entry)
-	Fit(entry, (side + width) * px, side * px, entry.auraLift)
+	Fit(entry, (side + width) * px, side * px)
 	PinSelection(entry)
 
 	-- The z-order Build's note sets out, rewritten on every relayout.
@@ -1242,6 +1168,10 @@ local function Place(entry)
 			region:SetDrawLayer("OVERLAY")
 		end
 	end
+
+	-- Last, because a row wraps against the block's width and the block has
+	-- only just been given one.
+	ns.FrameAuras.Place(entry, px, (side + width) * px, spec.mirror)
 end
 
 local function EntryFor(key)
@@ -1417,16 +1347,22 @@ local function Perch(entry)
 		local edge = "TOP" .. (host.spec.mirror and "RIGHT" or "LEFT")
 		local corner = "BOTTOM" .. (host.spec.mirror and "RIGHT" or "LEFT")
 		frame:ClearAllPoints()
-		-- Under the target's block, not under the target's frame. On the target
-		-- those two have different bottom edges: the frame carries the strip
-		-- the client's aura row hangs in, and hanging target of target off
-		-- that would leave a gap the size of a row of icons.
+		-- Under the block rather than under the frame. Those two are the same
+		-- bottom edge now that nothing tails the target, and the block is
+		-- still the right thing to name: it is the rectangle this file draws
+		-- and the one every other measurement here is taken in.
 		frame:SetPoint(edge, host.box or host.frame, corner, 0, -TOT_GAP * ns.Pixel(frame))
 		entry.perched = true
 	else
 		Replant(entry)
 		entry.perched = false
 	end
+	-- What the host's aura rows now hang from. This frame is parked on exactly
+	-- the corner they hang off, so without being told, the first row would be
+	-- drawn on top of it. Told rather than worked out over there, because
+	-- whether this frame is under that block is this function's answer and
+	-- nobody else's.
+	ns.FrameAuras.Under(host, entry.perched and frame or nil)
 	return true
 end
 
@@ -1499,6 +1435,12 @@ local function Style(entry)
 	entry.tint, entry.power, entry.levelTag = nil, nil, nil
 	entry.shownPercent, entry.shownPower, entry.shownName = nil, nil, nil
 	entry.styled = true
+	-- After entry.styled, because the rows only draw on a styled frame, and
+	-- not folded into `complete` with an `and`, which would skip the call on a
+	-- strip that combat had already refused.
+	if not ns.FrameAuras.Style(entry) then
+		complete = false
+	end
 	return complete
 end
 
@@ -1527,6 +1469,9 @@ local function Unstyle(entry)
 	end
 
 	local complete = RestoreArt(entry)
+	if not ns.FrameAuras.Unstyle(entry) then
+		complete = false
+	end
 	EachTouched(entry, Revert)
 	RestoreFrame(entry)
 	return complete
@@ -1677,6 +1622,12 @@ local function Refresh(entry)
 				PORTRAIT_TRIM, 1 - PORTRAIT_TRIM)
 		end
 	end
+
+	-- The aura rows, on this ticker rather than on UNIT_AURA, for the reason
+	-- the head of this file gives for reading health here: the event names
+	-- that carry auras have been renamed between these two clients and a
+	-- missed one is a row that lies. Everything it does is guarded in there.
+	ns.FrameAuras.Update(entry)
 end
 
 --------------------------------------------------------------------------
@@ -1687,7 +1638,7 @@ end
 -- to call before the saved variables exist, the same as every other part.
 -- Both halves have to agree: the part is on, and this frame has not been
 -- turned off on its own. Target of target is the one worth turning off by
--- itself, because Blizzard parks it across the target's aura row.
+-- itself, because Blizzard parks it where this addon's own aura rows go.
 function Skin.Wanted(key)
 	return ns.db.skin and ns.db.skinFrames[key] ~= false
 end
@@ -1821,16 +1772,11 @@ local function FitText(entry)
 	local shot = entry.frameShot
 	local was = shot and shot.width and shot.width > 0
 		and ("was %dx%d, "):format(shot.width, shot.height) or ""
-	-- The aura row, which is the one piece of the layout this file places by
-	-- resizing the frame rather than by anchoring anything. A row in the wrong
-	-- place is either a lift that was never measured, which this says, or a
-	-- lift that measured wrong, which this prints the number of.
-	local row = ""
-	if entry.spec.auras then
-		row = entry.auraLift and entry.auraLift > 0
-			and (", aura row lifted %.1f, frame tailed by the same"):format(entry.auraLift)
-			or ", aura row not measured yet, no tail on the frame"
-	end
+	-- The rows this addon draws under the block, where it draws any. What the
+	-- client would have hung there is hidden, and how much of it has been
+	-- caught so far is part of the same line.
+	local row = ns.FrameAuras.Probe(entry)
+	row = row and (", " .. row) or ""
 	return ("%sedit mode selection %s%s%s%s"):format(was,
 		type(entry.frame.Selection) == "table" and "pinned to the block"
 			or "not on this client",
@@ -1930,18 +1876,6 @@ events:RegisterEvent("ADDON_LOADED")
 -- Blizzard_EditMode load already reach Relayout. Which of the three this
 -- client actually fires is in docs/README.md under what has never run.
 pcall(events.RegisterEvent, events, "EDIT_MODE_LAYOUTS_UPDATED")
--- How far above the frame's bottom edge the client starts the target's aura
--- row is a number that can only be read off an icon it has already placed, so
--- the first target carrying an aura is what settles it. Filtered to the target
--- where the client can filter: unfiltered, this is every aura on every unit in
--- range and in a raid that is thousands of calls a fight to answer a question
--- whose answer changes once.
-if type(events.RegisterUnitEvent) == "function" then
-	events:RegisterUnitEvent("UNIT_AURA", "target")
-else
-	events:RegisterEvent("UNIT_AURA")
-end
-
 events:SetScript("OnEvent", function(_, event, arg1)
 	if event == "PLAYER_LOGIN" then
 		for _, spec in ipairs(SPECS) do
@@ -1968,18 +1902,6 @@ events:SetScript("OnEvent", function(_, event, arg1)
 
 	if event == "ADDON_LOADED" then
 		if arg1 == "Blizzard_EditMode" then
-			Skin.Relayout()
-		end
-		return
-	end
-
-	if event == "UNIT_AURA" then
-		-- Guarded on the number and not on the event. This fires on every aura
-		-- the target gains and loses, a relayout is a full pass over three
-		-- frames, and the lift it is watching for changes once and then never
-		-- again. The read is two anchors and no allocation.
-		local target = EntryFor("target")
-		if target and target.styled and target.auraLift ~= AuraLift(target) then
 			Skin.Relayout()
 		end
 		return

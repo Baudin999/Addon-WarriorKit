@@ -2,6 +2,94 @@
 
 ## Unreleased
 
+### The target's aura rows are the addon's now
+
+Blizzard drew the target's buffs and debuffs and the skin worked around where
+they landed. It draws them itself instead, and the machinery that did the
+working around is deleted.
+
+**The row could not be moved, which is why it had to be replaced.** Every icon
+in the client's row is a child of a secure unit button, so an addon may anchor
+one out of combat only, and the client re-anchors the head of each row on every
+aura the target gains or loses. Anything placed there is back inside the gauge
+one refresh into the first pull.
+
+What the skin did instead was move the edge the client measures from. It read
+the lift off an icon the client had already placed, fitted the target frame to
+the block plus that lift, and let the client's own arithmetic drop the icons
+under the block. It worked, and it cost four things: a number that only settled
+on the first target carrying an aura, a `UNIT_AURA` handler waiting for that
+moment, a frame that was not the same rectangle as the block, and a mouse region
+inset to pull clicks off the strip underneath. All four are gone. All three
+frames are the block exactly.
+
+**One square, two rows.** `UI/Aura.lua` is one aura drawn: the cropped icon, a
+hairline round it, the seconds left along the bottom, the stack count in the
+corner, and who cast it said by draining the art rather than by adding a colour.
+It came out of `UnitFrames/EnemyBars.lua` rather than being written beside it,
+so the debuff row on a nameplate and the row under the target block are the same
+code and cannot drift apart. The bars lost 39 lines and draw the same picture,
+with one difference: the stack count is inset by one screen pixel now instead of
+one unit, so at `bars zoom 2` it stops sitting two pixels in while the border
+beside it stays at one.
+
+It is deliberately not `UI/Ability.lua`. That file's whole vocabulary is ten
+reasons a press does or does not land, and it hangs the countdown off
+`status == "cooldown"` because below the global there is nothing to count. An
+aura has no cost, no range and no stance, its timer is the thing you actually
+read, and the six textures a button needs for its pushed, equipped and armed
+states are six per square nobody would ever see.
+
+**Yours go first.** The client's order is the order the auras landed in, so on
+anything with a raid on it your Rend is somewhere behind a screen of other
+people's bleeds and a row capped at twelve loses it. Sorting would allocate on a
+ticker; two passes over the same list do not, and the answer is the same.
+
+**`ns.UI.Flow` never runs on the ticker.** Every square is placed once at layout
+for the longest the row is allowed to be, the tick shows a prefix of them and
+moves none, and the only thing that changes is the row's own height, which is
+what tells the row below where to sit. The gap between rows is folded into each
+row's height, so a target with no debuffs puts the buff row against the block
+rather than one gap below where the debuffs would have been.
+
+**Hiding the client's row is a sweep, not a walk.** Those buttons are built on
+demand, so it cannot be done once when the skin goes on, and walking all
+forty-eight names every tick to find that out would be silly. They are built in
+order, so the only one that can have appeared since the last look is the one
+after the last one hidden: one global lookup per row per tick once the row has
+settled. `ns.Strip` refuses on a protected region in combat and says so, so a
+button the client builds mid fight is retried and lands when combat drops.
+
+**Target of target is parked on exactly the corner the rows hang from.** `Perch`
+tells them it is there and the first row hangs under it rather than through it.
+That happens on the ticker rather than at layout, because the client shows and
+hides that frame with the unit and a target with nothing targeted would
+otherwise leave a hole the size of it. Writing it there is allowed in combat
+where re-anchoring target of target itself is not, for the one reason that
+matters: that frame is ours.
+
+**Your own buffs stay where they are.** Blizzard does not hang them off
+`PlayerFrame` at all. They are `BuffFrame`, a top level Edit Mode system carrying
+thirty-two buffs, sixteen debuffs, three temporary weapon enchants and right
+click to cancel, and none of the payoff above is on that side. What this addon
+has to say about your own buffs is the nag row's, which reads
+`GetWeaponEnchantInfo` as well as your auras and so can see the sharpening stone
+that appears at no aura index.
+
+`/wk skin auras on|off`, `/wk skin aura 20`, `/wk skin debuffs 12`,
+`/wk skin buffs 8`. Turning the rows off leaves the target with no row at all,
+which is the honest answer rather than an oversight: the frame is the block, so
+handing the client's row back would hang it in the gauge. `/wk skin off` gives
+it back, because that is what gives the frame its size back.
+
+**Two gates moved in the same change.** `UnitFrames/Feature.lua` hit the 800
+line limit, and the page came out into `UnitFrames/Panel.lua` rather than a
+fourth entry on the length allow-list; the seam was already there, since nothing
+in the page decides anything and nothing left in `Feature.lua` draws. That also
+paid off the entry item 8 had added at 879, so the allow-list is back to three.
+`UnitFrames/EnemyBars.lua` ratcheted from 2050 to 2011 and `UnitFrames/Skin.lua`
+from 2012 to 1934.
+
 ### A breakdown of what this character actually does
 
 One row per ability, kept between sessions: how much of your damage it is, how

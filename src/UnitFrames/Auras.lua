@@ -73,12 +73,18 @@ local TIMER_CEILING, COUNT_CEILING = 14, 11
 --   head      the client's own button names, which are what gets hidden
 --   ceiling   how many of those the client will ever build
 --   setting   how many of ours to draw
+--   global    what this row is called, for the reason UnitFrames/Skin.lua
+--             names the block: a row that lands in the wrong place can then be
+--             measured from a macro or from the harness without this file
+--             handing out a reference to its own tables
 local ROWS = {
 	target = {
 		{ key = "debuffs", filter = "HARMFUL", head = "TargetFrameDebuff",
-			ceiling = 16, setting = "skinAuraDebuffs" },
+			ceiling = 16, setting = "skinAuraDebuffs",
+			global = "WarriorKitTargetDebuffs" },
 		{ key = "buffs", filter = "HELPFUL", head = "TargetFrameBuff",
-			ceiling = 32, setting = "skinAuraBuffs" },
+			ceiling = 32, setting = "skinAuraBuffs",
+			global = "WarriorKitTargetBuffs" },
 	},
 }
 
@@ -225,6 +231,30 @@ local function Height(row, lines)
 	return row.gap + lines * row.side + (lines - 1) * row.gap
 end
 
+-- What the first row hangs off, which is not always the block.
+--
+-- Target of target is parked on exactly the corner these rows hang from, three
+-- pixels under the block, so while it is there the rows go under it and while
+-- it is not they go against the block. Guarded on the frame itself, so this is
+-- one comparison a tick until that frame is shown or hidden, which happens
+-- when the target picks something up or drops it.
+--
+-- It has to be on the ticker rather than at layout because the client shows
+-- and hides that frame with the unit, and a target with nothing targeted would
+-- otherwise leave a hole the size of it above the debuffs. Writing it here is
+-- allowed in combat where re-anchoring target of target itself is not: this
+-- frame is ours.
+local function Hang(list)
+	local perch = list.perch
+	local head = (perch and perch:IsShown()) and perch or list.box
+	if list.head ~= head then
+		list.head = head
+		local first = list[1].frame
+		first:ClearAllPoints()
+		first:SetPoint(list.edge, head, list.corner, 0, 0)
+	end
+end
+
 local function Fill(row, unit, now)
 	local squares = row.squares
 	local count = Scan(row, unit)
@@ -303,7 +333,7 @@ function Auras.Build(entry)
 	end
 	local list = {}
 	for index, spec in ipairs(plan) do
-		local frame = CreateFrame("Frame", nil, entry.frame)
+		local frame = CreateFrame("Frame", spec.global, entry.frame)
 		frame:EnableMouse(false)
 		ns.UI.Adopt(frame)
 		frame:Hide()
@@ -357,9 +387,15 @@ function Auras.Place(entry, px, width, mirror)
 	local gap = GAP * px
 	local square = side * px
 
-	local above, corner = entry.box, "BOTTOM" .. (mirror and "RIGHT" or "LEFT")
+	local corner = "BOTTOM" .. (mirror and "RIGHT" or "LEFT")
 	local edge = "TOP" .. (mirror and "RIGHT" or "LEFT")
+	-- Where the chain starts, and the two points it is chained by. Kept on the
+	-- list because Hang re-anchors the first row on the ticker and must not
+	-- work either of them out again.
+	list.box, list.edge, list.corner = entry.box, edge, corner
+	list.head = nil
 
+	local above = entry.box
 	for index = 1, #list do
 		local row = list[index]
 		local unit = ns.UI.Unit(row.frame)
@@ -459,6 +495,7 @@ function Auras.Update(entry)
 		return
 	end
 	local unit, now = entry.spec.unit, GetTime()
+	Hang(list)
 	for index = 1, #list do
 		local row = list[index]
 		Sweep(row)
@@ -466,6 +503,18 @@ function Auras.Update(entry)
 			Fill(row, unit, now)
 		end
 	end
+end
+
+-- What sits between the block and the first row, or nothing. Called by
+-- UnitFrames/Skin.lua's Perch, which is the only thing that knows whether
+-- target of target is currently parked on the corner these rows hang from.
+function Auras.Under(entry, frame)
+	local list = entry and entry.auras
+	if not list or list.perch == frame then
+		return
+	end
+	list.perch = frame
+	list.head = nil
 end
 
 -- One line for /wk skin probe, per frame that has rows.

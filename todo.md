@@ -111,47 +111,44 @@ is its own decision, taken after the corridor exists to look at.
 
 ## 9. Our own buff and debuff rows on the skinned frames
 
-Depends on item 8, and on the same boundary.
+Built. Not confirmed in game, and it stays here until it is, the same as item 8.
 
-`Skin.lua` does not place the target's aura row today. It measures the lift
-Blizzard's row hangs by and sizes the target frame to block plus lift so that
-the client's own arithmetic lands the icons under the block. That trick exists
-because the row cannot be touched directly: every icon is a child of a secure
-unit button, an addon may anchor one out of combat only, and the client
-re-anchors the head of the row on every aura the target gains or loses, so
-anything placed here is back inside the gauge one refresh into the first pull.
+`UI/Aura.lua` is one aura square and both rows in the addon are made of it: the
+debuff row on an enemy bar and the two under the target block. That is what
+stops them drifting apart, and it is why `EnemyBars.lua` lost 39 lines rather
+than gaining a twin. `UnitFrames/Auras.lua` is the rows themselves, out of
+`C_UnitAuras` with the `UnitAura` fallback, laid out by `ns.UI.Flow` at layout
+time only. Yours are placed first, because the client's order is the order the
+auras landed in and a capped row otherwise loses your Rend under a raid.
 
-So there is one shape available. Hide the client's row and draw our own, the
-way `UnitFrames/EnemyBars.lua` already does: `C_UnitAuras.GetDebuffDataByIndex`
-with the `UnitAura` fallback at line 630, our own squares with our own border,
-crop and fonts, laid out by `ns.UI.Flow`. That code exists, it is already the
-look these frames wear, and the two rows stop being free to drift apart.
+The lift machinery is deleted, which was most of the point: no measured lift, no
+`UNIT_AURA` handler waiting for the first target with an aura, no frame fitted
+to block plus tail, no hit rect pulled off a strip that no longer exists. All
+three frames are the block exactly. `Skin.lua` went 2012 to 1934 with it.
 
-The lift machinery dies with it, and that is most of the payoff. No measured
-lift, no `UNIT_AURA` handler waiting for the first target with an aura to
-settle the number, no frame fitted to block plus tail, no `SetHitRectInsets`
-pulling the mouse off a tail that no longer exists, and the target frame
-becomes the block exactly like the other two. Deleting it is part of this item,
-not a follow-up: leaving both mechanisms in place means two answers for where a
-row goes.
+The client's row is hidden by a sweep of one global lookup per row per tick,
+because its buttons are built on demand and in order.
 
-The rows are the target's and nothing else's. Your own buffs stay where they
-are, with item 4's nag row, and this is settled rather than open.
+Settings are `/wk skin auras on|off`, `skin aura 12-32`, `skin debuffs 0-16` and
+`skin buffs 0-32`. Off leaves the target with no row at all, because the frame
+is the block and the client's own row would land inside the gauge.
 
-Blizzard does not hang your buffs off `PlayerFrame` to begin with. They are
-`BuffFrame`, a top level Edit Mode system of its own carrying 32 buffs, 16
-debuffs, three temporary weapon enchants and right click to cancel, and this
-addon has never referenced it. Taking it would be rebuilding a system rather
-than hiding a row, and none of this item's payoff sits on that side: every line
-of the lift machinery that dies here is target side.
+The open question at the foot of this item is answered and the reasoning is in
+`750cabe`: your own buffs stay with item 4's nag row. Blizzard does not hang
+them off `PlayerFrame`, they are `BuffFrame`, and a temporary weapon enchant
+appears at no aura index at all. The rows are built so that one entry in
+`Auras.lua`'s own table adds the player later if that ever changes.
 
-It would also cost the temporary enchant display, which is the part no aura
-scan can replace. `Buffs/Upkeep.lua:17` writes it down already: a weapon's
-temporary enchant is not a buff on you, it appears at no index, and
-`GetWeaponEnchantInfo` is the only thing in the API that reports it.
+Two things to look at in game rather than measure. Whether the client's aura
+buttons are protected on this backport, which decides whether one built mid
+fight can be hidden before combat drops. And whether twelve debuffs over two
+lines under the target block reads well at all. Both are in the README's
+untested list with what would settle them.
 
-The row is built so that a spec key is all it takes to add the player later,
-which is the cheap half of leaving the question open without paying for it.
+Target of target is the third. The rows hang under it because it is parked on
+the corner they hang from, so if it moves into the corridor the way item 8's
+test suggests it should, the rows come straight back up against the block on
+their own and nothing here has to change.
 
 ## 10. The Slam mark, still unconfirmed in game
 

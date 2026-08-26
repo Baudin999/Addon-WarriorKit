@@ -26,6 +26,11 @@ globals = {
 	-- scripts/harness.lua without Minimap/Corral.lua handing out a reference to
 	-- its own tables.
 	"WarriorKitCorral",
+	-- The target's two aura rows, named for the reason the three blocks in
+	-- UnitFrames/Skin.lua are: a row that lands in the wrong place has to be
+	-- measurable from a macro and from the harness without Auras.lua handing
+	-- out a reference to its own tables.
+	"WarriorKitTargetDebuffs", "WarriorKitTargetBuffs",
 	"WarriorKitChargeButton",
 	"WarriorKitSwitchButton",
 	-- one per loadout, each a secure button carrying that loadout's macro. All
