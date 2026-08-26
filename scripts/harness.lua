@@ -960,7 +960,61 @@ _G.CursorHasItem = constant(false)
 _G.GetInventorySlotInfo = function(name)
 	return 16, "Interface\\PaperDoll\\UI-PaperDoll-Slot-" .. tostring(name)
 end
-_G.HasAction, _G.GetActionInfo, _G.GetBonusBarOffset = constant(false), constant(nil), constant(0)
+_G.GetActionInfo, _G.GetBonusBarOffset = constant(nil), constant(0)
+
+-- One action slot, modelled rather than stubbed flat.
+--
+-- Buttons/Slot.lua walks a ladder over five of these calls and the whole value
+-- of the ladder is its order, so every rung has to be reachable from a test.
+-- A stub that answered "usable, in range, no cooldown" to everything would
+-- leave four of the six statuses unreachable and the ordering untested, which
+-- is the only part of that file that can be wrong.
+--
+-- Absent from the table means an empty slot, which is what the client says for
+-- every slot on a fresh character and is why HasAction used to be constant
+-- false here.
+local slots = {}
+_G.WarriorKitSlots = slots
+
+_G.HasAction = function(slot) return slots[slot] ~= nil end
+_G.GetActionTexture = function(slot)
+	local held = slots[slot]
+	return held and held.texture or nil
+end
+-- start, duration, enabled, in the order the loose global answers them.
+_G.GetActionCooldown = function(slot)
+	local held = slots[slot]
+	if not held or not held.duration then
+		return 0, 0, 1
+	end
+	return held.start or 0, held.duration, 1
+end
+-- usable, and whether the block is the power bar rather than anything else,
+-- which is the pair Slot.State splits "cost" from "stance" on.
+_G.IsUsableAction = function(slot)
+	local held = slots[slot]
+	if not held then
+		return false, false
+	end
+	if held.usable == nil then
+		return true, false
+	end
+	return held.usable, held.noPower or false
+end
+-- 1, 0 or nil, the same three IsSpellInRange answers. nil is the interesting
+-- one: it is what a client that never answers gives back, and what an honest
+-- client gives back when the action has no range at all.
+_G.IsActionInRange = function(slot)
+	local held = slots[slot]
+	if not held then
+		return nil
+	end
+	return held.range
+end
+_G.GetActionCount = function(slot)
+	local held = slots[slot]
+	return held and held.count or 0
+end
 _G.GetMacroIndexByName, _G.GetMacroInfo = constant(0), constant(nil)
 _G.GetNumMacros = function() return 0, 0 end
 _G.RegisterStateDriver = function() end
@@ -1573,6 +1627,242 @@ do
 
 	print(("gauge  flat fill, spent part at a fifth on %.1f alpha, layered under the"
 		.. " fill, %.2f KB per 200 paints"):format(TRACK_ALPHA, churned))
+end
+
+--------------------------------------------------------------------------
+-- The ability square
+--
+-- UI/Ability.lua and the two sources that feed it, Charge/Charge.lua for the
+-- three charge abilities and Buttons/Slot.lua for an action slot.
+--
+-- Four things are checked and none of them is visible in a screenshot.
+--
+-- A look is a reference. Every ticker that draws a square guards its writes by
+-- comparing the look it is about to draw against the one it drew last, and for
+-- a table that comparison is identity. A palette that built its answers would
+-- look right and would repaint every square five times a second forever, which
+-- is the exact defect UI/Gauge.lua's section above tests the unit palette for.
+--
+-- Every status has a look. The vocabulary is a table in one file and the two
+-- sources return strings; nothing but a test connects the two, and a source
+-- that invented a ninth status would draw it as "no" and nobody would know.
+--
+-- The ladder's order. Slot.State's whole design is which of two true things it
+-- says first, so every rung is driven and the ones that shadow each other are
+-- driven together.
+--
+-- And that a redraw of an unchanged square writes nothing at all.
+--------------------------------------------------------------------------
+
+do
+	local Ability = ns.UI.Ability
+	local Slot = ns.Slot
+
+	-- Every status the vocabulary names has a look in both shipped palettes,
+	-- and the same status hands back the same table every time.
+	local missing, unstable, named = 0, 0, 0
+	for status in pairs(Ability.STATUS) do
+		named = named + 1
+		for _, palette in ipairs({ Ability.SHOUT, Ability.QUIET }) do
+			local look = Ability.Look(palette, status)
+			if type(look) ~= "table" or type(look.color) ~= "table" or not look.alpha then
+				missing = missing + 1
+			elseif look ~= Ability.Look(palette, status) then
+				unstable = unstable + 1
+			end
+		end
+	end
+	check(missing == 0, ("%d statuses have no look"):format(missing))
+	check(unstable == 0, ("%d looks are rebuilt per call, so no guard can hold"):format(unstable))
+
+	-- The two palettes are different tables all the way down, so editing one
+	-- cannot move the other. They ship with two of the five outcomes sharing a
+	-- colour by value and that is a choice; sharing one by reference would be
+	-- an accident waiting to be found in six months.
+	local shared = 0
+	for _, outcome in ipairs({ "go", "swap", "range", "cost", "no" }) do
+		if Ability.SHOUT[outcome] == Ability.QUIET[outcome]
+			or Ability.SHOUT[outcome].color == Ability.QUIET[outcome].color then
+			shared = shared + 1
+		end
+	end
+	check(shared == 0, ("%d looks are shared between the two palettes by reference"):format(shared))
+
+	-- Ready is the loud one on the HUD and the quiet one on a bar. That is the
+	-- whole reason there are two palettes rather than one, so it is asserted
+	-- rather than left as a comment.
+	check(Ability.SHOUT.go.alpha == 1 and Ability.QUIET.go.alpha == 1,
+		"a ready square is drawn at full alpha in both palettes")
+	check(Ability.SHOUT.no.grey and Ability.QUIET.no.grey,
+		"a square that does nothing is desaturated in both palettes")
+	check(Ability.SHOUT.range.color ~= Ability.SHOUT.no.color,
+		"out of range is its own colour and not the grey everything else falls to")
+
+	--------------------------------------------------------------------------
+	-- The slot ladder
+	--------------------------------------------------------------------------
+
+	local slots = _G.WarriorKitSlots
+	local SLOT = 1
+
+	local function put(fields)
+		slots[SLOT] = fields
+	end
+
+	check(Slot.CanRead(), "this stub client cannot read an action slot: " .. Slot.Describe())
+
+	slots[SLOT] = nil
+	check(Slot.State(SLOT) == "empty", "a slot with nothing in it is not empty")
+
+	put({})
+	check(Slot.State(SLOT) == "unknown", "a slot the client has no art for is not unknown")
+
+	-- Every rung below has art, so "unknown" is behind it and each answer is
+	-- the rung being tested rather than the one above it.
+	local ART = "Interface\\Icons\\Ability_Warrior_Charge"
+
+	put({ texture = ART })
+	check(Slot.State(SLOT) == "ready", "a slot with nothing wrong with it is not ready")
+	check(Slot.Texture(SLOT) == ART, "the slot's art is not read back")
+
+	-- The global is not a cooldown. A bar that drew a swipe for it would
+	-- strobe on every press, which is the reason the floor is there.
+	put({ texture = ART, start = wall, duration = 1.5 })
+	check(Slot.State(SLOT) == "ready", "the global cooldown is being drawn as a cooldown")
+	put({ texture = ART, start = wall, duration = 1.6 })
+	local status, start, duration = Slot.State(SLOT)
+	check(status == "cooldown", "a real cooldown is not reported as one")
+	check(start == wall and duration == 1.6, "the cooldown's own numbers are not passed through")
+
+	-- Cost and stance are the same "not usable" from the client and the second
+	-- return is the only thing that tells them apart. Both are driven, because
+	-- collapsing them is the mistake this split exists to prevent.
+	put({ texture = ART, usable = false, noPower = true })
+	check(Slot.State(SLOT) == "cost", "no rage is not reported as cost")
+	put({ texture = ART, usable = false, noPower = false })
+	check(Slot.State(SLOT) == "stance", "the wrong stance is not reported as stance")
+
+	-- Cooldown outranks both, because a spell you cannot afford and which is
+	-- also on cooldown is one to wait for rather than one to build rage for.
+	put({ texture = ART, start = wall, duration = 6, usable = false, noPower = true })
+	check(Slot.State(SLOT) == "cooldown", "cost is being reported ahead of cooldown")
+
+	--------------------------------------------------------------------------
+	-- Range, and the client that never answers
+	--------------------------------------------------------------------------
+
+	-- With nothing targeted the question is not asked at all. Without that
+	-- guard every button answers nil on every tick you stand around untargeted,
+	-- and the fortieth nil prints a warning about a client fault that is not
+	-- one. Twenty-four buttons reach forty in under a second.
+	guids.target = nil
+	put({ texture = ART, range = 0 })
+	check(Slot.State(SLOT) == "ready",
+		"a slot is out of range with nothing targeted, which is not a distance")
+
+	guids.target = "Creature-0-0-0-0-1234-00000099"
+	check(Slot.State(SLOT) == "range", "an out of range target is not reported as range")
+
+	put({ texture = ART, range = 1 })
+	check(Slot.State(SLOT) == "ready", "an in range target is not reported as ready")
+
+	-- nil is not out of range. Both calls answer it for honest reasons: the
+	-- action has no range, the unit cannot take it, the client has not decided.
+	put({ texture = ART, range = nil })
+	check(Slot.State(SLOT) == "ready", "an unanswered range check is blocking the square")
+
+	--------------------------------------------------------------------------
+	-- What a redraw costs
+	--------------------------------------------------------------------------
+
+	-- Count the writes rather than trust the guards. Each of these shadows the
+	-- method on one region of one widget, so the metatable's own is untouched
+	-- and every other square in the addon still draws normally.
+	local writes = 0
+	local function countWrites(host, method)
+		host[method] = function() writes = writes + 1 end
+	end
+
+	local w = Ability.New(_G.UIParent, nil, nil, Ability.QUIET)
+	Ability.Size(w, 27)
+	countWrites(w.icon, "SetTexture")
+	countWrites(w.icon, "SetDesaturated")
+	countWrites(w, "SetAlpha")
+	countWrites(w.cooldown, "SetCooldown")
+	countWrites(w.timer, "SetText")
+	countWrites(w.count, "SetText")
+	for index = 1, 4 do
+		countWrites(w.edges[index], "SetColorTexture")
+	end
+
+	Ability.Draw(w, ART, "ready")
+	local first = writes
+	check(first > 0, "the first draw of a square wrote nothing")
+
+	writes = 0
+	for _ = 1, 50 do
+		Ability.Draw(w, ART, "ready")
+	end
+	check(writes == 0,
+		("redrawing an unchanged square 50 times wrote %d times"):format(writes))
+
+	-- A status change writes, and writes once rather than once per tick.
+	writes = 0
+	for _ = 1, 50 do
+		Ability.Draw(w, ART, "range")
+	end
+	check(writes > 0 and writes <= 6,
+		("one status change over 50 ticks wrote %d times"):format(writes))
+
+	-- The fade is the caller's half of alpha and moves without the status
+	-- moving, which is what the charge icon's "ready" mode does.
+	writes = 0
+	w.fade = 0
+	Ability.Draw(w, ART, "range")
+	check(writes == 1, ("a fade change wrote %d times, expected the one alpha"):format(writes))
+	w.fade = 1
+	Ability.Draw(w, ART, "range")
+
+	-- A running cooldown writes the timer, and only when the number it would
+	-- show has moved. Above ten seconds that is whole seconds, so at a tenth of
+	-- a second between ticks nine ticks in ten write nothing.
+	--
+	-- The first draw of the cooldown is taken outside the count, because it
+	-- carries the status change into it and would measure the look's six
+	-- writes rather than the timer's. What is measured is the steady state,
+	-- which is the one that runs for the length of a fight.
+	local base = wall
+	Ability.Draw(w, ART, "cooldown", base, 30)
+
+	writes = 0
+	for _ = 1, 50 do
+		advance(0.1)
+		Ability.Draw(w, ART, "cooldown", base, 30)
+	end
+	-- Five seconds pass, so five whole-second boundaries are crossed and the
+	-- string is built five times instead of fifty.
+	check(writes <= 6,
+		("a cooldown above ten seconds wrote the timer %d times in 50 ticks"):format(writes))
+
+	-- And that none of it allocates. This is the figure that goes wrong from a
+	-- one line change and is invisible everywhere else.
+	collectgarbage()
+	collectgarbage("stop")
+	local before = collectgarbage("count")
+	for _ = 1, 50 do
+		Ability.Draw(w, ART, "ready")
+	end
+	local churned = collectgarbage("count") - before
+	collectgarbage("restart")
+	collectgarbage("restart")
+	check(churned < 0.05,
+		("redrawing an unchanged square 50 times allocated %.2f KB"):format(churned))
+
+	slots[SLOT] = nil
+	guids.target = nil
+
+	print(("ability %d statuses over 2 palettes, the ladder walked to every rung,"
+		.. " 0 writes on 50 unchanged redraws, %.2f KB"):format(named, churned))
 end
 
 -- A mob and the plate the client puts up for it, carrying a scale of its own

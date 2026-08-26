@@ -31,34 +31,29 @@ Charge.ABILITIES = {
 	},
 }
 
--- Three looks, not eight. The question the icon answers is "would a press put
--- Charge on that mob", and there are only three honest answers to it, so a
--- colour per status was eight shades saying one of three things. Private,
--- because Charge.Look is the only way in.
-local LOOKS = {
-	go = { 0.16, 0.80, 0.32 },   -- the ability lands on that unit right now
-	swap = { 0.96, 0.62, 0.16 }, -- the press spends itself on the stance swap
-	no = { 0.38, 0.38, 0.43 },   -- nothing lands: cooldown, out of range, no unit
-}
-
--- Which of the three a status means. Everything absent from here is "no",
--- which is the grey one, and grey is deliberately where out of range and
--- cooldown both land: the reason differs, the answer does not.
-local OUTCOME = {
-	ready = "go",
-	stance = "swap",
-}
+-- The palette both charge displays draw in. One icon on the HUD and one in the
+-- world, each on its own with nothing beside it to compare against, so ready is
+-- worth a colour here in a way it is not on a bar of twenty-four squares.
+--
+-- The looks themselves are UI/Ability.lua's now. This file used to hold three
+-- of them privately and map every status onto one of the three, and the loss
+-- in moving them out is real and is worth naming: out of range and out of rage
+-- used to be the same grey as a cooldown, on the argument that the reason
+-- differs and the answer does not. That argument was right for a display that
+-- only ever answered "would a press put Charge on that mob". It was wrong
+-- about the one question you ask the icon while you are running at something,
+-- which is whether to keep running. Range is its own colour now.
+local PALETTE = ns.UI.Ability.SHOUT
 
 -- The one look every display reads, so the HUD icon and the world icon cannot
--- disagree about what green means. Returns the border colour, whether the art
--- is greyed out, and the alpha to draw at.
+-- disagree about what green means. Returns the whole look table rather than
+-- its three fields, because both callers guard on it and one identity
+-- comparison is what three used to be.
 function Charge.Look(status)
-	local outcome = OUTCOME[status] or "no"
-	return LOOKS[outcome], outcome == "no", outcome == "go" and 1 or 0.6
+	return ns.UI.Ability.Look(PALETTE, status)
 end
 
 local names, textures = {}, {}
-local rangeAnswered, rangeSilent = false, 0
 
 -- Bumped whenever the name caches below are dropped, which is the only thing
 -- that can change the text of the generated macro without the unit changing.
@@ -331,22 +326,14 @@ function Charge.State(key, unit)
 	end
 	local usable, noPower = ns.SpellUsable(name)
 	if not usable then
-		return noPower and "rage" or "stance"
+		return noPower and "cost" or "stance"
 	end
 
-	local range = ns.SpellInRange(name, unit)
-	if range == nil then
-		-- Only a definite 0 blocks. A client that never answers should not pin
-		-- every target at out-of-range, but it should say so once.
-		rangeSilent = rangeSilent + 1
-		if not rangeAnswered and rangeSilent == 40 then
-			ns.Print("this client is not answering range checks, so out-of-range targets cannot be dimmed.")
-		end
-	else
-		rangeAnswered = true
-		if range == 0 then
-			return "range"
-		end
+	-- ns.OutOfRange owns what a nil answer means and says so once a session.
+	-- Buttons/Slot.lua asks the identical question of an action slot, and two
+	-- copies of the counter would be two thresholds and the sentence twice.
+	if ns.OutOfRange(ns.SpellInRange(name, unit)) then
+		return "range"
 	end
 
 	return "ready"

@@ -124,12 +124,18 @@ done
 # on it. A reason is required, because an exemption without one is the same
 # invisible debt as a warning.
 HOT="
+Core/Core.lua:ns.OutOfRange
+UI/Ability.lua:Ability.Look
+UI/Ability.lua:Ability.Draw
+UI/Ability.lua:Quantum
+Buttons/Slot.lua:Slot.State
+Buttons/Slot.lua:Slot.Texture
+Buttons/Slot.lua:Slot.Count
 Charge/Charge.lua:Charge.Pick
 Charge/Charge.lua:Charge.State
 Charge/Charge.lua:Charge.PlateFor
 Charge/Icon.lua:ChargeIcon.SyncMacro
 Charge/Icon.lua:ChargeIcon.Update
-Charge/Icon.lua:Fade
 Charge/Marker.lua:AttachTo
 Charge/Marker.lua:ChargeMarker.Update
 UI/Gauge.lua:Gauge.Flatten

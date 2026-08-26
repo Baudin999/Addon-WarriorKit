@@ -78,7 +78,12 @@ read_globals = {
 	"ClearCursor", "GetCursorInfo", "GetActionInfo",
 	"CreateMacro", "DeleteMacro", "EditMacro", "GetMacroInfo",
 	"GetMacroIndexByName", "GetNumMacros", "GetBonusBarOffset",
-	"HasAction",
+	-- what one action slot is doing, read by Buttons/Slot.lua on the bar's
+	-- ticker. Probed by name in Slot.CanRead for the same reason the writers
+	-- above are: nothing installed here proves any of them is on 2.5.6, and a
+	-- bar that raises once per button per tick is worse than a grey bar.
+	"HasAction", "GetActionTexture", "GetActionCooldown", "GetActionCount",
+	"IsUsableAction", "IsActionInRange",
 	-- the spellbook, read by Buttons/Ranks.lua to find the best rank you know
 	"GetNumSpellTabs", "GetSpellTabInfo",
 	"GetSpellBookItemInfo", "GetSpellBookItemName",

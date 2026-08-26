@@ -17,11 +17,9 @@ ChargeIcon.BUTTON_NAME = BUTTON_NAME
 local FALLBACK_TEXTURE = "Interface\\Icons\\Ability_Warrior_Charge"
 local UPDATE_INTERVAL = 0.1
 
-local frame, handle, icon, border, cooldown, timerText, binder
-local shownStart, shownDuration = 0, 0
-local lastMacro, securePending, shownAbility
+local frame, handle, binder
+local lastMacro, securePending
 local lastUnit, lastWeapon, lastEpoch
-local shownColor, shownGrey, shownAlpha
 
 --------------------------------------------------------------------------
 -- The macro the button runs
@@ -120,30 +118,16 @@ end
 --------------------------------------------------------------------------
 
 local function Build()
-	frame = CreateFrame("Button", BUTTON_NAME, UIParent, "SecureActionButtonTemplate")
+	-- The square itself is UI/Ability.lua's now: the backing, the cropped icon,
+	-- the cooldown swipe with the client's numbers off, the timer, and the four
+	-- edge textures that carry the status colour. What is left in this file is
+	-- what makes it a charge button rather than a square, which is the macro,
+	-- the key and the drag handle.
+	frame = ns.UI.Ability.New(UIParent, BUTTON_NAME, "SecureActionButtonTemplate",
+		ns.UI.Ability.SHOUT)
 	frame:SetMovable(true)
 	frame:SetClampedToScreen(true)
 	frame:RegisterForClicks("AnyDown")
-
-	border = frame:CreateTexture(nil, "BACKGROUND")
-	border:SetAllPoints()
-	border:SetColorTexture(0, 0, 0, 1)
-
-	icon = frame:CreateTexture(nil, "ARTWORK")
-	icon:SetPoint("TOPLEFT", 2, -2)
-	icon:SetPoint("BOTTOMRIGHT", -2, 2)
-	icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-
-	cooldown = CreateFrame("Cooldown", "WarriorKitChargeCooldown", frame, "CooldownFrameTemplate")
-	cooldown:SetAllPoints(icon)
-	if cooldown.SetHideCountdownNumbers then
-		cooldown:SetHideCountdownNumbers(true) -- the addon draws its own timer
-	end
-
-	local fontPath = GameFontNormal:GetFont()
-	timerText = frame:CreateFontString(nil, "OVERLAY")
-	timerText:SetPoint("CENTER")
-	timerText:SetFont(fontPath, 18, "OUTLINE")
 
 	-- The drag handle, which is a plain frame laid over the button and shown
 	-- only while the frames are unlocked.
@@ -334,10 +318,14 @@ function ChargeIcon.ApplyLayout()
 		return
 	end
 	local db = ns.db
-	frame:SetSize(db.size, db.size)
+	-- The size is in this frame's own units and not in design pixels: the
+	-- charge button rides UIParent's scale rather than the addon's grid, which
+	-- is the state UI/Pixel.lua calls the honest degradation. Ability.Size
+	-- takes it as given and only the hairline round the art is asked for in
+	-- real pixels.
+	ns.UI.Ability.Size(frame, db.size)
 	frame:ClearAllPoints()
 	frame:SetPoint(db.point[1], UIParent, db.point[3], db.point[4], db.point[5])
-	timerText:SetFont((GameFontNormal:GetFont()), math.max(10, db.size * 0.4), "OUTLINE")
 end
 
 function ChargeIcon.ApplyLock()
@@ -346,27 +334,28 @@ function ChargeIcon.ApplyLock()
 	return applied
 end
 
--- Every path through Update sets an alpha, ten times a second, and the value
--- is the same one on nearly all of them. SetAlpha on an unchanged value still
--- dirties the frame, so the comparison is worth the four lines.
-local function Fade(value)
-	if value ~= shownAlpha then
-		shownAlpha = value
-		frame:SetAlpha(value)
-	end
-end
-
 function ChargeIcon.Update()
 	if not frame then
 		return
 	end
 	local db = ns.db
+	local Ability = ns.UI.Ability
 
 	-- Unlocked means you are placing it, so it stays visible whatever the
-	-- spell is doing.
+	-- spell is doing. Written as a fade rather than as an alpha, because the
+	-- look the status carries is the other half of the same number and
+	-- Ability.Draw multiplies the two. Two writers on one SetAlpha is what
+	-- this file used to be, and the second one won by being further down.
 	local placing = not db.locked
+
+	-- With the feature off there is no ability to ask about, so the square
+	-- keeps Charge's own art at the status that greys it and fades to nothing
+	-- unless you are placing it. Deliberately not ns.Charge.Texture(key) with
+	-- a key from the last pass: an absent key raises on the table write inside
+	-- Texture, and the last pass is not guaranteed to have had one.
 	if not db.charge then
-		Fade(placing and 1 or 0)
+		frame.fade = placing and 1 or 0
+		Ability.Draw(frame, ns.Charge.Texture("charge") or FALLBACK_TEXTURE, "unknown")
 		return
 	end
 
@@ -374,48 +363,14 @@ function ChargeIcon.Update()
 	-- judged against the unit it would take.
 	local key, unit = ns.Charge.Pick()
 	local status, start, duration = ns.Charge.State(key, unit)
-	local ready = status == "ready"
 
-	if key ~= shownAbility then
-		icon:SetTexture(ns.Charge.Texture(key) or FALLBACK_TEXTURE)
-		shownAbility = key
-	end
+	-- Mode "ready" is the setting that keeps the icon off the screen until a
+	-- press would land, and placing the frame overrides it, or you could not
+	-- find the thing you were dragging.
+	local hidden = not placing and db.chargeMode == "ready" and status ~= "ready"
+	frame.fade = hidden and 0 or 1
 
-	-- The same look the world marker draws, out of the same one function.
-	local color, grey, alpha = ns.Charge.Look(status)
-
-	if placing then
-		Fade(1)
-	elseif db.chargeMode == "ready" and not ready then
-		Fade(0)
-		return
-	else
-		Fade(alpha)
-	end
-
-	if status == "cooldown" then
-		if start ~= shownStart or duration ~= shownDuration then
-			cooldown:SetCooldown(start, duration)
-			shownStart, shownDuration = start, duration
-		end
-		local remaining = start + duration - GetTime()
-		timerText:SetText(remaining >= 10 and ("%d"):format(remaining) or ("%.1f"):format(remaining))
-	else
-		if shownDuration ~= 0 then
-			cooldown:SetCooldown(0, 0)
-			shownStart, shownDuration = 0, 0
-			timerText:SetText("")
-		end
-	end
-
-	-- Guarded on the look rather than written every tick. The colour tables
-	-- are the three module constants in Charge.lua, so identity is the right
-	-- comparison, and this runs ten times a second for the life of the session.
-	if color ~= shownColor or grey ~= shownGrey then
-		shownColor, shownGrey = color, grey
-		border:SetColorTexture(color[1], color[2], color[3], 1)
-		icon:SetDesaturated(grey)
-	end
+	Ability.Draw(frame, ns.Charge.Texture(key) or FALLBACK_TEXTURE, status, start, duration)
 end
 
 local events = CreateFrame("Frame")
@@ -449,7 +404,6 @@ events:SetScript("OnEvent", function(_, event)
 			return
 		end
 		Build()
-		icon:SetTexture(ns.Charge.Texture("charge") or FALLBACK_TEXTURE)
 		ChargeIcon.ApplyLayout()
 		ChargeIcon.ApplySecure()
 		BuildBinder(frame)

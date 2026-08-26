@@ -362,6 +362,35 @@ function ns.SpellInRange(spell, unit)
 	return _G.IsSpellInRange(spell, unit)
 end
 
+-- Whether a range answer definitely blocks. Takes what IsSpellInRange or
+-- IsActionInRange handed back, which is 1, 0 or nil.
+--
+-- Only a definite 0 blocks. Both calls answer nil for a great many honest
+-- reasons: the spell has no range, the unit cannot take it, the client has not
+-- decided yet. Treating nil as out of range would pin every square in the
+-- addon red, and treating it as in range silently would hide a client that
+-- never answers at all, which is a real state on 2.5.6 and is worth knowing
+-- once. So the nils are counted and the fortieth one says so, once, for the
+-- session.
+--
+-- Shared rather than kept in whichever file needed it first. Charge/Charge.lua
+-- had this counter and Buttons/Slot.lua needs the identical one, and two
+-- copies means two thresholds and two chances to print the sentence twice.
+local rangeAnswered, rangeSilent = false, 0
+local RANGE_PATIENCE = 40
+
+function ns.OutOfRange(answer)
+	if answer == nil then
+		rangeSilent = rangeSilent + 1
+		if not rangeAnswered and rangeSilent == RANGE_PATIENCE then
+			ns.Print("this client is not answering range checks, so out-of-range targets cannot be dimmed.")
+		end
+		return false
+	end
+	rangeAnswered = true
+	return answer == 0
+end
+
 --------------------------------------------------------------------------
 -- Items
 --

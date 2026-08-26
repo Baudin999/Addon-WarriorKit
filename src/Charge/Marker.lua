@@ -12,37 +12,18 @@ local UPDATE_INTERVAL = 0.05 -- this one tracks the camera, so it runs hotter th
 local PLATE_GAP = 8
 local FALLBACK_TEXTURE = "Interface\\Icons\\Ability_Warrior_Charge"
 
-local frame, icon, border, cooldown, timerText
-local shownStart, shownDuration = 0, 0
+local frame
 local attachedPlate, attachedAnchor, appliedSize, appliedOffset, appliedScale
-local shownColor, shownGrey, shownAlpha
 local warnedSoftTarget
 local warnedNameplates = false
 
 local function Build()
-	frame = CreateFrame("Frame", "WarriorKitChargeMarker", UIParent)
+	-- The same square the HUD icon is, out of the same file, so the two cannot
+	-- drift apart again. What is left here is where it sits: a nameplate the
+	-- addon does not own, at a scale that has to be cancelled out.
+	frame = ns.UI.Ability.New(UIParent, "WarriorKitChargeMarker", nil, ns.UI.Ability.SHOUT)
 	frame:EnableMouse(false) -- never steal a click meant for the nameplate underneath
 	frame:Hide()
-
-	border = frame:CreateTexture(nil, "BACKGROUND")
-	border:SetAllPoints()
-	border:SetColorTexture(0, 0, 0, 1)
-
-	icon = frame:CreateTexture(nil, "ARTWORK")
-	icon:SetPoint("TOPLEFT", 2, -2)
-	icon:SetPoint("BOTTOMRIGHT", -2, 2)
-	icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-	icon:SetTexture(ns.Charge.Texture("charge") or FALLBACK_TEXTURE)
-
-	cooldown = CreateFrame("Cooldown", "WarriorKitChargeMarkerCooldown", frame, "CooldownFrameTemplate")
-	cooldown:SetAllPoints(icon)
-	if cooldown.SetHideCountdownNumbers then
-		cooldown:SetHideCountdownNumbers(true) -- the addon draws its own timer
-	end
-
-	timerText = frame:CreateFontString(nil, "OVERLAY")
-	timerText:SetPoint("CENTER")
-	timerText:SetFont((GameFontNormal:GetFont()), 14, "OUTLINE")
 end
 
 local function Detach()
@@ -99,7 +80,11 @@ local function AttachTo(plate, unit)
 
 	local anchor = AnchorFor(plate, unit)
 	if anchor ~= attachedAnchor or appliedSize ~= db.chargeMarkerSize or appliedOffset ~= db.chargeMarkerOffset then
-		frame:SetSize(db.chargeMarkerSize, db.chargeMarkerSize)
+		-- The size is in this frame's own units. The marker rides a nameplate
+		-- and cancels the plate's scale out above rather than joining the
+		-- addon's pixel grid, so there is no design number to convert here and
+		-- Ability.Size takes the setting as written.
+		ns.UI.Ability.Size(frame, db.chargeMarkerSize)
 		frame:ClearAllPoints()
 		frame:SetPoint("BOTTOM", anchor, "TOP", 0, PLATE_GAP + db.chargeMarkerOffset)
 		attachedAnchor, appliedSize, appliedOffset = anchor, db.chargeMarkerSize, db.chargeMarkerOffset
@@ -170,34 +155,13 @@ function ChargeMarker.Update()
 
 	AttachTo(plate, unit)
 
-	if status == "cooldown" then
-		if start ~= shownStart or duration ~= shownDuration then
-			cooldown:SetCooldown(start, duration)
-			shownStart, shownDuration = start, duration
-		end
-		local remaining = start + duration - GetTime()
-		timerText:SetText(remaining >= 10 and ("%d"):format(remaining) or ("%.1f"):format(remaining))
-	else
-		if shownDuration ~= 0 then
-			cooldown:SetCooldown(0, 0)
-			shownStart, shownDuration = 0, 0
-			timerText:SetText("")
-		end
-	end
-
-	-- One shared look, so the icon in the world and the icon on the HUD say the
-	-- same thing: colour when the charge lands, grey when it does not.
-	--
-	-- Guarded together on the colour table's identity, because they are the
-	-- three module constants in Charge.lua and this is the fast ticker. Three
-	-- writes twenty times a second is what a mob standing still used to cost.
-	local color, grey, alpha = ns.Charge.Look(status)
-	if color ~= shownColor or grey ~= shownGrey or alpha ~= shownAlpha then
-		shownColor, shownGrey, shownAlpha = color, grey, alpha
-		border:SetColorTexture(color[1], color[2], color[3], 1)
-		icon:SetDesaturated(grey)
-		frame:SetAlpha(alpha)
-	end
+	-- The art, the swipe, the timer and the status colour, all of it guarded
+	-- against what was drawn last. This was twenty-eight lines here and the
+	-- same twenty-eight in Charge/Icon.lua, which is what UI/Ability.lua was
+	-- extracted to end. The world icon and the HUD icon now say the same thing
+	-- because they run the same code, not because two copies agree today.
+	ns.UI.Ability.Draw(frame, ns.Charge.Texture(key) or FALLBACK_TEXTURE,
+		status, start, duration)
 	frame:Show()
 end
 
