@@ -832,9 +832,19 @@ _G.WarriorKitSpellCast = {}
 -- the client calls that one Deep Wound. Naming them "Spell12162" and
 -- "Spell12721" would still tell them apart and would say nothing about why they
 -- have to be told apart.
+--
+-- The other four are the two reactive abilities, each at rank 1 and at a later
+-- rank. Buttons/Reaction.lua carries the two rank 1 ids and matches everything
+-- else by asking this client what it calls them, so a bar holding a rank nobody
+-- wrote down has to come back with the same string. A stub that named only rank
+-- 1 would let a rank list pass.
 local SPELL_NAMES = {
 	[12162] = "Deep Wounds",
 	[12721] = "Deep Wound",
+	[7384] = "Overpower",
+	[11585] = "Overpower",
+	[6572] = "Revenge",
+	[25288] = "Revenge",
 }
 _G.GetSpellInfo = function(id)
 	if type(id) == "number" and id >= 900000 then
@@ -1288,7 +1298,6 @@ _G.CursorHasItem = constant(false)
 _G.GetInventorySlotInfo = function(name)
 	return 16, "Interface\\PaperDoll\\UI-PaperDoll-Slot-" .. tostring(name)
 end
-_G.GetActionInfo = constant(nil)
 
 -- One action slot, modelled rather than stubbed flat.
 --
@@ -1305,6 +1314,18 @@ local slots = {}
 _G.WarriorKitSlots = slots
 
 _G.HasAction = function(slot) return slots[slot] ~= nil end
+-- What kind of thing is in the slot and which one, which is how
+-- Buttons/Reaction.lua tells an Overpower square from the other twenty-three.
+-- A slot the test named no spell for answers nothing at all, which is what the
+-- client says for a macro, an item or an empty slot, so the path that ignores
+-- everything but a plain spell is reachable from a test rather than assumed.
+_G.GetActionInfo = function(slot)
+	local held = slots[slot]
+	if not held or not held.spell then
+		return nil
+	end
+	return "spell", held.spell
+end
 _G.GetActionTexture = function(slot)
 	local held = slots[slot]
 	return held and held.texture or nil
@@ -2576,6 +2597,168 @@ do
 	-- action has no range, the unit cannot take it, the client has not decided.
 	put({ texture = ART, range = nil })
 	check(Slot.State(SLOT) == "ready", "an unanswered range check is blocking the square")
+
+	--------------------------------------------------------------------------
+	-- The reaction window
+	--
+	-- Overpower is not a spell you press, it is a spell the fight hands you for
+	-- a few seconds after the mob dodges. The client does not know that:
+	-- IsUsableAction says yes for the whole fight, which is why the square was
+	-- drawn ready for the whole fight, and why nothing in this file could catch
+	-- it until the stub grew a combat log the slot ladder reads.
+	--
+	-- Driven rather than described, because the mechanism is four things and
+	-- every one of them is a place to be wrong: the dodge opens it, the clock
+	-- shuts it, the press shuts it early, and somebody else's dodge is not
+	-- yours. Revenge is the same window off a different line, so it is driven
+	-- through the two shapes a block arrives in and not just the tidy one.
+	--------------------------------------------------------------------------
+
+	local ME = "Player-0-0000000r"
+	local MOB = "Creature-0-0000000r"
+	local OVERPOWER, REVENGE = 11585, 25288 -- a later rank of each, on purpose
+
+	-- Sixteen values matter here and each subevent puts the one this reads in a
+	-- different slot, so the slot is a parameter. Twelve carries an amount on a
+	-- swing and a spell id on anything with a spell in front of it, which is
+	-- what it is left holding when the test is about a later slot.
+	local function logLine(subevent, source, dest, at, value)
+		for index = 1, 21 do
+			logArgs[index] = nil
+		end
+		logArgs[1] = wall
+		logArgs[2] = subevent
+		logArgs[4] = source
+		logArgs[8] = dest
+		logArgs[12] = 300
+		logArgs[at] = value
+		fire("COMBAT_LOG_EVENT_UNFILTERED")
+	end
+
+	guids.target = nil
+	guids.player = ME
+
+	put({ texture = ART, spell = OVERPOWER })
+
+	if not WARRIOR then
+		-- Neither ability exists on another class, so nothing is registered and
+		-- no square is gated. Asserted rather than assumed, because a tracker
+		-- that came up anyway would grey a square this character cannot have and
+		-- would read every line of the combat log in the game to do it.
+		check(not ns.Reaction.Watching(),
+			"a reaction window is tracked on a class that has neither ability: " .. ns.Reaction.Describe())
+		check(ns.Reaction.Of(SLOT) == nil, "a slot is read as a reaction on another class")
+		check(Slot.State(SLOT) == "ready", "a square is gated on a window that could never open")
+		logLine("SWING_MISSED", ME, MOB, 12, "DODGE")
+		check(not ns.Reaction.Open(ns.Reaction.OVERPOWER),
+			"a dodge opened a window on a class with nothing to press")
+		check(Slot.State(SLOT) == "ready", "a dodge changed a square on another class")
+		put({ texture = ART })
+	else
+		check(ns.Reaction.Of(SLOT) == ns.Reaction.OVERPOWER,
+			"a slot holding a later rank of Overpower is not recognised as Overpower")
+		check(Slot.State(SLOT) == "reaction",
+			"Overpower is drawn ready with nothing having dodged you, which is the whole bug")
+
+		-- Somebody else's fight does not arm your button.
+		logLine("SWING_MISSED", "Player-0-0000009r", MOB, 12, "DODGE")
+		check(Slot.State(SLOT) == "reaction", "a stranger's attack being dodged opened your window")
+
+		-- And neither does a miss that is not a dodge.
+		logLine("SWING_MISSED", ME, MOB, 12, "PARRY")
+		check(Slot.State(SLOT) == "reaction", "a parry opened the Overpower window, and only a dodge does")
+
+		logLine("SWING_MISSED", ME, MOB, 12, "DODGE")
+		check(Slot.State(SLOT) == "ready", "the target dodged you and Overpower is still not pressable")
+
+		advance(4.9)
+		check(Slot.State(SLOT) == "ready", "the window shut before its five seconds were up")
+		advance(0.2)
+		check(Slot.State(SLOT) == "reaction", "the window never lapsed, so the square stays lit forever")
+
+		-- A dodged special counts too, and it carries the miss type five slots
+		-- further along. A parser reading one index for both fails here.
+		logLine("SPELL_MISSED", ME, MOB, 15, "DODGE")
+		check(Slot.State(SLOT) == "ready", "only a dodged white hit opens the window")
+
+		-- Spending it shuts it. The server takes the window away on the press and
+		-- says nothing, so without this the square stays lit for the rest of the
+		-- five seconds after the one press it had.
+		logLine("SPELL_CAST_SUCCESS", ME, MOB, 12, OVERPOWER)
+		check(Slot.State(SLOT) == "reaction", "pressing Overpower left its window open")
+
+		-- Revenge is the same window off your own block, dodge or parry. Its own
+		-- clock, so opening one does not open the other.
+		put({ texture = ART, spell = REVENGE })
+		check(Slot.State(SLOT) == "reaction", "Revenge is drawn ready with nothing having hit you")
+		logLine("SWING_MISSED", MOB, ME, 12, "DODGE")
+		check(Slot.State(SLOT) == "ready", "dodging a mob did not open Revenge")
+
+		put({ texture = ART, spell = OVERPOWER })
+		check(Slot.State(SLOT) == "reaction", "your own dodge opened the Overpower window too")
+
+		-- A block that stops the whole hit is a miss event. A block that stops part
+		-- of it is a landed hit carrying a blocked amount, which is the far more
+		-- common one on a tank, and it sits in slot 16 on a swing and slot 19 on a
+		-- special. A parser that read only the miss events would leave Revenge dark
+		-- through most of the fight it was open in.
+		advance(6)
+		put({ texture = ART, spell = REVENGE })
+		check(Slot.State(SLOT) == "reaction", "the Revenge window never lapsed")
+		logLine("SWING_DAMAGE", MOB, ME, 16, 40)
+		check(Slot.State(SLOT) == "ready", "a partial block did not open Revenge")
+
+		advance(6)
+		check(Slot.State(SLOT) == "reaction", "the Revenge window never lapsed")
+		logLine("SPELL_DAMAGE", MOB, ME, 19, 40)
+		check(Slot.State(SLOT) == "ready", "a partially blocked special did not open Revenge")
+
+		-- A hit you did nothing about is not a window. Slot 16 is the blocked part
+		-- and slot 12 is the amount, so a parser reading the wrong one opens Revenge
+		-- on every hit you take.
+		advance(6)
+		logLine("SWING_DAMAGE", MOB, ME, 16, 0)
+		check(Slot.State(SLOT) == "reaction", "an unblocked hit opened the Revenge window")
+
+		-- Where the rungs meet. A real cooldown outranks a shut window, because the
+		-- swipe counts that one down and nothing counts this one down. A shut window
+		-- outranks the wrong stance, because swapping stance would not let you press
+		-- it and an orange square saying "swap" would be telling you to.
+		put({ texture = ART, spell = OVERPOWER, start = wall, duration = 6 })
+		check(Slot.State(SLOT) == "cooldown", "a shut window is being reported ahead of a real cooldown")
+		put({ texture = ART, spell = OVERPOWER, usable = false, noPower = false })
+		check(Slot.State(SLOT) == "reaction", "the wrong stance is being reported ahead of a shut window")
+
+		-- And with the window open the client's own no comes back, which is what
+		-- makes the orange mean something: swap now and the press lands.
+		logLine("SWING_MISSED", ME, MOB, 12, "DODGE")
+		check(Slot.State(SLOT) == "stance",
+			"an open window hides the wrong stance, so the square never says to swap")
+		put({ texture = ART, spell = OVERPOWER, usable = false, noPower = true })
+		check(Slot.State(SLOT) == "cost", "an open window hides having no rage")
+
+		-- Combat dropping shuts both. A window still open after the mob is down is
+		-- a square saying press me at a corpse.
+		inCombat.player = false
+		fire("PLAYER_REGEN_ENABLED")
+		put({ texture = ART, spell = OVERPOWER })
+		check(Slot.State(SLOT) == "reaction", "the window survived the end of the fight")
+
+		-- Everything that is not one of the two is untouched, which is the other
+		-- twenty-three squares on the bar.
+		put({ texture = ART, spell = 1464 })
+		check(ns.Reaction.Of(SLOT) == nil, "an ordinary spell is being tracked as a reaction")
+		check(Slot.State(SLOT) == "ready", "an ordinary spell is gated on a reaction window")
+		put({ texture = ART })
+		check(ns.Reaction.Of(SLOT) == nil, "a slot holding a macro is being tracked as a reaction")
+
+		check(ns.Reaction.Watching(),
+			"no reaction window is tracked on a warrior: " .. ns.Reaction.Describe())
+	end
+
+	guids.player = nil
+
+	print(("react  %s"):format(ns.Reaction.Describe()))
 
 	--------------------------------------------------------------------------
 	-- What a redraw costs

@@ -2,6 +2,72 @@
 
 ## Unreleased
 
+### Overpower is a reaction, and the bars say so now
+
+Overpower was drawn ready from the first pull to the last. It is pressable for
+about five seconds after your target dodges you and not one moment else, which
+makes it the one square on a warrior's bar whose whole point is that it is
+usually dark. It was the brightest thing on the row.
+
+The client is the reason and it is worth stating exactly, because nothing in the
+code read wrong. `IsUsableAction` answers yes for Overpower in Battle Stance
+whether or not anything has dodged you. It is not confused and it is not
+answering about rage: the window lives on the server and the client is never
+told, so there is no aura to scan, no cooldown to read, no event when it opens
+and none when it shuts. Every rung of the ladder above that call was correct and
+the square was still a lie.
+
+The combat log is the only place the fact appears, so `Buttons/Reaction.lua`
+reads it, the same event `Meter/Meter.lua` and `Swing/Swing.lua` already read and
+the same way. A dodge of yours opens Overpower. A block, dodge or parry of yours
+opens Revenge, which is the identical mechanism seen from the other end and is
+in the same file for that reason: two copies of one five second clock is how the
+two drift, and the drift would be silent because each would be right most of the
+time. Pressing the ability shuts its own window, and leaving combat shuts both.
+
+A block is read in two shapes, not one. A block that stops the whole hit arrives
+as a miss; a block that stops part of it arrives as a landed hit carrying a
+blocked amount, and on a tank that is the common one. A parser that took only
+the tidy shape would leave Revenge dark through most of the fight it was open
+in.
+
+**The window is five seconds and that number is a decision.** Every
+player-facing source says five, and both abilities carry a five second cooldown,
+so a warrior pressing on every window presses on the cooldown. The MaNGOS and
+TrinityCore server cores both hold `REACTIVE_TIMER_START` at four. Five wins
+because the two errors do not cost the same: a second long says pressable when
+it is not and costs a glance, a second short greys a free five rage attack that
+is still sitting there and costs the attack. `/wk status` prints the seconds left
+on each window so the figure can be checked against the live client, and the
+README lists it under what has never been measured.
+
+**A new reason, and no new colour.** `reaction` joins the vocabulary in
+`UI/Ability.lua` and takes the look every unpressable square takes. A shut
+window is not a state you can act on: you cannot walk out of it and you cannot
+wait it out on purpose, so there is nothing for a colour to tell you to do. What
+says the window opened is the square leaving that look, which on a bar is a jump
+from drained grey to full colour and is the biggest change any square in the row
+can make.
+
+**The rung sits above the usable split**, which is the ladder's own rule that
+what cannot be fixed at all comes first. That ordering also quiets the square
+that used to shout for nothing: Overpower on a bar in Defensive Stance drew
+orange "swap" all fight, telling you to swap into a stance where the press still
+would not land. Now the orange turns up only while the window is open, where
+swapping really does let you press it.
+
+Stances needed no new code. Overpower is Battle Stance only and Revenge is
+Defensive Stance only, and the client already refuses both in the wrong stance
+in exactly the shape the ladder splits `cost` from `stance` on.
+
+Warrior only, decided once at login, so on another class nothing is registered
+and no combat log line is read. Only a plain spell is recognised, matched by
+asking the client its own name for the two abilities and comparing that against
+its name for whatever is in the slot: locale-proof, rank-proof, and two spell IDs
+in the source rather than a rank list that goes stale at the next trainer visit.
+An Overpower wrapped in a macro keeps the old behaviour, because the client will
+not say what a `/cast` line resolves to.
+
 ### A chat window, and a tab for the people you play with
 
 The complaint was that the chat interface is fiddly and not worth reading, and

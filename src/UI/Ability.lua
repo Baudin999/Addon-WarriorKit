@@ -68,14 +68,14 @@ UI.Ability = Ability
 -- It is handed a status and draws it. Charge/Charge.lua works out the status
 -- for the three charge abilities against a picked unit; Buttons/Slot.lua works
 -- it out for an action slot. Those two are different questions with the same
--- nine answers, and keeping the answers here is what stops a third display
--- inventing a tenth.
+-- ten answers, and keeping the answers here is what stops a third display
+-- inventing an eleventh.
 --------------------------------------------------------------------------
 
 --------------------------------------------------------------------------
 -- The vocabulary
 --
--- Nine statuses and six looks. The statuses are reasons and are the same
+-- Ten statuses and six looks. The statuses are reasons and are the same
 -- everywhere; the looks are what a reason is worth on screen and are not.
 --
 -- Splitting them is the whole design of this file. A status is a fact about
@@ -99,6 +99,7 @@ Ability.STATUS = {
 	empty    = true, -- the slot holds nothing
 	unknown  = true, -- there is an ability, this character cannot cast it
 	cooldown = true, -- on cooldown, longer than the global
+	reaction = true, -- a reactive ability whose window is shut
 	combat   = true, -- right ability, wrong side of the combat line
 	notarget = true, -- nothing to cast it on
 	stance   = true, -- wrong stance, or unusable for a reason that is not cost
@@ -129,6 +130,22 @@ Ability.STATUS = {
 -- Range does not get the drain, and the asymmetry is deliberate. Out of range
 -- is a fact about one mob and it goes away when you take a step; out of rage
 -- is a fact about you and it is the one that decides what to press.
+--
+-- Reaction is a new reason and takes no new look, which is the answer the two
+-- paragraphs above ask for rather than a way of avoiding the question. A shut
+-- Overpower window is not a state you can act on. You cannot walk out of it and
+-- you cannot wait it out on purpose; it opens when the mob dodges you and never
+-- otherwise, so there is nothing for a colour to tell you to do. That is the
+-- definition of "no", and four of the ten statuses already sit there for the
+-- same reason.
+--
+-- What says the window opened is the square leaving "no". On a bar that is a
+-- jump from 55% drained grey to full colour, which is a bigger change than any
+-- border in this table makes and is the one thing the eye catches in a row of
+-- twenty-four. Giving the shut state its own colour would put a permanent
+-- coloured edge on two squares for the length of every fight, which is the wall
+-- of colour the paragraph at the top of this file argues against, and it would
+-- spend that colour on the state you are meant to ignore.
 --
 -- Empty is pulled out for a different reason than range and cost are, and it is
 -- the one that made a half filled bar look broken. An empty slot has no art, so

@@ -236,11 +236,17 @@ ns.Register({
 	status = function()
 		local ranks = ("%d slots holding an older rank"):format(#ns.Ranks.Stale())
 		local bars = "bars " .. ns.Bars.Describe()
+		-- The reaction windows are here because the only way to check their
+		-- length against the live client is to read the seconds off a status
+		-- line while something is dodging you. Nothing else in the addon can
+		-- show you a number this file guessed.
+		local windows = "reactions " .. ns.Reaction.Describe()
 		if not ns.Layout.HasBackup() then
-			return "not applied, " .. ns.Layout.Describe() .. " | " .. ranks .. " | " .. bars
+			return "not applied, " .. ns.Layout.Describe()
+				.. " | " .. ranks .. " | " .. bars .. " | " .. windows
 		end
 		return "applied, backup from " .. ns.Layout.BackupStamp()
-			.. " | " .. ranks .. " | " .. bars
+			.. " | " .. ranks .. " | " .. bars .. " | " .. windows
 	end,
 
 	-- No reset hook. /wk reset puts frames back where they started, and where
