@@ -176,6 +176,13 @@ name of none of them.
                              with a band across the feed at each end of a fight
     Feeds/Feature.lua
 
+    Breakdown/Breakdown.lua  one counter row per ability, kept between sessions:
+                             what landed, what crit, what stopped it, banded by
+                             the target's level against yours
+    Breakdown/Window.lua     that table drawn into the settings panel, and the
+                             same ranking printed by the slash word
+    Breakdown/Feature.lua
+
     Artwork/Artwork.lua      strips the gryphons and the metal strip off the bars
     Artwork/Feature.lua
 
