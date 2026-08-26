@@ -78,6 +78,21 @@ ns.Register({
 				return
 			end
 
+			if option == "list" then
+				local names = ns.Corral.Names()
+				if #names == 0 then
+					ns.Print("the corral is holding nothing. " .. ns.Corral.Describe() .. ".")
+					return
+				end
+				for _, name in ipairs(names) do
+					ns.Print("  " .. name)
+				end
+				local pooled, refused = ns.Corral.Skipped()
+				ns.Print(("%d held, %d left as map pins, %d refused past the ceiling.")
+					:format(#names, pooled, refused))
+				return
+			end
+
 			if option == "scan" then
 				local taken = ns.Corral.Scan()
 				ns.Print(("%d new button%s collected, %s.")
@@ -95,6 +110,7 @@ ns.Register({
 		"minimap size <120-300>, how wide the map is drawn",
 		"minimap buttons on|off, collect the addon buttons behind one square",
 		"minimap scan, look for addon buttons that have appeared since login",
+		"minimap list, name every button the corral is holding",
 	},
 
 	status = function()
@@ -159,6 +175,18 @@ ns.Register({
 		end)
 		ui.Note(function()
 			return "Blizzard's own icons are left alone. The mail, the tracking and the calendar are read at a glance without being pressed, and the square above has already put them on the corners."
+		end)
+		ui.Note(function()
+			local pooled, refused = ns.Corral.Skipped()
+			if pooled == 0 and refused == 0 then
+				return "The minimap is also where every addon that draws a pin on the map hangs the pin, and a pin is not a button. Nothing on this map looked like one."
+			end
+			if refused > 0 then
+				return ("%d frames were left where they were as map pins, and %d more were refused because the corral will not hold more than it can lay out. Nothing is taken quietly.")
+					:format(pooled, refused)
+			end
+			return ("%d frames on this map are pins rather than buttons and were left alone. They come in pools with generated names, which is what tells them apart from a button.")
+				:format(pooled)
 		end)
 		ui.Action(function() return "put the square back under the map" end,
 			function()

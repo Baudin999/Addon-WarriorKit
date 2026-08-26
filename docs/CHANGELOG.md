@@ -90,6 +90,27 @@ it always was.
 No ticker. Addons load late, so the scan runs at login, on `ADDON_LOADED`
 after login, and whenever you open the tray, and never on a clock.
 
+The first test on a real client collected 555 buttons, and the shape of that
+mistake is worth keeping. The minimap is not only where addons hang their
+button; it is also where every addon that draws a pin on the map hangs the pin,
+and Questie parents several hundred quest icons to it. The corral took the lot
+and, because a taken button has its `SetPoint` replaced, left Questie unable to
+move its own map.
+
+Four tests now, and the last is the one that would have caught it alone. A
+candidate has to be a Button, because a pin is often a Frame and a button
+almost never is. It has to measure between 18 and 48, because LibDBIcon draws
+at 31 and a pin is drawn at 12 to 16. It has to not be one of a family:
+candidates are grouped by their name with the trailing digits taken off, and a
+group of more than two is a pool rather than a button, because pins are pooled
+and named by counter and a button has one name and no siblings. And there is a
+ceiling of 24, which is not a filter but a refusal, reported in `/wk status`
+and in the panel rather than swallowed.
+
+`/wk minimap list` names what is held and how much was left as pins, because
+the way this was found was a square on the minimap reading 555 with no way to
+ask what it meant.
+
 The harness grew a minimap: a cluster, a ring of art, four of Blizzard's
 buttons anchored the way the client anchors them, three addon buttons of the
 two shapes that actually turn up, and one unnamed child that must never be

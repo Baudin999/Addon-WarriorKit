@@ -1556,6 +1556,36 @@ do
 	-- anonymous frame on the minimap looks like. It must never be collected:
 	-- the corral is keyed by name and an unnamed one could not be released.
 	child("frame", map)
+
+	-- And the reason the corral has a shape test at all. The minimap is not
+	-- only where addons hang their button, it is also where every addon that
+	-- draws a pin hangs the pin, and Questie parents several hundred to it.
+	-- The first client this met collected 555 of them and left Questie unable
+	-- to move its own map.
+	--
+	-- Modelled the way a pool actually looks: one name with a counter on the
+	-- end, and drawn at a pin's size rather than a button's. Sixty is enough to
+	-- fail every count in the block below if the filter ever comes off.
+	for index = 1, 60 do
+		local pin = child("button", map, "QuestieFrame" .. index)
+		pin:SetSize(16, 16)
+		pin:SetPoint("CENTER", map, "CENTER", index, index)
+	end
+
+	-- A pin pool drawn at a button's size, which the size window cannot catch
+	-- and only the family rule can. This is the assertion that says the family
+	-- rule is doing work rather than riding along behind the size test.
+	for index = 1, 12 do
+		local pin = child("button", map, "GatherMatePin" .. index)
+		pin:SetSize(31, 31)
+		pin:SetPoint("CENTER", map, "CENTER", -index, index)
+	end
+
+	-- A frame rather than a button, at a button's size and with a name of its
+	-- own. Pins are often frames and buttons almost never are.
+	local pinFrame = child("frame", map, "SomeAddonMapNote")
+	pinFrame:SetSize(31, 31)
+	pinFrame:SetPoint("CENTER", map, "CENTER", 40, -40)
 end
 
 _G.WarriorKitDB, _G.WarriorKitCharDB = {}, {}
@@ -5373,11 +5403,30 @@ do
 	check(corral ~= nil, "the corral button was never built")
 
 	-- Three addon buttons on the fixture and nothing else. Blizzard's four are
-	-- not addon buttons, and the unnamed child cannot be released so is never
-	-- taken.
+	-- not addon buttons, the unnamed child cannot be released so is never
+	-- taken, and the seventy-two pins are pins.
 	check(ns.Corral.Count() == 3,
 		("the corral is holding %d buttons, the three addon ones make 3")
 			:format(ns.Corral.Count()))
+
+	-- The regression, and the one that cost a working Questie map. A pin pool
+	-- is left where it is, and a pool drawn at a button's size is left there
+	-- too, which is the half the size window cannot see.
+	--
+	-- Only the twelve count as skipped. The sixty are drawn at a pin's size and
+	-- never become candidates at all, the same way a texture never does, so
+	-- reporting them would turn a number that means "the corral decided not to"
+	-- into one that means "the minimap has things on it".
+	local pooled, refused = ns.Corral.Skipped()
+	check(pooled == 12,
+		("%d frames were read as a pool, the button-sized pool is 12"):format(pooled))
+	check(refused == 0, ("%d buttons hit the ceiling and nothing should have"):format(refused))
+	check(_G.QuestieFrame1:GetParent() == map, "a quest pin was collected as a button")
+	check(_G.QuestieFrame1.wkPinned == nil,
+		"a quest pin had its SetPoint taken, so its addon can no longer move it")
+	check(_G.GatherMatePin1:GetParent() == map,
+		"a pin pool drawn at a button's size got past the family rule")
+	check(_G.SomeAddonMapNote:GetParent() == map, "a named Frame was collected as a button")
 	for _, name in ipairs({ "MiniMapMailFrame", "GameTimeFrame", "MiniMapTracking" }) do
 		check(_G[name]:GetParent() == map,
 			("the corral took %s, which is Blizzard's and not an addon's"):format(name))

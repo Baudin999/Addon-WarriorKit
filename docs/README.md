@@ -2572,6 +2572,7 @@ nothing ever runs is a branch that is wrong.
     /wk minimap size 180         120 to 300, how wide the map is drawn
     /wk minimap buttons on|off   collect the addon buttons behind one square
     /wk minimap scan             look for buttons that appeared since login
+    /wk minimap list             what the corral holds, and what it left as pins
     /wk destroy                  the clutter window, one quest item at a time
     /wk ui                       what is baked in, and whether Edit Mode answers
     /wk ui save                  capture the active Edit Mode layout
@@ -2819,6 +2820,14 @@ Everything below was written from the API contract and has never executed:
   None of them is asserted. Both lists are walked through `_G`, a missing name
   is a skipped entry, and `MiniMapTracking` is spelled twice because the two
   clients disagree about which one they have.
+- Whether the four tests in `Corral.lua` tell a minimap button from a map pin on
+  every install. They are a Button rather than a Frame, a size between 18 and
+  48, not one of a name family of more than two, and a ceiling of 24. The
+  family rule is the load-bearing one and it turns on pins being pooled and
+  named by counter, which is how every pin pool this author has read is built
+  and is not a thing any client guarantees. An addon button that arrives with a
+  counter on its name and two siblings would be left on the map, which is the
+  safe direction to be wrong in; `/wk minimap list` says what was left and why.
 - Whether another addon's minimap button minds being reparented. `Corral.lua`
   changes a button's parent, clears its points and replaces its `SetPoint` with
   a no-op, which is what every button bag has done since the first one, and all

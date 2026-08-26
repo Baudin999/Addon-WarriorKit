@@ -44,11 +44,47 @@ local FACE = CELL
 --------------------------------------------------------------------------
 -- Which buttons are addon buttons
 --
--- Everything parented to the minimap that has a name, is not Blizzard's, and
--- is not ours. That is the same test every button bag has used since the
--- first one, and it is a test rather than a list because the list would be the
--- set of addons the author happens to have installed.
+-- This test shipped as "named, parented to the minimap, not Blizzard's and not
+-- ours", and it collected 555 of them on the first real client it met. The
+-- minimap is not only where addons hang their button. It is also where every
+-- addon that draws a pin on the map hangs the pin, and Questie alone parents
+-- several hundred quest icons to it. The corral took the lot, and because a
+-- taken button has its SetPoint replaced with a no-op, Questie then could not
+-- move its own pins.
+--
+-- So the test is four things now, and the last is the one that matters.
+--
+--   A Button. A pin is often a Frame and a minimap button is almost never one.
+--   This alone is most of the fix and none of the safety.
+--
+--   Sized like a button. LibDBIcon draws at 31 and everything that rolls its
+--   own lands within a few pixels of it. A pin is drawn at 12 to 16.
+--
+--   Not one of a family. This is the rule that would have caught the 555 on
+--   its own, and it is the only one here that is about shape rather than about
+--   numbers. Pins are pooled, and a pool is named by counter: QuestieFrame1,
+--   QuestieFrame2, QuestieFrame3. A minimap button has one name and no
+--   siblings. So candidates are grouped by their name with the trailing digits
+--   taken off, and any group with more than two in it is a pool and is left
+--   alone entirely.
+--
+--   And a ceiling, which is not a filter but a refusal. Past CEILING the scan
+--   stops and says how many it walked away from, because a corral that has
+--   quietly eaten something is exactly the failure this comment is about.
 --------------------------------------------------------------------------
+
+-- What a minimap button measures. LibDBIcon's own default is 31 and the window
+-- is wide enough for the ones that pick their own number.
+local SMALLEST, LARGEST = 18, 48
+
+-- How many may share one name family before the family is read as a pool. Two,
+-- because a pair of buttons from one addon is a thing that happens and three
+-- generated names in a row is not.
+local FAMILY = 2
+
+-- The most the corral will ever hold. Nothing sane reaches it, and reaching it
+-- is reported rather than swallowed.
+local CEILING = 24
 
 local BLIZZARD = {
 	Minimap = true,
@@ -79,19 +115,40 @@ local BLIZZARD = {
 -- Shape.lua draws, which has no name at all and so never gets this far.
 local MINE = "WarriorKit"
 
-local function Wanted(frame)
+-- The name with its trailing digits taken off, which is what a pool of pins
+-- has in common and what a button has to itself.
+local function Family(name)
+	return (name:gsub("%d+$", ""))
+end
+
+-- The name this frame would be collected under, or nil. Everything except the
+-- family rule, which needs to see the whole minimap at once and so lives in
+-- the scan.
+local function Candidate(frame)
 	if type(frame) ~= "table" or type(frame.GetName) ~= "function" then
-		return false
+		return nil
 	end
 	local name = frame:GetName()
 	if type(name) ~= "string" or name == "" then
-		return false
+		return nil
 	end
 	if BLIZZARD[name] or name:sub(1, #MINE) == MINE then
-		return false
+		return nil
 	end
-	local kind = ns.Measure(frame, "GetObjectType")
-	return kind == "Button" or kind == "Frame"
+	if ns.Measure(frame, "GetObjectType") ~= "Button" then
+		return nil
+	end
+
+	local width = ns.Measure(frame, "GetWidth")
+	local height = ns.Measure(frame, "GetHeight")
+	if type(width) ~= "number" or type(height) ~= "number" then
+		return nil
+	end
+	if width < SMALLEST or width > LARGEST or height < SMALLEST or height > LARGEST then
+		return nil
+	end
+
+	return name
 end
 
 --------------------------------------------------------------------------
@@ -232,10 +289,16 @@ end
 --------------------------------------------------------------------------
 -- Scanning
 --
--- Walks the minimap's children and takes what it has not already got. Cheap
--- enough to run on every addon that loads: a minimap has a dozen children and
--- the walk is a name lookup each.
+-- Walks the minimap's children twice. The first pass counts name families,
+-- because whether a candidate is a button or one pin of five hundred is a fact
+-- about its siblings and cannot be decided one frame at a time. The second pass
+-- takes what survived.
+--
+-- Two passes over a list this long is still nothing, and it runs on an addon
+-- loading rather than on a clock.
 --------------------------------------------------------------------------
+
+local pooled, refused = 0, 0
 
 function Corral.Scan()
 	if not tray or not ns.db.minimapCorral then
@@ -246,7 +309,6 @@ function Corral.Scan()
 		return 0
 	end
 
-	local taken = 0
 	local ok, children = pcall(function(frame)
 		return { frame:GetChildren() }
 	end, map)
@@ -254,9 +316,26 @@ function Corral.Scan()
 		return 0
 	end
 
-	for _, frame in ipairs(children) do
-		if Wanted(frame) then
-			if Take(frame:GetName(), frame) then
+	local names, families = {}, {}
+	for index, frame in ipairs(children) do
+		local name = Candidate(frame)
+		if name then
+			names[index] = name
+			local family = Family(name)
+			families[family] = (families[family] or 0) + 1
+		end
+	end
+
+	local taken = 0
+	pooled, refused = 0, 0
+	for index, frame in ipairs(children) do
+		local name = names[index]
+		if name then
+			if families[Family(name)] > FAMILY then
+				pooled = pooled + 1
+			elseif #order >= CEILING then
+				refused = refused + 1
+			elseif Take(name, frame) then
 				taken = taken + 1
 			end
 		end
@@ -267,6 +346,13 @@ function Corral.Scan()
 		Paint()
 	end
 	return taken
+end
+
+-- What the last scan walked away from. Pins in a pool, and anything past the
+-- ceiling. Both are read by the panel, because a corral that quietly declined
+-- to collect something is the same defect as one that quietly ate it.
+function Corral.Skipped()
+	return pooled, refused
 end
 
 function Corral.Count()
@@ -420,10 +506,17 @@ function Corral.Describe()
 		return "off, every addon button stays on the minimap"
 	end
 	local holding = #order
-	if holding == 0 then
-		return "on, nothing found to collect yet"
+	local skipped = ""
+	if pooled > 0 then
+		skipped = (", %d map pins left where they were"):format(pooled)
 	end
-	return ("on, holding %d button%s"):format(holding, holding == 1 and "" or "s")
+	if refused > 0 then
+		skipped = skipped .. (", %d refused past the ceiling of %d"):format(refused, CEILING)
+	end
+	if holding == 0 then
+		return "on, nothing found to collect yet" .. skipped
+	end
+	return ("on, holding %d button%s%s"):format(holding, holding == 1 and "" or "s", skipped)
 end
 
 local events = CreateFrame("Frame")
