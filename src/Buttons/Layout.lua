@@ -175,7 +175,10 @@ end
 -- the 12 slot stride covers the other two.
 --------------------------------------------------------------------------
 
-local function ButtonAction(name)
+-- Exported rather than local because Buttons/Bars.lua reads the same field off
+-- the same buttons to find out which slots a bar it is cloning drives, and two
+-- copies of a four line reader is two places for the 120 slot bound to drift.
+function Layout.SlotOf(name)
 	local button = _G[name]
 	local action = button and button.action
 	if type(action) == "number" and action >= 1 and action <= 120 then
@@ -187,7 +190,7 @@ end
 -- Returns a map of stance key to the slot its bar 1 button 1 writes to, or
 -- nil plus a reason when this client does not page bar 1 by stance.
 function Layout.Bar1Bases()
-	local base = ButtonAction("ActionButton1")
+	local base = Layout.SlotOf("ActionButton1")
 	if not base then
 		return nil, "cannot read ActionButton1"
 	end
@@ -210,7 +213,7 @@ function Layout.Bar1Bases()
 end
 
 function Layout.Bar2Base()
-	return ButtonAction("MultiBarBottomLeftButton1")
+	return Layout.SlotOf("MultiBarBottomLeftButton1")
 end
 
 --------------------------------------------------------------------------
@@ -329,7 +332,7 @@ local function TargetSlots()
 			end
 		end
 	else
-		local base = ButtonAction("ActionButton1")
+		local base = Layout.SlotOf("ActionButton1")
 		if base then
 			for index = 1, 12 do
 				slots[#slots + 1] = base + index - 1
@@ -476,7 +479,7 @@ function Layout.Apply()
 		-- No stance paging, so there is one page to fill and the tank set is
 		-- the one worth having on it. TargetSlots guards this read, and so must
 		-- this one: with the bar unreadable there is no slot to write to.
-		local base = ButtonAction("ActionButton1")
+		local base = Layout.SlotOf("ActionButton1")
 		if base then
 			for index = 1, 12 do
 				PlaceSpec(Layout.BAR1[index].defensive, base + index - 1, report)

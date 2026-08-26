@@ -86,6 +86,23 @@ local SKIN_CHURN_KB = 0.5
 -- screen between pulls, which is most of a session, costs nothing at all.
 local METER_CHURN_KB = 0.2
 
+-- The cloned action bars' tick, in KB per fifty ticks across every square on
+-- every bar the stub client has on, which is four bars of twelve.
+--
+-- Same kind of ratchet as the three above and quoted on the same terms. Nothing
+-- in Bars.Update builds anything: the slot comes back off the button's own
+-- action attribute, Slot.State returns loose values rather than a table, and
+-- Ability.Draw compares before every write. Forty-eight squares with nothing
+-- moving therefore measure 0.00, and the gate is the smallest figure that is
+-- not a claim a sampled number can never move.
+--
+-- What would move it is the shape this addon has caught twice already: a table
+-- built per square to carry the six values Ability.Draw takes as six
+-- arguments. At forty-eight squares and ten ticks a second that is four hundred
+-- and eighty throwaway tables a second, which is the number this gate exists to
+-- refuse.
+local BARS_CHURN_KB = 0.05
+
 --------------------------------------------------------------------------
 -- The stub
 --------------------------------------------------------------------------
@@ -363,6 +380,19 @@ function Region:SetAttribute(key, value)
 end
 function Region:GetAttribute(key)
 	return self.attributes and self.attributes[key]
+end
+
+-- Frame references, real rather than swallowed by the metatable above.
+--
+-- A SecureHandlerStateTemplate header reaches the buttons it re-points through
+-- these and through nothing else, so a no-op here would let a snippet that
+-- walked the wrong names pass every assertion below.
+function Region:SetFrameRef(name, frame)
+	self.refs = self.refs or {}
+	self.refs[name] = frame
+end
+function Region:GetFrameRef(name)
+	return self.refs and self.refs[name]
 end
 function Region:IsProtected() return false end
 function Region:SetShown(v) self.shown = v and true or false end
@@ -960,7 +990,7 @@ _G.CursorHasItem = constant(false)
 _G.GetInventorySlotInfo = function(name)
 	return 16, "Interface\\PaperDoll\\UI-PaperDoll-Slot-" .. tostring(name)
 end
-_G.GetActionInfo, _G.GetBonusBarOffset = constant(nil), constant(0)
+_G.GetActionInfo = constant(nil)
 
 -- One action slot, modelled rather than stubbed flat.
 --
@@ -1015,9 +1045,120 @@ _G.GetActionCount = function(slot)
 	local held = slots[slot]
 	return held and held.count or 0
 end
+
+-- Blizzard's own action bars, as much of them as a clone can see.
+--
+-- Five bars of twelve named buttons, each carrying the .action field that says
+-- which slot it drives, and a holder frame per multi-bar whose IsShown says
+-- whether the bar is on at all. Modelled rather than left absent, because
+-- Buttons/Bars.lua reads the slot off the button and the on/off off the holder,
+-- and with neither present every discovery comes back empty, the clone reports
+-- "nothing to clone", and the whole feature tests as passing.
+--
+-- Bar 1 sits on bonus bar page 1 at slot 73, which is what the live client
+-- answered for a warrior and is the number docs/README.md records. Three of the
+-- four multi-bars are on and one is off, because a clone that hardcoded "two
+-- bars" and a clone that cloned everything the client has a name for would both
+-- pass a fixture where every bar was on.
+local BLIZZARD_BARS = {
+	{ button = "ActionButton%d", base = 73 },
+	{ button = "MultiBarBottomLeftButton%d", base = 61, holder = "MultiBarBottomLeft", on = true },
+	{ button = "MultiBarBottomRightButton%d", base = 49, holder = "MultiBarBottomRight", on = true },
+	{ button = "MultiBarRightButton%d", base = 37, holder = "MultiBarRight", on = true },
+	{ button = "MultiBarLeftButton%d", base = 25, holder = "MultiBarLeft", on = false },
+}
+
+-- region rather than child, on purpose: these are Blizzard's frames and must
+-- not turn up in the anchor sweep that holds every frame on the addon's own
+-- grid to a whole pixel.
+for _, bar in ipairs(BLIZZARD_BARS) do
+	if bar.holder then
+		region("frame", _G.UIParent, bar.holder).shown = bar.on
+	end
+	for index = 1, 12 do
+		region("button", _G.UIParent, bar.button:format(index)).action = bar.base + index - 1
+	end
+end
+
 _G.GetMacroIndexByName, _G.GetMacroInfo = constant(0), constant(nil)
 _G.GetNumMacros = function() return 0, 0 end
-_G.RegisterStateDriver = function() end
+
+-- The state driver, modelled rather than accepted.
+--
+-- This is the one piece of Buttons/Bars.lua that cannot be read: bar 1 is
+-- re-pointed at another twelve action slots by a snippet running inside the
+-- restricted environment, because an attribute cannot be written from Lua in
+-- combat and a stance change happens in combat. A no-op here would leave the
+-- snippet's arithmetic, and which frames it walks, tested by nothing at all.
+--
+-- So the registration is recorded and the snippet is run as ordinary Lua with
+-- the three locals the client puts in scope. What that proves is what the
+-- snippet does. What it cannot prove is that the restricted environment accepts
+-- it, which is why DrivePages probes for the template and CanPage reports which
+-- path came up.
+local drivers = {}
+
+_G.RegisterStateDriver = function(frame, state, macro)
+	drivers[#drivers + 1] = { frame = frame, state = state, macro = macro }
+end
+_G.UnregisterStateDriver = function(frame, state)
+	for index = #drivers, 1, -1 do
+		if drivers[index].frame == frame and drivers[index].state == state then
+			table.remove(drivers, index)
+		end
+	end
+end
+
+-- Whether a driver was registered for that frame and state, and the macro
+-- condition it was given, so a test can assert the conditions cover every
+-- stance rather than only that a call was made.
+_G.WarriorKitDriver = function(frame, state)
+	for index = 1, #drivers do
+		if drivers[index].frame == frame and drivers[index].state == state then
+			return drivers[index].macro
+		end
+	end
+	return nil
+end
+
+-- One state transition, as the client would deliver it.
+_G.WarriorKitDriveState = function(frame, state, newstate)
+	local body = frame:GetAttribute("_onstate-" .. state)
+	if type(body) ~= "string" then
+		return false
+	end
+	local run = assert(loadstring("local self, stateid, newstate = ...\n" .. body))
+	run(frame, state, newstate)
+	return true
+end
+
+-- The binding set, which is what a bar clone reads its keys off. Separate from
+-- the override layer below on purpose: an override never writes into this, and
+-- an addon that could not tell the two apart would report its own bindings back
+-- to itself as the player's.
+--
+-- The keys are the ones Layout.BAR1 names in its comment, because those are the
+-- keys this install actually has and a fixture nobody uses proves less.
+local bindings = {}
+_G.WarriorKitBindings = bindings
+
+local BAR1_KEYS = { "E", "Q", "Z", "X", "C", "V", "F", "1", "2", "3", "4", "5" }
+for index = 1, 12 do
+	bindings[("ACTIONBUTTON%d"):format(index)] = { BAR1_KEYS[index] }
+	bindings[("MULTIACTIONBAR1BUTTON%d"):format(index)] = { "SHIFT-" .. BAR1_KEYS[index] }
+	bindings[("MULTIACTIONBAR2BUTTON%d"):format(index)] = { "CTRL-" .. BAR1_KEYS[index] }
+end
+-- One button with a secondary key as well, because the client allows two and
+-- losing the second one silently is exactly the kind of thing that ships.
+bindings.ACTIONBUTTON1 = { "E", "SHIFT-BUTTON3" }
+
+_G.GetBindingKey = function(command)
+	local held = bindings[command]
+	if not held then
+		return nil
+	end
+	return held[1], held[2]
+end
 -- The override layer, modelled rather than accepted. Every part that takes a
 -- key reads GetBindingAction back afterwards rather than believing its own
 -- SetOverrideBindingClick, because a client that takes the call and does
@@ -1040,7 +1181,19 @@ _G.GetBindingAction = function(key, checkOverride)
 	return held and held.action or ""
 end
 _G.IsControlKeyDown, _G.IsShiftKeyDown, _G.IsAltKeyDown = constant(false), constant(false), constant(false)
-_G.GetShapeshiftForm = constant(1)
+
+-- Which stance you are standing in, and which bonus bar page the client has bar
+-- 1 on because of it. Both are readable rather than constant, because
+-- Layout.Bar1Bases derives the other two stance pages from the one it can see
+-- and refuses outright when the offset says bar 1 is not paging at all. A
+-- constant zero left that refusal as the only reachable answer.
+--
+-- Form 1 and offset 1 is a warrior standing in battle stance, which is what the
+-- live client answered on Tusksfirst and is written down in docs/README.md.
+local shapeshift = { form = 1, bonus = 1 }
+_G.WarriorKitShapeshift = shapeshift
+_G.GetShapeshiftForm = function() return shapeshift.form end
+_G.GetBonusBarOffset = function() return shapeshift.bonus end
 _G.UISpecialFrames, _G.SlashCmdList, _G.Enum = {}, {}, {}
 
 --------------------------------------------------------------------------
@@ -1863,6 +2016,269 @@ do
 
 	print(("ability %d statuses over 2 palettes, the ladder walked to every rung,"
 		.. " 0 writes on 50 unchanged redraws, %.2f KB"):format(named, churned))
+end
+
+--------------------------------------------------------------------------
+-- The cloned action bars
+--
+-- The proof the whole part is for: can every bar the player already has, with
+-- every key they already have on it, be replaced by squares this addon draws.
+-- Four things below cannot be settled by reading Buttons/Bars.lua.
+--
+--   That discovery reads the client rather than a number somebody typed. The
+--   stub has three multi-bars on and one off, so a clone that assumed two bars
+--   and one that cloned every name it knows both fail here.
+--
+--   That the geometry lands on whole pixels. Every square is 27 across because
+--   27 is one of the two sizes where a stored icon texel lands on one screen
+--   pixel, and the bar around it is that arithmetic and nothing else.
+--
+--   That each square presses the slot it should in each stance. Bar 1 pages,
+--   and the paging happens inside a secure snippet, so the snippet is run.
+--
+--   That the keys arrive and that the off switch gives everything back. An
+--   override that was set and never read back is a key that silently does
+--   nothing, and a hidden Blizzard button with no way back is worse than no
+--   feature at all.
+--------------------------------------------------------------------------
+
+do
+	local barsChurn = 0
+	local Bars = ns.Bars
+	local slots = _G.WarriorKitSlots
+	local ART = "Interface\\Icons\\Ability_Warrior_Charge"
+
+	-- 27 is not a taste decision and the plan is not allowed to drift off it.
+	local sharp = false
+	for _, size in ipairs(ns.UI.IconSizes()) do
+		if size == 27 then
+			sharp = true
+		end
+	end
+	check(sharp, "the shipped square size is not one the client can draw sharp")
+
+	-- Bar 1's twelve slots carry art so the tick has something real to draw;
+	-- the rest stay empty, which is the mixed scene a fresh character has.
+	for index = 0, 11 do
+		slots[73 + index] = { texture = ART }
+	end
+
+	ns.db.actionBars = true
+	check(Bars.Apply(), "the clone reported combat deferring it with no combat running")
+
+	local bars = Bars.All()
+	check(#bars == 4, ("the stub has four action bars on and %d were cloned"):format(#bars))
+
+	local found = {}
+	for index = 1, #bars do
+		found[bars[index].def.key] = bars[index]
+	end
+	check(found.bar1 and found.bottomleft and found.bottomright and found.right,
+		"a bar the client has switched on was not cloned")
+	check(found.right2 == nil,
+		"a bar the client has switched off was cloned, so the off switch would show it")
+
+	--------------------------------------------------------------------------
+	-- Geometry
+	--------------------------------------------------------------------------
+
+	local squares = 0
+	for index = 1, #bars do
+		local entry = bars[index]
+		local px = ns.UI.Pixel(entry.frame)
+		check(px == 1, ("%s is not on the pixel grid, one unit is %.3f pixels")
+			:format(entry.def.key, px))
+
+		local columns = entry.def.columns
+		local rows = 12 / columns
+		local width = 3 * 2 + columns * 27 + (columns - 1) * 2
+		local height = 3 * 2 + rows * 27 + (rows - 1) * 2
+		check(entry.frame:GetWidth() == width,
+			("%s came out %s wide, the plan says %d"):format(entry.def.key,
+				tostring(entry.frame:GetWidth()), width))
+		check(entry.frame:GetHeight() == height,
+			("%s came out %s tall, the plan says %d"):format(entry.def.key,
+				tostring(entry.frame:GetHeight()), height))
+
+		for slot = 1, 12 do
+			local w = entry.buttons[slot]
+			squares = squares + 1
+			check(w:GetWidth() == 27 and w:GetHeight() == 27,
+				("%s square %d is %s by %s, not 27 square"):format(entry.def.key, slot,
+					tostring(w:GetWidth()), tostring(w:GetHeight())))
+		end
+	end
+	check(squares == 48, ("four bars of twelve is 48 squares and %d were made"):format(squares))
+
+	--------------------------------------------------------------------------
+	-- Which slot each square presses
+	--------------------------------------------------------------------------
+
+	local function pressing(entry, index)
+		return entry.buttons[index]:GetAttribute("action")
+	end
+
+	-- The bars that do not page each keep the twelve the button they replaced
+	-- was reading, which is the whole of "do not invent a slot space".
+	check(pressing(found.bottomleft, 1) == 61 and pressing(found.bottomleft, 12) == 72,
+		"the bottom left clone is not on the slots its Blizzard bar was on")
+	check(pressing(found.bottomright, 1) == 49 and pressing(found.right, 12) == 48,
+		"a clone is not on the slots its Blizzard bar was on")
+
+	-- Bar 1 pages. Battle is 73, and the other two stances are the twelve slot
+	-- stride away, which is what the live client answered on Tusksfirst.
+	check(Bars.CanPage(), "the state driver did not come up, so bar 1 cannot page in combat")
+	check(pressing(found.bar1, 1) == 73 and pressing(found.bar1, 12) == 84,
+		"bar 1 did not start on the stance it is standing in")
+
+	local macro = _G.WarriorKitDriver(found.bar1.header, "page")
+	check(type(macro) == "string" and macro:match("stance:1") and macro:match("stance:2")
+		and macro:match("stance:3") and macro:match("nostance"),
+		"the page driver does not cover all three stances and no stance")
+
+	-- Driven the way the client drives it, through the snippet, because in
+	-- combat the snippet is the only thing that can do this at all.
+	local PAGES = { ["1"] = 73, ["2"] = 85, ["3"] = 97 }
+	for state, base in pairs(PAGES) do
+		check(_G.WarriorKitDriveState(found.bar1.header, "page", state),
+			"the header carries no page handler for the state driver to run")
+		local wrong = 0
+		for index = 1, 12 do
+			if pressing(found.bar1, index) ~= base + index - 1 then
+				wrong = wrong + 1
+			end
+		end
+		check(wrong == 0,
+			("stance page %s left %d of 12 squares on the wrong slot"):format(state, wrong))
+	end
+
+	-- A stance the macro maps to nothing falls to page one rather than to a bar
+	-- of twelve empty squares.
+	_G.WarriorKitDriveState(found.bar1.header, "page", "9")
+	check(pressing(found.bar1, 1) == 73, "an unknown page left bar 1 pointing at nothing")
+	_G.WarriorKitDriveState(found.bar1.header, "page", "1")
+
+	--------------------------------------------------------------------------
+	-- The keys
+	--------------------------------------------------------------------------
+
+	local claimed, missed = 0, 0
+	for index = 1, #bars do
+		local entry = bars[index]
+		for slot = 1, 12 do
+			local name = entry.buttons[slot]:GetName()
+			local first, second = _G.GetBindingKey(entry.def.command:format(slot))
+			for _, key in ipairs({ first, second }) do
+				claimed = claimed + 1
+				if _G.GetBindingAction(key, true) ~= ("CLICK %s:LeftButton"):format(name) then
+					missed = missed + 1
+				end
+			end
+		end
+	end
+	check(claimed == 37,
+		("the stub binds 37 keys across the bars it has on and %d were read"):format(claimed))
+	check(missed == 0,
+		("%d of %d keys did not reach the square they were put on"):format(missed, claimed))
+	check(Bars.Keys() == claimed,
+		("the clone reports holding %d keys and the override layer carries %d")
+			:format(Bars.Keys(), claimed))
+
+	-- The secondary key is a key the player set on purpose and is the one a
+	-- clone drops silently.
+	check(_G.GetBindingAction("SHIFT-BUTTON3", true)
+		== ("CLICK %s:LeftButton"):format(found.bar1.buttons[1]:GetName()),
+		"the second key on a button was read and not bound")
+
+	-- And what gets drawn in the corner, which is a different question from
+	-- what gets bound. "SHIFT-BUTTON3" at seven pixels is a smear.
+	check(Bars.Short("SHIFT-BUTTON3") == "sM3", "a modified mouse button does not shorten")
+	check(Bars.Short("CTRL-SHIFT-NUMPAD7") == "csn7", "a stacked modifier does not shorten")
+	check(Bars.Short("E") == "E", "a plain key was rewritten")
+	check(found.bottomleft.buttons[1].key:GetText() == "sE",
+		"the square is not showing the key that presses it")
+
+	--------------------------------------------------------------------------
+	-- Blizzard's own buttons
+	--------------------------------------------------------------------------
+
+	check(not _G.ActionButton1:IsShown(), "Blizzard's bar 1 button is still on screen")
+	check(not _G.MultiBarRightButton12:IsShown(), "a cloned bar's Blizzard button is still up")
+	check(_G.MultiBarLeftButton1:IsShown(),
+		"a button on a bar nobody cloned was hidden, so the off switch would show it")
+	check(Bars.Hidden() == 48, ("48 buttons were cloned over and %d were hidden")
+		:format(Bars.Hidden()))
+
+	--------------------------------------------------------------------------
+	-- What a tick costs
+	--------------------------------------------------------------------------
+
+	local writes = 0
+	local function countWrites(host, method)
+		host[method] = function() writes = writes + 1 end
+	end
+
+	local watched = found.bar1.buttons[1]
+	countWrites(watched.icon, "SetTexture")
+	countWrites(watched.icon, "SetDesaturated")
+	countWrites(watched, "SetAlpha")
+	countWrites(watched.cooldown, "SetCooldown")
+	countWrites(watched.timer, "SetText")
+	countWrites(watched.count, "SetText")
+
+	Bars.Update()
+	writes = 0
+	for _ = 1, 50 do
+		Bars.Update()
+	end
+	check(writes == 0,
+		("50 ticks with nothing moving wrote a square %d times"):format(writes))
+
+	-- A slot that changed writes, so the guard above is a guard and not a
+	-- ticker that has quietly stopped drawing.
+	slots[73] = { texture = ART, usable = false, noPower = true }
+	Bars.Update()
+	check(writes > 0, "a square did not redraw when its slot changed")
+
+	collectgarbage()
+	collectgarbage("stop")
+	local before = collectgarbage("count")
+	for _ = 1, 50 do
+		Bars.Update()
+	end
+	barsChurn = collectgarbage("count") - before
+	collectgarbage("restart")
+
+	--------------------------------------------------------------------------
+	-- The off switch
+	--------------------------------------------------------------------------
+
+	ns.db.actionBars = false
+	check(Bars.Apply(), "turning the clone off reported combat deferring it")
+
+	check(_G.ActionButton1:IsShown() and _G.MultiBarRightButton12:IsShown(),
+		"Blizzard's buttons did not come back")
+	check(Bars.Hidden() == 0, "the off switch left buttons hidden with no way to find them")
+	check(not found.bar1.frame:IsShown(), "a cloned bar is still on screen with the clone off")
+	check(_G.GetBindingAction("E", true) == "",
+		"an override binding outlived the feature that set it")
+	check(Bars.Count() == 0, "the tick is still drawing squares nobody can see")
+
+	-- And back, because the anchor sweep at the end of this file is the only
+	-- thing that holds these bars to a whole pixel at 2x and 3x, and it can
+	-- only see frames that are there.
+	ns.db.actionBars = true
+	Bars.Apply()
+	check(_G.GetBindingAction("E", true) ~= "", "the keys did not come back with the bars")
+
+	slots[73] = { texture = ART }
+
+	print(("bars   %d bars, %d squares of 27 px, %d keys, pages %s, %.2f KB per 50 ticks, gate is %.2f")
+		:format(#bars, squares, claimed, Bars.CanPage() and "in combat" or "out of combat only",
+			barsChurn, BARS_CHURN_KB))
+	check(barsChurn <= BARS_CHURN_KB,
+		("the bars tick allocated %.2f KB per 50 ticks, over the %.2f KB gate")
+			:format(barsChurn, BARS_CHURN_KB))
 end
 
 -- A mob and the plate the client puts up for it, carrying a scale of its own

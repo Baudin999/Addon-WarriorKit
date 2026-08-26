@@ -98,6 +98,13 @@ Loadouts\Feature.lua
 Buttons\Slot.lua
 Buttons\Layout.lua
 Buttons\Ranks.lua
+
+# The bars themselves, after the three files they read and before Feature.lua
+# as everywhere else. Slot.lua says what one action slot is doing, Layout.lua
+# resolves which slots a bar drives, and Bars.lua is what draws them, so it
+# loads last of the three. It also needs UI\Ability.lua, UI\Flow.lua and the
+# pixel grid, all of which are far above this line.
+Buttons\Bars.lua
 Buttons\Feature.lua
 
 UnitFrames\Plates.lua

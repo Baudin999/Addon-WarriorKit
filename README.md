@@ -23,6 +23,12 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   over it. There is no breakdown to open, because there is nothing behind a row.
 - **A warrior bar loadout**, with a backup of whatever it replaced, plus an
   Edit Mode layout carried inside the addon.
+- **Your own action bars, redrawn.** `/wk actionbars on` reads whichever bars
+  you have up, stands one of ours up for each on the same action slots, moves
+  your keys onto it, and hides Blizzard's behind it. Bar 1 still pages by
+  stance. Every icon is drawn at the one size this client can draw sharp, and
+  the border says whether a press would land. Your keybindings are read and
+  never written, so `off` gives everything back with no reload.
 - **Stripped bar art**, so the bars read as a row of icons. `/wk art on` puts
   the Blizzard art back.
 - **Four chores done for you.** Corpses empty in one go instead of one slot at
