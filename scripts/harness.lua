@@ -2104,10 +2104,23 @@ for _, block in ipairs(blocks) do
 			end
 		end
 		check(slot ~= nil, key .. ": the portrait's square is not hung on the block")
+
+		-- Read as an offset into the block rather than as an anchor on the
+		-- mirrored corner, because ns.UI.Flow pins every frame in a tree to the
+		-- root's top left corner at the offset that came out. Deliberately: a
+		-- chain of anchors can only align the run it starts, which is what the
+		-- hand-written version of this layout worked around by threading the
+		-- mirror's sign through every offset it wrote.
+		--
+		-- The target's block runs backwards, so the square is the last cell of
+		-- the row and sits a gauge's width in. On the other two it is the first.
 		local square = slot and slot.points[1]
-		check(square and square[1] == corner and square[3] == corner
-			and square[4] == 0 and square[5] == 0,
-			key .. ": the square is not on the block's " .. corner)
+		local inset = key == "target" and (box:GetWidth() - slot:GetWidth()) or 0
+		check(square and square[1] == "TOPLEFT" and square[2] == box
+			and square[3] == "TOPLEFT" and square[4] == inset and square[5] == 0,
+			("%s: the square is pinned to the block at %s, %s and belongs at %d, 0")
+				:format(key, tostring(square and square[4]), tostring(square and square[5]),
+					inset))
 		check(slot and slot:GetWidth() == slot:GetHeight() and slot:GetHeight() == box:GetHeight(),
 			key .. ": the portrait's square is not the block's height squared")
 
@@ -2237,6 +2250,64 @@ for _, block in ipairs(blocks) do
 		for _, text in ipairs(top and top.regions or {}) do
 			check(text.fontObject ~= nil and text.fontPath == nil,
 				key .. ": a font string carries its own font instead of a shared object")
+		end
+	end
+end
+
+--------------------------------------------------------------------------
+-- The two rails, measured against the block they divide
+--
+-- The inside of the block is laid out by ns.UI.Flow now, and this is the check
+-- the enemy bars did not have when the same engine handed their gauge a height
+-- of one pixel: a node with no size and no grow measures zero, is given a
+-- pixel, and draws a bar nobody can read. Every anchor in that layout was
+-- individually correct and nothing caught it until somebody measured it.
+--
+-- So both rails are measured, and against the block rather than against the
+-- settings. Health, power and the three hairlines are the block's height. Each
+-- rail is the block less the portrait's square and less the pixel the outline
+-- draws into. Both start where the square stops, which the mirror puts on the
+-- other side of the block.
+--------------------------------------------------------------------------
+
+for _, block in ipairs(blocks) do
+	local key, box = block[1], block[2]
+	local healthRail, powerRail = box and box.children[1], box and box.children[2]
+	if healthRail and powerRail then
+		local px = ns.UI.Pixel(box)
+		-- The block's height, which is also the side of the portrait's square.
+		local side = box:GetHeight()
+		local function near(a, b) return math.abs(a - b) < 1e-9 end
+
+		-- Two bars and three hairlines fill the square exactly. A fractional
+		-- share would leave a seam along one of them, which reads as a
+		-- rendering fault rather than as a layout that does not add up.
+		local stack = healthRail:GetHeight() + powerRail:GetHeight() + 3 * px
+		check(near(stack, side),
+			("%s: a %.0f px health rail and a %.0f px power rail with three hairlines"
+				.. " come to %.0f, and the block is %.0f")
+				:format(key, healthRail:GetHeight(), powerRail:GetHeight(), stack, side))
+
+		local wide = box:GetWidth() - side - px
+		local at = {
+			{ "health", healthRail, px },
+			{ "power", powerRail, 2 * px + healthRail:GetHeight() },
+		}
+		for _, row in ipairs(at) do
+			local name, rail, y = row[1], row[2], row[3]
+			check(near(rail:GetWidth(), wide),
+				("%s: the %s rail is %.0f px wide inside a %.0f px block, expected %.0f")
+					:format(key, name, rail:GetWidth(), box:GetWidth(), wide))
+			-- Flow pins to the root's top left corner, so this is the offset
+			-- into the block: one pixel down for the health rail, past it and
+			-- the hairline under it for the power rail.
+			local left = key == "target" and px or side
+			local point = rail.points and rail.points[1]
+			check(point and point[1] == "TOPLEFT" and point[2] == box
+				and point[3] == "TOPLEFT" and near(point[4], left) and near(point[5], -y),
+				("%s: the %s rail is pinned at %s, %s and belongs at %.0f, %.0f")
+					:format(key, name, tostring(point and point[4]),
+						tostring(point and point[5]), left, -y))
 		end
 	end
 end

@@ -111,6 +111,9 @@ local Unit = ns.Unit
 local Color = Unit.Color
 local Level = Unit.Level
 
+-- The stack panel the enemy bars are laid out with, which lays the block out.
+local Flow = ns.UI.Flow
+
 local BACKDROP = Color.backdrop
 local TRACK = Color.track -- the spent part of a bar is its own colour, this dark
 local NAME_TEXT = Color.text.name
@@ -1035,21 +1038,21 @@ end
 --
 -- The corner is the one the portrait is on, which is the left of the player
 -- frame and the right of the target frame, so the block grows away from it in
--- opposite directions on the two and every offset below carries the sign that
--- says which. Nothing is measured off Blizzard's layout any more. The block
--- used to hang on the portrait's own anchor and be clamped to the room the
--- frame had left, which put the drawn rectangle somewhere inside a much
--- bigger invisible one; the frame is the drawn rectangle now, so there is no
--- room to be left and nothing to clamp against.
+-- opposite directions on the two. Nothing is measured off Blizzard's layout any
+-- more. The block used to hang on the portrait's own anchor and be clamped to
+-- the room the frame had left, which put the drawn rectangle somewhere inside a
+-- much bigger invisible one; the frame is the drawn rectangle now, so there is
+-- no room to be left and nothing to clamp against. What is inside the block
+-- used to be SetPoint arithmetic with the mirror's sign threaded through every
+-- offset in it, and is a tree handed to ns.UI.Flow now.
 local function Place(entry)
 	local spec, frame = entry.spec, entry.frame
 
-	-- Every number below this line is a whole count of physical pixels, and px
-	-- is what turns one into the units the block is drawn in. On the grid px is
+	-- Every number below this line is a whole count of physical pixels, and px is
+	-- what turns one into the units the block is drawn in. On the grid px is
 	-- exactly 1 and every multiply is free. Off it, on a client with no
-	-- SetIgnoreParentScale, px is the fraction that keeps the block the same
-	-- physical size and its hairlines one pixel wide, which is as close as that
-	-- client gets.
+	-- SetIgnoreParentScale, it is the fraction that keeps the block the same
+	-- physical size and its hairlines one pixel wide.
 	local px = ns.Pixel(entry.box)
 	-- And this is one pixel in Blizzard's units, for the handful of sizes and
 	-- offsets that get written onto a region of theirs rather than one of ours.
@@ -1058,41 +1061,38 @@ local function Place(entry)
 	local side = math.max(math.floor(ns.db.skinHeight * spec.scale + 0.5), 16)
 	local width = math.max(math.floor(ns.db.skinWidth * spec.scale + 0.5), 60)
 
-	-- LEFT is the side the portrait is on, RIGHT the side the gauge runs to,
-	-- and pull is the sign that turns an inset into an offset on whichever
-	-- edge that leaves. Mirroring the frame swaps all three and nothing else.
+	-- LEFT is the side the portrait is on, RIGHT the side the gauge runs to, and
+	-- pull is the sign that turns an inset into an offset on whichever edge that
+	-- leaves. What is left for them is what Flow cannot place: the block's corner
+	-- on Blizzard's frame, four badges of theirs on the square, and four strings
+	-- of ours as wide as whatever the unit happens to be called.
 	local portraitEdge = spec.mirror and "RIGHT" or "LEFT"
 	local gaugeEdge = spec.mirror and "LEFT" or "RIGHT"
 	local pull = spec.mirror and 1 or -1
 
 	-- The block first, on the frame's corner, then the frame given the block's
-	-- rectangle. In that order: the fit converts the block's size out of the
-	-- grid and into the frame's units, and a block that has not been sized yet
-	-- would hand it last tick's numbers.
+	-- rectangle. In that order: the fit converts the block's size out of the grid
+	-- into the frame's units, and a block not yet sized hands it last tick's.
 	entry.box:ClearAllPoints()
 	entry.box:SetPoint("TOP" .. portraitEdge, frame, "TOP" .. portraitEdge, 0, 0)
 	entry.box:SetSize((side + width) * px, side * px)
 	entry.box:SetFrameLevel(frame:GetFrameLevel())
 	ns.EdgeSize(entry.box.edges, px)
 
-	-- Measured every time rather than once, because the first target this
-	-- addon sees may carry no aura at all and the number is only readable off
-	-- an icon the client has already placed. It settles on the first target
-	-- that has one and never moves again.
+	-- Measured every time rather than once, because the first target this addon
+	-- sees may carry no aura at all and the number is only readable off an icon
+	-- the client has already placed. It settles on the first target that has one.
 	entry.auraLift = AuraLift(entry)
 	Fit(entry, (side + width) * px, side * px, entry.auraLift)
 	PinSelection(entry)
 
-	-- The portrait's square, which used to be the fixed point the whole block
-	-- hung from and is now just the first cell of it.
-	entry.slot:ClearAllPoints()
-	entry.slot:SetPoint("TOP" .. portraitEdge, entry.box, "TOP" .. portraitEdge, 0, 0)
-	entry.slot:SetSize(side * px, side * px)
-	entry.slot:SetFrameLevel(frame:GetFrameLevel())
-
+	-- The z-order Build's note sets out, rewritten on every relayout.
 	entry.top:ClearAllPoints()
 	entry.top:SetAllPoints(entry.box)
 	entry.top:SetFrameLevel(frame:GetFrameLevel() + 3)
+	entry.slot:SetFrameLevel(frame:GetFrameLevel())
+	entry.healthRail:SetFrameLevel(entry.box:GetFrameLevel() + 1)
+	entry.powerRail:SetFrameLevel(entry.box:GetFrameLevel() + 1)
 
 	-- Whole pixels, because the two bars have to add up to the square exactly:
 	-- health plus power plus the three hairlines is the side, and a fractional
@@ -1100,6 +1100,36 @@ local function Place(entry)
 	local inner = side - HAIRLINES
 	local health = math.floor(inner * HEALTH_SHARE)
 	local power = inner - health
+
+	-- The whole inside of the block, in one row of three: the portrait's square,
+	-- the gauge, and one pixel of nothing on the far edge for the box's own
+	-- outline to draw into. The divider is the square's inner column rather than
+	-- a cell of its own, so the square and the gauge read as one strip with a
+	-- hairline down it rather than as two boxes that happen to touch.
+	--
+	-- `reverse` is the whole of the mirroring: it runs the row backwards, so the
+	-- target's three cells land the other way round with no sign anywhere here.
+	--
+	-- Every node holding a frame stretches across the axis it is not sized on. A
+	-- node with neither a size nor a stretch measures zero and is handed one
+	-- pixel, which is what shipped on the enemy bars' gauge and stood until
+	-- somebody measured it. Both rails are measured in the harness now.
+	--
+	-- A rail carries no texture, only the rectangle its bar is pinned to. It used
+	-- to hold the spent track, which made the gauge depend on an order between
+	-- two frames the client did not keep: see the note on Underlay.
+	Flow.Arrange(entry.box, {
+		direction = "row", reverse = spec.mirror, align = "stretch",
+		width = (side + width) * px, height = side * px,
+		{ frame = entry.slot, width = side * px, align = "stretch",
+			direction = "row", reverse = spec.mirror, pad = { 0, px, 0, px },
+			{ grow = 1 }, { frame = entry.divider, width = px } },
+		{ direction = "column", grow = 1, gap = px, align = "stretch",
+			pad = { 0, px, 0, px },
+			{ frame = entry.healthRail, height = health * px },
+			{ frame = entry.powerRail, height = power * px } },
+		{ width = px },
+	})
 
 	if entry.portrait then
 		-- Inset by one pixel written in Blizzard's units, because a SetPoint
@@ -1114,42 +1144,12 @@ local function Place(entry)
 		entry.portrait:SetDrawLayer("OVERLAY")
 	end
 
-	-- One hairline where the square meets the gauge, drawn on the square's
-	-- inner edge, so the two read as one strip rather than as two boxes that
-	-- happen to touch.
-	entry.divider:ClearAllPoints()
-	entry.divider:SetPoint("TOP" .. gaugeEdge, entry.slot, "TOP" .. gaugeEdge, 0, -px)
-	entry.divider:SetPoint("BOTTOM" .. gaugeEdge, entry.slot, "BOTTOM" .. gaugeEdge, 0, px)
-	entry.divider:SetWidth(px)
-
-	-- The gauge is everything past the divider. A rail is pinned on both sides
-	-- rather than given a width, so it fills what is left exactly, and its
-	-- height is a whole number of pixels measured down from the top of the box.
-	--
-	-- A rail carries no texture of its own any more, only the rectangle its bar
-	-- is pinned to. It used to hold the spent track as well, which made the
-	-- order between two frames part of what the gauge looked like, and that is
-	-- an order this file wrote correctly and the client did not keep: see the
-	-- note on Underlay. The level is still written and still says what it
-	-- said, that the block is under the gauge and the gauge is under the text,
-	-- but nothing you can see now depends on the client agreeing.
-	local function Rail(rail, top, height)
-		local y = (top and -1 or -(2 + health)) * px
-		rail:ClearAllPoints()
-		rail:SetPoint("TOP" .. gaugeEdge, entry.box, "TOP" .. gaugeEdge, pull * px, y)
-		rail:SetPoint("TOP" .. portraitEdge, entry.slot, "TOP" .. gaugeEdge, 0, y)
-		rail:SetHeight(height * px)
-		rail:SetFrameLevel(entry.box:GetFrameLevel() + 1)
-	end
-
-	Rail(entry.healthRail, true, health)
-	Rail(entry.powerRail, false, power)
-
 	-- What the tick needs to draw an incoming heal, worked out here because all
 	-- three answers change with the layout and none of them changes between two
-	-- ticks. The rail is the gauge less the one pixel it is inset by on its
-	-- outer edge, and that is the full width a heal is a fraction of.
-	entry.railPixels = math.max(width - 1, 1)
+	-- ticks. The width a heal is a fraction of is read back off the rail Flow
+	-- just sized rather than derived from the settings again, so one thing
+	-- decides how wide the gauge is and not two.
+	entry.railPixels = math.max(math.floor(entry.healthRail:GetWidth() / px + 0.5), 1)
 	-- One pixel in the units the slice is drawn in, which are the bar's and no
 	-- longer the block's: the slice is a region of Blizzard's health bar now,
 	-- so a width written on it crosses the boundary like every other number
