@@ -478,7 +478,11 @@ function ChatWindow.Apply()
 	end
 
 	Relayout()
-	window.frame:SetShown((ns.db.chat and ns.db.chatShown) and true or false)
+	local shown = (ns.db.chat and ns.db.chatShown) and true or false
+	window.frame:SetShown(shown)
+	-- The claim on Blizzard's frames follows the window. A closed window that
+	-- kept the claim is a conversation deleted from both windows at once.
+	ns.ChatFeed.Watched(shown)
 	return true
 end
 
@@ -500,6 +504,7 @@ function ChatWindow.Hide()
 	end
 	ns.db.chatShown = false
 	window.frame:Hide()
+	ns.ChatFeed.Watched(false)
 	return true
 end
 

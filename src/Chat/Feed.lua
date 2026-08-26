@@ -109,6 +109,10 @@ local applied = false
 local claimed = {}
 local filtered = 0
 
+-- Whether the window that draws this is on screen. Set by whoever draws, the
+-- same as Feed.OnLine is, and read by Claiming below.
+local watched = false
+
 local frame = CreateFrame("Frame")
 
 --------------------------------------------------------------------------
@@ -263,6 +267,28 @@ local function Wanted(event)
 	return ns.db.chat
 end
 
+-- Whether a line may be taken out of Blizzard's frames.
+--
+-- Three things have to hold and the third is the one that was missing. The
+-- setting has to be on, something has to be drawing, and that something has to
+-- be on screen.
+--
+-- A filter installed while nothing is drawing does not move the conversation,
+-- it deletes it: the line comes out of Blizzard's frames and lands in a window
+-- that is closed, or in no window at all when the build failed, and the only
+-- symptom is a chat log that has gone quiet. That is not a corner case. The
+-- window has a close box, the closed state is saved, and Feed.Apply runs again
+-- at every login, so one press deleted every say, party, guild, raid and
+-- whisper line from the screen until the player found /wk chat.
+--
+-- The claim is also asked for at ADDON_LOADED, which is before the window
+-- exists at all. Holding it back until something is attached is what keeps the
+-- client's login replay in Blizzard's window instead of in the hundred line
+-- pending buffer, where everything past the hundredth was dropped.
+local function Claiming()
+	return ns.db.chat and ns.db.chatClaim and Feed.OnLine ~= nil and watched
+end
+
 -- A filter per claimed event, made once and kept, because
 -- ChatFrame_RemoveMessageEventFilter matches on the function itself and a fresh
 -- closure would remove nothing and leave the old one filtering forever.
@@ -302,7 +328,7 @@ end
 
 function Feed.Apply()
 	applied = true
-	local claiming = ns.db.chat and ns.db.chatClaim
+	local claiming = Claiming()
 	for event in pairs(KINDS) do
 		local want = Wanted(event)
 		-- An event this client does not know raises on registration rather than
@@ -324,6 +350,12 @@ end
 -- line you wanted.
 function Feed.Attach(onLine)
 	Feed.OnLine = onLine
+	-- Attaching moves what Claiming answers, so the filters are worked out
+	-- again here rather than left to the caller. A caller that forgot the
+	-- second call is a chat window that has gone quiet.
+	if applied then
+		Feed.Apply()
+	end
 	if not onLine then
 		return 0
 	end
@@ -336,6 +368,19 @@ function Feed.Attach(onLine)
 	return held
 end
 
+-- Told by whoever draws, whenever it comes up or goes away. The claim on
+-- Blizzard's frames follows the window, because a window you cannot see is not
+-- drawing the conversation it took.
+function Feed.Watched(shown)
+	shown = shown and true or false
+	if watched == shown then
+		return false
+	end
+	watched = shown
+	Feed.Apply()
+	return true
+end
+
 function Feed.Describe()
 	if not ns.db.chat then
 		return "off, Blizzard's chat draws everything"
@@ -345,6 +390,9 @@ function Feed.Describe()
 	end
 	if not Feed.Installed() then
 		return "on, but this client has no message filter so both windows draw"
+	end
+	if not Claiming() then
+		return "on, and handed back to Blizzard's chat while this window is closed"
 	end
 	return ("on, %d lines taken out of Blizzard's frames"):format(filtered)
 end
