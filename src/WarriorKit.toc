@@ -130,6 +130,12 @@ Buttons\Blizzard.lua
 Buttons\Which.lua
 Buttons\Bars.lua
 
+# The trace, before the squares that print through it. Read only and off unless
+# asked for: what the client says is under the cursor, and every gesture a
+# square gets, for the drops on bar 1 that two fixes written from the code have
+# now failed to explain.
+Buttons\Trace.lua
+
 # What one square answers to the mouse: the tooltip you get by hovering it and
 # the drag that fills it. Split out of Bars.lua at the 800 line gate, and a real
 # seam rather than a convenient one: everything in it hangs a script on a button

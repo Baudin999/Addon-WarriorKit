@@ -92,42 +92,122 @@ end
 -- session, because this client has no PickupAction or no PlaceAction at all,
 -- and that is worth one line in chat rather than an evening of dragging.
 --
--- Once a session rather than once a square: a drag along a bar passes over
+-- Once per reason rather than once per square: a drag along a bar passes over
 -- twelve of them and twelve identical lines is not a better answer than one.
+-- Keyed by the line itself, so a second thing going wrong still gets said;
+-- the first version latched on the first message and swallowed every other
+-- reason for the rest of the session, which is the same silence one layer up.
+--
 -- Combat is never reported, because it clears on its own and because a fight
 -- is when the chat frame has the least room for a sentence you did not need.
-local said
+local told = {}
 
-local function Refused(why)
-	if said or not why or why == ns.Layout.BUSY_COMBAT then
+local function Say(line)
+	if not line or told[line] then
 		return
 	end
-	said = true
-	ns.Print("nothing can be dropped on a square: " .. why .. ".")
+	told[line] = true
+	ns.Print(line)
+end
+
+local function Refused(why)
+	if not why or why == ns.Layout.BUSY_COMBAT then
+		return
+	end
+	Say("nothing can be dropped on a square: " .. why .. ".")
+end
+
+-- What the cursor is holding, as the three values a drop is judged by.
+--
+-- PlaceAction on a slot that already has something swaps: the slot takes what
+-- was on the cursor and the cursor takes what was in the slot. So "the cursor
+-- is still loaded" is not a failure and "the cursor is loaded with exactly what
+-- it was loaded with" is, which is why all three fields are compared rather
+-- than the presence of a cursor at all.
+local function Cursor()
+	if type(GetCursorInfo) ~= "function" then
+		return nil
+	end
+	return GetCursorInfo()
 end
 
 local function Carry(w)
 	w:RegisterForDrag("LeftButton")
 
 	w:SetScript("OnDragStart", function(self)
+		local slot = self:GetAttribute("action")
+		ns.BarTrace.Say(("pick up from slot %s, cursor %s"):format(
+			tostring(slot), ns.BarTrace.Cursor()))
 		local can, why = ns.Layout.CanCarry()
 		if not can then
 			return Refused(why)
 		end
-		local slot = self:GetAttribute("action")
 		if slot then
 			PickupAction(slot)
 		end
+		ns.BarTrace.Say("after the pick up, cursor " .. ns.BarTrace.Cursor())
+	end)
+
+	-- The other way a square gets filled, and the one the trace could not see.
+	--
+	-- Dropping a spell is a click as often as it is a drag: press over the
+	-- square with the cursor loaded and let go, and the client sends the button
+	-- a click rather than a receive drag. PostClick is where that can be
+	-- watched from, and it is the one hook a secure action button offers an
+	-- addon without standing in front of the protected call: it runs after the
+	-- client has already done whatever the click was going to do.
+	--
+	-- Guarded on the switch before anything is built, because this runs after
+	-- every cast off every square and the format below would otherwise be a
+	-- string allocated per press for nobody to read.
+	w:SetScript("PostClick", function(self, button)
+		if not ns.BarTrace.Running() then
+			return
+		end
+		ns.BarTrace.Say(("click %s on slot %s, cursor %s"):format(
+			tostring(button), tostring(self:GetAttribute("action")),
+			ns.BarTrace.Cursor()))
 	end)
 
 	w:SetScript("OnReceiveDrag", function(self)
+		local slot = self:GetAttribute("action")
+		ns.BarTrace.Say(("drop on slot %s, cursor %s"):format(
+			tostring(slot), ns.BarTrace.Cursor()))
+
 		local can, why = ns.Layout.CanCarry()
 		if not can then
 			return Refused(why)
 		end
-		local slot = self:GetAttribute("action")
-		if slot then
-			PlaceAction(slot)
+
+		-- A square with no slot behind it is the one refusal that is this
+		-- addon's own fault rather than the client's, and it is the state a
+		-- bar 1 whose pages never arrived would sit in: it draws, it hovers and
+		-- it presses, because every one of those reads the same missing
+		-- attribute and finds nothing to complain about.
+		if not slot then
+			return Say("that square is not pointing at an action slot, so nothing can be put on it.")
+		end
+
+		local kind, first, second = Cursor()
+		local was = ns.Slot.Texture(slot)
+		PlaceAction(slot)
+		local after, one, two = Cursor()
+		ns.BarTrace.Say("after the drop, cursor " .. ns.BarTrace.Cursor())
+
+		-- The drop reached us, the client took the call, and nothing moved:
+		-- the cursor is holding what it went in with and the slot is holding
+		-- what it already had. That is the one outcome that used to look
+		-- exactly like a bar the mouse never reached.
+		--
+		-- The slot is checked as well as the cursor because a swap leaves the
+		-- cursor full by design, and because dropping a spell onto a slot that
+		-- already holds it leaves the cursor looking untouched. Said as what is
+		-- known rather than as a diagnosis: nothing moved, and whether that is
+		-- the client refusing the slot or a drop that had nothing to do is not
+		-- something this line can tell.
+		if kind and after == kind and one == first and two == second
+			and ns.Slot.Texture(slot) == was then
+			Say(("dropping that on action slot %d changed nothing."):format(slot))
 		end
 	end)
 end

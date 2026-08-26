@@ -129,6 +129,17 @@ local function Where()
 	ns.Print("paste those over the geometry in that file, then actionbars reset.")
 end
 
+-- The trace, on or off. A toggle rather than on and off words, because it is
+-- one switch pressed twice in the same minute by somebody with a question, and
+-- because it is deliberately not saved: nothing here survives a reload.
+local function Trace()
+	local on = ns.BarTrace.Set(not ns.BarTrace.Running())
+	ns.Print("square trace " .. ns.BarTrace.Describe() .. ".")
+	if on then
+		ns.Print("drag a spell over the bar that will not take it, then actionbars trace again to stop.")
+	end
+end
+
 ns.Register({
 	name = "buttons",
 	order = 5,
@@ -188,6 +199,8 @@ ns.Register({
 				Where()
 			elseif arg == "match" then
 				Match()
+			elseif arg == "trace" then
+				Trace()
 			elseif arg == "reset" then
 				local dropped = ns.Bars.ResetPlacing()
 				ns.Print(dropped == 0 and "nothing was dragged, so the plan was already what you see."
@@ -198,6 +211,7 @@ ns.Register({
 				ns.Print("actionbars on clones every bar you have, with its keys, and hides Blizzard's. actionbars off gives them back.")
 				ns.Print("tick bars one at a time in the panel, or actionbars match to follow your own again.")
 				ns.Print("/wk unlock to drag them, actionbars where to print what you dragged, actionbars reset to undo it.")
+				ns.Print("actionbars trace when a square will not take a drop: it prints what the mouse is really touching.")
 			end
 		end,
 
@@ -230,6 +244,7 @@ ns.Register({
 		"actionbars on|off, our own bars over Blizzard's, same slots and same keys",
 		"actionbars match, back to cloning whichever bars you have on",
 		"actionbars where, actionbars reset, after dragging them with /wk unlock",
+		"actionbars trace, what the mouse is really touching, for a square that will not take a drop",
 		"ranks, ranks refresh",
 	},
 

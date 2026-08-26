@@ -180,6 +180,7 @@ UI/Ability.lua:Ability.Look
 UI/Ability.lua:Ability.Draw
 UI/Ability.lua:Quantum
 Buttons/Bars.lua:Bars.Update
+Buttons/Trace.lua:Trace.Sample
 Buttons/Reaction.lua:Reaction.Of
 Buttons/Reaction.lua:Reaction.Open
 Buttons/Reaction.lua:Reaction.Name

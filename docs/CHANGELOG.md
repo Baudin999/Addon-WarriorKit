@@ -98,6 +98,52 @@ The strip list may shrink with a setting. The restore list may not. It is
 no-op on a region that was never taken, so asking for all of them costs a table
 lookup.
 
+### Bar 1 still takes no drop, and now it says so
+
+The fix below did not fix it. Bar 1 hovers, names what is on it, highlights an
+empty square and pushes under a click, and a spell dragged onto it will not
+leave the cursor. Every other bar takes the same spell.
+
+That report kills the theory the entry below is built on. A square that answers
+`OnEnter` is a square the cursor is over, because the client hit tests both the
+same way, so no frame is swallowing the drop and no amount of frame level is
+going to help. Two fixes have now been written by reading the code and neither
+was ever checked against the client.
+
+So this release ships an instrument rather than a third theory.
+
+`/wk actionbars trace` turns on three read only prints. The first samples the
+frame the client says is under the cursor, five times a second, and prints it
+when it changes, with its name, its strata, its level and the action slot it
+presses if it has one. The second prints every gesture a square gets: the slot,
+what the cursor held going in and what it holds coming out. A drop that never
+prints is a drop the client never sent us. A drop that prints and leaves the
+cursor loaded is `PlaceAction` refusing the slot. Those are different bugs and
+nothing on screen has ever told them apart. The third prints every click a
+square gets, through `PostClick`, because a spell is dropped by clicking as
+often as by dragging and the first version of this could not see that at all.
+
+The first live run of it printed every gesture and never once named a frame,
+which from the chat frame looks exactly like a cursor touching nothing. This
+client has no `GetMouseFocus`. Both calls are asked for now, `GetMouseFocus` and
+the `GetMouseFoci` that replaced it, and the trace says which one answered the
+moment it is switched on, so a run that cannot name a frame says why instead of
+going quiet.
+
+The drop path stops being silent whether or not the trace is on. A drop that
+reaches a square and moves nothing now says which action slot it was aimed at,
+once per reason per session, and a square pointing at no slot at all says that
+instead. The old message latched on the first refusal and swallowed every other
+reason for the rest of the session, which was the same silence one layer down;
+the latch is keyed by the line now, so a second thing going wrong is still said.
+
+What is left of the difference between bar 1 and the other four, for whoever
+reads this next: bar 1 is the only bar the client re-points by stance, so its
+squares press the bonus bar slots 73 to 108 while every other bar presses 25 to
+72, and it is the only bar whose `action` attribute is written by a secure
+snippet as well as from Lua. The rest of it is the same code the working bars
+run.
+
 ### Bar 1 takes a dropped spell again
 
 Nothing could be dropped on bar 1. The other four bars took a spell off the

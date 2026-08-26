@@ -3792,6 +3792,155 @@ do
 	slots[seat] = nil
 	slots[there] = nil
 
+	--------------------------------------------------------------------------
+	-- A drop that goes nowhere, said out loud
+	--
+	-- What this pays for: bar 1 hovered, named what was on it and pushed under
+	-- a click, and took no drop at all, through two fixes written by reading
+	-- the code. Every one of those failures printed nothing, so the three ways
+	-- a drop can die looked identical on screen and the only tool left was
+	-- another theory.
+	--
+	-- Driven rather than asserted, for the reason the drag above is driven: a
+	-- message that is never reached is worth the same as no message.
+	--------------------------------------------------------------------------
+
+	local chat = _G.DEFAULT_CHAT_FRAME.AddMessage
+	local heard = {}
+	_G.DEFAULT_CHAT_FRAME.AddMessage = function(_, text)
+		heard[#heard + 1] = tostring(text)
+	end
+	local function Heard(what)
+		for index = 1, #heard do
+			if heard[index]:find(what, 1, true) then
+				return true
+			end
+		end
+		return false
+	end
+
+	-- The client taking the call and doing nothing with it, which is what a
+	-- slot it will not write looks like from this side.
+	local realPlace = _G.PlaceAction
+	slots[seat] = { texture = ART }
+	pick(square)
+	_G.PlaceAction = function() end
+	heard = {}
+	drop(other)
+	_G.PlaceAction = realPlace
+	check(Heard("changed nothing"),
+		"a drop the client did nothing with said nothing either")
+	ClearCursor()
+	slots[seat], slots[there] = nil, nil
+
+	-- A square pointing at no slot, which is the state a bar 1 whose stance
+	-- pages never arrived would sit in. It draws, it hovers and it presses,
+	-- because all three read the same missing attribute and find nothing to
+	-- complain about.
+	local held = other:GetAttribute("action")
+	other:SetAttribute("action", nil)
+	slots[seat] = { texture = ART }
+	pick(square)
+	heard = {}
+	drop(other)
+	check(Heard("not pointing at an action slot"),
+		"a square with no slot behind it swallowed a drop in silence")
+	other:SetAttribute("action", held)
+	ClearCursor()
+	slots[seat], slots[there] = nil, nil
+
+	-- And a drop that worked says nothing at all, because a bar that talks
+	-- every time it works is a bar nobody reads when it stops working.
+	slots[seat] = { texture = ART }
+	pick(square)
+	heard = {}
+	drop(other)
+	check(#heard == 0,
+		("a drop that worked printed %d lines"):format(#heard))
+	ClearCursor()
+	slots[seat], slots[there] = nil, nil
+
+	--------------------------------------------------------------------------
+	-- The trace
+	--
+	-- Off unless asked for, and when asked for it prints the two things no
+	-- reading of the code produced: which gesture reached a square, and which
+	-- frame the client says the cursor is over.
+	--------------------------------------------------------------------------
+
+	check(not ns.BarTrace.Running(), "the trace ships switched on")
+	slots[seat] = { texture = ART }
+	heard = {}
+	pick(square)
+	check(#heard == 0, "the trace talks with its switch off")
+	ClearCursor()
+	slots[seat] = nil
+
+	-- Which call this client answers "what is the cursor over" with, said on
+	-- the way in. The first live run of this trace printed every gesture and
+	-- never named a single frame, which from the chat frame looks exactly like
+	-- a cursor touching nothing rather than a client with no such call.
+	local realFocus, realFoci = _G.GetMouseFocus, _G.GetMouseFoci
+	_G.GetMouseFocus, _G.GetMouseFoci = nil, nil
+	heard = {}
+	ns.BarTrace.Set(true)
+	check(Heard("neither GetMouseFocus nor GetMouseFoci"),
+		"a client with no way to name the frame under the cursor said nothing about it")
+	ns.BarTrace.Set(false)
+
+	_G.GetMouseFoci = function() return { _G.ActionButton1 } end
+	heard = {}
+	ns.BarTrace.Set(true)
+	check(Heard("GetMouseFoci"), "the trace did not say which call it is reading the cursor with")
+
+	slots[seat] = { texture = ART }
+	heard = {}
+	pick(square)
+	drop(other)
+	check(Heard("pick up from slot " .. seat) and Heard("drop on slot " .. there),
+		"the trace missed the gesture it exists to print")
+
+	-- A click, which is how a spell is dropped as often as a drag is, and which
+	-- the first version of this file could not see at all.
+	heard = {}
+	local click = other:GetScript("PostClick")
+	check(click, "a square has no PostClick, so a drop made by clicking is invisible")
+	if click then
+		click(other, "LeftButton")
+	end
+	check(Heard("click LeftButton on slot " .. there),
+		"the trace missed a click on a square")
+
+	ClearCursor()
+	slots[seat], slots[there] = nil, nil
+
+	-- The newer of the two calls answers a stack, topmost first, and only the
+	-- top of it is under the cursor.
+	heard = {}
+	ns.BarTrace.Sample(nil, 1)
+	check(Heard("ActionButton1"),
+		"the sampler did not read the frame out of the stack GetMouseFoci answers")
+	_G.GetMouseFoci = realFoci
+	ns.BarTrace.Set(false)
+
+	-- The sampler, which is the whole instrument. A drop that never reaches a
+	-- square is a frame with a name, a strata and a level, and this is what
+	-- prints them.
+	_G.GetMouseFocus = function() return _G.ActionButton1 end
+	ns.BarTrace.Set(true)
+	heard = {}
+	ns.BarTrace.Sample(nil, 1)
+	check(Heard("ActionButton1") and Heard("MEDIUM"),
+		"the sampler did not name the frame the client says is under the cursor")
+	-- and it says it once rather than five times a second for as long as the
+	-- cursor sits still, which is what makes it readable at all.
+	heard = {}
+	ns.BarTrace.Sample(nil, 1)
+	check(#heard == 0, "the sampler repeats itself while the cursor sits still")
+	_G.GetMouseFocus = realFocus
+	ns.BarTrace.Set(false)
+	_G.DEFAULT_CHAT_FRAME.AddMessage = chat
+
 	-- The ring, on the square the tick actually drives.
 	slots[seat] = { texture = ART, equipped = true }
 	Bars.Update()
