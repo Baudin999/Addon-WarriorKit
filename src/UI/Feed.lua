@@ -40,6 +40,22 @@ local C, M = UI.Color, UI.Metric
 -- redrawn while nothing is happening, which is why a row carries no clock and
 -- the tooltip is where the time is: opening a tooltip is a moment, and a moment
 -- can afford to build a string.
+--
+-- **A row has three text columns and the middle one is optional.** A name and a
+-- number were not enough for the combat log: "Overpower 321" and "Plains
+-- Creeper 26" are the same shape and only one of them is a spell, so there was
+-- no reading a row and knowing who had done what to whom. The middle column is
+-- dim, right aligned against the number, and asked for by the caller in units,
+-- so the loot feed keeps two columns and the combat feed gets three without
+-- either being a special case in here. All three widths are decided per resize
+-- rather than per row, which is why a run of numbers reads as a column.
+--
+-- **A marker is a break in the timeline, not an entry in it.** Feed:Mark pushes
+-- one and it draws as a band across the whole row with a word on it: no icon,
+-- no middle column, nothing a thing that happened to you can look like. Here
+-- rather than faked in Feeds/Combat.lua because "one set of events ends and
+-- another begins" is a thing any feed wants, and a marker built out of an
+-- ordinary row is one an ordinary row can be mistaken for.
 --------------------------------------------------------------------------
 
 -- Every number is a unit, which is one physical pixel inside a frame
@@ -57,7 +73,13 @@ local RULE = 1
 local INSET = 3     -- the stripe to the icon
 local STRIPE = 2    -- the coloured mark down the left of a row
 local GUTTER = 5    -- the icon to the name
-local PAD = 4       -- the name to the number beside it
+local PAD = 4       -- one text column to the next
+
+-- The number column, fixed rather than grown to fit. A string that sizes itself
+-- puts every number at a different distance from the edge, which is a ragged
+-- column of damage. Six glyphs of Arial Narrow at the row size, which is a five
+-- figure hit with a crit mark on it.
+local AMOUNT = 42
 
 -- Outlined, so both sizes sit at or above ns.UI.OutlineFloor. A feed is drawn
 -- over the world with whatever background the player asked for, and at zero
@@ -138,16 +160,29 @@ local function BuildRow(feed, index)
 	row.icon:SetSize(ICON * unit, ICON * unit)
 	row.icon:SetPoint("LEFT", row, "LEFT", (STRIPE + INSET) * unit, 0)
 
+	-- Every column is anchored once here and only ever given a width in Resize.
+	-- Chaining each one's right edge to the next one's left, which is what this
+	-- did with two columns, lets a long name push a number about and makes the
+	-- columns disagree row to row. A clipped name is still the right item; a
+	-- clipped number is a lie, which is Meter/Window.lua's rule and is why the
+	-- number is the column that never gives way.
 	row.name = UI.Label(row, ROW_TEXT, C.text, "LEFT")
 	row.name:SetPoint("LEFT", row, "LEFT", (STRIPE + INSET + ICON + GUTTER) * unit, 0)
+
+	row.note = UI.Label(row, ROW_TEXT, C.dim, "RIGHT")
+	row.note:SetPoint("RIGHT", row, "RIGHT", -(INSET + AMOUNT + PAD) * unit, 0)
+	row.note:Hide()
 
 	row.amount = UI.Label(row, ROW_TEXT, C.text, "RIGHT")
 	row.amount:SetPoint("RIGHT", row, "RIGHT", -INSET * unit, 0)
 
-	-- The name gives way to the number. A clipped name is still the right item;
-	-- a clipped number is a lie, which is Meter/Window.lua's rule and the same
-	-- one applies to a stack size.
-	row.name:SetPoint("RIGHT", row.amount, "LEFT", -PAD * unit, 0)
+	-- The word on a marker, which starts where the icon would and therefore
+	-- cannot be the same font string as the name. Its own string rather than the
+	-- name moved, because moving it means a SetPoint on the repaint path and a
+	-- second font string per row is both cheaper and incapable of going stale.
+	row.caption = UI.Label(row, ROW_TEXT, C.text, "LEFT")
+	row.caption:SetPoint("LEFT", row, "LEFT", (STRIPE + INSET) * unit, 0)
+	row.caption:Hide()
 
 	row:SetScript("OnEnter", function(self)
 		feed:Enter(self.index)
@@ -170,8 +205,10 @@ end
 -- opts.empty     what is written where the rows would be before anything has
 --                happened
 -- opts.held      how many entries this feed keeps
--- opts.onTooltip function(entry, tip), filling the addon's own tooltip for the
---                row under the cursor
+-- opts.note      how wide the dim middle column is, in units, and zero for a
+--                feed that does not want one
+-- opts.onTooltip function(entry), answering the table UI/Tooltip.lua renders for
+--                the row under the cursor
 -- opts.unit      one design pixel in the parent's units, which the caller
 --                already read off the frame it adopted
 --------------------------------------------------------------------------
@@ -183,6 +220,7 @@ function UI.Feed(parent, opts)
 		unit = opts.unit or UI.Unit(parent),
 		title = opts.title,
 		empty = opts.empty,
+		note = opts.note or 0,
 		onTooltip = opts.onTooltip,
 		cap = opts.held or HELD,
 		-- Every entry this feed will ever hold, made once. A ring rather than a
@@ -305,6 +343,27 @@ function Feed:Push()
 	return slot
 end
 
+-- A break in the timeline rather than a thing that happened.
+--
+--   kind      what this marker is. Nothing here reads it; it is carried so the
+--             tooltip can say which of the two it is looking at.
+--   label     the word on the band
+--   trailing  the right hand side, which at the end of a fight is how long it
+--             lasted and at the start of one is nothing
+--   band      the band's colour, and the whole of how a marker is told apart
+--             from an entry at a glance
+--
+-- Loose arguments rather than a table, for the reason Feed:Entry is two calls:
+-- a marker arrives on the same event path a pull does.
+function Feed:Mark(kind, label, trailing, band)
+	local slot = self:Entry()
+	slot.mark = kind or true
+	slot.name = label or ""
+	slot.amount = trailing or ""
+	slot.stripe = band or C.chrome
+	return self:Push()
+end
+
 function Feed:Clear()
 	self.written, self.offset = 0, 0
 	self:Paint()
@@ -384,12 +443,46 @@ function Feed:Resize(width, rows)
 		self.rule:SetWidth(width * unit)
 	end
 
+	-- The three text columns, decided here and written to every row, so the
+	-- names line up down the feed and so do the numbers. The number column is
+	-- fixed and the other two share what is left; the middle one never takes
+	-- more than half of that, because a feed narrowed to its minimum has to
+	-- leave the name enough room to still be a name.
+	local free = content - (STRIPE + INSET + ICON + GUTTER) - INSET - AMOUNT - PAD
+	local note = 0
+	if self.note > 0 then
+		note = math.max(0, math.min(self.note, math.floor((free - PAD) / 2)))
+	end
+	local name = math.max(free - (note > 0 and note + PAD or 0), 1)
+
 	for index = 1, MAX_ROWS do
 		local row = self.rows[index]
 		row:SetWidth(content * unit)
 		row:ClearAllPoints()
 		row:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 0,
 			-(top + (index - 1) * (ROW + ROW_GAP)) * unit)
+
+		row.name:SetWidth(name * unit)
+		row.amount:SetWidth(AMOUNT * unit)
+		row.caption:SetWidth(math.max(content - STRIPE - INSET * 2 - AMOUNT - PAD, 1) * unit)
+		row.noted = note > 0
+		if row.noted then
+			row.note:SetWidth(note * unit)
+		end
+		-- Written from here rather than left to the repaint, because whether
+		-- there is a middle column at all is decided by the width and a row that
+		-- is not repainting is a row that would keep the last answer.
+		if row.noted and not row.shownMark then
+			row.note:Show()
+		else
+			row.note:Hide()
+		end
+		-- What the stripe is on an entry and what it becomes on a marker, held
+		-- on the row so the repaint can swap between them without knowing the
+		-- feed's width.
+		row.rib = STRIPE * unit
+		row.band = content * unit
+
 		if index > rows then
 			row.shownEntry = nil
 			row:Hide()
@@ -473,12 +566,17 @@ function Feed:Enter(index)
 	row.glow:Show()
 
 	local entry = row.shownEntry
+	-- What the row was showing when this tooltip was filled, so Paint can tell a
+	-- repaint that moved the entry under the cursor from one that did not. Both
+	-- halves: the ring hands the same table back a full lap later, and the push
+	-- time is the only thing that tells that apart from nothing having changed.
+	self.hoveredEntry = entry
+	self.hoveredAt = entry and entry.at
+
 	if not entry or not self.onTooltip then
 		return false
 	end
-	return UI.Tooltip.Open(row, function(tip)
-		self.onTooltip(entry, tip)
-	end)
+	return UI.Tooltip.Show(row, self.onTooltip(entry))
 end
 
 function Feed:Leave()
@@ -489,6 +587,7 @@ function Feed:Leave()
 		end
 		self.hovered = nil
 	end
+	self.hoveredEntry, self.hoveredAt = nil, nil
 	UI.Tooltip.Close()
 	return true
 end
@@ -517,14 +616,49 @@ local function PaintRow(row, entry, faded)
 		row:Show()
 	end
 
-	if row.shownIcon ~= entry.icon then
+	-- A marker drops everything a row uses to say what happened and its stripe
+	-- becomes the whole row. That is a shape an entry cannot take, and it has to
+	-- be, because the one thing worse than not marking where a fight started is
+	-- a mark that reads as a hit for nothing.
+	--
+	-- The fields the swap invalidates are cleared with it. Without that a marker
+	-- whose word matched the name already on the row would keep the row's own
+	-- string: a guard holding on a value that is right and a widget that is not.
+	local mark = entry.mark or false
+	if row.shownMark ~= mark then
+		row.shownMark = mark
+		row.shownName, row.shownColor, row.shownIcon, row.shownNote = nil, nil, nil, nil
+		row.stripe:SetWidth(mark and row.band or row.rib)
+		if mark then
+			row.icon:Hide()
+			row.name:Hide()
+			row.note:Hide()
+			row.caption:Show()
+		else
+			row.icon:Show()
+			row.name:Show()
+			row.caption:Hide()
+			if row.noted then
+				row.note:Show()
+			end
+		end
+	end
+
+	local label = mark and row.caption or row.name
+
+	if not mark and row.shownIcon ~= entry.icon then
 		row.shownIcon = entry.icon
 		row.icon:SetTexture(entry.icon)
 	end
 
 	if row.shownName ~= entry.name then
 		row.shownName = entry.name
-		row.name:SetText(entry.name or "")
+		label:SetText(entry.name or "")
+	end
+
+	if not mark and row.shownNote ~= entry.note then
+		row.shownNote = entry.note
+		row.note:SetText(entry.note or "")
 	end
 
 	if row.shownAmount ~= entry.amount then
@@ -535,7 +669,7 @@ local function PaintRow(row, entry, faded)
 	local color = entry.color or C.text
 	if row.shownColor ~= color then
 		row.shownColor = color
-		row.name:SetTextColor(color[1], color[2], color[3])
+		label:SetTextColor(color[1], color[2], color[3])
 	end
 
 	local tone = entry.tone or C.text
@@ -599,12 +733,22 @@ function Feed:Paint()
 		end
 	end
 
-	-- The row under the cursor has just been repainted with a different entry
-	-- on it, so the tooltip beside it is about something that has moved on. It
-	-- is reopened rather than closed, because a tooltip vanishing when a mob
+	-- The row under the cursor may have been repainted with a different entry on
+	-- it, and then the tooltip beside it is about something that has moved on.
+	-- It is reopened rather than closed, because a tooltip vanishing when a mob
 	-- dies somewhere else is worse than one that follows the row it is on.
+	--
+	-- Guarded, and this guard buys more than the usual one. Filling a tooltip
+	-- builds a table and a string or two, which a hover can afford; reopening it
+	-- unconditionally made that one fill per combat log event for as long as the
+	-- cursor rested anywhere on the feed. The row under the cursor mostly does
+	-- not move: the mouse is on row seven and the arrival lands on row one.
 	if self.hovered and self.hovered <= self.visible then
-		self:Enter(self.hovered)
+		local row = self.rows[self.hovered]
+		if row.shownEntry ~= self.hoveredEntry
+			or (row.shownEntry and row.shownEntry.at ~= self.hoveredAt) then
+			self:Enter(self.hovered)
+		end
 	end
 
 	self:Sync()

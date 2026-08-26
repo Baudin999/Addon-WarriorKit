@@ -94,12 +94,14 @@ name of none of them.
     UI/Scroll.lua        a viewport that clips, a canvas that moves, a bar
     UI/Log.lua           a column of lines that grows from the bottom, wraps,
                          caps itself and scrolls
-    UI/Tooltip.lua       the addon's own tooltip: a title, lines, pairs and a
-                         hint, plus a scanner that reads an item's real text out
-                         of the client so it can be redrawn in this chrome
+    UI/Tooltip.lua       the addon's own tooltip, rendered from a table a caller
+                         hands over, at the zoom of the frame it was opened on,
+                         plus a scanner that reads an item's real text out of
+                         the client so it can be redrawn in this chrome
     UI/Feed.lua          a column of entries, newest at the top, each an icon, a
-                         name, a number and a coloured stripe; a ring behind it
-                         and rows that repaint rather than move
+                         name, an optional dim middle column, a number and a
+                         coloured stripe, with markers that band the whole row;
+                         a ring behind it and rows that repaint rather than move
     UI/Widgets.lua       the widget kit a page is built out of
     UI/Window.lua        window chrome, the side rail and the tab strip
 
@@ -170,7 +172,8 @@ name of none of them.
     Feeds/Loot.lua           what dropped, out of the client's own loot
                              sentences turned into patterns rather than typed
     Feeds/Combat.lua         what landed on you or that you landed, out of the
-                             combat log, and only where one end of it is yours
+                             combat log, and only where one end of it is yours,
+                             with a band across the feed at each end of a fight
     Feeds/Feature.lua
 
     Artwork/Artwork.lua      strips the gryphons and the metal strip off the bars
@@ -325,6 +328,9 @@ goes through `Feature.lua` or through the shared surface below:
     ns.UI.Adopt(frame, zoom)     put a frame on the pixel grid, so one unit
                                  inside it is one physical pixel
     ns.UI.Rezoom(frame, zoom)    change that frame's whole-number zoom
+    ns.UI.ZoomOf(frame)          what zoom a frame is drawn at, walking up to
+                                 whichever ancestor was adopted, and nil where
+                                 none of them was
     ns.UI.Pixel(frame)           what ns.Pixel forwards to
     ns.UI.Round(frame, size)     a measurement snapped to a whole pixel
     ns.UI.Convert(size, from, to)   a size measured in one frame's units,
@@ -349,6 +355,20 @@ goes through `Feature.lua` or through the shared surface below:
                                  that scrolls in units the view cannot count
     ns.UI.Log(parent, opts)      a column of lines that grows from the
                                  bottom, or nil and why this client has none
+    ns.UI.Tooltip.Show(owner, data)   the addon's own tooltip, opened beside
+                                 owner at owner's zoom, from a table of a title,
+                                 a colour, an optional item link and a list of
+                                 lines: { "text" }, { "label", "value" },
+                                 { hint = "..." }, { blank = true }. Nothing to
+                                 say draws nothing
+    ns.UI.Tooltip.Close() / Lines() / Text(i) / Owner() / Zoom() / IsShown()
+    ns.UI.Tip(owner, describe)   hang that on a frame, where describe(owner)
+                                 answers the table or nothing
+    ns.UI.PassCamera(owner)      hand the right and middle buttons back to the
+                                 camera on a mouse enabled frame
+    ns.UI.Feed(parent, opts)     a column of entries with a ring behind it;
+                                 :Entry() / :Push() to add one, :Mark(kind,
+                                 label, trailing, band) for a break in it
     ns.Perf.Start(key) / ns.Perf.Stop(key)   bracket a tick body
     ns.Perf.Slot(key)            average ms, worst ms, and how many ticks
     ns.Perf.Memory()             KB held and KB per second being allocated
@@ -3644,8 +3664,9 @@ and zero errors.
    once a tick is the obvious way to write the filter and would show up here
    rather than as a stutter somebody reports six weeks later.
 
-   The tooltips are asserted through the stub's `GameTooltip`, whose four calls
-   are recorded the way the action bar section records them. Hovering a square
+   The tooltips are asserted by reading back what `UI/Tooltip.lua` drew, which
+   is where they go now rather than into the stub's `GameTooltip`. Hovering a
+   square
    has to name that square, carry the sentence the caption had no room for, and
    name the switch that silences it. The racial's has to name the racial and say
    how many seconds it has been off cooldown. A square takes the mouse while the

@@ -3,13 +3,28 @@ local ADDON, ns = ...
 local CombatFeed = {}
 ns.CombatFeed = CombatFeed
 
+local C = ns.UI.Color
 
 --------------------------------------------------------------------------
 -- What just happened to you
 --
 -- The same column as the loot stream, fed by the combat log instead: one row
 -- per thing that landed, newest at the top, with the icon of whatever did it,
--- the name of the spell or of whoever swung, and the number.
+-- what it was, who the other party was, and the number.
+--
+-- **A row has to answer three questions and it used to answer one.** The rule
+-- was: draw the spell's name where there is one and the other party's name
+-- where there is not. That reads "Overpower 321" and "Plains Creeper 26" as the
+-- same shape, and neither one says who was on the other end of it. So the name
+-- column is always what happened, a spell or the client's own word for a swing,
+-- and the dim middle column is always who, with "on" for something you did and
+-- "from" for something done to you. The direction is in the stripe as well, in
+-- colour, but colour on its own is a thing a colourblind player does not have.
+--
+-- **A critical carries a mark, not just a colour.** The number reads 871! and
+-- draws in gold. Gold alone was the whole signal and it was the same mistake
+-- one level down: the moment the feed exists to show you cannot be the one
+-- carried by hue alone.
 --
 -- **It is about you and nothing else.** The log names every creature in range,
 -- including the other party fighting the pack next door, and a feed that drew
@@ -66,43 +81,79 @@ local MISS = { 0.50, 0.50, 0.55 }
 -- which way the blow went.
 local CRIT = { 1.00, 0.82, 0.20 }
 
--- Auto Attack, for the icon on a swing. Asked of the client rather than typed,
--- because an icon path this file invented would be a green question mark on a
--- client that files it elsewhere. Resolved once at login and floored on the
--- client's own unknown icon.
+-- The two bands, which are the only thing on a marker row that says which one
+-- it is at a glance. Dark rather than saturated: a marker is a rule drawn
+-- across the feed, and one as loud as an entry would be competing with the
+-- entries it exists to separate.
+local PULL = { 0.32, 0.13, 0.13, 1 }
+local LULL = { 0.13, 0.15, 0.21, 1 }
+
+-- Auto Attack, for the icon and the word on a swing. Both asked of the client
+-- rather than typed: an icon path this file invented would be a green question
+-- mark on a client that files it elsewhere, and a typed "Melee" would be an
+-- English word in the middle of a German feed. Resolved once at login and
+-- floored on the client's own unknown icon and on a word of last resort.
 local UNKNOWN = "Interface\\Icons\\INV_Misc_QuestionMark"
 local AUTO_ATTACK = 6603
 local swingIcon = UNKNOWN
+local swingWord = "melee"
 
 local seen, ignored = 0, 0
 
 --------------------------------------------------------------------------
 
-local function Fill(entry, tip)
-	tip.Title(entry.name or "?", entry.color)
+local function Marker(entry)
+	local data = {
+		title = entry.name,
+		color = (entry.mark == "in") and IN or C.dim,
+		{ (entry.mark == "in")
+			and "A fight started here. Everything above this line is the same pull."
+			or "A fight ended here. Everything below this line was the pull before." },
+		{ "At", ns.Stream.Clock(entry.at) },
+	}
+	if entry.amount and entry.amount ~= "" then
+		data[#data + 1] = { "Lasted", entry.amount }
+	end
+	data[#data + 1] = { blank = true }
+	data[#data + 1] = { hint = "A break in the feed rather than something that"
+		.. " happened to you." }
+	return data
+end
 
+local function Fill(entry)
+	if entry.mark then
+		return Marker(entry)
+	end
+
+	local data = {
+		title = entry.name or "?",
+		color = entry.color,
+	}
 	if entry.subevent then
-		tip.Pair("Event", entry.subevent)
+		data[#data + 1] = { "Event", entry.subevent }
 	end
 	if entry.source then
-		tip.Pair("From", entry.source)
+		data[#data + 1] = { "From", entry.source }
 	end
 	if entry.dest then
-		tip.Pair("To", entry.dest)
+		data[#data + 1] = { "To", entry.dest }
 	end
 	if entry.value then
-		tip.Pair(entry.healed and "Healed" or "Damage", tostring(entry.value),
-			nil, entry.crit and CRIT or nil)
+		data[#data + 1] = { entry.healed and "Healed" or "Damage",
+			tostring(entry.value), tone = entry.crit and CRIT or nil }
 	end
 	if entry.crit then
-		tip.Line("A critical.", CRIT)
+		data[#data + 1] = { "A critical.", color = CRIT }
 	end
 	if entry.wasted and entry.wasted > 0 then
-		tip.Pair(entry.healed and "Overheal" or "Overkill", tostring(entry.wasted), nil, MISS)
+		data[#data + 1] = { entry.healed and "Overheal" or "Overkill",
+			tostring(entry.wasted), tone = MISS }
 	end
 
-	tip.Blank()
-	tip.Hint("Scroll the feed for what happened before this. /wk feed combat for the rest.")
+	data[#data + 1] = { blank = true }
+	data[#data + 1] = { hint = "Scroll the feed for what happened before this."
+		.. " /wk feed combat for the rest." }
+	return data
 end
 
 local stream = ns.Stream.New({
@@ -110,6 +161,11 @@ local stream = ns.Stream.New({
 	name = "WarriorKitCombatFeed",
 	title = "Combat",
 	empty = "quiet",
+	-- Room for a mob's name and the preposition in front of it, which is about
+	-- what "from Plains Creeper" measures. The feed gives it half of what is
+	-- left after the number column at most, so a feed dragged down to the
+	-- narrowest the panel allows gets less of it rather than losing the name.
+	note = 96,
 	onTooltip = Fill,
 })
 
@@ -122,6 +178,13 @@ end
 function CombatFeed.Defaults()
 	local defaults = ns.Stream.Defaults("combatFeed",
 		{ "BOTTOMLEFT", "UIParent", "BOTTOMLEFT", 20, 180 })
+
+	-- Wider and taller than the loot feed, because a combat row carries three
+	-- columns to loot's two and because a pull produces rows an order of
+	-- magnitude faster than a corpse does: at ten rows a fight scrolls off the
+	-- bottom before you have read the top of it.
+	defaults.combatFeedWidth = 320
+	defaults.combatFeedRows = 12
 
 	-- What you do, and what is done to you. Both on, because either alone is
 	-- half a conversation, and separate because they answer different questions
@@ -168,13 +231,41 @@ local function Mine(guid, me)
 	return ns.Unit.Roster.Owner(guid) == me
 end
 
--- The name a row carries. A spell has one and it is what you want to read; a
--- swing does not, and the informative thing about a swing is who threw it.
-local function Caption(spellName, outgoing, source, dest)
+-- What happened, which is the spell where there is one and the client's own
+-- word for a swing where there is not. Always what rather than sometimes who,
+-- because a column that means two different things depending on the row is a
+-- column you have to decode before you can read it.
+local function Caption(spellName)
 	if spellName and spellName ~= "" then
 		return spellName
 	end
-	return (outgoing and dest or source) or "?"
+	return swingWord
+end
+
+-- Who the other party was, and which way it went.
+--
+-- One short string built per row. That is an allocation on the path the combat
+-- log drives and it is worth it: the alternative is a fourth region on every
+-- row of every feed to hold a preposition, and this file already builds a
+-- string for the number. A row is a thing that happened to you rather than a
+-- tick, and there are not four hundred of them a second.
+local function Note(outgoing, source, dest)
+	local other = outgoing and dest or source
+	if not other or other == "" then
+		return ""
+	end
+	return (outgoing and "on %s" or "from %s"):format(other)
+end
+
+-- The number, with a crit said in a glyph as well as in gold.
+local function Amount(amount, crit)
+	if not amount then
+		return ""
+	end
+	if crit then
+		return amount .. "!"
+	end
+	return tostring(amount)
 end
 
 local function Add(subevent, shape, outgoing, source, dest, spellId, spellName,
@@ -197,8 +288,9 @@ local function Add(subevent, shape, outgoing, source, dest, spellId, spellName,
 
 	local entry = stream:Feed():Entry()
 	entry.icon = (spellId and ns.SpellTexture(spellId)) or swingIcon or UNKNOWN
-	entry.name = Caption(spellName, outgoing, source, dest)
-	entry.amount = miss or (amount and tostring(amount)) or ""
+	entry.name = Caption(spellName)
+	entry.note = Note(outgoing, source, dest)
+	entry.amount = miss or Amount(amount, crit)
 	entry.color = color
 	entry.stripe = color
 	entry.tone = crit and CRIT or color
@@ -283,6 +375,47 @@ function CombatFeed.OnLog()
 end
 
 --------------------------------------------------------------------------
+-- Where one fight ends and the next begins
+--
+-- Without these the feed is one unbroken column and the only thing separating
+-- the pack you are fighting from the one before it is a gap in the timestamps
+-- you cannot see, because a row carries no clock. A marker is the line down the
+-- middle of that: everything above it is this pull.
+--
+-- Both ends get one, and a pair with nothing between them is left standing
+-- rather than swallowed. That pair is information too. It says you were in
+-- combat and nothing that happened in it cleared the floor, which is the exact
+-- state somebody who has set the floor too high is looking for.
+--
+-- How long it lasted goes on the end marker because that is the one fact about
+-- a fight nothing else in the addon reports. The meters total a fight and reset
+-- on the next one; neither of them ever says how long you were in it.
+--------------------------------------------------------------------------
+
+local pulled
+
+local function Pull()
+	pulled = GetTime()
+	if not ns.db.combatFeed then
+		return false
+	end
+	stream:Feed():Mark("in", "in combat", "", PULL)
+	return true
+end
+
+local function Lull()
+	-- Nothing to measure against where the addon came up mid fight, and a
+	-- duration counted from login would be a made up number on a real row.
+	local held = pulled and ("%.1fs"):format(GetTime() - pulled) or ""
+	pulled = nil
+	if not ns.db.combatFeed then
+		return false
+	end
+	stream:Feed():Mark("out", "out of combat", held, LULL)
+	return true
+end
+
+--------------------------------------------------------------------------
 
 -- Whether this client will say what happened at all. Vanilla and TBC both
 -- carry the call, so this is expected to be true on both targets; it is asked
@@ -320,12 +453,32 @@ function CombatFeed.Counts()
 	return seen, ignored
 end
 
+-- What the markers are called from, so scripts/harness.lua can drive the two
+-- ends of a fight without inventing an event the client does not send.
+function CombatFeed.OnCombat(entering)
+	if entering then
+		return Pull()
+	end
+	return Lull()
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+events:RegisterEvent("PLAYER_REGEN_DISABLED")
+events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:SetScript("OnEvent", function(_, event)
 	if event == "PLAYER_LOGIN" then
 		swingIcon = ns.SpellTexture(AUTO_ATTACK) or UNKNOWN
+		swingWord = ns.SpellName(AUTO_ATTACK) or swingWord
+		return
+	end
+	if event == "PLAYER_REGEN_DISABLED" then
+		Pull()
+		return
+	end
+	if event == "PLAYER_REGEN_ENABLED" then
+		Lull()
 		return
 	end
 	CombatFeed.OnLog()

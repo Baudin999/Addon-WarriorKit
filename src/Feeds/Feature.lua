@@ -8,7 +8,11 @@ local LootFeed = ns.LootFeed
 local CombatFeed = ns.CombatFeed
 
 local LOW_ROWS, HIGH_ROWS = 3, 24
-local LOW_WIDTH, HIGH_WIDTH = 140, 420
+-- The floor moved up with the row layout. A combat row is an icon, a name, who
+-- it was and a number, and 140 units is not a row, it is four things clipped to
+-- two glyphs each. 200 is the narrowest that still leaves a name readable once
+-- the fixed number column and half of what is left have been taken off it.
+local LOW_WIDTH, HIGH_WIDTH = 200, 520
 local LOW_ZOOM, HIGH_ZOOM = 1, 3
 local LOW_ALPHA, HIGH_ALPHA, ALPHA_STEP = 0, 100, 5
 local LOW_QUALITY, HIGH_QUALITY = 0, 4
@@ -417,9 +421,14 @@ local function Panel(ui)
 
 	ui.Note(function()
 		return "The same column, fed by the combat log: one row per thing that landed"
-			.. " on you or that you landed on something. The stripe says which way it"
-			.. " went, white out, red in, green healed and grey missed, and a critical"
-			.. " draws its number in gold. Hover a row for the whole event."
+			.. " on you or that you landed on something. A row reads what happened,"
+			.. " then who it was, then the number. The stripe says which way it went,"
+			.. " white out, red in, green healed and grey missed, and a critical draws"
+			.. " its number in gold with a mark after it, so the crit is not a hue you"
+			.. " have to be able to see. Entering and leaving combat draw a band across"
+			.. " the feed, which is what separates one pull from the one before it, and"
+			.. " the band at the end says how long the fight took. Hover a row for the"
+			.. " whole event."
 	end)
 
 	ui.Note(function()
@@ -492,7 +501,7 @@ ns.Register({
 
 	help = {
 		"feed loot on|off, and feed combat on|off",
-		"feed <which> rows 10, width 220, zoom 1 to 3, alpha 70, mouse on|off",
+		"feed <which> rows 3 to 24, width 200 to 520, zoom 1 to 3, alpha 0 to 100, mouse on|off",
 		"feed loot quality 0 to 4, group on|off, money on|off",
 		"feed combat out|in|misses on|off, floor 0",
 		"feed <which> clear empties it, reset puts it back where it started",

@@ -6,11 +6,51 @@
 
 Two columns of what just happened, newest at the top and older underneath.
 A loot row is the item's icon, its name in its own quality colour and how many
-dropped; a combat row is the spell that landed, or whoever swung when there was
-no spell, and the number. Down the left edge of each row is a stripe in that
-same colour, so a pull reads as a ribbon before you read a word of it: quality
-for loot, and for combat which way the blow went, white out, red in, green
-healed and grey missed. A critical draws its number in gold.
+dropped. A combat row is three columns: what happened, who the other party was,
+and the number. Down the left edge of each row is a stripe, so a pull reads as a
+ribbon before you read a word of it: quality for loot, and for combat which way
+the blow went, white out, red in, green healed and grey missed.
+
+**A combat row has to say who, and for a while it did not.** The rule was to
+draw the spell where there was one and the other party's name where there was
+not, which put "Overpower 321" and "Plains Creeper 26" on the screen in the same
+shape, neither of them saying who was on the other end. So the name column is
+now always what happened, a spell or the client's own word for a swing, and the
+dim middle column is always who, reading "on Plains Creeper" for something you
+did and "from Plains Creeper" for something done to you. The number column is a
+fixed width, so a run of hits reads as a column rather than as a ragged edge.
+
+A critical draws its number in gold **and** puts a mark after it, `871!`. Gold
+alone was the whole signal, on the one row in the feed that exists to be
+noticed, and a signal carried by hue alone is one a colourblind player does not
+get. The same argument runs one level up in the stripe, which is why the middle
+column carries the preposition rather than leaving the direction to the colour.
+
+**Entering and leaving combat draw a band across the feed.** Without them a feed
+is one unbroken column and the only thing separating this pull from the last one
+is a gap in timestamps a row does not carry. A marker is a band the width of the
+row with a word on it: no icon, no middle column, nothing an event can look
+like, because a marker that could be read as a hit for nothing is worse than no
+marker at all. The band at the end of a fight says how long it lasted, which is
+a fact nothing else in the addon reports: the meters total a fight and reset on
+the next one, and neither of them ever says how long you were in it.
+
+A pair of markers with nothing between them is left standing rather than
+swallowed. That pair is information too. It says you were in combat and nothing
+that happened in it cleared the floor, which is exactly what somebody who has
+set that floor too high is looking for.
+
+`Feed:Mark` is a capability of the widget rather than something the combat feed
+fakes with an ordinary row, because "one set of events ends and another begins"
+is a thing any feed wants, and a marker built out of an ordinary row is one an
+ordinary row can be mistaken for.
+
+Both feeds ship wider than they did, 260 for loot and 320 for the combat log,
+and the combat feed shows twelve rows rather than ten. Three columns need the
+width, and a pull produces rows an order of magnitude faster than a corpse does:
+at ten rows a fight scrolled off the bottom before you had read the top of it.
+The width slider now runs 200 to 520 rather than 140 to 420, because 140 units
+is not a row, it is four things clipped to two glyphs each.
 
 **One widget, two feeds, and that was the point.** `UI/Feed.lua` knows about a
 column of entries and nothing else: not where it sits, not whether it is
@@ -64,6 +104,28 @@ parchment scroll with a gold border rising out of an interface that has neither
 anywhere else. `UI/Tooltip.lua` is the addon's own: the theme's palette, the
 shared Arial Narrow, the pixel grid, one frame with a pool of lines refilled on
 every open.
+
+**It is the size of the thing it describes.** One frame serves every hover in
+the addon, so it has one zoom and forty possible owners, and it took that zoom
+from `UI.WindowZoom`, which is the settings window's. With the UI size slider
+above 1 that meant hovering a feed row opened a box six hundred screen pixels
+across to explain a row thirty pixels tall. It now asks the owner what zoom the
+owner is drawn at, through the new `UI.ZoomOf`, and moves itself onto that. The
+padding, the line gap, the rule spacing and the wrap width all came in with it:
+a tooltip is a label that follows the cursor and is read in the half second
+before you move on, and every unit of air in it is a unit of the game it is
+covering.
+
+**A caller hands over a table, not a run of calls.** `Tooltip.Show(owner, data)`
+takes a title, a colour, an optional item link, and a list of lines: a plain
+sentence, a label and its value pushed to opposite edges, a quiet blue hint that
+names a switch, a spacer. The five imperative writers it published before are
+locals now. Five ways to write a line is five things a caller can do in the
+wrong order, and the one that actually mattered, whether a title had been
+written yet, was bookkeeping every caller had to get right on its own. What a
+hover says is a value the caller returns, which is also what let the feed guard
+the reopen: with the cursor resting on a feed, a tooltip was being refilled once
+per combat log event, and it is now refilled only when the entry under it moves.
 
 An item's text is the client's and there is no API that hands it over as data,
 so the supported way to read it is to point a tooltip of your own at the link

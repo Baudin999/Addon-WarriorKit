@@ -173,34 +173,23 @@ end
 -- item does not, when it landed and who it went to, are added underneath.
 --------------------------------------------------------------------------
 
--- When an entry happened, on the wall clock.
---
--- GetTime counts from when the client started, which is the right clock to
--- record on and an unreadable one to show, so the difference between then and
--- now is taken off the current time of day. Built here rather than stored on
--- the entry because this runs on a hover and Feed:Push runs on a drop: one of
--- those can afford a string and the other is on the path a raid drives.
-local function Clock(at)
-	if not at then
-		return "?"
-	end
-	return date("%H:%M:%S", time() - (GetTime() - at))
-end
-
-local function Fill(entry, tip)
-	if not (entry.link and tip.Item(entry.link)) then
-		tip.Title(entry.name or "?", entry.color)
-	end
-
-	tip.Blank()
-	tip.Pair("Looted", Clock(entry.at))
+local function Fill(entry)
+	local data = {
+		item = entry.link,
+		title = entry.name or "?",
+		color = entry.color,
+		{ blank = true },
+		{ "Looted", ns.Stream.Clock(entry.at) },
+	}
 	if (entry.count or 1) > 1 then
-		tip.Pair("Stack", tostring(entry.count))
+		data[#data + 1] = { "Stack", tostring(entry.count) }
 	end
 	if entry.who then
-		tip.Pair("Went to", entry.who)
+		data[#data + 1] = { "Went to", entry.who }
 	end
-	tip.Hint("Scroll the feed for what dropped before this. /wk feed loot for the rest.")
+	data[#data + 1] = { hint = "Scroll the feed for what dropped before this."
+		.. " /wk feed loot for the rest." }
+	return data
 end
 
 --------------------------------------------------------------------------

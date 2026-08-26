@@ -287,8 +287,10 @@ end
 --
 -- The three lines below are what this file used to write by hand into
 -- GameTooltip, and the shape of them is now UI/Tooltip.lua's: a title, a line
--- that says what is wrong, and a hint that says what to type. The tooltip that
--- draws them is the addon's own, so hovering a nag square no longer raises a
+-- that says what is wrong, and a hint that says what to type. It is handed over
+-- as one table rather than written a call at a time, so what a square says is a
+-- value this file returns rather than a sequence it has to perform. The tooltip
+-- that draws it is the addon's own, so hovering a nag square no longer raises a
 -- parchment scroll over an interface that has none anywhere else.
 --------------------------------------------------------------------------
 
@@ -326,18 +328,21 @@ local function Detail(entry)
 end
 
 local function Hover(w)
-	ns.UI.Tip(w, function(tip)
+	ns.UI.Tip(w, function()
 		local entry = w.entry
-		-- A square with nothing to say writes no lines, and a tooltip with no
-		-- lines in it does not open. That is the same refusal this had against
+		-- A square with nothing to say describes nothing, and a tooltip handed
+		-- nothing does not open. That is the same refusal this had against
 		-- GameTooltip and it matters for the same reason: without it the
 		-- previous square's sentence stays on screen pointing at this one.
 		if not entry or (entry.label or "") == "" then
-			return
+			return nil
 		end
-		tip.Title(entry.label, ns.UI.Color.text)
-		tip.Line(Detail(entry))
-		tip.Hint(Silencer(entry))
+		return {
+			title = entry.label,
+			color = ns.UI.Color.text,
+			{ Detail(entry) },
+			{ hint = Silencer(entry) },
+		}
 	end)
 end
 
