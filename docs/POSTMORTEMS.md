@@ -118,7 +118,8 @@ now reaches the world instead of being swallowed by an invisible frame.
 
 ### What changed so it cannot come back
 
-`scripts/harness.lua` carries `MainActionBar` in TOOLTIP at level 50 with bar
+`scripts/harness/client/02-text.lua` carries `MainActionBar` in TOOLTIP at
+level 50 with bar
 1's twelve buttons parented to it, and fails if the clone leaves it taking the
 mouse, if it silences a holder that never took one, or if the off switch leaves
 anything deaf. I checked the gate by removing the fix: two failures, and both

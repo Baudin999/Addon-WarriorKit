@@ -1,0 +1,189 @@
+-- Blizzard's own frames, stood up between the TOC and login
+--
+-- The three unit frames and the minimap, shaped the way 2.5.6 shapes them.
+-- They belong to the client rather than to the addon, but they are built
+-- after the TOC has loaded and before PLAYER_LOGIN fires, because that is the
+-- window the skin and the minimap shape resolve in. The runner calls this
+-- there and nowhere else.
+
+local H = ...
+local region, child = H.region, H.child
+
+-- The three Blizzard unit frames, shaped the way 2.5.6 shapes them: a portrait
+-- and two status bars hung off the frame under the four parent keys the skin
+-- resolves through, the ring and the state icons on a texture frame one level
+-- down, and target of target parented to the target frame, which is the nesting
+-- the skin's skip set exists for. Standing them up before PLAYER_LOGIN because
+-- that is when Skin.lua resolves and styles them.
+local PORTRAIT_X, PORTRAIT_Y = 7, -11
+
+local function unitFrame(name, w, h, parent, badges)
+	local frame = child("frame", parent or _G.UIParent, name)
+	frame:SetSize(w, h)
+	frame:CreateTexture(name .. "Background")
+	frame.portrait = frame:CreateTexture(name .. "Portrait")
+	frame.portrait:SetTexture("Interface\\CharacterFrame\\TempPortrait")
+	-- Anchored the way Blizzard anchors a portrait, in the frame's own units,
+	-- which is the number the skin has to convert before it can hang the block
+	-- on it. Deliberately not a whole pixel at this scale.
+	frame.portrait:SetPoint("TOPLEFT", frame, "TOPLEFT", PORTRAIT_X, PORTRAIT_Y)
+	frame.portrait:SetSize(60, 60)
+
+	for _, key in ipairs({ "healthbar", "manabar" }) do
+		local bar = child("statusbar", frame, name .. (key == "healthbar" and "HealthBar" or "ManaBar"))
+		bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+		bar:SetSize(119, 12)
+		bar.TextString = bar:CreateFontString()
+		frame[key] = bar
+	end
+
+	local art = child("frame", frame, name .. "TextureFrame")
+	art:CreateTexture(name .. "Ring")
+	art:CreateTexture(name .. "Flash")
+	frame.name = art:CreateFontString()
+	for _, badge in ipairs(badges or {}) do
+		art:CreateTexture(badge)
+	end
+	return frame
+end
+
+local playerFrame = unitFrame("PlayerFrame", 232, 100, nil,
+	{ "PlayerRestIcon", "PlayerAttackIcon", "PlayerPVPIcon" })
+child("fontstring", playerFrame, "PlayerLevelText")
+-- The combat feedback number, which is a font string and so is invisible to a
+-- walk over textures. Blizzard draws it centred on a portrait twice the size
+-- of the block, so left alone it lands across the level and the power gauge.
+child("fontstring", playerFrame, "PlayerHitIndicator")
+local targetFrame = unitFrame("TargetFrame", 232, 100, nil,
+	{ "TargetFrameRaidTargetIcon", "TargetFramePVPIcon" })
+child("fontstring", targetFrame, "TargetLevelText")
+child("fontstring", targetFrame, "TargetFrameHitIndicator")
+local totFrame = unitFrame("TargetFrameToT", 120, 50, targetFrame, {})
+-- Anchored the way the client anchors it: against a target frame 100 units
+-- tall. That offset is the whole reason the skin has to place this frame
+-- itself once the target frame is the height of the block instead.
+totFrame:SetPoint("TOPLEFT", targetFrame, "TOPLEFT", -35, -70)
+
+-- The head of each of the target's two aura rows, anchored the way the client
+-- anchors them: to the frame's bottom left corner, lifted by the height of the
+-- art that hangs under the bars on a frame 100 units tall. Everything after
+-- the head hangs off the head, so these two are the whole of the row's
+-- position, and the lift is the number the skin has to measure and cannot
+-- read, because the client keeps it in a local.
+--
+-- Standing them up unanchored first and anchoring them below, the way the
+-- client does: the buttons exist from the moment the frame does and are
+-- re-anchored on every aura the target gains or loses.
+local AURA_LIFT = 32
+local auraHeads = {}
+for _, name in ipairs({ "TargetFrameBuff1", "TargetFrameDebuff1" }) do
+	auraHeads[#auraHeads + 1] = child("button", targetFrame, name)
+end
+
+local function anchorAuras()
+	for _, head in ipairs(auraHeads) do
+		head:ClearAllPoints()
+		head:SetPoint("TOPLEFT", targetFrame, "BOTTOMLEFT", 5, AURA_LIFT)
+	end
+end
+
+-- What each unit frame was built as, taken before PLAYER_LOGIN and so before
+-- the skin has fitted any of them. The fit is only reversible if these are the
+-- numbers that come back.
+local BUILT = {}
+for _, frame in ipairs({ playerFrame, targetFrame, totFrame }) do
+	BUILT[frame.name] = { frame:GetWidth(), frame:GetHeight(),
+		frame.points and frame.points[1] }
+end
+
+-- The minimap, shaped the way TBC shapes it: a frame inside a cluster, a ring
+-- of art round it, four of Blizzard's own buttons anchored to points on that
+-- ring, and three addon buttons of the kind that go on it uninvited.
+--
+-- Stood up before PLAYER_LOGIN because that is when Minimap/Shape.lua reads
+-- the width the client drew it at, and the whole of turning the square off
+-- again is handing that number back.
+--
+-- The zoom trio is here because taking the two zoom buttons off the ring means
+-- the wheel has to do their work, and a stub without them would let a square
+-- that cannot be zoomed pass.
+do
+	local map = region("frame", _G.UIParent, "Minimap")
+	map:SetSize(140, 140)
+	map.zoom, map.zoomLevels = 2, 5
+	map.GetZoom = function(self) return self.zoom end
+	map.GetZoomLevels = function(self) return self.zoomLevels end
+	map.SetZoom = function(self, level) self.zoom = level end
+	map.SetMaskTexture = function(self, path) self.mask = path end
+	map.mask = "Textures\\MinimapMask"
+
+	local cluster = region("frame", _G.UIParent, "MinimapCluster")
+	cluster:SetSize(192, 192)
+
+	for _, name in ipairs({ "MinimapBorder", "MinimapBorderTop", "MinimapNorthTag",
+		"MinimapZoomIn", "MinimapZoomOut", "MiniMapWorldMapButton" }) do
+		child("texture", map, name)
+	end
+
+	-- Blizzard's own, each anchored to a point on the arc the way the client
+	-- anchors them. Those offsets are what the square has no room for and what
+	-- has to come back when it goes off.
+	for _, entry in ipairs({
+		{ "MiniMapTracking", "TOPLEFT", 8, -3 },
+		{ "MiniMapMailFrame", "TOPRIGHT", -3, -30 },
+		{ "MiniMapBattlefieldFrame", "BOTTOMRIGHT", -8, 25 },
+		{ "GameTimeFrame", "TOPRIGHT", 12, -8 },
+	}) do
+		local button = child("button", map, entry[1])
+		button:SetPoint(entry[2], map, entry[2], entry[3], entry[4])
+	end
+
+	-- Three addon buttons, of the two shapes that actually turn up. LibDBIcon
+	-- names one way and an addon rolling its own names the other, and both are
+	-- children of the minimap with a point on the arc.
+	for _, name in ipairs({ "LibDBIcon10_Questie", "LibDBIcon10_Details",
+		"TitanMinimapButton" }) do
+		local button = child("button", map, name)
+		button:SetSize(31, 31)
+		button:SetPoint("CENTER", map, "CENTER", 60, 20)
+	end
+
+	-- A child with no name at all, which is what a texture holder or an
+	-- anonymous frame on the minimap looks like. It must never be collected:
+	-- the corral is keyed by name and an unnamed one could not be released.
+	child("frame", map)
+
+	-- And the reason the corral has a shape test at all. The minimap is not
+	-- only where addons hang their button, it is also where every addon that
+	-- draws a pin hangs the pin, and Questie parents several hundred to it.
+	-- The first client this met collected 555 of them and left Questie unable
+	-- to move its own map.
+	--
+	-- Modelled the way a pool actually looks: one name with a counter on the
+	-- end, and drawn at a pin's size rather than a button's. Sixty is enough to
+	-- fail every count in the block below if the filter ever comes off.
+	for index = 1, 60 do
+		local pin = child("button", map, "QuestieFrame" .. index)
+		pin:SetSize(16, 16)
+		pin:SetPoint("CENTER", map, "CENTER", index, index)
+	end
+
+	-- A pin pool drawn at a button's size, which the size window cannot catch
+	-- and only the family rule can. This is the assertion that says the family
+	-- rule is doing work rather than riding along behind the size test.
+	for index = 1, 12 do
+		local pin = child("button", map, "GatherMatePin" .. index)
+		pin:SetSize(31, 31)
+		pin:SetPoint("CENTER", map, "CENTER", -index, index)
+	end
+
+	-- A frame rather than a button, at a button's size and with a name of its
+	-- own. Pins are often frames and buttons almost never are.
+	local pinFrame = child("frame", map, "SomeAddonMapNote")
+	pinFrame:SetSize(31, 31)
+	pinFrame:SetPoint("CENTER", map, "CENTER", 40, -40)
+end
+
+H.playerFrame, H.targetFrame, H.totFrame = playerFrame, targetFrame, totFrame
+H.AURA_LIFT, H.auraHeads, H.anchorAuras = AURA_LIFT, auraHeads, anchorAuras
+H.BUILT = BUILT

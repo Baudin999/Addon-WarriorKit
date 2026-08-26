@@ -439,6 +439,110 @@ else
 	status=1
 fi
 
+# The harness itself, held to the shape it was split into.
+#
+# It was one file of eleven thousand lines and it nearly stopped loading. Lua
+# 5.1 gives one function two hundred locals, a chunk is a function, and the
+# count had reached a hundred and seventy one. Nothing measured that. The file
+# carried a comment asking whoever came next to scope their section in a
+# `do ... end`, which is a request rather than a gate, and eleven of the thirty
+# six sections had not.
+#
+# So the three things the split is worth are measured here rather than asked
+# for. The name budget is the one that actually broke. The line limit is the
+# rule the addon is already held to above. The manifest is TOC parity by
+# another name, because a section file the runner does not list is a test that
+# looks like it covers something and does not.
+harness_status=0
+
+# Names declared at the top of a chunk, against Lua's ceiling of 200. Both of
+# these are ratchets: the general limit and every entry beside it sit at what
+# is measured today, so an improvement lowers the number in the same commit and
+# growth fails here instead of passing unremarked.
+HARNESS_NAME_LIMIT=40
+
+# path:ceiling:why it is exempt
+HARNESS_NAME_ALLOWED="
+sections/25-meters.lua:58:one scene held across damage, threat, the clock and both panes
+"
+
+# The same 800 the addon is held to, and the same allow-list shape.
+HARNESS_LINE_LIMIT=800
+
+# path:ceiling:why it is exempt
+HARNESS_LINE_ALLOWED="
+sections/05-action-bars.lua:1053:one subject, five bars; splits at the keys, the paging and the churn
+"
+
+harness_names='
+/^local[ \t]+function[ \t]+[A-Za-z_]/ { n += 1; next }
+/^local[ \t]/ {
+	line = $0
+	sub(/=.*/, "", line)
+	sub(/^local[ \t]+/, "", line)
+	gsub(/[^A-Za-z0-9_]+/, " ", line)
+	count = split(line, parts, " ")
+	for (i = 1; i <= count; i++) if (parts[i] != "") n += 1
+}
+END { print n + 0 }
+'
+
+# One measurement against one limit and one allow-list. Called twice per file
+# because the two numbers are the same rule about two different things.
+harness_budget() {
+	local rel="$1" what="$2" measured="$3" limit="$4" allowed="$5"
+	local ceiling="" why="" entry
+
+	while IFS= read -r entry; do
+		[ -n "$entry" ] || continue
+		case "$entry" in
+			"$rel":*)
+				ceiling=$(printf '%s' "$entry" | cut -d: -f2)
+				why=$(printf '%s' "$entry" | cut -d: -f3-)
+				[ -n "$why" ] || {
+					echo "harness/$rel is allow-listed for $what with no reason given"
+					harness_status=1
+				}
+				;;
+		esac
+	done <<< "$allowed"
+
+	if [ -n "$ceiling" ]; then
+		if [ "$measured" -gt "$ceiling" ]; then
+			echo "harness/$rel is $measured $what, over its own ceiling of $ceiling"
+			harness_status=1
+		elif [ "$measured" -lt "$ceiling" ]; then
+			echo "harness/$rel is $measured $what and its ceiling still says $ceiling: lower it"
+			harness_status=1
+		fi
+	elif [ "$measured" -gt "$limit" ]; then
+		echo "harness/$rel is $measured $what, over the limit of $limit and not allow-listed"
+		harness_status=1
+	fi
+}
+
+while IFS= read -r f; do
+	rel="${f#../scripts/harness/}"
+	harness_budget "$rel" "names at chunk level" "$(awk "$harness_names" "$f")" \
+		"$HARNESS_NAME_LIMIT" "$HARNESS_NAME_ALLOWED"
+	harness_budget "$rel" "lines" "$(wc -l < "$f")" \
+		"$HARNESS_LINE_LIMIT" "$HARNESS_LINE_ALLOWED"
+done < <(find ../scripts/harness -name '*.lua' -type f | sort)
+
+# Every section on disk is listed by the runner, and every section the runner
+# lists is on disk.
+listed=$(sed -n 's/^[[:space:]]*"\([0-9][0-9]-[a-z-]*\)",$/\1/p' \
+	../scripts/harness/runner.lua | sort)
+ondisk=$(find ../scripts/harness/sections -name '*.lua' -type f -printf '%f\n' \
+	| sed 's/\.lua$//' | sort)
+if [ "$listed" != "$ondisk" ]; then
+	echo "the runner's section list and harness/sections disagree:"
+	diff <(printf '%s\n' "$listed") <(printf '%s\n' "$ondisk") | sed 's/^/  /'
+	harness_status=1
+fi
+
+[ "$harness_status" -eq 0 ] || status=1
+
 luacheck=$(command -v luacheck || echo "$HOME/.luarocks/bin/luacheck")
 if [ -x "$luacheck" ]; then
 	"$luacheck" . || status=1

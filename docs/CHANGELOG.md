@@ -1486,6 +1486,48 @@ ceiling fails in both directions: growing past it fails, and shrinking below it
 fails until the number comes down in the same commit, which is what makes it a
 ratchet rather than a licence to grow back.
 
+### The harness was one file, and it had nearly stopped loading
+
+Eleven thousand lines: a stub of the client, then thirty six sections of
+assertions, in one chunk. Lua 5.1 gives one function two hundred locals, a chunk
+is a function, and the count had reached a hundred and seventy one. What that
+number buys at two hundred is not a failing test. It is `main function has more
+than 200 local variables`, and the harness does not start.
+
+Nothing measured it. The file carried a header asking whoever came next to scope
+their section in a `do ... end`, which is a request rather than a gate, and
+eleven of the thirty six sections had not. Ten of those eleven had left a name
+behind that a later section was reading.
+
+**It is a directory now.** `scripts/harness.lua` is still the command and still
+runs the same assertions in the same order, against the same client, to the same
+output. Under it, `harness/client/` is the stub, one file per part, loaded in the
+order `client/init.lua` lists. `harness/sections/` is the questions, one file per
+subject, in the order `harness/runner.lua` lists. Every file is its own chunk
+with its own two hundred names. The worst declares fifty eight.
+
+**What one section leaves for a later one is named at both ends.** Sections
+depend on each other on purpose: a churn figure measured in one is compared in
+another, the skin is fitted in one and taken off again three down. In the single
+file that worked because the variable was still in scope, which is also how a
+section could pick one up by accident. It goes through `H.carry` now, written
+where it is handed over and read where it is used. The ten values the stub keeps
+and a section writes, the purse and the repair bill and how tall the screen is,
+live on one table that both sides name.
+
+**Naming a section stops the run after it.**
+
+    lua5.1 scripts/harness.lua src WARRIOR 12-debuff-square-size
+
+Everything above that section still runs. Not the section alone: it reads what
+the ones above it left behind, so a run of one on its own is a crash rather than
+a smaller suite.
+
+**`check.sh` measures the shape**, which is the part that was missing the whole
+time. No harness file over 800 lines or 40 names at chunk level unless it carries
+its own ceiling and a written reason, both ratcheting in each direction, and the
+runner's section list has to match what is on disk.
+
 ## Unreleased
 
 ### The charge part now stays out of the way on another class

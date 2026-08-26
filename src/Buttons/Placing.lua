@@ -119,7 +119,7 @@ function Place.Handle(entry)
 		-- on the pixel grid, where a fractional offset is every icon and every
 		-- glyph on it rasterised across two rows. The grid buys exact sizes and
 		-- nothing at all about position; this is where position is decided, and
-		-- scripts/harness.lua's anchor sweep fails on a bar left on a fraction.
+		-- The harness's anchor sweep fails on a bar left on a fraction.
 		--
 		-- Not UI.Round, which snaps to a multiple of one physical pixel and
 		-- floors the result at one. That floor is right for a size, where zero

@@ -655,11 +655,11 @@ nothing rounds on a ticker.
    buy a sharpness nobody can see on something in motion. Rounding is also a
    throttle: a 180 pixel fill crossing a 3.4 second swing can only change value
    53 times a second once it is rounded, however often the tick runs, so it
-   stands still on 91 of the 144 frames a fast screen draws. Gated in the swing
-   section of `scripts/harness.lua`, which asserts that the fill lands off a
-   whole pixel on nearly every frame, and again in the cast section, which
-   drives a cast across two frame rates and asserts that no frame repeats the
-   position of the one before it.
+   stands still on 91 of the 144 frames a fast screen draws. Gated in
+   `scripts/harness/sections/27-swing-visible.lua`, which asserts that the fill
+   lands off a whole pixel on nearly every frame, and again in the cast section,
+   which drives a cast across two frame rates and asserts that no frame repeats
+   the position of the one before it.
 
 Rule 1 was written when every edge in the addon was static, and for that
 codebase it was the whole truth. The swing bar was the first moving edge and it
@@ -3713,7 +3713,26 @@ and zero errors.
    as the invariant it comes from: at 3.4, 2.4 and 1.6 second swings, and across
    a proc that lands mid swing, the moment the fill reaches the mark is the
    moment the swing has exactly a cast time left to run.
-7. Runs luacheck over the tree.
+8. Holds the harness to the shape it was split into. No file over 800 lines
+   or 40 names at chunk level unless it carries its own ceiling and a reason,
+   both ratcheting in each direction, and the runner's section list has to
+   match what is on disk. This one is here because the harness was a single
+   file of eleven thousand lines that had reached a hundred and seventy one
+   chunk locals against Lua 5.1's ceiling of two hundred, and the only thing
+   watching that number was a comment asking the next author to be careful.
+   The worst file declares fifty eight now.
+9. Runs luacheck over the tree.
+
+`scripts/harness.lua` is the command. The harness itself is the directory
+beside it. `harness/client/` is the stub of the client, one file per part,
+loaded in the order `client/init.lua` lists. `harness/sections/` is the
+questions, one file per subject, in the run order `harness/runner.lua` lists.
+That order is load bearing: sections leave state behind on purpose, and
+anything one hands to a later one goes through `H.carry` and is named at both
+ends. Naming a section stops the run after it, with everything above it still
+running, which is the smallest run that can answer for that section:
+
+    lua5.1 scripts/harness.lua src WARRIOR 12-debuff-square-size
 
 The harness runs twice, and the second run comes up as a hunter:
 
