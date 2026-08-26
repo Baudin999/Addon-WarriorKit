@@ -1044,7 +1044,7 @@ check(widget.box.edges[1].height == ns.UI.Pixel(widget),
 	("hairline is %.4f units, expected %.4f"):format(widget.box.edges[1].height, ns.UI.Pixel(widget)))
 
 -- The icon crop lands on texel boundaries and the client's snapping is off.
-local art = widget.icons[1].texture
+local art = widget.icons[1].icon
 check(art.texcoord and math.abs(art.texcoord[1] * 64 - 5) < 1e-9,
 	"icon crop is not on a texel boundary")
 check(art.snapped == false and art.bias == 0, "icon texture is still being snapped")

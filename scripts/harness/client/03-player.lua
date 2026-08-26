@@ -119,34 +119,45 @@ _G.UnitAffectingCombat = function(unit) return inCombat[unit] == true end
 -- that half of ScanDebuffs unreachable.
 --
 -- The order of the returns is the client's, not a convenience: name is first,
--- the stack count is third, the expiry is sixth and the caster is seventh, and
--- the addon reads them positionally because that is the only way this API can
--- be read on 2.5.6.
+-- the icon second, the stack count third, the expiry sixth and the caster
+-- seventh, and the addon reads them positionally because that is the only way
+-- this API can be read on 2.5.6.
+--
+-- The icon was nil here for as long as the only reader was the enemy bars'
+-- tracked row, which draws the art it looked up from the spell ID and never
+-- asks the aura for it. The row under the skinned target block draws whatever
+-- is actually on the unit and has nowhere else to get the picture from, so a
+-- stub answering nil would have let a row of blank squares pass.
 local debuffs = {}
+-- What is helping a unit that is not you. Its own table rather than a second
+-- use of `own.auras`, because the two are asked by different parts for
+-- different reasons: the buff nag walks your own list looking for what is
+-- missing, and the row under the skinned target block walks the target's
+-- looking for what is there. Empty in the shipped scene, like the debuffs
+-- above it, so no section sees a buff appear under it.
+local buffs = {}
 _G.UnitAura = function(unit, index, filter)
-	-- Your own buffs, which is the other half of the same call and the one the
-	-- buff nag walks. Only the player carries any, because that is the only unit
-	-- anything in this addon asks HELPFUL about, and the list is empty in the
-	-- shipped scene so no other section sees a buff appear under it.
+	local aura
 	if filter == "HELPFUL" then
-		if unit ~= "player" then
-			return nil
-		end
-		local aura = own.auras[index]
+		-- Your own buffs, which is the other half of the same call and the one
+		-- the buff nag walks.
+		local list = unit == "player" and own.auras or buffs[unit]
+		aura = list and list[index]
 		if not aura then
 			return nil
 		end
-		return aura.name, nil, aura.count, nil, nil, aura.expires, "player"
+		return aura.name, aura.icon, aura.count, nil, nil, aura.expires,
+			aura.source or (unit == "player" and "player" or nil)
 	end
 	if filter ~= "HARMFUL" then
 		return nil
 	end
 	local list = debuffs[unit]
-	local aura = list and list[index]
+	aura = list and list[index]
 	if not aura then
 		return nil
 	end
-	return aura.name, nil, aura.count, nil, nil, aura.expires, aura.source
+	return aura.name, aura.icon, aura.count, nil, nil, aura.expires, aura.source
 end
 _G.UnitPowerType, _G.UnitPower, _G.UnitPowerMax = constant(1), constant(40), constant(100)
 _G.UnitPlayerOrPetInParty, _G.UnitPlayerOrPetInRaid = constant(false), constant(false)
@@ -366,7 +377,7 @@ _G.LOOT_MONEY_SPLIT = "You receive %s as your split."
 _G.time = os.time
 
 H.own, H.realPlayers, H.inCombat = own, realPlayers, inCombat
-H.debuffs, H.advance, H.ITEMS = debuffs, advance, ITEMS
+H.debuffs, H.buffs, H.advance, H.ITEMS = debuffs, buffs, advance, ITEMS
 H.JUNK, H.QUESTBAG, H.CARRIED = JUNK, QUESTBAG, CARRIED
 H.refill, H.refillQuests, H.carrying = refill, refillQuests, carrying
 H.itemLink = itemLink

@@ -199,6 +199,7 @@ Charge/Marker.lua:AttachTo
 Charge/Marker.lua:ChargeMarker.Update
 UI/Gauge.lua:Gauge.Flatten
 UI/Gauge.lua:Gauge.Paint
+UI/Aura.lua:Aura.Draw
 UnitFrames/EnemyBars.lua:BuildTargeters
 UnitFrames/EnemyBars.lua:Member
 UnitFrames/EnemyBars.lua:Record
@@ -224,6 +225,12 @@ Perf/Perf.lua:Perf.Start
 Perf/Perf.lua:Perf.Stop
 Perf/Perf.lua:Perf.Sample
 Perf/Feature.lua:Paint
+UnitFrames/Auras.lua:AuraAt
+UnitFrames/Auras.lua:Scan
+UnitFrames/Auras.lua:Sweep
+UnitFrames/Auras.lua:Height
+UnitFrames/Auras.lua:Fill
+UnitFrames/Auras.lua:Auras.Update
 UnitFrames/Skin.lua:Refresh
 UnitFrames/Skin.lua:HealSlice
 Unit/Unit.lua:Unit.Health
@@ -381,9 +388,8 @@ LINE_LIMIT=800
 # path:ceiling:why it is exempt
 LINE_ALLOWED="
 UI/Widgets.lua:1289:the widget kit, one function per control and shared by every page
-UnitFrames/EnemyBars.lua:2050:splits at the settings API, the widget and the plate plumbing
+UnitFrames/EnemyBars.lua:2011:splits at the settings API, the widget and the plate plumbing
 UnitFrames/Skin.lua:2012:splits at the region walk, the block geometry and the tick
-UnitFrames/Feature.lua:879:two parts under one registration; splits where the bars half meets the skin half
 "
 
 while IFS= read -r f; do
