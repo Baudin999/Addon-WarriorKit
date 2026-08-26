@@ -374,6 +374,27 @@ end
 -- Stored rather than swallowed by the metatable, because a secure button's
 -- macro is written as an attribute and reading it back is the only way to
 -- assert what a key press would actually send.
+-- Which click edges a button answers, recorded rather than swallowed.
+--
+-- This fell through to the PascalCase no-op above, and a no-op here is a whole
+-- class of bug the harness cannot see: a secure button registered for an edge
+-- this client does not fire draws perfectly and does nothing at all when you
+-- click it. That is exactly what shipped on the action bars, which registered
+-- AnyDown on a client whose own ActionButton_OnLoad registers AnyUp.
+function Region:RegisterForClicks(...)
+	self.clicks = {}
+	for index = 1, select("#", ...) do
+		self.clicks[select(index, ...)] = true
+	end
+end
+function Region:GetRegisteredClicks() return self.clicks end
+
+-- Whether a frame takes the mouse. Recorded for the same reason: a frame laid
+-- over an icon that answers the mouse is a button you cannot press, and it
+-- looks identical to one you can.
+function Region:EnableMouse(value) self.mouse = value and true or false end
+function Region:IsMouseEnabled() return self.mouse end
+
 function Region:SetAttribute(key, value)
 	self.attributes = self.attributes or {}
 	self.attributes[key] = value
@@ -2208,6 +2229,38 @@ do
 		"a button on a bar nobody cloned was hidden, so the off switch would show it")
 	check(Bars.Hidden() == 48, ("48 buttons were cloned over and %d were hidden")
 		:format(Bars.Hidden()))
+
+	-- A square you cannot click.
+	--
+	-- Every one of these registered AnyDown, copied off the charge button,
+	-- which registers AnyDown and then calls EnableMouse(false) on itself
+	-- because the only ways to press it are a key and /click. On 2.5.6 the
+	-- client's own ActionButton_OnLoad registers AnyUp; casting on the down
+	-- edge came with a later expansion and its CVar. So the bars drew
+	-- correctly, lit correctly, counted down correctly, and did nothing at all
+	-- when clicked, and nothing in this file could see it because
+	-- RegisterForClicks was a no-op.
+	local mute, blind, seen = 0, 0, 0
+	for index = 1, #bars do
+		for slot = 1, 12 do
+			local w = bars[index].buttons[slot]
+			seen = seen + 1
+			local clicks = w:GetRegisteredClicks()
+			if not clicks or not (clicks.AnyUp or clicks.LeftButtonUp) then
+				mute = mute + 1
+			end
+			-- And nothing laid over the icon may answer the mouse, or the
+			-- click lands on the swipe instead of on the ability.
+			if w.cooldown:IsMouseEnabled() ~= false then
+				blind = blind + 1
+			end
+		end
+	end
+	check(seen == 48, ("walked %d squares, expected 48"):format(seen))
+	check(mute == 0,
+		("%d squares register no up edge, so a click on them does nothing"):format(mute))
+	check(blind == 0,
+		("%d cooldown swipes still answer the mouse and would eat the click"):format(blind))
 
 	-- Not by replacing a method on Blizzard's frame. ns.Strip swaps a region's
 	-- Show for its Hide, which is right for a texture and wrong for a secure

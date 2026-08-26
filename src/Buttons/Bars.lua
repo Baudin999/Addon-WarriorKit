@@ -301,9 +301,19 @@ local function BuildBar(entry)
 		local w = Ability.New(header, ("WarriorKitBarButton%d"):format(pool),
 			"SecureActionButtonTemplate", Ability.QUIET)
 		Ability.Size(w, SIZE)
-		-- On the down edge, which is what the charge button registers and what
-		-- makes a bound key feel like a key rather than like a click.
-		w:RegisterForClicks("AnyDown")
+		-- The up edge, which is what this client's own action buttons register
+		-- in ActionButton_OnLoad. Casting on the down edge arrived with a
+		-- later expansion and its CVar, and a button registered only for
+		-- AnyDown on 2.5.6 draws perfectly and does nothing at all when you
+		-- click it.
+		--
+		-- This said AnyDown, on the grounds that the charge button registers
+		-- it. That is not the precedent it looks like: the charge button calls
+		-- EnableMouse(false) on itself and says in its own note that the two
+		-- ways to press it are the bound key and /click. Copying a click
+		-- registration off a button that refuses the mouse is how a bar full
+		-- of squares ended up inert.
+		w:RegisterForClicks("AnyUp")
 		w:SetAttribute("type", "action")
 		entry.buttons[index] = w
 		squares[#squares + 1] = w

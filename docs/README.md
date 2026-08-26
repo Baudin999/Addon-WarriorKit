@@ -2757,10 +2757,12 @@ Everything below was written from the API contract and has never executed:
   says in its own header that the frame itself is never hidden, because it is a
   secure unit button. The harness asserts that no button of theirs carries a
   method or a field this addon wrote.
-- Whether an action button whose `action` attribute this addon wrote casts on the
-  key-down edge on 2.5.6. `Charge/Icon.lua` registers `AnyDown` on the same
-  client for a macro button and works; a `type="action"` button is the same
-  template with a different attribute.
+- Whether a key bound to one of our bar buttons wants the same click edge a
+  mouse click does. The squares register `AnyUp`, which is what this client's own
+  `ActionButton_OnLoad` registers, and the override bindings send `LeftButton`
+  through the same button. Registering `AnyDown` instead is what made the first
+  build draw perfectly and do nothing when clicked, and the harness now fails on
+  a square that answers no up edge.
 
 - Whether `LOOT_READY` fires before the loot window draws on 2.5.6. Leatrix
   Plus hangs its own faster looting on that event and is loaded on both clients,

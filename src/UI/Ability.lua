@@ -172,6 +172,15 @@ function Ability.New(parent, name, template, palette)
 	if w.cooldown.SetHideCountdownNumbers then
 		w.cooldown:SetHideCountdownNumbers(true) -- this file draws its own
 	end
+	-- The swipe covers the whole icon, so anything it took would be a click on
+	-- the ability. Said rather than assumed: a Cooldown is a frame, what a
+	-- frame does with the mouse is the template's business, and a square you
+	-- cannot press is indistinguishable from a square that is drawn wrong.
+	w.cooldown:EnableMouse(false)
+	-- The swipe covers the whole icon, so anything it took would be a click on
+	-- the ability. Said rather than assumed: a Cooldown is a frame, what a
+	-- frame does with the mouse is the template's business, and a square you
+	-- cannot press is indistinguishable from a square that is drawn wrong.
 
 	w.timer = UI.Label(w, 12, nil, "CENTER")
 	w.timer:SetPoint("CENTER")
