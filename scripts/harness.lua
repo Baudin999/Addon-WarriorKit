@@ -1109,6 +1109,39 @@ _G.IsAutoRepeatAction = function(slot)
 	local held = slots[slot]
 	return (held and held.repeating) and true or false
 end
+-- Worn or wielded, which is the green ring Blizzard draws and this addon draws
+-- one pixel inside the status border.
+_G.IsEquippedAction = function(slot)
+	local held = slots[slot]
+	return (held and held.equipped) and true or false
+end
+
+-- Picking an action slot up and putting it down.
+--
+-- Written onto the cursor declared above rather than onto one of their own.
+-- GetCursorInfo closes over that upvalue, and Buttons/Layout.lua refuses to
+-- write a slot while the cursor is full, so a second cursor here would leave
+-- Layout believing both hands were empty while a spell was on its way from one
+-- square to another. `id` and `link` are the two fields GetCursorInfo reports,
+-- so the shape is theirs and only `action` is new.
+--
+-- Modelled and not stubbed flat because Buttons/Bars.lua's whole drop path is
+-- unreachable otherwise: a pickup that never fills the cursor and a place that
+-- never moves a slot both look exactly like a bar you cannot drop on.
+_G.PickupAction = function(slot)
+	local held = slots[slot]
+	if not held then
+		return
+	end
+	cursor = { id = slot, link = nil, action = held }
+	slots[slot] = nil
+end
+_G.PlaceAction = function(slot)
+	local carried = cursor and cursor.action
+	local displaced = slots[slot]
+	slots[slot] = carried
+	cursor = displaced and { id = slot, link = nil, action = displaced } or nil
+end
 
 -- Blizzard's own action bars, as much of them as a clone can see.
 --
@@ -1985,6 +2018,17 @@ do
 	put({ texture = ART, repeating = true })
 	check(Slot.Active(SLOT), "an auto attack already swinging is not drawn as active")
 
+	-- Worn, which is a fact about the item and not a rung on the ladder, so it
+	-- is driven against a slot that is also on cooldown and unusable. All three
+	-- have to be sayable at once.
+	put({ texture = ART })
+	check(not Slot.Equipped(SLOT), "a slot holding nothing worn is drawn with the ring")
+	put({ texture = ART, equipped = true, usable = false, noPower = true,
+		start = wall, duration = 30 })
+	check(Slot.Equipped(SLOT), "a wielded weapon draws no equipped ring")
+	check(Slot.State(SLOT) == "cooldown",
+		"being equipped moved the slot off the rung it was on")
+
 	-- Cost and stance are the same "not usable" from the client and the second
 	-- return is the only thing that tells them apart. Both are driven, because
 	-- collapsing them is the mistake this split exists to prevent.
@@ -2124,6 +2168,17 @@ do
 		"the active tint is not additive, so it is a muddy rectangle over the art")
 	Ability.Draw(feel, ART, "cost")
 	check(not feel.active:IsShown(), "the active tint is not cleared when the ability stops")
+
+	-- The equipped ring, which is a second outline inside the status border and
+	-- so has to be able to be on while the border says something else.
+	Ability.Draw(feel, ART, "range", nil, nil, nil, false, true)
+	check(feel.equipped[1]:IsShown(), "a worn item draws no equipped ring")
+	check(feel.shownLook == Ability.Look(Ability.QUIET, "range"),
+		"the equipped ring took over the border, which the status owns")
+	check(feel.equipped[1].layer == "OVERLAY",
+		"the equipped ring is under the art, where the art will cover it")
+	Ability.Draw(feel, ART, "range")
+	check(not feel.equipped[1]:IsShown(), "the equipped ring outlived the item")
 
 	-- The two the client draws by itself, which is why nothing on the tick
 	-- touches them and why only their existence can be checked.
@@ -2644,6 +2699,78 @@ do
 
 	GameTooltip.SetAction, GameTooltip.SetOwner, GameTooltip.Hide =
 		realAction, realOwner, realHide
+	slots[seat] = nil
+
+	--------------------------------------------------------------------------
+	-- Dragging a spell onto a square
+	--
+	-- The only way to fill one by hand, because the Blizzard button underneath
+	-- is hidden and cannot be dropped on. Driven end to end across two squares
+	-- rather than by asserting the scripts exist: a pickup that never fills the
+	-- cursor and a drop that never moves a slot look exactly like a bar you
+	-- cannot drop on, and that is the state this replaces.
+	--------------------------------------------------------------------------
+
+	local other = found.bar1.buttons[3]
+	local there = other:GetAttribute("action")
+	local pick, drop = square:GetScript("OnDragStart"), other:GetScript("OnReceiveDrag")
+	check(pick and drop,
+		"a bar square has no drag scripts, so nothing can be moved onto it")
+
+	slots[seat] = { texture = ART }
+	slots[there] = nil
+	if pick then
+		pick(square)
+	end
+	check(GetCursorInfo() ~= nil, "dragging a square picked nothing up")
+	check(slots[seat] == nil, "the slot kept its ability while the cursor carried it")
+	if drop then
+		drop(other)
+	end
+	check(slots[there] ~= nil and slots[there].texture == ART,
+		"dropping on an empty square did not fill it")
+	check(GetCursorInfo() == nil, "the cursor is still full after a drop onto an empty slot")
+
+	-- And a swap, which is the case that loses a bar if it is wrong: dropping
+	-- onto a filled square has to hand the displaced ability back rather than
+	-- destroy it.
+	local OTHER_ART = "Interface\\Icons\\Ability_Warrior_Cleave"
+	slots[seat] = { texture = OTHER_ART }
+	if pick then
+		pick(square)
+	end
+	if drop then
+		drop(other)
+	end
+	check(slots[there] ~= nil and slots[there].texture == OTHER_ART,
+		"a drop onto a filled square did not replace what was there")
+	check(GetCursorInfo() ~= nil, "the displaced ability was destroyed instead of handed back")
+	ClearCursor()
+
+	-- Refused in combat, where PickupAction cannot be called at all. The clone
+	-- shares Layout's probe, so this is the same refusal that stops a loadout
+	-- writing mid-fight.
+	slots[seat] = { texture = ART }
+	local realLockdown = _G.InCombatLockdown
+	_G.InCombatLockdown = function() return true end
+	if pick then
+		pick(square)
+	end
+	_G.InCombatLockdown = realLockdown
+	check(GetCursorInfo() == nil, "a square let go of its ability in combat")
+	check(slots[seat] ~= nil, "a slot was emptied by a drag started in combat")
+
+	slots[seat] = nil
+	slots[there] = nil
+
+	-- The ring, on the square the tick actually drives.
+	slots[seat] = { texture = ART, equipped = true }
+	Bars.Update()
+	check(square.equipped[1]:IsShown(),
+		"the tick does not hand the equipped flag through, so a worn item has no ring")
+	slots[seat] = { texture = ART }
+	Bars.Update()
+	check(not square.equipped[1]:IsShown(), "the equipped ring outlived the item on the bar")
 	slots[seat] = nil
 
 	--------------------------------------------------------------------------

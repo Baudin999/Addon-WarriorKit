@@ -52,19 +52,15 @@ local Ability, Flow = UI.Ability, UI.Flow
 --   at PLAYER_REGEN_ENABLED. That is Charge/Icon.lua's ApplySecure shape.
 --
 -- What a square deliberately is not: a Blizzard action button. It casts, it
--- draws what the slot is doing, it carries its key and it names what is on it
--- when you hover it. It has no drag, and nothing can be dropped on it. Filling
--- a slot is Buttons/Layout.lua's job or the spellbook's, and both write the same
--- slots these squares read, so the picture updates on the next tick either way.
--- Adding drag would mean PickupAction and PlaceAction on a frame the player can
--- drop anything onto, which is a way to lose a bar to a misclick in exchange
--- for a gesture the spellbook already covers.
+-- draws what the slot is doing, it carries its key, it names what is on it when
+-- you hover it, and you can drag a spell onto it. Filling a slot is
+-- Buttons/Layout.lua's job or the spellbook's, and both write the same slots
+-- these squares read, so the picture updates on the next tick either way.
 --
--- The tooltip was on that list and should not have been. Drag is a way to lose
--- a bar; a tooltip is how you find out what rank of Rend the loadout put in
--- slot four without dragging anything anywhere. It is also the single loudest
--- thing missing from a square that is standing in for a button which has one:
--- hovering a bar and getting nothing back reads as broken, not as minimal.
+-- What one square answers to the mouse is Buttons/Square.lua, which is where
+-- the tooltip and the drag live and where the argument for both is written
+-- down. This file builds the squares and points them at slots; that one hangs
+-- the scripts.
 --------------------------------------------------------------------------
 
 -- Ten a second, which is what the charge icon runs at and is the rate a
@@ -280,33 +276,6 @@ local PAGE_SNIPPET = [[
 -- because a bar with no page is a bar of twelve empty squares.
 local PAGE_MACRO = "[stance:1] 1; [stance:2] 2; [stance:3] 3; [nostance] 1"
 
--- What is on this square, said in the client's own words.
---
--- OnEnter and OnLeave are not protected, so this is one of the few things a
--- secure button will let an addon put on it in plain Lua. The slot is read off
--- the button's own action attribute for the reason Bars.Update reads it there:
--- it is what a press would actually reach, whether Lua wrote it or the stance
--- snippet did.
---
--- Refused for an empty slot rather than left to SetAction. SetAction on a slot
--- with nothing in it fills nothing and leaves whatever the last tooltip said on
--- screen, anchored to a square that has no ability, which is worse than no
--- tooltip at all.
-local function Tooltip(w)
-	w:SetScript("OnEnter", function(self)
-		local slot = self:GetAttribute("action")
-		if not slot or not ns.Slot.Texture(slot) then
-			return
-		end
-		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:SetAction(slot)
-		GameTooltip:Show()
-	end)
-	w:SetScript("OnLeave", function()
-		GameTooltip:Hide()
-	end)
-end
-
 local function BuildBar(entry)
 	-- Two frames rather than one, and not for tidiness. UI.Box is what gives
 	-- the bar a background and a hairline, and SecureHandlerStateTemplate is
@@ -350,7 +319,7 @@ local function BuildBar(entry)
 		-- of squares ended up inert.
 		w:RegisterForClicks("AnyUp")
 		w:SetAttribute("type", "action")
-		Tooltip(w)
+		ns.Square.Handle(w)
 		entry.buttons[index] = w
 		squares[#squares + 1] = w
 	end
@@ -646,7 +615,7 @@ function Bars.Update()
 		local slot = w:GetAttribute("action")
 		local status, start, duration = ns.Slot.State(slot)
 		Ability.Draw(w, ns.Slot.Texture(slot), status, start, duration,
-			ns.Slot.Count(slot), ns.Slot.Active(slot))
+			ns.Slot.Count(slot), ns.Slot.Active(slot), ns.Slot.Equipped(slot))
 	end
 end
 

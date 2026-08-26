@@ -27,7 +27,7 @@ ns.Slot = Slot
 --
 -- Everything here runs on the bar's ticker against every button on it, so
 -- nothing allocates and nothing is cached that the client already holds.
--- check.sh's HOT list covers Slot.State and Slot.Active.
+-- check.sh's HOT list covers Slot.State, Slot.Active and Slot.Equipped.
 --------------------------------------------------------------------------
 
 -- Below this a cooldown is the global and not the ability's own, and the two
@@ -80,12 +80,15 @@ local NEEDED = {
 
 local probe -- nil until asked, then true or a reason string
 
--- The two that say a slot is already what is running, resolved to locals rather
--- than looked up per button per tick. Deliberately not in NEEDED: a client
--- missing them loses the active tint, which is one thing the square does not
--- say, and a client missing anything in NEEDED loses the bar. Those are not the
--- same loss and must not share a switch.
-local isCurrent, isRepeating
+-- The three that say something about a slot beyond whether a press would land.
+-- Resolved to locals rather than looked up per button per tick, and
+-- deliberately not in NEEDED: a client missing one of these loses a tint or a
+-- ring, and a client missing anything in NEEDED loses the bar. Those are not
+-- the same loss and must not share a switch.
+--
+-- None of the three is called by anything installed on this machine, which is
+-- the bar the rest of the file is held to, so none is assumed.
+local isCurrent, isRepeating, isEquipped
 
 function Slot.CanRead()
 	if probe == nil then
@@ -98,6 +101,7 @@ function Slot.CanRead()
 		end
 		isCurrent = type(IsCurrentAction) == "function" and IsCurrentAction or nil
 		isRepeating = type(IsAutoRepeatAction) == "function" and IsAutoRepeatAction or nil
+		isEquipped = type(IsEquippedAction) == "function" and IsEquippedAction or nil
 	end
 	if probe ~= true then
 		return false, probe
@@ -213,6 +217,21 @@ function Slot.Active(slot)
 		return true
 	end
 	return false
+end
+
+-- Whether the slot holds an item you are wearing or wielding. Blizzard draws a
+-- green border for this and it is worth keeping: an item slot on a bar is a
+-- trinket or a weapon swap, and whether the swap has already happened is the
+-- one thing the icon alone cannot tell you.
+--
+-- Its own answer for the same reason Slot.Active is. Being equipped is not a
+-- reason a press does or does not land, so it cannot be a rung, and an equipped
+-- weapon can be on cooldown and out of range at the same time.
+function Slot.Equipped(slot)
+	if not slot or probe ~= true or not isEquipped then
+		return false
+	end
+	return isEquipped(slot) and true or false
 end
 
 function Slot.Describe()

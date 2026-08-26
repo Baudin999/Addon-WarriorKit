@@ -40,10 +40,47 @@ fell to the `no` look and came out as `INV_Misc_QuestionMark` at 55 percent, a
 row of grey question marks where Blizzard's bar had holes. Both palettes grew an
 `empty` look carrying `blank`, which says draw no art at all.
 
-Not done, and worth knowing: there is still no way to drag a spell from the
-spellbook onto a square, because the Blizzard button underneath it is hidden and
-nothing can be dropped on the clone. Filling a slot is `/wk buttons apply` or
-`/wk actionbars off` and the spellbook. The equipped-item border Blizzard draws in green is also still absent.
+### You can drop a spell on a square, and a worn item says so
+
+The two things the entry above listed as not done.
+
+Dragging was refused on the grounds that `PickupAction` and `PlaceAction` on a
+frame you can drop anything onto is a way to lose a bar to a misclick. The risk
+is real and the conclusion did not follow. With Blizzard's buttons hidden
+underneath, nothing could be dropped on a bar at all, so learning a spell meant
+turning the whole clone off to place it and back on again. A misclick moves one
+slot and hands back what it displaced. Nothing is destroyed, and the picture is
+right on the next tick.
+
+So a square takes `OnDragStart` and `OnReceiveDrag`, both refused in combat,
+which is where `PickupAction` cannot be called anyway. They ask
+`Layout.CanCarry`, which is new and is the smaller half of `Layout.CanWrite`.
+That split was a bug found while wiring this up: `CanWrite` refuses while the
+cursor is holding something, which is the state every drop happens in, so a drop
+asking it would be told to put down the thing it was in the middle of putting
+down. It also demanded all seven action calls, and moving one slot onto another
+needs two. `CARRY` is those two, `COMPOSE` is the five a loadout needs on top,
+and each is probed once.
+
+Empty squares are drawn at full alpha now rather than faded. That looks
+backwards and is not: with `blank` there is no art left to fade, so the alpha
+only reached the black backing and the hairline, and fading those leaves a drop
+target you cannot see. It is also why there is no grid. The client shows one on
+`ACTIONBAR_SHOWGRID` because its bar has no background to see a hole against,
+and this one is squares on a box.
+
+The equipped ring is `IsEquippedAction` folded into `Slot.Equipped`, drawn as a
+second green outline one pixel inside the status border rather than a recolour
+of it. The outer edge already carries the status, and being worn is not a
+status: a wielded weapon can be on cooldown and out of range at once, and all
+three are worth saying. It sits on `OVERLAY` because `BORDER` is under the art,
+and a ring on the art's own bounds would be covered by it.
+
+`Buttons/Bars.lua` hit 832 lines doing this, over the 800 line gate. It took the
+split rather than a fourth entry on the allow-list. `Buttons/Square.lua` is what
+one square answers to the mouse: everything in it hangs a script on a button and
+touches the cursor, and none of it knows what a bar is or which slot a square
+points at.
 
 ### The meter bars have an opacity slider
 

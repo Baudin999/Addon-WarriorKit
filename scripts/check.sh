@@ -131,6 +131,7 @@ UI/Ability.lua:Quantum
 Buttons/Bars.lua:Bars.Update
 Buttons/Slot.lua:Slot.State
 Buttons/Slot.lua:Slot.Active
+Buttons/Slot.lua:Slot.Equipped
 Buttons/Slot.lua:Slot.Texture
 Buttons/Slot.lua:Slot.Count
 Charge/Charge.lua:Charge.Pick
