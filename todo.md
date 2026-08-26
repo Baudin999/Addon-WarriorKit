@@ -5,7 +5,7 @@ Seven pieces, in this order. Each is built by one agent in its own worktree unde
 when `./scripts/check.sh` comes back at zero. The worktrees stay after the
 merge.
 
-## 1. Weapon swing timer  [merged, STILL BROKEN, parked]
+## 1. Weapon swing timer  [done, smooth confirmed in game]
 
 The addon talks about the swing and never draws it. `UI/Ability.lua:48` says
 Heroic Strike is armed and goes off on the next swing, `UI/Ability.lua:229`
@@ -19,31 +19,48 @@ them, `Meter/Meter.lua:54` already reads `SWING_DAMAGE` off the combat log, and
 costs no swing. That window is the point of the feature, so it is drawn rather
 than left to be read off a moving bar.
 
-### Still not fixed. Parked, come back to it.
+### What was actually wrong
 
-Tested in game after the first repair. The bar is still chunky. The Slam mark
-was not reported again, so treat that half as unconfirmed rather than fixed.
+There were two throttles on one moving edge and the first one hid the second.
 
-What the repair changed, so the next attempt does not redo it: the fill was
-drawn on a 50 ms ticker whose accumulator reset to zero instead of subtracting
-the interval, which made the real rate 15 Hz on a 60 fps client and the real
-step 3.5 pixels. It draws every frame now and the accumulator is gone. That was
-a real bug and it was not the whole cause, because the bar still steps.
+The first was the ticker. The fill was drawn on a 50 ms ticker whose
+accumulator reset to zero instead of subtracting the interval, so the real rate
+was 15 Hz on a 60 fps client and the real step 3.5 pixels. That was fixed and
+the bar still stepped, which is what made the first repair look wrong. It was
+not wrong; it was half.
 
-What was ruled out by reading, and should be re-checked rather than trusted:
-`bar.pixels` is not stale on any reachable path, `Whole()` and
-`SetMinMaxValues` agree on 180 units meaning 180 physical pixels at zoom 1, and
-the quantisation to whole pixels is correct.
+The second was the rounding, in `DrawHand` in `Swing/Gauges.lua`. The fill was
+snapped to a whole pixel before being written, and a fill snapped to a whole
+pixel can only change value as many times as the bar has pixels. At 180 pixels
+across a 3.4 second swing that is 53 times a second and no oftener, whatever
+rate the tick runs at. Deleting the ticker raised the drawn rate from 20 to 53
+and left that ceiling exactly where it was. The bar stood still on 91 of the 144
+frames a fast screen draws, and every move was a whole design unit, which is
+three screen pixels at `swing zoom 3`.
 
-What has not been looked at. The gauge is a client `StatusBar` fed whole pixel
-values through `SetValue`, so the next place to look is `UI/Gauge.lua` and what
-the client does with a value between two of its own steps. Also worth checking:
-whether the OnUpdate is attached to a frame that is throttled or hidden, what
-the fill's texture anchoring does at a fractional width, and whether the swing's
-start time comes from an event that arrives in bursts rather than from GetTime.
-Ask the user for a screen recording or a frame by frame description before
-guessing again, because two rounds of reading have now produced one real bug
-and no fix.
+Nothing was wrong with `UI/Gauge.lua`, with `bar.pixels`, with the `StatusBar`
+or with where the swing's start time comes from. The client's own cast bar is a
+`StatusBar` fed a float and it glides. The quantiser was ours.
+
+The fill is now written as a fraction, every frame, unguarded. That needed the
+addon's whole-pixel rule split into two rules rather than excused once: a static
+edge lands on a whole pixel, a moving fill is not quantised. Both are in
+`docs/README.md` under the pixel grid and both are gated in the harness.
+
+The old assertions were the wrong statements and are gone. "Never jumps more
+than one pixel between two frames" and "visits all 180 positions" are both
+satisfied by a quantised fill, which is why they passed twice against a bar that
+stepped. What is asserted now is that the drawn position equals the elapsed
+fraction exactly, that it changes on every frame at 60 fps and at 144, and that
+every step is the same size. No harness assertion can prove a bar looks smooth,
+and the README says so rather than pretending.
+
+Confirmed in game by the user: the bar is smooth. The rounding was the cause and
+removing it was the fix.
+
+The Slam mark is the half still open. It was reported as wandering once, changed
+once, and has not been looked at in game since. Nothing in the smoothness work
+touched it. Ask before assuming it is fixed.
 
 ## 2. Deep Wounds is missing from the enemy bar debuffs  [merged]
 

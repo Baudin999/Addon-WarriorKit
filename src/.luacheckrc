@@ -74,6 +74,11 @@ globals = {
 	-- and Swing/Gauges.lua handing out a reference to its own bars would be a
 	-- worse seam than a global the client makes anyway.
 	"WarriorKitSwing",
+	-- the buff nag's row. Named for the reason the meter and the swing bars
+	-- are: the row is hidden almost all the time, so a row that has wandered
+	-- off the screen has to be findable from a macro, and scripts/harness.lua
+	-- has to measure what was drawn without Buffs/Nag.lua handing out its pool.
+	"WarriorKitBuffs",
 	-- the block the skin draws over each of the three Blizzard unit frames.
 	-- Named so a block that lands in the wrong place can be measured from a
 	-- macro or from scripts/harness.lua without Skin.lua handing out a

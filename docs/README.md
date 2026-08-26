@@ -64,7 +64,7 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is thirteen parts and a core. Each part is a folder, and Core knows the
+The addon is fourteen parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
@@ -146,6 +146,13 @@ name of none of them.
     Swing/Gauges.lua         a gauge per hand, the band on the main hand one,
                              and the tick that paints them
     Swing/Feature.lua
+
+    Buffs/Upkeep.lua         what should be up and is not: your own auras, and
+                             the temporary enchant on each hand
+    Buffs/Racials.lua        which racial this character owns, whether it is off
+                             cooldown, and whether it is one worth nagging about
+    Buffs/Nag.lua            the row of squares, and the tick that paints it
+    Buffs/Feature.lua
 
     Artwork/Artwork.lua      strips the gryphons and the metal strip off the bars
     Artwork/Feature.lua
@@ -409,6 +416,28 @@ goes through `Feature.lua` or through the shared surface below:
                                  the points in it, whether this character has
                                  Slam, and whether the cast outruns the swing
     ns.Slam.Open()               whether pressing Slam right now is the press
+    ns.Upkeep.Count() / Entry(i) / Missing(i) / Ceiling()   how many buffs are
+                                 watched, one of them, whether it is missing
+                                 right now, and how many squares the row must
+                                 be built to hold
+    ns.Upkeep.Enchants()         both hands at once: enchanted or not, and the
+                                 seconds left on each, or nil where this client
+                                 has no GetWeaponEnchantInfo
+    ns.Upkeep.EnchantShape()     3 or 4, the stride between the two hands in
+                                 that call's returns, counted rather than guessed
+    ns.Upkeep.Bare(hand) / Left(hand)   whether that hand takes a stone and has
+                                 none, and how long what is on it has to run
+    ns.Upkeep.Scan() / Rebuild() / Refit()   re-read your auras, rebuild the
+                                 list, re-read the art each hand draws
+    ns.Upkeep.Add(id) / Remove(id) / Extra() / MaxExtra() / Describe()
+    ns.Racials.Spell() / Name() / Texture()   the racial this character owns
+    ns.Racials.Worth() / Ready() / Idle() / Describe()   whether it is one worth
+                                 shouting about, whether it is off cooldown, both
+                                 at once, and one line for the status
+    ns.BuffNag.Apply / Lock / Reset / Update / Describe
+    ns.BuffNag.Mode() / Shown() / Caption() / Icon(slot)   which half is on
+                                 screen, how many squares, what the line under
+                                 them says, and one square for the harness
     ns.SwingGauges.Apply / Lock / Reset / Show / Update / Describe
     ns.SwingGauges.Bar(hand) / Applicable()   one hand's gauge, and whether
                                  there is a swing worth drawing at all
@@ -531,6 +560,35 @@ the frame's scale to `768 / physicalHeight`, and inside that frame one unit is
 one physical pixel. Every size in `EnemyBars.lua` is a whole number of pixels
 written as a whole number, `ns.Pixel` on such a frame returns exactly 1, and
 nothing rounds on a ticker.
+
+**There are two pixel rules, not one, and they want opposite things.**
+
+1. **A static edge lands on a whole pixel.** A border, an icon crop, a band, a
+   mark, a block of art, anything that holds still while you look at it. Drawn
+   across two rows of pixels it reads as blurry, and blurry is what this whole
+   section exists to stop. Gated by the anchor sweep at the end of
+   `scripts/harness.lua`, which walks every offset on the grid at 1x, 2x and 3x.
+2. **A moving fill is not quantised.** A swing bar, and a cast bar the day
+   somebody writes one. What the eye reads on a moving edge is its velocity, and
+   velocity lives in where the edge sits between two pixels as much as in which
+   pixel it is on. Rounding it throws away the only thing being looked at, to
+   buy a sharpness nobody can see on something in motion. Rounding is also a
+   throttle: a 180 pixel fill crossing a 3.4 second swing can only change value
+   53 times a second once it is rounded, however often the tick runs, so it
+   stands still on 91 of the 144 frames a fast screen draws. Gated in the swing
+   section of `scripts/harness.lua`, which asserts that the fill lands off a
+   whole pixel on nearly every frame.
+
+Rule 1 was written when every edge in the addon was static, and for that
+codebase it was the whole truth. The swing bar was the first moving edge and it
+was quantised because the rule said to, which is how a rule that was right for
+every case it had met produced a bar that visibly stepped. See "one pixel rule
+was two" under traps already hit.
+
+Which rule an edge falls under is not a judgement call: it is whether the edge
+moves under a moving clock. The Slam band and its mark move, but they move when
+your weapon speed does, which is a few times a fight, so they are static edges
+and they land on whole pixels.
 
 Three consequences worth knowing before changing anything under it:
 
@@ -755,31 +813,54 @@ become new ratchets.
 
 ### Ticker discipline
 
-Six `OnUpdate` tickers run at once and none of them ever stops. A seventh runs
+Eight `OnUpdate` tickers run at once and none of them ever stops. A ninth runs
 only while you are looking at it.
 
     Swing/Gauges.lua      every frame   two gauges and the Slam band
     Charge/Marker.lua        20 Hz      it tracks the camera
     Charge/Icon.lua          10 Hz      the HUD icon and the macro
     Buttons/Bars.lua         10 Hz      every square on every cloned bar
+    Buffs/Nag.lua            10 Hz      the missing buff row, and its pulse
     UnitFrames/EnemyBars.lua  5 Hz      every bar on screen
     UnitFrames/Skin.lua       5 Hz      the three Blizzard unit frames
+    Meter/Window.lua          5 Hz      the two panes of numbers
     Perf/Perf.lua             1 Hz      only while the performance tab is on screen
+
+The buff row is ten rather than five for one reason and it is not the readout.
+What it says changes when an aura lands, which is an event, and the row would be
+correct at one hertz. Ten is the rate the pulse on the racial square needs: 1.6
+seconds a cycle at ten hertz is sixteen alpha steps, which reads as a breath. At
+five it reads as a blink.
+
+Nothing in that tick walks your auras. UNIT_AURA fires for every buff you gain
+and every one you lose, so the scan runs from the event and the tick reads a
+field. The two weapon enchants are the exception and are read live, because a
+stone running out fires nothing at all, and that costs two numbers out of one
+call rather than a walk of forty slots.
 
 The swing timer has no rate, and it is the only thing here that does not. Every
 other ticker refreshes a readout, and a readout refreshed twenty times a second
 is never more than fifty milliseconds stale, which nobody can see. The swing bar
-is not a readout, it is a moving edge, and a moving edge is an animation. At the
-shipped width the fill crosses 53 pixels a second, so a draw every fifty
-milliseconds moves it about three pixels at a time, and three pixels is a step
-you can see. It shipped at 20 Hz and the report back was that the timer "jumps
-chunks", which is exactly what a 20 Hz animation on a 60 Hz screen is.
+is not a readout, it is a moving edge, and a moving edge is an animation. An
+animation is drawn on the frame the screen is drawn on or it is drawn in steps.
 
-Drawing it every frame costs nothing, because the quantisation is the guard.
-The fill is a whole number of pixels compared against the whole number already
-on the bar, so a frame that would draw the same pixel writes nothing: 53 writes
-a second inside a swing, and none at all outside one. Every other rate in the
-table stands, because none of those parts draws motion.
+The report back was that the timer "jumps chunks", and it took two repairs
+because there were two throttles on that one edge. The first was the 20 Hz
+ticker, which at the shipped width moves the fill about three pixels at a time.
+The second was the rounding: a fill snapped to a whole pixel can only change
+value 53 times a second across a 3.4 second swing, whatever rate the tick runs
+at, so it stood still on 91 of the 144 frames a fast screen draws and each move
+was a whole design unit, which is three screen pixels at `swing zoom 3`.
+Deleting the ticker raised the drawn rate from 20 to 53 and left the rounding in
+place, which is why the bar still stepped. See the two pixel rules under the
+pixel grid.
+
+So the fill is now written as a fraction, on every frame, with nothing in front
+of it. It is the one write in the addon that is not guarded, and the exemption
+is on the line rather than in an allow-list. What it costs was measured rather
+than argued: the swing tick allocated 0.03 KB per fifty ticks rounded and
+guarded, and allocates 0.03 KB per fifty ticks unguarded. Every other rate in
+the table stands, because none of those parts draws motion.
 
 The last one is the exception that proves the rule rather than a loosening of
 it. `UpdateAddOnMemoryUsage` walks every addon the client has loaded, which
@@ -828,8 +909,11 @@ cannot arrive unchecked.
 
 To exempt one line, put `-- unguarded: <reason>` on a write or
 `-- allocates: <reason>` on an allocation. The reason is required and the gate
-checks that it is there. Two exemptions stand today, both the same shape: a
-memoisation guarded by an early return the scan cannot see.
+checks that it is there. Seven exemptions stand today. Six are `allocates:` and
+all six are the same shape, a memoisation guarded by an early return the scan
+cannot see. The seventh is the addon's only `unguarded:`, and it is the swing
+fill: the one write here that is meant to run on every frame whatever it is
+about to draw.
 
 What is deliberately not guarded: `Skin.lua` re-applies `Flatten` and the
 portrait crop on every tick because Blizzard's own code puts the texture and the
@@ -1083,6 +1167,20 @@ one side, only the shim changes.
   the only place the fact appears. Before trusting a client answer about a
   reactive ability, work out whether the server ever sent the client the
   question.
+- **One pixel rule was two.** "Every edge lands on a whole pixel" was written
+  when every edge in this addon was a border, a crop or a block of art, and for
+  that codebase it was the whole truth: it is enforced across 6,836 offsets and
+  it has caught real bugs. The swing bar was the first edge that moves under a
+  moving clock, and it was rounded to a pixel because the rule said to, which is
+  what made it step. A moving edge wants the opposite thing, because the eye
+  reads velocity off it rather than sharpness, and rounding also caps how often
+  the edge can change position: 53 times a second at the shipped width,
+  whatever the frame rate. The bar was repaired once for the ticker rate alone
+  and still stepped, because the rounding was the second throttle and nobody had
+  looked at it. The rule was not wrong, it was under-specified, so it is now two
+  named rules with a gate each. See the pixel grid above. When a rule holds for
+  every case a codebase has and then meets a new kind of case, the question to
+  ask is whether it was ever one rule.
 
 ## Feature notes
 
@@ -2499,12 +2597,19 @@ time left to run. A swing of `D` seconds drawn as a bar puts that press at
 second, because a key press lands within about a tenth of where you aimed and a
 mark with no width is one you can only hit by luck.
 
-The band is drawn in whole pixels and so is the fill, which is what makes
-pressing on a mark mean anything: a band at 70.4 percent of a 180 pixel bar and
-a fill at 70.6 percent of it are the same pixel and the eye cannot tell which
-side of the line it is on. The whole gauge goes green while the fill is inside
-the band, because four percent of a bar is not enough to catch out of the corner
-of an eye and all of it is.
+The band and the mark are drawn in whole pixels, which is what makes pressing on
+a mark mean anything: a band at 70.4 percent of a 180 pixel bar and a mark at
+70.6 percent of it are the same pixel and the eye cannot tell which side of the
+line it is on. They move only when your weapon speed does, which is a few times
+a fight, so they are static edges under the first pixel rule.
+
+The fill is not drawn in whole pixels, and that is the second pixel rule rather
+than an exception to the first. The bar is asked which side of the drawn band
+its fill is on, in the band's own units, so the colour flips the instant the
+edge reaches the green you are aiming at rather than a pixel either side of it.
+The whole gauge goes green while the fill is inside the band, because four
+percent of a bar is not enough to catch out of the corner of an eye and all of
+it is.
 
 **Exactly one thing is allowed to move the mark, and it is your weapon speed.**
 That is the repair the feature needed after it shipped: the report back was that
@@ -2567,11 +2672,126 @@ the spell is matched by name across every shape that event arrives in.
 **The bar is drawn every frame and nothing else in the addon is.** See ticker
 discipline above for why, and for why that costs nothing.
 
+**It took two repairs and the first one was not wrong.** The fill shipped on a
+50 ms ticker whose accumulator reset to zero instead of subtracting the
+interval, which made the real rate 15 Hz and the real step three and a half
+pixels. That was a genuine bug and fixing it left the bar still stepping,
+because the rounding to whole pixels was a second throttle behind the first: a
+rounded fill changes value 53 times a second at the shipped width whatever the
+tick does. Two throttles on one edge, and finding the first is what hid the
+second. When a fix that was demonstrably correct does not change the symptom,
+look for a second cause of the same symptom before doubting the fix.
+
+**No test in this repo can prove the bar looks smooth.** Smooth is a property of
+a screen and an eye, and the harness has neither. What it can prove is the thing
+that leaves the client nothing to be blamed for: on every frame it is given, the
+addon hands the widget the exact position the elapsed time puts the edge at, the
+value changes on every frame, and every step is the same size as every other.
+That is asserted at 60 fps and at 144. The last mile is a person looking at it.
+
 **What could not be verified without the client.** That `SWING_DAMAGE` really
 carries the off hand flag in slot 21 on 2.5.6 and 1.15.9, that
 `UNIT_SPELLCAST_START` fires for Slam at all, and that the server scales a swing
 in flight rather than restarting it when haste changes. All three are asserted
 against the stub, which proves the arithmetic and proves nothing about the game.
+
+**Buff nag.** A row of squares over your character, and only when something is
+wrong. Nothing missing means nothing drawn.
+
+That is the design decision and it was a real choice. A row that is always up
+with the missing ones lit is furniture, and you stop seeing furniture in about a
+week, which is exactly long enough to convince yourself the addon is watching for
+you. A row that exists only when something is wrong carries its whole message in
+existing. The cost is a frame you cannot find to drag, so unlocking draws every
+square it watches at three quarters alpha, which is the trade the meters already
+make when they draw an outline round an empty pane.
+
+**Two halves, taking turns rather than sharing.** Out of combat the row is what
+is missing: no stone on either hand, no Battle Shout, no food. In combat it is
+the racial you own and have not pressed. They can never both be on screen, which
+is why one row is enough for two questions.
+
+The split is not a layout convenience. A missing buff is something you fix out of
+combat, because out of combat is when you can fix it, and shouting about a lapsed
+stone mid pull is telling you about a thing you cannot do. Blood Fury is the
+opposite: it is not a buff you keep up, it is two minutes of attack power sitting
+on a key, and the only moment worth saying anything is the moment you are
+swinging at something with it off cooldown.
+
+**The weapon enchants are the reason the feature exists** and they are the only
+entry that is not an aura. A temporary enchant does not appear in an aura scan at
+any index; `GetWeaponEnchantInfo` is the only thing in the client that knows.
+That call has had three shapes: six values at three per hand, eight once 6.0 put
+the enchant's own id in after the charges, and twelve once Cataclysm added a
+ranged hand. Nothing installed here settles which one 2.5.6 and 1.15.9 answer
+with, so the stride is counted with `select("#", ...)` rather than read
+positionally on a guess. Guessing three against a client that answers eight puts
+the main hand's enchant id where the off hand's "has an enchant" belongs, and a
+number is truthy: the off hand would read as enchanted forever, silently. The
+harness drives both shapes.
+
+**A shield is never nagged about**, and that is the client's own
+`OffhandHasWeapon` rather than a reading of the slot. A shield, a
+held-in-off-hand item and an empty hand all answer no to it, and all three are
+states a warrior is in on purpose.
+
+**Auras are matched by name and scanned on an event.** Battle Shout has eight
+ranks and the aura on you carries whichever one was shouted, so the ids in the
+source exist only to ask this client what it calls the spell in the language it
+is running in. The scan runs from `UNIT_AURA`, which fires for every buff you
+gain and every one you lose, so nothing walks forty slots on the tick. On a
+client carrying `C_UnitAuras` that walk would also build a table per aura, which
+is allocation on a ticker.
+
+Battle Shout is the one entry gated on class, inside `Upkeep.Rebuild`. The part
+itself is not: a lapsed stone costs a hunter's melee weapon exactly what it costs
+a warrior's, and a troll rogue forgets Berserking the same way.
+
+**Flasks and elixirs are a setting, not a table.** These clients will not say
+that an aura came from an elixir. There is no category on an aura and no call
+that maps one back to the item, so the only built-in version is about forty hand
+written spell ids that cannot be verified from outside the game, go stale on the
+next patch, and are wrong in a way nothing reports. `/wk buffs add <id>` takes
+six of your own, the same shape the debuff row on the enemy bars already has.
+
+**Only the racials that are damage are nagged about.** Blood Fury on an orc and
+Berserking on a troll: both are throughput, both come back inside three minutes,
+and forgetting one across a boss fight is free damage thrown away. Every other
+racial a warrior can have is listed with the nag off, so `/wk status` and the
+panel can name yours and say why it is quiet. Stoneform is spent when something
+bleeds you and War Stomp when something needs stunning, and a row that shouted
+about either every fight would teach you to ignore the row, which would cost you
+Blood Fury as well.
+
+The ids are Wowhead's TBC Classic database, each checked against the cooldown its
+page states: Blood Fury 20572 at two minutes, Berserking 26297 at three, War
+Stomp 20549, Will of the Forsaken 7744, Stoneform 20594, Escape Artist 20589,
+Perception 20600, Shadowmeld 20580, Gift of the Naaru 28880. Blood Fury has a
+second proof and it is the one that matters: 20572 appears as a buff with uptime
+in this install's own Details saved variables, recorded off a live 2.5.6 session.
+The race is read from `UnitRace`'s second return, which is the token and is the
+same string in every locale.
+
+**How loud, and why there is no sound.** The racial square breathes: its alpha
+runs between a floor and full over 1.6 seconds, which at ten hertz is sixteen
+steps and reads as a pulse rather than a strobe. It is on by default, because a
+nag you can ignore is not the thing that was asked for. There is no sound and
+there will not be. A chime in a raid competes with the sounds you are already
+listening for, it fires whether or not you are looking at the screen, and a
+racial coming off cooldown is worth noticing within a few seconds rather than
+immediately. The alpha is quantised to twentieths so a tick that would draw the
+same value writes nothing.
+
+Two states silence the missing-buff half and neither touches the racial half.
+Dead, because nagging a corpse about its sharpening stone is noise, and that one
+is not a setting. Resting, because an inn or a capital is where you have not put
+a stone on yet on purpose and the row would be up through an hour at the auction
+house; that one is `buffs resting` for anyone who buffs in the bank.
+
+**What could not be verified without the client.** Which shape
+`GetWeaponEnchantInfo` answers in, whether `IsResting` and `UnitIsDeadOrGhost`
+are on both flavours, and whether 19705 is spelled exactly "Well Fed" in every
+locale. All three are in the untested list below.
 
 **Interface.** One Edit Mode layout, carried inside the addon folder. This
 client has Edit Mode: the backported retail manager, with the layouts written to
@@ -2859,6 +3079,15 @@ nothing ever runs is a branch that is wrong.
     /wk swing width 180          80 to 400, one bar
     /wk swing height 10          4 to 32, one bar
     /wk swing zoom 1             1 to 3
+    /wk buffs                    what is missing, and what your racial is doing
+    /wk buffs on|off             the row of squares over your character
+    /wk buffs racial on|off      the racial you own and have not pressed
+    /wk buffs pulse on|off       whether the racial square breathes
+    /wk buffs resting on|off     nag in inns and cities too, off by default
+    /wk buffs zoom 2             1 to 3, and 2 is what it ships at
+    /wk buffs list               the flask and elixirs you added
+    /wk buffs add 17038          a spell id, up to six of your own
+    /wk buffs remove 17038       by the same id
     /wk skin on|off              square class-coloured player and target frames
     /wk skin player|target|tot on|off   one frame at a time
     /wk skin height 34           18 to 56, the block's height
@@ -3010,6 +3239,22 @@ and zero errors.
    cast from 5000 to 6200 milliseconds replaces the estimate with 1.2 seconds,
    and the band moves with it.
 
+   The buff nag is driven through a character who is missing things. A bare
+   main hand is noticed and a sharpened one is not, a shield in the off hand is
+   never nagged about and a weapon in it is, Battle Shout falling off turns its
+   entry on and a hunter is never told to keep it up, and a fully buffed
+   character is shown no row at all. `GetWeaponEnchantInfo` is stubbed in both
+   its shapes, six returns and eight, and the off hand is read in both: on the
+   eight value shape the main hand's enchant id sits exactly where the six value
+   shape puts "the off hand has an enchant", so a stride read wrongly fails here
+   rather than reporting an enchanted off hand forever on somebody's client. The
+   racial half asserts that an orc gets Blood Fury and a troll gets Berserking,
+   that a dwarf's Stoneform is never nagged about, that off cooldown in combat
+   draws the square and pressing it takes the square away, that a global sweep
+   does not count as having pressed it, that the square pulses and stops pulsing
+   with the setting, and that fifty ticks with the clock moving stay under the
+   allocation gate.
+
    The reaction windows are driven through the same stubbed log. A slot holding
    Overpower reads `reaction` with nothing having dodged you, `ready` the moment
    a dodge arrives, and `reaction` again once five seconds have passed. A
@@ -3024,11 +3269,18 @@ and zero errors.
    opens nothing, and an Overpower square reads `ready`.
 
    All of that passed while the feature was unusable in game, so a second
-   section asserts the two things a person actually sees. The fill is driven
-   across a whole swing one 60 fps frame at a time and has to take a different
-   pixel on nearly every one of them: the assertions are that it never jumps
-   more than one pixel between two frames and that it visits all 180 positions,
-   which is the only pair of statements that means smooth. Then five Slams are
+   section asserts the two things a person actually sees. No assertion here can
+   prove that a bar looks smooth, because smooth is a property of a screen and
+   an eye and the stub has neither. What is asserted instead is the property
+   that leaves the client nothing to be blamed for. The fill is driven across a
+   whole swing one frame at a time, at 60 fps and again at 144, and three things
+   have to hold on every frame with no tolerance allowed: the drawn position
+   equals elapsed over duration times the width exactly, the value changes on
+   every frame with no frame repeating the one before it, and every step is the
+   same size as every other, which is what constant velocity means. A fourth
+   assertion is the positive form of the second pixel rule, that the fill really
+   does land between pixels, so that reintroducing a round is a failure rather
+   than a silence. Then five Slams are
    cast in a row, each declaring a different length, and the press mark has to
    stay on the same pixel through all of them, through an aura event that moved
    no speed, and through readings that are refused for being longer than the
@@ -3118,6 +3370,31 @@ Everything below was written from the API contract and has never executed:
   parses a swing. Both indices are read by number and the harness feeds both,
   so the parser is asserted against the contract this file states; a client that
   put the flag somewhere else would give an off hand bar that never runs.
+- Which shape `GetWeaponEnchantInfo` answers in on 2.5.6 and 1.15.9. The
+  documented history is six returns at three per hand, eight from 6.0 once the
+  enchant's own id went in after the charges, and twelve from Cataclysm once a
+  ranged hand existed. The one unguarded call in this install is inside a Details
+  library written for a much later client and reads the eight value shape, and
+  the language server stub beside it contradicts itself twice. `Buffs/Upkeep.lua`
+  counts the returns instead of picking one, and the harness drives both, so a
+  client answering twelve is covered by the same branch that covers eight. A
+  client that answered some fourth shape would leave the off hand unread.
+- Whether `OffhandHasWeapon`, `IsResting` and `UnitIsDeadOrGhost` are on both
+  flavours. Nothing installed here calls any of the three, so all three are
+  probed by name and a missing one costs the check it feeds rather than raising:
+  no off hand entry, and a row that nags in an inn or over a corpse.
+- Whether 19705 is spelled exactly "Well Fed" in every locale, and whether every
+  food in these clients applies an aura by that name. Wowhead's TBC database
+  names 19705 "Well Fed" and the comparison is this client's own string for that
+  id against the aura's own string, so both sides come off the same client and a
+  localised name matches itself. A client that shipped a second food aura under
+  another name would leave that entry lit while you were fed.
+- Whether the nine racial ids are what these two clients cast. Each is Wowhead's
+  TBC Classic entry for that slug, cross-checked against the cooldown the page
+  states. Blood Fury is the exception and is confirmed: 20572 is in this
+  install's Details saved variables as a buff with uptime, recorded off a live
+  2.5.6 session. The other eight are read through `ns.SpellName`, so an id this
+  client does not know drops that entry rather than drawing a blank square.
 - Whether `UNIT_SPELLCAST_START` fires for Slam and `UnitCastingInfo` answers a
   start and an end for it. That measurement is what replaces the estimated cast
   time, so a client that never fires it leaves the band drawn from the spell's
@@ -3127,6 +3404,14 @@ Everything below was written from the API contract and has never executed:
   What is no longer on this list is whether that start and end are stable from
   one cast to the next. Only the first reading is taken, so a client that varies
   it cannot move the mark, and the answer stopped mattering.
+- Whether the swing bar looks smooth. This is not a client question, it is a
+  screen and an eye question, and no test in this repo can answer it. What is
+  asserted is that on every frame the addon is given it hands the widget the
+  exact position the elapsed time puts the edge at, that the value changes on
+  every frame at 60 fps and at 144, and that every step is the same size as
+  every other. That leaves the client nothing to be blamed for and it is not the
+  same claim. The bar has now been repaired twice against assertions that passed
+  both times, so the only thing that closes this is somebody watching it fill.
 - Whether the server scales a swing already in flight when haste lands, rather
   than restarting it. `Swing.Retime` assumes it scales, which is what every
   swing timer written for these clients assumes and what Flurry visibly does.
