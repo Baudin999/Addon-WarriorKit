@@ -982,6 +982,12 @@ local SPELL_NAMES = {
 	-- proves nothing about the real words. The three racials are here because
 	-- the row's caption says "press Blood Fury" and a caption reading "press
 	-- Spell20572" would pass an assertion about a caption.
+	-- Auto Attack. Feeds/Combat.lua puts this word in the name column of every
+	-- swing, because a row whose name column sometimes holds a spell and
+	-- sometimes holds a creature is a column you have to decode. A stub that
+	-- answered "Spell6603" would let an assertion about that column pass while
+	-- saying nothing about the word a player actually reads.
+	[6603] = "Attack",
 	[6673] = "Battle Shout",
 	[19705] = "Well Fed",
 	[20572] = "Blood Fury",
@@ -10235,12 +10241,23 @@ do
 		log("SWING_DAMAGE", "Creature-77", "Snarler", "Player-9", "Stranger", { [12] = 400 })
 		check(combat:Count() == 0, "an event with neither end yours got a row")
 
-		-- A swing on you. It carries no spell name, so the informative thing
-		-- about it is who threw it.
+		-- A swing on you.
+		--
+		-- The two assertions below used to read the other way round: the name
+		-- was "Ragged Wolf", because the rule was to fall back to the other
+		-- party where there was no spell. That made an incoming swing and an
+		-- outgoing spell the same shape on the screen, "Plains Creeper 26" and
+		-- "Overpower 321", and neither of them said who was on the other end.
+		-- So the name column is always what happened, which for a swing is the
+		-- client's own word for one, and the middle column is always who, with
+		-- the preposition that says which way it went.
 		log("SWING_DAMAGE", "Creature-77", "Ragged Wolf", me, "Baudin", { [12] = 137 })
 		check(combat:Count() == 1, "a swing on you did not get a row")
-		check(combat:At(0).name == "Ragged Wolf",
-			"an incoming swing is not named after whoever swung: " .. tostring(combat:At(0).name))
+		check(combat:At(0).name == "Attack",
+			"a swing is not named with the client's own word for one: "
+				.. tostring(combat:At(0).name))
+		check(combat:At(0).note == "from Ragged Wolf",
+			"an incoming swing does not say who swung: " .. tostring(combat:At(0).note))
 		check(combat:At(0).amount == "137", "an incoming swing lost its number")
 
 		-- A spell you cast. It has a name and that is what you want to read.
@@ -10248,9 +10265,19 @@ do
 			{ [12] = 12294, [13] = "Mortal Strike", [15] = 871, [21] = true })
 		check(combat:At(0).name == "Mortal Strike",
 			"an outgoing spell is not named after the spell: " .. tostring(combat:At(0).name))
+		check(combat:At(0).note == "on Ragged Wolf",
+			"an outgoing spell does not say what it landed on: " .. tostring(combat:At(0).note))
 		check(combat:At(0).crit, "a critical read as an ordinary hit")
 		check(combat:At(0).tone ~= combat:At(1).tone,
 			"a critical draws its number in the same colour as an ordinary hit")
+
+		-- And the half of that a colourblind player has. Gold was the whole of
+		-- how a critical announced itself, which is a hue and nothing else, on
+		-- the one row in the feed that exists to be noticed.
+		check(combat:At(0).amount == "871!",
+			"a critical carries no mark on its number, so the crit is a colour and nothing else: "
+				.. tostring(combat:At(0).amount))
+		check(combat:At(1).amount == "137", "an ordinary hit picked up the critical's mark")
 
 		-- Which way it went, as the colour that carries the whole row.
 		check(combat:At(0).stripe ~= combat:At(1).stripe,
@@ -10306,6 +10333,159 @@ do
 		guids.player = "Player-0-0000000f"
 
 		check(Combat.Ready(), "the combat feed says this client has no combat log")
+
+		----------------------------------------------------------------
+		-- Where one fight ends and the next begins
+		--
+		-- A feed with no markers in it is one unbroken column, and the only
+		-- thing separating this pull from the last one is a gap in timestamps
+		-- a row does not carry. Four claims here and the third is the one that
+		-- needs a harness: the markers arrive in the order the two events do,
+		-- the end of a fight says how long it was, a marker cannot be read as
+		-- an event, and a row goes back to being a row afterwards.
+		--
+		-- The third is a claim about what was drawn rather than about what was
+		-- stored. A marker that carried the right fields and drew an icon, a
+		-- name and a number would be a hit for nothing in the middle of a
+		-- fight, which is worse than no marker at all, and no assertion
+		-- against the entry can see it.
+		----------------------------------------------------------------
+
+		combat:Clear()
+		fire("PLAYER_REGEN_DISABLED")
+		check(combat:Count() == 1, "entering combat drew no marker")
+		check(combat:At(0).mark == "in",
+			"the marker for entering combat is not marked as one: "
+				.. tostring(combat:At(0).mark))
+
+		log("SPELL_DAMAGE", me, "Baudin", "Creature-77", "Ragged Wolf",
+			{ [12] = 12294, [13] = "Mortal Strike", [15] = 400 })
+		fire("PLAYER_REGEN_ENABLED")
+
+		check(combat:Count() == 3, ("a pull came out as %d rows rather than a marker, a hit and a marker")
+			:format(combat:Count()))
+		check(combat:At(0).mark == "out", "leaving combat drew no marker")
+		check(combat:At(1).mark == nil, "the hit between the two markers is marked as one")
+		check(combat:At(2).mark == "in",
+			"the markers did not arrive in the order the fight did")
+		check((combat:At(0).amount or ""):match("^%d+%.%d+s$") ~= nil,
+			"the end of a fight does not say how long it lasted: "
+				.. tostring(combat:At(0).amount))
+
+		do
+			local band, hit = combat:Row(1), combat:Row(2)
+			check(band.caption:IsShown() and not band.name:IsShown(),
+				"a marker draws the name column an entry uses, so the two read alike")
+			check(not band.icon:IsShown(), "a marker draws an icon, so it reads as an event")
+			check(band.stripe:GetWidth() == band.band,
+				("a marker's stripe is %s wide and the band across the row is %s")
+					:format(tostring(band.stripe:GetWidth()), tostring(band.band)))
+			check(band.caption:GetText() == "out of combat",
+				"the marker's word did not reach the row: " .. tostring(band.caption:GetText()))
+
+			-- The swap has to go both ways. One that only turned rows into
+			-- bands would leave a feed of bands behind the first pull.
+			check(hit.name:IsShown() and hit.icon:IsShown() and hit.stripe:GetWidth() == hit.rib,
+				"the row under a marker was left drawn as a marker")
+			check(hit.note:GetText() == "on Ragged Wolf",
+				"the middle column did not reach the row: " .. tostring(hit.note:GetText()))
+
+			-- And what a marker says when you hover it, which has to be about
+			-- the break rather than about a hit that never happened.
+			band:GetScript("OnEnter")(band)
+			check(ns.UI.Tooltip.Text(1) == "out of combat",
+				"hovering a marker did not describe the marker: "
+					.. tostring(ns.UI.Tooltip.Text(1)))
+			band:GetScript("OnLeave")(band)
+		end
+
+		ns.db.combatFeed = false
+		held = combat:Count()
+		fire("PLAYER_REGEN_DISABLED")
+		fire("PLAYER_REGEN_ENABLED")
+		check(combat:Count() == held, "a marker reached the feed with the feed switched off")
+		ns.db.combatFeed = true
+
+		----------------------------------------------------------------
+		-- The tooltip is the size of the thing it describes
+		--
+		-- One frame serves every hover in the addon, so it has one zoom and
+		-- forty possible owners. It took that zoom from UI.WindowZoom, which is
+		-- the settings window's and has nothing to do with a feed: with the UI
+		-- size slider up, hovering a row opened a box six hundred screen pixels
+		-- across beside the thirty pixel row it was explaining. Nothing outside
+		-- the file can see that but by opening it on two owners at different
+		-- zooms and reading the zoom back, which is why Tooltip.Zoom exists.
+		----------------------------------------------------------------
+
+		do
+			local Tip = ns.UI.Tooltip
+			local size = ns.UI.Size()
+
+			ns.db.combatFeedZoom = 2
+			combatStream:Apply()
+			-- The slider, put well above both feeds. This is the state the bug
+			-- was reported from and at 1x nothing here can fail.
+			ns.UI.SetSize(3)
+
+			local row = combat:Row(2)
+			row:GetScript("OnEnter")(row)
+			check(Tip.Zoom() == 2,
+				("a tooltip opened on a feed at 2x drew at %s"):format(tostring(Tip.Zoom())))
+			check(Tip.Zoom() ~= ns.UI.WindowZoom(),
+				"the tooltip is still taking the settings window's zoom rather than its owner's")
+
+			-- And the other feed, at a different zoom again, because a tooltip
+			-- that had simply stopped following the window and started
+			-- following the last thing it saw would pass the check above.
+			local loot = feed:Row(1)
+			loot:GetScript("OnEnter")(loot)
+			check(Tip.Zoom() == ns.db.lootFeedZoom,
+				("a tooltip opened on a feed at %sx drew at %s")
+					:format(tostring(ns.db.lootFeedZoom), tostring(Tip.Zoom())))
+			loot:GetScript("OnLeave")(loot)
+
+			ns.UI.SetSize(size)
+			ns.db.combatFeedZoom = 1
+			combatStream:Apply()
+
+			------------------------------------------------------------
+			-- The data a caller hands over
+			--
+			-- Every shape in the schema is in one of the two feeds' fills
+			-- already, so all of it is asserted through them rather than
+			-- through a table this section invented. A schema the harness
+			-- exercises and no caller uses is one that can rot without
+			-- anything here noticing.
+			------------------------------------------------------------
+
+			combat:Clear()
+			log("SPELL_DAMAGE", me, "Baudin", "Creature-77", "Ragged Wolf",
+				{ [12] = 12294, [13] = "Mortal Strike", [15] = 871, [16] = 40, [21] = true })
+
+			row = combat:Row(1)
+			row:GetScript("OnEnter")(row)
+			check(Tip.Text(1) == "Mortal Strike",
+				"the title did not render: " .. tostring(Tip.Text(1)))
+			check(Tip.Lines() == 9,
+				("the fill describes nine lines and %d were drawn"):format(Tip.Lines()))
+
+			local label, value = Tip.Text(5)
+			check(label == "Damage" and value == "871",
+				("a pair rendered as %s / %s"):format(tostring(label), tostring(value)))
+			check(Tip.Text(6) == "A critical.",
+				"a plain line did not render: " .. tostring(Tip.Text(6)))
+			check(Tip.Text(8) == "", "the spacer drew text on itself")
+			check((Tip.Text(9) or ""):find("^Scroll") ~= nil,
+				"the hint is not the last line: " .. tostring(Tip.Text(9)))
+
+			-- Nothing to say draws nothing, which is what a row whose entry has
+			-- gone gets and what a nag square with nothing to nag about gets. A
+			-- box the size of its own padding beside the thing it has nothing
+			-- to say about is worse than no box.
+			check(Tip.Show(row, nil) == false, "a tooltip handed nothing still opened")
+			check(not Tip.IsShown(), "a tooltip handed nothing stayed on screen")
+		end
 
 		print(("feeds  loot %s, combat %s; %d of %d loot sentences; tooltip %s")
 			:format(lootStream:Describe(), combatStream:Describe(), live, total,

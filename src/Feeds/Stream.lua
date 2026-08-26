@@ -50,7 +50,9 @@ local streams = {}
 --                wandered off the screen can be found from a macro
 -- spec.title     the word over the column, and the name shown while unlocked
 -- spec.empty     what stands where the rows would be before anything happens
--- spec.onTooltip function(entry, tip), filling the row's tooltip
+-- spec.note      how wide the dim middle column is, in units, and nothing for a
+--                stream whose rows are a name and a number
+-- spec.onTooltip function(entry), answering the table UI/Tooltip.lua renders
 --------------------------------------------------------------------------
 
 function Stream.New(spec)
@@ -59,6 +61,7 @@ function Stream.New(spec)
 		name = spec.name,
 		title = spec.title,
 		empty = spec.empty,
+		note = spec.note,
 		onTooltip = spec.onTooltip,
 		keys = { on = spec.prefix },
 	}, Instance)
@@ -76,13 +79,18 @@ end
 -- a setting is the file that says what it means.
 --
 -- Ten rows of a 29 pixel row is a column about the height of a chat window and
--- roughly a pull's worth of drops. 220 wide holds a 27 pixel icon, an item name
--- that is not clipped to three words and a stack size.
+-- roughly a pull's worth of drops. 260 wide holds a 27 pixel icon, a fixed
+-- number column and an item name that is not clipped to three words.
+--
+-- It was 220 and that was measured against a row of two columns. Three columns
+-- need the width back and then some, and a loot feed narrower than the combat
+-- feed sitting in the opposite corner reads as a mistake rather than as a
+-- decision, so both moved.
 function Stream.Defaults(prefix, point)
 	return {
 		[prefix] = true,
 		[prefix .. "Rows"] = 10,
-		[prefix .. "Width"] = 220,
+		[prefix .. "Width"] = 260,
 		[prefix .. "Zoom"] = 1,
 		-- Not the meter's zero. A meter is three columns of outlined text you
 		-- read out of the corner of your eye during a pull; a feed is a list you
@@ -93,6 +101,23 @@ function Stream.Defaults(prefix, point)
 		[prefix .. "Mouse"] = true,
 		[prefix .. "Point"] = point,
 	}
+end
+
+-- When an entry happened, on the wall clock.
+--
+-- GetTime counts from when the client started, which is the right clock to
+-- record on and an unreadable one to show, so the difference between then and
+-- now is taken off the current time of day. Built on a hover rather than stored
+-- on the entry, because Feed:Push runs on the path a raid drives and a hover is
+-- a moment that can afford a string.
+--
+-- Here rather than in either capture file because both of them want it and the
+-- second copy is the one that drifts.
+function Stream.Clock(at)
+	if not at then
+		return "?"
+	end
+	return date("%H:%M:%S", time() - (GetTime() - at))
 end
 
 function Instance:Setting(word)
@@ -144,6 +169,7 @@ function Instance:Build()
 		unit = self.unit,
 		title = self.title,
 		empty = self.empty,
+		note = self.note,
 		onTooltip = self.onTooltip,
 	})
 	self.feed.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)

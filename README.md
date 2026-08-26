@@ -50,11 +50,14 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   happened, newest at the top and older underneath, scrolled with the wheel. A
   loot row is the item's icon, its name in its own quality colour and how many
   dropped, with a stripe down the left in that same colour, so a pull reads as a
-  ribbon before you read a word of it. A combat row is the same shape off the
-  combat log: the spell that landed, or whoever swung when there was no spell,
-  and the number, with the stripe saying which way the blow went and a critical
-  drawing its number in gold. Both are the same widget, and adding a third feed
-  is a file that captures something and a table of settings.
+  ribbon before you read a word of it. A combat row is three columns off the
+  combat log: what happened, who it was, and the number. The stripe says which
+  way the blow went and a critical draws its number in gold with a mark after
+  it, so the crit is not a hue you have to be able to see. Entering and leaving
+  combat draw a band across the feed, which is what separates one pull from the
+  one before it, and the band at the end says how long the fight took. Both
+  feeds are the same widget, and adding a third is a file that captures
+  something and a table of settings.
 
   Hover any row and you get the addon's own tooltip, not Blizzard's parchment.
   For an item that means the item's real text, stats and all, read out of the
