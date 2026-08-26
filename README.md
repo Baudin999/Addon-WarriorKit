@@ -36,7 +36,11 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   something that should be up is not: a sharpening stone worn off either hand,
   Battle Shout lapsed, no food. It is not there at all when nothing is wrong, so
   seeing it is the whole message, and it is checked out of combat, which is when
-  you can fix it. A shield is never nagged about. Add your flask and your elixirs
+  you can fix it. A shield is never nagged about. Hover a square and it tells you
+  what is missing and what fixes it. Every entry has its own switch, per
+  character, because a bank alt that will never own a sharpening stone does not
+  need to be told about one forever, and one square you cannot silence teaches
+  you to ignore the whole row. Add your flask and your elixirs
   by spell id, because these clients will not say that an aura came from one.
   In combat the row turns into the other question: the racial you own and have
   not pressed. Blood Fury on an orc and Berserking on a troll pulse in the middle

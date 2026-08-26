@@ -254,16 +254,23 @@ registers no `lock` and no `reset`.
 
 **Two default tables, because there are two questions.** A preference is yours
 and belongs to the account. A record of what was in your action bars before the
-loadout overwrote them belongs to the character whose bars they were. Two parts use
-`charDefaults`. `Charge` keeps `softPrior`, the value a character's
+loadout overwrote them belongs to the character whose bars they were. Four parts
+use `charDefaults`. `Charge` keeps `softPrior`, the value a character's
 `SoftTargetEnemy` CVar had before the addon took it over, because that CVar is
 character scoped itself. `Buttons` keeps `layoutBackup`, `layoutStamp` and
 `layoutMacros`, and registers them there because holding them account-wide
 could destroy a second character's bars: the first character
 to apply the loadout owned the only backup, the second overwrote its bars
 without taking one, and restoring on the second wrote the first one's bars into
-its slots. A key that moves scope is migrated once at `ADDON_LOADED` and the
-account copy is dropped.
+its slots. `Loadouts` keeps the loadouts themselves, because a set of weapon
+swaps is a fact about the character wearing the weapons. `Buffs` keeps
+`buffWatch`, the
+entries on the nag row this character still watches, and that one is the only
+scope decision in the addon taken on editorial grounds rather than on a
+technical one: see the buff nag notes.
+
+A key that moves scope is migrated once at `ADDON_LOADED` and the account copy
+is dropped.
 
 This is what keeps the parts apart. Before the registry, `Core.lua` held a
 `DEFAULTS` table naming every setting in the addon and a slash handler with a
@@ -429,6 +436,12 @@ goes through `Feature.lua` or through the shared surface below:
                                  none, and how long what is on it has to run
     ns.Upkeep.Scan() / Rebuild() / Refit()   re-read your auras, rebuild the
                                  list, re-read the art each hand draws
+    ns.Upkeep.Fixed() / ByWord(w)   the four entries that ship, read only, and
+                                 the one a slash word names
+    ns.Upkeep.Watched(key) / SetWatched(key, on)   whether this character still
+                                 watches that entry, and switching it
+    ns.Upkeep.Silent()           how many entries you switched off, and their
+                                 captions in one phrase
     ns.Upkeep.Add(id) / Remove(id) / Extra() / MaxExtra() / Describe()
     ns.Racials.Spell() / Name() / Texture()   the racial this character owns
     ns.Racials.Worth() / Ready() / Idle() / Describe()   whether it is one worth
@@ -2696,6 +2709,89 @@ is missing: no stone on either hand, no Battle Shout, no food. In combat it is
 the racial you own and have not pressed. They can never both be on screen, which
 is why one row is enough for two questions.
 
+**Every entry has its own switch, and that is not a comfort feature.** A person
+who owns no sharpening stones was shown the main hand square every time they
+left combat, forever, about a thing they already knew and could not fix. What
+happens next is that they stop reading the row, and the row is one row, so
+ignoring the stone means ignoring Battle Shout and the food and Blood Fury with
+it. One unfixable square costs you the whole feature.
+
+So `buffs weapon off`, `buffs offhand off`, `buffs shout off` and `buffs food
+off`, with a tick box each on the panel. Switched off means off the list
+`Upkeep.Rebuild` builds, which is the only definition worth having: the tick
+never asks about that entry, the row never draws it, and `Describe` never counts
+it. Drawing it at alpha zero would have cost the same four calls a tick for a
+square nobody can use, and testing it on the tick and throwing the answer away
+is the same work with none of the answer. The harness asserts the entry is
+absent from the walked list rather than asserting the square is hidden, which is
+what makes the cheap wrong version fail.
+
+The switch names the thing rather than the slot, with one exception. `weapon`,
+`shout` and `food` are things. `offhand` is a hand, because for that entry the
+hand is the thing: the whole rule on it is that a shield in that hand is never
+nagged about and a weapon in it is.
+
+**The switch is per character and every other buff setting is not.** How big the
+row is and whether it breathes are the same answer on every character you own,
+so they are `ns.db`. Whether a bare weapon is worth a square is a fact about the
+character: a raiding main carries a stack of stones and wants the square, a bank
+alt has never bought one and never will. Account wide would have taken the one
+answer that is right for the raider and forced it on the alt, which is the exact
+complaint that produced this setting, one level up. It is `ns.dbc.buffWatch`, and
+absent means watched, so a fresh character carries an empty table and an entry
+added in a later release arrives switched on rather than silently missing.
+
+**A silenced entry is visible somewhere.** `/wk status` and the panel both name
+what you switched off, because a nag you turned off six weeks ago and can find
+no trace of is the same defect one room over: the row is quiet and you no longer
+know why. The status reads `3 tracked, 1 missing; bare weapon switched off`.
+
+**The captions name what is wrong, not which hand.** They read `bare weapon` and
+`bare off hand`. They used to read `main hand` and `off hand`, which names the
+slot and leaves you to work out what about it, and on a bare icon over your
+character that is no help at all. The racial half already spoke the right way
+with `press Blood Fury`.
+
+**Hovering a square says the rest.** The caption has to fit four squares' worth
+of words on one line, so it is two words and the tooltip carries what those two
+words could not: that a bare weapon means no stone, no oil and no imbue on the
+weapon you swing, that a bare off hand can only ever be a real weapon because a
+shield is never nagged about, that Battle Shout has lapsed and any rank counts,
+and for the racial, which racial it is and how many seconds it has been sitting
+off cooldown. That elapsed figure is the row's own record: a spell that is ready
+reports a duration of zero and no end time, so nothing in the client can answer
+it, and `Nag.Update` stamps the moment the racial half came up.
+
+The last line of every tooltip names the switch that silences that square. Being
+able to turn one off from the square you are tired of, rather than reading a
+settings page to find which tick box it is, is most of the value of having the
+switch at all.
+
+`Buttons/Square.lua` owns this shape for the action bars and the row follows it:
+`OnEnter` and `OnLeave`, anchored to the square, and refused outright when there
+is nothing to say. It is not shared code. Every step in that file is about an
+action slot read off a secure button's attribute and handed to the client to
+describe, and none of it has anything to do with a sharpening stone.
+
+**A square takes the mouse only while the row is locked and drawn**, and there
+is a real cost to say out loud. The row sits above the middle of the screen,
+which is where a right button drag to turn the camera starts, and a mouse
+enabled frame swallows every button that lands on it. So the right and middle
+buttons are handed back through `SetPassThroughButtons`, which arrived in 1.14.4
+and 10.0 and is probed rather than trusted. On a client without it, a right drag
+begun exactly on one of these squares does not turn the camera. That is at most
+four squares of 54 pixels, only while something is missing, and only out of
+combat. Unlocked the squares release the mouse entirely, because unlocked the
+row is a thing you drag and a square on top would eat the button first.
+
+**The spells you add yourself have no switch, and remove is why.** The four that
+ship cannot be taken off the row, so a switch is the only way to stop one. A
+spell you added is one you can remove in a press, and remove is the better
+answer: it hands the slot back, and a flask you have stopped keeping up is not
+something you want listed in a quiet state, it is something you want gone. A
+switch there would turn six slots into twelve states with nothing on screen to
+tell them apart.
+
 The split is not a layout convenience. A missing buff is something you fix out of
 combat, because out of combat is when you can fix it, and shouting about a lapsed
 stone mid pull is telling you about a thing you cannot do. Blood Fury is the
@@ -3066,6 +3162,10 @@ nothing ever runs is a branch that is wrong.
     /wk swing zoom 1             1 to 3
     /wk buffs                    what is missing, and what your racial is doing
     /wk buffs on|off             the row of squares over your character
+    /wk buffs weapon on|off      the stone on the weapon you swing
+    /wk buffs offhand on|off     the stone on the weapon in your off hand
+    /wk buffs shout on|off       Battle Shout lapsing
+    /wk buffs food on|off        not being Well Fed
     /wk buffs racial on|off      the racial you own and have not pressed
     /wk buffs pulse on|off       whether the racial square breathes
     /wk buffs resting on|off     nag in inns and cities too, off by default
@@ -3240,6 +3340,29 @@ and zero errors.
    with the setting, and that fifty ticks with the clock moving stay under the
    allocation gate.
 
+   The per-entry switches are driven with both hands bare, because the failure
+   worth catching is not that the switch works, it is that it works on one
+   entry. Switching the main hand off has to silence the main hand and leave the
+   off hand drawing. A switched-off entry has to be absent from the list the
+   tick walks, which is the assertion that fails against the two cheap wrong
+   versions: a square hidden on the tick, and an entry tested on the tick with
+   the answer thrown away. It has to be absent from the counts as well, so the
+   status line cannot report squares nobody can see. It has to land in
+   `WarriorKitCharDB` and not in `WarriorKitDB`, and it has to survive a
+   modelled reload, where the saved table is handed back as a fresh copy and the
+   entry is still off. Fifty ticks with an entry switched off are held to the
+   same allocation gate as the racial half, because rebuilding the watched list
+   once a tick is the obvious way to write the filter and would show up here
+   rather than as a stutter somebody reports six weeks later.
+
+   The tooltips are asserted through the stub's `GameTooltip`, whose four calls
+   are recorded the way the action bar section records them. Hovering a square
+   has to name that square, carry the sentence the caption had no room for, and
+   name the switch that silences it. The racial's has to name the racial and say
+   how many seconds it has been off cooldown. A square takes the mouse while the
+   row is locked and drawn, a hidden square does not, and unlocking hands the
+   mouse back so the row can still be dragged.
+
    The reaction windows are driven through the same stubbed log. A slot holding
    Overpower reads `reaction` with nothing having dodged you, `ready` the moment
    a dodge arrives, and `reaction` again once five seconds have passed. A
@@ -3374,6 +3497,12 @@ Everything below was written from the API contract and has never executed:
   id against the aura's own string, so both sides come off the same client and a
   localised name matches itself. A client that shipped a second food aura under
   another name would leave that entry lit while you were fed.
+- Whether `SetPassThroughButtons` is on 2.5.6 and 1.15.9. It arrived in 1.14.4
+  and 10.0 and nothing installed on this machine calls it, so `Buffs/Nag.lua`
+  probes for the name and pcalls it. Where it is missing, a right button drag
+  begun on one of the nag squares does not turn the camera: at most four squares
+  of 54 pixels, only while something is missing, and only out of combat. Settle
+  it by putting the mouse on a square with something missing and right dragging.
 - Whether the nine racial ids are what these two clients cast. Each is Wowhead's
   TBC Classic entry for that slug, cross-checked against the cooldown the page
   states. Blood Fury is the exception and is confirmed: 20572 is in this
