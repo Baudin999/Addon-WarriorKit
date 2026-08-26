@@ -2,6 +2,102 @@
 
 ## Unreleased
 
+### The enemy bars say when to Pummel again
+
+`grep UNIT_SPELLCAST` returned nothing across the addon. The bars replace the
+nameplate, so replacing it cost the one thing on a plate that says a cast is
+running and there are two seconds left to stop it. Every enemy bar carries a
+cast row now: the spell's name on the left, the seconds left on the right, a
+fill that runs left to right for a cast and drains right to left for a channel.
+
+Violet, and deliberately nothing else on the bar. The gauge above it carries
+threat, which is the green through red scale, and the tag beside it carries the
+XP scale, which is those same five colours meaning something else. A cast bar in
+any of them would read as a third opinion about the mob's health. A cast the
+client flags as uninterruptible draws in the idle slate instead: there is
+nothing for you to do and the colour says so.
+
+**The row is reserved and it draws nothing.** It is kept clear whether or not
+the mob is casting. A row that appeared would shove the health bar upwards at
+the exact moment the thing you are watching starts happening, and a bar that
+moves when the fight gets interesting is a bar you have to find again. Empty, it
+hides its box, so there is no fill, no edge and no backdrop and what is left is
+air. The three pixel threat bar that used to sit above the gauge is the version
+of this that got deleted for drawing its backdrop while nothing was pulling.
+
+**The fill is drawn on every frame.** One `OnUpdate` now runs two bodies:
+`EnemyBars.Sweep` on every frame, which advances the fills and nothing else, and
+`EnemyBars.Update` behind the fifth of a second accumulator it always had. This
+is the swing timer's argument and it took two repairs to learn there: a readout
+a fifth of a second stale is one nobody can fault, and a moving edge drawn at
+five hertz is a moving edge that steps. The harness holds the cast fill to the
+same three statements the swing bar is held to, at 60 fps and at 144, and none
+of them is a tolerance.
+
+The accumulator subtracts the interval now instead of zeroing. Zeroing throws
+away however far past the interval the frame landed, which turns a 5 Hz tick
+into every fourth frame at 60 and every twelfth at 144, rates of 4.6 and 4.8.
+That was the first of the two throttles on the swing bar, and it was the same
+line.
+
+**Nothing is kept between frames.** `ns.CastingInfo` is a live question with a
+live answer, so the tick asks it once per bar and `UnitFrames/Cast.lua` draws
+what came back. A model keyed by unit token would have to survive nameplate
+tokens being recycled the moment a mob dies, and that is a class of stale bar
+that cannot happen if there is no model.
+
+The `UNIT_SPELLCAST_*` events are registered as well, and they buy exactly one
+thing: the fifth of a second between a cast starting and the next tick, which on
+a one and a half second window is an eighth of the reason to look. They are not
+what the feature rests on. A client that never fires one of them for a nameplate
+unit draws the same bar a fifth of a second later, which is the lesson the
+debuff row paid for. `/wk status` says how many have ever reached a bar.
+
+**Two calls, one answer, and a flag that is counted rather than assumed.**
+`UnitCastingInfo` counts up and `UnitChannelInfo` counts down, and both open the
+same six returns and then differ by one slot: a cast carries a castID and a
+channel does not, so `notInterruptible` is the eighth return of one and the
+seventh of the other. Neither slot is trusted. What comes back is type checked,
+and `ns.CastImmuneKnown` reports what has been seen rather than what is assumed:
+nil before the first cast is read, false once one has been read without the
+flag, true once one has carried it.
+
+That both calls answer for a unit that is not you is the one inference this rests
+on, and it is a good one. Vanilla answered only for the player, which is why
+every Classic cast bar was built on a combat log estimator. Details ships that
+estimator and its framework used to route both calls through it on Era; the
+branch is switched off in its own source under the comment "disable this for
+now, as it appears to be working now through API changes". An addon deleting its
+own workaround is a stronger proof than an addon calling the API.
+
+`replace` style now hides Blizzard's plate cast bar, which it deliberately did
+not before. Two cast bars for one cast, in two places on the screen, is worse
+than either alone. `bars cast off` takes our row away and gives Blizzard's back
+in the same breath, so it is a real off switch rather than a way to stop seeing
+casts.
+
+`Swing/Slam.lua` reads the cast it measures through the same shim now. It had
+its own positional read of `UnitCastingInfo`, which is exactly the thing Core
+exists to do once.
+
+### A region hidden by a setting was not always given back
+
+Found on the way in, because the cast bar would have had the identical bug the
+first time anyone typed `bars cast off`.
+
+`PlateRegions` decided which of Blizzard's nameplate regions to hide by reading
+the settings, and the restore walk called the same function. Hide the raid icon
+with `bars marker` on, switch the setting off, and the walk that was meant to
+give it back no longer had it on the list. The icon stayed hidden for the rest
+of the session, nothing was written anywhere, and the only symptom was a mob
+with no raid marker at all: not ours, because the setting is off, and not
+Blizzard's, because we are still standing on it.
+
+The strip list may shrink with a setting. The restore list may not. It is
+`PlateRegions(plate, every)` now, restore passes `every`, and `ns.Unstrip` is a
+no-op on a region that was never taken, so asking for all of them costs a table
+lookup.
+
 ### Bar 1 takes a dropped spell again
 
 Nothing could be dropped on bar 1. The other four bars took a spell off the

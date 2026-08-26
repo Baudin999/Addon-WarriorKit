@@ -148,6 +148,13 @@ Buttons\Placing.lua
 Buttons\Feature.lua
 
 UnitFrames\Plates.lua
+
+# The cast row one enemy bar carries, before the file that builds the bar. Its
+# own file rather than forty more lines in EnemyBars.lua, and a real seam: it
+# knows nothing about a plate, a list or a widget pool, and everything in it
+# takes a widget and draws on it.
+UnitFrames\Cast.lua
+
 UnitFrames\EnemyBars.lua
 UnitFrames\Skin.lua
 UnitFrames\Feature.lua

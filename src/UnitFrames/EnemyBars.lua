@@ -149,6 +149,10 @@ local Flow = ns.UI.Flow
 -- Both used to be here and the same pair of writes was in Skin.lua as well,
 -- down to the fifth and the nine tenths.
 local Gauge = ns.UI.Gauge
+-- The cast row under the gauge, which is a widget of its own rather than
+-- forty more lines in here. It knows nothing about a plate, a list or a pool:
+-- this file hands it a widget and it draws on it.
+local Cast = ns.Cast
 
 local BACKDROP = Color.backdrop
 local EDGE = Color.iconEdge -- debuff icons only, the gauge edge follows threat
@@ -178,6 +182,11 @@ local TARGET_ALPHA = 1.00
 local OTHER_ALPHA = 0.55
 
 local anchor, header
+-- Assigned in the events section at the foot of the file, because it is the
+-- event frame's business and that frame is made down there. Declared up here
+-- because EnemyBars.Rebuild is what turns the cast events on and off and sits
+-- above it. Nothing can reach Rebuild before the file has finished loading.
+local CastEvents
 local pool, attached, listWidgets = {}, {}, {}
 -- Every enemy plate the client currently has up, kept by the add and remove
 -- events. GetNamePlates builds a fresh table on every call, and both the list
@@ -725,6 +734,11 @@ local function CreateWidget()
 	level.text = Text(level, PLATE_TEXT, Color.xp.none, "CENTER")
 	widget.level = level
 
+	-- Under the gauge, and reserved whether or not this mob ever casts. See the
+	-- head of Cast.lua for why it is reserved and why it draws nothing while it
+	-- is empty.
+	Cast.Build(widget)
+
 	widget.name = Text(widget.health, PLATE_TEXT, NAME_TEXT, "LEFT")
 	widget.healthText = Text(widget.health, PLATE_TEXT, HEALTH_TEXT, "RIGHT")
 	widget.threatText = Text(widget, PLATE_TEXT, HEALTH_TEXT, "LEFT")
@@ -865,6 +879,15 @@ local function LayoutWidget(widget, width, onPlate)
 		icons[index] = { frame = holder, width = iconSize, height = iconSize }
 	end
 
+	-- The cast row, under the gauge. What comes back is a node for the tree
+	-- below and how tall it is, and the second one is what PlaceOnPlate has to
+	-- take back out of its offset: the widget is anchored by its bottom edge,
+	-- the gauge used to sit on that edge, and anything reserved below it moves
+	-- the health bar up off the mob.
+	local castNode, castHeight = Cast.Fit(widget, unit, px, onPlate)
+	widget.underGauge = castHeight > 0
+		and ns.UI.Round(widget, castHeight + iconGap) or 0
+
 	-- The strip between the gauge and whatever is above it. The threat number
 	-- shares it with the bottom row of icons, so it is an icon tall; with
 	-- nothing tracked there are no icons to share it with and it is as tall as
@@ -910,6 +933,8 @@ local function LayoutWidget(widget, width, onPlate)
 				direction = "column",
 				{ frame = widget.health, grow = 1 },
 			},
+
+			castNode,
 		},
 	})
 
@@ -1038,9 +1063,15 @@ local function PlaceOnPlate(widget)
 		-- An odd bar cannot be centred on a point and land on a boundary, so
 		-- half a pixel of centring is what is given up. It is not visible. The
 		-- smear was.
+		--
+		-- The cast row is subtracted rather than ignored. It is reserved under
+		-- the gauge whether or not the mob casts, so without this every bar
+		-- would sit a cast row higher than it used to and the health bar, which
+		-- is the thing being centred, would no longer be over the mob.
 		local unit = ns.UI.Unit(widget)
 		widget:SetPoint("BOTTOM", host, "CENTER", shift,
 			-ns.UI.Round(widget, (PLATE_BAR_HEIGHT / 2 + 1) * unit)
+				- (widget.underGauge or 0)
 				+ ns.db.barsOffset * unit)
 	else
 		widget:SetPoint("BOTTOM", host, "TOP", shift, ns.db.barsOffset * ns.UI.Unit(widget))
@@ -1219,6 +1250,12 @@ local function UpdateWidget(widget, unit, guid)
 			holder.count:SetText(count > 1 and tostring(count) or "")
 		end
 	end
+
+	-- What the client says this mob is casting. Last, because it is the one
+	-- thing on the widget that is not read out of the unit's own state, and
+	-- because the cast events call it again on their own for the unit they
+	-- name. Everything it does is guarded in there.
+	Cast.Update(widget, unit)
 end
 
 --------------------------------------------------------------------------
@@ -1226,14 +1263,31 @@ end
 --
 -- The UnitFrame stays shown, because that is the frame the game hit-tests for
 -- clicks. Killing it would kill ctrl-click marking and targeting. Only its
--- visible pieces get switched off, and the cast bar is deliberately left
--- alone so interrupts stay visible.
+-- visible pieces get switched off.
+--
+-- This used to say the cast bar was deliberately left alone so interrupts
+-- stayed visible, and it was right for as long as nothing here drew one. The
+-- bars draw their own now, so leaving Blizzard's up is two cast bars for one
+-- cast, in two places, disagreeing about where the mob is. It goes with the
+-- rest, and only while `bars cast` is on: switch ours off and Blizzard's is
+-- what says when to Pummel again.
 --------------------------------------------------------------------------
 
 -- ns.Strip and ns.Unstrip in Core do the work, because the artwork part strips
 -- Blizzard bar art through the same two calls.
 
-local function PlateRegions(plate)
+-- `every` is what Restore passes and Strip does not.
+--
+-- Two of these regions are hidden only while a setting says so, and the list
+-- has to be longer on the way back than it was on the way in. Built from the
+-- settings in both directions, a plate stripped while `bars marker` was on and
+-- restored after it was switched off would keep Blizzard's raid icon hidden for
+-- the rest of the session: the walk that was supposed to give it back no longer
+-- had it on the list. Nothing said anything and the only symptom was a marker
+-- that had gone for good. Restore gives back everything this file has ever
+-- taken; ns.Unstrip is a no-op on a region that was never taken, so asking for
+-- all of them costs a table lookup.
+local function PlateRegions(plate, every)
 	local unitFrame = plate.UnitFrame
 	if not unitFrame then
 		return nil
@@ -1246,8 +1300,16 @@ local function PlateRegions(plate)
 		unitFrame.selectionHighlight,
 		unitFrame.aggroHighlight,
 	}
-	if ns.db.barsMarker then
+	if every or ns.db.barsMarker then
 		regions[#regions + 1] = unitFrame.RaidTargetFrame or unitFrame.raidIcon or unitFrame.RaidTargetIcon
+	end
+	if every or ns.db.barsCast then
+		-- One name and no fallback list. `castBar` is what the nameplate driver
+		-- calls it on every flavour of this client, and a second guess at a
+		-- PascalCase spelling is how a strip walk ends up handed a method rather
+		-- than a frame: the harness models a plate faithfully enough that it
+		-- answered one the first time this line asked for `CastBar`.
+		regions[#regions + 1] = unitFrame.castBar
 	end
 	return regions
 end
@@ -1387,7 +1449,7 @@ end
 -- changed since. Both halves no-op on a plate that was never touched.
 local function RestorePlate(plate)
 	local complete = PlateMouse(plate, true, nil)
-	for _, region in ipairs(PlateRegions(plate) or {}) do
+	for _, region in ipairs(PlateRegions(plate, true) or {}) do
 		if not ns.Unstrip(region) then
 			complete = false
 		end
@@ -1507,6 +1569,10 @@ local function Release(unit)
 	end
 	attached[unit] = nil
 	widget.plate = nil
+	-- A pooled widget keeps everything the tick drew on it, which is what the
+	-- caches on it are for. A half finished cast is the one piece of that which
+	-- is about the mob rather than about the widget, so it does not travel.
+	Cast.Clear(widget)
 	widget:Hide()
 	-- Cleared before the reparent below, so no anchor survives pointing at a
 	-- plate this widget is about to stop being a child of.
@@ -1638,6 +1704,7 @@ local function UpdateList()
 		widget:Show()
 	end
 	for index = shown + 1, #listWidgets do
+		Cast.Clear(listWidgets[index])
 		listWidgets[index]:Hide()
 	end
 end
@@ -1736,8 +1803,46 @@ function EnemyBars.Rebuild()
 	if ns.db.bars and EnemyBars.Mode() == "plates" then
 		AttachAll()
 	end
+	-- Only while there is a row for them to reach, and only on a client that
+	-- answers for a unit that is not you. See CAST_EVENTS.
+	CastEvents(ns.db.bars and ns.db.barsCast and ns.HasCastInfo()
+		and EnemyBars.Mode() == "plates")
 	ns.Plates.Apply()
 	EnemyBars.ApplyLock()
+end
+
+-- The cast fills, and nothing else, on every frame.
+--
+-- Split off EnemyBars.Update rather than folded into it, because the two are
+-- different kinds of thing running at different rates. Everything Update draws
+-- is a readout, and a readout a fifth of a second stale is one nobody can
+-- fault. A cast fill is a moving edge, and a moving edge is an animation: it is
+-- drawn on the frame the screen is drawn on or it is drawn in steps. That
+-- argument is Swing/Gauges.lua's and the note at the head of it is the long
+-- version.
+--
+-- What this costs when nothing is casting is the walk and one IsShown per bar,
+-- because Cast.Sweep's first line is the hidden row returning. GetTime is asked
+-- once here rather than once per bar.
+function EnemyBars.Sweep()
+	if not anchor or not ns.db.bars or not ns.db.barsCast then
+		return
+	end
+
+	-- Both lists, and no mode check. EnemyBars.Mode reads a CVar, which is a
+	-- reasonable thing to do five times a second and not sixty, and it is not
+	-- needed: `attached` is empty in list mode and every list widget is hidden
+	-- in plate mode, so the walk the mode would have skipped is the walk that
+	-- finds nothing anyway.
+	local now = GetTime()
+	for _, widget in pairs(attached) do
+		Cast.Sweep(widget, now)
+	end
+	for _, widget in ipairs(listWidgets) do
+		if widget:IsShown() then
+			Cast.Sweep(widget, now)
+		end
+	end
 end
 
 function EnemyBars.Update()
@@ -1773,6 +1878,57 @@ end
 local elapsed = 0
 local lastMode
 local events = CreateFrame("Frame")
+
+-- The cast events, and what they are and are not for.
+--
+-- They are not what the feature is built on. ns.CastingInfo is read again for
+-- every bar on every tick, so a client that never fires one of these for a
+-- nameplate unit draws exactly the same bar a fifth of a second later. That is
+-- deliberate after the Deep Wounds bug: a feature whose only source is an event
+-- nobody has proved fires is a feature that draws nothing and says nothing.
+--
+-- What they buy is the fifth of a second. A cast that starts just after a tick
+-- is 200 ms old before any bar admits it, and on a one and a half second window
+-- that is an eighth of the reason to look.
+--
+-- Registered only while there is something to draw with them, because
+-- registered they wake this frame on every cast every unit the client tracks
+-- starts, which in a raid is a great many for the eight of them that land on a
+-- mob with a bar. Rebuild is what turns them on and off, so a setting change
+-- reaches them for free.
+local CAST_EVENTS = {
+	"UNIT_SPELLCAST_START",
+	"UNIT_SPELLCAST_STOP",
+	"UNIT_SPELLCAST_FAILED",
+	"UNIT_SPELLCAST_INTERRUPTED",
+	"UNIT_SPELLCAST_DELAYED",
+	"UNIT_SPELLCAST_CHANNEL_START",
+	"UNIT_SPELLCAST_CHANNEL_UPDATE",
+	"UNIT_SPELLCAST_CHANNEL_STOP",
+}
+
+local isCastEvent = {}
+for _, event in ipairs(CAST_EVENTS) do
+	isCastEvent[event] = true
+end
+
+local castRegistered = false
+
+CastEvents = function(wanted)
+	wanted = wanted and true or false
+	if castRegistered == wanted then
+		return
+	end
+	castRegistered = wanted
+	for _, event in ipairs(CAST_EVENTS) do
+		if wanted then
+			events:RegisterEvent(event)
+		else
+			events:UnregisterEvent(event)
+		end
+	end
+end
+
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -1783,6 +1939,18 @@ if C_NamePlate then
 end
 
 events:SetScript("OnEvent", function(_, event, arg1)
+	if isCastEvent[event] then
+		-- Plate mode only, and the list is not an oversight. A widget in the
+		-- list is found by position rather than by unit, so the lookup would be
+		-- a walk of every bar for every cast in the zone, to save a fifth of a
+		-- second on the mode that runs when nameplates are switched off.
+		local casting = attached[arg1]
+		if casting then
+			Cast.Update(casting, arg1, true)
+		end
+		return
+	end
+
 	if event == "NAME_PLATE_UNIT_ADDED" then
 		plateUnits[arg1] = true
 		Attach(arg1)
@@ -1853,9 +2021,19 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	EnemyBars.Rebuild()
 
 	events:SetScript("OnUpdate", function(_, delta)
+		-- The cast fills first and unthrottled. See EnemyBars.Sweep.
+		ns.Perf.Start("cast")
+		EnemyBars.Sweep()
+		ns.Perf.Stop("cast")
+
 		elapsed = elapsed + delta
 		if elapsed >= REFRESH then
-			elapsed = 0
+			-- The remainder, not zero. Zeroing an accumulator throws away
+			-- however far past the interval the frame landed, which turns a
+			-- 5 Hz tick into one that fires every fourth 60 Hz frame and every
+			-- twelfth 144 Hz one, at rates of 4.6 and 4.8. That is the first
+			-- half of what made the swing bar step, and this is the same line.
+			elapsed = elapsed % REFRESH
 			ns.Perf.Start("bars")
 			EnemyBars.Update()
 			ns.Perf.Stop("bars")

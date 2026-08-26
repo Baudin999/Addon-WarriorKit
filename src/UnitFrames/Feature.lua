@@ -95,6 +95,15 @@ local function BarsWord(option, value)
 		ns.Print("mob tag " .. (ns.db.barsLevel and "on" or "off")
 			.. ": the level coloured by what the kill is worth, grey pays no XP and red is five levels"
 			.. " up, and a stripe beside it, bright amber when the mob is neutral and will not start it.")
+	elseif option == "cast" then
+		ns.db.barsCast = ns.Command.Toggle(value)
+		ns.EnemyBars.ApplyLayout()
+		ns.EnemyBars.Rebuild()
+		ns.Print("enemy cast bar " .. (ns.db.barsCast and "on" or "off")
+			.. ": " .. ns.Cast.Describe() .. ".")
+		if not ns.db.barsCast then
+			ns.Print("Blizzard's own plate cast bar is back, so a cast still shows.")
+		end
 	elseif option == "marker" then
 		ns.db.barsMarker = ns.Command.Toggle(value)
 		ns.EnemyBars.Rebuild()
@@ -281,6 +290,13 @@ ns.Register({
 		barsOffset = 0,
 		barsMarker = true,
 		barsLevel = true, -- the mob tag: level coloured by XP value, plus the reaction stripe
+
+		-- The cast row under the gauge. On by default, because it is the one
+		-- thing Blizzard's nameplate said that the bar replacing it did not,
+		-- and because on a mob that never casts it is a strip of empty screen
+		-- and nothing else. Off hands the job back to Blizzard's own plate cast
+		-- bar, which `replace` style stops hiding at the same moment.
+		barsCast = true,
 		barsClickThrough = false, -- the camera, at the price of click targeting and marking on a plate
 		-- Which buttons a plate hands back to the world while keeping the
 		-- rest. "right" is the default because it buys the camera drag and
@@ -372,6 +388,7 @@ ns.Register({
 		"bars on|off, bars mode auto|plates|list, bars style replace|attach",
 		"bars offset <-60-60>, bars marker on|off, bars level on|off",
 		"bars clickthrough on|off, bars camera right|left|both|off",
+		"bars cast on|off, the cast row under each bar",
 		"bars max <1-15>, bars width <120-400>, bars zoom <1-3>",
 		"bars debuff list|reset, bars debuff add|remove <spell id>, what the icon row tracks",
 		"bars icon <16-32>, the size of one debuff square",
@@ -393,6 +410,7 @@ ns.Register({
 				ns.UI.Describe(), ns.Plates.Describe(), ns.UI.FontName(),
 				ns.FrameSkin.Describe())
 			.. ("; debuffs at %dpx: %s"):format(ns.db.barsIconSize, ns.EnemyBars.DescribeSpells())
+			.. ("; cast bar %s"):format(ns.Cast.Describe())
 	end,
 
 	lock = function()
@@ -408,6 +426,7 @@ ns.Register({
 		ns.db.barsZoom = ns.DefaultFor("barsZoom")
 		ns.db.barsStack = ns.DefaultFor("barsStack")
 		ns.db.barsIconSize = ns.DefaultFor("barsIconSize")
+		ns.db.barsCast = ns.DefaultFor("barsCast")
 		-- A fresh table, not ns.DefaultFor: adding and removing a debuff mutates
 		-- the list in place, so by now the registered default is whatever the
 		-- last edit left it as. This relays out on its own and the two calls
@@ -487,6 +506,30 @@ ns.Register({
 				ns.EnemyBars.ApplyLayout()
 				ns.EnemyBars.Rebuild()
 			end)
+		ui.Check("cast bar under each enemy bar",
+			function() return ns.db.barsCast end,
+			function(value)
+				ns.db.barsCast = value
+				ns.EnemyBars.ApplyLayout()
+				ns.EnemyBars.Rebuild()
+			end)
+		ui.Note(function()
+			if not ns.HasCastInfo() then
+				return "This client answers no UnitCastingInfo for a unit that is not"
+					.. " you, so the row never draws whatever this is set to. Blizzard's"
+					.. " own plate cast bar is left alone in that case."
+			end
+			if not ns.db.barsCast then
+				return "Off, so Blizzard's own cast bar on the plate is left where it is"
+					.. " and that is what says when to Pummel."
+			end
+			return "The row is under the gauge and is kept clear whether or not the mob"
+				.. " is casting, so a cast starting does not shove the health bar"
+				.. " upwards. Empty it draws nothing at all. A cast fills left to"
+				.. " right, a channel drains right to left, and the number is the"
+				.. " seconds left to interrupt it. |cffd08040Now:|r "
+				.. ns.Cast.Describe() .. "."
+		end)
 		ui.Check("draw our own raid marker",
 			function() return ns.db.barsMarker end,
 			function(value)

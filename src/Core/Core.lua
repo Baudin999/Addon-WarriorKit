@@ -279,6 +279,98 @@ function ns.IncomingHeals(unit)
 end
 
 --------------------------------------------------------------------------
+-- What a unit is casting
+--
+-- The one thing an enemy nameplate says that health and threat do not: there
+-- is a window open right now, and Pummel or Shield Bash closes it. Replacing
+-- the plate took that away, which is the whole reason this is here.
+--
+-- Two calls, because the client has two and a unit is doing at most one of
+-- them. UnitCastingInfo counts up to a finish, UnitChannelInfo counts down from
+-- a start, and this asks for a cast and falls back to a channel so every caller
+-- gets one answer with a flag saying which it was.
+--
+-- Confirmed rather than remembered, on the bar every other shim in this file is
+-- held to. Details is installed on the Era client and its framework used to
+-- route both of these through LibClassicCasterino, which is the combat log
+-- estimator every vanilla cast bar was built on because vanilla answered only
+-- for you. That branch is switched off in `Libs/DF/externals.lua` under the
+-- comment "disable this for now, as it appears to be working now through API
+-- changes", and what it falls back to is UnitCastingInfo and UnitChannelInfo
+-- called unguarded. So both clients answer for a unit that is not you. Probed
+-- all the same, because nothing installed here proves it for 2.5.6 and a
+-- feature that silently draws nothing is the failure this addon keeps hitting.
+--
+-- The returns are read positionally, which is the thing this file exists to do
+-- once rather than in a feature. Both calls open with name, text, texture,
+-- start, finish, isTradeSkill. After that they differ by one slot: a cast
+-- carries a castID and a channel does not, so notInterruptible is the eighth
+-- return of one and the seventh of the other. Neither slot is trusted to hold
+-- it. What comes back is type checked, the way ns.Upkeep.EnchantShape counts
+-- the stride between two weapon enchants rather than assuming it, and a client
+-- that puts something else there is a client that does not say.
+--------------------------------------------------------------------------
+
+local UnitCastingInfo = _G.UnitCastingInfo
+local UnitChannelInfo = _G.UnitChannelInfo
+
+-- The cast half only, because that is the half a feature cannot do without.
+-- The channel call is probed separately inside ns.CastingInfo: a client that
+-- answered one and not the other would draw every cast and miss every channel,
+-- which is most of the feature rather than none of it, and is not a reason to
+-- report the whole thing absent.
+function ns.HasCastInfo()
+	return type(UnitCastingInfo) == "function"
+end
+
+-- nil until a cast has been read, false once one has been read and the client
+-- left that slot empty, true once one has come back with the flag in it.
+-- Reported and never inferred, the same as EnemyBars.CameraState: "this client
+-- does not say" and "nothing has said yet" are two different answers and the
+-- second one is not a claim.
+local immuneKnown
+
+function ns.CastImmuneKnown()
+	return immuneKnown
+end
+
+-- The spell's name, when it started and when it ends in GetTime seconds,
+-- whether it is a channel, and whether the client says it cannot be
+-- interrupted. Nil for a unit doing neither, which is nearly every unit nearly
+-- always, so the miss costs one call and one comparison.
+--
+-- The times come back in milliseconds on both calls and are divided here, for
+-- the reason ns.SpellCastTime divides: a caller counting the client's
+-- milliseconds against a GetTime in seconds draws a bar that is full from the
+-- first frame and nothing about it looks wrong.
+function ns.CastingInfo(unit)
+	if type(UnitCastingInfo) ~= "function" then
+		return nil
+	end
+
+	local channel = false
+	local name, _, _, startMS, endMS, _, _, immune = UnitCastingInfo(unit)
+	if not name and type(UnitChannelInfo) == "function" then
+		channel = true
+		name, _, _, startMS, endMS, _, immune = UnitChannelInfo(unit)
+	end
+	if not name or not startMS or not endMS then
+		return nil
+	end
+
+	if type(immune) == "boolean" then
+		immuneKnown = true
+	else
+		immune = nil
+		if immuneKnown == nil then
+			immuneKnown = false
+		end
+	end
+
+	return name, startMS / 1000, endMS / 1000, channel, immune
+end
+
+--------------------------------------------------------------------------
 -- Levels
 --
 -- What a mob is worth is a level question, and the client answers it in two

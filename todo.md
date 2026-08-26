@@ -91,11 +91,32 @@ Racials are in scope, and Blood Fury is the reason the feature exists. The long
 cooldowns, Death Wish and Recklessness, are timed by hand and stay out of this
 one; they are item 7.
 
-## 5. Enemy cast bar
+## 5. Enemy cast bar  [merged, untested in game]
 
 `grep UNIT_SPELLCAST` returns nothing across the addon. The enemy bars replace
 the nameplate, so replacing it costs the one thing that says when to Pummel or
 Shield Bash. The per-unit tick already exists in `UnitFrames/EnemyBars.lua`.
+
+Built in `UnitFrames/Cast.lua`, wired into the bar's layout and its tick, and
+gated in the harness at 60 fps and 144. `check.sh` is at zero.
+
+Three things in it were written from the API contract and have never run in the
+game. All three are in the untested list in `docs/README.md` and two of them
+answer themselves in `/wk status` on the first login:
+
+- whether `UNIT_SPELLCAST_START` fires for a `nameplateN` token. If it does not,
+  a cast shows up on the next tick instead of at once, and nothing else changes.
+- which slot really carries `notInterruptible` on each client. If neither does,
+  every cast draws as one you can stop, which is true of nearly everything a
+  warrior meets.
+- whether `plate.UnitFrame.castBar` is what these clients call the region. This
+  one does not fail soft: get it wrong and Blizzard's own cast bar is still
+  drawn under ours, which is visible in the first fight.
+
+Not in it, and worth deciding on before it is: the row says a cast is running,
+not whether *you* can stop it. Pummel's cooldown, the stance it needs and
+whether you are in range are `Buttons/Slot.lua`'s to answer, and crossing that
+boundary is a change to what the bar means rather than a detail on it.
 
 ## 6. Party frames
 

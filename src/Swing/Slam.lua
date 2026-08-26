@@ -58,7 +58,6 @@ ns.Slam = Slam
 -- that.
 --------------------------------------------------------------------------
 
-local UnitCastingInfo = _G.UnitCastingInfo
 local GetNumTalentTabs = _G.GetNumTalentTabs
 local GetNumTalents = _G.GetNumTalents
 local GetTalentInfo = _G.GetTalentInfo
@@ -301,11 +300,16 @@ end
 -- for. Held until a talent point moves, which is the only thing that really
 -- changes the answer.
 local function Learn()
-	if measured or type(UnitCastingInfo) ~= "function" then
+	if measured then
 		return
 	end
-	local _, _, _, startTime, endTime = UnitCastingInfo("player")
-	if type(startTime) ~= "number" or type(endTime) ~= "number" then
+	-- Through the shim rather than off UnitCastingInfo directly. This file used
+	-- to read the fourth and fifth returns of that call itself, which is the one
+	-- thing Core exists to do once: the enemy bars' cast row wanted the same two
+	-- numbers and the same milliseconds, and a second positional read of one
+	-- client API is a second place to be wrong about which slot holds what.
+	local casting, startTime, endTime = ns.CastingInfo("player")
+	if not casting or type(startTime) ~= "number" or type(endTime) ~= "number" then
 		return
 	end
 
@@ -313,7 +317,10 @@ local function Learn()
 	-- be drawn. A reading that snaps to zero is refused rather than held: zero
 	-- is a truthy value in Lua, it would win over the estimate for the rest of
 	-- the session, and Known would then say this character has no Slam.
-	local taken = math.floor((endTime - startTime) / 1000 / STEP + 0.5) * STEP
+	--
+	-- Seconds, because the shim divides. It used to be milliseconds divided
+	-- here, which is the same arithmetic in the other place.
+	local taken = math.floor((endTime - startTime) / STEP + 0.5) * STEP
 	if taken <= 0 then
 		return
 	end

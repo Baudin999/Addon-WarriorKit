@@ -12,16 +12,19 @@ local ADDON, ns = ...
 
 -- hz is what the row's ticker runs at, and it is what turns a per tick figure
 -- into the share of a second the part actually takes. The swing timer has no
--- rate of its own: it draws on every frame, because it is the only thing in the
--- addon that draws motion. Its row is costed against 60 frames a second, which
--- is the same budget Total below measures everything against, and `rate` is
--- what the heading says instead of a number of hertz.
+-- rate of its own: it draws on every frame, because motion is drawn on the
+-- frame the screen is drawn on or it is drawn in steps. The enemy cast fills
+-- are the second thing in the addon to say so and the second row with no hertz.
+-- Both are costed against 60 frames a second, which is the same budget Total
+-- below measures everything against, and `rate` is what the heading says
+-- instead of a number of hertz.
 local ROWS = {
 	{ key = "marker", label = "charge marker", hz = 20 },
 	{ key = "swing", label = "swing timer", hz = 60, rate = "every frame" },
 	{ key = "icon", label = "charge icon", hz = 10 },
 	{ key = "action", label = "action bars", hz = 10 },
 	{ key = "bars", label = "enemy bars", hz = 5 },
+	{ key = "cast", label = "enemy cast fills", hz = 60, rate = "every frame" },
 	{ key = "skin", label = "unit frames", hz = 5 },
 	{ key = "meter", label = "meters", hz = 5 },
 	{ key = "buffs", label = "buff nag", hz = 10 },

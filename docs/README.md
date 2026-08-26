@@ -5,7 +5,7 @@ marking, one button that casts Charge, Intervene or Intercept depending on what
 you are looking at, one key that takes the next enemy and swings at it, weapon
 loadouts with a key each that swap your stance and both your hands, a warrior
 loadout that fills the action bars, enemy bars that replace the
-Blizzard nameplate, a chat window with a tab for the people you name and a voice
+Blizzard nameplate and carry a cast bar of their own, a chat window with a tab for the people you name and a voice
 channel joined at login, a strip of the Blizzard bar art, three chores the
 client makes you do by hand, a swing timer with the Slam window marked on it,
 and one Edit Mode layout carried inside the addon folder. Settings live in a
@@ -127,6 +127,9 @@ name of none of them.
     Buttons/Feature.lua
 
     UnitFrames/Plates.lua    the client settings that decide where a plate goes
+    UnitFrames/Cast.lua      the cast row one enemy bar carries: what the mob is
+                             casting, how long is left of it, and whether the
+                             client says you can stop it
     UnitFrames/EnemyBars.lua enemy bars, nameplate replacement and list fallback
     UnitFrames/Skin.lua      the square skin on player, target and target of target
     UnitFrames/Feature.lua
@@ -340,6 +343,15 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Plates.SetFootprint(w, h)  how much room one bar wants, in UIParent units
     ns.Plates.Measure(plate)     what a plate was before the addon touched it
     ns.Plates.Apply / Restore / Flush / Stacking / Describe / Warn
+    ns.HasCastInfo()             whether this client will say what a unit that
+                                 is not you is casting
+    ns.CastingInfo(unit)         that spell's name, when it started and when it
+                                 ends in GetTime seconds, whether it is a
+                                 channel, and whether the client says it cannot
+                                 be interrupted. Nil for a unit doing neither
+    ns.CastImmuneKnown()         whether a cast has come back carrying that last
+                                 flag yet: nil before the first one is read,
+                                 false once one has been read without it
     ns.SpellName / ns.SpellTexture / ns.SpellCooldown / ns.SpellUsable / ns.SpellInRange
     ns.SpellCastTime(spell)      how long the client says that spell takes to
                                  cast, in seconds, and 0 for an instant or for a
@@ -454,6 +466,17 @@ goes through `Feature.lua` or through the shared surface below:
     ns.SwingGauges.Apply / Lock / Reset / Show / Update / Describe
     ns.SwingGauges.Bar(hand) / Applicable()   one hand's gauge, and whether
                                  there is a swing worth drawing at all
+    ns.Cast.Build(widget) / Fit / Clear   the cast row one enemy bar carries:
+                                 make it, size it to a widget and answer the
+                                 node its layout puts under the gauge, and
+                                 forget what was last drawn on it
+    ns.Cast.Update(widget, unit) / Sweep(widget, now)   what the client says,
+                                 read on the bars' tick, and the moving fill,
+                                 drawn on every frame
+    ns.Cast.Describe()           one line on whether the row is on, whether this
+                                 client answers for another unit at all, and
+                                 whether it has ever flagged one you cannot stop
+    ns.EnemyBars.Sweep()         the cast fills, every frame, and nothing else
     ns.EnemyBars.WidgetFor(unit) the bar on that unit's plate, if there is one
     ns.EnemyBars.Describe()      what the grid resolved to and whether the client
                                  agreed to space plates by the size of a bar
@@ -581,8 +604,9 @@ nothing rounds on a ticker.
    across two rows of pixels it reads as blurry, and blurry is what this whole
    section exists to stop. Gated by the anchor sweep at the end of
    `scripts/harness.lua`, which walks every offset on the grid at 1x, 2x and 3x.
-2. **A moving fill is not quantised.** A swing bar, and a cast bar the day
-   somebody writes one. What the eye reads on a moving edge is its velocity, and
+2. **A moving fill is not quantised.** A swing bar and an enemy cast bar, which
+   are the two things in this addon that draw motion.
+   What the eye reads on a moving edge is its velocity, and
    velocity lives in where the edge sits between two pixels as much as in which
    pixel it is on. Rounding it throws away the only thing being looked at, to
    buy a sharpness nobody can see on something in motion. Rounding is also a
@@ -590,7 +614,9 @@ nothing rounds on a ticker.
    53 times a second once it is rounded, however often the tick runs, so it
    stands still on 91 of the 144 frames a fast screen draws. Gated in the swing
    section of `scripts/harness.lua`, which asserts that the fill lands off a
-   whole pixel on nearly every frame.
+   whole pixel on nearly every frame, and again in the cast section, which
+   drives a cast across two frame rates and asserts that no frame repeats the
+   position of the one before it.
 
 Rule 1 was written when every edge in the addon was static, and for that
 codebase it was the whole truth. The swing bar was the first moving edge and it
@@ -830,11 +856,12 @@ Eight `OnUpdate` tickers run at once and none of them ever stops. A ninth runs
 only while you are looking at it.
 
     Swing/Gauges.lua      every frame   two gauges and the Slam band
+    UnitFrames/EnemyBars.lua every frame  the cast fill on every bar on screen
     Charge/Marker.lua        20 Hz      it tracks the camera
     Charge/Icon.lua          10 Hz      the HUD icon and the macro
     Buttons/Bars.lua         10 Hz      every square on every cloned bar
     Buffs/Nag.lua            10 Hz      the missing buff row, and its pulse
-    UnitFrames/EnemyBars.lua  5 Hz      every bar on screen
+    UnitFrames/EnemyBars.lua  5 Hz      everything else on every bar on screen
     UnitFrames/Skin.lua       5 Hz      the three Blizzard unit frames
     Meter/Window.lua          5 Hz      the two panes of numbers
     Perf/Perf.lua             1 Hz      only while the performance tab is on screen
@@ -851,11 +878,21 @@ field. The two weapon enchants are the exception and are read live, because a
 stone running out fires nothing at all, and that costs two numbers out of one
 call rather than a walk of forty slots.
 
-The swing timer has no rate, and it is the only thing here that does not. Every
-other ticker refreshes a readout, and a readout refreshed twenty times a second
-is never more than fifty milliseconds stale, which nobody can see. The swing bar
-is not a readout, it is a moving edge, and a moving edge is an animation. An
-animation is drawn on the frame the screen is drawn on or it is drawn in steps.
+Two rows have no rate, and they are the two things in the addon that draw
+motion. Every other ticker refreshes a readout, and a readout refreshed twenty
+times a second is never more than fifty milliseconds stale, which nobody can
+see. A swing bar and a cast bar are not readouts, they are moving edges, and a
+moving edge is an animation. An animation is drawn on the frame the screen is
+drawn on or it is drawn in steps.
+
+The enemy bars are on that list twice, and that is the arrangement rather than a
+duplicate. One `OnUpdate` runs two bodies: `EnemyBars.Sweep` on every frame,
+which advances the cast fills and nothing else, and `EnemyBars.Update` behind a
+fifth of a second accumulator, which is everything a bar says that is not
+moving. The accumulator subtracts the interval rather than zeroing, because
+zeroing throws away however far past it the frame landed and turns 5 Hz into
+every fourth frame at 60 and every twelfth at 144, which are 4.6 and 4.8. That
+was the first of the two throttles on the swing bar and it was the same line.
 
 The report back was that the timer "jumps chunks", and it took two repairs
 because there were two throttles on that one edge. The first was the 20 Hz
@@ -996,8 +1033,13 @@ the nameplate look, strip its visible regions instead: swap each region's
 `Show` method for `Hide` so Blizzard's update code cannot put them back, then
 hide it. That is `ns.Strip` in Core, and `ns.Unstrip` reverses it. Both refuse
 while a protected region is in lockdown and return false, so the caller can
-finish at PLAYER_REGEN_ENABLED. The cast bar is left alone on purpose so
-interrupts stay visible.
+finish at PLAYER_REGEN_ENABLED.
+
+The cast bar used to be left alone on purpose, so interrupts stayed visible, and
+that was right for as long as nothing here drew one. `replace` style hides it
+now, and only while `bars cast` is on: two cast bars for one cast, in two places
+on the screen, is worse than either of them alone. Switch ours off and
+Blizzard's is what says when to Pummel again.
 
 **A nameplate cannot be measured.** Plate frames are restricted regions here.
 `plate:GetCenter()` raises `Action[FrameMeasurement] failed because[Can't
@@ -1096,12 +1138,24 @@ unguarded rather than by memory:
     C_UnitAuras.*                 Leatrix_Plus
     UnitAura                      Questie
     C_NamePlate.*                 used by this addon's own marking module
+    UnitCastingInfo               Details, for a unit that is not you
+    UnitChannelInfo               Details, the same
     GetActionInfo                 OPie
     EditModeManagerFrame          Titan, GetActiveLayoutInfo only
 
 The spell and aura accessors are shimmed anyway, C_Spell first with the legacy
 global as fallback for spells, legacy first for auras. If a future client drops
 one side, only the shim changes.
+
+The two cast calls are worth the long version, because vanilla answered them
+only for you and every Classic cast bar was built on a combat log estimate
+instead. Details ships that estimator, LibClassicCasterino, and its framework
+used to route both calls through it on Era. That branch is switched off in
+`Libs/DF/externals.lua` under the comment "disable this for now, as it appears
+to be working now through API changes", and what it falls back to is
+`UnitCastingInfo` and `UnitChannelInfo` unguarded. An addon deleting its own
+workaround is a stronger proof than an addon calling the API, because somebody
+went and checked.
 
 ## Traps already hit
 
@@ -1164,6 +1218,24 @@ one side, only the shim changes.
   "... Stun". A `REPLACED` table in `EnemyBars.lua` swaps a saved 12162 for
   12721 at login and inside `AddSpell`, because a saved list keeps whatever was
   in it and the panel takes a bare number.
+- A list built from a setting in both directions gives back less than it took.
+  `PlateRegions` decided which of Blizzard's nameplate regions to hide by
+  reading the settings, and the restore walk used the same function. Hide the
+  raid icon with `bars marker` on, switch the setting off, and the walk that was
+  meant to give it back no longer had it on the list: the icon stayed hidden for
+  the rest of the session, nothing said anything, and the only symptom was a
+  mob with no marker at all on either bar. The strip list may shrink with a
+  setting; the restore list may not. `PlateRegions(plate, every)` is that, and
+  `ns.Unstrip` is a no-op on a region that was never taken, so asking for all of
+  them costs a table lookup. Found while adding the cast bar to the same walk,
+  which would have had the identical bug on its first `bars cast off`.
+- A guard on the value is not a guard on the frame. The cast row wrote the
+  spell's name behind a comparison against the name already on it, and showed
+  the row on the same branch. A mob that casts Shadow Bolt, is interrupted, and
+  casts Shadow Bolt again has not changed the string, so the second cast wrote
+  nothing and the row stayed hidden: the bar you most needed was the one that
+  never came. What the row is drawing and whether the row is drawn are two
+  questions and they take two guards.
 - Anything a ticker does at 20Hz has to be incapable of raising. Two of these
   in one session hit the client's error ceiling and got the whole addon
   offered up for disabling, which is a far worse failure than the feature
@@ -1953,6 +2025,79 @@ useless, so the bar shows the nearest challenger and their name instead,
 scanned across the roster. Colour follows that number: green clear, yellow past
 70, orange past 90, red whenever the mob is on someone else, grey with no
 threat data.
+
+**The cast bar.** `grep UNIT_SPELLCAST` returned nothing across this addon
+until this row existed, and the bars replace the nameplate, so replacing it cost
+the one thing on a plate that says when to press Pummel or Shield Bash. The row
+sits under the health gauge: the spell's name on the left, the seconds left on
+the right, a fill that runs left to right for a cast and drains right to left
+for a channel.
+
+Violet, and deliberately nothing else on the bar. The gauge above it carries
+threat, which is the green through red scale, and the tag beside it carries the
+XP scale, which is those same five colours meaning something else. A cast bar in
+any of them would read as a third opinion about the mob's health. The one
+exception is a cast the client flags as uninterruptible, which is drawn in the
+idle slate: there is nothing for you to do and the colour says so.
+
+**The row is reserved and it draws nothing.** It is kept clear whether or not
+the mob is casting, because a row that appeared would shove the health bar
+upwards at the exact moment the thing you are watching starts happening, and a
+bar that moves when the fight gets interesting is a bar you have to find again.
+Empty, it hides its box, so there is no fill, no edge and no backdrop: what is
+left is air. That is the mistake the three pixel threat bar above the gauge made
+and was deleted for. `PlaceOnPlate` subtracts the reserved height from its own
+offset, so the health gauge is still the thing centred on the mob.
+
+**The fill is drawn on every frame and the rest is not.** One `OnUpdate` runs
+`EnemyBars.Sweep`, which advances the fills and nothing else, and
+`EnemyBars.Update` behind the same fifth of a second accumulator it always had.
+The argument is the swing bar's and the note at the head of `Swing/Gauges.lua`
+is the long version: a readout a fifth of a second stale is one nobody can
+fault, and a moving edge drawn at five hertz is a moving edge that steps.
+
+**Nothing is kept between frames.** `ns.CastingInfo` is a live question with a
+live answer, so the tick asks it once per bar and `Cast.lua` draws what came
+back. A model keyed by unit token would have to survive nameplate tokens being
+recycled the moment a mob dies, which is a whole class of stale bar that cannot
+happen if there is no model. The `UNIT_SPELLCAST_*` events are registered too,
+and they are worth exactly one thing: the fifth of a second between a cast
+starting and the next tick, which on a one and a half second window is an eighth
+of the reason to look. They are not what the feature rests on. A client that
+never fires one of them for a nameplate unit draws the same bar a fifth of a
+second later, which is the lesson the debuff row paid for.
+
+They are registered only while the row is on, the client answers, and the bars
+are on plates. Registered they wake the bars' frame on every cast every unit the
+client tracks starts, and in a raid that is a great many for the eight of them
+that land on a mob with a bar. In list mode the tick does the whole job: a list
+widget is found by position rather than by unit, so the lookup would be a walk
+of every bar for every cast in the zone.
+
+**Two calls, one answer.** `UnitCastingInfo` counts up and `UnitChannelInfo`
+counts down, and a unit is doing at most one of them. `ns.CastingInfo` asks for
+a cast, falls back to a channel, and hands back one shape with a flag saying
+which it was. Both open name, text, texture, start, finish, isTradeSkill, and
+then differ by one slot: a cast carries a castID and a channel does not, so
+`notInterruptible` is the eighth return of one and the seventh of the other.
+Neither slot is trusted to hold it. What comes back is type checked, and
+`ns.CastImmuneKnown` reports what has actually been seen: nil before any cast
+has been read, false once one has been read without the flag, true once one has
+carried it. "This client does not say" and "nothing has said yet" are different
+answers and only one of them is a claim.
+
+**The seconds are floored, not rounded.** Rounded, a row with 2.96 left says
+3.0, which is the one number in the addon somebody is timing a press against
+promising a tenth of a second it does not have. They are also drawn out of a
+table of strings built once per tenth ever shown: at fifteen plates in a raid, a
+plain format call is a hundred and fifty throwaway strings a second to draw
+about thirty distinct numbers, and the churn gate in the cast section of
+`scripts/harness.lua` measured 0.93 KB per two hundred frames before it and
+0.00 after.
+
+`bars cast off` takes the row away and gives Blizzard's own plate cast bar back
+in the same breath, which is what makes it a real off switch rather than a way
+to stop seeing casts.
 
 **The debuff row is a setting, not a constant.** It ships tracking Sunder Armor,
 Demoralizing Shout, Thunder Clap and Rend, and `ns.db.barsSpells` is what it
@@ -3480,6 +3625,22 @@ Aiming at a mob out of combat with no target selected is the whole test.
 ## Untested against the live client
 
 Everything below was written from the API contract and has never executed:
+
+- The whole enemy cast row. `UnitCastingInfo` and `UnitChannelInfo` answering
+  for a unit that is not you is inferred from Details deleting its own
+  LibClassicCasterino workaround on Era, which is a strong proof and is still an
+  inference. Three things follow it and none has run in the game: whether the
+  `UNIT_SPELLCAST_*` events fire for a `nameplateN` token, which of the eighth
+  and seventh returns really carries `notInterruptible` on 2.5.6 and 1.15.9, and
+  whether `plate.UnitFrame.castBar` is what these clients call the region the
+  strip walk now hides. The first two fail soft by design: the tick re-reads
+  every bar every fifth of a second whatever the events do, and a slot that
+  holds something other than a boolean is read as "this client does not say" and
+  every cast draws as one you can stop. The third does not fail soft: a region
+  the strip walk cannot find is Blizzard's cast bar still drawn under ours, and
+  it announces itself. `/wk status` reports the other two, so one login answers
+  them: whether a cast event has ever reached a bar, and what the client put in
+  the uninterruptible slot.
 
 - Whether 2.5.6 and 1.15.9 spell 12721 exactly "Deep Wound" in every locale.
   Wowhead's TBC database says "Deep Wound" for 12721 and "Deep Wounds" for the

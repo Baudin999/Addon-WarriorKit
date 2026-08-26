@@ -52,6 +52,13 @@ local HUE = {
 	-- be one red too many. Neutral is the exception worth seeing across a room.
 	blood   = { 0.55, 0.12, 0.12 },
 	warning = { 0.95, 0.75, 0.15 },
+
+	-- The cast bar's own, and it is deliberately none of the above. The gauge
+	-- over it carries threat, which is the green through red scale, and the tag
+	-- beside it carries the XP scale, which is those same five again meaning
+	-- something else. A cast bar in any of them would read as a third opinion
+	-- about the mob's health.
+	violet = { 0.62, 0.45, 0.95 },
 }
 
 Color.hue = HUE
@@ -118,6 +125,15 @@ Color.aggro = {
 	comes = HUE.blood,
 	waits = HUE.warning,
 	idle  = HUE.slate,
+}
+
+-- A cast running on something you can attack. Two states and not three: one you
+-- can stop, and one the client says you cannot. A channel wears the same two
+-- and drains from the other end, because which way the fill runs already says
+-- which it is and a third colour would be a third thing to learn.
+Color.cast = {
+	open   = HUE.violet,
+	locked = HUE.slate,
 }
 
 -- Keyed by the number UnitPowerType returns rather than by the token beside
