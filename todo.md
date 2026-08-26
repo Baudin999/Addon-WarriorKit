@@ -1,122 +1,21 @@
 # Todo
 
-Seven pieces, in this order. Each is built by one agent in its own worktree under
-`.worktrees/`, on a branch named `worktree-<name>`, and merged into main
-when `./scripts/check.sh` comes back at zero. The worktrees stay after the
-merge.
+Each piece is built by one agent in its own worktree under `.worktrees/`,
+on a branch named `worktree-<name>`, and merged into main when
+`./scripts/check.sh` comes back at zero. The worktrees stay after the merge.
 
-## 1. Weapon swing timer  [done, smooth confirmed in game]
+## Landed
 
-The addon talks about the swing and never draws it. `UI/Ability.lua:48` says
-Heroic Strike is armed and goes off on the next swing, `UI/Ability.lua:229`
-brightens the border to say so, and nothing on screen says when that swing
-lands. Arms is guesswork without it.
+The hash is the commit that put it on main. What was wrong and what fixed it is
+in `docs/CHANGELOG.md` and `docs/README.md`; this list is only the receipt.
 
-Two gauges under the player, main hand and off hand. `UI/Gauge.lua` draws
-them, `Meter/Meter.lua:54` already reads `SWING_DAMAGE` off the combat log, and
-`Unit/Color.lua` holds the palette. Reset the timer on a Slam cast, re-read
-`UnitAttackSpeed` when haste moves, and mark the window where pressing Slam
-costs no swing. That window is the point of the feature, so it is drawn rather
-than left to be read off a moving bar.
+1. Weapon swing timer. Done, smooth confirmed in game. 8be9a43
+2. Deep Wounds missing from the enemy bar debuffs. Done. 05e40ec
+3. Overpower drawn as ready when it is not. Done. dbbcd69
+4. Missing buff nag, including racials. Done, untested in game. 042df6c
+5. Enemy cast bar. Done, untested in game. 89a3e45
 
-### What was actually wrong
-
-There were two throttles on one moving edge and the first one hid the second.
-
-The first was the ticker. The fill was drawn on a 50 ms ticker whose
-accumulator reset to zero instead of subtracting the interval, so the real rate
-was 15 Hz on a 60 fps client and the real step 3.5 pixels. That was fixed and
-the bar still stepped, which is what made the first repair look wrong. It was
-not wrong; it was half.
-
-The second was the rounding, in `DrawHand` in `Swing/Gauges.lua`. The fill was
-snapped to a whole pixel before being written, and a fill snapped to a whole
-pixel can only change value as many times as the bar has pixels. At 180 pixels
-across a 3.4 second swing that is 53 times a second and no oftener, whatever
-rate the tick runs at. Deleting the ticker raised the drawn rate from 20 to 53
-and left that ceiling exactly where it was. The bar stood still on 91 of the 144
-frames a fast screen draws, and every move was a whole design unit, which is
-three screen pixels at `swing zoom 3`.
-
-Nothing was wrong with `UI/Gauge.lua`, with `bar.pixels`, with the `StatusBar`
-or with where the swing's start time comes from. The client's own cast bar is a
-`StatusBar` fed a float and it glides. The quantiser was ours.
-
-The fill is now written as a fraction, every frame, unguarded. That needed the
-addon's whole-pixel rule split into two rules rather than excused once: a static
-edge lands on a whole pixel, a moving fill is not quantised. Both are in
-`docs/README.md` under the pixel grid and both are gated in the harness.
-
-The old assertions were the wrong statements and are gone. "Never jumps more
-than one pixel between two frames" and "visits all 180 positions" are both
-satisfied by a quantised fill, which is why they passed twice against a bar that
-stepped. What is asserted now is that the drawn position equals the elapsed
-fraction exactly, that it changes on every frame at 60 fps and at 144, and that
-every step is the same size. No harness assertion can prove a bar looks smooth,
-and the README says so rather than pretending.
-
-Confirmed in game by the user: the bar is smooth. The rounding was the cause and
-removing it was the fix.
-
-The Slam mark is the half still open. It was reported as wandering once, changed
-once, and has not been looked at in game since. Nothing in the smoothness work
-touched it. Ask before assuming it is fixed.
-
-## 2. Deep Wounds is missing from the enemy bar debuffs  [merged]
-
-The debuff walk at `UnitFrames/EnemyBars.lua:552` does not show Deep Wounds.
-Find out why and fix it. The likely cause is that the bleed is attributed to a
-source the filter rejects, so the check is on what `sourceUnit` actually comes
-back as for a proc rather than on the aura's name.
-
-## 3. Overpower is drawn as ready when it is not  [merged]
-
-Overpower can only be pressed inside the few seconds after the target dodges,
-and the bars show it as ready all the time. `Buttons/Slot.lua:188` asks
-`IsUsableAction`, and this client answers yes for a reactive ability whether or
-not the window is open, so the ladder never reaches a status that says no.
-
-Watch the combat log for a dodge against your target, hold the window, and let
-the slot report it. Revenge is the same mechanism off a block, dodge or parry
-of yours, so build the window once and use it twice. Third in the order because
-it wants the same combat-log watching item 1 stands up.
-
-## 4. Missing buff nag, including racials
-
-Nothing in the addon reads your own auras. A lapsed sharpening stone costs more
-damage than most rotational mistakes, and Battle Shout falling off is silent
-today. A row of dim icons for what is missing, out of combat.
-
-Racials are in scope, and Blood Fury is the reason the feature exists. The long
-cooldowns, Death Wish and Recklessness, are timed by hand and stay out of this
-one; they are item 7.
-
-## 5. Enemy cast bar  [merged, untested in game]
-
-`grep UNIT_SPELLCAST` returns nothing across the addon. The enemy bars replace
-the nameplate, so replacing it costs the one thing that says when to Pummel or
-Shield Bash. The per-unit tick already exists in `UnitFrames/EnemyBars.lua`.
-
-Built in `UnitFrames/Cast.lua`, wired into the bar's layout and its tick, and
-gated in the harness at 60 fps and 144. `check.sh` is at zero.
-
-Three things in it were written from the API contract and have never run in the
-game. All three are in the untested list in `docs/README.md` and two of them
-answer themselves in `/wk status` on the first login:
-
-- whether `UNIT_SPELLCAST_START` fires for a `nameplateN` token. If it does not,
-  a cast shows up on the next tick instead of at once, and nothing else changes.
-- which slot really carries `notInterruptible` on each client. If neither does,
-  every cast draws as one you can stop, which is true of nearly everything a
-  warrior meets.
-- whether `plate.UnitFrame.castBar` is what these clients call the region. This
-  one does not fail soft: get it wrong and Blizzard's own cast bar is still
-  drawn under ours, which is visible in the first fight.
-
-Not in it, and worth deciding on before it is: the row says a cast is running,
-not whether *you* can stop it. Pummel's cooldown, the stance it needs and
-whether you are in range are `Buttons/Slot.lua`'s to answer, and crossing that
-boundary is a change to what the bar means rather than a detail on it.
+## Open
 
 ## 6. Party frames
 
@@ -129,3 +28,121 @@ addon already opened.
 
 Death Wish, Recklessness, Shield Wall, Last Stand, trinkets. The bars draw a
 swipe, but the cooldowns that matter are the ones not under your eyes.
+
+## 8. Link the target block to the player block
+
+### The Edit Mode boundary, which items 8 and 9 both sit on
+
+Edit Mode is not being replaced. It is demoted to one job: it positions the
+player block, and that is all it positions. Every relationship between frames
+becomes this addon's, starting with the target hanging off the player and the
+aura rows of item 9 hanging off both.
+
+That is the only division available, not a compromise. Edit Mode has no notion
+of one system anchored to another; it stores an absolute point per system and
+writes it back. Anything relational is ours by definition, and the only real
+question is how much absolute positioning is left with it. One anchor is the
+right amount. Dragging, snapping, switching layouts and storing them per
+character all keep working, and none of it has to be written here.
+
+### The link
+
+`UnitFrames/Skin.lua` fits three frames to three blocks and then leaves each
+one wherever Edit Mode parked it, so a pair that is mirrored inside each block
+sits at unmatched heights and unmatched distances apart. The two blocks should
+be one HUD.
+
+One anchor does it: the target block's top corner on the player block's other
+top corner, offset by a horizontal gap and a vertical level. Written once, out
+of combat, behind the same lockdown guard as `Place` and `Relayout`. The client
+maintains it after that, so nothing runs on a tick and nothing resyncs after a
+drag. Target of target already hangs off the target block at
+`UnitFrames/Skin.lua:1225` and follows with no new code.
+
+The mirroring makes the pair symmetric for free. The player's gauge end is its
+right edge and the target's is its left, so linking them faces the two gauges
+across the gap and turns the portraits outward.
+
+The gap is measured inner edge to inner edge, in screen pixels, snapped, like
+`/wk skin height` and `/wk skin width`. Where the pair lands on screen is still
+a fraction of a pixel nobody can read, because the player frame's origin is
+Blizzard's. That is the boundary `docs/README.md` already draws round the
+block, unchanged.
+
+Four things carry it.
+
+  Dragging the target in Edit Mode sets the offsets. A linked frame that
+  swallows your drag is a bug report. On drop, derive `gap` and `level` from
+  where it landed relative to the player block, store them, re-anchor. The
+  drag still means something and it teaches the two numbers without a slash
+  command.
+
+  Edit Mode writes its saved point back over the anchor on login and on layout
+  change, so the link re-applies on those events and after the skin's own
+  relayout. `Skin.lua` already post-hooks `AnchorSelectionFrame` for this class
+  of problem. Which event this hybrid client actually fires goes in the
+  untested list in `docs/README.md`, not in a comment claiming it works.
+
+  Off restores. The target frame's own point is recorded before the first link
+  and written back by `/wk skin link off`, without a reload, the same
+  discipline the skin applies to the frame size and `Charge/SoftTarget.lua`
+  applies to a cvar.
+
+  The link requires both frames skinned. Unskinned, `TargetFrame` is 232 by 100
+  and a gap measured off its edge means nothing. The setting says so rather
+  than drawing something wrong.
+
+    /wk skin link on|off         hang the target block off the player block
+    /wk skin gap 120             0 to 400, between the two facing edges
+    /wk skin level 0             -100 to 100, the target's drop from the player
+
+Gated in `scripts/harness.lua`: the gap equals the setting at three UI scales;
+level 0 puts both block tops on one Y; link off returns the recorded point
+exactly; a simulated Edit Mode drag re-derives the gap it was given; turning
+the link on during lockdown writes nothing and finishes at
+`PLAYER_REGEN_ENABLED`; target of target stays three pixels under the target
+block after a relink.
+
+The corridor the gap opens is the reason this is worth building and it is not
+in this item. The swing gauges and the enemy cast bar both want to live level
+with your eyes between the two blocks rather than under the player, and moving
+them there changes what the swing timer means and where you look for it. That
+is its own decision, taken after the corridor exists to look at.
+
+## 9. Our own buff and debuff rows on the skinned frames
+
+Depends on item 8, and on the same boundary.
+
+`Skin.lua` does not place the target's aura row today. It measures the lift
+Blizzard's row hangs by and sizes the target frame to block plus lift so that
+the client's own arithmetic lands the icons under the block. That trick exists
+because the row cannot be touched directly: every icon is a child of a secure
+unit button, an addon may anchor one out of combat only, and the client
+re-anchors the head of the row on every aura the target gains or loses, so
+anything placed here is back inside the gauge one refresh into the first pull.
+
+So there is one shape available. Hide the client's row and draw our own, the
+way `UnitFrames/EnemyBars.lua` already does: `C_UnitAuras.GetDebuffDataByIndex`
+with the `UnitAura` fallback at line 630, our own squares with our own border,
+crop and fonts, laid out by `ns.UI.Flow`. That code exists, it is already the
+look these frames wear, and the two rows stop being free to drift apart.
+
+The lift machinery dies with it, and that is most of the payoff. No measured
+lift, no `UNIT_AURA` handler waiting for the first target with an aura to
+settle the number, no frame fitted to block plus tail, no `SetHitRectInsets`
+pulling the mouse off a tail that no longer exists, and the target frame
+becomes the block exactly like the other two. Deleting it is part of this item,
+not a follow-up: leaving both mechanisms in place means two answers for where a
+row goes.
+
+Still to decide before it is built: whether the player's own buffs come here or
+stay with item 4's nag row, which already reads your auras and already has an
+opinion about what is missing.
+
+## 10. The Slam mark, still unconfirmed in game
+
+Carried out of item 1 rather than closed with it. The mark was reported as
+wandering once, changed once in `4ab4480`, and has not been looked at in game
+since. Nothing in the smoothness work that closed item 1 touched it, and the
+bar being smooth says nothing about where the mark sits. Ask before assuming it
+is fixed.
