@@ -151,6 +151,7 @@ The same section is why `scripts/harness.lua` has one table where it had four
 locals. That file is a single chunk sitting on Lua 5.1's two hundred local
 limit, which turns out to be a real ceiling: the allocation gates are one
 concept and are one table now, and the chat stubs bring one name between them.
+
 ### A swing timer, with the Slam press drawn on it
 
 The addon talked about the swing everywhere and never drew it. `UI/Ability.lua`
@@ -218,6 +219,36 @@ twenty-one so the off hand flag exists to be read. The swing gate went into the
 `CHURN` table with the others rather than taking a local of its own, for the
 reason the chat work gives above: that chunk is at Lua 5.1's ceiling of two
 hundred locals, and the swing gate is what it ran out on.
+
+### Deep Wounds never lit up, because the talent is not the bleed
+
+The debuff row above an enemy bar matches auras by name, and the picker offered
+12162 for Deep Wounds. 12162 is the talent. It is a hidden passive on the
+warrior, the client names it "Deep Wounds", and no mob has ever carried an aura
+by that name. What lands is 12721, and the client spells that one "Deep Wound",
+singular. One letter, no error in the log, and an arms warrior watching a square
+that could not come on.
+
+The shortlist now carries 12721. Anyone who already picked Deep Wounds keeps the
+dead ID, because the default list is read once on a fresh account and never
+again, so `EnemyBars.Repair` swaps it at login and `AddSpell` swaps it on the way
+in. Type 12162 into the panel's id field and the addon tells you Deep Wound is on
+the bar, which is the truth and is visibly not what you typed.
+
+Charge and Intercept have the same shape and were already right: 7922 and 20253
+are the applied stuns, not the abilities. The comments beside them say so now, so
+the next person to tidy the list does not "fix" them into the ability IDs.
+
+The panel note used to say to use rank 1's id since the match is by name. That is
+true for a ranked spell and false for a proc, and it is the sentence that made
+12162 look correct. It now says to use the ID of the aura that lands, and names
+both halves of the Deep Wounds pair.
+
+The harness stubs auras now instead of answering nil forever, which left the
+half of `ScanDebuffs` that lights a square up unreachable. It puts a "Deep Wound"
+bleed on a mob and asserts the slot goes to mine with the timer and the stack the
+client reported, dims for another warrior's, and goes out when it falls off. Put
+12162 back and it says the mob is bleeding and the slot reads "none".
 
 ### The addon has a face
 

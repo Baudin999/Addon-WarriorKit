@@ -1025,6 +1025,17 @@ one side, only the shim changes.
   The no argument call is what clears it. Written as
   `RegisterForDrag(unlocked and "LeftButton" or nil)` it raised on every lock,
   which meant every login.
+- The spell that applies an aura and the aura it applies are two spells with
+  two names. The debuff row matched on the name and the picker offered 12162,
+  the Deep Wounds talent, which the client happily names "Deep Wounds". What
+  lands on the mob is 12721, and the client calls it "Deep Wound". One letter,
+  no error in the log, and a square that stayed dark through every fight for
+  the life of the setting. Track the ID of the aura, never the ID of the talent
+  or the charge that grants it. Charge and Intercept have the same shape and
+  were already right: the applied stuns are 7922 and 20253, and both are named
+  "... Stun". A `REPLACED` table in `EnemyBars.lua` swaps a saved 12162 for
+  12721 at login and inside `AddSpell`, because a saved list keeps whatever was
+  in it and the panel takes a bare number.
 - Anything a ticker does at 20Hz has to be incapable of raising. Two of these
   in one session hit the client's error ceiling and got the whole addon
   offered up for disabling, which is a far worse failure than the feature
@@ -1753,6 +1764,15 @@ enough: every rank of Sunder resolves to the same string, and another warrior's
 Sunder shows up desaturated rather than missing. It is also why two IDs that
 resolve to one name are refused. They would be two identical squares lighting up
 and going out together.
+
+It is also why the ID has to be the aura's and not the applying spell's. A proc
+and a stun bolted onto a charge are two spells each, and the one Wowhead finds
+first is the talent. `SUGGESTED` carries 12721 for Deep Wounds and not 12162,
+and `REPLACED` swaps the old ID out of a saved list at login and out of anything
+typed into the panel. There is no way to ask either client whether an ID names a
+hidden passive, so nothing warns about the general case. Naming the cases we
+know is honest; guessing at the rest would put a wrong warning next to a working
+square.
 
 `EnemyBars.AddSpell` and `EnemyBars.RemoveSpell` are the only writes to that
 list. Both re-resolve the names and textures and then relayout, because a caller
@@ -2696,7 +2716,7 @@ nothing ever runs is a branch that is wrong.
     /wk bars max 8               list mode only, 1 to 15
     /wk bars width 180           a bar on a plate and in the list, 120 to 400
     /wk bars debuff              what the icon row tracks, in order
-    /wk bars debuff add 12162    a spell id, up to ten of them
+    /wk bars debuff add 12721    a spell id, up to ten of them
     /wk bars debuff remove 772   by the same id
     /wk bars debuff reset        back to the four it ships with
     /wk bars icon 20             one debuff square's edge, 16 to 32, sharp at 29
@@ -2931,6 +2951,13 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- Whether 2.5.6 and 1.15.9 spell 12721 exactly "Deep Wound" in every locale.
+  Wowhead's TBC database says "Deep Wound" for 12721 and "Deep Wounds" for the
+  12162 talent, and the scan compares the aura's name against
+  `ns.SpellName(12721)`, so both sides come off the same client and a localised
+  name matches itself. A client that shipped the bleed under another ID is the
+  only way this stays dark, and `/wk bars debuff` would then name a debuff the
+  mob does not have.
 - Whether `SWING_DAMAGE` carries the off hand flag in the twenty-first value on
   2.5.6 and 1.15.9, and `SWING_MISSED` in the second. Nothing installed here
   parses a swing. Both indices are read by number and the harness feeds both,

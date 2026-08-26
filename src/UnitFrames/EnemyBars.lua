@@ -24,12 +24,20 @@ local MAX_SPELLS = 10
 -- two clients. It is a shortlist and not a limit, because the panel also takes
 -- a bare spell ID and so does `bars debuff add`. An ID this client cannot name
 -- is dropped from the offer rather than shown as a blank row.
+--
+-- Every ID here is the ID of the aura that lands on the mob, never the ID of
+-- the spell or talent that applies it. For a ranked spell those are the same
+-- thing and rank 1 covers every rank. For a proc and for a stun bolted onto a
+-- charge they are two different spells with two different names, and the one
+-- you find first is the wrong one. Deep Wounds is the case that got shipped
+-- broken: 12162 is the talent, the picker offered it, and the square never
+-- lit up once. See REPLACED below.
 local SUGGESTED = {
 	7386,  -- Sunder Armor
 	1160,  -- Demoralizing Shout
 	6343,  -- Thunder Clap
 	772,   -- Rend
-	12162, -- Deep Wounds
+	12721, -- Deep Wound, the bleed the Deep Wounds talent applies
 	12294, -- Mortal Strike
 	1715,  -- Hamstring
 	12323, -- Piercing Howl
@@ -39,8 +47,27 @@ local SUGGESTED = {
 	676,   -- Disarm
 	12809, -- Concussion Blow
 	5246,  -- Intimidating Shout
-	7922,  -- Charge Stun
-	20253, -- Intercept
+	7922,  -- Charge Stun, not Charge
+	20253, -- Intercept Stun, not Intercept
+}
+
+-- An ID this addon offered that no aura will ever carry, and the ID that works
+-- in its place.
+--
+-- 12162 is the Deep Wounds talent. The client names it "Deep Wounds" and
+-- ns.SpellName answers happily, so nothing looked wrong: the picker showed the
+-- entry, the square drew, and it stayed dark through every fight. The aura that
+-- actually lands is 12721, and the client calls that one "Deep Wound",
+-- singular. Since the scan matches on the name, one letter was the whole bug.
+--
+-- Two doors have to be shut, not one. A saved list keeps whatever was already
+-- in it, because DEFAULT_SPELLS is read once on a fresh account and never
+-- again, so anyone who picked Deep Wounds before this fix still carries the
+-- dead ID. And a bare number goes on through the panel's text field and
+-- `bars debuff add`, where Wowhead's search for "deep wounds" still lands on
+-- the talent first. So the swap happens at login and again inside AddSpell.
+local REPLACED = {
+	[12162] = 12721, -- the Deep Wounds talent, for the Deep Wound bleed
 }
 
 local REFRESH = 0.2
@@ -309,6 +336,29 @@ function EnemyBars.Unresolved()
 	return unresolved
 end
 
+-- Swap every dead ID on the saved list for the one that works, once, at login.
+-- It runs before the first Resolve, so no name has been taken off a dead ID yet
+-- and nothing downstream has to know this happened. It edits the list and
+-- nothing else, because at login the anchor does not exist and a relayout from
+-- here would raise. Resolve is the next line in that handler.
+--
+-- A list that already carries the replacement drops the dead entry rather than
+-- keeping both. Two IDs that resolve to one name are two squares lighting up
+-- and going out together, which is exactly what AddSpell refuses to create.
+function EnemyBars.Repair()
+	local list = ns.db.barsSpells
+	for index = #list, 1, -1 do
+		local live = REPLACED[list[index]]
+		if live then
+			if EnemyBars.Slot(live) then
+				table.remove(list, index)
+			else
+				list[index] = live
+			end
+		end
+	end
+end
+
 local function Resolve()
 	local count = 0
 	wipe(unresolved)
@@ -346,6 +396,10 @@ function EnemyBars.AddSpell(spellID)
 	if not spellID or spellID <= 0 or spellID ~= math.floor(spellID) then
 		return false, "a spell id is a whole number. It is the last part of the spell's Wowhead address."
 	end
+	-- Typed the talent, got the bleed. The caller prints the name that comes
+	-- back, so the substitution says itself: you asked for Deep Wounds and the
+	-- addon tells you Deep Wound is on the bar.
+	spellID = REPLACED[spellID] or spellID
 
 	local name = ns.SpellName(spellID)
 	if not name then
@@ -1763,6 +1817,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	end
 
 	-- PLAYER_LOGIN
+	EnemyBars.Repair()
 	Resolve()
 	if #unresolved > 0 then
 		ns.Print("these ids on the debuff list are not spells this client knows, so they draw"
