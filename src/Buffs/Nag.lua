@@ -135,6 +135,14 @@ local elapsed = 0
 -- entries does not.
 local mode, mask = nil, -1
 
+-- When the racial half last came up, so the tooltip can say how long you have
+-- been sitting on a cooldown you own. Nothing in the client answers that: a
+-- spell that is ready reports a duration of zero and no end time, so the only
+-- honest source is the moment this row noticed. Recorded at the transition
+-- inside Nag.Update, which is behind the comparison and runs when the row
+-- changes rather than when it is drawn.
+local racialSince = 0
+
 local BIT = {}
 for index = 1, 32 do
 	BIT[index] = 2 ^ (index - 1)
@@ -241,19 +249,131 @@ local function Words()
 	return text
 end
 
+--------------------------------------------------------------------------
+-- What one square says to the mouse
+--
+-- The caption has to fit four squares' worth of words on one line over your
+-- character, so it says "bare weapon" and stops. That is the right length for a
+-- thing you read at a glance mid-raid and it is not enough to act on if you
+-- have never seen the row before. The tooltip is where the rest goes: what the
+-- square is about, what fixes it, and the name of the switch that silences it,
+-- so somebody tired of one square can turn it off from the square rather than
+-- reading the whole panel looking for it.
+--
+-- Buttons/Square.lua owns this shape for the action bars and this follows it.
+-- OnEnter and OnLeave, anchored to the square, and refused outright when there
+-- is nothing to say rather than left to fill itself in from whatever the
+-- tooltip was last handed, which would leave the previous square's sentence on
+-- screen pointing at this one. It is not shared with that file: every step
+-- there is about an action slot read off a secure button's attribute and handed
+-- to the client to describe, and none of the three has anything to do with a
+-- sharpening stone.
+--
+-- A square takes the mouse only while the row is locked and drawn, which is two
+-- decisions.
+--
+-- Drawn, because six of the ten squares are hidden at any moment and enabling
+-- the mouse on all ten at login would leave invisible mouse traps sitting over
+-- the middle of the screen.
+--
+-- Locked, because unlocked the row is a thing you drag. The parent frame owns
+-- that drag, and a square on top of it taking the mouse would eat the button
+-- before the drag started. That is the same trap Nag.Lock carries a note about
+-- one level up, met again one level down.
+--
+-- The row sits above the middle of the screen, which is exactly where a right
+-- button drag to turn the camera starts, and a mouse enabled frame swallows
+-- every button that lands on it. So the right and middle buttons are handed
+-- back where the client has SetPassThroughButtons. Where it does not, a right
+-- drag begun on one of these squares does not turn the camera: at most four
+-- squares of 54 pixels, only while something is missing, and only out of
+-- combat. That is the price of the tooltip and it is worth saying out loud
+-- rather than discovering.
+--------------------------------------------------------------------------
+
+local function PassCamera(w)
+	if type(w.SetPassThroughButtons) ~= "function" then
+		return
+	end
+	-- pcalled rather than trusted. Nothing installed on this machine calls it,
+	-- it arrived in 1.14.4 and 10.0 and neither target client is proven to carry
+	-- it, and a name that exists while refusing these arguments would raise once
+	-- per square at login.
+	pcall(w.SetPassThroughButtons, w, "RightButton", "MiddleButton")
+end
+
+-- The line that names the switch, which is the whole reason a tooltip on a nag
+-- square knows anything about settings.
+local function Silencer(entry)
+	if entry == racial then
+		return "Silence it with /wk buffs racial off, or from the panel."
+	end
+	if entry.word then
+		return ("Silence it with /wk buffs %s off, or from the panel. That is per"
+			.. " character."):format(entry.word)
+	end
+	return ("Take it off the row with /wk buffs remove %d, or from the panel.")
+		:format(entry.spell or 0)
+end
+
+-- What the caption could not hold.
+local function Detail(entry)
+	if entry == racial then
+		local idle = GetTime() - racialSince
+		if racialSince > 0 and idle >= 1 then
+			return ("Off cooldown for %d seconds and doing nothing there. Press it.")
+				:format(idle)
+		end
+		return "Off cooldown. Press it."
+	end
+	if entry.hint then
+		return entry.hint
+	end
+	-- One you added yourself. The client's own name for the aura is the only
+	-- thing this addon knows about it, which is the honest sentence to write.
+	return (entry.name or ("Spell " .. tostring(entry.spell)))
+		.. " is not on you. You put it on the row yourself."
+end
+
+local function Hover(w)
+	w:SetScript("OnEnter", function(self)
+		local entry = self.entry
+		if not entry or (entry.label or "") == "" then
+			return
+		end
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(entry.label, 1, 1, 1)
+		GameTooltip:AddLine(Detail(entry), 0.82, 0.82, 0.86, true)
+		GameTooltip:AddLine(Silencer(entry), 0.55, 0.72, 1, true)
+		GameTooltip:Show()
+	end)
+	w:SetScript("OnLeave", function()
+		GameTooltip:Hide()
+	end)
+	PassCamera(w)
+end
+
 local function Place()
 	Collect()
 
+	-- The preview is the row being dragged, so its squares hand the mouse back
+	-- and the parent gets the button. Every other mode is a square you can hover
+	-- and a square you cannot move.
+	local hoverable = mode ~= "preview"
 	local palette = (mode == "racial") and URGENT or MISSING
 	for slot = 1, #icons do
 		local w = icons[slot]
 		if slot <= shownCount then
 			w.palette = palette
 			w.art = shown[slot].texture
+			w.entry = shown[slot]
+			w:EnableMouse(hoverable)
 			w:ClearAllPoints()
 			w:SetPoint("TOPLEFT", frame, "TOPLEFT", (slot - 1) * (ICON + GAP) * unit, 0)
 			w:Show()
 		else
+			w.entry = nil
+			w:EnableMouse(false)
 			w:Hide()
 		end
 	end
@@ -327,6 +447,9 @@ function Nag.Update()
 	end
 
 	if want ~= mode or bits ~= mask then
+		if want == "racial" and mode ~= "racial" then
+			racialSince = GetTime()
+		end
 		mode, mask = want, bits
 		Place()
 	end
@@ -503,6 +626,9 @@ events:SetScript("OnEvent", function(_, event, token)
 		for slot = 1, ns.Upkeep.Ceiling() do
 			icons[slot] = ns.UI.Ability.New(frame, nil, nil, MISSING)
 			icons[slot]:Hide()
+			-- The scripts go on once. Whether the square answers them is
+			-- EnableMouse, written by Place every time the row changes.
+			Hover(icons[slot])
 		end
 
 		built = true

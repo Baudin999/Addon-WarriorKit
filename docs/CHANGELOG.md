@@ -2,6 +2,101 @@
 
 ## Unreleased
 
+### A nag you cannot silence is a nag you learn to ignore
+
+The report was one sentence: "I do not have a weapon enchant, and I know that's
+bad, but I do not need a permanent nag for something I cannot fix." The row had
+one master switch and no way to stop watching one thing, so a character with no
+sharpening stones got the main hand square every time they left combat, forever.
+
+That is worse than a wasted square. The row is one row. Once you have learned to
+look past the stone you have learned to look past Battle Shout, the food and
+Blood Fury sitting on your keyboard, and the whole feature is gone. One
+unfixable entry costs you the other three.
+
+So every entry has its own switch: `buffs weapon off`, `buffs offhand off`,
+`buffs shout off`, `buffs food off`, and a tick box each under a new **What it
+watches** heading on the panel. The words name the thing rather than the slot,
+with one exception. `offhand` is a hand, because for that entry the hand is the
+thing: the only rule on it is that a shield in that hand is never nagged about
+and a weapon in it is.
+
+**Off means off the list, not hidden.** A switched-off entry never reaches the
+list `Upkeep.Rebuild` builds, so the tick never asks about it, the row never
+draws it, and `Describe` never counts it. Drawing it at alpha zero would have
+cost the same four calls a tick for a square nobody can use, and testing it on
+the tick and dropping the answer is the same work with none of the answer. The
+harness asserts the entry is absent from the walked list rather than that the
+square is hidden, which is what makes both cheap versions fail rather than pass.
+
+**Per character, and this is the one scope decision in the addon taken on
+editorial grounds.** Everything else on the buffs page is a preference about the
+row itself, and how big the row is is the same answer on every character you
+own. Whether a bare weapon is worth a square is a fact about the character: a
+raiding main carries a stack of stones and wants the square, a bank alt has
+never bought one and never will. Account wide would have taken the raider's
+answer and forced it on the alt, which is the complaint that produced the
+setting, repeated one level up. It is `ns.dbc.buffWatch`, and absent means
+watched, so a fresh character carries an empty table and an entry added in a
+later release arrives switched on.
+
+**What you switched off is visible.** `/wk status` and the panel both name it,
+so the status reads `3 tracked, 1 missing; bare weapon switched off`. A nag you
+turned off six weeks ago and can find no trace of is the same defect in a new
+place: the row is quiet and you no longer know why.
+
+**The captions say what is wrong instead of which hand.** `main hand` became
+`bare weapon` and `off hand` became `bare off hand`. The old ones named the slot
+and left you to work out what about it, which on a bare icon over your character
+is no help at all. The racial half was already speaking correctly with `press
+Blood Fury`.
+
+**Hovering a square says the rest.** Two words of caption is the right length
+for something you read at a glance mid-raid and it is not enough the first time
+you see it. The tooltip carries what the caption could not: that a bare weapon
+means no stone, no oil and no imbue on the weapon you swing; that a bare off
+hand can only be a real weapon, because a shield is never nagged about; that
+Battle Shout has lapsed and any rank counts; and for the racial, which racial it
+is and how many seconds it has been sitting off cooldown. That last figure is
+the row's own record. A spell that is ready reports a duration of zero and no
+end time, so nothing in the client can answer it, and `Nag.Update` stamps the
+moment the racial half came up.
+
+The last line of every tooltip names the switch that silences that square.
+Turning one off from the square you are tired of, rather than reading a settings
+page to find which tick box it is, is most of what the switch is worth.
+
+`Buttons/Square.lua` owns this shape for the action bars and the row follows it
+rather than inventing a second way: `OnEnter` and `OnLeave`, anchored to the
+square, refused outright when there is nothing to say. It is not shared code,
+because every step in that file is about an action slot read off a secure
+button's attribute and handed to the client to describe.
+
+**One real cost, and it is worth naming rather than discovering.** A square
+takes the mouse only while the row is locked and drawn, and this row sits above
+the middle of the screen, which is where a right button drag to turn the camera
+starts. A mouse enabled frame swallows every button that lands on it. The right
+and middle buttons are handed back through `SetPassThroughButtons`, which
+arrived in 1.14.4 and 10.0 and is probed rather than trusted, so on a client
+without it a right drag begun exactly on one of these squares does not turn the
+camera: at most four squares of 54 pixels, only while something is missing, and
+only out of combat. It is in the untested list. Unlocked, the squares release
+the mouse entirely, because unlocked the row is a thing you drag and a square on
+top would eat the button first.
+
+**The spells you add yourself have no switch, and remove is why.** The four that
+ship cannot be taken off the row, so a switch is the only way to stop one. A
+spell you added is one press from gone, and gone is the better answer: it hands
+the slot back, and a flask you have stopped keeping up is not something you want
+listed in a quiet state. A switch there would turn six slots into twelve states
+with nothing on screen to tell them apart.
+
+The assertions found one bug while they were being written.
+`ns.dbc.buffWatch[key] = on and nil or false` is the short way to write the
+setter and it is wrong in Lua: `and nil` is falsy, so the `or` takes over and
+every call writes `false`. Switching an entry back on left it off. It is a
+branch now, with the reason on the line.
+
 ### The swing bar still stepped, because there were two throttles on one edge
 
 The last repair deleted a 20 Hz ticker with a broken accumulator, which was a

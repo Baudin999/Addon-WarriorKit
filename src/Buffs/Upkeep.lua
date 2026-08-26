@@ -71,13 +71,43 @@ local MAX_EXTRA = 6
 -- Two of them are hands rather than auras, and they are the reason this file
 -- exists at all. The other two are the cheapest buffs in the game to keep up
 -- and the two most often forgotten after a wipe.
+--
+-- Five fields carry the words, and they are five because they are read in five
+-- places that cannot share one string.
+--
+--   fixed    the caption under the square. It has to fit three others on one
+--            line over your character, so it is two or three words and it names
+--            what is wrong rather than where. "main hand" named the slot and
+--            left you to work out what about it, which on a bare icon is no
+--            help at all. "bare weapon" is the voice the racial half already
+--            speaks in with "press Blood Fury": it says the thing you would fix.
+--   word     what you type. `/wk buffs weapon off`.
+--   switch   the panel's tick box, which is a sentence rather than a label
+--            because every other tick box on that page is one.
+--   hint     the tooltip, which is where the detail the caption cannot hold
+--            goes: what the square is about and what fixes it.
+--   warrior  gated on class, and only Battle Shout is.
+--
+-- The slash words name the thing rather than the slot, with one deliberate
+-- exception. `weapon`, `shout` and `food` are the things. `offhand` is the hand,
+-- because for that entry the hand is the thing: the whole rule on it is that a
+-- shield in that hand is never nagged about and a weapon in it is, so the hand
+-- is what you are switching off rather than an address for something else.
 --------------------------------------------------------------------------
 
 local FIXED = {
 	-- The main hand, which is the sharpening stone, the oil or the shaman's
 	-- imbue. Nagged only while there is a weapon in the slot, because an empty
 	-- hand is a state you are in on purpose and briefly.
-	{ key = "mainhand", hand = MAIN, label = "main hand" },
+	{
+		key = "mainhand", hand = MAIN,
+		fixed = "bare weapon",
+		word = "weapon",
+		switch = "tell me about a bare weapon",
+		hint = "Nothing on the weapon you swing. A sharpening stone, a weightstone,"
+			.. " an oil or a shaman's imbue all count, and the cheapest of them is"
+			.. " still the cheapest damage in the game.",
+	},
 
 	-- The off hand, and the one entry in this file with a rule about what it
 	-- must not do. A shield takes no stone, a held-in-off-hand item takes no
@@ -85,7 +115,15 @@ local FIXED = {
 	-- answer false to OffhandHasWeapon, which is the client's own question of
 	-- "is there a weapon in that hand", so the test is that call and not
 	-- whether the slot has something in it.
-	{ key = "offhand", hand = OFF, label = "off hand" },
+	{
+		key = "offhand", hand = OFF,
+		fixed = "bare off hand",
+		word = "offhand",
+		switch = "tell me about a bare off hand",
+		hint = "Nothing on the weapon in your off hand. A shield takes no stone and"
+			.. " is never nagged about, so this square only ever means a real"
+			.. " weapon in that hand with nothing on it.",
+	},
 
 	-- Battle Shout, rank 1. Warrior only, because it is the one entry on this
 	-- list that is a class ability rather than something anybody standing in
@@ -96,14 +134,28 @@ local FIXED = {
 	-- number. Rank 3 of the same spell, 6192, is in this install's Details
 	-- saved variables off a live 2.5.6 session, so the ranked chain is real on
 	-- this client.
-	{ key = "shout", spell = 6673, warrior = true, fixed = "battle shout" },
+	{
+		key = "shout", spell = 6673, warrior = true,
+		fixed = "battle shout",
+		word = "shout",
+		switch = "tell me when Battle Shout has lapsed",
+		hint = "Battle Shout has lapsed. Any rank counts and somebody else's shout"
+			.. " counts as yours, because the attack power is on you either way.",
+	},
 
 	-- Food. Every food buff in the game lands as one aura called Well Fed, and
 	-- 19705 is the id this file asks the client to spell that phrase for. It is
 	-- Nightfin Soup's buff on Wowhead's TBC database, named exactly "Well Fed",
 	-- and which food granted it does not matter: the name is the thing being
 	-- compared and every food shares it.
-	{ key = "food", spell = 19705, fixed = "food" },
+	{
+		key = "food", spell = 19705,
+		fixed = "food",
+		word = "food",
+		switch = "tell me when I am not fed",
+		hint = "You are not Well Fed. Every food buff in the game lands as that one"
+			.. " aura, so any of them clears this square.",
+	},
 }
 
 --------------------------------------------------------------------------
@@ -154,6 +206,71 @@ end
 
 function Upkeep.Entry(index)
 	return order[index]
+end
+
+-- The four that ship, read only, so Feature.lua builds a tick box and a slash
+-- word per entry off this list instead of naming the four twice.
+function Upkeep.Fixed()
+	return FIXED
+end
+
+function Upkeep.ByWord(word)
+	for index = 1, #FIXED do
+		if FIXED[index].word == word then
+			return FIXED[index]
+		end
+	end
+	return nil
+end
+
+--------------------------------------------------------------------------
+-- What you have switched off
+--
+-- One entry at a time, and the whole of it is Rebuild's filter below. A
+-- switched-off entry is not on `order`, which means the tick never asks about
+-- it, Nag.lua never draws it, and Describe never counts it. That is what "off"
+-- has to mean: an entry drawn at alpha zero is still four calls a tick and
+-- still a square of screen nobody can use, and an entry checked and thrown away
+-- is the same work with none of the answer.
+--
+-- Absent means watched. The saved table carries only what you switched off and
+-- carries it as false, so a fresh character has an empty table, and an entry
+-- added in a later release is watched rather than silently missing because
+-- nobody's saved variables knew its name.
+--------------------------------------------------------------------------
+
+function Upkeep.Watched(key)
+	return ns.dbc.buffWatch[key] ~= false
+end
+
+function Upkeep.SetWatched(key, on)
+	-- Written as a branch and not as `on and nil or false`, which is the shorter
+	-- line and is wrong: `and nil` is falsy, so the `or` takes over and every
+	-- call writes false. Switching an entry back on would leave it off.
+	if on then
+		ns.dbc.buffWatch[key] = nil
+	else
+		ns.dbc.buffWatch[key] = false
+	end
+	Upkeep.Rebuild()
+end
+
+-- How many are switched off, and their captions in one phrase.
+--
+-- This exists so a silenced entry is visible somewhere. A nag you turned off
+-- six weeks ago and cannot find any trace of is the same defect as a nag you
+-- learned to ignore, moved one room over: the row is quiet and you no longer
+-- know why. `/wk status` and the panel both say this.
+function Upkeep.Silent()
+	local count, names = 0, ""
+	for index = 1, #FIXED do
+		local entry = FIXED[index]
+		if not Upkeep.Watched(entry.key) then
+			count = count + 1
+			names = names .. (count > 1 and ", " or "") .. entry.fixed
+		end
+	end
+	return count, names
 end
 
 --------------------------------------------------------------------------
@@ -332,7 +449,7 @@ function Upkeep.Rebuild()
 
 	for index = 1, #FIXED do
 		local entry = FIXED[index]
-		if not entry.warrior or ns.IsWarrior() then
+		if (not entry.warrior or ns.IsWarrior()) and Upkeep.Watched(entry.key) then
 			order[#order + 1] = entry
 		end
 	end
@@ -350,14 +467,14 @@ function Upkeep.Rebuild()
 		if entry.spell then
 			entry.name = ns.SpellName(entry.spell)
 			entry.texture = ns.SpellTexture(entry.spell)
-			-- A shipped entry says what it is in the caption's own words; one
-			-- you added says whatever this client calls it, because "flask" is
-			-- not a word the client would use and the spell's name is.
-			entry.label = entry.fixed or entry.name or ("spell " .. entry.spell)
 			if entry.name then
 				wanted[entry.name] = entry
 			end
 		end
+		-- A shipped entry says what it is in the caption's own words; one you
+		-- added says whatever this client calls it, because "flask" is not a
+		-- word the client would use and the spell's name is.
+		entry.label = entry.fixed or entry.name or ("spell " .. entry.spell)
 	end
 
 	Upkeep.Refit()
@@ -429,10 +546,19 @@ function Upkeep.Remove(spell)
 end
 
 -- One line for the status and the panel. Names what is missing right now, which
--- is the only thing anybody types this to find out.
+-- is the only thing anybody types this to find out, and then names what you
+-- switched off, which is the thing you would otherwise have no way of learning.
+--
+-- The counts are of the watched list alone. A switched-off entry is not tracked
+-- and is not missing, because a status line that said "4 tracked, 2 missing"
+-- about two squares you cannot see would have moved the nag off the screen and
+-- into the text rather than turned it off.
 function Upkeep.Describe()
+	local silent, names = Upkeep.Silent()
+	local tail = silent > 0 and ("; " .. names .. " switched off") or ""
+
 	if #order == 0 then
-		return "nothing tracked"
+		return "nothing tracked" .. tail
 	end
 	local missing = 0
 	for index = 1, #order do
@@ -441,7 +567,7 @@ function Upkeep.Describe()
 		end
 	end
 	if missing == 0 then
-		return ("%d tracked, all up"):format(#order)
+		return ("%d tracked, all up"):format(#order) .. tail
 	end
-	return ("%d tracked, %d missing"):format(#order, missing)
+	return ("%d tracked, %d missing"):format(#order, missing) .. tail
 end

@@ -8595,6 +8595,51 @@ do
 		return Nag.Caption():find(word, 1, true) ~= nil
 	end
 
+	-- What a tick costs, measured twice: once with an entry switched off in the
+	-- missing-buff half, and once in the racial half with the clock moving,
+	-- which is the row's only moving state. Defined up here because both halves
+	-- use it.
+	local function churnBuffs(n)
+		collectgarbage("collect")
+		collectgarbage("stop")
+		local start = collectgarbage("count")
+		for _ = 1, n do
+			advance(0.1)
+			ticker.scripts.OnUpdate(ticker, 0.2)
+		end
+		local after = collectgarbage("count")
+		collectgarbage("restart")
+		return after - start
+	end
+
+	-- What a square says to the mouse. GameTooltip is the stub's PascalCase
+	-- catch-all, so the calls are recorded here rather than read back off it,
+	-- the way the action bar section records them. Installed for the whole
+	-- section, because both halves of the row are hovered, and handed back at
+	-- the end of it.
+	local said, owned
+	local realOwner, realText, realLine, realHide =
+		GameTooltip.SetOwner, GameTooltip.SetText, GameTooltip.AddLine, GameTooltip.Hide
+	GameTooltip.SetOwner = function(_, of) owned = of end
+	GameTooltip.SetText = function(_, text) said = tostring(text) end
+	GameTooltip.AddLine = function(_, text) said = (said or "") .. "\n" .. tostring(text) end
+	GameTooltip.Hide = function() owned = nil end
+
+	-- Both scripts are looked for before either is called. A square that was
+	-- never given them answers nil here, and calling nil aborts the run with a
+	-- stack trace instead of naming what is missing.
+	local function hover(slot)
+		said, owned = nil, nil
+		local square = Nag.Icon(slot)
+		local enter = square:GetScript("OnEnter")
+		check(enter and square:GetScript("OnLeave"),
+			"a nag square has no hover scripts, so it can never say what it means")
+		if enter then
+			enter(square)
+		end
+		return said or "", owned
+	end
+
 	----------------------------------------------------------------------
 	-- Which shape this client answers in
 	----------------------------------------------------------------------
@@ -8617,11 +8662,11 @@ do
 	tick()
 
 	check(Nag.Mode() == "upkeep", "a bare weapon out of combat drew nothing")
-	check(says("main hand"), "a bare main hand was not nagged about")
+	check(says("bare weapon"), "a bare main hand was not nagged about")
 
 	own.main, own.mainLeft = true, 1500 * 1000
 	tick()
-	check(not says("main hand"), "a sharpened weapon was nagged about anyway")
+	check(not says("bare weapon"), "a sharpened weapon was nagged about anyway")
 	check(math.floor(Upkeep.Left(ns.Gear.MAINHAND)) == 1500,
 		"the main hand's remaining time did not come back in seconds")
 
@@ -8633,7 +8678,7 @@ do
 	swing.off = nil -- OffhandHasWeapon is false for a shield, which is the rule
 	fire("PLAYER_EQUIPMENT_CHANGED")
 	tick()
-	check(not says("off hand"), "a shield was nagged about")
+	check(not says("bare off hand"), "a shield was nagged about")
 
 	-- A real weapon in that hand with nothing on it, read on the eight value
 	-- shape, where a guessed stride of three would find the main hand's enchant
@@ -8641,25 +8686,186 @@ do
 	swing.off = 1.8
 	fire("PLAYER_EQUIPMENT_CHANGED")
 	tick()
-	check(says("off hand"),
+	check(says("bare off hand"),
 		"a bare off hand was not nagged about, which is the stride read wrongly")
 
 	own.off, own.offLeft = true, 900 * 1000
 	tick()
-	check(not says("off hand"), "a sharpened off hand was nagged about anyway")
+	check(not says("bare off hand"), "a sharpened off hand was nagged about anyway")
 
 	-- And again on the six value shape, so neither branch of the decode is only
 	-- ever run one way round.
 	own.wide = false
 	own.off = false
 	tick()
-	check(says("off hand"), "the six value shape lost the off hand")
+	check(says("bare off hand"), "the six value shape lost the off hand")
 	own.wide = true
 	own.off = true
 	tick()
 
-	swing.off, swing.offhand = nil, nil
+	----------------------------------------------------------------------
+	-- Switching one entry off
+	--
+	-- The request this section exists for: a character with no sharpening stones
+	-- does not need to be told about the main hand every time it leaves combat.
+	--
+	-- Driven with both hands bare, because the failure worth catching is not
+	-- that the switch works, it is that it works on one entry. A filter written
+	-- against the wrong index, or a row that hides the square without taking the
+	-- entry off the list, silences the neighbour too and looks fine in a
+	-- screenshot of a character who is only missing one thing.
+	----------------------------------------------------------------------
+
+	swing.offhand = _G.WarriorKitItemLink("Thrash Blade")
+	swing.off = 1.8
+	own.main, own.mainLeft = false, 0
+	own.off, own.offLeft = false, 0
 	fire("PLAYER_EQUIPMENT_CHANGED")
+	tick()
+	check(says("bare weapon") and says("bare off hand"),
+		"both hands are bare and the row does not say so: " .. Nag.Caption())
+
+	local watched = Upkeep.Count()
+	Upkeep.SetWatched("mainhand", false)
+	Nag.Apply()
+	tick()
+	check(not says("bare weapon"), "switching the main hand off left it on the row")
+	check(says("bare off hand"), "switching the main hand off took the off hand with it")
+	check(Upkeep.Count() == watched - 1,
+		("%d entries are watched with one switched off, and %d were before")
+			:format(Upkeep.Count(), watched))
+
+	-- Off the list the tick walks, not drawn at nothing and not checked and
+	-- thrown away. This is the assertion that makes "off" mean off: a square at
+	-- alpha zero would pass every check above it and still cost four calls a
+	-- tick and a square of screen nobody can use.
+	local walked = false
+	for index = 1, Upkeep.Count() do
+		if Upkeep.Entry(index).key == "mainhand" then
+			walked = true
+		end
+	end
+	check(not walked,
+		"a switched off entry is still on the list the tick walks, so it is being"
+			.. " asked about and the answer thrown away")
+
+	-- Not counted anywhere either, and said out loud. A status line reporting
+	-- squares you cannot see has moved the nag rather than turned it off.
+	local counted = 0
+	for index = 1, Upkeep.Count() do
+		if Upkeep.Missing(index) then
+			counted = counted + 1
+		end
+	end
+	check(Nag.Shown() == counted,
+		("%d squares are drawn and %d entries are missing"):format(Nag.Shown(), counted))
+	check(Upkeep.Describe():find(("%d tracked, %d missing")
+		:format(Upkeep.Count(), counted), 1, true) ~= nil,
+		"the status line counts entries the row does not: " .. Upkeep.Describe())
+	check(Upkeep.Describe():find("bare weapon switched off", 1, true) ~= nil,
+		"nothing anywhere says what was switched off: " .. Upkeep.Describe())
+	check(Nag.Describe():find("bare weapon switched off", 1, true) ~= nil,
+		"/wk status does not carry it: " .. Nag.Describe())
+
+	-- And it costs nothing. The gate is the same figure the racial half is held
+	-- to, because a filter that rebuilt the watched list once a tick would be
+	-- the obvious way to write this and would show up here rather than in a
+	-- stutter somebody reports six weeks later.
+	churnBuffs(50)
+	local silentChurn = churnBuffs(50)
+	check(silentChurn <= CHURN.buffs,
+		("the row allocated %.2f KB over 50 ticks with an entry switched off, gate is %.2f")
+			:format(silentChurn, CHURN.buffs))
+
+	----------------------------------------------------------------------
+	-- Where the switch lives
+	--
+	-- This character's saved variables and not the account's, which is the whole
+	-- argument for the setting: a bank alt that will never own a sharpening
+	-- stone and a raiding main that always does want opposite answers, and one
+	-- account-wide key would give them the same one.
+	----------------------------------------------------------------------
+
+	check(ns.dbc.buffWatch ~= nil, "the switch list is not in the character table")
+	check(ns.db.buffWatch == nil, "the switch list is in the account table")
+	check(ns.dbc == _G.WarriorKitCharDB,
+		"the table the switch lands in is not the one the TOC saves per character")
+	check(_G.WarriorKitCharDB.buffWatch.mainhand == false,
+		"switching an entry off never reached the saved variables")
+
+	-- The round trip. What the client writes at logout is that table and what it
+	-- hands back at login is the same table with Core's defaults backfilled into
+	-- whatever is absent, so a reload is modelled by handing the list back as a
+	-- fresh copy of what was saved. Anything cached outside the saved table
+	-- fails here.
+	local reloaded = {}
+	for key, value in pairs(_G.WarriorKitCharDB.buffWatch) do
+		reloaded[key] = value
+	end
+	ns.dbc.buffWatch = reloaded
+	Upkeep.Rebuild()
+	Nag.Apply()
+	tick()
+	check(not Upkeep.Watched("mainhand"),
+		"the switch did not survive the round trip through saved variables")
+	check(not says("bare weapon"),
+		"a reload put the entry that was switched off back on the row")
+
+	----------------------------------------------------------------------
+	-- What a square says to the mouse
+	--
+	-- The caption is two words and the tooltip is where the rest goes: what the
+	-- square is about, and the name of the switch that silences it, so somebody
+	-- tired of one square can turn it off from the square.
+	----------------------------------------------------------------------
+
+	local hoverText, hoverOwner = hover(1)
+	check(hoverOwner == Nag.Icon(1), "the tooltip is not anchored to the square you hovered")
+	check(hoverText:find("bare off hand", 1, true) ~= nil,
+		"the tooltip does not name the square it is on: " .. hoverText)
+	check(hoverText:find("shield", 1, true) ~= nil,
+		"the tooltip does not carry what the caption could not: " .. hoverText)
+	check(hoverText:find("/wk buffs offhand off", 1, true) ~= nil,
+		"the tooltip does not name the switch that silences the square: " .. hoverText)
+
+	local leave = Nag.Icon(1):GetScript("OnLeave")
+	if leave then
+		leave(Nag.Icon(1))
+	end
+	check(owned == nil, "the tooltip stays up after the cursor has left the square")
+
+	-- Mouse only while the row is locked and drawn. A hidden square that still
+	-- took the mouse would be an invisible trap over the middle of the screen,
+	-- and a square that took it while the row was unlocked would eat the drag
+	-- that moves the row.
+	check(Nag.Icon(1).mouse == true, "a drawn square does not take the mouse, so it never hovers")
+	check(Nag.Icon(Upkeep.Ceiling()).mouse == false,
+		"a hidden square takes the mouse, which is an invisible trap over the world")
+	ns.db.locked = false
+	Nag.Lock()
+	tick()
+	check(Nag.Mode() == "preview", "unlocking did not put the row into preview")
+	check(Nag.Icon(1).mouse == false,
+		"a square eats the mouse while the row is unlocked, so the row cannot be dragged")
+	ns.db.locked = true
+	Nag.Lock()
+	tick()
+
+	-- Back on, so nothing below this inherits a silenced main hand.
+	Upkeep.SetWatched("mainhand", true)
+	Nag.Apply()
+	tick()
+	check(says("bare weapon"), "switching the entry back on did not put it back")
+	check(_G.WarriorKitCharDB.buffWatch.mainhand == nil,
+		"switching an entry back on left a key behind in the saved variables")
+	check(select(1, Upkeep.Silent()) == 0,
+		"the status line still reports something switched off")
+
+	own.main, own.mainLeft = true, 1500 * 1000
+	swing.off, swing.offhand = nil, nil
+	own.off, own.offLeft = true, 900 * 1000
+	fire("PLAYER_EQUIPMENT_CHANGED")
+	tick()
 
 	----------------------------------------------------------------------
 	-- Battle Shout, which is the one entry gated on class
@@ -8727,8 +8933,21 @@ do
 	check(Nag.Shown() == 1, "the racial half drew more than one square")
 	check(Nag.Caption() == "press Blood Fury",
 		"the caption read " .. Nag.Caption())
-	check(not says("main hand"),
+	check(not says("bare weapon"),
 		"a missing stone shouted in combat, where you cannot do anything about it")
+
+	-- The racial square's own tooltip. It says which racial, how long it has
+	-- been sitting there, and how to switch the half off. The elapsed figure is
+	-- this row's own record: a spell that is ready reports a duration of zero
+	-- and no end time, so nothing in the client can answer it.
+	advance(12)
+	local racialText = hover(1)
+	check(racialText:find("Blood Fury", 1, true) ~= nil,
+		"the racial tooltip does not name the racial: " .. racialText)
+	check(racialText:find("12 seconds", 1, true) ~= nil,
+		"the racial tooltip does not say how long it has been ready: " .. racialText)
+	check(racialText:find("/wk buffs racial off", 1, true) ~= nil,
+		"the racial tooltip does not name the switch: " .. racialText)
 
 	-- Pressed. The cooldown is the only thing that says so and it is what takes
 	-- the square off the screen.
@@ -8775,19 +8994,6 @@ do
 	-- moving state. Standing still it writes nothing at all, and a gate on that
 	-- figure would be a gate on the guards rather than on the tick.
 	----------------------------------------------------------------------
-
-	local function churnBuffs(n)
-		collectgarbage("collect")
-		collectgarbage("stop")
-		local start = collectgarbage("count")
-		for _ = 1, n do
-			advance(0.1)
-			ticker.scripts.OnUpdate(ticker, 0.2)
-		end
-		local after = collectgarbage("count")
-		collectgarbage("restart")
-		return after - start
-	end
 
 	churnBuffs(50)
 	local churned = churnBuffs(50)
@@ -8911,6 +9117,9 @@ do
 	ns.db.buffZoom = shipped
 	Nag.Apply()
 	tick()
+
+	GameTooltip.SetOwner, GameTooltip.SetText, GameTooltip.AddLine, GameTooltip.Hide =
+		realOwner, realText, realLine, realHide
 
 	-- Left drawn on purpose. The anchor sweep at the end of this file walks
 	-- every frame on the grid, and a row that had put itself away would be a row

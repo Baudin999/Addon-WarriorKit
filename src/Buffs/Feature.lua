@@ -88,6 +88,25 @@ local function BuffWord(arg)
 		return
 	end
 
+	-- One switch per watched entry, driven off the list itself so the four words
+	-- and the four tick boxes on the panel cannot drift apart. Last of the named
+	-- words and ahead of the bare on|off, because an unknown word has to reach
+	-- the toggle the way it always did.
+	local entry = ns.Upkeep.ByWord(option)
+	if entry then
+		if entry.warrior and not ns.IsWarrior() then
+			ns.Print(entry.fixed .. " is on the row for a warrior and nowhere else,"
+				.. " so there is nothing here to switch off.")
+			return
+		end
+		ns.Upkeep.SetWatched(entry.key, ns.Command.Toggle(value))
+		ns.BuffNag.Apply()
+		ns.Print(entry.fixed .. (ns.Upkeep.Watched(entry.key)
+			and " is watched again on this character."
+			or " is switched off on this character."))
+		return
+	end
+
 	SetBuffs(ns.Command.Toggle(option))
 	ns.Print("buff nag " .. (ns.db.buffs and "on" or "off") .. ".")
 end
@@ -196,12 +215,38 @@ ns.Register({
 		buffExtra = {},
 	},
 
+	-- Which entries this character still watches, keyed by the entry's own key
+	-- and holding false for each one you switched off. Absent means watched, so
+	-- a fresh character carries an empty table.
+	--
+	-- Per character, and it is the only buff setting that is. Everything in
+	-- `defaults` above is a preference about the row itself: how big it is,
+	-- whether it breathes, whether it draws in an inn. Those are the same answer
+	-- on every character you own and they belong to the account.
+	--
+	-- Whether a missing sharpening stone is worth telling you about is not a
+	-- preference. It is a fact about the character, and it differs between two
+	-- characters on the same account more sharply than almost anything else this
+	-- addon stores. A raiding main carries a stack of stones and wants the
+	-- square. A bank alt has never bought one, is never going to, and is shown a
+	-- red square over its head every time it leaves combat for a thing it cannot
+	-- fix. That is the exact failure this setting exists to end, so putting the
+	-- answer in ns.db would end it for one of those two characters and repeat it
+	-- for the other.
+	--
+	-- The migration is free. Core moves a key that changes scope out of the
+	-- account table once at ADDON_LOADED, and this key has never been in it.
+	charDefaults = {
+		buffWatch = {},
+	},
+
 	words = {
 		buffs = BuffWord,
 	},
 
 	help = {
 		"buffs on|off, the row of what is missing",
+		"buffs weapon|offhand|shout|food on|off, one entry at a time",
 		"buffs racial on|off, the racial you have not pressed",
 		"buffs pulse on|off, resting on|off, zoom 1 to 3",
 		"buffs list, buffs add|remove <spell id>, your own flask and elixirs",
@@ -271,6 +316,51 @@ ns.Register({
 			return "Battle Shout is matched by name, so rank 1 covers all eight and"
 				.. " somebody else's shout counts as yours, which is the truth: the"
 				.. " attack power is on you either way."
+		end)
+
+		ui.Header("What it watches")
+
+		ui.Note(function()
+			return "One switch each, because a nag you cannot silence is a nag you learn"
+				.. " to ignore, and once you are ignoring the row you are ignoring the"
+				.. " parts of it that were useful. Switch one off and it is not watched,"
+				.. " not drawn and not counted."
+		end)
+
+		-- Built from Upkeep's own list rather than from four literals here, so a
+		-- fifth entry would arrive with its switch already on the page. Battle
+		-- Shout is skipped on anyone who cannot cast it, which is the same call
+		-- the Charge page makes: a tick box that writes a setting nothing reads
+		-- is worse than the sentence saying why it is absent.
+		for index = 1, #ns.Upkeep.Fixed() do
+			local entry = ns.Upkeep.Fixed()[index]
+			if not entry.warrior or ns.IsWarrior() then
+				ui.Check(entry.switch,
+					function() return ns.Upkeep.Watched(entry.key) end,
+					function(value)
+						ns.Upkeep.SetWatched(entry.key, value)
+						ns.BuffNag.Apply()
+					end)
+			end
+		end
+
+		ui.Note(function()
+			local silent, names = ns.Upkeep.Silent()
+			if silent == 0 then
+				return "Nothing switched off. The row is watching all of it."
+			end
+			return ("|cffd08040Switched off on this character: %s.|r Nothing on that list"
+				.. " is drawn and nothing on it is counted, so /wk status says the same"
+				.. " sentence rather than reporting squares you cannot see."):format(names)
+		end)
+
+		ui.Note(function()
+			return "These four are per character. Every other setting on this page is the"
+				.. " account's, because how big the row is and whether it breathes are"
+				.. " the same answer on every character you own. Whether a bare weapon is"
+				.. " worth a square is not: a raiding main carries stones and a bank alt"
+				.. " has never bought one, and account wide would make one of those two"
+				.. " answers wrong."
 		end)
 
 		ui.Header("Racials")
@@ -358,6 +448,13 @@ ns.Register({
 				.. " list is the honest version of that."
 		end)
 
+		-- No switch on these, and that is a decision rather than an omission.
+		-- The four above cannot be taken off the row, so the only way to stop
+		-- one is a switch. A spell you added is one you can remove in a press,
+		-- and remove is a better answer than off: it hands the slot back, and a
+		-- flask you have stopped keeping up is not a thing you want listed in a
+		-- quiet state, it is a thing you want gone. A switch here would turn six
+		-- slots into twelve states with nothing on screen to tell them apart.
 		for slot = 1, ns.Upkeep.MaxExtra() do
 			ExtraRow(ui, slot)
 		end
