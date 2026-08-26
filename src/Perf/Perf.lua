@@ -38,7 +38,7 @@ local SAMPLE_RATE = 1.0
 
 -- Declared here, in the order they are shown, because a table built per frame is
 -- the thing this file exists to catch.
-local ORDER = { "marker", "icon", "action", "bars", "skin", "meter" }
+local ORDER = { "marker", "swing", "icon", "action", "bars", "skin", "meter" }
 local slots = {}
 local gauges, gaugeOrder = {}, {}
 

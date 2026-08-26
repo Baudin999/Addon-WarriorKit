@@ -31,6 +31,20 @@
 -- CVar is never written. A decision taken at login cannot be reached by
 -- flipping the class afterwards, so the only way to test it is to come up as
 -- something else, and check.sh does both runs.
+--
+-- Late sections are wrapped in `do ... end`, and that is load bearing rather
+-- than decoration. Lua 5.1 gives one function two hundred locals and this file
+-- is a single chunk, so every name a section declares stays live for the rest
+-- of the run and the file stops loading at all once the count is reached. The
+-- error is `main function has more than 200 local variables` and it is not a
+-- test failure, it is the whole harness refusing to start.
+--
+-- Two features merged in the same week each freed one name and each thought
+-- that was the fix. Neither was. A `do ... end` around a section hands every
+-- name in it back at the `end`, which is the fix that keeps working as the
+-- file grows. Wrap a new section in one unless something after it reads a name
+-- the section declares, and prefer moving that shared name to the top of the
+-- file over leaving the section unwrapped.
 
 local SCREEN_H = 1440 -- a height that is not 768, which is the whole point
 local UI_SCALE = 0.65
@@ -39,6 +53,27 @@ local UI_SCALE = 0.65
 -- installed long before that line runs.
 local PLAYER_CLASS = arg[2] or "WARRIOR"
 local WARRIOR = PLAYER_CLASS == "WARRIOR"
+
+-- Every allocation gate in this file, in one table.
+--
+-- One table rather than one local each because this chunk sits at Lua 5.1's
+-- ceiling of two hundred locals in a function, and the fifth gate is what it
+-- ran out on. Anything added here from now on is a key rather than a local.
+-- Folding names into a table buys single figures, which is a stay of execution.
+-- Scoping sections in `do ... end` is what actually pays, and the header says
+-- how.
+--
+-- All five are ratchets rather than ceilings. Each sits just above what the
+-- measurement reads today, and the next improvement lowers it in the same
+-- commit. None of them is zero, because a gate of zero is a claim that a
+-- sampled figure can never move.
+local CHURN = {
+	list = 0.05,
+	skin = 0.5,
+	meter = 0.2,
+	bars = 0.05,
+	swing = 0.05,
+}
 
 -- The bars' steady state, in KB per fifty ticks with two bars up, covering the
 -- plate path and the list path both.
@@ -57,6 +92,7 @@ local WARRIOR = PLAYER_CLASS == "WARRIOR"
 --
 -- The gate is 0.05 rather than 0.00 because a gate of zero is a claim the
 -- measurement can never move, and this one is a sampled figure.
+
 -- The skin's tick, in KB per fifty ticks across all three unit frames. Same
 -- kind of ratchet. It was 18.75 while the level tag was built and then compared
 -- on every tick, which is a tostring and a concat per frame to say a number
@@ -98,12 +134,16 @@ local WARRIOR = PLAYER_CLASS == "WARRIOR"
 -- and eighty throwaway tables a second, which is the number this gate exists to
 -- refuse.
 
--- All four in one table rather than one local each. They are one concept and
--- they are all quoted in the same unit, and this file is a single chunk sitting
--- on Lua 5.1's two hundred local limit, which is a real ceiling rather than a
--- style preference: the next part that needs a name at this level cannot have
--- one until something gives one up.
-local CHURN = { list = 0.05, skin = 0.5, meter = 0.2, bars = 0.05 }
+-- The swing timer's tick, in KB per fifty ticks with both hands running and the
+-- Slam band drawn, at twenty ticks a second, which is the fastest thing in the
+-- addon.
+--
+-- Nothing on that path builds anything. The fill is an integer compared against
+-- the integer already on the bar, the band is placed only when one of its two
+-- pixel edges moves, and ns.Slam.Window hands back three numbers rather than a
+-- table. It measures 0.03 and the gate is 0.05, and what is left is the flip
+-- itself: the gauge repaints its fill, its spent track and its four edges twice
+-- a swing, on the two ticks the window opens and closes on.
 
 --------------------------------------------------------------------------
 -- The stub
@@ -755,11 +795,17 @@ _G.RAID_CLASS_COLORS = {
 -- Every id names a spell except the block above 900000, which names none. The
 -- debuff list has a path for an id this client does not know and a stub that
 -- answered every number would leave that path unreachable.
+--
+-- The fourth return is the cast time in milliseconds, which is what
+-- ns.SpellCastTime reads and what the Slam window is built on. Empty here and
+-- filled by the swing section, so every other spell in this file stays the
+-- instant it was.
+_G.WarriorKitSpellCast = {}
 _G.GetSpellInfo = function(id)
 	if type(id) == "number" and id >= 900000 then
 		return nil
 	end
-	return "Spell" .. id, nil, "Interface\\Icons\\A" .. id
+	return "Spell" .. id, nil, "Interface\\Icons\\A" .. id, _G.WarriorKitSpellCast[id]
 end
 _G.GetSpellTexture = function(id) return "Interface\\Icons\\A" .. id end
 _G.GetSpellCooldown = function() return 0, 0 end
@@ -838,7 +884,78 @@ local function itemLink(name)
 end
 _G.WarriorKitItemLink = itemLink
 
-_G.GetInventoryItemLink = constant(nil)
+--------------------------------------------------------------------------
+-- The hands, and how fast they swing
+--
+-- Everything the swing timer is built on, in one table the tests move rather
+-- than four stubs they replace. All of it is read through a local the module
+-- took at load, which is why it is declared here and never swapped out.
+--
+-- The two hands start empty, because most of this file is written against a
+-- character carrying nothing: the gear scan counts what is in the bags and a
+-- weapon appearing in a slot would move numbers three sections away. The swing
+-- section equips one, drives the timer and takes it off again.
+--------------------------------------------------------------------------
+
+local swing = {
+	main = 3.4,   -- a slow two hander, which is the weapon Slam is pressed with
+	off = nil,    -- nothing in the off hand until a test puts one there
+	mainhand = nil, -- the link slot 16 answers with
+	offhand = nil,  -- and slot 17
+	talent = 0,   -- points in the talent whose name contains Slam's
+	cast = nil,   -- a cast in flight, as start and stop in milliseconds
+}
+_G.WarriorKitSwing = swing
+
+_G.GetInventoryItemLink = function(unit, slot)
+	if unit ~= "player" then
+		return nil
+	end
+	if slot == 16 then
+		return swing.mainhand
+	end
+	if slot == 17 then
+		return swing.offhand
+	end
+	return nil
+end
+
+-- Two returns, and the second is nil with an empty off hand or a shield in it,
+-- which is the answer the client gives and the one the addon branches on.
+_G.UnitAttackSpeed = function(unit)
+	if unit ~= "player" then
+		return nil, nil
+	end
+	return swing.main, swing.off
+end
+_G.OffhandHasWeapon = function()
+	return swing.off ~= nil
+end
+
+-- The talent trees, read by index rather than by tab name. Meter/Spec.lua uses
+-- GetTalentTabInfo and this is the other call on the same data, so the two do
+-- not collide.
+--
+-- Tab 1 slot 2 is the talent the Slam window's estimate looks for, and its name
+-- carries the spell's own name inside it, which is the rule the addon matches
+-- on. Every other slot is a talent that does not, so a matcher that took the
+-- first talent it found would fail here rather than pass by luck.
+_G.GetNumTalents = function() return 3 end
+_G.GetTalentInfo = function(tab, index)
+	if tab == 1 and index == 2 then
+		return "Improved Spell1464", "Interface\\Icons\\Slam", 4, 1, swing.talent, 5
+	end
+	return ("Talent%d%d"):format(tab, index), "Interface\\Icons\\T", 1, 1, 0, 5
+end
+
+-- A cast in flight, in the client's own milliseconds. Nil is nothing being
+-- cast, which is every moment except the one a test opens.
+_G.UnitCastingInfo = function(unit)
+	if unit ~= "player" or not swing.cast then
+		return nil
+	end
+	return swing.cast.name, swing.cast.name, nil, swing.cast.start, swing.cast.stop
+end
 -- Quality is the third value and the sell price the eleventh, which is the
 -- order ns.ItemValue reads them in. Answering nil for a name this stub does not
 -- carry is the client's "not cached yet", and the vendor sweep has to treat
@@ -1393,15 +1510,20 @@ _G.UISpecialFrames, _G.SlashCmdList, _G.Enum = {}, {}, {}
 -- module took at load, so all four are declared here, before the addon runs,
 -- and a test moves the data under them rather than replacing the function.
 --
--- The log is modelled as the sixteen values the client hands over, because the
--- addon reads five of them out of fixed positions and the positions are the
--- whole contract: a stub that answered a named table would let a parser that
--- reads the wrong slot pass.
+-- The log is modelled as the twenty-one values the client hands over, because
+-- the addon reads seven of them out of fixed positions and the positions are
+-- the whole contract: a stub that answered a named table would let a parser
+-- that reads the wrong slot pass.
+--
+-- Twenty-one rather than sixteen because of the off hand flag. It is the last
+-- value of SWING_DAMAGE and the second of SWING_MISSED, which is the same fact
+-- in two places, and a stub that stopped at sixteen would let a swing timer
+-- that never saw an off hand swing pass.
 --------------------------------------------------------------------------
 
 local logArgs = {}
 _G.CombatLogGetCurrentEventInfo = function()
-	return unpack(logArgs, 1, 16)
+	return unpack(logArgs, 1, 21)
 end
 
 -- Three trees per character, points and an icon each. Two shapes, because
@@ -1545,6 +1667,9 @@ _G.C_Club = {
 _G.C_VoiceChat = {
 	IsEnabled = function() return chat.voice.enabled end,
 	IsLoggedIn = function() return chat.voice.loggedIn end,
+	Login = function()
+		chat.voice.calls[#chat.voice.calls + 1] = { what = "login" }
+	end,
 	GetChannelForChannelType = function(channelType)
 		return chat.voice.channels[channelType]
 	end,
@@ -4321,6 +4446,7 @@ check(healTick(0) == 0, "the slice stayed up after the heal it predicted landed"
 print(("heals  gauge %d px, 1800 of 9000 draws %d px, an overheal clamps to %d px")
 	:format(railPixels, fits, capped))
 
+do
 --------------------------------------------------------------------------
 -- The aura row
 --
@@ -4382,6 +4508,7 @@ check((playerBottom or 0) == 0,
 print(("auras  the client lifts the row %d units, the target frame is the block"
 	.. " plus that and takes no clicks in it"):format(AURA_LIFT))
 
+end
 --------------------------------------------------------------------------
 -- The fit, off and back on
 --
@@ -4998,6 +5125,7 @@ do
 	end
 end
 
+do
 --------------------------------------------------------------------------
 -- Loadouts
 --
@@ -5112,6 +5240,7 @@ end
 print(("loadout %d of %d rows, %d secure buttons, defensive sends %d characters")
 	:format(ns.Loadouts.Count(), ns.Loadouts.MAX, ns.Loadouts.MAX, #LoadoutMacro(DEFENSIVE)))
 
+end
 --------------------------------------------------------------------------
 -- Which class this is
 --
@@ -5198,6 +5327,7 @@ do
 			page and #page.sections or 0, (page and #page.sections == 1) and "" or "s"))
 end
 
+do
 --------------------------------------------------------------------------
 -- The three chores
 --
@@ -5660,6 +5790,8 @@ do
 			ns.Camera.Describe(), ns.Errors.Describe(), drewCount()))
 end
 
+end
+do
 --------------------------------------------------------------------------
 -- The minimap
 --
@@ -5935,6 +6067,8 @@ do
 			ns.Corral.Count(), select("#", map:GetChildren())))
 end
 
+end
+do
 --------------------------------------------------------------------------
 -- The clutter window
 --
@@ -6095,6 +6229,8 @@ do
 		:format(#found, #QUESTBAG, #destroyed, 3))
 end
 
+end
+do
 --------------------------------------------------------------------------
 -- The meters
 --
@@ -6276,17 +6412,17 @@ do
 	-- slot 16 pass.
 	----------------------------------------------------------------------
 
-	local function log(subevent, source, dest, swing, amount, wasted)
-		for index = 1, 16 do
+	local function log(subevent, source, dest, white, amount, wasted)
+		for index = 1, 21 do
 			logArgs[index] = nil
 		end
 		logArgs[1] = GetTime()
 		logArgs[2] = subevent
 		logArgs[4] = source
 		logArgs[8] = dest
-		logArgs[12] = swing
+		logArgs[12] = white
 		logArgs[15] = amount
-		if swing then
+		if white then
 			logArgs[13] = wasted
 		else
 			logArgs[16] = wasted
@@ -6701,6 +6837,434 @@ do
 	fire("GROUP_ROSTER_UPDATE")
 end
 
+end
+do
+--------------------------------------------------------------------------
+-- The swing timer
+--
+-- Five questions, and only the last of them is about drawing.
+--
+-- Does the log start the right hand. The off hand flag is the twenty-first
+-- value of SWING_DAMAGE and the second of SWING_MISSED, and reading the wrong
+-- slot gives an off hand bar that never runs and a main hand bar that runs at
+-- twice the speed. That looks like a haste bug and is a parser bug, which is
+-- why it is asserted from both subevents and from a stranger's swing as well
+-- as from the player's.
+--
+-- Does the swing come off the weapon. UnitAttackSpeed is the only source and
+-- a swap has to move it, so the speed is changed under a running timer and the
+-- bar is measured again.
+--
+-- Does haste scale what is left rather than restart it. Flurry landing halfway
+-- through a swing leaves you halfway through a shorter swing, and a timer that
+-- kept the elapsed instead would jump backwards every time it landed. This is
+-- the single thing a warrior's swing timer has to get right and it is one line
+-- of arithmetic, which is exactly the kind of line that gets rewritten wrong.
+--
+-- Does the Slam band land where the arithmetic says. The band is the whole
+-- feature: a cast of C seconds against a swing of D belongs at (D - C) over D
+-- of the bar, in whole pixels, and a band drawn a pixel off is a press that
+-- clips. It is asserted as pixels rather than as a fraction, because pixels
+-- are what the eye is aiming at.
+--
+-- And does the tick stay free. Twenty times a second is the fastest thing in
+-- this addon, so the bar is quantised to whole pixels and every write is
+-- guarded on the integer it would draw.
+--------------------------------------------------------------------------
+
+do
+	local swingTicker
+	for _, f in ipairs(frames) do
+		if f.scripts.OnUpdate and f.origin:match("Swing/Gauges") then
+			swingTicker = f
+		end
+	end
+	check(swingTicker ~= nil, "the swing timer registered no ticker")
+
+	local ME = "Player-0-0000000f"
+	local SOMEBODY = "Player-0-0000001f"
+	local SLAM = 1464
+
+	guids.player = ME
+	swing.mainhand = itemLink("Arcanite Reaper")
+	swing.main, swing.off = 3.4, nil
+	fire("PLAYER_ENTERING_WORLD")
+	ns.SwingGauges.Apply()
+
+	local frame = _G.WarriorKitSwing
+	check(frame ~= nil, "no swing frame came up")
+	local mainBar = ns.SwingGauges.Bar(ns.Swing.MAIN)
+	local offBar = ns.SwingGauges.Bar(ns.Swing.OFF)
+	check(mainBar ~= nil and offBar ~= nil, "the swing timer built fewer than two bars")
+
+	----------------------------------------------------------------------
+	-- The shape
+	----------------------------------------------------------------------
+
+	check(math.abs(ns.UI.Pixel(frame) - 1) < 1e-9,
+		("the swing bars are not on the grid: one pixel is %.4f units"):format(ns.UI.Pixel(frame)))
+	check(mainBar:GetWidth() == ns.db.swingWidth,
+		("the main hand bar is %.1f px, the setting says %d")
+			:format(mainBar:GetWidth(), ns.db.swingWidth))
+	check(mainBar:GetHeight() == ns.db.swingHeight,
+		("the main hand bar is %.1f px tall, the setting says %d")
+			:format(mainBar:GetHeight(), ns.db.swingHeight))
+	check(not offBar:IsShown(), "the off hand bar is drawn with nothing in the off hand")
+	check(frame:GetHeight() == ns.db.swingHeight,
+		("one bar and the frame is %.1f px tall, the bar is %d")
+			:format(frame:GetHeight(), ns.db.swingHeight))
+
+	-- The band and the press line sit over the fill, which is ARTWORK, and under
+	-- nothing. And the border is made after both, because within one draw layer
+	-- the order is the order the textures were made and the band runs the full
+	-- height of the bar: made the other way round, the edge disappears behind
+	-- the band for exactly the span of screen the band exists to point at.
+	check(mainBar.band.layer == "OVERLAY" and mainBar.mark.layer == "OVERLAY",
+		("the band draws on %s and the line on %s, and both belong on OVERLAY")
+			:format(tostring(mainBar.band.layer), tostring(mainBar.mark.layer)))
+	local bandAt, edgeAt
+	for index, drawn in ipairs(mainBar.regions) do
+		if drawn == mainBar.band then
+			bandAt = index
+		end
+		if drawn == mainBar.edges[1] then
+			edgeAt = index
+		end
+	end
+	check(bandAt ~= nil and edgeAt ~= nil and bandAt < edgeAt,
+		("the band is region %s and the border region %s, and the border is made last")
+			:format(tostring(bandAt), tostring(edgeAt)))
+
+	-- The scale is the bar's own width, which is what makes a fill a whole
+	-- number of pixels rather than a fraction of one.
+	local low, high = mainBar:GetMinMaxValues()
+	check(low == 0 and high == ns.db.swingWidth,
+		("the bar counts %s to %s, and it should count pixels")
+			:format(tostring(low), tostring(high)))
+
+	----------------------------------------------------------------------
+	-- The log
+	--
+	-- Twenty-one values, and the off hand flag is in a different slot on each
+	-- of the two subevents that carry one.
+	----------------------------------------------------------------------
+
+	local function white(subevent, source, offhand)
+		for index = 1, 21 do
+			logArgs[index] = nil
+		end
+		logArgs[1] = GetTime()
+		logArgs[2] = subevent
+		logArgs[4] = source
+		if subevent == "SWING_MISSED" then
+			logArgs[12] = "DODGE"
+			logArgs[13] = offhand
+		else
+			logArgs[12] = 300
+			logArgs[13] = -1
+			logArgs[21] = offhand
+		end
+		fire("COMBAT_LOG_EVENT_UNFILTERED")
+	end
+
+	check(not ns.Swing.Armed(ns.Swing.MAIN),
+		"a swing was running before anything had swung")
+
+	white("SWING_DAMAGE", SOMEBODY)
+	check(not ns.Swing.Armed(ns.Swing.MAIN),
+		"somebody else's swing started your timer")
+
+	white("SWING_DAMAGE", ME)
+	check(ns.Swing.Armed(ns.Swing.MAIN), "your own swing did not start the timer")
+	check(math.abs(ns.Swing.Remaining(ns.Swing.MAIN) - 3.4) < 1e-6,
+		("a 3.4s weapon left %.3fs to run"):format(ns.Swing.Remaining(ns.Swing.MAIN)))
+
+	-- A dodge is the server saying the swing happened and did nothing, so it
+	-- restarts the timer exactly as a landed hit does. A timer that only heard
+	-- damage would stop dead against a mob you cannot hit.
+	advance(1.0)
+	white("SWING_MISSED", ME)
+	check(math.abs(ns.Swing.Remaining(ns.Swing.MAIN) - 3.4) < 1e-6,
+		("a dodged swing left %.3fs to run, and it restarts the timer")
+			:format(ns.Swing.Remaining(ns.Swing.MAIN)))
+
+	-- The off hand, from both directions. With nothing in that hand there is no
+	-- speed to run and the flag does nothing at all.
+	white("SWING_DAMAGE", ME, true)
+	check(not ns.Swing.Armed(ns.Swing.OFF),
+		"an off hand swing ran a timer for a hand holding nothing")
+
+	swing.off = 1.8
+	swing.offhand = itemLink("Bloodspiller")
+	fire("UNIT_INVENTORY_CHANGED", "player")
+	check(offBar:IsShown(), "a weapon went into the off hand and no bar came up")
+	check(frame:GetHeight() == ns.db.swingHeight * 2 + 2,
+		("two bars and a two pixel gap is %d px, the frame is %.1f")
+			:format(ns.db.swingHeight * 2 + 2, frame:GetHeight()))
+
+	white("SWING_DAMAGE", ME, true)
+	check(math.abs(ns.Swing.Remaining(ns.Swing.OFF) - 1.8) < 1e-6,
+		("the off hand flag on SWING_DAMAGE left %.3fs, and the off hand is 1.8s")
+			:format(ns.Swing.Remaining(ns.Swing.OFF)))
+	white("SWING_MISSED", ME, true)
+	check(math.abs(ns.Swing.Remaining(ns.Swing.OFF) - 1.8) < 1e-6,
+		("the off hand flag on SWING_MISSED left %.3fs, and the off hand is 1.8s")
+			:format(ns.Swing.Remaining(ns.Swing.OFF)))
+
+	-- And the main hand is untouched by either, which is the half that fails
+	-- when the two flags are read out of one slot.
+	advance(0.4)
+	local before = ns.Swing.Remaining(ns.Swing.MAIN)
+	white("SWING_DAMAGE", ME, true)
+	check(math.abs(ns.Swing.Remaining(ns.Swing.MAIN) - before) < 1e-6,
+		"an off hand swing restarted the main hand timer")
+
+	----------------------------------------------------------------------
+	-- Haste, which is the line that has to be right
+	----------------------------------------------------------------------
+
+	white("SWING_DAMAGE", ME)
+	advance(1.7)
+	check(math.abs(ns.Swing.Fraction(ns.Swing.MAIN) - 0.5) < 1e-6,
+		("halfway through a 3.4s swing reads as %.3f"):format(ns.Swing.Fraction(ns.Swing.MAIN)))
+
+	-- Flurry, as an aura rather than as an attack speed event, because the
+	-- attack speed event does not reliably follow one on these clients and
+	-- that is the whole reason UNIT_AURA is registered.
+	swing.main = 2.4
+	fire("UNIT_AURA", "player")
+	check(math.abs(ns.Swing.Remaining(ns.Swing.MAIN) - 1.7 * 2.4 / 3.4) < 1e-6,
+		("1.7s left of a 3.4s swing hasted to 2.4s should leave %.3fs and left %.3fs")
+			:format(1.7 * 2.4 / 3.4, ns.Swing.Remaining(ns.Swing.MAIN)))
+	check(math.abs(ns.Swing.Fraction(ns.Swing.MAIN) - 0.5) < 1e-6,
+		("haste moved the fill to %.3f, and scaling what is left keeps it at half")
+			:format(ns.Swing.Fraction(ns.Swing.MAIN)))
+
+	-- An aura for somebody else's buff, which is most of them, costs a
+	-- comparison and writes nothing.
+	local held = ns.Swing.Remaining(ns.Swing.MAIN)
+	fire("UNIT_AURA", "player")
+	check(math.abs(ns.Swing.Remaining(ns.Swing.MAIN) - held) < 1e-6,
+		"an aura event that moved no speed still moved the swing")
+
+	-- A weapon swap is the same arithmetic arriving by another door, and it is
+	-- the one this addon causes itself off a loadout key.
+	swing.main = 3.4
+	fire("UNIT_ATTACK_SPEED", "player")
+	check(math.abs(ns.Swing.Speed(ns.Swing.MAIN) - 3.4) < 1e-6,
+		("the weapon went back to 3.4s and the timer says %.3f")
+			:format(ns.Swing.Speed(ns.Swing.MAIN)))
+
+	----------------------------------------------------------------------
+	-- The Slam window
+	----------------------------------------------------------------------
+
+	_G.WarriorKitSpellCast[SLAM] = 1500
+	swing.talent = 5
+	ns.Slam.Forget()
+
+	if not WARRIOR then
+		check(ns.Slam.Window() == nil,
+			("a %s was given a Slam window"):format(PLAYER_CLASS))
+		check(not ns.Slam.Known(), ("a %s knows Slam"):format(PLAYER_CLASS))
+	else
+		check(ns.Slam.Rank() == 5,
+			("Improved Slam read as %d points, and the tree holds 5"):format(ns.Slam.Rank()))
+		check(math.abs(ns.Slam.Estimate() - 1.0) < 1e-6,
+			("a 1.5s cast less 5 points of Improved Slam should estimate 1.00s and estimates %.3f")
+				:format(ns.Slam.Estimate()))
+		check(ns.Slam.Measured() == nil, "a cast was measured before one was ever made")
+
+		local open, close, at = ns.Slam.Window()
+		check(math.abs(at - (3.4 - 1.0) / 3.4) < 1e-6,
+			("the press sits at %.4f of the bar, and (3.4 - 1.0) / 3.4 is %.4f")
+				:format(at, (3.4 - 1.0) / 3.4))
+		check(math.abs(close - open - 0.2 / 3.4) < 1e-9,
+			("the band is %.4f of the bar, and two tenths of a 3.4s swing is %.4f")
+				:format(close - open, 0.2 / 3.4))
+	end
+
+	----------------------------------------------------------------------
+	-- What that draws
+	----------------------------------------------------------------------
+
+	white("SWING_DAMAGE", ME)
+	advance(1.7)
+	swingTicker.scripts.OnUpdate(swingTicker, 0.05)
+
+	local width = ns.db.swingWidth
+	check(mainBar.shownValue == math.floor(0.5 * width + 0.5),
+		("half of a %d pixel bar is %d and the fill drew %s")
+			:format(width, math.floor(0.5 * width + 0.5), tostring(mainBar.shownValue)))
+	check(mainBar.shownValue == math.floor(mainBar.shownValue),
+		"the fill is not a whole number of pixels")
+
+	if WARRIOR then
+		local open, close, at = ns.Slam.Window()
+		local left = math.floor(open * width + 0.5)
+		local right = math.floor(close * width + 0.5)
+		check(mainBar.band:IsShown(), "the Slam band is not drawn")
+		check(mainBar.band:GetWidth() == right - left,
+			("the band drew %.1f px, and %d to %d is %d")
+				:format(mainBar.band:GetWidth(), left, right, right - left))
+		local point = mainBar.band.points and mainBar.band.points[1]
+		check(point and point[4] == left,
+			("the band starts at %s px, and %.4f of a %d pixel bar is %d")
+				:format(tostring(point and point[4]), open, width, left))
+		check(mainBar.mark:IsShown(), "the press line inside the band is not drawn")
+		local markAt = mainBar.mark.points and mainBar.mark.points[1]
+		check(markAt and markAt[4] == math.floor(at * width + 0.5),
+			("the press line is at %s px and the arithmetic says %d")
+				:format(tostring(markAt and markAt[4]), math.floor(at * width + 0.5)))
+
+		-- Outside the band at half a swing, because a 1.0s cast against a 3.4s
+		-- swing belongs at 70 percent of the bar and not at 50.
+		check(not mainBar.shownNow,
+			"the gauge flipped colour halfway through a swing, nowhere near the window")
+
+		-- And inside it. The press is at 2.4 seconds spent of 3.4, so another
+		-- seven tenths puts the fill on the mark.
+		advance(0.7)
+		swingTicker.scripts.OnUpdate(swingTicker, 0.05)
+		check(mainBar.shownNow, "the fill reached the press mark and the gauge did not flip")
+		check(mainBar.edges.r > 0.3 and mainBar.edges.g > 0.9,
+			("the border did not go green while the window was open: %.2f, %.2f, %.2f")
+				:format(mainBar.edges.r, mainBar.edges.g, mainBar.edges.b))
+
+		-- Out the other side.
+		advance(0.6)
+		swingTicker.scripts.OnUpdate(swingTicker, 0.05)
+		check(not mainBar.shownNow, "the window never closed")
+
+		----------------------------------------------------------------
+		-- A finished Slam restarts the swing
+		----------------------------------------------------------------
+
+		white("SWING_DAMAGE", ME)
+		advance(2.0)
+		fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-1", SLAM)
+		check(math.abs(ns.Swing.Remaining(ns.Swing.MAIN) - 3.4) < 1e-6,
+			("a finished Slam left %.3fs of swing, and it restarts the whole 3.4")
+				:format(ns.Swing.Remaining(ns.Swing.MAIN)))
+
+		-- Somebody else's cast, and one of yours that is not Slam, both leave
+		-- it alone.
+		advance(1.0)
+		local running = ns.Swing.Remaining(ns.Swing.MAIN)
+		fire("UNIT_SPELLCAST_SUCCEEDED", "party1", "cast-2", SLAM)
+		fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-3", 772)
+		check(math.abs(ns.Swing.Remaining(ns.Swing.MAIN) - running) < 1e-6,
+			"a cast that was not your Slam restarted your swing")
+
+		----------------------------------------------------------------
+		-- And the client's own number replaces the estimate
+		--
+		-- The estimate is a guess about whether this client folds a talent into
+		-- the spell's cast time. UNIT_SPELLCAST_START carries what the server
+		-- actually started, so from the first Slam of a session there is
+		-- nothing left to guess.
+		----------------------------------------------------------------
+
+		swing.cast = { name = ns.Slam.Name(), start = 5000, stop = 6200 }
+		fire("UNIT_SPELLCAST_START", "player", "cast-4", SLAM)
+		swing.cast = nil
+		check(ns.Slam.Measured() ~= nil and math.abs(ns.Slam.Measured() - 1.2) < 1e-6,
+			("a cast from 5000 to 6200 milliseconds measured as %s seconds")
+				:format(tostring(ns.Slam.Measured())))
+		check(math.abs(ns.Slam.Cast() - 1.2) < 1e-6,
+			"the measurement did not replace the estimate")
+		local _, _, moved = ns.Slam.Window()
+		check(math.abs(moved - (3.4 - 1.2) / 3.4) < 1e-6,
+			("the band did not move with the measured cast: %.4f"):format(moved))
+	else
+		check(not mainBar.band:IsShown(),
+			("a %s was drawn a Slam band"):format(PLAYER_CLASS))
+		check(mainBar:IsShown(),
+			("a %s holding a weapon was not drawn a swing bar"):format(PLAYER_CLASS))
+	end
+
+	----------------------------------------------------------------------
+	-- The page, which is where the check box lives
+	----------------------------------------------------------------------
+
+	local page
+	for _, part in ipairs(window.parts) do
+		if part.name == "Swing" then
+			page = part
+		end
+	end
+	check(page ~= nil, "the options window has no Swing page")
+	check(page and #page.sections == (WARRIOR and 2 or 1),
+		("the Swing page has %s tabs on a %s"):format(page and #page.sections or "no",
+			PLAYER_CLASS))
+
+	-- On and off, from the setting the check box writes.
+	ns.db.swing = false
+	ns.SwingGauges.Apply()
+	check(not frame:IsShown(), "the swing bars stayed up with the setting off")
+	ns.db.swing = true
+	ns.SwingGauges.Apply()
+	check(frame:IsShown(), "the swing bars did not come back with the setting on")
+
+	-- Nothing in the main hand is nothing to time, whatever the setting says.
+	swing.mainhand = nil
+	ns.SwingGauges.Apply()
+	check(not frame:IsShown(), "the swing bars were drawn for an empty main hand")
+	swing.mainhand = itemLink("Arcanite Reaper")
+	ns.SwingGauges.Apply()
+
+	----------------------------------------------------------------------
+	-- Allocation
+	----------------------------------------------------------------------
+
+	local function swingChurn(n)
+		collectgarbage("collect")
+		collectgarbage("stop")
+		local before = collectgarbage("count")
+		for _ = 1, n do
+			advance(0.05)
+			swingTicker.scripts.OnUpdate(swingTicker, 0.05)
+			-- Restarted through ns.Swing rather than through the log, because a
+			-- log event wakes the meters too and what would be measured is
+			-- their segment rather than this tick.
+			if not ns.Swing.Armed(ns.Swing.MAIN) or ns.Swing.Remaining(ns.Swing.MAIN) <= 0 then
+				ns.Swing.Start(ns.Swing.MAIN)
+				ns.Swing.Start(ns.Swing.OFF)
+			end
+		end
+		local after = collectgarbage("count")
+		collectgarbage("restart")
+		return (after - before) / (n / 50)
+	end
+
+	swingChurn(200)
+	local swingKb = swingChurn(200)
+	check(swingKb <= CHURN.swing,
+		("the swing timer allocates %.2f KB per 50 ticks, the gate is %.2f")
+			:format(swingKb, CHURN.swing))
+
+	print(("swing  %d x %d px per hand, main %.2fs off %.2fs, Slam window %s, %.2f KB per 50 ticks, gate is %.2f")
+		:format(ns.db.swingWidth, ns.db.swingHeight, ns.Swing.Speed(ns.Swing.MAIN),
+			ns.Swing.Speed(ns.Swing.OFF),
+			WARRIOR and ("%.0f%% of the bar"):format(select(3, ns.Slam.Window()) * 100) or "not a warrior",
+			swingKb, CHURN.swing))
+
+	----------------------------------------------------------------------
+	-- Put the client back the way the sections after this one expect it.
+	----------------------------------------------------------------------
+
+	guids.player = nil
+	swing.mainhand, swing.offhand, swing.off = nil, nil, nil
+	swing.main, swing.talent = 3.4, 0
+	_G.WarriorKitSpellCast[SLAM] = nil
+	ns.Slam.Forget()
+	fire("UNIT_INVENTORY_CHANGED", "player")
+	ns.Swing.Stop(ns.Swing.MAIN)
+	ns.Swing.Stop(ns.Swing.OFF)
+	ns.SwingGauges.Apply()
+end
+
+end
 --------------------------------------------------------------------------
 -- What the addon costs
 --
@@ -6826,134 +7390,141 @@ do
 	-- sink would be asserting that the feed called the test sink.
 	----------------------------------------------------------------------
 
-	local function held()
-		return Window.Count(Feed.CHAT), Window.Count(Feed.WHISPER), Window.Count(Feed.PEOPLE)
-	end
+	-- In a block of its own, so the two dozen names this needs stop existing
+	-- before the voice tests start. Lua 5.1 gives one function two hundred
+	-- locals and this file is a single chunk that has been at that ceiling
+	-- since the meters went in.
+	do
+		local function held()
+			return Window.Count(Feed.CHAT), Window.Count(Feed.WHISPER), Window.Count(Feed.PEOPLE)
+		end
 
-	local chatLines, whisperLines, peopleLines = held()
-	fire("CHAT_MSG_PARTY", "pull it", "Stranger", nil, nil, nil, nil, nil, nil, nil, nil, nil, "GX")
-	local a, b, c = held()
-	check(a == chatLines + 1, "a party line from a stranger did not reach the chat tab")
-	check(b == whisperLines, "a party line reached the whispers tab")
-	check(c == peopleLines, "a party line from a stranger reached the people tab")
+		local chatLines, whisperLines, peopleLines = held()
+		fire("CHAT_MSG_PARTY", "pull it", "Stranger", nil, nil, nil, nil, nil, nil, nil, nil, nil, "GX")
+		local a, b, c = held()
+		check(a == chatLines + 1, "a party line from a stranger did not reach the chat tab")
+		check(b == whisperLines, "a party line reached the whispers tab")
+		check(c == peopleLines, "a party line from a stranger reached the people tab")
 
-	fire("CHAT_MSG_PARTY", "coming", "Bram", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P1")
-	local d, e, f = held()
-	check(d == a + 1, "a party line from somebody on the list missed the chat tab")
-	check(f == c + 1, "a party line from somebody on the list missed the people tab")
-	check(e == b, "a party line reached the whispers tab")
+		fire("CHAT_MSG_PARTY", "coming", "Bram", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P1")
+		local d, e, f = held()
+		check(d == a + 1, "a party line from somebody on the list missed the chat tab")
+		check(f == c + 1, "a party line from somebody on the list missed the people tab")
+		check(e == b, "a party line reached the whispers tab")
 
-	fire("CHAT_MSG_WHISPER", "where are you", "Aria", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P2")
-	local g, h, i = held()
-	check(g == d + 1 and h == e + 1 and i == f + 1,
-		"a whisper from somebody on the list did not reach all three tabs")
+		fire("CHAT_MSG_WHISPER", "where are you", "Aria", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P2")
+		local g, h, i = held()
+		check(g == d + 1 and h == e + 1 and i == f + 1,
+			"a whisper from somebody on the list did not reach all three tabs")
 
-	-- The one you send, which the client reports with the recipient in the
-	-- sender's place. It belongs on the people tab because the conversation is
-	-- with a person on the list, and half a conversation is not one.
-	fire("CHAT_MSG_WHISPER_INFORM", "on my way", "Aria")
-	local j, k, l = held()
-	check(j == g + 1 and k == h + 1 and l == i + 1,
-		"a whisper sent to somebody on the list did not reach all three tabs")
+		-- The one you send, which the client reports with the recipient in the
+		-- sender's place. It belongs on the people tab because the conversation is
+		-- with a person on the list, and half a conversation is not one.
+		fire("CHAT_MSG_WHISPER_INFORM", "on my way", "Aria")
+		local j, k, l = held()
+		check(j == g + 1 and k == h + 1 and l == i + 1,
+			"a whisper sent to somebody on the list did not reach all three tabs")
 
-	-- The numbered channels are a setting and it ships off.
-	fire("CHAT_MSG_CHANNEL", "wts", "Spammer", nil, "1. General", nil, nil, 1, "General")
-	local m = held()
-	check(m == j, "a numbered channel was captured with the setting off")
+		-- The numbered channels are a setting and it ships off.
+		fire("CHAT_MSG_CHANNEL", "wts", "Spammer", nil, "1. General", nil, nil, 1, "General")
+		local m = held()
+		check(m == j, "a numbered channel was captured with the setting off")
 
-	ns.db.chatChannels = true
-	Feed.Apply()
-	fire("CHAT_MSG_CHANNEL", "wts", "Spammer", nil, "1. General", nil, nil, 1, "General")
-	check(held() == j + 1, "a numbered channel was not captured with the setting on")
-	ns.db.chatChannels = false
-	Feed.Apply()
+		ns.db.chatChannels = true
+		Feed.Apply()
+		fire("CHAT_MSG_CHANNEL", "wts", "Spammer", nil, "1. General", nil, nil, 1, "General")
+		check(held() == j + 1, "a numbered channel was not captured with the setting on")
+		ns.db.chatChannels = false
+		Feed.Apply()
 
-	----------------------------------------------------------------------
-	-- The claim
-	----------------------------------------------------------------------
+		----------------------------------------------------------------------
+		-- The claim
+		----------------------------------------------------------------------
 
-	local function claimed(event)
-		return #(chat.filters[event] or {})
-	end
+		local function claimed(event)
+			return #(chat.filters[event] or {})
+		end
 
-	check(claimed("CHAT_MSG_PARTY") == 1,
-		("%d filters on party chat, expected exactly one"):format(claimed("CHAT_MSG_PARTY")))
-	check(claimed("CHAT_MSG_CHANNEL") == 0,
-		"the numbered channels are filtered out of Blizzard's window while they are not captured")
-	check(chat.filters.CHAT_MSG_PARTY[1]() == true,
-		"the filter let the message through, so both windows would draw it")
+		check(claimed("CHAT_MSG_PARTY") == 1,
+			("%d filters on party chat, expected exactly one"):format(claimed("CHAT_MSG_PARTY")))
+		check(claimed("CHAT_MSG_CHANNEL") == 0,
+			"the numbered channels are filtered out of Blizzard's window while they are not captured")
+		check(chat.filters.CHAT_MSG_PARTY[1]() == true,
+			"the filter let the message through, so both windows would draw it")
 
-	-- Twice on and once off. The filter is looked up by identity when it is
-	-- removed, so a fresh closure per apply would leave every earlier one in
-	-- FrameXML's list forever.
-	Feed.Apply()
-	Feed.Apply()
-	check(claimed("CHAT_MSG_PARTY") == 1,
-		("applying three times left %d filters on party chat"):format(claimed("CHAT_MSG_PARTY")))
+		-- Twice on and once off. The filter is looked up by identity when it is
+		-- removed, so a fresh closure per apply would leave every earlier one in
+		-- FrameXML's list forever.
+		Feed.Apply()
+		Feed.Apply()
+		check(claimed("CHAT_MSG_PARTY") == 1,
+			("applying three times left %d filters on party chat"):format(claimed("CHAT_MSG_PARTY")))
 
-	ns.db.chatClaim = false
-	Feed.Apply()
-	check(claimed("CHAT_MSG_PARTY") == 0,
-		"turning the claim off left Blizzard's window still filtered")
-	ns.db.chatClaim = true
-	Feed.Apply()
-	check(claimed("CHAT_MSG_PARTY") == 1, "turning the claim back on did not filter again")
+		ns.db.chatClaim = false
+		Feed.Apply()
+		check(claimed("CHAT_MSG_PARTY") == 0,
+			"turning the claim off left Blizzard's window still filtered")
+		ns.db.chatClaim = true
+		Feed.Apply()
+		check(claimed("CHAT_MSG_PARTY") == 1, "turning the claim back on did not filter again")
 
-	-- The part off is the part gone: no events, no filters.
-	ns.db.chat = false
-	Feed.Apply()
-	check(claimed("CHAT_MSG_PARTY") == 0, "the part is off and Blizzard's window is still filtered")
-	local quiet = held()
-	fire("CHAT_MSG_PARTY", "anyone there", "Bram", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P1")
-	check(held() == quiet, "a line was captured with the part switched off")
-	ns.db.chat = true
-	Feed.Apply()
+		-- The part off is the part gone: no events, no filters.
+		ns.db.chat = false
+		Feed.Apply()
+		check(claimed("CHAT_MSG_PARTY") == 0, "the part is off and Blizzard's window is still filtered")
+		local quiet = held()
+		fire("CHAT_MSG_PARTY", "anyone there", "Bram", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P1")
+		check(held() == quiet, "a line was captured with the part switched off")
+		ns.db.chat = true
+		Feed.Apply()
 
-	----------------------------------------------------------------------
-	-- What a line looks like
-	----------------------------------------------------------------------
+		----------------------------------------------------------------------
+		-- What a line looks like
+		----------------------------------------------------------------------
 
-	chat.classByGuid.P1 = "WARRIOR"
-	local before = Window.Count(Feed.CHAT)
-	fire("CHAT_MSG_PARTY", "ready", "Bram", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P1")
-	check(Window.Count(Feed.CHAT) == before + 1, "the line with a GUID on it was dropped")
+		chat.classByGuid.P1 = "WARRIOR"
+		local before = Window.Count(Feed.CHAT)
+		fire("CHAT_MSG_PARTY", "ready", "Bram", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P1")
+		check(Window.Count(Feed.CHAT) == before + 1, "the line with a GUID on it was dropped")
 
-	----------------------------------------------------------------------
-	-- Typing in it
-	----------------------------------------------------------------------
+		----------------------------------------------------------------------
+		-- Typing in it
+		----------------------------------------------------------------------
 
-	local sent = #chat.sent
-	Window.Send("hello")
-	check(#chat.sent == sent + 1, "a plain line was not sent at all")
-	check(chat.sent[#chat.sent].kind == "SAY",
-		("a plain line went to %s, expected SAY"):format(tostring(chat.sent[#chat.sent].kind)))
+		local sent = #chat.sent
+		Window.Send("hello")
+		check(#chat.sent == sent + 1, "a plain line was not sent at all")
+		check(chat.sent[#chat.sent].kind == "SAY",
+			("a plain line went to %s, expected SAY"):format(tostring(chat.sent[#chat.sent].kind)))
 
-	-- A slash goes to the client's own parser rather than to a parser written
-	-- here, because the client's is the one that knows every command in the game
-	-- and every other addon's.
-	local ran = #chat.slash
-	Window.Send("/dance")
-	check(#chat.slash == ran + 1 and chat.slash[#chat.slash] == "/dance",
-		"a slash command was not handed to the client's own parser")
-	check(#chat.sent == sent + 1, "a slash command was also sent as a chat message")
+		-- A slash goes to the client's own parser rather than to a parser written
+		-- here, because the client's is the one that knows every command in the game
+		-- and every other addon's.
+		local ran = #chat.slash
+		Window.Send("/dance")
+		check(#chat.slash == ran + 1 and chat.slash[#chat.slash] == "/dance",
+			"a slash command was not handed to the client's own parser")
+		check(#chat.sent == sent + 1, "a slash command was also sent as a chat message")
 
-	-- Clicking a name answers it, which is a whisper to that name and nothing
-	-- else.
-	Window.Reply("Aria")
-	local kind, target = Window.Channel()
-	check(kind == "WHISPER" and target == "Aria",
-		("answering a name typed into %s at %s"):format(tostring(kind), tostring(target)))
-	Window.Send("on my way")
-	check(chat.sent[#chat.sent].kind == "WHISPER" and chat.sent[#chat.sent].target == "Aria",
-		"the reply did not go to the person whose name was clicked")
+		-- Clicking a name answers it, which is a whisper to that name and nothing
+		-- else.
+		Window.Reply("Aria")
+		local kind, target = Window.Channel()
+		check(kind == "WHISPER" and target == "Aria",
+			("answering a name typed into %s at %s"):format(tostring(kind), tostring(target)))
+		Window.Send("on my way")
+		check(chat.sent[#chat.sent].kind == "WHISPER" and chat.sent[#chat.sent].target == "Aria",
+			"the reply did not go to the person whose name was clicked")
 
-	-- Guild is offered while you are in one and skipped while you are not, so
-	-- the cycle cannot land on a channel the server would refuse.
-	chat.inGuild = false
-	for _ = 1, #({ "say", "party", "raid", "guild", "yell", "reply" }) do
-		Window.Cycle(1)
-		check(select(1, Window.Channel()) ~= "GUILD",
-			"the channel cycled onto guild chat with no guild")
+		-- Guild is offered while you are in one and skipped while you are not, so
+		-- the cycle cannot land on a channel the server would refuse.
+		chat.inGuild = false
+		for _ = 1, #({ "say", "party", "raid", "guild", "yell", "reply" }) do
+			Window.Cycle(1)
+			check(select(1, Window.Channel()) ~= "GUILD",
+				"the channel cycled onto guild chat with no guild")
+		end
+
 	end
 
 	----------------------------------------------------------------------
@@ -6980,9 +7551,16 @@ do
 	local asked = #chat.voice.calls
 	fire("GROUP_ROSTER_UPDATE")
 	fire("GROUP_ROSTER_UPDATE")
-	fire("VOICE_CHAT_LOGIN")
 	check(#chat.voice.calls == asked,
-		("three events in a burst made %d more requests"):format(#chat.voice.calls - asked))
+		("two roster changes in a burst made %d more requests")
+			:format(#chat.voice.calls - asked))
+
+	-- The service signing in is not a burst of the same news, it is new news,
+	-- and it clears the rate limit rather than waiting it out. Everything this
+	-- file gave up on before the service existed is worth one more ask the
+	-- moment it does.
+	fire("VOICE_CHAT_LOGIN")
+	check(#chat.voice.calls > asked, "the voice service signed in and nothing was asked for")
 
 	-- The channel turns up. Now there is something to activate, and asking the
 	-- service again would be the wrong call entirely.
@@ -7046,16 +7624,39 @@ do
 	chat.voice.active = nil
 	Voice.Set(Voice.GROUP)
 
-	-- A service that is there and has not signed in yet is a different answer
-	-- from one that is not there, and only the second is worth telling anyone
-	-- to go and fix.
+	-- A service that says it is not signed in is told to sign in, and the join
+	-- is asked for anyway.
+	--
+	-- This was a refusal at the top of Apply, and it was wrong on the only
+	-- client that matters: IsLoggedIn reads false there with voice plainly
+	-- working, and pressing the voice button in the client's own window joins
+	-- the channel while it is still saying no. Nothing was ever tried. The rule
+	-- it broke is the one the rest of the addon holds to, which is to probe what
+	-- you are about to call rather than the weather around it, so the assertion
+	-- is now that a false answer costs nothing.
 	chat.voice.loggedIn = false
 	chat.voice.channels[2] = nil
 	chat.voice.active = nil
 	advance(10)
+	local before_login = #chat.voice.calls
 	local ok, why = Voice.Apply(true)
-	check(not ok and why:find("signed in") ~= nil,
-		("a voice service that has not signed in answered %q"):format(tostring(why)))
+	check(ok, ("a join was refused because the service said it was not signed in: %s")
+		:format(tostring(why)))
+
+	local sawLogin, sawRequest = false, false
+	for index = before_login + 1, #chat.voice.calls do
+		local call = chat.voice.calls[index]
+		sawLogin = sawLogin or call.what == "login"
+		sawRequest = sawRequest or call.what == "requestType"
+	end
+	check(sawLogin, "the service said it was not signed in and was never asked to sign in")
+	check(sawRequest, "the channel was never asked for")
+
+	-- And the diagnostic says what each probe answered, because the sentence
+	-- this part prints is a decision made out of four of them and the first bug
+	-- in it was invisible without them.
+	check(Voice.Diagnose():find("signed in false") ~= nil,
+		("the diagnostic reads %q"):format(Voice.Diagnose()))
 	chat.voice.loggedIn = true
 
 	-- Asking forever is not an option. Past the attempt cap the requests stop
