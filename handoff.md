@@ -72,15 +72,36 @@ collapsing to a pixel, yours-first, twenty unchanged ticks writing nothing, the
 sweep catching buttons the client builds after the skin is on, and combat
 refusing a strip with the next tick out of combat taking it.
 
-## Still to do on item 9
+## Item 9, second half
 
-- Delete the lift machinery from `Skin.lua`: `AURA_CEILING`, `AnchorOf`,
-  `AuraLift`, `entry.auraLift`, `Fit`'s tail, the `UNIT_AURA` handler, the
-  `auras` key on the target spec, the aura clause in `FitText`.
-- Wire four call sites: `Build`, `Place`, `Refresh`, `Style`/`Unstyle`.
-- Fold section 34 into `14-aura-row.lua` and delete it. Fix the hit-rect
-  assertion in section 15. Drop `AURA_LIFT`, `auraHeads` and `anchorAuras` from
-  `client/08-blizzard.lua`.
-- Re-measure `Skin.lua`'s ceiling. It is still 2012 and the delete is worth
-  about 110 lines.
-- `docs/README.md` and `docs/CHANGELOG.md`, and item 9 to Landed in `todo.md`.
+`Skin.lua` is 1934 and its ceiling in `check.sh` is re-measured, not carried
+over. What came out: `AURA_CEILING`, `AnchorOf`, `AuraLift`, `entry.auraLift`,
+`Fit`'s tail, the `UNIT_AURA` registration and handler, the `auras` key on the
+target spec, and the aura clause in `FitText`. Four call sites went in: `Build`,
+`Place`, `Refresh` and `Style`/`Unstyle`.
+
+One thing that was not in either plan. Target of target is parked on exactly the
+corner the aura rows hang from, so without being told it is there the first row
+is drawn straight through it. `Perch` now calls `ns.FrameAuras.Under`, and the
+rows re-hang on the ticker rather than at layout, because the client shows and
+hides that frame with the unit. If target of target moves into the corridor the
+way the in-game test suggests, the rows come back up against the block on their
+own and nothing has to change here.
+
+`14-aura-row.lua` is rewritten against the real rows through the skin's own
+ticker, and `34-probe.lua` is deleted. `client/08-blizzard.lua` lost `AURA_LIFT`,
+`auraHeads` and `anchorAuras`; both aura heads are still stood up, because
+section 14 needs something to hide. Section 15's hit-rect assertion still holds
+and its comment no longer talks about a tail.
+
+`docs/README.md` and `docs/CHANGELOG.md` are written, and item 9 in `todo.md`
+says built and not confirmed in game, which is where item 8 also sits.
+
+## Careful, second one
+
+`docs/README.md` is edited on this branch. handoff said the root worktree is
+carrying an uncommitted text pass on that file, and item 8 deliberately did not
+touch it. Item 9 could not do the same: the aura section described the lift as
+the live mechanism and the lift is deleted. The edits are surgical replacements
+of named passages, so they conflict only where the text pass touched the same
+lines. If it does conflict, take the text pass's prose and this branch's facts.

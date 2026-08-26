@@ -229,6 +229,7 @@ UnitFrames/Auras.lua:AuraAt
 UnitFrames/Auras.lua:Scan
 UnitFrames/Auras.lua:Sweep
 UnitFrames/Auras.lua:Height
+UnitFrames/Auras.lua:Hang
 UnitFrames/Auras.lua:Fill
 UnitFrames/Auras.lua:Auras.Update
 UnitFrames/Skin.lua:Refresh
@@ -389,7 +390,7 @@ LINE_LIMIT=800
 LINE_ALLOWED="
 UI/Widgets.lua:1289:the widget kit, one function per control and shared by every page
 UnitFrames/EnemyBars.lua:2011:splits at the settings API, the widget and the plate plumbing
-UnitFrames/Skin.lua:2012:splits at the region walk, the block geometry and the tick
+UnitFrames/Skin.lua:1934:splits at the region walk, the block geometry and the tick
 "
 
 while IFS= read -r f; do
