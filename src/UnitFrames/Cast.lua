@@ -162,8 +162,8 @@ function Cast.Build(widget)
 	-- Pinned to the gauge rather than arranged, for the reason the mob's name
 	-- and its health number are: both are sized by whatever the spell happens
 	-- to be called, which is not a number the layout knows before it runs.
-	box.name = Text(box.bar, PLATE_TEXT, NAME_TEXT, "LEFT", ns.UI.SHADOW)
-	box.timer = Text(box.bar, PLATE_TEXT, TIMER_TEXT, "RIGHT", ns.UI.SHADOW)
+	box.name = Text(box.bar, PLATE_TEXT, NAME_TEXT, "LEFT", ns.UI.FLAT)
+	box.timer = Text(box.bar, PLATE_TEXT, TIMER_TEXT, "RIGHT", ns.UI.FLAT)
 
 	box:Hide()
 	widget.cast = box
@@ -208,7 +208,7 @@ function Cast.Fit(widget, unit, px, onPlate)
 	-- eleven pixels tall and a rim in there closes the glyph it is drawn round.
 	local size = math.max(TEXT_FLOOR, math.floor(math.min(
 		(onPlate and PLATE_TEXT or LIST_TEXT) * unit, height - 2 * px) + 0.5))
-	local font = ns.UI.NumberFont(size)
+	local font = ns.UI.Font(size, ns.UI.FLAT)
 
 	box.name:SetFontObject(font)
 	box.timer:SetFontObject(font)

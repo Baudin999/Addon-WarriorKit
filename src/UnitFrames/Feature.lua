@@ -383,6 +383,20 @@ ns.Register({
 		end,
 
 		skin = SkinWord,
+
+		-- The palette, as numbers you can check against what is on screen.
+		--
+		-- It is here rather than under `skin` because it answers for the enemy
+		-- bars too, and it exists because the rule it prints is invisible: every
+		-- fill is capped so the name on it clears Color.TEXT_RATIO, and the only
+		-- way to see that from in the game is to be told the ratio.
+		colors = function()
+			local summary, rows = ns.Unit.Color.Describe()
+			ns.Print("colours: " .. summary .. ".")
+			for _, row in ipairs(rows) do
+				ns.Print("  " .. row)
+			end
+		end,
 	},
 
 	help = {
@@ -399,6 +413,7 @@ ns.Register({
 		"skin height <18-72>, skin width <90-360>, both in screen pixels",
 		"skin heals on|off, the incoming heal on the health gauge",
 		"skin probe, what this client answered for each frame",
+		"colors, every class fill and how far the name on it is from it",
 	},
 
 	status = function()

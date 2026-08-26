@@ -31,6 +31,146 @@ Unit.Color = Color
 -- file builds a colour at call time and nothing may start.
 --------------------------------------------------------------------------
 
+--------------------------------------------------------------------------
+-- Contrast
+--
+-- Which colours may carry text, and which colour that text is.
+--
+-- This arrived from a screenshot: the player frame drew a white name on the
+-- warrior tan, and the two did not hold apart. They were never going to. Tan is
+-- #C79C6E, white on it is 2.4:1, and the whole palette was the same shape.
+-- White on the threat amber is 1.6:1, on the threat green 2.4:1, on the orange
+-- 2.3:1. Only the red and the slate were over four. Every bar this addon draws
+-- was carrying a name it was fighting.
+--
+-- Blizzard's numbers are not wrong, they are for the other problem. A class
+-- colour exists to put a player's name IN that colour against a black chat
+-- window, where bright is exactly right. A bar fill is the inverse: the colour
+-- is the background and the text is on top of it. Six of the nine classes are
+-- too light to be a background for anything, and one of them is literally
+-- white.
+--
+-- So the palette carries a rule rather than a pile of hand-picked pairs. Every
+-- colour this addon fills a bar with is taken under a luminance ceiling, and
+-- the ceiling is the value at which Color.paper clears TEXT_RATIO on it. One
+-- text colour, guaranteed on every fill, at every state of the bar: the spent
+-- end is the fill through Color.Dim, which is darker still, so a fill that
+-- clears also clears there.
+--
+-- The shaping runs once at load and writes into the tables in place, so a
+-- colour keeps the identity Unit/Unit.lua's tickers guard on. Scaling in linear
+-- space leaves hue and saturation exactly where they were and only takes
+-- brightness off, which is why the warrior still reads as tan and the threat
+-- green still reads as green.
+--
+-- The tokens run the other way. A level tag, a stack count and the name of
+-- whoever else has this mob are short coloured strings ON a fill, so they need
+-- a floor rather than a ceiling, and a hue that cannot reach it is blended
+-- toward white until it does. TOKEN_RATIO is three rather than four and a half
+-- and that is a judgement, not a rounding: these are two digits and a percent
+-- sign in a HUD, not a paragraph, and holding a five colour scale apart is half
+-- of what they are for.
+--------------------------------------------------------------------------
+
+-- The sRGB transfer function, inverted. WCAG's definition, and the reason the
+-- shaping below is done on these numbers rather than on the stored ones: a
+-- colour halved in sRGB is not half as bright, and a scale that pretends it is
+-- turns a hue as it dims it.
+local function Linear(c)
+	if c <= 0.04045 then
+		return c / 12.92
+	end
+	return ((c + 0.055) / 1.055) ^ 2.4
+end
+
+local function Gamma(c)
+	if c <= 0.0031308 then
+		return c * 12.92
+	end
+	return 1.055 * c ^ (1 / 2.4) - 0.055
+end
+
+-- Relative luminance, 0 for black and 1 for white.
+function Color.Luma(color)
+	return 0.2126 * Linear(color[1])
+		+ 0.7152 * Linear(color[2])
+		+ 0.0722 * Linear(color[3])
+end
+
+-- How far apart two colours are, as WCAG counts it. 1 is the same colour and
+-- 21 is black against white.
+function Color.Contrast(a, b)
+	local first, second = Color.Luma(a), Color.Luma(b)
+	if first < second then
+		first, second = second, first
+	end
+	return (first + 0.05) / (second + 0.05)
+end
+
+-- The one colour text is drawn in over a fill. Not pure white: a bar is a lit
+-- surface and paper at 0.97 sits on it rather than glaring off it.
+Color.paper = { 0.97, 0.97, 1.00 }
+
+Color.TEXT_RATIO = 4.5  -- a name and a number, which are read
+Color.TOKEN_RATIO = 3.0 -- a level tag and a stack count, which are recognised
+
+-- Solved rather than typed. Both are one rearrangement of the contrast formula,
+-- and typing the answer is how a threshold and its consequence drift apart.
+local FILL_CEILING = (Color.Luma(Color.paper) + 0.05) / Color.TEXT_RATIO - 0.05
+local TOKEN_FLOOR = Color.TOKEN_RATIO * (FILL_CEILING + 0.05) - 0.05
+
+Color.fillCeiling = FILL_CEILING
+Color.tokenFloor = TOKEN_FLOOR
+
+-- Brightness off, hue untouched. Scaling the linear components by one factor is
+-- the only operation that does both, and the factor is exact because luminance
+-- is linear in them: to land on a target luma, scale by the ratio.
+local function Darken(color)
+	local luma = Color.Luma(color)
+	if luma <= FILL_CEILING then
+		return false
+	end
+	local factor = FILL_CEILING / luma
+	for index = 1, 3 do
+		color[index] = Gamma(Linear(color[index]) * factor)
+	end
+	return true
+end
+
+-- Brightness on, and hue given up only as far as it has to be. A colour whose
+-- strongest channel is already 1 cannot be scaled any brighter, so this walks
+-- toward white instead, which is the one direction that always arrives. The
+-- coral at the deadly end of the XP scale is the case that needs it: it is
+-- 1.00 0.35 0.32 and reaches the floor as a salmon, because a red that dark
+-- cannot be read off a dark fill and staying red would be choosing the hue over
+-- the number.
+--
+-- Bisection rather than a formula, because blending toward white is not linear
+-- in luma and twenty steps lands inside a thousandth.
+local function Brighten(color)
+	if Color.Luma(color) >= TOKEN_FLOOR then
+		return false
+	end
+	local low, high = 0, 1
+	local red, green, blue = color[1], color[2], color[3]
+	local probe = { red, green, blue }
+	for _ = 1, 20 do
+		local mid = (low + high) / 2
+		probe[1] = red + (1 - red) * mid
+		probe[2] = green + (1 - green) * mid
+		probe[3] = blue + (1 - blue) * mid
+		if Color.Luma(probe) < TOKEN_FLOOR then
+			low = mid
+		else
+			high = mid
+		end
+	end
+	color[1] = red + (1 - red) * high
+	color[2] = green + (1 - green) * high
+	color[3] = blue + (1 - blue) * high
+	return true
+end
+
 local HUE = {
 	green  = { 0.20, 0.72, 0.38 },
 	amber  = { 0.95, 0.77, 0.25 },
@@ -98,7 +238,7 @@ Color.track = 0.30
 Color.edgeDim = 0.60
 
 Color.text = {
-	name   = { 0.97, 0.97, 1.00 },
+	name   = Color.paper,
 	value  = { 0.74, 0.76, 0.82 },
 	target = { 1.00, 0.90, 0.55 }, -- the one that is yours
 	count  = { 1.00, 0.86, 0.45 }, -- a debuff's stack number
@@ -174,36 +314,174 @@ Color.power = {
 }
 
 --------------------------------------------------------------------------
+-- The classes
+--
+-- Ours rather than RAID_CLASS_COLORS, and the reason is not taste. A fill has
+-- to be shaped before it can carry text, shaping reads the number, and a global
+-- this addon does not own is one that can be absent on one of the two clients
+-- or moved by another addon that got there first. The nine below are the
+-- client's own values written down, so both clients draw the same bar and the
+-- shaping has something to work from.
+--
+-- Two colours per class, answering two different questions.
+--
+--   tint  the identity. A name in a line of chat, which is text IN the colour
+--         against a dark window, and the job Blizzard chose these numbers for.
+--   fill  the bar. The same colour under the luminance ceiling, so the name on
+--         top of it can be read. A copy, and shaped by the pass below rather
+--         than typed, because arithmetic done once by hand rots the first time
+--         the ceiling moves.
+--
+-- Death knight is not here because neither of these clients has one. A class
+-- this table does not know falls back to RAID_CLASS_COLORS and is shaped the
+-- same way on the way through.
+--------------------------------------------------------------------------
+
+local CLASS_TINT = {
+	WARRIOR = { 0.78, 0.61, 0.43 },
+	PALADIN = { 0.96, 0.55, 0.73 },
+	HUNTER  = { 0.67, 0.83, 0.45 },
+	ROGUE   = { 1.00, 0.96, 0.41 },
+	PRIEST  = { 1.00, 1.00, 1.00 },
+	SHAMAN  = { 0.00, 0.44, 0.87 },
+	MAGE    = { 0.41, 0.80, 0.94 },
+	WARLOCK = { 0.58, 0.51, 0.79 },
+	DRUID   = { 1.00, 0.49, 0.04 },
+}
+
+local CLASS = {}
+for name, tint in pairs(CLASS_TINT) do
+	CLASS[name] = { tint = tint, fill = { tint[1], tint[2], tint[3] } }
+end
+
+Color.class = CLASS
+
+--------------------------------------------------------------------------
+-- The shaping pass
+--
+-- Runs once at load over every table above that is one of the two roles, and
+-- writes in place, so every reference to a colour moves together and the
+-- identity Unit/Unit.lua's tickers guard on survives.
+--
+-- Deduped, because the roles share tables on purpose. HUE.slate is the idle
+-- threat state, the idle reaction and a locked cast at once, and darkening it
+-- three times would land it at a fraction of what the ceiling asked for. That
+-- is the one bug this pass can have and the set is the whole of the fix.
+--
+-- Not shaped: Color.frame and the two hues under it. An edge is a pixel of
+-- chrome round a box with nothing ever drawn on top of it, so a ceiling meant
+-- for backgrounds would do nothing but stop the one state that departs from
+-- departing.
+--------------------------------------------------------------------------
+
+local shaped = {}
+
+local function Shape(list, apply)
+	for _, color in ipairs(list) do
+		if not shaped[color] then
+			shaped[color] = true
+			apply(color)
+		end
+	end
+end
+
+local fills, tokens = { Color.heal }, {}
+for _, group in ipairs({ Color.threat, Color.reaction, Color.cast, Color.power }) do
+	for _, color in pairs(group) do
+		fills[#fills + 1] = color
+	end
+end
+for _, pair in pairs(CLASS) do
+	fills[#fills + 1] = pair.fill
+end
+for _, color in pairs(Color.xp) do
+	tokens[#tokens + 1] = color
+end
+for _, color in ipairs({ Color.text.value, Color.text.target, Color.text.count }) do
+	tokens[#tokens + 1] = color
+end
+
+Shape(fills, Darken)
+Shape(tokens, Brighten)
+
+-- Every fill the palette owns, so the harness can hold all of them to the
+-- ceiling rather than to the five it happens to know the names of, and so
+-- `/wk colors` can print the lot.
+Color.fills = fills
+Color.tokens = tokens
+
+
+-- The whole palette as the player can check it: what each class fills a bar
+-- with and how far the name on top of it is from the fill under it. Printed by
+-- `/wk colors`, and it exists because a rule with no readout is a rule nobody
+-- can argue with. The worst line is the one to read.
+function Color.Describe()
+	local rows, names = {}, {}
+	for name in pairs(CLASS) do
+		names[#names + 1] = name
+	end
+	table.sort(names)
+	for _, name in ipairs(names) do
+		local fill = CLASS[name].fill
+		rows[#rows + 1] = ("%s %.2f %.2f %.2f, name at %.1f:1")
+			:format(name:lower(), fill[1], fill[2], fill[3], Color.Contrast(Color.paper, fill))
+	end
+	local worst = 99
+	for _, fill in ipairs(fills) do
+		local ratio = Color.Contrast(Color.paper, fill)
+		worst = ratio < worst and ratio or worst
+	end
+	local token = 99
+	for _, color in ipairs(tokens) do
+		for _, fill in ipairs(fills) do
+			local ratio = Color.Contrast(color, fill)
+			token = ratio < token and ratio or token
+		end
+	end
+	return ("%d fills, worst name at %.1f:1 against a floor of %.1f; %d tokens, worst"
+		.. " at %.1f:1 against a floor of %.1f")
+		:format(#fills, worst, Color.TEXT_RATIO, #tokens, token, Color.TOKEN_RATIO), rows
+end
+
+--------------------------------------------------------------------------
 
 local UnitClass = UnitClass
 local UnitReaction = UnitReaction
 local UnitIsPlayer = UnitIsPlayer
 
--- Two caches, because the two callers want two different shapes and neither
--- should pay to convert. Both are filled the first time a class is seen and
--- kept for the session: there are ten classes and the lookup below is the
--- guard the allocation scan cannot see.
-local byClass = {}
+-- One cache, for the classes this table does not carry. Filled the first time
+-- such a class is seen and kept for the session: the lookup is the guard the
+-- allocation scan cannot see, and on these two clients it never fills at all.
 local hexByClass = {}
 
--- The class colour as { r, g, b }, or nil for anything with no class. Nil
--- rather than white, because the caller has a reaction colour to fall back to
--- and white is a claim that this thing is a player of no class.
+-- What a class fills a bar with, or nil for anything with no class. Nil rather
+-- than white, because the caller has a reaction colour to fall back to and
+-- white is a claim that this thing is a player of no class.
+--
+-- The fill and not the tint. A bar is a background and the tint is a foreground
+-- colour; handing the tint back here is the bug the whole contrast section
+-- above exists to make impossible to write.
 function Color.Class(class)
 	if not class then
 		return nil
 	end
-	local cached = byClass[class]
-	if cached then
-		return cached
+	local known = CLASS[class]
+	if known then
+		return known.fill
 	end
 	local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
 	if not color then
 		return nil
 	end
-	cached = { color.r, color.g, color.b } -- allocates: once per class, and the lookup above is the guard the scan cannot see
-	byClass[class] = cached
-	return cached
+	-- A class off the end of the table, shaped on the way in so it obeys the
+	-- same ceiling as the nine that are in it. Three tables for a class this
+	-- addon has never heard of, on the one call that ever sees it: the CLASS
+	-- lookup above is the guard from the second call onward, and on both of
+	-- these clients this line never runs at all.
+	local fill = { color.r, color.g, color.b } -- allocates: once per unknown class, and the CLASS lookup above is the guard the scan cannot see
+	Darken(fill)
+	CLASS[class] = { tint = { color.r, color.g, color.b }, fill = fill } -- allocates: once per unknown class, same guard
+	return fill
 end
 
 -- The same colour as the eight hex digits a chat escape wants. Separate from
@@ -211,9 +489,13 @@ end
 -- caller asks per group member per tick and ("ff%02x%02x%02x"):format builds a
 -- string every time it is called.
 --
--- White for a class this client will not colour, because a name with no colour
--- still has to be readable and this one is going into a line of text rather
--- than onto a bar.
+-- The tint and not the fill, which is the one place in the file that difference
+-- is visible from outside. This goes into a chat line, where the colour is the
+-- text and the dark window behind it is the background, so the bright identity
+-- colour is right and the darkened bar colour would be unreadable.
+--
+-- White for a class neither this table nor the client will colour, because a
+-- name with no colour still has to be legible.
 function Color.ClassHex(class)
 	if not class then
 		return "ffffffff"
@@ -222,11 +504,12 @@ function Color.ClassHex(class)
 	if cached then
 		return cached
 	end
-	local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
-	if not color then
+	local known = CLASS[class] or (Color.Class(class) and CLASS[class])
+	if not known then
 		return "ffffffff"
 	end
-	cached = ("ff%02x%02x%02x"):format(color.r * 255, color.g * 255, color.b * 255) -- allocates: once per class, and the lookup above is the guard the scan cannot see
+	local tint = known.tint
+	cached = ("ff%02x%02x%02x"):format(tint[1] * 255, tint[2] * 255, tint[3] * 255) -- allocates: once per class, and the lookup above is the guard the scan cannot see
 	hexByClass[class] = cached
 	return cached
 end

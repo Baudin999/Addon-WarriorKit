@@ -740,14 +740,14 @@ local function CreateWidget()
 	-- over the fill. A glyph does not, and the mob's name has sat in this strip
 	-- since the first bar. What the chip cost was the widget's shape: marker,
 	-- gap, tag, box is four left edges and a staircase for a silhouette.
-	widget.levelText = Text(widget.health, PLATE_TEXT, Color.xp.none, "LEFT", ns.UI.SHADOW)
+	widget.levelText = Text(widget.health, PLATE_TEXT, Color.xp.none, "LEFT", ns.UI.FLAT)
 
 	-- The second chamber of the same box, under the health gauge and inside the
 	-- same frame. See the head of Cast.lua.
 	Cast.Build(widget)
 
-	widget.name = Text(widget.health, PLATE_TEXT, NAME_TEXT, "LEFT", ns.UI.SHADOW)
-	widget.healthText = Text(widget.health, PLATE_TEXT, HEALTH_TEXT, "RIGHT", ns.UI.SHADOW)
+	widget.name = Text(widget.health, PLATE_TEXT, NAME_TEXT, "LEFT", ns.UI.FLAT)
+	widget.healthText = Text(widget.health, PLATE_TEXT, HEALTH_TEXT, "RIGHT", ns.UI.FLAT)
 	widget.threatText = Text(widget, PLATE_TEXT, HEALTH_TEXT, "LEFT")
 
 	-- SetRaidTargetIconTexture picks one of eight out of a single sheet, so this
@@ -834,7 +834,7 @@ local function LayoutWidget(widget, width, onPlate)
 	-- Five, not four: four next to a one pixel hairline reads as three.
 	local pad = 5 * unit
 	local fontSize = math.floor((onPlate and PLATE_TEXT or LIST_TEXT) * unit + 0.5)
-	local font = ns.UI.Font(fontSize, ns.UI.SHADOW)
+	local font = ns.UI.Font(fontSize, ns.UI.FLAT)
 
 	-- Two strings on this widget have nothing behind them. The level, the name
 	-- and the health number sit on the gauge's fill, and behind its spent end is

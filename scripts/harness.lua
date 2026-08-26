@@ -969,10 +969,15 @@ _G.tinsert, _G.date = table.insert, os.date
 -- know what time it is.
 _G.GetGameTime = function() return 21, 7 end
 _G.GetBuildInfo = function() return "2.5.6", "69110", "2025-01-01", 20506 end
+-- Death knight is here and is not in Unit/Color.lua's own table, on purpose:
+-- it is the one class that has to arrive through this global, so it is what
+-- proves the fallback shapes a colour rather than handing back the raw one.
+-- Neither of these clients has the class; the path is what is being tested.
 _G.RAID_CLASS_COLORS = {
 	WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
 	HUNTER = { r = 0.67, g = 0.83, b = 0.45 },
 	PRIEST = { r = 1.00, g = 1.00, b = 1.00 },
+	DEATHKNIGHT = { r = 0.77, g = 0.12, b = 0.23 },
 }
 -- Every id names a spell except the block above 900000, which names none. The
 -- debuff list has a path for an id this client does not know and a stub that
@@ -2390,6 +2395,79 @@ do
 	unitAlias["nameplate1target"] = nil
 	guids["nameplate1target"] = nil
 
+	----------------------------------------------------------------------
+	-- Contrast
+	--
+	-- The palette's one invariant, and the reason it has a shaping pass at all.
+	-- Every colour this addon fills a bar with is dark enough that Color.paper
+	-- clears TEXT_RATIO on it, and every short coloured token drawn on one of
+	-- those fills clears TOKEN_RATIO.
+	--
+	-- This is the check that would have caught the bug the whole thing came out
+	-- of. The player frame drew a white name on the warrior tan, which is
+	-- 2.4:1, and nothing anywhere said so. The threat amber was worse at 1.6:1.
+	--
+	-- Measured rather than compared against the shaped numbers, so it is not the
+	-- shaping pass marking its own work: Color.Contrast is the WCAG formula and
+	-- the two ratios are the thresholds, and a fill that arrived by any route,
+	-- including RAID_CLASS_COLORS for a class the table does not carry, has to
+	-- clear them the same way.
+	----------------------------------------------------------------------
+
+	local worstFill, worstFillAt = 99, nil
+	for _, fill in ipairs(Color.fills) do
+		local ratio = Color.Contrast(Color.paper, fill)
+		if ratio < worstFill then
+			worstFill, worstFillAt = ratio, fill
+		end
+	end
+	check(worstFill >= Color.TEXT_RATIO - 1e-6,
+		("a fill sits at %.2f:1 under the name on it, and the floor is %.1f: %.2f %.2f %.2f")
+			:format(worstFill, Color.TEXT_RATIO, worstFillAt[1], worstFillAt[2], worstFillAt[3]))
+
+	local worstToken, worstTokenAt = 99, nil
+	for _, token in ipairs(Color.tokens) do
+		for _, fill in ipairs(Color.fills) do
+			local ratio = Color.Contrast(token, fill)
+			if ratio < worstToken then
+				worstToken, worstTokenAt = ratio, token
+			end
+		end
+	end
+	check(worstToken >= Color.TOKEN_RATIO - 1e-6,
+		("a token sits at %.2f:1 on the worst fill, and the floor is %.1f: %.2f %.2f %.2f")
+			:format(worstToken, Color.TOKEN_RATIO, worstTokenAt[1], worstTokenAt[2],
+				worstTokenAt[3]))
+
+	-- The spent end of a gauge, which is where a name spends most of a fight.
+	-- Color.Dim takes the fill to three tenths in sRGB, which is darker than the
+	-- fill in luminance by more than the ceiling's own margin, so the name only
+	-- gets easier to read as the mob dies. Asserted rather than reasoned about,
+	-- because Color.track is a tuning number somebody will raise.
+	for _, fill in ipairs(Color.fills) do
+		local track = { fill[1] * Color.track, fill[2] * Color.track, fill[3] * Color.track }
+		check(Color.Contrast(Color.paper, track) >= Color.TEXT_RATIO - 1e-6,
+			("the spent end of a %.2f %.2f %.2f gauge reads at %.2f:1")
+				:format(fill[1], fill[2], fill[3], Color.Contrast(Color.paper, track)))
+	end
+
+	-- A class the table does not carry comes in through RAID_CLASS_COLORS and
+	-- has to be shaped on the way, or the one class this addon has never heard
+	-- of is the one that draws an unreadable bar.
+	check(Color.class.DEATHKNIGHT == nil,
+		"the palette carries a death knight, so the fallback below tests nothing")
+	local unknown = Color.Class("DEATHKNIGHT")
+	check(unknown and Color.Contrast(Color.paper, unknown) >= Color.TEXT_RATIO - 1e-6,
+		("a class off the end of the palette came through at %.2f:1")
+			:format(unknown and Color.Contrast(Color.paper, unknown) or 0))
+	-- And its tint is the client's own, unshaped, because a name in a chat line
+	-- is text ON the colour and wants the bright one.
+	check(Color.ClassHex("DEATHKNIGHT") == "ffc41e3a",
+		("a death knight's chat colour came back %q, not the client's own")
+			:format(Color.ClassHex("DEATHKNIGHT")))
+
+	local summary = Color.Describe()
+	print(("colour %s"):format(summary))
 	print("unit   palette shared, colours by reference, threat walk skips you, vanilla fallback")
 end
 
@@ -5153,21 +5231,27 @@ local blocks = {
 -- player alone, so the player wears their own class colour and the other two
 -- fall to the hostile one on a reaction of 2.
 --
--- Two class colours, because this file runs twice and comes up as a different
--- class the second time. Both are the stub's own figures written out again, so
--- the check is still that the skin carried the client's colour through rather
--- than that two tables agree with each other.
+-- What each of the three blocks should be painted, read from the palette
+-- rather than written out again.
+--
+-- It used to be the stub's own class figures typed a second time, so that the
+-- check was "the skin carried the client's colour through" rather than "two
+-- tables agree". That stopped being the right question when Unit/Color.lua took
+-- the class colours over: the bar is no longer the client's number, it is that
+-- number under a luminance ceiling, and a hand-written copy here would be one
+-- more place the arithmetic has to be redone by hand.
+--
+-- So this half is an identity check and the contrast section below is the half
+-- that is independent. Together they say the skin painted what the palette
+-- decided, and the palette decided something a name can be read on.
 local TRACK, EDGE_DIM = ns.Unit.Color.track, 0.60
-local CLASS_TINT = {
-	WARRIOR = { 0.78, 0.61, 0.43 },
-	HUNTER = { 0.67, 0.83, 0.45 },
-}
+local HOSTILE = ns.Unit.Color.reaction.hostile
 local TINT = {
-	player = CLASS_TINT[PLAYER_CLASS],
-	target = { 0.88, 0.25, 0.28 },
-	tot = { 0.88, 0.25, 0.28 },
+	player = ns.Unit.Color.Class(PLAYER_CLASS),
+	target = HOSTILE,
+	tot = HOSTILE,
 }
-assert(TINT.player, PLAYER_CLASS .. " has no colour in the stub's palette")
+assert(TINT.player, PLAYER_CLASS .. " has no colour in the palette")
 
 -- The two textures the skin draws inside each of Blizzard's bars, found the
 -- way everything else here is found: by what they are, not by reaching into
@@ -5570,34 +5654,23 @@ do
 	check(math.abs(threatY - math.floor(threatY + 0.5)) < 1e-6,
 		("an odd icon put the threat line at %.3f pixels"):format(threatY))
 
-	-- Every string the bar draws, against the three rules in UI/Text.lua.
+	-- Every string the bar draws, against the three roles in UI/Text.lua.
 	--
-	-- One. A glyph at or under the monochrome ceiling is rasterised with no
-	-- anti-aliasing. This is the rule that made the bars sharp and it is the one
-	-- most easily lost, because it is a word inside a flags string that nothing
-	-- else in the addon spells out.
-	--
-	-- Two. Text over the addon's own art is flat and carries a shadow. An
-	-- outline is a rim drawn round the glyph, so it costs the same number of
+	-- One. Text over art the addon did not paint is flat and carries a shadow.
+	-- An outline is a rim drawn round the glyph, so it costs the same number of
 	-- pixels whatever the glyph is, and below about fourteen it has eaten the
 	-- counters: the hole in a 6, the waist of an 8. The bars drew these outlined
 	-- at seven to twelve pixels, which is where a stack count stops being a
 	-- digit.
 	--
-	-- Three. Text over the world is outlined, at or above the floor. It has no
+	-- Two. Text over the world is outlined, at or above the floor. It has no
 	-- known colour behind it, so a shadow has nothing to be darker than and flat
 	-- is not softer, it is gone.
+	--
+	-- Three. Text over a fill the palette owns is flat and bare. Not because a
+	-- rim looks wrong there but because Unit/Color.lua guarantees the contrast,
+	-- and the section under this one is what holds it to that.
 	local floor = ns.UI.OutlineFloor()
-	local ceiling = ns.UI.MonoCeiling()
-	-- Anchored, or rule one asserts nothing: every check below reads the ceiling
-	-- back out of UI/Text.lua, so a ceiling of zero would satisfy all of them by
-	-- putting every string above it. The floor is the anchor. Outlined text is
-	-- drawn at exactly the floor, and an anti-aliased stem with a rim round it is
-	-- the defect this whole section exists to catch, so the size that must carry
-	-- a rim must also be a size the rasteriser leaves alone.
-	check(ceiling >= floor,
-		("the monochrome ceiling is %d and the outline floor is %d, so text drawn"
-			.. " at the floor is anti-aliased under a rim"):format(ceiling, floor))
 
 	-- Read back off the font object rather than off the constant, because the
 	-- size a string ends up at is the smaller of the design size and a fraction
@@ -5606,11 +5679,14 @@ do
 		local _, drawnAt, flags = region:GetFont()
 		local shadowX = select(1, region:GetShadowOffset())
 		check(drawnAt ~= nil, ("the %s reports no font"):format(label))
-		if drawnAt and drawnAt <= ceiling then
-			check(flags and flags:find("MONOCHROME", 1, true),
-				("the %s is %d pixels, at or under the %d ceiling, and anti-aliased: flags %q")
-					:format(label, drawnAt, ceiling, tostring(flags)))
-		end
+		-- MONOCHROME was the default here for one commit and it was wrong: an
+		-- unhinted face at this size rounds each stem independently and the
+		-- report was that every string in the addon went fuzzy. Asserted rather
+		-- than written down, because the next person to reach for it will reach
+		-- for it in UI/Text.lua and not in the note explaining why not to.
+		check(not (flags or ""):find("MONOCHROME", 1, true),
+			("the %s has the rasteriser turned off, which broke Arial Narrow's"
+				.. " stems the last time it was tried"):format(label))
 		return drawnAt, flags or "", shadowX
 	end
 
@@ -5647,7 +5723,7 @@ do
 	-- So the rule itself is checked where it lives, rather than through a call
 	-- site that can only ever reach one size. Either side of the old switch
 	-- point, because that is where a reintroduced branch would show.
-	for _, size in ipairs{ floor - 1, floor, ceiling + 4 } do
+	for _, size in ipairs{ floor - 1, floor, floor + 6 } do
 		local font = ns.UI.NumberFont(size)
 		local _, drawnAt, flags = font:GetFont()
 		local shadowX = select(1, font:GetShadowOffset())
@@ -5683,19 +5759,15 @@ do
 	}
 	for _, entry in ipairs(OVER_THE_FILL) do
 		local region = entry[2](widget)
-		local _, flags = inspect(entry[1], region)
-		local shadowX = select(1, region:GetShadowOffset())
-		check(not flags:find("OUTLINE", 1, true),
-			("the %s is outlined over an opaque fill, which spends the glyph's own"
-				.. " pixels on a rim it does not need"):format(entry[1]))
-		check(shadowX > 0,
-			("the %s is flat with no shadow over the fill"):format(entry[1]))
+		local _, flags, shadowX = inspect(entry[1], region)
+		check(flags == "" and shadowX == 0,
+			("the %s carries %q and a %s pixel shadow over a fill whose contrast"
+				.. " the palette already guarantees"):format(entry[1], flags, tostring(shadowX)))
 	end
 
 	print(("fonts  %d numbers on a square, all flat and shadowed; %d strings over the"
-		.. " fill the same; %d over the world outlined at %d px or more; nothing"
-		.. " anti-aliased at or under %d")
-		:format(flat, #OVER_THE_FILL, #OVER_THE_WORLD, floor, ceiling))
+		.. " fill flat and bare; %d over the world outlined at %d px or more")
+		:format(flat, #OVER_THE_FILL, #OVER_THE_WORLD, floor))
 
 	print(("icons  %d texels sampled, range %d to %d; sharp at %s square at 1x, %s at 2x")
 		:format(texels, low, high, listed(1), listed(2)))
@@ -7710,12 +7782,12 @@ do
 		check(size and (size >= floor or not flags:find("OUTLINE", 1, true)),
 			("%s is outlined at %s pixels and the floor is %d")
 				:format(entry[1], tostring(size), floor))
-		-- The meter draws at 14, under the ceiling, so every string on it should
-		-- come back with the rasteriser turned off. This is the same rule the
-		-- bars are held to and the meter is the other place it is visible.
-		check(size and (size > ns.UI.MonoCeiling() or flags:find("MONOCHROME", 1, true)),
-			("%s is %s pixels and anti-aliased: flags %q")
-				:format(entry[1], tostring(size), flags))
+		-- The other half of the same rule, and the meter is where it is most
+		-- visible: fourteen pixel rows of prose are what the report about fuzzy
+		-- text was actually looking at.
+		check(not flags:find("MONOCHROME", 1, true),
+			("%s has the rasteriser turned off, which broke Arial Narrow's stems"
+				.. " the last time it was tried"):format(entry[1]))
 	end
 
 	-- Every setting that reshapes it reuses the frames it already made.
