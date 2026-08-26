@@ -986,10 +986,12 @@ _G.WarriorKitSpellCast = {}
 -- wrote down has to come back with the same string. A stub that named only rank
 -- 1 would let a rank list pass.
 local SPELL_NAMES = {
-	-- Auto Attack, which is what a white swing is filed under in the breakdown
-	-- and where Feeds/Combat.lua takes its swing icon from. Named here for the
-	-- reason the racials below are: a table row reading "Spell6603" would pass
-	-- an assertion about a row while being a word no player can read.
+	-- Auto Attack, and two parts want it for the same reason. Feeds/Combat.lua
+	-- puts this word in the name column of every swing, because a row whose name
+	-- column sometimes holds a spell and sometimes holds a creature is a column
+	-- you have to decode, and Breakdown/Breakdown.lua files every white swing
+	-- under it. A stub answering "Spell6603" would let an assertion about either
+	-- pass while saying nothing about the word a player actually reads.
 	[6603] = "Attack",
 	[12162] = "Deep Wounds",
 	[12721] = "Deep Wound",
@@ -1003,12 +1005,6 @@ local SPELL_NAMES = {
 	-- proves nothing about the real words. The three racials are here because
 	-- the row's caption says "press Blood Fury" and a caption reading "press
 	-- Spell20572" would pass an assertion about a caption.
-	-- Auto Attack. Feeds/Combat.lua puts this word in the name column of every
-	-- swing, because a row whose name column sometimes holds a spell and
-	-- sometimes holds a creature is a column you have to decode. A stub that
-	-- answered "Spell6603" would let an assertion about that column pass while
-	-- saying nothing about the word a player actually reads.
-	[6603] = "Attack",
 	[6673] = "Battle Shout",
 	[19705] = "Well Fed",
 	[20572] = "Blood Fury",
