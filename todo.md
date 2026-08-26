@@ -5,7 +5,7 @@ Seven pieces, in this order. Each is built by one agent in its own worktree unde
 when `./scripts/check.sh` comes back at zero. The worktrees stay after the
 merge.
 
-## 1. Weapon swing timer
+## 1. Weapon swing timer  [merged, being repaired]
 
 The addon talks about the swing and never draws it. `UI/Ability.lua:48` says
 Heroic Strike is armed and goes off on the next swing, `UI/Ability.lua:229`
@@ -19,14 +19,14 @@ them, `Meter/Meter.lua:54` already reads `SWING_DAMAGE` off the combat log, and
 costs no swing. That window is the point of the feature, so it is drawn rather
 than left to be read off a moving bar.
 
-## 2. Deep Wounds is missing from the enemy bar debuffs
+## 2. Deep Wounds is missing from the enemy bar debuffs  [merged]
 
 The debuff walk at `UnitFrames/EnemyBars.lua:552` does not show Deep Wounds.
 Find out why and fix it. The likely cause is that the bleed is attributed to a
 source the filter rejects, so the check is on what `sourceUnit` actually comes
 back as for a proc rather than on the aura's name.
 
-## 3. Overpower is drawn as ready when it is not
+## 3. Overpower is drawn as ready when it is not  [merged]
 
 Overpower can only be pressed inside the few seconds after the target dodges,
 and the bars show it as ready all the time. `Buttons/Slot.lua:188` asks
