@@ -117,7 +117,9 @@ name of none of them.
                              that loadout's cast and its pair of /equipslot lines
     Loadouts/Feature.lua     the paperdoll page and the loadout tab strip
 
-    Buttons/Slot.lua         what one action slot is doing, as one of nine statuses
+    Buttons/Reaction.lua     whether the Overpower or Revenge window is open,
+                             tracked off the combat log
+    Buttons/Slot.lua         what one action slot is doing, as one of ten statuses
     Buttons/Layout.lua       the warrior loadout, and the backup of what it replaced
     Buttons/Ranks.lua        moves bar slots up to the best rank you know
     Buttons/Bars.lua         a clone of every action bar you have, on the same
@@ -421,8 +423,11 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Command.Toggle(arg)       "off" is off, anything else is on
     ns.Command.Number(v, lo, hi, what)  parse and range-check, or complain and return nil
     ns.Slot.State(slot)          what one action slot is doing: a status out of
-                                 UI/Ability.lua's nine, plus the cooldown times
+                                 UI/Ability.lua's ten, plus the cooldown times
     ns.Slot.Texture / Count / CanRead / Describe
+    ns.Reaction.Of(slot)         which reactive ability that slot holds, or nil
+    ns.Reaction.Open(key)        whether that window is open right now
+    ns.Reaction.Remaining(key) / Name(key) / Watching() / Describe()
     ns.Bars.Apply()              stand the cloned bars up, or take them down and
                                  give Blizzard's back; false when combat deferred it
     ns.Bars.CanPage()            whether a state driver came up, so bar 1 pages
@@ -1040,6 +1045,18 @@ one side, only the shim changes.
   in one session hit the client's error ceiling and got the whole addon
   offered up for disabling, which is a far worse failure than the feature
   simply not working.
+- An API that answers yes when the truth is no is worse than one that refuses
+  to answer, because nothing in the code looks wrong. `IsUsableAction` says
+  Overpower is usable in Battle Stance whether or not anything has dodged you.
+  It is not confused and it is not lying about rage: the window lives on the
+  server and the client is never told, so there is no aura to scan, no cooldown
+  to read and no event to catch. The cloned bars drew the one square whose whole
+  point is that it is usually not pressable as ready from the first pull to the
+  last, and every rung of the ladder above it was correct. The fix is
+  `Buttons/Reaction.lua`, which watches the combat log because the combat log is
+  the only place the fact appears. Before trusting a client answer about a
+  reactive ability, work out whether the server ever sent the client the
+  question.
 
 ## Feature notes
 
@@ -1490,6 +1507,55 @@ The stale list is cached and dropped on `LEARNED_SPELL_IN_TAB`,
 count on every refresh. `Apply` reads each slot again before writing it, since
 the cached list can be a click old and a slot that moved underneath must not be
 overwritten.
+
+*The reaction window.* Overpower and Revenge are the two squares on a warrior's
+bar you do not press, you are handed. Overpower opens when your target dodges
+you; Revenge opens when you block, dodge or parry. The client will not say so.
+`IsUsableAction` answers yes for Overpower in Battle Stance for the whole of
+every fight, so the square that is pressable for five seconds an encounter was
+drawn ready for all of it.
+
+`Buttons/Reaction.lua` tracks both off `COMBAT_LOG_EVENT_UNFILTERED`, which is
+the only place the fact appears, and `Slot.State` asks it one question. One file
+for both because they are one idea seen from two ends: the trigger differs by
+which side of the swing you are on and the clock after it is identical. Five
+subevents are read. A dodge of yours off `SWING_MISSED` or `SPELL_MISSED` opens
+Overpower. A block, dodge or parry of yours off the same two opens Revenge, and
+so does a blocked amount on `SWING_DAMAGE` or `SPELL_DAMAGE`, because a block
+that stops only part of a hit arrives as a landed hit and that is the common
+case on a tank. `SPELL_CAST_SUCCESS` shuts the window you just spent, and
+leaving combat shuts both.
+
+The window is five seconds and that number is the one thing here that is not
+read off the client. It is listed under what has never been measured, with the
+argument, at the bottom of this file.
+
+The rung sits above the usable split rather than below it, which is the ladder's
+own rule: what cannot be fixed at all comes first, and a shut window is not
+something you can do anything about while a wrong stance is. That ordering also
+fixes the square that used to shout for nothing. Overpower on a bar in Defensive
+Stance drew orange "swap" from the first pull to the last, which is a colour
+telling you to swap into a stance where the press still would not land. Now the
+orange appears only while the window is open, where swapping really does let you
+press it.
+
+Stances needed no new code. Overpower is Battle Stance only and Revenge is
+Defensive Stance only, and `IsUsableAction` already refuses both in the wrong
+stance with a `notEnoughPower` of false, which is exactly the pair the ladder
+splits `cost` from `stance` on.
+
+Only a plain spell is recognised, matched by asking the client its own name for
+Overpower and Revenge at rank 1 and comparing that against its name for whatever
+is in the slot. Both sides are the client's string, so it holds in every locale
+and at every rank, and the file carries two spell IDs rather than a rank list
+that goes stale at the next trainer visit. An Overpower wrapped in a macro is
+not recognised and keeps the old behaviour, which is the same limit `Ranks.lua`
+takes for the same reason: the client will not say what a `/cast` line resolves
+to.
+
+Warrior only, decided once at `PLAYER_LOGIN`. On another class nothing
+registers, so no square is gated on a window that could not open and no combat
+log line is read to find that out.
 
 The design lives in `Layout.BAR1`, `Layout.BAR2` and `Layout.MACROS`, three
 declarative tables. Changing the loadout is editing data. `BAR1` is twelve rows
@@ -2881,6 +2947,19 @@ and zero errors.
    back on the tick it leaves. Then a completed Slam restarts the swing, a
    cast from 5000 to 6200 milliseconds replaces the estimate with 1.2 seconds,
    and the band moves with it.
+
+   The reaction windows are driven through the same stubbed log. A slot holding
+   Overpower reads `reaction` with nothing having dodged you, `ready` the moment
+   a dodge arrives, and `reaction` again once five seconds have passed. A
+   stranger's dodged swing does not open it, a parry does not open it, pressing
+   the ability shuts it, and combat ending shuts both. Revenge is driven off a
+   full block, a partial block on `SWING_DAMAGE` and a partial block on
+   `SPELL_DAMAGE`, which are three different slots for the same fact, so a
+   parser reading one index for all of them fails here. Where the rungs meet is
+   asserted too: a real cooldown outranks a shut window and a shut window
+   outranks the wrong stance, and an open window hands the wrong stance back so
+   the square can say to swap. On the hunter run nothing is registered, a dodge
+   opens nothing, and an Overpower square reads `ready`.
 7. Runs luacheck over the tree.
 
 The harness runs twice, and the second run comes up as a hunter:
@@ -3376,3 +3455,25 @@ Everything below was written from the API contract and has never executed:
   PLAYER_TARGET_CHANGED and PLAYER_ENTERING_WORLD re-place the block, and the
   portrait's crop is re-applied every tick, but a re-anchor on some other event
   would show as a piece drifting out of the square.
+- How long the Overpower and Revenge windows really are. Five seconds is what
+  every player-facing source says: the Vanilla wiki calls Overpower "only usable
+  if your target dodges, for a short amount of time (5 second period)", the
+  Classic guides agree, and both abilities carry a five second cooldown, so a
+  warrior pressing on every window presses on the cooldown. The MaNGOS and
+  TrinityCore server cores both hold `REACTIVE_TIMER_START` at 4000
+  milliseconds, which is where four seconds comes from when somebody quotes it.
+  `Buttons/Reaction.lua` uses five, because running a second long costs a glance
+  at a square that says pressable when it is not, and running a second short
+  greys a free five rage attack that is still sitting there. Settling it needs
+  the live client: get something to dodge you, watch the seconds in `/wk status`
+  and see when the client starts refusing the press.
+- Whether `SPELL_CAST_SUCCESS` is what these clients send when Overpower or
+  Revenge lands. It is the subevent the window is shut on. If a client sends
+  something else, the square stays lit for the rest of the five seconds after
+  the one press it had, which is a smaller version of the bug the file exists to
+  fix rather than a new one.
+- Whether a blocked amount really sits in slot 16 of `SWING_DAMAGE` and slot 19
+  of `SPELL_DAMAGE` on 2.5.6 and 1.15.9. Both are read positionally, the way
+  every other combat log read in this addon is. Reading the wrong slot opens the
+  Revenge window on every hit you take, which looks like a window that never
+  shuts rather than like a parser fault.
