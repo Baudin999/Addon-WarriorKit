@@ -80,7 +80,21 @@ local TOT_SCALE = 0.62
 -- Blizzard's own anchor for that frame was written against a 232 by 100
 -- target frame and means nothing once the frame is the size of the block, so
 -- this file places it and this is the whole of the placement.
+--
+-- A constant rather than the third pair of settings. The two blocks stand side
+-- by side and the number between them is a corridor somebody wants to choose;
+-- target of target is stacked under the target and reads as one unit with it,
+-- and three pixels is the hairline that keeps two adjacent outlines from
+-- reading as one thick edge. There is no second value anyone would type.
 local TOT_GAP = 3
+
+-- The target block against the player block: the pixels between their two
+-- facing edges, and how far the target's top edge drops below the player's.
+-- Both are settings and these are the range one may land in, shared with
+-- `/wk skin gap` and `/wk skin level` through Skin.LinkRange so the slash
+-- command, the panel and a dropped drag all clamp to the same numbers.
+local GAP_LOW, GAP_HIGH = 0, 400
+local LEVEL_LOW, LEVEL_HIGH = -100, 100
 
 -- Below this many pixels tall a power bar cannot hold a readable number, so it
 -- carries none. Target of target is the frame that hits it.
@@ -166,6 +180,9 @@ local BADGES = {
 -- under   the key of the frame this one is parked beneath once both are
 --         fitted, because its own anchor was written against the size the
 --         frame no longer is
+-- beside  the key of the frame this one hangs off sideways, gauge edge to
+--         gauge edge, once both are fitted. Edit Mode positions the block
+--         named here and this file positions everything against it
 -- global  what the block this file draws over that frame is called. Named
 --         rather than anonymous for one reason: the box is the frame every
 --         measurement in this file is taken in, so a block that lands wrong
@@ -194,7 +211,7 @@ local SPECS = {
 		-- Mirrored, because the target frame sits on the right of the screen
 		-- and its portrait has always been on the outside edge. Moving it to
 		-- the left would be a second change nobody asked for.
-		key = "target", unit = "target", mirror = true,
+		key = "target", unit = "target", mirror = true, beside = "player",
 		scale = 1, global = "WarriorKitSkinTarget",
 		frames = { "TargetFrame" },
 		art = { "TargetFrameTextureFrame" },
@@ -689,30 +706,50 @@ local function RememberFrame(entry)
 	entry.frameShot = shot
 end
 
+-- The frame back on the anchors it carried before this file moved it.
+--
+-- Three callers now, which is why it is a function rather than the same six
+-- lines three times: target of target coming off its perch, the target block
+-- coming off the player block, and the whole skin coming off. A restore that
+-- differed between those three would be a frame that lands somewhere new
+-- depending on which switch you flipped.
+--
+-- A nil relativeTo means the parent, and SetPoint reads a nil there as
+-- UIParent instead, which would fling the frame into the middle of the screen.
+local function Replant(entry)
+	local shot = entry.frameShot
+	if not shot or not shot.points or #shot.points == 0 then
+		return false
+	end
+	local frame = entry.frame
+	frame:ClearAllPoints()
+	for _, point in ipairs(shot.points) do
+		frame:SetPoint(point[1], point[2] or frame:GetParent(),
+			point[3], point[4], point[5])
+	end
+	return true
+end
+
 local function RestoreFrame(entry)
 	local shot = entry.frameShot
 	if not shot then
 		return
 	end
 	local frame = entry.frame
-	entry.frameShot = nil
 	pcall(function()
 		if shot.width and shot.width > 0 and shot.height and shot.height > 0 then
 			frame:SetSize(shot.width, shot.height)
 		end
-		if entry.perched and shot.points and #shot.points > 0 then
-			frame:ClearAllPoints()
-			for _, point in ipairs(shot.points) do
-				frame:SetPoint(point[1], point[2] or frame:GetParent(),
-					point[3], point[4], point[5])
-			end
+		if entry.perched or entry.linked then
+			Replant(entry)
 		end
 		if shot.insets and #shot.insets == 4 and frame.SetHitRectInsets then
 			frame:SetHitRectInsets(shot.insets[1], shot.insets[2],
 				shot.insets[3], shot.insets[4])
 		end
 	end)
-	entry.perched = false
+	entry.frameShot = nil
+	entry.perched, entry.linked = false, false
 	entry.auraLift = nil
 end
 
@@ -863,6 +900,34 @@ local function HookSelection(entry)
 		end
 	end)
 	return entry.hooked
+end
+
+-- A linked frame that swallows your drag is a bug report, so nothing here
+-- refuses one. What this hooks is the drop, and Landed below turns where the
+-- frame came to rest back into the two numbers.
+--
+-- Edit Mode drops a system by calling that frame's own OnDragStop, which is
+-- how Blizzard's own system template carries it, so the method is post-hooked
+-- where it exists and the script is hooked where it does not. Neither shape is
+-- confirmed on this hybrid client and docs/README.md carries it in the
+-- untested list with what would prove it.
+--
+-- Like the selection hook, this one cannot be taken off again, which is why it
+-- does nothing at all unless the frame is linked at the moment of the drop.
+local function HookDrag(entry, landed)
+	local frame = entry.frame
+	if entry.dragHooked or not entry.spec.beside then
+		return false
+	end
+	local function drop()
+		landed(entry)
+	end
+	if type(frame.OnDragStop) == "function" and type(hooksecurefunc) == "function" then
+		entry.dragHooked = pcall(hooksecurefunc, frame, "OnDragStop", drop)
+	elseif type(frame.HookScript) == "function" and frame:GetScript("OnDragStop") then
+		entry.dragHooked = pcall(frame.HookScript, frame, "OnDragStop", drop)
+	end
+	return entry.dragHooked
 end
 
 --------------------------------------------------------------------------
@@ -1188,6 +1253,134 @@ local function EntryFor(key)
 	return nil
 end
 
+--------------------------------------------------------------------------
+-- The chain
+--
+-- Edit Mode positions the player block and nothing else. The target block
+-- hangs off the player block and target of target hangs off the target block,
+-- so the three are one HUD and Edit Mode keeps the one job it is good at.
+--
+-- That is the only division available rather than a compromise. Edit Mode
+-- stores an absolute point per system and writes it back, and has no notion of
+-- one system anchored to another, so anything relational is this addon's by
+-- definition and the only real question is how much absolute positioning is
+-- left with it. One anchor is the right amount: dragging, snapping, switching
+-- layouts and storing them per character all go on working and none of it is
+-- written here.
+--
+-- One anchor per link, written out of combat behind the same lockdown guard as
+-- the rest of Place, and the client maintains it from there. Nothing runs on a
+-- tick, nothing resyncs after a drag and nothing polls GetPoint.
+--------------------------------------------------------------------------
+
+-- Which edge of each block faces the other, and which way the second one
+-- reaches to get there.
+--
+-- Read off spec.mirror rather than written out. The mirror is what puts the
+-- player's gauge end on its right edge and the target's on its left, so
+-- linking the two gauge ends is what faces the gauges across the gap and turns
+-- both portraits outward, and a frame that stops being mirrored takes its side
+-- of the link with it rather than leaving a constant here to be found later.
+local function Facing(host, entry)
+	return entry.spec.mirror and "LEFT" or "RIGHT",
+		host.spec.mirror and "LEFT" or "RIGHT",
+		host.spec.mirror and -1 or 1
+end
+
+-- One edge of a frame in screen units, which is the only space two frames on
+-- different scales share. Nil where the client will not answer, which is a
+-- frame whose position has not resolved yet, and the caller draws nothing out
+-- of a nil rather than deriving a number from one.
+local function ScreenEdge(frame, getter)
+	local value = ns.Measure(frame, getter)
+	local scale = ns.Measure(frame, "GetEffectiveScale")
+	if not value or not scale then
+		return nil
+	end
+	return value * scale
+end
+
+local function Snap(value, low, high)
+	return math.max(low, math.min(high, math.floor(value + 0.5)))
+end
+
+-- The target block on the player block's far side.
+--
+-- The gap is measured inner edge to inner edge, in screen pixels, snapped,
+-- the same ruler `/wk skin height` and `/wk skin width` are on. Where the pair
+-- lands on screen is still a fraction of a pixel nobody can read, because the
+-- player frame's origin is Blizzard's and this file only decides the distance
+-- between the two. That is the boundary the header already draws round the
+-- block, unchanged.
+--
+-- Both frames have to be skinned. Unskinned, TargetFrame is 232 by 100 and a
+-- gap measured off its edge is a gap to the edge of a rectangle three quarters
+-- of which is empty, so the link waits and Skin.DescribeLink says why.
+--
+-- Written on every pass rather than only when the switch moves, because three
+-- things change the number without changing the state: the gap setting, the
+-- level setting, and a resolution change that moves what one pixel costs in
+-- this frame's units.
+local function Link(entry)
+	local host = entry.spec.beside and EntryFor(entry.spec.beside)
+	if not host then
+		return true
+	end
+	local want = (ns.db.skinLink and entry.styled and host.styled) and true or false
+	if not want and not entry.linked then
+		return true
+	end
+	if Blocked(entry) then
+		return false
+	end
+	local frame = entry.frame
+	if want then
+		RememberFrame(entry)
+		local px = ns.Pixel(frame)
+		local mine, theirs, reach = Facing(host, entry)
+		frame:ClearAllPoints()
+		-- On the host's block rather than the host's frame, for the reason the
+		-- perch below is: those two are the same rectangle on the player and
+		-- are not on the target, and the block is the one you can see.
+		frame:SetPoint("TOP" .. mine, host.box or host.frame, "TOP" .. theirs,
+			reach * ns.db.skinGap * px, -ns.db.skinLevel * px)
+		entry.linked = true
+	else
+		Replant(entry)
+		entry.linked = false
+	end
+	return true
+end
+
+-- Where the drag put it, read back as the two numbers.
+--
+-- The gap is the distance between the two facing edges and the level is how
+-- far the target's top edge sits below the player's, both in screen pixels,
+-- both snapped and both clamped to the range the slash command takes. Then the
+-- anchor is written again, so the next relayout puts the frame where the drag
+-- left it rather than where the setting used to say. The drag still means
+-- something, and it teaches the two numbers without a slash command.
+local function Landed(entry)
+	local host = entry.spec.beside and EntryFor(entry.spec.beside)
+	if not host or not entry.linked or Blocked(entry) then
+		return false
+	end
+	local frame, block = entry.frame, host.box or host.frame
+	local mine, theirs, reach = Facing(host, entry)
+	local ours = ScreenEdge(frame, mine == "LEFT" and "GetLeft" or "GetRight")
+	local anchor = ScreenEdge(block, theirs == "LEFT" and "GetLeft" or "GetRight")
+	local ourTop, theirTop = ScreenEdge(frame, "GetTop"), ScreenEdge(block, "GetTop")
+	-- One screen pixel in the units those four edges came back in, which is
+	-- what turns a distance on the screen into the count a person types.
+	local pixel = ns.Pixel(frame) * (ns.Measure(frame, "GetEffectiveScale") or 0)
+	if not ours or not anchor or not ourTop or not theirTop or pixel <= 0 then
+		return false
+	end
+	ns.db.skinGap = Snap(reach * (ours - anchor) / pixel, GAP_LOW, GAP_HIGH)
+	ns.db.skinLevel = Snap((theirTop - ourTop) / pixel, LEVEL_LOW, LEVEL_HIGH)
+	return Link(entry)
+end
+
 -- Target of target, parked under the target block.
 --
 -- It has to be placed by this file once the target frame is fitted, and only
@@ -1200,13 +1393,19 @@ end
 --
 -- Both halves are conditional on the target being fitted, because a target
 -- frame that is back at Blizzard's size wants Blizzard's anchor back with it.
+--
+-- Written on every pass rather than only when the switch moves, for Link's
+-- third reason: TOT_GAP is three pixels and what three pixels cost in this
+-- frame's units moves with the screen. Skipping a pass that changed nothing
+-- else is what left this frame three pixels of the old grid under the block
+-- after a monitor swap.
 local function Perch(entry)
 	local host = entry.spec.under and EntryFor(entry.spec.under)
 	if not host then
 		return true
 	end
 	local want = entry.styled and host.styled and true or false
-	if want == (entry.perched or false) then
+	if not want and not entry.perched then
 		return true
 	end
 	if Blocked(entry) then
@@ -1225,14 +1424,7 @@ local function Perch(entry)
 		frame:SetPoint(edge, host.box or host.frame, corner, 0, -TOT_GAP * ns.Pixel(frame))
 		entry.perched = true
 	else
-		local shot = entry.frameShot
-		if shot and shot.points and #shot.points > 0 then
-			frame:ClearAllPoints()
-			for _, point in ipairs(shot.points) do
-				frame:SetPoint(point[1], point[2] or frame:GetParent(),
-					point[3], point[4], point[5])
-			end
-		end
+		Replant(entry)
 		entry.perched = false
 	end
 	return true
@@ -1274,6 +1466,7 @@ local function Style(entry)
 	-- Before Place, which is the first thing here that resizes it.
 	RememberFrame(entry)
 	HookSelection(entry)
+	HookDrag(entry, Landed)
 
 	if not entry.box then
 		Build(entry)
@@ -1515,10 +1708,14 @@ function Skin.Apply()
 			pending = true
 		end
 	end
-	-- After every frame has settled, not inside the loop above: where target
-	-- of target goes depends on whether the target frame came out fitted, and
-	-- the target is styled after it on a client that names them in that order.
+	-- After every frame has settled, not inside the loop above: where a frame
+	-- hangs depends on whether the one it hangs off came out fitted, and the
+	-- target is styled after target of target on a client that names them in
+	-- that order.
 	for _, entry in ipairs(entries) do
+		if not Link(entry) then
+			pending = true
+		end
 		if not Perch(entry) then
 			pending = true
 		end
@@ -1548,6 +1745,9 @@ function Skin.Relayout()
 				pending = true
 			else
 				Place(entry)
+				if not Link(entry) then
+					pending = true
+				end
 				if not Perch(entry) then
 					pending = true
 				end
@@ -1572,6 +1772,44 @@ function Skin.Deferred()
 	return pending
 end
 
+-- The drop, from Edit Mode's own hook above or from a harness standing one up.
+-- Public because a drag is a scene rather than a state and there is no other
+-- way to reach it: the hook needs a client with Edit Mode and a mouse on it.
+function Skin.Landed()
+	for _, entry in ipairs(entries) do
+		if entry.spec.beside then
+			Landed(entry)
+		end
+	end
+end
+
+-- What a gap and a level are allowed to be. One source for the slash command,
+-- the panel's two steppers and the clamp a dropped drag goes through, because
+-- three copies of a range is three chances for a drag to store a number the
+-- command would have refused.
+function Skin.LinkRange()
+	return GAP_LOW, GAP_HIGH, LEVEL_LOW, LEVEL_HIGH
+end
+
+-- What the link is doing, which is not always what the setting asks for. It
+-- needs both frames skinned, so this says which half is missing rather than
+-- leaving the setting on and nothing drawn.
+function Skin.DescribeLink()
+	if not ns.db.skinLink then
+		return "the target block sits on its own Edit Mode point"
+	end
+	if not ns.db.skin then
+		return "the link is on and waiting for the skin, which is off"
+	end
+	if not (Skin.Wanted("player") and Skin.Wanted("target")) then
+		return "the link needs the player and target frames skinned, and one of them is off"
+	end
+	return ("the target block hangs %d pixels off the player block, %s")
+		:format(ns.db.skinGap, ns.db.skinLevel == 0 and "both tops on one line"
+			or ("%d pixels %s"):format(math.abs(ns.db.skinLevel),
+				ns.db.skinLevel > 0 and "lower" or "higher"))
+end
+
 -- What the client actually answered, printed rather than guessed at. Every
 -- number the layout is built from comes out here, so a block that lands in the
 -- wrong place is one line of output rather than another round of inference.
@@ -1593,10 +1831,11 @@ local function FitText(entry)
 			and (", aura row lifted %.1f, frame tailed by the same"):format(entry.auraLift)
 			or ", aura row not measured yet, no tail on the frame"
 	end
-	return ("%sedit mode selection %s%s%s"):format(was,
+	return ("%sedit mode selection %s%s%s%s"):format(was,
 		type(entry.frame.Selection) == "table" and "pinned to the block"
 			or "not on this client",
-		entry.perched and (", parked under the " .. entry.spec.under) or "", row)
+		entry.perched and (", parked under the " .. entry.spec.under) or "",
+		entry.linked and (", hung off the " .. entry.spec.beside .. " block") or "", row)
 end
 
 function Skin.Probe()
@@ -1654,7 +1893,8 @@ function Skin.Describe()
 			off[#off + 1] = entry.spec.key
 		end
 	end
-	local line = ("square frames, %d regions hidden"):format(Skin.Hidden())
+	local line = ("square frames, %d regions hidden, %s"):format(Skin.Hidden(),
+		Skin.DescribeLink())
 	if ns.db.skinHeals then
 		line = line .. (ns.HasHealPrediction() and ", incoming heals on the gauge"
 			or ", incoming heals asked for and this client has no prediction api")
@@ -1682,6 +1922,14 @@ events:RegisterEvent("PLAYER_REGEN_ENABLED")
 -- Blizzard_EditMode is load on demand, so the selection this file pins may not
 -- exist until the first time the user opens Edit Mode.
 events:RegisterEvent("ADDON_LOADED")
+-- Edit Mode writes its own saved point back over the link's anchor whenever a
+-- layout is applied, so the link is written again on the event that says it
+-- did. The name is retail's and this client is a backport of it, so the
+-- registration goes through pcall: a client that has never heard of the event
+-- refuses it and loses nothing, because PLAYER_ENTERING_WORLD and the
+-- Blizzard_EditMode load already reach Relayout. Which of the three this
+-- client actually fires is in docs/README.md under what has never run.
+pcall(events.RegisterEvent, events, "EDIT_MODE_LAYOUTS_UPDATED")
 -- How far above the frame's bottom edge the client starts the target's aura
 -- row is a number that can only be read off an icon it has already placed, so
 -- the first target carrying an aura is what settles it. Filtered to the target
