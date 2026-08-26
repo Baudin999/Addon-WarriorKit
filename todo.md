@@ -160,3 +160,23 @@ wandering once, changed once in `4ab4480`, and has not been looked at in game
 since. Nothing in the smoothness work that closed item 1 touched it, and the
 bar being smooth says nothing about where the mark sits. Ask before assuming it
 is fixed.
+
+## 11. Split Skin.lua, and take the ceiling back down
+
+Item 8 raised `UnitFrames/Skin.lua` in `check.sh` from 1764 to 2012 rather than
+taking the split, and that number is owed back. The split `check.sh` names for
+that file is the region walk, the block geometry and the tick.
+
+It waits for item 9, which deletes the lift machinery: roughly 110 lines that
+belong to none of the three pieces. Carving first means cutting a file that
+still has them in it and then deleting a slice out of one of the pieces, with
+both open branches rebasing across the rewrite. After item 9 the three pieces
+are the three subjects and nothing moves twice.
+
+Measure the new number rather than reusing one. Item 9 lowers the file too, and
+a ceiling handed from one commit to the next instead of measured is not a
+ratchet.
+
+The fourth allow-list entry, `UnitFrames/Feature.lua` at 879, goes away on its
+own when item 9's `UnitFrames/Panel.lua` split lands and item 8's panel block
+relocates into it. It is not part of this item.
