@@ -47,8 +47,15 @@ local function unitFrame(name, w, h, parent, badges)
 	return frame
 end
 
+-- Both frames carry a point of their own, the way the client hands them one
+-- and the way Edit Mode writes one back. That is what the frame link has to
+-- record before it moves the target and hand back when it is turned off, and a
+-- frame standing here with no anchor at all would make the restore untestable:
+-- there would be nothing to give back and no way to tell that from a restore
+-- that did nothing.
 local playerFrame = unitFrame("PlayerFrame", 232, 100, nil,
 	{ "PlayerRestIcon", "PlayerAttackIcon", "PlayerPVPIcon" })
+playerFrame:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT", -19, -4)
 child("fontstring", playerFrame, "PlayerLevelText")
 -- The combat feedback number, which is a font string and so is invisible to a
 -- walk over textures. Blizzard draws it centred on a portrait twice the size
@@ -56,6 +63,11 @@ child("fontstring", playerFrame, "PlayerLevelText")
 child("fontstring", playerFrame, "PlayerHitIndicator")
 local targetFrame = unitFrame("TargetFrame", 232, 100, nil,
 	{ "TargetFrameRaidTargetIcon", "TargetFramePVPIcon" })
+-- Deliberately not the player's own Y. Two frames Edit Mode happened to leave
+-- on one line would make "level 0 puts both block tops on one Y" true before
+-- anything linked them, and an assertion that passes against the unlinked
+-- layout is not an assertion.
+targetFrame:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT", 250, -50)
 child("fontstring", targetFrame, "TargetLevelText")
 child("fontstring", targetFrame, "TargetFrameHitIndicator")
 local totFrame = unitFrame("TargetFrameToT", 120, 50, targetFrame, {})

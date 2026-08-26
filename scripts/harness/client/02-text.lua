@@ -215,6 +215,66 @@ function Region:SetAllPoints(other)
 	self.points = { { "TOPLEFT", self.allPoints, "TOPLEFT", 0, 0 },
 		{ "BOTTOMRIGHT", self.allPoints, "BOTTOMRIGHT", 0, 0 } }
 end
+
+-- Where a frame actually landed, resolved through the chain of anchors it was
+-- given rather than answered as a constant.
+--
+-- The frame link needs it. Dropping the target in Edit Mode is read back as a
+-- gap and a level by measuring four edges and taking two differences, and both
+-- frames are on different scales, so a stub that answered nil made the
+-- derivation untestable and one that answered a constant made it pass. These
+-- four are also what UI/Tooltip.lua and UI/Widgets.lua ask when they decide
+-- which way to open over an owner.
+--
+-- What is modelled is one anchor per frame, which is what the addon writes.
+-- Both offsets are in the anchored frame's own units, the way the client reads
+-- them, and the walk stops at UIParent or at a frame carrying no anchor at
+-- all, either of which sits at the origin. Two things are deliberately not
+-- modelled: a frame sized by a pair of opposing anchors rather than by
+-- SetSize, and the client's own origin, which is the bottom left of the screen
+-- where this is the top left of UIParent. Every reader in the addon takes a
+-- difference between two of these, and a difference is the same on both.
+local function corner(point, width, height)
+	local x = width / 2
+	if point:find("LEFT") then
+		x = 0
+	elseif point:find("RIGHT") then
+		x = width
+	end
+	local y = -height / 2
+	if point:find("TOP") then
+		y = 0
+	elseif point:find("BOTTOM") then
+		y = -height
+	end
+	return x, y
+end
+
+local function origin(self)
+	if self == _G.UIParent or self:GetNumPoints() == 0 then
+		return 0, 0
+	end
+	local point, relative, relativePoint, x, y = self:GetPoint(1)
+	relative = relative or self.parent or _G.UIParent
+	local scale, theirs = self:GetEffectiveScale(), relative:GetEffectiveScale()
+	local rx, ry = origin(relative)
+	local ax, ay = corner(relativePoint, relative:GetWidth(), relative:GetHeight())
+	local mx, my = corner(point, self:GetWidth(), self:GetHeight())
+	return rx + ax * theirs + (x - mx) * scale, ry + ay * theirs + (y - my) * scale
+end
+
+function Region:GetLeft()
+	return (origin(self)) / self:GetEffectiveScale()
+end
+function Region:GetTop()
+	local _, y = origin(self)
+	return y / self:GetEffectiveScale()
+end
+function Region:GetRight() return self:GetLeft() + self:GetWidth() end
+function Region:GetBottom() return self:GetTop() - self:GetHeight() end
+function Region:GetCenter()
+	return self:GetLeft() + self:GetWidth() / 2, self:GetTop() - self:GetHeight() / 2
+end
 -- Stored rather than swallowed by the metatable, because a secure button's
 -- macro is written as an attribute and reading it back is the only way to
 -- assert what a key press would actually send.

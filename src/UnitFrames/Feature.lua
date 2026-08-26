@@ -188,6 +188,35 @@ local function SkinWord(arg)
 		return
 	end
 
+	if option == "link" then
+		ns.db.skinLink = ns.Command.Toggle(value)
+		ns.FrameSkin.Apply()
+		ns.Print("frame link " .. (ns.db.skinLink and "on" or "off")
+			.. ": " .. ns.FrameSkin.DescribeLink() .. ".")
+		if ns.db.skinLink then
+			ns.Print("Edit Mode positions the player block and this addon positions"
+				.. " everything against it. Drag the target in Edit Mode and where"
+				.. " it lands becomes the gap and the level.")
+		end
+		return
+	end
+
+	if option == "gap" or option == "level" then
+		local gapLow, gapHigh, levelLow, levelHigh = ns.FrameSkin.LinkRange()
+		local low, high = gapLow, gapHigh
+		if option == "level" then
+			low, high = levelLow, levelHigh
+		end
+		local size = ns.Command.Number(value, low, high, "skin " .. option)
+		if size then
+			ns.db[option == "gap" and "skinGap" or "skinLevel"] = size
+			ns.FrameSkin.Relayout()
+			ns.Print("skin " .. option .. " " .. size .. ": "
+				.. ns.FrameSkin.DescribeLink() .. ".")
+		end
+		return
+	end
+
 	if option == "heals" then
 		ns.db.skinHeals = ns.Command.Toggle(value)
 		ns.FrameSkin.Apply()
@@ -370,6 +399,26 @@ ns.Register({
 		skinHeight = 34,
 		skinWidth = 168,
 
+		-- The target block hung off the player block, which is the whole
+		-- shape of the change: Edit Mode is left positioning the player
+		-- block and this addon positions everything against it. On by
+		-- default for the reason the skin itself is, and it is the point of
+		-- the part rather than an extra. `/wk skin link off` puts the
+		-- target frame back on the point Edit Mode gave it, without a
+		-- reload, and every drag in Edit Mode goes on working either way.
+		skinLink = true,
+
+		-- Between the two facing edges, in screen pixels like the two sizes
+		-- above. 120 leaves a corridor wide enough to read as deliberate
+		-- and narrow enough that both blocks stay in one glance. What goes
+		-- in that corridor is a decision for after it exists.
+		skinGap = 120,
+
+		-- How far the target's top edge drops below the player's, in the
+		-- same pixels. Zero puts both block tops on one line, which is what
+		-- the pair looked wrong without.
+		skinLevel = 0,
+
 		-- The incoming heal slice on the health gauge. On by default, and it
 		-- costs nothing on a client that answers no prediction: the shim in
 		-- Core hands back nil and the tick draws the same nothing it draws for
@@ -411,6 +460,9 @@ ns.Register({
 		"skin on|off, the square player, target and target of target frames",
 		"skin player|target|tot on|off, one frame at a time",
 		"skin height <18-72>, skin width <90-360>, both in screen pixels",
+		"skin link on|off, hang the target block off the player block",
+		"skin gap <0-400>, the screen pixels between the two facing edges",
+		"skin level <-100-100>, the target's drop from the player",
 		"skin heals on|off, the incoming heal on the health gauge",
 		"skin probe, what this client answered for each frame",
 		"colors, every class fill and how far the name on it is from it",
@@ -459,6 +511,12 @@ ns.Register({
 		ns.db.skinHeight = ns.DefaultFor("skinHeight")
 		ns.db.skinWidth = ns.DefaultFor("skinWidth")
 		ns.db.skinHeals = ns.DefaultFor("skinHeals")
+		-- The two numbers a drag in Edit Mode writes, back where they started.
+		-- Reset already means put the frames back, and a gap that survived one
+		-- would be the only thing on these three frames that did not.
+		ns.db.skinLink = ns.DefaultFor("skinLink")
+		ns.db.skinGap = ns.DefaultFor("skinGap")
+		ns.db.skinLevel = ns.DefaultFor("skinLevel")
 		ns.FrameSkin.Apply()
 	end,
 
@@ -736,6 +794,39 @@ ns.Register({
 				ns.db.skinWidth = value
 				ns.FrameSkin.Relayout()
 			end)
+		local gapLow, gapHigh, levelLow, levelHigh = ns.FrameSkin.LinkRange()
+		ui.Check("hang the target block off the player block",
+			function() return ns.db.skinLink end,
+			function(value)
+				ns.db.skinLink = value
+				ns.FrameSkin.Apply()
+			end)
+		ui.Stepper("gap between the two facing edges, in pixels", gapLow, gapHigh, 10,
+			function() return ns.db.skinGap end,
+			function(value)
+				ns.db.skinGap = value
+				ns.FrameSkin.Relayout()
+			end)
+		ui.Stepper("the target's drop from the player, in pixels", levelLow, levelHigh, 5,
+			function() return ns.db.skinLevel end,
+			function(value)
+				ns.db.skinLevel = value
+				ns.FrameSkin.Relayout()
+			end)
+		ui.Note(function()
+			if not ns.db.skinLink then
+				return "Off, so Edit Mode positions both blocks and the two are free to"
+					.. " sit at unmatched heights and unmatched distances apart. "
+					.. ns.FrameSkin.DescribeLink() .. "."
+			end
+			return "Edit Mode positions the player block and this addon positions"
+				.. " everything against it: the target hangs off the player and target"
+				.. " of target hangs off the target. Dragging the target in Edit Mode"
+				.. " still works, and where you drop it becomes these two numbers."
+				.. " Both blocks are mirrored, so linking them faces the two gauges"
+				.. " across the gap and turns the portraits outward. |cffd08040Now:|r "
+				.. ns.FrameSkin.DescribeLink() .. "."
+		end)
 		for _, frame in ipairs({ { "player", "the player frame" },
 			{ "target", "the target frame" },
 			{ "tot", "target of target, which sits on the target's auras" } }) do

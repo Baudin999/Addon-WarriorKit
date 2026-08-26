@@ -371,7 +371,7 @@ done < <(grep -lE 'SetScript\("OnUpdate"' --include='*.lua' -r . | sort)
 # any one line and the whole is past what fits in a head, so the next change
 # lands wherever there is room rather than where it belongs.
 #
-# 800 is the general limit. Three files are over it and each carries its own
+# 800 is the general limit. Four files are over it and each carries its own
 # ceiling below, set at what it measures today, so any growth fails here rather
 # than passing unremarked. Raising one of those numbers is a decision to record
 # in the commit message, not a formality: the alternative is to take the split
@@ -382,7 +382,8 @@ LINE_LIMIT=800
 LINE_ALLOWED="
 UI/Widgets.lua:1289:the widget kit, one function per control and shared by every page
 UnitFrames/EnemyBars.lua:2050:splits at the settings API, the widget and the plate plumbing
-UnitFrames/Skin.lua:1764:splits at the region walk, the block geometry and the tick
+UnitFrames/Skin.lua:2012:splits at the region walk, the block geometry and the tick
+UnitFrames/Feature.lua:879:two parts under one registration; splits where the bars half meets the skin half
 "
 
 while IFS= read -r f; do

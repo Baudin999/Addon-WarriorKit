@@ -526,6 +526,12 @@ goes through `Feature.lua` or through the shared surface below:
     ns.FrameSkin.Apply()         put the three Blizzard unit frames where
                                  ns.db.skin says they should be
     ns.FrameSkin.Describe()      one line on what the skin did or did not find
+    ns.FrameSkin.Landed()        Edit Mode dropped a linked frame: read the gap
+                                 and the level back off where it came to rest
+    ns.FrameSkin.LinkRange()     gap low, gap high, level low, level high, so the
+                                 command, the panel and a drag clamp to one set
+    ns.FrameSkin.DescribeLink()  one line on where the target block is hanging,
+                                 or which frame it is waiting on
     ns.Options.Refresh()         put the panel back in step with the database
     ns.Options.SelectTab(index)  show one part's page
     ns.Register(feature)         sign a part into the registry, from Feature.lua only
@@ -2438,6 +2444,71 @@ was written against a target frame 100 units tall, so the moment that frame is
 parked three pixels under the target block, on the edge the two share, and it
 goes back to Blizzard's anchor the moment either frame is unskinned.
 
+**The three frames are one chain, and Edit Mode is left one job.** The player
+block is wherever Edit Mode put it. The target block hangs off the player block
+and target of target hangs off the target block, so what you place is one HUD
+rather than three frames free to drift apart. `/wk skin link off` puts the
+target frame back on its own point without a reload.
+
+That division is the only one available rather than a compromise. Edit Mode
+stores an absolute point per system and writes it back, and has no notion of
+one system anchored to another, so anything relational is this addon's by
+definition and the only real question is how much absolute positioning stays
+with Edit Mode. One anchor is the right amount. Dragging, snapping, switching
+layouts and storing them per character all go on working, and none of it is
+written here.
+
+The mirroring already in the blocks is what makes the pair symmetric. The
+player's gauge ends on its right edge and the target's on its left, because
+`spec.mirror` is false on one and true on the other, so anchoring the two gauge
+ends together faces the gauges across the gap and turns both portraits outward.
+`Link` reads that off the mirror flag rather than naming a corner, so a frame
+that stopped being mirrored would take its side of the link with it.
+
+`/wk skin gap 120` is the distance between those two facing edges and `/wk skin
+level 0` is how far the target's top edge drops below the player's. Both are
+counts of screen pixels on the same ruler as `/wk skin height`, and both are
+snapped. Where the pair lands on the screen is still a fraction of a pixel
+nobody can read, because the player frame's origin is Blizzard's and this only
+decides the distance between the two. That is the boundary the pixel grid
+already draws round the block, unchanged.
+
+Four things carry it, and the first is that a drag still means something. A
+linked frame that swallows your drag is a bug report, so nothing here refuses
+one. What is hooked is the drop: `Landed` measures four edges in screen units,
+divides by what one screen pixel costs there, snaps, clamps to the range the
+slash command takes, stores the two numbers and writes the anchor again. The
+drag teaches both settings without anyone typing a command.
+
+Second, the anchor is written again on every relayout rather than only when the
+switch moves, because three things change the number without changing the
+state: the gap setting, the level setting, and a resolution change that moves
+what one pixel costs in the frame's own units. Edit Mode writes its own saved
+point back over ours when a layout is applied, so the events that say it did
+are what re-apply the link. That last part is now true of target of target as
+well, and it was a bug: its three pixels were converted once and left, so a
+monitor swapped mid session left it on the old grid's offset until something
+else happened to move it.
+
+Third, off restores. The frame's own points are recorded before the first link,
+in the same `frameShot` the fit records its size in, and `Replant` hands them
+back. Three callers share that one function now, target of target coming off
+its perch, the target coming off the player block, and the whole skin coming
+off, because a restore that differed between the three would be a frame that
+lands somewhere new depending on which switch you flipped.
+
+Fourth, the link needs both frames skinned. Unskinned, `TargetFrame` is 232 by
+100 and a gap measured off its edge is a gap to the edge of a rectangle three
+quarters of which is empty, so the link waits and `/wk status` names the half
+that is missing rather than drawing something wrong.
+
+Target of target keeps `TOT_GAP` and gets no numbers of its own, which is a
+decision rather than an omission. The two blocks stand side by side and what
+sits between them is a corridor somebody wants to choose. Target of target is
+stacked under the target and reads as one piece with it, and three pixels is
+the hairline that stops two adjacent outlines reading as one thick edge. There
+is no second value anyone would type.
+
 Edit Mode also draws a selection frame over the system it is dragging. Where
 this client puts one, the skin pins it to the block, and it post-hooks that
 frame's own `AnchorSelectionFrame` so a re-anchor when the user next opens Edit
@@ -3491,8 +3562,11 @@ nothing ever runs is a branch that is wrong.
     /wk buffs remove 17038       by the same id
     /wk skin on|off              square class-coloured player and target frames
     /wk skin player|target|tot on|off   one frame at a time
-    /wk skin height 34           18 to 56, the block's height
-    /wk skin width 168           90 to 280, the gauge's width
+    /wk skin height 34           18 to 72, the block's height
+    /wk skin width 168           90 to 360, the gauge's width
+    /wk skin link on|off         hang the target block off the player block
+    /wk skin gap 120             0 to 400, between the two facing edges
+    /wk skin level 0             -100 to 100, the target's drop from the player
     /wk skin heals on|off        the incoming heal slice on the health gauge
     /wk skin probe               what this client answered for each frame
     /wk buttons apply            fill the bars with the warrior loadout
@@ -3565,7 +3639,7 @@ and zero errors.
    settings that vanish on logout rather than an error.
 5. Bans writes and allocation on ticker paths, described under Ticker
    discipline above.
-6. Caps how long a file may be. 800 lines in general, and three files carry
+6. Caps how long a file may be. 800 lines in general, and four files carry
    their own ceiling set at what they measure today, each with a one-line reason
    and the split it would take. The ceiling fails in both directions: a file that
    grows past it fails, and a file that shrinks below it fails until the number
@@ -3595,6 +3669,32 @@ and zero errors.
    of screen its block does, target of target is parked under the target block,
    and turning the skin off hands every frame back the size the stub built it
    and target of target back its own anchor.
+
+   The chain is measured between the blocks rather than inside one, because a
+   distance between two frames on two different scales is the thing the link
+   can get wrong. The gap between the two facing edges is the setting at UI
+   scale 0.65, 1 and 0.5, and target of target is three pixels under the target
+   block at all three, which is the sweep that caught its offset being
+   converted once and left on the old grid. Level 0 puts both block tops on one
+   Y and level 24 puts the target 24 pixels below, because zero on its own is
+   also what a link that dropped the vertical offset would produce. A drag is
+   stood up the way Edit Mode drops one, on an absolute point of its own rather
+   than on our anchor, so the two numbers have to come back out of four
+   measured edges: dropped 77 across and 33 down, `/wk skin gap` reads 77 and
+   `/wk skin level` reads 33. Turning the link off hands the target frame back
+   the exact point the stub gave it, and turning it on inside lockdown writes
+   nothing at all and finishes at `PLAYER_REGEN_ENABLED`.
+
+   For that last pair the stub had to grow two things it had done without.
+   `PlayerFrame` and `TargetFrame` now carry a point each, deliberately not on
+   one line, because a restore has nothing to prove against a frame that never
+   had an anchor and "both tops on one Y" is free if they started that way. And
+   `GetLeft`, `GetRight`, `GetTop` and `GetBottom` resolve through the chain of
+   anchors a frame was given rather than answering nil. What that models is one
+   anchor per frame, which is what this addon writes; a frame sized by two
+   opposing anchors is outside it, and the origin is the top left of `UIParent`
+   rather than the bottom left of the screen, so it answers differences
+   faithfully and absolutes on an offset.
 
    Two things the skin got wrong on the live client are gated there now. The
    stub records a texture's draw layer, which it used to drop, so the order that
@@ -4254,6 +4354,31 @@ Everything below was written from the API contract and has never executed:
   default; if the client insets its selection by the size of the art this part
   has already hidden, the pin is what corrects it. `/wk skin probe` says which
   of the two this client is.
+- How this client's Edit Mode says a system has been dropped. `HookDrag` wants
+  the moment a drag ends, so that where the target landed becomes the gap and
+  the level. Retail carries `OnDragStop` as a method on the system frame itself
+  and wires it as that frame's own drag script, so the method is post-hooked
+  where it is a function on the frame and the script is hooked where it is not.
+  Nothing installed on this machine touches either. A client that carries
+  neither loses only the drag: the two numbers stay whatever `/wk skin gap` and
+  `/wk skin level` were last set to, and the link is still written. Settle it by
+  opening Edit Mode, dragging the target somewhere obvious, closing Edit Mode
+  and reading `/wk status`, which prints the gap the drop stored.
+- Whether a frame anchored to another frame can still be dragged in this Edit
+  Mode at all. `StartMoving` clears a frame's points and follows the mouse, so
+  an anchor of ours is no more of an obstacle than Edit Mode's own, and that is
+  the contract rather than an observation. A client that refused would show as a
+  target frame that will not move once the link is on, and `/wk skin link off`
+  is the way out of that without a reload.
+- Whether `EDIT_MODE_LAYOUTS_UPDATED` is a real event on this backport. It is
+  retail's name for a layout being applied, which is the moment Edit Mode writes
+  its own saved point back over the link's anchor. Registering an event a client
+  does not have raises, so the registration goes through `pcall` and a client
+  without it loses nothing this addon needs:
+  `PLAYER_ENTERING_WORLD`, `PLAYER_TARGET_CHANGED` and the `Blizzard_EditMode`
+  load all reach `Relayout` already. A layout switch that leaves the target
+  frame parked at Edit Mode's own point until the next target change is what a
+  missing event looks like.
 - Whether Edit Mode's magnetism snaps against the frame's rectangle or against
   the selection's. They are the same rectangle on the player and on target of
   target, and on the target the frame is the block plus the strip the aura row
