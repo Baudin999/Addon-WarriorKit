@@ -2292,7 +2292,7 @@ do
 	-- warrior. Identity rather than value, for the reason above.
 	check(Color.Reaction("nameplate1") == Color.reaction.hostile,
 		"a reaction 2 mob is not coloured hostile")
-	check(Color.Aggro("nameplate1") == Color.aggro.comes,
+	check(Color.Frame("nameplate1") == Color.frame.hostile,
 		"a hostile mob is not marked as one that comes for you")
 	-- Whatever class this run came up as, since check.sh does two.
 	local playerClass = select(2, _G.UnitClass("player"))
@@ -2527,7 +2527,7 @@ do
 	-- The palette, restated rather than reached for, the same way the skin
 	-- section below restates it. A test that asks the file under test what the
 	-- answer is has not asked anything.
-	local TRACK, TRACK_ALPHA = 0.20, 0.9
+	local TRACK, TRACK_ALPHA = ns.Unit.Color.track, 0.9
 
 	local function near(got, want)
 		return got ~= nil and math.abs(got - want) < 1e-9
@@ -2579,7 +2579,7 @@ do
 			:format(tostring(bar.barR), tostring(bar.barG), tostring(bar.barB),
 				safe[1], safe[2], safe[3]))
 	check(paints(track, safe[1] * TRACK, safe[2] * TRACK, safe[3] * TRACK, TRACK_ALPHA),
-		"the spent part of the gauge is not its own colour at a fifth on nine tenths alpha")
+		"the spent part of the gauge is not its own colour at ns.Unit.Color.track on nine tenths alpha")
 
 	-- Through the setter the skin puts aside rather than through the no-op it
 	-- leaves in its place. The skin freezes SetStatusBarColor because Blizzard
@@ -2639,8 +2639,8 @@ do
 	check(churned < 0.05,
 		("painting a gauge 200 times allocated %.2f KB"):format(churned))
 
-	print(("gauge  flat fill, spent part at a fifth on %.1f alpha, layered under the"
-		.. " fill, %.2f KB per 200 paints"):format(TRACK_ALPHA, churned))
+	print(("gauge  flat fill, spent part at %.2f on %.1f alpha, layered under the"
+		.. " fill, %.2f KB per 200 paints"):format(TRACK, TRACK_ALPHA, churned))
 end
 
 --------------------------------------------------------------------------
@@ -4112,10 +4112,11 @@ for name, frame in pairs({ anchor = anchor, widget = widget }) do
 	check(math.abs(px - 1) < 1e-9, ("%s is not on the grid: one pixel is %.4f units"):format(name, px))
 end
 
--- Whole pixels where the grid can reach. The tag is the one size derived from
--- a measurement the client made, so it is the one that can come back fractional.
-for _, pair in ipairs({ { "widget", widget }, { "box", widget.box }, { "tag", widget.level },
-	{ "icon", widget.icons[1] } }) do
+-- Whole pixels where the grid can reach. The health number is the one size
+-- derived from a measurement the client made, so it is the one that can come
+-- back fractional; the tag frame that used to hold that job is gone.
+for _, pair in ipairs({ { "widget", widget }, { "box", widget.box },
+	{ "health number", widget.healthText }, { "icon", widget.icons[1] } }) do
 	for _, axis in ipairs({ "GetWidth", "GetHeight" }) do
 		local size = pair[2][axis](pair[2])
 		check(math.abs(size - math.floor(size + 0.5)) < 1e-9,
@@ -4178,14 +4179,52 @@ end
 -- that is not told to grow measures zero and gets zero.
 do
 	local px = ns.UI.Pixel(widget)
-	check(math.abs(widget.health:GetHeight() - (widget.box:GetHeight() - 2 * px)) < 1e-9,
-		("the gauge is %.0f px tall inside a %.0f px box, expected %.0f")
-			:format(widget.health:GetHeight(), widget.box:GetHeight(),
-				widget.box:GetHeight() - 2 * px))
+	-- Horizontally the gauge is still the box less a hairline each side, and
+	-- that half has not moved.
 	check(math.abs(widget.health:GetWidth() - (widget.box:GetWidth() - 2 * px)) < 1e-9,
 		("the gauge is %.0f px wide inside a %.0f px box, expected %.0f")
 			:format(widget.health:GetWidth(), widget.box:GetWidth(),
 				widget.box:GetWidth() - 2 * px))
+
+	-- Vertically it is the box less two hairlines only while nothing is casting.
+	-- The box has two chambers now and the second one comes and goes, so what is
+	-- asserted is the arithmetic both states have to satisfy:
+	--
+	--   idle = hairline + health + hairline
+	--   open = idle + seam + cast
+	--
+	-- and, the part that is the whole reason the chamber is not a Flow node,
+	-- that the health gauge is the same height and in the same place in both.
+	check(math.abs(widget.health:GetHeight() - (widget.boxIdle - 2 * px)) < 1e-9,
+		("the gauge is %.0f px tall inside a %.0f px idle box, expected %.0f")
+			:format(widget.health:GetHeight(), widget.boxIdle, widget.boxIdle - 2 * px))
+	check(math.abs(widget.box:GetHeight() - widget.boxIdle) < 1e-9,
+		("nothing is casting and the box is %.0f px, idle is %.0f")
+			:format(widget.box:GetHeight(), widget.boxIdle))
+
+	local cast = widget.cast
+	check(math.abs(widget.boxOpen - (widget.boxIdle + px + cast:GetHeight())) < 1e-9,
+		("the open box is %.0f px, expected idle %.0f plus a seam plus a %.0f px chamber")
+			:format(widget.boxOpen, widget.boxIdle, cast:GetHeight()))
+
+	local beforeH = widget.health:GetHeight()
+	local _, _, _, _, beforeY = widget.health:GetPoint()
+	ns.db.locked = false -- unlocked, the chamber previews itself on every bar
+	ns.Cast.Update(widget, "nameplate1")
+	check(math.abs(widget.box:GetHeight() - widget.boxOpen) < 1e-9,
+		("a cast left the box at %.0f px, open is %.0f")
+			:format(widget.box:GetHeight(), widget.boxOpen))
+	check(widget.cast.seam:IsShown(), "the box has two chambers and no seam between them")
+	local _, _, _, _, afterY = widget.health:GetPoint()
+	check(widget.health:GetHeight() == beforeH and afterY == beforeY,
+		"the cast chamber moved the health gauge, which is the whole thing it must not do")
+
+	ns.db.locked = true
+	ns.Cast.Clear(widget)
+	check(math.abs(widget.box:GetHeight() - widget.boxIdle) < 1e-9,
+		("the cast ended and the box stayed at %.0f px, idle is %.0f")
+			:format(widget.box:GetHeight(), widget.boxIdle))
+	check(not widget.cast.seam:IsShown(), "nothing is casting and the seam is still drawn")
 end
 
 -- The edges are one pixel, which was the whole complaint.
@@ -4260,17 +4299,18 @@ local function IconRows(bar)
 	return out
 end
 
--- What the cast row takes under the gauge, in this widget's units: eleven
--- pixels of bar, a hairline each side of it, and the same four pixel gap the
--- debuff row uses above the gauge. Zero with the setting off.
+-- What the cast chamber takes out of the widget's own height, which is nothing.
 --
--- Reserved whether or not anything is casting, which is the point of it, so it
--- is part of every height below rather than a case one of them tests.
-local function CastRoom(bar)
-	if not ns.db.barsCast then
-		return 0
-	end
-	return 11 * ns.UI.Unit(bar) + 2 * ns.UI.Pixel(bar) + 4 * ns.UI.Unit(bar)
+-- It used to be eleven pixels of bar, a hairline each side and a four pixel gap,
+-- reserved whether or not anything was casting, and that reserve was part of
+-- every height below. The chamber is inside the health box now and grows it
+-- downward from the box's own bottom edge, so the widget Flow measured does not
+-- change when a mob casts and neither does anything above the gauge.
+--
+-- Kept as a function rather than deleted, because the contract it states is the
+-- one worth keeping true: the cast setting must not move the bar's height.
+local function CastRoom(_)
+	return 0
 end
 
 -- The whole of the alignment contract: the last square in every row ends on the
@@ -4291,9 +4331,9 @@ local function CheckPacked(what)
 					:format(what, index, row[column] - row[column - 1], size + gap))
 		end
 	end
-	-- The gauge, the strip the icon rows take, the line above the lot, and the
-	-- cast row underneath it.
-	local wanted = (21 + 2) + #rows * (size + gap) + 15 * px + CastRoom(bar)
+	-- The gauge and its hairlines, the strip the icon rows take, and the line
+	-- above the lot. Nothing under the gauge: the cast chamber is inside the box.
+	local wanted = (22 + 2) + #rows * (size + gap) + 16 * px + CastRoom(bar)
 	check(math.abs(bar:GetHeight() - wanted) < 1e-9,
 		("%s: the bar is %.0f px tall over %d icon row(s), expected %.0f")
 			:format(what, bar:GetHeight(), #rows, wanted))
@@ -4351,13 +4391,13 @@ do
 	local bare = ns.EnemyBars.WidgetFor("nameplate1")
 	local px, unit = ns.UI.Pixel(bare), ns.UI.Unit(bare)
 	-- Built from the design rather than from one number, so the zoom and the
-	-- outline floor both reach it. The gauge is 21 with a hairline each side,
-	-- the strip above it is the threat line's own height, and 15 is the room the
+	-- outline floor both reach it. The gauge is 22 with a hairline each side,
+	-- the strip above it is the threat line's own height, and 16 is the room the
 	-- name over the plate takes. The strip is the floor rather than the bar's
-	-- text size because that line sits over the world and cannot go flat, which
-	-- is the whole reason it is 14 and not 12.
-	local strip = math.max(12, ns.UI.OutlineFloor())
-	local wanted = 21 * unit + 2 * px + (4 + strip + 15) * unit + CastRoom(bare)
+	-- text size because that line sits over the world and cannot go flat; the
+	-- two are the same number now that the bar's own text is at the floor too.
+	local strip = math.max(14, ns.UI.OutlineFloor())
+	local wanted = 22 * unit + 2 * px + (4 + strip + 16) * unit + CastRoom(bare)
 	check(math.abs(bare:GetHeight() - wanted) < 1e-9,
 		("with nothing tracked the bar is %.0f px tall, expected %.0f"):format(bare:GetHeight(), wanted))
 	check(not bare.icons[1]:IsShown(), "an empty list still shows a square")
@@ -4516,9 +4556,9 @@ do
 		check(math.abs(wide - ns.db.barsWidth * zoom) < 1e-6,
 			("at %dx the bar is %.1f screen pixels wide, the design asked for %d")
 				:format(zoom, wide, ns.db.barsWidth * zoom))
-		check(math.abs(gauge - (21 * zoom + 2)) < 1e-6,
+		check(math.abs(gauge - (22 * zoom + 2)) < 1e-6,
 			("at %dx the gauge box is %.1f screen pixels, expected %d")
-				:format(zoom, gauge, 21 * zoom + 2))
+				:format(zoom, gauge, 22 * zoom + 2))
 		check(math.abs(icon - ns.db.barsIconSize * zoom) < 1e-6,
 			("at %dx a debuff square is %.1f screen pixels, the design asked for %d")
 				:format(zoom, icon, ns.db.barsIconSize * zoom))
@@ -4829,17 +4869,29 @@ do
 	-- Off, and what has to come back with it
 	----------------------------------------------------------------------
 
+	-- Turning the chamber off takes nothing off the bar, and that is the whole
+	-- assertion. It used to take fifteen pixels, because the row was reserved
+	-- under the gauge whether or not anything cast: the setting moved every bar
+	-- on the screen up or down, and PlaceOnPlate had to subtract the reserve back
+	-- out to keep the gauge over the mob. The chamber lives inside the box now,
+	-- so the widget is the same height either way and the only thing the setting
+	-- decides is whether the box can grow.
 	local tall = ns.EnemyBars.WidgetFor("nameplate1"):GetHeight()
+	local openBox = ns.EnemyBars.WidgetFor("nameplate1").boxOpen
 	ns.db.barsCast = false
 	ns.EnemyBars.ApplyLayout()
 	ns.EnemyBars.Rebuild()
 
-	local short = ns.EnemyBars.WidgetFor("nameplate1"):GetHeight()
-	local room = 11 + 2 + 4
-	check(math.abs(tall - short - room) < 1e-9,
-		("switching the cast row off took %.0f px off the bar, and the row is %d")
-			:format(tall - short, room))
-	check(not ns.EnemyBars.WidgetFor("nameplate1").cast:IsShown(),
+	local bar = ns.EnemyBars.WidgetFor("nameplate1")
+	check(math.abs(tall - bar:GetHeight()) < 1e-9,
+		("switching the cast row off took %.0f px off the bar, and it must take none")
+			:format(tall - bar:GetHeight()))
+	check(math.abs(bar.boxOpen - bar.boxIdle) < 1e-9,
+		("the chamber is off and the box can still open to %.0f px over its idle %.0f")
+			:format(bar.boxOpen, bar.boxIdle))
+	check(openBox > bar.boxIdle,
+		"the chamber was on and the box could not open any further than idle")
+	check(not bar.cast:IsShown(),
 		"the cast row is switched off and still drawn")
 	check(plate.UnitFrame.castBar:IsShown(),
 		"our cast row is off and Blizzard's plate cast bar did not come back with it")
@@ -4860,7 +4912,9 @@ do
 	ns.EnemyBars.ApplyLayout()
 	ns.EnemyBars.Rebuild()
 	check(math.abs(ns.EnemyBars.WidgetFor("nameplate1"):GetHeight() - tall) < 1e-9,
-		"the cast row did not take its room back")
+		"the bar changed height when the cast row came back")
+	check(ns.EnemyBars.WidgetFor("nameplate1").boxOpen > ns.EnemyBars.WidgetFor("nameplate1").boxIdle,
+		"the cast row came back and the box still cannot open")
 
 	----------------------------------------------------------------------
 	-- The preview, which is the only way to look at this row on purpose
@@ -5014,8 +5068,10 @@ do
 		("the cast section left the clock at %.9f, and the sections below it want a whole second")
 			:format(_G.GetTime()))
 
-	print(("cast   %d px row, fill exact at 60 and 144 fps, immune flag %s; %s")
-		:format(room, tostring(ns.CastImmuneKnown()), ns.Cast.Describe()))
+	local chamber = ns.EnemyBars.WidgetFor("nameplate1")
+	print(("cast   %d px chamber in a %d px box, %d idle, fill exact at 60 and 144 fps, immune flag %s; %s")
+		:format(chamber.cast:GetHeight(), chamber.boxOpen, chamber.boxIdle,
+			tostring(ns.CastImmuneKnown()), ns.Cast.Describe()))
 end
 
 
@@ -5063,7 +5119,7 @@ local blocks = {
 -- class the second time. Both are the stub's own figures written out again, so
 -- the check is still that the skin carried the client's colour through rather
 -- than that two tables agree with each other.
-local TRACK, EDGE_DIM = 0.20, 0.60
+local TRACK, EDGE_DIM = ns.Unit.Color.track, 0.60
 local CLASS_TINT = {
 	WARRIOR = { 0.78, 0.61, 0.43 },
 	HUNTER = { 0.67, 0.83, 0.45 },
@@ -5251,7 +5307,7 @@ for _, block in ipairs(blocks) do
 					tostring(frame.healthbar.barB), tint[1], tint[2], tint[3]))
 		check(paints(skinTrack(frame.healthbar), tint[1] * TRACK, tint[2] * TRACK,
 			tint[3] * TRACK, 0.9), key .. ": the spent part of the health gauge is not "
-				.. "the unit's colour at a fifth")
+				.. "the unit's colour at ns.Unit.Color.track")
 		local dimmed = 0
 		for _, region in ipairs(box.regions) do
 			if paints(region, tint[1] * EDGE_DIM, tint[2] * EDGE_DIM, tint[3] * EDGE_DIM, 1) then
@@ -5567,9 +5623,9 @@ do
 end
 
 print(("grid   %s"):format(ns.UI.Describe()))
-print(("bar    %.0f x %.0f px, box %.0f, tag %.0f, icon %.0f, hairline %.0f")
-	:format(widget:GetWidth(), widget:GetHeight(), widget.box:GetHeight(),
-		widget.level:GetWidth(), widget.icons[1]:GetWidth(), widget.box.edges[1].height))
+print(("bar    %.0f x %.0f px, box %.0f idle and %.0f casting, icon %.0f, hairline %.0f")
+	:format(widget:GetWidth(), widget:GetHeight(), widget.boxIdle, widget.boxOpen,
+		widget.icons[1]:GetWidth(), widget.box.edges[1].height))
 print(("plates %s"):format(ns.Plates.Describe()))
 local playerBox = _G.WarriorKitSkinPlayer
 print(("skin   %s; player block %.0f x %.0f px, gauge %.0f and %.0f, hairline %.0f")
@@ -10338,6 +10394,13 @@ end
 --   STRIPE_WIDTH * px / 2      2.5 pixels, on the level tag's number.
 --   lineHeight / 2             half a pixel on the threat line at any odd
 --                              debuff icon size.
+--
+-- The first two are gone rather than rounded. The bar height is even now, so the
+-- offset that centres it is whole by construction, and the level is a font
+-- string inside the gauge with no stripe to centre it against. Rounding a
+-- half-pixel away costs half a pixel of centring; not producing one costs
+-- nothing. The check stays, because the next odd constant will not announce
+-- itself either.
 --
 -- Scope is every frame the addon put on the grid and everything under it, found
 -- by walking up for the SetIgnoreParentScale that UI.Adopt calls. A frame that

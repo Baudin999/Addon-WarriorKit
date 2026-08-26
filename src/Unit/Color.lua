@@ -47,10 +47,18 @@ local HUE = {
 	gold   = { 1.00, 0.62, 0.25 },
 	coral  = { 1.00, 0.35, 0.32 },
 
-	-- Hostile is the deep one because it is what nearly everything on screen
-	-- is, and a third bright red beside threat red and five-levels-up red would
-	-- be one red too many. Neutral is the exception worth seeing across a room.
-	blood   = { 0.55, 0.12, 0.12 },
+	-- Reaction, and the pair is deliberately lopsided. Hostile is chrome: it is
+	-- what nearly everything on screen is, so the frame round it has to read as
+	-- structure and disappear. Neutral is the exception worth seeing across a
+	-- room, so it is the only one that carries a hue at all.
+	--
+	-- This used to be a deep blood red against the same amber, on a five pixel
+	-- stripe outside the bar. Every bar the addon draws is on something you can
+	-- attack, so the red was on almost every bar, permanently, at the outermost
+	-- edge of the widget. That is the loudest position on the bar paying for the
+	-- one bit that is nearly always the same. A channel that is loud in the
+	-- common case is noise.
+	iron    = { 0.24, 0.25, 0.29 },
 	warning = { 0.95, 0.75, 0.15 },
 
 	-- The cast bar's own, and it is deliberately none of the above. The gauge
@@ -67,12 +75,22 @@ Color.hue = HUE
 -- file path anywhere, so there is no art asset that has to still exist on this
 -- client.
 Color.backdrop = { 0.04, 0.04, 0.05, 0.85 }
-Color.plate    = { 0.03, 0.03, 0.04, 0.95 } -- the level tag's own chip
 Color.iconEdge = { 0, 0, 0, 0.90 }
+
+-- The hairline between the two chambers of an enemy bar, health above and cast
+-- below. Darker than the backdrop and fully opaque, because its whole job is to
+-- be the one line that says these are two readings and not one fill. Against
+-- the backdrop's own 0.85 it would show the world through the seam.
+Color.seam = { 0.02, 0.02, 0.03, 1 }
 
 -- What the spent part of a bar keeps of its own colour. A mob at ten percent
 -- still reads as yours rather than as an empty box.
-Color.track = 0.20
+--
+-- Raised from a fifth when the enemy bars' edge stopped carrying threat. A one
+-- pixel ring at full saturation was never what made aggro legible on a nearly
+-- empty bar; the track was, and at a fifth it was too dim to do it alone. Three
+-- tenths puts the answer across the bar's whole width instead of round its rim.
+Color.track = 0.30
 
 -- What an edge keeps of the fill's colour. At full strength a hostile target
 -- ringed the whole block in saturated red and the border shouted louder than
@@ -119,12 +137,19 @@ Color.xp = {
 	deadly = HUE.coral,
 }
 
--- Whether it comes for you on its own. Hostile mobs do inside their aggro
--- radius; neutral ones stand there until you hit them.
-Color.aggro = {
-	comes = HUE.blood,
-	waits = HUE.warning,
-	idle  = HUE.slate,
+-- The frame round a bar, which is where reaction lives now. A departure
+-- channel: hostile and friendly both draw chrome and only neutral departs from
+-- it, because neutral is the one you need told before you cleave.
+--
+-- Friendly answers iron rather than a colour of its own, and that is not a
+-- placeholder. Both halves of the enemy bars require UnitCanAttack, so no bar
+-- is ever drawn on something friendly and a third colour here would be one no
+-- caller can reach. Something that stopped being attackable would get the
+-- quiet frame, which is the right answer for a bar that is about to go away.
+Color.frame = {
+	hostile = HUE.iron,
+	neutral = HUE.warning,
+	idle    = HUE.iron,
 }
 
 -- A cast running on something you can attack. Two states and not three: one you
@@ -219,15 +244,16 @@ function Color.Reaction(unit)
 	return reaction == 4 and Color.reaction.neutral or Color.reaction.hostile
 end
 
--- Whether it comes for you unprompted. The reaction is the whole question and
--- the whole answer; what it cannot tell you is aggro radius, which shrinks as
--- the mob falls behind your level.
-function Color.Aggro(unit)
+-- The frame colour for a unit, which is the reaction question asked in the one
+-- channel that costs no pixels: 4 is neutral and departs, everything else is
+-- chrome. What it cannot tell you is aggro radius, which shrinks as the mob
+-- falls behind your level and which no API on these clients answers.
+function Color.Frame(unit)
 	local reaction = UnitReaction(unit, "player")
 	if not reaction or reaction >= 5 then
-		return Color.aggro.idle
+		return Color.frame.idle
 	end
-	return reaction == 4 and Color.aggro.waits or Color.aggro.comes
+	return reaction == 4 and Color.frame.neutral or Color.frame.hostile
 end
 
 -- The colour a unit's own gauge wears. A player wears their class; anything

@@ -22,9 +22,11 @@ ns.Plates = Plates
 --                     first thing the part takes.
 --   the plate's size  the driver spaces plates by how big it thinks a plate is,
 --                     and it thinks a plate is Blizzard's nameplate. Ours is
---                     twice the height of that, with a level tag hanging off
---                     the left edge, so two plates the driver has cleanly
---                     separated are two bars that are not.
+--                     twice the height of that, and taller again while a mob
+--                     is casting, so two plates the driver has cleanly
+--                     separated are two bars that are not. The figure sent is
+--                     the casting height: spacing for the taller of two
+--                     states is right in both and for the shorter, neither.
 --
 -- SetNamePlateEnemySize tells it the real figure. Where that call is missing,
 -- nameplateOverlapV multiplies the height the driver uses instead, which gets

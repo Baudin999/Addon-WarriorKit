@@ -817,7 +817,7 @@ the widget fixes it. Blizzard's driver decides where a plate goes, and it uses
 two things `UnitFrames/Plates.lua` can reach: `nameplateMotion`, which on 0 lets
 plates overlap freely and on 1 makes the driver push them apart, and the plate's
 size, which the driver takes to be Blizzard's nameplate. Ours is twice the
-height of that with a level tag hanging off the left edge.
+height of that, and taller again while a mob is casting.
 
 `SetNamePlateEnemySize` tells it the real figure, sent in UIParent's units
 because that is what the driver counts in. Where that call is missing,
@@ -1903,15 +1903,24 @@ debuff icons packed right. The icon row wraps upwards when it stops fitting, so
 a long list on a narrow bar becomes two rows rather than icons hanging off the
 left edge.
 
-The edge around the gauge carries the threat colour, the same colour the fill
-uses, so aggro is legible off a bar that is nearly empty. Your current target
-turns its name pale gold instead, because the edge is spoken for.
+The edge around the gauge carries reaction, not threat. It used to carry threat
+at full saturation on all four sides, which put a saturated red ring on nearly
+every bar on the screen to say what the fill under it already said. The palette
+had been arguing against that since it was written: `Color.edgeDim` is 0.60 with
+a note saying an edge at full strength "shouted louder than anything inside it",
+and the skinned unit frames dim theirs while these bars never did.
 
-**The mob tag** sits outside the box, off the left end of the gauge, and
-answers two questions between them: what the kill is worth, and whether the mob
-starts it.
+What pays for losing the edge is the track. The spent part of a gauge keeps
+three tenths of the threat hue rather than a fifth, so a mob at ten percent
+reads as yours across the bar's whole width instead of round its rim. The ring
+was never what made aggro legible on a nearly empty bar; the track was, and at a
+fifth it was too dim to do the job alone.
 
-The number is the level, coloured on the client's own XP scale:
+Your current target turns its name pale gold and everything else dims to 0.55
+alpha, because the edge is spoken for.
+
+**The level** sits inside the gauge, left of the name, coloured on the client's
+own XP scale:
 
     grey     more than GetQuestGreenRange below you, and it pays nothing
     green    below you and still inside that range
@@ -1922,74 +1931,62 @@ The number is the level, coloured on the client's own XP scale:
     42   normal        42+   elite        42r   rare        42r+  rare elite
     ??   a boss, or a level this client will not name
 
-The stripe closing the tag on the left is the reaction. `UnitReaction` under 4
-is hostile and it comes for you inside its aggro radius, 4 is neutral and it
-stands there until you hit it. Anything over 4 does not fight you at all and
-cannot normally reach a bar, since a bar needs `UnitCanAttack`, so that case
-draws the idle grey rather than a claim.
-
-Hostile is deep red and quiet, neutral is bright amber. That is deliberate and
-not a mistake about which one matters: nearly everything on the screen is
-hostile, the bar already carries threat red on the fill and five-levels-up red
-on the number, and a third bright red would say nothing new. The exception is
-what you want to catch from across a room.
-
-The stripe cannot tell you about aggro radius, which shrinks as a mob falls
-behind your level until a hostile one walks past without noticing you. Read the
-two halves of the tag together. Deep red against a grey number is a mob that
-could come for you and will probably not bother.
-
 `replace` style strips `LevelFrame` and `ClassificationFrame` off the Blizzard
 plate, so before this the bar showed no level and no elite dragon at all. The
-tag puts both back in one string.
+string puts both back.
 
-The tag is one frame holding both, and one setting turns the pair on and off,
-because they are one question: what is this thing and what does it do about me.
-The number and the stripe are a tag rather than a second colour on the gauge on
-purpose. The XP scale
-and the threat scale are the same five colours meaning two different things,
-and a green fill would have to mean "you hold it" and "it is worth little" at
-once. So difficulty gets the tag, threat keeps the fill, the edge and the line
-above, and neither has to be read through the other.
+**Reaction is the frame, and it is a departure channel.** `UnitReaction` under 4
+is hostile and draws iron `#3D404A`, which reads as chrome and disappears. 4 is
+neutral and draws amber `#F2BF26` around the whole box, which is unmissable
+across a room and is exactly what "do not cleave this one" needs to be. Anything
+over 4 does not fight you at all and cannot reach a bar, since both halves of
+the collector require `UnitCanAttack`, so friendly draws the quiet frame rather
+than a colour no caller can reach.
 
-The tag used to sit inside the gauge, over the left end of the fill. The left
-end is the part a mob still has at ten percent, so the tag covered exactly the
-health worth looking at. It now sits outside the box, flush against its left
-edge and the same height as it, so the two read as one strip with the box's own
-hairline between them. There is no gap. The whole inside of the bar is the
-name's again, left edge to health number.
+That is the second thing the revamp moved and the reasoning is worth keeping.
+Reaction used to be a five pixel stripe closing a level chip on its far left,
+which put a permanent five pixels at the outermost edge of the widget, in the
+loudest position on the bar, to carry one bit. Because every bar is on something
+attackable, that bit was hostile on nearly every bar on the screen. A channel
+that is loud in the common case is noise. Drawing nothing for the common case
+and everything for the exception costs no pixels and says more.
 
-It is pinned by its right edge rather than its left. It is as wide as its own
-text, measured with `GetStringWidth` whenever the string changes, because `??`
-and `42r+` are not the same width, and pinning the right edge means a wider tag
-grows leftwards into empty screen instead of pushing the gauge. The raid marker
-anchors outside the tag while the tag is on and back against the box when it is
-off, so the two never want the same strip of screen.
+The frame is outside the `bars level` branch on purpose. Turning the mob level
+off turns off what a kill is worth, which is a preference. It must not turn off
+whether a mob will start a fight, which is not.
 
-Its plate is near black and the number carries the colour, because a filled chip
-would sit against the gauge in a colour off the same five and the two would read
-as one smear.
+**The level moved inside the gauge, and the chip is what was wrong, not the
+position.** The original argument for hanging it outside was that inside the
+gauge it covered the left end of the fill, which is the end a mob still has at
+ten percent. That is true of a chip and false of a glyph: the chip drew an
+opaque plate over the fill, and a font string does not. The mob's name has sat
+in that exact strip since the first bar and has never covered anything.
 
-**What sits over the mob is the tag plus the box, not the box.** A tag hanging
-off one side would otherwise throw the whole thing left of the plate's centre.
-`PlaceOnPlate` shifts the widget right by half the tag width when it anchors it,
-which puts the middle of the pair on the plate centre and carries the threat
-line and the debuff row along rather than leaving them behind. It is not a
-one-time calculation: the offset is half of a width that changes with the
-string, so `UpdateWidget` calls `PlaceOnPlate` again on the same branch that
-remeasures the tag, next to the `GetStringWidth` call that caused the move. Both
-are guarded on the string, so a mob whose level is not changing pays nothing.
+The second argument was that the XP scale and the threat scale are the same five
+colours meaning two different things, so a green fill cannot mean "you hold it"
+and "it is worth little" at once. That is an argument about two *fills*
+competing. A 14 pixel outlined numeral over a flat fill reads as a label, the
+way the name beside it does.
 
-List mode gets no offset at all. There the widgets stack against the anchor's
-left edge, and the right answer is boxes that line up under a ragged column of
-tags, not boxes that shuffle sideways by mob level. `LayoutWidget` records
-`widget.onPlate` for that check, and a widget going back to the pool drops its
-`widget.plate` so a stale plate cannot be re-anchored to.
+What the chip cost was the shape of the whole widget. Reading leftward from the
+box there was a raid marker, a three pixel gap, a tag about 27 pixels wide, then
+the bar, while the targeted-by line above was `barsWidth + 60` and centred. Four
+distinct vertical alignments inside one 79 pixel object, and a ragged staircase
+for a silhouette. Nothing else in the addon does that: the options window, the
+meter rows and the nag row all share one left edge. The assembly has one left
+edge now, and the raid marker is the only thing outside it.
+
+It also made the footprint handed to the nameplate driver wider than the bar,
+which is the complication the head of `Plates.lua` documents, and it forced
+`PlaceOnPlate` to shift the widget right by half the tag on every remeasure,
+because `??` and `42r+` are not the same width. Both are gone. `LayoutWidget`
+sends the driver `barsWidth` and `PlaceOnPlate` applies no horizontal offset at
+all.
 
 `GetQuestGreenRange` is what draws the grey line, and a client without it gets
 green for everything below you instead. Grey is a claim that the kill is worth
 zero, and that claim needs the number the shim could not get. `bars level off`
-takes the whole tag away, stripe included.
+takes the string away and leaves the frame.
 
 A one pixel edge is not `SetHeight(1)`. A nameplate carries a scale of its own,
 so a one unit edge on a plate landed at about one and a half pixels and rounded
@@ -2002,8 +1999,37 @@ do not share a scale.
 There was a second three pixel bar above the health bar showing the threat
 number as a gauge. Solo, and any time nothing was pulling, it sat empty and left
 a dark stripe along the top of the box that read as an unfinished fill. It is
-gone: threat is the colour of the gauge and of the edge, and the number is still
-written on the line above.
+gone: threat is the fill and the track, and the number is still written on the
+line above.
+
+**One type size on the bar, and it is the outline floor.** `PLATE_TEXT` was 12
+while the threat number and the targeted-by line above it were raised to 14 to
+clear that floor, so the mob's name was drawn smaller than the list of who else
+was on it. Worse, the name, the health number and the level were all drawn at 12
+with an outline, and `UI/Text.lua` states in its own words that an outline below
+14 closes up a glyph's counters until a 3 and an 8 stop being different shapes.
+That is what "the bar looks coarse" actually was. Not blurry: mush. Everything
+on the bar is Arial Narrow 14 now, and the cast chamber's text is 10 flat, which
+`ns.UI.NumberFont` handles by dropping the outline rather than closing the
+glyph. Two sizes on the widget instead of four.
+
+The health number is given the width of `"100%"` at layout and kept there. Arial
+Narrow is proportional, so `"9%"` and `"100%"` are different widths, and the
+name's right boundary is pinned to this string's left edge. Without a reserved
+column the name re-measured and re-clipped every time the percent changed, so
+the mob's name walked left and right as it died, once per bar per tick.
+
+Text is inset five pixels from the gauge's ends rather than four. Four next to a
+one pixel hairline reads as three, which is what made the name look like it was
+leaning on the frame.
+
+`PLATE_BAR_HEIGHT` is 22 rather than 21, and that is a pixel-crispness fix
+rather than a size preference. `replace` is the default style and it centres the
+gauge on the mob, so the offset is half the bar height. Half of 21 is half a
+pixel, and a widget whose origin is half a pixel off a boundary has every edge,
+every glyph and every icon inside it drawn across two rows. `PlaceOnPlate` used
+to round that away and give up half a pixel of centring in exchange. An even bar
+gives up nothing and there is nothing left to round.
 
 **A plate is a hole in the camera, and the hole is not ours.** The widget calls
 `EnableMouse(false)` on itself and none of its children ever take the mouse, so
@@ -2083,26 +2109,55 @@ threat data.
 
 **The cast bar.** `grep UNIT_SPELLCAST` returned nothing across this addon
 until this row existed, and the bars replace the nameplate, so replacing it cost
-the one thing on a plate that says when to press Pummel or Shield Bash. The row
-sits under the health gauge: the spell's name on the left, the seconds left on
-the right, a fill that runs left to right for a cast and drains right to left
-for a channel.
+the one thing on a plate that says when to press Pummel or Shield Bash. The
+spell's name sits on the left, the seconds left on the right, and a fill runs
+left to right for a cast and drains right to left for a channel.
 
 Violet, and deliberately nothing else on the bar. The gauge above it carries
-threat, which is the green through red scale, and the tag beside it carries the
-XP scale, which is those same five colours meaning something else. A cast bar in
-any of them would read as a third opinion about the mob's health. The one
-exception is a cast the client flags as uninterruptible, which is drawn in the
-idle slate: there is nothing for you to do and the colour says so.
+threat, which is the green through red scale, and the level beside the name
+carries the XP scale, which is those same five colours meaning something else. A
+cast bar in any of them would read as a third opinion about the mob's health.
+The one exception is a cast the client flags as uninterruptible, which is drawn
+in the idle slate: there is nothing for you to do and the colour says so.
 
-**The row is reserved and it draws nothing.** It is kept clear whether or not
-the mob is casting, because a row that appeared would shove the health bar
-upwards at the exact moment the thing you are watching starts happening, and a
-bar that moves when the fight gets interesting is a bar you have to find again.
-Empty, it hides its box, so there is no fill, no edge and no backdrop: what is
-left is air. That is the mistake the three pixel threat bar above the gauge made
-and was deleted for. `PlaceOnPlate` subtracts the reserved height from its own
-offset, so the health gauge is still the thing centred on the mob.
+**It is the second chamber of the health bar's box, not a box under it.** One
+outline goes round both, with a one pixel opaque seam between them and no gap.
+
+It began as a separate box with its own backdrop, its own four sided violet
+outline and four pixels of clearance. That is two independently framed
+rectangles near each other, with nothing but proximity claiming they are about
+the same mob. A seam reads as a division inside one object; a gap reads as two
+objects. The chamber also has no edge of its own, because the box's outline
+belongs to reaction, and turning it violet for the length of a cast would say
+the mob had gone neutral.
+
+**The chamber takes no room while nothing is casting.** The row used to be
+reserved whether or not the mob ever cast, so seventeen pixels of nothing hung
+under every bar on the screen, permanently. With the fifteen pixel targeted-by
+line that is empty whenever you are solo, up to 32 of the widget's 79 pixels
+were nothing at all, most of the time.
+
+The goal that reserve bought was right and is kept: a row that appears must not
+shove the health bar upward at the exact moment the thing you are watching
+starts happening, because a bar that moves when the fight gets interesting is a
+bar you have to find again. Reserving was one way to reach it and it was the
+expensive way. The widget hangs by its **top** edge now, so the chamber opens
+downward out of the box's bottom and every pixel above it, the health gauge
+included, stays exactly where it was. The bar is 64 pixels idle and 76 casting,
+against 79 always.
+
+`Cast.Fit` therefore returns a height and not a Flow node. Flow measures once at
+layout, and a chamber that comes and goes five times a fight is a state, not a
+measurement, so `LayoutWidget` stores the box's idle and open heights and `Cast`
+switches between them with one `SetHeight`. The health gauge carries the height
+Flow gave it and is pinned to the widget's top left, so growing the box around
+it moves nothing. The harness asserts exactly that: it opens the chamber and
+checks the gauge's height and anchor offset are unchanged.
+
+`Plates.SetFootprint` is handed the **casting** height unconditionally. The
+widget really does grow, and a driver told the idle figure would space plates so
+that a chamber opened into the bar underneath. Spacing for the taller of two
+states is correct in both; spacing for the shorter is correct in neither.
 
 **The fill is drawn on every frame and the rest is not.** One `OnUpdate` runs
 `EnemyBars.Sweep`, which advances the fills and nothing else, and
@@ -3375,7 +3430,7 @@ nothing ever runs is a branch that is wrong.
     /wk bars style replace|attach
     /wk bars offset 0            nudge the bar on the plate, -60 to 60
     /wk bars marker on|off       ours, or hand the marker back to Blizzard
-    /wk bars level on|off        the mob tag, XP colour and reaction stripe
+    /wk bars level on|off        the mob level inside the bar, coloured by XP
     /wk bars max 8               list mode only, 1 to 15
     /wk bars width 180           a bar on a plate and in the list, 120 to 400
     /wk bars debuff              what the icon row tracks, in order

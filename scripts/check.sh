@@ -210,6 +210,7 @@ UnitFrames/EnemyBars.lua:EnemyBars.Sweep
 UnitFrames/Cast.lua:Seconds
 UnitFrames/Cast.lua:Preview
 UnitFrames/Cast.lua:Show
+UnitFrames/Cast.lua:Chamber
 UnitFrames/Cast.lua:Cast.Update
 UnitFrames/Cast.lua:Cast.Sweep
 UnitFrames/EnemyBars.lua:Collect
@@ -231,7 +232,7 @@ Unit/Unit.lua:Unit.TargetToken
 Unit/Color.lua:Color.Class
 Unit/Color.lua:Color.ClassHex
 Unit/Color.lua:Color.Reaction
-Unit/Color.lua:Color.Aggro
+Unit/Color.lua:Color.Frame
 Unit/Color.lua:Color.OfUnit
 Unit/Color.lua:Color.Dim
 Unit/Level.lua:Level.Tag

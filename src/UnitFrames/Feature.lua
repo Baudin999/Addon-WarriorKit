@@ -92,9 +92,10 @@ local function BarsWord(option, value)
 		ns.db.barsLevel = ns.Command.Toggle(value)
 		ns.EnemyBars.ApplyLayout()
 		ns.EnemyBars.Rebuild()
-		ns.Print("mob tag " .. (ns.db.barsLevel and "on" or "off")
-			.. ": the level coloured by what the kill is worth, grey pays no XP and red is five levels"
-			.. " up, and a stripe beside it, bright amber when the mob is neutral and will not start it.")
+		ns.Print("mob level " .. (ns.db.barsLevel and "on" or "off")
+			.. ": drawn inside the bar, left of the name, coloured by what the kill is worth."
+			.. " Grey pays no XP and red is five levels up. Whether a mob is neutral is the"
+			.. " bar's own frame, and that stays either way.")
 	elseif option == "cast" then
 		ns.db.barsCast = ns.Command.Toggle(value)
 		ns.EnemyBars.ApplyLayout()
@@ -289,7 +290,7 @@ ns.Register({
 		barsStyle = "replace", -- "replace" takes over the nameplate look, "attach" rides above Blizzard's
 		barsOffset = 0,
 		barsMarker = true,
-		barsLevel = true, -- the mob tag: level coloured by XP value, plus the reaction stripe
+		barsLevel = true, -- the level, inside the bar, coloured by XP value
 
 		-- The cast row under the gauge. On by default, because it is the one
 		-- thing Blizzard's nameplate said that the bar replacing it did not,
@@ -499,7 +500,7 @@ ns.Register({
 			end
 			return "the red outline on each plate is the region that takes the mouse. Our bar is anchored to it, so the two should agree."
 		end)
-		ui.Check("mob tag: level by XP value, stripe by hostile or neutral",
+		ui.Check("mob level inside the bar, coloured by XP value",
 			function() return ns.db.barsLevel end,
 			function(value)
 				ns.db.barsLevel = value

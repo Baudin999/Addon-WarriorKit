@@ -20,19 +20,28 @@ ns.Cast = Cast
 -- recycled the moment a mob dies, which is a whole class of stale bar this
 -- file cannot have.
 --
--- The row is reserved whether or not the mob is casting, and it draws nothing
--- at all while it is empty: the box is hidden, so there is no fill, no edge and
--- no backdrop. Both halves of that are deliberate.
+-- The row is the second chamber of the health bar's own box, not a box of its
+-- own under it, and it takes no room at all while nothing is casting.
 --
--- Reserved, because a row that appeared would shove the health bar upwards at
--- the exact moment the thing you are watching starts happening, and a bar that
--- moves when the fight gets interesting is a bar you have to re-find.
+-- It began as a separate box: its own backdrop, its own four sided violet
+-- outline, four pixels of gap. Two independently framed rectangles near each
+-- other, with nothing but proximity saying they were about the same mob. One
+-- outline round both and one dark line between them says it instead, and the
+-- line is the cheaper claim: a seam reads as a division inside one object, a
+-- gap reads as two objects.
 --
--- Empty rather than dark, because the three pixel threat bar that used to sit
--- above the gauge got this wrong. It drew its backdrop and its edge whether or
--- not anything was pulling, and solo that is a dark stripe along the bar that
--- reads as a fill somebody forgot to finish. What is left here when nothing is
--- casting is air.
+-- The room it used to hold is the other half. The row was reserved whether or
+-- not the mob ever cast, so seventeen pixels of nothing hung under every bar on
+-- the screen, permanently. The goal that bought was right and is kept: a row
+-- that appears must not shove the health bar upward at the exact moment the
+-- thing you are watching starts happening, because a bar that moves when the
+-- fight gets interesting is a bar you have to re-find. Reserving was only one
+-- way to reach it, and it was the expensive way. The widget hangs by its top
+-- edge now, so the chamber opens downward out of the box's bottom and every
+-- pixel above it, the health gauge included, stays exactly where it was.
+--
+-- What is left when nothing is casting is not air. It is nothing: the box is
+-- the health gauge and its hairline, and the bar is twelve pixels shorter.
 --
 -- Two things move on this row and they move at different rates, so they are
 -- two functions. Cast.Update is what the client said and runs on the bars'
@@ -44,20 +53,23 @@ local Color = ns.Unit.Color
 local Gauge = ns.UI.Gauge
 local Text = ns.UI.Label
 
--- The row's height, in pixels like every other size in the bars, and shorter
--- than the health gauge on purpose. It is the second thing you read on a bar
--- and drawing it the same height as the first would make you decide which one
--- you were looking at.
+-- The chamber's height, in pixels like every other size in the bars, and half
+-- the health gauge on purpose. It is the second thing you read on a bar and
+-- drawing it the same height as the first would make you decide which one you
+-- were looking at. Eleven against a twenty two pixel gauge is that ratio said
+-- exactly, which it was not against twenty one.
 local PLATE_HEIGHT = 11
 local LIST_HEIGHT = 14
 
 -- The text on the row, capped by the row rather than by the bar's own size.
--- Fourteen pixels of glyph in an eleven pixel bar is a bar with a name lying
--- across both its edges.
-local PLATE_TEXT = 12
-local LIST_TEXT = 14
+-- Fourteen pixels of glyph in an eleven pixel chamber is a chamber with a name
+-- lying across both its edges, so this stays under the bar's own size and under
+-- ns.UI.OutlineFloor: the font below drops the outline rather than closing up
+-- the glyph, which is what ns.UI.NumberFont is for.
+local PLATE_TEXT = 10
+local LIST_TEXT = 12
 local TEXT_FLOOR = 7
-local PAD = 4
+local PAD = 5
 
 -- Two decimals is a number you cannot read off a moving bar and none is a
 -- number that says 1 for a whole second. One tenth is what an interrupt is
@@ -93,11 +105,11 @@ local function Seconds(tenths)
 	return held
 end
 
-local BACKDROP = Color.backdrop
 local NAME_TEXT = Color.text.name
 local TIMER_TEXT = Color.text.value
 local OPEN = Color.cast.open
 local LOCKED = Color.cast.locked
+local SEAM = Color.seam
 
 --------------------------------------------------------------------------
 -- Building and laying out
@@ -106,12 +118,46 @@ local LOCKED = Color.cast.locked
 -- One row, built with the widget that carries it and hidden until something
 -- casts. Nothing here is sized or anchored: every measurement on this row
 -- follows a setting that moves while the addon is up, so all of it is Cast.Fit's.
+-- Open or close the chamber, which is one write to the health box's height.
+--
+-- The box is the frame both gauges live in, so growing it is the whole of
+-- opening the chamber: the health gauge above carries a height Flow already
+-- gave it and is pinned to the widget's top left, so it does not move, and the
+-- box's outline follows its own frame. Nothing is laid out again.
+--
+-- Both heights are numbers LayoutWidget worked out and left on the widget. The
+-- guard is on the height already set rather than on a flag, because this is
+-- reached from Cast.Update's tick as well as from a cast event, and the write
+-- it is guarding measures nothing but still dirties the frame.
+local function Chamber(box, open)
+	local widget = box.widget
+	local height = (open and widget.boxOpen) or widget.boxIdle
+	if height and widget.box:GetHeight() ~= height then
+		widget.box:SetHeight(height)
+	end
+	if box.seam:IsShown() ~= (open and true or false) then
+		box.seam:SetShown(open)
+	end
+end
+
 function Cast.Build(widget)
-	local box = CreateFrame("Frame", nil, widget)
-	local back = ns.Fill(box, "BACKGROUND", BACKDROP[1], BACKDROP[2], BACKDROP[3], BACKDROP[4])
-	back:SetAllPoints()
-	box.edges = ns.Outline(box, OPEN[1], OPEN[2], OPEN[3], 1)
+	-- Parented to the health box, not to the widget, and with neither a fill of
+	-- its own nor an outline. It is inside the frame the box already draws, so a
+	-- backdrop would be a second dark layer over the first and an edge would cut
+	-- the box in half with a violet line. What separates the two chambers is one
+	-- seam, and EnemyBars draws it.
+	local box = CreateFrame("Frame", nil, widget.box)
 	box.bar = Gauge.New(box)
+
+	-- The one line between the two chambers. Drawn on the health box rather
+	-- than on either gauge because it belongs to neither, and owned here rather
+	-- than by the bar because it comes and goes with the chamber under it.
+	box.seam = ns.Fill(widget.box, "ARTWORK", SEAM[1], SEAM[2], SEAM[3], SEAM[4])
+	box.seam:Hide()
+	-- The widget the chamber belongs to. Show and Clear are handed the chamber
+	-- and have to resize the box around it, and walking up through GetParent
+	-- would be reaching for the same thing without saying so.
+	box.widget = widget
 
 	-- Pinned to the gauge rather than arranged, for the reason the mob's name
 	-- and its health number are: both are sized by whatever the spell happens
@@ -134,23 +180,23 @@ function Cast.Clear(widget)
 	end
 	box.shownSpell, box.shownTenths, box.look, box.preview = nil, nil, nil, nil
 	box:Hide()
+	Chamber(box, false)
 end
 
--- Fit the row to a widget, and answer two things: the node the widget's layout
--- puts under its gauge, and how tall that node is. There is no width here
--- because there is nothing to decide: the row is stretched to the bar by the
--- column it sits in, the same as the box above it.
+-- Fit the chamber to a widget and answer how tall it is, which is the one
+-- number EnemyBars needs: the box's open height is its idle height plus a seam
+-- plus this. There is no node and no width, because the chamber is not in the
+-- widget's column at all. It is anchored to the health gauge above it and takes
+-- that gauge's two vertical edges, so it is exactly as wide as the fill it sits
+-- under, however the box's own width rounds.
 --
--- The height is what PlaceOnPlate needs. The widget is anchored by its bottom
--- edge and the gauge used to sit on that edge, so everything reserved below the
--- gauge has to come back out of the offset or the health bar climbs off the
--- mob. A node that takes no room answers zero, which is the same arithmetic
--- with nothing in it.
+-- A chamber that is turned off answers zero, which makes the open height equal
+-- the idle height and the box a box with one gauge in it.
 function Cast.Fit(widget, unit, px, onPlate)
 	local box = widget.cast
 	if not ns.db.barsCast then
 		Cast.Clear(widget)
-		return { skip = true }, 0
+		return 0
 	end
 
 	local height = (onPlate and PLATE_HEIGHT or LIST_HEIGHT) * unit
@@ -162,8 +208,6 @@ function Cast.Fit(widget, unit, px, onPlate)
 	local size = math.max(TEXT_FLOOR, math.floor(math.min(
 		(onPlate and PLATE_TEXT or LIST_TEXT) * unit, height - 2 * px) + 0.5))
 	local font = ns.UI.NumberFont(size)
-
-	ns.EdgeSize(box.edges, px)
 
 	box.name:SetFontObject(font)
 	box.timer:SetFontObject(font)
@@ -183,15 +227,26 @@ function Cast.Fit(widget, unit, px, onPlate)
 	-- second list of fields to keep true would not cost more of.
 	Cast.Clear(widget)
 
-	-- The gauge is the inside of the box less the hairline around it, grown
-	-- rather than sized, exactly as the health box is: the two hairlines come
-	-- off the box's own measurement and the fill is what is left however the
-	-- numbers round.
-	local boxHeight = height + px * 2
-	return { frame = box, height = boxHeight, pad = px, align = "stretch",
-		direction = "column",
-		{ frame = box.bar, grow = 1 },
-	}, boxHeight
+	-- Under the health gauge, one seam below it, and squared off against that
+	-- gauge's own left and right edges rather than against the box's. The box
+	-- has a hairline on both sides and the health gauge is already inside it, so
+	-- taking the gauge's edges puts the two fills in the same column by
+	-- construction instead of by subtracting the same pixel twice.
+	--
+	-- The chamber fills itself: it is anchored on three sides and given a
+	-- height, and it is not in any Flow tree, so nothing measures it but this.
+	box:ClearAllPoints()
+	box:SetPoint("TOPLEFT", widget.health, "BOTTOMLEFT", 0, -px)
+	box:SetPoint("TOPRIGHT", widget.health, "BOTTOMRIGHT", 0, -px)
+	box:SetHeight(height)
+	box.seam:ClearAllPoints()
+	box.seam:SetPoint("TOPLEFT", widget.health, "BOTTOMLEFT", 0, 0)
+	box.seam:SetPoint("TOPRIGHT", widget.health, "BOTTOMRIGHT", 0, 0)
+	box.seam:SetHeight(px)
+	box.bar:ClearAllPoints()
+	box.bar:SetAllPoints(box)
+
+	return height
 end
 
 -- How many cast events have reached a bar. Counted rather than inferred, for
@@ -257,16 +312,20 @@ local function Show(box, name, start, finish, channel, immune)
 		box.name:SetText(name)
 	end
 
+	-- The fill alone now. The chamber has no edge of its own: the box's outline
+	-- is reaction's and colouring it violet for the length of a cast would say
+	-- the mob had turned neutral. Violet appears in exactly one place on this
+	-- widget and that is the point of it.
 	local look = immune and LOCKED or OPEN
 	if box.look ~= look then
 		box.look = look
 		Gauge.Paint(box.bar, box.bar.track, look)
-		ns.Recolor(box.edges, look)
 	end
 
 	if not box:IsShown() then
 		box:Show()
 	end
+	Chamber(box, true)
 end
 
 -- What the client says this unit is doing, read onto the row.

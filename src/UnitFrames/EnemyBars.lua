@@ -119,13 +119,26 @@ local ICON_GAP = 4
 -- did not work, so the only way to get a big icon was this number, and this
 -- number stopped well short of one.
 local ICON_MIN, ICON_MAX = 16, 56
-local PLATE_BAR_HEIGHT = 21
+
+-- Even, and that is the whole reason it is not 21. Replace centres the gauge on
+-- the mob, so the offset is half the bar height, and half of 21 is half a pixel:
+-- every bar the addon has drawn had its origin off a boundary and everything
+-- inside it drawn across two rows. PlaceOnPlate rounded that away and gave up
+-- half a pixel of centring. An even bar gives up nothing.
+local PLATE_BAR_HEIGHT = 22
 local LIST_BAR_HEIGHT = 28
-local TOP_TEXT = 15
-local LEVEL_WIDTH = 32 -- until the first update measures the tag's own text
-local LEVEL_PAD = 10
-local STRIPE_WIDTH = 5
-local PLATE_TEXT = 12
+
+-- Both sized off ns.UI.OutlineFloor, which is 14, and that is the whole of the
+-- type on this bar.
+--
+-- PLATE_TEXT was 12 while the threat number and the targeted-by line were
+-- raised to 14 to clear the floor, so the mob's name was drawn smaller than the
+-- list of who else was on it, and the name, the health number and the level all
+-- carried an outline UI/Text.lua says closes up a glyph's counters below 14.
+-- That is the whole of "coarse": not blurry, mush. TOP_TEXT is the room the
+-- taller of the two sits in, and at 15 it clipped that glyph by a pixel.
+local TOP_TEXT = 16
+local PLATE_TEXT = 14
 local LIST_TEXT = 14
 local COUNT_TEXT_SIZE = 11
 local NAME_MAX = 8
@@ -160,12 +173,11 @@ local NAME_TEXT = Color.text.name
 local TARGET_TEXT = Color.text.target
 local HEALTH_TEXT = Color.text.value
 local COUNT_TEXT = Color.text.count
-local LEVEL_BACK = Color.plate
 
 -- Which bar is yours, said with the one channel nothing else on the bar is
--- using. The fill, the edge and the line above all belong to threat, the tag
--- belongs to what the kill is worth, and the stripe belongs to reaction, so a
--- fourth colour would be a fourth thing to read on a bar that already has
+-- using. The fill, the track and the number above belong to threat, the level
+-- glyph belongs to what the kill is worth, and the frame belongs to reaction,
+-- so a fourth colour would be a fourth thing to read on a bar that already has
 -- three. Alpha is free.
 --
 -- Attach calls SetIgnoreParentAlpha, which throws away the client's own
@@ -702,41 +714,36 @@ local function CreateWidget()
 	-- twenty one pixels.
 	ns.UI.Adopt(widget, ns.db.barsZoom)
 
-	-- One framed box, one gauge inside it, and the gauge fills the box. There
-	-- used to be a second three pixel bar for threat stacked above the health
-	-- bar, which sat empty whenever nothing was pulling and left a dark stripe
-	-- along the top that read as an unfinished fill. Threat is a colour now,
-	-- on the gauge and on the edge, and a number on the line above.
+	-- One framed box with two chambers in it, health above and cast below, and
+	-- one outline round both. There used to be a third bar above the health for
+	-- threat, three pixels tall, which sat empty whenever nothing was pulling and
+	-- read as a fill somebody forgot to finish. Threat is the fill, the track and
+	-- a number on the line above.
 	local box = CreateFrame("Frame", nil, widget)
 	local bg = ns.Fill(box, "BACKGROUND", BACKDROP[1], BACKDROP[2], BACKDROP[3], BACKDROP[4])
 	bg:SetAllPoints()
-	local idle = Color.threat.idle
-	box.edges = ns.Outline(box, idle[1], idle[2], idle[3], 1)
+	-- The frame carries reaction, not threat. Threat had it at full strength on
+	-- all four sides, while ns.Unit.Color's own edgeDim note says such an edge
+	-- "shouted louder than anything inside it". Fifteen plates ringed in red said
+	-- what the fill already said.
+	local frame = Color.frame.hostile
+	box.edges = ns.Outline(box, frame[1], frame[2], frame[3], 1)
 	widget.box = box
 
 	widget.health = Gauge.New(box)
 
-	-- The tag sits outside the box, off the gauge's left end, because inside
-	-- the gauge it covered the left end of the fill and that is the end a mob
-	-- still has at ten percent. It is a frame of its own rather than a texture
-	-- so it can carry its own plate and grow with its text. Dark plate,
-	-- coloured number: a filled chip would sit against the gauge in a colour
-	-- off the same five and the two would read as one smear.
-	local level = CreateFrame("Frame", nil, widget)
-	local levelBack = ns.Fill(level, "BACKGROUND",
-		LEVEL_BACK[1], LEVEL_BACK[2], LEVEL_BACK[3], LEVEL_BACK[4])
-	levelBack:SetAllPoints()
-	-- The reaction stripe closes the tag on the left. Same frame, because the
-	-- two answer one question between them, what this mob is and what it does
-	-- about you, and one setting turns the pair on and off.
-	local aggro = Color.aggro.comes
-	level.stripe = ns.Fill(level, "ARTWORK", aggro[1], aggro[2], aggro[3], 1)
-	level.text = Text(level, PLATE_TEXT, Color.xp.none, "CENTER")
-	widget.level = level
+	-- The level sits inside the gauge, left of the name, as a font string. It
+	-- used to be a chip off the gauge's left end, on its own dark plate, closed
+	-- by a five pixel reaction stripe. The reason given was that inside the gauge
+	-- it covered the left end of the fill, the end a mob still has at ten
+	-- percent. True of a chip, and the chip was the bug: it drew an opaque plate
+	-- over the fill. A glyph does not, and the mob's name has sat in this strip
+	-- since the first bar. What the chip cost was the widget's shape: marker,
+	-- gap, tag, box is four left edges and a staircase for a silhouette.
+	widget.levelText = Text(widget.health, PLATE_TEXT, Color.xp.none, "LEFT")
 
-	-- Under the gauge, and reserved whether or not this mob ever casts. See the
-	-- head of Cast.lua for why it is reserved and why it draws nothing while it
-	-- is empty.
+	-- The second chamber of the same box, under the health gauge and inside the
+	-- same frame. See the head of Cast.lua.
 	Cast.Build(widget)
 
 	widget.name = Text(widget.health, PLATE_TEXT, NAME_TEXT, "LEFT")
@@ -790,11 +797,11 @@ end
 -- because this function works out how many fit and anchors each square to the
 -- gauge's corner with the row width subtracted.
 --
--- Three things are still anchored by hand below the tree, and the reason is the
--- same for all three: their size is whatever the mob happens to be called or
--- what level it is, so it is not known when the layout runs. A layout that had
--- to re-run on a name change would be a layout running on the tick. See the
--- note at the top of UI/Flow.lua.
+-- The strings inside the gauge are still anchored by hand below the tree, and
+-- the reason is the same for each: their size is whatever the mob happens to be
+-- called or what level it is, so it is not known when the layout runs. A layout
+-- that had to re-run on a name change would be a layout running on the tick.
+-- See the note at the top of UI/Flow.lua.
 --
 -- Two conversions, and telling them apart is the whole of why `bars zoom` works
 -- now and did not before.
@@ -824,21 +831,23 @@ local function LayoutWidget(widget, width, onPlate)
 	local boxHeight = barHeight + px * 2 -- the gauge, plus the hairline around it
 	local iconSize = ns.db.barsIconSize * unit
 	local iconGap = ICON_GAP * unit
-	local pad = 4 * unit
+	-- Five, not four: four next to a one pixel hairline reads as three.
+	local pad = 5 * unit
 	local fontSize = math.floor((onPlate and PLATE_TEXT or LIST_TEXT) * unit + 0.5)
 	local font = ns.UI.Font(fontSize)
 
-	-- Two strings on this widget have nothing behind them.
+	-- Two strings on this widget have nothing behind them. The level, the name
+	-- and the health number sit on the gauge's own fill, so an outline is a
+	-- choice there and contrast is the argument for keeping it. The threat line
+	-- and the targeted-by line sit in the gap above the gauge, over whatever the
+	-- player is standing on, so it is not a choice: without it a pale number over
+	-- pale ground is gone. The floor is a hard minimum for those two rather than
+	-- the switch point ns.UI.NumberFont applies over art.
 	--
-	-- The name, the health number and the level tag all sit on an opaque fill, so
-	-- an outline is a choice there and contrast is the argument for keeping it.
-	-- The threat line and the targeted-by line sit in the gap above the gauge,
-	-- over whatever the player happens to be standing on, so the outline is not a
-	-- choice: without it a pale number over pale ground is gone.
-	--
-	-- That makes the outline floor a hard minimum for these two rather than the
-	-- switch point ns.UI.NumberFont applies over art. There is no graceful
-	-- degradation available, so the size has to come up instead.
+	-- With PLATE_TEXT at the floor this is the same object as `font` at zoom 1
+	-- and the bar carries one type size. The max stays because `bars zoom` can
+	-- take the widget off the grid on a client with no SetIgnoreParentScale, and
+	-- there the two part company again.
 	local openFont = ns.UI.Font(math.max(fontSize, ns.UI.OutlineFloor()))
 
 	-- Both numbers on an icon are sized off the icon rather than off the bar,
@@ -879,14 +888,10 @@ local function LayoutWidget(widget, width, onPlate)
 		icons[index] = { frame = holder, width = iconSize, height = iconSize }
 	end
 
-	-- The cast row, under the gauge. What comes back is a node for the tree
-	-- below and how tall it is, and the second one is what PlaceOnPlate has to
-	-- take back out of its offset: the widget is anchored by its bottom edge,
-	-- the gauge used to sit on that edge, and anything reserved below it moves
-	-- the health bar up off the mob.
-	local castNode, castHeight = Cast.Fit(widget, unit, px, onPlate)
-	widget.underGauge = castHeight > 0
-		and ns.UI.Round(widget, castHeight + iconGap) or 0
+	-- The cast chamber, inside the box rather than under it. What comes back is
+	-- how tall it is and nothing else: it is not in the column below, so it has
+	-- no node there. See the head of Cast.lua.
+	local castHeight = Cast.Fit(widget, unit, px, onPlate)
 
 	-- The strip between the gauge and whatever is above it. The threat number
 	-- shares it with the bottom row of icons, so it is an icon tall; with
@@ -929,12 +934,15 @@ local function LayoutWidget(widget, width, onPlate)
 			-- It grows rather than carrying a height, so the two hairlines come
 			-- off the box's own measurement and the gauge is exactly what is
 			-- left however the numbers round.
+			-- Measured at its idle height: the health gauge and the hairline
+			-- round it. The cast chamber grows the box downward outside this
+			-- tree and after it has run, which is why it is not a node. Flow
+			-- measures once at layout, and a chamber that comes and goes five
+			-- times a fight is a state, not a measurement.
 			{ frame = widget.box, height = boxHeight, pad = px, align = "stretch",
 				direction = "column",
 				{ frame = widget.health, grow = 1 },
 			},
-
-			castNode,
 		},
 	})
 
@@ -946,90 +954,95 @@ local function LayoutWidget(widget, width, onPlate)
 	-- Sized by their own content, so they are anchored rather than arranged
 	--------------------------------------------------------------------------
 
+	-- Given the width of "100%" and kept there. Arial Narrow is proportional and
+	-- the name's right edge is pinned to this string, so without a reserved
+	-- column the name re-measured and re-clipped on every percent change: the
+	-- mob's name walked as it died, once per bar per tick.
 	widget.healthText:SetFontObject(font)
+	widget.healthText:SetText("100%")
+	widget.healthText:SetWidth(ns.UI.Round(widget, widget.healthText:GetStringWidth()))
+	widget.shownPercent = nil -- the width is set from a string the tick did not write
 	widget.healthText:ClearAllPoints()
 	widget.healthText:SetPoint("RIGHT", widget.health, "RIGHT", -pad, 0)
 
-	-- The whole inside of the gauge belongs to the name, left edge to health
-	-- number, because the tag no longer takes a bite out of it. Pinned to the
-	-- number rather than given a width, so a long name yields to it.
+	-- The level, then the name, then the number, left to right along one gauge.
+	-- Coloured on the XP scale, which is the five hues threat wears on the fill
+	-- under it: the second argument for keeping the tag outside, and an argument
+	-- about two fills competing. A 14 pixel outlined numeral over a flat fill
+	-- reads as a label, the way the name beside it does.
+	local showLevel = ns.db.barsLevel
+	widget.levelText:SetShown(showLevel)
+	widget.levelText:SetFontObject(font)
+	widget.levelText:ClearAllPoints()
+	widget.levelText:SetPoint("LEFT", widget.health, "LEFT", pad, 0)
+	widget.levelTag = nil -- the font moved, so the tick remeasures the string
+
+	-- Pinned between the level and the number rather than given a width, so a
+	-- long name yields to both. Anchored to the gauge when there is no level:
+	-- pinned to a hidden string it would be indented by whatever the last mob's
+	-- level measured.
 	widget.name:SetFontObject(font)
 	widget.name:ClearAllPoints()
-	widget.name:SetPoint("LEFT", widget.health, "LEFT", pad, 0)
+	if showLevel then
+		widget.name:SetPoint("LEFT", widget.levelText, "RIGHT", pad, 0)
+	else
+		widget.name:SetPoint("LEFT", widget.health, "LEFT", pad, 0)
+	end
 	widget.name:SetPoint("RIGHT", widget.healthText, "LEFT", -pad, 0)
 
-	-- Levelled here rather than at creation, because Attach sets the widget's
-	-- frame level after the widget exists and this runs after that.
-	local showLevel = ns.db.barsLevel
-	widget.level:SetShown(showLevel)
-	widget.level:SetFrameLevel(widget.health:GetFrameLevel() + 1)
-	widget.level.text:SetFontObject(font)
-	widget.level.text:ClearAllPoints()
-	-- Shifted right by half the stripe, so the number centres in the space the
-	-- stripe leaves rather than in the whole tag. Rounded, because the stripe is
-	-- five pixels wide and half of five is half a pixel: the number was landing
-	-- across two columns on every bar the addon has ever drawn. Half a pixel off
-	-- centre and sharp beats dead centre and smeared.
-	widget.level.text:SetPoint("CENTER", widget.level, "CENTER",
-		ns.UI.Round(widget, STRIPE_WIDTH * unit / 2), 0)
-	widget.level:ClearAllPoints()
-	-- Flush against the box and the same height as it, so the tag and the bar
-	-- read as one strip with the box's own hairline between them. Pinned by
-	-- its right edge, so a wider tag grows leftwards into empty screen and the
-	-- gauge never moves under it.
-	widget.level:SetPoint("TOPRIGHT", widget.box, "TOPLEFT", 0, 0)
-	widget.level:SetPoint("BOTTOMRIGHT", widget.box, "BOTTOMLEFT", 0, 0)
-	widget.level:SetWidth(LEVEL_WIDTH * unit)
-	widget.level.stripe:ClearAllPoints()
-	widget.level.stripe:SetPoint("TOPLEFT", widget.level, "TOPLEFT", 0, 0)
-	widget.level.stripe:SetPoint("BOTTOMLEFT", widget.level, "BOTTOMLEFT", 0, 0)
-	widget.level.stripe:SetWidth(STRIPE_WIDTH * unit)
-	widget.levelTag = nil -- the next update sizes the tag to its own text
+	-- The box's two heights: what Flow measured, and what it becomes while
+	-- something casts. Both stored, so Cast's switch is one SetHeight against a
+	-- number rather than this arithmetic done again on the tick.
+	widget.boxIdle = boxHeight
+	widget.boxOpen = castHeight > 0 and (boxHeight + px + castHeight) or boxHeight
+	widget.box:SetHeight(widget.boxIdle)
 
-	-- Outside the tag when there is a tag, so the two do not want the same
-	-- strip of screen. Anchored to the box when there is not, rather than to a
-	-- hidden frame, which would leave the icon floating a tag's width out.
+	-- Off the box's left edge, which is now the widget's own: with the tag gone
+	-- there is one line down the left of the assembly, and the marker is outside
+	-- it.
 	widget.marker:ClearAllPoints()
 	widget.marker:SetSize(barHeight + pad, barHeight + pad)
-	if showLevel then
-		widget.marker:SetPoint("RIGHT", widget.level, "LEFT", -3 * unit, 0)
-	else
-		widget.marker:SetPoint("RIGHT", widget.box, "LEFT", -3 * unit, 0)
-	end
+	widget.marker:SetPoint("RIGHT", widget.box, "LEFT", -3 * unit, 0)
+
+	-- Where the gauge's middle sits below the widget's top edge, which is what
+	-- PlaceOnPlate centres on the mob, and where the box's bottom edge is at
+	-- rest, which is what the `above` style stands on the plate. Read off the
+	-- layout rather than added up from the constants again: Flow pins everything
+	-- to the widget's top left, so a change to any row above the gauge moves both
+	-- of these without being told.
+	local _, _, _, _, gaugeY = widget.health:GetPoint()
+	widget.gaugeMid = -(gaugeY or 0) + widget.health:GetHeight() / 2
+	widget.boxBottom = widget.gaugeMid + widget.health:GetHeight() / 2 + px
 
 	-- What the client needs to know to stop two of these landing on each other.
 	-- Sent in UIParent's units because that is what the nameplate driver counts
-	-- in, and only from the plate layout: the list is anchored to the screen and
-	-- spaces itself.
+	-- in, and only from the plate layout: the list spaces itself.
+	--
+	-- The height sent is the casting one unconditionally, because the widget
+	-- really does grow and a driver told the idle figure would space plates so a
+	-- chamber opened into the bar underneath. Spacing for the taller case is
+	-- right in both states; for the shorter one, neither. The width is just the
+	-- bar now that the tag is gone.
 	if onPlate then
-		local wide = width + (showLevel and widget.level:GetWidth() or 0)
 		ns.Plates.SetFootprint(
-			ns.UI.Convert(wide, widget, UIParent),
-			ns.UI.Convert(widget:GetHeight(), widget, UIParent))
+			ns.UI.Convert(width, widget, UIParent),
+			ns.UI.Convert(widget:GetHeight() + (widget.boxOpen - widget.boxIdle),
+				widget, UIParent))
 	end
 end
 
--- The tag hangs off the left of the box, so the box on its own is no longer
--- what sits over the mob. Shifting the whole widget right by half the tag puts
--- the middle of tag-plus-box on the plate's centre, and moves the threat line
--- and the debuff row with it rather than leaving them behind. This runs again
--- every time the tag is remeasured, because "9" and "42r+" are not the same
--- width and neither is the offset that centres them.
---
--- The list gets no offset. There the widgets stack against the anchor's left
--- edge, and boxes that line up under a ragged tag column is the correct look.
+-- Anchored by the top, with no horizontal offset left to apply. Both used to be
+-- the other way round and both were the tag's doing: the widget hung by its
+-- bottom edge, so anything reserved below the gauge came back out of the offset
+-- or the health bar climbed off the mob, and the tag hung off the box's left, so
+-- the widget was shifted right by half of it, recomputed on the tick because "9"
+-- and "42r+" do not measure the same. Hanging by the top makes the chamber free:
+-- it opens downward and nothing above it moves, so the gauge is over the mob
+-- casting or not, which is what the reserved row bought without the air.
 local function PlaceOnPlate(widget)
 	local plate = widget.plate
 	if not plate then
 		return
-	end
-	-- Rounded, because half of an odd tag is half a pixel and a widget offset
-	-- by half a pixel has every edge, glyph and icon inside it resampled across
-	-- two. This is the one offset in the file that is not already a whole
-	-- number: it is derived from text the client measured.
-	local shift = 0
-	if widget.onPlate and ns.db.barsLevel then
-		shift = ns.UI.Round(widget, widget.level:GetWidth() / 2)
 	end
 
 	-- Anchored to the frame that takes the mouse, not to the plate around it.
@@ -1045,36 +1058,27 @@ local function PlaceOnPlate(widget)
 	-- bar moves onto the hit box, which is the point. barsOffset still nudges.
 	local host = plate.UnitFrame or plate
 
+	local unit = ns.UI.Unit(widget)
+	-- Measured by LayoutWidget off the arranged tree. The fallback is for a
+	-- widget placed before it has been laid out, which the next layout corrects.
+	local mid = widget.gaugeMid or 0
+
 	widget:ClearAllPoints()
 	if ns.db.barsStyle == "replace" then
 		-- Sit where the Blizzard bar was, so the bar still reads as the mob's.
-		-- The gauge sits one pixel inside the box, so the gauge and not the
-		-- frame around it is what lands on the centre.
 		--
-		-- Rounded, and this is the one that mattered. PLATE_BAR_HEIGHT is 21, so
-		-- half of it plus one is 11.5, and replace is the default style: every
-		-- bar the addon has ever drawn had its own origin half a pixel below a
-		-- pixel boundary, and a widget offset by half a pixel has every edge,
-		-- every glyph and every icon inside it drawn across two rows. That is
-		-- the whole of "the bar does not look crisp". The comment three lines up
-		-- from here has said so since the tag shift was rounded; the number
-		-- underneath it was never put through the same treatment.
-		--
-		-- An odd bar cannot be centred on a point and land on a boundary, so
-		-- half a pixel of centring is what is given up. It is not visible. The
-		-- smear was.
-		--
-		-- The cast row is subtracted rather than ignored. It is reserved under
-		-- the gauge whether or not the mob casts, so without this every bar
-		-- would sit a cast row higher than it used to and the health bar, which
-		-- is the thing being centred, would no longer be over the mob.
-		local unit = ns.UI.Unit(widget)
-		widget:SetPoint("BOTTOM", host, "CENTER", shift,
-			-ns.UI.Round(widget, (PLATE_BAR_HEIGHT / 2 + 1) * unit)
-				- (widget.underGauge or 0)
-				+ ns.db.barsOffset * unit)
+		-- No rounding, and that is the change worth naming. The bar height is
+		-- even now and every row above it is a whole number, so the offset is
+		-- whole by construction. It used to be 11.5 on the default style: every
+		-- bar had its origin off a boundary and everything inside it drawn across
+		-- two rows, and the fix was to round the centring away instead.
+		widget:SetPoint("TOP", host, "CENTER", 0, mid + ns.db.barsOffset * unit)
 	else
-		widget:SetPoint("BOTTOM", host, "TOP", shift, ns.db.barsOffset * ns.UI.Unit(widget))
+		-- Above the plate rather than over it, so the box's bottom edge lands on
+		-- the plate's top and a chamber opens downward from there, toward the
+		-- mob. That is the only direction that does not push the health bar.
+		widget:SetPoint("TOP", host, "TOP", 0,
+			(widget.boxBottom or widget:GetHeight()) + ns.db.barsOffset * unit)
 	end
 end
 
@@ -1109,53 +1113,51 @@ local function UpdateWidget(widget, unit, guid)
 		widget.health:SetValue(health)
 	end
 
-	-- The gauge, the track behind it, the threat line and the edge all take the
-	-- one colour, so a single identity guard covers the four of them. These are
-	-- the five module constants, so identity is the right comparison.
+	-- The gauge, the track behind it and the threat number take the one colour,
+	-- so a single identity guard covers the three of them. These are the five
+	-- module constants, so identity is the right comparison.
 	--
-	-- The spent part of the bar keeps the hue at a fifth of the brightness, so
-	-- a mob at ten percent still reads as yours instead of as an empty box.
-	-- That fifth is UI/Gauge.lua's now, because the skinned unit frames want
-	-- the same one and the two files each had their own copy of it. The edge
-	-- takes the colour too, so the frame and the fill say the same thing and
-	-- the aggro state is legible at a glance from a bar that is nearly empty.
+	-- The edge is not one of them any more; see the note in CreateWidget. What
+	-- pays for losing it is the track: the spent part keeps three tenths of the
+	-- hue rather than a fifth, so a mob at ten percent reads as yours across the
+	-- bar's width instead of round its rim. That fraction is UI/Gauge.lua's.
 	local color, label = ThreatState(unit)
-	if widget.edgeColor ~= color then
-		widget.edgeColor = color
+	if widget.threatColor ~= color then
+		widget.threatColor = color
 		Gauge.Paint(widget.health, widget.health.track, color)
 		widget.threatText:SetTextColor(color[1], color[2], color[3])
-		ns.Recolor(widget.box.edges, color)
 	end
 	if widget.shownThreat ~= label then
 		widget.shownThreat = label
 		widget.threatText:SetText(label)
 	end
 
+	-- The frame, which is reaction and nothing else: hostile draws chrome and
+	-- disappears, neutral draws amber and does not. Outside the barsLevel branch
+	-- below, deliberately, because turning the mob level off turns off what a kill
+	-- is worth and must not turn off "do not cleave this one".
+	local edge = Color.Frame(unit)
+	if widget.edgeColor ~= edge then
+		widget.edgeColor = edge
+		ns.Recolor(widget.box.edges, edge)
+	end
+
 	-- Guarded on the string and on the colour table's identity, the way the
-	-- edge is: this runs five times a second per mob and a level changes when
+	-- frame is: this runs five times a second per mob and a level changes when
 	-- the mob does.
+	--
+	-- Two things this used to do and no longer has to: measure its own string to
+	-- resize a frame, and call PlaceOnPlate, because a tag that changed width
+	-- moved the assembly's centre. The name yields through one anchor now.
 	if ns.db.barsLevel then
 		local tag, xp = Level.Of(unit)
 		if widget.levelTag ~= tag then
 			widget.levelTag = tag
-			widget.level.text:SetText(tag)
-			-- ns.UI.Unit inline rather than in a local, because `unit` in this
-			-- function is the unit token the tick is about and two meanings of
-			-- one word inside one function is how the wrong one gets used.
-			widget.level:SetWidth(ns.UI.Round(widget,
-				widget.level.text:GetStringWidth()
-					+ (LEVEL_PAD + STRIPE_WIDTH) * ns.UI.Unit(widget)))
-			PlaceOnPlate(widget) -- the tag changed width, so the centre moved
+			widget.levelText:SetText(tag)
 		end
 		if widget.levelColor ~= xp then
 			widget.levelColor = xp
-			widget.level.text:SetTextColor(xp[1], xp[2], xp[3])
-		end
-
-		local reaction = Color.Aggro(unit)
-		if widget.reactionColor ~= reaction then
-			widget.reactionColor = reaction
-			widget.level.stripe:SetColorTexture(reaction[1], reaction[2], reaction[3], 1)
+			widget.levelText:SetTextColor(xp[1], xp[2], xp[3])
 		end
 	end
 
@@ -1528,14 +1530,12 @@ local function Attach(unit)
 	-- screen pixels on every monitor because the widget is on the grid.
 	--
 	-- It used to be the width of the plate under it, and that was a loop with no
-	-- fixed point. LayoutWidget hands the driver a footprint a tag wider than
-	-- the bar, so that the level tag hanging off the left edge still counts as
-	-- room; the driver sizes every plate to it; and the next bar measured off a
-	-- plate came back changed. Which way it ran depended on the scale the client
-	-- puts on a nameplate against the scale it puts on UIParent. Wider every
-	-- round on one, narrower every round on another, and a setting change ran it
-	-- again. There was never a width the bars settled on, and no setting that
-	-- chose one.
+	-- fixed point: LayoutWidget hands the driver a footprint, the driver sizes
+	-- every plate to it, and the next bar measured off a plate came back changed.
+	-- Which way it ran depended on the scale the client puts on a nameplate
+	-- against the scale it puts on UIParent. Wider every round on one, narrower
+	-- on another, and a setting change ran it again. There was never a width the
+	-- bars settled on, and no setting that chose one.
 	--
 	-- LayoutWidget is around sixty anchor, font and size calls, and this runs
 	-- for every nameplate the game puts up, which in a busy zone is several a
