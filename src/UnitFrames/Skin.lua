@@ -965,10 +965,10 @@ local function Build(entry)
 	-- One shared font object per size rather than a font on each string. Place
 	-- picks the real size off the bar heights a moment later; these are only
 	-- what the strings carry until it does.
-	entry.nameText = ns.UI.Label(entry.top, BIG_MAX, NAME_TEXT, "LEFT", ns.UI.SHADOW)
-	entry.healthText = ns.UI.Label(entry.top, BIG_MAX, VALUE_TEXT, "RIGHT", ns.UI.SHADOW)
-	entry.levelText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "LEFT", ns.UI.SHADOW)
-	entry.powerText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "RIGHT", ns.UI.SHADOW)
+	entry.nameText = ns.UI.Label(entry.top, BIG_MAX, NAME_TEXT, "LEFT", ns.UI.FLAT)
+	entry.healthText = ns.UI.Label(entry.top, BIG_MAX, VALUE_TEXT, "RIGHT", ns.UI.FLAT)
+	entry.levelText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "LEFT", ns.UI.FLAT)
+	entry.powerText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "RIGHT", ns.UI.FLAT)
 end
 
 -- Sized off the two settings, placed on the frame's own corner, and the frame
@@ -1124,8 +1124,8 @@ local function Place(entry)
 	-- here undid it. Shadowed, not outlined: all four sit on an opaque bar.
 	local big = math.min(math.max(math.floor(health * BIG_SHARE), BIG_MIN), BIG_MAX)
 	local small = math.min(math.max(math.floor(power * SMALL_SHARE), SMALL_MIN), SMALL_MAX)
-	local bigFont = ns.UI.Font(big * px, ns.UI.SHADOW)
-	local smallFont = ns.UI.Font(small * px, ns.UI.SHADOW)
+	local bigFont = ns.UI.Font(big * px, ns.UI.FLAT)
+	local smallFont = ns.UI.Font(small * px, ns.UI.FLAT)
 
 	entry.nameText:SetFontObject(bigFont)
 	entry.healthText:SetFontObject(bigFont)

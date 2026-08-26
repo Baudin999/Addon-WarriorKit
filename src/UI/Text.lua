@@ -28,40 +28,36 @@ local UI = ns.UI
 local PATH = "Fonts\\ARIALN.TTF"
 local DEFAULT_FLAGS = "OUTLINE"
 
--- Anti-aliasing off, which is what actually made the frames sharp.
+-- Three roles, and every string in the addon is exactly one of them. This is
+-- the whole font policy and it is here rather than argued again at each site.
 --
--- UI/Pixel.lua already lands every glyph on a whole number of physical pixels,
--- so the softness that was left was the rasteriser and not the geometry. A 14
--- pixel Arial Narrow stem is about a pixel and a half wide and anti-aliased to
--- grey at both edges. OUTLINE then wraps an anti-aliased black rim round that,
--- and what reaches the screen is grey, dark grey, grey, with no fully opaque
--- pixel anywhere along the stem. That is the blur, and no amount of pixel
--- alignment removes it.
+--   flat      over a surface this addon painted and knows the colour of. Panel
+--             prose, and every string on a bar, because Unit/Color.lua caps
+--             every fill it owns so that Color.paper clears 4.5:1 on it. The
+--             contrast is guaranteed by the palette, so the glyph needs nothing
+--             round it and gets nothing. UI.FLAT.
+--   shadowed  over art the addon did not paint and cannot predict: a spell icon
+--             on a debuff square. A one pixel drop shadow, which holds the
+--             glyph off a bright icon without spending any of the glyph's own
+--             pixels. UI.SHADOW.
+--   outlined  over the world. No known colour behind it at all, so a shadow has
+--             nothing to be darker than and the rim is the only thing that
+--             works. The default, and UI.OutlineFloor is its minimum size.
 --
--- MONOCHROME turns the rasteriser off. Every pixel of a glyph is on or off, a
--- stem is a hard column of solid colour, and a rim round a hard edge stays a
--- rim instead of bleeding into it.
+-- What is deliberately not here is MONOCHROME. It was tried as the default for
+-- everything at or under sixteen pixels and it was a mistake, so this note is
+-- the gravestone rather than a switch. Turning the rasteriser off gives a
+-- purpose built pixel font hard clean edges; it gives Arial Narrow broken ones,
+-- because an unhinted humanist face at eleven to fourteen pixels has stems that
+-- do not land on pixel boundaries and rounding each one independently makes
+-- them different weights. The report was that all the text went fuzzy, and it
+-- had. The grid already puts every glyph on a whole pixel and that is as far as
+-- geometry can take this; the rest of what reads as sharpness is contrast, and
+-- that is Unit/Color.lua's job.
 --
--- The ceiling is there because the trade reverses as the glyph grows. At eleven
--- pixels a diagonal has three steps and reads as a letter; at twenty it has six
--- and reads as a staircase. Sixteen is where this addon stops drawing chrome
--- and starts drawing prose, and the only thing that goes above it is the chat
--- text size slider, which runs to 20.
-local MONO = "MONOCHROME"
-local MONO_CEILING = 16
-
--- A caller asking for a one pixel drop shadow. Not a client flag, and it never
--- reaches SetFont: it rides in the flags string so that it threads through
--- UI.Label and every other site that already passes flags along, instead of
--- adding a parameter to all of them.
---
--- What it replaces is the outline, over every surface the addon drew itself. An
--- outline and a shadow do the same job, which is to keep a pale glyph off the
--- surface behind it, and the outline does it by spending the glyph's own pixels
--- while the shadow does it by spending the pixel below and to the right. Over
--- opaque art that makes the shadow strictly better. Over the world it is not
--- available at all, because a shadow needs a known colour to be darker than and
--- the world is not one.
+-- UI.SHADOW is not a client flag and never reaches SetFont. It rides in the
+-- flags string so that it threads through UI.Label and every other site that
+-- already passes flags along, instead of adding a parameter to all of them.
 UI.SHADOW = "SHADOW"
 
 -- One unit, which inside a frame ns.UI.Adopt has taken onto the grid is one
@@ -72,15 +68,13 @@ local SHADOW_OFFSET = 1
 local fonts = {}
 local made = 0
 
--- What actually reaches SetFont, and whether the font wants a shadow. Both come
--- out of the same two inputs, so they are decided together and once.
-local function Compose(size, flags)
+-- What actually reaches SetFont, and whether the font wants a shadow.
+local function Compose(flags)
 	local shadow = flags:find(UI.SHADOW, 1, true) ~= nil
-	local real = flags:gsub(UI.SHADOW, ""):gsub("^[%s,]+", ""):gsub("[%s,]+$", "")
-	if size <= MONO_CEILING then
-		real = (real == "") and MONO or (real .. ", " .. MONO)
+	if not shadow then
+		return flags, false
 	end
-	return real, shadow
+	return (flags:gsub(UI.SHADOW, ""):gsub("^[%s,]+", ""):gsub("[%s,]+$", "")), true
 end
 
 -- One object per size and flag pair, made on first ask and never freed. The key
@@ -96,7 +90,7 @@ function UI.Font(size, flags)
 		return font
 	end
 
-	local real, shadow = Compose(size, flags)
+	local real, shadow = Compose(flags)
 	made = made + 1
 	font = CreateFont(ADDON .. "Font" .. made)
 	font:SetFont(PATH, size, real)
@@ -115,29 +109,28 @@ end
 
 -- The smallest glyph an outline can go round without eating it.
 --
--- Only text over the world reaches this now. Everything the addon draws over
--- its own art is flat and shadowed, which is the choice this number used to
--- make on that text's behalf. What is left has no fallback to switch to: a pale
--- number over pale ground with no rim is not softer, it is gone. So the floor
--- stopped being a switch and became a minimum size, and a string that must be
+-- Only text over the world reaches this. Everything else has a known colour
+-- behind it and takes a shadow or nothing, which is the choice this number used
+-- to make on that text's behalf. What is left has no fallback to switch to: a
+-- pale number over pale ground with no rim is not softer, it is gone. So the
+-- floor is not a switch, it is a minimum size, and a string that must be
 -- outlined must also be at least this tall.
 --
--- Fourteen, and MONOCHROME is why it is still fourteen rather than sixteen. A
--- rim round an anti-aliased stem bleeds into it and the hole in a 6 fills well
--- above fourteen, which is what the enemy bars were showing. Round a hard edge
--- it does not bleed and fourteen holds.
+-- Fourteen is where a rim stops closing an Arial Narrow counter. An outline
+-- costs a pixel on every stroke whatever the glyph is, so below it the hole in
+-- a 6 and the waist of an 8 fill in and a 3 and an 8 stop being different
+-- shapes.
 local OUTLINE_FLOOR = 14
 
--- A number drawn over art rather than over the world: the timer and the stack
--- count on a debuff square, the spell name and the seconds in the cast chamber.
--- Flat and shadowed at every size.
+-- A number drawn over art the addon did not paint: the timer and the stack
+-- count on a debuff square, which sit on whatever the spell icon happens to be.
+-- Shadowed at every size.
 --
 -- This used to pick up an outline at OUTLINE_FLOOR and drop it below. The switch
 -- existed because a rim was the only thing holding a pale digit off a bright
--- icon, and it cost the counters of every digit under fourteen: a 3 and an 8
--- stopped being different shapes. A shadow holds the digit off just as well and
--- spends no pixel of the glyph to do it, so there is nothing left for a switch
--- to choose between and the small sizes are the ones that gain most.
+-- icon, and it cost the counters of every digit under fourteen. A shadow holds
+-- the digit off just as well and spends no pixel of the glyph to do it, so
+-- there is nothing left for a switch to choose between.
 function UI.NumberFont(size)
 	return UI.Font(size, UI.SHADOW)
 end
@@ -146,13 +139,9 @@ function UI.OutlineFloor()
 	return OUTLINE_FLOOR
 end
 
-function UI.MonoCeiling()
-	return MONO_CEILING
-end
-
 -- Outlined by default, because the default caller is a string over the world
--- and a shadow disappears against a dark floor. Everything over the addon's own
--- art passes UI.SHADOW, and panel prose passes UI.FLAT.
+-- and a shadow disappears against a dark floor. Everything else passes one of
+-- the other two roles at the head of this file.
 function UI.Label(parent, size, color, justify, flags)
 	local text = parent:CreateFontString(nil, "OVERLAY")
 	text:SetFontObject(UI.Font(size, flags))
