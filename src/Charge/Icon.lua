@@ -17,7 +17,7 @@ ChargeIcon.BUTTON_NAME = BUTTON_NAME
 local FALLBACK_TEXTURE = "Interface\\Icons\\Ability_Warrior_Charge"
 local UPDATE_INTERVAL = 0.1
 
-local frame, icon, border, cooldown, timerText, hint, binder
+local frame, handle, icon, border, cooldown, timerText, binder
 local shownStart, shownDuration = 0, 0
 local lastMacro, securePending, shownAbility
 local lastUnit, lastWeapon, lastEpoch
@@ -145,23 +145,39 @@ local function Build()
 	timerText:SetPoint("CENTER")
 	timerText:SetFont(fontPath, 18, "OUTLINE")
 
-	hint = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	hint:SetPoint("BOTTOM", frame, "TOP", 0, 2)
-	hint:SetText("WarriorKit")
-	hint:Hide()
+	-- The drag handle, which is a plain frame laid over the button and shown
+	-- only while the frames are unlocked.
+	--
+	-- It exists because the two jobs cannot share one frame. Placing the icon
+	-- needs the mouse; casting from it must not fire on the press that starts
+	-- a drag, and the button registers its clicks on the down edge. The old
+	-- answer was to clear the button's type attribute while unlocked, which
+	-- also killed the bound key: the override stayed on the key, the key
+	-- clicked the button, and the button had no action. Charge silently did
+	-- nothing until you locked the frames again, and nothing said so.
+	--
+	-- A separate frame over the top gives each job its own: this one takes
+	-- every click while you are placing, the button keeps its action the whole
+	-- time, and the key works in both states.
+	handle = CreateFrame("Frame", nil, UIParent)
+	handle:SetAllPoints(frame)
+	handle:SetFrameStrata("HIGH")
+	handle:EnableMouse(true)
+	handle:RegisterForDrag("LeftButton")
+	handle:Hide()
 
-	frame:SetScript("OnDragStart", function(self)
+	handle:SetScript("OnDragStart", function()
 		if not ns.db.locked and not InCombatLockdown() then
-			self:StartMoving()
+			frame:StartMoving()
 		end
 	end)
-	frame:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		local point, _, relativePoint, x, y = self:GetPoint()
+	handle:SetScript("OnDragStop", function()
+		frame:StopMovingOrSizing()
+		local point, _, relativePoint, x, y = frame:GetPoint()
 		ns.db.point = { point, "UIParent", relativePoint, x, y }
 	end)
 
-	frame:SetScript("OnEnter", function(self)
+	handle:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		local key, unit = ns.Charge.Pick()
 		GameTooltip:AddLine(ns.Charge.Name(key) or key)
@@ -172,9 +188,10 @@ local function Build()
 		else
 			GameTooltip:AddLine("hover a party member or a mob", 0.8, 0.8, 0.8)
 		end
+		GameTooltip:AddLine("drag to move it", 0.8, 0.8, 0.8)
 		GameTooltip:Show()
 	end)
-	frame:SetScript("OnLeave", function()
+	handle:SetScript("OnLeave", function()
 		GameTooltip:Hide()
 	end)
 end
@@ -200,28 +217,19 @@ function ChargeIcon.ApplySecure()
 	securePending = nil
 
 	local db = ns.db
-	local unlocked = not db.locked
-	-- Mouse only while you are placing it, the same as the enemy bars anchor.
-	-- A mouse enabled frame swallows every button that lands on it, including
-	-- the right button drag that turns the camera, and this icon sits near the
-	-- middle of the screen where that drag starts. The two documented ways to
-	-- press it are the bound key and /click, neither of which needs the mouse.
-	-- The cost is that the tooltip only appears while unlocked.
-	frame:EnableMouse(unlocked)
-	-- RegisterForDrag(nil) is an error, not a way to clear it. Clearing is the
-	-- no argument call.
-	if unlocked then
-		frame:RegisterForDrag("LeftButton")
-	else
-		frame:RegisterForDrag()
-	end
-	-- Unlocked means you are dragging it, so the click must not cast.
-	frame:SetAttribute("type", (db.charge and not unlocked) and "macro" or nil)
-	if unlocked then
-		hint:Show()
-	else
-		hint:Hide()
-	end
+	-- The button never takes the mouse, in either state. A mouse enabled frame
+	-- swallows every button that lands on it, including the right button drag
+	-- that turns the camera, and this icon sits near the middle of the screen
+	-- where that drag starts. The two documented ways to press it are the
+	-- bound key and /click, neither of which needs the mouse, and while you
+	-- are placing it the handle above takes the clicks instead.
+	frame:EnableMouse(false)
+	frame:RegisterForDrag()
+	-- Not conditioned on the lock. Whether the frames are locked is a question
+	-- about dragging, and an unlocked frame that cannot cast is a charge key
+	-- that quietly does nothing.
+	frame:SetAttribute("type", db.charge and "macro" or nil)
+	handle:SetShown(not db.locked)
 	return true
 end
 
@@ -299,6 +307,12 @@ end
 -- read with the override dropped, so it reports the real binding rather than
 -- our own click binding, and it is kept so the UI can keep showing it.
 function ChargeIcon.Bind(key)
+	-- No button on another class, so there is nothing for a key to press. Said
+	-- before the combat check, because "not in combat" is advice that would
+	-- never come true here.
+	if not frame then
+		return nil, ns.Charge.NOT_WARRIOR .. "."
+	end
 	if InCombatLockdown() then
 		return nil, "keys cannot be rebound in combat."
 	end
@@ -424,6 +438,16 @@ events:RegisterEvent("PLAYER_TARGET_CHANGED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:SetScript("OnEvent", function(_, event)
 	if event == "PLAYER_LOGIN" then
+		-- Nothing here is built on another class. The button casts Charge,
+		-- Intervene and Intercept and nothing else, so on a hunter it would be
+		-- a secure frame sitting on a key override with a ten-a-second ticker
+		-- behind it, all to draw an ability that cannot be cast. Unregister
+		-- rather than return, so the file is silent for the rest of the
+		-- session instead of waking on every SPELLS_CHANGED to decide again.
+		if not ns.IsWarrior() then
+			events:UnregisterAllEvents()
+			return
+		end
 		Build()
 		icon:SetTexture(ns.Charge.Texture("charge") or FALLBACK_TEXTURE)
 		ChargeIcon.ApplyLayout()

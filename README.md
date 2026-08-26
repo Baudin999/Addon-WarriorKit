@@ -25,14 +25,22 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   Edit Mode layout carried inside the addon.
 - **Stripped bar art**, so the bars read as a row of icons. `/wk art on` puts
   the Blizzard art back.
-- **Three chores done for you.** Corpses empty in one go instead of one slot at
-  a time. Grey items sell themselves at every merchant, and hold shift to skip
-  one. The camera pulls back four times the base distance instead of 1.9.
+- **Four chores done for you.** Corpses empty in one go instead of one slot at
+  a time. Grey items sell themselves at every merchant. Damaged gear pays for
+  its own repair at any merchant who mends, out of the guild bank where your
+  rank allows it and out of your purse where it does not. Hold shift as you open
+  a merchant to skip both. The camera pulls back four times the base distance
+  instead of 1.9.
 - **`/wk destroy` clears out finished quest items.** One card at a time, with
   the quest it came from written on it, and a destroy and a skip. It reads
   Questie's database to work out which quest, so it needs Questie installed.
 
 `/wk` opens the settings panel. Everything in it has a slash command too.
+
+The Charge button and the bar loadout are warrior only, and on any other class
+they are not there at all: no button, no icon in the world, no key taken, and
+your action targeting setting left exactly where you had it. Everything else on
+this list works the same on a hunter as it does on a warrior.
 
 ## Install
 

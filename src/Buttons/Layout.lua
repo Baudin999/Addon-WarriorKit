@@ -153,15 +153,14 @@ end
 
 -- The loadout on top of that. Every spell in BAR1 and BAR2 is a warrior spell,
 -- so on anyone else this fills the bars with things they cannot cast and takes
--- a backup only that character can put back. Not cached, because a cache taken
--- before class data resolved would lock a warrior out for the session.
+-- a backup only that character can put back. ns.IsWarrior owns the question and
+-- owns the reason it is not cached; the charge part asks the same one.
 function Layout.CanApply()
 	local can, why = Layout.CanWrite()
 	if not can then
 		return false, why
 	end
-	local _, class = UnitClass("player")
-	if class and class ~= "WARRIOR" then
+	if not ns.IsWarrior() then
 		return false, Layout.NOT_WARRIOR
 	end
 	return true

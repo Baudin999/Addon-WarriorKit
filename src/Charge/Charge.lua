@@ -58,7 +58,6 @@ function Charge.Look(status)
 end
 
 local names, textures = {}, {}
-local isWarrior -- nil until the class resolves, class data is not reliable while files load
 local rangeAnswered, rangeSilent = false, 0
 
 -- Bumped whenever the name caches below are dropped, which is the only thing
@@ -104,18 +103,12 @@ function Charge.NameEpoch()
 	return nameEpoch + ns.Stance.Epoch()
 end
 
-local function IsPlayerWarrior()
-	if isWarrior == nil then
-		local _, class = UnitClass("player")
-		if class then
-			isWarrior = (class == "WARRIOR")
-		end
-	end
-	return isWarrior == true
-end
+-- Said once here so the panel, the slash word and the status line all give the
+-- same reason, rather than three sentences that have to be kept in step.
+Charge.NOT_WARRIOR = "the charge button casts three warrior abilities and you are not a warrior"
 
 function Charge.Known(key)
-	if not IsPlayerWarrior() then
+	if not ns.IsWarrior() then
 		return false
 	end
 	local info = Charge.ABILITIES[key]

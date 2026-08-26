@@ -1,14 +1,15 @@
 local ADDON, ns = ...
 
+local Unit = ns.Unit
 local Roster = {}
-ns.MeterRoster = Roster
+Unit.Roster = Roster
 
 --------------------------------------------------------------------------
 -- Who is in the group
 --
--- Both meters ask the same three questions and neither may ask the client
--- directly, because the answers are wanted per row per tick and two of the
--- three are not questions the client will answer at all.
+-- The meters and the enemy bars ask the same questions of it, and none of them
+-- may ask the client directly, because the answers are wanted per row per tick
+-- and some of them are not questions the client will answer at all.
 --
 --   is this GUID one of ours       the combat log names everyone in range,
 --                                  including the other party fighting the
@@ -29,16 +30,28 @@ ns.MeterRoster = Roster
 -- guid -> unit token, this group only, rebuilt whenever the group changes.
 local units = {}
 
--- guid -> owner guid, for pets and for anything a member summoned. Rebuilt with
--- the roster and added to by Meter.lua when it sees a summon, so it is bounded
--- by what one fight summons rather than by a session's worth.
+-- guid -> owner guid, for pets. Rebuilt with the roster, because a pet unit is
+-- something the client will answer for and the answer is current.
 local owners = {}
+
+-- guid -> owner guid, for anything a member summoned. Written by Meter.lua off
+-- the summon in the log and deliberately not rebuilt with the roster, because
+-- there is nothing to rebuild it from: no unit token points at a totem and the
+-- summon is the only place the client ever says whose it is. Wiping this on a
+-- roster change threw that away, and since a segment starts by rebuilding the
+-- roster, every totem dropped before a pull had its damage land nowhere for
+-- the whole fight. Pre-pull is when totems get dropped.
+--
+-- Bounded by pruning to the current group below rather than by wiping, so it
+-- holds one entry per thing the people you are with have summoned since you
+-- met them. A shaman retotemming all night is a few hundred short strings.
+local summons = {}
 
 -- guid -> { name, class }, kept for as long as the client runs.
 local known = {}
 
 -- The units in the group, player first, as a plain array so the threat sampler
--- can walk it without pairs and without building anything.
+-- and the enemy bars can walk it without pairs and without building anything.
 local order = {}
 
 local UnitClass = UnitClass
@@ -88,6 +101,11 @@ end
 -- on a ticker: the group changes when someone joins, and a meter that rescans
 -- the raid five times a second to be told the same twenty names is the kind of
 -- cost this addon has a whole tab for.
+--
+-- The enemy bars used to run their own copy of this walk on the tick, for the
+-- unit list their threat comparison needs. That is eighty unit queries five
+-- times a second in a forty man to be told what an event already knew, and it
+-- is the reason this file now lives under Unit rather than under Meter.
 function Roster.Build()
 	wipe(units)
 	wipe(owners)
@@ -112,6 +130,17 @@ function Roster.Build()
 			end
 		end
 	end
+
+	-- Everything summoned by somebody who is no longer here. Their totem is
+	-- still burning and its damage is no longer ours to count, and this is the
+	-- one place the table can be trimmed without losing a summon that is still
+	-- live. Off the hot path by construction: this runs on a roster change and
+	-- at the top of a segment, never on a tick.
+	for guid, owner in pairs(summons) do
+		if not units[owner] then
+			summons[guid] = nil
+		end
+	end
 end
 
 -- The units in the group, player first. The array itself is handed out rather
@@ -132,7 +161,7 @@ function Roster.Owner(guid)
 	if not guid then
 		return nil
 	end
-	local owner = owners[guid]
+	local owner = owners[guid] or summons[guid]
 	if owner then
 		return owner
 	end
@@ -144,7 +173,7 @@ end
 -- Eye of Kilrogg are not a pet unit and no unit token ever points at them.
 function Roster.Own(guid, ownerGuid)
 	if guid and ownerGuid and units[ownerGuid] then
-		owners[guid] = ownerGuid
+		summons[guid] = ownerGuid
 	end
 end
 

@@ -108,11 +108,25 @@ local RAID_ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 -- drawn from coloured rectangles rather than from UI-StatusBar, which is the
 -- 2007 glass texture and reads like it. Nothing here is a file path, so there
 -- is no art asset that has to still exist on this client.
-local BACKDROP = { 0.04, 0.04, 0.05, 0.85 }
-local EDGE = { 0, 0, 0, 0.90 } -- debuff icons only, the gauge edge follows threat
-local TRACK = 0.20 -- the spent part of a bar is its own colour, this dark
-local NAME_TEXT = { 0.97, 0.97, 1.00 }
-local TARGET_TEXT = { 1.00, 0.90, 0.55 }
+--
+-- Every colour on that list now comes out of ns.Unit.Color rather than out of
+-- this file. It used to be declared here and declared again in Skin.lua, four
+-- of the nine with the same literals typed twice, which held right up until
+-- somebody warmed the green on one of them.
+local Color = ns.Unit.Color
+local Level = ns.Unit.Level
+local Roster = ns.Unit.Roster
+local Threat = ns.Unit.Threat
+local Flow = ns.UI.Flow
+
+local BACKDROP = Color.backdrop
+local EDGE = Color.iconEdge -- debuff icons only, the gauge edge follows threat
+local TRACK = Color.track -- the spent part of a bar is its own colour, this dark
+local NAME_TEXT = Color.text.name
+local TARGET_TEXT = Color.text.target
+local HEALTH_TEXT = Color.text.value
+local COUNT_TEXT = Color.text.count
+local LEVEL_BACK = Color.plate
 
 -- Which bar is yours, said with the one channel nothing else on the bar is
 -- using. The fill, the edge and the line above all belong to threat, the tag
@@ -132,48 +146,6 @@ local TARGET_TEXT = { 1.00, 0.90, 0.55 }
 -- off a mob that is not yours yet.
 local TARGET_ALPHA = 1.00
 local OTHER_ALPHA = 0.55
-local HEALTH_TEXT = { 0.74, 0.76, 0.82 }
-local COUNT_TEXT = { 1.00, 0.86, 0.45 }
-
--- Tanking colours key off how close the nearest challenger is. Not tanking is
--- always red, because the mob is on the wrong person.
-local SAFE = { 0.20, 0.72, 0.38 }
-local CLOSE = { 0.95, 0.77, 0.25 }
-local LOSING = { 0.98, 0.55, 0.20 }
-local OFF_YOU = { 0.88, 0.25, 0.28 }
-local IDLE = { 0.42, 0.45, 0.52 }
-
--- What the mob is worth, on the client's own XP scale. These never touch the
--- gauge: the XP scale and the threat scale are the same five colours saying
--- two different things, and a bar carrying both would say neither. Difficulty
--- gets the level tag, threat keeps the fill, the edge and the line above.
-local NO_XP = { 0.55, 0.56, 0.60 }
-local EASY = { 0.35, 0.85, 0.35 }
-local EVEN = { 1.00, 0.92, 0.25 }
-local HARD = { 1.00, 0.62, 0.25 }
-local DEADLY = { 1.00, 0.35, 0.32 }
-local LEVEL_BACK = { 0.03, 0.03, 0.04, 0.95 }
-
--- Whether it comes for you on its own. Hostile is what nearly everything on
--- the screen is, so it stays deep and quiet; a third bright red on a bar that
--- already carries threat red and five-levels-up red would be one red too many.
--- Neutral is the exception and the one worth seeing from across a room, so it
--- gets the bright colour.
-local AGGRO = { 0.55, 0.12, 0.12 }
-local PASSIVE = { 0.95, 0.75, 0.15 }
-
--- The suffix is the whole classification vocabulary, and it is the half of the
--- answer the number cannot give: an elite at your level is not a mob at your
--- level, in XP or in what it does back.
---
---     42   normal        42+   elite        42r   rare        42r+  rare elite
---     ??   a boss, or a level this client will not name
-local CLASSIFICATION = {
-	elite = "+",
-	worldboss = "+",
-	rareelite = "r+",
-	rare = "r",
-}
 
 local anchor, header
 local pool, attached, listWidgets = {}, {}, {}
@@ -190,7 +162,17 @@ local trackedNames, trackedIcons = {}, {}
 -- an account plays both flavours and a spell Era has never heard of should come
 -- back when you log into the TBC character it was added on.
 local unresolved = {}
-local targeters, groupUnits = {}, {}
+local targeters = {}
+-- unit token -> that member's pet token. Built once against the fixed token set
+-- rather than concatenated per member per tick, for the reason
+-- ns.Unit.TargetToken exists.
+local PET_FOR = { player = "pet" }
+for index = 1, 40 do
+	PET_FOR["raid" .. index] = "raidpet" .. index
+end
+for index = 1, 4 do
+	PET_FOR["party" .. index] = "partypet" .. index
+end
 local haveTarget = false -- gathered once a tick, read by every widget
 local firstSeen, seenCounter = {}, 0
 local scratch = {}
@@ -436,47 +418,9 @@ local function ShortName(name)
 	return name
 end
 
--- Cached per class rather than formatted per call. There are nine of these on
--- this client and the answer for a class never moves, but this is reached once
--- per group member five times a second and the format call allocated a string
--- every time.
-local classColors = {}
-
-local function ClassColor(unit)
-	local _, class = UnitClass(unit)
-	if not class then
-		return "ffffffff"
-	end
-	local cached = classColors[class]
-	if cached then
-		return cached
-	end
-	local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
-	if not color then
-		return "ffffffff"
-	end
-	cached = ("ff%02x%02x%02x"):format(color.r * 255, color.g * 255, color.b * 255)
-	classColors[class] = cached
-	return cached
-end
-
 --------------------------------------------------------------------------
 -- Data gathering
 --------------------------------------------------------------------------
-
--- "raid17" .. "target" is a fresh string every time it is asked for, and it is
--- asked for once per group member five times a second. The token set is fixed
--- and under a hundred entries, so it is memoised rather than rebuilt.
-local targetTokens = {}
-
-local function TargetToken(unit)
-	local token = targetTokens[unit]
-	if not token then
-		token = unit .. "target"
-		targetTokens[unit] = token
-	end
-	return token
-end
 
 -- The coloured label for one group member, cached against the name it was
 -- built from. Group composition changes when someone joins or leaves, not five
@@ -491,7 +435,8 @@ local function Label(unit, owner)
 	if entry and entry.name == name then
 		return entry.label
 	end
-	local label = ("|c%s%s%s|r"):format(ClassColor(subject), owner and "*" or "", ShortName(name))
+	local _, class = UnitClass(subject)
+	local label = ("|c%s%s%s|r"):format(Color.ClassHex(class), owner and "*" or "", ShortName(name))
 	if entry then
 		entry.name, entry.label = name, label
 	else
@@ -504,7 +449,7 @@ end
 -- closures per call is two closures five times a second for the life of the
 -- session. They read the same two module tables either way.
 local function Record(unit, owner)
-	local targetUnit = TargetToken(unit)
+	local targetUnit = ns.Unit.TargetToken(unit)
 	if not UnitExists(targetUnit) then
 		return
 	end
@@ -521,139 +466,65 @@ local function Member(unit, petUnit)
 	if UnitExists(petUnit) then
 		Record(petUnit, unit)
 	end
-	if not UnitIsUnit(unit, "player") then
-		groupUnits[#groupUnits + 1] = unit
-	end
 end
 
--- guid -> "Name *Pet Name", and a fresh roster for threat comparisons.
+-- guid -> "Name *Pet Name", for the line above each bar that says who else is
+-- already on this mob.
+--
+-- Who is in the group no longer comes from here. It used to: this function
+-- rebuilt the whole party or raid on every tick, eighty unit queries in a forty
+-- man five times a second, and then the threat comparison walked what came out.
+-- ns.Unit.Roster already had that list, built on GROUP_ROSTER_UPDATE, because
+-- the meters needed the same thing and got it right. What is left here is the
+-- half that genuinely does move between two ticks, which is what each member is
+-- currently targeting.
 local function BuildTargeters()
 	wipe(targeters)
-	wipe(groupUnits)
 	-- Asked once here rather than once per mob in UpdateWidget. It is the same
 	-- answer for every bar on the screen and this already runs exactly once a
 	-- tick in both modes.
 	haveTarget = UnitExists("target")
 
-	Member("player", "pet")
-	if IsInRaid() then
-		for i = 1, GetNumGroupMembers() do
-			local unit = "raid" .. i
-			if UnitExists(unit) and not UnitIsUnit(unit, "player") then
-				Member(unit, "raidpet" .. i)
-			end
-		end
-	else
-		for i = 1, 4 do
-			if UnitExists("party" .. i) then
-				Member("party" .. i, "partypet" .. i)
-			end
-		end
+	local group = Roster.Units()
+	for index = 1, #group do
+		local unit = group[index]
+		Member(unit, PET_FOR[unit])
 	end
 end
 
--- Vanilla has no threat API, so on Classic Era the colour comes from who the
--- mob is swinging at instead: you, someone else, or nobody yet. That is not
--- threat. It cannot warn you before a mob turns, only tell you after it has.
--- It is the honest half of the question that client can answer, and it beats a
--- screen of identical grey bars.
-local function TargetState(unit)
-	local victim = unit .. "target"
-	if not UnitExists(victim) then
-		return IDLE, ""
-	end
-	if UnitIsUnit(victim, "player") then
-		return SAFE, "on you"
-	end
-	return OFF_YOU, "on " .. ShortName(UnitName(victim))
-end
-
--- While you hold the mob the number that matters is the nearest challenger,
--- not your own permanent 100%. Returns a colour and a line of text, and the
--- colour is the one thing on the widget that is not about health: it paints
--- the gauge, the edge around it and the line above it.
+-- The colour and the line of text above the gauge. The colour is the one thing
+-- on the widget that is not about health: it paints the gauge, the edge around
+-- it and the line above it.
+--
+-- Both halves of the question live in ns.Unit.Threat now, which is also where
+-- the meter reads them. What stays here is the wording, because how a bar
+-- phrases a number is the bar's business and shortening a name is presentation.
+--
+-- While you hold the mob the number that matters is the nearest challenger, not
+-- your own permanent 100%.
 local function ThreatState(unit)
-	if not ns.HasThreat() then
-		return TargetState(unit)
-	end
+	local color, percent, challenger = Threat.State(unit)
 
-	local isTanking, status = ns.Threat("player", unit)
-	if status == nil then
-		return IDLE, ""
-	end
-
-	if isTanking then
-		local worst, worstUnit = 0, nil
-		for _, member in ipairs(groupUnits) do
-			local _, _, percent = ns.Threat(member, unit)
-			if percent and percent > worst then
-				worst, worstUnit = percent, member
-			end
+	-- Vanilla has no threat API. The colour comes from who the mob is swinging
+	-- at instead: you, someone else, or nobody yet. That is not threat. It
+	-- cannot warn you before a mob turns, only tell you after it has. It is the
+	-- honest half of the question that client can answer, and it beats a screen
+	-- of identical grey bars.
+	if not color then
+		local shade, victim, mine = Threat.Swinging(unit)
+		if not victim then
+			return shade, ""
 		end
-		if not worstUnit then
-			return SAFE, ""
-		end
-		local color = worst >= 90 and LOSING or (worst >= 70 and CLOSE or SAFE)
-		return color, ("%d%% %s"):format(worst, ShortName(UnitName(worstUnit)))
+		return shade, mine and "on you" or ("on " .. ShortName(UnitName(victim)))
 	end
 
-	local _, _, percent = ns.Threat("player", unit)
-	percent = percent or 0
-	return OFF_YOU, ("%d%%"):format(percent)
-end
-
--- Hostile mobs come for you inside their aggro radius. Neutral ones stand
--- there until you hit them. That is the whole question and UnitReaction is the
--- whole answer: 4 is neutral, under it is hostile, over it does not fight you
--- at all and cannot normally reach a bar, since a bar needs UnitCanAttack.
---
--- What the reaction cannot tell you is aggro radius, which shrinks as the mob
--- falls behind your level until a hostile mob well under you walks past
--- without noticing. Read the stripe with the level: deep red on a grey number
--- is a mob that could come and probably will not bother.
-local function Reaction(unit)
-	local reaction = UnitReaction(unit, "player")
-	if not reaction or reaction >= 5 then
-		return IDLE
+	if not percent then
+		return color, ""
 	end
-	return reaction == 4 and PASSIVE or AGGRO
-end
-
--- The level tag and the colour that says what killing it is worth. The scale
--- is the client's own quest scale, which is also its XP scale: more than
--- GetQuestGreenRange below you and the mob pays nothing, two either side of
--- you is even, five above is the top of the range.
---
--- A client with no GetQuestGreenRange gets green rather than grey for the mobs
--- below that line. Grey is a claim that the kill is worth zero, and that claim
--- needs the number the shim could not get.
-local function Difficulty(unit)
-	local level = UnitLevel(unit) or 0
-	local tag = level > 0 and tostring(level) or "??"
-	local suffix = CLASSIFICATION[ns.Classification(unit) or "normal"]
-	if suffix then
-		tag = tag .. suffix
+	if challenger then
+		return color, ("%d%% %s"):format(percent, ShortName(UnitName(challenger)))
 	end
-
-	-- A level the client will not name is above yours by definition.
-	if level <= 0 then
-		return tag, DEADLY
-	end
-
-	local diff = level - (UnitLevel("player") or level)
-	if diff >= 5 then
-		return tag, DEADLY
-	elseif diff >= 3 then
-		return tag, HARD
-	elseif diff >= -2 then
-		return tag, EVEN
-	end
-
-	local green = ns.GreenRange()
-	if green and -diff > green then
-		return tag, NO_XP
-	end
-	return tag, EASY
+	return color, ("%d%%"):format(percent)
 end
 
 -- The per-slot tables are reused rather than rebuilt, so `found` carries one
@@ -786,7 +657,8 @@ local function CreateWidget()
 	local box = CreateFrame("Frame", nil, widget)
 	local bg = ns.Fill(box, "BACKGROUND", BACKDROP[1], BACKDROP[2], BACKDROP[3], BACKDROP[4])
 	bg:SetAllPoints()
-	box.edges = ns.Outline(box, IDLE[1], IDLE[2], IDLE[3], 1)
+	local idle = Color.threat.idle
+	box.edges = ns.Outline(box, idle[1], idle[2], idle[3], 1)
 	widget.box = box
 
 	widget.health = FlatBar(box)
@@ -804,8 +676,9 @@ local function CreateWidget()
 	-- The reaction stripe closes the tag on the left. Same frame, because the
 	-- two answer one question between them, what this mob is and what it does
 	-- about you, and one setting turns the pair on and off.
-	level.stripe = ns.Fill(level, "ARTWORK", AGGRO[1], AGGRO[2], AGGRO[3], 1)
-	level.text = Text(level, PLATE_TEXT, NO_XP, "CENTER")
+	local aggro = Color.aggro.comes
+	level.stripe = ns.Fill(level, "ARTWORK", aggro[1], aggro[2], aggro[3], 1)
+	level.text = Text(level, PLATE_TEXT, Color.xp.none, "CENTER")
 	widget.level = level
 
 	widget.name = Text(widget.health, PLATE_TEXT, NAME_TEXT, "LEFT")
@@ -870,6 +743,37 @@ end
 -- in the design. On the grid that is a divide by the zoom, the frame's scale
 -- multiplies it straight back, and the bar measured 180 by 62 screen pixels at
 -- zoom 1, 2 and 3 alike. The setting had never done anything.
+-- Everything stacks upwards from the gauge, which sits on the widget's bottom
+-- edge. That way one anchor point places the whole thing. The row above the
+-- gauge is shared: threat on the left, debuff icons packed to the right, so
+-- neither has to be centred into the other's way.
+--
+-- This used to be a hundred and eighty lines of SetPoint. It is a tree handed
+-- to ns.UI.Flow now, and the widget's own height falls out of the measurement
+-- rather than being derived by hand from four other numbers. What that bought,
+-- beyond the length: the icon row wraps because the row node says wrap, not
+-- because this function works out how many fit and anchors each square to the
+-- gauge's corner with the row width subtracted.
+--
+-- Three things are still anchored by hand below the tree, and the reason is the
+-- same for all three: their size is whatever the mob happens to be called or
+-- what level it is, so it is not known when the layout runs. A layout that had
+-- to re-run on a name change would be a layout running on the tick. See the
+-- note at the top of UI/Flow.lua.
+--
+-- Two conversions, and telling them apart is the whole of why `bars zoom` works
+-- now and did not before.
+--
+-- `unit` turns a number from the constants above into the units this widget is
+-- drawn in. On the grid it is 1: a design pixel is a unit, and the zoom on the
+-- frame's scale is what makes that unit a 1x1, 2x2 or 3x3 block of screen
+-- pixels. Off the grid, on a client with no SetIgnoreParentScale, it is the
+-- fraction that keeps the bar the same physical size, which is as close as that
+-- client gets.
+--
+-- `px` is one screen pixel, and it is for hairlines, insets and nothing else.
+-- An edge is one pixel at every zoom, the same as every rule in the options
+-- window. A design that grows does not want a border that grows with it.
 local function LayoutWidget(widget, width, onPlate)
 	-- Measured here rather than baked into a constant, because the same widget
 	-- is laid out on a nameplate and in the list and a reparent can move the
@@ -894,10 +798,19 @@ local function LayoutWidget(widget, width, onPlate)
 	--
 	-- That makes the outline floor a hard minimum for these two rather than the
 	-- switch point ns.UI.NumberFont applies over art. There is no graceful
-	-- degradation available, so the size has to come up instead. They were 12,
-	-- outlined, which is the one combination that is bad in both directions at
-	-- once: too small to carry a rim, and unable to drop it.
+	-- degradation available, so the size has to come up instead.
 	local openFont = ns.UI.Font(math.max(fontSize, ns.UI.OutlineFloor()))
+
+	-- Both numbers on an icon are sized off the icon rather than off the bar,
+	-- because the icon is a setting now: a fourteen pixel timer on a sixteen
+	-- pixel square covers the art it is annotating.
+	-- Both sit on the icon's own art, which is opaque, so they go through
+	-- ns.UI.NumberFont: it keeps the outline while the glyph is big enough to
+	-- carry one and drops it when it is not.
+	local timerFont = ns.UI.NumberFont(math.max(8,
+		math.min(fontSize, math.floor(iconSize * 0.6))))
+	local countFont = ns.UI.NumberFont(math.max(7,
+		math.min(math.floor(COUNT_TEXT_SIZE * unit + 0.5), math.floor(iconSize * 0.5))))
 
 	-- The row, packed right and wrapped.
 	--
@@ -908,57 +821,91 @@ local function LayoutWidget(widget, width, onPlate)
 	-- thirty two pixels is 356 and wider than any bar this addon will draw. So
 	-- the row wraps upwards instead of overflowing, every row right aligned
 	-- under the one above it, and the bottom row is the one nearest the gauge
-	-- and the one that fills first.
+	-- and the one that fills first. That is `lineOrder = "up"`.
 	FitIcons(widget)
 	local count = #trackedNames
-	local perRow = math.max(1, math.floor((width + iconGap) / (iconSize + iconGap)))
-	local iconRows = count > 0 and math.ceil(count / perRow) or 0
+	local icons = {
+		direction = "row", wrap = true, justify = "end", lineOrder = "up",
+		gap = iconGap, width = width, alignX = "start", alignY = "end",
+	}
+	for index = 1, count do
+		local holder = widget.icons[index]
+		ns.EdgeSize(holder.edges, px)
+		holder.timer:SetFontObject(timerFont)
+		holder.count:SetFontObject(countFont)
+		holder.texture:ClearAllPoints()
+		holder.texture:SetPoint("TOPLEFT", px, -px)
+		holder.texture:SetPoint("BOTTOMRIGHT", -px, px)
+		icons[index] = { frame = holder, width = iconSize, height = iconSize }
+	end
 
 	-- The strip between the gauge and whatever is above it. The threat number
 	-- shares it with the bottom row of icons, so it is an icon tall; with
 	-- nothing tracked there are no icons to share it with and it is as tall as
 	-- its own text, which is the whole of what an empty list costs in height.
-	local lineHeight = iconRows > 0 and iconSize
+	local lineHeight = count > 0 and iconSize
 		or math.max(fontSize, ns.UI.OutlineFloor())
-	local rowHeight = boxHeight + iconGap + lineHeight
-		+ math.max(iconRows - 1, 0) * (iconGap + iconSize)
 
-	-- Only the bottom row is beside the threat number, so only the bottom row
-	-- takes width away from it.
-	local bottom = math.min(count, perRow)
-	local bottomWidth = bottom > 0 and (bottom * iconSize + (bottom - 1) * iconGap) or 0
-
-	-- Both numbers on an icon are sized off the icon rather than off the bar,
-	-- because the icon is a setting now: a fourteen pixel timer on a sixteen
-	-- pixel square covers the art it is annotating.
-	-- Both numbers sit on the icon's own art, which is opaque, so they go through
-	-- ns.UI.NumberFont: it keeps the outline while the glyph is big enough to
-	-- carry one and drops it when it is not. These were outlined at every size,
-	-- and at the sizes a small square forces that is a blob rather than a digit.
-	local timerFont = ns.UI.NumberFont(math.max(8,
-		math.min(fontSize, math.floor(iconSize * 0.6))))
-	local countFont = ns.UI.NumberFont(math.max(7,
-		math.min(math.floor(COUNT_TEXT_SIZE * unit + 0.5), math.floor(iconSize * 0.5))))
+	-- Only the bottom line is beside the threat number, so only the bottom line
+	-- takes width away from it. Asked of Flow rather than worked out again here,
+	-- so there is one rule for where a line breaks.
+	local lines = Flow.Lines(icons)
+	local bottomWidth = (count > 0 and lines[1]) and lines[1].main or 0
 
 	widget:SetWidth(width)
-	widget:SetHeight(rowHeight + TOP_TEXT * unit)
 	widget.onPlate = onPlate -- PlaceOnPlate centres on a plate and not in the list
 
-	widget.box:ClearAllPoints()
-	widget.box:SetPoint("BOTTOMLEFT", widget, "BOTTOMLEFT", 0, 0)
-	widget.box:SetPoint("BOTTOMRIGHT", widget, "BOTTOMRIGHT", 0, 0)
-	widget.box:SetHeight(boxHeight)
-	ns.EdgeSize(widget.box.edges, px)
+	Flow.Arrange(widget, {
+		direction = "column", width = width, align = "stretch",
 
-	-- Pinned to all four corners rather than given a height, so the gauge is
-	-- exactly the inside of the box however the numbers round.
-	widget.health:ClearAllPoints()
-	widget.health:SetPoint("TOPLEFT", widget.box, "TOPLEFT", px, -px)
-	widget.health:SetPoint("BOTTOMRIGHT", widget.box, "BOTTOMRIGHT", -px, px)
+		-- Wider than the bar and centred on it, so a long list of names
+		-- overhangs both sides evenly rather than clipping on one.
+		{ frame = widget.targetedBy, width = width + 60 * unit,
+			height = TOP_TEXT * unit, align = "center" },
+
+		{ direction = "column", gap = iconGap, align = "stretch",
+
+			-- Two things in one strip. The icons take the full width to wrap
+			-- against and the threat line takes what the bottom line of them
+			-- leaves, which is why this is a stack and not a row: in a row each
+			-- would reserve space from the other and the icons would wrap early.
+			{ direction = "stack",
+				{ frame = widget.threatText, alignX = "start", alignY = "end",
+					width = math.max(24 * unit, width - bottomWidth - 8 * unit),
+					height = lineHeight },
+				icons,
+			},
+
+			-- The gauge is the inside of the box, less the hairline around it.
+			-- It grows rather than carrying a height, so the two hairlines come
+			-- off the box's own measurement and the gauge is exactly what is
+			-- left however the numbers round.
+			{ frame = widget.box, height = boxHeight, pad = px, align = "stretch",
+				direction = "column",
+				{ frame = widget.health, grow = 1 },
+			},
+		},
+	})
+
+	ns.EdgeSize(widget.box.edges, px)
+	widget.threatText:SetFontObject(openFont)
+	widget.targetedBy:SetFontObject(openFont)
+
+	--------------------------------------------------------------------------
+	-- Sized by their own content, so they are anchored rather than arranged
+	--------------------------------------------------------------------------
 
 	widget.healthText:SetFontObject(font)
 	widget.healthText:ClearAllPoints()
 	widget.healthText:SetPoint("RIGHT", widget.health, "RIGHT", -pad, 0)
+
+	-- The whole inside of the gauge belongs to the name, left edge to health
+	-- number, because the tag no longer takes a bite out of it. Pinned to the
+	-- number rather than given a width, so a long name yields to it.
+	widget.name:SetFontObject(font)
+	widget.name:ClearAllPoints()
+	widget.name:SetPoint("LEFT", widget.health, "LEFT", pad, 0)
+	widget.name:SetPoint("RIGHT", widget.healthText, "LEFT", -pad, 0)
 
 	-- Levelled here rather than at creation, because Attach sets the widget's
 	-- frame level after the widget exists and this runs after that.
@@ -988,45 +935,6 @@ local function LayoutWidget(widget, width, onPlate)
 	widget.level.stripe:SetWidth(STRIPE_WIDTH * unit)
 	widget.levelTag = nil -- the next update sizes the tag to its own text
 
-	-- The whole inside of the gauge belongs to the name now, left edge to
-	-- health number, because the tag no longer takes a bite out of it.
-	widget.name:SetFontObject(font)
-	widget.name:ClearAllPoints()
-	widget.name:SetPoint("LEFT", widget.health, "LEFT", pad, 0)
-	widget.name:SetPoint("RIGHT", widget.healthText, "LEFT", -pad, 0)
-
-	widget.threatText:SetFontObject(openFont)
-	widget.threatText:ClearAllPoints()
-	-- Rounded for the same reason: lineHeight is the icon's edge when anything is
-	-- tracked, and half of an odd icon is half a pixel.
-	widget.threatText:SetPoint("LEFT", widget, "BOTTOMLEFT", px,
-		boxHeight + iconGap + ns.UI.Round(widget, lineHeight / 2))
-	widget.threatText:SetWidth(math.max(24 * unit, width - bottomWidth - 8 * unit))
-
-	for index = 1, count do
-		local holder = widget.icons[index]
-		holder:SetSize(iconSize, iconSize)
-		ns.EdgeSize(holder.edges, px)
-		holder.timer:SetFontObject(timerFont)
-		holder.count:SetFontObject(countFont)
-		holder.texture:ClearAllPoints()
-		holder.texture:SetPoint("TOPLEFT", px, -px)
-		holder.texture:SetPoint("BOTTOMRIGHT", -px, px)
-
-		-- Every square is anchored to the gauge's top right corner rather than
-		-- to the square before it, so each row lands on the right edge by
-		-- construction and a partial row hangs its gap on the left where it
-		-- belongs. A chain of LEFT anchors could only align the row it started.
-		local row = math.floor((index - 1) / perRow) -- 0 is the row on the gauge
-		local column = (index - 1) % perRow
-		local inRow = math.min(perRow, count - row * perRow)
-		local rowWidth = inRow * iconSize + (inRow - 1) * iconGap
-		holder:ClearAllPoints()
-		holder:SetPoint("BOTTOMLEFT", widget.box, "TOPRIGHT",
-			column * (iconSize + iconGap) - rowWidth,
-			iconGap + row * (iconGap + iconSize))
-	end
-
 	-- Outside the tag when there is a tag, so the two do not want the same
 	-- strip of screen. Anchored to the box when there is not, rather than to a
 	-- hidden frame, which would leave the icon floating a tag's width out.
@@ -1037,11 +945,6 @@ local function LayoutWidget(widget, width, onPlate)
 	else
 		widget.marker:SetPoint("RIGHT", widget.box, "LEFT", -3 * unit, 0)
 	end
-
-	widget.targetedBy:SetFontObject(openFont)
-	widget.targetedBy:ClearAllPoints()
-	widget.targetedBy:SetPoint("TOP", widget, "TOP", 0, 0)
-	widget.targetedBy:SetWidth(width + 60 * unit)
 
 	-- What the client needs to know to stop two of these landing on each other.
 	-- Sent in UIParent's units because that is what the nameplate driver counts
@@ -1174,7 +1077,7 @@ local function UpdateWidget(widget, unit, guid)
 	-- edge is: this runs five times a second per mob and a level changes when
 	-- the mob does.
 	if ns.db.barsLevel then
-		local tag, xp = Difficulty(unit)
+		local tag, xp = Level.Of(unit)
 		if widget.levelTag ~= tag then
 			widget.levelTag = tag
 			widget.level.text:SetText(tag)
@@ -1191,7 +1094,7 @@ local function UpdateWidget(widget, unit, guid)
 			widget.level.text:SetTextColor(xp[1], xp[2], xp[3])
 		end
 
-		local reaction = Reaction(unit)
+		local reaction = Color.Aggro(unit)
 		if widget.reactionColor ~= reaction then
 			widget.reactionColor = reaction
 			widget.level.stripe:SetColorTexture(reaction[1], reaction[2], reaction[3], 1)

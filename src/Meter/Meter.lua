@@ -30,6 +30,15 @@ ns.Meter = Meter
 -- Effective healing only. Overheal is subtracted, because a healer who lands
 -- 40k of heals into a full health bar has healed nothing, and a meter that
 -- says otherwise is a meter people learn to ignore.
+--
+-- Effective damage only, for exactly the same reason. A 5,000 hit on a mob
+-- with 100 health left does 100 damage and wastes 4,900, and the client hands
+-- that 4,900 over as a separate number so it can be taken off. The usual
+-- answer is to keep it, which is why in most meters the killing blow moves
+-- somebody up the chart: they are being paid for health the mob did not have.
+-- Overheal is not counted here and overkill is not either, because a meter
+-- that runs one rule down the healing column and the opposite one down the
+-- damage column cannot be read across.
 --------------------------------------------------------------------------
 
 local CombatLogGetCurrentEventInfo = _G.CombatLogGetCurrentEventInfo
@@ -38,6 +47,9 @@ local CombatLogGetCurrentEventInfo = _G.CombatLogGetCurrentEventInfo
 -- A table lookup rather than a chain of comparisons: the log delivers a few
 -- hundred of these a second in a raid and this is the first line of the
 -- handler.
+--
+-- Overkill is always the slot after the amount, on every one of these and on
+-- a heal's overheal too, so the table only has to carry the one index.
 local DAMAGE = {
 	SWING_DAMAGE = 12,
 	RANGE_DAMAGE = 15,
@@ -86,7 +98,7 @@ function Meter.Start()
 		slot.damage, slot.healing, slot.active = 0, 0, false
 		list[index] = nil
 	end
-	ns.MeterRoster.Build()
+	ns.Unit.Roster.Build()
 	startedAt, endedAt = GetTime(), nil
 	running = true
 end
@@ -139,12 +151,12 @@ local function Fighting(owner)
 	if UnitAffectingCombat("player") then
 		return true
 	end
-	local unit = ns.MeterRoster.UnitFor(owner)
+	local unit = ns.Unit.Roster.UnitFor(owner)
 	return unit ~= nil and UnitAffectingCombat(unit)
 end
 
 local function Record(guid, damage, healing)
-	local owner = ns.MeterRoster.Owner(guid)
+	local owner = ns.Unit.Roster.Owner(guid)
 	if not owner then
 		return
 	end
@@ -165,13 +177,23 @@ local function OnLog()
 	end
 
 	local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
-		arg12, _, _, arg15, arg16 = CombatLogGetCurrentEventInfo()
+		arg12, arg13, _, arg15, arg16 = CombatLogGetCurrentEventInfo()
 
 	local at = DAMAGE[subevent]
 	if at then
 		local amount = (at == 12) and arg12 or arg15
+		-- The client sends minus one here on every hit that killed nothing,
+		-- which is nearly every hit, so what is tested below is the sign and
+		-- not just the type. Subtracting a minus one would hand back more
+		-- damage than was dealt.
+		local wasted = (at == 12) and arg13 or arg16
 		if type(amount) == "number" and amount > 0 then
-			Record(sourceGUID, amount, 0)
+			if type(wasted) == "number" and wasted > 0 then
+				amount = amount - wasted
+			end
+			if amount > 0 then
+				Record(sourceGUID, amount, 0)
+			end
 		end
 		return
 	end
@@ -190,7 +212,7 @@ local function OnLog()
 	-- and no unit token ever points at one, so the summon is the only place the
 	-- client says whose it is.
 	if subevent == "SPELL_SUMMON" then
-		ns.MeterRoster.Own(destGUID, sourceGUID)
+		ns.Unit.Roster.Own(destGUID, sourceGUID)
 	end
 end
 

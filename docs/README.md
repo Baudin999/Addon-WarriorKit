@@ -73,9 +73,17 @@ name of none of them.
     Core/Command.lua     slash dispatch, built from the registry
     Core/Panel.lua       the options window and the widget kit
 
+    Unit/Unit.lua        health and power, as the integers that get drawn
+    Unit/Color.lua       every colour the addon puts on a unit, in one palette
+    Unit/Level.lua       the level tag, the elite suffix, what a kill is worth
+    Unit/Roster.lua      who is in the group, whose pet is whose, and what a
+                         GUID was called when it last was
+    Unit/Threat.lua      what the threat API says, for one mob or across a group
+
     UI/Pixel.lua         the pixel grid: screen size, scale, snapping, rescale
     UI/Draw.lua          a filled rectangle, a hairline outline, a crisp icon
     UI/Text.lua          one shared font object per size, a label, wrapped height
+    UI/Flow.lua          a stack panel: rows, columns, wrapping and alignment
     UI/Theme.lua         the palette and the pixel metrics, in one table each
     UI/Stack.lua         a column of rows, each one asked how tall it is
     UI/Scroll.lua        a viewport that clips, a canvas that moves, a bar
@@ -92,7 +100,8 @@ name of none of them.
     Charge/Charge.lua        which ability, which unit, what state; shared colours
     Charge/Icon.lua          the HUD icon, which is also the secure button that casts
     Charge/Marker.lua        the icon in the world above the mob the button will hit
-    Charge/SoftTarget.lua    action targeting, held on out of combat and off in it
+    Charge/SoftTarget.lua    action targeting, held on out of combat and off in
+                             it, and never touched on another class
     Charge/Feature.lua
 
     Targeting/Switch.lua     the secure button behind the switch key, and its binding
@@ -111,8 +120,6 @@ name of none of them.
     UnitFrames/Skin.lua      the square skin on player, target and target of target
     UnitFrames/Feature.lua
 
-    Meter/Roster.lua         who is in the group, whose pet is whose, and what a
-                             GUID was called when it last was
     Meter/Spec.lua           the icon beside a name: a talent tree where the
                              client will say which, a class icon where it will not
     Meter/Meter.lua          damage and healing per player, out of the combat log
@@ -126,6 +133,7 @@ name of none of them.
 
     Comfort/Loot.lua         empties a corpse on LOOT_READY, before the window draws
     Comfort/Vendor.lua       sells grey items while a merchant window is up
+    Comfort/Repair.lua       pays the merchant to mend, guild funds first
     Comfort/Camera.lua       how far cameraDistanceMaxZoomFactor lets you pull back
     Comfort/Clutter.lua      which quest items are finished with, and why
     Comfort/Destroy.lua      the one-card-at-a-time window that acts on that
@@ -144,17 +152,35 @@ name of none of them.
     check.sh             syntax, TOC coverage and lint gate, exits non-zero on any finding
     bake-ui.sh           bakes a captured Edit Mode layout into EditMode/Saved.lua
 
-`UI/` is not a part. It has no `Feature.lua`, signs into no registry, owns no
-setting and knows the name of nothing above it. It is a layer, the way Core is:
-everything that puts a frame on the screen draws through it, and it draws
-through the client.
+Neither `UI/` nor `Unit/` is a part. Neither has a `Feature.lua`, neither signs
+into a registry, neither owns a setting and neither knows the name of anything
+above it. They are layers, the way Core is.
 
-TOC order matters three times. `Core/Core.lua` must load first because it
-creates the registry every other file signs into. `UI/` loads next, before
-`Core/Panel.lua`, because the panel takes `ns.Fill` and `ns.Outline` into
-file-scope locals as it loads. Within a part, behaviour loads before
-`Feature.lua`, because `Feature.lua` is the only file in a part allowed to name
-anything outside its own folder.
+`UI/` is how the addon draws. Everything that puts a frame on the screen goes
+through it, and it goes through the client.
+
+`Unit/` is what the addon knows about a mob or a group member. It draws nothing.
+It exists because the enemy bars and the frame skin had each grown their own
+copy of the same four answers and the copies had drifted: the class colour was a
+hex string in one file and a table in the other, the level tag was cached in one
+and rebuilt per tick in the other, and the reaction palette was declared twice
+with the same literals. Both files read one copy now, so they cannot disagree
+about what a mob is, and the threat meter reads the same roster the bars do.
+
+Two rules hold everywhere under `Unit/`, and both come from the callers rather
+than from taste. Nothing allocates, because everything on that page is reachable
+from a ticker running against every mob on the screen. And a colour is handed
+back by reference and never built at call time, because the tickers guard their
+widget writes on colour identity, so the same state has to answer the same
+table every time.
+
+TOC order matters four times. `Core/Core.lua` must load first because it creates
+the registry every other file signs into. `Unit/` loads next, because it draws
+nothing and needs nothing but Core, and inside it Color loads before Level and
+Roster before Threat. `UI/` loads after that and before `Core/Panel.lua`, because
+the panel takes `ns.Fill` and `ns.Outline` into file-scope locals as it loads.
+Within a part, behaviour loads before `Feature.lua`, because `Feature.lua` is the
+only file in a part allowed to name anything outside its own folder.
 
 The Charge files split by job, not by feature. `Charge.lua` decides which
 ability, which unit and what state, and all three displays read that one answer.
@@ -341,6 +367,8 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Layout.Apply / Restore    fill the action bars, or put back what was there
     ns.EditMode.CanApply / Capture / Apply / Saved / IndexOf
     ns.interface / ns.vanilla    the interface number, and whether this is 1.x
+    ns.IsWarrior()               whether the charge part and the loadout apply
+                                 to this character at all
     ns.HasThreat() / ns.Threat(source, unit)   the threat API, or nil on vanilla
     ns.HasHealPrediction() / ns.IncomingHeals(unit)   what is already in the air
                                  for that unit, 0 when nothing is, nil when the
@@ -457,13 +485,15 @@ out a widget per nameplate.
 
 ### The widget library
 
-`UI/` was three files and a pixel grid. It is eight now, and the five new ones
+`UI/` was three files and a pixel grid. It is nine now, and the six new ones
 are a widget library rather than a settings panel: the options window is the
 first thing built on them and is not meant to be the last.
 
     ns.UI.Color / ns.UI.Metric     the palette and the measurements
     ns.UI.Box / ns.UI.Rule         a filled box with a hairline, and a hairline
     ns.UI.Stack(parent, width)     a column, :Add, :Space, :Reflow
+    ns.UI.Flow.Arrange(root, tree) rows, columns, wrapping and alignment
+    ns.UI.Flow.Lines(node)         where a wrapping row breaks
     ns.UI.ScrollView(parent)       :Resize, :Update(extent), :ScrollTo
     ns.UI.Button(parent, opts)     a push button
     ns.UI.Pixel(frame)             one screen pixel, in that frame's units
@@ -512,6 +542,53 @@ where neither does. The bar is a `Slider` frame type with a thumb the addon
 draws, chosen because following a dragged thumb by hand means an `OnUpdate` and
 this addon does not add a ticker for a settings window. The wheel is
 `EnableMouseWheel`. No Blizzard widget template is used anywhere in the layer.
+
+### Layout, in the sense a stack panel means it
+
+`ns.UI.Stack` lays a settings page out: a column of rows, each asked its own
+height. `ns.UI.Flow` is the other kind, the one a HUD widget wants, and it is
+what XAML calls a StackPanel and CSS calls a flex container. You describe what
+goes where and it works out the offsets.
+
+    Flow.Arrange(widget, {
+        direction = "column", gap = 4, align = "stretch",
+        { frame = widget.targetedBy, height = 15, align = "center" },
+        { direction = "stack",
+            { frame = widget.threatText, alignX = "start", alignY = "end" },
+            { direction = "row", wrap = true, justify = "end",
+              lineOrder = "up", ... },
+        },
+        { frame = widget.box, height = 23 },
+    })
+
+Two passes, the same two XAML has. Measure asks every node how big it wants to
+be, bottom up. Arrange hands every node the rectangle it got, top down, and pins
+each frame to the root's top left corner at the offset that came out.
+
+**Pinned to one corner, not chained.** A chain of anchors can only align the run
+it starts, which is why the debuff row on an enemy bar used to be anchored square
+by square to the gauge's corner with the row width subtracted by hand.
+
+**A stack is XAML's single-cell Grid.** Every child gets the whole rectangle and
+places itself in it with `alignX` and `alignY`. It is how the threat line and the
+debuff row share one strip of screen: in a row each would reserve space from the
+other and the icons would wrap early.
+
+**`reverse` is the whole of mirroring.** The run starts at the far edge and walks
+in. Nothing else about a mirrored layout differs.
+
+**It does not do content sizing, and it will not.** A node's size is a number the
+caller knows before the layout runs. The two strings inside an enemy bar's gauge
+are sized by whatever the mob happens to be called, so they stay pinned to each
+other with plain anchors. A layout that had to re-run when a name changed would
+be a layout running on the tick, and `check.sh` is what keeps that boundary: no
+function in `UI/Flow.lua` is named in `HOT`, so it may allocate and the files
+that call it may not.
+
+`scripts/harness.lua` gates the engine on its own, before anything built out of
+it: nine shapes, each read back off the offsets Flow wrote. A layout bug inside
+the enemy bars shows up as one failing assertion about a debuff square and takes
+an hour to trace back to the arithmetic. The same bug there names itself.
 
 ### Where the client puts a nameplate
 
@@ -818,8 +895,13 @@ one side, only the shim changes.
   straight back off. The icon has to be part of the key: keyed on the GUID
   alone it also swallowed a deliberate second click, so marking a mob skull and
   changing your mind to cross inside half a second did nothing.
-- Class data is not reliably available while files load. Resolve
-  `UnitClass("player")` at PLAYER_LOGIN, not at file scope.
+- Class data is not reliably available while files load. Ask `ns.IsWarrior()`
+  at PLAYER_LOGIN or later, never at file scope, and never cache the answer of
+  your own: a cache taken while the files load would lock a warrior out of the
+  charge button for the whole session. `ns.IsWarrior()` reads the class every
+  time for that reason, and answers yes while the class is unresolved, because
+  a wrong yes costs a moment of a button that will not cast and a wrong no
+  costs a warrior their button until they reload.
 - Our widgets call `EnableMouse(false)` so they never swallow a click meant for
   the nameplate underneath.
 - A mouse enabled frame swallows every mouse button that lands on it, whatever
@@ -874,6 +956,24 @@ charge. `/wk status` names each mark and its key, and appends `unproven` when
 **Charge.** Three abilities, one button. Charge.lua holds the state,
 ChargeIcon.lua draws the HUD icon and is the button that casts, ChargeMarker.lua
 puts a copy of that icon in the world over the mob you are about to hit.
+
+None of it is built on another class. Charge, Intervene and Intercept are
+warrior abilities, so on a hunter the whole part is cost with nothing on the
+other side of it: a secure frame holding a key override, a ten-a-second ticker
+on the icon, a twenty-a-second nameplate scan on the marker, and a client CVar
+written on every combat transition. `Icon.lua` and `Marker.lua` ask
+`ns.IsWarrior()` at PLAYER_LOGIN and unregister their event frames outright
+rather than building something and hiding it, because a hidden marker is still
+paying for the scan. `SoftTarget.Wanted` asks the same question, so the CVar is
+never written either; that gate is on `Wanted` and not on the event frame,
+because `Apply` is also called straight from the panel and the slash word and
+one authority is what stops those three paths disagreeing. `/wk charge`,
+`/wk size` and `/wk bind` say why instead of writing a setting nothing reads,
+and the Charge page in the options window is one sentence instead of four tabs.
+
+The saved settings are left alone. They are account-wide, a warrior alt shares
+them, and a class gate is a fact about this character rather than a preference
+about the addon.
 
     out of combat            Charge     Battle Stance      the mob you are looking at
     in combat, friendly hover Intervene Defensive Stance   that party member
@@ -1047,7 +1147,9 @@ with `token unproven` means the CVar is set and the token is what is not
 answering.
 
 **Action targeting.** `Charge/SoftTarget.lua` owns the `SoftTargetEnemy` CVar
-and drives it off combat: on when you are out of it, off when you are in it.
+and drives it off combat: on when you are out of it, off when you are in it. On
+another class it owns nothing and writes nothing, because the setting exists to
+serve a button that is not built there.
 
 That is the same line the rest of the Charge part already draws. Charge is an
 out of combat ability, the world marker detaches at PLAYER_REGEN_DISABLED, and
@@ -2403,6 +2505,8 @@ nothing ever runs is a branch that is wrong.
     /wk art on|off               Blizzard bar art, off by default
     /wk loot on|off              empty a corpse in one go
     /wk sell on|off              grey items at every merchant, shift to skip one
+    /wk repair                   pay the merchant in front of you now
+    /wk repair on|off            every merchant who mends, shift to skip one
     /wk zoom on|off              how far the camera pulls back
     /wk destroy                  the clutter window, one quest item at a time
     /wk ui                       what is baked in, and whether Edit Mode answers
@@ -2434,7 +2538,7 @@ alone. Everything runs from one script:
 
     ./check.sh
 
-It does six things and exits non-zero on any finding. The bar is zero warnings
+It does seven things and exits non-zero on any finding. The bar is zero warnings
 and zero errors.
 
 1. Loads every `.lua` under the addon through lua5.1. It walks the tree with
@@ -2454,7 +2558,14 @@ and zero errors.
    settings that vanish on logout rather than an error.
 5. Bans writes and allocation on ticker paths, described under Ticker
    discipline above.
-6. Runs `scripts/harness.lua`, which loads every file in TOC order against a
+6. Caps how long a file may be. 800 lines in general, and three files carry
+   their own ceiling set at what they measure today, each with a one-line reason
+   and the split it would take. The ceiling fails in both directions: a file that
+   grows past it fails, and a file that shrinks below it fails until the number
+   comes down with it, which is what makes it a ratchet rather than a licence.
+   The addon had gates on allocation, on TOC parity and on version drift, and
+   nothing at all watching a file reach nineteen hundred lines.
+7. Runs `scripts/harness.lua`, which loads every file in TOC order against a
    stub of the client, puts two nameplates up, drives the enemy bars ticker and
    then asserts the things reading the source cannot settle: that the grid
    resolves to one unit per pixel on a screen that is not 768 tall, that a
@@ -2463,7 +2574,10 @@ and zero errors.
    boundary, that the driver was told how much room a bar wants, and that fifty
    ticks stay under the allocation gate. Those gates are ratchets: each sits
    just above the current figure and the next improvement lowers it in the same
-   commit. The bars' gate went in at 5.0 covering 4.10 and is 0.5 covering 0.17.
+   commit. The bars' gate went in at 5.0 covering 4.10, then 0.5, then 0.25, and
+   is 0.05 now that the tick no longer rebuilds the raid to find out who is in
+   it. It also gates `ns.UI.Flow` on its own, nine layout shapes read back off
+   the offsets the engine wrote, before anything built out of it is touched.
 
    It also stands up stubbed `PlayerFrame`, `TargetFrame` and `TargetFrameToT`,
    runs the skin against them, and asserts that the blocks the addon owns are on
@@ -2504,6 +2618,25 @@ and zero errors.
    where a protected block holds its scale and takes the new one at
    `PLAYER_REGEN_ENABLED` while an unadopted frame moves straight away.
 7. Runs luacheck over the tree.
+
+The harness runs twice, and the second run comes up as a hunter:
+
+    lua5.1 scripts/harness.lua src HUNTER
+
+Two parts of the addon are warrior only, and both decide it once at
+`PLAYER_LOGIN`, so a decision that has already been taken cannot be reached by
+flipping the class afterwards. The second run is the only way to assert that
+the charge button and the world marker were never built, that the key was
+refused rather than accepted and dropped, that the Charge page is one sentence
+instead of four tabs of dead controls, and that `SoftTargetEnemy` came out of
+the run holding the value it went in with. Every check in that section is
+written against the class the run is, so it gates both directions: the warrior
+run proves the same things were built.
+
+The other ten parts are asserted again on that run, which is the point. A part
+that quietly needed a warrior fails in `check.sh` rather than in someone's
+game. The skin's colour checks are the only ones that had to learn about it,
+because the player's health bar carries the player's class colour.
 
 The harness is not a client. Every API in it answers what that file says it
 answers, so a stub that returns the wrong thing is a test that passes and a
@@ -2557,6 +2690,20 @@ Everything below was written from the API contract and has never executed:
 - Whether `GetContainerItemInfo` answers a table on 2.5.6 or eleven loose
   values. Both are read in `ns.ContainerItem`, the same way `ns.ContainerSlots`
   already reads both container APIs.
+- Whether `CanGuildBankRepair`, `GetGuildBankMoney` and `GetGuildBankWithdrawMoney`
+  are on the Era client. TitanRepair calls all three unguarded on both, but Era
+  has no guild bank at all, so what that proves is that TitanRepair would break
+  and not that the call is there. `Comfort/Repair.lua` reaches all three through
+  `_G` and pcalls them, so a client without them loses guild funding and still
+  repairs out of your own purse. The merchant half is not in this list:
+  `CanMerchantRepair`, `GetRepairAllCost`, `RepairAllItems` and
+  `GetInventoryItemDurability` are called unguarded by both TitanRepair and
+  Leatrix Plus on both clients, inside their own auto-repair feature, which is
+  the same feature and so the same proof.
+- Whether `GetGuildBankWithdrawMoney` really answers `-1` for a rank with no
+  limit on this client rather than a large number. Read as an amount, `-1` is
+  the smallest allowance there is and every repair falls through to your own
+  gold, which is the safe direction to be wrong in. The harness models both.
 - Whether `ERR_VENDOR_DOESNT_BUY` and `ERR_TOO_MUCH_GOLD` are the constants this
   client raises, and whether `UI_ERROR_MESSAGE` hands the message first or
   second. Both positions are compared and both constants are reached through

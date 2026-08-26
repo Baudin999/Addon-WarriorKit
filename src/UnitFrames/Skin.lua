@@ -82,12 +82,6 @@ local TOT_SCALE = 0.62
 -- this file places it and this is the whole of the placement.
 local TOT_GAP = 3
 
--- The edge takes the fill's colour at this much of its brightness. At full
--- strength a hostile target ringed the whole block in saturated red and the
--- border shouted louder than anything inside it. The fill carries the colour;
--- the edge only has to agree with it.
-local EDGE_DIM = 0.60
-
 -- Below this many pixels tall a power bar cannot hold a readable number, so it
 -- carries none. Target of target is the frame that hits it.
 local VALUE_FLOOR = 9
@@ -108,41 +102,21 @@ local SMALL_SHARE, SMALL_MIN, SMALL_MAX = 0.80, 7, 11
 -- The look, and deliberately the enemy bars' look: the same flat fills, the
 -- same hairline, no gloss, no gradient and no file path, so there is no art
 -- asset that has to still exist on this client.
-local BACKDROP = { 0.04, 0.04, 0.05, 0.85 }
-local TRACK = 0.20 -- the spent part of a bar is its own colour, this dark
-local NAME_TEXT = { 0.97, 0.97, 1.00 }
-local VALUE_TEXT = { 0.74, 0.76, 0.82 }
+--
+-- "Deliberately the enemy bars' look" used to be a comment and two copies of
+-- the same nine literals. It is one table now. ns.Unit.Color is where every
+-- colour the addon puts on a unit lives, and both files read it, so the two
+-- cannot drift the way they were free to before.
+local Unit = ns.Unit
+local Color = Unit.Color
+local Level = Unit.Level
 
--- Incoming heals, laid over the part of the gauge the heal is about to reach.
--- A pale green rather than the class colour, and half transparent, because the
--- whole job of the slice is to read as not yours yet: what is filled is what
--- you have, what is behind this is what somebody has already spent a cast on.
--- Green because that is what heal prediction has been in every unit frame that
--- draws it, and a colour the game has already taught is worth more than a
--- prettier one it has not.
-local HEAL = { 0.42, 0.86, 0.52, 0.55 }
-
--- What the gauge and the edge around it are coloured by. A player wears their
--- class colour, which is the whole point of the setting. Anything else has no
--- class, so it falls back to what it thinks of you, on the same three colours
--- the enemy bars use for the same question.
-local IDLE = { 0.42, 0.45, 0.52 }
-local DIM = { 0, 0, 0 } -- scratch, rewritten by Dim() on every recolour
-local HOSTILE = { 0.88, 0.25, 0.28 }
-local NEUTRAL = { 0.95, 0.77, 0.25 }
-local FRIENDLY = { 0.20, 0.72, 0.38 }
-
--- Keyed by the number UnitPowerType returns rather than by the token it
--- returns beside it, because the number is the half that has never been
--- renamed. PowerBarColor would answer this too and is a global nothing
--- installed here calls unguarded, so the five colours live here instead.
-local POWER = {
-	[0] = { 0.25, 0.44, 0.90 }, -- mana
-	[1] = { 0.78, 0.25, 0.22 }, -- rage
-	[2] = { 1.00, 0.50, 0.25 }, -- focus
-	[3] = { 0.95, 0.90, 0.35 }, -- energy
-	[4] = { 0.40, 0.80, 0.90 }, -- happiness
-}
+local BACKDROP = Color.backdrop
+local TRACK = Color.track -- the spent part of a bar is its own colour, this dark
+local NAME_TEXT = Color.text.name
+local VALUE_TEXT = Color.text.value
+local HEAL = Color.heal
+local IDLE = Color.reaction.idle
 
 -- Only reached when a bar's original texture answers no file path, which is
 -- what a bar wearing an atlas rather than a file would do. Restoring the wrong
@@ -150,11 +124,6 @@ local POWER = {
 -- invisible bar, and that is the one that reads as broken.
 local FALLBACK_BAR = "Interface\\TargetingFrame\\UI-StatusBar"
 
--- The same suffix vocabulary the enemy bars use, so an elite reads the same
--- way on the target frame as it does on the mob's own bar.
---
---     42   normal        42+   elite        42r   rare        42r+  rare elite
---     ??   a boss, or a level this client will not name
 -- The state icons the walk must not hide, matched on the end of a region's
 -- name rather than on the whole of it. Naming them outright would mean three
 -- names per icon across two clients and a hybrid between them; the suffix is
@@ -173,13 +142,6 @@ local BADGES = {
 	-- Bigger, because the PvP texture carries a wide transparent margin and
 	-- renders visibly smaller than the box it is given.
 	{ pattern = "PVPIcon$", slot = "pvp", corner = "BOTTOM", scale = 0.72 },
-}
-
-local CLASSIFICATION = {
-	elite = "+",
-	worldboss = "+",
-	rareelite = "r+",
-	rare = "r",
 }
 
 --------------------------------------------------------------------------
@@ -214,6 +176,9 @@ local SPECS = {
 			manabar = { "PlayerFrameManaBar" },
 		},
 		level = { "PlayerLevelText" },
+		-- Blizzard's combat feedback text: the damage number it flashes over
+		-- the portrait. See the note in StripArt.
+		feedback = { "PlayerHitIndicator" },
 	},
 	{
 		-- Mirrored, because the target frame sits on the right of the screen
@@ -234,6 +199,7 @@ local SPECS = {
 			manabar = { "TargetFrameManaBar" },
 		},
 		level = { "TargetLevelText", "TargetFrameTextureFrameLevelText" },
+		feedback = { "TargetFrameHitIndicator", "TargetHitIndicator" },
 	},
 	{
 		key = "tot", unit = "targettarget", mirror = false, under = "target",
@@ -275,7 +241,6 @@ local function EachTouched(entry, fn)
 end
 
 local entries = {}
-local classTint = {}
 local pending = false
 
 --------------------------------------------------------------------------
@@ -500,6 +465,11 @@ local function Resolve(spec)
 		spec = spec,
 		frame = frame,
 		level = Piece(frame, nil, spec.level),
+		-- Resolved by global name only, the way the level text is and for the
+		-- same reason: it hangs off no parent key on either client, and asking
+		-- a frame for a key it does not carry is a question whose answer
+		-- depends on what that frame's metatable does with a miss.
+		feedback = Piece(frame, nil, spec.feedback),
 		badges = {},
 		stripped = {},
 		names = {},
@@ -672,8 +642,15 @@ local function StripArt(entry)
 	-- name, its level and the two status bar numbers all go, because this file
 	-- draws its own pair and two answers stacked on one gauge is worse than
 	-- either.
+	--
+	-- The combat feedback number goes with them, and it is the one on the list
+	-- that is not replaced by anything. It is drawn at Blizzard's font size,
+	-- centred on a portrait that used to be twice this size, so on the block it
+	-- lands across the level and the power gauge and neither number can be
+	-- read. Blizzard's own art no longer exists to hold it, so there is nowhere
+	-- correct to put it and hiding is the honest answer.
 	local texts = { BarText(entry.healthbar), BarText(entry.manabar),
-		entry.name, entry.level }
+		entry.name, entry.level, entry.feedback }
 	for _, text in pairs(texts) do
 		entry.stripped[text] = true
 		count = count + 1
@@ -1325,74 +1302,14 @@ end
 
 --------------------------------------------------------------------------
 -- Colour
+--
+-- All of it is ns.Unit.Color's now. What used to be here was a class colour
+-- cache, a reaction ladder and a level tag cache, and every one of the three
+-- had a twin in UnitFrames/EnemyBars.lua. The two class caches even disagreed
+-- about the shape of an answer, one returning a table and one a hex string,
+-- which is what happens when the same thing is written twice by the same
+-- person a month apart.
 --------------------------------------------------------------------------
-
--- Cached per class rather than built per tick, so the identity guards below
--- work and nothing allocates five times a second.
-local function ClassTint(unit)
-	local _, class = UnitClass(unit)
-	if not class then
-		return nil
-	end
-	if classTint[class] then
-		return classTint[class]
-	end
-	local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
-	if not color then
-		return nil
-	end
-	classTint[class] = { color.r, color.g, color.b } -- allocates: once per class, and the early return above is the guard the scan cannot see
-	return classTint[class]
-end
-
--- The edge's colour, written into one scratch table rather than allocated,
--- because this is reached from the tick.
-local function Dim(color)
-	DIM[1], DIM[2], DIM[3] = color[1] * EDGE_DIM, color[2] * EDGE_DIM, color[3] * EDGE_DIM
-	return DIM
-end
-
-local function Tint(unit)
-	if UnitIsPlayer(unit) then
-		local tint = ClassTint(unit)
-		if tint then
-			return tint
-		end
-	end
-	local reaction = UnitReaction(unit, "player")
-	if not reaction then
-		return IDLE
-	end
-	if reaction >= 5 then
-		return FRIENDLY
-	end
-	return reaction == 4 and NEUTRAL or HOSTILE
-end
-
--- One string per level and classification pair, built the first time that
--- pair is seen and kept for the session. The tostring on the level and the
--- concat under it both allocate, and the guard below them compared the string
--- after it had already been built, so the guard never saved the building:
--- three frames at five ticks a second is thirty strings a second handed to the
--- collector to say a number that changes when the unit does. Levels are
--- bounded and there are five classifications, so the cache is too.
-local levelTags = {}
-
-local function LevelTag(unit)
-	local level = UnitLevel(unit) or 0
-	local suffix = CLASSIFICATION[ns.Classification(unit) or "normal"] or ""
-	local bySuffix = levelTags[suffix]
-	if not bySuffix then
-		bySuffix = {} -- allocates: once per classification, and the lookup above is the guard the scan cannot see
-		levelTags[suffix] = bySuffix
-	end
-	local tag = bySuffix[level]
-	if not tag then
-		tag = (level > 0 and tostring(level) or "??") .. suffix
-		bySuffix[level] = tag
-	end
-	return tag
-end
 
 --------------------------------------------------------------------------
 -- Styling and unstyling
@@ -1543,19 +1460,18 @@ local function Refresh(entry)
 		return
 	end
 
-	local tint = Tint(unit)
+	local tint = Color.OfUnit(unit)
 	if entry.tint ~= tint then
 		entry.tint = tint
 		Paint(entry.healthbar, tint)
 		entry.healthTrack:SetColorTexture(tint[1] * TRACK, tint[2] * TRACK, tint[3] * TRACK, 0.9)
-		local edge = Dim(tint)
+		local edge = Color.Dim(tint, Color.edgeDim)
 		ns.Recolor(entry.box.edges, edge)
 		entry.divider:SetColorTexture(edge[1], edge[2], edge[3], 1)
 	end
 
-	local powerType = UnitPowerType(unit)
-	local maxPower = UnitPowerMax(unit) or 0
-	local power = (maxPower > 0 and POWER[powerType]) or IDLE
+	local shownPower, maxPower, powerType = Unit.Power(unit)
+	local power = (maxPower > 0 and Color.power[powerType]) or IDLE
 	if entry.power ~= power then
 		entry.power = power
 		Paint(entry.manabar, power)
@@ -1565,8 +1481,7 @@ local function Refresh(entry)
 	-- Compared as the integers that get drawn, the same way the enemy bars do
 	-- it. A SetText costs a string measure and a relayout whether or not the
 	-- text changed, and a player at full health is the common case.
-	local health, maxHealth = UnitHealth(unit) or 0, UnitHealthMax(unit) or 0
-	local percent = maxHealth > 0 and math.floor(health / maxHealth * 100) or -1
+	local health, maxHealth, percent = Unit.Health(unit)
 	if entry.shownPercent ~= percent then
 		entry.shownPercent = percent
 		entry.healthText:SetText(percent >= 0 and (percent .. "%") or "")
@@ -1591,10 +1506,12 @@ local function Refresh(entry)
 	end
 	HealSlice(entry, span)
 
-	local shownPower = maxPower > 0 and (UnitPower(unit) or 0) or -1
-	if entry.shownPower ~= shownPower then
-		entry.shownPower = shownPower
-		entry.powerText:SetText(shownPower >= 0 and tostring(shownPower) or "")
+	-- -1 rather than 0 for a unit with no power bar at all, so "empty" and
+	-- "has none" guard apart. Most of what you fight has none.
+	local drawnPower = maxPower > 0 and shownPower or -1
+	if entry.shownPower ~= drawnPower then
+		entry.shownPower = drawnPower
+		entry.powerText:SetText(drawnPower >= 0 and tostring(drawnPower) or "")
 	end
 
 	local name = UnitName(unit) or ""
@@ -1603,9 +1520,9 @@ local function Refresh(entry)
 		entry.nameText:SetText(name)
 	end
 
-	-- Guarded on the string, which LevelTag now hands over already built rather
+	-- Guarded on the string, which ns.Unit.Level hands over already built rather
 	-- than building one per tick to compare.
-	local tag = LevelTag(unit)
+	local tag = Level.Tag(unit)
 	if entry.levelTag ~= tag then
 		entry.levelTag = tag
 		entry.levelText:SetText(tag)

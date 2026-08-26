@@ -221,6 +221,15 @@ events:SetScript("OnEvent", function(_, event)
 		return
 	end
 
+	-- The marker aims a charge, so it is worth nothing to anyone who cannot
+	-- cast one. Unregistered on another class rather than built and left
+	-- hidden, because the cost this file carries is the twenty-a-second
+	-- nameplate scan below and a hidden frame would still be paying it.
+	if not ns.IsWarrior() then
+		events:UnregisterAllEvents()
+		return
+	end
+
 	Build()
 	ChargeMarker.Update()
 	-- The ticker hangs off this frame, which is never hidden. On the marker

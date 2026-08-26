@@ -22,25 +22,42 @@
 -- that passes and a client that does not.
 --
 --     lua5.1 scripts/harness.lua src
+--     lua5.1 scripts/harness.lua src HUNTER
+--
+-- The second argument is the class this run is. It defaults to WARRIOR, which
+-- is every run this file has ever done. Two parts of the addon are warrior
+-- only, and both decide it once at PLAYER_LOGIN: the charge button and the
+-- world marker are not built at all on another class, and the action targeting
+-- CVar is never written. A decision taken at login cannot be reached by
+-- flipping the class afterwards, so the only way to test it is to come up as
+-- something else, and check.sh does both runs.
 
 local SCREEN_H = 1440 -- a height that is not 768, which is the whole point
 local UI_SCALE = 0.65
+
+-- Read here rather than beside ROOT below, because the UnitClass stub is
+-- installed long before that line runs.
+local PLAYER_CLASS = arg[2] or "WARRIOR"
+local WARRIOR = PLAYER_CLASS == "WARRIOR"
 
 -- The bars' steady state, in KB per fifty ticks with two bars up, covering the
 -- plate path and the list path both.
 --
 -- A ratchet, not a ceiling. It was 51.76 before the list collector stopped
 -- allocating and 4.10 after, so the gate went in at 5.0. Then it measured 0.17
--- and the gate came to 0.5. It measures 0.09 now and the gate is 0.25.
+-- and the gate came to 0.5, then 0.09 and the gate came to 0.25. It measures
+-- 0.00 now and the gate is 0.05.
 --
--- What moved it from 0.17 to 0.09 is not something this file can point at. It
--- was not the zoom section added above it, which measures the same 0.09 with
--- that section switched off, and it is stable to the digit across runs. Most
--- likely the scene reaching the measurement is warmer than it was. The number is
--- lowered anyway, because a threshold parked above what the code actually does
--- is a licence to go back there, and if the cause turns out to be a scene change
--- rather than an improvement the gate will say so the next time it moves.
-local LIST_CHURN_KB = 0.25
+-- What took it to zero is named and is not a scene change this time. The tick
+-- was rebuilding the party or raid on every pass to get the unit list its
+-- threat comparison walks, which is a table write and a token concat per
+-- member, five times a second, for an answer that changes when somebody joins.
+-- ns.Unit.Roster already held that list and rebuilds it on GROUP_ROSTER_UPDATE,
+-- so the walk is gone and what is left on the tick allocates nothing at all.
+--
+-- The gate is 0.05 rather than 0.00 because a gate of zero is a claim the
+-- measurement can never move, and this one is a sampled figure.
+local LIST_CHURN_KB = 0.05
 
 -- The skin's tick, in KB per fifty ticks across all three unit frames. Same
 -- kind of ratchet. It was 18.75 while the level tag was built and then compared
@@ -506,7 +523,19 @@ local guids = {}
 local function constant(v) return function() return v end end
 _G.UnitExists = function(u) return guids[u] ~= nil end
 _G.UnitGUID = function(u) return guids[u] end
-_G.UnitIsUnit = function(a, b) return a == b end
+-- Table driven rather than a plain equality, for the same reason the threat
+-- reader below is: several files resolve UnitIsUnit into a file-scope local as
+-- they load, so a test that swapped the global afterwards would swap nothing.
+-- The alias table is empty in the shipped scene, where two tokens are the same
+-- unit or they are not.
+local unitAlias = {}
+_G.UnitIsUnit = function(a, b)
+	if a == b then
+		return true
+	end
+	local aliases = unitAlias[a]
+	return aliases ~= nil and aliases[b] == true
+end
 -- Class and name are per unit where a test has said so and the shipped answer
 -- everywhere else. Every module that reads them localises the global at load,
 -- so a test cannot swap the function afterwards; it writes to these tables
@@ -517,7 +546,7 @@ _G.UnitClass = function(unit)
 	if class then
 		return class, class
 	end
-	return "Warrior", "WARRIOR"
+	return PLAYER_CLASS:sub(1, 1) .. PLAYER_CLASS:sub(2):lower(), PLAYER_CLASS
 end
 
 -- Threat, with a hook for the same reason. Core/Core.lua resolves
@@ -726,6 +755,70 @@ _G.GetMoney = function() return purse end
 _G.GetCoinText = function(amount) return ("%dc"):format(amount) end
 _G.MerchantFrame = region("frame")
 _G.MerchantFrame:Hide()
+
+-- The repair side of the same window. Modelled as a bill that has to be paid
+-- by somebody: the two repair calls move money out of a named purse and only
+-- then clear the damage, so a repair the addon reports as done and never paid
+-- for fails here rather than in Ironforge.
+--
+-- GUILD.allowed is what CanGuildBankRepair answers, GUILD.limit is the rank's
+-- withdraw ceiling with -1 meaning none, and GUILD.held is what is actually in
+-- the bank. All three are separate because the addon has to get the order of
+-- them right and a single "can the guild pay" flag would let it get it wrong.
+local repairBill = 0
+local repairsMerchant = true
+local paidBy = nil
+local GUILD = { allowed = false, limit = 0, held = 0, spent = 0 }
+
+_G.CanMerchantRepair = function() return repairsMerchant end
+_G.GetRepairAllCost = function() return repairBill end
+
+_G.RepairAllItems = function(onGuild)
+	if repairBill <= 0 then
+		return
+	end
+	if onGuild then
+		-- The client refuses rather than billing you personally, which is the
+		-- behaviour the addon's fall-through exists for.
+		if not GUILD.allowed then
+			return
+		end
+		local ceiling = GUILD.limit == -1 and GUILD.held or GUILD.limit
+		if ceiling < repairBill or GUILD.held < repairBill then
+			return
+		end
+		GUILD.held = GUILD.held - repairBill
+		GUILD.spent = GUILD.spent + repairBill
+		paidBy = "guild"
+	else
+		if purse < repairBill then
+			return
+		end
+		purse = purse - repairBill
+		paidBy = "you"
+	end
+	repairBill = 0
+end
+
+_G.CanGuildBankRepair = function() return GUILD.allowed end
+_G.GetGuildBankMoney = function() return GUILD.held end
+_G.GetGuildBankWithdrawMoney = function() return GUILD.limit end
+
+-- Eighteen slots, of which the ones that wear are given a pair. A ring answers
+-- nothing, which is what the scan has to skip rather than count as a piece at
+-- zero percent.
+local DURABILITY = {
+	[1] = { 40, 100 },
+	[5] = { 95, 100 },
+	[16] = { 12, 100 },
+}
+_G.GetInventoryItemDurability = function(slot)
+	local pair = DURABILITY[slot]
+	if not pair then
+		return nil
+	end
+	return pair[1], pair[2]
+end
 
 -- A corpse, with a quality on each slot so a master loot threshold has
 -- something to sort by: two under a threshold of 2 and two at or above it.
@@ -1029,9 +1122,14 @@ end
 local playerFrame = unitFrame("PlayerFrame", 232, 100, nil,
 	{ "PlayerRestIcon", "PlayerAttackIcon", "PlayerPVPIcon" })
 child("fontstring", playerFrame, "PlayerLevelText")
+-- The combat feedback number, which is a font string and so is invisible to a
+-- walk over textures. Blizzard draws it centred on a portrait twice the size
+-- of the block, so left alone it lands across the level and the power gauge.
+child("fontstring", playerFrame, "PlayerHitIndicator")
 local targetFrame = unitFrame("TargetFrame", 232, 100, nil,
 	{ "TargetFrameRaidTargetIcon", "TargetFramePVPIcon" })
 child("fontstring", targetFrame, "TargetLevelText")
+child("fontstring", targetFrame, "TargetFrameHitIndicator")
 local totFrame = unitFrame("TargetFrameToT", 120, 50, targetFrame, {})
 -- Anchored the way the client anchors it: against a target frame 100 units
 -- tall. That offset is the whole reason the skin has to place this frame
@@ -1081,6 +1179,261 @@ local function check(ok, message)
 		failures = failures + 1
 		print("  FAIL " .. message)
 	end
+end
+
+--------------------------------------------------------------------------
+-- The shared unit layer
+--
+-- ns.Unit, on its own. Two things it promises are not visible in a screenshot
+-- and are what everything above it is built on.
+--
+-- The first is that a colour is a reference. Every ticker in the addon guards
+-- its widget writes by comparing what it is about to draw against what it drew
+-- last, and for a colour that comparison is table identity, so the same state
+-- has to answer the same table every time. A version of this layer that built
+-- its answers would look right on screen and would write the gauge, the track,
+-- the edge and the threat line five times a second forever.
+--
+-- The second is who a walk covers. The threat comparison asks who is closest to
+-- taking a mob off you, so it has to skip you: counting the player makes every
+-- mob you are holding look like it is about to be lost.
+--------------------------------------------------------------------------
+
+do
+	local Unit = ns.Unit
+	local Color, Level, Threat = Unit.Color, Unit.Level, Unit.Threat
+
+	-- A colour is the same table twice, or the guards above it are dead.
+	check(Color.Class("WARRIOR") == Color.Class("WARRIOR"),
+		"the class colour is a fresh table on every call")
+	check(Color.ClassHex("WARRIOR"):match("^ff%x%x%x%x%x%x$") ~= nil,
+		("the class escape is %q, expected ffRRGGBB"):format(Color.ClassHex("WARRIOR")))
+	check(Color.Class("NOTACLASS") == nil,
+		"a class the client will not colour came back with a colour anyway")
+	check(Color.ClassHex(nil) == "ffffffff",
+		"a nameless class did not fall back to white")
+
+	-- A green that answers two questions is the same green, which is the whole
+	-- reason the palette is one table and not two.
+	check(Color.threat.safe == Color.reaction.friendly,
+		"safe and friendly are two different greens again")
+	check(Color.threat.off == Color.reaction.hostile,
+		"off you and hostile are two different reds again")
+
+	-- The stub's mobs are reaction 2, which is hostile, and the player is a
+	-- warrior. Identity rather than value, for the reason above.
+	check(Color.Reaction("nameplate1") == Color.reaction.hostile,
+		"a reaction 2 mob is not coloured hostile")
+	check(Color.Aggro("nameplate1") == Color.aggro.comes,
+		"a hostile mob is not marked as one that comes for you")
+	-- Whatever class this run came up as, since check.sh does two.
+	local playerClass = select(2, _G.UnitClass("player"))
+	check(Color.OfUnit("player") == Color.Class(playerClass),
+		("the player's own frame is not wearing the %s colour"):format(tostring(playerClass)))
+	check(Color.OfUnit("nameplate1") == Color.reaction.hostile,
+		"a mob with no class did not fall back to its reaction")
+
+	-- Dimming writes into one scratch table rather than allocating.
+	local dim = Color.Dim(Color.reaction.hostile, 0.5)
+	check(dim == Color.Dim(Color.reaction.friendly, 0.5),
+		"dimming allocates a table instead of reusing its scratch")
+	check(math.abs(dim[1] - Color.reaction.friendly[1] * 0.5) < 1e-9,
+		"the scratch does not carry the colour it was last handed")
+
+	-- Everything in the stub is level 62, player included, so every mob is an
+	-- even fight and none of them is an elite.
+	local tag, worth = Level.Of("nameplate1")
+	check(tag == "62", ("the level tag is %q, expected \"62\""):format(tag))
+	check(worth == Color.xp.even,
+		"a mob at your own level is not on the even colour")
+
+	check(Unit.TargetToken("raid17") == "raid17target",
+		("the target token is %q, expected \"raid17target\""):format(Unit.TargetToken("raid17")))
+
+	-- 4200 of 9000, floored to the integer that gets drawn rather than kept as
+	-- the ratio, because the integer is what the guards compare.
+	local health, maxHealth, percent = Unit.Health("nameplate1")
+	check(health == 4200 and maxHealth == 9000 and percent == 46,
+		("health reads %d of %d at %d%%, expected 4200 of 9000 at 46%%")
+			:format(health, maxHealth, percent))
+
+	-- Nobody but you in the group, so there is nobody to lose a mob to. A walk
+	-- that counted the player would answer 100 here and every bar you were
+	-- holding would draw as about to be lost.
+	check(ns.Unit.Roster.Size() < 2, "the harness starts in a group of more than one")
+	check(Threat.Top("nameplate1") == nil,
+		"the threat walk counted the player as their own challenger")
+
+	-- The vanilla road. That client has no threat API at all and the colour
+	-- comes from who the mob is actually swinging at, which is the honest half
+	-- of the question it can answer. Called directly, because the API is
+	-- resolved into a local at load and cannot be taken away afterwards.
+	local shade, victim, mine = Threat.Swinging("nameplate1")
+	check(shade == Color.threat.idle and victim == nil and mine == false,
+		"a mob swinging at nobody is not drawn idle")
+
+	guids["nameplate1target"] = "Player-0-00000042"
+	shade, victim, mine = Threat.Swinging("nameplate1")
+	check(shade == Color.threat.off and victim == "nameplate1target" and mine == false,
+		"a mob on somebody else is not drawn as off you")
+
+	unitAlias["nameplate1target"] = { player = true }
+	shade, victim, mine = Threat.Swinging("nameplate1")
+	check(shade == Color.threat.safe and mine == true,
+		"a mob swinging at you is not drawn as yours")
+	unitAlias["nameplate1target"] = nil
+	guids["nameplate1target"] = nil
+
+	print("unit   palette shared, colours by reference, threat walk skips you, vanilla fallback")
+end
+
+--------------------------------------------------------------------------
+-- The layout engine
+--
+-- ns.UI.Flow, on its own, before anything that is built out of it. Every
+-- number below is a rectangle the engine worked out, read back off the offsets
+-- it wrote, because that is the whole of what it promises: hand it a tree and
+-- every frame in it lands where the tree says.
+--
+-- Worth gating separately from the widgets. A layout bug inside the enemy bars
+-- shows up as one failing assertion about a debuff square and takes an hour to
+-- trace back to the arithmetic; the same bug here names itself.
+--------------------------------------------------------------------------
+
+do
+	local function Cell()
+		return region("frame", _G.UIParent)
+	end
+
+	local root = Cell()
+	ns.UI.Adopt(root)
+	local px = ns.UI.Pixel(root)
+	local Flow = ns.UI.Flow
+
+	-- Where a frame ended up, in root units, from the offset Flow wrote on it.
+	local function At(frame)
+		local _, _, _, x, y = frame:GetPoint()
+		return (x or 0) / px, -(y or 0) / px
+	end
+
+	local function near(got, want, what)
+		check(math.abs(got - want) < 1e-9,
+			("flow: %s is %.2f, expected %.2f"):format(what, got, want))
+	end
+
+	-- A column, stretched across, which is the shape of every stacked readout
+	-- in the addon.
+	do
+		local a, b, c = Cell(), Cell(), Cell()
+		Flow.Arrange(root, {
+			direction = "column", gap = 2 * px, align = "stretch", width = 100 * px,
+			{ frame = a, height = 10 * px },
+			{ frame = b, height = 20 * px },
+			{ frame = c, height = 5 * px },
+		})
+		near(root:GetHeight() / px, 39, "the column's height")
+		near(select(2, At(a)), 0, "the first row's top")
+		near(a:GetWidth() / px, 100, "a stretched row's width")
+		near(select(2, At(b)), 12, "the second row's top")
+		near(select(2, At(c)), 34, "the third row's top")
+	end
+
+	-- One child growing into what the others left, which is how a label takes
+	-- the room beside a fixed control.
+	do
+		local a, b = Cell(), Cell()
+		Flow.Arrange(root, {
+			direction = "row", gap = 4 * px, width = 100 * px, height = 20 * px,
+			{ frame = a, width = 10 * px, grow = 1 },
+			{ frame = b, width = 30 * px },
+		})
+		near(a:GetWidth() / px, 66, "the growing child took the slack")
+		near(At(b), 70, "the fixed child sits after it")
+	end
+
+	-- Packed to the far end, and run backwards, which is what mirroring a
+	-- layout is and nothing else.
+	do
+		local a, b = Cell(), Cell()
+		Flow.Arrange(root, {
+			direction = "row", gap = 4 * px, width = 100 * px, height = 20 * px,
+			justify = "end",
+			{ frame = a, width = 10 * px },
+			{ frame = b, width = 20 * px },
+		})
+		near(At(a), 66, "justify end: the first child")
+		near(At(b), 80, "justify end: the last child ends flush")
+
+		local c, d = Cell(), Cell()
+		Flow.Arrange(root, {
+			direction = "row", gap = 4 * px, width = 100 * px, height = 20 * px,
+			reverse = true,
+			{ frame = c, width = 10 * px },
+			{ frame = d, width = 20 * px },
+		})
+		near(At(d), 0, "reversed: the last child leads")
+		near(At(c), 24, "reversed: the first child follows")
+	end
+
+	-- Centred across the axis its container runs along.
+	do
+		local a = Cell()
+		Flow.Arrange(root, {
+			direction = "row", width = 100 * px, height = 20 * px,
+			{ frame = a, width = 10 * px, height = 6 * px, align = "center" },
+		})
+		near(select(2, At(a)), 7, "a centred child's top")
+	end
+
+	-- The wrapping row, right aligned, growing upwards, which is the debuff row
+	-- on an enemy bar. Five 20 wide squares with a 4 gap in a 70 wide row: three
+	-- fit on the line nearest the gauge and two wrap above it.
+	do
+		local squares = {}
+		local icons = { direction = "row", wrap = true, justify = "end",
+			lineOrder = "up", gap = 4 * px, width = 70 * px, alignY = "end" }
+		for index = 1, 5 do
+			squares[index] = Cell()
+			icons[index] = { frame = squares[index], width = 20 * px, height = 20 * px }
+		end
+
+		local lines = Flow.Lines(icons)
+		check(#lines == 2, ("flow: the row broke into %d lines, expected 2"):format(#lines))
+		near(lines[1].main / px, 68, "the first line's width")
+
+		-- The line nearest the gauge is full and the tail hangs above it, so a
+		-- text node beside it is sized against the first line and not the row.
+		local text = Cell()
+		Flow.Arrange(root, {
+			direction = "stack", width = 70 * px,
+			{ frame = text, width = 70 * px - lines[1].main, height = 20 * px,
+				alignX = "start", alignY = "end" },
+			icons,
+		})
+		near(root:GetHeight() / px, 44, "the stack is as tall as its tallest child")
+		near(select(2, At(text)), 24, "the text sits on the line nearest the gauge")
+		near(select(2, At(squares[1])), 24, "and so does the first square")
+		near(At(squares[1]), 2, "the full line is packed right")
+		near(At(squares[3]) + 20, 70, "the last square on it ends flush")
+		near(select(2, At(squares[4])), 0, "the wrapped line is above")
+		near(At(squares[4]) + 20 + 4 + 20, 70, "and is packed right too")
+	end
+
+	-- A node that is not drawn takes no room, which is what every setting that
+	-- hides one row of a widget relies on.
+	do
+		local a, b, c = Cell(), Cell(), Cell()
+		Flow.Arrange(root, {
+			direction = "column", gap = 2 * px, width = 50 * px,
+			{ frame = a, height = 10 * px },
+			{ frame = b, height = 20 * px, skip = true },
+			{ frame = c, height = 10 * px },
+		})
+		near(root:GetHeight() / px, 22, "the height ignores the skipped node")
+		near(select(2, At(c)), 12, "the row after it moved up")
+	end
+
+	print("flow   column, row, grow, justify, reverse, align, wrap up, stack, skip")
 end
 
 -- A mob and the plate the client puts up for it, carrying a scale of its own
@@ -1186,6 +1539,22 @@ for i = #plates, 3, -1 do
 	plates[i] = nil
 end
 
+-- The gauge fills the inside of the box, which is the box less one hairline on
+-- each edge. Asserted because it was briefly one pixel tall: the gauge carries
+-- no height of its own and takes whatever the box has left, and a layout node
+-- that is not told to grow measures zero and gets zero.
+do
+	local px = ns.UI.Pixel(widget)
+	check(math.abs(widget.health:GetHeight() - (widget.box:GetHeight() - 2 * px)) < 1e-9,
+		("the gauge is %.0f px tall inside a %.0f px box, expected %.0f")
+			:format(widget.health:GetHeight(), widget.box:GetHeight(),
+				widget.box:GetHeight() - 2 * px))
+	check(math.abs(widget.health:GetWidth() - (widget.box:GetWidth() - 2 * px)) < 1e-9,
+		("the gauge is %.0f px wide inside a %.0f px box, expected %.0f")
+			:format(widget.health:GetWidth(), widget.box:GetWidth(),
+				widget.box:GetWidth() - 2 * px))
+end
+
 -- The edges are one pixel, which was the whole complaint.
 check(widget.box.edges[1].height == ns.UI.Pixel(widget),
 	("hairline is %.4f units, expected %.4f"):format(widget.box.edges[1].height, ns.UI.Pixel(widget)))
@@ -1205,30 +1574,46 @@ check(art.snapped == false and art.bias == 0, "icon texture is still being snapp
 -- long that is, and when it no longer fits it wraps upwards rather than hanging
 -- icons off the left edge of the bar.
 --
--- Anchors rather than resolved rectangles. This stub records what a frame was
+-- Offsets rather than resolved rectangles. This stub records what a frame was
 -- anchored to and does no layout, which is the honest thing to assert against:
--- the anchor is the addon's half of the contract and the arithmetic on it is
+-- the offset is the addon's half of the contract and the arithmetic on it is
 -- the client's.
+--
+-- Measured against the gauge rather than read off one anchor pair. Every square
+-- used to hang off the gauge's own top right corner and this asserted that pair
+-- by name; ns.UI.Flow pins everything in a widget to the widget's top left
+-- instead, so which pair it used is the layout engine's business and the only
+-- thing worth asserting is where the square lands. That is what this measures,
+-- and it covers the gauge's own placement too, which naming the anchor did not.
 --------------------------------------------------------------------------
 
--- Every square hangs off the gauge's top right corner, so the row a square is
--- in is its y offset and its place in that row is its x. Returns the rows, top
--- to bottom, each one a list of x offsets.
+-- The offset a frame was pinned at, checked to be pinned the way Flow pins
+-- everything inside a widget.
+local function Corner(frame, bar, what)
+	local point, relative, relativePoint, x, y = frame:GetPoint()
+	check(point == "TOPLEFT" and relative == bar and relativePoint == "TOPLEFT",
+		("%s is anchored %s to %s, not TOPLEFT to the widget's TOPLEFT")
+			:format(what, tostring(point), tostring(relativePoint)))
+	return x or 0, y or 0
+end
+
+-- Where every square sits relative to the right end of the gauge, grouped by
+-- the line it is on. Returns the lines, the one nearest the gauge first, each
+-- one a list of the offsets of the squares' left edges.
 local function IconRows(bar)
 	local rows, order = {}, {}
+	local boxX = Corner(bar.box, bar, "the gauge")
+	local edge = boxX + bar.box:GetWidth()
 	for index = 1, #ns.EnemyBars.Spells() do
 		local holder = bar.icons[index]
-		local point, relative, relativePoint, x, y = holder:GetPoint()
-		check(point == "BOTTOMLEFT" and relative == bar.box and relativePoint == "TOPRIGHT",
-			("debuff %d is anchored %s to %s, not BOTTOMLEFT to the gauge's TOPRIGHT")
-				:format(index, point, tostring(relativePoint)))
+		local x, y = Corner(holder, bar, ("debuff %d"):format(index))
 		check(holder:IsShown(), ("debuff %d is on the list and hidden"):format(index))
 		if not rows[y] then
 			rows[y] = {}
 			order[#order + 1] = y
 		end
 		local row = rows[y]
-		row[#row + 1] = x
+		row[#row + 1] = x - edge
 	end
 	for index = #ns.EnemyBars.Spells() + 1, #bar.icons do
 		check(not bar.icons[index]:IsShown(),
@@ -1489,14 +1874,24 @@ local blocks = {
 -- The palette, restated rather than reached for. Skin.lua keeps these local and
 -- that is right; a gate that imported the number it is checking would pass on
 -- the day somebody changed it by accident. UnitIsPlayer above is true for the
--- player alone, so the player wears the stubbed warrior colour and the other
--- two fall to the hostile one on a reaction of 2.
+-- player alone, so the player wears their own class colour and the other two
+-- fall to the hostile one on a reaction of 2.
+--
+-- Two class colours, because this file runs twice and comes up as a different
+-- class the second time. Both are the stub's own figures written out again, so
+-- the check is still that the skin carried the client's colour through rather
+-- than that two tables agree with each other.
 local TRACK, EDGE_DIM = 0.20, 0.60
+local CLASS_TINT = {
+	WARRIOR = { 0.78, 0.61, 0.43 },
+	HUNTER = { 0.67, 0.83, 0.45 },
+}
 local TINT = {
-	player = { 0.78, 0.61, 0.43 },
+	player = CLASS_TINT[PLAYER_CLASS],
 	target = { 0.88, 0.25, 0.28 },
 	tot = { 0.88, 0.25, 0.28 },
 }
+assert(TINT.player, PLAYER_CLASS .. " has no colour in the stub's palette")
 
 -- The two textures the skin draws inside each of Blizzard's bars, found the
 -- way everything else here is found: by what they are, not by reaching into
@@ -2141,6 +2536,21 @@ check(back ~= nil and back[1] == was[1] and back[2] == was[2] and back[3] == was
 
 ns.db.skin = true
 ns.FrameSkin.Apply()
+
+-- The combat feedback number, which is the one Blizzard piece on these frames
+-- that a walk over textures cannot reach. It is a font string, it is drawn at
+-- Blizzard's size and centred on a portrait that no longer exists at that size,
+-- and left alone it lands across the level and the power gauge. Asserted on
+-- both frames, and asserted through Show, because Blizzard's own combat handler
+-- calls Show on it at every hit and a plain Hide would last until the next one.
+for _, name in ipairs({ "PlayerHitIndicator", "TargetFrameHitIndicator" }) do
+	local text = _G[name]
+	check(text ~= nil, ("the harness has no %s to hide"):format(name))
+	text:Show()
+	check(not text:IsShown(),
+		("%s came back the moment the client showed it, so the damage number"
+			.. " still lands across the level"):format(name))
+end
 
 for _, block in ipairs(blocks) do
 	local key, frame = block[1], block[3]
@@ -2795,6 +3205,92 @@ print(("loadout %d of %d rows, %d secure buttons, defensive sends %d characters"
 	:format(ns.Loadouts.Count(), ns.Loadouts.MAX, ns.Loadouts.MAX, #LoadoutMacro(DEFENSIVE)))
 
 --------------------------------------------------------------------------
+-- Which class this is
+--
+-- Ten of the twelve parts do not care. Two do: the charge button casts three
+-- warrior abilities, and the loadout fills the bars with warrior spells. On
+-- anyone else neither can do anything, so neither should be running, and the
+-- charge part in particular has to be absent rather than merely quiet. A
+-- hidden button is still a secure frame holding a key override, and a hidden
+-- marker is still a nameplate scan twenty times a second.
+--
+-- Both halves are decided once, at PLAYER_LOGIN, which is why this file takes
+-- a class on the command line instead of flipping one here. Every check below
+-- is written against WARRIOR rather than against a fixed answer, so the same
+-- section is a gate on both runs: the warrior run proves the parts are built
+-- and the other run proves they are not.
+--
+-- The CVar is the one worth stating plainly. Action targeting exists to serve
+-- the charge button, so on another class the addon must leave the client's own
+-- setting exactly as it found it, and "the addon does nothing" is only ever
+-- provable by reading the thing it would have written.
+--------------------------------------------------------------------------
+
+do
+	check(ns.IsWarrior() == WARRIOR,
+		("the addon thinks a %s is%s a warrior"):format(PLAYER_CLASS, WARRIOR and " not" or ""))
+
+	check((_G.WarriorKitChargeButton ~= nil) == WARRIOR,
+		("the charge button %s built on a %s"):format(WARRIOR and "was not" or "was", PLAYER_CLASS))
+	check((_G.WarriorKitChargeMarker ~= nil) == WARRIOR,
+		("the world marker %s built on a %s"):format(WARRIOR and "was not" or "was", PLAYER_CLASS))
+	check(ns.Charge.Known("charge") == WARRIOR,
+		("a %s %s Charge"):format(PLAYER_CLASS, WARRIOR and "does not know" or "knows"))
+
+	-- Put the client's own value back under the addon and let it decide again.
+	-- A warrior is out of combat here, so the setting says on; anyone else has
+	-- to come out of this with the same "0" they went in with.
+	cvars.SoftTargetEnemy = "0"
+	fire("PLAYER_ENTERING_WORLD")
+	check(cvars.SoftTargetEnemy == (WARRIOR and "3" or "0"),
+		("action targeting came out at %s on a %s"):format(cvars.SoftTargetEnemy, PLAYER_CLASS))
+
+	-- The key. Refused rather than accepted and dropped, because a binding the
+	-- panel shows and nothing presses is worse than being told why.
+	local held = ns.db.chargeKey
+	local displaced, why = ns.ChargeIcon.Bind("F")
+	check((displaced ~= nil) == WARRIOR,
+		("binding the charge key on a %s came back %s"):format(PLAYER_CLASS, tostring(displaced or why)))
+	ns.ChargeIcon.Bind(held)
+
+	-- The loadout's own class gate is not reached from here: this stub has no
+	-- PickupSpell, so Layout.CanWrite refuses before the class is asked, and a
+	-- check on the message would be a check on the missing stub. It reads the
+	-- same ns.IsWarrior as everything above.
+
+	-- The page in the options window. Four tabs of controls on a warrior, one
+	-- page saying why on anyone else, rather than check boxes that write a
+	-- setting nothing on this character reads.
+	local page
+	for _, part in ipairs(window.parts) do
+		if part.name == "Charge" then
+			page = part
+		end
+	end
+	check(page ~= nil, "the options window has no Charge page")
+	check(page and #page.sections == (WARRIOR and 4 or 1),
+		("the Charge page has %s tabs on a %s"):format(page and #page.sections or "no",
+			PLAYER_CLASS))
+
+	local status
+	for _, feature in ipairs(ns.features) do
+		if feature.name == "charge" then
+			status = feature.status()
+		end
+	end
+	check(status ~= nil, "the charge part reports no status line")
+	check(WARRIOR or (status and status:find("not a warrior", 1, true) ~= nil),
+		("the charge status line on a %s does not say why: %s"):format(PLAYER_CLASS, tostring(status)))
+
+	print(("class   %s: charge button %s, world marker %s, action targeting %s, Charge page %d tab%s")
+		:format(PLAYER_CLASS,
+			_G.WarriorKitChargeButton and "built" or "not built",
+			_G.WarriorKitChargeMarker and "built" or "not built",
+			cvars.SoftTargetEnemy == "0" and "left alone" or ("driven to " .. cvars.SoftTargetEnemy),
+			page and #page.sections or 0, (page and #page.sections == 1) and "" or "s"))
+end
+
+--------------------------------------------------------------------------
 -- The three chores
 --
 -- Two of these are conveniences and one of them can destroy what you own. The
@@ -2882,8 +3378,29 @@ do
 	-- The vendor
 	----------------------------------------------------------------------
 
-	local vendorFrame = (events["MERCHANT_SHOW"] or {})[1]
-	check(vendorFrame ~= nil, "nothing registered MERCHANT_SHOW")
+	-- Two parts sit on the merchant now, the sweep and the repair, so the
+	-- sweep's frame is found by the thing only it has rather than by its place
+	-- in the list: a sale is the one of the two that has to be stopped when the
+	-- window shuts, so it is the one that also holds MERCHANT_CLOSED.
+	local function listening(frame, event)
+		for _, f in ipairs(events[event] or {}) do
+			if f == frame then
+				return true
+			end
+		end
+		return false
+	end
+
+	local vendorFrame, repairFrame = nil, nil
+	for _, f in ipairs(events["MERCHANT_SHOW"] or {}) do
+		if listening(f, "MERCHANT_CLOSED") then
+			vendorFrame = f
+		else
+			repairFrame = f
+		end
+	end
+	check(vendorFrame ~= nil, "nothing registered MERCHANT_SHOW and MERCHANT_CLOSED")
+	check(repairFrame ~= nil, "nothing registered MERCHANT_SHOW for the repair")
 
 	local function sweep()
 		local ticks = 0
@@ -2931,10 +3448,124 @@ do
 
 	ns.db.sellTrash = false
 	ns.Vendor.Apply()
-	check(#(events["MERCHANT_SHOW"] or {}) == 0,
+	check(not listening(vendorFrame, "MERCHANT_SHOW"),
 		"selling off left the addon sitting on the merchant")
 	ns.db.sellTrash = true
 	ns.Vendor.Apply()
+	_G.MerchantFrame:Hide()
+
+	----------------------------------------------------------------------
+	-- The repair
+	--
+	-- One call and no ticker, so what is asserted is not that it finished but
+	-- that the right purse paid. Every branch below ends with somebody out of
+	-- pocket by exactly the bill, or with the bill still standing.
+	----------------------------------------------------------------------
+
+	local function damage(amount)
+		repairBill = amount
+		paidBy = nil
+	end
+
+	-- Nothing damaged is not a refusal, and it must not print as one.
+	purse = 500
+	damage(0)
+	_G.MerchantFrame:Show()
+	fire("MERCHANT_SHOW")
+	check(ns.Repair.Run() == 0, "an undamaged warrior was not reported as undamaged")
+
+	-- Your own money, which is the ordinary case: no guild bank in reach.
+	GUILD.allowed = false
+	damage(120)
+	purse = 500
+	fire("MERCHANT_SHOW")
+	check(repairBill == 0, "opening a merchant left the gear damaged")
+	check(purse == 380, ("the repair cost 120 and the purse moved by %d"):format(500 - purse))
+	check(paidBy == "you", "the repair was not billed to the player")
+
+	-- A purse that cannot cover it is left alone. Half a repair is not a thing
+	-- the client offers and a purse emptied to nothing is worse than broken mail.
+	damage(400)
+	purse = 100
+	fire("MERCHANT_SHOW")
+	check(repairBill == 400, "a repair went through on a purse that could not cover it")
+	check(purse == 100, "money left a purse that could not cover the repair")
+
+	-- Guild funds first where the guild allows it, and the purse untouched.
+	GUILD.allowed, GUILD.limit, GUILD.held, GUILD.spent = true, 1000, 1000, 0
+	damage(400)
+	purse = 100
+	fire("MERCHANT_SHOW")
+	check(repairBill == 0, "the guild bank was in reach and the gear stayed damaged")
+	check(GUILD.spent == 400, ("the guild paid %d of a 400 bill"):format(GUILD.spent))
+	check(purse == 100, "the guild paid and the purse moved as well")
+
+	-- An unlimited rank answers -1, which is a sentinel and not an amount. Read
+	-- as an amount it is the smallest allowance there is and every repair falls
+	-- through to your own gold.
+	GUILD.allowed, GUILD.limit, GUILD.held, GUILD.spent = true, -1, 1000, 0
+	damage(400)
+	purse = 1000
+	fire("MERCHANT_SHOW")
+	check(GUILD.spent == 400, "an unlimited withdraw allowance was read as no allowance")
+	check(purse == 1000, "an unlimited rank still paid out of the player's purse")
+
+	-- A rank allowed to withdraw less than the bill falls back to your gold
+	-- rather than trying the guild and walking away.
+	GUILD.allowed, GUILD.limit, GUILD.held, GUILD.spent = true, 50, 1000, 0
+	damage(400)
+	purse = 1000
+	fire("MERCHANT_SHOW")
+	check(GUILD.spent == 0, "the guild paid past the rank's withdraw limit")
+	check(purse == 600, ("the purse should have covered the 400; it moved %d"):format(1000 - purse))
+	check(repairBill == 0, "a rank under the limit left the gear damaged")
+
+	-- And a guild that says yes and then refuses. The addon has to notice the
+	-- bill is still standing and pay it itself.
+	GUILD.allowed, GUILD.limit, GUILD.held, GUILD.spent = true, 1000, 0, 0
+	damage(400)
+	purse = 1000
+	fire("MERCHANT_SHOW")
+	check(repairBill == 0, "the guild refused and nothing paid the bill")
+	check(purse == 600, "the guild refused and the fall-through never happened")
+	GUILD.allowed = false
+
+	-- A merchant who does not mend is a refusal with a reason, not a repair.
+	repairsMerchant = false
+	damage(400)
+	purse = 1000
+	fire("MERCHANT_SHOW")
+	check(repairBill == 400, "a merchant who does not repair repaired anyway")
+	check(select(2, ns.Repair.Run()) == "this merchant does not repair",
+		"the refusal did not say why")
+	repairsMerchant = true
+
+	-- Shift holds it off, the same key that holds the sale off.
+	damage(400)
+	purse = 1000
+	_G.IsShiftKeyDown = constant(true)
+	fire("MERCHANT_SHOW")
+	check(repairBill == 400, "shift did not hold the repair off")
+	_G.IsShiftKeyDown = constant(false)
+
+	-- Off is unregistered, not a branch inside a handler the client still calls.
+	ns.db.autoRepair = false
+	ns.Repair.Apply()
+	check(not listening(repairFrame, "MERCHANT_SHOW"),
+		"repair off left the addon sitting on the merchant")
+	fire("MERCHANT_SHOW")
+	check(repairBill == 400, "repair off still paid the merchant")
+	ns.db.autoRepair = true
+	ns.Repair.Apply()
+
+	-- The worst piece, not the first one and not an average. A ring answers
+	-- nothing and must not count as a piece at zero.
+	damage(0)
+	local worst, counted = ns.Repair.Durability()
+	check(counted == 3, ("%d slots answered durability, three wear"):format(counted))
+	check(worst ~= nil and math.floor(worst + 0.5) == 12,
+		"the worst piece is at 12%% and the scan did not say so")
+
 	_G.MerchantFrame:Hide()
 
 	----------------------------------------------------------------------
@@ -2961,8 +3592,9 @@ do
 	ns.db.maxZoom = true
 	ns.Camera.Apply()
 
-	print(("chores corpse of %d in one pass, vendor paid %s over %d passes for 2 of 4 slots, camera %s")
-		:format(#CORPSE, _G.GetCoinText(sale), ticks, ns.Camera.Describe()))
+	print(("chores corpse of %d in one pass, vendor paid %s over %d passes for 2 of 4 slots, repair %s, camera %s")
+		:format(#CORPSE, _G.GetCoinText(sale), ticks, ns.Repair.Describe(),
+			ns.Camera.Describe()))
 end
 
 --------------------------------------------------------------------------
@@ -3282,12 +3914,12 @@ do
 	realPlayers.party1, realPlayers.party2 = true, true
 	fire("GROUP_ROSTER_UPDATE")
 
-	check(ns.MeterRoster.Size() == 3,
-		("the group has %d members in it, expected 3"):format(ns.MeterRoster.Size()))
-	check(ns.MeterRoster.Owner(PET) == SNEAKY, "a pet's damage does not land on its owner")
-	check(ns.MeterRoster.Owner(BAUDIN) == BAUDIN, "your own damage does not land on you")
-	check(ns.MeterRoster.Owner(STRANGER) == nil, "somebody else's fight is inside the group filter")
-	local who, class = ns.MeterRoster.Who(SNEAKY)
+	check(ns.Unit.Roster.Size() == 3,
+		("the group has %d members in it, expected 3"):format(ns.Unit.Roster.Size()))
+	check(ns.Unit.Roster.Owner(PET) == SNEAKY, "a pet's damage does not land on its owner")
+	check(ns.Unit.Roster.Owner(BAUDIN) == BAUDIN, "your own damage does not land on you")
+	check(ns.Unit.Roster.Owner(STRANGER) == nil, "somebody else's fight is inside the group filter")
+	local who, class = ns.Unit.Roster.Who(SNEAKY)
 	check(who == "Sneakyman" and class == "HUNTER",
 		("the roster has %s the %s"):format(tostring(who), tostring(class)))
 
@@ -3297,9 +3929,16 @@ do
 	-- Sixteen values in the order the client hands them over. The amount is at
 	-- 12 for a swing and at 15 for everything with a spell in front of it, and
 	-- reading the wrong one is the whole failure mode this models.
+	--
+	-- `wasted` is the slot after the amount, which is 13 on a swing and 16 on
+	-- everything else. The client puts three different things there and they
+	-- are all the same thing: overkill on a damage event, overheal on a heal.
+	-- One parameter rather than three, because a stub that gave each of them
+	-- its own argument would let a parser that reads a swing's overkill out of
+	-- slot 16 pass.
 	----------------------------------------------------------------------
 
-	local function log(subevent, source, dest, swing, amount, overheal)
+	local function log(subevent, source, dest, swing, amount, wasted)
 		for index = 1, 16 do
 			logArgs[index] = nil
 		end
@@ -3309,7 +3948,11 @@ do
 		logArgs[8] = dest
 		logArgs[12] = swing
 		logArgs[15] = amount
-		logArgs[16] = overheal
+		if swing then
+			logArgs[13] = wasted
+		else
+			logArgs[16] = wasted
+		end
 		fire("COMBAT_LOG_EVENT_UNFILTERED")
 	end
 
@@ -3327,7 +3970,7 @@ do
 	local ranked = ns.Meter.Rank("dps")
 	check(#ranked == 2, ("%d rows did damage, expected 2"):format(#ranked))
 	check(ranked[1].guid == BAUDIN and ns.Meter.Amount(ranked[1], "dps") == 1000,
-		("the top row is %s on %d"):format(tostring(ns.MeterRoster.Who(ranked[1].guid)),
+		("the top row is %s on %d"):format(tostring(ns.Unit.Roster.Who(ranked[1].guid)),
 			ns.Meter.Amount(ranked[1], "dps")))
 	check(ranked[2].guid == SNEAKY and ns.Meter.Amount(ranked[2], "dps") == 800,
 		("the hunter and their pet came to %d, expected 800")
@@ -3388,6 +4031,87 @@ do
 	-- And one heal in this segment, so the toggle below has something to swap
 	-- to. Nobody has healed since the pull opened it, and a pane that is empty
 	-- because the fight was quiet proves nothing about the pane.
+	log("SPELL_HEAL", FROST, nil, nil, 600, 100)
+
+	----------------------------------------------------------------------
+	-- Overkill
+	--
+	-- The last hit of a fight is reported at what it swung for, not at what
+	-- the mob had left, and the difference is handed over beside it. Counting
+	-- the swing is counting health the mob did not have, and on a five second
+	-- pull it is most of the chart.
+	--
+	-- Three hits, because there are three ways to get this wrong: read a
+	-- swing's overkill out of the spell slot, read a spell's out of the swing
+	-- slot, or subtract the minus one the client sends on every hit that
+	-- killed nothing and hand back more damage than was dealt.
+	--
+	-- Small numbers on purpose. This lands in the segment the pane assertions
+	-- further down are drawn from, and those expect the hunter on top, so what
+	-- is checked here has to stay under their 250.
+	----------------------------------------------------------------------
+
+	log("SWING_DAMAGE", BAUDIN, nil, 5000, nil, 4900)
+	log("SPELL_DAMAGE", BAUDIN, nil, nil, 2000, 1900)
+	log("SPELL_DAMAGE", BAUDIN, nil, nil, 40, -1)
+
+	local killer = nil
+	for _, slot in ipairs(ns.Meter.Rank("dps")) do
+		if slot.guid == BAUDIN then
+			killer = slot
+		end
+	end
+	check(killer ~= nil and ns.Meter.Amount(killer, "dps") == 240,
+		("7,040 swung with 6,800 of it overkill counted as %s, expected 240")
+			:format(killer and tostring(ns.Meter.Amount(killer, "dps")) or "no row at all"))
+	check(ns.Meter.Amount(ns.Meter.Rank("dps")[1], "dps") == 250,
+		("the hunter is on %d and the overkill went somewhere it should not have")
+			:format(ns.Meter.Amount(ns.Meter.Rank("dps")[1], "dps")))
+
+	----------------------------------------------------------------------
+	-- A totem that was already down when the fight started
+	--
+	-- The summon is the only place the client says whose a totem is, and it
+	-- happens before the pull, because that is when totems get dropped. A
+	-- segment opens by rebuilding the roster, so a roster rebuild that forgot
+	-- what it had been told by the log dropped the totem's whole fight.
+	----------------------------------------------------------------------
+
+	inCombat.player, inCombat.party1 = false, false
+	fire("PLAYER_REGEN_ENABLED")
+
+	local PRE = "Creature-0-0000-000-searing"
+	log("SPELL_SUMMON", FROST, PRE)
+	fire("GROUP_ROSTER_UPDATE") -- somebody zones in between pulls
+	check(ns.Unit.Roster.Owner(PRE) == FROST,
+		"a roster change forgot whose totem it is")
+
+	inCombat.player = true
+	fire("PLAYER_REGEN_DISABLED")
+	log("SPELL_DAMAGE", PRE, nil, nil, 640)
+	local burning = ns.Meter.Rank("dps")
+	check(#burning == 1 and burning[1].guid == FROST
+			and ns.Meter.Amount(burning[1], "dps") == 640,
+		"a totem dropped before the pull did not put its damage on anyone")
+
+	-- And it stops being ours when its owner is not. The totem is still
+	-- burning; it is somebody else's fight now.
+	realPlayers.party2, guids.party2 = nil, nil
+	fire("GROUP_ROSTER_UPDATE")
+	check(ns.Unit.Roster.Owner(PRE) == nil,
+		"a totem kept counting after its owner left the group")
+	realPlayers.party2, guids.party2 = true, FROST
+	fire("GROUP_ROSTER_UPDATE")
+
+	-- Put the segment the pane assertions below are drawn from back the way
+	-- they expect to find it: the hunter on top, the priest healing.
+	inCombat.player, inCombat.party1 = false, false
+	fire("PLAYER_REGEN_ENABLED")
+	inCombat.player = true
+	fire("PLAYER_REGEN_DISABLED")
+	log("SPELL_DAMAGE", SNEAKY, nil, nil, 250)
+	log("SPELL_SUMMON", FROST, TOTEM)
+	log("SPELL_DAMAGE", TOTEM, nil, nil, 120)
 	log("SPELL_HEAL", FROST, nil, nil, 600, 100)
 
 	----------------------------------------------------------------------

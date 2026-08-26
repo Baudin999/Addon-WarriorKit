@@ -133,11 +133,9 @@ Charge/Icon.lua:Fade
 Charge/Marker.lua:AttachTo
 Charge/Marker.lua:ChargeMarker.Update
 UnitFrames/EnemyBars.lua:BuildTargeters
+UnitFrames/EnemyBars.lua:Member
 UnitFrames/EnemyBars.lua:Record
 UnitFrames/EnemyBars.lua:ThreatState
-UnitFrames/EnemyBars.lua:TargetState
-UnitFrames/EnemyBars.lua:Difficulty
-UnitFrames/EnemyBars.lua:Reaction
 UnitFrames/EnemyBars.lua:ScanDebuffs
 UnitFrames/EnemyBars.lua:UpdateWidget
 UnitFrames/EnemyBars.lua:UpdateList
@@ -152,10 +150,25 @@ Perf/Perf.lua:Perf.Sample
 Perf/Feature.lua:Paint
 UnitFrames/Skin.lua:Refresh
 UnitFrames/Skin.lua:HealSlice
-UnitFrames/Skin.lua:Tint
-UnitFrames/Skin.lua:ClassTint
-UnitFrames/Skin.lua:LevelTag
 UnitFrames/Skin.lua:Flatten
+Unit/Unit.lua:Unit.Health
+Unit/Unit.lua:Unit.Power
+Unit/Unit.lua:Unit.TargetToken
+Unit/Color.lua:Color.Class
+Unit/Color.lua:Color.ClassHex
+Unit/Color.lua:Color.Reaction
+Unit/Color.lua:Color.Aggro
+Unit/Color.lua:Color.OfUnit
+Unit/Color.lua:Color.Dim
+Unit/Level.lua:Level.Tag
+Unit/Level.lua:Level.Worth
+Unit/Level.lua:Level.Of
+Unit/Roster.lua:Roster.Units
+Unit/Threat.lua:Threat.On
+Unit/Threat.lua:Threat.Top
+Unit/Threat.lua:Threat.Shade
+Unit/Threat.lua:Threat.State
+Unit/Threat.lua:Threat.Swinging
 Meter/Meter.lua:Meter.Rank
 Meter/Meter.lua:Meter.Total
 Meter/Spec.lua:Spec.Request
@@ -246,17 +259,77 @@ while IFS= read -r f; do
 	esac
 done < <(grep -lE 'SetScript\("OnUpdate"' --include='*.lua' -r . | sort)
 
+# No file grows without somebody deciding it should.
+#
+# The addon has an allocation gate, a TOC parity gate and a version gate, and
+# had nothing at all watching the size of a file. Two of them had reached
+# nineteen hundred lines, which is the same class of debt: nothing is wrong with
+# any one line and the whole is past what fits in a head, so the next change
+# lands wherever there is room rather than where it belongs.
+#
+# 800 is the general limit. Three files are over it and each carries its own
+# ceiling below, set at what it measures today, so any growth fails here rather
+# than passing unremarked. Raising one of those numbers is a decision to record
+# in the commit message, not a formality: the alternative is to take the split
+# named beside it.
+LINE_LIMIT=800
+
+# path:ceiling:why it is exempt
+LINE_ALLOWED="
+UI/Widgets.lua:1289:the widget kit, one function per control and shared by every page
+UnitFrames/EnemyBars.lua:1844:splits at the settings API, the widget and the plate plumbing
+UnitFrames/Skin.lua:1828:splits at the region walk, the block geometry and the tick
+"
+
+while IFS= read -r f; do
+	f="${f#./}"
+	lines=$(wc -l < "$f")
+	ceiling=""
+	while IFS= read -r entry; do
+		[ -n "$entry" ] || continue
+		case "$entry" in
+			"$f":*)
+				ceiling=$(printf '%s' "$entry" | cut -d: -f2)
+				why=$(printf '%s' "$entry" | cut -d: -f3-)
+				[ -n "$why" ] || { echo "$f is allow-listed for length with no reason given"; status=1; }
+				;;
+		esac
+	done <<< "$LINE_ALLOWED"
+
+	if [ -n "$ceiling" ]; then
+		if [ "$lines" -gt "$ceiling" ]; then
+			echo "$f is $lines lines, over its own ceiling of $ceiling"
+			status=1
+		elif [ "$lines" -lt "$ceiling" ]; then
+			echo "$f is $lines lines and its ceiling still says $ceiling: lower it"
+			status=1
+		fi
+	elif [ "$lines" -gt "$LINE_LIMIT" ]; then
+		echo "$f is $lines lines, over the $LINE_LIMIT line limit and not allow-listed"
+		status=1
+	fi
+done < <(find . -name '*.lua' -type f | sort)
+
 # The addon, loaded and driven under a stub of the client. Syntax and lint say
 # the files parse and read cleanly; this is the only layer that says the pixel
 # arithmetic lands where it should and that a tick does not allocate. It runs
 # before luacheck because a stack trace is a more useful first failure than a
 # style warning.
+# Twice, and the second time as a hunter. Two parts of the addon are warrior
+# only and both decide it once at PLAYER_LOGIN, so the run that proves the
+# charge button and the world marker are not built, and that the action
+# targeting CVar is left alone, has to come up as something else from the
+# start. Everything else in the addon is class agnostic and is asserted again
+# on that run, which is the point: a part that quietly needed a warrior would
+# fail here rather than in someone's game.
 if [ -f ../scripts/harness.lua ]; then
-	if ! lua5.1 ../scripts/harness.lua .; then
-		echo "harness FAIL"
-		status=1
-	fi
-	echo
+	for class in WARRIOR HUNTER; do
+		if ! lua5.1 ../scripts/harness.lua . "$class"; then
+			echo "harness FAIL as $class"
+			status=1
+		fi
+		echo
+	done
 else
 	echo "scripts/harness.lua is missing"
 	status=1

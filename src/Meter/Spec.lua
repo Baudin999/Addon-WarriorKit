@@ -180,7 +180,7 @@ function Spec.Request(guid)
 		return false
 	end
 
-	local unit = ns.MeterRoster.UnitFor(guid)
+	local unit = ns.Unit.Roster.UnitFor(guid)
 	if not Inspectable(unit) then
 		-- Recorded as asked anyway. Someone out of range on every tick for the
 		-- next minute is someone this must stop reconsidering five times a
@@ -204,7 +204,7 @@ local function InspectReady(guid)
 	end
 	pending = nil
 
-	local unit = ns.MeterRoster.UnitFor(guid)
+	local unit = ns.Unit.Roster.UnitFor(guid)
 	if unit and UnitExists(unit) then
 		icons[guid] = Resolve(true) or false
 	end

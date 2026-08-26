@@ -1,6 +1,6 @@
 local ADDON, ns = ...
 
-ns.version = "1.7"
+ns.version = "1.8"
 
 -- Core knows nothing about any feature. It holds the saved variables, the API
 -- shims, the two drawing helpers every part uses, and the one registry every
@@ -190,6 +190,33 @@ end
 
 ns.interface = select(4, GetBuildInfo()) or 0
 ns.vanilla = ns.interface > 0 and ns.interface < 20000
+
+--------------------------------------------------------------------------
+-- Which class this is
+--
+-- Two parts of the addon are warrior only. The charge button casts three
+-- warrior abilities and the loadout fills the bars with warrior spells, so on
+-- anyone else neither can do anything, and the charge part in particular is
+-- pure cost: two tickers, a secure button holding a key override and a client
+-- CVar driven off every combat transition, all of it for a button that would
+-- cast nothing. Both parts ask here rather than each reading the class for
+-- itself, so they cannot disagree about what this character is.
+--
+-- Not cached. Class data is not reliable while the files load, and a cache
+-- taken then would lock a warrior out for the rest of the session. UnitClass
+-- is a read of data the client already holds, so the call is cheaper than that
+-- bug is.
+--
+-- An unresolved class counts as a warrior, because the two wrong answers do
+-- not cost the same. A wrong yes is a moment of a button that will not cast; a
+-- wrong no, taken once at PLAYER_LOGIN, is a warrior with no charge button
+-- until they reload.
+--------------------------------------------------------------------------
+
+function ns.IsWarrior()
+	local _, class = UnitClass("player")
+	return class == nil or class == "WARRIOR"
+end
 
 --------------------------------------------------------------------------
 -- API shims

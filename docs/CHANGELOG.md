@@ -2,6 +2,190 @@
 
 ## Unreleased
 
+### The unit frames share one layer instead of two copies of it
+
+`UnitFrames/EnemyBars.lua` and `UnitFrames/Skin.lua` draw the same things about
+the same units, and each had grown its own copy of how. Neither copy was wrong.
+Having two of them was, and they had already drifted:
+
+- the class colour was a hex string in one file and an `{r, g, b}` table in the
+  other, with a cache each;
+- the level tag was interned in the skin and rebuilt on every tick in the bars,
+  which is a `tostring` and a concat per mob to say a number that changes when
+  the mob does;
+- the reaction palette was declared in both, four of the nine colours being the
+  same three literals typed out twice, which holds until somebody warms the
+  green on one of them;
+- the bars walked the whole party or raid on their own ticker to get the unit
+  list their threat comparison needs, which is eighty unit queries five times a
+  second in a forty man, while `Meter/Roster.lua` already held that list and
+  rebuilt it on `GROUP_ROSTER_UPDATE`.
+
+There is a `Unit/` layer now, between Core and UI, and both files read it.
+`Unit/Color.lua` is every colour the addon puts on a unit, one palette with the
+semantic maps on top of it, so a green that appears in two answers is the same
+table in both. `Unit/Level.lua` is the tag and what the kill is worth, so the
+bars got the skin's cache and the skin got the bars' colour. `Unit/Threat.lua`
+is what the client's threat API says, for one mob or across a group.
+`Unit/Roster.lua` is `Meter/Roster.lua` moved, because the bars wanted the same
+answer it was already giving the meters.
+
+`Unit/` draws nothing and signs into no registry. Two rules hold across it, and
+both come from the callers rather than from taste. Nothing allocates, because
+everything on that page is reachable from a ticker running against every mob on
+the screen. And a colour is handed back by reference and never built at call
+time, because the tickers guard their widget writes on colour identity, so the
+same state has to answer the same table every time.
+
+The enemy bars' allocation gate went from 0.25 to 0.05 KB per fifty ticks, and
+what it measures is 0.00. The roster walk was the whole of what was left.
+
+Nothing about what either frame looks like changed.
+
+### A stack panel, so a widget's layout is a tree rather than a hundred SetPoints
+
+`ns.UI.Flow` is what XAML calls a StackPanel and CSS calls a flex container:
+rows, columns, gaps, padding, alignment, growth, wrapping and mirroring. Two
+passes, the same two XAML has. Measure asks every node how big it wants to be,
+bottom up; Arrange hands every node the rectangle it got, top down, and pins
+each frame to the root's top left corner at the offset that came out.
+
+`LayoutWidget` in `UnitFrames/EnemyBars.lua` was a hundred and eighty lines of
+`SetPoint` with the failure mode every hand-written layout has: each anchor is
+individually correct and the relationship between them lives only in whoever
+wrote them. Moving the threat line up three pixels meant finding the four other
+offsets measured off the same edge. It is a tree now, and the widget's own
+height falls out of the measurement instead of being derived by hand from four
+other numbers.
+
+Three shapes were worth adding for what the bars actually needed. `lineOrder`
+lets a wrapping row grow upwards, so the debuff line nearest the gauge is the
+one that fills first and a partial line hangs off the top. `direction = "stack"`
+is XAML's single-cell Grid, every child getting the whole rectangle and placing
+itself in it, which is how the threat number and the debuff row share one strip
+without either reserving room from the other. And `reverse` is the whole of
+mirroring a layout, which is what the target frame is against the player frame.
+
+It does not do content sizing and it will not. A node's size is a number the
+caller knows before the layout runs, so the two strings inside a gauge, sized by
+whatever the mob happens to be called, stay pinned to each other with plain
+anchors. A layout that had to re-run on a name change would be a layout running
+on the tick. `check.sh` is what holds that line: no function in `UI/Flow.lua` is
+named in `HOT`, so the engine may allocate and everything that calls it may not.
+
+`scripts/harness.lua` gates the engine on its own, nine shapes read back off the
+offsets it wrote, before anything built out of it is touched. The debuff row
+test stopped naming an anchor pair and measures where the square lands instead,
+which also covers the gauge's own placement and did not before.
+
+### check.sh caps how long a file may be
+
+The addon gates allocation on tickers, TOC parity between the two flavours and
+version drift between the TOCs and `ns.version`, and had nothing watching a file
+reach nineteen hundred lines. Two had. That is the same class of debt: nothing
+is wrong with any one line, the whole is past what fits in a head, and the next
+change lands wherever there is room rather than where it belongs.
+
+800 lines in general. Three files carry their own ceiling, set at what they
+measure today, each with a one-line reason and the split it would take. The
+ceiling fails in both directions: growing past it fails, and shrinking below it
+fails until the number comes down in the same commit, which is what makes it a
+ratchet rather than a licence to grow back.
+
+## Unreleased
+
+### The charge part now stays out of the way on another class
+
+Charge, Intervene and Intercept are warrior abilities. On a hunter the part was
+still built anyway: a secure button holding a key override, a ten-a-second
+ticker behind an icon that could never light, a twenty-a-second nameplate scan
+behind a marker for an ability that does not exist, and `SoftTargetEnemy`
+rewritten on every combat transition to serve all of it. Four tabs of settings
+in `/wk` wrote values nothing on that character read.
+
+`ns.IsWarrior()` is the one answer now, in `Core/Core.lua`, and the loadout
+reads the same one instead of asking the client itself. `Icon.lua` and
+`Marker.lua` unregister their event frames at PLAYER_LOGIN rather than building
+something and hiding it, because a hidden marker still pays for the scan.
+`SoftTarget.Wanted` returns nil, which is the single place that decides whether
+that CVar gets written, so the panel, the slash word and the combat transitions
+all leave it alone together. The slash words say why, `/wk status` says why, and
+the Charge page is one sentence instead of four tabs of dead controls.
+
+The saved settings are untouched. They are account-wide and a warrior alt shares
+them, so a class gate is a fact about this character rather than a preference
+about the addon.
+
+The class is read every time rather than cached. Class data is not reliable
+while the files load, and a cache taken then would lock a warrior out of their
+own charge button for the session. An unresolved class counts as a warrior for
+the same reason: the two wrong answers do not cost the same.
+
+`check.sh` runs the harness twice, and the second run comes up as a hunter.
+Both halves are decided once at PLAYER_LOGIN, so the only way to assert that
+nothing was built is to start as something else. That run asserts the button
+and the marker are absent, the key was refused, the Charge page is one tab and
+the CVar came out holding the value it went in with, and it re-runs every other
+part of the addon on the way, which is how a part that quietly needed a warrior
+would now fail here rather than in someone's game.
+
+### The charge key did nothing while the frames were unlocked
+
+`ApplySecure` cleared the button's `type` attribute whenever `ns.db.locked` was
+false, so that a left-press meant for a drag could not also cast. It did stop
+the drag casting. It also killed the bound key, because the key is an override
+that clicks the same button, and a secure button with no type is a button with
+no action. The symptom is a charge key that silently does nothing until you type
+`/wk lock`, with no error and nothing in chat.
+
+The two jobs are on two frames now. The button keeps `type = "macro"` the whole
+time and never takes the mouse at all; a plain frame laid over it takes every
+click while the frames are unlocked and does the dragging. The key works in both
+states, a stray click while placing still cannot cast, and the tooltip moved
+onto the handle with the drag.
+
+### Blizzard's damage number sat across the level and the rage gauge
+
+`StripArt` walks textures. The combat feedback number is a font string, so the
+walk never saw it, and Blizzard draws it centred on a portrait sized for a frame
+a hundred units tall. On a 34 pixel block it lands over the level text and half
+the power gauge, and neither number can be read.
+
+It goes with the name, the level and the two bar numbers, which is the list of
+font strings this file already hides by name. It is the one entry on that list
+with nothing drawn in its place: the art that used to hold it does not exist any
+more, so there is nowhere correct to put it. The harness shows it and asserts it
+stays hidden, because the client calls `Show` on it at every hit.
+
+### Repairing
+
+The other half of what a merchant is for. Grey items have sold themselves at
+every merchant since 1.4 and the repair was still a click on an anvil.
+
+`Comfort/Repair.lua` pays at any merchant the client says can mend, the moment
+the window opens, behind the same shift key that skips the sale. Guild funds
+first where your rank's withdraw allowance covers the bill, your own purse where
+it does not, and nothing at all where neither can cover it: half a repair is not
+something the client offers, and an emptied purse is worse than broken mail.
+A guild that answers yes and then refuses falls through to your own gold rather
+than walking away.
+
+`/wk repair` with no argument repairs the merchant in front of you now and says
+why not when it cannot. `/wk repair on|off` is the setting. `/wk status` carries
+the worst piece you are wearing.
+
+One call and no ticker, which is the whole reason it is a separate file from the
+sale. `RepairAllItems` does every slot at once, so unlike a sweep there is
+nothing to repeat. The two parts share the merchant window and share nothing
+else.
+
+The merchant calls are named in `.luacheckrc` on the usual standard: TitanRepair
+and Leatrix Plus both call them unguarded on both clients, inside the feature
+this one is. The guild bank trio is not, because Classic Era has no guild bank
+and TitanRepair calling them there proves only that TitanRepair would break.
+Those three go through `_G` and are pcalled, so a client without them loses
+guild funding and keeps the repair.
+
 ### The numbers on a debuff square were outlined into blobs
 
 The threat line and the targeted-by line went up to 14 for the same reason from

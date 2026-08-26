@@ -94,7 +94,15 @@ local MAX_ROWS = 10
 
 -- How faint a bar is. Low enough to read the world through and high enough to
 -- tell four classes apart at a glance, which is the whole job.
-local BAR_ALPHA = 0.32
+--
+-- It was 0.32, and 0.32 is a wash rather than a tint. The top row's bar is the
+-- full width of the pane by definition, so whatever this number is, the number
+-- one player is a solid rectangle of class colour across the meter every tick,
+-- and at a third alpha that rectangle is the brightest thing on that part of
+-- the screen. At 0.15 the rank still reads at a glance, because a bar is read
+-- against the bars beside it and not against the world behind it, and the
+-- world behind it comes through.
+local BAR_ALPHA = 0.15
 
 local DIM = { 0.56, 0.56, 0.62 }
 local WHITE = { 0.87, 0.87, 0.91 }
@@ -450,7 +458,7 @@ local function PaintDamage()
 		if slot then
 			shown = index
 			local row = damage.rows[index]
-			local name, class = ns.MeterRoster.Who(slot.guid)
+			local name, class = ns.Unit.Roster.Who(slot.guid)
 			local rate = ns.Meter.Rate(slot, mode)
 			PaintRow(row, slot.guid, class, name or "?", math.floor(rate + 0.5), WHITE)
 			PaintBar(row, (top > 0) and (rate / top) or 0, width)
@@ -501,7 +509,7 @@ local function PaintThreat()
 		local eta = math.floor(when + 0.5)
 		if threat.shownEta ~= eta or threat.shownSoonest ~= soonest.guid then
 			threat.shownEta, threat.shownSoonest = eta, soonest.guid
-			local name = ns.MeterRoster.Who(soonest.guid)
+			local name = ns.Unit.Roster.Who(soonest.guid)
 			SetRight(threat, (name or "?") .. " in " .. eta .. "s", WARN)
 		end
 	end
@@ -513,7 +521,7 @@ local function PaintThreat()
 		if slot then
 			shown = index
 			local row = threat.rows[index]
-			local name, class = ns.MeterRoster.Who(slot.guid)
+			local name, class = ns.Unit.Roster.Who(slot.guid)
 			local color = slot.eta and WARN or (slot.tanking and WHITE or DIM)
 			PaintRow(row, slot.guid, class, name or "?", math.floor(slot.pct + 0.5), color)
 			PaintBar(row, slot.pct / 100, width)

@@ -60,10 +60,17 @@ local function Remember()
 	ns.dbc.softPrior = Read() or OFF
 end
 
--- Nil when the setting is off, which means the CVar is the player's again and
--- this file must not touch it.
+-- Nil when the addon must not touch the CVar: the setting is off, so it is the
+-- player's again, or this is not a warrior.
+--
+-- The class is part of the same question. This setting exists to serve the
+-- charge button, which is not built on another class, so on a hunter the addon
+-- would be editing a client CVar on every combat transition for a feature that
+-- is not running. Gated here rather than at the event frame because Apply is
+-- also called straight from the panel and the slash word, and one authority
+-- for "should this be written" is what stops those three paths disagreeing.
 local function Wanted()
-	if not ns.db.softAuto then
+	if not ns.db.softAuto or not ns.IsWarrior() then
 		return nil
 	end
 	return UnitAffectingCombat("player") and OFF or ON
@@ -129,6 +136,9 @@ function SoftTarget.Describe()
 	end
 	local on = (tonumber(value) or 0) > 0
 
+	if not ns.IsWarrior() then
+		return ("yours, currently %s"):format(on and "on" or "off")
+	end
 	if not ns.db.softAuto then
 		return ("manual, currently %s"):format(on and "on" or "off")
 	end

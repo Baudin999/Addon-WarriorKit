@@ -139,6 +139,17 @@ read_globals = {
 	-- missing one would compare a message against nil and stop a sale that was
 	-- fine.
 	"MerchantFrame", "GetMoney", "GetCoinText",
+	-- Repairing, for the same window. TitanRepair and Leatrix Plus are both
+	-- installed on both of these clients and both call all four unguarded,
+	-- inside their own auto-repair feature, which is the same feature and so
+	-- the same proof. The guild bank trio is deliberately absent:
+	-- CanGuildBankRepair, GetGuildBankMoney and GetGuildBankWithdrawMoney are
+	-- only proven by TitanRepair calling them, and Classic Era has no guild
+	-- bank at all, so Comfort/Repair.lua reaches all three through _G and
+	-- pcalls them. A client without them loses guild funding and keeps the
+	-- repair, which is the right way round to be wrong.
+	"CanMerchantRepair", "GetRepairAllCost", "RepairAllItems",
+	"GetInventoryItemDurability",
 	-- The quest log, for the clutter scan. Questie calls both of these
 	-- unguarded on both clients and reads the quest id out of the eighth value
 	-- exactly as Clutter.lua does. IsQuestFlaggedCompleted is not here: it lives

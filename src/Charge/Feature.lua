@@ -11,6 +11,18 @@ local function ApplyChargeChange()
 	ns.SoftTarget.Apply()
 end
 
+-- Every word this part answers to runs through here first. On another class
+-- none of them has anything to act on: no button, no marker, and a CVar this
+-- addon has deliberately left alone. Saying so once beats four settings that
+-- take a value and then do nothing with it.
+local function Refuse()
+	if ns.IsWarrior() then
+		return false
+	end
+	ns.Print(ns.Charge.NOT_WARRIOR .. ", so nothing here is running on this character.")
+	return true
+end
+
 local function SoftWord(sub)
 	local want = ns.Command.Toggle(sub)
 	if want == ns.db.softAuto then
@@ -84,6 +96,9 @@ ns.Register({
 
 	words = {
 		charge = function(arg, rawArg)
+			if Refuse() then
+				return
+			end
 			local option, value = arg:match("^(%S*)%s*(.-)$")
 			if option == "always" or option == "ready" then
 				ns.db.chargeMode = option
@@ -106,6 +121,9 @@ ns.Register({
 		end,
 
 		size = function(arg)
+			if Refuse() then
+				return
+			end
 			local size = ns.Command.Number(arg, 16, 128, "size")
 			if size then
 				ns.db.size = size
@@ -115,6 +133,9 @@ ns.Register({
 		end,
 
 		bind = function(_, rawArg)
+			if Refuse() then
+				return
+			end
 			local key = rawArg:upper()
 			if key == "NONE" then
 				key = ""
@@ -141,6 +162,9 @@ ns.Register({
 	},
 
 	status = function()
+		if not ns.IsWarrior() then
+			return "off, " .. ns.Charge.NOT_WARRIOR
+		end
 		return ("icon %s (%s), marker %s, key %s, action targeting %s, token %s")
 			:format(ns.db.charge and "on" or "off", ns.db.chargeMode,
 				ns.db.chargeMarker and "on" or "off",
@@ -165,6 +189,22 @@ ns.Register({
 	end,
 
 	panel = function(ui)
+		-- One page saying why, rather than four tabs of controls that write a
+		-- setting nothing reads. The rest of this function builds live widgets
+		-- against a button and a marker that were never created on this class,
+		-- and a check box you can tick that changes nothing on screen is worse
+		-- than a sentence.
+		if not ns.IsWarrior() then
+			ui.Header("Charge")
+			ui.Note(function()
+				return "|cffd08040" .. ns.Charge.NOT_WARRIOR .. ".|r"
+			end)
+			ui.Note(function()
+				return "The button, the icon in the world and the key override are not built here, and action targeting is left exactly as your client has it. Every other part of the addon works the same as it does on a warrior."
+			end)
+			return
+		end
+
 		ui.Header("Charge key")
 		ui.KeyField("key",
 			function()

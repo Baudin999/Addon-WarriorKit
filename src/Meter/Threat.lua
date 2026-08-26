@@ -155,7 +155,7 @@ function ThreatMeter.Update()
 
 	local now = GetTime()
 	tanking = nil
-	local units = ns.MeterRoster.Units()
+	local units = ns.Unit.Roster.Units()
 	for index = 1, #units do
 		Sample(units[index], now)
 	end
@@ -176,7 +176,7 @@ end
 -- Meter.Rank: an array this file already owns, filled and sorted in place.
 function ThreatMeter.Rank()
 	local count = 0
-	local units = ns.MeterRoster.Units()
+	local units = ns.Unit.Roster.Units()
 	for index = 1, #units do
 		local slot = slots[UnitGUID(units[index]) or ""]
 		if slot and slot.live then
