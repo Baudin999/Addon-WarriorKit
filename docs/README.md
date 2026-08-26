@@ -1159,6 +1159,9 @@ went and checked.
 
 ## Traps already hit
 
+One line each. A bug that survived a shipped fix gets a full write-up in
+`docs/POSTMORTEMS.md` instead.
+
 - A word Core answers itself is a word no feature can have. The dispatch in
   `Core/Command.lua` returned before the registry was consulted, so the
   interface part's `ui` lost silently and every `/wk ui` opened the panel. One
