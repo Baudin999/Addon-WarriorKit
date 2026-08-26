@@ -2,6 +2,91 @@
 
 ## Unreleased
 
+### The bars say what you can afford, and what is already armed
+
+Two things a square was not saying.
+
+A spell you have no rage for was drawn in full colour with a blue hairline
+round it. The hairline is correct and it is not enough on its own: it is one
+pixel on a 27 pixel square, and "what can I press" is a question asked with the
+eye moving rather than stopping. The bars carry no rage bar and no mana bar of
+their own, so what you can afford is readable off the squares or it is not
+readable anywhere. The `cost` look now drains the art the way the `no` look
+does, in both palettes. The blue edge stays and says which of the two kinds of
+no it is once the eye has landed.
+
+Range deliberately does not get the same drain. Out of range is a fact about
+one mob and it goes away when you take a step; out of rage is a fact about you
+and it is the one that decides what to press. Two states that both grey out are
+two states you have to read the border to tell apart, which is the border doing
+the work the art should have done.
+
+The other was a queued Heroic Strike, which is the one press in a warrior's
+rotation whose entire answer is "it is armed and it goes off on the next
+swing". `Slot.Active` had it right the whole time and `Ability.Draw` drew it as
+22% additive gold over the icon, which is invisible on art that is already
+bright. It now draws a gold ring on the edge of the art as well, which is the
+half you can see across a screen, and keeps the tint underneath so the square
+reads as lit rather than merely outlined. Blizzard draws a checked border for
+the same fact.
+
+The ring lands exactly where the green equipped ring lands and is built after
+it, so on the one square that is both, armed wins. Two rings a pixel apart on a
+27 pixel square is mush, so there is only room for one and it has to be picked:
+being worn is still true a second from now and the green comes back the moment
+the swing lands, where an armed press you did not see is a press you make
+again.
+
+`scripts/harness.lua` holds both. The drain on `cost` and its absence on
+`range` are asserted against both palettes, and the ring is driven on and off
+against a status that is not `ready`, so it cannot quietly become a tenth rung
+of the ladder or take the border the status owns.
+
+### A black edge round the map, and a clock on the end of it
+
+The ring was doing one job worth keeping. It ended the picture. Take it off and
+the world runs out to a rectangle with nothing round it, which reads as a hole
+cut in the screen rather than as a map.
+
+So the square gets the box the action bars are already built on: three pixels
+of near black with a hairline on the outside of it, in the same two colours, so
+the two read as pieces of one interface. It is drawn as four bands round the
+map rather than as one rectangle behind it. A rectangle would have to sit under
+the map to avoid covering the world, and where a child frame lands against its
+parent's own drawing is the client's business rather than something an addon
+gets to state. Four bands are outside the map's bounds and cover nothing
+whatever the client decides.
+
+Two more pieces of Blizzard's furniture come off with the ring. The sun and
+moon said whether it was day in a game whose sky says the same thing. The
+digital clock draws its numbers on a strip of the old stone minimap tile, so on
+a stripped square it was the last of the round map anywhere on the screen,
+hanging under the bottom edge looking like the one bit that survived. That
+strip is what this change started as.
+
+`Minimap/Clock.lua` puts the reading back as a tab off the middle of the bottom
+of the black. It overlaps the bezel by exactly one pixel, so the tab's top edge
+and the bezel's bottom edge land in the same row, and the seam between them is
+painted out with one band of the fill colour inset a pixel at each end. The
+outline then turns both corners and runs round the map and the clock as one
+silhouette rather than as a box with a box stuck to it. That join is the whole
+reason it is a file and not four lines in `Shape.lua`.
+
+It says local time, where Blizzard's shipped saying the realm's. The realm's is
+the time an addon needs and not the time a person does, and it is one hover
+away with the date. The twelve hour toggle is read off the client's own CVar,
+because a player who set it set it for a clock and this is the clock now; a
+client with no such CVar reads as twenty four hours, which everybody can parse,
+where the wrong guess in the other direction puts a pm on the wrong half of the
+day. The tick looks once a second and writes twice an hour.
+
+Blizzard's clock belongs to an addon loaded on demand, so at login there is
+nothing for the strip to take. `Shape.lua` runs another apply on `ADDON_LOADED`
+and that is the one that catches it. Login is still the first apply and nothing
+before it counts, because an apply taken earlier would read the width off a
+frame the client has not sized yet and remember that number as the one to hand
+back when the square goes off.
+
 ### The auto repair never repaired
 
 It gated on `MerchantFrame:IsShown()`, and `MERCHANT_SHOW` is the server

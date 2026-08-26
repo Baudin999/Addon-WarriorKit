@@ -6,6 +6,9 @@ ns.Bars = Bars
 local UI = ns.UI
 local Ability, Flow = UI.Ability, UI.Flow
 
+-- The plan, and the question of which of it you want, both in Which.lua.
+local Which = ns.WhichBars
+
 --------------------------------------------------------------------------
 -- The bars
 --
@@ -27,9 +30,10 @@ local Ability, Flow = UI.Ability, UI.Flow
 --   makes the off switch free: an override is a layer, not a write, and
 --   dropping it leaves the binding set exactly as it was found.
 --
---   Which bars exist. BARS below is what this client can have. What you
---   actually have is read off the frames at build time, so a right bar you
---   never turned on is a bar this file never makes and never hides.
+--   Which bars exist. Buttons/Which.lua holds the plan of what this client can
+--   have and answers which of them you want, and the shipping answer is read
+--   off your own bars: one you have on is one we clone. This file builds what
+--   that question returns and hands back what it does not.
 --
 -- The geometry is source code and not a setting. This is a personal addon for
 -- one person who wants the same interface on every install, so the plan is a
@@ -93,58 +97,12 @@ local SIZE = 27
 local GAP = 2
 local PAD = 3
 
--- Every bar this client can have, in draw order.
---
---   buttons   the Blizzard button name the slot is read off and which then gets
---             hidden. Hiding the twelve buttons rather than the frame holding
---             them is deliberate: bar 1's buttons live on MainMenuBarArtFrame
---             along with the micro menu and the bag bar, and Artwork.lua
---             already carries the note about what hiding that frame costs.
---   command   the binding command its keys are saved under
---   frame     the Blizzard frame whose IsShown answers whether the bar is on at
---             all. nil for bar 1, which is always on
---   pages     bar 1 alone, which the client re-points at a different twelve
---             slots in each stance
---
--- The rest is geometry: how many columns the twelve break into, and where the
--- bar's corner lands on UIParent. Those offsets are in the bar's own units, and
--- every bar goes on the pixel grid, so they are whole screen pixels and mean
--- the same thing on a 1080p panel as on a 4K one.
-local BARS = {
-	{ key = "bar1", label = "bar 1", pages = true,
-		buttons = "ActionButton%d", command = "ACTIONBUTTON%d",
-		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 8 },
-
-	{ key = "bottomleft", label = "bottom left bar",
-		buttons = "MultiBarBottomLeftButton%d", command = "MULTIACTIONBAR1BUTTON%d",
-		frame = "MultiBarBottomLeft",
-		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 44 },
-
-	{ key = "bottomright", label = "bottom right bar",
-		buttons = "MultiBarBottomRightButton%d", command = "MULTIACTIONBAR2BUTTON%d",
-		frame = "MultiBarBottomRight",
-		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 80 },
-
-	-- MultiBarRight is the client's "right bar" and MultiBarLeft is "right bar
-	-- 2", which sits to its left. The names are the wrong way round and have
-	-- been since 2005; the command numbers are what the binding set actually
-	-- carries and those are right.
-	{ key = "right", label = "right bar",
-		buttons = "MultiBarRightButton%d", command = "MULTIACTIONBAR3BUTTON%d",
-		frame = "MultiBarRight",
-		columns = 2, point = "RIGHT", to = "RIGHT", x = -8, y = 0 },
-
-	{ key = "right2", label = "right bar 2",
-		buttons = "MultiBarLeftButton%d", command = "MULTIACTIONBAR4BUTTON%d",
-		frame = "MultiBarLeft",
-		columns = 2, point = "RIGHT", to = "RIGHT", x = -73, y = 0 },
-}
-
 --------------------------------------------------------------------------
 -- State
 --------------------------------------------------------------------------
 
 local order = {}       -- one entry per cloned bar, in draw order
+local built = {}       -- bar key to entry, so a second look adds rather than repeats
 local squares = {}     -- every square on every bar, flat, walked by the tick
 local pool = 0         -- next name out of the button pool
 
@@ -198,38 +156,6 @@ function Bars.Short(key)
 	-- key nobody binds and is better half readable than absent.
 	rest = (rest:gsub("^NUMPAD", "n"):gsub("^BUTTON", "M"))
 	return prefix .. rest
-end
-
---------------------------------------------------------------------------
--- What is out there
---------------------------------------------------------------------------
-
--- Read off the bar frame rather than off its buttons, and read once. After the
--- clone is up this file has hidden every one of those buttons, so their own
--- IsShown is its own answer coming back; the frame holding them is what
--- MultiActionBar_Update actually toggles and is the only honest source left.
---
--- A bar turned on after the clone was built is not picked up, because a bar is
--- twelve secure buttons and secure buttons are made once at load in every part
--- of this addon that has them. Bars.Describe says so.
-local function Discover()
-	local found = {}
-	for index = 1, #BARS do
-		local def = BARS[index]
-		local holder = def.frame and _G[def.frame]
-		local on = def.frame == nil or (holder and holder:IsShown()) or false
-		local base = on and ns.Layout.SlotOf(def.buttons:format(1)) or nil
-		if base then
-			local entry = { def = def, base = base }
-			if def.pages then
-				-- nil where this client does not page bar 1 by stance, which is
-				-- every non-warrior and is a state Layout already reports.
-				entry.pages = ns.Layout.Bar1Bases()
-			end
-			found[#found + 1] = entry
-		end
-	end
-	return found
 end
 
 -- Both keys the binding set holds for one command. Two, because the client
@@ -305,23 +231,26 @@ local function BuildBar(entry)
 		local w = Ability.New(header, ("WarriorKitBarButton%d"):format(pool),
 			"SecureActionButtonTemplate", Ability.QUIET)
 		Ability.Size(w, SIZE)
-		-- The up edge, which is what this client's own action buttons register
-		-- in ActionButton_OnLoad. Casting on the down edge arrived with a
-		-- later expansion and its CVar, and a button registered only for
-		-- AnyDown on 2.5.6 draws perfectly and does nothing at all when you
-		-- click it.
+		-- Two edges, and they are two separate switches. The registration is
+		-- what the mouse obeys, and it is the up edge because that is what this
+		-- client's own action buttons register and because a square you can
+		-- drop a spell onto must not cast on the press that starts the drag.
 		--
-		-- This said AnyDown, on the grounds that the charge button registers
-		-- it. That is not the precedent it looks like: the charge button calls
-		-- EnableMouse(false) on itself and says in its own note that the two
-		-- ways to press it are the bound key and /click. Copying a click
-		-- registration off a button that refuses the mouse is how a bar full
-		-- of squares ended up inert.
+		-- Which edge a bound key fires on is the attribute, and a binding made
+		-- with SetOverrideBindingClick reads it. With nothing to read it
+		-- dispatches on the down edge, which is where the two disagreed and is
+		-- what a dead square looked like: the client pushes a button on the
+		-- down edge whichever edge it dispatches, so the square went dark under
+		-- the key and the click that would have cast was thrown away by AnyUp
+		-- on the way past. Pressed, and inert.
+		--
+		-- Charge/Icon.lua is the other half of the proof. It registers AnyDown,
+		-- sets nothing here, and its key has always worked.
 		w:RegisterForClicks("AnyUp")
+		w:SetAttribute("useOnKeyDown", false)
 		w:SetAttribute("type", "action")
 		ns.Square.Handle(w)
 		entry.buttons[index] = w
-		squares[#squares + 1] = w
 	end
 
 	ns.BarPlace.Handle(entry)
@@ -445,12 +374,18 @@ local function ClaimKey(owner, key, name)
 	return true
 end
 
+-- Walked over everything ever built rather than over what is up, because a bar
+-- you have just unticked is exactly the bar whose keys have to go back and is
+-- exactly the bar that is no longer in `order`.
 local function DropKeys()
 	if type(ClearOverrideBindings) ~= "function" then
 		return
 	end
-	for index = 1, #order do
-		pcall(ClearOverrideBindings, order[index].header)
+	for index = 1, #Which.PLAN do
+		local entry = built[Which.PLAN[index].key]
+		if entry then
+			pcall(ClearOverrideBindings, entry.header)
+		end
 	end
 end
 
@@ -536,16 +471,69 @@ end
 -- On and off
 --------------------------------------------------------------------------
 
+-- Build whatever is out there and is not built yet.
+--
+-- Run on every apply, because discovery is a race this used to lose. At
+-- PLAYER_LOGIN bar 1 answers and every other bar is still hidden, so a build
+-- taken there cloned bar 1 alone; the old guard then refused to look again on
+-- the grounds that something had been built, and the answer to "which bars do
+-- you have" was fixed for the session at the one moment it was wrong.
+--
+-- Each bar is still built exactly once, which is the rule that mattered. What
+-- changed is that a bar seen later gets its twelve squares when it is seen.
 local function Build()
-	order = Discover()
-	for index = 1, #order do
-		local entry = order[index]
-		BuildBar(entry)
-		Arrange(entry)
-		if DrivePages(entry) then
-			paging = true
+	local found = Which.Discover()
+
+	for index = 1, #found do
+		local entry = found[index]
+		local have = built[entry.def.key]
+		if have then
+			-- Which.lua is asked again on every pass, so a box ticked in the
+			-- panel arrives here as a bar that changes side.
+			have.wanted = entry.wanted
+			-- The one answer that can arrive late on a bar already standing.
+			-- Bar1Bases refuses while the client says you are in no stance,
+			-- which is what it says at login, and a bar 1 that came up without
+			-- its pages would page from Lua for the rest of the session.
+			if have.def.pages and not have.pages and entry.pages then
+				have.pages = entry.pages
+				if DrivePages(have) then
+					paging = true
+				end
+			end
+		elseif entry.wanted then
+			-- Nothing is built for a bar you do not want, so a clone of two
+			-- bars costs twenty-four secure buttons and not sixty.
+			built[entry.def.key] = entry
+			BuildBar(entry)
+			Arrange(entry)
+			if DrivePages(entry) then
+				paging = true
+			end
 		end
 	end
+
+	-- What is up, in the plan's own order rather than the order it was built
+	-- in. Both lists are emptied rather than replaced, because Bars.All hands
+	-- `order` out and a caller holding the old table would be holding a list
+	-- that stopped changing.
+	--
+	-- `squares` is derived from this rather than filled as buttons are made,
+	-- so a bar you untick leaves the tick as well as the screen.
+	wipe(order)
+	wipe(squares)
+	for index = 1, #Which.PLAN do
+		local entry = built[Which.PLAN[index].key]
+		if entry and entry.wanted then
+			order[#order + 1] = entry
+			for slot = 1, PER_BAR do
+				squares[#squares + 1] = entry.buttons[slot]
+			end
+		end
+	end
+	-- Place.Handle makes every handle hidden, so a bar that arrived while the
+	-- frames were unlocked needs telling.
+	ns.BarPlace.Lock(order)
 end
 
 -- Returns false when combat deferred part of the work.
@@ -563,16 +551,25 @@ function Bars.Apply()
 	pending = nil
 
 	local want = ns.db.actionBars and true or false
-	if want and #order == 0 then
+	if want then
 		Build()
 	end
 
+	-- Everything ever built goes out of sight first, and what is wanted comes
+	-- back below. A bar you untick keeps its twelve secure buttons, because
+	-- secure buttons cannot be destroyed and must never be made twice; what it
+	-- loses is the screen, its keys and its claim on Blizzard's buttons, and
+	-- that is the whole of what turning a bar off means here.
+	for index = 1, #Which.PLAN do
+		local entry = built[Which.PLAN[index].key]
+		if entry then
+			entry.frame:Hide()
+		end
+	end
+	DropKeys()
+
 	if not want then
 		live = false
-		for index = 1, #order do
-			order[index].frame:Hide()
-		end
-		DropKeys()
 		return ns.TheirBars.Show()
 	end
 
@@ -581,7 +578,10 @@ function Bars.Apply()
 		order[index].frame:Show()
 	end
 
-	local complete = ns.TheirBars.Hide(Covered())
+	-- Exactly the buttons the bars that are up stand over, and every other one
+	-- handed back. One call rather than a hide and a show, so a bar that
+	-- changed side cannot leave Blizzard's twelve hidden behind nothing.
+	local complete = ns.TheirBars.Only(Covered())
 	Bars.Page()
 	if not Bars.ApplyBindings() then
 		complete = false
@@ -630,6 +630,9 @@ function Bars.Describe()
 		return "off, your own bars are where they were"
 	end
 	if #order == 0 then
+		if Which.Decided() > 0 then
+			return "on, and every bar is unticked, so your own bars are where they were"
+		end
 		return "on, but no action bar answered, so there was nothing to clone"
 	end
 
@@ -652,6 +655,10 @@ function Bars.Describe()
 	end
 	if order[1].def.pages and not paging then
 		line = line .. "; no state driver, so bar 1 pages only out of combat"
+	end
+	if Which.Decided() > 0 then
+		line = line .. ("; %d bar%s picked by hand rather than off your own"):format(
+			Which.Decided(), Which.Decided() == 1 and "" or "s")
 	end
 	return line
 end
@@ -698,11 +705,9 @@ end)
 
 events:RegisterEvent("PLAYER_LOGIN")
 -- PLAYER_ENTERING_WORLD as well as PLAYER_LOGIN, and it is not belt and braces.
--- Discovery reads ActionButton1.action, and the client's own bar controller
--- fills that field in on entering the world, which is after login. A build
--- taken at login alone would find nothing on a cold start and report having
--- nothing to clone. Bars.Apply only builds while nothing has been built, so a
--- second call after a successful one costs a comparison.
+-- The client puts its own bars up and fills in ActionButton1.action on entering
+-- the world, which is after login, so login sees a fraction of what is there.
+-- Build costs a walk of five names once everything is standing.
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")

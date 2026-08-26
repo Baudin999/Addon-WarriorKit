@@ -153,6 +153,8 @@ UnitFrames/EnemyBars.lua:UpdateList
 UnitFrames/EnemyBars.lua:Collect
 UnitFrames/EnemyBars.lua:CollectUnits
 UnitFrames/EnemyBars.lua:EnemyBars.Update
+Minimap/Clock.lua:Clock.Reading
+Minimap/Clock.lua:Clock.Update
 Comfort/Vendor.lua:Sweep
 Comfort/Vendor.lua:Tick
 Perf/Perf.lua:Perf.Start

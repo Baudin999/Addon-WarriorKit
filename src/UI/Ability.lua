@@ -43,10 +43,20 @@ UI.Ability = Ability
 --   whatever SetPushedTexture was handed. Buttons only; a plain frame has no
 --   such state and the marker in the world is not something you press.
 --
---   An active tint, for the one square whose ability is already what is
---   running: the stance you are standing in, the auto attack already swinging.
---   That one is not free, because nothing in the client knows to draw it, so it
---   is an argument to Ability.Draw like every other fact about the square.
+--   An active ring and tint, for the one square whose ability is already what
+--   is running: the stance you are standing in, the auto attack already
+--   swinging, the Heroic Strike queued onto the next swing. That one is not
+--   free, because nothing in the client knows to draw it, so it is an argument
+--   to Ability.Draw like every other fact about the square.
+--
+--   It started as the tint alone, at 22% additive gold over a 27 pixel icon,
+--   and that is not visible on art that is already bright. Queueing Heroic
+--   Strike is the case that proved it: the one press in a warrior's rotation
+--   whose whole answer is "it is armed and it goes off on the next swing", and
+--   the square said nothing you could see. Blizzard draws a checked border for
+--   the same fact. So does this now, and the tint stays underneath it, because
+--   the ring is the edge and the fill is what makes the square read as lit
+--   rather than as outlined.
 --
 -- And a green ring for an item you are wearing, which is what Blizzard's own
 -- buttons draw for the same fact. It is a second outline one pixel inside the
@@ -107,6 +117,19 @@ Ability.STATUS = {
 -- when you glance at it mid-fight. Cooldown is not in that group because the
 -- swipe already says it, in more detail than a colour could.
 --
+-- Cost keeps the drain that "no" has, and that is the one look in the table
+-- that says the same thing twice. It has to, because this addon draws no rage
+-- bar and no mana bar on the bars themselves: what you can afford right now is
+-- readable off the squares or it is not readable anywhere. A hairline of blue
+-- on a 27 pixel square is a thing you find when you go looking for it, and the
+-- question "what can I press" is asked with the eye moving, not stopping. The
+-- drained art answers it at a glance and the blue edge says which of the two
+-- kinds of no it is once the eye has landed.
+--
+-- Range does not get the drain, and the asymmetry is deliberate. Out of range
+-- is a fact about one mob and it goes away when you take a step; out of rage
+-- is a fact about you and it is the one that decides what to press.
+--
 -- Empty is pulled out for a different reason than range and cost are, and it is
 -- the one that made a half filled bar look broken. An empty slot has no art, so
 -- it fell to "no" and was drawn as the fallback question mark at 55% alpha:
@@ -141,7 +164,7 @@ Ability.SHOUT = {
 	go    = { color = { 0.16, 0.80, 0.32 }, alpha = 1 },
 	swap  = { color = { 0.96, 0.62, 0.16 }, alpha = 0.6 },
 	range = { color = { 0.85, 0.25, 0.22 }, alpha = 0.6 },
-	cost  = { color = { 0.29, 0.45, 0.85 }, alpha = 0.6 },
+	cost  = { color = { 0.29, 0.45, 0.85 }, alpha = 0.6, grey = true },
 	empty = { color = { 0.20, 0.20, 0.24 }, alpha = 1, blank = true },
 	no    = { color = { 0.38, 0.38, 0.43 }, alpha = 0.6, grey = true },
 }
@@ -153,7 +176,7 @@ Ability.QUIET = {
 	go    = { color = { 0.16, 0.16, 0.19 }, alpha = 1 },
 	swap  = { color = { 0.96, 0.62, 0.16 }, alpha = 1 },
 	range = { color = { 0.85, 0.25, 0.22 }, alpha = 1 },
-	cost  = { color = { 0.29, 0.45, 0.85 }, alpha = 1 },
+	cost  = { color = { 0.29, 0.45, 0.85 }, alpha = 1, grey = true },
 	empty = { color = { 0.13, 0.13, 0.16 }, alpha = 1, blank = true },
 	no    = { color = { 0.16, 0.16, 0.19 }, alpha = 0.55, grey = true },
 }
@@ -210,6 +233,22 @@ function Ability.New(parent, name, template, palette)
 	w.active = ns.Fill(w, "OVERLAY", 1, 0.84, 0.32, 0.22)
 	w.active:SetBlendMode("ADD")
 	w.active:Hide()
+
+	-- The edge of the same fact. Four textures on the art's own bounds, laid
+	-- out exactly where the equipped ring is laid out, and built after it so
+	-- that on the one square that is both they draw over it.
+	--
+	-- That is a real decision and not an accident of order. Two rings one pixel
+	-- apart on a 27 pixel square is mush, so there is only room for one and it
+	-- has to be picked. Being armed is momentary and being worn is not: a
+	-- weapon you are wielding is still wielded a second from now and the ring
+	-- comes back the moment the swing lands, where an armed press missed is a
+	-- press you make again.
+	w.armed = {}
+	for index = 1, 4 do
+		w.armed[index] = ns.Fill(w, "OVERLAY", 1, 0.82, 0.28, 1)
+		w.armed[index]:Hide()
+	end
 
 	-- Worn or wielded. Four edges anchored to the art rather than to the frame,
 	-- which lands them exactly one pixel inside the status border, and on
@@ -351,6 +390,24 @@ function Ability.Size(w, side)
 	ring[4]:SetPoint("TOPRIGHT", w.icon, "TOPRIGHT")
 	ring[4]:SetPoint("BOTTOMRIGHT", w.icon, "BOTTOMRIGHT")
 	ns.EdgeSize(ring, edge)
+
+	-- The armed ring sits exactly where the equipped one does, for the reason
+	-- Ability.New states. Anchored to the same four corners rather than to the
+	-- ring's textures, so neither depends on the other having been laid out.
+	local armed = w.armed
+	for index = 1, 4 do
+		armed[index]:ClearAllPoints()
+	end
+	armed[1]:SetPoint("TOPLEFT", w.icon, "TOPLEFT")
+	armed[1]:SetPoint("TOPRIGHT", w.icon, "TOPRIGHT")
+	armed[2]:SetPoint("BOTTOMLEFT", w.icon, "BOTTOMLEFT")
+	armed[2]:SetPoint("BOTTOMRIGHT", w.icon, "BOTTOMRIGHT")
+	armed[3]:SetPoint("TOPLEFT", w.icon, "TOPLEFT")
+	armed[3]:SetPoint("BOTTOMLEFT", w.icon, "BOTTOMLEFT")
+	armed[4]:SetPoint("TOPRIGHT", w.icon, "TOPRIGHT")
+	armed[4]:SetPoint("BOTTOMRIGHT", w.icon, "BOTTOMRIGHT")
+	ns.EdgeSize(armed, edge)
+
 	if w.pushed then
 		w.pushed:ClearAllPoints()
 		w.pushed:SetAllPoints(w.icon)
@@ -494,10 +551,16 @@ function Ability.Draw(w, texture, status, start, duration, count, active, equipp
 		w.timer:SetText("")
 	end
 
+	-- One comparison for the tint and the ring, because they are two halves of
+	-- one fact and can never disagree.
 	local on = active and true or false
 	if on ~= w.shownActive then
 		w.shownActive = on
 		w.active:SetShown(on)
+		local armed = w.armed
+		for index = 1, 4 do
+			armed[index]:SetShown(on)
+		end
 	end
 
 	local worn = equipped and true or false

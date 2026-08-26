@@ -71,15 +71,38 @@ local function Restore(frame)
 	return true
 end
 
--- Hide every button named in the list. Takes global frame names rather than
--- walking the bars itself, so the file that decided which bars it was cloning
--- is the only file that knows, and this one only knows how to hide a button
--- without taking its taint with it.
-function Theirs.Hide(names)
-	local complete = true
+-- Exactly these hidden and every other one handed back.
+--
+-- Takes global frame names rather than walking the bars itself, so the file
+-- that decided which bars it was cloning is the only file that knows, and this
+-- one only knows how to hide a button without taking its taint with it.
+--
+-- One call rather than a hide and a show, because the two halves have to agree
+-- and there is a switch per bar that can move a button from one side to the
+-- other. A bar unticked in the panel stops naming its twelve here, and the same
+-- pass that stops hiding them is the pass that gives them back; nothing has to
+-- remember which bar they came from.
+function Theirs.Only(names)
+	local wanted = {}
 	for index = 1, #names do
 		local frame = _G[names[index]]
 		if frame then
+			wanted[frame] = true
+		end
+	end
+
+	local complete = true
+	for frame in pairs(hidden) do
+		if not wanted[frame] then
+			if Restore(frame) then
+				hidden[frame] = nil
+			else
+				complete = false
+			end
+		end
+	end
+	for frame in pairs(wanted) do
+		if not hidden[frame] then
 			if Banish(frame) then
 				hidden[frame] = true
 			else

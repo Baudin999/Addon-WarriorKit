@@ -35,10 +35,14 @@ end
 -- Returns the four edges so a caller that recolours on state, the way a bar
 -- takes the threat colour, or resizes them to a real pixel, does not have to
 -- rebuild them.
-function ns.Outline(frame, r, g, b, a)
+--
+-- The layer is an argument because a frame can carry two of these at once: the
+-- minimap bezel is a wide band on BACKGROUND with a hairline on BORDER over
+-- it, and two sets on one layer have no order between them.
+function ns.Outline(frame, r, g, b, a, layer)
 	local edges = {}
 	for i = 1, 4 do
-		edges[i] = ns.Fill(frame, "BORDER", r, g, b, a)
+		edges[i] = ns.Fill(frame, layer or "BORDER", r, g, b, a)
 	end
 	edges[1]:SetPoint("TOPLEFT")
 	edges[1]:SetPoint("TOPRIGHT")

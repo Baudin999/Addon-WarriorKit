@@ -1,3 +1,5 @@
+![WarriorKit](media/warriorkit.jpg)
+
 # WarriorKit
 
 A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
@@ -67,6 +69,10 @@ Unzip into `Interface/AddOns`, so that the folder is
     src/        the addon, exactly what the client loads
     docs/       the engineering notes, including the file map and API caveats
     scripts/    check.sh, bake-ui.sh, release.sh
+    media/      the project art: the banner above and the square avatar
+
+`media/` is for GitHub and the CurseForge project page. Nothing in it is
+shipped, because the client has no use for a JPEG.
 
 `src/` is what a client sees. Link it in rather than copying, so there is one
 copy to edit and every client loads it:

@@ -148,6 +148,17 @@ ns.Register({
 			end
 			return "Blizzard's own mail, tracking and battleground icons are moved to the corners of the square, because they were anchored to points on the arc and a square has no arc to hang them on."
 		end)
+		ui.Note(function()
+			if not ns.db.minimapSquare then
+				return "The ring is the only thing ending the picture on a round map, which is why the sun, the clock and the black edge below all wait for the square."
+			end
+			local reading = ns.MinimapClock.Describe()
+			return ("The ring ended the picture and nothing else on it did, so the square gets the same black edge and hairline the action bars are built on. The clock hangs off the bottom of that edge in the middle%s, and the realm's time is on its tooltip.")
+				:format(reading and (", reading " .. reading) or "")
+		end)
+		ui.Note(function()
+			return "The sun and moon and Blizzard's own clock come off with the ring. The sun says whether it is day in a game whose sky says the same thing, and the clock draws its numbers on a strip of the old stone minimap tile, which on a stripped square is the last piece of Blizzard's map left on the screen."
+		end)
 
 		ui.Header("Addon buttons")
 		ui.Check("collect them behind one square",

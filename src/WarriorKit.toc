@@ -109,6 +109,13 @@ Buttons\Ranks.lua
 # not own, and because how you hide a secure button without taking its taint
 # with you is a subject rather than a detail. Before Bars.lua, which calls it.
 Buttons\Blizzard.lua
+
+# The plan of which bars this client can have, and the answer to which of them
+# you want cloned. Before Bars.lua, which reads both at build time. Its own file
+# because the answer stopped being a reading of the client the moment there was
+# a tick box per bar, and because the plan is the one part of the bars that is
+# source code rather than a setting.
+Buttons\Which.lua
 Buttons\Bars.lua
 
 # What one square answers to the mouse: the tooltip you get by hovering it and
@@ -155,6 +162,7 @@ Artwork\Feature.lua
 # means anything. Next to Artwork because it is the same job on another of
 # Blizzard's frames: furniture off, everything reversible in one call.
 Minimap\Shape.lua
+Minimap\Clock.lua
 Minimap\Corral.lua
 Minimap\Feature.lua
 

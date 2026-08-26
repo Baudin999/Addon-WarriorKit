@@ -171,6 +171,7 @@ read_globals = {
 	-- the CVar out of combat and hands it back in. Both calls are pcalled: no
 	-- addon here proves SetCVar takes that name on 2.5.6.
 	"GetCVarBool", "GetCVar", "SetCVar",
+	"GetGameTime",
 	-- Looting, for the Comfort part. Leatrix Plus is loaded on both of these
 	-- clients and calls all five unguarded inside its own faster-looting
 	-- feature, which is the same feature and so the same proof;

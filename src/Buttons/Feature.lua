@@ -66,6 +66,33 @@ local function SetBars(value)
 	ns.Options.Refresh()
 end
 
+-- One bar, ticked or unticked. Which.lua holds the decision and Bars.Apply is
+-- what makes the screen agree with it, the same shape SetBars has.
+local function SetBar(def, value)
+	ns.WhichBars.Want(def.key, value)
+	local complete = ns.Bars.Apply()
+	ns.Print(def.label .. (value and " cloned." or " handed back."))
+	if not complete then
+		ns.Print("part of that needs combat to end first, and will run then.")
+	end
+	ns.Options.Refresh()
+end
+
+-- Back to cloning whatever you have on, which is the shipping state and is what
+-- makes this feature quick to start with: no list to tick, no bar to place, the
+-- bars you already had with the keys you already set.
+local function Match()
+	local dropped = ns.WhichBars.Follow()
+	ns.Bars.Apply()
+	if dropped == 0 then
+		ns.Print("already following your own bars: " .. ns.Bars.Describe() .. ".")
+	else
+		ns.Print(("dropped %d bar choice%s, following your own bars again: %s."):format(
+			dropped, dropped == 1 and "" or "s", ns.Bars.Describe()))
+	end
+	ns.Options.Refresh()
+end
+
 local function Restore()
 	local ok, result = ns.Layout.Restore()
 	if not ok then
@@ -121,6 +148,13 @@ ns.Register({
 		-- prints it in the plan's own shape to paste in, and `actionbars reset`
 		-- drops it again once you have.
 		barPoints = {},
+
+		-- Which bars are cloned, keyed by the plan's bar key. Empty is the
+		-- normal state and means every bar follows your own: one you have on is
+		-- one we clone, which is what makes turning this on give you back the
+		-- interface you already had. An entry here is a bar you have decided
+		-- about, and the client's own switch stops being consulted for it.
+		barsShown = {},
 	},
 
 	-- Per character, all three of them. These describe one character's action
@@ -152,6 +186,8 @@ ns.Register({
 				SetBars(ns.Command.Toggle(arg))
 			elseif arg == "where" then
 				Where()
+			elseif arg == "match" then
+				Match()
 			elseif arg == "reset" then
 				local dropped = ns.Bars.ResetPlacing()
 				ns.Print(dropped == 0 and "nothing was dragged, so the plan was already what you see."
@@ -160,6 +196,7 @@ ns.Register({
 			else
 				ns.Print("action bars: " .. ns.Bars.Describe() .. ".")
 				ns.Print("actionbars on clones every bar you have, with its keys, and hides Blizzard's. actionbars off gives them back.")
+				ns.Print("tick bars one at a time in the panel, or actionbars match to follow your own again.")
 				ns.Print("/wk unlock to drag them, actionbars where to print what you dragged, actionbars reset to undo it.")
 			end
 		end,
@@ -191,6 +228,7 @@ ns.Register({
 	help = {
 		"buttons apply, buttons restore, buttons status",
 		"actionbars on|off, our own bars over Blizzard's, same slots and same keys",
+		"actionbars match, back to cloning whichever bars you have on",
 		"actionbars where, actionbars reset, after dragging them with /wk unlock",
 		"ranks, ranks refresh",
 	},
@@ -246,6 +284,27 @@ ns.Register({
 				return "Your bars are Blizzard's. Nothing is hidden and no key is taken."
 			end
 			return ns.Bars.Describe() .. "."
+		end)
+
+		-- One row per bar the client can have, so a bar that misbehaves can be
+		-- handed back on its own without turning the whole feature off and
+		-- losing the others. Untouched, each row shows what you have on.
+		for _, def in ipairs(ns.WhichBars.PLAN) do
+			ui.Check(def.label,
+				function() return ns.WhichBars.Wanted(def) end,
+				function(value) SetBar(def, value) end)
+		end
+		ui.Action(
+			function() return "match my current bars" end,
+			Match,
+			function() return ns.WhichBars.Decided() > 0 end)
+		ui.Note(function()
+			local decided = ns.WhichBars.Decided()
+			if decided == 0 then
+				return "Every row follows your own interface options. Turn a bar on there and it is cloned too."
+			end
+			return ("%d bar%s set by hand. Match puts them all back to following your own bars."):format(
+				decided, decided == 1 and " is" or "s are")
 		end)
 
 		ui.Gap()

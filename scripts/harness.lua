@@ -681,6 +681,11 @@ _G.GetTime = function() return wall end
 _G.GetQuestGreenRange, _G.InCombatLockdown = constant(8), constant(false)
 _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 _G.tinsert, _G.date = table.insert, os.date
+-- The realm's clock, which is not the machine's and is what Minimap/Clock.lua
+-- puts in the tooltip under the reading on its face. A fixed pair rather than a
+-- read of the real one, because a test that asserts on a formatted time has to
+-- know what time it is.
+_G.GetGameTime = function() return 21, 7 end
 _G.GetBuildInfo = function() return "2.5.6", "69110", "2025-01-01", 20506 end
 _G.RAID_CLASS_COLORS = {
 	WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
@@ -2061,6 +2066,14 @@ do
 		"a ready square is drawn at full alpha in both palettes")
 	check(Ability.SHOUT.no.grey and Ability.QUIET.no.grey,
 		"a square that does nothing is desaturated in both palettes")
+
+	-- The bars draw no rage bar and no mana bar, so what you can afford is
+	-- readable off the squares or nowhere. A blue hairline alone is a thing you
+	-- go looking for; the drain is what answers at a glance.
+	check(Ability.SHOUT.cost.grey and Ability.QUIET.cost.grey,
+		"a spell you cannot afford is drawn in full colour, and there is no resource bar to read instead")
+	check(not Ability.SHOUT.range.grey and not Ability.QUIET.range.grey,
+		"out of range drains the art too, so it cannot be told from out of rage")
 	check(Ability.SHOUT.range.color ~= Ability.SHOUT.no.color,
 		"out of range is its own colour and not the grey everything else falls to")
 
@@ -2082,6 +2095,21 @@ do
 	local function put(fields)
 		slots[SLOT] = fields
 	end
+
+	-- Before anything asks whether the slot can be read, because "nobody has
+	-- asked yet" and "this client cannot" used to be the same answer here. Every
+	-- reader guarded on the raw probe, the probe was nil until something called
+	-- CanRead, and the only caller that did was Bars.Describe. So the bars came
+	-- up blank on every login and filled in the moment you typed /wk, and this
+	-- file could not see it because the line below primes the probe for the rest
+	-- of the run. It has to be the first thing the ladder does or it proves
+	-- nothing.
+	put({ texture = "Interface\\Icons\\Ability_Warrior_Charge" })
+	check(Slot.State(SLOT) ~= "empty",
+		"a filled slot reads as empty until something else asks whether slots can be read")
+	check(Slot.Texture(SLOT) ~= nil,
+		"a filled slot has no art until something else asks whether slots can be read")
+	slots[SLOT] = nil
 
 	check(Slot.CanRead(), "this stub client cannot read an action slot: " .. Slot.Describe())
 
@@ -2282,8 +2310,19 @@ do
 	check(feel.active:IsShown(), "the stance you are standing in draws no active tint")
 	check(feel.active:GetBlendMode() == "ADD",
 		"the active tint is not additive, so it is a muddy rectangle over the art")
+
+	-- And the edge of it, which is the half you can see across a screen. The
+	-- tint alone at 22% over bright art is invisible, and the case that proves
+	-- it is a queued Heroic Strike: armed, and the square said nothing.
+	check(feel.armed[1]:IsShown(), "a queued ability draws no ring, so an armed square looks idle")
+	check(feel.armed[1].layer == "OVERLAY",
+		"the armed ring is under the art, where the art will cover it")
+	check(feel.shownLook == Ability.Look(Ability.QUIET, "cost"),
+		"the armed ring took over the border, which the status owns")
+
 	Ability.Draw(feel, ART, "cost")
 	check(not feel.active:IsShown(), "the active tint is not cleared when the ability stops")
+	check(not feel.armed[1]:IsShown(), "the armed ring outlived the swing")
 
 	-- The equipped ring, which is a second outline inside the status border and
 	-- so has to be able to be on while the border says something else.
@@ -2549,7 +2588,7 @@ do
 	-- correctly, lit correctly, counted down correctly, and did nothing at all
 	-- when clicked, and nothing in this file could see it because
 	-- RegisterForClicks was a no-op.
-	local mute, blind, seen = 0, 0, 0
+	local mute, blind, deaf, seen = 0, 0, 0, 0
 	for index = 1, #bars do
 		for slot = 1, 12 do
 			local w = bars[index].buttons[slot]
@@ -2557,6 +2596,20 @@ do
 			local clicks = w:GetRegisteredClicks()
 			if not clicks or not (clicks.AnyUp or clicks.LeftButtonUp) then
 				mute = mute + 1
+			end
+			-- And the key edge, which is a second switch and was the second
+			-- half of the same bug. The registration above is what the mouse
+			-- obeys; a key bound with SetOverrideBindingClick fires on
+			-- whichever edge useOnKeyDown names, and with the attribute unset
+			-- that is the down edge. A square registered AnyUp and left unset
+			-- therefore answered the mouse, went dark under the key because
+			-- the client pushes a button on the down edge either way, and cast
+			-- nothing. Asserted as agreement rather than as a value, so it
+			-- keeps holding if the registration above is ever changed.
+			local keyDown = w:GetAttribute("useOnKeyDown")
+			local answersDown = clicks and (clicks.AnyDown or clicks.LeftButtonDown)
+			if keyDown == nil or (keyDown and true or false) ~= (answersDown and true or false) then
+				deaf = deaf + 1
 			end
 			-- And nothing laid over the icon may answer the mouse, or the
 			-- click lands on the swipe instead of on the ability.
@@ -2642,6 +2695,9 @@ do
 		("%d squares register no up edge, so a click on them does nothing"):format(mute))
 	check(blind == 0,
 		("%d cooldown swipes still answer the mouse and would eat the click"):format(blind))
+	check(deaf == 0,
+		("%d squares fire their key on an edge they do not answer, so the key does nothing")
+			:format(deaf))
 
 	-- Not by replacing a method on Blizzard's frame. ns.Strip swaps a region's
 	-- Show for its Hide, which is right for a texture and wrong for a secure
@@ -2679,6 +2735,95 @@ do
 	fire("ACTIONBAR_PAGE_CHANGED")
 	check(not _G.ActionButton1:IsShown(),
 		"the client put a button back and nothing hid it again")
+
+	--------------------------------------------------------------------------
+	-- A bar that was not there when we first looked
+	--
+	-- Discovery is a race, and the shipped version lost it. The client puts its
+	-- own bars up on entering the world, which is after PLAYER_LOGIN, so the
+	-- first look found bar 1 and four hidden holders; the build then refused to
+	-- look again because something had been built, and one bar was the answer
+	-- for the rest of the session.
+	--
+	-- MultiBarLeft is the fixture's off bar for exactly this. Turning it on and
+	-- applying again has to clone it, and has to leave the four already
+	-- standing alone rather than building them a second time.
+	--------------------------------------------------------------------------
+
+	do
+	local was = #bars
+	local names = {}
+	for index = 1, #bars do
+		names[bars[index].def.key] = (names[bars[index].def.key] or 0) + 1
+	end
+
+	_G.MultiBarLeft.shown = true
+	check(Bars.Apply(), "a bar turning on reported combat deferring the clone")
+	check(#bars == was + 1,
+		("a bar turned on and the clone went from %d bars to %d"):format(was, #bars))
+
+	local twice = 0
+	for index = 1, #bars do
+		local key = bars[index].def.key
+		if names[key] then
+			twice = twice + 1
+			names[key] = nil
+		end
+	end
+	check(twice == was, ("%d of %d bars survived the second look"):format(twice, was))
+	check(Bars.Count() == (was + 1) * 12,
+		("%d squares on %d bars, expected %d"):format(Bars.Count(), #bars, (was + 1) * 12))
+	check(Bars.Hidden() == (was + 1) * 12,
+		("%d of Blizzard's buttons are hidden behind %d cloned bars")
+			:format(Bars.Hidden(), #bars))
+	end
+
+	--------------------------------------------------------------------------
+	-- One bar at a time
+	--
+	-- The whole point of a switch per bar is that a bar which misbehaves can be
+	-- handed back on its own. Handing one back is three things and any one of
+	-- them left out leaves the player worse off than before they ticked it: the
+	-- squares go, Blizzard's twelve come back, and the keys stop being taken.
+	-- The last is the one that hides, because a key still pointing at a square
+	-- nobody can see is a key that does nothing at all.
+	--------------------------------------------------------------------------
+
+	do
+	local standing = #bars
+	ns.WhichBars.Want("bottomleft", false)
+	check(Bars.Apply(), "unticking a bar reported combat deferring it")
+
+	check(#bars == standing - 1,
+		("unticking one bar took the clone from %d bars to %d"):format(standing, #bars))
+	check(not found.bottomleft.frame:IsShown(), "an unticked bar is still on screen")
+	check(_G.MultiBarBottomLeftButton1:IsShown(),
+		"an unticked bar did not give Blizzard's buttons back")
+	check(_G.GetBindingAction("SHIFT-E", true) == "",
+		"an unticked bar is still holding the key that presses it")
+	check(Bars.Count() == (standing - 1) * 12,
+		("%d squares are still on the tick with one bar unticked"):format(Bars.Count()))
+
+	-- And a bar the client has switched off, ticked on. This is the half that
+	-- reading IsShown alone could never do: the twelve slots are there and your
+	-- keys point at them whether or not Blizzard is drawing a bar over them.
+	ns.WhichBars.Want("bottomleft", true)
+	check(Bars.Apply(), "ticking a bar back reported combat deferring it")
+	check(#bars == standing, ("ticking the bar back left %d bars"):format(#bars))
+	check(not _G.MultiBarBottomLeftButton1:IsShown(),
+		"the bar came back and Blizzard's buttons stayed up behind it")
+	check(_G.GetBindingAction("SHIFT-E", true)
+		== ("CLICK %s:LeftButton"):format(found.bottomleft.buttons[1]:GetName()),
+		"the key did not come back with the bar")
+
+	-- Match drops every decision and follows the client again, which is the
+	-- shipping state and the fast way in.
+	check(ns.WhichBars.Decided() > 0, "ticking bars by hand recorded no decision to drop")
+	check(ns.WhichBars.Follow() > 0, "match dropped nothing")
+	check(ns.WhichBars.Decided() == 0, "match left a decision behind")
+	check(Bars.Apply(), "following the client again reported combat deferring it")
+	check(#bars == standing, ("following the client again left %d bars"):format(#bars))
+	end
 
 	--------------------------------------------------------------------------
 	-- What a tick costs
@@ -2914,7 +3059,7 @@ do
 	slots[73] = { texture = ART }
 
 	print(("bars   %d bars, %d squares of 27 px, %d keys, pages %s, %.2f KB per 50 ticks, gate is %.2f")
-		:format(#bars, squares, claimed, Bars.CanPage() and "in combat" or "out of combat only",
+		:format(#bars, Bars.Count(), claimed, Bars.CanPage() and "in combat" or "out of combat only",
 			barsChurn, BARS_CHURN_KB))
 	check(barsChurn <= BARS_CHURN_KB,
 		("the bars tick allocated %.2f KB per 50 ticks, over the %.2f KB gate")
@@ -5340,6 +5485,109 @@ do
 	check(_G.MinimapBorder.wkStripped, "the ring is still drawn round a square map")
 	check(_G.MinimapZoomIn.wkStripped, "the zoom buttons are still on the arc")
 
+	-- The sun and the moon, which said whether it was day in a game whose sky
+	-- says the same thing. Furniture the addon takes off rather than furniture
+	-- it moves, so unlike the mail icon it is not on a corner and never was.
+	check(_G.GameTimeFrame.wkStripped, "the sun and moon are still on the map")
+
+	-- Blizzard's clock, and the piece that made any of this worth doing: it
+	-- draws its numbers on a strip of the old stone minimap tile, so on a
+	-- stripped square it was the last of the round map left on the screen.
+	--
+	-- It belongs to Blizzard_TimeManager, which is loaded on demand, so at
+	-- login it does not exist and there is nothing for the strip to take. The
+	-- Apply that catches it is the one ADDON_LOADED runs, and that is the whole
+	-- reason Shape.lua registers the event at all.
+	check(_G.TimeManagerClockButton == nil,
+		"the fixture put Blizzard's clock up before the addon that owns it loaded")
+	child("button", map, "TimeManagerClockButton")
+	fire("ADDON_LOADED", "Blizzard_TimeManager")
+	check(_G.TimeManagerClockButton.wkStripped,
+		"Blizzard's clock loaded after login and the square never took it off")
+
+	----------------------------------------------------------------------
+	-- The bezel and the clock
+	--
+	-- Their own block, and not for tidiness: this file is one Lua chunk and
+	-- Lua allows two hundred locals in one of them, which the harness is close
+	-- enough to that a handful more asserted here would fail to compile rather
+	-- than fail an assertion.
+	----------------------------------------------------------------------
+
+	do
+		-- The black the ring used to be. Four bands and a hairline on a frame
+		-- of ours anchored outside the map's own bounds, which is what makes it
+		-- safe: nothing it draws can land on the world however the client
+		-- orders a child frame against its parent.
+		local bezel = ns.MinimapShape.Bezel()
+		check(bezel ~= nil, "a square map was left with no bezel round it")
+		check(bezel:IsShown(), "the bezel is hidden on a map the addon calls square")
+		check(bezel.pad > bezel.hairline,
+			"the black round the map is no wider than the hairline round the black")
+
+		local point, relative, _, x, y = bezel:GetPoint()
+		check(point == "TOPLEFT" and relative == map and x < 0 and y > 0,
+			("the bezel is anchored %s at %.2f %.2f, which is not outside the map")
+				:format(tostring(point), x, y))
+
+		-- The tab. It hangs off the middle of the bottom of the bezel and
+		-- overlaps it by exactly the hairline, because the two edges landing in
+		-- one row of pixels is what lets the seam be painted out and the
+		-- outline read as one silhouette rather than as a box with a box stuck
+		-- to it.
+		local tab = _G.WarriorKitClock
+		check(tab ~= nil, "the clock tab was never built")
+
+		point, relative, _, x, y = tab:GetPoint()
+		check(point == "TOP" and relative == bezel and x == 0,
+			"the clock is not centred under the bottom of the bezel")
+		check(math.abs(y - bezel.hairline) < 1e-9,
+			("the clock overlaps the bezel by %.4f, the hairline is %.4f")
+				:format(y, bezel.hairline))
+		check(tab:GetWidth() > 0 and tab:GetHeight() > 0, "the clock tab has no size")
+
+		-- Twenty four hours with no CVar to say otherwise, which is the reading
+		-- a client that never offered the choice gets.
+		check(ns.MinimapClock.Reading():match("^%d%d:%d%d$") ~= nil,
+			("the clock reads %s, which is not a 24 hour time")
+				:format(tostring(ns.MinimapClock.Reading())))
+
+		-- The guard, and the only reason a clock is allowed on a ticker at all.
+		-- The first write happened in Apply; a second look inside the same
+		-- minute has nothing to say and must not touch the font string.
+		check(ns.MinimapClock.Update() == false,
+			"the clock wrote its font string again inside the same minute")
+
+		-- The twelve hour toggle changes both what the reading says and how
+		-- wide the widest one is, so it is a rebuild rather than a repaint, and
+		-- it arrives on an event that carries every other CVar the client
+		-- writes.
+		local narrow = tab:GetWidth()
+		_G.SetCVar("timeMgrUseMilitaryTime", 0)
+		fire("CVAR_UPDATE", "timeMgrUseMilitaryTime")
+		check(ns.MinimapClock.Reading():match("^%d?%d:%d%d [AP]M$") ~= nil,
+			("the 12 hour clock reads %s"):format(tostring(ns.MinimapClock.Reading())))
+		check(tab:GetWidth() > narrow,
+			("the tab stayed %.1f wide for a reading three characters longer")
+				:format(narrow))
+
+		-- The realm's time, which the face has no room for and the tooltip
+		-- carries under the reading that is on it.
+		check(ns.MinimapClock.Realm() == "9:07 PM",
+			("the realm clock said %s, the stub says 21:07")
+				:format(tostring(ns.MinimapClock.Realm())))
+		_G.SetCVar("timeMgrUseMilitaryTime", 1)
+		fire("CVAR_UPDATE", "timeMgrUseMilitaryTime")
+		check(ns.MinimapClock.Realm() == "21:07",
+			("the realm clock said %s in 24 hour"):format(tostring(ns.MinimapClock.Realm())))
+
+		-- The hover, and nothing is asserted about it beyond this: it must not
+		-- raise. The tooltip is the client's frame and what it draws is the
+		-- client's business.
+		tab.scripts.OnEnter(tab)
+		tab.scripts.OnLeave(tab)
+	end
+
 	-- Blizzard's own buttons were anchored to points on the arc, and a square
 	-- has no arc. Each is pulled to a corner of the frame itself.
 	local point, relative = mail:GetPoint()
@@ -5382,6 +5630,11 @@ do
 	check(map.mask == "Textures\\MinimapMask", "the round mask did not come back")
 	check(not _G.MinimapBorder.wkStripped, "the ring did not come back")
 	check(not _G.MinimapZoomIn.wkStripped, "the zoom buttons did not come back")
+	check(not _G.GameTimeFrame.wkStripped, "the sun and moon did not come back")
+	check(not _G.TimeManagerClockButton.wkStripped,
+		"Blizzard's clock did not come back with the round map")
+	check(not ns.MinimapShape.Bezel():IsShown(),
+		"the addon's own bezel is still drawn round a round map")
 	check(map:GetScript("OnMouseWheel") == nil,
 		"the zoom buttons came back and the wheel is still driving them too")
 

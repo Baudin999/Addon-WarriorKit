@@ -78,7 +78,20 @@ local NEEDED = {
 	"IsUsableAction", "IsActionInRange",
 }
 
-local probe -- nil until asked, then true or a reason string
+-- nil until asked, then true or a reason string.
+--
+-- Every reader below goes through Slot.CanRead rather than testing this
+-- directly, and that is not tidiness. Nil means nobody has looked yet, and a
+-- reader that read nil as "cannot read" answered "empty" for every slot on
+-- every bar: the only caller that asked was Bars.Describe, so the squares came
+-- up blank at login and filled in the moment you typed /wk. A guard that gives
+-- the same answer for "no" and "not yet" is a guard that lies once per session,
+-- silently, at the worst moment.
+--
+-- The cost on the tick is a call and a comparison per read, which is what the
+-- guard was already doing plus the call. Nothing here allocates, and check.sh's
+-- HOT list still holds every one of them to that.
+local probe
 
 -- The three that say something about a slot beyond whether a press would land.
 -- Resolved to locals rather than looked up per button per tick, and
@@ -117,7 +130,7 @@ end
 -- texture changes when the loadout changes and the status changes ten times a
 -- second, and the caller guards the two separately.
 function Slot.Texture(slot)
-	if not slot or probe ~= true then
+	if not slot or not Slot.CanRead() then
 		return nil
 	end
 	return GetActionTexture(slot)
@@ -127,7 +140,7 @@ end
 -- Returns nil rather than 1 for the ordinary case, so the caller can guard on
 -- nil and never draw a "1" over an icon that only ever had one.
 function Slot.Count(slot)
-	if not slot or probe ~= true or type(GetActionCount) ~= "function" then
+	if not slot or not Slot.CanRead() or type(GetActionCount) ~= "function" then
 		return nil
 	end
 	local count = GetActionCount(slot)
@@ -140,7 +153,7 @@ end
 -- Returns a status from UI/Ability.lua's vocabulary, plus the cooldown start
 -- and duration when there is one.
 function Slot.State(slot)
-	if not slot or probe ~= true then
+	if not slot or not Slot.CanRead() then
 		return "empty"
 	end
 	if not HasAction(slot) then
@@ -207,7 +220,7 @@ end
 -- install addons that stop it. A steady tint says the same thing and does not
 -- pull the eye off the fight.
 function Slot.Active(slot)
-	if not slot or probe ~= true then
+	if not slot or not Slot.CanRead() then
 		return false
 	end
 	if isCurrent and isCurrent(slot) then
@@ -228,7 +241,7 @@ end
 -- reason a press does or does not land, so it cannot be a rung, and an equipped
 -- weapon can be on cooldown and out of range at the same time.
 function Slot.Equipped(slot)
-	if not slot or probe ~= true or not isEquipped then
+	if not slot or not Slot.CanRead() or not isEquipped then
 		return false
 	end
 	return isEquipped(slot) and true or false

@@ -50,6 +50,27 @@ local ART = {
 	"MiniMapWorldMapButton",
 }
 
+-- Two pieces that are not ring art and come off anyway, because they are
+-- furniture this addon replaces rather than furniture a square has no room for.
+--
+-- GameTimeFrame is the sun and the moon. It says whether it is day in a game
+-- whose sky says the same thing, and pressing it opens a calendar nothing here
+-- wants a corner of the map spent on.
+--
+-- TimeManagerClockButton is the digital clock, and on a stripped square it is
+-- the last of Blizzard's minimap art left on the screen: the numbers are drawn
+-- on a strip of the old stone tile, and it hangs under the bottom edge looking
+-- like the one piece of the round map that survived. Minimap/Clock.lua puts a
+-- clock back in the shape the rest of the addon is drawn in.
+--
+-- The clock belongs to Blizzard_TimeManager, which is loaded on demand and may
+-- not exist at the first Apply. ADDON_LOADED runs another one, and a name this
+-- client never loads is skipped the same as any other.
+local FURNITURE = {
+	"GameTimeFrame",
+	"TimeManagerClockButton",
+}
+
 -- Blizzard's own minimap buttons, which are not addon buttons and are not the
 -- corral's business. They are anchored to points on the arc, so on a square
 -- they end up floating outside it. Each is pulled to the corner named here.
@@ -62,10 +83,9 @@ local CORNERS = {
 	{ "MiniMapMailFrame", "TOPRIGHT", -1, -1 },
 	{ "MiniMapBattlefieldFrame", "BOTTOMRIGHT", -1, 1 },
 	{ "MiniMapMeetingStoneFrame", "BOTTOMRIGHT", -1, 1 },
-	{ "GameTimeFrame", "BOTTOMLEFT", 1, 1 },
 }
 
-local border, applied
+local bezel, applied
 local original = {}   -- what each moved button was anchored to before this file moved it
 local wheelWas = nil  -- the mousewheel handler the client had, if it had one
 local wheelTaken = false
@@ -165,23 +185,70 @@ local function Wheel(map, square)
 end
 
 --------------------------------------------------------------------------
--- The edge
+-- The bezel
 --
--- One pixel, in the addon's own colour, drawn on a frame of ours rather than
--- on the minimap. Nothing here is a texture on somebody else's frame, so the
--- client's own update code has nothing to argue with.
+-- The ring was doing one job worth keeping. It ended the picture. Take it off
+-- and the world runs out to a rectangle with nothing round it, which reads as
+-- a hole cut in the screen rather than as a map.
+--
+-- Buttons/Bars.lua already answered this for the action bars: a few pixels of
+-- near black round the squares with a hairline on the outside of it, which is
+-- what makes twelve icons read as one object. The map gets the same box, at the
+-- same width, in the same two colours, because they are meant to look like two
+-- pieces of one interface.
+--
+-- Four bands rather than one filled rectangle. A rectangle would have to be
+-- drawn under the map to avoid covering the world, and where a child frame
+-- lands against its parent's own drawing is the client's business rather than
+-- something an addon gets to state. Four bands sit entirely outside the map's
+-- bounds and cover nothing whatever the client decides.
+--
+-- It is a frame of ours anchored to the map rather than a texture on the map,
+-- so the client's own update code has nothing to argue with.
 --------------------------------------------------------------------------
 
-local function Edge(map)
-	if border then
-		return border
+-- How wide the black is. The same number Buttons/Bars.lua pads its box by, and
+-- it is shared for the look rather than for the arithmetic.
+local PAD = 3
+
+local function Build(map)
+	local C = ns.UI.Color
+
+	bezel = CreateFrame("Frame", nil, map)
+
+	local px = ns.Pixel(bezel)
+	local pad = PAD * px
+	bezel:SetPoint("TOPLEFT", map, "TOPLEFT", -pad, pad)
+	bezel:SetPoint("BOTTOMRIGHT", map, "BOTTOMRIGHT", pad, -pad)
+
+	bezel.bands = ns.Outline(bezel, C.window[1], C.window[2], C.window[3],
+		C.window[4], "BACKGROUND")
+	ns.EdgeSize(bezel.bands, pad)
+
+	-- Over the bands, so the hairline is the outside of the black rather than a
+	-- line lost somewhere inside it.
+	bezel.edges = ns.Outline(bezel, C.hairline[1], C.hairline[2], C.hairline[3], 1)
+	ns.EdgeSize(bezel.edges, px)
+
+	bezel.pad = pad
+	bezel.hairline = px
+	return bezel
+end
+
+-- The frame the black is drawn on, built on the first call.
+--
+-- Public because Minimap/Clock.lua hangs its tab off the bottom of it and has
+-- to anchor to the black rather than to the map, and because whichever of the
+-- two files gets PLAYER_LOGIN first has to be able to build it.
+function Shape.Bezel()
+	if bezel then
+		return bezel
 	end
-	border = CreateFrame("Frame", nil, map)
-	border:SetPoint("TOPLEFT", map, "TOPLEFT", 0, 0)
-	border:SetPoint("BOTTOMRIGHT", map, "BOTTOMRIGHT", 0, 0)
-	border.edges = ns.Outline(border, ns.UI.Color.edge[1], ns.UI.Color.edge[2],
-		ns.UI.Color.edge[3], 1)
-	return border
+	local map = Map()
+	if not map then
+		return nil
+	end
+	return Build(map)
 end
 
 --------------------------------------------------------------------------
@@ -219,20 +286,26 @@ function Shape.Apply()
 		map:SetMaskTexture(square and SQUARE_MASK or ROUND_MASK)
 	end
 
-	for _, name in ipairs(ART) do
-		local region = _G[name]
-		if region then
-			if square then
-				ns.Strip(region)
-			else
-				ns.Unstrip(region)
+	for _, list in ipairs({ ART, FURNITURE }) do
+		for _, name in ipairs(list) do
+			local region = _G[name]
+			if region then
+				if square then
+					ns.Strip(region)
+				else
+					ns.Unstrip(region)
+				end
 			end
 		end
 	end
 
 	Corner(map, square)
 	Wheel(map, square)
-	Edge(map):SetShown(square)
+
+	local frame = Shape.Bezel()
+	if frame then
+		frame:SetShown(square)
+	end
 
 	applied = square
 end
@@ -266,8 +339,25 @@ function Shape.Describe()
 		ns.db.minimapSize, Original(map))
 end
 
+-- ADDON_LOADED as well as login, because Blizzard_TimeManager is loaded on
+-- demand and its clock is one of the frames FURNITURE names. Apply is idempotent
+-- and does no work worth counting, so running it again is cheaper than keeping a
+-- second list of what is still outstanding.
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
-events:SetScript("OnEvent", function()
+events:RegisterEvent("ADDON_LOADED")
+
+-- Login is still the first Apply and nothing before it counts. ADDON_LOADED
+-- fires for every addon on the way in, including this one, and an Apply taken
+-- there would read the width off a frame the client has not sized yet and
+-- remember that number as the one to hand back when the square goes off.
+local ready = false
+
+events:SetScript("OnEvent", function(_, event)
+	if event == "PLAYER_LOGIN" then
+		ready = true
+	elseif not ready then
+		return
+	end
 	Shape.Apply()
 end)
