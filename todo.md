@@ -36,7 +36,7 @@ swipe, but the cooldowns that matter are the ones not under your eyes.
 Edit Mode is not being replaced. It is demoted to one job: it positions the
 player block, and that is all it positions. Every relationship between frames
 becomes this addon's, starting with the target hanging off the player and the
-aura rows of item 9 hanging off both.
+aura row of item 9 hanging off the target block.
 
 That is the only division available, not a compromise. Edit Mode has no notion
 of one system anchored to another; it stores an absolute point per system and
@@ -135,9 +135,23 @@ becomes the block exactly like the other two. Deleting it is part of this item,
 not a follow-up: leaving both mechanisms in place means two answers for where a
 row goes.
 
-Still to decide before it is built: whether the player's own buffs come here or
-stay with item 4's nag row, which already reads your auras and already has an
-opinion about what is missing.
+The rows are the target's and nothing else's. Your own buffs stay where they
+are, with item 4's nag row, and this is settled rather than open.
+
+Blizzard does not hang your buffs off `PlayerFrame` to begin with. They are
+`BuffFrame`, a top level Edit Mode system of its own carrying 32 buffs, 16
+debuffs, three temporary weapon enchants and right click to cancel, and this
+addon has never referenced it. Taking it would be rebuilding a system rather
+than hiding a row, and none of this item's payoff sits on that side: every line
+of the lift machinery that dies here is target side.
+
+It would also cost the temporary enchant display, which is the part no aura
+scan can replace. `Buffs/Upkeep.lua:17` writes it down already: a weapon's
+temporary enchant is not a buff on you, it appears at no index, and
+`GetWeaponEnchantInfo` is the only thing in the API that reports it.
+
+The row is built so that a spec key is all it takes to add the player later,
+which is the cheap half of leaving the question open without paying for it.
 
 ## 10. The Slam mark, still unconfirmed in game
 
