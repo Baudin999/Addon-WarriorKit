@@ -2741,14 +2741,22 @@ Everything below was written from the API contract and has never executed:
   installed calls it. It is probed by name and pcalled, and both returns are put
   on the override layer and read straight back with `GetBindingAction`, so a key
   the call did not take is reported rather than believed.
-- What hiding one of Blizzard's action buttons through `ns.Strip` does to that
-  button's taint. `ns.Strip` writes three fields onto the frame, which for a
-  secure button is a taint the client may notice later. The same mechanism
-  already hides regions of `PlayerFrame` and `TargetFrame`, which are secure unit
-  buttons, and neither has raised on the live client; a button on a hidden bar is
-  a weaker case than a frame you still click. If it does turn out to spam, the
-  answer is `SetAttribute("statehidden", true)` and a reparent, which is what
-  every bar addon does and which taints the same frame in a way Blizzard expects.
+- Whether `statehidden` is enough to keep one of Blizzard's action buttons down
+  on 2.5.6. `Buttons/Blizzard.lua` sets it and calls `Hide`, and re-hides on the
+  events the client repaints its bars on, so a client that ignores the flag
+  costs a few extra `Hide` calls rather than a bar that comes back.
+
+  What it deliberately does *not* do is go through `ns.Strip`, which swaps a
+  region's `Show` for its `Hide`. That is right for a texture and wrong for a
+  secure action button: the client's own bar controller calls `Show` on these
+  from code that goes on to take protected actions, and an addon function
+  running inside that stack taints it. The symptom is a press failing mid-fight
+  with "Interface action failed because of an AddOn" and nothing tying it to
+  this addon. `UnitFrames/Skin.lua` reads like a precedent for stripping and is
+  the opposite of one: it strips regions of `PlayerFrame` and `TargetFrame` and
+  says in its own header that the frame itself is never hidden, because it is a
+  secure unit button. The harness asserts that no button of theirs carries a
+  method or a field this addon wrote.
 - Whether an action button whose `action` attribute this addon wrote casts on the
   key-down edge on 2.5.6. `Charge/Icon.lua` registers `AnyDown` on the same
   client for a macro button and works; a `type="action"` button is the same

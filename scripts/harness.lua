@@ -2209,6 +2209,43 @@ do
 	check(Bars.Hidden() == 48, ("48 buttons were cloned over and %d were hidden")
 		:format(Bars.Hidden()))
 
+	-- Not by replacing a method on Blizzard's frame. ns.Strip swaps a region's
+	-- Show for its Hide, which is right for a texture and wrong for a secure
+	-- action button: the client's own bar controller calls Show on these from
+	-- code that goes on to take protected actions, and an addon function
+	-- running inside that stack taints it. The symptom is a press failing
+	-- mid-fight with "Interface action failed because of an AddOn" and nothing
+	-- on screen tying it to this addon, which is why it is asserted here rather
+	-- than left to a comment.
+	local swapped, flagged = 0, 0
+	for index = 1, 12 do
+		for _, pattern in ipairs({ "ActionButton%d", "MultiBarRightButton%d" }) do
+			local frame = _G[pattern:format(index)]
+			if frame then
+				if rawget(frame, "Show") or rawget(frame, "wkStripped") then
+					swapped = swapped + 1
+				end
+				if frame.attributes and frame.attributes.statehidden == true then
+					flagged = flagged + 1
+				end
+			end
+		end
+	end
+	check(swapped == 0,
+		("%d of Blizzard's buttons had a method or a field written onto them"):format(swapped))
+	check(flagged == 24,
+		("%d of 24 hidden buttons carry statehidden, which is what stops the client showing them")
+			:format(flagged))
+
+	-- And when the client shows one anyway, the next repaint event puts it
+	-- back. This is the half of the trade that statehidden buys: no taint, at
+	-- the cost of having to answer the controller.
+	_G.ActionButton1:Show()
+	check(_G.ActionButton1:IsShown(), "the stub refused to show a hidden button, so the next check proves nothing")
+	fire("ACTIONBAR_PAGE_CHANGED")
+	check(not _G.ActionButton1:IsShown(),
+		"the client put a button back and nothing hid it again")
+
 	--------------------------------------------------------------------------
 	-- What a tick costs
 	--------------------------------------------------------------------------

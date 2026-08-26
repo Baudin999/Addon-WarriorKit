@@ -144,8 +144,6 @@ local BARS = {
 
 local order = {}       -- one entry per cloned bar, in draw order
 local squares = {}     -- every square on every bar, flat, walked by the tick
-local stripped = {}    -- every Blizzard button this file hid, so the off switch
-                       -- shows exactly those and nothing it did not hide
 local pool = 0         -- next name out of the button pool
 
 local live = false     -- the squares are up and the tick should draw them
@@ -482,58 +480,26 @@ function Bars.ApplyBindings()
 	return true
 end
 
---------------------------------------------------------------------------
--- Blizzard's own buttons
---
--- Hidden one button at a time, through ns.Strip, which swaps a region's Show
--- for its Hide so the client's own update code cannot put it back. The frames
--- holding them are left alone: bar 1's twelve are parented to
--- MainMenuBarArtFrame along with the micro menu and the bag bar, and hiding
--- that takes all three, which is the warning Artwork.lua already carries.
---
--- Only the buttons of bars this file actually cloned are touched. Stripping a
--- bar the player has switched off would mean the off switch showed it, and an
--- off switch that turns something on is worse than one that does nothing.
---------------------------------------------------------------------------
 
-local function HideBlizzard()
-	local complete = true
+-- Every Blizzard button the bars this file cloned are standing in for. Built
+-- on demand rather than held, because it is asked for once when the clone goes
+-- up and never on a tick.
+local function Covered()
+	local names = {}
 	for index = 1, #order do
 		local def = order[index].def
 		for slot = 1, PER_BAR do
-			local frame = _G[def.buttons:format(slot)]
-			if frame and not stripped[frame] then
-				if ns.Strip(frame) then
-					stripped[frame] = true
-				else
-					complete = false
-				end
-			end
+			names[#names + 1] = def.buttons:format(slot)
 		end
 	end
-	return complete
+	return names
 end
 
--- Clearing a key during the walk is the one table mutation Lua allows mid
--- traversal, and a frame combat still refuses keeps the key it already has.
-local function ShowBlizzard()
-	local complete = true
-	for frame in pairs(stripped) do
-		if ns.Unstrip(frame) then
-			stripped[frame] = nil
-		else
-			complete = false
-		end
-	end
-	return complete
-end
-
+-- Forwarded rather than reached for directly, so the panel, the status line and
+-- the harness all ask the bars how many of Blizzard's buttons are down and none
+-- of them has to know which file did it.
 function Bars.Hidden()
-	local count = 0
-	for _ in pairs(stripped) do
-		count = count + 1
-	end
-	return count
+	return ns.TheirBars.Count()
 end
 
 --------------------------------------------------------------------------
@@ -577,7 +543,7 @@ function Bars.Apply()
 			order[index].frame:Hide()
 		end
 		DropKeys()
-		return ShowBlizzard()
+		return ns.TheirBars.Show()
 	end
 
 	live = #order > 0
@@ -585,7 +551,7 @@ function Bars.Apply()
 		order[index].frame:Show()
 	end
 
-	local complete = HideBlizzard()
+	local complete = ns.TheirBars.Hide(Covered())
 	Bars.Page()
 	if not Bars.ApplyBindings() then
 		complete = false
@@ -711,9 +677,16 @@ events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 events:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
 events:RegisterEvent("UPDATE_BINDINGS")
+-- The three the client repaints its bars on. Nothing here needs them for the
+-- squares; they exist so a button we hid that the controller has just shown
+-- again goes back out of sight. See the header of Buttons/Blizzard.lua.
+events:RegisterEvent("UPDATE_BONUS_ACTIONBAR")
+events:RegisterEvent("ACTIONBAR_SHOWGRID")
+events:RegisterEvent("ACTIONBAR_HIDEGRID")
 events:SetScript("OnEvent", function(_, event)
 	if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
 		Bars.Apply()
+		ns.TheirBars.Recheck()
 		-- The ticker lives on this frame, which is never hidden. On a bar it
 		-- would stop the moment the bar hid and never come back.
 		events:SetScript("OnUpdate", OnUpdate)
@@ -731,6 +704,10 @@ events:SetScript("OnEvent", function(_, event)
 		end
 		return
 	end
+
+	-- Every event left here is one the client repaints its bars on, so any of
+	-- them can have put a hidden button back.
+	ns.TheirBars.Recheck()
 
 	-- A stance change and a page change both re-point bar 1. The snippet has
 	-- already done it where the state driver came up; this is the client that
