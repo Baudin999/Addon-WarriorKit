@@ -48,6 +48,11 @@ local function BreakdownWord(arg)
 		return
 	end
 
+	if option == "open" or option == "window" then
+		Window.Toggle()
+		return
+	end
+
 	if option == "top" then
 		local count = ns.Command.Number(value, 1, 40, "breakdown rows")
 		if count then
@@ -172,7 +177,19 @@ local function Panel(ui)
 			.. " quietly counted as your own level."
 	end)
 
-	Window.Build(ui)
+	ui.Action(function()
+		return Window.IsShown() and "close the table" or "open the table"
+	end, function()
+		Window.Toggle()
+	end)
+
+	ui.Note(function()
+		return "The table is a window of its own rather than a page in here, and"
+			.. " the way you open it is a left click on the meter's header, which is"
+			.. " where you are looking when the question occurs to you. Right click"
+			.. " that header to swap the meter between damage and healing. Escape or"
+			.. " the cross closes the table."
+	end)
 
 	ui.Note(function()
 		return "Ranks are added up under one name. A rate pools across ranks correctly,"
@@ -223,7 +240,7 @@ ns.Register({
 	},
 
 	help = {
-		"breakdown on|off, and breakdown to print the top ten",
+		"breakdown on|off, breakdown open for the window, breakdown to print the top ten",
 		"breakdown top 20, sort damage|casts|hits, band all or a level band",
 		"breakdown reset yes throws away everything counted so far",
 	},

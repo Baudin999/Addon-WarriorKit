@@ -26,9 +26,10 @@ ns.MeterWindow = MeterWindow
 -- reason the charge button does: a mouse enabled frame swallows every button
 -- that lands on it, including the right button drag that turns the camera, and
 -- this sits in the part of the screen where that drag starts. The one
--- exception is the damage pane's header, which is the DPS/HPS toggle and is
--- fourteen pixels tall. A control you are meant to click has to be clickable
--- while the frame it is on is locked, or it is not a control.
+-- exception is the damage pane's header, which opens the breakdown on the left
+-- button and swaps DPS for HPS on the right, and is sixteen pixels tall. A
+-- control you are meant to click has to be clickable while the frame it is on
+-- is locked, or it is not a control.
 --------------------------------------------------------------------------
 
 local FRAME_NAME = "WarriorKitMeter"
@@ -206,18 +207,29 @@ local function BuildPane(clickable, percent)
 	if clickable then
 		-- Only the header strip, and only this pane's. See the note at the top
 		-- about what a mouse enabled frame costs.
+		--
+		-- Two clicks on the one strip, and which of them got the left button is
+		-- worth arguing. The meter is where you are standing when you wonder
+		-- what your own damage is made of, so the left button opens the
+		-- breakdown, which is the answer, and the right button keeps the swap
+		-- between damage and healing, which is a thing you set once an evening.
 		local button = CreateFrame("Button", nil, pane)
 		button:SetPoint("TOPLEFT")
 		button:SetPoint("TOPRIGHT")
 		button:SetHeight(HEADER * unit)
-		button:RegisterForClicks("LeftButtonUp")
-		button:SetScript("OnClick", function()
-			MeterWindow.Toggle()
+		button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+		button:SetScript("OnClick", function(_, click)
+			if click == "RightButton" then
+				MeterWindow.Toggle()
+				return
+			end
+			ns.BreakdownWindow.Toggle()
 		end)
 		button:SetScript("OnEnter", function(self)
 			GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
 			GameTooltip:AddLine("WarriorKit meters")
-			GameTooltip:AddLine("Click to swap damage and healing.", 0.8, 0.8, 0.8)
+			GameTooltip:AddLine("Click for the breakdown of what you do.", 0.8, 0.8, 0.8)
+			GameTooltip:AddLine("Right click to swap damage and healing.", 0.8, 0.8, 0.8)
 			GameTooltip:Show()
 		end)
 		button:SetScript("OnLeave", function()

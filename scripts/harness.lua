@@ -8109,10 +8109,11 @@ do
 	ns.MeterWindow.Apply()
 	meterTicker.scripts.OnUpdate(meterTicker, 0.25)
 
-	-- One click on the header is the whole of the toggle.
+	-- The header carries two clicks. The right one is the whole of the toggle;
+	-- the left one opens the breakdown, and is asserted where the breakdown is.
 	check(damagePane.button ~= nil, "the damage header is not clickable")
-	damagePane.button.scripts.OnClick()
-	check(ns.db.meterMode == "hps", "clicking the header did not swap to healing")
+	damagePane.button.scripts.OnClick(damagePane.button, "RightButton")
+	check(ns.db.meterMode == "hps", "right clicking the header did not swap to healing")
 	meterTicker.scripts.OnUpdate(meterTicker, 0.25)
 	check(damagePane.left:GetText() == "HPS", "the pane swapped and the header did not")
 	check(damagePane.rows[1].name:GetText() == "Frostbite",
@@ -8121,7 +8122,21 @@ do
 	-- sitting on it at zero.
 	check(not damagePane.rows[2]:IsShown(),
 		"a member who healed nothing kept their row when the pane swapped to healing")
-	damagePane.button.scripts.OnClick()
+	damagePane.button.scripts.OnClick(damagePane.button, "RightButton")
+
+	-- The left button on the same strip opens the breakdown. It is asserted
+	-- here rather than in the breakdown's own section because what is being
+	-- claimed is about the meter: that the strip carries two clicks and they do
+	-- not run into each other.
+	check(not ns.BreakdownWindow.IsShown(),
+		"the breakdown window was open before anything opened it")
+	damagePane.button.scripts.OnClick(damagePane.button, "LeftButton")
+	check(ns.BreakdownWindow.IsShown(),
+		"a left click on the meter header did not open the breakdown")
+	check(ns.db.meterMode == "dps", "opening the breakdown also swapped the meter")
+	damagePane.button.scripts.OnClick(damagePane.button, "LeftButton")
+	check(not ns.BreakdownWindow.IsShown(),
+		"a second left click on the meter header did not close the breakdown")
 
 	-- The projection reaching the header, name and all. Soonest is asserted on
 	-- its own above; this is the other half, that what it works out gets drawn.
@@ -10855,16 +10870,39 @@ do
 	check(row("Mortal Strike").damage == 1400, "the roll up joined two different abilities")
 
 	----------------------------------------------------------------------
-	-- The table on the page
+	-- The table in its window
 	----------------------------------------------------------------------
 
-	ns.Options.Refresh()
-	check(Pane.Shown() > 0, "the breakdown page drew no rows with a table full of abilities")
+	Pane.Open()
+	check(Pane.IsShown(), "the breakdown window did not open")
+	check(Pane.Shown() > 0, "the breakdown drew no rows with a table full of abilities")
 	check(Pane.Row(1).name:GetText() == "Mortal Strike",
 		("the top row by damage is %s, expected the biggest total")
 			:format(tostring(Pane.Row(1).name:GetText())))
 	check(Pane.Row(1).bar:GetWidth() > Pane.Row(2).bar:GetWidth(),
 		"the share bars do not rank the rows")
+	check(Pane.Row(1).icon.texture ~= nil, "a row drew no icon")
+
+	-- Escape has to close it, and Escape is a list of frame names rather than a
+	-- key anything here can press. A window that never joined the list is one
+	-- you can only close with the mouse, and nothing else would say so.
+	local escapes = false
+	for _, name in ipairs(_G.UISpecialFrames) do
+		if name == "WarriorKitBreakdown" then
+			escapes = true
+		end
+	end
+	check(escapes, "the breakdown window is not in UISpecialFrames, so Escape leaves it open")
+
+	-- Ranking by casts is a different order from ranking by damage, and the chip
+	-- that says so has to move with it.
+	ns.db.breakdownSort = "casts"
+	Pane.Paint()
+	check(Pane.Row(1).name:GetText() == "Slam",
+		("ranked by casts the top row is %s, expected the most pressed ability")
+			:format(tostring(Pane.Row(1).name:GetText())))
+	ns.db.breakdownSort = "damage"
+	Pane.Paint()
 
 	----------------------------------------------------------------------
 	-- Starting again
@@ -10874,8 +10912,10 @@ do
 	Breakdown.Reset()
 	check(Breakdown.Count() == 0, "a reset left abilities in the store")
 	check(Breakdown.Since() >= since, "a reset did not restamp when the count started")
-	ns.Options.Refresh()
-	check(Pane.Shown() == 0, "the page still drew rows after a reset")
+	Pane.Paint()
+	check(Pane.Shown() == 0, "the window still drew rows after a reset")
+	Pane.Close()
+	check(not Pane.IsShown(), "the breakdown window would not close")
 
 	print(("break  %s; %d bands, melee as %q")
 		:format(Breakdown.Describe(), #Breakdown.Bands(), ns.SpellName(6603) or "Melee"))

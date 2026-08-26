@@ -59,12 +59,18 @@ everybody, deliberately, because it is answering what the group did to this
 pull. Counting the group here would grow the table by every stranger you have
 ever been in a party with, and that is the one filter keeping it bounded.
 
-The table is a page in the settings panel rather than a frame of its own.
-Everything else in this addon that has a frame has one because you read it
-during a fight; this is a month of play summed up, it does not change while you
-look at it, and a window for it would be one more thing to place and one more
-thing on screen during the fight it is describing. `/wk breakdown` prints the
-same ranking, and throwing the record away takes two presses or `reset yes`,
+The table opens from the meter. It lived on a settings page first, on the
+argument that a month of play summed up is read between sessions rather than
+during a pull and does not need a frame to place. That argument was about where
+the numbers are kept; it said nothing about how you get to them, and the way you
+got to them was six clicks into a settings tree. The meter is what you are
+looking at when the question occurs to you, so a left click on the meter header
+opens the table and a right click still swaps the meter between damage and
+healing. Escape or the cross closes it, and there is no frame at all until the
+first open and no ticker behind it ever.
+
+`/wk breakdown open` opens the same window and `/wk breakdown` prints the
+ranking to chat. Throwing the record away takes two presses or `reset yes`,
 because a mistyped word should not be able to delete a month of counting.
 
 ### Loot and the combat log, as feeds you can scroll

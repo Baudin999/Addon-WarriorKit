@@ -234,7 +234,7 @@ Feeds\Feature.lua
 # The breakdown. What this character does, counted out of the combat log and
 # kept between sessions: one row per ability, how often it lands, how often it
 # crits, what stopped it and how much of your damage it is. Breakdown.lua counts
-# and Window.lua draws the table into the settings panel, so Window loads after
+# and Window.lua draws the table into a window of its own, so Window loads after
 # it, and Feature.lua last as everywhere else.
 #
 # It is not the meters and shares nothing with them. Meter/Meter.lua totals the
@@ -245,7 +245,8 @@ Feeds\Feature.lua
 #
 # After the feeds because it is the last thing in the addon that reads the
 # combat log, and after Core\Panel.lua and the widget kit, which are far above
-# this line, because the whole readout is a page in the settings window.
+# this line, because the window is built out of the second and opened from the
+# first.
 Breakdown\Breakdown.lua
 Breakdown\Window.lua
 Breakdown\Feature.lua

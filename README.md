@@ -18,11 +18,12 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   a tag saying what the kill is worth.
 - **A damage meter and a threat meter, side by side.** One row per player: the
   spec icon, the name, the number, and a class-coloured bar as long as their
-  share of the top row. Clicking the header swaps damage for healing. The threat
-  side is the client's own percentage, where 100 means that player takes the
-  mob, and beside it the seconds until they get there at the rate they are
-  gaining. Nothing is drawn but the rows, so it sits on the screen rather than
-  over it. There is no breakdown to open, because there is nothing behind a row.
+  share of the top row. Click the header for the breakdown of your own damage,
+  right click it to swap damage for healing. The threat side is the client's own
+  percentage, where 100 means that player takes the mob, and beside it the
+  seconds until they get there at the rate they are gaining. Nothing is drawn but
+  the rows, so it sits on the screen rather than over it. A row opens nothing,
+  because there is nothing behind a row.
 - **A swing timer, with the Slam press marked on it.** One bar per hand, filling
   towards the next swing off the combat log, and a green band on the main hand
   bar showing where to press Slam so the cast finishes exactly as the swing
@@ -75,7 +76,11 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   damage comes from Thunder Clap, whether that new axe changed anything. Rows
   can be read one level band at a time, since in this era the target's level
   drives crit and miss hard and a number pooled across grey trash and an elite
-  is the average of two unrelated things. `/wk breakdown` prints the top ten.
+  is the average of two unrelated things.
+
+  It opens in a window of its own, from a click on the meter header or from
+  `/wk breakdown open`, and Escape closes it. `/wk breakdown` prints the top ten
+  to chat instead.
 - **A warrior bar loadout**, with a backup of whatever it replaced, plus an
   Edit Mode layout carried inside the addon.
 - **Your own action bars, redrawn.** `/wk actionbars on` reads whichever bars

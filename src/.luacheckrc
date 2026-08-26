@@ -18,6 +18,9 @@ globals = {
 	"WarriorKitMarkButton",
 	"WarriorKitOptions",
 	"WarriorKitClutter",
+	-- the breakdown table, opened from the meter. Named so Escape closes it
+	-- through UISpecialFrames, which is a list of names.
+	"WarriorKitBreakdown",
 	-- the square that holds the other addons' minimap buttons. Named so a
 	-- button that has gone missing can be found from a macro or from
 	-- scripts/harness.lua without Minimap/Corral.lua handing out a reference to
