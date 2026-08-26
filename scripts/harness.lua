@@ -2966,8 +2966,9 @@ if window then
 			end
 		end
 	end
-	check(sliders == 2, ("%d sliders in the panel, expected the UI size and the debuff icon")
-		:format(sliders))
+	check(sliders == 3,
+		("%d sliders in the panel, expected the UI size, the debuff icon and the"
+			.. " meter bar opacity"):format(sliders))
 
 	if size then
 		local low, high = size:GetMinMaxValues()
@@ -4457,6 +4458,25 @@ do
 	local top = damagePane.rows[1].bar:GetWidth()
 	check(top == ns.db.meterWidth,
 		("the top bar is %.0f px across a %d px pane"):format(top, ns.db.meterWidth))
+
+	-- And how faint it is, which is a setting rather than a constant. The row
+	-- guards its colour write on the player's class, so the half of this worth
+	-- asserting is not that the number arrives but that moving it lands on the
+	-- next tick: a slider whose effect waits for somebody in the group to change
+	-- class is a slider that does nothing.
+	local shipped = ns.DefaultFor("meterBarAlpha") / 100
+	check(math.abs(damagePane.rows[1].bar.a - shipped) < 1e-6,
+		("the bars drew at %.2f alpha, the default says %.2f")
+			:format(damagePane.rows[1].bar.a, shipped))
+	ns.db.meterBarAlpha = 60
+	ns.MeterWindow.Apply()
+	meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+	check(math.abs(damagePane.rows[1].bar.a - 0.6) < 1e-6,
+		("the opacity setting says 60 percent, the bar drew at %.2f")
+			:format(damagePane.rows[1].bar.a))
+	ns.db.meterBarAlpha = ns.DefaultFor("meterBarAlpha")
+	ns.MeterWindow.Apply()
+	meterTicker.scripts.OnUpdate(meterTicker, 0.25)
 
 	-- One click on the header is the whole of the toggle.
 	check(damagePane.button ~= nil, "the damage header is not clickable")

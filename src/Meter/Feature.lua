@@ -14,6 +14,18 @@ local LOW_ROWS, HIGH_ROWS = 3, 10
 local LOW_WIDTH, HIGH_WIDTH = 120, 400
 local LOW_ZOOM, HIGH_ZOOM = 1, 3
 
+-- The bar opacity, in whole percent. Zero is a stop rather than an accident: a
+-- meter with no bars at all is three columns of text over the world, which is a
+-- thing somebody will want and is otherwise a second setting to reach it. The
+-- top is a solid bar, because the row it sits behind is outlined text and stays
+-- readable on one, and a player on a bright floor asking for a solid bar has
+-- already decided.
+--
+-- Fives, so the panel's stops and a macro's are the same twenty one values.
+-- Command.Step refuses anything off them rather than rounding it, for the
+-- reason it refuses a fractional zoom.
+local LOW_ALPHA, HIGH_ALPHA, ALPHA_STEP = 0, 100, 5
+
 --------------------------------------------------------------------------
 
 local function Describe()
@@ -75,6 +87,17 @@ local function MeterWord(arg)
 		return
 	end
 
+	if option == "alpha" then
+		local alpha = ns.Command.Step(value, LOW_ALPHA, HIGH_ALPHA, ALPHA_STEP,
+			"meter bar opacity")
+		if alpha then
+			ns.db.meterBarAlpha = alpha
+			MeterWindow.Apply()
+			ns.Print(("meter bars at %d%% opacity."):format(alpha))
+		end
+		return
+	end
+
 	if option == "zoom" then
 		local zoom = ns.Command.Number(value, LOW_ZOOM, HIGH_ZOOM, "meter zoom")
 		if zoom then
@@ -115,6 +138,10 @@ ns.Register({
 		meterWidth = 200,
 		meterZoom = 1,
 
+		-- What the note in Meter/Window.lua argues for: a tint you can rank four
+		-- players by, not a wash you read the meter through.
+		meterBarAlpha = 15,
+
 		-- Left of centre and above the middle, which on a 16:9 screen is clear
 		-- of the action bars, clear of the unit frames this addon skins, and
 		-- inside the part of the screen you are already looking at.
@@ -128,6 +155,7 @@ ns.Register({
 	help = {
 		"meter on|off, and meter dps|hps to swap what the left pane counts",
 		"meter threat on|off, rows 3 to 10, width 120 to 400, zoom 1 to 3",
+		"meter alpha 15, the bar opacity, 0 to 100 in fives",
 	},
 
 	status = Describe,
@@ -140,6 +168,7 @@ ns.Register({
 		ns.db.meterRows = ns.DefaultFor("meterRows")
 		ns.db.meterWidth = ns.DefaultFor("meterWidth")
 		ns.db.meterZoom = ns.DefaultFor("meterZoom")
+		ns.db.meterBarAlpha = ns.DefaultFor("meterBarAlpha")
 		MeterWindow.Reset()
 	end,
 
@@ -212,6 +241,25 @@ ns.Register({
 				ns.db.meterWidth = value
 				MeterWindow.Apply()
 			end)
+
+		ui.Slider("bar opacity", LOW_ALPHA, HIGH_ALPHA, ALPHA_STEP,
+			function() return ns.db.meterBarAlpha end,
+			function(value)
+				ns.db.meterBarAlpha = value
+				MeterWindow.Apply()
+			end,
+			function(value) return value .. "%" end)
+
+		ui.Note(function()
+			return "How much of the floor the bars cover. The top row's bar is the full"
+				.. " width of the pane every tick, by definition, so this is really"
+				.. " asking how bright a rectangle you want lying across that part of"
+				.. " the screen during a pull. 15 is a tint you can rank four players"
+				.. " by over a dark floor, and over a bright one it is nothing at all,"
+				.. " which is why it is a slider and not the number this addon picked."
+				.. " At 0 there are no bars and the meter is columns of outlined text"
+				.. " over the world."
+		end)
 
 		ui.Stepper("zoom", LOW_ZOOM, HIGH_ZOOM, 1,
 			function() return ns.db.meterZoom end,

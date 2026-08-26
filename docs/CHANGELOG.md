@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### The meter bars have an opacity slider
+
+`BAR_ALPHA = 0.15` was a constant in `Meter/Window.lua` and the note beside it
+argued the number well: a bar is read against the bars next to it rather than
+against the world behind it, so a tint ranks four players and a wash only hides
+the floor. The argument holds and the number does not travel. 15 percent over a
+dark crypt is what it was drawn for, and 15 percent over Tanaris at noon is
+nothing at all, which is a thing the addon cannot see and a player can see in a
+second.
+
+So it is `meterBarAlpha`, whole percent, 0 to 100 in fives, still 15 by default.
+The panel gets a slider under the pane width and `/wk meter alpha 60` reaches
+the same stops, through `Command.Step` so a value off them is refused rather
+than quietly rounded. At 0 there are no bars and the meter is columns of
+outlined text over the world, which is one of the reasons the range starts
+there rather than at something safe.
+
+The one part worth writing down is the guard. A row writes its bar and its name
+only when the player on it changes class, which is what keeps the tick free, and
+the alpha is not the class: left alone, the slider would have looked broken to
+anyone dragging it outside a fight and landed later on a class change that never
+comes. `MeterWindow.Apply` clears the colour guard on every row, so a setting
+change lands on the next tick. The harness asserts that, rather than asserting
+the saved variable took the number, and the panel's slider census went from two
+to three so the next one is a decision as well.
+
 ### The unit frames share one layer instead of two copies of it
 
 `UnitFrames/EnemyBars.lua` and `UnitFrames/Skin.lua` draw the same things about

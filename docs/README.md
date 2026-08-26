@@ -2158,6 +2158,27 @@ The row is then the icon with a pixel above and below it, 29, so the icon
 decides the height rather than the text. Six rows and a header is 196 pixels and
 two panes and their gap is 408.
 
+**How faint the bars are is a slider, and it starts at 15.** A bar is the only
+surface the meter draws, and the top row's is the full width of its pane every
+tick by definition, so whatever the alpha is, the player in first place is a
+rectangle of class colour lying across that part of the screen for the whole
+fight. It shipped at 0.32, which is a wash rather than a tint, and sat at 0.15
+after that, which is right for the floor it was drawn over: a bar is read
+against the bars beside it and not against the world behind it, and at 0.15 the
+world comes through. What 0.15 cannot do is hold over a bright one. The tint
+that ranks four players in a crypt is nothing at all in Tanaris at noon, and no
+number this addon picks is right on both, so `meterBarAlpha` is whole percent,
+0 to 100 in fives. At 0 there are no bars and the meter is columns of outlined
+text over the world.
+
+The part that made it more than a number is the guard. A row writes its bar and
+its name only when the player on it changes class, which is what turns thirty
+writes a second into none, and the alpha is not the class: left behind that
+guard, a dragged slider would wait for somebody in the group to change class,
+which is never. `MeterWindow.Apply` clears the guard on every row instead, and
+the harness asserts the drag lands on the next tick rather than asserting the
+saved variable took the number.
+
 **And every string is 14, because every string is outlined.** They have to be:
 the meter has no background, and the outline is the only thing between a number
 and a pale floor behind it. That is the difference between this and a timer on a
@@ -2498,7 +2519,8 @@ nothing ever runs is a branch that is wrong.
     /wk meter dps|hps            what the left pane counts
     /wk meter threat on|off      the right pane
     /wk meter rows 6             3 to 10, per pane
-    /wk meter width 150          one pane, 90 to 320
+    /wk meter width 150          one pane, 120 to 400
+    /wk meter alpha 15           bar opacity, 0 to 100 in fives
     /wk meter zoom 1             1 to 3
     /wk skin on|off              square class-coloured player and target frames
     /wk skin player|target|tot on|off   one frame at a time

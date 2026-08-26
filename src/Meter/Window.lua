@@ -92,17 +92,31 @@ local REFRESH = 0.2
 -- would leak a pane's worth of frames every time the slider moved.
 local MAX_ROWS = 10
 
--- How faint a bar is. Low enough to read the world through and high enough to
--- tell four classes apart at a glance, which is the whole job.
+-- How faint a bar is, as a fraction, out of the whole percent the setting
+-- holds. Low enough to read the world through and high enough to tell four
+-- classes apart at a glance, which is the whole job.
 --
--- It was 0.32, and 0.32 is a wash rather than a tint. The top row's bar is the
--- full width of the pane by definition, so whatever this number is, the number
--- one player is a solid rectangle of class colour across the meter every tick,
--- and at a third alpha that rectangle is the brightest thing on that part of
--- the screen. At 0.15 the rank still reads at a glance, because a bar is read
--- against the bars beside it and not against the world behind it, and the
--- world behind it comes through.
-local BAR_ALPHA = 0.15
+-- It was a constant here, and the argument for the number it was set to still
+-- stands and is now the default rather than the only answer. It was 0.32 first,
+-- and 0.32 is a wash rather than a tint: the top row's bar is the full width of
+-- the pane by definition, so whatever this number is, the number one player is
+-- a solid rectangle of class colour across the meter every tick, and at a third
+-- alpha that rectangle is the brightest thing on that part of the screen. At
+-- 0.15 the rank still reads at a glance, because a bar is read against the bars
+-- beside it and not against the world behind it, and the world behind it comes
+-- through.
+--
+-- What made it a setting is the half of that the addon cannot see. The right
+-- alpha depends on what is behind the meter, and what is behind the meter is
+-- the zone: 15 over a night time crypt floor is the tint this was drawn for and
+-- 15 over Tanaris at noon is nothing at all. No number this file picks is right
+-- on both, and a player looking at one of them can tell in a second.
+--
+-- Called from the two places a bar's colour is written, never from a tick:
+-- BuildRow runs once per row and PaintRow's write sits behind its class guard.
+local function BarAlpha()
+	return ns.db.meterBarAlpha / 100
+end
 
 local DIM = { 0.56, 0.56, 0.62 }
 local WHITE = { 0.87, 0.87, 0.91 }
@@ -144,7 +158,7 @@ local function BuildRow(pane, index)
 	row:SetPoint("TOPLEFT", pane, "TOPLEFT", 0,
 		-(HEADER + RULE + (index - 1) * (ROW + ROW_GAP)) * unit)
 
-	row.bar = ns.Fill(row, "BACKGROUND", 0.5, 0.5, 0.5, BAR_ALPHA)
+	row.bar = ns.Fill(row, "BACKGROUND", 0.5, 0.5, 0.5, BarAlpha())
 	row.bar:SetPoint("TOPLEFT")
 	row.bar:SetHeight(ROW * unit)
 	row.bar:SetWidth(unit)
@@ -237,6 +251,21 @@ local function SizePane(pane, width, rows)
 	end
 end
 
+-- Forget what every row on this pane last painted its colour at.
+--
+-- A row writes its bar and its name only when the player on it changes class,
+-- which is the guard that turns thirty writes a second into none. The alpha is
+-- not the class. Moved on the panel, it would sit behind that guard unread
+-- until somebody on the meter changed class, which is never, and the slider
+-- would look broken to anyone who was not in a fight while they dragged it. So
+-- the guard is cleared here, where a setting changes, and the next tick paints
+-- what the setting now says.
+local function Forget(pane)
+	for index = 1, MAX_ROWS do
+		pane.rows[index].shownClass = nil
+	end
+end
+
 --------------------------------------------------------------------------
 -- Layout
 --
@@ -259,6 +288,8 @@ function MeterWindow.Apply()
 	local height = (HEADER + RULE + rows * (ROW + ROW_GAP) - ROW_GAP) * unit
 
 	SizePane(damage, width, rows)
+	Forget(damage)
+	Forget(threat)
 
 	local total = width
 	if db.meterThreat then
@@ -376,7 +407,7 @@ local function PaintRow(row, guid, class, label, value, color)
 	if row.shownClass ~= class then
 		row.shownClass = class
 		local r, g, b = ClassColor(class)
-		row.bar:SetColorTexture(r, g, b, BAR_ALPHA)
+		row.bar:SetColorTexture(r, g, b, BarAlpha())
 		row.name:SetTextColor(r, g, b)
 	end
 
