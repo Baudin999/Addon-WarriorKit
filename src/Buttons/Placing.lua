@@ -18,6 +18,51 @@ ns.BarPlace = Place
 -- loud and not yet the point at which Meter's version, which enables the mouse
 -- on the frame itself rather than laying a handle over it, is worth rewriting.
 
+-- How deep a bar stands, which is the other half of where it is.
+--
+-- Blizzard's `MainActionBar` is declared `enableMouse="true"` on MEDIUM at frame
+-- level 50, sized 454 by 35 and anchored to the bottom of UIParent.
+-- Buttons/Blizzard.lua hides the twelve buttons standing on it and a hidden
+-- frame takes no mouse, but the bar frame under them is not hidden and is not
+-- ours to hide: that corner of the client carries the micro menu and the bag bar
+-- too, which is the warning Artwork.lua already writes down. Strip its art,
+-- which is the shipping setting, and what is left is an invisible frame across
+-- the bottom of the screen that takes every click landing on it.
+--
+-- A frame built on UIParent starts at level 1. Fifty beats one, so every drop
+-- and every click aimed at bar 1 went into a frame with no drag handler and
+-- vanished, while the keys, which never ask the mouse anything, went on working.
+-- Bar 1 only, mouse only, and nothing on screen to see, because the thing
+-- swallowing the click had already had its art taken off.
+--
+-- The other four bars were never affected and Blizzard's own source says why:
+-- MultiBarBottomLeft, MultiBarBottomRight, MultiBarLeft and MultiBarRight are
+-- each declared on MEDIUM with no `enableMouse` at all, so none of them has ever
+-- taken a click. MainActionBar is the one action bar frame in the client that
+-- does, which is exactly why exactly one bar was broken.
+--
+-- 120 rather than 51, and the headroom is the point. The end caps and the page
+-- number inside that bar are declared at level 100 and neither takes the mouse
+-- today; a number that already clears the frames which could start taking it is
+-- a number nobody has to come back to.
+local LEVEL = 120
+
+-- Stand one bar up where the mouse can reach it. Once, at build.
+--
+-- The header carries its own level rather than inheriting one. A child does
+-- start a level above its parent and the squares rely on exactly that, but the
+-- level the squares are hit-tested at is the whole of this bug, and a number
+-- that load bearing is written down rather than left to a default no file
+-- states. The strata is set first because SetFrameStrata re-seats a frame in the
+-- new strata's own order, so a level written before it is a level thrown away.
+function Place.Stand(entry)
+	entry.frame:SetFrameStrata("MEDIUM")
+	entry.frame:SetFrameLevel(LEVEL)
+	if entry.header then
+		entry.header:SetFrameLevel(LEVEL + 1)
+	end
+end
+
 -- Where a bar sits: what you dragged it to, or what the plan says.
 --
 -- The plan is the record and the drag is the tool. A position saved in WTF does
