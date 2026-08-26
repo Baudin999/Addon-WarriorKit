@@ -688,7 +688,27 @@ _G.UnitIsPlayer = function(unit) return realPlayers[unit] == true end
 -- somebody else made while you are still walking in.
 local inCombat = {}
 _G.UnitAffectingCombat = function(unit) return inCombat[unit] == true end
-_G.UnitAura = constant(nil)
+-- What each mob is bleeding from. Table driven and empty by default, because
+-- the debuff row's whole contract is that a square lights up when an aura whose
+-- name matches lands on the unit, and a stub that answered nil forever left
+-- that half of ScanDebuffs unreachable.
+--
+-- The order of the returns is the client's, not a convenience: name is first,
+-- the stack count is third, the expiry is sixth and the caster is seventh, and
+-- the addon reads them positionally because that is the only way this API can
+-- be read on 2.5.6.
+local debuffs = {}
+_G.UnitAura = function(unit, index, filter)
+	if filter ~= "HARMFUL" then
+		return nil
+	end
+	local list = debuffs[unit]
+	local aura = list and list[index]
+	if not aura then
+		return nil
+	end
+	return aura.name, nil, aura.count, nil, nil, aura.expires, aura.source
+end
 _G.UnitPowerType, _G.UnitPower, _G.UnitPowerMax = constant(1), constant(40), constant(100)
 _G.UnitPlayerOrPetInParty, _G.UnitPlayerOrPetInRaid = constant(false), constant(false)
 _G.UnitIsGroupLeader, _G.UnitIsGroupAssistant = constant(true), constant(false)
@@ -726,11 +746,27 @@ _G.RAID_CLASS_COLORS = {
 -- filled by the swing section, so every other spell in this file stays the
 -- instant it was.
 _G.WarriorKitSpellCast = {}
+-- The handful of ids whose real name is what the test is about, spelled the way
+-- both clients spell them. Everything else keeps the synthetic name, because a
+-- stub carrying the whole spell table would be a second copy of the client to
+-- keep correct.
+--
+-- These two are here because the debuff row matches auras by name and these two
+-- names differ by one letter. 12162 is the Deep Wounds talent, a hidden passive
+-- on the warrior that no mob ever carries; 12721 is the bleed it applies, and
+-- the client calls that one Deep Wound. Naming them "Spell12162" and
+-- "Spell12721" would still tell them apart and would say nothing about why they
+-- have to be told apart.
+local SPELL_NAMES = {
+	[12162] = "Deep Wounds",
+	[12721] = "Deep Wound",
+}
 _G.GetSpellInfo = function(id)
 	if type(id) == "number" and id >= 900000 then
 		return nil
 	end
-	return "Spell" .. id, nil, "Interface\\Icons\\A" .. id, _G.WarriorKitSpellCast[id]
+	return SPELL_NAMES[id] or ("Spell" .. id), nil,
+		"Interface\\Icons\\A" .. id, _G.WarriorKitSpellCast[id]
 end
 _G.GetSpellTexture = function(id) return "Interface\\Icons\\A" .. id end
 _G.GetSpellCooldown = function() return 0, 0 end
@@ -3394,7 +3430,7 @@ check(#ns.EnemyBars.Spells() == 4, "the bar does not ship tracking four debuffs"
 CheckPacked("as it ships")
 
 -- One more, and the row is one longer and still ends where it did.
-check((ns.EnemyBars.AddSpell(12162)), "Deep Wounds would not go on the list")
+check((ns.EnemyBars.AddSpell(12721)), "Deep Wound would not go on the list")
 check(#ns.EnemyBars.Spells() == 5, "adding a debuff did not lengthen the list")
 local packed = CheckPacked("with a fifth")
 check(#packed == 1 and #packed[1] == 5,
@@ -3402,13 +3438,13 @@ check(#packed == 1 and #packed[1] == 5,
 
 -- The same id twice would be two squares lighting up together, and an id this
 -- client cannot name would be a blank square.
-check(not (ns.EnemyBars.AddSpell(12162)), "the same debuff went on the list twice")
+check(not (ns.EnemyBars.AddSpell(12721)), "the same debuff went on the list twice")
 check(not (ns.EnemyBars.AddSpell(900001)), "an id this client cannot name went on the list")
 check(not (ns.EnemyBars.AddSpell("rend")), "a word went on the list as a spell id")
 check(#ns.EnemyBars.Spells() == 5, "a refused add changed the list anyway")
 
 -- Off again, and the row is back where it started.
-check((ns.EnemyBars.RemoveSpell(12162)), "Deep Wounds would not come off the list")
+check((ns.EnemyBars.RemoveSpell(12721)), "Deep Wound would not come off the list")
 check(#ns.EnemyBars.Spells() == 4, "removing a debuff did not shorten the list")
 CheckPacked("after a remove")
 
@@ -3461,6 +3497,104 @@ ns.EnemyBars.ResetSpells()
 check(#ns.EnemyBars.Spells() == 4, "the reset did not put the four back")
 CheckPacked("after a reset")
 widget = ns.EnemyBars.WidgetFor("nameplate1")
+
+--------------------------------------------------------------------------
+-- A tracked debuff lights its square up
+--
+-- Everything above measures where the squares sit. Nothing measured whether
+-- one ever comes on, and that is the half that shipped broken.
+--
+-- The row matches auras by name, and the name a proc's aura carries is not the
+-- name of the talent that grants it. The picker offered 12162, the Deep Wounds
+-- talent, which resolves to "Deep Wounds" and is a hidden passive no mob ever
+-- carries. What lands is 12721, and the client calls it "Deep Wound". One
+-- letter, no error anywhere, and a square that stayed dark through every fight.
+--
+-- So: put the bleed on the mob and assert the slot comes on, goes desaturated
+-- for somebody else's bleed and goes out when it falls off. Track the talent
+-- and the first of those goes red, which is the whole point of this block.
+--------------------------------------------------------------------------
+
+do
+	-- The shortlist offers the aura, never the spell that applies it. This is
+	-- the assertion that fails the moment 12162 goes back in SUGGESTED.
+	for _, spellID in ipairs(ns.EnemyBars.Suggestions()) do
+		check(spellID ~= 12162,
+			"the picker offers 12162, the Deep Wounds talent, which lands on nobody")
+	end
+
+	-- Typing the talent's id gets you the bleed, because Wowhead's search for
+	-- deep wounds finds the talent first and the panel takes a bare number.
+	local ok, named = ns.EnemyBars.AddSpell(12162)
+	check(ok, "the Deep Wounds talent id would not go on the list at all")
+	check(named == "Deep Wound",
+		("adding 12162 put %q on the bar, expected Deep Wound"):format(tostring(named)))
+	check(ns.EnemyBars.Slot(12162) == nil, "the dead talent id went on the list as itself")
+	local slot = ns.EnemyBars.Slot(12721)
+	check(slot ~= nil, "Deep Wound is on the bar and has no slot")
+	-- Falls back to whatever slot the talent id took, so a run with 12162 put
+	-- back reaches the assertions below instead of dying on a nil index. Those
+	-- are the ones that name the symptom a player sees: the square is there,
+	-- the mob is bleeding, and it never comes on.
+	slot = slot or ns.EnemyBars.Slot(12162) or 1
+
+	local function Square()
+		return ns.EnemyBars.WidgetFor("nameplate1").icons[slot]
+	end
+
+	debuffs.nameplate1 = {
+		{ name = "Deep Wound", count = 3, expires = _G.GetTime() + 9, source = "player" },
+	}
+	ns.EnemyBars.Update()
+	check(Square().shownState == "mine",
+		("the mob is bleeding from Deep Wound and slot %d reads %q, expected mine")
+			:format(slot, tostring(Square().shownState)))
+	check(Square().shownSeconds == 9,
+		("the square says %s seconds, the aura has 9"):format(tostring(Square().shownSeconds)))
+	check(Square().shownCount == 3,
+		("the square says a stack of %s, the aura has 3"):format(tostring(Square().shownCount)))
+
+	-- Another warrior's bleed is dimmed rather than dropped, which is how you
+	-- see that the mob has it and that refreshing it is not your call.
+	debuffs.nameplate1[1].source = "party1"
+	ns.EnemyBars.Update()
+	check(Square().shownState == "theirs",
+		("somebody else's Deep Wound reads %q, expected theirs"):format(tostring(Square().shownState)))
+
+	debuffs.nameplate1 = nil
+	ns.EnemyBars.Update()
+	check(Square().shownState == "none",
+		("the bleed fell off and the square reads %q, expected none"):format(tostring(Square().shownState)))
+	check(Square().shownSeconds == 0 and Square().shownCount == 0,
+		"the square kept the timer and the stack after the bleed fell off")
+
+	-- The saved list is what outlives the fix. Defaults are read once on a
+	-- fresh account, so anyone who picked Deep Wounds before it still carries
+	-- 12162 and would keep carrying it forever. Login repairs the list itself.
+	local saved = ns.EnemyBars.Spells()
+	local before = #saved
+	saved[#saved + 1] = 12162
+	ns.EnemyBars.Repair()
+	ns.EnemyBars.Retrack()
+	check(#saved == before,
+		("repairing a list that already tracked the bleed left %d entries, expected %d")
+			:format(#saved, before))
+	check(ns.EnemyBars.Slot(12162) == nil, "the repair left the dead talent id on the list")
+
+	check((ns.EnemyBars.RemoveSpell(12721)), "Deep Wound would not come off the list")
+	saved[#saved + 1] = 12162
+	ns.EnemyBars.Repair()
+	ns.EnemyBars.Retrack()
+	check(ns.EnemyBars.Slot(12162) == nil, "the repair left the dead talent id on the list")
+	check(ns.EnemyBars.Slot(12721) ~= nil, "the repair dropped the bleed instead of renaming it")
+
+	-- Back to the four, because the churn figure below is quoted against them.
+	ns.db.barsIconSize = 20
+	ns.EnemyBars.ResetSpells()
+	check(#ns.EnemyBars.Spells() == 4, "the reset did not put the four back")
+	CheckPacked("after the debuff scan")
+	widget = ns.EnemyBars.WidgetFor("nameplate1")
+end
 
 --------------------------------------------------------------------------
 -- bars zoom actually scales the bar

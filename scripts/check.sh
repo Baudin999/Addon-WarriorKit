@@ -352,7 +352,7 @@ LINE_LIMIT=800
 # path:ceiling:why it is exempt
 LINE_ALLOWED="
 UI/Widgets.lua:1289:the widget kit, one function per control and shared by every page
-UnitFrames/EnemyBars.lua:1817:splits at the settings API, the widget and the plate plumbing
+UnitFrames/EnemyBars.lua:1872:splits at the settings API, the widget and the plate plumbing
 UnitFrames/Skin.lua:1764:splits at the region walk, the block geometry and the tick
 "
 

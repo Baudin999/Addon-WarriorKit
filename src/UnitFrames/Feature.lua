@@ -602,8 +602,12 @@ ns.Register({
 		ui.Note(function()
 			return "The picker is the warrior's own debuffs and the shortlist, not the"
 				.. " limit. Anything a mob can carry goes on by id, which is the last"
-				.. " part of the spell's address on Wowhead. Rank 1's id, since the"
-				.. " match is by name."
+				.. " part of the spell's address on Wowhead. Use the id of the aura"
+				.. " that lands on the mob, not the id of the spell or talent that"
+				.. " puts it there. For a ranked spell those are the same and rank 1"
+				.. " covers every rank, because the match is by name. For a proc they"
+				.. " are two spells: the Deep Wounds talent is 12162, the bleed it"
+				.. " applies is 12721, and the client spells that one Deep Wound."
 		end)
 		-- One pixel a step. It used to be two, which stepped straight over the
 		-- sizes that draw sharp, on a range that stopped short of the biggest of
