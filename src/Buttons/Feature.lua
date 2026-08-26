@@ -86,6 +86,22 @@ if ns.Perf then
 	end)
 end
 
+-- Printed rather than written, because an addon cannot write its own source
+-- and the plan in Buttons/Bars.lua is where a position belongs if it is to
+-- survive a fresh clone. Drag it, print it, paste it, reset it.
+local function Where()
+	local lines = ns.Bars.Where()
+	if #lines == 0 then
+		ns.Print("no bars are up, so there is nothing to place. actionbars on first.")
+		return
+	end
+	ns.Print("where the bars are, in the shape the plan in Buttons/Bars.lua wants:")
+	for _, line in ipairs(lines) do
+		ns.Print(line)
+	end
+	ns.Print("paste those over the geometry in that file, then actionbars reset.")
+end
+
 ns.Register({
 	name = "buttons",
 	order = 5,
@@ -97,6 +113,14 @@ ns.Register({
 		-- feature that rearranges the bars of everyone who happens to update
 		-- has to be asked for.
 		actionBars = false,
+
+		-- Where a bar has been dragged to, keyed by the plan's bar key. Empty
+		-- is the normal state and means the plan in Buttons/Bars.lua decides,
+		-- which is the one that travels with a clone of the addon. An entry
+		-- here is a position you are still trying out: `actionbars where`
+		-- prints it in the plan's own shape to paste in, and `actionbars reset`
+		-- drops it again once you have.
+		barPoints = {},
 	},
 
 	-- Per character, all three of them. These describe one character's action
@@ -113,15 +137,30 @@ ns.Register({
 		layoutMacros = {},
 	},
 
+	-- /wk unlock reaches the bars through here, the same way it reaches the
+	-- charge icon and the meters. Without it the handles never show and the
+	-- bars are the one part of the addon you cannot drag.
+	lock = function()
+		ns.Bars.ApplyLock()
+	end,
+
 	words = {
 		-- Not "bars": the enemy bars part claimed that word years ago and Core
 		-- asserts at login that no two features share one.
 		actionbars = function(arg)
 			if arg == "on" or arg == "off" then
 				SetBars(ns.Command.Toggle(arg))
+			elseif arg == "where" then
+				Where()
+			elseif arg == "reset" then
+				local dropped = ns.Bars.ResetPlacing()
+				ns.Print(dropped == 0 and "nothing was dragged, so the plan was already what you see."
+					or ("dropped %d dragged position%s, back to the plan."):format(
+						dropped, dropped == 1 and "" or "s"))
 			else
 				ns.Print("action bars: " .. ns.Bars.Describe() .. ".")
 				ns.Print("actionbars on clones every bar you have, with its keys, and hides Blizzard's. actionbars off gives them back.")
+				ns.Print("/wk unlock to drag them, actionbars where to print what you dragged, actionbars reset to undo it.")
 			end
 		end,
 
@@ -152,6 +191,7 @@ ns.Register({
 	help = {
 		"buttons apply, buttons restore, buttons status",
 		"actionbars on|off, our own bars over Blizzard's, same slots and same keys",
+		"actionbars where, actionbars reset, after dragging them with /wk unlock",
 		"ranks, ranks refresh",
 	},
 

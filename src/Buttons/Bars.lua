@@ -282,6 +282,8 @@ local function BuildBar(entry)
 	local bar = UI.Box(UIParent, UI.Color.window, UI.Color.hairline)
 	UI.Adopt(bar, 1)
 	bar:SetFrameStrata("MEDIUM")
+	bar:SetMovable(true)
+	bar:SetClampedToScreen(true)
 	bar:Hide()
 	entry.frame = bar
 
@@ -318,6 +320,8 @@ local function BuildBar(entry)
 		entry.buttons[index] = w
 		squares[#squares + 1] = w
 	end
+
+	ns.BarPlace.Handle(entry)
 end
 
 -- Lay one bar out and put it where the plan says. Called at build and again on
@@ -340,8 +344,7 @@ local function Arrange(entry)
 	end
 
 	Flow.Arrange(entry.frame, rows)
-	entry.frame:ClearAllPoints()
-	entry.frame:SetPoint(def.point, UIParent, def.to, def.x, def.y)
+	ns.BarPlace.Put(entry)
 end
 
 --------------------------------------------------------------------------
@@ -507,9 +510,23 @@ end
 
 -- Forwarded rather than reached for directly, so the panel, the status line and
 -- the harness all ask the bars how many of Blizzard's buttons are down and none
--- of them has to know which file did it.
+-- of them has to know which file did it. The three below forward to
+-- Buttons/Placing.lua for the same reason: `order` is this file's, and a caller
+-- that had to be handed it would be a caller that could hold a stale one.
 function Bars.Hidden()
 	return ns.TheirBars.Count()
+end
+
+function Bars.ApplyLock()
+	ns.BarPlace.Lock(order)
+end
+
+function Bars.Where()
+	return ns.BarPlace.Where(order)
+end
+
+function Bars.ResetPlacing()
+	return ns.BarPlace.Reset(order)
 end
 
 --------------------------------------------------------------------------

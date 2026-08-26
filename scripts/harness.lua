@@ -393,6 +393,9 @@ function Region:GetRegisteredClicks() return self.clicks end
 -- over an icon that answers the mouse is a button you cannot press, and it
 -- looks identical to one you can.
 function Region:EnableMouse(value) self.mouse = value and true or false end
+-- Recorded, not swallowed: a frame that was never made movable answers every
+-- drag by doing nothing, and looks exactly like one that was.
+function Region:SetMovable(value) self.movable = value and true or false end
 function Region:IsMouseEnabled() return self.mouse end
 
 function Region:SetAttribute(key, value)
@@ -2257,6 +2260,78 @@ do
 		end
 	end
 	check(seen == 48, ("walked %d squares, expected 48"):format(seen))
+
+	--------------------------------------------------------------------------
+	-- Placing them
+	--
+	-- The bars shipped with no lock handling and no drag at all, which followed
+	-- from the plan living in source and was never said out loud. /wk unlock
+	-- reached the charge icon and the meters and silently did nothing here.
+	--------------------------------------------------------------------------
+
+	local shipped = ns.db.locked
+	ns.db.locked = true
+	ns.Each("lock")
+	local showing = 0
+	for index = 1, #bars do
+		if bars[index].handle and bars[index].handle:IsShown() then
+			showing = showing + 1
+		end
+	end
+	check(showing == 0, ("%d drag handles are up with the frames locked"):format(showing))
+
+	ns.db.locked = false
+	ns.Each("lock")
+	showing = 0
+	for index = 1, #bars do
+		if bars[index].handle and bars[index].handle:IsShown() then
+			showing = showing + 1
+		end
+	end
+	check(showing == #bars,
+		("%d of %d bars grew a drag handle when the frames unlocked"):format(showing, #bars))
+
+	-- The handle takes the mouse and the bar underneath it does not, which is
+	-- the whole reason it is a separate frame: everything inside a bar is a
+	-- secure button that has to keep answering clicks while you place it.
+	check(bars[1].handle:IsMouseEnabled() == true, "the drag handle does not take the mouse")
+	check(bars[1].frame:IsMouseEnabled() ~= true,
+		"the bar itself takes the mouse, so it is competing with its own buttons")
+	check(bars[1].frame.movable == true, "the bar was never made movable, so a drag does nothing")
+
+	-- A drag writes an override, and the override is what draws.
+	local one = found.bar1
+	one.handle:GetScript("OnDragStart")()
+	one.frame.points = nil
+	-- Dropped on a fraction on purpose. A drag lands wherever the cursor was,
+	-- and the bar is on the pixel grid, where a fractional offset puts every
+	-- icon and every glyph on it across two rows of pixels. The grid buys exact
+	-- sizes and nothing at all about position, so this is the one place
+	-- position is made whole and it has to be asserted with a number that would
+	-- survive not being.
+	one.frame:SetPoint("BOTTOM", _G.UIParent, "BOTTOM", 40.4, 259.6)
+	one.handle:GetScript("OnDragStop")()
+	local saved = ns.db.barPoints.bar1
+	check(saved and saved[4] == 40 and saved[5] == 260,
+		("a drag to 40.4, 259.6 recorded %s, %s"):format(
+			tostring(saved and saved[4]), tostring(saved and saved[5])))
+
+	-- And it comes back in the plan's own shape, so it can be pasted into
+	-- Buttons/Bars.lua and stop depending on saved variables at all. That is
+	-- the whole reconciliation between a plan in git and a bar you drag.
+	local printed = ns.Bars.Where()
+	check(#printed == #bars, ("where printed %d lines for %d bars"):format(#printed, #bars))
+	check(printed[1]:find("x = 40") and printed[1]:find("y = 260") and printed[1]:find("dragged"),
+		"the printed plan line does not carry what the drag recorded: " .. tostring(printed[1]))
+
+	check(ns.Bars.ResetPlacing() == 1, "reset dropped no dragged position")
+	check(next(ns.db.barPoints) == nil, "reset left a dragged position behind")
+	local back = ns.Bars.Where()
+	check(back[1]:find("y = 8") and not back[1]:find("dragged"),
+		"reset did not put bar 1 back on the plan: " .. tostring(back[1]))
+
+	ns.db.locked = shipped
+	ns.Each("lock")
 	check(mute == 0,
 		("%d squares register no up edge, so a click on them does nothing"):format(mute))
 	check(blind == 0,

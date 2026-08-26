@@ -112,6 +112,12 @@ Buttons\Ranks.lua
 # with you is a subject rather than a detail. Before Bars.lua, which calls it.
 Buttons\Blizzard.lua
 Buttons\Bars.lua
+
+# Where each cloned bar sits and the handle you drag it by. After Bars.lua,
+# which is the only caller, and separate from it because the bar's shape is
+# decided by the plan in source and its position is the one thing you cannot
+# sensibly type.
+Buttons\Placing.lua
 Buttons\Feature.lua
 
 UnitFrames\Plates.lua
