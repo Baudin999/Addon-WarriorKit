@@ -148,6 +148,27 @@ local function Carry(w)
 		ns.BarTrace.Say("after the pick up, cursor " .. ns.BarTrace.Cursor())
 	end)
 
+	-- The other way a square gets filled, and the one the trace could not see.
+	--
+	-- Dropping a spell is a click as often as it is a drag: press over the
+	-- square with the cursor loaded and let go, and the client sends the button
+	-- a click rather than a receive drag. PostClick is where that can be
+	-- watched from, and it is the one hook a secure action button offers an
+	-- addon without standing in front of the protected call: it runs after the
+	-- client has already done whatever the click was going to do.
+	--
+	-- Guarded on the switch before anything is built, because this runs after
+	-- every cast off every square and the format below would otherwise be a
+	-- string allocated per press for nobody to read.
+	w:SetScript("PostClick", function(self, button)
+		if not ns.BarTrace.Running() then
+			return
+		end
+		ns.BarTrace.Say(("click %s on slot %s, cursor %s"):format(
+			tostring(button), tostring(self:GetAttribute("action")),
+			ns.BarTrace.Cursor()))
+	end)
+
 	w:SetScript("OnReceiveDrag", function(self)
 		local slot = self:GetAttribute("action")
 		ns.BarTrace.Say(("drop on slot %s, cursor %s"):format(

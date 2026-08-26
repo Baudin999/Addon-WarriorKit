@@ -132,7 +132,7 @@ read_globals = {
 	-- the addon whose only job is to answer a question about a bug, and a
 	-- diagnostic that raises on a client without it would be a diagnostic that
 	-- makes things worse.
-	"GetMouseFocus",
+	"GetMouseFocus", "GetMouseFoci",
 	-- what one action slot is doing, read by Buttons/Slot.lua on the bar's
 	-- ticker. Probed by name in Slot.CanRead for the same reason the writers
 	-- above are: nothing installed here proves any of them is on 2.5.6, and a

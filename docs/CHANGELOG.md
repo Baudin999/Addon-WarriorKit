@@ -16,14 +16,23 @@ was ever checked against the client.
 
 So this release ships an instrument rather than a third theory.
 
-`/wk actionbars trace` turns on two read only prints. The first samples the
+`/wk actionbars trace` turns on three read only prints. The first samples the
 frame the client says is under the cursor, five times a second, and prints it
 when it changes, with its name, its strata, its level and the action slot it
 presses if it has one. The second prints every gesture a square gets: the slot,
 what the cursor held going in and what it holds coming out. A drop that never
 prints is a drop the client never sent us. A drop that prints and leaves the
 cursor loaded is `PlaceAction` refusing the slot. Those are different bugs and
-nothing on screen has ever told them apart.
+nothing on screen has ever told them apart. The third prints every click a
+square gets, through `PostClick`, because a spell is dropped by clicking as
+often as by dragging and the first version of this could not see that at all.
+
+The first live run of it printed every gesture and never once named a frame,
+which from the chat frame looks exactly like a cursor touching nothing. This
+client has no `GetMouseFocus`. Both calls are asked for now, `GetMouseFocus` and
+the `GetMouseFoci` that replaced it, and the trace says which one answered the
+moment it is switched on, so a run that cannot name a frame says why instead of
+going quiet.
 
 The drop path stops being silent whether or not the trace is on. A drop that
 reaches a square and moves nothing now says which action slot it was aimed at,

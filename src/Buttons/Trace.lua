@@ -84,6 +84,32 @@ function Trace.Cursor()
 	return ("%s %s/%s"):format(tostring(kind), tostring(first), tostring(second))
 end
 
+-- The frame the client says the cursor is over, whichever way this client
+-- answers that question.
+--
+-- Two names, because the first run of this trace printed nothing at all on the
+-- live client and a silent instrument is worse than no instrument. GetMouseFocus
+-- is the call every client from vanilla to Dragonflight had; GetMouseFoci
+-- replaced it and returns the whole stack under the cursor, topmost first. This
+-- client is a hybrid, so it is asked for both and neither is assumed.
+--
+-- Returns the frame and the name of the call that answered, so Trace.Set can
+-- say up front which one this client has and a run that prints nothing is a run
+-- that said why.
+function Trace.Focus()
+	if type(GetMouseFocus) == "function" then
+		return GetMouseFocus(), "GetMouseFocus"
+	end
+	if type(GetMouseFoci) == "function" then
+		local stack = GetMouseFoci()
+		if type(stack) == "table" then
+			return stack[1], "GetMouseFoci"
+		end
+		return stack, "GetMouseFoci"
+	end
+	return nil, nil
+end
+
 -- Which action slot a frame presses, when it is the kind of frame that presses
 -- one. Blizzard's own buttons carry it too, so a trace that lands on one of
 -- theirs says which slot theirs would have written and ours would have.
@@ -135,7 +161,7 @@ function Trace.Sample(_, elapsed)
 	end
 	since = 0
 
-	local focus = type(GetMouseFocus) == "function" and GetMouseFocus() or nil
+	local focus = Trace.Focus()
 	if focus == last then
 		return
 	end
@@ -155,6 +181,15 @@ function Trace.Set(on)
 	running = on and true or false
 	since = INTERVAL
 	last = nil
+	if running then
+		-- Said on the way in rather than discovered by its absence. The first
+		-- run of this printed every gesture and never once named a frame, and
+		-- from the chat frame that looked exactly like a cursor that touched
+		-- nothing rather than a client with no call to ask.
+		local _, api = Trace.Focus()
+		Trace.Say(api and ("the frame under the cursor is read with " .. api)
+			or "this client has neither GetMouseFocus nor GetMouseFoci, so nothing can say which frame the cursor is over")
+	end
 	return running
 end
 

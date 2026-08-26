@@ -1159,6 +1159,12 @@ one side, only the shim changes.
   cursor as it changes, and every gesture a square gets, with the slot and the
   cursor either side of it. A drop that never prints was never sent to us; a
   drop that prints and leaves the cursor loaded is the client refusing the slot.
+- This client has no `GetMouseFocus`. The trace was written around it, printed
+  every gesture on its first live run and never named a single frame, which
+  reads as a cursor touching nothing rather than as a missing call. `Trace.Focus`
+  asks for `GetMouseFocus` and then for the `GetMouseFoci` that replaced it, and
+  says which one answered as the switch goes on. A diagnostic that can go silent
+  for two different reasons is not a diagnostic.
 - What is actually different about bar 1: it is the only bar the client
   re-points by stance, so its squares press the bonus bar slots 73 to 108 while
   every other bar presses 25 to 72, and it is the only bar whose `action`

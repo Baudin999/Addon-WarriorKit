@@ -3824,21 +3824,58 @@ do
 	ClearCursor()
 	slots[seat] = nil
 
+	-- Which call this client answers "what is the cursor over" with, said on
+	-- the way in. The first live run of this trace printed every gesture and
+	-- never named a single frame, which from the chat frame looks exactly like
+	-- a cursor touching nothing rather than a client with no such call.
+	local realFocus, realFoci = _G.GetMouseFocus, _G.GetMouseFoci
+	_G.GetMouseFocus, _G.GetMouseFoci = nil, nil
+	heard = {}
 	ns.BarTrace.Set(true)
+	check(Heard("neither GetMouseFocus nor GetMouseFoci"),
+		"a client with no way to name the frame under the cursor said nothing about it")
+	ns.BarTrace.Set(false)
+
+	_G.GetMouseFoci = function() return { _G.ActionButton1 } end
+	heard = {}
+	ns.BarTrace.Set(true)
+	check(Heard("GetMouseFoci"), "the trace did not say which call it is reading the cursor with")
+
 	slots[seat] = { texture = ART }
 	heard = {}
 	pick(square)
 	drop(other)
 	check(Heard("pick up from slot " .. seat) and Heard("drop on slot " .. there),
 		"the trace missed the gesture it exists to print")
+
+	-- A click, which is how a spell is dropped as often as a drag is, and which
+	-- the first version of this file could not see at all.
+	heard = {}
+	local click = other:GetScript("PostClick")
+	check(click, "a square has no PostClick, so a drop made by clicking is invisible")
+	if click then
+		click(other, "LeftButton")
+	end
+	check(Heard("click LeftButton on slot " .. there),
+		"the trace missed a click on a square")
+
 	ClearCursor()
 	slots[seat], slots[there] = nil, nil
+
+	-- The newer of the two calls answers a stack, topmost first, and only the
+	-- top of it is under the cursor.
+	heard = {}
+	ns.BarTrace.Sample(nil, 1)
+	check(Heard("ActionButton1"),
+		"the sampler did not read the frame out of the stack GetMouseFoci answers")
+	_G.GetMouseFoci = realFoci
+	ns.BarTrace.Set(false)
 
 	-- The sampler, which is the whole instrument. A drop that never reaches a
 	-- square is a frame with a name, a strata and a level, and this is what
 	-- prints them.
-	local realFocus = _G.GetMouseFocus
 	_G.GetMouseFocus = function() return _G.ActionButton1 end
+	ns.BarTrace.Set(true)
 	heard = {}
 	ns.BarTrace.Sample(nil, 1)
 	check(Heard("ActionButton1") and Heard("MEDIUM"),
