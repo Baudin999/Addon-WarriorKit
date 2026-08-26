@@ -865,7 +865,23 @@ _G.UnitHealth, _G.UnitHealthMax = constant(4200), constant(9000)
 -- that fits inside what is missing, and one that does not.
 local incomingHeals = 0
 _G.UnitGetIncomingHeals = function() return incomingHeals end
-_G.UnitLevel, _G.UnitReaction = constant(62), constant(2)
+_G.UnitReaction = constant(2)
+
+-- Level by unit token, defaulting to 62 for everything nobody has said
+-- otherwise about.
+--
+-- It was a flat constant until the breakdown's level bands needed a target that
+-- is not the same level as the player. A stub answering 62 for everybody would
+-- file every hit under one band and pass every assertion about banding while
+-- proving nothing, which is the worst kind of fixture: the failure it hides is
+-- that every crit and miss rate in the table is an average of unrelated fights.
+--
+-- On _G rather than in a local, the way WarriorKitItemLink is, because this
+-- file is one chunk at Lua 5.1's ceiling of two hundred locals.
+_G.WarriorKitLevels = {}
+_G.UnitLevel = function(unit)
+	return _G.WarriorKitLevels[unit] or 62
+end
 -- True for exactly one unit, so the skin's player frame takes the class colour
 -- through ClassTint and the other two fall to the reaction colour. Both halves
 -- of Tint run, and the per class cache gets filled once and read after that.
@@ -970,6 +986,11 @@ _G.WarriorKitSpellCast = {}
 -- wrote down has to come back with the same string. A stub that named only rank
 -- 1 would let a rank list pass.
 local SPELL_NAMES = {
+	-- Auto Attack, which is what a white swing is filed under in the breakdown
+	-- and where Feeds/Combat.lua takes its swing icon from. Named here for the
+	-- reason the racials below are: a table row reading "Spell6603" would pass
+	-- an assertion about a row while being a word no player can read.
+	[6603] = "Attack",
 	[12162] = "Deep Wounds",
 	[12721] = "Deep Wound",
 	[7384] = "Overpower",
@@ -10315,6 +10336,250 @@ do
 	-- Put away, because the sections after this one hover things of their own
 	-- and a tooltip anchored to a loot row would still be up.
 	ns.UI.Tooltip.Close()
+end
+
+--------------------------------------------------------------------------
+-- The breakdown
+--
+-- Six questions no amount of reading Breakdown/ will answer.
+--
+-- Do the numbers land in the right slot. The whole file is positional reads of
+-- the combat log, and a swing puts its amount where a spell puts its id. A
+-- parser that read the wrong slot would file a spell id as a damage number and
+-- the table would look populated and be nonsense.
+--
+-- Is a crit counted as a hit as well as a crit. Crits are a subset of landed
+-- hits and not a separate outcome, and getting that wrong gives a crit rate
+-- over the wrong denominator, which is the single number this feature exists to
+-- report.
+--
+-- Are the two averages actually separable. Keeping crit damage apart from total
+-- damage is the whole reason four counters are stored rather than two, and the
+-- claim is that the average normal hit and the average crit both come back out.
+-- A blended average would satisfy any test that only checked the total.
+--
+-- Does a miss keep its type. A dodge and a parry mean different things to a
+-- warrior and the store keeps them apart on purpose; a pooled counter would
+-- pass every test about miss chance and lose the thing worth knowing.
+--
+-- Does the level band actually band. The combat log carries no level, so this
+-- rests on a cache fed from targets and nameplates, and the failure mode is
+-- silent: everything lands in one bucket and every rate is an average of
+-- unrelated fights.
+--
+-- And does the roll up by name join ranks without joining anything else.
+--------------------------------------------------------------------------
+
+do
+	local Breakdown, Pane = ns.Breakdown, ns.BreakdownWindow
+
+	-- The sections above leave the player with no GUID, which is what the client
+	-- looks like across a loading screen. PLAYER_ENTERING_WORLD is what this
+	-- part reads its own GUID and level on, so it is fired rather than the
+	-- module local being reached into.
+	guids.player = "Player-0-0000000f"
+	fire("PLAYER_ENTERING_WORLD")
+	Breakdown.Reset()
+
+	local ME = guids.player
+	local MOB = "Creature-0-0-0-0-4321-00000001"
+	local UNSEEN = "Creature-0-0-0-0-4321-00000002"
+
+	local function log(subevent, source, dest, slots)
+		for index = 1, 21 do
+			logArgs[index] = nil
+		end
+		logArgs[1] = GetTime()
+		logArgs[2] = subevent
+		logArgs[4] = source
+		logArgs[8] = dest
+		for at, value in pairs(slots) do
+			logArgs[at] = value
+		end
+		fire("COMBAT_LOG_EVENT_UNFILTERED")
+	end
+
+	-- One row out of the ranked list, by name, so an assertion names the
+	-- ability it is about rather than an index that moves as the sort does.
+	local function row(name, band)
+		local ranked = Breakdown.Rank("damage", band)
+		for index = 1, #ranked do
+			if ranked[index].name == name then
+				return ranked[index]
+			end
+		end
+		return nil
+	end
+
+	check(Breakdown.Ready(), "the breakdown says this client has no combat log")
+	check(Breakdown.Count() == 0, "the store did not start empty")
+	check(Breakdown.Since() > 0, "a reset did not stamp when the count started")
+
+	----------------------------------------------------------------------
+	-- Which slot the number is in
+	----------------------------------------------------------------------
+
+	-- A white swing carries its amount at twelve and has no spell in front of
+	-- it. A parser that read slot fifteen would find nothing and count nothing.
+	log("SWING_DAMAGE", ME, UNSEEN, { [12] = 137 })
+	local melee = row(ns.SpellName(6603) or "Melee")
+	check(melee ~= nil, "a white swing did not reach the table")
+	check(melee and melee.damage == 137, "a swing's amount was not read from slot twelve")
+	check(melee and melee.name == "Attack",
+		("a swing is filed under %s, expected the client's own word for it")
+			:format(tostring(melee and melee.name)))
+
+	-- A spell carries its id, name and school first and its amount at fifteen.
+	log("SPELL_DAMAGE", ME, UNSEEN, { [12] = 12294, [13] = "Mortal Strike", [15] = 500 })
+	log("SPELL_DAMAGE", ME, UNSEEN, { [12] = 12294, [13] = "Mortal Strike", [15] = 900, [21] = true })
+
+	local ms = row("Mortal Strike")
+	check(ms ~= nil, "a spell did not reach the table")
+	check(ms and ms.damage == 1400, ("Mortal Strike totals %s, expected 1400")
+		:format(tostring(ms and ms.damage)))
+
+	----------------------------------------------------------------------
+	-- Crits are a subset of hits, and the two averages come apart
+	----------------------------------------------------------------------
+
+	check(ms and ms.landed == 2, ("%s landed hits, expected the crit to count as one too")
+		:format(tostring(ms and ms.landed)))
+	check(ms and ms.crits == 1, "the critical was not counted as one")
+	check(Breakdown.CritRate(ms) == 0.5,
+		("crit rate came back %s, expected one crit in two landed hits")
+			:format(tostring(Breakdown.CritRate(ms))))
+
+	-- The claim that keeping crit damage apart is worth a counter. A blended
+	-- average of a 500 and a 900 is 700, which is a number describing no hit
+	-- this character has ever landed.
+	check(Breakdown.AverageHit(ms) == 500,
+		("the average normal hit came back %s, expected 500 and not a blend with the crit")
+			:format(tostring(Breakdown.AverageHit(ms))))
+	check(Breakdown.AverageCrit(ms) == 900,
+		("the average crit came back %s, expected 900"):format(tostring(Breakdown.AverageCrit(ms))))
+
+	----------------------------------------------------------------------
+	-- Overkill
+	--
+	-- The client sends the wasted part in the slot after the amount and sends
+	-- minus one on every hit that killed nothing. Meter/Meter.lua subtracts it
+	-- and this has to agree, or the two readouts cannot be compared.
+	----------------------------------------------------------------------
+
+	log("SPELL_DAMAGE", ME, UNSEEN, { [12] = 772, [13] = "Rend", [15] = 300, [16] = 100 })
+	local rend = row("Rend")
+	check(rend and rend.damage == 200,
+		("Rend counted %s of a 300 hit that wasted 100"):format(tostring(rend and rend.damage)))
+	check(rend and rend.wasted == 100, "the wasted part was not kept")
+	check(rend and rend.max == 200, "the best hit recorded the raw number rather than the effective one")
+
+	log("SPELL_DAMAGE", ME, UNSEEN, { [12] = 772, [13] = "Rend", [15] = 50, [16] = -1 })
+	rend = row("Rend")
+	check(rend and rend.damage == 250,
+		("a minus one overkill changed the total to %s"):format(tostring(rend and rend.damage)))
+
+	----------------------------------------------------------------------
+	-- A miss keeps its type
+	----------------------------------------------------------------------
+
+	log("SPELL_MISSED", ME, UNSEEN, { [12] = 12294, [13] = "Mortal Strike", [15] = "DODGE" })
+	log("SPELL_MISSED", ME, UNSEEN, { [12] = 12294, [13] = "Mortal Strike", [15] = "PARRY" })
+	ms = row("Mortal Strike")
+
+	check(ms and ms.misses == 2, "two stopped attempts did not both count")
+	check(Breakdown.Attempts(ms) == 4, ("%s attempts, expected two landed and two stopped")
+		:format(tostring(Breakdown.Attempts(ms))))
+	check(Breakdown.MissRate(ms) == 0.5, "the miss rate is not stopped attempts over every attempt")
+	check(Breakdown.MissRateOf(ms, "DODGE") == 0.25, "a dodge did not keep its own rate")
+	check(Breakdown.MissRateOf(ms, "PARRY") == 0.25, "a parry did not keep its own rate")
+	check(Breakdown.MissRateOf(ms, "MISS") == nil,
+		"an outcome that never happened is being reported as a zero rate")
+
+	-- A stopped attempt is not a landed hit, so it must not move the crit rate.
+	check(Breakdown.CritRate(ms) == 0.5, "a dodge changed the crit rate")
+
+	----------------------------------------------------------------------
+	-- What you pressed is not what landed
+	----------------------------------------------------------------------
+
+	log("SPELL_CAST_SUCCESS", ME, UNSEEN, { [12] = 1464, [13] = "Slam" })
+	log("SPELL_CAST_SUCCESS", ME, UNSEEN, { [12] = 1464, [13] = "Slam" })
+	local slam = row("Slam")
+	check(slam and slam.casts == 2, "a cast that landed nothing was not counted")
+	check(slam and Breakdown.Attempts(slam) == 0, "a cast was counted as an attempt")
+	check(Breakdown.CritRate(slam) == nil, "a spell with no landed hits reported a crit rate")
+
+	----------------------------------------------------------------------
+	-- Somebody else's fight
+	--
+	-- The one filter that keeps the table bounded. Without it the store grows
+	-- by every stranger you have ever been in a party with.
+	----------------------------------------------------------------------
+
+	local held = Breakdown.Count()
+	log("SPELL_DAMAGE", "Player-9", UNSEEN, { [12] = 9999, [13] = "Someone Else", [15] = 4000 })
+	check(Breakdown.Count() == held, "another player's damage was counted as yours")
+
+	----------------------------------------------------------------------
+	-- The level bands
+	--
+	-- The combat log carries no level, so this rests entirely on the cache fed
+	-- from your target and from nameplates. The failure is silent: everything
+	-- lands in one band and every rate becomes an average of unrelated fights.
+	----------------------------------------------------------------------
+
+	_G.WarriorKitLevels.target = 65
+	guids.target = MOB
+	fire("PLAYER_TARGET_CHANGED")
+
+	log("SPELL_DAMAGE", ME, MOB, { [12] = 845, [13] = "Cleave", [15] = 220 })
+	check(row("Cleave", 3) ~= nil, "a mob three levels over you did not land in the third band")
+	check(row("Cleave", 1) == nil, "a mob three levels over you was counted as at or under you")
+
+	-- A mob you never targeted and never saw a plate for. It has to land in the
+	-- band that says so rather than being quietly counted as your own level,
+	-- which is the answer that would flatter every rate in the table.
+	log("SPELL_DAMAGE", ME, UNSEEN, { [12] = 845, [13] = "Cleave", [15] = 180 })
+	check(row("Cleave", 4) ~= nil, "a mob whose level was never seen did not land in the unknown band")
+	check(row("Cleave").damage == 400, "the bands do not add back up to the total")
+
+	----------------------------------------------------------------------
+	-- Ranks roll up, and nothing else does
+	----------------------------------------------------------------------
+
+	log("SPELL_DAMAGE", ME, UNSEEN, { [12] = 11574, [13] = "Rend", [15] = 90 })
+	check(Breakdown.Count() >= 2, "two ranks of Rend were stored under one key")
+	rend = row("Rend")
+	check(rend and rend.damage == 340,
+		("two ranks of Rend read back as %s, expected them added up under one name")
+			:format(tostring(rend and rend.damage)))
+	check(row("Mortal Strike").damage == 1400, "the roll up joined two different abilities")
+
+	----------------------------------------------------------------------
+	-- The table on the page
+	----------------------------------------------------------------------
+
+	ns.Options.Refresh()
+	check(Pane.Shown() > 0, "the breakdown page drew no rows with a table full of abilities")
+	check(Pane.Row(1).name:GetText() == "Mortal Strike",
+		("the top row by damage is %s, expected the biggest total")
+			:format(tostring(Pane.Row(1).name:GetText())))
+	check(Pane.Row(1).bar:GetWidth() > Pane.Row(2).bar:GetWidth(),
+		"the share bars do not rank the rows")
+
+	----------------------------------------------------------------------
+	-- Starting again
+	----------------------------------------------------------------------
+
+	local since = Breakdown.Since()
+	Breakdown.Reset()
+	check(Breakdown.Count() == 0, "a reset left abilities in the store")
+	check(Breakdown.Since() >= since, "a reset did not restamp when the count started")
+	ns.Options.Refresh()
+	check(Pane.Shown() == 0, "the page still drew rows after a reset")
+
+	print(("break  %s; %d bands, melee as %q")
+		:format(Breakdown.Describe(), #Breakdown.Bands(), ns.SpellName(6603) or "Melee"))
 end
 
 --------------------------------------------------------------------------

@@ -61,6 +61,18 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   client and redrawn in this interface. Nothing in either feed is on a ticker:
   they change when something happens to you and when you scroll them, and never
   in between.
+- **A breakdown of what this character actually does.** One row per ability,
+  kept between sessions: how much of your damage it is, how often it lands, how
+  often it crits, what it averages, and what stopped it when it did not land.
+  The miss column names the outcome rather than pooling it, because a dodge and
+  a parry mean different things and dodge is the one you can do something about.
+
+  It answers the questions a meter cannot, because a meter forgets the pull it
+  was counting: whether Slam pays for the swing it costs, what share of your
+  damage comes from Thunder Clap, whether that new axe changed anything. Rows
+  can be read one level band at a time, since in this era the target's level
+  drives crit and miss hard and a number pooled across grey trash and an elite
+  is the average of two unrelated things. `/wk breakdown` prints the top ten.
 - **A warrior bar loadout**, with a backup of whatever it replaced, plus an
   Edit Mode layout carried inside the addon.
 - **Your own action bars, redrawn.** `/wk actionbars on` reads whichever bars

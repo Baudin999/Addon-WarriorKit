@@ -2,6 +2,71 @@
 
 ## Unreleased
 
+### A breakdown of what this character actually does
+
+One row per ability, kept between sessions: how much of your damage it is, how
+often it lands, how often it crits, what it averages, what its best hit was and
+what stopped it when it did not land. It is the question the meters cannot
+answer, because a meter totals the pull you are in and forgets it when the next
+one starts. This never forgets and never reports a rate.
+
+**Counters, not history.** Every question it exists to answer is a ratio over
+counters. Crit chance is crits over landed hits, miss chance is the miss table
+over attempts, and what share of your damage is Thunder Clap is a sum over rows.
+None of them needs the event that produced it kept, and keeping the events is
+the one thing this could not afford. An evening of solo play is tens of
+thousands of combat log lines, and the client writes saved variables by
+serialising the whole table to Lua source at logout. So the table grows with the
+number of abilities you use and never with the number of swings you take.
+
+**There is no flush, so there is nothing to flush.** An addon cannot ask the
+client to write saved variables; they are written at logout, at a reload and on
+quitting, and the only way to force one in between is `ReloadUI`, which is why
+Titan puts a confirmation box in front of changing a profile. So this does not
+accumulate into a private table and copy it across at `PLAYER_LOGOUT`. It counts
+straight into the table the client serialises, and there is no logout hook that
+can be forgotten.
+
+**Crit damage is kept apart from total damage**, and that is what makes both
+averages come back out. The average normal hit is the damage that was not a crit
+over the hits that were not crits; the average crit is the other half. A single
+blended average of a 500 and a 900 is 700, which describes no hit the character
+has ever landed, and it cannot be taken apart afterwards. Four counters instead
+of two, and the harness asserts both halves.
+
+**A miss keeps its type.** The client names ten outcomes and the table holds the
+ones that happened to you. A dodge says you were in front of it and a parry says
+something about the target, and one pooled "missed" number teaches neither.
+
+**Rates are banded by the target's level against yours.** In this era level
+difference drives miss and dodge hard, and a lifetime crit rate pooled across
+grey trash and an elite is an average of two unrelated fights. There are four
+bands and the fourth is the honest one: the combat log carries no level, so it
+is only ever learned from a unit token, which means the mob was your target or
+had a nameplate up. Anything you hit without ever seeing lands in "level not
+seen" rather than being quietly counted as your own level, which is the answer
+that would flatter every rate in the table.
+
+**Stored by spell id, added up by name.** A name is localised and collides: the
+eight ranks of Heroic Strike are eight ids and one word. Reading by id would
+give eight thin rows nobody wants and storing by name would throw away the
+ability to look at one rank alone. The pane says the one thing that does not
+survive the roll up, which is that a rate pools across ranks correctly and an
+average hit does not.
+
+**Only your own hits.** `Meter/Meter.lua` reads the same event and counts
+everybody, deliberately, because it is answering what the group did to this
+pull. Counting the group here would grow the table by every stranger you have
+ever been in a party with, and that is the one filter keeping it bounded.
+
+The table is a page in the settings panel rather than a frame of its own.
+Everything else in this addon that has a frame has one because you read it
+during a fight; this is a month of play summed up, it does not change while you
+look at it, and a window for it would be one more thing to place and one more
+thing on screen during the fight it is describing. `/wk breakdown` prints the
+same ranking, and throwing the record away takes two presses or `reset yes`,
+because a mistyped word should not be able to delete a month of counting.
+
 ### Loot and the combat log, as feeds you can scroll
 
 Two columns of what just happened, newest at the top and older underneath.
