@@ -273,6 +273,14 @@ ns.Register({
 				ns.Print("voice: " .. why .. ".")
 				return
 			end
+			-- Every answer the client gave, rather than the one sentence this
+			-- part decided out of them. The first bug in this part was a probe
+			-- refusing a join the client would have taken, and there was no way
+			-- to see which probe it was without reading the source.
+			if arg == "why" then
+				ns.Print("voice: " .. ns.Voice.Diagnose() .. ".")
+				return
+			end
 			ns.Print("voice: " .. ns.Voice.Describe() .. ".")
 		end,
 	},
@@ -285,6 +293,7 @@ ns.Register({
 		"voice, what the voice pick is doing",
 		"voice group|off, join your party or raid channel, or nothing",
 		"voice join, ask for it again now",
+		"voice why, every answer the client gives about voice",
 	},
 
 	status = function()
@@ -395,6 +404,9 @@ ns.Register({
 		end)
 		ui.Note(function()
 			return "A channel does not have to exist to be picked. A party channel is made when you group up and a community one when the first person joins it, so this asks for the one you named again at every login, at every roster change and whenever the voice service comes back, and stops asking after five refusals."
+		end)
+		ui.Note(function()
+			return ns.Voice.Diagnose():sub(1, 1):upper() .. ns.Voice.Diagnose():sub(2) .. "."
 		end)
 		ui.Action(function() return "join it now" end,
 			function()

@@ -104,16 +104,46 @@ function Voice.Supported()
 	return true
 end
 
--- Whether the service has signed in yet. Separate from Supported, because the
--- answer changes a few seconds after login and the difference between "cannot"
--- and "not yet" is the difference between telling the player to go and fix
--- something and telling them to wait.
+-- Whether the service says it has signed in.
+--
+-- Reported and never gated on, and that distinction cost a release. This used
+-- to be a refusal at the top of Apply: a false answer meant "wait", and nothing
+-- was tried until it turned true. On this client it does not turn true. It
+-- reads false with the service plainly working, and pressing the voice button
+-- in the client's own Chat Channels window joins the channel while this is
+-- still saying no, so the addon sat there refusing to make the call that would
+-- have worked at any point in the evening.
+--
+-- The rule this file broke is the one the rest of the addon holds to: probe
+-- what you are about to call, not the weather around it. Whether a join lands
+-- is answered by making the join. A precondition invented on top of that is a
+-- feature that can only be more broken than the API under it.
 function Voice.Ready()
 	local loggedIn = API("IsLoggedIn")
 	if not loggedIn then
-		return true
+		return nil
 	end
 	return loggedIn() and true or false
+end
+
+-- Sign the voice client in, where it says it is not and the client has the
+-- call. Blizzard's own interface does this on your behalf when you reach for
+-- voice, which is what pressing the circle in Chat Channels is doing, so the
+-- addon asks for the same thing before it asks for a channel.
+--
+-- Rate limited with the join below rather than separately, because it is the
+-- same kind of request to the same service and this is not something to ask for
+-- twice a second.
+local function SignIn()
+	if Voice.Ready() ~= false then
+		return false
+	end
+	local login = API("Login")
+	if not login then
+		return false
+	end
+	pcall(login)
+	return true
 end
 
 --------------------------------------------------------------------------
@@ -313,11 +343,6 @@ function Voice.Apply(force)
 		lastResult = why
 		return false, lastResult
 	end
-	if not Voice.Ready() then
-		lastResult = "the voice service has not signed in yet"
-		return false, lastResult
-	end
-
 	if force then
 		tries = 0
 	end
@@ -352,6 +377,7 @@ function Voice.Apply(force)
 		return false, lastResult
 	end
 	lastTry, tries = now, tries + 1
+	SignIn()
 
 	-- A setting holding something neither branch below understands, which is a
 	-- saved variable edited by hand or a shape this file used to write.
@@ -420,6 +446,31 @@ function Voice.Describe()
 	return ("set to join %s (%s)"):format(Voice.Label(), lastResult)
 end
 
+-- Every answer the client gives about voice, in one line.
+--
+-- Here because the first thing that went wrong with this part was invisible
+-- from the game: the addon said it was waiting for a service that was already
+-- working, and there was no way to ask which of the four probes behind that
+-- sentence had produced it. A part that talks to a service it cannot see has to
+-- be able to say what the service said.
+function Voice.Diagnose()
+	if not _G.C_VoiceChat then
+		return "no C_VoiceChat on this client"
+	end
+
+	local enabled = API("IsEnabled")
+	local ready = Voice.Ready()
+	local channel = Target()
+	local active = Voice.Active()
+
+	return ("enabled %s, signed in %s, channel %s, active %s, %d of %d tries, last %s")
+		:format(enabled and tostring(enabled()) or "not asked",
+			ready == nil and "not asked" or tostring(ready),
+			channel and (channel.name or "yes") or "none yet",
+			active and (active.name or "yes") or "none",
+			tries, ATTEMPTS, lastResult)
+end
+
 --------------------------------------------------------------------------
 -- When to try
 --
@@ -456,6 +507,11 @@ frame:SetScript("OnEvent", function(_, event)
 		-- this file exists to reach. Nothing to do but stop counting.
 		tries = 0
 		return
+	end
+	-- The service arriving is new information, so whatever this file had given
+	-- up on before it arrived is worth trying again from a clean count.
+	if event == "VOICE_CHAT_LOGIN" or event == "VOICE_CHAT_CONNECTION_SUCCESS" then
+		tries, lastTry = 0, 0
 	end
 	Voice.Apply()
 end)
