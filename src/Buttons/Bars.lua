@@ -97,6 +97,7 @@ local SIZE = 27
 local GAP = 2
 local PAD = 3
 
+
 --------------------------------------------------------------------------
 -- State
 --------------------------------------------------------------------------
@@ -209,7 +210,6 @@ local function BuildBar(entry)
 	-- so the header sits inside the box and covers it exactly.
 	local bar = UI.Box(UIParent, UI.Color.window, UI.Color.hairline)
 	UI.Adopt(bar, 1)
-	bar:SetFrameStrata("MEDIUM")
 	bar:SetMovable(true)
 	bar:SetClampedToScreen(true)
 	bar:Hide()
@@ -224,6 +224,12 @@ local function BuildBar(entry)
 	end
 	header:SetAllPoints(bar)
 	entry.header = header
+
+	-- Depth is a position, so Buttons/Placing.lua owns it. Called here rather
+	-- than in Arrange because it is settled once at build and never again, and
+	-- called after the header exists because the header is half of what it
+	-- stands up.
+	ns.BarPlace.Stand(entry)
 
 	entry.buttons = {}
 	for index = 1, PER_BAR do
@@ -646,6 +652,16 @@ function Bars.Describe()
 
 	if not ns.Slot.CanRead() then
 		line = line .. "; " .. ns.Slot.Describe()
+	end
+	-- Whether a square can be filled by hand, which is a different question
+	-- from whether it can be read and has a different answer. A client that
+	-- draws every bar perfectly and refuses every drop is a client where
+	-- learning a spell means turning the clone off, and the status line is
+	-- where that has to be said. Combat is left out: it clears on its own, and
+	-- Buttons/Square.lua does not report it either.
+	local canCarry, whyCarry = ns.Layout.CanCarry()
+	if not canCarry and whyCarry ~= ns.Layout.BUSY_COMBAT then
+		line = line .. "; nothing can be dropped on a square: " .. whyCarry
 	end
 	if proven == false then
 		line = line .. "; this client accepted the keys and did not bind them"

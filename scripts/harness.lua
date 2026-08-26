@@ -1551,6 +1551,29 @@ local BLIZZARD_BARS = {
 	{ button = "MultiBarLeftButton%d", base = 25, holder = "MultiBarLeft", on = false },
 }
 
+-- The frame that swallowed every drop on bar 1, modelled because reading the
+-- code could not find it and only Blizzard's own source could.
+--
+-- MainActionBar is declared `enableMouse="true"` on MEDIUM at frame level 50,
+-- 454 by 35, anchored to the bottom of UIParent. Buttons/Blizzard.lua hides the
+-- twelve buttons standing on it and a hidden frame takes no mouse, but this
+-- frame is not hidden and must not be: the micro menu and the bag bar hang off
+-- the same corner. Strip the art and it is an invisible mouse trap across the
+-- bottom of the screen.
+--
+-- The four multi-bars are declared with no `enableMouse` at all, which is why
+-- they are absent here and why exactly one bar was ever broken. Modelling only
+-- the frame that takes the mouse is the point: a fixture where every Blizzard
+-- bar frame took clicks would pass a fix that raised nothing.
+-- Declared inside the block, because a name at file scope here is one of the
+-- two hundred Lua 5.1 allows a chunk and this file's header says what happens
+-- when they run out.
+do
+	local main = region("frame", _G.UIParent, "MainActionBar")
+	main:SetFrameLevel(50)
+	main:EnableMouse(true)
+end
+
 -- region rather than child, on purpose: these are Blizzard's frames and must
 -- not turn up in the anchor sweep that holds every frame on the addon's own
 -- grid to a whole pixel.
@@ -3288,6 +3311,30 @@ do
 		end
 	end
 	check(seen == 48, ("walked %d squares, expected 48"):format(seen))
+
+	-- A square nothing can reach.
+	--
+	-- The one above is about what a square answers. This is about whether the
+	-- mouse ever gets to ask, and it is a different bug with the same face: bar
+	-- 1 drew, lit, counted down and cast off its keys, and every drop and every
+	-- click on it went into Blizzard's MainActionBar, which sits mouse enabled
+	-- and invisible across the bottom of the screen at level 50 while a frame
+	-- built on UIParent starts at 1.
+	--
+	-- Asserted against the fixture's own level rather than a number written
+	-- twice, and asserted on every bar rather than on bar 1, because the next
+	-- bar somebody drags down there has to win the same argument.
+	local sunk = 0
+	for index = 1, #bars do
+		local level = bars[index].frame:GetFrameLevel()
+		if not level or level <= _G.MainActionBar:GetFrameLevel() then
+			sunk = sunk + 1
+		end
+	end
+	check(sunk == 0, ("%d cloned bars sit at or under Blizzard's own mouse enabled "
+		.. "bar, so nothing can be dropped on them"):format(sunk))
+	check(found.bar1.header:GetFrameLevel() > _G.MainActionBar:GetFrameLevel(),
+		"the header the squares hang off is under Blizzard's bar frame")
 
 	--------------------------------------------------------------------------
 	-- Placing them

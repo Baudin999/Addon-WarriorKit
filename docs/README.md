@@ -1080,6 +1080,12 @@ and says which one is missing. Every write is also guarded by `GetCursorInfo`,
 so a pickup that came up empty can never reach `PlaceAction` and drop whatever
 was on the cursor last into a slot.
 
+`PickupAction`, `PlaceAction`, `PickupSpell`, `PickupMacro`, `ClearCursor`,
+`GetCursorInfo` and `GetActionInfo` are each present as exact strings in
+`WowClassic.exe` on this install, which is weaker evidence than an addon calling
+one and stronger than nothing. The probes stay: a name in the binary is not a
+name bound into the Lua environment, and the probes cost one comparison.
+
 **APIs that do exist here**, each confirmed by an installed addon calling it
 unguarded rather than by memory:
 
@@ -1134,6 +1140,15 @@ one side, only the shim changes.
   `RegisterForDrag` bug below was fixed, because that error aborted
   `ApplySecure` before it ever set the `type` attribute, so the button was
   mouse enabled and inert. Fixing one bug is what exposed the other.
+- A frame that covers another one takes its mouse whether or not anything is
+  drawn on it. `MainActionBar` is declared `enableMouse="true"` at frame level
+  50 across the bottom of UIParent; the four multi-bars are declared with no
+  `enableMouse` at all. Hiding Blizzard's twelve buttons does not hide the frame
+  they stand on, and stripping its art does not stop it taking clicks, so a
+  cloned bar standing over bar 1 at the default level 1 drew perfectly, cast off
+  its keys, and swallowed every drop. Anything laid over Blizzard's furniture has
+  to say what level it stands at. `Buttons/Placing.lua` uses 120 and the harness
+  models the frame at 50.
 - `RegisterForDrag(nil)` is an error, not a way to clear a drag registration.
   The no argument call is what clears it. Written as
   `RegisterForDrag(unlocked and "LeftButton" or nil)` it raised on every lock,

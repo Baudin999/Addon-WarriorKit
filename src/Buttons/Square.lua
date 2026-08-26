@@ -82,12 +82,37 @@ end
 -- slots from empty hands and the wrong one here: a drop happens with a spell on
 -- the cursor by definition, and asking CanWrite would refuse every drop with
 -- "put down what you are holding first".
+
+-- A refusal nobody can see is indistinguishable from a bar that ignores the
+-- mouse, which is what this cost an evening to find out.
+--
+-- Both halves used to answer a false CanCarry with a bare return. The spell
+-- stayed on the cursor, the square stayed empty, and nothing on screen said
+-- why. Two of the three reasons that call can refuse are permanent for the
+-- session, because this client has no PickupAction or no PlaceAction at all,
+-- and that is worth one line in chat rather than an evening of dragging.
+--
+-- Once a session rather than once a square: a drag along a bar passes over
+-- twelve of them and twelve identical lines is not a better answer than one.
+-- Combat is never reported, because it clears on its own and because a fight
+-- is when the chat frame has the least room for a sentence you did not need.
+local said
+
+local function Refused(why)
+	if said or not why or why == ns.Layout.BUSY_COMBAT then
+		return
+	end
+	said = true
+	ns.Print("nothing can be dropped on a square: " .. why .. ".")
+end
+
 local function Carry(w)
 	w:RegisterForDrag("LeftButton")
 
 	w:SetScript("OnDragStart", function(self)
-		if not ns.Layout.CanCarry() then
-			return
+		local can, why = ns.Layout.CanCarry()
+		if not can then
+			return Refused(why)
 		end
 		local slot = self:GetAttribute("action")
 		if slot then
@@ -96,8 +121,9 @@ local function Carry(w)
 	end)
 
 	w:SetScript("OnReceiveDrag", function(self)
-		if not ns.Layout.CanCarry() then
-			return
+		local can, why = ns.Layout.CanCarry()
+		if not can then
+			return Refused(why)
 		end
 		local slot = self:GetAttribute("action")
 		if slot then

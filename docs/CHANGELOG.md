@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+### Bar 1 takes a dropped spell again
+
+Nothing could be dropped on bar 1. The other four bars took a spell off the
+spellbook and cast it a second later; bar 1 took the drop, kept its empty
+square, and the key that pressed that square went on doing nothing, because
+nothing had ever landed there.
+
+The cause is one line of Blizzard's own XML. `MainActionBar` is declared
+`enableMouse="true"` at frame level 50, 454 by 35, anchored to the bottom of
+UIParent. Its twelve buttons are hidden by `Buttons/Blizzard.lua` and a hidden
+frame takes no mouse, but the bar frame under them is not hidden and is not ours
+to hide: the micro menu and the bag bar hang off that same corner, which is the
+warning `Artwork/Artwork.lua` has carried since it was written. Strip the art off
+it, which is the shipping setting, and what is left is an invisible frame across
+the bottom of the screen that swallows every click landing on it.
+
+A frame built on UIParent starts at level 1. Fifty beats one, so a drop aimed at
+bar 1 went into a frame with no drag handler and disappeared, and only bar 1,
+because `MultiBarBottomLeft`, `MultiBarBottomRight`, `MultiBarLeft` and
+`MultiBarRight` are each declared with no `enableMouse` at all. Exactly one
+action bar frame in the client takes the mouse, and exactly one bar was broken.
+The keys never asked the mouse anything, which is why the bar looked alive.
+
+`Buttons/Placing.lua` owns the number, because depth is a position. The cloned
+bars stand at level 120, clear of the end caps and the page number
+at 100, and `scripts/harness.lua` carries a `MainActionBar` at 50 so the next bar
+dragged down there has to win the same argument.
+
+Two things around it were silent and are not now. A pickup or a drop refused by
+`Layout.CanCarry` says why once a session instead of returning into nothing, and
+`/wk actionbars` carries the standing answer, so a client that draws every bar
+and accepts no drop says so in its own status line. That is the half of this bug
+that cost the most: every failure mode looked exactly like a bar that ignores the
+mouse.
+
 ### A nag you cannot silence is a nag you learn to ignore
 
 The report was one sentence: "I do not have a weapon enchant, and I know that's
