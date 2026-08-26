@@ -393,6 +393,9 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Swing.Speed(hand) / Armed / Remaining / Fraction   how long a swing is,
                                  whether one is running, how much of it is left
                                  and how much of it is spent, per hand
+    ns.Swing.Duration(hand)      how long the swing being drawn is, which is
+                                 what Fraction divides by. Anything marking up
+                                 that bar asks this rather than Speed
     ns.Swing.Start(hand) / Stop(hand) / Retime()   a swing landed, a swing is
                                  not coming, and the speed moved under one
     ns.Swing.Ready() / HasMainhand() / HasOffhand()   whether the client will
@@ -755,20 +758,28 @@ become new ratchets.
 Six `OnUpdate` tickers run at once and none of them ever stops. A seventh runs
 only while you are looking at it.
 
-    Charge/Marker.lua        20 Hz   it tracks the camera
-    Swing/Gauges.lua         20 Hz   two gauges and the Slam band
-    Charge/Icon.lua          10 Hz   the HUD icon and the macro
-    Buttons/Bars.lua         10 Hz   every square on every cloned bar
-    UnitFrames/EnemyBars.lua  5 Hz   every bar on screen
-    UnitFrames/Skin.lua       5 Hz   the three Blizzard unit frames
-    Perf/Perf.lua             1 Hz   only while the performance tab is on screen
+    Swing/Gauges.lua      every frame   two gauges and the Slam band
+    Charge/Marker.lua        20 Hz      it tracks the camera
+    Charge/Icon.lua          10 Hz      the HUD icon and the macro
+    Buttons/Bars.lua         10 Hz      every square on every cloned bar
+    UnitFrames/EnemyBars.lua  5 Hz      every bar on screen
+    UnitFrames/Skin.lua       5 Hz      the three Blizzard unit frames
+    Perf/Perf.lua             1 Hz      only while the performance tab is on screen
 
-The swing timer runs at the marker's rate rather than the icon's on purpose,
-and it is the only readout in the addon where that is worth the cost. What you
-are pressing on is a band two tenths of a second wide: at 10 Hz a tenth of that
-band goes past between frames, which is half the aim you have. The tick pays
-for it by quantising the fill to whole pixels, so between swings it writes
-nothing at all and inside one it writes one number.
+The swing timer has no rate, and it is the only thing here that does not. Every
+other ticker refreshes a readout, and a readout refreshed twenty times a second
+is never more than fifty milliseconds stale, which nobody can see. The swing bar
+is not a readout, it is a moving edge, and a moving edge is an animation. At the
+shipped width the fill crosses 53 pixels a second, so a draw every fifty
+milliseconds moves it about three pixels at a time, and three pixels is a step
+you can see. It shipped at 20 Hz and the report back was that the timer "jumps
+chunks", which is exactly what a 20 Hz animation on a 60 Hz screen is.
+
+Drawing it every frame costs nothing, because the quantisation is the guard.
+The fill is a whole number of pixels compared against the whole number already
+on the bar, so a frame that would draw the same pixel writes nothing: 53 writes
+a second inside a swing, and none at all outside one. Every other rate in the
+table stands, because none of those parts draws motion.
 
 The last one is the exception that proves the rule rather than a loosening of
 it. `UpdateAddOnMemoryUsage` walks every addon the client has loaded, which
@@ -2480,30 +2491,66 @@ side of the line it is on. The whole gauge goes green while the fill is inside
 the band, because four percent of a bar is not enough to catch out of the corner
 of an eye and all of it is.
 
-**The cast time is measured, and estimated only until it can be.**
-`UNIT_SPELLCAST_START` carries what the server actually started, as a start and
-an end in milliseconds, with talents and haste already in it. That number
-replaces the estimate from the first Slam of a session and is re-taken on every
-cast.
+**Exactly one thing is allowed to move the mark, and it is your weapon speed.**
+That is the repair the feature needed after it shipped: the report back was that
+the mark "moves around depending on when I click the spell", and it did, because
+the cast time under it was re-measured on every cast.
 
-Until then it is the spell's own cast time out of `ns.SpellCastTime`, less 0.1
-seconds per point of Improved Slam. The talent is found by name rather than by
-position, because a talent's tab and index are not stable and its name is: every
-"Improved X" talent in this game carries the ability's own localised name inside
-it, in every locale Blizzard ships, so the talent whose name contains the
-localised name of Slam and is not Slam is Improved Slam.
+`D` is the swing being drawn, out of `ns.Swing.Duration`, rather than what
+`UnitAttackSpeed` says right now. Those are the same number today and asking for
+the first is what keeps the mark and the fill two readings of one thing rather
+than two answers that agree by luck.
 
-That rule about naming is the one guess in the feature and it is deliberately
-the shortest lived thing in it. Whether this client already folds Improved Slam
-into `GetSpellInfo` could not be settled without logging in, and the measurement
-means it does not have to be: a first cast one tenth out is the whole cost of
-being wrong.
+`C` is a constant per character. Haste does not touch Slam's cast time on either
+of these clients: Warcraft wiki's patch history dates that to Cataclysm 4.0.1,
+2010-10-12, "Slam can now be cast while moving, and haste now reduces the cast
+time". Before that patch it is 1.5 seconds less the talent and nothing else. So
+a second reading of it carries no information, and every difference a second
+reading could carry is noise the mark would move for.
+
+The mark does still move when the swing speed does, and it has to: the press is
+the moment with a cast time left to run, and a shorter swing spends a bigger
+share of itself on the same cast. Flurry landing walks the band back down the
+bar, not up it. The harness asserts that as the invariant rather than as a
+percentage, at three weapon speeds and across a proc that lands mid swing,
+because the percentage is the number that moves.
+
+**The cast time is measured once and then held.** `UNIT_SPELLCAST_START` carries
+what the server actually started, as a start and an end in milliseconds, with
+the talent already in it. The first Slam of a session replaces the estimate.
+Every Slam after it is ignored.
+
+The reading is snapped to a twentieth of a second, because every value the real
+cast can take is a multiple of a tenth and the milliseconds under that are the
+server's own rounding. It is refused if it snaps to zero, since zero is truthy
+in Lua and a held zero would win over the estimate and then report that this
+character has no Slam. It is refused if it is longer than the spell's own cast
+time, because that reading is some other cast. What drops the held number is
+`CHARACTER_POINTS_CHANGED`, which is the one event that means the answer really
+changed.
+
+Until the first cast it is the spell's own cast time out of `ns.SpellCastTime`,
+less 0.1 seconds per point of Improved Slam. The talent is found by name rather
+than by position, because a talent's tab and index are not stable and its name
+is: every "Improved X" talent in this game carries the ability's own localised
+name inside it, in every locale Blizzard ships, so the talent whose name
+contains the localised name of Slam and is not Slam is Improved Slam.
+
+The 0.1 is a seed and is not trusted. Warcraft wiki's rank table gives 0.1 per
+point over five points for Classic and for Burning Crusade and dates the two
+point, 0.5 per point version to patch 3.0.2, one expansion past both of these
+clients. Wowhead's TBC entry for spell 12330 reads -1000 milliseconds, which
+does not agree. Nothing in the API settles it, the measurement replaces it on
+the first cast, and the panel says "estimated" until it has.
 
 **Slam restarts the swing and nothing in the log says so.** The next log event
 you would see is the swing that lands a full weapon speed later, so a timer
 built on the log alone draws the whole of that swing wrong.
 `UNIT_SPELLCAST_SUCCEEDED` for your own Slam restarts the main hand timer, and
 the spell is matched by name across every shape that event arrives in.
+
+**The bar is drawn every frame and nothing else in the addon is.** See ticker
+discipline above for why, and for why that costs nothing.
 
 **What could not be verified without the client.** That `SWING_DAMAGE` really
 carries the off hand flag in slot 21 on 2.5.6 and 1.15.9, that
@@ -2960,6 +3007,20 @@ and zero errors.
    outranks the wrong stance, and an open window hands the wrong stance back so
    the square can say to swap. On the hunter run nothing is registered, a dodge
    opens nothing, and an Overpower square reads `ready`.
+
+   All of that passed while the feature was unusable in game, so a second
+   section asserts the two things a person actually sees. The fill is driven
+   across a whole swing one 60 fps frame at a time and has to take a different
+   pixel on nearly every one of them: the assertions are that it never jumps
+   more than one pixel between two frames and that it visits all 180 positions,
+   which is the only pair of statements that means smooth. Then five Slams are
+   cast in a row, each declaring a different length, and the press mark has to
+   stay on the same pixel through all of them, through an aura event that moved
+   no speed, and through readings that are refused for being longer than the
+   spell or for rounding away to nothing. What is allowed to move it is asserted
+   as the invariant it comes from: at 3.4, 2.4 and 1.6 second swings, and across
+   a proc that lands mid swing, the moment the fill reaches the mark is the
+   moment the swing has exactly a cast time left to run.
 7. Runs luacheck over the tree.
 
 The harness runs twice, and the second run comes up as a hunter:
@@ -3047,15 +3108,27 @@ Everything below was written from the API contract and has never executed:
   time, so a client that never fires it leaves the band drawn from the spell's
   own cast time less 0.1 seconds per point of Improved Slam, which is the state
   the first Slam of every session is drawn in anyway.
+
+  What is no longer on this list is whether that start and end are stable from
+  one cast to the next. Only the first reading is taken, so a client that varies
+  it cannot move the mark, and the answer stopped mattering.
 - Whether the server scales a swing already in flight when haste lands, rather
   than restarting it. `Swing.Retime` assumes it scales, which is what every
   swing timer written for these clients assumes and what Flurry visibly does.
   Getting it wrong costs a bar that is out by the difference for one swing after
   every proc.
-- Whether this client folds Improved Slam into `GetSpellInfo`. If it does, the
-  estimate is a tenth of a second per point too short until the first Slam of
-  the session is cast, and the measurement corrects it from then on. This is
-  the one place in the feature where being wrong was designed to be temporary.
+- Whether this client folds Improved Slam into `GetSpellInfo`, and whether the
+  talent is 0.1 seconds a point on 2.5.6 or 0.2. Warcraft wiki's rank table says
+  0.1 for both Classic and Burning Crusade; Wowhead's TBC entry for spell 12330
+  says -1000 milliseconds, which would be 0.2. Either way the estimate is out by
+  at most half a second and only until the first Slam of the session is cast,
+  and the measurement corrects it from then on. This is the one place in the
+  feature where being wrong was designed to be temporary.
+
+  What is settled, and did not need the client: haste does not reduce Slam's
+  cast time on either of these versions. Warcraft wiki's patch history dates
+  that to Cataclysm 4.0.1. The mark is built on the cast being a constant per
+  character, and that is where the constant comes from.
 - Whether `RegisterStateDriver` and `SecureHandlerStateTemplate` re-point bar 1
   at another twelve action slots in combat on 2.5.6. `Charge/Icon.lua` already
   builds a handler and registers a driver on the same client, so the machinery is
