@@ -135,15 +135,20 @@ local CHURN = {
 -- refuse.
 
 -- The swing timer's tick, in KB per fifty ticks with both hands running and the
--- Slam band drawn, at twenty ticks a second, which is the fastest thing in the
--- addon.
+-- Slam band drawn. This is the only thing in the addon that draws on every
+-- frame, so it is the tick where an allocation costs the most.
 --
--- Nothing on that path builds anything. The fill is an integer compared against
--- the integer already on the bar, the band is placed only when one of its two
--- pixel edges moves, and ns.Slam.Window hands back three numbers rather than a
--- table. It measures 0.03 and the gate is 0.05, and what is left is the flip
--- itself: the gauge repaints its fill, its spent track and its four edges twice
--- a swing, on the two ticks the window opens and closes on.
+-- Nothing on that path builds anything. The fill is one multiply and one
+-- SetValue, the band is placed only when one of its two pixel edges moves, and
+-- ns.Slam.Window hands back three numbers rather than a table.
+--
+-- It measured 0.03 with the fill rounded to a pixel and written only when that
+-- pixel changed, and it measures 0.03 with the fill written unguarded on every
+-- frame. That is the measurement the unguarded write was asked for: dropping
+-- the guard bought smooth motion and cost nothing the collector can see. The
+-- gate stays at 0.05. What is left of the 0.03 is the flip: the gauge repaints
+-- its fill, its spent track and its four edges twice a swing, on the two ticks
+-- the window opens and closes on.
 
 --------------------------------------------------------------------------
 -- The stub
@@ -7195,9 +7200,9 @@ do
 -- clips. It is asserted as pixels rather than as a fraction, because pixels
 -- are what the eye is aiming at.
 --
--- And does the tick stay free. Twenty times a second is the fastest thing in
--- this addon, so the bar is quantised to whole pixels and every write is
--- guarded on the integer it would draw.
+-- And does the tick stay free. This is the only thing in the addon that draws
+-- on every frame, so what it allocates per tick is gated below and the fill's
+-- unguarded write is measured rather than argued about.
 --------------------------------------------------------------------------
 
 do
@@ -7420,12 +7425,12 @@ do
 	advance(1.7)
 	swingTicker.scripts.OnUpdate(swingTicker, 0.05)
 
+	-- Read off the widget rather than off the bookkeeping field beside it, so a
+	-- tick that worked out the right number and never wrote it fails here.
 	local width = ns.db.swingWidth
-	check(mainBar.shownValue == math.floor(0.5 * width + 0.5),
-		("half of a %d pixel bar is %d and the fill drew %s")
-			:format(width, math.floor(0.5 * width + 0.5), tostring(mainBar.shownValue)))
-	check(mainBar.shownValue == math.floor(mainBar.shownValue),
-		"the fill is not a whole number of pixels")
+	check(math.abs(mainBar:GetValue() - 0.5 * width) < 1e-9,
+		("half of a %d pixel bar is %.1f and the fill drew %s")
+			:format(width, 0.5 * width, tostring(mainBar:GetValue())))
 
 	if WARRIOR then
 		local open, close, at = ns.Slam.Window()
@@ -7601,13 +7606,31 @@ do
 -- passed while the feature was unusable in game. Two things were wrong and
 -- neither is arithmetic.
 --
--- The bar moved in steps. The fill was drawn on a 20 Hz ticker, and 20 Hz is
--- the rate a readout is refreshed at rather than the rate a thing that moves
--- is animated at. At the shipped width the fill crosses 53 pixels a second, so
--- a draw every 50 milliseconds moves it about three pixels at a time and the
--- eye reads three pixels as a jump. So the assertion is not "the fill is
--- right" but "the fill never moves more than one pixel between two frames of a
--- 60 fps client", which is the only statement that means smooth.
+-- The bar moved in steps, and it took two goes to find out why, because there
+-- were two throttles on one edge and removing the first left the second.
+--
+-- The first was a 20 Hz ticker. The second was the rounding: the fill was
+-- snapped to a whole pixel, so it could only change value 53 times a second at
+-- the shipped width however often the tick ran. A 144 Hz screen drew the same
+-- position on 91 of its 144 frames, and each move was a whole design unit,
+-- which is three screen pixels at swing zoom 3.
+--
+-- No assertion in this file can prove that a bar looks smooth. Smooth is a
+-- property of a screen and an eye, and the stub has neither. What can be
+-- proved is the property that leaves the client nothing to be blamed for, and
+-- it is one sentence: on every frame it is given, the addon hands the widget
+-- the exact position the elapsed time puts the edge at. So the fill is driven
+-- across a whole swing at two frame rates and three things are asserted, none
+-- of which is a tolerance. The drawn position equals elapsed over duration
+-- times the width, exactly. The value changes on every frame, with no frame
+-- repeating the one before it. And every step is the same size as every other,
+-- which is what constant velocity means and what a quantiser destroys.
+--
+-- The second of those is also the gate on the addon's second pixel rule: a
+-- moving fill is not quantised. Reintroduce a Whole() around the fill and the
+-- repeated frames come back and this fails. The first rule, that a static edge
+-- lands on a whole pixel, is gated by the anchor sweep at the end of the file
+-- and by the mark assertions below.
 --
 -- And the mark moved. It was drawn from a cast time re-measured on every cast,
 -- so the number under it changed while the player was aiming at it. The
@@ -7620,9 +7643,13 @@ do
 -- that must not.
 --------------------------------------------------------------------------
 
--- One frame on a 60 fps client, which is the rate the fill has to be smooth
--- at because it is the rate the screen is.
+-- One frame on a 60 fps client. The fill test below runs at 144 fps as well,
+-- because a rounded fill is worse on a faster screen and an addon that only
+-- ever looked right at 60 is an addon that looks wrong on half the monitors
+-- sold. Everything else in the section is about drawing rather than rate and
+-- uses the 60 fps figure.
 local FRAME = 1 / 60
+local FAST_FRAME = 1 / 144
 local SLAM = 1464
 
 guids.player = "Player-0-0000000f"
@@ -7651,8 +7678,8 @@ local width = ns.db.swingWidth
 -- One frame of the client, through whatever the ticker decides to do with it.
 -- Only the fill test below uses this, because it is the only test about the
 -- rate rather than about the drawing.
-local function tick()
-	ticker.scripts.OnUpdate(ticker, FRAME)
+local function tick(interval)
+	ticker.scripts.OnUpdate(ticker, interval or FRAME)
 end
 
 -- A draw, taken straight rather than through the ticker, so a test about where
@@ -7677,30 +7704,83 @@ check(bar.pixels == width,
 --------------------------------------------------------------------------
 
 do
-	ns.Swing.Start(ns.Swing.MAIN)
-	tick()
+	local SPEED = 3.4
 
-	local seen, distinct, biggest, last = {}, 0, 0, bar.shownValue
-	for _ = 1, math.floor(3.4 / FRAME) do
-		advance(FRAME)
-		tick()
-		local step = bar.shownValue - last
-		if step > biggest then
-			biggest = step
+	-- One swing, one frame at a time, reading the widget rather than the field
+	-- beside it. Three numbers come back: the worst distance between what was
+	-- drawn and where the elapsed time says the edge belongs, how many frames
+	-- drew the same position as the frame before them, and the widest and
+	-- narrowest step taken.
+	--
+	-- The elapsed time is accumulated here in the same order the stub clock
+	-- accumulates it, so the two agree bit for bit and the comparison can be an
+	-- exact one. A tolerance would let a rounded fill through at any width where
+	-- a pixel is small.
+	local function run(interval)
+		swing.main = SPEED
+		fire("UNIT_ATTACK_SPEED", "player")
+		ns.Swing.Start(ns.Swing.MAIN)
+		tick(interval)
+
+		local elapsed, frames, repeated = 0, 0, 0
+		local worst, widest, narrowest = 0, 0, math.huge
+		local last = bar:GetValue()
+		while elapsed + interval < SPEED do
+			advance(interval)
+			elapsed = elapsed + interval
+			tick(interval)
+
+			local at = bar:GetValue()
+			local off = math.abs(at - elapsed / SPEED * width)
+			if off > worst then
+				worst = off
+			end
+			local step = at - last
+			if step == 0 then
+				repeated = repeated + 1
+			end
+			if step > widest then
+				widest = step
+			end
+			if step < narrowest then
+				narrowest = step
+			end
+			last = at
+			frames = frames + 1
 		end
-		last = bar.shownValue
-		if not seen[bar.shownValue] then
-			seen[bar.shownValue] = true
-			distinct = distinct + 1
-		end
+		return frames, worst, repeated, widest - narrowest
 	end
 
-	check(biggest <= 1,
-		("the fill jumped %d pixels in one frame, and one frame of a 3.4s swing is %.2f pixels")
-			:format(biggest, width / 3.4 * FRAME))
-	check(distinct >= width,
-		("the fill took %d positions across a %d pixel swing, and every pixel is one position")
-			:format(distinct, width))
+	for _, pass in ipairs{ { FRAME, 60 }, { FAST_FRAME, 144 } } do
+		local frames, worst, repeated, spread = run(pass[1])
+		check(worst < 1e-9,
+			("at %d fps the fill was drawn %.4f px from where the elapsed time puts it")
+				:format(pass[2], worst))
+		check(repeated == 0,
+			("at %d fps the fill drew the same position twice on %d of %d frames, and a frame it does not move on is a frame the eye reads as a stall")
+				:format(pass[2], repeated, frames))
+		check(spread < 1e-9,
+			("at %d fps the widest step was %.6f px more than the narrowest, and a fill at constant velocity takes one step size")
+				:format(pass[2], spread))
+	end
+
+	-- And the positive form of the addon's second pixel rule, stated on its own
+	-- so that deleting the three assertions above cannot quietly take it with
+	-- them: the fill really does sit between pixels. A whole number every frame
+	-- is a quantiser, and a quantiser is the defect this section exists for.
+	ns.Swing.Start(ns.Swing.MAIN)
+	local fractional = 0
+	for _ = 1, 60 do
+		advance(FRAME)
+		tick()
+		local at = bar:GetValue()
+		if math.abs(at - math.floor(at + 0.5)) > 1e-6 then
+			fractional = fractional + 1
+		end
+	end
+	check(fractional >= 50,
+		("the fill landed off a whole pixel on %d of 60 frames, and a moving fill is not quantised")
+			:format(fractional))
 end
 
 --------------------------------------------------------------------------
@@ -8395,6 +8475,15 @@ end
 -- is not on the grid is not held to this: the charge button rides UIParent's
 -- scale, and Blizzard's own frames are Blizzard's business. UIParent itself is
 -- skipped, because the stub sets the flag on it to model the client.
+--
+-- This is the whole of the addon's first pixel rule and none of its second. It
+-- walks anchor offsets, and an anchor offset is a static edge by construction:
+-- a border, a band, a mark, a block of art. A moving fill is placed by
+-- SetValue rather than by an anchor and never reaches this walk, which is
+-- correct rather than a gap, because a moving fill is not allowed to be a whole
+-- pixel. The second rule is gated in the swing section above, which asserts the
+-- opposite thing about the same kind of edge: that the fill lands between
+-- pixels on nearly every frame. Two rules, two gates, and neither excused.
 --------------------------------------------------------------------------
 
 do
