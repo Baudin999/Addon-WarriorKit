@@ -97,6 +97,86 @@ collected because a nameless button could not be released. Most of what it
 asserts is the reverse direction, because the forward one is the easy half of
 both files.
 
+### The cloned bars answer a press
+
+The squares read the right slots, drew the right art and cast the right spells,
+and they still did not feel like buttons. Five things were missing and four of
+them are the same missing thing: nothing on a square changed in response to
+anything you did with it.
+
+The loudest was the global cooldown. `Buttons/Slot.lua` withheld the swipe below
+1.5 seconds on the grounds that a bar sweeping on every press is a strobe. It
+is, and that strobe was the only thing on screen answering a key press: a rage
+dump has no cooldown to count, no colour to change and nothing to grey, so
+pressing one moved no pixel at all. `Slot.State` now returns the cooldown's
+numbers whether or not it returns the `cooldown` status, and `Ability.Draw`
+takes the swipe off the numbers and the countdown off the status. The global
+sweeps and gets no number; a real cooldown still gets both.
+
+Then the three the client will draw for you if asked. A highlight on the
+HIGHLIGHT layer, which the client shows and hides itself for any frame that
+takes the mouse. A pushed tint, which the Button widget draws between mouse down
+and mouse up. And a tooltip, which was on the list of things a square
+deliberately was not and should not have been: drag is a way to lose a bar to a
+misclick, and a tooltip is how you find out which rank of Rend the loadout put
+in slot four.
+
+The fifth is the active tint. `IsCurrentAction` and `IsAutoRepeatAction` fold
+into `Slot.Active`, and a square that is already what is running gets an
+additive gold wash over the art. On a warrior that is the stance you are
+standing in, drawn on the bar at a glance, and the auto attack already swinging.
+It is an argument to `Ability.Draw` rather than a tenth status, because the
+active stance is also `ready` and the two must be able to be true at once. The
+two calls are probed separately from the five in `NEEDED`: a client without them
+loses a tint, not the bar.
+
+And empty slots stopped being question marks. An empty slot has no art, so it
+fell to the `no` look and came out as `INV_Misc_QuestionMark` at 55 percent, a
+row of grey question marks where Blizzard's bar had holes. Both palettes grew an
+`empty` look carrying `blank`, which says draw no art at all.
+
+### You can drop a spell on a square, and a worn item says so
+
+The two things the entry above listed as not done.
+
+Dragging was refused on the grounds that `PickupAction` and `PlaceAction` on a
+frame you can drop anything onto is a way to lose a bar to a misclick. The risk
+is real and the conclusion did not follow. With Blizzard's buttons hidden
+underneath, nothing could be dropped on a bar at all, so learning a spell meant
+turning the whole clone off to place it and back on again. A misclick moves one
+slot and hands back what it displaced. Nothing is destroyed, and the picture is
+right on the next tick.
+
+So a square takes `OnDragStart` and `OnReceiveDrag`, both refused in combat,
+which is where `PickupAction` cannot be called anyway. They ask
+`Layout.CanCarry`, which is new and is the smaller half of `Layout.CanWrite`.
+That split was a bug found while wiring this up: `CanWrite` refuses while the
+cursor is holding something, which is the state every drop happens in, so a drop
+asking it would be told to put down the thing it was in the middle of putting
+down. It also demanded all seven action calls, and moving one slot onto another
+needs two. `CARRY` is those two, `COMPOSE` is the five a loadout needs on top,
+and each is probed once.
+
+Empty squares are drawn at full alpha now rather than faded. That looks
+backwards and is not: with `blank` there is no art left to fade, so the alpha
+only reached the black backing and the hairline, and fading those leaves a drop
+target you cannot see. It is also why there is no grid. The client shows one on
+`ACTIONBAR_SHOWGRID` because its bar has no background to see a hole against,
+and this one is squares on a box.
+
+The equipped ring is `IsEquippedAction` folded into `Slot.Equipped`, drawn as a
+second green outline one pixel inside the status border rather than a recolour
+of it. The outer edge already carries the status, and being worn is not a
+status: a wielded weapon can be on cooldown and out of range at once, and all
+three are worth saying. It sits on `OVERLAY` because `BORDER` is under the art,
+and a ring on the art's own bounds would be covered by it.
+
+`Buttons/Bars.lua` hit 832 lines doing this, over the 800 line gate. It took the
+split rather than a fourth entry on the allow-list. `Buttons/Square.lua` is what
+one square answers to the mouse: everything in it hangs a script on a button and
+touches the cursor, and none of it knows what a bar is or which slot a square
+points at.
+
 ### The meter bars have an opacity slider
 
 `BAR_ALPHA = 0.15` was a constant in `Meter/Window.lua` and the note beside it

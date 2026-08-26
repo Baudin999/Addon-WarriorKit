@@ -113,6 +113,14 @@ Buttons\Ranks.lua
 Buttons\Blizzard.lua
 Buttons\Bars.lua
 
+# What one square answers to the mouse: the tooltip you get by hovering it and
+# the drag that fills it. Split out of Bars.lua at the 800 line gate, and a real
+# seam rather than a convenient one: everything in it hangs a script on a button
+# and touches the cursor, and none of it knows what a bar is. After Bars.lua,
+# which is the only caller, and after Layout.lua, whose probe it asks before it
+# picks anything up.
+Buttons\Square.lua
+
 # Where each cloned bar sits and the handle you drag it by. After Bars.lua,
 # which is the only caller, and separate from it because the bar's shape is
 # decided by the plan in source and its position is the one thing you cannot

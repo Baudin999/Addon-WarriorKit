@@ -31,6 +31,29 @@ UI.Ability = Ability
 --                     it allocates nothing and writes nothing already there.
 --                     check.sh's HOT list holds it to that.
 --
+-- What a square answers to the hand, as opposed to what it says about the
+-- game, is here too and was the thing missing when the bars did not feel like
+-- buttons. Three pieces, all of them free:
+--
+--   A highlight under the cursor, drawn on the HIGHLIGHT layer, which the
+--   client shows and hides itself for any frame that takes the mouse. No
+--   script, no per-tick work.
+--
+--   A pushed tint on the way down, which the Button widget draws itself for
+--   whatever SetPushedTexture was handed. Buttons only; a plain frame has no
+--   such state and the marker in the world is not something you press.
+--
+--   An active tint, for the one square whose ability is already what is
+--   running: the stance you are standing in, the auto attack already swinging.
+--   That one is not free, because nothing in the client knows to draw it, so it
+--   is an argument to Ability.Draw like every other fact about the square.
+--
+-- And a green ring for an item you are wearing, which is what Blizzard's own
+-- buttons draw for the same fact. It is a second outline one pixel inside the
+-- first rather than a recolour of it, because the outer edge already carries
+-- the status and being equipped is not a status: a wielded weapon can be on
+-- cooldown and out of range at once, and all three are worth saying.
+--
 -- What this file does not do, and will not: decide what an ability is doing.
 -- It is handed a status and draws it. Charge/Charge.lua works out the status
 -- for the three charge abilities against a picked unit; Buttons/Slot.lua works
@@ -42,7 +65,7 @@ UI.Ability = Ability
 --------------------------------------------------------------------------
 -- The vocabulary
 --
--- Nine statuses and five looks. The statuses are reasons and are the same
+-- Nine statuses and six looks. The statuses are reasons and are the same
 -- everywhere; the looks are what a reason is worth on screen and are not.
 --
 -- Splitting them is the whole design of this file. A status is a fact about
@@ -74,7 +97,7 @@ Ability.STATUS = {
 	ready    = true, -- press it
 }
 
--- Which of the five looks a status is worth. Everything absent is "no", which
+-- Which of the six looks a status is worth. Everything absent is "no", which
 -- is where cooldown, wrong stance and an empty slot all land: the reasons
 -- differ, and the answer to "would a press do the thing" does not.
 --
@@ -83,11 +106,26 @@ Ability.STATUS = {
 -- walking and one by waiting, and both are what you are actually asking a bar
 -- when you glance at it mid-fight. Cooldown is not in that group because the
 -- swipe already says it, in more detail than a colour could.
+--
+-- Empty is pulled out for a different reason than range and cost are, and it is
+-- the one that made a half filled bar look broken. An empty slot has no art, so
+-- it fell to "no" and was drawn as the fallback question mark at 55% alpha:
+-- twelve grey question marks where Blizzard's bar had twelve holes. `blank`
+-- says draw no art at all, which is what a hole looks like.
+--
+-- Drawn at full alpha rather than faded, which looks backwards and is not. With
+-- `blank` there is no art left to fade, so the alpha only reaches the black
+-- backing and the hairline, and fading those leaves a drop target you cannot
+-- see. Buttons/Bars.lua lets you drag a spell onto a square, so where the holes
+-- are is a thing the bar has to answer. This is also why there is no grid: the
+-- client shows one on ACTIONBAR_SHOWGRID because its bar has no background to
+-- see a hole against, and this one is squares on a box.
 local OUTCOME = {
 	ready  = "go",
 	stance = "swap",
 	range  = "range",
 	cost   = "cost",
+	empty  = "empty",
 }
 
 -- What a look is: a border colour, whether to drain the art, and what alpha to
@@ -104,6 +142,7 @@ Ability.SHOUT = {
 	swap  = { color = { 0.96, 0.62, 0.16 }, alpha = 0.6 },
 	range = { color = { 0.85, 0.25, 0.22 }, alpha = 0.6 },
 	cost  = { color = { 0.29, 0.45, 0.85 }, alpha = 0.6 },
+	empty = { color = { 0.20, 0.20, 0.24 }, alpha = 1, blank = true },
 	no    = { color = { 0.38, 0.38, 0.43 }, alpha = 0.6, grey = true },
 }
 
@@ -115,6 +154,7 @@ Ability.QUIET = {
 	swap  = { color = { 0.96, 0.62, 0.16 }, alpha = 1 },
 	range = { color = { 0.85, 0.25, 0.22 }, alpha = 1 },
 	cost  = { color = { 0.29, 0.45, 0.85 }, alpha = 1 },
+	empty = { color = { 0.13, 0.13, 0.16 }, alpha = 1, blank = true },
 	no    = { color = { 0.16, 0.16, 0.19 }, alpha = 0.55, grey = true },
 }
 
@@ -162,10 +202,48 @@ function Ability.New(parent, name, template, palette)
 
 	w.icon = UI.Icon(w, "ARTWORK")
 
+	-- Already what is running: the stance you are standing in, the auto attack
+	-- already swinging. Additive rather than a border colour, because it is not
+	-- a rung on the status ladder and must be able to sit on top of any rung
+	-- without arguing with it. A square can be the active stance and out of
+	-- rage at the same time and both are worth saying.
+	w.active = ns.Fill(w, "OVERLAY", 1, 0.84, 0.32, 0.22)
+	w.active:SetBlendMode("ADD")
+	w.active:Hide()
+
+	-- Worn or wielded. Four edges anchored to the art rather than to the frame,
+	-- which lands them exactly one pixel inside the status border, and on
+	-- OVERLAY rather than BORDER because BORDER is under the art and a ring
+	-- drawn on the art's own bounds would be covered by it.
+	w.equipped = {}
+	for index = 1, 4 do
+		w.equipped[index] = ns.Fill(w, "OVERLAY", 0.24, 0.78, 0.35, 1)
+		w.equipped[index]:Hide()
+	end
+
 	-- Four edge textures rather than one recoloured background, so the border
 	-- can be a real hairline at any square size instead of a fixed inset. This
 	-- is the piece both charge displays were missing.
 	w.edges = ns.Outline(w, 0, 0, 0, 1)
+
+	-- Under the cursor. The HIGHLIGHT draw layer is the one the client shows
+	-- and hides by itself for any frame that takes the mouse, so this is a
+	-- texture and no script at all. Drawn for the world marker too, which costs
+	-- one texture nobody will ever hover.
+	w.hover = ns.Fill(w, "HIGHLIGHT", 1, 1, 1, 0.16)
+
+	-- On the way down. The Button widget draws this itself between mouse down
+	-- and mouse up, whatever RegisterForClicks says the press is worth, so a
+	-- click has an answer even on a spell whose whole cooldown is the global.
+	-- A Frame has no pushed state and SetPushedTexture is not on it.
+	if kind == "Button" then
+		w:SetPushedTexture("Interface\\Buttons\\WHITE8X8")
+		local pushed = w:GetPushedTexture()
+		if pushed then
+			pushed:SetColorTexture(0, 0, 0, 0.36)
+			w.pushed = pushed
+		end
+	end
 
 	w.cooldown = CreateFrame("Cooldown", name and (name .. "Cooldown") or nil, w,
 		"CooldownFrameTemplate")
@@ -211,6 +289,8 @@ function Ability.New(parent, name, template, palette)
 	w.shownStart, w.shownDuration = -1, -1
 	w.shownCount = -1
 	w.shownTick = nil
+	w.shownActive = nil
+	w.shownEquipped = nil
 
 	return w
 end
@@ -247,6 +327,34 @@ function Ability.Size(w, side)
 	ns.EdgeSize(w.edges, edge)
 	w.cooldown:ClearAllPoints()
 	w.cooldown:SetAllPoints(w.icon)
+
+	-- Both cover the art and not the frame, so the hairline border stays a
+	-- border under a hover and under a press rather than being tinted with
+	-- everything else.
+	w.hover:ClearAllPoints()
+	w.hover:SetAllPoints(w.icon)
+	w.active:ClearAllPoints()
+	w.active:SetAllPoints(w.icon)
+
+	-- Anchored to the art on both ends of each edge, so the ring is inside the
+	-- status border at any square size rather than at a fixed inset.
+	local ring = w.equipped
+	for index = 1, 4 do
+		ring[index]:ClearAllPoints()
+	end
+	ring[1]:SetPoint("TOPLEFT", w.icon, "TOPLEFT")
+	ring[1]:SetPoint("TOPRIGHT", w.icon, "TOPRIGHT")
+	ring[2]:SetPoint("BOTTOMLEFT", w.icon, "BOTTOMLEFT")
+	ring[2]:SetPoint("BOTTOMRIGHT", w.icon, "BOTTOMRIGHT")
+	ring[3]:SetPoint("TOPLEFT", w.icon, "TOPLEFT")
+	ring[3]:SetPoint("BOTTOMLEFT", w.icon, "BOTTOMLEFT")
+	ring[4]:SetPoint("TOPRIGHT", w.icon, "TOPRIGHT")
+	ring[4]:SetPoint("BOTTOMRIGHT", w.icon, "BOTTOMRIGHT")
+	ns.EdgeSize(ring, edge)
+	if w.pushed then
+		w.pushed:ClearAllPoints()
+		w.pushed:SetAllPoints(w.icon)
+	end
 
 	-- Whole pixels, because a font size that lands on a fraction is a glyph
 	-- rasterised across two rows and that is exactly what a timer must not be.
@@ -297,23 +405,46 @@ local function Quantum(remaining)
 end
 
 -- One square, one tick. `texture` is the art, `status` one of Ability.STATUS,
--- `start` and `duration` the cooldown when there is one, and `count` a stack
--- or charge number, or nil for none.
+-- `start` and `duration` the cooldown when there is one, `count` a stack or
+-- charge number, `active` whether the ability is already what is running, and
+-- `equipped` whether the item in the slot is worn.
 --
--- Deliberately six arguments rather than one table. A table would be an
+-- Deliberately eight arguments rather than one table. A table would be an
 -- allocation per square per tick, which at twenty-four buttons five times a
--- second is a hundred and twenty throwaway tables a second to say what six
+-- second is a hundred and twenty throwaway tables a second to say what eight
 -- values already say.
-function Ability.Draw(w, texture, status, start, duration, count)
-	if texture ~= w.shownTexture then
-		w.shownTexture = texture
-		w.icon:SetTexture(texture or FALLBACK_TEXTURE)
+--
+-- Eight is the ceiling and the last two are both booleans, which is the shape
+-- that gets passed in the wrong order eventually. A ninth fact about a square
+-- is the point at which this takes a table built once per widget and mutated,
+-- rather than one more positional flag.
+--
+-- `start` and `duration` are the swipe and are drawn whenever they are given.
+-- `status` says whether the swipe also gets a number over it, and it is only
+-- "cooldown" for a wait longer than the global. That split is the difference
+-- between a bar that answers a press and one that does not: below the global
+-- there is nothing to count down, and a bar that drew nothing at all there was
+-- a bar where pressing a rage dump changed no pixel on the screen.
+function Ability.Draw(w, texture, status, start, duration, count, active, equipped)
+	-- Read before the art, because whether an empty square draws the fallback
+	-- question mark or nothing at all is the look's decision and not the
+	-- texture's.
+	local look = Ability.Look(w.palette, status)
+
+	local art = texture
+	if not art and not look.blank then
+		art = FALLBACK_TEXTURE
+	end
+	if art ~= w.shownTexture then
+		w.shownTexture = art
+		-- nil blanks the texture, which is what an empty slot looks like on
+		-- every action bar the game has ever shipped.
+		w.icon:SetTexture(art)
 	end
 
 	-- Guarded on the look's identity rather than on its two drawn fields,
 	-- because a palette hands back the same table for the same outcome every
 	-- time and one comparison replaces two.
-	local look = Ability.Look(w.palette, status)
 	if look ~= w.shownLook then
 		w.shownLook = look
 		ns.Recolor(w.edges, look.color)
@@ -330,11 +461,21 @@ function Ability.Draw(w, texture, status, start, duration, count)
 		w:SetAlpha(alpha)
 	end
 
-	if status == "cooldown" then
+	-- The swipe. Driven by the numbers alone, so a global cooldown sweeps the
+	-- square without the status having moved and without the art going grey.
+	if start and duration and duration > 0 then
 		if start ~= w.shownStart or duration ~= w.shownDuration then
 			w.shownStart, w.shownDuration = start, duration
 			w.cooldown:SetCooldown(start, duration)
 		end
+	elseif w.shownDuration ~= 0 then
+		w.shownStart, w.shownDuration = 0, 0
+		w.cooldown:SetCooldown(0, 0)
+	end
+
+	-- The number over it, which only a real cooldown gets. A global is one and
+	-- a half seconds and the swipe has already said so.
+	if status == "cooldown" then
 		-- The string is built only when the number it would show has moved,
 		-- which at a tenth of a second between ticks is most ticks skipped
 		-- once the countdown is above ten seconds.
@@ -348,10 +489,24 @@ function Ability.Draw(w, texture, status, start, duration, count)
 				w.timer:SetText(("%.1f"):format(remaining))
 			end
 		end
-	elseif w.shownDuration ~= 0 then
-		w.shownStart, w.shownDuration, w.shownTick = 0, 0, nil
-		w.cooldown:SetCooldown(0, 0)
+	elseif w.shownTick ~= nil then
+		w.shownTick = nil
 		w.timer:SetText("")
+	end
+
+	local on = active and true or false
+	if on ~= w.shownActive then
+		w.shownActive = on
+		w.active:SetShown(on)
+	end
+
+	local worn = equipped and true or false
+	if worn ~= w.shownEquipped then
+		w.shownEquipped = worn
+		local ring = w.equipped
+		for index = 1, 4 do
+			ring[index]:SetShown(worn)
+		end
 	end
 
 	if count ~= w.shownCount then

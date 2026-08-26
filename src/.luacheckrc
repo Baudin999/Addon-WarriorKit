@@ -116,6 +116,13 @@ read_globals = {
 	-- bar that raises once per button per tick is worse than a grey bar.
 	"HasAction", "GetActionTexture", "GetActionCooldown", "GetActionCount",
 	"IsUsableAction", "IsActionInRange",
+	-- and the three that say something about a slot beyond whether a press would
+	-- land: the stance you are standing in, the auto attack already swinging,
+	-- and the weapon you are wielding. Probed separately from the five above and
+	-- resolved to locals in Slot.CanRead, because a client without them loses a
+	-- tint or a ring, not the bar. Nothing installed on this machine calls any
+	-- of the three.
+	"IsCurrentAction", "IsAutoRepeatAction", "IsEquippedAction",
 	-- which key the binding set already holds for one of Blizzard's action
 	-- buttons, read by Buttons/Bars.lua so the clone answers the keys you
 	-- already had. Probed by name and pcalled at the call site rather than

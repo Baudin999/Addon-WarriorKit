@@ -110,12 +110,35 @@ local STANCES = { "battle", "defensive", "berserker" }
 -- the same way BuildBinder probes for RegisterStateDriver.
 --------------------------------------------------------------------------
 
-local NEEDED = {
-	"PickupSpell", "PickupMacro", "PlaceAction", "PickupAction",
-	"ClearCursor", "GetCursorInfo", "GetActionInfo",
+-- Two lists, because there are two sizes of job here and they need different
+-- amounts of the client.
+--
+-- Moving one slot onto another needs two calls. That is what a drag from
+-- Buttons/Bars.lua is, and holding it to the whole list below would refuse a
+-- gesture over five functions it never touches.
+--
+-- Composing a loadout needs the rest: it picks spells and macros up by name,
+-- reads back what a slot ended up holding, and puts the cursor down when it is
+-- finished. Everything in CARRY as well, which is why CanWrite is CanCarry plus
+-- this rather than a list of its own.
+local CARRY = { "PickupAction", "PlaceAction" }
+local COMPOSE = {
+	"PickupSpell", "PickupMacro", "ClearCursor", "GetCursorInfo", "GetActionInfo",
 }
 
-local probe -- nil until asked, then true or a reason string
+-- nil until asked, then true or a reason string. One each, because a client
+-- with the two and not the five is a real client and answers yes to one
+-- question and no to the other.
+local carrying, composing
+
+local function Absent(list)
+	for _, name in ipairs(list) do
+		if type(_G[name]) ~= "function" then
+			return name .. " is missing on this client"
+		end
+	end
+	return true
+end
 
 -- Named rather than repeated, because Layout.Describe tests two of them by
 -- value to decide whether a refusal is worth reporting as unavailability or as
@@ -125,25 +148,41 @@ Layout.BUSY_COMBAT = "you are in combat"
 Layout.BUSY_CURSOR = "put down what you are holding first"
 Layout.NOT_WARRIOR = "this is a warrior loadout and you are not a warrior"
 
+-- Whether the cursor may be picked up or put down at all: the API is here and
+-- combat is not. Says nothing about what the cursor is holding, which is the
+-- whole reason it is split out of Layout.CanWrite below.
+--
+-- Buttons/Bars.lua drags a spell onto a square through this. That gesture
+-- happens with something already on the cursor, which is the exact state
+-- CanWrite refuses, so a drop asking CanWrite would be told to put down the
+-- thing it is in the middle of putting down.
+function Layout.CanCarry()
+	if carrying == nil then
+		carrying = Absent(CARRY)
+	end
+	if carrying ~= true then
+		return false, carrying
+	end
+	if InCombatLockdown() then
+		return false, Layout.BUSY_COMBAT
+	end
+	return true
+end
+
 -- Whether an action slot can be written at all: the API is here, combat is
 -- not, and the cursor is empty. Says nothing about what is worth writing, so
 -- Ranks uses this one. Moving a slot up to the best rank you know is the same
 -- job in every class.
 function Layout.CanWrite()
-	if probe == nil then
-		probe = true
-		for _, name in ipairs(NEEDED) do
-			if type(_G[name]) ~= "function" then
-				probe = name .. " is missing on this client"
-				break
-			end
-		end
+	local can, why = Layout.CanCarry()
+	if not can then
+		return false, why
 	end
-	if probe ~= true then
-		return false, probe
+	if composing == nil then
+		composing = Absent(COMPOSE)
 	end
-	if InCombatLockdown() then
-		return false, Layout.BUSY_COMBAT
+	if composing ~= true then
+		return false, composing
 	end
 	if GetCursorInfo() then
 		return false, Layout.BUSY_CURSOR

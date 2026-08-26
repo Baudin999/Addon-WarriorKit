@@ -27,12 +27,30 @@ ns.Slot = Slot
 --
 -- Everything here runs on the bar's ticker against every button on it, so
 -- nothing allocates and nothing is cached that the client already holds.
--- check.sh's HOT list covers Slot.State.
+-- check.sh's HOT list covers Slot.State, Slot.Active and Slot.Equipped.
 --------------------------------------------------------------------------
 
--- Below this a cooldown is the global and not the ability's own. Drawing a
--- swipe for the global turns the whole bar into a strobe on every press, which
--- is what every action bar addon suppresses and why the number is here.
+-- Below this a cooldown is the global and not the ability's own, and the two
+-- are worth different things on the square.
+--
+-- A real cooldown is a status: it is why the press did nothing, it lasts long
+-- enough to plan around, and it gets a number counting down over it. The global
+-- is not a status at all. It is one and a half seconds, every ability has it,
+-- and greying the whole bar for it would say twenty-four true and useless
+-- things at once.
+--
+-- What the global does get is the swipe, with no number and no status change.
+-- This file used to withhold that too, on the grounds that a bar sweeping on
+-- every press is a strobe. It is, and that strobe is the only thing on screen
+-- that answers a key press: below the global a rage dump has no cooldown, no
+-- colour change and nothing to count, so a bar that also refused the swipe
+-- changed no pixel at all when you pressed it. That is what made the squares
+-- feel like a picture of a bar rather than a bar. Blizzard's own buttons sweep,
+-- and so does every bar addon; withholding it was the odd choice.
+--
+-- So Slot.State returns the cooldown numbers whether or not it returns the
+-- "cooldown" status, and UI/Ability.lua draws the swipe off the numbers and the
+-- countdown off the status.
 --
 -- Stated as its own constant rather than shared with Charge/Charge.lua's,
 -- which holds the identical 1.5. They are the same number for the same reason
@@ -62,6 +80,16 @@ local NEEDED = {
 
 local probe -- nil until asked, then true or a reason string
 
+-- The three that say something about a slot beyond whether a press would land.
+-- Resolved to locals rather than looked up per button per tick, and
+-- deliberately not in NEEDED: a client missing one of these loses a tint or a
+-- ring, and a client missing anything in NEEDED loses the bar. Those are not
+-- the same loss and must not share a switch.
+--
+-- None of the three is called by anything installed on this machine, which is
+-- the bar the rest of the file is held to, so none is assumed.
+local isCurrent, isRepeating, isEquipped
+
 function Slot.CanRead()
 	if probe == nil then
 		probe = true
@@ -71,6 +99,9 @@ function Slot.CanRead()
 				break
 			end
 		end
+		isCurrent = type(IsCurrentAction) == "function" and IsCurrentAction or nil
+		isRepeating = type(IsAutoRepeatAction) == "function" and IsAutoRepeatAction or nil
+		isEquipped = type(IsEquippedAction) == "function" and IsEquippedAction or nil
 	end
 	if probe ~= true then
 		return false, probe
@@ -123,8 +154,17 @@ function Slot.State(slot)
 	end
 
 	local start, duration, enabled = GetActionCooldown(slot)
-	if enabled and enabled ~= 0 and duration and duration > GCD and start and start > 0 then
+	local running = enabled and enabled ~= 0 and duration and duration > 0
+		and start and start > 0
+	if running and duration > GCD then
 		return "cooldown", start, duration
+	end
+	-- A global. Not a status, so the ladder carries on and whatever it decides
+	-- is returned with the swipe's two numbers stapled on. Nil when nothing is
+	-- running, which is what UI/Ability.lua reads as "clear the swipe".
+	local swipeStart, swipeDuration
+	if running then
+		swipeStart, swipeDuration = start, duration
 	end
 
 	-- Two returns, and the second is the whole reason this is not a boolean.
@@ -134,7 +174,7 @@ function Slot.State(slot)
 	-- drawing.
 	local usable, noPower = IsUsableAction(slot)
 	if not usable then
-		return noPower and "cost" or "stance"
+		return noPower and "cost" or "stance", swipeStart, swipeDuration
 	end
 
 	-- Asked only when there is something to be at a distance from. Without
@@ -148,10 +188,50 @@ function Slot.State(slot)
 	-- Charge/Charge.lua asks the identical question of a spell and a unit, and
 	-- reaches it only with a unit it has already checked exists.
 	if UnitExists(RANGE_UNIT) and ns.OutOfRange(IsActionInRange(slot, RANGE_UNIT)) then
-		return "range"
+		return "range", swipeStart, swipeDuration
 	end
 
-	return "ready"
+	return "ready", swipeStart, swipeDuration
+end
+
+-- Whether a press would be asking for something already happening: the stance
+-- you are standing in, the auto attack already swinging, a shout already up.
+--
+-- Its own answer rather than a tenth status, because it is not a rung on the
+-- ladder and does not compete with one. The active stance is also "ready", and
+-- on a warrior the active stance is the single most useful thing a bar can say
+-- at a glance, so it has to be drawable on top of whatever the ladder decided.
+--
+-- Auto attack is folded in with the current action rather than flashed. The
+-- client flashes it, which is twenty years of habit and also the reason people
+-- install addons that stop it. A steady tint says the same thing and does not
+-- pull the eye off the fight.
+function Slot.Active(slot)
+	if not slot or probe ~= true then
+		return false
+	end
+	if isCurrent and isCurrent(slot) then
+		return true
+	end
+	if isRepeating and isRepeating(slot) then
+		return true
+	end
+	return false
+end
+
+-- Whether the slot holds an item you are wearing or wielding. Blizzard draws a
+-- green border for this and it is worth keeping: an item slot on a bar is a
+-- trinket or a weapon swap, and whether the swap has already happened is the
+-- one thing the icon alone cannot tell you.
+--
+-- Its own answer for the same reason Slot.Active is. Being equipped is not a
+-- reason a press does or does not land, so it cannot be a rung, and an equipped
+-- weapon can be on cooldown and out of range at the same time.
+function Slot.Equipped(slot)
+	if not slot or probe ~= true or not isEquipped then
+		return false
+	end
+	return isEquipped(slot) and true or false
 end
 
 function Slot.Describe()

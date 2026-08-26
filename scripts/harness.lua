@@ -183,6 +183,34 @@ function Region:SetDrawLayer(layer, sublevel)
 end
 function Region:GetDrawLayer() return self.layer, self.sublevel end
 function Region:CreateFontString() return child("fontstring", self) end
+
+-- What a button draws between mouse down and mouse up. Modelled rather than
+-- left to the PascalCase no-op above, for that no-op's usual reason: an addon
+-- that never gave a button one and an addon that gave it one look identical to
+-- a stub that swallows both, and the difference on screen is whether a click
+-- has any answer at all. GetPushedTexture answering nil is also a real client
+-- state, so the caller's guard on it has to be reachable from here.
+function Region:SetPushedTexture(path)
+	local texture = child("texture", self, nil)
+	texture.layer, texture.sublevel = "OVERLAY", 0
+	texture.texture = path
+	self.pushedTexture = texture
+end
+function Region:GetPushedTexture() return self.pushedTexture end
+
+-- How a texture is composited. Data, because the active tint on a square is
+-- additive on purpose: laid over the art at ordinary blending it would be a
+-- muddy rectangle rather than a glow, and nothing else could tell.
+function Region:SetBlendMode(mode) self.blend = mode end
+function Region:GetBlendMode() return self.blend end
+
+-- The swipe. Recorded rather than swallowed, because whether a global cooldown
+-- draws one is the whole difference between a bar that answers a key press and
+-- one where pressing a rage dump changes no pixel on the screen, and a no-op
+-- reads the same either way.
+function Region:SetCooldown(start, duration)
+	self.cdStart, self.cdDuration = start, duration
+end
 function Region:SetScript(name, fn) self.scripts[name] = fn end
 function Region:GetScript(name) return self.scripts[name] end
 function Region:SetSize(w, h) self.width, self.height = w, h end
@@ -1097,6 +1125,51 @@ _G.GetActionCount = function(slot)
 	local held = slots[slot]
 	return held and held.count or 0
 end
+-- Already what is running: the stance you are standing in, the auto attack
+-- already swinging. Two calls rather than one because the client has two, and
+-- Buttons/Slot.lua folds them into a single answer; a stub with only the first
+-- would leave the fold untested.
+_G.IsCurrentAction = function(slot)
+	local held = slots[slot]
+	return (held and held.current) and true or false
+end
+_G.IsAutoRepeatAction = function(slot)
+	local held = slots[slot]
+	return (held and held.repeating) and true or false
+end
+-- Worn or wielded, which is the green ring Blizzard draws and this addon draws
+-- one pixel inside the status border.
+_G.IsEquippedAction = function(slot)
+	local held = slots[slot]
+	return (held and held.equipped) and true or false
+end
+
+-- Picking an action slot up and putting it down.
+--
+-- Written onto the cursor declared above rather than onto one of their own.
+-- GetCursorInfo closes over that upvalue, and Buttons/Layout.lua refuses to
+-- write a slot while the cursor is full, so a second cursor here would leave
+-- Layout believing both hands were empty while a spell was on its way from one
+-- square to another. `id` and `link` are the two fields GetCursorInfo reports,
+-- so the shape is theirs and only `action` is new.
+--
+-- Modelled and not stubbed flat because Buttons/Bars.lua's whole drop path is
+-- unreachable otherwise: a pickup that never fills the cursor and a place that
+-- never moves a slot both look exactly like a bar you cannot drop on.
+_G.PickupAction = function(slot)
+	local held = slots[slot]
+	if not held then
+		return
+	end
+	cursor = { id = slot, link = nil, action = held }
+	slots[slot] = nil
+end
+_G.PlaceAction = function(slot)
+	local carried = cursor and cursor.action
+	local displaced = slots[slot]
+	slots[slot] = carried
+	cursor = displaced and { id = slot, link = nil, action = displaced } or nil
+end
 
 -- Blizzard's own action bars, as much of them as a clone can see.
 --
@@ -1943,7 +2016,7 @@ do
 	-- colour by value and that is a choice; sharing one by reference would be
 	-- an accident waiting to be found in six months.
 	local shared = 0
-	for _, outcome in ipairs({ "go", "swap", "range", "cost", "no" }) do
+	for _, outcome in ipairs({ "go", "swap", "range", "cost", "empty", "no" }) do
 		if Ability.SHOUT[outcome] == Ability.QUIET[outcome]
 			or Ability.SHOUT[outcome].color == Ability.QUIET[outcome].color then
 			shared = shared + 1
@@ -1960,6 +2033,14 @@ do
 		"a square that does nothing is desaturated in both palettes")
 	check(Ability.SHOUT.range.color ~= Ability.SHOUT.no.color,
 		"out of range is its own colour and not the grey everything else falls to")
+
+	-- An empty slot draws no art in either palette. Without this it fell to
+	-- "no", which has no `blank`, and twelve empty slots came up as twelve grey
+	-- question marks: the defect that made a half filled bar read as broken.
+	check(Ability.SHOUT.empty.blank and Ability.QUIET.empty.blank,
+		"an empty slot still draws the fallback question mark in one of the palettes")
+	check(not Ability.Look(Ability.QUIET, "cooldown").blank,
+		"a square on cooldown is drawn blank, so the art vanishes mid-fight")
 
 	--------------------------------------------------------------------------
 	-- The slot ladder
@@ -1988,14 +2069,51 @@ do
 	check(Slot.State(SLOT) == "ready", "a slot with nothing wrong with it is not ready")
 	check(Slot.Texture(SLOT) == ART, "the slot's art is not read back")
 
-	-- The global is not a cooldown. A bar that drew a swipe for it would
-	-- strobe on every press, which is the reason the floor is there.
+	-- The global is not a status and is still a swipe. Both halves are checked,
+	-- because the bug they replace was the swipe being withheld along with the
+	-- status, which left a press with nothing on screen to answer it.
 	put({ texture = ART, start = wall, duration = 1.5 })
-	check(Slot.State(SLOT) == "ready", "the global cooldown is being drawn as a cooldown")
-	put({ texture = ART, start = wall, duration = 1.6 })
 	local status, start, duration = Slot.State(SLOT)
+	check(status == "ready", "the global cooldown is being drawn as a cooldown")
+	check(start == wall and duration == 1.5,
+		"the global's numbers are withheld, so a press draws no swipe at all")
+
+	-- And the numbers ride whatever the rest of the ladder decided, not just
+	-- "ready". A spell you cannot afford is still sweeping.
+	put({ texture = ART, start = wall, duration = 1.5, usable = false, noPower = true })
+	status, start, duration = Slot.State(SLOT)
+	check(status == "cost" and start == wall and duration == 1.5,
+		"the global's swipe is dropped on any rung below ready")
+
+	put({ texture = ART, start = wall, duration = 1.6 })
+	status, start, duration = Slot.State(SLOT)
 	check(status == "cooldown", "a real cooldown is not reported as one")
 	check(start == wall and duration == 1.6, "the cooldown's own numbers are not passed through")
+
+	-- Nothing running means no swipe, which is what clears one that has ended.
+	put({ texture = ART })
+	status, start, duration = Slot.State(SLOT)
+	check(status == "ready" and start == nil and duration == nil,
+		"a slot with no cooldown running is handing back numbers to sweep")
+
+	-- Already what is running. Two client calls folded into one answer, so both
+	-- are driven and the fold is what is checked rather than either call.
+	check(not Slot.Active(SLOT), "an idle slot is drawn as already running")
+	put({ texture = ART, current = true })
+	check(Slot.Active(SLOT), "the stance you are standing in is not drawn as active")
+	put({ texture = ART, repeating = true })
+	check(Slot.Active(SLOT), "an auto attack already swinging is not drawn as active")
+
+	-- Worn, which is a fact about the item and not a rung on the ladder, so it
+	-- is driven against a slot that is also on cooldown and unusable. All three
+	-- have to be sayable at once.
+	put({ texture = ART })
+	check(not Slot.Equipped(SLOT), "a slot holding nothing worn is drawn with the ring")
+	put({ texture = ART, equipped = true, usable = false, noPower = true,
+		start = wall, duration = 30 })
+	check(Slot.Equipped(SLOT), "a wielded weapon draws no equipped ring")
+	check(Slot.State(SLOT) == "cooldown",
+		"being equipped moved the slot off the rung it was on")
 
 	-- Cost and stance are the same "not usable" from the client and the second
 	-- return is the only thing that tells them apart. Both are driven, because
@@ -2085,6 +2203,78 @@ do
 	check(writes == 1, ("a fade change wrote %d times, expected the one alpha"):format(writes))
 	w.fade = 1
 	Ability.Draw(w, ART, "range")
+
+	--------------------------------------------------------------------------
+	-- What a square answers to the hand
+	--------------------------------------------------------------------------
+
+	-- On its own widget, and that is not tidiness. Every write on `w` above is
+	-- shadowed by a counter that records the call and stores nothing, so
+	-- reading a texture or a string back off it answers whatever was there
+	-- before the shadow went on. These checks are readbacks, so they need a
+	-- square nobody has instrumented.
+	local feel = Ability.New(_G.UIParent, nil, "SecureActionButtonTemplate",
+		Ability.QUIET)
+	Ability.Size(feel, 27)
+
+	-- An empty slot draws no art. The fallback question mark is still there for
+	-- a square whose look has no `blank`, which is every other status, so both
+	-- sides are driven off the same widget.
+	Ability.Draw(feel, nil, "empty")
+	check(feel.icon:GetTexture() == nil,
+		"an empty slot is drawing the fallback question mark")
+	Ability.Draw(feel, nil, "unknown")
+	check(feel.icon:GetTexture() ~= nil,
+		"a slot the client has not resolved is drawing nothing, so the square vanishes")
+
+	-- The swipe follows the numbers and the countdown follows the status, which
+	-- is what lets a global sweep the square without greying it or putting a
+	-- 1.4 on it.
+	Ability.Draw(feel, ART, "ready", wall, 1.5)
+	check(feel.cooldown.cdStart == wall and feel.cooldown.cdDuration == 1.5,
+		"a global cooldown draws no swipe, so a press changes nothing on screen")
+	check((feel.timer:GetText() or "") == "",
+		"a global cooldown is being counted down like a real one")
+	check(feel.shownLook == Ability.Look(Ability.QUIET, "ready"),
+		"a swiping square changed its look, so the whole bar greys on every press")
+
+	Ability.Draw(feel, ART, "ready")
+	check(feel.cooldown.cdDuration == 0, "the swipe is not cleared when the cooldown ends")
+
+	-- A real cooldown still gets its number, which is the half of the split
+	-- that was already right and is the half a change here would break.
+	Ability.Draw(feel, ART, "cooldown", wall, 30)
+	check((feel.timer:GetText() or "") ~= "", "a real cooldown lost its countdown")
+
+	-- The active tint sits on top of the ladder rather than replacing a rung,
+	-- so it is driven against a status that is not "ready".
+	Ability.Draw(feel, ART, "cost", nil, nil, nil, true)
+	check(feel.active:IsShown(), "the stance you are standing in draws no active tint")
+	check(feel.active:GetBlendMode() == "ADD",
+		"the active tint is not additive, so it is a muddy rectangle over the art")
+	Ability.Draw(feel, ART, "cost")
+	check(not feel.active:IsShown(), "the active tint is not cleared when the ability stops")
+
+	-- The equipped ring, which is a second outline inside the status border and
+	-- so has to be able to be on while the border says something else.
+	Ability.Draw(feel, ART, "range", nil, nil, nil, false, true)
+	check(feel.equipped[1]:IsShown(), "a worn item draws no equipped ring")
+	check(feel.shownLook == Ability.Look(Ability.QUIET, "range"),
+		"the equipped ring took over the border, which the status owns")
+	check(feel.equipped[1].layer == "OVERLAY",
+		"the equipped ring is under the art, where the art will cover it")
+	Ability.Draw(feel, ART, "range")
+	check(not feel.equipped[1]:IsShown(), "the equipped ring outlived the item")
+
+	-- The two the client draws by itself, which is why nothing on the tick
+	-- touches them and why only their existence can be checked.
+	check(feel.hover and feel.hover.layer == "HIGHLIGHT",
+		"a square has no highlight layer, so hovering it does nothing")
+	check(feel.pushed ~= nil,
+		"a button draws nothing on the way down, so a click has no answer")
+
+	local drawn = Ability.New(_G.UIParent, nil, nil, Ability.SHOUT)
+	check(drawn.pushed == nil, "a plain frame was given a pushed texture it cannot draw")
 
 	-- A running cooldown writes the timer, and only when the number it would
 	-- show has moved. Above ten seconds that is whole seconds, so at a tenth of
@@ -2499,6 +2689,175 @@ do
 	end
 	barsChurn = collectgarbage("count") - before
 	collectgarbage("restart")
+
+	--------------------------------------------------------------------------
+	-- What a square answers to the hand
+	--
+	-- UI/Ability.lua's own section proves a square can draw a hover, a pushed
+	-- tint, a swipe for the global and an active wash. None of that proves the
+	-- squares this file builds are wired to any of it: the tooltip is hung on
+	-- the button in Buttons/Bars.lua and the active flag is the seventh
+	-- argument to a Draw call there, and either could be dropped by a refactor
+	-- with every check in the ability section still green.
+	--
+	-- Driven on buttons[2] and not buttons[1]. Every drawing method on the
+	-- first square is shadowed above by a counter that records the call and
+	-- stores nothing, so a readback off it answers whatever was there before
+	-- the shadow went on rather than what the tick just drew.
+	--------------------------------------------------------------------------
+
+	local square = found.bar1.buttons[2]
+	local seat = square:GetAttribute("action")
+
+	check(square.pushed ~= nil,
+		"a bar square draws nothing on the way down, so a click has no answer")
+	check(square.hover and square.hover.layer == "HIGHLIGHT",
+		"a bar square has no highlight layer, so hovering it does nothing")
+
+	-- The global sweeps, carries no number, and does not move the look. That
+	-- last one is the whole point of keeping it out of the status: if it moved
+	-- the look, the entire bar would grey for a second and a half on every
+	-- press.
+	slots[seat] = { texture = ART, start = _G.GetTime(), duration = 1.5, current = true }
+	Bars.Update()
+	check(square.cooldown.cdDuration == 1.5,
+		"the global draws no swipe, so pressing a rage dump changes nothing on screen")
+	check((square.timer:GetText() or "") == "",
+		"the global is being counted down on the square like a real cooldown")
+	check(square.shownLook == ns.UI.Ability.Look(ns.UI.Ability.QUIET, "ready"),
+		"the global moved the square's look, so the whole bar greys on every press")
+	check(square.active:IsShown(),
+		"the tick does not hand the active flag through, so the stance you are in is invisible")
+
+	slots[seat] = { texture = ART, start = _G.GetTime(), duration = 30 }
+	Bars.Update()
+	check((square.timer:GetText() or "") ~= "", "a real cooldown lost its countdown")
+	check(not square.active:IsShown(), "the active tint outlived the ability running")
+
+	slots[seat] = nil
+	Bars.Update()
+	check(square.icon:GetTexture() == nil,
+		"an empty square draws the fallback question mark, so an unfilled bar reads as broken")
+	check(square.cooldown.cdDuration == 0, "an emptied square kept its swipe")
+
+	-- The tooltip. GameTooltip is the stub's PascalCase catch-all, so the three
+	-- calls are recorded here rather than read back off it: what matters is
+	-- that the square asks about its own slot and refuses to ask at all about
+	-- an empty one, and neither is visible any other way.
+	local asked, owner, dropped
+	local realAction, realOwner, realHide =
+		GameTooltip.SetAction, GameTooltip.SetOwner, GameTooltip.Hide
+	GameTooltip.SetAction = function(_, which) asked = which end
+	GameTooltip.SetOwner = function(_, of) owner = of end
+	GameTooltip.Hide = function() dropped = true end
+
+	-- Both scripts are checked for before either is called. A square that was
+	-- never given them answers nil here, and calling nil aborts the run with a
+	-- stack trace instead of naming the thing that is missing, which is the
+	-- opposite of what a gate is for.
+	local enter, leave = square:GetScript("OnEnter"), square:GetScript("OnLeave")
+	check(enter and leave,
+		"a bar square has no hover scripts, so it can never show a tooltip")
+
+	slots[seat] = { texture = ART }
+	Bars.Update()
+	if enter then
+		enter(square)
+	end
+	check(asked == seat,
+		("hovering a square asked the tooltip about slot %s, not its own %d")
+			:format(tostring(asked), seat))
+	check(owner == square, "the tooltip is not anchored to the square you hovered")
+	if leave then
+		leave(square)
+	end
+	check(dropped, "the tooltip stays up after the cursor has left the square")
+
+	-- An empty slot fills nothing and would leave the last ability's tooltip on
+	-- screen anchored to a square that has none, which is worse than silence.
+	asked = nil
+	slots[seat] = nil
+	Bars.Update()
+	if enter then
+		enter(square)
+	end
+	check(asked == nil, "an empty square asks for a tooltip it cannot fill")
+
+	GameTooltip.SetAction, GameTooltip.SetOwner, GameTooltip.Hide =
+		realAction, realOwner, realHide
+	slots[seat] = nil
+
+	--------------------------------------------------------------------------
+	-- Dragging a spell onto a square
+	--
+	-- The only way to fill one by hand, because the Blizzard button underneath
+	-- is hidden and cannot be dropped on. Driven end to end across two squares
+	-- rather than by asserting the scripts exist: a pickup that never fills the
+	-- cursor and a drop that never moves a slot look exactly like a bar you
+	-- cannot drop on, and that is the state this replaces.
+	--------------------------------------------------------------------------
+
+	local other = found.bar1.buttons[3]
+	local there = other:GetAttribute("action")
+	local pick, drop = square:GetScript("OnDragStart"), other:GetScript("OnReceiveDrag")
+	check(pick and drop,
+		"a bar square has no drag scripts, so nothing can be moved onto it")
+
+	slots[seat] = { texture = ART }
+	slots[there] = nil
+	if pick then
+		pick(square)
+	end
+	check(GetCursorInfo() ~= nil, "dragging a square picked nothing up")
+	check(slots[seat] == nil, "the slot kept its ability while the cursor carried it")
+	if drop then
+		drop(other)
+	end
+	check(slots[there] ~= nil and slots[there].texture == ART,
+		"dropping on an empty square did not fill it")
+	check(GetCursorInfo() == nil, "the cursor is still full after a drop onto an empty slot")
+
+	-- And a swap, which is the case that loses a bar if it is wrong: dropping
+	-- onto a filled square has to hand the displaced ability back rather than
+	-- destroy it.
+	local OTHER_ART = "Interface\\Icons\\Ability_Warrior_Cleave"
+	slots[seat] = { texture = OTHER_ART }
+	if pick then
+		pick(square)
+	end
+	if drop then
+		drop(other)
+	end
+	check(slots[there] ~= nil and slots[there].texture == OTHER_ART,
+		"a drop onto a filled square did not replace what was there")
+	check(GetCursorInfo() ~= nil, "the displaced ability was destroyed instead of handed back")
+	ClearCursor()
+
+	-- Refused in combat, where PickupAction cannot be called at all. The clone
+	-- shares Layout's probe, so this is the same refusal that stops a loadout
+	-- writing mid-fight.
+	slots[seat] = { texture = ART }
+	local realLockdown = _G.InCombatLockdown
+	_G.InCombatLockdown = function() return true end
+	if pick then
+		pick(square)
+	end
+	_G.InCombatLockdown = realLockdown
+	check(GetCursorInfo() == nil, "a square let go of its ability in combat")
+	check(slots[seat] ~= nil, "a slot was emptied by a drag started in combat")
+
+	slots[seat] = nil
+	slots[there] = nil
+
+	-- The ring, on the square the tick actually drives.
+	slots[seat] = { texture = ART, equipped = true }
+	Bars.Update()
+	check(square.equipped[1]:IsShown(),
+		"the tick does not hand the equipped flag through, so a worn item has no ring")
+	slots[seat] = { texture = ART }
+	Bars.Update()
+	check(not square.equipped[1]:IsShown(), "the equipped ring outlived the item on the bar")
+	slots[seat] = nil
 
 	--------------------------------------------------------------------------
 	-- The off switch

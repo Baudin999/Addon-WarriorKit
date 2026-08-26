@@ -52,13 +52,15 @@ local Ability, Flow = UI.Ability, UI.Flow
 --   at PLAYER_REGEN_ENABLED. That is Charge/Icon.lua's ApplySecure shape.
 --
 -- What a square deliberately is not: a Blizzard action button. It casts, it
--- draws what the slot is doing, and it carries its key. It has no tooltip, no
--- drag, and nothing can be dropped on it. Filling a slot is Buttons/Layout.lua's
--- job or the spellbook's, and both write the same slots these squares read, so
--- the picture updates on the next tick either way. Adding drag would mean
--- PickupAction and PlaceAction on a frame the player can drop anything onto,
--- which is a way to lose a bar to a misclick in exchange for a gesture the
--- spellbook already covers.
+-- draws what the slot is doing, it carries its key, it names what is on it when
+-- you hover it, and you can drag a spell onto it. Filling a slot is
+-- Buttons/Layout.lua's job or the spellbook's, and both write the same slots
+-- these squares read, so the picture updates on the next tick either way.
+--
+-- What one square answers to the mouse is Buttons/Square.lua, which is where
+-- the tooltip and the drag live and where the argument for both is written
+-- down. This file builds the squares and points them at slots; that one hangs
+-- the scripts.
 --------------------------------------------------------------------------
 
 -- Ten a second, which is what the charge icon runs at and is the rate a
@@ -317,6 +319,7 @@ local function BuildBar(entry)
 		-- of squares ended up inert.
 		w:RegisterForClicks("AnyUp")
 		w:SetAttribute("type", "action")
+		ns.Square.Handle(w)
 		entry.buttons[index] = w
 		squares[#squares + 1] = w
 	end
@@ -611,7 +614,8 @@ function Bars.Update()
 		local w = squares[index]
 		local slot = w:GetAttribute("action")
 		local status, start, duration = ns.Slot.State(slot)
-		Ability.Draw(w, ns.Slot.Texture(slot), status, start, duration, ns.Slot.Count(slot))
+		Ability.Draw(w, ns.Slot.Texture(slot), status, start, duration,
+			ns.Slot.Count(slot), ns.Slot.Active(slot), ns.Slot.Equipped(slot))
 	end
 end
 
