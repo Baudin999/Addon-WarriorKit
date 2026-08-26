@@ -294,9 +294,27 @@ end
 -- closure would remove nothing and leave the old one filtering forever.
 local filters = {}
 
+-- The filter asks the same question again for every message it is handed,
+-- rather than trusting that it was taken out of FrameXML's list when the answer
+-- last changed.
+--
+-- Installing and removing is now the cheap half. It saves FrameXML a call per
+-- message per frame and it is worth doing, but it is not what makes this
+-- correct: correctness is that a filter which outlives its reason hands the
+-- line back instead of deleting it. Anything that forgets to reapply, an
+-- unhandled error between a hide and the reapply, a path added later that moves
+-- the window without telling this file, costs a wasted call and nothing else.
+--
+-- That is the shape the first version got wrong. It had two installations, a
+-- filter that deletes and a window that draws, kept in step by whoever
+-- remembered to call both. They went out of step the moment the window was
+-- closed and the conversation was drawn nowhere at all.
 local function FilterFor(event)
 	if not filters[event] then
 		filters[event] = function()
+			if not Claiming() then
+				return false
+			end
 			filtered = filtered + 1
 			return true
 		end

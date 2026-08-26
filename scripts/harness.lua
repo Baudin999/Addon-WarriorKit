@@ -7635,7 +7635,17 @@ do
 		-- gone quiet, on both windows at once.
 		----------------------------------------------------------------------
 
+		-- Captured while it is installed, so it can be asked what it does once
+		-- the reason for it has gone. The install is an optimisation; the
+		-- filter deciding for itself is what makes a missed reapply cost a
+		-- wasted call instead of the conversation.
+		local stale = chat.filters.CHAT_MSG_PARTY[1]
+		check(stale() == true,
+			"the filter handed a line back to Blizzard's window while ours was open")
+
 		Window.Hide()
+		check(stale() == false,
+			"a filter left behind after the window closed still deleted the line")
 		check(claimed("CHAT_MSG_WHISPER_INFORM") == 0,
 			"the window is closed and Blizzard's frames are still filtered, so the conversation is drawn nowhere")
 		check(claimed("CHAT_MSG_PARTY") == 0,
