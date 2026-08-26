@@ -2134,6 +2134,25 @@ about thirty distinct numbers, and the churn gate in the cast section of
 `scripts/harness.lua` measured 0.93 KB per two hundred frames before it and
 0.00 after.
 
+**Unlocking previews it, because a caster is not something you can arrange.**
+The row is empty almost all of the time, so "unlock the frames and look", which
+is how every other piece of this addon gets placed and sized, had nothing to
+look at. Unlocked, every bar on screen draws its own cast instead of asking the
+client: five seconds around, the first half a cast filling left to right and the
+second a channel draining right to left, so one unlock answers both questions.
+It goes through `Show`, the same guarded writes the real thing goes through,
+rather than a second copy of the drawing that could drift from it.
+
+It is named "cast" and "channel" rather than after a spell. A row reading
+"Shadow Bolt" over a boar that is not casting is a preview lying about the thing
+it is previewing.
+
+You still need a bar to look at, which means a hostile target in list mode or a
+nameplate up in plate mode. Locking again drops the preview at once, including
+the case that matters: locked while the mob really is casting, the flag has to
+go or the sweep rolls that cast over into another preview when it ends and the
+row never goes out again.
+
 `bars cast off` takes the row away and gives Blizzard's own plate cast bar back
 in the same breath, which is what makes it a real off switch rather than a way
 to stop seeing casts.

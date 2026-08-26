@@ -530,6 +530,18 @@ ns.Register({
 				.. " seconds left to interrupt it. |cffd08040Now:|r "
 				.. ns.Cast.Describe() .. "."
 		end)
+		ui.Note(function()
+			if not ns.db.locked then
+				return "Unlocked, so every bar on screen is drawing a preview rather than"
+					.. " asking the client: a cast, then a channel, five seconds around."
+					.. " Lock the frames and the row goes back to what the mob is really"
+					.. " doing. You still need an enemy bar to look at, which means a"
+					.. " hostile target, or a nameplate up with V."
+			end
+			return "A mob that casts is not something you can arrange, so unlock the"
+				.. " frames to see the row: every bar previews a cast and then a"
+				.. " channel until you lock them again. Any hostile target will do."
+		end)
 		ui.Check("draw our own raid marker",
 			function() return ns.db.barsMarker end,
 			function(value)

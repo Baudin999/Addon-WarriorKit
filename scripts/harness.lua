@@ -4818,6 +4818,81 @@ do
 		"the cast row did not take its room back")
 
 	----------------------------------------------------------------------
+	-- The preview, which is the only way to look at this row on purpose
+	--
+	-- A mob that casts is not something you can arrange, so "unlock the frames
+	-- and look" had nothing to look at and the row could not be placed, sized or
+	-- judged until a caster pulled you. Unlocked, every bar draws its own cast
+	-- instead of asking the client, which is what Buffs/Nag.lua already does
+	-- with an equally empty row.
+	----------------------------------------------------------------------
+
+	enemyCasts.cast.nameplate1 = nil
+	ns.EnemyBars.Update()
+	check(not row():IsShown(), "the row did not clear before the preview test")
+
+	ns.db.locked = false
+	ns.EnemyBars.Update()
+	check(row():IsShown(),
+		"the frames are unlocked, nothing is casting, and the row has nothing on it")
+	check(row().shownSpell == "cast" or row().shownSpell == "channel",
+		("the preview put %q on the row, and it says what it is rather than naming a spell")
+			:format(tostring(row().shownSpell)))
+	check(ns.CastImmuneKnown() ~= nil,
+		"the preview moved the client's own answer about uninterruptible casts")
+
+	-- It rolls over rather than ending. A preview that goes out for a fifth of a
+	-- second on every loop is a flicker, and the whole job of this is to be
+	-- looked at.
+	local blank = 0
+	for _ = 1, math.floor(6 / FRAME) do
+		paint()
+		if not row():IsShown() then
+			blank = blank + 1
+		end
+	end
+	check(blank == 0,
+		("the preview went out on %d of %.0f frames across a full loop")
+			:format(blank, 6 / FRAME))
+
+	-- Both pictures, across one loop: a cast that fills and a channel that
+	-- drains. One unlock has to answer both, because they are what the row draws
+	-- and they do not look alike.
+	local sawCast, sawChannel = false, false
+	for _ = 1, math.floor(6 / FRAME) do
+		paint()
+		if row().channel then
+			sawChannel = true
+		else
+			sawCast = true
+		end
+	end
+	check(sawCast and sawChannel,
+		("a five second loop drew a cast %s and a channel %s, and it owes both")
+			:format(tostring(sawCast), tostring(sawChannel)))
+
+	-- Locked again, with the mob really casting at that moment, which is the case
+	-- the preview flag has to be dropped for. Locked over an empty row the
+	-- ordinary clear covers it; locked over a real cast, a flag left standing
+	-- means the sweep rolls that cast over into another preview when it ends and
+	-- the row never goes out again.
+	casts("Shadow Bolt", 1, nil)
+	ns.db.locked = true
+	ns.EnemyBars.Update()
+	check(row().shownSpell == "Shadow Bolt",
+		("locking over a live cast left %q on the row"):format(tostring(row().shownSpell)))
+	check(not row().preview, "a locked row is still flagged as a preview")
+
+	advance(1.2)
+	barTicker.scripts.OnUpdate(barTicker, FRAME)
+	check(not row():IsShown(),
+		"the cast ended and the row rolled over into a preview instead of going out")
+
+	enemyCasts.cast.nameplate1 = nil
+	ns.EnemyBars.Update()
+	check(not row():IsShown(), "the row did not clear after the preview test")
+
+	----------------------------------------------------------------------
 	-- What the fills cost, which is the question every frame asks
 	--
 	-- The bars' own churn figure below is quoted with nothing casting, and with

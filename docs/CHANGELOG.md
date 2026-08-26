@@ -70,6 +70,15 @@ branch is switched off in its own source under the comment "disable this for
 now, as it appears to be working now through API changes". An addon deleting its
 own workaround is a stronger proof than an addon calling the API.
 
+**Unlocking previews it.** A mob that casts is not something you can arrange, so
+"unlock the frames and look", which is how everything else in this addon gets
+placed and sized, had nothing to look at: the row could not be judged until a
+caster pulled you. Unlocked, every bar draws its own cast instead of asking the
+client, five seconds around, a cast filling and then a channel draining, through
+the same guarded writes the real thing uses. `Buffs/Nag.lua` had the same
+problem with an equally empty row and this is its answer. You still need a bar
+to look at, which means a hostile target or a nameplate up.
+
 `replace` style now hides Blizzard's plate cast bar, which it deliberately did
 not before. Two cast bars for one cast, in two places on the screen, is worse
 than either alone. `bars cast off` takes our row away and gives Blizzard's back

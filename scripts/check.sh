@@ -208,6 +208,8 @@ UnitFrames/EnemyBars.lua:UpdateWidget
 UnitFrames/EnemyBars.lua:UpdateList
 UnitFrames/EnemyBars.lua:EnemyBars.Sweep
 UnitFrames/Cast.lua:Seconds
+UnitFrames/Cast.lua:Preview
+UnitFrames/Cast.lua:Show
 UnitFrames/Cast.lua:Cast.Update
 UnitFrames/Cast.lua:Cast.Sweep
 UnitFrames/EnemyBars.lua:Collect

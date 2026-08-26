@@ -132,7 +132,7 @@ function Cast.Clear(widget)
 	if not box then
 		return
 	end
-	box.shownSpell, box.shownTenths, box.look = nil, nil, nil
+	box.shownSpell, box.shownTenths, box.look, box.preview = nil, nil, nil, nil
 	box:Hide()
 end
 
@@ -212,34 +212,40 @@ local heard = 0
 -- of the second, and check.sh is told why on the line itself.
 --------------------------------------------------------------------------
 
--- What the client says this unit is doing, read onto the row.
+-- What an unlocked frame draws instead of asking the client.
+--
+-- The row is empty almost all of the time, which makes "unlock the frames and
+-- look" a thing with nothing to look at: a feature you cannot see until a
+-- caster pulls you is one you cannot place, size or judge. Buffs/Nag.lua has
+-- the same shape of problem and the same answer, and its preview mode is where
+-- this idea comes from.
+--
+-- Five seconds, and both halves are drawn because the row draws two different
+-- pictures. The first is a cast filling left to right and the second is a
+-- channel draining right to left, so one unlock answers both questions.
+--
+-- Named in English like everything else this addon says in its own voice, and
+-- named for what it is rather than after a spell. A row reading "Shadow Bolt"
+-- over a boar that is not casting is a preview lying about the thing it is
+-- previewing.
+local PREVIEW = 2.5
+
+local function Preview(now)
+	local phase = now % (PREVIEW * 2)
+	local channel = phase >= PREVIEW
+	local start = now - (channel and (phase - PREVIEW) or phase)
+	return channel and "channel" or "cast", start, start + PREVIEW, channel
+end
+
+-- The guarded writes, shared by the client's answer and by the preview, so the
+-- preview really is a preview: it goes through the drawing the real thing goes
+-- through rather than through a second copy of it that can drift.
 --
 -- The shown guard is on the frame rather than on the spell's name, and that is
 -- not tidiness. A mob that casts Shadow Bolt, is interrupted, and casts Shadow
 -- Bolt again has not changed the string, so a name guard alone would leave the
 -- second cast on a hidden row.
-function Cast.Update(widget, unit, fromEvent)
-	local box = widget.cast
-	if not box or not ns.db.barsCast then
-		return
-	end
-
-	if fromEvent then
-		heard = heard + 1
-	end
-
-	-- A cast that has already run out is nothing to draw, whatever the client
-	-- still has in its own table. Cast.Sweep takes a finished cast off the row
-	-- on the frame it ends, and without this line the next tick would put it
-	-- straight back for as long as the client kept answering.
-	local name, start, finish, channel, immune = ns.CastingInfo(unit)
-	if not name or not finish or finish <= start or finish <= GetTime() then
-		if box:IsShown() then
-			Cast.Clear(widget)
-		end
-		return
-	end
-
+local function Show(box, name, start, finish, channel, immune)
 	-- Plain fields on a table, not writes to a frame, so they are unguarded on
 	-- purpose: comparing three numbers to save writing three numbers is the
 	-- guard costing more than the write. The frame writes below are the ones
@@ -263,6 +269,48 @@ function Cast.Update(widget, unit, fromEvent)
 	end
 end
 
+-- What the client says this unit is doing, read onto the row.
+function Cast.Update(widget, unit, fromEvent)
+	local box = widget.cast
+	if not box or not ns.db.barsCast then
+		return
+	end
+
+	if fromEvent then
+		heard = heard + 1
+	end
+
+	-- Unlocked, the row previews itself and the client is not asked at all. The
+	-- unlocked state already means "show me where things are and how big they
+	-- are" everywhere else in this addon, and a row that answers that question
+	-- with nothing is a row you place by memory.
+	if not ns.db.locked then
+		box.preview = true
+		Show(box, Preview(GetTime()))
+		return
+	end
+	if box.preview then
+		-- Locked again. Cleared here rather than left to fall through, because
+		-- what is on the row is a number this file made up and the branch below
+		-- would leave it there until the mob happened to cast.
+		Cast.Clear(widget)
+	end
+
+	-- A cast that has already run out is nothing to draw, whatever the client
+	-- still has in its own table. Cast.Sweep takes a finished cast off the row
+	-- on the frame it ends, and without this line the next tick would put it
+	-- straight back for as long as the client kept answering.
+	local name, start, finish, channel, immune = ns.CastingInfo(unit)
+	if not name or not finish or finish <= start or finish <= GetTime() then
+		if box:IsShown() then
+			Cast.Clear(widget)
+		end
+		return
+	end
+
+	Show(box, name, start, finish, channel, immune)
+end
+
 -- The moving edge, on every frame, and the only thing this file draws that is
 -- not a readout.
 --
@@ -280,6 +328,14 @@ function Cast.Sweep(widget, now)
 	local box = widget.cast
 	if not box or not box:IsShown() then
 		return
+	end
+
+	-- A preview rolls over instead of ending. Refreshed here rather than left to
+	-- the tick, because the tick is up to a fifth of a second away and a fifth
+	-- of a second of empty row on every loop is exactly the flicker a preview
+	-- exists to rule out.
+	if box.preview and box.finish - now <= 0 then
+		Show(box, Preview(now))
 	end
 
 	local left = box.finish - now
@@ -313,6 +369,10 @@ function Cast.Describe()
 	end
 	if not ns.HasCastInfo() then
 		return "|cffd08040this client answers no UnitCastingInfo|r, so the row never draws"
+	end
+	if not ns.db.locked then
+		return "on, and previewing itself on every bar because the frames are"
+			.. " unlocked: a cast, then a channel, five seconds around"
 	end
 	local line = "on"
 	local known = ns.CastImmuneKnown()
