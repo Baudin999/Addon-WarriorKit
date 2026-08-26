@@ -69,9 +69,9 @@ local PANE_GAP = 8  -- the damage pane to the threat pane
 --
 -- The meter has no background. The outline is the only thing between a number
 -- and a pale floor behind it, so unlike a timer on a debuff square this text
--- cannot fall back to flat when it gets small: flat over the world is not
--- softer, it is gone. ns.UI.NumberFont exists for the other case and is
--- deliberately not used here for that reason.
+-- cannot trade the rim for a shadow: a shadow needs a known colour to be darker
+-- than and the world is not one. ns.UI.NumberFont makes that trade at every
+-- size and is deliberately not used here for that reason.
 --
 -- What that leaves is a hard minimum. An outline costs a pixel on every stroke,
 -- and below ns.UI.OutlineFloor a 3 and an 8 stop being different shapes. Both

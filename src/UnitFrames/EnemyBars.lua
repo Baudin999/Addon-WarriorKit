@@ -668,9 +668,9 @@ local function IconHolder(widget)
 	holder.texture = ns.UI.Icon(holder)
 	-- Timer along the bottom edge and stacks in the corner, which leaves the
 	-- middle of the art readable. A number across the icon does not.
-	holder.timer = Text(holder, PLATE_TEXT, NAME_TEXT, "CENTER")
+	holder.timer = Text(holder, PLATE_TEXT, NAME_TEXT, "CENTER", ns.UI.SHADOW)
 	holder.timer:SetPoint("BOTTOM", holder, "BOTTOM", 0, 0)
-	holder.count = Text(holder, COUNT_TEXT_SIZE, COUNT_TEXT, "RIGHT")
+	holder.count = Text(holder, COUNT_TEXT_SIZE, COUNT_TEXT, "RIGHT", ns.UI.SHADOW)
 	holder.count:SetPoint("TOPRIGHT", holder, "TOPRIGHT", -1, -1)
 	return holder
 end
@@ -740,14 +740,14 @@ local function CreateWidget()
 	-- over the fill. A glyph does not, and the mob's name has sat in this strip
 	-- since the first bar. What the chip cost was the widget's shape: marker,
 	-- gap, tag, box is four left edges and a staircase for a silhouette.
-	widget.levelText = Text(widget.health, PLATE_TEXT, Color.xp.none, "LEFT")
+	widget.levelText = Text(widget.health, PLATE_TEXT, Color.xp.none, "LEFT", ns.UI.SHADOW)
 
 	-- The second chamber of the same box, under the health gauge and inside the
 	-- same frame. See the head of Cast.lua.
 	Cast.Build(widget)
 
-	widget.name = Text(widget.health, PLATE_TEXT, NAME_TEXT, "LEFT")
-	widget.healthText = Text(widget.health, PLATE_TEXT, HEALTH_TEXT, "RIGHT")
+	widget.name = Text(widget.health, PLATE_TEXT, NAME_TEXT, "LEFT", ns.UI.SHADOW)
+	widget.healthText = Text(widget.health, PLATE_TEXT, HEALTH_TEXT, "RIGHT", ns.UI.SHADOW)
 	widget.threatText = Text(widget, PLATE_TEXT, HEALTH_TEXT, "LEFT")
 
 	-- SetRaidTargetIconTexture picks one of eight out of a single sheet, so this
@@ -834,15 +834,15 @@ local function LayoutWidget(widget, width, onPlate)
 	-- Five, not four: four next to a one pixel hairline reads as three.
 	local pad = 5 * unit
 	local fontSize = math.floor((onPlate and PLATE_TEXT or LIST_TEXT) * unit + 0.5)
-	local font = ns.UI.Font(fontSize)
+	local font = ns.UI.Font(fontSize, ns.UI.SHADOW)
 
 	-- Two strings on this widget have nothing behind them. The level, the name
-	-- and the health number sit on the gauge's own fill, so an outline is a
-	-- choice there and contrast is the argument for keeping it. The threat line
-	-- and the targeted-by line sit in the gap above the gauge, over whatever the
-	-- player is standing on, so it is not a choice: without it a pale number over
-	-- pale ground is gone. The floor is a hard minimum for those two rather than
-	-- the switch point ns.UI.NumberFont applies over art.
+	-- and the health number sit on the gauge's fill, and behind its spent end is
+	-- the track at nine tenths over a backdrop at seventeen twentieths: about one
+	-- and a half percent of the world reaches them, which is a known dark colour
+	-- and all a shadow needs. The threat line and the targeted-by line sit in the
+	-- gap above the gauge with no known colour behind them, so they keep the
+	-- outline, and the floor is a hard minimum for those two, not a switch.
 	--
 	-- With PLATE_TEXT at the floor this is the same object as `font` at zoom 1
 	-- and the bar carries one type size. The max stays because `bars zoom` can
@@ -854,8 +854,8 @@ local function LayoutWidget(widget, width, onPlate)
 	-- because the icon is a setting now: a fourteen pixel timer on a sixteen
 	-- pixel square covers the art it is annotating.
 	-- Both sit on the icon's own art, which is opaque, so they go through
-	-- ns.UI.NumberFont: it keeps the outline while the glyph is big enough to
-	-- carry one and drops it when it is not.
+	-- ns.UI.NumberFont and come back flat with a shadow. That is the whole reason
+	-- a 7 pixel stack count is readable: nothing is spent on a rim.
 	local timerFont = ns.UI.NumberFont(math.max(8,
 		math.min(fontSize, math.floor(iconSize * 0.6))))
 	local countFont = ns.UI.NumberFont(math.max(7,
