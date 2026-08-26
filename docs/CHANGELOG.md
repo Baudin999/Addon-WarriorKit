@@ -59,6 +59,106 @@ allocated 0.03 KB per fifty ticks rounded and guarded, and allocates 0.03 KB per
 fifty ticks written every frame. The gate stays at 0.05. It is the addon's only
 `-- unguarded:` exemption and the reason is on the line.
 
+### The addon reads your own auras now, and says what you forgot
+
+`grep UnitBuff` across `src/` used to find nothing. A sharpening stone that wore
+off forty minutes ago costs more damage over a raid than any single rotational
+mistake, and Battle Shout falling off says nothing at all.
+
+`Buffs/` is a row of squares over your character, and it is not there when
+nothing is wrong. That is the design decision. A row that is always up with the
+missing ones lit is furniture, and you stop seeing furniture in about a week,
+which is exactly long enough to convince yourself the addon is watching for you.
+A row that exists only when something is wrong carries its whole message in
+existing. The cost is a frame you cannot find to drag, so unlocking shows every
+square it watches at three quarters alpha, which is the trade the meters already
+make when they draw an outline round an empty pane.
+
+**Two halves, taking turns rather than sharing one row.** Out of combat it is
+what is missing: no stone on either hand, no Battle Shout, no food. In combat it
+is the racial you own and have not pressed. They can never both be on screen,
+which is why one row answers two questions.
+
+That split is not a layout convenience. You fix a missing buff out of combat
+because out of combat is when you can fix it, and shouting about a lapsed stone
+mid pull is telling you about a thing you cannot do. Blood Fury is the opposite.
+It is not a buff you keep up; it is two minutes of attack power sitting on a key,
+and the only moment worth saying anything is the moment you are swinging at
+something with it off cooldown.
+
+**The weapon enchants are the reason the feature exists and are the only entry
+that is not an aura.** A temporary enchant does not appear in an aura scan at any
+index. `GetWeaponEnchantInfo` is the only thing in the client that knows, and
+that call has had three shapes: six values at three per hand, eight once 6.0 put
+the enchant's own id in after the charges, and twelve once Cataclysm added a
+ranged hand. Nothing installed here settles which one 2.5.6 and 1.15.9 answer
+with. So the stride is counted with `select("#", ...)` rather than read
+positionally on a guess: at a guessed three against a client that answers eight,
+the main hand's enchant id lands where the off hand's "has an enchant" belongs,
+and a number is truthy, so the off hand would read as enchanted forever and never
+say why. The harness drives both shapes and reads the off hand in both.
+
+**A shield is never nagged about**, and that is the client's own
+`OffhandHasWeapon` rather than a reading of the slot. A shield, a
+held-in-off-hand item and an empty hand all answer no to it, and every one of the
+three is a state a warrior is in on purpose.
+
+**Auras are matched by name and scanned on an event, never on the tick.** Battle
+Shout has eight ranks and the aura carries whichever one was shouted, so the ids
+in the source exist only to ask this client what it calls the spell in the
+language it is running in. `UNIT_AURA` fires for every buff you gain and every one
+you lose, so the walk runs from the event and the tick reads a field. On a client
+carrying `C_UnitAuras` that walk would also build a table per aura, which is
+allocation on a ticker.
+
+**Flasks and elixirs are a setting rather than a table.** These clients will not
+say that an aura came from an elixir. There is no category on an aura and no call
+that maps one back to the item, so the built-in version is about forty hand
+written spell ids that cannot be checked from outside the game, go stale on the
+next patch, and are wrong in a way nothing reports. `/wk buffs add <id>` takes six
+of your own, the same shape the debuff row on the enemy bars already has.
+
+**Only the racials that are damage are nagged about.** Blood Fury on an orc and
+Berserking on a troll: both are throughput, both come back inside three minutes,
+and forgetting one across a boss fight is free damage thrown away. Every other
+racial a warrior can have is listed with the nag off so the status line and the
+panel can name yours and say why it is quiet. Stoneform is spent when something
+bleeds you and War Stomp when something needs stunning, and a row that shouted
+about either every fight would teach you to ignore the row, which would cost you
+Blood Fury as well.
+
+The ids come from Wowhead's TBC Classic database and each was checked against the
+cooldown its page states. Blood Fury has a second proof and it is the one that
+matters: 20572 sits in this install's own Details saved variables as a buff with
+uptime, recorded off a live 2.5.6 session. The race is `UnitRace`'s second
+return, which is the token and is the same string in every locale, and it is read
+every time rather than cached for the reason `ns.IsWarrior` reads the class every
+time.
+
+**The racial square breathes, and there is no sound.** Its alpha runs between a
+floor and full over 1.6 seconds, which at the row's ten hertz is sixteen steps
+and reads as a pulse rather than a strobe. It is on by default, because a nag you
+can ignore is not what was asked for, and `/wk buffs pulse off` makes it a still
+square. A sound would be a new kind of thing in this addon and is not worth it: a
+chime in a raid competes with the sounds you are already listening for, it fires
+whether or not you are looking at the screen, and a racial coming off cooldown is
+worth noticing within a few seconds rather than immediately. The alpha is
+quantised to twentieths so a tick that would draw the same value writes nothing.
+
+Two states silence the missing-buff half and neither touches the racial half.
+Dead, because nagging a corpse about its sharpening stone is noise, and that one
+is not a setting. Resting, because an inn is where you have not put a stone on
+yet on purpose and the row would be up through an hour at the auction house; that
+one is `/wk buffs resting` for anyone who buffs in the bank.
+
+**Not gated on warrior.** A lapsed stone costs a hunter's melee weapon exactly
+what it costs a warrior's, and a troll rogue forgets Berserking the same way.
+Battle Shout is the one entry that asks `ns.IsWarrior`, inside `Upkeep.Rebuild`,
+and the hunter harness run asserts it is not on the list.
+
+The long personal cooldowns are deliberately absent. Death Wish and Recklessness
+are timed by hand on purpose and are their own piece of work.
+
 ### Overpower is a reaction, and the bars say so now
 
 Overpower was drawn ready from the first pull to the last. It is pressable for

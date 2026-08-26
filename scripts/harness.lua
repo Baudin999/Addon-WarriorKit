@@ -73,6 +73,7 @@ local CHURN = {
 	meter = 0.2,
 	bars = 0.05,
 	swing = 0.05,
+	buffs = 0.05,
 }
 
 -- The bars' steady state, in KB per fifty ticks with two bars up, covering the
@@ -743,6 +744,72 @@ _G.UnitClass = function(unit)
 	return PLAYER_CLASS:sub(1, 1) .. PLAYER_CLASS:sub(2):lower(), PLAYER_CLASS
 end
 
+--------------------------------------------------------------------------
+-- Everything about the player themselves that the buff nag reads
+--
+-- One table rather than one local each, for the reason `chat` above is one
+-- table: this chunk sits near Lua 5.1's ceiling of two hundred locals in a
+-- function, and a part that needs eight pieces of state has to bring one name
+-- with it.
+--
+--   race, raceName  what UnitRace answers, token second
+--   main, mainLeft  the main hand's temporary enchant and its milliseconds
+--   off, offLeft    the off hand's
+--   wide            which shape GetWeaponEnchantInfo answers in
+--   resting, dead   the two states that silence the missing buff row
+--   auras           the buffs on you, in slot order
+--   cooldowns       spell id to start and duration, for the racial
+--------------------------------------------------------------------------
+
+local own = {
+	race = "Orc", raceName = "Orc",
+	main = false, mainLeft = 0, off = false, offLeft = 0, wide = false,
+	resting = false, dead = false,
+	auras = {},
+	cooldowns = {},
+}
+
+-- The race, as the client answers it: a localised name first and a token
+-- second. The name is deliberately not spelled the same as the token, so a file
+-- that read the wrong return finds nothing in its table even on a client
+-- running in English.
+--
+-- A variable rather than a constant, because the whole point of the racial half
+-- is that an orc gets Blood Fury and a troll gets Berserking, and a stub that
+-- answered one race would leave the other branch unreachable.
+_G.UnitRace = function(unit)
+	if unit ~= "player" then
+		return nil, nil
+	end
+	return own.raceName, own.race
+end
+
+-- Your own temporary weapon enchants, and the one stub in this file whose shape
+-- is itself the thing under test.
+--
+-- GetWeaponEnchantInfo has had three shapes: six values at three per hand,
+-- eight once 6.0 put the enchant's own id after the charges, and twelve once
+-- Cataclysm added a ranged hand. Nothing on this machine settles which of them
+-- 2.5.6 and 1.15.9 answer with, so Buffs/Upkeep.lua counts the returns rather
+-- than reading them positionally on a guess.
+--
+-- `wide` drives that count and both settings are exercised. On the eight value
+-- shape the main hand's enchant id sits exactly where the six value shape puts
+-- "the off hand has an enchant", and it is a number, and a number is truthy: a
+-- parser that guessed three would say the off hand was enchanted forever and
+-- never say why. That is what the buff section asserts.
+_G.GetWeaponEnchantInfo = function()
+	if own.wide then
+		return own.main, own.mainLeft, own.main and 5 or 0, own.main and 2506 or 0,
+			own.off, own.offLeft, own.off and 5 or 0, own.off and 2506 or 0
+	end
+	return own.main, own.mainLeft, own.main and 5 or 0,
+		own.off, own.offLeft, own.off and 5 or 0
+end
+
+_G.IsResting = function() return own.resting end
+_G.UnitIsDeadOrGhost = function() return own.dead end
+
 -- Threat, with a hook for the same reason. Core/Core.lua resolves
 -- UnitDetailedThreatSituation once at load and calls the local from then on, so
 -- the meters' section installs a reader here rather than replacing the global,
@@ -786,6 +853,20 @@ _G.UnitAffectingCombat = function(unit) return inCombat[unit] == true end
 -- be read on 2.5.6.
 local debuffs = {}
 _G.UnitAura = function(unit, index, filter)
+	-- Your own buffs, which is the other half of the same call and the one the
+	-- buff nag walks. Only the player carries any, because that is the only unit
+	-- anything in this addon asks HELPFUL about, and the list is empty in the
+	-- shipped scene so no other section sees a buff appear under it.
+	if filter == "HELPFUL" then
+		if unit ~= "player" then
+			return nil
+		end
+		local aura = own.auras[index]
+		if not aura then
+			return nil
+		end
+		return aura.name, nil, aura.count, nil, nil, aura.expires, "player"
+	end
 	if filter ~= "HARMFUL" then
 		return nil
 	end
@@ -861,6 +942,17 @@ local SPELL_NAMES = {
 	[11585] = "Overpower",
 	[6572] = "Revenge",
 	[25288] = "Revenge",
+	-- The buff nag's five. Battle Shout and Well Fed are here because the aura
+	-- walk compares this client's own string for an id against the string an
+	-- aura carries, so both sides have to be the real words or the comparison
+	-- proves nothing about the real words. The three racials are here because
+	-- the row's caption says "press Blood Fury" and a caption reading "press
+	-- Spell20572" would pass an assertion about a caption.
+	[6673] = "Battle Shout",
+	[19705] = "Well Fed",
+	[20572] = "Blood Fury",
+	[26297] = "Berserking",
+	[20594] = "Stoneform",
 }
 _G.GetSpellInfo = function(id)
 	if type(id) == "number" and id >= 900000 then
@@ -870,7 +962,18 @@ _G.GetSpellInfo = function(id)
 		"Interface\\Icons\\A" .. id, _G.WarriorKitSpellCast[id]
 end
 _G.GetSpellTexture = function(id) return "Interface\\Icons\\A" .. id end
-_G.GetSpellCooldown = function() return 0, 0 end
+-- Table driven, and empty in the shipped scene so every spell reads as ready
+-- the way a constant pair of zeroes already did. The racial half of the buff
+-- nag is the only thing here that asks: pressing Blood Fury has to take the
+-- square off the screen, and a stub that never put a cooldown on anything could
+-- not tell a fixed nag from a working one.
+_G.GetSpellCooldown = function(id)
+	local entry = own.cooldowns[id]
+	if not entry then
+		return 0, 0, 1
+	end
+	return entry[1], entry[2], 1
+end
 _G.IsUsableSpell, _G.IsSpellInRange, _G.IsSpellKnown = constant(true), constant(1), constant(true)
 _G.GetNumSpellTabs = constant(0)
 -- Three items in the backpack and empty hands. Enough for the gear scan to
@@ -8446,6 +8549,375 @@ do
 		:format(Window.Tabs(),
 			Window.Count(Feed.CHAT), Window.Count(Feed.WHISPER), Window.Count(Feed.PEOPLE),
 			Feed.Claimed(), Voice.Describe()))
+end
+
+--------------------------------------------------------------------------
+-- The buff nag
+--
+-- Two halves that take turns, and the assertions are mostly about the turns
+-- rather than about the drawing. A missing sharpening stone must be noticed out
+-- of combat and must go quiet the moment a fight starts, because you cannot
+-- apply one mid pull. Blood Fury must be silent out of combat and loud in it,
+-- because pressing it is only worth saying while you are swinging.
+--
+-- The one assertion here that is about a client API rather than about the
+-- feature is the off hand. GetWeaponEnchantInfo answers six values on the
+-- oldest shape and eight once the enchant's own id went in after the charges,
+-- and on the eight value shape the main hand's enchant id sits exactly where
+-- the six value shape puts "the off hand has an enchant". It is a number, and a
+-- number is truthy. A parser that guessed the stride would report an enchanted
+-- off hand forever, silently, on whichever of the two clients answers the shape
+-- it did not guess. So the stub is driven in both shapes and the off hand is
+-- read in both.
+--
+-- The shield is the other half of that: a shield takes no stone and a tank
+-- holding one must never be nagged about it. That is the client's own
+-- OffhandHasWeapon and not a reading of the slot, and the slot is filled with a
+-- shield here to prove the difference.
+--------------------------------------------------------------------------
+
+do
+	local Upkeep, Racials, Nag = ns.Upkeep, ns.Racials, ns.BuffNag
+
+	local ticker
+	for _, f in ipairs(frames) do
+		if f.scripts.OnUpdate and f.origin:match("Buffs/Nag") then
+			ticker = f
+		end
+	end
+	check(ticker ~= nil, "the buff nag registered no ticker")
+
+	local function tick()
+		ticker.scripts.OnUpdate(ticker, 0.2)
+	end
+
+	local function says(word)
+		return Nag.Caption():find(word, 1, true) ~= nil
+	end
+
+	----------------------------------------------------------------------
+	-- Which shape this client answers in
+	----------------------------------------------------------------------
+
+	own.wide = false
+	check(Upkeep.EnchantShape() == 3, "six returns did not read as a stride of three")
+	own.wide = true
+	check(Upkeep.EnchantShape() == 4, "eight returns did not read as a stride of four")
+
+	----------------------------------------------------------------------
+	-- The main hand
+	----------------------------------------------------------------------
+
+	ns.db.locked = true
+	own.race, own.raceName = "Orc", "Orc"
+	swing.mainhand = _G.WarriorKitItemLink("Arcanite Reaper")
+	swing.offhand, swing.off = nil, nil
+	own.main, own.mainLeft, own.off, own.offLeft = false, 0, false, 0
+	fire("PLAYER_EQUIPMENT_CHANGED")
+	tick()
+
+	check(Nag.Mode() == "upkeep", "a bare weapon out of combat drew nothing")
+	check(says("main hand"), "a bare main hand was not nagged about")
+
+	own.main, own.mainLeft = true, 1500 * 1000
+	tick()
+	check(not says("main hand"), "a sharpened weapon was nagged about anyway")
+	check(math.floor(Upkeep.Left(ns.Gear.MAINHAND)) == 1500,
+		"the main hand's remaining time did not come back in seconds")
+
+	----------------------------------------------------------------------
+	-- The off hand, a shield, and the stride
+	----------------------------------------------------------------------
+
+	swing.offhand = _G.WarriorKitItemLink("Aegis")
+	swing.off = nil -- OffhandHasWeapon is false for a shield, which is the rule
+	fire("PLAYER_EQUIPMENT_CHANGED")
+	tick()
+	check(not says("off hand"), "a shield was nagged about")
+
+	-- A real weapon in that hand with nothing on it, read on the eight value
+	-- shape, where a guessed stride of three would find the main hand's enchant
+	-- id sitting in the off hand's "has an enchant" slot and say it was fine.
+	swing.off = 1.8
+	fire("PLAYER_EQUIPMENT_CHANGED")
+	tick()
+	check(says("off hand"),
+		"a bare off hand was not nagged about, which is the stride read wrongly")
+
+	own.off, own.offLeft = true, 900 * 1000
+	tick()
+	check(not says("off hand"), "a sharpened off hand was nagged about anyway")
+
+	-- And again on the six value shape, so neither branch of the decode is only
+	-- ever run one way round.
+	own.wide = false
+	own.off = false
+	tick()
+	check(says("off hand"), "the six value shape lost the off hand")
+	own.wide = true
+	own.off = true
+	tick()
+
+	swing.off, swing.offhand = nil, nil
+	fire("PLAYER_EQUIPMENT_CHANGED")
+
+	----------------------------------------------------------------------
+	-- Battle Shout, which is the one entry gated on class
+	----------------------------------------------------------------------
+
+	own.auras[1] = { name = "Battle Shout", expires = _G.GetTime() + 120 }
+	fire("UNIT_AURA", "player")
+	tick()
+	check(not says("battle shout"), "Battle Shout was nagged about while it was up")
+
+	own.auras[1] = nil
+	fire("UNIT_AURA", "player")
+	tick()
+	if WARRIOR then
+		check(says("battle shout"), "Battle Shout falling off said nothing")
+	else
+		check(not says("battle shout"),
+			"a hunter was told to keep Battle Shout up")
+	end
+
+	----------------------------------------------------------------------
+	-- Food, which is not
+	----------------------------------------------------------------------
+
+	check(says("food"), "an unfed character was not nagged about food")
+	own.auras[1] = { name = "Well Fed", expires = _G.GetTime() + 900 }
+	fire("UNIT_AURA", "player")
+	tick()
+	check(not says("food"), "Well Fed did not count as food")
+	own.auras[1] = nil
+	fire("UNIT_AURA", "player")
+
+	----------------------------------------------------------------------
+	-- Which racial you own
+	----------------------------------------------------------------------
+
+	check(Racials.Name() == "Blood Fury", "an orc did not get Blood Fury")
+	check(Racials.Spell() == 20572, "Blood Fury is not 20572")
+	check(Racials.Worth(), "Blood Fury is not worth nagging about")
+
+	own.race, own.raceName = "Troll", "Troll"
+	check(Racials.Name() == "Berserking", "a troll did not get Berserking")
+	check(Racials.Spell() == 26297, "Berserking is not 26297")
+	check(Racials.Worth(), "Berserking is not worth nagging about")
+
+	own.race, own.raceName = "Dwarf", "Dwarf"
+	check(Racials.Name() == "Stoneform", "a dwarf did not get Stoneform")
+	check(not Racials.Worth(),
+		"Stoneform is nagged about, and a defensive spent on a bleed is not a rotation")
+
+	-- A race with nothing listed answers nothing rather than answering the last
+	-- race's spell, which is what a cache keyed on nothing would have done.
+	own.race, own.raceName = "Goblin", "Goblin"
+	check(Racials.Spell() == nil, "a race with no racial listed kept the last one")
+
+	own.race, own.raceName = "Orc", "Orc"
+
+	----------------------------------------------------------------------
+	-- The racial half, in a fight
+	----------------------------------------------------------------------
+
+	inCombat.player = true
+	tick()
+	check(Nag.Mode() == "racial", "Blood Fury off cooldown in a fight drew nothing")
+	check(Nag.Shown() == 1, "the racial half drew more than one square")
+	check(Nag.Caption() == "press Blood Fury",
+		"the caption read " .. Nag.Caption())
+	check(not says("main hand"),
+		"a missing stone shouted in combat, where you cannot do anything about it")
+
+	-- Pressed. The cooldown is the only thing that says so and it is what takes
+	-- the square off the screen.
+	own.cooldowns[20572] = { _G.GetTime(), 120 }
+	tick()
+	check(Nag.Mode() == "quiet", "pressing Blood Fury left the square on screen")
+	check(Nag.Shown() == 0, "a spent racial still drew a square")
+
+	-- A global sweep is not the ability's own cooldown. Reading it as one would
+	-- blink the square out for a second and a half after every other press.
+	own.cooldowns[20572] = { _G.GetTime(), 1.5 }
+	tick()
+	check(Nag.Mode() == "racial", "a global cooldown counted as the racial being spent")
+	own.cooldowns[20572] = nil
+
+	-- Turned off, the racial half goes quiet and the missing stone stays quiet
+	-- too, because combat is combat.
+	ns.db.buffRacial = false
+	tick()
+	check(Nag.Mode() == "quiet", "the racial setting did nothing")
+	ns.db.buffRacial = true
+	tick()
+
+	----------------------------------------------------------------------
+	-- The pulse
+	----------------------------------------------------------------------
+
+	local before = Nag.Icon(1).shownAlpha
+	advance(0.8) -- half a cycle
+	tick()
+	check(Nag.Icon(1).shownAlpha ~= before, "the racial square did not pulse")
+	check(Nag.Icon(1).shownAlpha >= 0.3 and Nag.Icon(1).shownAlpha <= 1,
+		"the pulse left the square at " .. tostring(Nag.Icon(1).shownAlpha))
+
+	ns.db.buffPulse = false
+	tick()
+	check(Nag.Icon(1).shownAlpha == 1, "pulse off did not leave the square at full alpha")
+	ns.db.buffPulse = true
+
+	----------------------------------------------------------------------
+	-- What a tick costs
+	--
+	-- Measured in the racial half with the clock moving, which is the row's only
+	-- moving state. Standing still it writes nothing at all, and a gate on that
+	-- figure would be a gate on the guards rather than on the tick.
+	----------------------------------------------------------------------
+
+	local function churnBuffs(n)
+		collectgarbage("collect")
+		collectgarbage("stop")
+		local start = collectgarbage("count")
+		for _ = 1, n do
+			advance(0.1)
+			ticker.scripts.OnUpdate(ticker, 0.2)
+		end
+		local after = collectgarbage("count")
+		collectgarbage("restart")
+		return after - start
+	end
+
+	churnBuffs(50)
+	local churned = churnBuffs(50)
+	check(churned <= CHURN.buffs,
+		("the buff row allocated %.2f KB over 50 ticks, and the gate is %.2f")
+			:format(churned, CHURN.buffs))
+
+	----------------------------------------------------------------------
+	-- Out of combat again, and the two states that silence the row
+	----------------------------------------------------------------------
+
+	inCombat.player = nil
+	tick()
+	check(Nag.Mode() == "upkeep", "leaving combat did not put the missing buffs back")
+
+	own.resting = true
+	tick()
+	check(Nag.Mode() == "quiet", "the row nagged somebody sitting in an inn")
+	ns.db.buffResting = true
+	tick()
+	check(Nag.Mode() == "upkeep", "the setting for nagging while resting did nothing")
+	ns.db.buffResting = false
+	own.resting = false
+
+	own.dead = true
+	tick()
+	check(Nag.Mode() == "quiet", "the row nagged a corpse about its sharpening stone")
+	own.dead = false
+	tick()
+
+	----------------------------------------------------------------------
+	-- Nothing missing means nothing drawn
+	----------------------------------------------------------------------
+
+	own.main = true
+	own.auras[1] = { name = "Well Fed", expires = _G.GetTime() + 900 }
+	own.auras[2] = { name = "Battle Shout", expires = _G.GetTime() + 120 }
+	fire("UNIT_AURA", "player")
+	tick()
+	check(Nag.Mode() == "quiet", "a fully buffed character was still shown a row")
+	check(Nag.Shown() == 0, "a row with nothing wrong drew a square")
+
+	-- Unlocked it comes back as a preview of everything it watches, because a
+	-- frame you cannot see is a frame you cannot drag.
+	ns.db.locked = false
+	Nag.Lock()
+	tick()
+	check(Nag.Mode() == "preview", "unlocking did not show the row")
+	check(Nag.Shown() == Upkeep.Count(),
+		("the preview drew %d squares of %d"):format(Nag.Shown(), Upkeep.Count()))
+	ns.db.locked = true
+	Nag.Lock()
+
+	----------------------------------------------------------------------
+	-- The list you keep, which is where a flask goes
+	----------------------------------------------------------------------
+
+	local tracked = Upkeep.Count()
+	local added, said = Upkeep.Add(17038)
+	check(added, "adding a spell to the row was refused: " .. tostring(said))
+	check(Upkeep.Count() == tracked + 1, "an added spell did not reach the list")
+
+	tick()
+	check(says("Spell17038"), "an added buff that is not on you was not nagged about")
+
+	own.auras[3] = { name = "Spell17038", expires = _G.GetTime() + 3600 }
+	fire("UNIT_AURA", "player")
+	tick()
+	check(not says("Spell17038"), "an added buff that is on you was nagged about anyway")
+	own.auras[3] = nil
+	fire("UNIT_AURA", "player")
+
+	check(Upkeep.Add(17038) == false, "the same spell went on the row twice")
+	check(Upkeep.Add("not a number") == false, "a word was taken as a spell id")
+
+	for extra = 1, Upkeep.MaxExtra() do
+		Upkeep.Add(17038 + extra)
+	end
+	check(#Upkeep.Extra() == Upkeep.MaxExtra(),
+		("the list holds %d and the cap is %d"):format(#Upkeep.Extra(), Upkeep.MaxExtra()))
+	check(Upkeep.Add(19999) == false, "the list went past its own cap")
+
+	for _ = 1, Upkeep.MaxExtra() do
+		Upkeep.Remove(Upkeep.Extra()[1])
+	end
+	check(#Upkeep.Extra() == 0, "removing every added spell left something behind")
+	check(Upkeep.Count() == tracked, "the list did not come back to what it was")
+
+	----------------------------------------------------------------------
+	-- Whole pixels at every zoom
+	--
+	-- The general anchor sweep at the end of this file catches the row at
+	-- whatever zoom it is left in. This walks all three, because the row ships
+	-- at 2x and the offsets between squares are the design number multiplied by
+	-- the zoom.
+	----------------------------------------------------------------------
+
+	own.main, own.off = false, false
+	own.auras[1], own.auras[2] = nil, nil
+	fire("UNIT_AURA", "player")
+
+	local shipped = ns.db.buffZoom
+	local off = 0
+	for _, zoom in ipairs({ 1, 2, 3 }) do
+		ns.db.buffZoom = zoom
+		Nag.Apply()
+		tick()
+		for slot = 1, Nag.Shown() do
+			local square = Nag.Icon(slot)
+			local px = ns.UI.Pixel(square)
+			for _, point in ipairs(square.points or {}) do
+				local x, y = (point[4] or 0) / px, (point[5] or 0) / px
+				if math.abs(x - math.floor(x + 0.5)) > 1e-6
+					or math.abs(y - math.floor(y + 0.5)) > 1e-6 then
+					off = off + 1
+				end
+			end
+		end
+	end
+	check(off == 0, ("%d square anchors were off a whole pixel"):format(off))
+	ns.db.buffZoom = shipped
+	Nag.Apply()
+	tick()
+
+	-- Left drawn on purpose. The anchor sweep at the end of this file walks
+	-- every frame on the grid, and a row that had put itself away would be a row
+	-- that sweep never looked at.
+	print(("buffs  %d tracked, %d missing, %s; racial %s; %.2f KB per 50 ticks, gate is %.2f")
+		:format(Upkeep.Count(), Nag.Shown(), Nag.Mode(),
+			Racials.Describe(), churned, CHURN.buffs))
 end
 
 --------------------------------------------------------------------------
