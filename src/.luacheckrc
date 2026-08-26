@@ -111,6 +111,11 @@ read_globals = {
 	-- bar that raises once per button per tick is worse than a grey bar.
 	"HasAction", "GetActionTexture", "GetActionCooldown", "GetActionCount",
 	"IsUsableAction", "IsActionInRange",
+	-- and the two that say the slot is already what is running, which draw the
+	-- active tint on the stance you are standing in and the auto attack already
+	-- swinging. Probed separately from the five above and resolved to locals in
+	-- Slot.CanRead: a client without them loses a tint, not the bar.
+	"IsCurrentAction", "IsAutoRepeatAction",
 	-- which key the binding set already holds for one of Blizzard's action
 	-- buttons, read by Buttons/Bars.lua so the clone answers the keys you
 	-- already had. Probed by name and pcalled at the call site rather than

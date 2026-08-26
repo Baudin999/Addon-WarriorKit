@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+### The cloned bars answer a press
+
+The squares read the right slots, drew the right art and cast the right spells,
+and they still did not feel like buttons. Five things were missing and four of
+them are the same missing thing: nothing on a square changed in response to
+anything you did with it.
+
+The loudest was the global cooldown. `Buttons/Slot.lua` withheld the swipe below
+1.5 seconds on the grounds that a bar sweeping on every press is a strobe. It
+is, and that strobe was the only thing on screen answering a key press: a rage
+dump has no cooldown to count, no colour to change and nothing to grey, so
+pressing one moved no pixel at all. `Slot.State` now returns the cooldown's
+numbers whether or not it returns the `cooldown` status, and `Ability.Draw`
+takes the swipe off the numbers and the countdown off the status. The global
+sweeps and gets no number; a real cooldown still gets both.
+
+Then the three the client will draw for you if asked. A highlight on the
+HIGHLIGHT layer, which the client shows and hides itself for any frame that
+takes the mouse. A pushed tint, which the Button widget draws between mouse down
+and mouse up. And a tooltip, which was on the list of things a square
+deliberately was not and should not have been: drag is a way to lose a bar to a
+misclick, and a tooltip is how you find out which rank of Rend the loadout put
+in slot four.
+
+The fifth is the active tint. `IsCurrentAction` and `IsAutoRepeatAction` fold
+into `Slot.Active`, and a square that is already what is running gets an
+additive gold wash over the art. On a warrior that is the stance you are
+standing in, drawn on the bar at a glance, and the auto attack already swinging.
+It is an argument to `Ability.Draw` rather than a tenth status, because the
+active stance is also `ready` and the two must be able to be true at once. The
+two calls are probed separately from the five in `NEEDED`: a client without them
+loses a tint, not the bar.
+
+And empty slots stopped being question marks. An empty slot has no art, so it
+fell to the `no` look and came out as `INV_Misc_QuestionMark` at 55 percent, a
+row of grey question marks where Blizzard's bar had holes. Both palettes grew an
+`empty` look carrying `blank`, which says draw no art at all.
+
+Not done, and worth knowing: there is still no way to drag a spell from the
+spellbook onto a square, because the Blizzard button underneath it is hidden and
+nothing can be dropped on the clone. Filling a slot is `/wk buttons apply` or
+`/wk actionbars off` and the spellbook. The equipped-item border Blizzard draws in green is also still absent.
+
 ### The meter bars have an opacity slider
 
 `BAR_ALPHA = 0.15` was a constant in `Meter/Window.lua` and the note beside it
