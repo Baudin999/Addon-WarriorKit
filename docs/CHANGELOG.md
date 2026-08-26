@@ -98,86 +98,56 @@ The strip list may shrink with a setting. The restore list may not. It is
 no-op on a region that was never taken, so asking for all of them costs a table
 lookup.
 
-### Bar 1 still takes no drop, and now it says so
+### Bar 1 takes a dropped spell, and this time the client said why
 
-The fix below did not fix it. Bar 1 hovers, names what is on it, highlights an
-empty square and pushes under a click, and a spell dragged onto it will not
-leave the cursor. Every other bar takes the same spell.
+Two fixes went in for this and neither worked, because both were written by
+reading the code. Bar 1 hovered, named what was on it, highlighted an empty
+square and pushed under a click, and a spell dragged onto it would not leave the
+cursor. Every other bar took the same spell.
 
-That report kills the theory the entry below is built on. A square that answers
-`OnEnter` is a square the cursor is over, because the client hit tests both the
-same way, so no frame is swallowing the drop and no amount of frame level is
-going to help. Two fixes have now been written by reading the code and neither
-was ever checked against the client.
+So this release stopped guessing and asked. `/wk actionbars trace` prints what
+the client says is under the cursor, whenever that changes, with the frame's
+name, its strata, its level and the action slot it presses if it has one. It
+answered in one line:
 
-So this release ships an instrument rather than a third theory.
+    trace: under the cursor: MainActionBar (TOOLTIP 50), holding spell 21/spell
 
-`/wk actionbars trace` turns on three read only prints. The first samples the
-frame the client says is under the cursor, five times a second, and prints it
-when it changes, with its name, its strata, its level and the action slot it
-presses if it has one. The second prints every gesture a square gets: the slot,
-what the cursor held going in and what it holds coming out. A drop that never
-prints is a drop the client never sent us. A drop that prints and leaves the
-cursor loaded is `PlaceAction` refusing the slot. Those are different bugs and
-nothing on screen has ever told them apart. The third prints every click a
-square gets, through `PostClick`, because a spell is dropped by clicking as
-often as by dragging and the first version of this could not see that at all.
+`MainActionBar` is mouse enabled in **TOOLTIP**, which is the top strata there
+is. The previous fix stood the cloned bars at frame level 120 to beat that
+frame's level of 50, and a level cannot win an argument with a strata: our bar
+sat at MEDIUM 122 and lost every hit test on that corner of the screen anyway.
+The same trace never once named a bar 1 square while it named squares on the
+other four, which is the same fact from the other side.
 
-The first live run of it printed every gesture and never once named a frame,
-which from the chat frame looks exactly like a cursor touching nothing. This
-client has no `GetMouseFocus`. Both calls are asked for now, `GetMouseFocus` and
-the `GetMouseFoci` that replaced it, and the trace says which one answered the
-moment it is switched on, so a run that cannot name a frame says why instead of
-going quiet.
+That frame cannot be hidden, because the micro menu and the bag bar hang off the
+same corner, and it cannot be out-stacked, because nothing stacks above TOOLTIP
+except tooltips. So the mouse comes off it. It has no click handler and no drag
+handler; it exists to stop a press reaching the world, and the bar of ours
+standing over it does that job now. `Buttons/Blizzard.lua` walks up from each
+Blizzard button it hides, silences any ancestor that actually takes the mouse,
+and hands every one of them back when the clone is turned off, which is the
+same shape the button hiding already had. Frames declared with no `enableMouse`,
+which is all four multi-bars, are never touched. `EnableMouse` is per frame and
+never inherited, so the micro menu and the bag bar keep theirs.
 
-The drop path stops being silent whether or not the trace is on. A drop that
-reaches a square and moves nothing now says which action slot it was aimed at,
-once per reason per session, and a square pointing at no slot at all says that
-instead. The old message latched on the first refusal and swallowed every other
-reason for the rest of the session, which was the same silence one layer down;
-the latch is keyed by the line now, so a second thing going wrong is still said.
+**The trace stays.** It is off unless asked for, read only, and it prints three
+things: the frame under the cursor as it changes, every drag gesture a square
+gets with the cursor either side of it, and every click, through `PostClick`,
+because a spell is dropped by clicking as often as by dragging. Its first live
+run printed every gesture and never named a frame, because this client has no
+`GetMouseFocus`; both that and the `GetMouseFoci` that replaced it are asked
+for now, and the trace says which one answered as it switches on.
 
-What is left of the difference between bar 1 and the other four, for whoever
-reads this next: bar 1 is the only bar the client re-points by stance, so its
-squares press the bonus bar slots 73 to 108 while every other bar presses 25 to
-72, and it is the only bar whose `action` attribute is written by a secure
-snippet as well as from Lua. The rest of it is the same code the working bars
-run.
+The drop path also stops being silent with the trace off. A drop that reaches a
+square and moves nothing says which action slot it was aimed at, once per reason
+per session, and a square pointing at no slot says that instead. The old latch
+fired on the first refusal and swallowed every other reason for the rest of the
+session, which was the same silence one layer down; it is keyed by the line now.
 
-### Bar 1 takes a dropped spell again
-
-Nothing could be dropped on bar 1. The other four bars took a spell off the
-spellbook and cast it a second later; bar 1 took the drop, kept its empty
-square, and the key that pressed that square went on doing nothing, because
-nothing had ever landed there.
-
-The cause is one line of Blizzard's own XML. `MainActionBar` is declared
-`enableMouse="true"` at frame level 50, 454 by 35, anchored to the bottom of
-UIParent. Its twelve buttons are hidden by `Buttons/Blizzard.lua` and a hidden
-frame takes no mouse, but the bar frame under them is not hidden and is not ours
-to hide: the micro menu and the bag bar hang off that same corner, which is the
-warning `Artwork/Artwork.lua` has carried since it was written. Strip the art off
-it, which is the shipping setting, and what is left is an invisible frame across
-the bottom of the screen that swallows every click landing on it.
-
-A frame built on UIParent starts at level 1. Fifty beats one, so a drop aimed at
-bar 1 went into a frame with no drag handler and disappeared, and only bar 1,
-because `MultiBarBottomLeft`, `MultiBarBottomRight`, `MultiBarLeft` and
-`MultiBarRight` are each declared with no `enableMouse` at all. Exactly one
-action bar frame in the client takes the mouse, and exactly one bar was broken.
-The keys never asked the mouse anything, which is why the bar looked alive.
-
-`Buttons/Placing.lua` owns the number, because depth is a position. The cloned
-bars stand at level 120, clear of the end caps and the page number
-at 100, and `scripts/harness.lua` carries a `MainActionBar` at 50 so the next bar
-dragged down there has to win the same argument.
-
-Two things around it were silent and are not now. A pickup or a drop refused by
-`Layout.CanCarry` says why once a session instead of returning into nothing, and
-`/wk actionbars` carries the standing answer, so a client that draws every bar
-and accepts no drop says so in its own status line. That is the half of this bug
-that cost the most: every failure mode looked exactly like a bar that ignores the
-mouse.
+`scripts/harness.lua` carries `MainActionBar` in TOOLTIP with bar 1's twelve
+buttons parented to it, and fails if the clone leaves it taking the mouse, if it
+silences a holder that never took one, or if the off switch leaves anything
+deaf. The old fixture said MEDIUM and both failed fixes passed it.
 
 ### A nag you cannot silence is a nag you learn to ignore
 

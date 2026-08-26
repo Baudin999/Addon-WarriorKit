@@ -30,9 +30,33 @@ ns.TheirBars = Theirs
 -- that fire a few times a session, against a taint that is silent until it
 -- costs you a taunt.
 --
--- The holders are left alone. Bar 1's twelve are parented to
+-- The holders are not hidden. Bar 1's twelve are parented to
 -- MainMenuBarArtFrame along with the micro menu and the bag bar, and hiding
 -- that takes all three, which is the warning Artwork.lua already carries.
+--
+-- They are silenced instead, and that is the whole of the bar 1 drop bug.
+--
+-- A hidden button takes no mouse. The frame it was standing on is not hidden,
+-- and on this client `MainActionBar` is mouse enabled in the TOOLTIP strata,
+-- which is the top one there is: it sits invisible across the bottom of the
+-- screen with its art stripped, above every strata a bar of ours could stand
+-- in, and it takes every drop aimed at bar 1. `/wk actionbars trace` printed it
+-- in one line after two fixes had guessed at frame levels, which is a number
+-- that cannot win an argument with a strata.
+--
+-- So the mouse comes off it, not the frame off the screen. Nothing that frame
+-- does with a click is anything the player wanted: it has no drag handler and
+-- no click handler, it exists to stop a press reaching the world, and our own
+-- bar standing over it does that job now. The micro menu and the bag bar are
+-- children with a mouse of their own and are untouched, because EnableMouse is
+-- per frame and never inherited.
+--
+-- Walked up from the buttons rather than named. The frame that took the drop is
+-- an ancestor of the button it was standing on, whatever it happens to be
+-- called on whichever client this is, and only an ancestor that actually takes
+-- the mouse is touched: the four multi-bars are declared with no enableMouse at
+-- all and stay exactly as they were found. UIParent ends the walk, because
+-- silencing that is silencing the interface.
 --
 -- Only the buttons of bars this file actually cloned are touched. Hiding a bar
 -- the player has switched off would mean the off switch showed it, and an off
@@ -43,6 +67,11 @@ ns.TheirBars = Theirs
 -- knows exactly what to put back and nothing else. Keyed by frame rather than
 -- by name, because a name is resolved once and a frame is the thing.
 local hidden = {}
+
+-- Every frame this file took the mouse off, so the off switch hands back
+-- exactly those and nothing else. A frame that was already deaf when we found
+-- it never lands here and never gets a mouse it did not have.
+local deafened = {}
 
 -- One button out of sight. Returns false when combat refused it, which is the
 -- same contract ns.Strip has and what lets the caller report a partial job.
@@ -71,6 +100,43 @@ local function Restore(frame)
 	return true
 end
 
+-- The mouse off one frame, and back on. Same contract as Banish and Restore:
+-- false means combat refused it and the caller can report a partial job.
+local function Deafen(frame)
+	if ns.Blocked(frame) then
+		return false
+	end
+	frame:EnableMouse(false)
+	return true
+end
+
+local function Hear(frame)
+	if ns.Blocked(frame) then
+		return false
+	end
+	frame:EnableMouse(true)
+	return true
+end
+
+-- Every frame above one button, collected into `wanted`.
+--
+-- Stops at UIParent and at a frame with no parent, so the walk cannot reach the
+-- interface itself.
+--
+-- Every ancestor is collected and not only the ones taking the mouse right now,
+-- which is the difference between a switch and a loop. The pass below silences
+-- the ones that are listening; a pass after that would find them deaf, leave
+-- them out, and hand the mouse straight back to the frame it had just taken it
+-- from. Whether a frame is worth silencing is decided once, at the moment it is
+-- silenced, and remembered in `deafened`.
+local function Above(frame, wanted)
+	local step = frame and frame.GetParent and frame:GetParent()
+	while step and step ~= UIParent do
+		wanted[step] = true
+		step = step.GetParent and step:GetParent() or nil
+	end
+end
+
 -- Exactly these hidden and every other one handed back.
 --
 -- Takes global frame names rather than walking the bars itself, so the file
@@ -83,11 +149,12 @@ end
 -- pass that stops hiding them is the pass that gives them back; nothing has to
 -- remember which bar they came from.
 function Theirs.Only(names)
-	local wanted = {}
+	local wanted, above = {}, {}
 	for index = 1, #names do
 		local frame = _G[names[index]]
 		if frame then
 			wanted[frame] = true
+			Above(frame, above)
 		end
 	end
 
@@ -110,6 +177,30 @@ function Theirs.Only(names)
 			end
 		end
 	end
+
+	-- And the frames those buttons stand on, which is where the drops went.
+	-- Handed back first for the same reason the buttons are: a bar unticked in
+	-- the panel stops naming its twelve, so the same pass that stops silencing
+	-- its holder is the pass that gives the mouse back.
+	for frame in pairs(deafened) do
+		if not above[frame] then
+			if Hear(frame) then
+				deafened[frame] = nil
+			else
+				complete = false
+			end
+		end
+	end
+	for frame in pairs(above) do
+		if not deafened[frame] and type(frame.IsMouseEnabled) == "function"
+			and frame:IsMouseEnabled() then
+			if Deafen(frame) then
+				deafened[frame] = true
+			else
+				complete = false
+			end
+		end
+	end
 	return complete
 end
 
@@ -121,6 +212,13 @@ function Theirs.Show()
 	for frame in pairs(hidden) do
 		if Restore(frame) then
 			hidden[frame] = nil
+		else
+			complete = false
+		end
+	end
+	for frame in pairs(deafened) do
+		if Hear(frame) then
+			deafened[frame] = nil
 		else
 			complete = false
 		end
@@ -137,11 +235,33 @@ function Theirs.Recheck()
 			Banish(frame)
 		end
 	end
+	-- The same question for the holders. ACTIONBAR_SHOWGRID is one of the
+	-- events this runs on and is exactly the moment the client tidies its own
+	-- bars for a cursor with something on it, which is the moment a mouse
+	-- handed back costs the drop that was already on its way.
+	for frame in pairs(deafened) do
+		if type(frame.IsMouseEnabled) == "function" and frame:IsMouseEnabled()
+			and not ns.Blocked(frame) then
+			Deafen(frame)
+		end
+	end
 end
 
 function Theirs.Count()
 	local count = 0
 	for _ in pairs(hidden) do
+		count = count + 1
+	end
+	return count
+end
+
+-- How many of Blizzard's own frames are standing there with their mouse off.
+-- Counted separately from the buttons because they are a different claim on the
+-- client's interface and because a status line that added them together would
+-- report sixty-one buttons hidden.
+function Theirs.Deafened()
+	local count = 0
+	for _ in pairs(deafened) do
 		count = count + 1
 	end
 	return count

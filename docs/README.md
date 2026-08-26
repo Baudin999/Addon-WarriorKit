@@ -1203,6 +1203,20 @@ went and checked.
   its keys, and swallowed every drop. Anything laid over Blizzard's furniture has
   to say what level it stands at. `Buttons/Placing.lua` uses 120 and the harness
   models the frame at 50.
+- A frame level cannot win an argument with a frame strata. `MainActionBar` on
+  this client is mouse enabled in TOOLTIP, the top strata there is, so a cloned
+  bar at MEDIUM 122 lost every hit test on the bottom of the screen to a frame
+  at level 50. Two fixes were written against the level before `/wk actionbars
+  trace` printed the strata. When a frame is taking a click that is not yours,
+  read both numbers, and read them off the client rather than off Blizzard's
+  XML: this one is declared MEDIUM and is not running at MEDIUM.
+- Where a frame cannot be hidden and cannot be out-stacked, take its mouse off.
+  `Buttons/Blizzard.lua` walks up from each button it hides and calls
+  `EnableMouse(false)` on any ancestor that takes the mouse, and hands every one
+  of them back with the off switch. `EnableMouse` is per frame and never
+  inherited, so the micro menu and the bag bar hanging off the same corner keep
+  theirs. A frame with no click handler and no drag handler that swallows every
+  press is furniture, not interface.
 - That level was a real bug and was not the bar 1 bug. Bar 1 still took no drop
   after it, while hovering, naming what was on it and pushing under a click. A
   frame that answers `OnEnter` is the frame the client hit tested the cursor

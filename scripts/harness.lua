@@ -394,7 +394,12 @@ function Region:SetParent(p) self.parent = p end
 function Region:GetParent() return self.parent end
 function Region:SetFrameLevel(l) self.frameLevel = l end
 function Region:GetFrameLevel() return self.frameLevel end
-function Region:GetFrameStrata() return "MEDIUM" end
+-- Recorded rather than constant, because a strata is what the bar 1 drop bug
+-- turned out to be: MainActionBar sits mouse enabled in TOOLTIP, the top strata
+-- there is, and no frame level a cloned bar can be given wins that argument.
+-- A fixture that answered MEDIUM for everything could not model it.
+function Region:SetFrameStrata(value) self.strata = value end
+function Region:GetFrameStrata() return self.strata or "MEDIUM" end
 function Region:SetTexCoord(a, b, c, d) self.texcoord = { a, b, c, d } end
 -- Eight values, the way the client answers, and the first of them is the left
 -- crop, which is what the skin's tick reads back before it writes.
@@ -1596,7 +1601,7 @@ end
 -- bars" and a clone that cloned everything the client has a name for would both
 -- pass a fixture where every bar was on.
 local BLIZZARD_BARS = {
-	{ button = "ActionButton%d", base = 73 },
+	{ button = "ActionButton%d", base = 73, stands = "MainActionBar" },
 	{ button = "MultiBarBottomLeftButton%d", base = 61, holder = "MultiBarBottomLeft", on = true },
 	{ button = "MultiBarBottomRightButton%d", base = 49, holder = "MultiBarBottomRight", on = true },
 	{ button = "MultiBarRightButton%d", base = 37, holder = "MultiBarRight", on = true },
@@ -1623,6 +1628,12 @@ local BLIZZARD_BARS = {
 do
 	local main = region("frame", _G.UIParent, "MainActionBar")
 	main:SetFrameLevel(50)
+	-- TOOLTIP, which is what `/wk actionbars trace` read off the live client
+	-- and is the whole bug: it is the top strata there is, so a cloned bar
+	-- standing at MEDIUM 120 loses every hit test on that corner of the screen
+	-- no matter how high the level goes. Two fixes were written against a
+	-- fixture that said MEDIUM here and both of them passed it.
+	main:SetFrameStrata("TOOLTIP")
 	main:EnableMouse(true)
 end
 
@@ -1633,8 +1644,13 @@ for _, bar in ipairs(BLIZZARD_BARS) do
 	if bar.holder then
 		region("frame", _G.UIParent, bar.holder).shown = bar.on
 	end
+	-- Parented to the frame they stand on where the client parents them there,
+	-- because Buttons/Blizzard.lua walks up from the button to find whatever is
+	-- taking the mouse above it rather than naming a frame. A fixture that hung
+	-- every button off UIParent would have nothing above it to find.
+	local stands = bar.stands and _G[bar.stands] or _G.UIParent
 	for index = 1, 12 do
-		region("button", _G.UIParent, bar.button:format(index)).action = bar.base + index - 1
+		region("button", stands, bar.button:format(index)).action = bar.base + index - 1
 	end
 end
 
@@ -3388,6 +3404,27 @@ do
 	check(found.bar1.header:GetFrameLevel() > _G.MainActionBar:GetFrameLevel(),
 		"the header the squares hang off is under Blizzard's bar frame")
 
+	-- And the level is not the fix, which is what the trace finally said.
+	--
+	-- MainActionBar is mouse enabled in TOOLTIP, the top strata there is, so
+	-- every drop aimed at bar 1 went into it whatever level the clone stood at.
+	-- The frame is not ours to hide, because the micro menu and the bag bar hang
+	-- off the same corner, so the mouse comes off it instead: it has no click
+	-- handler and no drag handler, and the bar of ours standing over it is doing
+	-- the only job it was doing.
+	--
+	-- Asserted on the frame walked up from the button rather than on a name, and
+	-- asserted alongside a holder that never took the mouse, because a fix that
+	-- silenced every frame it could reach would pass a check that only looked at
+	-- this one.
+	check(not _G.MainActionBar:IsMouseEnabled(),
+		"Blizzard's bar frame still takes the mouse, so bar 1 still takes no drop")
+	check(ns.TheirBars.Deafened() == 1,
+		("%d of Blizzard's frames were silenced, expected the one that takes the mouse")
+			:format(ns.TheirBars.Deafened()))
+	check(not _G.MultiBarBottomLeft:IsMouseEnabled(),
+		"a holder that never took the mouse was handed one")
+
 	--------------------------------------------------------------------------
 	-- Placing them
 	--
@@ -3960,6 +3997,10 @@ do
 
 	check(_G.ActionButton1:IsShown() and _G.MultiBarRightButton12:IsShown(),
 		"Blizzard's buttons did not come back")
+	check(_G.MainActionBar:IsMouseEnabled(),
+		"the off switch left Blizzard's own bar frame deaf to the mouse")
+	check(ns.TheirBars.Deafened() == 0,
+		"the off switch left frames silenced with no way to find them")
 	check(Bars.Hidden() == 0, "the off switch left buttons hidden with no way to find them")
 	check(not found.bar1.frame:IsShown(), "a cloned bar is still on screen with the clone off")
 	check(_G.GetBindingAction("E", true) == "",
