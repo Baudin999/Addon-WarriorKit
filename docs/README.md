@@ -113,8 +113,11 @@ name of none of them.
                              that loadout's cast and its pair of /equipslot lines
     Loadouts/Feature.lua     the paperdoll page and the loadout tab strip
 
+    Buttons/Slot.lua         what one action slot is doing, as one of nine statuses
     Buttons/Layout.lua       the warrior loadout, and the backup of what it replaced
     Buttons/Ranks.lua        moves bar slots up to the best rank you know
+    Buttons/Bars.lua         a clone of every action bar you have, on the same
+                             slots and the same keys, with Blizzard's hidden
     Buttons/Feature.lua
 
     UnitFrames/Plates.lua    the client settings that decide where a plate goes
@@ -364,6 +367,19 @@ goes through `Feature.lua` or through the shared surface below:
     ns.DefaultFor(key)           the registered default for a setting, for reset
     ns.Command.Toggle(arg)       "off" is off, anything else is on
     ns.Command.Number(v, lo, hi, what)  parse and range-check, or complain and return nil
+    ns.Slot.State(slot)          what one action slot is doing: a status out of
+                                 UI/Ability.lua's nine, plus the cooldown times
+    ns.Slot.Texture / Count / CanRead / Describe
+    ns.Bars.Apply()              stand the cloned bars up, or take them down and
+                                 give Blizzard's back; false when combat deferred it
+    ns.Bars.CanPage()            whether a state driver came up, so bar 1 pages
+                                 in combat rather than only out of it
+    ns.Bars.All()                the bars it built, read only
+    ns.Bars.Count() / Hidden() / Keys()   squares drawn, Blizzard buttons
+                                 hidden, and keys the override layer took
+    ns.Bars.Short(key)           a binding shortened to fit a 27 pixel square
+    ns.Bars.Describe()           one line for /wk status and the panel
+    ns.Layout.SlotOf(name)       which action slot one of Blizzard's buttons drives
     ns.Layout.CanWrite()         the action API is here, combat is not, cursor is empty
     ns.Layout.CanApply()         that, and you are a warrior
     ns.Layout.Apply / Restore    fill the action bars, or put back what was there
@@ -657,16 +673,17 @@ become new ratchets.
 
 ### Ticker discipline
 
-Four `OnUpdate` tickers run at once and none of them ever stops. A fifth runs
+Five `OnUpdate` tickers run at once and none of them ever stops. A sixth runs
 only while you are looking at it.
 
     Charge/Marker.lua        20 Hz   it tracks the camera
     Charge/Icon.lua          10 Hz   the HUD icon and the macro
+    Buttons/Bars.lua         10 Hz   every square on every cloned bar
     UnitFrames/EnemyBars.lua  5 Hz   every bar on screen
     UnitFrames/Skin.lua       5 Hz   the three Blizzard unit frames
     Perf/Perf.lua             1 Hz   only while the performance tab is on screen
 
-The fifth one is the exception that proves the rule rather than a loosening of
+The sixth one is the exception that proves the rule rather than a loosening of
 it. `UpdateAddOnMemoryUsage` walks every addon the client has loaded, which
 would make the file that measures the cost the most expensive thing in the
 addon. So it is started by the tab's `OnShow` and stopped by its `OnHide`, and
@@ -2502,6 +2519,7 @@ nothing ever runs is a branch that is wrong.
     /wk bind none                hand the key back
     /wk switch TAB               next enemy and swing at it, override binding only
     /wk switch none              hand that key back
+    /wk actionbars on|off        our own bars over Blizzard's, same slots, same keys
     /wk bars on|off
     /wk bars mode auto|plates|list
     /wk bars style replace|attach
@@ -2708,6 +2726,33 @@ Aiming at a mob out of combat with no target selected is the whole test.
 ## Untested against the live client
 
 Everything below was written from the API contract and has never executed:
+
+- Whether `RegisterStateDriver` and `SecureHandlerStateTemplate` re-point bar 1
+  at another twelve action slots in combat on 2.5.6. `Charge/Icon.lua` already
+  builds a handler and registers a driver on the same client, so the machinery is
+  reached; what neither file proves is that the restricted environment runs the
+  snippet `Buttons/Bars.lua` gives it. `scripts/harness.lua` runs that snippet as
+  ordinary Lua and asserts every square lands on the right slot for all three
+  stance pages, which settles the arithmetic and nothing else. `DrivePages`
+  probes for the template and the global before either is used, and
+  `ns.Bars.CanPage` reports which path is live, so a client with neither pages
+  bar 1 out of combat and says so in `/wk status`.
+- Whether `GetBindingKey` answers a secondary key on this client. Nothing
+  installed calls it. It is probed by name and pcalled, and both returns are put
+  on the override layer and read straight back with `GetBindingAction`, so a key
+  the call did not take is reported rather than believed.
+- What hiding one of Blizzard's action buttons through `ns.Strip` does to that
+  button's taint. `ns.Strip` writes three fields onto the frame, which for a
+  secure button is a taint the client may notice later. The same mechanism
+  already hides regions of `PlayerFrame` and `TargetFrame`, which are secure unit
+  buttons, and neither has raised on the live client; a button on a hidden bar is
+  a weaker case than a frame you still click. If it does turn out to spam, the
+  answer is `SetAttribute("statehidden", true)` and a reparent, which is what
+  every bar addon does and which taints the same frame in a way Blizzard expects.
+- Whether an action button whose `action` attribute this addon wrote casts on the
+  key-down edge on 2.5.6. `Charge/Icon.lua` registers `AnyDown` on the same
+  client for a macro button and works; a `type="action"` button is the same
+  template with a different attribute.
 
 - Whether `LOOT_READY` fires before the loot window draws on 2.5.6. Leatrix
   Plus hangs its own faster looting on that event and is loaded on both clients,

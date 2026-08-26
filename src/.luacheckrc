@@ -29,6 +29,33 @@ globals = {
 	"WarriorKitLoadout5Button", "WarriorKitLoadout6Button",
 	"WarriorKitLoadout7Button", "WarriorKitLoadout8Button",
 	"WarriorKitLoadout9Button", "WarriorKitLoadout10Button",
+	-- One per square on a cloned action bar, plus the cooldown frame each square
+	-- carries, which UI/Ability.lua names after it. Both are made by CreateFrame
+	-- with a name built by concatenation, so luacheck never sees the write;
+	-- listed here because the game makes the global and the README says every
+	-- one of those is written down. Sixty is five bars of twelve, which is every
+	-- action bar this client has, and Buttons/Bars.lua hands the button's name to
+	-- SetOverrideBindingClick, which is the whole reason any of them is named.
+	"WarriorKitBarButton1", "WarriorKitBarButton2", "WarriorKitBarButton3", "WarriorKitBarButton4", "WarriorKitBarButton5", "WarriorKitBarButton6",
+	"WarriorKitBarButton7", "WarriorKitBarButton8", "WarriorKitBarButton9", "WarriorKitBarButton10", "WarriorKitBarButton11", "WarriorKitBarButton12",
+	"WarriorKitBarButton13", "WarriorKitBarButton14", "WarriorKitBarButton15", "WarriorKitBarButton16", "WarriorKitBarButton17", "WarriorKitBarButton18",
+	"WarriorKitBarButton19", "WarriorKitBarButton20", "WarriorKitBarButton21", "WarriorKitBarButton22", "WarriorKitBarButton23", "WarriorKitBarButton24",
+	"WarriorKitBarButton25", "WarriorKitBarButton26", "WarriorKitBarButton27", "WarriorKitBarButton28", "WarriorKitBarButton29", "WarriorKitBarButton30",
+	"WarriorKitBarButton31", "WarriorKitBarButton32", "WarriorKitBarButton33", "WarriorKitBarButton34", "WarriorKitBarButton35", "WarriorKitBarButton36",
+	"WarriorKitBarButton37", "WarriorKitBarButton38", "WarriorKitBarButton39", "WarriorKitBarButton40", "WarriorKitBarButton41", "WarriorKitBarButton42",
+	"WarriorKitBarButton43", "WarriorKitBarButton44", "WarriorKitBarButton45", "WarriorKitBarButton46", "WarriorKitBarButton47", "WarriorKitBarButton48",
+	"WarriorKitBarButton49", "WarriorKitBarButton50", "WarriorKitBarButton51", "WarriorKitBarButton52", "WarriorKitBarButton53", "WarriorKitBarButton54",
+	"WarriorKitBarButton55", "WarriorKitBarButton56", "WarriorKitBarButton57", "WarriorKitBarButton58", "WarriorKitBarButton59", "WarriorKitBarButton60",
+	"WarriorKitBarButton1Cooldown", "WarriorKitBarButton2Cooldown", "WarriorKitBarButton3Cooldown", "WarriorKitBarButton4Cooldown", "WarriorKitBarButton5Cooldown", "WarriorKitBarButton6Cooldown",
+	"WarriorKitBarButton7Cooldown", "WarriorKitBarButton8Cooldown", "WarriorKitBarButton9Cooldown", "WarriorKitBarButton10Cooldown", "WarriorKitBarButton11Cooldown", "WarriorKitBarButton12Cooldown",
+	"WarriorKitBarButton13Cooldown", "WarriorKitBarButton14Cooldown", "WarriorKitBarButton15Cooldown", "WarriorKitBarButton16Cooldown", "WarriorKitBarButton17Cooldown", "WarriorKitBarButton18Cooldown",
+	"WarriorKitBarButton19Cooldown", "WarriorKitBarButton20Cooldown", "WarriorKitBarButton21Cooldown", "WarriorKitBarButton22Cooldown", "WarriorKitBarButton23Cooldown", "WarriorKitBarButton24Cooldown",
+	"WarriorKitBarButton25Cooldown", "WarriorKitBarButton26Cooldown", "WarriorKitBarButton27Cooldown", "WarriorKitBarButton28Cooldown", "WarriorKitBarButton29Cooldown", "WarriorKitBarButton30Cooldown",
+	"WarriorKitBarButton31Cooldown", "WarriorKitBarButton32Cooldown", "WarriorKitBarButton33Cooldown", "WarriorKitBarButton34Cooldown", "WarriorKitBarButton35Cooldown", "WarriorKitBarButton36Cooldown",
+	"WarriorKitBarButton37Cooldown", "WarriorKitBarButton38Cooldown", "WarriorKitBarButton39Cooldown", "WarriorKitBarButton40Cooldown", "WarriorKitBarButton41Cooldown", "WarriorKitBarButton42Cooldown",
+	"WarriorKitBarButton43Cooldown", "WarriorKitBarButton44Cooldown", "WarriorKitBarButton45Cooldown", "WarriorKitBarButton46Cooldown", "WarriorKitBarButton47Cooldown", "WarriorKitBarButton48Cooldown",
+	"WarriorKitBarButton49Cooldown", "WarriorKitBarButton50Cooldown", "WarriorKitBarButton51Cooldown", "WarriorKitBarButton52Cooldown", "WarriorKitBarButton53Cooldown", "WarriorKitBarButton54Cooldown",
+	"WarriorKitBarButton55Cooldown", "WarriorKitBarButton56Cooldown", "WarriorKitBarButton57Cooldown", "WarriorKitBarButton58Cooldown", "WarriorKitBarButton59Cooldown", "WarriorKitBarButton60Cooldown",
 	"WarriorKitChargeCooldown",
 	"WarriorKitChargeMarker",
 	"WarriorKitChargeMarkerCooldown",
@@ -84,6 +111,12 @@ read_globals = {
 	-- bar that raises once per button per tick is worse than a grey bar.
 	"HasAction", "GetActionTexture", "GetActionCooldown", "GetActionCount",
 	"IsUsableAction", "IsActionInRange",
+	-- which key the binding set already holds for one of Blizzard's action
+	-- buttons, read by Buttons/Bars.lua so the clone answers the keys you
+	-- already had. Probed by name and pcalled at the call site rather than
+	-- trusted: nothing installed here calls it, and the only other reader of a
+	-- binding in this addon is GetBindingAction, which is above.
+	"GetBindingKey",
 	-- the spellbook, read by Buttons/Ranks.lua to find the best rank you know
 	"GetNumSpellTabs", "GetSpellTabInfo",
 	"GetSpellBookItemInfo", "GetSpellBookItemName",

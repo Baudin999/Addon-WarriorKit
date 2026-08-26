@@ -13,6 +13,7 @@ local ADDON, ns = ...
 local ROWS = {
 	{ key = "marker", label = "charge marker", hz = 20 },
 	{ key = "icon", label = "charge icon", hz = 10 },
+	{ key = "action", label = "action bars", hz = 10 },
 	{ key = "bars", label = "enemy bars", hz = 5 },
 	{ key = "skin", label = "unit frames", hz = 5 },
 	{ key = "meter", label = "meters", hz = 5 },

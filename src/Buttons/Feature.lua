@@ -52,6 +52,20 @@ local function RefreshRanks()
 	ns.Options.Refresh()
 end
 
+-- The clone, which is the other half of this part: Layout writes the slots and
+-- Bars draws them. One feature rather than two, because they are one job seen
+-- from two ends and a panel that split them would ask the same question twice.
+local function SetBars(value)
+	ns.db.actionBars = value and true or false
+	local complete = ns.Bars.Apply()
+	ns.Print("action bars " .. (ns.db.actionBars and "cloned" or "handed back")
+		.. ": " .. ns.Bars.Describe() .. ".")
+	if not complete then
+		ns.Print("part of that needs combat to end first, and will run then.")
+	end
+	ns.Options.Refresh()
+end
+
 local function Restore()
 	local ok, result = ns.Layout.Restore()
 	if not ok then
@@ -63,9 +77,27 @@ local function Restore()
 	ns.Options.Refresh()
 end
 
+-- What the millisecond figure on the performance tab is per. 0.4 ms means one
+-- thing at twelve squares and another at sixty. Registered from here rather
+-- than from Bars.lua, because a behaviour file names nothing outside its folder.
+if ns.Perf then
+	ns.Perf.Gauge("bar squares on screen", function()
+		return ns.Bars.Count()
+	end)
+end
+
 ns.Register({
 	name = "buttons",
 	order = 5,
+
+	defaults = {
+		-- Off, and it is the only default in this addon that is off because of
+		-- what turning it on does rather than because of what it is worth. On
+		-- means Blizzard's own buttons are hidden the moment you log in, and a
+		-- feature that rearranges the bars of everyone who happens to update
+		-- has to be asked for.
+		actionBars = false,
+	},
 
 	-- Per character, all three of them. These describe one character's action
 	-- bars and one character's macros. Held account-wide, the first character to
@@ -82,6 +114,17 @@ ns.Register({
 	},
 
 	words = {
+		-- Not "bars": the enemy bars part claimed that word years ago and Core
+		-- asserts at login that no two features share one.
+		actionbars = function(arg)
+			if arg == "on" or arg == "off" then
+				SetBars(ns.Command.Toggle(arg))
+			else
+				ns.Print("action bars: " .. ns.Bars.Describe() .. ".")
+				ns.Print("actionbars on clones every bar you have, with its keys, and hides Blizzard's. actionbars off gives them back.")
+			end
+		end,
+
 		ranks = function(arg)
 			if arg == "refresh" or arg == "apply" then
 				RefreshRanks()
@@ -108,16 +151,24 @@ ns.Register({
 
 	help = {
 		"buttons apply, buttons restore, buttons status",
+		"actionbars on|off, our own bars over Blizzard's, same slots and same keys",
 		"ranks, ranks refresh",
 	},
 
 	status = function()
 		local ranks = ("%d slots holding an older rank"):format(#ns.Ranks.Stale())
+		local bars = "bars " .. ns.Bars.Describe()
 		if not ns.Layout.HasBackup() then
-			return "not applied, " .. ns.Layout.Describe() .. " | " .. ranks
+			return "not applied, " .. ns.Layout.Describe() .. " | " .. ranks .. " | " .. bars
 		end
-		return "applied, backup from " .. ns.Layout.BackupStamp() .. " | " .. ranks
+		return "applied, backup from " .. ns.Layout.BackupStamp()
+			.. " | " .. ranks .. " | " .. bars
 	end,
+
+	-- No reset hook. /wk reset puts frames back where they started, and where
+	-- the cloned bars sit is not a setting to start from: it is a table in
+	-- Bars.lua. Turning the clone off is a decision, not a reset, so it stays on
+	-- the switch that says so.
 
 	panel = function(ui)
 		ui.Header("Buttons")
@@ -140,6 +191,21 @@ ns.Register({
 				return "Your old bars are held from " .. ns.Layout.BackupStamp() .. ". " .. ns.Layout.Describe() .. "."
 			end
 			return ns.Layout.Describe() .. ". Nothing is overwritten until you press it."
+		end)
+
+		ui.Gap()
+		ui.Header("Our own bars")
+		ui.Note(function()
+			return "Reads every action bar you have on, and stands up one of ours for each: the same action slots, the same keys, and Blizzard's buttons hidden behind it. Your keybindings are read, never written."
+		end)
+		ui.Check("clone my action bars",
+			function() return ns.db.actionBars end,
+			SetBars)
+		ui.Note(function()
+			if not ns.db.actionBars then
+				return "Your bars are Blizzard's. Nothing is hidden and no key is taken."
+			end
+			return ns.Bars.Describe() .. "."
 		end)
 
 		ui.Gap()
