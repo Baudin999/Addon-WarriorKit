@@ -482,6 +482,21 @@ function Region:SetFont(path, size, flags)
 	self.fontPath, self.fontSize, self.fontFlags = path, size, flags
 	return true
 end
+function Region:SetShadowColor(r, g, b, a) self.shadowColor = { r, g, b, a } end
+function Region:SetShadowOffset(x, y) self.shadowX, self.shadowY = x, y end
+-- Same fall-through as GetFont, and for the same reason: the shadow is set on
+-- the shared font object and never on the string, so a test that asked the
+-- string directly would find nothing on every string in the addon.
+function Region:GetShadowOffset()
+	if self.shadowX then
+		return self.shadowX, self.shadowY
+	end
+	local object = self.fontObject
+	if object and object.shadowX then
+		return object.shadowX, object.shadowY
+	end
+	return 0, 0
+end
 -- Real anchors, because the skin reads Blizzard's back out of its own snapshot
 -- and places the whole block on the first of them. With GetNumPoints answering
 -- nothing the snapshot recorded nothing, the block fell to its fallback anchor,
@@ -5555,17 +5570,50 @@ do
 	check(math.abs(threatY - math.floor(threatY + 0.5)) < 1e-6,
 		("an odd icon put the threat line at %.3f pixels"):format(threatY))
 
-	-- Every number on a debuff square, at every size the square can be set to.
+	-- Every string the bar draws, against the three rules in UI/Text.lua.
 	--
-	-- An outline is a rim drawn round the glyph, so it costs the same number of
+	-- One. A glyph at or under the monochrome ceiling is rasterised with no
+	-- anti-aliasing. This is the rule that made the bars sharp and it is the one
+	-- most easily lost, because it is a word inside a flags string that nothing
+	-- else in the addon spells out.
+	--
+	-- Two. Text over the addon's own art is flat and carries a shadow. An
+	-- outline is a rim drawn round the glyph, so it costs the same number of
 	-- pixels whatever the glyph is, and below about fourteen it has eaten the
 	-- counters: the hole in a 6, the waist of an 8. The bars drew these outlined
 	-- at seven to twelve pixels, which is where a stack count stops being a
-	-- digit. Read back off the font object rather than off the constant, because
-	-- the size a string ends up at is the smaller of the design size and a
-	-- fraction of the icon, and it is the second one that produced the bad
-	-- values.
+	-- digit.
+	--
+	-- Three. Text over the world is outlined, at or above the floor. It has no
+	-- known colour behind it, so a shadow has nothing to be darker than and flat
+	-- is not softer, it is gone.
 	local floor = ns.UI.OutlineFloor()
+	local ceiling = ns.UI.MonoCeiling()
+	-- Anchored, or rule one asserts nothing: every check below reads the ceiling
+	-- back out of UI/Text.lua, so a ceiling of zero would satisfy all of them by
+	-- putting every string above it. The floor is the anchor. Outlined text is
+	-- drawn at exactly the floor, and an anti-aliased stem with a rim round it is
+	-- the defect this whole section exists to catch, so the size that must carry
+	-- a rim must also be a size the rasteriser leaves alone.
+	check(ceiling >= floor,
+		("the monochrome ceiling is %d and the outline floor is %d, so text drawn"
+			.. " at the floor is anti-aliased under a rim"):format(ceiling, floor))
+
+	-- Read back off the font object rather than off the constant, because the
+	-- size a string ends up at is the smaller of the design size and a fraction
+	-- of the icon, and it is the second one that produced the bad values.
+	local function inspect(label, region)
+		local _, drawnAt, flags = region:GetFont()
+		local shadowX = select(1, region:GetShadowOffset())
+		check(drawnAt ~= nil, ("the %s reports no font"):format(label))
+		if drawnAt and drawnAt <= ceiling then
+			check(flags and flags:find("MONOCHROME", 1, true),
+				("the %s is %d pixels, at or under the %d ceiling, and anti-aliased: flags %q")
+					:format(label, drawnAt, ceiling, tostring(flags)))
+		end
+		return drawnAt, flags or "", shadowX
+	end
+
 	local outlined, flat = 0, 0
 	for size = low, high do
 		ns.db.barsIconSize = size
@@ -5573,69 +5621,81 @@ do
 		ns.EnemyBars.Rebuild()
 		local holder = widget.icons[1]
 		for _, part in ipairs{ { "timer", holder.timer }, { "count", holder.count } } do
-			local _, drawnAt, flags = part[2]:GetFont()
-			check(drawnAt ~= nil,
-				("the %s on a %d square reports no font"):format(part[1], size))
+			local drawnAt, flags, shadowX = inspect(
+				("%s on a %d square"):format(part[1], size), part[2])
 			if drawnAt then
-				check(drawnAt >= floor or flags == "",
-					("at icon %d the %s is %d pixels and still outlined, under the %d floor")
-						:format(size, part[1], drawnAt, floor))
-				if flags == "" then
-					flat = flat + 1
-				else
+				if flags:find("OUTLINE", 1, true) then
 					outlined = outlined + 1
+				else
+					flat = flat + 1
+					check(shadowX > 0,
+						("at icon %d the %s is flat with no shadow, so it has nothing"
+							.. " holding it off the art under it"):format(size, part[1]))
 				end
 			end
 		end
 	end
-	-- Every one of them comes out flat, and that is the honest result rather than
-	-- a branch that never ran. Both numbers are capped by a design constant
-	-- below the floor, the timer by the bar's own text size and the count by
-	-- COUNT_TEXT_SIZE, so no icon setting can lift either to fourteen. Worth
-	-- knowing rather than hiding: it means a 56 pixel square still carries a 12
-	-- pixel timer, which is legible but small for the room it has.
+	-- Every one of them comes out flat, at every icon size, and that is now the
+	-- rule rather than an accident of the caps: ns.UI.NumberFont has no outlined
+	-- branch left to reach. Worth knowing rather than hiding: a 56 pixel square
+	-- still carries a 12 pixel timer, which is legible but small for the room it
+	-- has, because both numbers are capped by a design constant.
 	check(outlined == 0,
-		("%d numbers on a debuff square are outlined, and the caps should make that impossible")
-			:format(outlined))
+		("%d numbers on a debuff square are outlined, and ns.UI.NumberFont should"
+			.. " have no way left to produce one"):format(outlined))
 
-	-- So the branch itself is checked where it lives, rather than through a call
-	-- site that can only ever reach one side of it.
-	local _, small, smallFlags = ns.UI.NumberFont(floor - 1):GetFont()
-	local _, big, bigFlags = ns.UI.NumberFont(floor):GetFont()
-	check(small == floor - 1 and smallFlags == "",
-		("NumberFont at %d came back %s with flags %q"):format(floor - 1,
-			tostring(small), tostring(smallFlags)))
-	check(big == floor and bigFlags == "OUTLINE",
-		("NumberFont at %d came back %s with flags %q"):format(floor,
-			tostring(big), tostring(bigFlags)))
+	-- So the rule itself is checked where it lives, rather than through a call
+	-- site that can only ever reach one size. Either side of the old switch
+	-- point, because that is where a reintroduced branch would show.
+	for _, size in ipairs{ floor - 1, floor, ceiling + 4 } do
+		local font = ns.UI.NumberFont(size)
+		local _, drawnAt, flags = font:GetFont()
+		local shadowX = select(1, font:GetShadowOffset())
+		check(drawnAt == size and not flags:find("OUTLINE", 1, true) and shadowX > 0,
+			("NumberFont at %d came back %s with flags %q and a %s pixel shadow")
+				:format(size, tostring(drawnAt), tostring(flags), tostring(shadowX)))
+	end
 
 	-- And the other side of the same rule, across every string the bar draws.
 	--
-	-- An outline is not optional over the world: with nothing behind the glyph,
-	-- flat is not softer, it is gone. So outlined text has to be at or above the
-	-- floor, because there is no degradation to fall back on. Text over an opaque
-	-- fill may be either, and which one is a contrast judgement the layout is
-	-- allowed to make.
-	--
 	-- The two that sit in the gap above the gauge were 12 and outlined, which is
 	-- the one combination that is wrong both ways at once: too small to carry a
-	-- rim and unable to drop it. The three over the fill are the same size and
-	-- are not listed here, because an opaque backing makes the outline a choice.
+	-- rim and unable to drop it. The three over the fill are listed separately,
+	-- because an opaque backing is what lets them take a shadow instead.
 	local OVER_THE_WORLD = {
 		{ "threat line", function(w) return w.threatText end },
 		{ "targeted by", function(w) return w.targetedBy end },
 	}
 	for _, entry in ipairs(OVER_THE_WORLD) do
-		local _, drawnAt, flags = entry[2](widget):GetFont()
-		check(flags ~= "", ("the %s went flat, and it has no background to be flat over")
-			:format(entry[1]))
+		local drawnAt, flags = inspect(entry[1], entry[2](widget))
+		check(flags:find("OUTLINE", 1, true),
+			("the %s went flat, and it has no background to be flat over")
+				:format(entry[1]))
 		check(drawnAt and drawnAt >= floor,
 			("the %s is %s pixels over the world, under the %d floor, and cannot drop its outline")
 				:format(entry[1], tostring(drawnAt), floor))
 	end
 
-	print(("fonts  %d numbers on a square, all flat; %d strings over the world, all outlined at %d px or more")
-		:format(flat, #OVER_THE_WORLD, floor))
+	local OVER_THE_FILL = {
+		{ "level", function(w) return w.levelText end },
+		{ "name", function(w) return w.name end },
+		{ "health number", function(w) return w.healthText end },
+	}
+	for _, entry in ipairs(OVER_THE_FILL) do
+		local region = entry[2](widget)
+		local _, flags = inspect(entry[1], region)
+		local shadowX = select(1, region:GetShadowOffset())
+		check(not flags:find("OUTLINE", 1, true),
+			("the %s is outlined over an opaque fill, which spends the glyph's own"
+				.. " pixels on a rim it does not need"):format(entry[1]))
+		check(shadowX > 0,
+			("the %s is flat with no shadow over the fill"):format(entry[1]))
+	end
+
+	print(("fonts  %d numbers on a square, all flat and shadowed; %d strings over the"
+		.. " fill the same; %d over the world outlined at %d px or more; nothing"
+		.. " anti-aliased at or under %d")
+		:format(flat, #OVER_THE_FILL, #OVER_THE_WORLD, floor, ceiling))
 
 	print(("icons  %d texels sampled, range %d to %d; sharp at %s square at 1x, %s at 2x")
 		:format(texels, low, high, listed(1), listed(2)))
@@ -7646,9 +7706,16 @@ do
 		{ "the threat header", threatPane.left },
 	}) do
 		local _, size, flags = entry[2]:GetFont()
-		check(size and (size >= floor or flags == ""),
+		flags = flags or ""
+		check(size and (size >= floor or not flags:find("OUTLINE", 1, true)),
 			("%s is outlined at %s pixels and the floor is %d")
 				:format(entry[1], tostring(size), floor))
+		-- The meter draws at 14, under the ceiling, so every string on it should
+		-- come back with the rasteriser turned off. This is the same rule the
+		-- bars are held to and the meter is the other place it is visible.
+		check(size and (size > ns.UI.MonoCeiling() or flags:find("MONOCHROME", 1, true)),
+			("%s is %s pixels and anti-aliased: flags %q")
+				:format(entry[1], tostring(size), flags))
 	end
 
 	-- Every setting that reshapes it reuses the frames it already made.

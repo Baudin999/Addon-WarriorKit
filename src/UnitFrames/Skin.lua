@@ -965,10 +965,10 @@ local function Build(entry)
 	-- One shared font object per size rather than a font on each string. Place
 	-- picks the real size off the bar heights a moment later; these are only
 	-- what the strings carry until it does.
-	entry.nameText = ns.UI.Label(entry.top, BIG_MAX, NAME_TEXT, "LEFT")
-	entry.healthText = ns.UI.Label(entry.top, BIG_MAX, VALUE_TEXT, "RIGHT")
-	entry.levelText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "LEFT")
-	entry.powerText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "RIGHT")
+	entry.nameText = ns.UI.Label(entry.top, BIG_MAX, NAME_TEXT, "LEFT", ns.UI.SHADOW)
+	entry.healthText = ns.UI.Label(entry.top, BIG_MAX, VALUE_TEXT, "RIGHT", ns.UI.SHADOW)
+	entry.levelText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "LEFT", ns.UI.SHADOW)
+	entry.powerText = ns.UI.Label(entry.top, SMALL_MAX, VALUE_TEXT, "RIGHT", ns.UI.SHADOW)
 end
 
 -- Sized off the two settings, placed on the frame's own corner, and the frame
@@ -1117,15 +1117,15 @@ local function Place(entry)
 		entry[key]:SetAllPoints(index == 1 and entry.healthRail or entry.powerRail)
 	end
 
-	-- Sized off the block rather than off a constant, because the same code
-	-- draws a 34 pixel player frame and a 21 pixel target of target and one
-	-- font size cannot serve both. A font object per size, shared with every
-	-- other string the addon draws at that size, rather than a font on each
-	-- string: a string given a font by SetFont carries its own copy of it.
+	-- Sized off the block, because the same code draws a 34 pixel player frame
+	-- and a 21 pixel target of target. One shared object per size; UI/Text.lua
+	-- says why. Not rounded: `big` is a whole count of pixels and `px` is what
+	-- one costs in units, so `big * px` is already exact and the round that sat
+	-- here undid it. Shadowed, not outlined: all four sit on an opaque bar.
 	local big = math.min(math.max(math.floor(health * BIG_SHARE), BIG_MIN), BIG_MAX)
 	local small = math.min(math.max(math.floor(power * SMALL_SHARE), SMALL_MIN), SMALL_MAX)
-	local bigFont = ns.UI.Font(math.floor(big * px + 0.5))
-	local smallFont = ns.UI.Font(math.floor(small * px + 0.5))
+	local bigFont = ns.UI.Font(big * px, ns.UI.SHADOW)
+	local smallFont = ns.UI.Font(small * px, ns.UI.SHADOW)
 
 	entry.nameText:SetFontObject(bigFont)
 	entry.healthText:SetFontObject(bigFont)
