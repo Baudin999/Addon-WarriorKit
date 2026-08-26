@@ -155,6 +155,17 @@ Meter\Threat.lua
 Meter\Window.lua
 Meter\Feature.lua
 
+# The swing timer. Swing.lua is the clock, out of the combat log and
+# UnitAttackSpeed; Slam.lua is where the press that costs no swing lands;
+# Gauges.lua draws both hands and the band; Feature.lua last as everywhere
+# else. Slam loads after Swing because a finished Slam restarts the swing and
+# calls into it, and Gauges after both because it draws what the two answer.
+# After the meters and before the art for no reason but the panel's order.
+Swing\Swing.lua
+Swing\Slam.lua
+Swing\Gauges.lua
+Swing\Feature.lua
+
 Artwork\Artwork.lua
 Artwork\Feature.lua
 

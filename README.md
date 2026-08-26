@@ -23,6 +23,15 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   mob, and beside it the seconds until they get there at the rate they are
   gaining. Nothing is drawn but the rows, so it sits on the screen rather than
   over it. There is no breakdown to open, because there is nothing behind a row.
+- **A swing timer, with the Slam press marked on it.** One bar per hand, filling
+  towards the next swing off the combat log, and a green band on the main hand
+  bar showing where to press Slam so the cast finishes exactly as the swing
+  does. Press before the band and the Slam restart throws away the swing you had
+  charged; press after it and the swing is pushed out to the end of the cast.
+  The whole bar goes green while you are on the band. The cast time is the
+  client's own, measured off your last Slam, and it follows your haste, so the
+  band moves when Flurry lands. The bars are drawn for anybody holding a weapon;
+  the band is a warrior's.
 - **A warrior bar loadout**, with a backup of whatever it replaced, plus an
   Edit Mode layout carried inside the addon.
 - **Your own action bars, redrawn.** `/wk actionbars on` reads whichever bars
@@ -54,10 +63,11 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
 
 `/wk` opens the settings panel. Everything in it has a slash command too.
 
-The Charge button and the bar loadout are warrior only, and on any other class
-they are not there at all: no button, no icon in the world, no key taken, and
-your action targeting setting left exactly where you had it. Everything else on
-this list works the same on a hunter as it does on a warrior.
+The Charge button, the bar loadout and the Slam band are warrior only, and on
+any other class they are not there at all: no button, no icon in the world, no
+key taken, no band on the swing bar, and your action targeting setting left
+exactly where you had it. Everything else on this list works the same on a
+hunter as it does on a warrior, the swing bars included.
 
 ## Install
 

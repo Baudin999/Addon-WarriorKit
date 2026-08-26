@@ -248,6 +248,18 @@ Meter/Window.lua:SetRight
 Meter/Window.lua:PaintDamage
 Meter/Window.lua:PaintThreat
 Meter/Window.lua:MeterWindow.Update
+Swing/Swing.lua:Swing.Speed
+Swing/Swing.lua:Swing.Armed
+Swing/Swing.lua:Swing.Fraction
+Swing/Slam.lua:Slam.Name
+Swing/Slam.lua:Slam.Estimate
+Swing/Slam.lua:Slam.Cast
+Swing/Slam.lua:Slam.Known
+Swing/Slam.lua:Slam.Window
+Swing/Gauges.lua:Whole
+Swing/Gauges.lua:DrawHand
+Swing/Gauges.lua:DrawWindow
+Swing/Gauges.lua:SwingGauges.Update
 "
 
 hot_scan='

@@ -2,6 +2,74 @@
 
 ## Unreleased
 
+### A swing timer, with the Slam press drawn on it
+
+The addon talked about the swing everywhere and never drew it. `UI/Ability.lua`
+brightens a square's border to say Heroic Strike is armed and goes off on the
+next swing, and nothing on screen said when that swing was coming.
+
+`Swing/` is two gauges under the character, one per hand, on the pixel grid.
+The clock is the combat log: `SWING_DAMAGE` and `SWING_MISSED` with you as the
+source, because a swing landing is the same instant the next one starts, and
+`UnitAttackSpeed` is how long that instant lasts. A miss counts, since
+`SWING_MISSED` is the server saying the swing happened and did nothing, and a
+timer that only heard damage would stop dead against a mob you cannot hit.
+
+Which hand swung is a flag in two different slots, twenty-one on a landed swing
+and thirteen on a missed one. Reading one index for both gives an off hand bar
+that never runs and a main hand bar that runs twice as fast, which reads as a
+haste bug and is a parser bug, so the harness feeds both subevents.
+
+Haste scales what is left of a swing rather than restarting it. Flurry landing
+halfway through a 3.4 second swing leaves you halfway through a 2.4 second one.
+That is one line of arithmetic and it is the single thing a warrior's swing
+timer has to get right, so it is asserted rather than described.
+`UNIT_ATTACK_SPEED` is not enough on its own, because it does not reliably
+follow an aura on these clients, so the player's own `UNIT_AURA` is registered
+too and every one of them ends in a comparison against the speed already held.
+`UNIT_INVENTORY_CHANGED` is the third door into the same arithmetic and this
+addon opens it itself, off a loadout key.
+
+The band is the point of the whole thing. Slam has a cast time, it does not
+interrupt the swing while it casts, and finishing it restarts the swing. Press
+early and the restart throws away the charge you had; press late and the swing
+is pushed out to the end of the cast. The one right press is where the cast ends
+as the swing ends, at `(D - C) / D` of the bar, and that is drawn as a green
+band two tenths of a second wide with a line down the middle of it. The whole
+gauge flips green while the fill is inside, because four percent of a bar is not
+enough to catch out of the corner of an eye and all of it is.
+
+The cast time is the client's own. `UNIT_SPELLCAST_START` carries what the
+server actually started, talents and haste folded in, so from the first Slam of
+a session the band is drawn off a measurement. Until then it is the spell's cast
+time out of the new `ns.SpellCastTime` less a tenth of a second per point of
+Improved Slam, and the talent is found by name rather than by position, because
+every "Improved X" talent carries the ability's own localised name inside it.
+Whether this client already folds that talent into `GetSpellInfo` could not be
+settled without logging in, and the measurement means it does not have to be.
+
+A completed Slam restarts the main hand timer off `UNIT_SPELLCAST_SUCCEEDED`.
+Nothing in the log says so: the next event you would see is the swing that lands
+a full weapon speed later, and a timer built on the log alone draws the whole of
+that swing wrong.
+
+The bars are gated on holding a weapon and not on being a warrior, because a
+swing timer is worth the same to anybody standing in melee. The band is Slam's
+and is warrior only, and the hunter run of the harness asserts both halves.
+
+The tick runs at 20 Hz, which is the marker's rate and the fastest thing in the
+addon, and it pays for that by counting in whole pixels: the bar's scale is its
+own width, so the fill is an integer compared against the integer already on it
+and between swings the tick writes nothing at all. It measures 0.03 KB per fifty
+ticks against a gate of 0.05.
+
+`scripts/harness.lua` grew an attack speed, a talent tree, a cast in flight and
+a weapon in each hand, and its combat log stub went from sixteen values to
+twenty-one so the off hand flag exists to be read. Its five allocation gates are
+one `CHURN` table now rather than five locals, because the chunk had reached Lua
+5.1's ceiling of two hundred locals in a function and the swing gate is what it
+ran out on.
+
 ### The addon has a face
 
 `Media/Icon.tga` is the first art the addon ships: the sword emblem, 64 by 64,

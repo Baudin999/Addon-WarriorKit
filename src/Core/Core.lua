@@ -323,6 +323,24 @@ function ns.SpellName(spell)
 	return (_G.GetSpellInfo(spell))
 end
 
+-- How long the client says that spell takes to cast, in seconds. Zero for an
+-- instant, and zero where the client will not say, because every caller of
+-- this branches the same way on a nil and the branch is worth writing once.
+--
+-- The client counts in milliseconds on both sides of the shim. It is the
+-- fourth return of the old global and the castTime field of the new table, and
+-- the fourth return is the reason this exists at all: a select(4) sitting in a
+-- feature file is a positional read of an API the addon otherwise never reads
+-- positionally.
+function ns.SpellCastTime(spell)
+	if C_Spell and C_Spell.GetSpellInfo then
+		local info = C_Spell.GetSpellInfo(spell)
+		return (info and info.castTime or 0) / 1000
+	end
+	local castTime = select(4, _G.GetSpellInfo(spell))
+	return (castTime or 0) / 1000
+end
+
 function ns.SpellTexture(spell)
 	if C_Spell and C_Spell.GetSpellTexture then
 		return C_Spell.GetSpellTexture(spell)
