@@ -97,6 +97,17 @@ globals = {
 	-- without Chat/Window.lua handing out a reference to its own tables.
 	"WarriorKitChat",
 	"WarriorKit_ChatEnter",
+	-- the two feeds, and the tooltip they open. All three are named for the
+	-- reason the meter and the chat window are: a frame that has wandered off
+	-- the screen has to be findable from a macro, and scripts/harness.lua has to
+	-- measure what was drawn without UI/Feed.lua handing out its row pool. The
+	-- scanner is different and is not optional: a GameTooltip's own lines are
+	-- reachable only as globals built from its name, so a nameless one has text
+	-- on it that nothing can read.
+	"WarriorKitLootFeed",
+	"WarriorKitCombatFeed",
+	"WarriorKitTooltip",
+	"WarriorKitTooltipScan",
 	"BINDING_HEADER_WARRIORKIT",
 	"BINDING_NAME_WARRIORKIT_MARK_SKULL",
 	"BINDING_NAME_WARRIORKIT_MARK_CROSS",
@@ -245,7 +256,13 @@ read_globals = {
 	"UpdateAddOnMemoryUsage", "GetAddOnMemoryUsage",
 	"UpdateAddOnCPUUsage", "GetAddOnCPUUsage",
 	"RAID_CLASS_COLORS", "wipe", "InCombatLockdown",
-	"date", "GetBuildInfo",
+	-- the wall clock, for the time of day a feed row landed. GetTime counts
+	-- from when the client started and is the right thing to record on; `time`
+	-- is what turns that into a clock a person reads, and the pair of them is
+	-- how Feeds/Loot.lua says when something dropped without keeping a formatted
+	-- string on every entry. Both are called unguarded by TitanClock and by
+	-- Details on both clients.
+	"date", "time", "GetBuildInfo",
 	-- Edit Mode. Titan calls EditModeManagerFrame:GetActiveLayoutInfo()
 	-- unguarded, which is what proves the frame is here. The methods the
 	-- EditMode part uses past that one are probed by name before every call.

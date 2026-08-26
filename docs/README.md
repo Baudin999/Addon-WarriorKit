@@ -1,6 +1,6 @@
 # WarriorKit
 
-A personal warrior addon for WoW TBC Anniversary. Eleven parts: ctrl-click raid
+A personal warrior addon for WoW TBC Anniversary. Twelve parts: ctrl-click raid
 marking, one button that casts Charge, Intervene or Intercept depending on what
 you are looking at, one key that takes the next enemy and swings at it, weapon
 loadouts with a key each that swap your stance and both your hands, a warrior
@@ -8,8 +8,9 @@ loadout that fills the action bars, enemy bars that replace the
 Blizzard nameplate and carry a cast bar of their own, a chat window with a tab for the people you name and a voice
 channel joined at login, a strip of the Blizzard bar art, three chores the
 client makes you do by hand, a swing timer with the Slam window marked on it,
-and one Edit Mode layout carried inside the addon folder. Settings live in a
-panel opened with `/wk`.
+a loot stream and a combat log drawn as scrolling feeds, and one Edit Mode
+layout carried inside the addon folder. Settings live in a panel opened with
+`/wk`.
 
 This file is written for whoever picks the addon up next, human or agent. The
 first half is what it does, the second half is what the client will and will
@@ -64,7 +65,7 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is fourteen parts and a core. Each part is a folder, and Core knows the
+The addon is seventeen parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
@@ -93,6 +94,12 @@ name of none of them.
     UI/Scroll.lua        a viewport that clips, a canvas that moves, a bar
     UI/Log.lua           a column of lines that grows from the bottom, wraps,
                          caps itself and scrolls
+    UI/Tooltip.lua       the addon's own tooltip: a title, lines, pairs and a
+                         hint, plus a scanner that reads an item's real text out
+                         of the client so it can be redrawn in this chrome
+    UI/Feed.lua          a column of entries, newest at the top, each an icon, a
+                         name, a number and a coloured stripe; a ring behind it
+                         and rows that repaint rather than move
     UI/Widgets.lua       the widget kit a page is built out of
     UI/Window.lua        window chrome, the side rail and the tab strip
 
@@ -156,6 +163,15 @@ name of none of them.
                              cooldown, and whether it is one worth nagging about
     Buffs/Nag.lua            the row of squares, and the tick that paints it
     Buffs/Feature.lua
+
+    Feeds/Stream.lua         one feed put on the screen: its frame, its anchor,
+                             its drag and the seven settings behind it, found by
+                             prefix so both streams read the same six
+    Feeds/Loot.lua           what dropped, out of the client's own loot
+                             sentences turned into patterns rather than typed
+    Feeds/Combat.lua         what landed on you or that you landed, out of the
+                             combat log, and only where one end of it is yours
+    Feeds/Feature.lua
 
     Artwork/Artwork.lua      strips the gryphons and the metal strip off the bars
     Artwork/Feature.lua

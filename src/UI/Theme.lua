@@ -49,6 +49,13 @@ UI.Color = {
 	dim      = { 0.56, 0.56, 0.62 },
 	heading  = { 1.00, 0.82, 0.20 },
 	quiet    = { 0.42, 0.42, 0.47 },
+
+	-- The line in a tooltip that tells you what to type. It was a literal in
+	-- Buffs/Nag.lua, 0.55 0.72 1, one of exactly two colours that file wrote by
+	-- hand, and it came here when the tooltip it was written for became
+	-- UI/Tooltip.lua. Blue rather than the accent because the accent is a
+	-- control that can be clicked and this is a sentence that cannot.
+	hint     = { 0.55, 0.72, 1.00 },
 }
 
 -- Whole pixels, every one of them. The three font sizes are pixels too, because

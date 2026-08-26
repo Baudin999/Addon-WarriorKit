@@ -1,6 +1,6 @@
 ## Interface: 20506
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, square class-coloured player and target frames, a square minimap with the addon buttons collected behind one square, a chat window with a tab for the people you name and a voice channel joined at login, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, square class-coloured player and target frames, a square minimap with the addon buttons collected behind one square, a chat window with a tab for the people you name and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
@@ -71,6 +71,22 @@ UI\Scroll.lua
 # bar, and after UI\Theme.lua because it takes the palette into file-scope
 # locals as it loads, the same as everything else on this layer.
 UI\Log.lua
+
+# The tooltip. Every hover in the addon went to GameTooltip until this existed,
+# which meant a parchment scroll with a gold border rising out of an interface
+# that has neither anywhere else. This is the addon's own: the theme's palette,
+# the shared font, the pixel grid, and a scanner that reads an item's real text
+# out of the client so a hovered item is drawn here rather than there. After
+# UI\Theme.lua for the palette and UI\Text.lua for the fonts, and before every
+# part that answers the mouse.
+UI\Tooltip.lua
+
+# A column of things that happened, newest at the top, older below it, scrolled
+# by the wheel. It is not UI\Log.lua, which holds strings and cannot carry an
+# icon per line, and it is not UI\Stack.lua, which relays the whole column every
+# time a row arrives. After UI\Scroll.lua because it borrows that file's bar,
+# and after UI\Tooltip.lua because a row's whole answer to the mouse is one.
+UI\Feed.lua
 
 UI\Widgets.lua
 UI\Window.lua
@@ -199,6 +215,21 @@ Buffs\Upkeep.lua
 Buffs\Racials.lua
 Buffs\Nag.lua
 Buffs\Feature.lua
+
+# The feeds. Two columns of what just happened: what dropped, and what landed on
+# you. Stream.lua is the frame one of them sits in, its anchor and its settings,
+# and it loads first because the other two ask it for one as they load. Loot and
+# Combat share nothing with each other: one parses the client's loot sentences
+# and one reads the combat log, and neither knows the other exists. Feature.lua
+# last, as everywhere else.
+#
+# After Buffs because it is the last of the parts that draw over the world, and
+# after Unit\Roster.lua, which is what the combat feed asks whether a GUID is
+# one of yours. Both are far above this line.
+Feeds\Stream.lua
+Feeds\Loot.lua
+Feeds\Combat.lua
+Feeds\Feature.lua
 
 Artwork\Artwork.lua
 Artwork\Feature.lua

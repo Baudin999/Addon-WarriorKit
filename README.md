@@ -46,6 +46,21 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   not pressed. Blood Fury on an orc and Berserking on a troll pulse in the middle
   of your screen until you spend them, because those are the two that are damage
   and the rest are cooldowns you spend when something happens.
+- **A loot stream, and the combat log beside it.** Two columns of what just
+  happened, newest at the top and older underneath, scrolled with the wheel. A
+  loot row is the item's icon, its name in its own quality colour and how many
+  dropped, with a stripe down the left in that same colour, so a pull reads as a
+  ribbon before you read a word of it. A combat row is the same shape off the
+  combat log: the spell that landed, or whoever swung when there was no spell,
+  and the number, with the stripe saying which way the blow went and a critical
+  drawing its number in gold. Both are the same widget, and adding a third feed
+  is a file that captures something and a table of settings.
+
+  Hover any row and you get the addon's own tooltip, not Blizzard's parchment.
+  For an item that means the item's real text, stats and all, read out of the
+  client and redrawn in this interface. Nothing in either feed is on a ticker:
+  they change when something happens to you and when you scroll them, and never
+  in between.
 - **A warrior bar loadout**, with a backup of whatever it replaced, plus an
   Edit Mode layout carried inside the addon.
 - **Your own action bars, redrawn.** `/wk actionbars on` reads whichever bars

@@ -282,25 +282,15 @@ end
 -- one level up, met again one level down.
 --
 -- The row sits above the middle of the screen, which is exactly where a right
--- button drag to turn the camera starts, and a mouse enabled frame swallows
--- every button that lands on it. So the right and middle buttons are handed
--- back where the client has SetPassThroughButtons. Where it does not, a right
--- drag begun on one of these squares does not turn the camera: at most four
--- squares of 54 pixels, only while something is missing, and only out of
--- combat. That is the price of the tooltip and it is worth saying out loud
--- rather than discovering.
+-- button drag to turn the camera starts. ns.UI.Tip hands those buttons back
+-- where the client will take them and says what it costs where it will not.
+--
+-- The three lines below are what this file used to write by hand into
+-- GameTooltip, and the shape of them is now UI/Tooltip.lua's: a title, a line
+-- that says what is wrong, and a hint that says what to type. The tooltip that
+-- draws them is the addon's own, so hovering a nag square no longer raises a
+-- parchment scroll over an interface that has none anywhere else.
 --------------------------------------------------------------------------
-
-local function PassCamera(w)
-	if type(w.SetPassThroughButtons) ~= "function" then
-		return
-	end
-	-- pcalled rather than trusted. Nothing installed on this machine calls it,
-	-- it arrived in 1.14.4 and 10.0 and neither target client is proven to carry
-	-- it, and a name that exists while refusing these arguments would raise once
-	-- per square at login.
-	pcall(w.SetPassThroughButtons, w, "RightButton", "MiddleButton")
-end
 
 -- The line that names the switch, which is the whole reason a tooltip on a nag
 -- square knows anything about settings.
@@ -336,21 +326,19 @@ local function Detail(entry)
 end
 
 local function Hover(w)
-	w:SetScript("OnEnter", function(self)
-		local entry = self.entry
+	ns.UI.Tip(w, function(tip)
+		local entry = w.entry
+		-- A square with nothing to say writes no lines, and a tooltip with no
+		-- lines in it does not open. That is the same refusal this had against
+		-- GameTooltip and it matters for the same reason: without it the
+		-- previous square's sentence stays on screen pointing at this one.
 		if not entry or (entry.label or "") == "" then
 			return
 		end
-		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:SetText(entry.label, 1, 1, 1)
-		GameTooltip:AddLine(Detail(entry), 0.82, 0.82, 0.86, true)
-		GameTooltip:AddLine(Silencer(entry), 0.55, 0.72, 1, true)
-		GameTooltip:Show()
+		tip.Title(entry.label, ns.UI.Color.text)
+		tip.Line(Detail(entry))
+		tip.Hint(Silencer(entry))
 	end)
-	w:SetScript("OnLeave", function()
-		GameTooltip:Hide()
-	end)
-	PassCamera(w)
 end
 
 local function Place()

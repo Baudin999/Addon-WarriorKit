@@ -2,6 +2,92 @@
 
 ## Unreleased
 
+### Loot and the combat log, as feeds you can scroll
+
+Two columns of what just happened, newest at the top and older underneath.
+A loot row is the item's icon, its name in its own quality colour and how many
+dropped; a combat row is the spell that landed, or whoever swung when there was
+no spell, and the number. Down the left edge of each row is a stripe in that
+same colour, so a pull reads as a ribbon before you read a word of it: quality
+for loot, and for combat which way the blow went, white out, red in, green
+healed and grey missed. A critical draws its number in gold.
+
+**One widget, two feeds, and that was the point.** `UI/Feed.lua` knows about a
+column of entries and nothing else: not where it sits, not whether it is
+switched on, not what an item or a swing is. `Feeds/Stream.lua` is the frame one
+of them sits in and the seven settings behind it, found by prefix so both
+streams read the same six. What is left in `Feeds/Loot.lua` and
+`Feeds/Combat.lua` is only the capture. A third feed is a file and a table.
+
+**The rows do not move.** There is one frame per visible row, built once,
+anchored once, and never anchored again. Arrivals go into a ring and scrolling
+is an offset into it, so ten rows repaint whether the feed holds ten entries or
+four hundred, and a scroll costs the same as a drop. `UI/Log.lua` already
+refused to build a chat window out of `UI/Stack.lua` for this reason and the
+constant here is worse: a stack would remeasure four hundred entries every time
+a mob died. It also means there is no clipping to arrange and no ScrollFrame to
+probe, because the rows exactly fill the space.
+
+The ring reuses its tables, and the harness states that by identity rather than
+by measuring it: the four hundred and first drop has to land in the table the
+first one used. Nothing in either feed is on a ticker. They change when
+something happens to you and when you scroll them, and never in between, which
+is why a row carries no clock and the time of day lives in the tooltip.
+
+**An arrival must not scroll the feed under you.** Scrolled back into history,
+a drop pushes the list down under the offset rather than under your eyes. That
+is the defect that would make the scrollback useless and it cannot be seen in a
+screenshot: a feed that jumped and one that did not are the same picture taken
+at different moments. It is gated.
+
+**The loot sentences are built, not typed.** The client hands over the same
+localised format strings it used, so `LOOT_ITEM_SELF_MULTIPLE` becomes a pattern
+and a German client is read by German rules without the addon knowing a word of
+German. Order in that table is its whole correctness: "You receive loot: %s."
+matches the counted sentence as well, because the link is followed by "x8" and
+`(.+)` will happily swallow it, so every counted form is tried before its
+uncounted twin. The harness carries both forms of each for exactly that, and
+deliberately leaves two of the twelve out, because a client that carries some
+and not others is a real state and `/wk status` has to say so rather than
+quietly capturing two thirds of what drops.
+
+The combat feed is about you and nothing else. The log names every creature in
+range, including the other party fighting the pack next door, and a feed that
+drew all of it would be the client's own combat log tab, which is the thing
+nobody reads. It is not the meters either: they total a fight, this is a list of
+moments, and the two share no state.
+
+### The addon has its own tooltip now
+
+Every hover in the addon went to `GameTooltip` until this release, which meant a
+parchment scroll with a gold border rising out of an interface that has neither
+anywhere else. `UI/Tooltip.lua` is the addon's own: the theme's palette, the
+shared Arial Narrow, the pixel grid, one frame with a pool of lines refilled on
+every open.
+
+An item's text is the client's and there is no API that hands it over as data,
+so the supported way to read it is to point a tooltip of your own at the link
+and read back the font strings it filled in. That is what a hovered loot row
+does, and it is why the tooltip carries a scanner. Where the client refuses the
+frame, or hands over nothing, the row falls back to its name and the facts the
+feed knows, and `/wk feed` says which of the three happened rather than leaving
+you to guess from a thin box.
+
+`Buffs/Nag.lua` was the file that had invented this shape, three lines of a
+title, what is wrong and the name of the switch that silences it, and it is now
+the first caller rather than the only implementation. Its `PassCamera` came with
+it and is `ns.UI.PassCamera`: a mouse enabled frame swallows every button that
+lands on it, including the right drag that turns the camera, and everything in
+this addon you can hover sits exactly where that drag starts. Written once for
+four nag squares, it is the same trap at forty times the area on a feed, which
+is what moved it into the library. Where the client has no
+`SetPassThroughButtons` the price is real and both the panel and the feeds' own
+setting say so out loud.
+
+The blue instruction colour that was one of two literals in `Buffs/Nag.lua` is
+`UI.Color.hint` now. Its detail line takes the theme's reading colour rather
+than the near-identical grey it had, which is the point of having a palette.
+
 ### The enemy bars say when to Pummel again
 
 `grep UNIT_SPELLCAST` returned nothing across the addon. The bars replace the
