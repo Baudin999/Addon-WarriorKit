@@ -1,4 +1,4 @@
-![WarriorKit](media/warriorkit.jpg)
+![WarriorKit](art/warriorkit.jpg)
 
 # WarriorKit
 
@@ -67,12 +67,14 @@ Unzip into `Interface/AddOns`, so that the folder is
 ## Repo layout
 
     src/        the addon, exactly what the client loads
+    src/Media/  the art the addon ships, today one 64x64 icon
     docs/       the engineering notes, including the file map and API caveats
     scripts/    check.sh, bake-ui.sh, release.sh
-    media/      the project art: the banner above and the square avatar
+    art/        the project art: the banner above, the avatar, the plaque
 
-`media/` is for GitHub and the CurseForge project page. Nothing in it is
-shipped, because the client has no use for a JPEG.
+`art/` is for GitHub and the CurseForge project page and is not shipped, which
+is what separates it from `src/Media/`. The client reads BLP and TGA, so a JPEG
+in the addon folder would be dead weight.
 
 `src/` is what a client sees. Link it in rather than copying, so there is one
 copy to edit and every client loads it:

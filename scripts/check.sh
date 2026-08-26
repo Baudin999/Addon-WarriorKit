@@ -65,7 +65,7 @@ done < <(find . -maxdepth 1 -name 'WarriorKit*.toc' -type f | sort)
 core_version=$(sed -n 's/^ns\.version = "\(.*\)"$/\1/p' Core/Core.lua)
 [ -n "$core_version" ] || { echo "Core/Core.lua declares no ns.version"; status=1; }
 
-for field in Version Title Notes; do
+for field in Version Title Notes IconTexture; do
 	first_value=""
 	first_toc=""
 	while IFS= read -r toc; do
@@ -95,6 +95,57 @@ for table_name in $(grep -hE '^## SavedVariables(PerCharacter)?:' WarriorKit*.to
 		status=1
 	}
 done
+
+# Every texture a TOC names must be in the addon, and every file in Media/ must
+# be named by something.
+#
+# A path that does not resolve draws as a green question mark and writes nothing
+# to the log, so the only symptom is art that is quietly wrong. An asset nothing
+# names is weight in every download and nobody notices it either. Both are
+# invisible in review for the same reason: the file list and the code that reads
+# it are never open at the same time.
+#
+# The client's paths are Interface\AddOns\WarriorKit\..., which is this
+# directory with the slashes turned round and a prefix on the front, so the
+# prefix comes off before the file can be looked for.
+while IFS= read -r declared; do
+	[ -n "$declared" ] || continue
+	path=$(printf '%s' "$declared" | tr -d '\r' | tr '\\' '/')
+	case "$path" in
+		Interface/AddOns/WarriorKit/*) path="${path#Interface/AddOns/WarriorKit/}" ;;
+		*) echo "a TOC names a texture outside the addon: $declared"; status=1; continue ;;
+	esac
+	[ -f "$path" ] || { echo "a TOC names a missing texture: $declared"; status=1; }
+done < <(grep -hE '^## IconTexture:' WarriorKit*.toc | sed 's/^[^:]*: *//' | sort -u)
+
+# The client reads BLP and TGA and nothing else, and on these clients a texture
+# whose sides are not powers of two is not drawn. Neither failure says anything
+# out loud, which is why this is a gate rather than a convention.
+while IFS= read -r asset; do
+	asset="${asset#./}"
+	case "$asset" in
+		*.tga|*.blp) ;;
+		*) echo "$asset is not a format the client reads"; status=1; continue ;;
+	esac
+
+	grep -qrF "$(basename "$asset")" --include='*.lua' --include='*.toc' --include='*.xml' . \
+		|| { echo "nothing in the addon names $asset"; status=1; }
+
+	if [ -x "$(command -v identify || true)" ]; then
+		read -r w h < <(identify -format '%w %h' "$asset" 2>/dev/null || echo "0 0")
+		for side in "$w" "$h"; do
+			if [ "$side" -lt 1 ] || [ $(( side & (side - 1) )) -ne 0 ]; then
+				echo "$asset is ${w}x${h}, and both sides have to be powers of two"
+				status=1
+				break
+			fi
+		done
+	else
+		echo "identify missing, so no texture in Media/ was measured: install imagemagick"
+		status=1
+		break
+	fi
+done < <(find Media -type f 2>/dev/null | sort)
 
 # Every write on a ticker path is guarded against the value already on the
 # frame.

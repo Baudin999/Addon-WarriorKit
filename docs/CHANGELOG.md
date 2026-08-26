@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### The addon has a face
+
+`Media/Icon.tga` is the first art the addon ships: the sword emblem, 64 by 64,
+cut round with an alpha edge. Both TOCs name it as `## IconTexture:`, which is
+what the client draws beside WarriorKit in the addon list. It is the only place
+this art goes. The panel is flat, pixel-exact and deliberately plain, and a
+gold plaque inside it would be a sticker on a schematic.
+
+Three rules in `check.sh` came with it, because a texture fails silently in
+every direction. A path a TOC names has to resolve to a file in the addon; a
+file in `Media/` has to be a `.tga` or a `.blp` and has to be named by
+something; and both its sides have to be powers of two. A path that does not
+resolve draws a green question mark and writes nothing to the log, and a
+texture 60 pixels wide is simply not drawn. `IconTexture` also joined the list
+of fields the two TOCs must agree on, and `release.sh` now fails if the icon is
+missing from the zip.
+
 ### The bars say what you can afford, and what is already armed
 
 Two things a square was not saying.

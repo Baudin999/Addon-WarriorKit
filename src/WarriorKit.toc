@@ -2,6 +2,7 @@
 ## Title: WarriorKit
 ## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, square class-coloured player and target frames, a square minimap with the addon buttons collected behind one square, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
+## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
 ## SavedVariables: WarriorKitDB
 ## SavedVariablesPerCharacter: WarriorKitCharDB

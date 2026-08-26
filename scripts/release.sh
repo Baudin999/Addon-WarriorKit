@@ -84,7 +84,7 @@ listing=$(unzip -l "$zip_path")
 
 # A zip that is missing a TOC installs as a folder the client ignores, and the
 # symptom is an addon that simply never appears in the list.
-for required in WarriorKit/WarriorKit.toc WarriorKit/WarriorKit_Vanilla.toc WarriorKit/Bindings.xml; do
+for required in WarriorKit/WarriorKit.toc WarriorKit/WarriorKit_Vanilla.toc WarriorKit/Bindings.xml WarriorKit/Media/Icon.tga; do
 	if ! grep -qF "$required" <<<"$listing"; then
 		echo "the zip is missing $required" >&2
 		exit 1
