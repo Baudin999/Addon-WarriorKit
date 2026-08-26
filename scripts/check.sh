@@ -371,56 +371,29 @@ while IFS= read -r f; do
 	esac
 done < <(grep -lE 'SetScript\("OnUpdate"' --include='*.lua' -r . | sort)
 
-# No file grows without somebody deciding it should.
+# What shape the code is in, measured per function.
 #
-# The addon has an allocation gate, a TOC parity gate and a version gate, and
-# had nothing at all watching the size of a file. Two of them had reached
-# nineteen hundred lines, which is the same class of debt: nothing is wrong with
-# any one line and the whole is past what fits in a head, so the next change
-# lands wherever there is room rather than where it belongs.
+# This replaced a per-file line ceiling and the replacement is the point. A
+# line count per file says how much there is and nothing about whether it can
+# be read, and the only move it rewards is cutting a file in half, which
+# changes no function and no dependency. Both things it rewarded happened here
+# in one afternoon: one change hit the ceiling and raised the number, another
+# took a split it had not gone looking for, and neither wrote a better
+# function. The gate was measuring size and calling it structure.
 #
-# 800 is the general limit. Four files are over it and each carries its own
-# ceiling below, set at what it measures today, so any growth fails here rather
-# than passing unremarked. Raising one of those numbers is a decision to record
-# in the commit message, not a formality: the alternative is to take the split
-# named beside it.
-LINE_LIMIT=800
-
-# path:ceiling:why it is exempt
-LINE_ALLOWED="
-UI/Widgets.lua:1289:the widget kit, one function per control and shared by every page
-UnitFrames/EnemyBars.lua:2011:splits at the settings API, the widget and the plate plumbing
-UnitFrames/Skin.lua:1934:splits at the region walk, the block geometry and the tick
-"
-
-while IFS= read -r f; do
-	f="${f#./}"
-	lines=$(wc -l < "$f")
-	ceiling=""
-	while IFS= read -r entry; do
-		[ -n "$entry" ] || continue
-		case "$entry" in
-			"$f":*)
-				ceiling=$(printf '%s' "$entry" | cut -d: -f2)
-				why=$(printf '%s' "$entry" | cut -d: -f3-)
-				[ -n "$why" ] || { echo "$f is allow-listed for length with no reason given"; status=1; }
-				;;
-		esac
-	done <<< "$LINE_ALLOWED"
-
-	if [ -n "$ceiling" ]; then
-		if [ "$lines" -gt "$ceiling" ]; then
-			echo "$f is $lines lines, over its own ceiling of $ceiling"
-			status=1
-		elif [ "$lines" -lt "$ceiling" ]; then
-			echo "$f is $lines lines and its ceiling still says $ceiling: lower it"
-			status=1
-		fi
-	elif [ "$lines" -gt "$LINE_LIMIT" ]; then
-		echo "$f is $lines lines, over the $LINE_LIMIT line limit and not allow-listed"
+# scripts/shape.lua measures three things that survive a file being cut in
+# half, because each belongs to a function rather than to a file: a function's
+# own lines with nested functions taken out, how deep it nests, and how many
+# branches it takes. The numbers, the allow-list and the reason for every entry
+# on it are in that file, next to the code that enforces them.
+if [ -f ../scripts/shape.lua ]; then
+	if ! lua5.1 ../scripts/shape.lua $(find . -name '*.lua' -type f | sort); then
 		status=1
 	fi
-done < <(find . -name '*.lua' -type f | sort)
+else
+	echo "scripts/shape.lua is missing and nothing is measuring the code's shape"
+	status=1
+fi
 
 # The addon, loaded and driven under a stub of the client. Syntax and lint say
 # the files parse and read cleanly; this is the only layer that says the pixel
