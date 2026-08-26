@@ -108,6 +108,7 @@ local SECTIONS = {
 	"31-feeds",
 	"32-breakdown",
 	"33-anchors",
+	"34-probe",
 }
 
 -- Naming a section runs every section up to and including it, rather than that
