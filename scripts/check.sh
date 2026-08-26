@@ -152,7 +152,6 @@ Perf/Perf.lua:Perf.Sample
 Perf/Feature.lua:Paint
 UnitFrames/Skin.lua:Refresh
 UnitFrames/Skin.lua:HealSlice
-UnitFrames/Skin.lua:Flatten
 Unit/Unit.lua:Unit.Health
 Unit/Unit.lua:Unit.Power
 Unit/Unit.lua:Unit.TargetToken
@@ -279,8 +278,8 @@ LINE_LIMIT=800
 # path:ceiling:why it is exempt
 LINE_ALLOWED="
 UI/Widgets.lua:1289:the widget kit, one function per control and shared by every page
-UnitFrames/EnemyBars.lua:1835:splits at the settings API, the widget and the plate plumbing
-UnitFrames/Skin.lua:1828:splits at the region walk, the block geometry and the tick
+UnitFrames/EnemyBars.lua:1817:splits at the settings API, the widget and the plate plumbing
+UnitFrames/Skin.lua:1764:splits at the region walk, the block geometry and the tick
 "
 
 while IFS= read -r f; do

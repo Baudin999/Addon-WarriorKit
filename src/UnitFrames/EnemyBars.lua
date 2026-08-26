@@ -715,29 +715,6 @@ end
 -- gauge is shared: threat on the left, debuff icons packed to the right, so
 -- neither has to be centred into the other's way.
 --
--- Two conversions, and telling them apart is the whole of why `bars zoom` works
--- now and did not before.
---
--- `unit` turns a number from the constants above into the units this widget is
--- drawn in. On the grid it is 1: a design pixel is a unit, and the zoom on the
--- frame's scale is what makes that unit a 1x1, 2x2 or 3x3 block of screen
--- pixels. Off the grid, on a client with no SetIgnoreParentScale, it is the
--- fraction that keeps the bar the same physical size, which is as close as that
--- client gets.
---
--- `px` is one screen pixel, and it is for hairlines, insets and nothing else.
--- An edge is one pixel at every zoom, the same as every rule in the options
--- window. A design that grows does not want a border that grows with it.
---
--- Every size below used to go through `px`, including the ones that are sizes
--- in the design. On the grid that is a divide by the zoom, the frame's scale
--- multiplies it straight back, and the bar measured 180 by 62 screen pixels at
--- zoom 1, 2 and 3 alike. The setting had never done anything.
--- Everything stacks upwards from the gauge, which sits on the widget's bottom
--- edge. That way one anchor point places the whole thing. The row above the
--- gauge is shared: threat on the left, debuff icons packed to the right, so
--- neither has to be centred into the other's way.
---
 -- This used to be a hundred and eighty lines of SetPoint. It is a tree handed
 -- to ns.UI.Flow now, and the widget's own height falls out of the measurement
 -- rather than being derived by hand from four other numbers. What that bought,
@@ -764,6 +741,11 @@ end
 -- `px` is one screen pixel, and it is for hairlines, insets and nothing else.
 -- An edge is one pixel at every zoom, the same as every rule in the options
 -- window. A design that grows does not want a border that grows with it.
+--
+-- Every size here used to go through `px`, including the ones that are sizes in
+-- the design. On the grid that is a divide by the zoom, the frame's scale
+-- multiplies it straight back, and the bar measured 180 by 62 screen pixels at
+-- zoom 1, 2 and 3 alike. The setting had never done anything.
 local function LayoutWidget(widget, width, onPlate)
 	-- Measured here rather than baked into a constant, because the same widget
 	-- is laid out on a nameplate and in the list and a reparent can move the

@@ -110,16 +110,23 @@ local SMALL_SHARE, SMALL_MIN, SMALL_MAX = 0.80, 7, 11
 local Unit = ns.Unit
 local Color = Unit.Color
 local Level = Unit.Level
+local Gauge = ns.UI.Gauge
 
 -- The stack panel the enemy bars are laid out with, which lays the block out.
 local Flow = ns.UI.Flow
 
 local BACKDROP = Color.backdrop
-local TRACK = Color.track -- the spent part of a bar is its own colour, this dark
 local NAME_TEXT = Color.text.name
 local VALUE_TEXT = Color.text.value
 local HEAL = Color.heal
 local IDLE = Color.reaction.idle
+
+-- What a spent track is until the first tick paints it its unit's colour.
+-- ns.Fill defaulted to opaque black and ns.UI.Gauge.Underlay leaves a
+-- texture uncoloured, so this is passed rather than dropped: the two paths
+-- only differ on a styled frame whose unit does not exist, and a refactor
+-- is the wrong place to decide that black was the wrong answer.
+local BUILD_BLACK = { 0, 0, 0, 1 }
 
 -- Only reached when a bar's original texture answers no file path, which is
 -- what a bar wearing an atlas rather than a file would do. Restoring the wrong
@@ -398,54 +405,6 @@ local function Thaw(object, method)
 	object["wk" .. method] = nil
 end
 
--- Blizzard's own fill texture, turned into a flat colour. Swapping in a new
--- texture instead left the original parented to the bar and still drawing,
--- which is what kept the soft rounded ends of UI-StatusBar under a flat colour
--- that was doing nothing.
---
--- Re-fetched rather than cached, because a client that swaps the texture
--- object out from under the bar would leave a cached one pointing at nothing,
--- and re-applied from the tick, because the portrait's crop had to be for the
--- same reason: their code sets these back and ours has to be the last word.
---
--- Being the last word is not the same as writing every tick, which is what
--- this did. A colour texture answers no file path, so a bar that is still flat
--- costs one comparison, and the moment Blizzard puts UI-StatusBar back the
--- path answers and this writes again. Six bars at five ticks a second is
--- thirty texture writes saved, all of them writing the colour already there.
--- Where the client has no GetTexture the write stands unguarded, which is what
--- this file did before and is the safe half to be wrong on.
-local function Flatten(bar)
-	local fill = bar and bar.GetStatusBarTexture and bar:GetStatusBarTexture()
-	if not fill or not fill.SetColorTexture then
-		return nil
-	end
-	local flat = fill.GetTexture and bar.wkFlat == fill and not fill:GetTexture()
-	if not flat then
-		bar.wkFlat = fill
-		fill:SetColorTexture(1, 1, 1, 1)
-	end
-	return fill
-end
-
-local function Paint(bar, color)
-	if not bar then
-		return
-	end
-	local set = bar.wkSetStatusBarColor or bar.SetStatusBarColor
-	if set then
-		set(bar, color[1], color[2], color[3], 1)
-	end
-end
-
---------------------------------------------------------------------------
--- Finding the pieces
---------------------------------------------------------------------------
-
--- The parent key first, because UnitFrame_Initialize hangs portrait, name,
--- healthbar and manabar off every one of these frames and has since vanilla,
--- and a key cannot be renamed by a client that renamed the global. The names
--- are the fallback for the pieces that never had a key.
 local function Piece(frame, key, names)
 	if key and frame[key] then
 		return frame[key]
@@ -910,33 +869,13 @@ end
 -- The block we draw
 --------------------------------------------------------------------------
 
--- A texture of ours, drawn inside a bar of Blizzard's and under its fill.
---
--- Under it by draw layer, not by frame level, and that is the whole reason
--- these two textures live on the client's bar rather than on our own rail.
--- Two frames agree on an order only while their levels do, and this file
--- writes both of those levels and can still be wrong about them: on the live
--- client the target frame came out with its rails level with its bars, the
--- tie went to whichever was built later, which is ours, and the spent track
--- drew over the fill at nine tenths alpha. A target at full health read at 28
--- percent of its own colour, which is what a dead one looks like. The player
--- frame, one line of the same code away, was correct.
---
--- Inside one frame there is nothing to disagree about. Layer beats level and
--- BACKGROUND is the bottom one, so a sublevel there is below every layer a
--- status bar's fill can be built on, on any client, and no number this file
--- writes can move it. The sublevels are the two lowest the client allows,
--- which leaves the track under the slice and both under the fill.
+-- The two textures this file draws inside Blizzard's own bars: the spent track
+-- and the incoming heal slice. Both are regions of the client's bar rather than
+-- of our rail beside it, and ns.UI.Gauge.Underlay carries the reason, which is
+-- a bug this file shipped. The sublevels are ours to choose and are the two
+-- lowest the client allows, which leaves the track under the slice and both
+-- under the fill.
 local TRACK_LAYER, SLICE_LAYER = -8, -7
-
-local function Underlay(bar, sublevel, r, g, b, a)
-	local texture = ns.Fill(bar, "BACKGROUND", r or 0, g or 0, b or 0, a or 1)
-	texture:SetAllPoints()
-	if texture.SetDrawLayer then
-		texture:SetDrawLayer("BACKGROUND", sublevel)
-	end
-	return texture
-end
 
 -- One box, one divider, one text frame. It used to be two outlined boxes
 -- pushed together, and two edges meeting down the middle is what made the
@@ -1004,8 +943,8 @@ local function Build(entry)
 	-- brightness, so a unit at ten percent still reads as itself rather than
 	-- as an empty box. Filling the bar, so it is placed once here rather than
 	-- re-anchored on every relayout.
-	entry.healthTrack = Underlay(entry.healthbar, TRACK_LAYER)
-	entry.powerTrack = Underlay(entry.manabar, TRACK_LAYER)
+	entry.healthTrack = Gauge.Underlay(entry.healthbar, TRACK_LAYER, BUILD_BLACK)
+	entry.powerTrack = Gauge.Underlay(entry.manabar, TRACK_LAYER, BUILD_BLACK)
 
 	-- The incoming heal, between the track and the fill, on the sublevel
 	-- between them. That ordering is the clamp doing itself a favour: a heal
@@ -1015,8 +954,7 @@ local function Build(entry)
 	-- Anchored nowhere yet. Where it starts is where the fill stops, and that
 	-- is a region the client owns and may hand back a different object for, so
 	-- HealSlice pins it on the first tick and re-pins it if the object moves.
-	entry.healSlice = Underlay(entry.healthbar, SLICE_LAYER,
-		HEAL[1], HEAL[2], HEAL[3], HEAL[4])
+	entry.healSlice = Gauge.Underlay(entry.healthbar, SLICE_LAYER, HEAL)
 	entry.healSlice:ClearAllPoints()
 	entry.healSlice:Hide()
 
@@ -1352,7 +1290,7 @@ local function Style(entry)
 	Crisp(entry.portrait)
 
 	for _, key in ipairs(BARS) do
-		Flatten(entry[key])
+		Gauge.Flatten(entry[key])
 		Freeze(entry[key], "SetStatusBarColor")
 	end
 
@@ -1463,8 +1401,7 @@ local function Refresh(entry)
 	local tint = Color.OfUnit(unit)
 	if entry.tint ~= tint then
 		entry.tint = tint
-		Paint(entry.healthbar, tint)
-		entry.healthTrack:SetColorTexture(tint[1] * TRACK, tint[2] * TRACK, tint[3] * TRACK, 0.9)
+		Gauge.Paint(entry.healthbar, entry.healthTrack, tint)
 		local edge = Color.Dim(tint, Color.edgeDim)
 		ns.Recolor(entry.box.edges, edge)
 		entry.divider:SetColorTexture(edge[1], edge[2], edge[3], 1)
@@ -1474,8 +1411,7 @@ local function Refresh(entry)
 	local power = (maxPower > 0 and Color.power[powerType]) or IDLE
 	if entry.power ~= power then
 		entry.power = power
-		Paint(entry.manabar, power)
-		entry.powerTrack:SetColorTexture(power[1] * TRACK, power[2] * TRACK, power[3] * TRACK, 0.9)
+		Gauge.Paint(entry.manabar, entry.powerTrack, power)
 	end
 
 	-- Compared as the integers that get drawn, the same way the enemy bars do
@@ -1538,8 +1474,8 @@ local function Refresh(entry)
 	-- The comparison is exact because the crop is a power of two fraction. A
 	-- crop written as 0.15 would come back as whatever the client rounded it
 	-- to and this guard would never hold.
-	Flatten(entry.healthbar)
-	Flatten(entry.manabar)
+	Gauge.Flatten(entry.healthbar)
+	Gauge.Flatten(entry.manabar)
 	local portrait = entry.portrait
 	if portrait then
 		local left = portrait.GetTexCoord and portrait:GetTexCoord()

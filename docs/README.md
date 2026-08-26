@@ -579,6 +579,13 @@ other and the icons would wrap early.
 **`reverse` is the whole of mirroring.** The run starts at the far edge and walks
 in. Nothing else about a mirrored layout differs.
 
+**Both unit frame files are laid out by it.** The enemy bar is a column with a
+wrapping row in it. The skinned block is a mirrored row, and `reverse = spec.mirror`
+is the whole of the mirroring: the target frame is the player frame with that
+flag set. What Flow will not place is the block's own anchor on Blizzard's frame,
+the badge regions the client owns, and the four font strings sized by whatever
+the unit is called.
+
 **It does not do content sizing, and it will not.** A node's size is a number the
 caller knows before the layout runs. The two strings inside an enemy bar's gauge
 are sized by whatever the mob happens to be called, so they stay pinned to each

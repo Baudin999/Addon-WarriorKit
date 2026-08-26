@@ -78,6 +78,55 @@ offsets it wrote, before anything built out of it is touched. The debuff row
 test stopped naming an anchor pair and measures where the square lands instead,
 which also covers the gauge's own placement and did not before.
 
+### The frame skin is laid out by the same engine, and mirroring is one flag
+
+`Place` in `UnitFrames/Skin.lua` carried the block's whole geometry by hand, and
+`spec.mirror` was three variables named `portraitEdge`, `gaugeEdge` and `pull`
+whose signs were threaded through every offset in the function. The target frame
+mirrors the player frame, so every one of those offsets had to carry which way
+it was facing.
+
+The box's interior is a Flow row of three cells now with `reverse = spec.mirror`
+on it, and mirroring is that flag. Two details made it work. The pixel the box's
+outline draws into is its own empty cell at the end of the row rather than
+padding, because `reverse` reverses child order and not padding, so an inset
+written as padding would have stayed on the same edge when mirrored. And the
+divider is the square's inner column expressed as a nested reversed row, so it
+turns with the square.
+
+Three things `reverse` could not take, and all three for the same reason Flow
+does not do content sizing. The block's own anchor on Blizzard's frame is placed
+by its owner. The four badge regions belong to the client and stay hand pinned.
+And the four font strings are as wide as whatever the unit is called, so they
+are anchored rather than arranged. `pull` survives in that last block alone
+instead of running through the whole function.
+
+Nine anchors went out of the addon: the rails and the divider each used two
+points and use one. The blocks measure what they measured, 202 by 34 with a 21
+and 10 gauge and a one pixel hairline.
+
+### One gauge, drawn one way
+
+The addon drew a flat status bar in three places and had three implementations
+of it. Two of them shared an exact pair of lines, the fill colour followed by
+the spent track at a fifth of that colour on nine tenths alpha, typed out in
+`EnemyBars.lua` and again in `Skin.lua`.
+
+`UI/Gauge.lua` holds what is actually shared. `Gauge.New` builds a flat bar with
+its track. `Gauge.Flatten` turns a bar the client made into a flat one and reads
+back first, so a bar that is already flat costs a comparison rather than a
+texture write. `Gauge.Underlay` puts a texture inside a bar and under its fill
+by draw layer, which is where the note about the target frame drawing at 28
+percent of its own colour now lives. `Gauge.Paint` is the pair, once.
+
+`Meter/Window.lua` was looked at and deliberately left alone. Its rows wear the
+same look and are a different widget: one texture whose width is that player's
+share, with nothing behind it and no spent part to colour. Putting it through a
+gauge would add a frame per row, raise an ordering question against the row's
+icon and text that does not exist today, and hand a StatusBar's internal float
+the rounding the meter does in whole pixels on purpose. Three implementations
+were two implementations and a lookalike.
+
 ### check.sh caps how long a file may be
 
 The addon gates allocation on tickers, TOC parity between the two flavours and
