@@ -5,7 +5,7 @@ Seven pieces, in this order. Each is built by one agent in its own worktree unde
 when `./scripts/check.sh` comes back at zero. The worktrees stay after the
 merge.
 
-## 1. Weapon swing timer  [built, fixed twice, wants one look in game]
+## 1. Weapon swing timer  [done, smooth confirmed in game]
 
 The addon talks about the swing and never draws it. `UI/Ability.lua:48` says
 Heroic Strike is armed and goes off on the next swing, `UI/Ability.lua:229`
@@ -55,10 +55,12 @@ fraction exactly, that it changes on every frame at 60 fps and at 144, and that
 every step is the same size. No harness assertion can prove a bar looks smooth,
 and the README says so rather than pretending.
 
-What to check in game: pull something with a slow weapon and watch the main hand
-bar fill. The edge should glide with no stutter and no stall, at any
-`/wk swing zoom`. The Slam mark was not re-reported after the first repair and
-nothing here touched it, so it is still unconfirmed rather than fixed.
+Confirmed in game by the user: the bar is smooth. The rounding was the cause and
+removing it was the fix.
+
+The Slam mark is the half still open. It was reported as wandering once, changed
+once, and has not been looked at in game since. Nothing in the smoothness work
+touched it. Ask before assuming it is fixed.
 
 ## 2. Deep Wounds is missing from the enemy bar debuffs  [merged]
 
