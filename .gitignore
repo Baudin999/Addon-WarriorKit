@@ -1,2 +1,12 @@
 # Built by scripts/release.sh, never edited by hand.
 dist/
+
+# The same scratch checkouts, in the location the worktree tooling actually
+# uses at the repo root. The directory is already here and empty; without this
+# rule the first agent to check out into it commits a repo inside the repo.
+.worktrees/
+
+# Merge and patch leftovers. They are byte-identical copies of tracked files
+# and get committed by a wide `git add` before anyone notices.
+*.orig
+*.rej
