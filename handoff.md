@@ -111,6 +111,13 @@ hide`, and a key beats the combat switch rather than being read alongside it.
 `ns.BarLook.CanDrive` probes for the calls, so a client with neither leaves every
 bar up and says so.
 
+While the options window is open, the bar the page's tab strip names wears an
+accent rim, two pixels outside it. That needed `showing` on the registry, which
+is the window opening and closing, fired off the frame's own `OnShow` and
+`OnHide` because Escape closes the panel through `UISpecialFrames` and never
+comes past `Core/Panel.lua`. It is the first hook of its kind and any part that
+wants to point at one of its own rows can use it.
+
 `Buttons/Placing.lua` gained the bars' own lock. Off, holding shift puts the drag
 handles up, watched off `MODIFIER_STATE_CHANGED`. It ships locked because a
 handle takes every click that lands on it.

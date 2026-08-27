@@ -22,6 +22,7 @@
 local H = ...
 local ns = H.ns
 local check, fire = H.check, H.fire
+local window = H.carry.window
 
 local Look = ns.BarLook
 
@@ -247,6 +248,62 @@ check(handles() == 0, ("%d handles stayed up after shift came off"):format(handl
 
 ns.db.locked, ns.db.barsLocked = wasLocked, wasBars
 ns.Each("lock")
+
+--------------------------------------------------------------------------
+-- Which bar the page is showing, said on the screen
+--
+-- The strip names a bar and the rim points at it. Driven through the window's
+-- own OnShow and OnHide rather than through Options.Show and Options.Hide,
+-- because Escape closes the panel by calling Hide on the frame and that is the
+-- route the mark has to survive.
+--------------------------------------------------------------------------
+
+local function rimmed()
+	local up, on = 0, nil
+	for index = 1, #bars do
+		if bars[index].rim and bars[index].rim:IsShown() then
+			up = up + 1
+			on = bars[index].def.key
+		end
+	end
+	return up, on
+end
+
+check(rimmed() == 0, "a bar is wearing the page's rim with the page shut")
+
+ns.Options.Show()
+window.frame:GetScript("OnShow")(window.frame)
+ns.BarLook.Show(1)
+ns.Bars.ApplyMark()
+local up, on = rimmed()
+check(up == 1 and on == "bar1",
+	("the page is on bar 1 and %d bars are rimmed, the last of them %s")
+		:format(up, tostring(on)))
+
+-- The rim follows the strip, which is the whole point of it.
+ns.BarLook.Show(2)
+ns.Bars.ApplyMark()
+up, on = rimmed()
+check(up == 1 and on == "bottomleft",
+	("the strip moved to the bottom left bar and the rim is on %s"):format(tostring(on)))
+
+-- Anchored outside the bar on both corners. A rim on the bar's own edge covers
+-- the hairline that is already there and reads as the colour setting having
+-- moved, so the offsets are what is asserted rather than the colour.
+local rim = bars[2].rim
+local topLeft, _, _, left, top = rim:GetPoint(1)
+local bottomRight, _, _, right, bottom = rim:GetPoint(2)
+check(topLeft == "TOPLEFT" and left < 0 and top > 0,
+	("the rim's top left corner is at %s, %s and is not outside the bar")
+		:format(tostring(left), tostring(top)))
+check(bottomRight == "BOTTOMRIGHT" and right > 0 and bottom < 0,
+	("the rim's bottom right corner is at %s, %s and is not outside the bar")
+		:format(tostring(right), tostring(bottom)))
+
+-- And it goes with the window, by the route Escape takes.
+window.frame:GetScript("OnHide")(window.frame)
+check(rimmed() == 0, "the panel closed and a bar kept its rim")
+ns.Options.Hide()
 
 --------------------------------------------------------------------------
 -- Back to the plan

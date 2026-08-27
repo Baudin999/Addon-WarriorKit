@@ -624,6 +624,10 @@ goes through `Feature.lua` or through the shared surface below:
                                  back, and whether this client can do it at all
     ns.BarLook.Shape(def) / Hours(def) / Summary(order)   the two readings on the
                                  panel's page, and one line across every bar
+    ns.BarLook.Marking(open) / Marked() / Mark(order)
+                                 the accent rim on whichever bar the panel's
+                                 page is showing, up with that window and off
+                                 again with it
     ns.BarLook.Find(word) / Plain() / Decided()
     ns.BarPlace.Loose()          whether a bar can be dragged right now: every
                                  frame unlocked, or the bars loose and shift held
@@ -2228,6 +2232,22 @@ times six controls down a page, which is thirty rows to find one in. The strip
 picks a bar and every control answers for whichever is in front, which is the
 shape the loadouts page and the people page already have. Which tab is in front
 is not a saved setting, the same as `ns.People.Shown`.
+
+*And the bar it names wears a rim while the window is open.* A strip that says
+"bottom left bar" names a bar you then have to find by counting, and the two on
+the right of the screen are a pair of identical columns. The rim is two physical
+pixels of the accent colour, which is what the selected tab is marked in, two
+pixels outside the bar rather than on its own edge: drawn on the edge it covers
+the hairline already there and reads as the colour setting having moved.
+
+It goes up and down with the window, which is what the `showing` registry hook
+is for. Core had no way to tell a part that the options window had opened, and
+this is the first thing that needed one. It fires off the window frame's own
+`OnShow` and `OnHide` rather than out of `Options.Show` and `Options.Hide`,
+because Escape closes the panel through `UISpecialFrames`, which calls `Hide` on
+the frame and never comes past `Core/Panel.lua`. A mark that outlived the window
+would be an accent rectangle round one bar for the rest of the session with
+nothing on the screen to say why.
 
 **Options panel.** `/wk` with nothing after it opens it, Escape closes it, and
 every row has a slash command behind it so nothing is only reachable by mouse.

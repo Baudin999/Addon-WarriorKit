@@ -472,6 +472,12 @@ function Bars.ApplyLock()
 	ns.BarPlace.Lock(order)
 end
 
+-- The accent rim on whichever bar the options page is showing. Forwarded for
+-- the reason the lock above is: `order` is this file's.
+function Bars.ApplyMark()
+	ns.BarLook.Mark(order)
+end
+
 function Bars.Where()
 	return ns.BarPlace.Where(order)
 end
@@ -502,6 +508,7 @@ function Bars.Restyle()
 	-- A bar the client has just taken off the screen must not leave a drag
 	-- handle floating where it was.
 	ns.BarPlace.Lock(order)
+	ns.BarLook.Mark(order)
 	return true
 end
 
@@ -570,8 +577,10 @@ local function Build()
 		end
 	end
 	-- Place.Handle makes every handle hidden, so a bar that arrived while the
-	-- frames were unlocked needs telling.
+	-- frames were unlocked needs telling, and a bar that arrived while its own
+	-- page was open needs marking.
 	ns.BarPlace.Lock(order)
+	ns.BarLook.Mark(order)
 end
 
 -- Returns false when combat deferred part of the work.

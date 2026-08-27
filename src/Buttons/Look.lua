@@ -477,6 +477,76 @@ function Look.Summary(order)
 end
 
 --------------------------------------------------------------------------
+-- Which bar the panel is showing, said on the screen
+--
+-- A tab strip that says "bottom left bar" names a bar you then have to find by
+-- counting, and the two on the right of the screen are a pair of identical
+-- columns. So while the options window is open, whichever bar its strip is on
+-- wears an accent rim, in the colour the selected tab is marked in, so the two
+-- read as one thing.
+--
+-- Outside the bar rather than on it. A rim drawn on the bar's own edge covers
+-- the hairline already there and reads as the bar having changed colour, which
+-- is the row above pretending to have moved.
+--
+-- It goes down with the window. A mark that outlived the panel would be an
+-- accent rectangle round one bar for the rest of the session with nothing on
+-- screen to say why, and the buttons feature's `showing` hook is what takes it
+-- off.
+--------------------------------------------------------------------------
+
+-- Two physical pixels and two out from the bar. Every other line this addon
+-- draws is a hairline, which is right for a border and wrong for a highlight: a
+-- highlight you have to look for is not one.
+local RIM, RIM_GAP = 2, 2
+
+local marking = false
+
+local function Rim(entry)
+	if entry.rim then
+		return entry.rim
+	end
+	local accent = UI.Color.accent
+	local rim = CreateFrame("Frame", nil, entry.frame)
+	rim:SetPoint("TOPLEFT", -RIM_GAP, RIM_GAP)
+	rim:SetPoint("BOTTOMRIGHT", RIM_GAP, -RIM_GAP)
+	rim.edges = ns.Outline(rim, accent[1], accent[2], accent[3], 1)
+	ns.EdgeSize(rim.edges, ns.Pixel(rim) * RIM)
+	rim:Hide()
+	entry.rim = rim
+	return rim
+end
+
+-- Whether the window that does the marking is up.
+function Look.Marking(open)
+	marking = open and true or false
+	return marking
+end
+
+function Look.Marked()
+	return marking
+end
+
+-- The rim on the bar the page is on and off every other one. Called when the
+-- window opens or closes, when the strip picks another bar, and on every apply,
+-- because a bar built while the window was open has to arrive marked or not on
+-- its own account.
+--
+-- Built on demand, so a player who never opens that page never pays for five
+-- frames, and asked for at all only where there is one already or one is
+-- wanted.
+function Look.Mark(order)
+	local chosen = Look.Chosen()
+	for index = 1, #order do
+		local entry = order[index]
+		local wanted = marking and entry.def == chosen
+		if wanted or entry.rim then
+			Rim(entry):SetShown(wanted)
+		end
+	end
+end
+
+--------------------------------------------------------------------------
 -- Which bar the panel is showing
 --
 -- Not a saved setting. It is which tab is in front while the window is open,

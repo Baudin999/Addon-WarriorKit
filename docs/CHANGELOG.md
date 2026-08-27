@@ -52,7 +52,20 @@ six controls down a column, which is the shape the loadouts page and the people
 page already have. Every setting has a slash word: `actionbars rows|colour|
 background|combat|key <bar> <value>`, and `actionbars plain` drops the lot.
 
-`harness/sections/38-bar-look.lua` is 55 checks: the arithmetic of every shape,
+The bar the strip names wears an accent rim while the window is open, because a
+tab that says "bottom left bar" names a bar you then have to find by counting and
+the two on the right of the screen are a pair of identical columns. Two pixels of
+the colour the selected tab is marked in, two pixels outside the bar so it does
+not cover the hairline already there.
+
+That needed a hook Core did not have. `showing`, on the registry, is the options
+window opening and closing, fired off the window frame's own `OnShow` and
+`OnHide` rather than out of `Options.Show` and `Options.Hide`, because Escape
+closes the panel through `UISpecialFrames` and never comes past `Core/Panel.lua`.
+A mark that outlived the window would be an accent rectangle round one bar for
+the rest of the session with nothing on screen to say why.
+
+`harness/sections/38-bar-look.lua` is 61 checks: the arithmetic of every shape,
 a shape put back to the plan's being dropped rather than stored, the colour
 reaching the texture, the hairline going with the background, the macro each pair
 of switches registers, the driver count after three restyles, the driver being

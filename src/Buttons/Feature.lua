@@ -196,7 +196,11 @@ local function EachBarPage(ui)
 			return labels
 		end,
 		ns.BarLook.Shown,
-		function(index) ns.BarLook.Show(index) end)
+		function(index)
+			ns.BarLook.Show(index)
+			-- The rim moves with the strip, which is the whole point of it.
+			ns.Bars.ApplyMark()
+		end)
 
 	ui.Check("clone this bar",
 		function() return ns.WhichBars.Wanted(Chosen()) end,
@@ -402,6 +406,15 @@ ns.Register({
 	-- bars are the one part of the addon you cannot drag.
 	lock = function()
 		ns.Bars.ApplyLock()
+	end,
+
+	-- The options window, opened and closed. The page above marks whichever bar
+	-- its tab strip is on, so the mark goes up with the window and comes off
+	-- with it: an accent rim round a bar for the rest of the session, with the
+	-- window that explained it shut, is worse than no mark at all.
+	showing = function(open)
+		ns.BarLook.Marking(open)
+		ns.Bars.ApplyMark()
 	end,
 
 	words = {

@@ -491,6 +491,26 @@ local function Build()
 		height = WINDOW_H,
 	})
 
+	-- The window opening and closing, told to whichever part wants to answer it.
+	--
+	-- Hung on the frame rather than written into Options.Show and Options.Hide,
+	-- because Escape closes the window through UISpecialFrames, which calls Hide
+	-- on the frame and never comes past this file. UI/Window.lua hangs its own
+	-- cleanup there for the same reason, so this chains rather than replaces.
+	--
+	-- One part answers it today: the bars mark whichever of them the page is
+	-- showing, and a mark has to come off when the window that explains it goes.
+	local closing = window.frame:GetScript("OnHide")
+	window.frame:SetScript("OnHide", function(self, ...)
+		if closing then
+			closing(self, ...)
+		end
+		ns.Each("showing", false)
+	end)
+	window.frame:SetScript("OnShow", function()
+		ns.Each("showing", true)
+	end)
+
 	rail = UI.Rail(window.content, { onSelect = Choose })
 	divider = UI.Rule(window.content, UI.Color.hairline, true)
 

@@ -28,6 +28,9 @@ ns.version = "1.9"
 --   lock          function applying ns.db.locked to this part's frames
 --   reset         function putting this part's frames back where they started
 --   panel         function(ui) building this part's sections of the panel
+--   showing       function(open) the options window opened or closed. For a
+--                 part that draws something on the screen to say which of its
+--                 rows the page is on, and has to stop when the page is gone
 --
 -- Every field except name is optional. A part with no frames has no lock.
 --
