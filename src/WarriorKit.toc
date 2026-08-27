@@ -202,6 +202,13 @@ UnitFrames\EnemyBars.lua
 # for where an aura goes.
 UnitFrames\Auras.lua
 
+# The switches that take Blizzard's own copy of something this addon draws off
+# the screen: your buffs, your debuffs, the target's icons, the target's cast
+# bar. One table of frames and one Apply, so adding the next one is a line
+# rather than a file. Separate from Auras.lua because it answers on a client
+# with no skin at all and knows nothing about a row.
+UnitFrames\Blizzard.lua
+
 UnitFrames\Skin.lua
 
 # The part's page in the options window, before Feature.lua, which is the only

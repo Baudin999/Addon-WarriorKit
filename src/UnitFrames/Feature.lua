@@ -166,6 +166,16 @@ end
 local FRAME_WORDS = { player = "player frame", target = "target frame",
 	tot = "target of target" }
 
+-- The words `/wk hide` answers to, off the same list the panel draws from so
+-- the two cannot drift.
+local function Words()
+	local words = {}
+	for index, switch in ipairs(ns.BlizzHide.Switches()) do
+		words[index] = switch.word
+	end
+	return table.concat(words, ", ")
+end
+
 local function SkinWord(arg)
 	local option, value = arg:match("^(%S*)%s*(.-)$")
 
@@ -434,17 +444,18 @@ ns.Register({
 		skinAuraDebuffs = 12,
 		skinAuraBuffs = 8,
 
-		-- The client's own aura row, in the top corner of the screen. On, and
-		-- on a default install that changes nothing you can see: the player
-		-- block is skinned, so it is drawing your buffs and the client's frames
-		-- are down whatever this says.
+		-- The client's own copies of what this addon draws. Four switches, one
+		-- per thing you can see twice, and every one of them means exactly what
+		-- its label says.
 		--
-		-- It ships on because the switch is only about the install where that
-		-- is not true. With `skin off`, or the player frame turned off on its
-		-- own, your buffs are the client's row and nothing else, and taking that
-		-- away without being asked would leave nothing on the screen saying what
-		-- is on you. Off is a real preference and this is where it lives.
-		blizzAuras = true,
+		-- All four ship on, because an addon that draws your buffs under your
+		-- portrait and leaves the client's in the corner has not replaced
+		-- anything, it has added to it. The frames each one takes down are in
+		-- UnitFrames/Blizzard.lua.
+		hideBlizzBuffs = true,
+		hideBlizzDebuffs = true,
+		hideBlizzTargetAuras = true,
+		hideBlizzTargetCast = true,
 	},
 
 	words = {
@@ -454,29 +465,25 @@ ns.Register({
 
 		skin = SkinWord,
 
-		-- The client's own aura row, which is not part of the skin and is a
-		-- word of its own for that reason: it answers on a client where every
-		-- Blizzard unit frame is standing where it always was.
-		auras = function(arg)
-			ns.db.blizzAuras = ns.Command.Toggle(arg)
-			ns.FrameAuras.Client()
-			if ns.db.blizzAuras then
-				ns.Print("the client's own aura row is back in the corner of the"
-					.. " screen wherever nothing here is standing in for it."
-					.. " What the skin draws under the blocks is `skin auras`,"
-					.. " and this is the client's.")
-				if ns.FrameSkin.Wanted("player") then
-					ns.Print("the player block is skinned, so your buffs are"
-						.. " under it and the client's row stays down: two copies"
-						.. " of one aura is not something this switch will do."
-						.. " `/wk skin player off` is what puts it back.")
+		-- The client's own copies, one word each. Its own word rather than a
+		-- corner of `skin`, because none of these four is part of the skin:
+		-- they answer on a client where every Blizzard frame is standing
+		-- exactly where it always was.
+		hide = function(arg)
+			local word, value = arg:match("^(%S*)%s*(.-)$")
+			local switch = ns.BlizzHide.Find(word)
+			if not switch then
+				ns.Print("hide takes one of: " .. Words() .. ".")
+				for _, each in ipairs(ns.BlizzHide.Switches()) do
+					ns.Print(("  %s: %s, %s"):format(each.word, each.label,
+						ns.db[each.key] and "hidden" or "on screen"))
 				end
-			else
-				ns.Print("the client's own aura row is hidden: your buffs, your"
-					.. " debuffs and the weapon enchant beside them. Right click"
-					.. " to cancel a buff goes with it, because cancelling one is"
-					.. " a call an addon is not allowed to make.")
+				return
 			end
+			ns.db[switch.key] = ns.Command.Toggle(value)
+			ns.BlizzHide.Apply()
+			ns.Print(switch.label .. " "
+				.. (ns.db[switch.key] and "hidden." or "back on screen."))
 		end,
 
 		-- The palette, as numbers you can check against what is on screen.
@@ -570,12 +577,14 @@ ns.Register({
 		ns.db.skinAuraSize = ns.DefaultFor("skinAuraSize")
 		ns.db.skinAuraDebuffs = ns.DefaultFor("skinAuraDebuffs")
 		ns.db.skinAuraBuffs = ns.DefaultFor("skinAuraBuffs")
-		-- Reset means put the frames back, and the client's own row is a frame
-		-- this part took down. Somebody who hid it deliberately loses that in a
-		-- reset, which is the same trade every other setting here makes and the
-		-- reason `/wk reset` prints what it did.
-		ns.db.blizzAuras = ns.DefaultFor("blizzAuras")
-		ns.FrameAuras.Client()
+		-- Reset means put the frames back, and the client's own copies are
+		-- frames this part took down. Somebody who put one back deliberately
+		-- loses that in a reset, which is the same trade every other setting
+		-- here makes and the reason `/wk reset` prints what it did.
+		for _, switch in ipairs(ns.BlizzHide.Switches()) do
+			ns.db[switch.key] = ns.DefaultFor(switch.key)
+		end
+		ns.BlizzHide.Apply()
 		ns.FrameSkin.Apply()
 	end,
 

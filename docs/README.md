@@ -543,12 +543,18 @@ goes through `Feature.lua` or through the shared surface below:
                                  what now sits between a block and its first
                                  row, which Perch is the only thing that knows
     ns.FrameAuras.Describe() / Probe(entry) / SizeRange() / CountCeiling(key)
-    ns.FrameAuras.Client() / ClientFound()
-                                 hide or give back the client's own aura row
-                                 from ns.db.blizzAuras, and how many of the two
-                                 frames it hangs off this client carries. Not
-                                 part of the skin: it answers with every
-                                 Blizzard unit frame left alone
+    ns.BlizzHide.Apply()         every frame in UnitFrames/Blizzard.lua put
+                                 where its switch says. Not part of the skin: it
+                                 answers with every Blizzard unit frame left
+                                 alone
+    ns.BlizzHide.Switches() / Find(word)
+                                 the four switches in panel order, and the one a
+                                 `/wk hide` word names. The panel and the slash
+                                 word both walk this rather than writing the
+                                 list out again
+    ns.BlizzHide.Found() / Describe()
+                                 how many of the frames those switches name this
+                                 client carries, and what is currently hidden
     ns.FrameSkin.Landed()        Edit Mode dropped a linked frame: read the gap
                                  and the level back off where it came to rest
     ns.FrameSkin.LinkRange()     gap low, gap high, level low, level high, so the
@@ -2831,17 +2837,29 @@ returning false, so a button the client builds mid fight is retried and lands
 the moment combat drops. Whether these buttons are protected at all on this
 backport is in the untested list below.
 
-That sweep is the skin standing in for exactly the rows it draws, and it is not
-the only question. `/wk auras off` is the other one: the client's row off the
-screen whatever this addon is drawing, for the player who runs with no skin at
-all. It takes the other handle. `BuffFrame` and `TemporaryEnchantFrame` are two
-globals rather than fifty-one names, and a button this backport spells some
-other way goes down with the frame it is parented to instead of surviving a
-sweep that stopped at it. The two never argue over a region: the sweep holds
-buttons, the switch holds their frames, `ns.Strip` marks what it holds, so
-turning either off gives back only what that one took. It ships on, because on
-a skinned frame it has nothing left to hide and on an unskinned one the client's
-row is the only thing on the screen saying what is on you.
+That sweep is one handle and it is not enough on its own. A button this
+backport spells some other way is one the sweep never reaches, and the sweep
+stops at the first name that is not a frame, so a single renamed button leaves
+the whole run above it on the screen. That is not theoretical: it is what put a
+Blizzard debuff over a row already drawing the same debuff, on a client that had
+moved your debuffs out of `BuffFrame` into a `DebuffFrame` of their own.
+
+So `UnitFrames/Blizzard.lua` takes the other handle, and holds every switch of
+this shape in one table. A frame goes down by name, and every button inside it
+goes with its parent whatever it is called. `BuffFrame` is the awkward one: it
+holds both of your rows on 2.5.6, so it may only go down when both switches are
+on, and whichever switch is on alone is served by the sweep, which works a
+button at a time and can tell a buff from a debuff. `DebuffFrame` is the newer
+clients splitting that frame in two, and a name a client does not carry costs
+one lookup against nil. The target's rows name no frame at all, because every
+icon in them is a child of `TargetFrame` and hiding `TargetFrame` is hiding the
+target.
+
+The two never argue over a region: the sweep holds buttons, this holds frames,
+`ns.Strip` marks what it holds, so turning either off gives back only what that
+one took. All four switches ship on, because an addon that draws your buffs
+under your portrait and leaves the client's in the corner has not replaced
+anything, it has added to it.
 
 A run is one name the client counts from 1, and a row can stand in for more
 than one of them: your buff row replaces `BuffButton` and `TempEnchant` both.
@@ -4246,7 +4264,11 @@ and a row with nothing on it costs one comparison.
     /wk skin debuffs 12          0 to 16, how long the debuff row runs
     /wk skin buffs 8             0 to 32, how long the buff row runs
     /wk skin probe               what this client answered for each frame
-    /wk auras on|off             the client's own aura row in the corner
+    /wk hide                     the four switches, and what each is doing
+    /wk hide buffs on|off        Blizzard's buffs, in the corner of the screen
+    /wk hide debuffs on|off      Blizzard's debuffs, beside them
+    /wk hide target on|off       Blizzard's icons on the target frame
+    /wk hide cast on|off         Blizzard's cast bar for your target
     /wk buttons apply            fill the bars with the warrior loadout
     /wk buttons restore          put back exactly what was there before
     /wk buttons                  what it would do, and whether a backup is held
@@ -4596,13 +4618,13 @@ Everything below was written from the API contract and has never executed:
   hidden within a fifth of a second and nobody sees it. What would prove it: get
   a target to nine or more debuffs for the first time in a session while in
   combat, and watch whether one of Blizzard's icons appears below the block.
-- Whether `BuffFrame` and `TemporaryEnchantFrame` are what these clients call
-  the two frames the client's own aura row hangs off. `/wk auras off` hides
-  those two globals rather than the buttons inside them, which is the point of
-  it: a button named something the sweep never guessed still goes down with its
-  parent. A client that renamed the frames as well hides nothing, and
-  `/wk status` says so by reporting 0 of 2 frames found rather than reporting a
-  row that is hidden.
+- Whether `BuffFrame`, `TemporaryEnchantFrame`, `DebuffFrame` and
+  `TargetFrameSpellBar` are what these clients call those four frames. Each
+  `/wk hide` switch takes a global down rather than the buttons inside it, which
+  is the point of it: a button named something the sweep never guessed still
+  goes down with its parent. A client that renamed the frames as well hides
+  nothing, and the panel says so by reporting how many of the four were found
+  rather than reporting a row that is hidden.
 - Whether the four rows are the right shape at the size the blocks actually end
   up. Everything about the wrap, the mirroring and the row heights is asserted
   in `harness/sections/14-aura-row.lua` against a 202 pixel block, and the

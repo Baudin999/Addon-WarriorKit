@@ -490,64 +490,94 @@ ns.FrameSkin.Relayout()
 debuffs.target, buffs.target = nil, nil
 tick()
 
--- The client's own row, which takes the other handle.
+-- The switches that take the client's own copies off the screen.
 --
--- The sweep above hides buttons by name, one at a time, because a row of ours
--- is standing in for that row of theirs. It is not enough on its own: a button
--- this backport calls something the name list never guessed survives it, and
--- the sweep stops at the first name that is not a frame, so one renamed button
--- leaves the run above it up. The two frames the client hangs the row off go
--- down as well whenever the player block is skinned, and every button under
--- them goes with its parent whatever it is called. That is why this asserts
--- the frames rather than the buttons under them.
+-- Four of them, one per thing you can see twice, and each is a plain boolean
+-- that does what its label says. They are asserted through ns.db and
+-- ns.BlizzHide.Apply rather than through the panel, because the panel is one
+-- of two callers and the slash word is the other.
 --
--- The default install is the case worth asserting, because it is the one
--- nobody switches: the block is drawing your buffs, so the client's row is
--- down with `blizzAuras` still at its default of on.
-check(ns.db.blizzAuras and ns.FrameSkin.Styled("player"),
-	"this check is not measuring a skinned player block on a default setting")
+-- Two handles do the hiding and both are checked here. A frame goes down for
+-- your own rows, which is what survives a button this backport names something
+-- the sweep never guessed. The target's rows have no frame between them and
+-- TargetFrame, so those go one button at a time, and that half is asserted
+-- further up where the sweep is.
+--
+-- The default install is the case worth asserting first, because it is the one
+-- nobody switches.
+for _, switch in ipairs(ns.BlizzHide.Switches()) do
+	check(ns.db[switch.key],
+		("%s does not ship hidden, so the addon draws it twice out of the box")
+			:format(switch.label))
+end
 check(not _G.BuffFrame:IsShown(),
-	"the player block is drawing your buffs and the client's row is up too")
+	"the addon draws your buffs and Blizzard's are up too")
 check(not _G.TemporaryEnchantFrame:IsShown(),
-	"the player block is drawing the weapon enchant and the client's is up too")
+	"the addon draws the weapon enchant and Blizzard's is up too")
 
--- Held, the way every other strip in the addon holds what it hides: the
--- client turns its own row back on whenever it redraws, so hiding it once is
--- not hiding it.
+-- Held, the way every other strip in the addon holds what it hides: the client
+-- turns its own frames back on whenever it redraws, so hiding one once is not
+-- hiding it.
 _G.BuffFrame:Show()
 check(not _G.BuffFrame:IsShown(),
-	"the client showed its own buff row again and the strip did not hold it")
+	"the client showed its own buff frame again and the strip did not hold it")
 
--- And given back whole where nothing is standing in for it, because a row
--- taken from a player who has no other reading of what is on them is a row
--- taken for no reason. The player block off on its own is the smallest way to
--- ask for that.
-ns.db.skinFrames.player = false
-ns.FrameSkin.Apply()
-check(_G.BuffFrame:IsShown() and _G.TemporaryEnchantFrame:IsShown(),
-	"the player block came off and the client's own row stayed hidden")
-
--- The switch still answers there, which is the whole of what it is for now.
-ns.db.blizzAuras = false
-ns.FrameAuras.Client()
-check(not _G.BuffFrame:IsShown(),
-	"auras off left the client's buff row up in the corner of the screen")
-check(not _G.TemporaryEnchantFrame:IsShown(),
-	"auras off left the client's weapon enchant up beside the row it hides")
-
-ns.db.blizzAuras = ns.DefaultFor("blizzAuras")
-ns.FrameAuras.Client()
-check(_G.BuffFrame:IsShown() and _G.TemporaryEnchantFrame:IsShown(),
-	"auras on left one of the client's own aura frames hidden")
-
--- And the block coming back takes the client's row down again without the
--- switch being touched, which is the failure that started this: a player who
--- has never heard of `/wk auras` should never see two copies of one buff.
-ns.db.skinFrames.player = ns.DefaultFor("skinFrames").player
-ns.FrameSkin.Apply()
-check(not _G.BuffFrame:IsShown() and not _G.TemporaryEnchantFrame:IsShown(),
-	"the player block came back and the client's own row stayed up under it")
+-- One switch off puts one thing back and leaves the rest where they were,
+-- which is the whole of what was asked for. Buffs are the awkward one on this
+-- client and so the one worth measuring: BuffFrame holds your debuffs as well
+-- here, so it may not go down for a player who asked to keep only the buffs,
+-- and the sweep has to be what hides the debuffs on their own.
+ns.db.hideBlizzBuffs = false
+ns.BlizzHide.Apply()
 tick()
+check(_G.BuffFrame:IsShown(),
+	"buffs were put back and the frame they hang off stayed hidden")
+check(_G.TemporaryEnchantFrame:IsShown(),
+	"buffs were put back and the weapon enchant beside them stayed hidden")
+check(_G.BuffButton1:IsShown(),
+	"buffs were put back and the sweep was still holding the first one down")
+check(not _G.DebuffButton1:IsShown(),
+	"putting the buffs back put the debuffs back with them")
+
+ns.db.hideBlizzBuffs = ns.DefaultFor("hideBlizzBuffs")
+ns.BlizzHide.Apply()
+tick()
+check(not _G.BuffFrame:IsShown() and not _G.BuffButton1:IsShown(),
+	"the buffs switch went back on and Blizzard's buffs stayed on screen")
+
+-- The target's cast bar is the one frame in the list that a lockdown can
+-- refuse, because it is a child of a secure unit button. Refused, remembered,
+-- and taken down when combat drops, like every other strip in the addon.
+ns.db.hideBlizzTargetCast = false
+ns.BlizzHide.Apply()
+check(_G.TargetFrameSpellBar:IsShown(),
+	"the cast bar was put back and stayed hidden")
+
+do
+	local bar = _G.TargetFrameSpellBar
+	local realLockdown, realProtected = _G.InCombatLockdown, Region.IsProtected
+	local inCombat = true
+	_G.InCombatLockdown = function() return inCombat end
+	function Region:IsProtected()
+		return bar == self
+	end
+
+	ns.db.hideBlizzTargetCast = true
+	ns.BlizzHide.Apply()
+	check(bar:IsShown(),
+		"combat let the addon hide a protected cast bar, which the client refuses")
+
+	-- Remembered rather than dropped, and taken the moment combat ends. The
+	-- retry is the file's own PLAYER_REGEN_ENABLED, so this fires the event
+	-- rather than calling Apply again: an Apply that works here and an event
+	-- that never reaches it is a switch that only answers out of combat.
+	inCombat = false
+	H.fire("PLAYER_REGEN_ENABLED")
+	check(not bar:IsShown(),
+		"combat dropped and Blizzard's cast bar was still on screen")
+
+	_G.InCombatLockdown, Region.IsProtected = realLockdown, realProtected
+end
 
 print(("auras  debuffs %d wide under each block and buffs %d over it, square"
 	.. " %.0f px under a %.0f px strip for the time, the client's own rows"
