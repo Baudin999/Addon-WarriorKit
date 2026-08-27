@@ -351,14 +351,6 @@ local function Frames(ui)
 			ns.FrameSkin.Relayout()
 		end)
 
-	ui.Check("show the client's own aura row where nothing here replaces it",
-		function() return ns.db.blizzAuras end,
-		function(value)
-			ns.db.blizzAuras = value
-			ns.FrameAuras.Client()
-		end)
-	ui.Hint("A skinned player block draws your buffs and keeps the client's row down whatever this says; turn the player frame off and this decides. Right click to cancel a buff goes with that row.")
-
 	ui.Reading("the frames", ns.FrameSkin.Describe)
 	ui.Reading("the corridor", ns.FrameSkin.DescribeLink)
 	ui.Reading("the aura rows", ns.FrameAuras.Describe)
@@ -368,8 +360,31 @@ local function Frames(ui)
 	end)
 end
 
+-- One line per thing this addon draws that Blizzard also draws. Nothing here
+-- reads another setting, so every line does what it says whatever else is
+-- switched on.
+local function Blizzard(ui)
+	ui.Section("Blizzard's own frames", "You")
+	ui.Lede("This addon draws these itself. Untick one to put Blizzard's copy back.")
+
+	for _, switch in ipairs(ns.BlizzHide.Switches()) do
+		ui.Check("hide " .. switch.label,
+			function() return ns.db[switch.key] end,
+			function(value)
+				ns.db[switch.key] = value
+				ns.BlizzHide.Apply()
+			end)
+		if switch.hint then
+			ui.Hint(switch.hint)
+		end
+	end
+
+	ui.Reading("what is hidden", ns.BlizzHide.Describe)
+end
+
 function Panel.Draw(ui)
 	EnemyBars(ui)
 	Debuffs(ui)
 	Frames(ui)
+	Blizzard(ui)
 end

@@ -88,6 +88,11 @@ local RETIRED = {
 	-- choose. Retired rather than left to sit unread, because a setting nothing
 	-- reads is a setting somebody will try to change.
 	skinGap = true,
+
+	-- 1.9: one switch for the client's own aura row, which meant a different
+	-- thing depending on what the skin was doing. It is four switches now, one
+	-- per thing you can see twice, and each says what it does on its own line.
+	blizzAuras = true,
 }
 
 -- A key lives in exactly one scope. Checking both tables on every insert is

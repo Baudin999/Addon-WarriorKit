@@ -92,6 +92,11 @@ for _, name in ipairs({ "TargetFrameBuff1", "TargetFrameDebuff1" }) do
 	child("button", targetFrame, name)
 end
 
+-- The client's own cast bar for your target, which this addon draws on the
+-- enemy bar instead. A child of the target frame, so it is the one frame in
+-- UnitFrames/Blizzard.lua's list that a lockdown can refuse.
+child("statusbar", targetFrame, "TargetFrameSpellBar")
+
 -- The head of each of your own two rows, and the client's own weapon enchant.
 -- None of the three is a child of PlayerFrame on any client: the client hangs
 -- your buffs off BuffFrame in the top corner of the screen and the enchants off
