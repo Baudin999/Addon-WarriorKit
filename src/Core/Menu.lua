@@ -47,8 +47,14 @@ local LONE_GAP = 1
 -- is not worth thirty lines of chat.
 local PROBE_LIST = 16
 
--- The button, why there is not one, and which of the two shapes above it found.
+-- The button, why there is not one, and which of the shapes above it found.
 local button, refusal, shape
+
+-- What the last walk actually saw, carried so the refusal can say it. This is
+-- the only part of the addon that fails because of how somebody else's frame is
+-- built, and a refusal that does not say what it counted sends whoever is
+-- holding it back to the game for another look. `/wk status` should be enough.
+local seen = { children = 0, buttons = 0, deep = false }
 
 -- What the menu was tall before we grew it, and what we last set it to. The
 -- pair is how re-attaching stays idempotent across a client that recomputes the
@@ -105,6 +111,10 @@ end
 
 local function Survey(menu)
 	local all, others, hangs = {}, {}, {}
+	seen.children, seen.deep = 0, false
+	for _ in ipairs({ menu:GetChildren() }) do
+		seen.children = seen.children + 1
+	end
 	Gather(menu, all, others, hangs)
 
 	-- One level down, and only when the menu itself held nothing.
@@ -116,6 +126,7 @@ local function Survey(menu)
 	-- rather than the whole tree, because the whole tree of somebody else's
 	-- frame is a walk with no bottom to it and this needs a foot, not a census.
 	if #others == 0 then
+		seen.deep = true
 		for _, child in ipairs({ menu:GetChildren() }) do
 			if ns.Measure(child, "GetObjectType") ~= "Button" then
 				Gather(child, all, others, hangs)
@@ -123,6 +134,7 @@ local function Survey(menu)
 		end
 	end
 
+	seen.buttons = #others
 	return all, others, hangs
 end
 
@@ -142,19 +154,30 @@ local function ChainFoot(all, hangs)
 	return foot
 end
 
--- The lowest button on the screen, and the gap between it and the one above it.
+-- The lowest button, and the gap between it and the one above it.
 --
--- Read off the screen rather than off the anchors, because this is the walk for
--- a menu whose anchors say nothing useful about order. Both clients put the
--- origin at a different corner and it does not matter: the foot is the smallest
--- bottom edge either way, because every reading here is a difference between
--- two of them.
-local function LowestFoot(others)
+-- Two readings of the same question, because the first one is not always
+-- answerable. `GetBottom` is the screen, and a frame the client has not put on
+-- the screen yet does not have one, which is every button in this menu at
+-- login. The anchor offset is what is left: in a column hung off one frame, the
+-- lowest button is the one with the most negative offset. Both agree about
+-- order and both are only ever read as a difference between two of them, which
+-- is why the same arithmetic works on either.
+local function BottomOf(entry)
+	return ns.Measure(entry, "GetBottom")
+end
+
+local function OffsetOf(entry)
+	local _, _, _, _, y = Anchor(entry)
+	return y
+end
+
+local function Lowest(others, read)
 	local foot, low, above
 	for _, entry in ipairs(others) do
-		local bottom = ns.Measure(entry, "GetBottom")
-		if bottom and (not low or bottom < low) then
-			foot, low = entry, bottom
+		local value = read(entry)
+		if value and (not low or value < low) then
+			foot, low = entry, value
 		end
 	end
 	if not foot then
@@ -162,14 +185,14 @@ local function LowestFoot(others)
 	end
 
 	for _, entry in ipairs(others) do
-		local bottom = ns.Measure(entry, "GetBottom")
-		if entry ~= foot and bottom and bottom > low and (not above or bottom < above) then
-			above = bottom
+		local value = read(entry)
+		if entry ~= foot and value and value > low and (not above or value < above) then
+			above = value
 		end
 	end
 
 	local height = ns.Measure(foot, "GetHeight") or 0
-	local gap = above and (above - (low + height)) or LONE_GAP
+	local gap = above and (above - low - height) or LONE_GAP
 	if gap < 0 then
 		gap = LONE_GAP
 	end
@@ -256,9 +279,14 @@ function Menu.Attach()
 	if foot then
 		gap, shape = Insert(foot), "chain"
 	else
-		local lowest, measured = LowestFoot(others)
+		local lowest, measured = Lowest(others, BottomOf)
 		if not lowest then
-			refusal = "this client's game menu has no button to sit under"
+			lowest, measured = Lowest(others, OffsetOf)
+		end
+		if not lowest then
+			refusal = ("this client's game menu has no button to sit under: %d children,"
+				.. " %d buttons%s"):format(seen.children, seen.buttons,
+				seen.deep and ", counting inside them" or "")
 			return false
 		end
 		Append(lowest, measured)
@@ -266,7 +294,8 @@ function Menu.Attach()
 	end
 
 	if not gap then
-		refusal = "this client's game menu will not say where its buttons are"
+		refusal = ("this client's game menu will not say where its buttons are: %d"
+			.. " children, %d buttons"):format(seen.children, seen.buttons)
 		return false
 	end
 

@@ -179,6 +179,41 @@ if button then
 		"the status line does not say the button went under: " .. Menu.Describe())
 end
 
+-- And the same menu with the client refusing to say where anything is.
+--
+-- This is login. The menu has never been on the screen, so nothing in it has a
+-- bottom edge to report, and the walk that reads the screen has nothing to read.
+-- What is left is the anchor offsets, which a column hung off one frame carries
+-- whether or not it has ever been drawn.
+--
+-- Modelled by shadowing GetBottom on Blizzard's buttons, which is what a client
+-- that has not laid the frame out answers. Put back afterwards, because the
+-- block below this one reads the screen again.
+if button then
+	for _, entry in ipairs(buttons) do
+		entry.GetBottom = function() return nil end
+	end
+	button:ClearAllPoints()
+	menu:SetHeight(BARE)
+
+	check(Menu.Attach(), "the button would not go in off the anchors alone")
+
+	local _, relative, _, _, y = button:GetPoint(1)
+	check(relative == continue,
+		("the button hangs off %s rather than the lowest offset")
+			:format(tostring(relative and relative.name)))
+	check(y == -H.MENU_GAP,
+		("the button sits %g under the foot and the column's own gap is %g")
+			:format(-y, H.MENU_GAP))
+	check(menu:GetHeight() == BARE + STEP,
+		("the menu is %g tall and one button taller than %g is %g")
+			:format(menu:GetHeight(), BARE, BARE + STEP))
+
+	for _, entry in ipairs(buttons) do
+		entry.GetBottom = nil
+	end
+end
+
 -- And the menu that keeps its buttons in a container.
 --
 -- This is what the live client answered on the first build: the button was
