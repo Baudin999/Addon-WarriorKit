@@ -55,6 +55,20 @@ ns.FrameAuras = Auras
 -- screen, and Buffs/Nag.lua only says when one is missing. Both hands go at the
 -- head of your buff row, out of Buffs/Upkeep.lua so the three shapes that call
 -- has had are counted in one place.
+--
+-- So the client's own enchant buttons go too, and they were left up for one
+-- release. TemporaryEnchantFrame was deliberately spared while the enchant was
+-- the one thing on you nothing here drew; the moment the row started drawing
+-- it, sparing the client's copy stopped being a reading of the stone and
+-- became a second one, in the top corner, under a square saying the same
+-- number. That is the rule the whole file is built on: an aura the addon draws
+-- has exactly one place on the screen.
+--
+-- They are swept as a run of their own rather than appended to the buff row's
+-- names, because the two runs do not fill together. The sweep stops at the
+-- first name the client has not built, and the client builds BuffButton6 only
+-- once you carry six buffs, so a single list of both would stop short of the
+-- enchants on every character who has ever had fewer buffs than the ceiling.
 --------------------------------------------------------------------------
 
 local Aura = ns.UI.Aura
@@ -63,6 +77,13 @@ local Flow = ns.UI.Flow
 -- Between two squares, and between the block and the first row. In pixels,
 -- like every other number the skin draws with.
 local GAP = 3
+
+-- The client's temporary weapon enchant buttons: the name it counts them from
+-- and how many of them it keeps. Three, because that is main hand, off hand and
+-- ranged, and the third has never been drawn on a warrior. Swept by the row
+-- that draws the enchants itself, which is the only row that has earned the
+-- right to take the client's copy off the screen.
+local ENCHANT_HEAD, ENCHANT_COUNT = "TempEnchant", 3
 
 -- What the square's edge may be set to. The floor is where the stack count
 -- stops being readable. The ceiling is the block's own height, above which a
@@ -99,7 +120,10 @@ local TIMER_CEILING, COUNT_CEILING = 14, 11
 --             that does not carry the global above
 --   enchants  put the temporary weapon enchants at the head of this row,
 --             which only your own buffs can be, because they are the one
---             thing on you that no aura index answers for
+--             thing on you that no aura index answers for. It is also what
+--             hides the client's own enchant buttons, and that is one flag
+--             rather than two on purpose: drawing them here is the whole of
+--             the reason we are allowed to take the client's copy down
 --   setting   how many of ours to draw
 --   global    what this row is called, for the reason UnitFrames/Skin.lua
 --             names the block: a row that lands in the wrong place can then be
@@ -261,31 +285,69 @@ end
 --
 -- It is neither. The buttons are built in order, so the only one that can have
 -- appeared since the last look is the one after the last one hidden. That is a
--- single global lookup per row per tick once the row has settled, and a run of
+-- single global lookup per run per tick once the run has settled, and a run of
 -- them the first time a unit turns up with a full list.
+--
+-- A run is one name the client counts from 1, and a row can replace more than
+-- one of them: your buff row stands in for BuffButton and for TempEnchant
+-- both. Each carries its own mark, because each fills on its own and a sweep
+-- that walked them as one list would stop at the first BuffButton the client
+-- has not built and never reach the enchants at all.
 --
 -- A name this client does not use costs nothing and hides nothing, which is
 -- the honest failure: the sweep stops at the first name that is not a frame
 -- and /wk skin probe then says none of the client's are hidden. Whether these
--- four names are what this backport calls its own buttons is in the untested
+-- five names are what this backport calls its own buttons is in the untested
 -- list in docs/README.md.
 --------------------------------------------------------------------------
 
+-- One run of the client's button names, counted from 1 and stopping where the
+-- client stops. `swept` is how far down it the sweep has got, which is also
+-- how many of the client's this run currently has off the screen.
+local function Run(head, ceiling)
+	local names = {}
+	for slot = 1, ceiling do
+		names[slot] = head .. slot
+	end
+	return { names = names, swept = 0 }
+end
+
 -- False when combat refused, which is the caller's signal to try again at
 -- PLAYER_REGEN_ENABLED rather than to eat a lockdown error.
+--
+-- A refusal on one run gives up on that run and not on the next one. The two
+-- are separate frames of the client's, so a lockdown refusing one says nothing
+-- about the other, and the caller retries the row whole either way.
 local function Sweep(row)
-	while row.swept < row.ceiling do
-		local button = _G[row.names[row.swept + 1]]
-		if not button then
-			return true -- the client has not built this one yet
+	local complete = true
+	local runs = row.runs
+	for index = 1, #runs do
+		local run = runs[index]
+		local names, last = run.names, #run.names
+		while run.swept < last do
+			local button = _G[names[run.swept + 1]]
+			if not button then
+				break -- the client has not built this one yet
+			end
+			if not ns.Strip(button) then
+				complete = false
+				break
+			end
+			row.stripped[button] = true
+			run.swept = run.swept + 1
 		end
-		if not ns.Strip(button) then
-			return false
-		end
-		row.stripped[button] = true
-		row.swept = row.swept + 1
 	end
-	return true
+	return complete
+end
+
+-- How many of the client's buttons this row currently has off the screen,
+-- across every run. Only /wk skin probe asks.
+local function Swept(row)
+	local runs, total = row.runs, 0
+	for index = 1, #runs do
+		total = total + runs[index].swept
+	end
+	return total
 end
 
 local function Unsweep(row)
@@ -300,7 +362,10 @@ local function Unsweep(row)
 	-- Reset whether or not every one came back. ns.Strip is a no-op on a region
 	-- it already holds, so a sweep that starts again from one costs a table
 	-- lookup per button that never came back and cannot double-strip anything.
-	row.swept = 0
+	local runs = row.runs
+	for index = 1, #runs do
+		runs[index].swept = 0
+	end
 	return complete
 end
 
@@ -437,17 +502,21 @@ function Auras.Build(entry)
 		-- The client's own button names, built once. A tick that concatenated
 		-- them would allocate a string per name per pass to answer a question
 		-- whose answer never changes.
-		local names = {}
+		--
+		-- One run per name the client counts from 1. Your buff row replaces
+		-- two of them, because the sharpening stone it leads with is drawn by
+		-- the client under a name of its own.
 		local ceiling = _G[spec.max] or spec.ceiling
-		for slot = 1, ceiling do
-			names[slot] = spec.head .. slot
+		local runs = { Run(spec.head, ceiling) }
+		if spec.enchants then
+			runs[2] = Run(ENCHANT_HEAD, ENCHANT_COUNT)
 		end
 
 		list[index] = {
 			key = spec.key, filter = spec.filter, setting = spec.setting,
 			below = spec.below, enchants = spec.enchants,
 			frame = frame, squares = {}, found = {},
-			names = names, ceiling = ceiling, stripped = {}, swept = 0,
+			runs = runs, ceiling = ceiling, stripped = {},
 			wanted = 0, perLine = 1,
 		}
 	end
@@ -627,7 +696,7 @@ function Auras.Probe(entry)
 	for index = 1, #list do
 		local row = list[index]
 		parts[index] = ("%s %d of %d wide, %d of the client's hidden")
-			:format(row.key, row.wanted, row.perLine, row.swept)
+			:format(row.key, row.wanted, row.perLine, Swept(row))
 	end
 	return table.concat(parts, ", ")
 end

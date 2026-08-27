@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### The client's weapon enchant goes off the screen with the rest of its auras
+
+Reported from the game: with the addon's own rows on, the client is still
+drawing auras.
+
+`TemporaryEnchantFrame` was the one thing the sweep deliberately spared, and
+the reason expired in the change directly below this one. While nothing here
+drew the enchant, the client's copy was the only reading of the stone on your
+weapon and taking it down would have taken that reading with it. The row draws
+both hands at its own head now, so what the corner held was a second copy of a
+number the square already carried, sitting where you have to look away to read
+it. `TempEnchant1` and up are swept like `BuffButton1` and up, and an aura this
+addon draws is back to having exactly one place on the screen.
+
+**It is a run of its own rather than the tail of the buff row's names.** The
+sweep stops at the first name the client has not built, because the client
+builds those buttons on demand and in order, and the two names do not fill
+together: on a character carrying six buffs the walk stops at `BuffButton7` and
+a single list of both would never reach an enchant. So each name the client
+counts from 1 carries its own mark, and `/wk skin probe` adds them up.
+
 ### The weapon enchant leads your buff row, and the square can be bigger
 
 Reported from the game with a screenshot: the squares are too small and the

@@ -326,6 +326,14 @@ do
 	check(not _G.BuffButton1:IsShown() and not _G.DebuffButton1:IsShown(),
 		"the client is still drawing your own auras in the corner of the screen")
 
+	-- And the client's own weapon enchant, which is a run of its own under a
+	-- name of its own. It was spared while the addon drew no enchant at all;
+	-- the row draws both hands now, so the client's copy is a second reading of
+	-- the same stone in the top corner of the screen.
+	check(not _G.TempEnchant1:IsShown(),
+		"the client is still drawing the weapon enchant in the corner of the"
+			.. " screen, under a square of ours saying the same number")
+
 	-- The sharpening stone on your weapon, at the head of the buff row. It sits
 	-- at no aura index at all, so the walk above cannot find it and hiding the
 	-- client's row would otherwise take the last reading of it off the screen.

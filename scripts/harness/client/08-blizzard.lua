@@ -92,13 +92,20 @@ for _, name in ipairs({ "TargetFrameBuff1", "TargetFrameDebuff1" }) do
 	child("button", targetFrame, name)
 end
 
--- The head of each of your own two rows. Not children of PlayerFrame on any
--- client: the client hangs your buffs off BuffFrame in the top corner of the
--- screen, which is a system of its own and is why the addon leaves the frame
+-- The head of each of your own two rows, and the client's own weapon enchant.
+-- None of the three is a child of PlayerFrame on any client: the client hangs
+-- your buffs off BuffFrame in the top corner of the screen and the enchants off
+-- TemporaryEnchantFrame beside them, which is why the addon leaves both frames
 -- alone and hides the buttons. What the harness needs from them is the same
 -- thing it needs from the two above, a button under each name that starts out
 -- shown, so the sweep has something to take off the screen.
-for _, name in ipairs({ "BuffButton1", "DebuffButton1" }) do
+--
+-- TempEnchant1 is here because the addon draws the sharpening stone itself now,
+-- at the head of your buff row. While it did not, the client's was the only
+-- reading of the stone on the screen and was deliberately left up; the moment
+-- the row drew one, leaving the client's up was a second copy of the same
+-- number in the corner.
+for _, name in ipairs({ "BuffButton1", "DebuffButton1", "TempEnchant1" }) do
 	child("button", _G.UIParent, name)
 end
 

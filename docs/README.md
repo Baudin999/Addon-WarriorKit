@@ -2645,6 +2645,15 @@ the row. The square borrows the weapon's own art, which is what Blizzard's
 enchant button does, and hovering it opens the item's tooltip rather than an
 aura's, because the enchant is a line on the item.
 
+`TemporaryEnchantFrame` goes down with the rest, and it was spared for one
+release. While nothing here drew the enchant, the client's copy was the only
+reading of the stone on your weapon and hiding it would have taken that reading
+off the screen; the moment the row drew one, sparing the client's copy stopped
+being a reading and became a second one, in the corner, saying the same number
+under a square that already said it. An aura this addon draws gets one place on
+the screen, and that rule does not have an exception for the one aura that has
+no index.
+
 Your own auras go first, and it is the one opinion in the file. The client's
 order is the order the auras landed in, so on anything with a raid on it a row
 capped at twelve loses your Rend behind a screen of other people's bleeds.
@@ -2665,11 +2674,18 @@ Hiding the client's rows is a sweep rather than a walk. Those buttons are built
 on demand, so it cannot be done once when the skin goes on, and walking all
 ninety-six names every tick to find that out would be silly. They are built in
 order, so the only one that can have appeared since the last look is the one
-after the last one hidden: one global lookup per row per tick once the row has
+after the last one hidden: one global lookup per run per tick once the run has
 settled. `ns.Strip` refuses on a protected region in combat and says so by
 returning false, so a button the client builds mid fight is retried and lands
 the moment combat drops. Whether these buttons are protected at all on this
 backport is in the untested list below.
+
+A run is one name the client counts from 1, and a row can stand in for more
+than one of them: your buff row replaces `BuffButton` and `TempEnchant` both.
+Each run carries its own mark, because the two do not fill together. A sweep
+walking them as one list would stop at the first `BuffButton` the client has not
+built yet, which on a character carrying six buffs is `BuffButton7`, and would
+never reach an enchant at all.
 
 Target of target is parked under the target block on the corner the portrait is
 on, and the debuff row runs from the other corner, so the two cannot be chained
@@ -4680,12 +4696,13 @@ Everything below was written from the API contract and has never executed:
   frame parked at Edit Mode's own point until the next target change is what a
   missing event looks like.
 - Whether this client names its aura buttons `TargetFrameBuff1`,
-  `TargetFrameDebuff1`, `BuffButton1` and `DebuffButton1`. All four are the
-  Classic names and none is called by anything installed here. A name that is
-  not a frame stops that row's sweep at slot one and hides nothing, so the
-  client's icons stay where they are, on top of ours in the player's case and
-  inside the gauge in the target's. `/wk skin probe` prints how many of each row
-  it has hidden, so one look at a full list settles all four.
+  `TargetFrameDebuff1`, `BuffButton1`, `DebuffButton1` and `TempEnchant1`. All
+  five are the Classic names and none is called by anything installed here. A
+  name that is not a frame stops that run's sweep at slot one and hides nothing,
+  so the client's icons stay where they are, on top of ours in the player's case
+  and inside the gauge in the target's. `/wk skin probe` prints how many of each
+  row it has hidden, and the buff row's number counts both of its runs, so a
+  full list plus a sharpening stone settles all five in one look.
 - Where the target's cast bar lands. `Target_Spellbar_AdjustPosition` anchors it
   under the last aura row where there are auras, which now follows the block in,
   and against the frame where there are none. The second case has not been
