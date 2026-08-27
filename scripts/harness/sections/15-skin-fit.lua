@@ -177,11 +177,13 @@ do
 	-- put on one here rather than on the anchor the link writes. That is the
 	-- whole point of the test: the two numbers have to come back out of four
 	-- measured edges, not out of inverting the offset this addon last wrote.
-	local wantGap, wantLevel = 77, 33
+	-- The sideways part of the drag is deliberate: the drop has to be pulled
+	-- off the mirror line for the re-anchor below to prove it goes back.
+	local pullAside, wantLevel = 77, 33
 	local px, scale = pixel(), targetFrame:GetEffectiveScale()
 	targetFrame:ClearAllPoints()
 	targetFrame:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT",
-		(edge(playerBox, "GetRight") + wantGap * px) / scale,
+		(edge(playerBox, "GetRight") + pullAside * px) / scale,
 		(edge(playerBox, "GetTop") - wantLevel * px) / scale)
 	ns.FrameSkin.Landed()
 	check(ns.db.skinLevel == wantLevel,
@@ -192,13 +194,15 @@ do
 		"the drop stored its numbers and never re-anchored the target on the player block")
 	-- The horizontal half of a drop is not kept, and that is the design rather
 	-- than a loss: the target's edge is the player's reflected, so the only
-	-- place it can land is opposite wherever the player is. What the drop is
-	-- still allowed to set is the vertical, which the check above asserts.
+	-- place it can land is opposite wherever the player is. The drag above
+	-- pulled it 77 pixels off that line and the re-anchor puts it back. What
+	-- the drop is still allowed to set is the vertical, which the check above
+	-- asserts.
 	local axis = (edge(targetBox, "GetLeft") + edge(playerBox, "GetRight")) / 2
 	check(math.abs(axis - middle()) / pixel() < 1e-6,
 		("the re-anchor after the drop put the mirror line %.2f pixels off the"
 			.. " middle of the screen"):format((axis - middle()) / pixel()))
-	ns.db.skinGap, ns.db.skinLevel = ns.DefaultFor("skinGap"), ns.DefaultFor("skinLevel")
+	ns.db.skinLevel = ns.DefaultFor("skinLevel")
 	ns.FrameSkin.Relayout()
 
 	-- Off restores, and it restores the point the frame arrived with rather
@@ -239,6 +243,13 @@ do
 	check(math.abs(relinked - 3) < 1e-6,
 		("after a relink target of target sits %.2f pixels under the target block")
 			:format(relinked))
+
+	-- The distance across is not a setting and must not quietly become one
+	-- again. A default named skinGap would land in ns.db here, and a link that
+	-- read it would pass every check above while the mirror only held for
+	-- whatever number it happened to hold.
+	check(ns.db.skinGap == nil,
+		"skinGap is back in the settings and the distance across is the mirror")
 
 	print(("link   the mirror line is the middle of the screen at ui scale 0.65,"
 		.. " 1 and 0.5, 3 px under the target block; a drag reads back %d down")

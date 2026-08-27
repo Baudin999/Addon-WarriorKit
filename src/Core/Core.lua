@@ -64,6 +64,14 @@ local RETIRED = {
 	-- existed wrote it, and ApplyDefaults keeps whatever it finds, so a boolean
 	-- would still be sitting where a table is now indexed.
 	markKeys = true,
+
+	-- 1.2: the distance between the player and target blocks, back when the two
+	-- were anchored a fixed distance apart. The target's facing edge is the
+	-- player's reflected in the middle of the screen now, so the corridor is
+	-- twice the player's distance from the centre and there is no number to
+	-- choose. Retired rather than left to sit unread, because a setting nothing
+	-- reads is a setting somebody will try to change.
+	skinGap = true,
 }
 
 -- A key lives in exactly one scope. Checking both tables on every insert is

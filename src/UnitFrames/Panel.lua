@@ -346,18 +346,12 @@ function Panel.Draw(ui)
 			ns.db.skinWidth = value
 			ns.FrameSkin.Relayout()
 		end)
-	local gapLow, gapHigh, levelLow, levelHigh = ns.FrameSkin.LinkRange()
-	ui.Check("hang the target block off the player block",
+	local levelLow, levelHigh = ns.FrameSkin.LinkRange()
+	ui.Check("mirror the target block off the player block",
 		function() return ns.db.skinLink end,
 		function(value)
 			ns.db.skinLink = value
 			ns.FrameSkin.Apply()
-		end)
-	ui.Stepper("gap between the two facing edges, in pixels", gapLow, gapHigh, 10,
-		function() return ns.db.skinGap end,
-		function(value)
-			ns.db.skinGap = value
-			ns.FrameSkin.Relayout()
 		end)
 	ui.Stepper("the target's drop from the player, in pixels", levelLow, levelHigh, 5,
 		function() return ns.db.skinLevel end,
@@ -372,11 +366,13 @@ function Panel.Draw(ui)
 				.. ns.FrameSkin.DescribeLink() .. "."
 		end
 		return "Edit Mode positions the player block and this addon positions"
-			.. " everything against it: the target hangs off the player and target"
-			.. " of target hangs off the target. Dragging the target in Edit Mode"
-			.. " still works, and where you drop it becomes these two numbers."
-			.. " Both blocks are mirrored, so linking them faces the two gauges"
-			.. " across the gap and turns the portraits outward. |cffd08040Now:|r "
+			.. " everything against it: the target is the player reflected in the"
+			.. " middle of the screen and target of target hangs off the target."
+			.. " Drag the player to widen or close the corridor between them, and"
+			.. " drag the player past the centre to make the pair cross. Dragging"
+			.. " the target still works and sets the drop above. Both blocks are"
+			.. " mirrored, so the two gauges face each other across the corridor"
+			.. " and both portraits turn outward. |cffd08040Now:|r "
 			.. ns.FrameSkin.DescribeLink() .. "."
 	end)
 	for _, frame in ipairs({ { "player", "the player frame" },

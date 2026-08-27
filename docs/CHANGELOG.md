@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+### The target block is the player block mirrored, and the gap setting is gone
+
+`/wk skin gap` is retired. There is no number between the two blocks any more,
+because the distance across was never a preference and pretending it was is
+what made the pair look wrong.
+
+**A fixed distance apart is not a mirror.** The link anchored the target block
+120 pixels off the player block's far edge, which put the line the two mirrored
+about wherever Edit Mode had last left the player. In game that is left of
+centre and low, so the pair sat off to one side facing each other. Reported
+from the game, and the specification was wrong rather than the code that
+implemented it.
+
+**The target's facing edge is the player's reflected in the middle of the
+screen.** Reflecting a point about the centre moves it 2 * (centre - point),
+read in screen units because that is the only space two frames on different
+scales share, then divided back into the frame's own units because that is what
+an anchor offset counts in. The corridor between the blocks is now twice the
+player's distance from the centre, so you widen it by dragging the player
+outward and you close it by dragging the player in. Drag the player across the
+centre and the pair crosses, which is what a mirror does and is worth knowing
+before it surprises you.
+
+**Dragging the target still means something, and it means one thing now.** The
+drop sets the level, which is how far the target's top edge sits below the
+player's. The sideways half is measured and thrown away, and the re-anchor puts
+the frame back on the mirror line, because opposite the player is the only place
+it can go. `Landed` reads two edges instead of four for it.
+
+**A pass that cannot measure writes nothing.** `Mirrored` comes back empty on a
+pass where the client has not resolved the player block's position yet, which
+happens once at login. There is nothing to fall back to now that the fixed
+distance is gone, and that is the better answer. The target stays on the point
+it arrived with and the next pass asks again, instead of jumping to an invented
+distance and then jumping a second time. `/wk status` says the rest follows on
+the next pass rather than blaming combat for it.
+
+Three harness assertions changed with the specification rather than being
+adjusted to fit it. What they assert is the mirror stated as the thing you can
+see: the midpoint of the two facing edges is the middle of the screen, at three
+UI scales. The stub parks the player right of centre on purpose, so a pair
+anchored a fixed distance apart fails all three. A fourth asserts `skinGap` is
+still absent from the settings, because a distance that quietly became a number
+again would pass every other check while the mirror only held for whatever value
+it happened to hold. The key is in `RETIRED`, so a saved variable written before
+this is cleared rather than left to be found.
+
 ### The target's aura rows are the addon's now
 
 Blizzard drew the target's buffs and debuffs and the skin worked around where

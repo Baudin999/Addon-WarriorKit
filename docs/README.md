@@ -351,6 +351,12 @@ goes through `Feature.lua` or through the shared surface below:
                                  the client's own snapping turned off
     ns.UI.Crisp(texture)         that sampling fix, on a texture you made
     ns.UI.Font(size, flags) / ns.UI.Label(...) / ns.UI.FontName()
+    ns.UI.FLAT / ns.UI.SHADOW / ns.UI.NumberFont(size) / ns.UI.OutlineFloor()
+                                 the three text roles, and the smallest glyph
+                                 an outline can go round. See Text.
+    ns.Unit.Color.paper          the one colour text is drawn in over a fill
+    ns.Unit.Color.Luma / .Contrast   relative luminance, and the ratio between
+                                 two colours. See Contrast.
     ns.UI.Wrap / ns.UI.TextHeight   a string folded to a width, and how tall
                                  it came out
     ns.UI.Flush()                every adopted frame combat refused to re-scale
@@ -734,10 +740,145 @@ whole pixels and stretches the two axes by different amounts. Both methods are
 probed rather than called, and an icon that is merely soft beats a widget that
 raises. `ns.UI.Icon` does all of it.
 
-Text goes through `ns.UI.Font`, which hands out one shared font object per size
-and flag pair. A font string given a font by `SetFont` carries its own copy; one
-given a font object shares. The bars alone put eight strings on a widget and lay
-out a widget per nameplate.
+### Text
+
+Every string in the addon goes through `ns.UI.Font`, which hands out one shared
+font object per size and flag pair. A font string given a font by `SetFont`
+carries its own copy of it; one given a font object shares. The bars alone put
+eight strings on a widget and lay out a widget per nameplate, so that is a
+couple of hundred private font instances against six shared ones, and a font
+size change is six writes rather than one per string.
+
+The typeface is `Fonts\ARIALN.TTF` and it is not a setting. Friz Quadrata is the
+client's default and it is a serif cut for a 2004 headline, not for a ten pixel
+number over a moving nameplate. Every client since the first ships Arial Narrow,
+so it costs no asset in the addon folder and no dependency.
+
+**Three roles, and every string is exactly one of them.** This is the whole font
+policy. Pick the role from what is behind the glyph, never from how it looks.
+
+    flat       over a surface this addon painted and knows the colour of.
+               Panel prose, and every string on a bar. Nothing round the
+               glyph, because Unit/Color.lua guarantees the contrast.
+               ns.UI.FLAT.
+    shadowed   over art the addon did not paint and cannot predict, which is
+               a spell icon under a debuff timer. A one pixel drop shadow,
+               which holds the glyph off a bright icon and spends none of the
+               glyph's own pixels. ns.UI.SHADOW, or ns.UI.NumberFont.
+    outlined   over the world. The only place with no known colour behind it,
+               so a shadow has nothing to be darker than. The default.
+
+An outline and a shadow do the same job, which is to keep a pale glyph off what
+is behind it, and they pay for it differently. The outline spends the glyph's
+own pixels; the shadow spends the pixel below and to the right. That is why the
+outline is last resort and not first: over anything with a known colour the
+shadow is strictly better, and over a surface the palette caps neither is needed.
+
+`ns.UI.SHADOW` is not a client flag and never reaches `SetFont`. It rides inside
+the flags string so that it threads through `ns.UI.Label` and every other site
+that already passes flags along, instead of adding a parameter to all of them.
+
+**`ns.UI.OutlineFloor` is a minimum size, not a switch.** An outline costs a
+pixel on every stroke whatever the glyph is, so below fourteen it has eaten the
+counters: the hole in a 6, the waist of an 8, and a 3 and an 8 stop being
+different shapes. Only text over the world is outlined now, and that text has no
+fallback to switch to, because flat over the world is not softer, it is gone. So
+a string that must be outlined must also be at least fourteen pixels tall.
+
+**MONOCHROME is not in the addon and this is why.** It was tried as the default
+for everything at or under sixteen pixels, on the theory that turning the
+rasteriser off would stop an anti-aliased rim bleeding into an anti-aliased
+stem. It does, and it also breaks the stems. An unhinted humanist face at eleven
+to fourteen pixels has stems that do not land on pixel boundaries, and rounding
+each one independently on and off makes them different weights, so whole words
+come out uneven. It looked sharp on a 14 pixel numeral over a bar and it looked
+like damage on a tooltip and on a meter row, which is most of the text this
+addon draws. The report was that all the text had gone fuzzy, and it had. The
+harness asserts that no string carries the flag, because the next person to
+reach for it will reach for it in `UI/Text.lua` and not in this paragraph.
+
+**Sharpness is geometry first and contrast second, and there is no third.** The
+grid puts every glyph on a whole number of physical pixels, which is as far as
+geometry goes. Everything after that is the section below.
+
+### Contrast
+
+A colour this addon fills a bar with is a background, and something is written
+on top of it. That is a different job from the one Blizzard's class colours were
+chosen for, which is a name **in** the colour against a black chat window, and
+the two want opposite things. Six of the nine classes are too light to be a
+background for anything. One of them is white.
+
+The palette was carrying the consequence in silence. White on the warrior tan is
+2.4:1. On the threat amber it is 1.6:1, on the threat green 2.4:1, on the orange
+2.3:1. Two colours in the whole set were over 4:1, nothing anywhere said so, and
+the report that came back was that the frames were not sharp. They were not
+soft. They had no edge to be sharp at.
+
+So `Unit/Color.lua` carries a rule rather than a pile of hand-picked pairs.
+
+    Color.paper            the one colour text is drawn in over a fill
+    Color.TEXT_RATIO       4.5, for a name and a number, which are read
+    Color.TOKEN_RATIO      3.0, for a level tag and a stack count, which are
+                           recognised
+    Color.Luma(c)          sRGB relative luminance, the WCAG definition
+    Color.Contrast(a, b)   how far apart two colours are, 1 to 21
+    Color.fills / .tokens  every colour in each role, so a gate can walk them
+    Color.Describe()       the whole table, and `/wk colors` prints it
+
+**Every fill is taken under a luminance ceiling, and the ceiling is solved, not
+typed.** It is the value at which `Color.paper` clears `TEXT_RATIO`, which is one
+rearrangement of the contrast formula, and writing the answer down instead is how
+a threshold and its consequence drift apart. One text colour then works on every
+fill, at every state of the bar: the spent end is the fill through `Color.Dim`,
+which is darker still.
+
+**The shaping scales the linear components by one factor.** That is the only
+operation that takes brightness off without turning the hue, which is why the
+warrior still reads as tan and the threat green still reads as green. A colour
+halved in sRGB is not half as bright, and a scale that pretends it is turns a
+hue as it dims it. Warrior goes `0.78 0.61 0.43` to `0.55 0.43 0.30`.
+
+**Tokens run the other way**, with a floor rather than a ceiling, and a hue that
+cannot reach it is blended toward white until it does. Three rather than four and
+a half is a judgement and not a rounding: these are two digits and a percent sign
+in a HUD, not a paragraph, and holding a five colour scale apart is half of what
+they are for.
+
+**The pass runs once at load and writes in place**, so a colour keeps the table
+identity the tickers guard on, and it is deduped, because the roles share tables
+on purpose. `HUE.slate` is the idle threat state, the idle reaction and a locked
+cast at once, and darkening it three times would land it at a fraction of what
+the ceiling asked for. That is the one bug this pass can have.
+
+**Not shaped:** `Color.frame` and the hues under it. An edge is a pixel of chrome
+round a box with nothing ever drawn on top of it, so a ceiling meant for
+backgrounds would do nothing but stop the one state that departs from departing.
+
+**Classes carry two colours, and confusing them is the bug the whole section
+exists to prevent.** `tint` is the identity and goes in a chat line, where the
+colour is the text. `fill` is the bar, where the colour is the background.
+`Color.Class` hands back the fill and `Color.ClassHex` hands back the tint. The
+nine are written down in `Unit/Color.lua` rather than read from
+`RAID_CLASS_COLORS`, because a fill has to be shaped before it can carry text,
+shaping reads the number, and a global this addon does not own can be absent on
+one of the two clients or moved by another addon that got there first. A class
+off the end of the table still arrives through that global and is shaped on the
+way in.
+
+**Where to put a new colour.** A fill goes in one of the role tables and the
+shaping pass takes it. A short coloured string on a fill goes in `Color.xp` or
+`Color.text` and the floor takes it. Prose over a fill is `Color.paper` and
+nothing else. The harness fails on anything that misses its threshold, so the
+answer to "is this readable" is never a judgement made at the call site.
+
+**One place the rule gives a bad answer, and it is not hidden.** The XP scale
+collapsed at the top: `hard` is `1.00 0.76 0.52` and `deadly` is `1.00 0.74
+0.73`, differing only in blue. A red that dark cannot be read off a dark fill, so
+raising it to the floor walks it toward white and it lands on salmon. The rule is
+telling the truth. A red level tag on a coloured bar cannot be both red and
+readable, and the fix is a dark chip behind the tag, which is a layout change and
+not a palette one.
 
 ### The widget library
 
@@ -1245,6 +1386,22 @@ One line each. A bug that survived a shipped fix gets a full write-up in
   time for that reason, and answers yes while the class is unresolved, because
   a wrong yes costs a moment of a button that will not cast and a wrong no
   costs a warrior their button until they reload.
+- MONOCHROME is not a sharpness setting, it is a font choice. It gives a purpose
+  built pixel font hard clean edges and it gives an unhinted humanist face like
+  Arial Narrow broken ones, because at eleven to fourteen pixels the stems do not
+  land on boundaries and rounding each independently makes them different
+  weights. Shipped as the default under sixteen pixels for exactly one commit.
+  The harness asserts the flag is absent.
+- A font size is in units and a pixel count is not, and rounding in the wrong one
+  undoes the conversion. `Skin.lua` had `math.floor(big * px + 0.5)` where `big`
+  was already a whole count of physical pixels and `px` was what one costs in
+  units, so the product was exact and the floor broke it. Invisible on the grid,
+  where `px` is 1, and a fractional glyph height on a client with no
+  `SetIgnoreParentScale`.
+- White text is not readable because it is white. It was on every bar in the
+  addon at between 1.6:1 and 2.4:1, and the symptom reported was "not sharp"
+  rather than "low contrast", which sent the first fix at the rasteriser instead
+  of at the palette. Ask `Color.Contrast` before believing a rendering theory.
 - Our widgets call `EnableMouse(false)` so they never swallow a click meant for
   the nameplate underneath.
 - A mouse enabled frame swallows every mouse button that lands on it, whatever
@@ -2008,8 +2165,13 @@ in that exact strip since the first bar and has never covered anything.
 The second argument was that the XP scale and the threat scale are the same five
 colours meaning two different things, so a green fill cannot mean "you hold it"
 and "it is worth little" at once. That is an argument about two *fills*
-competing. A 14 pixel outlined numeral over a flat fill reads as a label, the
-way the name beside it does.
+competing. A 14 pixel numeral over a flat fill reads as a label, the way the
+name beside it does.
+
+That numeral has since cost more than it was meant to. It is the one string on
+the widget the **Contrast** rule cannot serve well, because the XP scale runs to
+red at the deadly end and a red token cannot be read off a capped fill. The chip
+is what would fix it, and taking it away is what made it a problem.
 
 What the chip cost was the shape of the whole widget. Reading leftward from the
 box there was a raid marker, a three pixel gap, a tag about 27 pixels wide, then
@@ -2052,9 +2214,13 @@ was on it. Worse, the name, the health number and the level were all drawn at 12
 with an outline, and `UI/Text.lua` states in its own words that an outline below
 14 closes up a glyph's counters until a 3 and an 8 stop being different shapes.
 That is what "the bar looks coarse" actually was. Not blurry: mush. Everything
-on the bar is Arial Narrow 14 now, and the cast chamber's text is 10 flat, which
-`ns.UI.NumberFont` handles by dropping the outline rather than closing the
-glyph. Two sizes on the widget instead of four.
+on the bar is Arial Narrow 14 now, and the cast chamber's text is 10. Two sizes
+on the widget instead of four.
+
+Neither carries an outline any more. Both sit on a fill the palette caps, so
+they are flat and bare, and the only two strings on the widget that keep a rim
+are the threat line and the targeted-by line, which hang in the gap above the
+gauge over whatever the player is standing on. See **Text** and **Contrast**.
 
 The health number is given the width of `"100%"` at layout and kept there. Arial
 Narrow is proportional, so `"9%"` and `"100%"` are different widths, and the
@@ -2507,24 +2673,37 @@ ends together faces the gauges across the gap and turns both portraits outward.
 `Link` reads that off the mirror flag rather than naming a corner, so a frame
 that stopped being mirrored would take its side of the link with it.
 
-`/wk skin gap 120` is the distance between those two facing edges and `/wk skin
-level 0` is how far the target's top edge drops below the player's. Both are
-counts of screen pixels on the same ruler as `/wk skin height`, and both are
+The distance across is not a setting. `Mirrored` reflects the player's facing
+edge in the middle of the screen, which puts the target's facing edge 2 *
+(centre - edge) away from it, and both terms are read in screen units because
+that is the only space two frames on different scales share. The first version
+of this anchored the two blocks a fixed 120 pixels apart, which put the line
+they mirrored about wherever Edit Mode had last left the player. In game that
+is left of centre and low, and two frames facing each other off to one side is
+not a mirror. The specification was wrong, not the code under it.
+
+So the corridor is twice the player's distance from the centre, and you widen
+it by dragging the player outward. Drag the player across the centre and the
+pair crosses, which is what a mirror does and is worth knowing before it
+surprises you.
+
+`/wk skin level 0` is the one number left: how far the target's top edge drops
+below the player's, in screen pixels on the same ruler as `/wk skin height`,
 snapped. Where the pair lands on the screen is still a fraction of a pixel
-nobody can read, because the player frame's origin is Blizzard's and this only
-decides the distance between the two. That is the boundary the pixel grid
-already draws round the block, unchanged.
+nobody can read, because the player frame's origin is Blizzard's. That is the
+boundary the pixel grid already draws round the block, unchanged.
 
 Four things carry it, and the first is that a drag still means something. A
 linked frame that swallows your drag is a bug report, so nothing here refuses
-one. What is hooked is the drop: `Landed` measures four edges in screen units,
-divides by what one screen pixel costs there, snaps, clamps to the range the
-slash command takes, stores the two numbers and writes the anchor again. The
-drag teaches both settings without anyone typing a command.
+one. What is hooked is the drop: `Landed` measures the two top edges in screen
+units, divides by what one screen pixel costs there, snaps, clamps to the range
+the slash command takes, stores the level and writes the anchor again. The
+sideways half of your drop is thrown away and the re-anchor puts the frame back
+on the mirror line, because opposite the player is the only place it can go.
 
 Second, the anchor is written again on every relayout rather than only when the
-switch moves, because three things change the number without changing the
-state: the gap setting, the level setting, and a resolution change that moves
+switch moves, because three things change the numbers without changing the
+state. The player moving, the level setting, and a resolution change that moves
 what one pixel costs in the frame's own units. Edit Mode writes its own saved
 point back over ours when a layout is applied, so the events that say it did
 are what re-apply the link. That last part is now true of target of target as
@@ -2540,16 +2719,18 @@ off, because a restore that differed between the three would be a frame that
 lands somewhere new depending on which switch you flipped.
 
 Fourth, the link needs both frames skinned. Unskinned, `TargetFrame` is 232 by
-100 and a gap measured off its edge is a gap to the edge of a rectangle three
-quarters of which is empty, so the link waits and `/wk status` names the half
-that is missing rather than drawing something wrong.
+100 and an edge measured off it is the edge of a rectangle three quarters of
+which is empty, so the link waits and `/wk status` names the half that is
+missing rather than drawing something wrong. `Mirrored` can also come back with
+nothing, on a pass where the client has not resolved the player block's
+position yet. There is nothing to fall back to and that is deliberate. The
+target stays on the point it already has and the next pass asks again, rather
+than jumping to an invented distance and then jumping a second time.
 
-Target of target keeps `TOT_GAP` and gets no numbers of its own, which is a
-decision rather than an omission. The two blocks stand side by side and what
-sits between them is a corridor somebody wants to choose. Target of target is
-stacked under the target and reads as one piece with it, and three pixels is
-the hairline that stops two adjacent outlines reading as one thick edge. There
-is no second value anyone would type.
+Target of target keeps `TOT_GAP` and gets no number of its own, which is a
+decision rather than an omission. It is stacked under the target and reads as
+one piece with it, and three pixels is the hairline that stops two adjacent
+outlines reading as one thick edge. There is no other value anyone would type.
 
 Edit Mode also draws a selection frame over the system it is dragging. Where
 this client puts one, the skin pins it to the block, and it post-hooks that
@@ -2919,9 +3100,10 @@ saved variable took the number.
 **And every string is 14, because every string is outlined.** They have to be:
 the meter has no background, and the outline is the only thing between a number
 and a pale floor behind it. That is the difference between this and a timer on a
-debuff square, which sits on opaque art and can fall back to flat when it gets
-small. `ns.UI.NumberFont` does exactly that and is deliberately not used here,
-because flat over the world is not softer, it is gone.
+debuff square, which sits on art and can trade the rim for a shadow.
+`ns.UI.NumberFont` makes that trade at every size and is deliberately not used
+here, because a shadow needs a known colour to be darker than and the world is
+not one.
 
 What that leaves is a hard minimum rather than a preference. An outline costs a
 pixel on every stroke, and below `ns.UI.OutlineFloor` a 3 and an 8 stop being
@@ -3607,8 +3789,7 @@ nothing ever runs is a branch that is wrong.
     /wk skin player|target|tot on|off   one frame at a time
     /wk skin height 34           18 to 72, the block's height
     /wk skin width 168           90 to 360, the gauge's width
-    /wk skin link on|off         hang the target block off the player block
-    /wk skin gap 120             0 to 400, between the two facing edges
+    /wk skin link on|off         mirror the target block off the player block
     /wk skin level 0             -100 to 100, the target's drop from the player
     /wk skin heals on|off        the incoming heal slice on the health gauge
     /wk skin auras on|off        the target's own buff and debuff rows
@@ -3719,18 +3900,23 @@ and zero errors.
 
    The chain is measured between the blocks rather than inside one, because a
    distance between two frames on two different scales is the thing the link
-   can get wrong. The gap between the two facing edges is the setting at UI
-   scale 0.65, 1 and 0.5, and target of target is three pixels under the target
-   block at all three, which is the sweep that caught its offset being
-   converted once and left on the old grid. Level 0 puts both block tops on one
-   Y and level 24 puts the target 24 pixels below, because zero on its own is
-   also what a link that dropped the vertical offset would produce. A drag is
-   stood up the way Edit Mode drops one, on an absolute point of its own rather
-   than on our anchor, so the two numbers have to come back out of four
-   measured edges: dropped 77 across and 33 down, `/wk skin gap` reads 77 and
-   `/wk skin level` reads 33. Turning the link off hands the target frame back
-   the exact point the stub gave it, and turning it on inside lockdown writes
-   nothing at all and finishes at `PLAYER_REGEN_ENABLED`.
+   can get wrong. What is asserted is the mirror stated as the thing you can
+   see: the midpoint of the two facing edges is the middle of the screen, at UI
+   scale 0.65, 1 and 0.5. The stub parks the player right of centre on purpose,
+   so a pair anchored a fixed distance apart fails all three. Target of target
+   is three pixels under the target block at the same three scales, which is the
+   sweep that caught its offset being converted once and left on the old grid.
+   Level 0 puts both block tops on one Y and level 24 puts the target 24 pixels
+   below, because zero on its own is also what a link that dropped the vertical
+   offset would produce. A drag is stood up the way Edit Mode drops one, on an
+   absolute point of its own rather than on our anchor, so the level has to come
+   back out of two measured edges: dropped 77 across and 33 down, `/wk skin
+   level` reads 33 and the 77 is undone by the re-anchor putting the frame back
+   on the mirror line. One check asserts `skinGap` is still absent from the
+   settings, so the distance across cannot quietly become a number again.
+   Turning the link off hands the target frame back the exact point the stub
+   gave it, and turning it on inside lockdown writes nothing at all and finishes
+   at `PLAYER_REGEN_ENABLED`.
 
    For that last pair the stub had to grow two things it had done without.
    `PlayerFrame` and `TargetFrame` now carry a point each, deliberately not on
@@ -4419,15 +4605,15 @@ Everything below was written from the API contract and has never executed:
   has already hidden, the pin is what corrects it. `/wk skin probe` says which
   of the two this client is.
 - How this client's Edit Mode says a system has been dropped. `HookDrag` wants
-  the moment a drag ends, so that where the target landed becomes the gap and
-  the level. Retail carries `OnDragStop` as a method on the system frame itself
-  and wires it as that frame's own drag script, so the method is post-hooked
-  where it is a function on the frame and the script is hooked where it is not.
-  Nothing installed on this machine touches either. A client that carries
-  neither loses only the drag: the two numbers stay whatever `/wk skin gap` and
-  `/wk skin level` were last set to, and the link is still written. Settle it by
-  opening Edit Mode, dragging the target somewhere obvious, closing Edit Mode
-  and reading `/wk status`, which prints the gap the drop stored.
+  the moment a drag ends, so that where the target landed becomes the level.
+  Retail carries `OnDragStop` as a method on the system frame itself and wires
+  it as that frame's own drag script, so the method is post-hooked where it is a
+  function on the frame and the script is hooked where it is not. Nothing
+  installed on this machine touches either. A client that carries neither loses
+  only the drag: the level stays whatever `/wk skin level` was last set to, and
+  the link is still written. Settle it by opening Edit Mode, dragging the target
+  well up or down, closing Edit Mode and reading `/wk status`, which prints the
+  drop it stored.
 - Whether a frame anchored to another frame can still be dragged in this Edit
   Mode at all. `StartMoving` clears a frame's points and follows the mouse, so
   an anchor of ours is no more of an obstacle than Edit Mode's own, and that is

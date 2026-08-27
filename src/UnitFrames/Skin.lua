@@ -90,12 +90,14 @@ local TOT_SCALE = 0.62
 -- reading as one thick edge. There is no second value anyone would type.
 local TOT_GAP = 3
 
--- The target block against the player block: the pixels between their two
--- facing edges, and how far the target's top edge drops below the player's.
--- Both are settings and these are the range one may land in, shared with
--- `/wk skin gap` and `/wk skin level` through Skin.LinkRange so the slash
+-- How far the target's top edge drops below the player's. The range one may
+-- land in, shared with `/wk skin level` through Skin.LinkRange so the slash
 -- command, the panel and a dropped drag all clamp to the same numbers.
-local GAP_LOW, GAP_HIGH = 0, 400
+--
+-- There is no horizontal number beside it. The distance across is the mirror,
+-- and the mirror is not a preference: the target's facing edge is the player's
+-- reflected in the middle of the screen, so the corridor is twice the player's
+-- distance from the centre and Edit Mode sets it by moving the player.
 local LEVEL_LOW, LEVEL_HIGH = -100, 100
 
 -- Below this many pixels tall a power bar cannot hold a readable number, so it
@@ -1203,18 +1205,20 @@ end
 -- tick, nothing resyncs after a drag and nothing polls GetPoint.
 --------------------------------------------------------------------------
 
--- Which edge of each block faces the other, and which way the second one
--- reaches to get there.
+-- Which edge of each block faces the other.
 --
 -- Read off spec.mirror rather than written out. The mirror is what puts the
 -- player's gauge end on its right edge and the target's on its left, so
 -- linking the two gauge ends is what faces the gauges across the gap and turns
 -- both portraits outward, and a frame that stops being mirrored takes its side
 -- of the link with it rather than leaving a constant here to be found later.
+--
+-- It used to return a third value, the direction the second block reached in
+-- to cover a gap somebody typed. Reflection has no direction to choose: the
+-- reflected edge lands on whichever side of the centre the player is not.
 local function Facing(host, entry)
 	return entry.spec.mirror and "LEFT" or "RIGHT",
-		host.spec.mirror and "LEFT" or "RIGHT",
-		host.spec.mirror and -1 or 1
+		host.spec.mirror and "LEFT" or "RIGHT"
 end
 
 -- One edge of a frame in screen units, which is the only space two frames on
@@ -1242,8 +1246,11 @@ end
 -- different scales share, and the result is divided back into the frame's own
 -- units because that is what an anchor offset counts in.
 --
--- Nil where the client has not resolved a position yet, and the caller falls
--- back to the fixed distance rather than deriving a number out of a nil.
+-- Nil where the client has not resolved a position yet. There is nothing to
+-- fall back to and that is deliberate: the caller leaves the target on the
+-- point it already has and asks again on the next pass, which is the frame
+-- staying where Edit Mode put it rather than jumping to an invented distance
+-- and then jumping again once the host answers.
 local function Mirrored(frame, block, theirs)
 	local edge = ScreenEdge(block, theirs == "LEFT" and "GetLeft" or "GetRight")
 	local width = ns.Measure(UIParent, "GetWidth")
@@ -1257,21 +1264,23 @@ end
 
 -- The target block on the player block's far side.
 --
--- The gap is measured inner edge to inner edge, in screen pixels, snapped,
--- the same ruler `/wk skin height` and `/wk skin width` are on. Where the pair
--- lands on screen is still a fraction of a pixel nobody can read, because the
--- player frame's origin is Blizzard's and this file only decides the distance
--- between the two. That is the boundary the header already draws round the
+-- Across, it is the player's facing edge reflected in the middle of the
+-- screen. Down, it is the level setting in screen pixels, snapped, the same
+-- ruler `/wk skin height` and `/wk skin width` are on. Where the pair lands on
+-- screen is still a fraction of a pixel nobody can read, because the player
+-- frame's origin is Blizzard's and this file only decides where the target
+-- goes given it. That is the boundary the header already draws round the
 -- block, unchanged.
 --
 -- Both frames have to be skinned. Unskinned, TargetFrame is 232 by 100 and a
--- gap measured off its edge is a gap to the edge of a rectangle three quarters
--- of which is empty, so the link waits and Skin.DescribeLink says why.
+-- distance measured off its edge is a distance to the edge of a rectangle
+-- three quarters of which is empty, so the link waits and Skin.DescribeLink
+-- says why.
 --
 -- Written on every pass rather than only when the switch moves, because three
--- things change the number without changing the state: the gap setting, the
--- level setting, and a resolution change that moves what one pixel costs in
--- this frame's units.
+-- things change the numbers without changing the state: the player moving,
+-- the level setting, and a resolution change that moves what one pixel costs
+-- in this frame's units.
 local function Link(entry)
 	local host = entry.spec.beside and EntryFor(entry.spec.beside)
 	if not host then
@@ -1288,9 +1297,8 @@ local function Link(entry)
 	if want then
 		RememberFrame(entry)
 		local px = ns.Pixel(frame)
-		local mine, theirs, reach = Facing(host, entry)
+		local mine, theirs = Facing(host, entry)
 		local block = host.box or host.frame
-		frame:ClearAllPoints()
 		-- On the host's block rather than the host's frame, for the reason the
 		-- perch below is: those two are the same rectangle on the player and
 		-- are not on the target, and the block is the one you can see.
@@ -1304,9 +1312,16 @@ local function Link(entry)
 		-- Reflecting a point about the centre puts it 2 * (centre - point)
 		-- away from itself, and both terms are read in screen units because
 		-- that is the only space two frames on different scales share.
+		--
+		-- Measured before the frame is unpinned, so a host that cannot answer
+		-- yet leaves the target on the point it arrived with.
+		local across = Mirrored(frame, block, theirs)
+		if not across then
+			return false
+		end
+		frame:ClearAllPoints()
 		frame:SetPoint("TOP" .. mine, block, "TOP" .. theirs,
-			Mirrored(frame, block, theirs) or reach * ns.db.skinGap * px,
-			-ns.db.skinLevel * px)
+			across, -ns.db.skinLevel * px)
 		entry.linked = true
 	else
 		Replant(entry)
@@ -1315,31 +1330,31 @@ local function Link(entry)
 	return true
 end
 
--- Where the drag put it, read back as the two numbers.
+-- Where the drag put it, read back as the level.
 --
--- The gap is the distance between the two facing edges and the level is how
--- far the target's top edge sits below the player's, both in screen pixels,
--- both snapped and both clamped to the range the slash command takes. Then the
--- anchor is written again, so the next relayout puts the frame where the drag
--- left it rather than where the setting used to say. The drag still means
--- something, and it teaches the two numbers without a slash command.
+-- The level is how far the target's top edge sits below the player's, in
+-- screen pixels, snapped and clamped to the range the slash command takes.
+-- Then the anchor is written again, so the next relayout puts the frame where
+-- the drag left it rather than where the setting used to say. The drag still
+-- means something, and it teaches the number without a slash command.
+--
+-- Only the vertical half of the drop is kept, and that is the design rather
+-- than a loss. The horizontal is the mirror, so the only place the target can
+-- land is opposite wherever the player is; a drag that pulled it sideways is
+-- answered by putting it straight back, which is what Link does below.
 local function Landed(entry)
 	local host = entry.spec.beside and EntryFor(entry.spec.beside)
 	if not host or not entry.linked or Blocked(entry) then
 		return false
 	end
 	local frame, block = entry.frame, host.box or host.frame
-	local mine, theirs, reach = Facing(host, entry)
-	local ours = ScreenEdge(frame, mine == "LEFT" and "GetLeft" or "GetRight")
-	local anchor = ScreenEdge(block, theirs == "LEFT" and "GetLeft" or "GetRight")
 	local ourTop, theirTop = ScreenEdge(frame, "GetTop"), ScreenEdge(block, "GetTop")
-	-- One screen pixel in the units those four edges came back in, which is
+	-- One screen pixel in the units those two edges came back in, which is
 	-- what turns a distance on the screen into the count a person types.
 	local pixel = ns.Pixel(frame) * (ns.Measure(frame, "GetEffectiveScale") or 0)
-	if not ours or not anchor or not ourTop or not theirTop or pixel <= 0 then
+	if not ourTop or not theirTop or pixel <= 0 then
 		return false
 	end
-	ns.db.skinGap = Snap(reach * (ours - anchor) / pixel, GAP_LOW, GAP_HIGH)
 	ns.db.skinLevel = Snap((theirTop - ourTop) / pixel, LEVEL_LOW, LEVEL_HIGH)
 	return Link(entry)
 end
@@ -1767,12 +1782,12 @@ function Skin.Landed()
 	end
 end
 
--- What a gap and a level are allowed to be. One source for the slash command,
--- the panel's two steppers and the clamp a dropped drag goes through, because
--- three copies of a range is three chances for a drag to store a number the
--- command would have refused.
+-- What a level is allowed to be. One source for the slash command, the panel's
+-- stepper and the clamp a dropped drag goes through, because three copies of a
+-- range is three chances for a drag to store a number the command would have
+-- refused.
 function Skin.LinkRange()
-	return GAP_LOW, GAP_HIGH, LEVEL_LOW, LEVEL_HIGH
+	return LEVEL_LOW, LEVEL_HIGH
 end
 
 -- What the link is doing, which is not always what the setting asks for. It
@@ -1788,8 +1803,8 @@ function Skin.DescribeLink()
 	if not (Skin.Wanted("player") and Skin.Wanted("target")) then
 		return "the link needs the player and target frames skinned, and one of them is off"
 	end
-	return ("the target block hangs %d pixels off the player block, %s")
-		:format(ns.db.skinGap, ns.db.skinLevel == 0 and "both tops on one line"
+	return ("the target block is the player block mirrored in the middle of the"
+		.. " screen, %s"):format(ns.db.skinLevel == 0 and "both tops on one line"
 			or ("%d pixels %s"):format(math.abs(ns.db.skinLevel),
 				ns.db.skinLevel > 0 and "lower" or "higher"))
 end
@@ -1884,8 +1899,13 @@ function Skin.Describe()
 	if #off > 0 then
 		line = line .. ", " .. table.concat(off, " and ") .. " left alone"
 	end
+	-- Combat is the usual reason a pass did not finish, and it is not the only
+	-- one any more: a link written before the client has resolved the player
+	-- block's edge waits for a pass that can measure it. Saying "when combat
+	-- drops" out of combat sends the reader to look at the wrong thing.
 	if pending then
-		line = line .. ", the rest follows when combat drops"
+		line = line .. (InCombatLockdown() and ", the rest follows when combat drops"
+			or ", the rest follows on the next pass")
 	end
 	return line
 end

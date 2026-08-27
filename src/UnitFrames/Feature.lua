@@ -199,23 +199,20 @@ local function SkinWord(arg)
 			.. ": " .. ns.FrameSkin.DescribeLink() .. ".")
 		if ns.db.skinLink then
 			ns.Print("Edit Mode positions the player block and this addon positions"
-				.. " everything against it. Drag the target in Edit Mode and where"
-				.. " it lands becomes the gap and the level.")
+				.. " everything against it. The target is the player mirrored in the"
+				.. " middle of the screen, so drag the player to set the corridor;"
+				.. " dragging the target sets the level.")
 		end
 		return
 	end
 
-	if option == "gap" or option == "level" then
-		local gapLow, gapHigh, levelLow, levelHigh = ns.FrameSkin.LinkRange()
-		local low, high = gapLow, gapHigh
-		if option == "level" then
-			low, high = levelLow, levelHigh
-		end
-		local size = ns.Command.Number(value, low, high, "skin " .. option)
+	if option == "level" then
+		local low, high = ns.FrameSkin.LinkRange()
+		local size = ns.Command.Number(value, low, high, "skin level")
 		if size then
-			ns.db[option == "gap" and "skinGap" or "skinLevel"] = size
+			ns.db.skinLevel = size
 			ns.FrameSkin.Relayout()
-			ns.Print("skin " .. option .. " " .. size .. ": "
+			ns.Print("skin level " .. size .. ": "
 				.. ns.FrameSkin.DescribeLink() .. ".")
 		end
 		return
@@ -398,15 +395,13 @@ ns.Register({
 		-- reload, and every drag in Edit Mode goes on working either way.
 		skinLink = true,
 
-		-- Between the two facing edges, in screen pixels like the two sizes
-		-- above. 120 leaves a corridor wide enough to read as deliberate
-		-- and narrow enough that both blocks stay in one glance. What goes
-		-- in that corridor is a decision for after it exists.
-		skinGap = 120,
-
-		-- How far the target's top edge drops below the player's, in the
-		-- same pixels. Zero puts both block tops on one line, which is what
-		-- the pair looked wrong without.
+		-- How far the target's top edge drops below the player's, in screen
+		-- pixels like the two sizes above. Zero puts both block tops on one
+		-- line, which is what the pair looked wrong without.
+		--
+		-- There is no distance setting beside it. The corridor across is the
+		-- player's distance from the middle of the screen doubled, so it is
+		-- set by dragging the player rather than by typing a number.
 		skinLevel = 0,
 
 		-- The incoming heal slice on the health gauge. On by default, and it
@@ -468,8 +463,7 @@ ns.Register({
 		"skin on|off, the square player, target and target of target frames",
 		"skin player|target|tot on|off, one frame at a time",
 		"skin height <18-72>, skin width <90-360>, both in screen pixels",
-		"skin link on|off, hang the target block off the player block",
-		"skin gap <0-400>, the screen pixels between the two facing edges",
+		"skin link on|off, mirror the target block off the player block",
 		"skin level <-100-100>, the target's drop from the player",
 		"skin heals on|off, the incoming heal on the health gauge",
 		"skin auras on|off, our own buff and debuff rows under the target block",
@@ -523,11 +517,10 @@ ns.Register({
 		ns.db.skinHeight = ns.DefaultFor("skinHeight")
 		ns.db.skinWidth = ns.DefaultFor("skinWidth")
 		ns.db.skinHeals = ns.DefaultFor("skinHeals")
-		-- The two numbers a drag in Edit Mode writes, back where they started.
-		-- Reset already means put the frames back, and a gap that survived one
+		-- The number a drag in Edit Mode writes, back where it started. Reset
+		-- already means put the frames back, and a level that survived one
 		-- would be the only thing on these three frames that did not.
 		ns.db.skinLink = ns.DefaultFor("skinLink")
-		ns.db.skinGap = ns.DefaultFor("skinGap")
 		ns.db.skinLevel = ns.DefaultFor("skinLevel")
 		ns.db.skinAuras = ns.DefaultFor("skinAuras")
 		ns.db.skinAuraSize = ns.DefaultFor("skinAuraSize")

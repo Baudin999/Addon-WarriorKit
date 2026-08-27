@@ -63,19 +63,25 @@ The mirroring makes the pair symmetric for free. The player's gauge end is its
 right edge and the target's is its left, so linking them faces the two gauges
 across the gap and turns the portraits outward.
 
-The gap is measured inner edge to inner edge, in screen pixels, snapped, like
-`/wk skin height` and `/wk skin width`. Where the pair lands on screen is still
-a fraction of a pixel nobody can read, because the player frame's origin is
-Blizzard's. That is the boundary `docs/README.md` already draws round the
-block, unchanged.
+The distance across is not a setting, and the first version of this was wrong
+to make it one. `120 pixels apart` put the line the pair mirrored about
+wherever Edit Mode last left the player, which in game is left of centre and
+low. The target's facing edge is the player's reflected in the middle of the
+screen, so the corridor is twice the player's distance from the centre and you
+widen it by dragging the player outward. `skinGap` is retired.
+
+The level is measured in screen pixels, snapped, like `/wk skin height` and
+`/wk skin width`. Where the pair lands on screen is still a fraction of a pixel
+nobody can read, because the player frame's origin is Blizzard's. That is the
+boundary `docs/README.md` already draws round the block, unchanged.
 
 Four things carry it.
 
-  Dragging the target in Edit Mode sets the offsets. A linked frame that
-  swallows your drag is a bug report. On drop, derive `gap` and `level` from
-  where it landed relative to the player block, store them, re-anchor. The
-  drag still means something and it teaches the two numbers without a slash
-  command.
+  Dragging the target in Edit Mode sets the level. A linked frame that swallows
+  your drag is a bug report. On drop, derive `level` from where it landed
+  relative to the player block, store it, re-anchor. The sideways half of the
+  drop is thrown away, because opposite the player is the only place the target
+  can go.
 
   Edit Mode writes its saved point back over the anchor on login and on layout
   change, so the link re-applies on those events and after the skin's own
@@ -89,22 +95,23 @@ Four things carry it.
   applies to a cvar.
 
   The link requires both frames skinned. Unskinned, `TargetFrame` is 232 by 100
-  and a gap measured off its edge means nothing. The setting says so rather
-  than drawing something wrong.
+  and an edge measured off it means nothing. The setting says so rather than
+  drawing something wrong.
 
-    /wk skin link on|off         hang the target block off the player block
-    /wk skin gap 120             0 to 400, between the two facing edges
+    /wk skin link on|off         mirror the target block off the player block
     /wk skin level 0             -100 to 100, the target's drop from the player
 
-Gated in `scripts/harness.lua`: the gap equals the setting at three UI scales;
-level 0 puts both block tops on one Y; link off returns the recorded point
-exactly; a simulated Edit Mode drag re-derives the gap it was given; turning
-the link on during lockdown writes nothing and finishes at
-`PLAYER_REGEN_ENABLED`; target of target stays three pixels under the target
-block after a relink.
+Gated in `scripts/harness.lua`: the midpoint of the two facing edges is the
+middle of the screen at three UI scales, with the stub's player parked right of
+centre so a fixed distance fails all three; level 0 puts both block tops on one
+Y; link off returns the recorded point exactly; a simulated Edit Mode drag
+re-derives the level it was given and is pulled back onto the mirror line;
+`skinGap` is absent from the settings; turning the link on during lockdown
+writes nothing and finishes at `PLAYER_REGEN_ENABLED`; target of target stays
+three pixels under the target block after a relink.
 
-The corridor the gap opens is the reason this is worth building and it is not
-in this item. The swing gauges and the enemy cast bar both want to live level
+The corridor the mirror opens is the reason this is worth building and it is
+not in this item. The swing gauges and the enemy cast bar both want to live level
 with your eyes between the two blocks rather than under the player, and moving
 them there changes what the swing timer means and where you look for it. That
 is its own decision, taken after the corridor exists to look at.
