@@ -54,7 +54,7 @@ local BRANCHES = 30
 -- something the client indexes in two dimensions. Only the first two are
 -- shapes anybody would defend, which is what makes this list a work list.
 local ALLOWED = {
-	{ path = "./UnitFrames/EnemyBars.lua", fn = "LayoutWidget", own = 203,
+	{ path = "./UnitFrames/EnemyBars.lua", fn = "LayoutWidget", own = 185,
 	  why = "places every region of one nameplate widget in one pass" },
 	{ path = "./UnitFrames/Skin.lua", fn = "Place", own = 195,
 	  why = "places every region of one block in one pass; item 11 splits it" },

@@ -29,6 +29,16 @@ end
 
 function Region:SetText(s) self.text = s end
 function Region:GetText() return self.text end
+-- Recorded rather than dropped on the no-op floor, because one string in the
+-- addon says two different things in two colours and the colour is the half a
+-- reader takes first: an aura's time left is white while it is counted in
+-- seconds and gold once it is counted in minutes.
+function Region:SetTextColor(r, g, b, a)
+	self.textR, self.textG, self.textB, self.textA = r, g, b, a
+end
+function Region:GetTextColor()
+	return self.textR, self.textG, self.textB, self.textA
+end
 function Region:SetSpacing(v) self.spacing = v end
 function Region:SetWordWrap(v) self.wordWrap = v and true or false end
 function Region:SetJustifyH(v) self.justify = v end

@@ -52,12 +52,42 @@ check(Square().shownState == "mine",
 	("the mob is bleeding from Deep Wound and slot %d reads %q, expected mine")
 		:format(slot, tostring(Square().shownState)))
 -- The number and the unit it is in, which is one reading and not two. Nine
--- seconds is read in seconds, so the unit is empty; a half hour buff on the
--- same square reads 28 and "m", which is what stopped four digits landing on a
--- sixteen pixel icon.
-check(Square().shownLeft == 9 and Square().shownUnit == "",
+-- seconds is read in seconds; a half hour buff on the same square reads 28 and
+-- " m", which is what stopped four digits landing on a sixteen pixel icon.
+--
+-- Written out with the space the client puts there, because the row above ours
+-- on the screen is the client's own and it says "56 s".
+check(Square().shownLeft == 9 and Square().shownUnit == " s",
 	("the square says %s%s, the aura has 9 seconds")
 		:format(tostring(Square().shownLeft), tostring(Square().shownUnit)))
+check(Square().timer.text == "9 s",
+	("the square drew %q over the art, expected \"9 s\""):format(tostring(Square().timer.text)))
+
+-- And the colour, which is the client's rule rather than ours: counted in
+-- seconds it is white, counted in minutes it is gold. Two rows of auras that
+-- disagree about what a colour means are two rows you have to read separately.
+local Color = ns.Unit.Color
+local function tintOf(square)
+	local r, g, b = square.timer:GetTextColor()
+	return { r, g, b }
+end
+local function same(a, b)
+	return math.abs(a[1] - b[1]) < 1e-9 and math.abs(a[2] - b[2]) < 1e-9
+		and math.abs(a[3] - b[3]) < 1e-9
+end
+check(same(tintOf(Square()), Color.text.name),
+	("nine seconds is drawn %.2f %.2f %.2f and the client draws a countdown in"
+		.. " paper white"):format(unpack(tintOf(Square()))))
+
+debuffs.nameplate1[1].expires = _G.GetTime() + 9 * 60
+ns.EnemyBars.Update()
+check(Square().shownUnit == " m" and Square().timer.text == "9 m",
+	("nine minutes left and the square says %q"):format(tostring(Square().timer.text)))
+check(same(tintOf(Square()), Color.text.duration),
+	("nine minutes is drawn %.2f %.2f %.2f and the client draws a duration in"
+		.. " gold"):format(unpack(tintOf(Square()))))
+debuffs.nameplate1[1].expires = _G.GetTime() + 9
+ns.EnemyBars.Update()
 
 -- The sweep, which is the other half of the timer and the half you read from
 -- across the screen. The client is handed the application time and the length,

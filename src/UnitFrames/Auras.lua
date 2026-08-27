@@ -620,10 +620,13 @@ function Auras.Place(entry, px, width, mirror)
 				Hover(held, entry.spec.unit, row.filter)
 				row.squares[slot] = held
 			end
-			Aura.Size(held, square, px,
+			-- The height is what comes back rather than the square, because the
+			-- number stands over the art now and the widget is taller than it
+			-- is wide. UI/Aura.lua is the only file that knows by how much.
+			local wide, tall = Aura.Size(held, square, px,
 				math.floor(TIMER_CEILING * unit + 0.5),
 				math.floor(COUNT_CEILING * unit + 0.5))
-			node[slot] = { frame = held, width = square, height = square }
+			node[slot] = { frame = held, width = wide, height = tall }
 		end
 		for slot = row.wanted + 1, #row.squares do
 			row.squares[slot]:Hide()

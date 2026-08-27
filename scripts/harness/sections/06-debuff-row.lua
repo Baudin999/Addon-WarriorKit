@@ -94,9 +94,23 @@ local function CheckPacked(what)
 					:format(what, index, row[column] - row[column - 1], size + gap))
 		end
 	end
+	-- A square is the setting wide and taller than that, because the time left
+	-- stands over the art rather than on it. The setting is the art: what the
+	-- panel says is what the icon draws, and the strip is what the widget adds
+	-- on top of it.
+	local square = bar.icons[1]
+	check(math.abs(square.box:GetHeight() - size) < 1e-9,
+		("%s: icon %d is set and the art is %.0f px"):format(what,
+			ns.db.barsIconSize, square.box:GetHeight()))
+	check(square:GetHeight() > square.box:GetHeight(),
+		("%s: the square is %.0f px tall and the art in it is %.0f, so the"
+			.. " timer has nowhere to stand"):format(what, square:GetHeight(),
+			square.box:GetHeight()))
+	local tall = square:GetHeight()
+
 	-- The gauge and its hairlines, the strip the icon rows take, and the line
 	-- above the lot. Nothing under the gauge: the cast chamber is inside the box.
-	local wanted = (22 + 2) + #rows * (size + gap) + 16 * px + CastRoom(bar)
+	local wanted = (22 + 2) + #rows * (tall + gap) + 16 * px + CastRoom(bar)
 	check(math.abs(bar:GetHeight() - wanted) < 1e-9,
 		("%s: the bar is %.0f px tall over %d icon row(s), expected %.0f")
 			:format(what, bar:GetHeight(), #rows, wanted))

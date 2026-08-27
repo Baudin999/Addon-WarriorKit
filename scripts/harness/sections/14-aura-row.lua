@@ -126,11 +126,15 @@ check(math.abs(leftOf(first)) < 1e-6,
 -- One gap between the block and line one, on both sides of it. Under the
 -- block that is the row's own top edge; over it, the row is sized for a full
 -- list and line one sits against the bottom.
+--
+-- Measured off the square's height rather than its width, because the two
+-- parted company when the time left moved over the art: a square is the icon
+-- and the strip of air over it that the number stands in.
 do
 	check(math.abs(underTop(first) - gap) < 1e-6,
 		("line one of the debuff row is %.2f under the row's own top edge and"
 			.. " the gap is %.2f"):format(underTop(first), gap))
-	local over = rowB:GetHeight() - underTop(squares(rowB)[1]) - side
+	local over = rowB:GetHeight() - underTop(squares(rowB)[1]) - first:GetHeight()
 	check(math.abs(over - gap) < 1e-6,
 		("line one of the buff row is %.2f over the block and the gap is %.2f")
 			:format(over, gap))
@@ -293,7 +297,8 @@ do
 		("square 1's right edge is at %.1f and the row is %.1f wide, so it does"
 			.. " not start on the block's gauge end")
 			:format(leftOf(yours[1]) + side, yourD:GetWidth()))
-	local yourOver = yourB:GetHeight() - underTop(squares(yourB)[1]) - side
+	local yourOver = yourB:GetHeight() - underTop(squares(yourB)[1])
+		- squares(yourB)[1]:GetHeight()
 	check(math.abs(yourOver - gap) < 1e-6,
 		("line one of your buff row is %.2f over the block and the gap is %.2f")
 			:format(yourOver, gap))
@@ -396,16 +401,42 @@ do
 		check(math.abs(square:GetWidth() - want * px) < 1e-6,
 			("skin aura %d drew a square %.2f wide and a pixel is %.2f")
 				:format(want, square:GetWidth(), px))
-		check(math.abs(square:GetHeight() - square:GetWidth()) < 1e-6,
-			("skin aura %d drew a square %.2f by %.2f, which is not a square")
-				:format(want, square:GetWidth(), square:GetHeight()))
+
+		-- The setting is the art. What the widget adds to it is the strip the
+		-- time left stands in, over the top edge, and that is the whole of the
+		-- difference between the two heights.
+		check(math.abs(square.box:GetHeight() - square:GetWidth()) < 1e-6,
+			("skin aura %d drew art %.2f by %.2f, which is not a square")
+				:format(want, square.box:GetWidth(), square.box:GetHeight()))
+		local strip = square:GetHeight() - square.box:GetHeight()
+		check(strip >= square.timer:FontSize(),
+			("skin aura %d left %.2f over the square for a %.2f pixel number")
+				:format(want, strip, square.timer:FontSize()))
+		check(math.abs(strip / edge - math.floor(strip / edge + 0.5)) < 1e-6,
+			("skin aura %d left %.2f over the square, which is not a whole"
+				.. " number of %.2f pixel steps"):format(want, strip, edge))
+
+		-- The number is over the art and not on it, which is the reading the
+		-- client's own row gives and the one this row was changed to match.
+		local point, to, toPoint, _, lift = square.timer:GetPoint(1)
+		check(point == "BOTTOM" and to == square.box and toPoint == "TOP"
+			and math.abs(lift - edge) < 1e-6,
+			("skin aura %d anchored the time %s to the art's %s at %.2f")
+				:format(want, tostring(point), tostring(toPoint), lift or 0))
+
+		-- The mouse stays on the art. A tooltip that opens over the blank sky
+		-- above an icon is a tooltip nobody asked for.
+		local _, _, top = square:GetHitRectInsets()
+		check(math.abs((top or 0) - strip) < 1e-6,
+			("skin aura %d takes the mouse %.2f above the art and the strip is"
+				.. " %.2f"):format(want, top or 0, strip))
 
 		-- The art, inset by one pixel and given a size of its own. The size is
 		-- the half that matters: a region hung off two of the square's corners
 		-- has no rectangle until the client works one out, and one it declines
 		-- to work out draws nothing and says nothing.
 		local top, relative, relativePoint, x, y = square.icon:GetPoint(1)
-		check(top == "TOPLEFT" and relative == square and relativePoint == "TOPLEFT"
+		check(top == "TOPLEFT" and relative == square.box and relativePoint == "TOPLEFT"
 			and math.abs(x - edge) < 1e-6 and math.abs(y + edge) < 1e-6,
 			("skin aura %d anchored the art %s to %s at %.2f, %.2f and the inset"
 				.. " is one pixel of %.2f")
@@ -460,5 +491,7 @@ debuffs.target, buffs.target = nil, nil
 tick()
 
 print(("auras  debuffs %d wide under each block and buffs %d over it, square"
-	.. " %.0f px, the client's own rows hidden as they are built")
-	:format(#squares(rowD), #squares(rowB), side))
+	.. " %.0f px under a %.0f px strip for the time, the client's own rows"
+	.. " hidden as they are built")
+	:format(#squares(rowD), #squares(rowB), side,
+		squares(rowD)[1]:GetHeight() - squares(rowD)[1].box:GetHeight()))

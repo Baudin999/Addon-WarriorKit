@@ -762,9 +762,11 @@ policy. Pick the role from what is behind the glyph, never from how it looks.
                glyph, because Unit/Color.lua guarantees the contrast.
                ns.UI.FLAT.
     shadowed   over art the addon did not paint and cannot predict, which is
-               a spell icon under a debuff timer. A one pixel drop shadow,
+               a spell icon under a stack count. A one pixel drop shadow,
                which holds the glyph off a bright icon and spends none of the
-               glyph's own pixels. ns.UI.SHADOW, or ns.UI.NumberFont.
+               glyph's own pixels. ns.UI.SHADOW, or ns.UI.NumberFont. An
+               aura's time left takes this role over the world as well, since
+               it is drawn below the outline floor and has no other option.
     outlined   over the world. The only place with no known colour behind it,
                so a shadow has nothing to be darker than. The default.
 
@@ -2497,6 +2499,15 @@ the advice rather than leaving a stale number in a note.
 The timer and the stack count are sized off the square rather than off the bar,
 because a fourteen pixel number on a sixteen pixel icon covers the art it is
 annotating.
+
+The timer stands over the square rather than on it, in a strip as tall as its
+own type plus a pixel, and the widget the row lays out is the square plus that
+strip. The client's own buff row reads that way and this one now matches it:
+gold while the time is counted in minutes, paper white once it is counted in
+seconds, `14 m` and `56 s` with the space the client puts there. It keeps the
+shadowed font over the world, which is the one exception to the three roles
+above, because these numbers run from eight pixels to fourteen and an outline
+at eight has closed the hole in a 6.
 
 **Bar art.** Strips the 2007 furniture off the action bars at PLAYER_LOGIN: the
 two gryphons, the riveted metal strip behind bar 1, the page arrows and the page

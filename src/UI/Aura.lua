@@ -8,8 +8,8 @@ UI.Aura = Aura
 -- One aura, drawn
 --
 -- A square with a cropped icon in it, a hairline round the icon, a sweep over
--- the art that empties as the aura runs out, the time left along the bottom
--- and the stack count in the top corner. Whoever cast it is the fifth thing it
+-- the art that empties as the aura runs out, the time left over the top of it
+-- and the stack count in the corner. Whoever cast it is the fifth thing it
 -- says, and it says it by draining the art rather than by adding a colour:
 -- yours in full colour, someone else's grey.
 --
@@ -43,17 +43,22 @@ UI.Aura = Aura
 local Color = ns.Unit.Color
 
 local EDGE = Color.iconEdge
-local TIMER_TEXT = Color.text.name
 local COUNT_TEXT = Color.text.count
 
--- The last seconds get a colour and nothing else does. A row of twelve squares
--- in three colours is a row you have to read; a row in one colour with one
--- amber number in it is a row you glance at. Amber under ten seconds is long
--- enough to press something, red under five is long enough to be already
--- moving, and above ten the number is the same paper white as every other
--- reading on the frame.
-local SOON, URGENT = 10, 5
-local SOON_TEXT, URGENT_TEXT = Color.hue.amber, Color.hue.red
+-- What the number is written in, and it is the client's own rule rather than
+-- one of ours. The client's buff frame has read a duration in gold and a
+-- countdown in white for twenty years: over a minute it is written in minutes
+-- and is gold, under a minute it is written in seconds and is white. So the
+-- colour and the unit are the same fact said twice, which is why Tint below
+-- takes the unit and not the seconds.
+--
+-- This replaced an amber-under-ten, red-under-five ladder of our own. The
+-- ladder was not wrong about what is urgent; it was wrong about who decides.
+-- Half the auras on your screen are drawn by the client, in a row above this
+-- one, and two rows that disagree about what a colour means are two rows you
+-- have to read separately.
+local TIMER_TEXT = Color.text.name
+local DURATION_TEXT = Color.text.duration
 
 -- What the sweep is made of. Black, because it is a shadow over the art rather
 -- than a colour of its own, and at two thirds so the icon under it is still
@@ -69,13 +74,17 @@ local MINUTE, HOUR = 60, 3600
 -- comes in as an argument, so a row of squares cannot carry type larger than
 -- the rest of the widget it sits on.
 --
--- Both sit on the icon's own art, which is opaque, so they go through
--- UI.NumberFont and come back flat with a shadow. That is the whole reason a
--- seven pixel stack count is readable: nothing is spent on a rim.
+-- Both go through UI.NumberFont and come back flat with a shadow, which is the
+-- whole reason a seven pixel stack count is readable: nothing is spent on a
+-- rim. The count has the icon's own art behind it, which is what a shadow is
+-- for. The timer has the world, and it keeps the shadow anyway, because it is
+-- eight to fourteen pixels tall and an outline at that size closes the hole in
+-- a 6. UI/Text.lua's floor is the reason that trade is written down here.
 --
 -- The timer's share is under half the square because the string is now up to
--- three characters wide rather than up to two. At six tenths, "28m" was wider
--- than the icon it was written on.
+-- four characters wide rather than up to two. At six tenths, "28 m" was wider
+-- than the square it stands over, and a strip that overhangs on both sides is
+-- what makes two squares beside each other read as one number.
 local TIMER_SHARE, TIMER_FLOOR = 0.45, 8
 local COUNT_SHARE, COUNT_FLOOR = 0.5, 7
 
@@ -89,13 +98,18 @@ local COUNT_SHARE, COUNT_FLOOR = 0.5, 7
 -- draws a square for an aura that is not there.
 local ALPHA = { mine = 1, theirs = 0.65, none = 0.22 }
 
--- What the bottom of the square reads, as a number and the unit it is in.
+-- What the strip over the square reads, as a number and the unit it is in.
 --
 -- It used to be the seconds, whole, whatever the number was, which is what put
 -- 1972 across a sixteen pixel square. Four digits of a half hour buff are a
 -- precision nobody reads and they cover the art that says which buff it is.
 -- The client's own frames have read "28 m" for twenty years and they are
 -- right, so this answers in the largest unit that still says something true.
+--
+-- The unit is written out, seconds included, and with the space the client
+-- puts there. "56 s" and "14 m" are what the row above ours says, and a row
+-- that dropped the s would be the one row on the screen where a bare 56 could
+-- be either.
 --
 -- Rounded up, in every unit. A buff reading 1 m has at least a minute left in
 -- it, and a number that reaches 0 while the aura is still on the unit is a
@@ -106,34 +120,39 @@ local ALPHA = { mine = 1, theirs = 0.65, none = 0.22 }
 -- that is once a minute per square, and above an hour once an hour.
 local function Reading(left)
 	if left >= HOUR then
-		return math.ceil(left / HOUR), "h"
+		return math.ceil(left / HOUR), " h"
 	end
 	if left >= MINUTE then
-		return math.ceil(left / MINUTE), "m"
+		return math.ceil(left / MINUTE), " m"
 	end
-	return math.ceil(left), ""
+	return math.ceil(left), " s"
 end
 
--- Which of the three the number is written in. Returns one of the palette's
--- own tables, so the caller's guard is one comparison of identity rather than
--- three of floats.
-local function Tint(left)
-	if left <= 0 then
+-- Which of the two the number is written in, off the unit it came back in.
+-- Returns one of the palette's own tables, so the caller's guard is one
+-- comparison of identity rather than three of floats.
+local function Tint(unit)
+	if unit == " s" then
 		return TIMER_TEXT
 	end
-	if left <= URGENT then
-		return URGENT_TEXT
-	end
-	if left <= SOON then
-		return SOON_TEXT
-	end
-	return TIMER_TEXT
+	return DURATION_TEXT
 end
 
 function Aura.New(parent)
+	-- Two frames and not one. The widget is the square plus the strip of air
+	-- over it that carries the number, and `box` is the square itself: the art,
+	-- the hairline round it and the sweep across it.
+	--
+	-- The split is what lets the number sit outside the art. ns.Outline hangs
+	-- its four hairlines off the frame's own corners with no offsets, so a
+	-- widget that was the square would have drawn its border round the strip as
+	-- well, and the layout above would have had to know which part of the
+	-- rectangle was the picture. Now the caller lays out one rectangle, and
+	-- everything about where the picture is inside it is here.
 	local w = CreateFrame("Frame", nil, parent)
-	w.edges = ns.Outline(w, EDGE[1], EDGE[2], EDGE[3], EDGE[4])
-	w.icon = UI.Icon(w)
+	w.box = CreateFrame("Frame", nil, w)
+	w.edges = ns.Outline(w.box, EDGE[1], EDGE[2], EDGE[3], EDGE[4])
+	w.icon = UI.Icon(w.box)
 
 	-- The sweep, over the art and under the numbers.
 	--
@@ -149,7 +168,7 @@ function Aura.New(parent)
 	-- A cooldown starts covered and uncovers as it comes back. An aura starts
 	-- clear and fills as it runs out, so the square you just refreshed is the
 	-- bright one and the square about to drop is the dark one.
-	w.swipe = CreateFrame("Cooldown", nil, w, "CooldownFrameTemplate")
+	w.swipe = CreateFrame("Cooldown", nil, w.box, "CooldownFrameTemplate")
 	if w.swipe.SetHideCountdownNumbers then
 		w.swipe:SetHideCountdownNumbers(true)
 	end
@@ -176,15 +195,23 @@ function Aura.New(parent)
 	-- working is indistinguishable from a square drawn over the wrong aura.
 	w.swipe:EnableMouse(false)
 
-	-- Timer along the bottom edge and stacks in the corner, which leaves the
-	-- middle of the art readable. A number across the icon does not.
+	-- The time over the square and the stack count in its corner.
 	--
-	-- Both are children of the sweep rather than of the square, which is the
-	-- one thing that keeps them legible: a font string on the square draws
-	-- under a frame that is a child of the square, and the sweep would take two
-	-- thirds out of the number it is standing behind.
-	w.timer = UI.Label(w.swipe, TIMER_FLOOR, TIMER_TEXT, "CENTER", UI.SHADOW)
-	w.timer:SetPoint("BOTTOM", w, "BOTTOM", 0, 0)
+	-- Over it, outside the art, which is where the client puts it and is the
+	-- whole of what this widget got wrong. A number written on the icon is a
+	-- number over a picture chosen by whoever drew the spell: 27 on a pale
+	-- bandage and 27 on a dark bleed are two different readings of the same
+	-- number, and the shadow behind it only ever fixes one of them. Over the
+	-- square it has the world behind it, which is a worse background in theory
+	-- and a better one in practice, because a number nothing else is competing
+	-- with is a number you read at a glance.
+	--
+	-- The timer is a child of the widget rather than of the sweep, because it
+	-- no longer stands on the art the sweep darkens. The count still does, so
+	-- it stays a child of the sweep: a font string on the box draws under a
+	-- frame that is a child of the box, and the sweep would take two thirds out
+	-- of the number it was standing behind.
+	w.timer = UI.Label(w, TIMER_FLOOR, TIMER_TEXT, "CENTER", UI.SHADOW)
 	w.count = UI.Label(w.swipe, COUNT_FLOOR, COUNT_TEXT, "RIGHT", UI.SHADOW)
 
 	-- What was last drawn. Every one of these is compared before its write in
@@ -207,8 +234,34 @@ end
 -- rather than one pixel, so at `bars zoom 2` it sat two pixels in while the
 -- border beside it stayed one. It is `px` here, like every other hairline in
 -- the addon.
+--
+-- Returns the width and the height of the whole widget, and they are no longer
+-- the same number: the number sits over the square now, so a square of `side`
+-- needs a rectangle taller than `side` to live in. Both callers put what comes
+-- back into their layout node. A caller that kept passing `side` for the
+-- height would lay the rows one number closer together than they are drawn and
+-- the strip over each square would land on the row above it.
 function Aura.Size(w, side, px, timerCeiling, countCeiling)
-	w:SetSize(side, side)
+	local timerSize = math.max(TIMER_FLOOR,
+		math.min(timerCeiling, math.floor(side * TIMER_SHARE)))
+	w.timer:SetFontObject(UI.NumberFont(timerSize))
+
+	-- The strip the number stands in: its own type height and a pixel of air
+	-- under it, taken up to whole pixels so the square below still starts on
+	-- one. Off the size we just asked for rather than off the string, because a
+	-- font string measures 0 tall until it has text in it and a square with
+	-- nothing on it yet is most of the row.
+	local lift = (math.ceil(timerSize / px) + 1) * px
+	w:SetSize(side, side + lift)
+
+	-- The mouse stays on the square. The strip is empty most of the time and a
+	-- tooltip that opens when you pass over blank sky above an icon is a
+	-- tooltip you did not ask for.
+	w:SetHitRectInsets(0, 0, lift, 0)
+
+	w.box:ClearAllPoints()
+	w.box:SetSize(side, side)
+	w.box:SetPoint("BOTTOMLEFT", w, "BOTTOMLEFT", 0, 0)
 
 	-- Every region of the square is given a size as well as an anchor, which is
 	-- the one rule that separates this widget from the rest of the addon and it
@@ -228,7 +281,7 @@ function Aura.Size(w, side, px, timerCeiling, countCeiling)
 	local inner = math.max(side - px * 2, px)
 	w.icon:ClearAllPoints()
 	w.icon:SetSize(inner, inner)
-	w.icon:SetPoint("TOPLEFT", w, "TOPLEFT", px, -px)
+	w.icon:SetPoint("TOPLEFT", w.box, "TOPLEFT", px, -px)
 
 	-- The sweep covers the art and stops at it. Given the same rectangle for
 	-- the same reason: it is a frame whose size is a setting, and a wedge one
@@ -236,16 +289,16 @@ function Aura.Size(w, side, px, timerCeiling, countCeiling)
 	-- line on the square that says where one square ends and the next begins.
 	w.swipe:ClearAllPoints()
 	w.swipe:SetSize(inner, inner)
-	w.swipe:SetPoint("TOPLEFT", w, "TOPLEFT", px, -px)
+	w.swipe:SetPoint("TOPLEFT", w.box, "TOPLEFT", px, -px)
 
-	w.timer:SetFontObject(UI.NumberFont(math.max(TIMER_FLOOR,
-		math.min(timerCeiling, math.floor(side * TIMER_SHARE)))))
 	w.count:SetFontObject(UI.NumberFont(math.max(COUNT_FLOOR,
 		math.min(countCeiling, math.floor(side * COUNT_SHARE)))))
 
+	w.timer:ClearAllPoints()
+	w.timer:SetPoint("BOTTOM", w.box, "TOP", 0, px)
 	w.count:ClearAllPoints()
-	w.count:SetPoint("TOPRIGHT", w, "TOPRIGHT", -px, -px)
-	return side
+	w.count:SetPoint("TOPRIGHT", w.box, "TOPRIGHT", -px, -px)
+	return side, side + lift
 end
 
 -- One square, one tick.
@@ -306,7 +359,7 @@ function Aura.Draw(w, texture, state, expires, duration, count, now)
 		w.timer:SetText(reading > 0 and (reading .. unit) or "")
 	end
 
-	local tint = Tint(left)
+	local tint = Tint(unit)
 	if w.shownTint ~= tint then
 		w.shownTint = tint
 		w.timer:SetTextColor(tint[1], tint[2], tint[3])

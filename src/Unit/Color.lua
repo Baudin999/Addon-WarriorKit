@@ -241,6 +241,19 @@ Color.text = {
 	name   = Color.paper,
 	value  = { 0.74, 0.76, 0.82 },
 	target = { 1.00, 0.90, 0.55 }, -- the one that is yours
+
+	-- An aura's time left while it is still measured in minutes, and it is the
+	-- client's NORMAL_FONT_COLOR written down rather than read, for the reason
+	-- the class colours below are written down: a global this addon does not
+	-- own can be absent on one client or moved by another addon. Under a minute
+	-- the same number is Color.paper, which is the client's rule too.
+	--
+	-- Not a token, and deliberately. A token is short coloured text over a fill
+	-- the palette owns, held to a contrast floor against it. This one stands
+	-- over the world above an icon, where there is no fill to be held to and a
+	-- shadow is what makes it readable.
+	duration = { 1.00, 0.82, 0.00 },
+
 	count  = { 1.00, 0.86, 0.45 }, -- a debuff's stack number
 }
 

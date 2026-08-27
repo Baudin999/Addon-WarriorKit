@@ -725,6 +725,45 @@ local function FitIcons(widget)
 	end
 end
 
+-- The tracked row as a layout node, packed right and wrapped.
+--
+-- Right against the gauge's right edge is where it has always been and where it
+-- stays: the icons are what you glance at, the gauge's right end is where the
+-- health number already is, and a row that grew rightwards would walk off the
+-- bar. The length is yours, and ten icons at thirty two pixels is 356 and wider
+-- than any bar this addon will draw. So the row wraps upwards instead of
+-- overflowing, every line right aligned under the one above it, and the bottom
+-- line is the one nearest the gauge and the one that fills first. That is
+-- `lineOrder = "up"`.
+--
+-- Every square is taller than it is wide, because the time stands over the art
+-- rather than on it. How much taller is UI/Aura.lua's answer and nothing here
+-- works it out again: the strip is the timer's own type height, and the type
+-- size is already that file's arithmetic off the square and this widget's
+-- ceiling. That height comes back beside the node, because the strip the threat
+-- line shares with the bottom line of icons is as tall as an icon and the icon
+-- is no longer the setting.
+--
+-- Split out of LayoutWidget rather than left in it. That function places every
+-- region of the widget in one pass and is on scripts/shape.lua's list at a
+-- number it may not exceed, and the row is the one part of it that is about a
+-- list rather than about the widget.
+local function IconRow(widget, iconSize, iconGap, width, px, timerCeiling, countCeiling)
+	FitIcons(widget)
+	local icons = {
+		direction = "row", wrap = true, justify = "end", lineOrder = "up",
+		gap = iconGap, width = width, alignX = "start", alignY = "end",
+	}
+	local height = iconSize
+	for index = 1, #trackedNames do
+		local wide, tall = Aura.Size(widget.icons[index], iconSize, px,
+			timerCeiling, countCeiling)
+		height = tall
+		icons[index] = { frame = widget.icons[index], width = wide, height = tall }
+	end
+	return icons, height
+end
+
 local function CreateWidget()
 	local widget = CreateFrame("Frame", nil, UIParent)
 	widget:EnableMouse(false) -- never steal a click from the nameplate underneath
@@ -883,27 +922,9 @@ local function LayoutWidget(widget, width, onPlate)
 	local timerCeiling = fontSize
 	local countCeiling = math.floor(COUNT_TEXT_SIZE * unit + 0.5)
 
-	-- The row, packed right and wrapped.
-	--
-	-- Right against the gauge's right edge is where it has always been and where
-	-- it stays: the icons are what you glance at, the gauge's right end is where
-	-- the health number already is, and a row that grew rightwards would walk
-	-- off the bar. What is new is that the length is yours, and ten icons at
-	-- thirty two pixels is 356 and wider than any bar this addon will draw. So
-	-- the row wraps upwards instead of overflowing, every row right aligned
-	-- under the one above it, and the bottom row is the one nearest the gauge
-	-- and the one that fills first. That is `lineOrder = "up"`.
-	FitIcons(widget)
+	local icons, iconHeight = IconRow(widget, iconSize, iconGap, width, px,
+		timerCeiling, countCeiling)
 	local count = #trackedNames
-	local icons = {
-		direction = "row", wrap = true, justify = "end", lineOrder = "up",
-		gap = iconGap, width = width, alignX = "start", alignY = "end",
-	}
-	for index = 1, count do
-		local holder = widget.icons[index]
-		Aura.Size(holder, iconSize, px, timerCeiling, countCeiling)
-		icons[index] = { frame = holder, width = iconSize, height = iconSize }
-	end
 
 	-- The cast chamber, inside the box rather than under it. What comes back is
 	-- how tall it is and nothing else: it is not in the column below, so it has
@@ -914,7 +935,7 @@ local function LayoutWidget(widget, width, onPlate)
 	-- shares it with the bottom row of icons, so it is an icon tall; with
 	-- nothing tracked there are no icons to share it with and it is as tall as
 	-- its own text, which is the whole of what an empty list costs in height.
-	local lineHeight = count > 0 and iconSize
+	local lineHeight = count > 0 and iconHeight
 		or math.max(fontSize, ns.UI.OutlineFloor())
 
 	-- Only the bottom line is beside the threat number, so only the bottom line

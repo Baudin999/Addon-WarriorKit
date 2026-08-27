@@ -2,6 +2,55 @@
 
 ## Unreleased
 
+### The aura square reads the way the client's own row does
+
+Reported from the game with a screenshot of Blizzard's buff row above ours. Two
+rows of icons, one over the other, saying the same kind of thing in two
+different languages: theirs `14 m` in gold above the icon, ours `4m` in white
+inside it, and the number inside the art was the one you could not read.
+
+**The number moved off the art and into a strip over the square.** A number
+written on an icon is a number over a picture somebody else chose. 27 on a pale
+bandage and 27 on a dark bleed are two different readings, and the drop shadow
+behind it only ever rescues one of them. Over the square it has the world
+behind it, which is a worse background in theory and a better one in practice,
+because nothing else is competing for those pixels.
+
+That makes the widget taller than it is wide, so it is two frames now: the
+square, which is the art and the hairline and the sweep, and the widget, which
+is the square plus the strip. `Aura.Size` hands its caller back a width and a
+height instead of one number, and both rows put what comes back into their
+layout node. The strip is the timer's own type height and a pixel of air, taken
+up to whole pixels so the art below it still starts on one. The mouse stays on
+the art: `SetHitRectInsets` keeps the strip out of it, because a tooltip that
+opens over blank sky above an icon is a tooltip nobody asked for.
+
+**The colour is the client's rule now, and so is the format.** Gold while the
+time is counted in minutes or hours, paper white once it is counted in seconds.
+That is the same fact the unit already carries, which is why `Tint` takes the
+unit rather than the seconds. The string is written out the way the client
+writes it, with the space and the unit on every reading: `14 m`, `2 h`, `56 s`.
+
+The amber-under-ten, red-under-five ladder this replaces was not wrong about
+what is urgent. It was wrong about who decides. Half the auras on the screen
+are drawn by the client in a row of its own, and two rows that disagree about
+what a colour means are two rows you have to read separately.
+`Color.text.duration` is the client's `NORMAL_FONT_COLOR` written down rather
+than read, for the reason the class colours are written down: a global this
+addon does not own can be absent on one client or moved by another addon. It is
+not a token, because it stands over the world rather than on a fill the palette
+caps.
+
+Sections 6, 7 and 14 measure all of it. The bar's height is built from the
+square the setting draws plus the strip over it rather than from the setting
+alone, section 7 asserts the string and its colour at both ranges, and section
+14 asserts the anchor, the strip in whole pixels and the hit rect at three
+square sizes. The harness client records `SetTextColor` for that, since one
+string in the addon says two things in two colours.
+
+`LayoutWidget` on the enemy bars gave its tracked row up to `IconRow` on the way
+through, and shape.lua's entry for it comes down from 203 lines to 185.
+
 ### The aura square sweeps, and says the time the way the client does
 
 Reported from the game with a screenshot of Blizzard's buff row beside ours:
@@ -24,14 +73,14 @@ the truth about what is known rather than a wedge drawn against a guess.
 **The number is in the largest unit that still says something true.** Whole
 seconds, at any range, is what put four digits across a sixteen pixel icon: a
 half hour buff read `1972`, which is a precision nobody uses, over the art that
-says which buff it is. It reads `28m` now, and `2h`, and plain seconds under a
+says which buff it is. It reads `28 m` now, and `2 h`, and seconds under a
 minute, rounded up in every unit so a square never reads 0 while the aura is
 still on the unit. The type is sized at under half the square rather than six
-tenths, because the string is three characters wide now and was two.
+tenths, because the string is four characters wide now and was two.
 
-The last seconds get a colour and nothing else does: amber under ten, red under
-five, paper white above. One amber number in a row of white ones is a row you
-glance at.
+The colour of that number, and the exact format of it, are the entry above:
+this one landed an amber and red ladder of our own, and the client's own gold
+and white replaced it before either shipped.
 
 Measured in section 7, which now asserts the reading and its unit, the two
 numbers handed to the sweep, and that the sweep is reversed. The harness client
