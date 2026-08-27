@@ -188,8 +188,13 @@ end
 -- Bottom left, opposite the loot stream, which is the other half of the same
 -- corner of the screen and is where the client's own combat text already goes.
 function CombatFeed.Defaults()
+	-- Keeps the word over it and the line round it, which is the third
+	-- argument and the one thing this feed and the loot feed answer
+	-- differently. A loot row says what it is by the colour of the name on it;
+	-- a combat row is three columns of numbers, and a column of numbers with
+	-- nothing named over it is a column you have to work out.
 	local defaults = ns.Stream.Defaults("combatFeed",
-		{ "BOTTOMLEFT", "UIParent", "BOTTOMLEFT", 20, 180 })
+		{ "BOTTOMLEFT", "UIParent", "BOTTOMLEFT", 20, 180 }, true)
 
 	-- Wider and taller than the loot feed, because a combat row carries three
 	-- columns to loot's two and because a pull produces rows an order of

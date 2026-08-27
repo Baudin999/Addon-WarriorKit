@@ -1,10 +1,10 @@
 # Handoff
 
-Items 8 and 9 are on main and neither has been confirmed in game. Three things
+Items 8 and 9 are on main and neither has been confirmed in game. Four things
 have landed since and none has been seen in the game either: the `/wk hide`
 switches that take the client's own copy of what this addon draws off the
-screen, your own cast bar, and the five settings per cloned action bar. That is
-the whole of where things stand.
+screen, your own cast bar, the five settings per cloned action bar, and the loot
+feed rebuild. That is the whole of where things stand.
 
 ## On main
 
@@ -24,6 +24,14 @@ the whole of where things stand.
 - `UnitFrames/PlayerCast.lua` is your own cast bar, under the swing timer and
   the same width as it. `/wk cast on|off`, `cast width|height|zoom|reset`, its
   own section in the panel, and `hide playercast` for Blizzard's.
+- The loot feed is bare, filtered by chips and worth hovering. No word over the
+  column and no line round it, both of them settings a stream now ships an
+  answer to; seven chips over the rows, five quality colours plus quest and
+  coin, filtering what is drawn rather than what is recorded; a ring round a
+  quest item's icon; a vendor price per item and per stack on the hover, and an
+  auction price out of whichever scanner is installed. `<prefix>Icon` makes the
+  row a size. `feed loot header|edge|filters|poor|common|uncommon|rare|epic|quest|money`,
+  the same switches on the panel page, and `Feeds/Auction.lua` is new.
 - `Buttons/Look.lua` is five settings per cloned bar: the rows the twelve fold
   into, the colour and opacity of the ground under them, whether the bar goes
   down in combat and which key holds it up. Plus the bars' own lock, which is

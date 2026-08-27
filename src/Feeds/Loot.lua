@@ -52,6 +52,43 @@ local QUALITY = {
 	[7] = { 0.00, 0.80, 1.00 },
 }
 
+-- The number of qualities the chips and the filter know about, which is the
+-- five the game grades an item on. Six and seven exist and are the heirloom and
+-- the artifact, neither of which drops on this client; anything at that end of
+-- the scale is drawn in its own colour above and filtered with the epics.
+local QUALITIES = 4
+
+-- What class the client files a quest item under. Comfort/Clutter.lua reads the
+-- same number off the same call and says so in its own header; this is the
+-- second reader, and the two are deliberately not sharing a constant, because
+-- one of them scanning your bags and the other reading a loot message are not
+-- one decision.
+local QUEST_CLASS = 12
+
+-- The ring round a quest item's icon, and the chip that says whether those
+-- items are drawn.
+--
+-- Orange rather than the heading gold beside it. Gold is what the coin rows are
+-- and what the account's own accent is, and a quest marker in that colour is a
+-- marker you have to work out. This is the only orange in the addon.
+local QUEST = { 0.98, 0.55, 0.15 }
+
+-- What the client calls each quality in its own language. ITEM_QUALITY0_DESC
+-- and its siblings are the strings the client's own tooltips use, so a player
+-- reading "Uncommon" on a chip reads the same word the item does; the English
+-- list behind them is for a client that carries neither.
+--
+-- Here rather than in Feeds/Feature.lua, where it was, because the chips over
+-- the rows name a quality and the panel page names the same quality, and the
+-- two of them reading different tables is how one ends up saying "Poor" while
+-- the other says "Grey".
+local QUALITY_WORDS = { [0] = "Poor", "Common", "Uncommon", "Rare", "Epic" }
+
+function ns.QualityWord(quality)
+	local named = _G["ITEM_QUALITY" .. quality .. "_DESC"]
+	return (type(named) == "string" and named) or QUALITY_WORDS[quality] or tostring(quality)
+end
+
 local COIN = "Interface\\Icons\\INV_Misc_Coin_01"
 
 -- What the client draws where an item's icon should be and cannot say which.
@@ -164,14 +201,157 @@ local function Read(text)
 	return nil, nil, nil
 end
 
+
+--------------------------------------------------------------------------
+-- What the column shows
+--
+-- Six chips over the rows: one per quality, and one for coin. Each is on or
+-- off, each says which of them it is by its colour, and between them they are
+-- the whole of what is drawn.
+--
+-- **The feed records everything either way.** There was a quality floor here
+-- and it worked at the door: an item under it never became a row and could not
+-- be got back by changing your mind. That is the wrong end to filter at for a
+-- window whose whole job is answering "what did I just get", and it was also
+-- the second control doing this job, which is one more than a feature should
+-- have. It is gone. Everything that drops is written down, the chips decide
+-- what you are looking at, and turning one back on brings its history with it.
+--
+-- **A quest item is not a quality.** It is white, the same white as a stack of
+-- linen, so it gets a ring round its icon rather than a colour of its own, and
+-- its chip is an override rather than a seventh tier: on, a quest item is drawn
+-- whatever its own quality chip says. That is the combination that makes the
+-- feed useful while questing, which is turning the whites off and still seeing
+-- the five wolf livers you need.
+--
+-- The five qualities are one saved number rather than five saved booleans. A
+-- table of five would be five keys the defaults have to backfill and five
+-- things a reset has to walk; a bitmask is one of each, and nothing outside
+-- this pair of functions ever sees it.
+--------------------------------------------------------------------------
+
+local function Lit(quality)
+	return math.floor(ns.db.lootFeedShow / 2 ^ quality) % 2 == 1
+end
+
+local function Light(quality, on)
+	if Lit(quality) == (on and true or false) then
+		return false
+	end
+	local flag = 2 ^ quality
+	ns.db.lootFeedShow = on and (ns.db.lootFeedShow + flag) or (ns.db.lootFeedShow - flag)
+	return true
+end
+
+-- Handed out, because the panel puts the same six switches on a page and the
+-- two have to be the same switch. A second copy of this arithmetic behind a
+-- check box is a check box that disagrees with the chip beside it.
+function LootFeed.Lit(quality)
+	return Lit(quality)
+end
+
+function LootFeed.Light(quality, on)
+	return Light(quality, on)
+end
+
+-- Whether one entry is drawn. This is the function UI/Feed.lua walks the ring
+-- with, so it reads settings and asks the entry, and does no work of its own.
+local function Passes(entry)
+	if entry.money then
+		return ns.db.lootFeedMoney and true or false
+	end
+	if entry.quest and ns.db.lootFeedQuest then
+		return true
+	end
+	return Lit(math.min(entry.quality or 1, QUALITIES))
+end
+
+-- The chips, in the order they are drawn: the quality ramp read left to right,
+-- then a break, then the two that are not a quality.
+local function Chips()
+	local chips = {}
+	for quality = 0, QUALITIES do
+		chips[#chips + 1] = {
+			color = QUALITY[quality],
+			-- A function rather than a string, because the word is the client's
+			-- and its global is not reliably in place while this file is still
+			-- loading. Built on the hover, which is a moment and can afford it.
+			tip = function()
+				return ("%s items. Click to take them off the column; the feed"
+					.. " goes on recording them either way.")
+					:format(ns.QualityWord(quality))
+			end,
+			get = function() return Lit(quality) end,
+			set = function(on) Light(quality, on) end,
+		}
+	end
+
+	chips[#chips + 1] = { gap = true }
+
+	chips[#chips + 1] = {
+		color = QUEST,
+		tip = "Quest items, whatever their own quality chip says. They are the"
+			.. " rows with a ring round the icon.",
+		get = function() return ns.db.lootFeedQuest end,
+		set = function(on) ns.db.lootFeedQuest = on end,
+	}
+	chips[#chips + 1] = {
+		color = C.heading,
+		tip = "Coin. Off, what you picked up is still in the purse along the"
+			.. " bottom and out of the column.",
+		get = function() return ns.db.lootFeedMoney end,
+		set = function(on) ns.db.lootFeedMoney = on end,
+	}
+	return chips
+end
+
 --------------------------------------------------------------------------
 -- The tooltip
 --
 -- The item's own text where the client will hand it over, which is the whole
 -- reason UI/Tooltip.lua carries a scanner, and the item's name in its quality
--- colour where it will not. Either way the two facts the feed knows and the
--- item does not, when it landed and who it went to, are added underneath.
+-- colour where it will not. Either way the facts the feed knows and the item
+-- does not go underneath.
+--
+-- **What an item is worth is two numbers and they answer different questions.**
+-- The vendor price is what the merchant hands you and it is a fact the client
+-- holds: it is on the item's own tooltip already, in copper, per item, and the
+-- thing it does not say is what a stack of eleven silk cloth is worth, which is
+-- the number you actually want when deciding whether to walk back. The auction
+-- price is not a fact the client holds at all; it comes out of whichever
+-- scanner the player has installed, and it is the difference between vendoring
+-- a green and posting it. See Feeds/Auction.lua for who is asked and why the
+-- line names them.
+--
+-- **Neither line appears when there is nothing true to put on it.** An item the
+-- client has not cached has no vendor price and gets no vendor line, which is
+-- not the same as a price of zero: an item a vendor will not take is a real
+-- thing and says so in words. A client with no auction addon gets no auction
+-- line and no note about it, because a tooltip is not the place to advertise
+-- somebody else's addon.
 --------------------------------------------------------------------------
+
+-- The vendor's two lines: what one is worth, and what the stack came to.
+--
+-- The stack line only appears where it says something the first does not, which
+-- is a stack of more than one that a vendor will actually pay for.
+local function Vendor(data, entry)
+	local price = entry.price
+	if not price then
+		return false
+	end
+	if price <= 0 then
+		data[#data + 1] = { "Vendor", "will not take it", tone = C.quiet }
+		return true
+	end
+
+	data[#data + 1] = { "Vendor", ns.Purse.Coin(price) }
+	if (entry.count or 1) > 1 then
+		data[#data + 1] = { ("Stack of %d"):format(entry.count),
+			ns.Purse.Coin(price * entry.count), tone = C.heading }
+	end
+	return true
+end
 
 local function Fill(entry)
 	local data = {
@@ -179,8 +359,21 @@ local function Fill(entry)
 		title = entry.name or "?",
 		color = entry.color,
 		{ blank = true },
-		{ "Looted", ns.Stream.Clock(entry.at) },
 	}
+
+	if entry.quest then
+		data[#data + 1] = { "Quest item", color = QUEST }
+	end
+
+	Vendor(data, entry)
+
+	local going, scanner = ns.Auction.Price(entry.link)
+	if going then
+		data[#data + 1] = { scanner, ns.Purse.Coin(going), tone = C.accent }
+	end
+
+	data[#data + 1] = { blank = true }
+	data[#data + 1] = { "Looted", ns.Stream.Clock(entry.at) }
 	if (entry.count or 1) > 1 then
 		data[#data + 1] = { "Stack", tostring(entry.count) }
 	end
@@ -200,6 +393,8 @@ local stream = ns.Stream.New({
 	title = "Loot",
 	empty = "nothing yet",
 	onTooltip = Fill,
+	chips = Chips(),
+	filter = Passes,
 	-- The strip along the bottom, which is Feeds/Purse.lua's three numbers. It
 	-- is on this feed and not on the combat one because this is the window
 	-- already answering "what did I just get", and gold was the part of that
@@ -221,18 +416,29 @@ end
 -- centre. That is where the client's own loot text goes past and it is where
 -- your eye already is when something dies.
 function LootFeed.Defaults()
+	-- No word over it and no line round it, which is the third argument. The
+	-- rows are an icon, a name in the item's own quality colour and a count,
+	-- with the same quality colours as chips over them; there is nothing about
+	-- that column the word "Loot" adds, and the edge was a window frame round
+	-- something that is not a window.
 	local defaults = ns.Stream.Defaults("lootFeed",
-		{ "BOTTOMRIGHT", "UIParent", "BOTTOMRIGHT", -20, 180 })
+		{ "BOTTOMRIGHT", "UIParent", "BOTTOMRIGHT", -20, 180 }, false)
 
 	-- Yours only. Everyone else's drops are the thing that makes the client's
 	-- own loot spam unreadable in a raid, and a feed that reproduced it would
 	-- have replaced one unreadable column with a prettier one.
 	defaults.lootFeedGroup = false
 
-	-- Everything, including the grey vendor trash, because on this addon's own
-	-- defaults Comfort/Vendor.lua sells that trash for you and the feed is the
-	-- only place you will ever see what it was.
-	defaults.lootFeedQuality = 0
+	-- Every quality lit, greys included, because Comfort/Vendor.lua sells that
+	-- trash for you on this addon's own defaults and the feed is the only place
+	-- you will ever see what it was. Five bits, one per quality, and the
+	-- arithmetic that reads them is at the top of this file.
+	defaults.lootFeedShow = 2 ^ (QUALITIES + 1) - 1
+
+	-- Quest items through whatever their quality chip says, because the reason
+	-- to turn the whites off is the linen and the reason not to is the wolf
+	-- liver, and this is the switch that has both.
+	defaults.lootFeedQuest = true
 
 	defaults.lootFeedMoney = true
 
@@ -249,17 +455,18 @@ end
 -- Rows
 --------------------------------------------------------------------------
 
-local seen, dropped = 0, 0
+local seen = 0
 
 local function AddItem(who, link, count)
-	local quality = ns.ItemValue(link)
-	if quality and quality < ns.db.lootFeedQuality then
-		dropped = dropped + 1
-		return false
-	end
-
+	local quality, price = ns.ItemValue(link)
 	local name, icon = ns.ItemInfo(link)
 	local color = QUALITY[quality or 1] or QUALITY[1]
+
+	-- The class the client files it under, which is the only thing that tells a
+	-- quest item from a white one. Read here rather than on the hover, because
+	-- a tooltip that asked would be asking about an item that may have left
+	-- your bags an hour ago, and this is one lookup on a path a drop drives.
+	local _, class = ns.ItemKind(link)
 
 	local entry = stream:Feed():Entry()
 	entry.icon = icon or UNKNOWN
@@ -271,6 +478,14 @@ local function AddItem(who, link, count)
 	entry.link = link
 	entry.count = count
 	entry.who = who
+	-- The three the filter and the row read. Quality is what the chips grade it
+	-- by, quest is the ring round the icon and the chip that overrides them, and
+	-- the price is the vendor's, kept because the client will answer for an item
+	-- in your bags and go quiet about one you sold.
+	entry.quality = quality
+	entry.quest = (class == QUEST_CLASS) or nil
+	entry.ring = entry.quest and QUEST or nil
+	entry.price = price
 	stream:Feed():Push()
 
 	seen = seen + 1
@@ -318,9 +533,12 @@ function LootFeed.OnLoot(text)
 end
 
 function LootFeed.OnMoney(text)
-	if not ns.db.lootFeed or not ns.db.lootFeedMoney or type(text) ~= "string" then
+	if not ns.db.lootFeed or type(text) ~= "string" then
 		return false
 	end
+	-- The coin chip is not consulted here. It decides whether a coin row is
+	-- drawn, the same as every other chip, and a capture that read it would put
+	-- the setting back at the door this file spent its filter getting away from.
 	return AddMoney(text)
 end
 
@@ -353,16 +571,17 @@ function LootFeed.Describe()
 		line = line .. (", and this client carries %d of the %d loot messages")
 			:format(live, total)
 	end
-	if dropped > 0 then
-		line = line .. (", %d under the quality floor"):format(dropped)
-	end
 	return line
 end
 
--- What has ever reached the feed and what the quality floor turned away, for
--- the panel and for scripts/harness.lua.
+-- What has ever reached the feed, for the panel and for scripts/harness.lua.
+--
+-- One number rather than the two it was. The second was what a quality floor
+-- turned away at the door, and there is no door any more: everything that drops
+-- is recorded and the chips decide what is drawn, which is a number the feed
+-- itself already carries and puts in its own tally.
 function LootFeed.Counts()
-	return seen, dropped
+	return seen
 end
 
 local events = CreateFrame("Frame")

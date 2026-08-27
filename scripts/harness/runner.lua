@@ -114,6 +114,7 @@ local SECTIONS = {
 	"37-player-cast",
 	"38-bar-look",
 	"39-party-raid",
+	"40-loot-feed",
 }
 
 -- Naming a section runs every section up to and including it, rather than that
