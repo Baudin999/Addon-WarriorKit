@@ -200,6 +200,14 @@ local stream = ns.Stream.New({
 	title = "Loot",
 	empty = "nothing yet",
 	onTooltip = Fill,
+	-- The strip along the bottom, which is Feeds/Purse.lua's three numbers. It
+	-- is on this feed and not on the combat one because this is the window
+	-- already answering "what did I just get", and gold was the part of that
+	-- answer a list of rows could not give: coin gets a row when it drops and
+	-- the row scrolls away, and what you want an hour later is the total and
+	-- the slope.
+	onStatus = ns.Purse.Line,
+	onStatusTooltip = ns.Purse.Ledger,
 })
 
 function LootFeed.Stream()
@@ -227,6 +235,13 @@ function LootFeed.Defaults()
 	defaults.lootFeedQuality = 0
 
 	defaults.lootFeedMoney = true
+
+	-- The status strip's, folded in here rather than registered on their own.
+	-- Feeds/Feature.lua merges one table per stream and the strip belongs to
+	-- this one, so this is where its keys reach the account file.
+	for key, value in pairs(ns.Purse.Defaults()) do
+		defaults[key] = value
+	end
 	return defaults
 end
 

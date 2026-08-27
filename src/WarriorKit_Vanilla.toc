@@ -261,7 +261,13 @@ Buffs\Feature.lua
 # After Buffs because it is the last of the parts that draw over the world, and
 # after Unit\Roster.lua, which is what the combat feed asks whether a GUID is
 # one of yours. Both are far above this line.
+#
+# Purse.lua between the frame and the two feeds. It is the ledger behind the
+# status strip along the bottom of the loot feed: what this character carries,
+# what the account carries, and how fast that is moving. Before Loot.lua because
+# that file folds the purse's defaults into its own as it loads.
 Feeds\Stream.lua
+Feeds\Purse.lua
 Feeds\Loot.lua
 Feeds\Combat.lua
 Feeds\Feature.lua

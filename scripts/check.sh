@@ -230,6 +230,9 @@ Feeds/Purse.lua:Purse.Coin
 Feeds/Purse.lua:Others
 Feeds/Purse.lua:Purse.Mine
 Feeds/Purse.lua:Who
+Feeds/Purse.lua:Purse.Note
+Feeds/Purse.lua:Purse.Start
+Feeds/Purse.lua:Money
 Feeds/Purse.lua:Group
 Feeds/Purse.lua:RateText
 Feeds/Purse.lua:Tone

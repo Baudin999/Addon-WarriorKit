@@ -47,6 +47,33 @@ local C = UI.Color
 -- a key.
 local KEYS = { "Rows", "Width", "Zoom", "Alpha", "Mouse", "Shown", "Point" }
 
+--------------------------------------------------------------------------
+-- The status strip
+--
+-- An optional row along the bottom of a stream, under a hairline, holding three
+-- short readings: one at each end and one in the middle. A stream that is given
+-- no onStatus has none of it and is the frame it always was.
+--
+-- **Why the strip has a beat and the feed does not.** Everything above it
+-- changes when something happens to you, and the header of UI/Feed.lua refuses
+-- a ticker on exactly that ground. A reading is the other kind of number: gold
+-- an hour moves because the clock moved, and nothing fires an event when a
+-- minute passes. So the strip carries the only OnUpdate in this part, one
+-- second apart, and it is a child of the stream frame, which means the client
+-- stops calling it the moment the feed is hidden.
+--------------------------------------------------------------------------
+
+local STATUS = 17     -- the strip's own height
+local STATUS_RULE = 1 -- the hairline over it
+local STATUS_INSET = 4
+local STATUS_TEXT = 12
+
+-- One second. The three readings behind this change about once a minute
+-- between them, so a faster beat would be four comparisons a frame to write
+-- nothing, and a slower one would leave a gold figure visibly behind the coin
+-- you just picked up.
+local BEAT = 1
+
 local Instance = {}
 Instance.__index = Instance
 
@@ -64,6 +91,10 @@ local streams = {}
 -- spec.note      how wide the dim middle column is, in units, and nothing for a
 --                stream whose rows are a name and a number
 -- spec.onTooltip function(entry), answering the table UI/Tooltip.lua renders
+-- spec.onStatus  function(), answering the three readings along the bottom and
+--                the colour of the last one, or nothing at all for a stream
+--                whose strip is switched off. Absent for a stream with no strip
+-- spec.onStatusTooltip function(), the table hovering that strip renders
 --------------------------------------------------------------------------
 
 function Stream.New(spec)
@@ -74,6 +105,8 @@ function Stream.New(spec)
 		empty = spec.empty,
 		note = spec.note,
 		onTooltip = spec.onTooltip,
+		onStatus = spec.onStatus,
+		onStatusTooltip = spec.onStatusTooltip,
 		keys = { on = spec.prefix },
 	}, Instance)
 
@@ -140,6 +173,129 @@ function Instance:Setting(word)
 	return ns.db[self.keys[word]]
 end
 
+--------------------------------------------------------------------------
+-- The strip, written
+--
+-- On the strip's own beat, which is why every write here is behind a
+-- comparison. A SetText costs a measure and a relayout whether or not the
+-- string changed, and two of these three change about once a minute; the
+-- colour changes when the rate crosses zero, which is a handful of times an
+-- evening.
+--
+-- Colours are compared by identity rather than by component, which is the same
+-- bargain UI/Feed.lua strikes and the reason Feeds/Purse.lua hands back stable
+-- tables instead of building one per reading.
+--------------------------------------------------------------------------
+
+local function Refresh(stream)
+	local held, hoard, rate, tone = stream.onStatus()
+	if not held then
+		return false
+	end
+
+	if stream.heldAt ~= held then
+		stream.heldAt = held
+		stream.held:SetText(held)
+	end
+	if stream.hoardAt ~= hoard then
+		stream.hoardAt = hoard
+		stream.hoard:SetText(hoard)
+	end
+	if stream.rateAt ~= rate then
+		stream.rateAt = rate
+		stream.rate:SetText(rate)
+	end
+	if stream.toneAt ~= tone then
+		stream.toneAt = tone
+		stream.rate:SetTextColor(tone[1], tone[2], tone[3])
+	end
+	return true
+end
+
+-- The strip itself, built once. Three font strings and a hairline, and the one
+-- ticker in this part.
+function Instance:BuildStatus()
+	local frame, unit = self.frame, self.unit
+
+	local strip = CreateFrame("Frame", nil, frame)
+	self.status = strip
+	strip:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+	strip:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+	strip:SetHeight(STATUS * unit)
+	strip.since = 0
+
+	self.statusRule = ns.Fill(frame, "ARTWORK", C.hairline[1], C.hairline[2],
+		C.hairline[3], 1)
+	self.statusRule:SetPoint("BOTTOMLEFT", strip, "TOPLEFT", 0, 0)
+	self.statusRule:SetPoint("BOTTOMRIGHT", strip, "TOPRIGHT", 0, 0)
+	self.statusRule:SetHeight(STATUS_RULE * unit)
+
+	-- Yours in the addon's heading gold, the account's dim in the middle
+	-- because it is context rather than news, and the rate on the right in
+	-- whatever colour the rate has earned.
+	self.held = UI.Label(strip, STATUS_TEXT, C.heading, "LEFT")
+	self.held:SetPoint("LEFT", strip, "LEFT", STATUS_INSET * unit, 0)
+
+	self.hoard = UI.Label(strip, STATUS_TEXT, C.dim, "CENTER")
+	self.hoard:SetPoint("CENTER", strip, "CENTER", 0, 0)
+
+	self.rate = UI.Label(strip, STATUS_TEXT, C.quiet, "RIGHT")
+	self.rate:SetPoint("RIGHT", strip, "RIGHT", -STATUS_INSET * unit, 0)
+
+	strip:SetScript("OnUpdate", function(this, elapsed)
+		this.since = this.since + elapsed
+		if this.since < BEAT then
+			return
+		end
+		this.since = 0
+		Refresh(self)
+	end)
+
+	if self.onStatusTooltip then
+		strip:SetScript("OnEnter", function()
+			UI.Tooltip.Show(strip, self.onStatusTooltip())
+		end)
+		strip:SetScript("OnLeave", function()
+			UI.Tooltip.Close()
+		end)
+	end
+	return true
+end
+
+-- The strip, sized to the feed above it, and the height the frame has to add to
+-- the feed's own for it. Zero for a stream with no strip and for one whose
+-- reading says it has nothing to report, which is how the setting behind the
+-- strip reaches the geometry rather than only the paint.
+function Instance:Dress()
+	if not self.status then
+		return 0
+	end
+
+	local unit = self.unit
+	if not (self.onStatus and self.onStatus()) then
+		self.status:Hide()
+		self.statusRule:Hide()
+		return 0
+	end
+
+	-- Three cells across the width, so the middle reading stays in the middle
+	-- and the two ends clip rather than run into it. A feed at its narrowest is
+	-- still three cells; what it loses is the tail of the longest number, and
+	-- the tooltip is where the whole of it lives.
+	local cell = math.max(math.floor((self:Setting("width") - STATUS_INSET * 2) / 3), 1)
+	self.held:SetWidth(cell * unit)
+	self.hoard:SetWidth(cell * unit)
+	self.rate:SetWidth(cell * unit)
+
+	self.status:SetHeight(STATUS * unit)
+	self.statusRule:SetHeight(STATUS_RULE * unit)
+	-- Whether it takes the mouse is Lock's alone, which Apply calls after this.
+	self.status:Show()
+	self.statusRule:Show()
+	Refresh(self)
+	return (STATUS + STATUS_RULE) * unit
+end
+
 function Instance:Build()
 	if self.frame then
 		return false
@@ -194,6 +350,10 @@ function Instance:Build()
 	-- column once at every login for nobody.
 	self.feed:Awake(self:Visible())
 
+	if self.onStatus then
+		self:BuildStatus()
+	end
+
 	return true
 end
 
@@ -215,7 +375,9 @@ function Instance:Apply()
 	UI.Rezoom(self.frame, self:Setting("zoom"))
 
 	local width, height = self.feed:Resize(self:Setting("width"), self:Setting("rows"))
-	self.frame:SetSize(width, height)
+	-- The strip is measured after the feed and before the frame, because it is
+	-- the only thing in here whose height is a decision rather than a setting.
+	self.frame:SetSize(width, height + self:Dress())
 
 	-- The edge follows the background. At zero opacity the player has asked for
 	-- rows over the world, and a hairline rectangle round nothing is a window
@@ -224,6 +386,11 @@ function Instance:Apply()
 	self.bg:SetColorTexture(C.window[1], C.window[2], C.window[3], alpha)
 	for index = 1, 4 do
 		self.edges[index]:SetAlpha(alpha > 0 and 1 or 0)
+	end
+	-- The strip's hairline goes with them, for the same reason. Over bare world
+	-- a line under the last row is a rule dividing nothing from nothing.
+	if self.statusRule then
+		self.statusRule:SetAlpha(alpha > 0 and 1 or 0)
 	end
 
 	self.feed:Mouse(self:Setting("mouse"))
@@ -241,6 +408,13 @@ function Instance:Lock()
 	-- the only things on it that answer the mouse are the rows, and only when
 	-- the player has left that setting on.
 	self.frame:EnableMouse(unlocked)
+	-- And the strip lets go of it while the feed is being placed. It sits along
+	-- the bottom edge, which is where a hand reaches for a window, so a strip
+	-- still taking the mouse is a corner of the frame you cannot drag by.
+	if self.status then
+		self.status:EnableMouse((not unlocked and self.onStatusTooltip
+			and self:Setting("mouse")) and true or false)
+	end
 	if unlocked then
 		self.frame:RegisterForDrag("LeftButton")
 		self.grab:Show()
@@ -285,6 +459,15 @@ end
 
 function Instance:Feed()
 	return self.feed
+end
+
+-- The status strip and the three readings on it, for the panel and for
+-- scripts/harness.lua. Handed out for the reason UI/Feed.lua hands out a row:
+-- "the strip is 17 units tall and the frame grew by 18" is a claim the harness
+-- has to be able to make, and reaching into a stream's own fields to make it
+-- would be asserting this file's spelling rather than its arithmetic.
+function Instance:Strip()
+	return self.status, self.held, self.hoard, self.rate
 end
 
 function Instance:Describe()

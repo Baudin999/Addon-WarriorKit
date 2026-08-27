@@ -43,6 +43,12 @@ UI.Color = {
 	danger   = { 0.40, 0.13, 0.13, 1 },
 	dangerHover = { 0.57, 0.18, 0.18, 1 },
 	tick     = { 0.34, 0.80, 0.44, 1 },
+	-- A number that has gone the wrong way, which so far is one number: the
+	-- gold an hour along the bottom of the loot feed, on an hour where the
+	-- repair bill beat the drops. Its own entry rather than the danger red
+	-- above, because that one is a button you can press by accident and this
+	-- is a fact about your afternoon.
+	loss     = { 0.86, 0.38, 0.38, 1 },
 	shadow   = { 0, 0, 0, 0.55 },
 
 	text     = { 0.87, 0.87, 0.91 },
