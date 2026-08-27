@@ -84,10 +84,8 @@ end
 -- in, because the button it displaced would look like a second end the moment
 -- we placed it. The lowest walk needs ours out, because an unplaced button sits
 -- at the origin and a placed one is already the lowest thing there.
-local function Survey(menu)
-	local all, others, hangs = {}, {}, {}
-
-	for _, child in ipairs({ menu:GetChildren() }) do
+local function Gather(host, all, others, hangs)
+	for _, child in ipairs({ host:GetChildren() }) do
 		if ns.Measure(child, "GetObjectType") == "Button" then
 			local _, relative = Anchor(child)
 			if relative then
@@ -100,6 +98,27 @@ local function Survey(menu)
 				if child ~= button then
 					others[#others + 1] = child
 				end
+			end
+		end
+	end
+end
+
+local function Survey(menu)
+	local all, others, hangs = {}, {}, {}
+	Gather(menu, all, others, hangs)
+
+	-- One level down, and only when the menu itself held nothing.
+	--
+	-- This is what the live client answered: the button was built, the frame was
+	-- there and the walk found no button in it at all. A menu that keeps its
+	-- buttons in a container of its own is the shape that produces exactly that,
+	-- and the container is a child of the menu like everything else. One level
+	-- rather than the whole tree, because the whole tree of somebody else's
+	-- frame is a walk with no bottom to it and this needs a foot, not a census.
+	if #others == 0 then
+		for _, child in ipairs({ menu:GetChildren() }) do
+			if ns.Measure(child, "GetObjectType") ~= "Button" then
+				Gather(child, all, others, hangs)
 			end
 		end
 	end
@@ -163,6 +182,13 @@ local function Fit(foot)
 	local width, height = ns.Measure(foot, "GetWidth"), ns.Measure(foot, "GetHeight")
 	if width and height and width > 0 and height > 0 then
 		button:SetSize(width, height)
+	end
+	-- Over whatever the foot is drawn in. Ours is a child of the menu and the
+	-- foot may be a child of a container inside it, and a button behind the
+	-- frame it sits under is a button you cannot click.
+	local level = ns.Measure(foot, "GetFrameLevel")
+	if level then
+		button:SetFrameLevel(level + 1)
 	end
 end
 
@@ -301,6 +327,20 @@ end
 -- somebody else's frame, and the shape has changed once already. So there is a
 -- way to look at it that is not reading this file and guessing. Same job
 -- `/wk skin probe` does for the aura buttons and for the same reason.
+-- One line about one region: what it is, what it is called, whether it is up
+-- and what it hangs off. Everything the two walks read, said out loud.
+local function Say(region, indent)
+	local _, relative = Anchor(region)
+	ns.Print(("%s%s %s%s, %s wide, hangs off %s"):format(
+		indent,
+		tostring(ns.Measure(region, "GetObjectType")):lower(),
+		ns.Measure(region, "GetName") or "unnamed",
+		ns.Measure(region, "IsShown") and "" or " (hidden)",
+		tostring(ns.Measure(region, "GetWidth")),
+		relative and (ns.Measure(relative, "GetName") or "an unnamed frame")
+			or "nothing"))
+end
+
 function Menu.Probe()
 	local menu = _G.GameMenuFrame
 	if not menu then
@@ -310,27 +350,32 @@ function Menu.Probe()
 
 	ns.Print(("game menu: %s tall, %s"):format(
 		tostring(ns.Measure(menu, "GetHeight")), Menu.Describe()))
-	ns.Print(("  our button %s, AddButton %s, Layout %s"):format(
+	ns.Print(("  our button %s, AddButton %s, Layout %s, HookScript %s"):format(
 		button and "built" or "not built",
 		type(menu.AddButton) == "function" and "yes" or "no",
-		type(menu.Layout) == "function" and "yes" or "no"))
+		type(menu.Layout) == "function" and "yes" or "no",
+		type(menu.HookScript) == "function" and "yes" or "no"))
 
-	local count = 0
+	local children, lines = 0, 0
 	for _, child in ipairs({ menu:GetChildren() }) do
-		if ns.Measure(child, "GetObjectType") == "Button" then
-			count = count + 1
-			if count <= PROBE_LIST then
-				local _, relative = Anchor(child)
-				ns.Print(("  %s%s, %s wide, hangs off %s"):format(
-					ns.Measure(child, "GetName") or "unnamed",
-					ns.Measure(child, "IsShown") and "" or " (hidden)",
-					tostring(ns.Measure(child, "GetWidth")),
-					relative and (ns.Measure(relative, "GetName") or "an unnamed frame")
-						or "nothing"))
+		children = children + 1
+		if lines < PROBE_LIST then
+			lines = lines + 1
+			Say(child, "  ")
+		end
+		-- And what is inside it, because a menu that keeps its buttons in a
+		-- container is the shape this probe was written to catch.
+		if ns.Measure(child, "GetObjectType") ~= "Button" then
+			for _, inner in ipairs({ child:GetChildren() }) do
+				if lines < PROBE_LIST then
+					lines = lines + 1
+					Say(inner, "    ")
+				end
 			end
 		end
 	end
-	ns.Print(("  %d buttons, %d listed."):format(count, math.min(count, PROBE_LIST)))
+
+	ns.Print(("  %d children of the menu, %d regions listed."):format(children, lines))
 end
 
 local events = CreateFrame("Frame")

@@ -179,6 +179,48 @@ if button then
 		"the status line does not say the button went under: " .. Menu.Describe())
 end
 
+-- And the menu that keeps its buttons in a container.
+--
+-- This is what the live client answered on the first build: the button was
+-- built, the frame was there and the walk found no button in it at all, which
+-- is what a menu holding its column inside a frame of its own looks like from
+-- outside. Modelled by moving Blizzard's buttons one level down, which is the
+-- only thing that changes: they keep the anchors the block above gave them and
+-- our button is unplaced again, the way a client that relaid its menu leaves it.
+if button then
+	local box = H.child("frame", menu, "GameMenuFrameHolder")
+	box:SetSize(menu:GetWidth(), menu:GetHeight())
+	box:SetPoint("TOPLEFT", menu, "TOPLEFT", 0, 0)
+	box:SetFrameLevel(4)
+
+	local top = {}
+	for _, entry in ipairs(menu.children) do
+		if entry == button or entry == box then
+			top[#top + 1] = entry
+		else
+			entry.parent = box
+			box.children[#box.children + 1] = entry
+		end
+	end
+	menu.children = top
+
+	button:ClearAllPoints()
+	menu:SetHeight(BARE)
+
+	check(Menu.Attach(), "the button would not go into a menu holding a container")
+
+	local _, relative = button:GetPoint(1)
+	check(relative == continue,
+		("the button hangs off %s rather than the lowest button in the container")
+			:format(tostring(relative and relative.name)))
+	check(button:GetFrameLevel() == continue:GetFrameLevel() + 1,
+		("the button is at level %s and the foot is at %s, so it can be behind it")
+			:format(tostring(button:GetFrameLevel()), tostring(continue:GetFrameLevel())))
+	check(menu:GetHeight() == BARE + STEP,
+		("the menu is %g tall and one button taller than %g is %g")
+			:format(menu:GetHeight(), BARE, BARE + STEP))
+end
+
 -- The probe runs. It is the only thing in the addon that reports on somebody
 -- else's frame, so it is the thing somebody will type when the button has not
 -- turned up, and a probe that raises at that moment is worse than no probe.
