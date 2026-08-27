@@ -37,6 +37,16 @@ _G.GetInventoryItemLink = function(unit, slot)
 	return nil
 end
 
+-- The art on the hand, which is what the aura row draws for a temporary weapon
+-- enchant: the enchant itself has no icon of its own and Blizzard's own enchant
+-- button borrows the weapon's.
+_G.GetInventoryItemTexture = function(unit, slot)
+	if unit ~= "player" or not _G.GetInventoryItemLink(unit, slot) then
+		return nil
+	end
+	return "hand" .. slot
+end
+
 -- Two returns, and the second is nil with an empty off hand or a shield in it,
 -- which is the answer the client gives and the one the addon branches on.
 _G.UnitAttackSpeed = function(unit)

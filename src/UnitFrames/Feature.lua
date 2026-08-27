@@ -467,7 +467,7 @@ ns.Register({
 		"skin level <-100-100>, the target's drop from the player",
 		"skin heals on|off, the incoming heal on the health gauge",
 		"skin auras on|off, our own aura rows under the player and target blocks",
-		"skin aura <12-32>, the size of one aura square, in screen pixels",
+		"skin aura <12 up to the block height>, one aura square, in screen pixels",
 		"skin debuffs <0-16>, skin buffs <0-32>, how long each row runs",
 		"skin probe, what this client answered for each frame",
 		"colors, every class fill and how far the name on it is from it",

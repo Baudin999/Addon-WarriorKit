@@ -74,12 +74,12 @@ target the player mirrored, and a HUD with rows on one side of it only is not
 one HUD. The player is now an entry in `Auras.lua`'s own table, which is what
 that file was shaped for, and `Skin.lua` did not change at all.
 
-Two things went off the screen with `BuffFrame` and one did not. Right click to
+One thing went off the screen with `BuffFrame` and stays off. Right click to
 cancel a buff is gone, because cancelling one is a protected call and a square
 drawn here cannot make it; getting it back is a secure button per square and
-waits for somebody to miss it. The temporary weapon enchant is deliberately
-left where the client draws it, because nothing here can find it and hiding it
-would take the sharpening stone off the screen.
+waits for somebody to miss it. The temporary weapon enchant on each hand leads
+your buff row instead, out of `Buffs/Upkeep.lua`, because it sits at no aura
+index and the client's row was the only thing drawing it.
 
 Three things to look at in game rather than measure. Whether the client's aura
 buttons are protected on this backport, which decides whether one built mid

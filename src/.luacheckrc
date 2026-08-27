@@ -26,11 +26,12 @@ globals = {
 	-- scripts/harness.lua without Minimap/Corral.lua handing out a reference to
 	-- its own tables.
 	"WarriorKitCorral",
-	-- The target's two aura rows, named for the reason the three blocks in
-	-- UnitFrames/Skin.lua are: a row that lands in the wrong place has to be
-	-- measurable from a macro and from the harness without Auras.lua handing
-	-- out a reference to its own tables.
+	-- The four aura rows, two on each block, named for the reason the three
+	-- blocks in UnitFrames/Skin.lua are: a row that lands in the wrong place has
+	-- to be measurable from a macro and from the harness without Auras.lua
+	-- handing out a reference to its own tables.
 	"WarriorKitTargetDebuffs", "WarriorKitTargetBuffs",
+	"WarriorKitPlayerDebuffs", "WarriorKitPlayerBuffs",
 	"WarriorKitChargeButton",
 	"WarriorKitSwitchButton",
 	-- one per loadout, each a secure button carrying that loadout's macro. All
@@ -183,7 +184,8 @@ read_globals = {
 	-- anywhere else. C_Item is the newer home for the item lookups and is
 	-- reached through _G in Core beside C_Container, so it is not an entry
 	-- here.
-	"GetInventoryItemLink", "GetContainerNumSlots", "GetContainerItemLink",
+	"GetInventoryItemLink", "GetInventoryItemTexture",
+	"GetContainerNumSlots", "GetContainerItemLink",
 	"GetContainerItemInfo", "UseContainerItem",
 	"GetItemInfo", "GetItemInfoInstant", "C_Container",
 	-- the empty-slot art each hand draws when nothing is set, and whether the

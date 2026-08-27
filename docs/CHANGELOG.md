@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### The weapon enchant leads your buff row, and the square can be bigger
+
+Reported from the game with a screenshot: the squares are too small and the
+sharpening stone is nowhere.
+
+**The enchant was left to the client and the client's row is hidden.** That was
+the wrong end of the trade. A temporary weapon enchant sits at no aura index at
+all, so `GetWeaponEnchantInfo` is the only call that knows about it, and hiding
+`BuffFrame` took the last reading of it off the screen. Both hands now lead your
+buff row, read through `Buffs/Upkeep.lua` because that file already counts the
+returns rather than picking one of the three shapes the call has had. The square
+borrows the weapon's own art, the way Blizzard's enchant button does, and
+hovering it opens the item's tooltip, because the enchant is a line on the item.
+A client with no such call adds nothing and says nothing.
+
+**The size ceiling was a constant that stopped being true.** `/wk skin aura`
+ran to 32, which was the block's height when the rows were written. The block is
+`/wk skin height` and runs to 72, so the ceiling follows it: the rule was always
+that a square should not be taller than the frame it hangs off, and now the rule
+is what is written down instead of the number it came to that day.
+
+**The flag reached the table and not the row.** `enchants` was on the spec in
+`ROWS` and `Auras.Build` copies named fields onto the row it builds, so the row
+never saw it and drew nothing. The harness caught it on the first run, which is
+the whole argument for asserting a feature rather than looking at it.
+
 ### The aura rows go on both sides of the block and run outward
 
 Both rows sat under the block and chained, debuffs then buffs. Asked for from

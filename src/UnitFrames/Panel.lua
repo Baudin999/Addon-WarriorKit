@@ -452,10 +452,11 @@ function Panel.Draw(ui)
 			.. " everything else is drained, and yours are placed first, so a raid's"
 			.. " worth of other people's bleeds cannot push your Rend off the end."
 			.. " Hovering a square gives you the client's own tooltip for that aura."
-			.. " Right click to cancel one of your own buffs goes with the client's"
-			.. " row, because cancelling a buff is a call an addon is not allowed to"
-			.. " make, and the temporary weapon enchant stays where the client draws"
-			.. " it because it sits at no aura index at all. "
+			.. " The temporary weapon enchant on each hand leads your buff row,"
+			.. " because it sits at no aura index and the client's row was the only"
+			.. " thing drawing it. Right click to cancel one of your own buffs is"
+			.. " the one thing that goes with that row: cancelling a buff is a call"
+			.. " an addon is not allowed to make. "
 			.. ns.FrameAuras.Describe() .. "."
 	end)
 	ui.Note(function()

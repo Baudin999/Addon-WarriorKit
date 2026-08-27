@@ -44,13 +44,17 @@ ns.FrameAuras = Auras
 --
 -- The client's own buffs and debuffs are hidden the same way the target's are,
 -- by name and one at a time, because BuffButton1 and DebuffButton1 are built
--- the same way on demand. Two things this addon does not take off the screen.
--- Right click to cancel a buff goes with the client's row, because cancelling
--- one is a protected call and a square drawn here cannot make it. And the
--- temporary weapon enchant stays where the client draws it: it appears at no
--- aura index at all, so nothing below can find it, and Buffs/Nag.lua only says
--- when the sharpening stone is missing rather than how long the one on your
--- weapon has left.
+-- the same way on demand. One thing goes with them and does not come back:
+-- right click to cancel a buff, because cancelling one is a protected call and
+-- a square drawn here cannot make it.
+--
+-- The temporary weapon enchant does come back, and it has to. It sits at no
+-- aura index at all, so the walk below cannot find it and GetWeaponEnchantInfo
+-- is the only call in the client that knows about it. Hiding the client's row
+-- without it would take the last reading of the stone on your weapon off the
+-- screen, and Buffs/Nag.lua only says when one is missing. Both hands go at the
+-- head of your buff row, out of Buffs/Upkeep.lua so the three shapes that call
+-- has had are counted in one place.
 --------------------------------------------------------------------------
 
 local Aura = ns.UI.Aura
@@ -61,9 +65,11 @@ local Flow = ns.UI.Flow
 local GAP = 3
 
 -- What the square's edge may be set to. The floor is where the stack count
--- stops being readable and the ceiling is the block's own default height, above
--- which the row is taller than the frame it hangs under.
-local SIZE_MIN, SIZE_MAX = 12, 32
+-- stops being readable. The ceiling is the block's own height, above which a
+-- square is taller than the frame it hangs off, and that is `/wk skin height`
+-- rather than the constant it was written as: the block was 34 pixels tall
+-- when this file was new and it is a setting that runs to 72.
+local SIZE_MIN, SIZE_CEILING = 12, 72
 
 -- The largest either number on a square may be drawn at. UI/Aura.lua takes the
 -- rest off the square's own size; these stop a large square carrying type
@@ -91,6 +97,9 @@ local TIMER_CEILING, COUNT_CEILING = 14, 11
 --             argued with
 --   ceiling   how many of those the client will ever build, for a client
 --             that does not carry the global above
+--   enchants  put the temporary weapon enchants at the head of this row,
+--             which only your own buffs can be, because they are the one
+--             thing on you that no aura index answers for
 --   setting   how many of ours to draw
 --   global    what this row is called, for the reason UnitFrames/Skin.lua
 --             names the block: a row that lands in the wrong place can then be
@@ -102,7 +111,7 @@ local ROWS = {
 			max = "DEBUFF_MAX_DISPLAY", ceiling = 16,
 			setting = "skinAuraDebuffs", global = "WarriorKitPlayerDebuffs" },
 		{ key = "buffs", filter = "HELPFUL", head = "BuffButton", below = false,
-			max = "BUFF_MAX_DISPLAY", ceiling = 32,
+			max = "BUFF_MAX_DISPLAY", ceiling = 32, enchants = true,
 			setting = "skinAuraBuffs", global = "WarriorKitPlayerBuffs" },
 	},
 	target = {
@@ -165,13 +174,57 @@ end
 -- which is EnemyBars.lua's rule for the same reason: a fresh table per aura per
 -- tick is the kind of garbage that shows up as a stutter on a pull rather than
 -- as a number on a frame counter.
-local function Scan(row, unit)
+-- The sharpening stone on your weapon, at the head of the row it belongs to.
+--
+-- It is here rather than left to the client because it is the one thing on you
+-- that no aura scan can find: a temporary weapon enchant sits at no aura index
+-- at all, and GetWeaponEnchantInfo is the only call that knows about it. Hiding
+-- the client's buff row without this would take the last reading of it off the
+-- screen, which is what the first build of these rows did.
+--
+-- Read through Buffs/Upkeep.lua rather than out of the call, because that file
+-- already counts the returns instead of picking one of the three shapes
+-- GetWeaponEnchantInfo has had. A client with no such call answers nil there
+-- and this adds nothing, which is the same trade every other shim here makes.
+--
+-- On the tick, and it allocates nothing: two numbers out of one call and a
+-- texture the client already holds.
+local function Enchants(row, found, wanted, taken, now)
+	local Upkeep = ns.Upkeep
+	if not row.enchants or type(Upkeep) ~= "table" then
+		return taken
+	end
+	local mine, mineLeft, other, otherLeft = Upkeep.Enchants()
+	if mine == nil then
+		return taken
+	end
+	for hand = 1, 2 do
+		local has = (hand == 1) and mine or other
+		local left = (hand == 1) and mineLeft or otherLeft
+		if has and taken < wanted then
+			taken = taken + 1
+			local slot = found[taken]
+			if not slot then
+				slot = {}
+				found[taken] = slot
+			end
+			local gear = (hand == 1) and ns.Gear.MAINHAND or ns.Gear.OFFHAND
+			slot.icon = GetInventoryItemTexture("player", gear)
+			slot.expires = (left and left > 0) and (now + left) or 0
+			slot.count, slot.mine, slot.index, slot.gear = 0, true, nil, gear
+		end
+	end
+	return taken
+end
+
+local function Scan(row, unit, now)
 	local wanted = row.wanted
 	if wanted < 1 or not UnitExists(unit) then
 		return 0
 	end
 
-	local found, filter, taken = row.found, row.filter, 0
+	local found, filter = row.found, row.filter
+	local taken = Enchants(row, found, wanted, 0, now)
 	for pass = 1, 2 do
 		local index = 1
 		while taken < wanted do
@@ -189,6 +242,7 @@ local function Scan(row, unit)
 				end
 				slot.icon, slot.expires = icon, expires or 0
 				slot.count, slot.mine, slot.index = count or 0, mine, index
+				slot.gear = nil
 			end
 			index = index + 1
 		end
@@ -300,12 +354,12 @@ end
 
 local function Fill(row, unit, now)
 	local squares = row.squares
-	local count = Scan(row, unit)
+	local count = Scan(row, unit, now)
 
 	for slot = 1, count do
 		local found = row.found[slot]
 		local square = squares[slot]
-		square.auraIndex = found.index
+		square.auraIndex, square.auraGear = found.index, found.gear
 		Aura.Draw(square, found.icon, found.mine and "mine" or "theirs",
 			found.expires, found.count, now)
 		if not square:IsShown() then
@@ -315,7 +369,7 @@ local function Fill(row, unit, now)
 	for slot = count + 1, #squares do
 		local square = squares[slot]
 		if square:IsShown() then
-			square.auraIndex = nil
+			square.auraIndex, square.auraGear = nil, nil
 			square:Hide()
 		end
 	end
@@ -336,16 +390,23 @@ end
 local function Hover(square, unit, filter)
 	square:EnableMouse(true)
 	square:SetScript("OnEnter", function(self)
-		if not self.auraIndex or type(GameTooltip) ~= "table" then
+		if type(GameTooltip) ~= "table" then
 			return
 		end
-		local setter = filter == "HARMFUL" and GameTooltip.SetUnitDebuff
-			or GameTooltip.SetUnitBuff
-		if type(setter) ~= "function" then
+		-- A weapon enchant answers to the hand it is on rather than to an aura
+		-- index, which is the same call Blizzard's own enchant button makes:
+		-- the item's tooltip carries the enchant line.
+		local setter, subject = GameTooltip.SetUnitBuff, self.auraIndex
+		if self.auraGear then
+			setter, subject = GameTooltip.SetInventoryItem, self.auraGear
+		elseif filter == "HARMFUL" then
+			setter = GameTooltip.SetUnitDebuff
+		end
+		if not subject or type(setter) ~= "function" then
 			return
 		end
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		setter(GameTooltip, unit, self.auraIndex)
+		setter(GameTooltip, unit, subject)
 		GameTooltip:Show()
 	end)
 	square:SetScript("OnLeave", function()
@@ -384,7 +445,8 @@ function Auras.Build(entry)
 
 		list[index] = {
 			key = spec.key, filter = spec.filter, setting = spec.setting,
-			below = spec.below, frame = frame, squares = {}, found = {},
+			below = spec.below, enchants = spec.enchants,
+			frame = frame, squares = {}, found = {},
 			names = names, ceiling = ceiling, stripped = {}, swept = 0,
 			wanted = 0, perLine = 1,
 		}
@@ -411,8 +473,9 @@ function Auras.Place(entry, px, width, mirror)
 	end
 
 	local on = ns.db.skinAuras and true or false
-	local asked = ns.db.skinAuraSize or SIZE_MIN
-	local side = math.floor(math.max(math.min(asked, SIZE_MAX), SIZE_MIN) + 0.5)
+	local low, high = Auras.SizeRange()
+	local asked = ns.db.skinAuraSize or low
+	local side = math.floor(math.max(math.min(asked, high), low) + 0.5)
 	local gap = GAP * px
 	local square = side * px
 
@@ -581,7 +644,8 @@ end
 -- What the two settings may be set to, so the slash word and the panel offer
 -- the same range and neither has to repeat the numbers.
 function Auras.SizeRange()
-	return SIZE_MIN, SIZE_MAX
+	local block = ns.db.skinHeight or SIZE_CEILING
+	return SIZE_MIN, math.max(math.min(block, SIZE_CEILING), SIZE_MIN)
 end
 
 -- The most of one kind of aura any frame will draw, which is what the slash

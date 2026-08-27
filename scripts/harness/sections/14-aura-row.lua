@@ -326,6 +326,20 @@ do
 	check(not _G.BuffButton1:IsShown() and not _G.DebuffButton1:IsShown(),
 		"the client is still drawing your own auras in the corner of the screen")
 
+	-- The sharpening stone on your weapon, at the head of the buff row. It sits
+	-- at no aura index at all, so the walk above cannot find it and hiding the
+	-- client's row would otherwise take the last reading of it off the screen.
+	own.main, own.mainLeft = true, 1800
+	H.swing.mainhand = "|cffffffff|Hitem:12404|h[Dense Sharpening Stone]|h|r"
+	tick()
+	check(mine[1].auraGear == ns.Gear.MAINHAND,
+		"the weapon enchant is not the first square on your buff row")
+	check(mine[1].shownIcon == "hand" .. ns.Gear.MAINHAND,
+		"the enchant square drew no art, and it borrows the weapon's")
+	check(mine[2].shownIcon == "shout",
+		"the enchant pushed your buffs off the row instead of leading it")
+	own.main, own.mainLeft, H.swing.mainhand = false, 0, nil
+
 	debuffs.player, own.auras = nil, heldAuras
 	tick()
 	check(not yours[1]:IsShown() and not mine[1]:IsShown(),

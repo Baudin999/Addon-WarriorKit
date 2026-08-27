@@ -2614,6 +2614,12 @@ answer rather than an oversight: each frame is its block, so handing the
 client's row back would hang it in the gauge. Only `/wk skin off` gives it back,
 because that is what gives the frame its size back.
 
+`/wk skin aura` sizes the square, and its ceiling is the block's own height
+rather than a constant. Above that a square is taller than the frame it hangs
+off, which was 34 pixels when these rows were written and is `/wk skin height`
+now, running to 72. The floor is 12, where the stack count stops being
+readable.
+
 **The player has the same two rows, and that was the second answer.** The first
 build drew them on the target only, on the argument that Blizzard does not hang
 your buffs off `PlayerFrame` at all: they are `BuffFrame`, a system of its own
@@ -2625,14 +2631,19 @@ on the target rather than in a corner you have to look away to read. `ROWS` in
 entry in it, the rows are the same rows, the settings are the same settings, and
 nothing else in the file knows the difference.
 
-Two things stay with the client's row and go off the screen with it. Cancelling
-one of your own buffs is a protected call, so a square drawn here cannot offer
-right click to cancel; the client's row could, and it is hidden. And the
-temporary weapon enchant sits at no aura index at all, so no walk over
-`C_UnitAuras` can find it, which is why `TemporaryEnchantFrame` is deliberately
-left where the client draws it. `Buffs/Nag.lua` says when the sharpening stone
-is missing. The client's own frame is still the only thing that says how long
-the one on your weapon has left.
+One thing stays with the client's row and goes off the screen with it.
+Cancelling one of your own buffs is a protected call, so a square drawn here
+cannot offer right click to cancel; the client's row could, and it is hidden.
+
+The temporary weapon enchant is the other half of that and it does come back.
+It sits at no aura index at all, so no walk over `C_UnitAuras` finds it and
+`GetWeaponEnchantInfo` is the only call in the client that knows about it. Both
+hands lead your buff row, read through `Buffs/Upkeep.lua` rather than out of the
+call, because that file already counts the returns instead of picking one of the
+three shapes that call has had. A client answering none of them adds nothing to
+the row. The square borrows the weapon's own art, which is what Blizzard's
+enchant button does, and hovering it opens the item's tooltip rather than an
+aura's, because the enchant is a line on the item.
 
 Your own auras go first, and it is the one opinion in the file. The client's
 order is the order the auras landed in, so on anything with a raid on it a row
