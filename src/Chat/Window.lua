@@ -63,6 +63,60 @@ local built = false
 local pending = false
 
 --------------------------------------------------------------------------
+-- What the last attempt did
+--
+-- One sentence, written at every step of standing the window up, and written to
+-- the saved variables as well as to this local.
+--
+-- The saved copy is the point. The failure this is for is the one nobody can
+-- see: no window on the screen, the client swallowing the error because
+-- scriptErrors ships off, and Blizzard's own window left up by the coupling
+-- that is meant to be a safety net. Three silences, and every one of them looks
+-- from the outside like a part that did nothing. A sentence in a local is no
+-- help there, because the thing that would print it is the window that did not
+-- build; a sentence in the saved file is still there after the reload, and the
+-- panel, `/wk status` and anyone reading WTF all get the same answer out of it.
+--
+-- It is a saved variable that is not a setting, which is the one of those in the
+-- addon. It earns that by being the only channel out of a failure that has no
+-- other channel.
+local said = "nothing has tried to build it yet"
+
+local function Note(why)
+	said = why
+	if ns.db then
+		ns.db.chatWhy = why
+	end
+	return why
+end
+
+-- Where the window came out, in physical pixels off the bottom left of the
+-- screen.
+--
+-- This is the whole diagnostic on the success path, and it exists because
+-- "built" and "shown" are both true in the two cases that look identical from a
+-- chair: a window that came out at no size, and a window that landed off the
+-- edge of the screen. Neither raises, neither prints, and both read straight
+-- off these numbers.
+local function Placed()
+	local frame = window.frame
+	local scale = frame.GetEffectiveScale and frame:GetEffectiveScale() or 1
+	local left = frame.GetLeft and frame:GetLeft()
+	local bottom = frame.GetBottom and frame:GetBottom()
+	if not left or not bottom then
+		return ("open at %d by %d units and anchored to nothing the client will "
+			.. "resolve, which is a window with no place on the screen")
+			:format(math.floor(frame:GetWidth() or 0), math.floor(frame:GetHeight() or 0))
+	end
+	return ("open, %d by %d px at %d across and %d up, alpha %.2f, strata %s")
+		:format(math.floor((frame:GetWidth() or 0) * scale),
+			math.floor((frame:GetHeight() or 0) * scale),
+			math.floor(left * scale), math.floor(bottom * scale),
+			frame:GetAlpha() or 1,
+			frame.GetFrameStrata and frame:GetFrameStrata() or "unknown")
+end
+
+--------------------------------------------------------------------------
 -- Logs
 --------------------------------------------------------------------------
 
@@ -173,7 +227,7 @@ local function Sound(important)
 	return true
 end
 
-local function OnLine(rooms, text, r, g, b, important)
+local function Draw(rooms, text, r, g, b, important)
 	local appeared = false
 	for _, id in ipairs(rooms) do
 		local log = LogFor(id)
@@ -195,6 +249,25 @@ local function OnLine(rooms, text, r, g, b, important)
 		Refresh()
 	end
 	Sound(important)
+end
+
+-- Drawing a line is the one thing this window does from inside an event handler
+-- for the rest of the session, and an event handler is where the client eats a
+-- raise. A window that quietly stops taking lines is the same blank corner as
+-- one that never built, so the first refusal is caught, recorded and said out
+-- loud, and the ones after it are counted instead: a draw that is broken at all
+-- is broken on every line, and on a raid night that is a wall of text.
+local broke = 0
+
+local function OnLine(rooms, text, r, g, b, important)
+	local ok, why = pcall(Draw, rooms, text, r, g, b, important)
+	if ok then
+		return
+	end
+	broke = broke + 1
+	if broke == 1 then
+		ns.Print("the chat window " .. Note("stopped drawing lines: " .. tostring(why)))
+	end
 end
 
 --------------------------------------------------------------------------
@@ -642,10 +715,19 @@ function ChatWindow.Describe()
 		return "off"
 	end
 	if not built then
-		return "not built yet"
+		-- The sentence rather than "not built yet", because "not built yet" is
+		-- the answer that sent somebody looking at the wrong file.
+		return "not built: " .. said
 	end
 	return ("%s, %s, in %s"):format(window:IsShown() and "open" or "closed",
 		ns.Rooms.Describe(), ns.Rooms.Title(active))
+end
+
+-- What the last attempt to stand the window up did, whether it worked or not.
+-- The panel draws it and `/wk status` folds it into the chat line, so the thing
+-- you do when the corner is empty is read one line rather than guess.
+function ChatWindow.Why()
+	return said
 end
 
 -- How many rooms are drawn right now. Named for the panel and for /wk status,
@@ -698,18 +780,27 @@ end
 --------------------------------------------------------------------------
 
 function ChatWindow.Start()
-	if built or not ns.db.chat then
-		return built
+	if built then
+		return true
+	end
+	if not ns.db.chat then
+		Note("off, so nothing is built")
+		return false
 	end
 
 	local ok, made = pcall(Build)
 	if not ok then
 		built = false
-		ns.Print("the chat window did not build, so Blizzard's is still your chat: "
-			.. tostring(made))
+		ns.Print("the chat window " .. Note("did not build, so Blizzard's is still "
+			.. "your chat: " .. tostring(made)))
 		return false
 	end
 	if not made then
+		-- LogFor has already said which piece the client refused. Recorded here
+		-- anyway, because the line it printed goes into a window that scrolls
+		-- and this one survives the reload.
+		ns.Print("the chat window " .. Note("did not build: the log refused, and "
+			.. "the line above it says what the client would not make"))
 		return false
 	end
 
@@ -718,9 +809,11 @@ function ChatWindow.Start()
 		ChatWindow.Apply()
 	end)
 	if not applied then
-		ns.Print("the chat window built and would not lay itself out: " .. tostring(why))
+		ns.Print("the chat window " .. Note("built and would not lay itself out: "
+			.. tostring(why)))
 		return false
 	end
+	Note(Placed())
 	return true
 end
 
@@ -749,10 +842,16 @@ end
 
 events:SetScript("OnEvent", function(_, event)
 	if event == "PLAYER_LOGIN" then
+		-- Written before anything is tried, so a session where this file never
+		-- reached login is told apart from one that reached it and failed. Those
+		-- are two different bugs, and from a chair they are the same blank
+		-- corner of the screen. Everything below overwrites it.
+		Note("login reached, nothing built yet")
 		if not ns.db.chat then
 			-- Nothing is built while the part is off, so a player who has turned
 			-- it off pays nothing at all for it: no frames, no logs, no font
 			-- objects. Turning it back on builds it.
+			Note("off, so nothing is built")
 			return
 		end
 		ChatWindow.Start()

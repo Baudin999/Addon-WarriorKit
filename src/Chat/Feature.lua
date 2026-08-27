@@ -398,6 +398,13 @@ ns.Register({
 		chatStamp = true,
 		chatSound = true,
 
+		-- What the last attempt to build the window did. The one saved variable
+		-- in the addon that is not a setting, and Chat/Window.lua's Note says
+		-- why it has to be saved rather than held in memory: the failure it
+		-- reports is one where the window that would print it is the window that
+		-- did not build.
+		chatWhy = "",
+
 		-- Wider than the window this replaced, because the rail down the left
 		-- takes a hundred pixels that used to be the message.
 		chatWidth = 520,
@@ -513,6 +520,7 @@ ns.Register({
 		end)
 		ui.Reading("rooms", ns.Rooms.Describe)
 		ui.Reading("Blizzard's window", ns.ChatBlizzard.Describe)
+		ui.Reading("the last build", ns.ChatWindow.Why)
 
 		GroupsPage(ui)
 
