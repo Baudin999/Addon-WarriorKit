@@ -72,7 +72,10 @@ local C, M = UI.Color, UI.Metric
 local ICON = 27
 local ROW_PAD = 2
 local ROW_GAP = 1
-local HEADER = 16
+-- The strip over the rows. It was 16, which was a heading and nothing else in
+-- it; a chip is a square you have to be able to hit with a mouse at a UI scale
+-- of one half, and 16 left it no air at all.
+local HEADER = 20
 local RULE = 1
 local INSET = 3     -- the stripe to the icon
 local STRIPE = 2    -- the coloured mark down the left of a row
@@ -92,18 +95,20 @@ local PAD = 4       -- one text column to the next
 -- panel page and a second copy of the range is a second thing to keep in step.
 UI.FEED_ICON, UI.FEED_ICON_LOW, UI.FEED_ICON_HIGH = ICON, 16, 40
 
--- One filter chip: a small square in the colour of the thing it turns on, in
--- the strip over the rows. Eleven units inside a sixteen unit header, which
--- leaves the same two and a half either side that the heading text gets.
-local CHIP = 11
+-- One filter chip: a small square of the addon's own furniture with a mark on
+-- it, in the strip over the rows. Sixteen units inside a twenty unit header,
+-- which is the same two units of air the heading text gets.
+local CHIP = 16
 local CHIP_GAP = 3
+local CHIP_MARK = 14
 -- The air that separates one run of chips from the next. Three units says
--- nothing; a whole chip's width says these two are different questions.
-local CHIP_BREAK = 9
--- What a chip that is switched off is painted at. Not hidden and not greyed:
--- the colour is what says which one it is, so an off chip keeps its colour and
--- loses its light.
-local CHIP_OFF = 0.22
+-- nothing; most of a chip's width says these two are different questions.
+local CHIP_BREAK = 10
+-- What the mark on a chip that is switched off is painted at. Not hidden and
+-- not greyed: the colour and the shape are what say which chip it is, so an off
+-- chip keeps both and loses its light. Low enough to read as off across the
+-- room and high enough to still find with a cursor.
+local CHIP_OFF = 0.3
 
 -- The number column, fixed rather than grown to fit. A string that sizes itself
 -- puts every number at a different distance from the edge, which is a ragged
@@ -482,18 +487,26 @@ end
 -- while looking at the feed, and a window you have to open, find a page in and
 -- close again is a window you stop opening.
 --
--- **A chip is its colour.** No letter on it and no word beside it. The five
--- quality chips are the game's own quality ramp read left to right, which is a
--- thing every player in this game already reads without being told, and a word
--- on each would be five words of English in a feed whose rows are localised.
--- What a chip means in prose is in its tooltip, which is where a control that
--- needs a sentence keeps one everywhere else in this addon.
+-- **A chip is a mark in a colour.** No word on it and no word beside it. The
+-- five quality chips are one glyph, a gem, in the game's own quality ramp read
+-- left to right, which is a thing every player in this game already reads
+-- without being told; a word on each would be five words of English in a feed
+-- whose rows are localised.
 --
--- **Off is dim, not gone and not grey.** A chip that hid itself would leave a
+-- The first version of this drew each chip as a rectangle of flat quality
+-- colour and nothing else, and it was wrong in a way that is obvious the moment
+-- you look at a screenshot rather than at the geometry: seven hard-edged colour
+-- swatches in a row is a colour picker, and it looked like something that had
+-- been left on the screen by mistake. Nothing else in this addon that you click
+-- is a bare colour. An ability square, an aura square, a button in the panel
+-- are all the same thing, a dark square with a hairline and a mark on it, and a
+-- chip is that at chip size.
+--
+-- **Off is a dim mark, not a gone one.** A chip that hid itself would leave a
 -- strip whose chips move about as you click them, and a chip that went grey
--- would lose the one thing saying which one it is. So an off chip keeps its
--- colour at a fifth of its light: the ramp stays in place and the gaps in it
--- are the filter.
+-- would lose the one thing saying which one it is. The square and its hairline
+-- never move and never change, so the strip keeps its rhythm; what goes out is
+-- the coloured mark on top of it.
 --
 -- **The filter is what is drawn, not what is kept.** Nothing here refuses an
 -- entry at the door. Everything that drops is recorded and the chips decide
@@ -502,8 +515,12 @@ end
 --
 -- The caller hands over one table per chip, in the order they are drawn:
 --
---   { color = , tip = , get = function() end, set = function(on) end }
+--   { color = , mark = , tip = , get = function() end, set = function(on) end }
 --   { gap = true }   air, for the break between one run of chips and the next
+--
+-- `mark` is the letter the glyph face draws its mark on. See
+-- scripts/bake-glyphs.sh for which letter is which mark and why the letter
+-- matters on a client that will not take the font.
 --
 -- `tip` is a string, or a function answering one for a chip whose sentence is
 -- not knowable until somebody hovers it.
@@ -515,7 +532,10 @@ local function PaintChip(chip)
 		return false
 	end
 	chip.lit = on
-	chip.bg:SetAlpha(on and 1 or CHIP_OFF)
+	-- The mark, not the square. The ground and its hairline are furniture and
+	-- stay exactly where they are, so a strip of chips keeps its rhythm however
+	-- many of them are off; what goes out is the coloured thing on top.
+	chip.mark:SetAlpha(on and 1 or CHIP_OFF)
 	return true
 end
 
@@ -533,10 +553,24 @@ function Feed:BuildChips(specs)
 			chip:SetPoint("TOPLEFT", self.frame, "TOPLEFT", x * unit,
 				-math.floor((HEADER - CHIP) / 2) * unit)
 
-			chip.bg = ns.Fill(chip, "ARTWORK", spec.color[1], spec.color[2], spec.color[3], 1)
+			-- A square of the addon's own furniture with a mark on it, which is
+			-- what every other thing in here you can click looks like: an
+			-- ability square, an aura square, a button in the panel. It was a
+			-- rectangle of flat quality colour, and seven of those in a row read
+			-- as a colour picker somebody had left on the screen.
+			chip.bg = ns.Fill(chip, "BACKGROUND", C.control[1], C.control[2], C.control[3], 1)
 			chip.bg:SetAllPoints()
 			chip.edges = ns.Outline(chip, C.edge[1], C.edge[2], C.edge[3], 1)
 			ns.EdgeSize(chip.edges, ns.Pixel(chip))
+
+			-- The glyph face, so the mark is a gem or a quest bang rather than a
+			-- shape this file drew out of rectangles. UI/Text.lua falls the
+			-- whole thing back to Arial Narrow on a client that refuses the
+			-- font, and scripts/bake-glyphs.sh picked the three letters so that
+			-- what comes back is still a mark: `*`, `!` and `$`.
+			chip.mark = UI.Glyph(chip, CHIP_MARK * unit, spec.color, "CENTER")
+			chip.mark:SetPoint("CENTER")
+			chip.mark:SetText(spec.mark)
 
 			chip.get, chip.set, chip.tip = spec.get, spec.set, spec.tip
 			chip:SetScript("OnClick", function(this)
@@ -545,6 +579,7 @@ function Feed:BuildChips(specs)
 				self:Refilter()
 			end)
 			chip:SetScript("OnEnter", function(this)
+				UI.Tint(this.bg, C.hover)
 				-- Called rather than read where the caller gave a function. A
 				-- chip that names a quality names it in the client's own
 				-- language, and the client's own language is a global that is
@@ -554,7 +589,8 @@ function Feed:BuildChips(specs)
 				local tip = this.tip
 				UI.Tooltip.Show(this, { { type(tip) == "function" and tip() or tip } })
 			end)
-			chip:SetScript("OnLeave", function()
+			chip:SetScript("OnLeave", function(this)
+				UI.Tint(this.bg, C.control)
 				UI.Tooltip.Close()
 			end)
 			UI.PassCamera(chip)

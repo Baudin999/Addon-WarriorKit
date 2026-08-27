@@ -73,6 +73,13 @@ local QUEST_CLASS = 12
 -- marker you have to work out. This is the only orange in the addon.
 local QUEST = { 0.98, 0.55, 0.15 }
 
+-- The three letters the glyph face draws the chips' marks on. A gem for the
+-- thing that grades an item, the quest bang, and a stack of coins. Named rather
+-- than written at the call site because scripts/bake-glyphs.sh is what decides
+-- which letter carries which mark, and a literal `*` sitting in a table would
+-- give nobody reading this file a way to find that out.
+local GEM, BANG, COINS = "*", "!", "$"
+
 -- What the client calls each quality in its own language. ITEM_QUALITY0_DESC
 -- and its siblings are the strings the client's own tooltips use, so a player
 -- reading "Uncommon" on a chip reads the same word the item does; the English
@@ -273,6 +280,7 @@ local function Chips()
 	for quality = 0, QUALITIES do
 		chips[#chips + 1] = {
 			color = QUALITY[quality],
+			mark = GEM,
 			-- A function rather than a string, because the word is the client's
 			-- and its global is not reliably in place while this file is still
 			-- loading. Built on the hover, which is a moment and can afford it.
@@ -290,6 +298,7 @@ local function Chips()
 
 	chips[#chips + 1] = {
 		color = QUEST,
+		mark = BANG,
 		tip = "Quest items, whatever their own quality chip says. They are the"
 			.. " rows with a ring round the icon.",
 		get = function() return ns.db.lootFeedQuest end,
@@ -297,6 +306,7 @@ local function Chips()
 	}
 	chips[#chips + 1] = {
 		color = C.heading,
+		mark = COINS,
 		tip = "Coin. Off, what you picked up is still in the purse along the"
 			.. " bottom and out of the column.",
 		get = function() return ns.db.lootFeedMoney end,

@@ -76,7 +76,8 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   ribbon before you read a word of it. A quest item carries a ring round its
   icon, because a quest item is white and so is a stack of linen. The loot feed
   has no word over it and no line round it, and over the rows are seven small
-  squares in the quality colours: click one and that kind stops being drawn.
+  squares: five gems in the quality colours, a quest bang and a stack of coins.
+  Click one and that kind stops being drawn.
   They filter what you are looking at rather than what is recorded, so turning
   one back on brings its history with it. Hover a row and the tooltip carries
   what a vendor pays for one and what the stack came to, plus what it goes for

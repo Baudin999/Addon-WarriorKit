@@ -4217,9 +4217,10 @@ them and the chrome was carrying nothing. Both are settings, `feed loot header`
 and `feed loot edge`, and the combat feed keeps both because its rows are three
 columns of numbers.
 
-Over the rows are seven small squares, five in the quality colours and then, past
-a break, quest and coin. Each is on or off and each says which it is by its
-colour, which is a thing every player in this game already reads. They filter
+Over the rows are seven small squares of the addon's own furniture, each with a
+mark on it: five gems in the quality colours and then, past a break, a quest bang
+and a stack of coins. An off chip keeps its square and dims its mark, so the
+strip holds its rhythm however many are off. They filter
 what is drawn rather than what is kept: everything that drops is recorded either
 way, so turning a chip back on brings its history with it. The tally on the right
 of the strip reads "4/40" whenever a chip is hiding something, because a column

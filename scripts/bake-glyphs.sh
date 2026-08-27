@@ -6,13 +6,18 @@
 # crops and UI.Icon hands out. Two different things, two words, and this is the
 # first.
 #
-# Five glyphs, and they are drawn on the letters the panel was already using:
-# the chevrons on `v` and `>`, the close cross on `x`, and the stepper's own
-# `+` and `-`. Nothing in the Lua carries a codepoint escape and nothing has to
-# know it is looking at an icon. A string given the icon font draws the icon; the
-# same string given the text font draws the letter, which is what the panel drew
-# before this file existed and is what it draws again on a client that will not
-# take the font.
+# Eight glyphs, and each is drawn on a letter the addon can stand to fall back
+# to. Five were the panel's and were already the letter it drew: the chevrons on
+# `v` and `>`, the close cross on `x`, and the stepper's own `+` and `-`. Three
+# are the loot feed's filter chips and are new, so the letter was a choice: `*`
+# for the gem that grades an item, `!` for the quest mark, and `$` for coin.
+#
+# That choice is the whole trick. Nothing in the Lua carries a codepoint escape
+# and nothing has to know it is looking at an icon. A string given the icon font
+# draws the icon; the same string given the text font draws the letter, which is
+# what a client refusing the font gets. `!` in Arial Narrow beside `!` in Font
+# Awesome is the same mark twice, and `$` is money either way, so the chips
+# survive that client as marks rather than as three empty squares.
 #
 # The source is the system copy rather than a download, because a build step
 # that reaches the network is a build step that breaks when you are on a train.
@@ -56,6 +61,9 @@ PICK = {
     0xF00D: "x",  # xmark, the close button
     0xF067: "+",  # plus, a stepper and the loadout list
     0xF068: "-",  # minus, a stepper
+    0xF3A5: "*",  # gem, one per quality on the loot feed's filter strip
+    0xF12A: "!",  # exclamation, the quest chip and the ring it turns on
+    0xF51E: "$",  # coins, the coin chip
 }
 
 font = TTFont(src)
@@ -82,7 +90,7 @@ for table in font["cmap"].tables:
 NAMES = {
     1: "WarriorKit Glyphs",
     2: "Regular",
-    3: "WarriorKit Glyphs: five glyphs of Font Awesome Free Solid",
+    3: "WarriorKit Glyphs: eight glyphs of Font Awesome Free Solid",
     4: "WarriorKit Glyphs",
     6: "WarriorKitGlyphs-Regular",
     13: "SIL Open Font License 1.1. See Media/Glyphs-LICENSE.txt.",

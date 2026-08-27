@@ -130,9 +130,24 @@ being drawn without the rows moving up is a band of empty window, so
 deciding again.
 
 **Filter chips instead of a quality floor.** Seven small squares over the rows:
-five in the quality colours, then a break, then quest and coin. Each is on or
-off and each says which it is by its colour, because the quality ramp is a thing
-every player in this game already reads.
+five gems in the quality colours, then a break, then a quest bang and a stack of
+coins. Each is on or off and the quality five say which they are by colour,
+because the quality ramp is a thing every player in this game already reads.
+
+The first cut of this drew each chip as a rectangle of flat quality colour and
+nothing else, which is obvious in a screenshot and invisible in the geometry:
+seven hard-edged colour swatches in a row is a colour picker, and it read as
+something left on the screen by mistake. Nothing else in this addon that you
+click is a bare colour. An ability square, an aura square and a button in the
+panel are the same thing, a dark square with a hairline and a mark on it, and a
+chip is now that at chip size. `bake-glyphs.sh` gained three codepoints for the
+marks and the header went from 16 units to 20 to hold them, which is air the
+heading wanted anyway.
+
+The letters those glyphs are baked onto were a choice rather than an accident.
+`*`, `!` and `$`: a client that refuses the font falls the whole string back to
+Arial Narrow, and what comes back is still a mark rather than three empty
+squares. `!` is the same mark in both faces.
 
 The floor they replace worked at the door. An item under it never became a row
 and no amount of changing your mind got it back, which is the wrong end to
