@@ -220,7 +220,13 @@ function UI.Log(parent, opts)
 	-- The client reports its own scrolling, including the scroll it does for us
 	-- when a line arrives while we are at the bottom, so the bar follows a page
 	-- up as well as a drag.
-	if type(frame.SetScript) == "function" then
+	--
+	-- Asked for by name rather than probed through SetScript, which every frame
+	-- has: a script type this client does not carry is refused by SetScript
+	-- itself, and that raise took the whole window down and left Blizzard's chat
+	-- on the screen. 2.5.6 has no OnMessageScrollChanged, so the bar follows the
+	-- wheel and the arrivals, both of which Sync themselves, and nothing else.
+	if type(frame.HasScript) == "function" and frame:HasScript("OnMessageScrollChanged") then
 		frame:SetScript("OnMessageScrollChanged", function()
 			log:Sync()
 		end)
