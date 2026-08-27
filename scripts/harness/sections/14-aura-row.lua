@@ -1,27 +1,28 @@
--- The target's aura rows
+-- The aura rows on the skinned frames
 --
 -- The client hangs the target's buffs and debuffs off the frame's bottom left
 -- corner, lifted by the height of the art that used to sit under the bars.
 -- Fitting the frame to the block took that art away and the same lift then put
 -- the row inside the gauge. This file used to assert the answer to that, which
--- was to fit the frame to the block plus the measured lift so the client's own
--- arithmetic landed the icons under the block.
+-- was to fit the target frame to the block plus the measured lift so the
+-- client's own arithmetic landed the icons under the block.
 --
--- That is gone. The row is hidden and the addon draws its own, which is the
+-- That is gone. The rows are hidden and the addon draws its own, which is the
 -- only shape available once you want to decide where an aura goes: every icon
--- in the client's row is a child of a secure unit button, an addon may anchor
--- one out of combat only, and the client re-anchors the head of the row on
--- every aura the target gains or loses.
+-- in the client's target row is a child of a secure unit button, an addon may
+-- anchor one out of combat only, and the client re-anchors the head of the row
+-- on every aura the target gains or loses.
 --
 -- So the questions changed. They are no longer "did the frame come out the
--- right height" but "is the client's row hidden, is ours where the block says,
--- and does it stay right when the target picks up a raid's worth of debuffs".
--- The one that carried over is the last: the frame is the block exactly now,
--- on all three, which is what section 15 goes on to take off and put back.
+-- right height" but "are the client's rows hidden, are ours on the sides of
+-- the block they belong on, do they run the way the block is mirrored, and
+-- does none of it move when a target picks up a raid's worth of debuffs". The
+-- one that carried over is that the frame is the block exactly now, on all
+-- three, which is what section 15 goes on to take off and put back.
 --
 -- Measured off the frames rather than read out of Auras.lua's tables, the same
--- way 06-debuff-row measures the bar's icon row. Both rows are named globals
--- for exactly this reason.
+-- way 06-debuff-row measures the bar's icon row. All four rows are named
+-- globals for exactly this reason.
 
 local H = ...
 local ns, check = H.ns, H.check
@@ -37,6 +38,8 @@ end
 
 local box = _G.WarriorKitSkinTarget
 local px = ns.Pixel(box)
+-- The one gap in UnitFrames/Auras.lua, in the units these frames are drawn in.
+local gap = 3 * px
 local rowD, rowB = _G.WarriorKitTargetDebuffs, _G.WarriorKitTargetBuffs
 
 check(rowD ~= nil and rowB ~= nil,
@@ -57,52 +60,84 @@ check((bottom or 0) == 0,
 	("the target frame refuses clicks %s units above its own bottom edge, and"
 		.. " there is no longer anything down there"):format(tostring(bottom)))
 
--- Where the chain hangs. Target of target is parked on exactly the corner the
--- rows hang from, so while it is shown the first row goes under it.
 local function anchor(frame)
 	local point, relative, relativePoint, x, y = frame:GetPoint()
 	return point, relative, relativePoint, x or 0, y or 0
 end
 
-local point, relative, relativePoint = anchor(rowD)
-check(point == "TOPRIGHT" and relativePoint == "BOTTOMRIGHT",
-	("the debuff row is anchored %s to %s, and the target block is mirrored")
-		:format(tostring(point), tostring(relativePoint)))
-check(relative == _G.TargetFrameToT,
-	"target of target is parked under the block and the debuff row is not"
-	.. " hanging off it, so the two are drawn on top of each other")
+-- Where a row sits and which way it grows.
+--
+-- Debuffs under the block and buffs over it, both anchored to the block itself.
+-- Nothing chains: a target picking up twelve bleeds cannot move the buffs, and
+-- a row that grows grows away from the block in the direction it was already
+-- growing.
+do
+	local point, relative, relativePoint = anchor(rowD)
+	check(point == "TOPLEFT" and relative == box and relativePoint == "BOTTOMLEFT",
+		("the target's debuff row is anchored %s to %s and belongs under the"
+			.. " block on its gauge end")
+			:format(tostring(point), tostring(relativePoint)))
+	local bpoint, brelative, brelativePoint = anchor(rowB)
+	check(bpoint == "BOTTOMLEFT" and brelative == box and brelativePoint == "TOPLEFT",
+		("the target's buff row is anchored %s to %s and belongs over the block")
+			:format(tostring(bpoint), tostring(brelativePoint)))
 
-local bpoint, brelative, brelativePoint = anchor(rowB)
-check(bpoint == "TOPRIGHT" and brelative == rowD and brelativePoint == "BOTTOMRIGHT",
-	"the buff row is not hanging off the bottom of the debuff row")
+	-- Target of target is parked three pixels under the block on the corner the
+	-- portrait is on, and the debuff row runs from the other corner, so the two
+	-- cannot be chained: the row would land inset by the difference between the
+	-- two widths. It clears that frame by dropping past it instead.
+	local tot = _G.TargetFrameToT
+	check(tot:IsShown(), "nothing is parked under the target block, so the drop"
+		.. " the debuff row has to clear is not being tested at all")
+	local tall = tot:GetHeight() * tot:GetEffectiveScale() / box:GetEffectiveScale()
+	local dropped = -select(5, anchor(rowD))
+	check(dropped > tall and dropped < tall + 2 * gap,
+		("target of target is %.2f tall and the debuff row dropped %.2f, so the"
+			.. " two are drawn on top of each other"):format(tall, dropped))
+end
 
 -- The squares, in the order the row built them.
 local function squares(row)
 	return row.children
 end
+local function leftOf(square)
+	return select(4, anchor(square))
+end
+-- How far the square's own top edge is under the row's, which is what the row
+-- above the block has to get right: line one has to sit against the block, not
+-- against the far end of a frame sized for a full list.
+local function underTop(square)
+	return -select(5, anchor(square))
+end
+
 local first, second = squares(rowD)[1], squares(rowD)[2]
 check(first ~= nil and second ~= nil, "the debuff row built fewer than two squares")
-
-local function leftOf(square)
-	local _, _, _, x = anchor(square)
-	return x
-end
 local side = first:GetWidth()
-check(leftOf(first) > leftOf(second),
-	("square 1 is at x=%.1f and square 2 at x=%.1f, so the row runs the wrong"
-		.. " way for a mirrored block"):format(leftOf(first), leftOf(second)))
-check(math.abs((leftOf(first) + side) - rowD:GetWidth()) < 1e-6,
-	("square 1's right edge is at %.1f and the row is %.1f wide, so the row is"
-		.. " not packed against the block's own edge")
-		:format(leftOf(first) + side, rowD:GetWidth()))
 
--- Nothing on the target, so nothing drawn, and an empty row costs no height.
--- That is what puts the buff row against the block rather than one gap below
--- where the debuffs would have been.
+-- The target block is mirrored, so its gauge end is its left edge and both its
+-- rows start there and run right, away from the corridor in the middle of the
+-- screen.
+check(leftOf(first) < leftOf(second),
+	("square 1 is at x=%.1f and square 2 at x=%.1f, so the target's row runs"
+		.. " back towards the corridor"):format(leftOf(first), leftOf(second)))
+check(math.abs(leftOf(first)) < 1e-6,
+	("square 1 starts %.1f in from the block's gauge end"):format(leftOf(first)))
+
+-- One gap between the block and line one, on both sides of it. Under the
+-- block that is the row's own top edge; over it, the row is sized for a full
+-- list and line one sits against the bottom.
+do
+	check(math.abs(underTop(first) - gap) < 1e-6,
+		("line one of the debuff row is %.2f under the row's own top edge and"
+			.. " the gap is %.2f"):format(underTop(first), gap))
+	local over = rowB:GetHeight() - underTop(squares(rowB)[1]) - side
+	check(math.abs(over - gap) < 1e-6,
+		("line one of the buff row is %.2f over the block and the gap is %.2f")
+			:format(over, gap))
+end
+
+-- Nothing on the target, so nothing drawn.
 check(not first:IsShown(), "a square is drawn with no debuff on the target")
-check(math.abs(rowD:GetHeight() - px) < 1e-6,
-	("an empty debuff row is %.2f tall and should be one pixel")
-		:format(rowD:GetHeight()))
 
 -- Three debuffs, one of them yours and third in the client's order.
 local now = _G.GetTime()
@@ -127,58 +162,72 @@ check(squares(rowD)[3]:IsShown() and not squares(rowD)[4]:IsShown(),
 check(squares(rowB)[1].shownIcon == "shout",
 	"the buff row drew nothing for the buff on the target")
 
-local oneLine = rowD:GetHeight()
-check(oneLine > side and oneLine < side * 2,
-	("three debuffs on one line made the row %.2f tall and a square is %.2f")
-		:format(oneLine, side))
-
 -- The client's own row, hidden, and hidden as it is built rather than once.
 check(not _G.TargetFrameDebuff1:IsShown(),
 	"the client's first debuff icon is still drawn under our own row")
 
--- Enough to wrap. The row grows downwards and its height says so, which is the
--- only thing the tick moves: every square was placed once at layout.
-local many = {}
-for index = 1, 12 do
-	many[index] = { name = "Bleed" .. index, icon = "bleed",
-		expires = now + index, source = index == 1 and "player" or "party1" }
-end
-debuffs.target = many
-tick()
-check(rowD:GetHeight() > oneLine,
-	("twelve debuffs left the row at %.2f, the same height three took")
-		:format(rowD:GetHeight()))
-local top = select(5, anchor(squares(rowD)[1]))
-local wrapped = 0
-for _, square in ipairs(squares(rowD)) do
-	if square:IsShown() and select(5, anchor(square)) ~= top then
-		wrapped = wrapped + 1
+-- Enough to wrap, which is what a raid's worth of bleeds does. Every square was
+-- placed once at layout and the tick shows a prefix of them, so filling the row
+-- moves nothing: not the row, not line one, and not the buffs on the far side
+-- of the block.
+do
+	local held = { rowD:GetHeight(), underTop(first), leftOf(first),
+		underTop(squares(rowB)[1]) }
+	local many = {}
+	for index = 1, 12 do
+		many[index] = { name = "Bleed" .. index, icon = "bleed",
+			expires = now + index, source = index == 1 and "player" or "party1" }
+	end
+	debuffs.target = many
+	tick()
+	check(rowD:GetHeight() == held[1] and underTop(first) == held[2]
+		and leftOf(first) == held[3],
+		"twelve debuffs moved the row or the square you read first")
+	check(underTop(squares(rowB)[1]) == held[4],
+		"twelve debuffs on the target moved the buffs over the block")
+
+	local top, wrapped = underTop(squares(rowD)[1]), 0
+	for _, square in ipairs(squares(rowD)) do
+		if square:IsShown() and underTop(square) ~= top then
+			wrapped = wrapped + 1
+		end
+	end
+	check(wrapped > 0, "twelve debuffs all stayed on one line of a 202 pixel block")
+	-- Downwards, because the row is under the block. The row over it wraps the
+	-- other way and section 02 is where that is asserted against ns.UI.Flow.
+	for _, square in ipairs(squares(rowD)) do
+		if square:IsShown() then
+			check(underTop(square) >= top,
+				"a wrapped debuff line went up over the block instead of down")
+		end
 	end
 end
-check(wrapped > 0, "twelve debuffs all stayed on one line of a 202 pixel block")
 
 -- A tick that changes nothing writes nothing. The guard is ns.UI.Aura's and it
 -- is the reason the same square can be handed the same texture five times a
 -- second for the life of a setting.
-local writes = 0
-for _, square in ipairs(squares(rowD)) do
-	for _, key in ipairs({ "icon", "timer", "count" }) do
-		local art = square[key]
-		for _, method in ipairs({ "SetTexture", "SetText", "SetDesaturated" }) do
-			if type(art[method]) == "function" and not art["wk" .. method] then
-				art["wk" .. method] = art[method]
-				art[method] = function(self, ...)
-					writes = writes + 1
-					return art["wk" .. method](self, ...)
+do
+	local writes = 0
+	for _, square in ipairs(squares(rowD)) do
+		for _, key in ipairs({ "icon", "timer", "count" }) do
+			local art = square[key]
+			for _, method in ipairs({ "SetTexture", "SetText", "SetDesaturated" }) do
+				if type(art[method]) == "function" and not art["wk" .. method] then
+					art["wk" .. method] = art[method]
+					art[method] = function(self, ...)
+						writes = writes + 1
+						return art["wk" .. method](self, ...)
+					end
 				end
 			end
 		end
 	end
+	for _ = 1, 20 do
+		tick()
+	end
+	check(writes == 0,
+		("twenty unchanged ticks wrote %d times to a square"):format(writes))
 end
-for _ = 1, 20 do
-	tick()
-end
-check(writes == 0, ("twenty unchanged ticks wrote %d times to a square"):format(writes))
 
 -- The client builds its aura buttons on demand, so the sweep has to catch one
 -- that did not exist when the skin went on. Built here the way the client
@@ -212,40 +261,42 @@ do
 end
 
 --------------------------------------------------------------------------
--- Your own two rows, under the player block
+-- Your own two rows, under and over the player block
 --
 -- The same rows off the same settings, drawn by the same file, which is the
--- reason ROWS is keyed by frame rather than copied. Two things differ and both
--- come off the spec. The player block is not mirrored, so its rows run left to
--- right from the corner the portrait is on. And nothing is ever parked under
--- that block, so the debuff row hangs on the block itself rather than on a
--- perch the way the target's hangs under target of target.
+-- reason ROWS is keyed by frame rather than copied. What differs comes off the
+-- block's mirror alone. The player block is not mirrored, so its gauge end is
+-- its right edge: both its rows start there and run left, which is the target's
+-- pair reflected across the corridor between them.
 --------------------------------------------------------------------------
 do
 	local playerBox = _G.WarriorKitSkinPlayer
 	local yourD, yourB = _G.WarriorKitPlayerDebuffs, _G.WarriorKitPlayerBuffs
 	check(yourD ~= nil and yourB ~= nil,
-		"the skin built no aura rows under the player block")
+		"the skin built no aura rows on the player block")
 
 	local ppoint, prelative, prelativePoint = anchor(yourD)
-	check(ppoint == "TOPLEFT" and prelativePoint == "BOTTOMLEFT",
-		("your debuff row is anchored %s to %s, and the player block is not"
-			.. " mirrored"):format(tostring(ppoint), tostring(prelativePoint)))
-	check(prelative == playerBox,
-		"your debuff row is not hanging off the player block itself, and there"
-		.. " is nothing parked under that block for it to hang off instead")
-	local bp, br = anchor(yourB)
-	check(bp == "TOPLEFT" and br == yourD,
-		"your buff row is not hanging off the bottom of your debuff row")
+	check(ppoint == "TOPRIGHT" and prelative == playerBox
+		and prelativePoint == "BOTTOMRIGHT",
+		("your debuff row is anchored %s to %s and belongs under the block on"
+			.. " its gauge end"):format(tostring(ppoint), tostring(prelativePoint)))
+	local ybp, ybr, ybrp = anchor(yourB)
+	check(ybp == "BOTTOMRIGHT" and ybr == playerBox and ybrp == "TOPRIGHT",
+		("your buff row is anchored %s to %s and belongs over the block")
+			:format(tostring(ybp), tostring(ybrp)))
 
 	local yours = squares(yourD)
-	check(leftOf(yours[1]) < leftOf(yours[2]),
-		("square 1 is at x=%.1f and square 2 at x=%.1f, so your row runs the"
-			.. " wrong way for a block that is not mirrored")
-			:format(leftOf(yours[1]), leftOf(yours[2])))
-	check(math.abs(leftOf(yours[1])) < 1e-6,
-		("square 1 starts %.1f in from the block's own edge, and it should be"
-			.. " against it"):format(leftOf(yours[1])))
+	check(leftOf(yours[1]) > leftOf(yours[2]),
+		("square 1 is at x=%.1f and square 2 at x=%.1f, so your row runs back"
+			.. " towards the corridor"):format(leftOf(yours[1]), leftOf(yours[2])))
+	check(math.abs((leftOf(yours[1]) + side) - yourD:GetWidth()) < 1e-6,
+		("square 1's right edge is at %.1f and the row is %.1f wide, so it does"
+			.. " not start on the block's gauge end")
+			:format(leftOf(yours[1]) + side, yourD:GetWidth()))
+	local yourOver = yourB:GetHeight() - underTop(squares(yourB)[1]) - side
+	check(math.abs(yourOver - gap) < 1e-6,
+		("line one of your buff row is %.2f over the block and the gap is %.2f")
+			:format(yourOver, gap))
 
 	-- What is on you, put on the same two stub tables the buff nag walks, and
 	-- taken off again at the end of this block so no later section sees a buff
@@ -281,10 +332,10 @@ do
 		"a square is still lit with nothing on you")
 end
 
--- Off, and the target then has no row at all. That is the honest answer rather
--- than an oversight: the frame is the block, so handing the client's row back
--- would hang it inside the gauge. Only the skin coming off gives it back, and
--- section 15 is where that happens.
+-- Off, and neither frame then has a row at all. That is the honest answer
+-- rather than an oversight: each frame is its block, so handing the client's
+-- row back would hang it in the gauge. Only the skin coming off gives it back,
+-- and section 15 is where that happens.
 ns.db.skinAuras = false
 ns.FrameSkin.Relayout()
 check(not rowD:IsShown() and not rowB:IsShown(),
@@ -297,6 +348,6 @@ ns.FrameSkin.Relayout()
 debuffs.target, buffs.target = nil, nil
 tick()
 
-print(("auras  debuffs %d wide and buffs %d under each of the two blocks,"
-	.. " square %.0f px, the client's own rows hidden as they are built")
+print(("auras  debuffs %d wide under each block and buffs %d over it, square"
+	.. " %.0f px, the client's own rows hidden as they are built")
 	:format(#squares(rowD), #squares(rowB), side))

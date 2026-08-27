@@ -2601,8 +2601,14 @@ the block exactly.
 
 What draws instead is `UnitFrames/Auras.lua`: `C_UnitAuras` with the `UnitAura`
 fallback every other aura reader here uses, our own squares out of `UI/Aura.lua`,
-laid out by `ns.UI.Flow`. Debuffs against the block and buffs under them, both
-wrapping downwards, both mirrored off the corner the block's portrait is on.
+laid out by `ns.UI.Flow`. Debuffs under the block and buffs over it, each
+wrapping away from the block so a row that fills moves nothing that was already
+on the screen, and every row starting on the block's gauge end and running
+outward from it. Which is to say the four rows are two reflections: yours run
+right to left and the target's run left to right, across the same corridor the
+two blocks are mirrored about. `lineOrder` on the `ns.UI.Flow` node is what
+keeps line one against the block on the row above it, where the frame is sized
+for a full list and fills from the bottom edge up.
 `/wk skin auras off` leaves both frames with no row at all, which is the honest
 answer rather than an oversight: each frame is its block, so handing the
 client's row back would hang it in the gauge. Only `/wk skin off` gives it back,
@@ -2637,11 +2643,12 @@ drained, which is the same three states the enemy bars' debuff row uses, because
 it is the same square: `UI/Aura.lua` is one file and both rows are made of it.
 
 `ns.UI.Flow` never runs on the ticker. Every square is placed once at layout for
-the longest the row is allowed to be, the tick shows a prefix of them and moves
-none, and the only thing that changes is the row's own height, which is what
-tells the row below where to sit. The gap between rows is folded into each row's
-height, so a target with no debuffs puts the buff row against the block rather
-than one gap below where the debuffs would have been.
+the longest the row is allowed to be, and the tick shows a prefix of them and
+moves none. The row's own height is set once as well, to what a full list comes
+to, and nothing on a tick writes it: no row hangs off another one, so a height
+that tracked the count would buy nothing. On the row above the block it would
+cost that row every square it has, because those are placed against the frame's
+bottom edge and that edge is the one the anchor holds still.
 
 Hiding the client's rows is a sweep rather than a walk. Those buttons are built
 on demand, so it cannot be done once when the skin goes on, and walking all
@@ -2653,15 +2660,18 @@ returning false, so a button the client builds mid fight is retried and lands
 the moment combat drops. Whether these buttons are protected at all on this
 backport is in the untested list below.
 
-Target of target is parked on exactly the corner the target's rows hang from,
-so `Perch` tells them it is there and the first row hangs under it instead of
-through it. Nothing is ever parked under the player block, so over there the
-same comparison is against nil and the rows sit on the block itself.
-That is on the ticker rather than at layout, because the client shows and hides
-that frame with the unit and a target with nothing targeted would otherwise
-leave a hole the size of it. Writing it there is allowed in combat where
-re-anchoring target of target itself is not, for the one reason that matters
-here: that frame is ours.
+Target of target is parked under the target block on the corner the portrait is
+on, and the debuff row runs from the other corner, so the two cannot be chained
+by an anchor: the row would land inset by the difference between the two widths.
+`Perch` tells the rows that frame is there, and what is taken off it is its
+height, which is the only thing about it the row cares about. The row goes on
+hanging from the block's own corner with that much more drop. Nothing is ever
+parked under the player block, so over there the same comparison is against nil
+for the life of the session. It is on the ticker rather than at layout because
+the client shows and hides that frame with the unit, and a target with nothing
+targeted would otherwise leave a hole the size of it. Writing it there is
+allowed in combat where re-anchoring target of target itself is not, for the one
+reason that matters here: that frame is ours.
 
 A resize is not a free change, so three things carry it. The original size is
 recorded before the first fit and `/wk skin off` writes it back, without a

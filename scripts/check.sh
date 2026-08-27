@@ -228,7 +228,6 @@ Perf/Feature.lua:Paint
 UnitFrames/Auras.lua:AuraAt
 UnitFrames/Auras.lua:Scan
 UnitFrames/Auras.lua:Sweep
-UnitFrames/Auras.lua:Height
 UnitFrames/Auras.lua:Hang
 UnitFrames/Auras.lua:Fill
 UnitFrames/Auras.lua:Auras.Update

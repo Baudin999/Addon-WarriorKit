@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### The aura rows go on both sides of the block and run outward
+
+Both rows sat under the block and chained, debuffs then buffs. Asked for from
+the game: buffs over the block and debuffs under it, and every row running
+outward from the middle of the screen rather than in from the portrait.
+
+**Nothing chains any more, and that is the point.** Each row anchors to the
+block itself, buffs on its top edge and debuffs on its bottom. A target picking
+up a raid's worth of bleeds moved the buff row before and now moves nothing:
+the two rows cannot push each other about because neither one is holding the
+other up.
+
+**Every row starts on the gauge end.** That is the edge facing the other block,
+which is the opposite corner to the portrait, and it comes off `spec.mirror`
+the way everything else about the mirroring does. So your rows run right to
+left and the target's run left to right, and the four of them read outward from
+the corridor the two blocks are already mirrored about. `reverse` and `justify`
+on the `ns.UI.Flow` node both flipped for it.
+
+**A row grows away from the block.** `lineOrder` was already in `ns.UI.Flow`,
+put there for the enemy bars' debuff row, and it is what puts line one against
+the block on the row above it: the frame is sized for a full list and fills
+from its bottom edge up. Nothing new was needed in the layout engine.
+
+**The row's height stops changing on the tick.** It is set once, to what a full
+list comes to. No row hangs off another one now, so a height that tracked the
+count buys nothing, and on the row above the block it would cost that row every
+square it has: those are placed against the frame's bottom edge, and that edge
+is the one an anchor on the block's top holds still. `Height` and the
+per-row line count go with it.
+
+**Target of target is cleared by dropping past it rather than by hanging off
+it.** It is parked under the target block on the portrait corner and the debuff
+row now runs from the other corner, so an anchor between them would inset the
+row by the difference between the two widths. `Perch` still says the frame is
+there. What is taken off it is its height, converted into the block's units
+because it is drawn at a scale of its own, and the row keeps hanging from the
+block's own corner with that much more drop. Read on a change of head, not on
+the tick, so it costs one comparison against nil while the target holds still.
+
 ### Your own buffs and debuffs, under your own block
 
 The aura rows were built for the target only, on the argument that Blizzard

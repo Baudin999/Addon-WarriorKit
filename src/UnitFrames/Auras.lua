@@ -72,13 +72,17 @@ local TIMER_CEILING, COUNT_CEILING = 14, 11
 
 -- Which rows a skinned frame gets, by the key UnitFrames/Skin.lua's SPECS uses.
 --
--- Debuffs first, nearest the block, on both frames. This is a warrior's addon
--- and the target's debuffs are the row it is for: your Rend, your Sunder
--- stacks, Demoralizing Shout still up. What is helping the target is worth
--- knowing and is worth knowing second. The player keeps the same order rather
--- than a second rule, and it costs nothing to read that way: an empty row is
--- one pixel tall, so with nothing on you your buffs sit against the block
--- exactly as if the debuff row were not there.
+-- Debuffs under the block and buffs over it, on both frames. The two rows do
+-- not chain and neither can push the other about, which is the whole reason
+-- they are on opposite sides: a target picking up a raid's worth of bleeds
+-- moves nothing that was already on your screen.
+--
+-- Which way each one runs is not in this table, because it is not a property of
+-- the row. It comes off the block's mirror in Auras.Place: both pairs start on
+-- the gauge end, the edge that faces the other block, and run outward from
+-- there. So your rows run right to left and the target's run left to right, and
+-- the four of them read outward from the corridor in the middle of the screen
+-- the way the two blocks already do.
 --
 --   filter    what the client calls this half of the aura list
 --   head      the client's own button names, which are what gets hidden
@@ -94,18 +98,18 @@ local TIMER_CEILING, COUNT_CEILING = 14, 11
 --             handing out a reference to its own tables
 local ROWS = {
 	player = {
-		{ key = "debuffs", filter = "HARMFUL", head = "DebuffButton",
+		{ key = "debuffs", filter = "HARMFUL", head = "DebuffButton", below = true,
 			max = "DEBUFF_MAX_DISPLAY", ceiling = 16,
 			setting = "skinAuraDebuffs", global = "WarriorKitPlayerDebuffs" },
-		{ key = "buffs", filter = "HELPFUL", head = "BuffButton",
+		{ key = "buffs", filter = "HELPFUL", head = "BuffButton", below = false,
 			max = "BUFF_MAX_DISPLAY", ceiling = 32,
 			setting = "skinAuraBuffs", global = "WarriorKitPlayerBuffs" },
 	},
 	target = {
-		{ key = "debuffs", filter = "HARMFUL", head = "TargetFrameDebuff",
+		{ key = "debuffs", filter = "HARMFUL", head = "TargetFrameDebuff", below = true,
 			max = "MAX_TARGET_DEBUFFS", ceiling = 16,
 			setting = "skinAuraDebuffs", global = "WarriorKitTargetDebuffs" },
-		{ key = "buffs", filter = "HELPFUL", head = "TargetFrameBuff",
+		{ key = "buffs", filter = "HELPFUL", head = "TargetFrameBuff", below = false,
 			max = "MAX_TARGET_BUFFS", ceiling = 32,
 			setting = "skinAuraBuffs", global = "WarriorKitTargetBuffs" },
 	},
@@ -250,40 +254,47 @@ end
 -- The rows we draw
 --------------------------------------------------------------------------
 
--- How tall a row of `lines` is, with the gap that separates it from whatever is
--- above it folded into its own height. That is what lets an empty row cost
--- nothing: with no debuffs on the target the buff row sits against the block
--- rather than one gap below where the debuffs would have been.
-local function Height(row, lines)
-	if lines < 1 then
-		return row.px
-	end
-	return row.gap + lines * row.side + (lines - 1) * row.gap
-end
-
--- What the first row hangs off, which is not always the block.
+-- What a row under the block hangs from, which is not always the block.
 --
--- Target of target is parked on exactly the corner these rows hang from, three
--- pixels under the block, so while it is there the rows go under it and while
--- it is not they go against the block. Nothing is ever parked under the player
--- block, so over there this is one comparison against nil and the rows sit on
--- the block itself for the life of the session. Guarded on the frame itself, so this is
--- one comparison a tick until that frame is shown or hidden, which happens
--- when the target picks something up or drops it.
+-- Target of target is parked three pixels under the target block on the corner
+-- the portrait is on, and the debuff row runs from the other corner, so the two
+-- cannot be chained by an anchor: the row would land inset by the difference
+-- between the two widths. What is taken off that frame instead is its height,
+-- which is the only thing about it this row cares about, and the row goes on
+-- hanging from the block's own corner with that much more drop.
 --
--- It has to be on the ticker rather than at layout because the client shows
--- and hides that frame with the unit, and a target with nothing targeted would
--- otherwise leave a hole the size of it above the debuffs. Writing it here is
--- allowed in combat where re-anchoring target of target itself is not: this
--- frame is ours.
+-- The height is read on a change of head rather than every pass. The client
+-- shows and hides that frame with the unit, so this measures when the target
+-- picks something up or drops it, and costs one comparison against nil the
+-- rest of the time. Nothing is ever parked under the player block, so over
+-- there it is that comparison for the life of the session.
+--
+-- Writing the anchor here is allowed in combat where re-anchoring target of
+-- target itself is not: this frame is ours.
 local function Hang(list)
 	local perch = list.perch
-	local head = (perch and perch:IsShown()) and perch or list.box
-	if list.head ~= head then
-		list.head = head
-		local first = list[1].frame
-		first:ClearAllPoints()
-		first:SetPoint(list.edge, head, list.corner, 0, 0)
+	local shown = (perch and perch:IsShown()) and perch or nil
+	if list.head == shown then
+		return
+	end
+	list.head = shown
+
+	local drop = 0
+	if shown then
+		-- In the block's units, because that is what an anchor offset counts
+		-- in and target of target is drawn at a scale of its own.
+		local mine = ns.Measure(list.box, "GetEffectiveScale") or 1
+		local theirs = ns.Measure(shown, "GetEffectiveScale") or mine
+		if mine > 0 then
+			drop = (ns.Measure(shown, "GetHeight") or 0) * theirs / mine + list.gap
+		end
+	end
+	for index = 1, #list do
+		local row = list[index]
+		if row.below then
+			row.frame:ClearAllPoints()
+			row.frame:SetPoint(row.edge, list.box, row.corner, 0, -drop)
+		end
 	end
 end
 
@@ -309,14 +320,6 @@ local function Fill(row, unit, now)
 		end
 	end
 
-	-- The row's own height, which is the whole of what the tick moves. Every
-	-- square was placed once at layout and none of them moves again, so a row
-	-- that grows from one line to two only has to tell whatever hangs under it.
-	local lines = math.ceil(count / row.perLine)
-	if row.lines ~= lines then
-		row.lines = lines
-		row.frame:SetHeight(Height(row, lines))
-	end
 end
 
 --------------------------------------------------------------------------
@@ -381,10 +384,9 @@ function Auras.Build(entry)
 
 		list[index] = {
 			key = spec.key, filter = spec.filter, setting = spec.setting,
-			frame = frame, squares = {}, found = {},
+			below = spec.below, frame = frame, squares = {}, found = {},
 			names = names, ceiling = ceiling, stripped = {}, swept = 0,
-			wanted = 0, perLine = 1, lines = nil,
-			side = 0, gap = 0, px = 1,
+			wanted = 0, perLine = 1,
 		}
 	end
 	entry.auras = list
@@ -414,30 +416,37 @@ function Auras.Place(entry, px, width, mirror)
 	local gap = GAP * px
 	local square = side * px
 
-	local corner = "BOTTOM" .. (mirror and "RIGHT" or "LEFT")
-	local edge = "TOP" .. (mirror and "RIGHT" or "LEFT")
-	-- Where the chain starts, and the two points it is chained by. Kept on the
-	-- list because Hang re-anchors the first row on the ticker and must not
-	-- work either of them out again.
-	list.box, list.edge, list.corner = entry.box, edge, corner
+	-- Which end of the block every row starts from. It is the gauge end, the
+	-- edge facing the other block, which is the opposite corner to the one the
+	-- portrait is on. So the four rows all run outward from the corridor in the
+	-- middle of the screen, the same way the two blocks read outward from it.
+	local hand = mirror and "LEFT" or "RIGHT"
+	-- Kept on the list because Hang re-anchors the rows under the block on the
+	-- ticker and must not work any of this out again.
+	list.box, list.gap = entry.box, gap
 	list.head = nil
 
-	local above = entry.box
 	for index = 1, #list do
 		local row = list[index]
 		local unit = ns.UI.Unit(row.frame)
-		row.side, row.gap, row.px = square, gap, px
 		row.wanted = on and math.max(math.min(ns.db[row.setting] or 0, row.ceiling), 0) or 0
+		row.edge = (row.below and "TOP" or "BOTTOM") .. hand
+		row.corner = (row.below and "BOTTOM" or "TOP") .. hand
 
-		-- Wrapped, and packed to the same corner the block's portrait is on.
-		-- `reverse` runs the row backwards and `justify` puts a part filled line
-		-- against that same edge, which between them are the whole of the
-		-- mirroring: with neither, a short line on the target would hug the
-		-- corridor side and the full lines above it would not.
+		-- Wrapped, packed to the gauge end, and growing away from the block.
+		--
+		-- `reverse` runs the row backwards and `justify` puts a part filled
+		-- line against the same edge the full ones start from, which between
+		-- them are the whole of the mirroring: with neither, a short line on
+		-- the target would hug one side and the full lines would hug the other.
+		-- `lineOrder` is what keeps line one against the block whichever side
+		-- of it the row is on, so a row that grows grows outward and the line
+		-- you read first never moves.
 		local node = {
 			direction = "row", wrap = true, width = width, gap = gap,
-			reverse = mirror, justify = mirror and "end" or "start",
-			pad = { 0, gap, 0, 0 },
+			reverse = not mirror, justify = mirror and "start" or "end",
+			lineOrder = row.below and "down" or "up",
+			pad = row.below and { 0, gap, 0, 0 } or { 0, 0, 0, gap },
 		}
 		for slot = 1, row.wanted do
 			local held = row.squares[slot]
@@ -456,21 +465,23 @@ function Auras.Place(entry, px, width, mirror)
 		end
 
 		row.frame:ClearAllPoints()
-		row.frame:SetPoint(edge, above, corner, 0, 0)
+		row.frame:SetPoint(row.edge, entry.box, row.corner, 0, 0)
 		row.frame:SetWidth(width)
+		-- Sized to the longest the row is allowed to be and left at it. The
+		-- tick draws a prefix of the squares and moves none of them, and
+		-- nothing hangs off a row any more, so a height that changed with the
+		-- count would buy nothing and would cost the row above the block every
+		-- square it had: those are placed against the frame's bottom edge, and
+		-- that edge is the one an anchor on the block's top holds still.
 		Flow.Arrange(row.frame, node)
 
 		-- How many fit on a line, asked of Flow rather than worked out again
 		-- here, so there is one rule for where a line breaks and not two that
-		-- agree until somebody changes the gap.
+		-- agree until somebody changes the gap. Only /wk skin probe reads it.
 		local lines = Flow.Lines(node)
 		row.perLine = math.max(lines[1] and #lines[1] or 0, 1)
-		-- The tick guards the row's height against the height it last wrote,
-		-- and that height is now a different number of pixels.
-		row.lines = nil
 
 		row.frame:SetShown(on and row.wanted > 0)
-		above = row.frame
 	end
 end
 
@@ -504,7 +515,6 @@ function Auras.Unstyle(entry)
 	for index = 1, #list do
 		local row = list[index]
 		row.frame:Hide()
-		row.lines = nil
 		if not Unsweep(row) then
 			complete = false
 		end

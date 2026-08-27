@@ -59,6 +59,13 @@ Settings are `/wk skin auras on|off`, `skin aura 12-32`, `skin debuffs 0-16` and
 leaves both frames with no row at all, because each frame is its block and the
 client's own row would land inside the gauge.
 
+Buffs over the block and debuffs under it, every row starting on the gauge end
+and running outward, so the four of them read away from the corridor the way
+the two blocks do. Nothing chains, so a target picking up a raid's worth of
+bleeds moves nothing that was already on the screen. `lineOrder` on the
+`ns.UI.Flow` node was already there for the enemy bars and is what keeps line
+one against the block on the row above it.
+
 The open question at the foot of this item was answered the wrong way and is
 answered again. `750cabe` said your own buffs stay with item 4's nag row,
 because Blizzard does not hang them off `PlayerFrame`: they are `BuffFrame`, and
