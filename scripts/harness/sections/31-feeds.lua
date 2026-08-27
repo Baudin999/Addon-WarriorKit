@@ -615,6 +615,31 @@ do
 		check((Tip.Text(9) or ""):find("^Scroll") ~= nil,
 			"the hint is not the last line: " .. tostring(Tip.Text(9)))
 
+		-- Two sizes, and both of them the addon's own.
+		--
+		-- The body was 11, which is UI.Metric.small, the size the panel keeps
+		-- for a hint under a control. Every line of a tooltip is the thing you
+		-- opened it to read, so a box whose prose was a size smaller than the
+		-- panel it was hanging over had it exactly backwards, and the report
+		-- was that the tooltip's font looked bad. It did.
+		--
+		-- Read off the font the client ended up with rather than off the two
+		-- constants, because the point of the fix is that the file no longer
+		-- writes its own numbers. Multiplied by nothing: a size inside an
+		-- adopted frame is a count of design pixels and so is the metric.
+		local M = ns.UI.Metric
+		check(Tip.Size(1) == M.heading,
+			("the tooltip title is %s pixels and the addon's heading is %d")
+				:format(tostring(Tip.Size(1)), M.heading))
+		for _, index in ipairs({ 5, 6, 9 }) do
+			check(Tip.Size(index) == M.font,
+				("tooltip line %d is %s pixels and the addon's body is %d")
+					:format(index, tostring(Tip.Size(index)), M.font))
+		end
+		check(M.heading > M.font,
+			("a title at %d and a body at %d is not a title")
+				:format(M.heading, M.font))
+
 		-- Nothing to say draws nothing, which is what a row whose entry has
 		-- gone gets and what a nag square with nothing to nag about gets. A
 		-- box the size of its own padding beside the thing it has nothing

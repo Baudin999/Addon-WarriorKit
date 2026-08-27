@@ -26,7 +26,6 @@ local UI = ns.UI
 --------------------------------------------------------------------------
 
 local PATH = "Fonts\\ARIALN.TTF"
-local DEFAULT_FLAGS = "OUTLINE"
 
 -- The glyph face.
 --
@@ -62,7 +61,18 @@ local GLYPHS = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Glyphs.ttf"
 --             pixels. UI.SHADOW.
 --   outlined  over the world. No known colour behind it at all, so a shadow has
 --             nothing to be darker than and the rim is the only thing that
---             works. The default, and UI.OutlineFloor is its minimum size.
+--             works. UI.OUTLINE, and UI.OutlineFloor is its minimum size.
+--
+-- All three are named and every caller passes one. An outline used to be the
+-- unnamed default, which is a policy nobody reads holding a value everybody
+-- gets, and it went wrong exactly where you would expect: the purse along the
+-- bottom of the loot feed and every row of the feed above it are painted on an
+-- opaque surface this addon owns, they asked for no role, and they were drawn
+-- with a rim meant for text over a mob. Twelve pixel Arial Narrow with an
+-- outline round it is the "worse font" that got reported, and no site had to
+-- be wrong for it to happen. scripts/check.sh now fails any call that names no
+-- role. FALLBACK is what a call the grep did not see still draws, because a
+-- readable string is a better failure than a raise in the middle of a layout.
 --
 -- What is deliberately not here is MONOCHROME. It was tried as the default for
 -- everything at or under sixteen pixels and it was a mistake, so this note is
@@ -78,7 +88,13 @@ local GLYPHS = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Glyphs.ttf"
 -- UI.SHADOW is not a client flag and never reaches SetFont. It rides in the
 -- flags string so that it threads through UI.Label and every other site that
 -- already passes flags along, instead of adding a parameter to all of them.
+-- UI.FLAT is the empty string for the same reason: a role is a value a caller
+-- passes, and "no flags" has to be one of the values or it is a gap.
+UI.FLAT = ""
 UI.SHADOW = "SHADOW"
+UI.OUTLINE = "OUTLINE"
+
+local FALLBACK = UI.OUTLINE
 
 -- One unit, which inside a frame ns.UI.Adopt has taken onto the grid is one
 -- physical pixel. Off the grid it is near enough one, and that is the same
@@ -104,7 +120,7 @@ end
 -- are two faces and neither is a setting, so which one you get is a function
 -- you called rather than a string you passed.
 function UI.Font(size, flags)
-	flags = flags or DEFAULT_FLAGS
+	flags = flags or FALLBACK
 	local key = "text" .. size .. flags
 	local font = fonts[key]
 	if font then
@@ -201,9 +217,10 @@ local function String(parent, object, color, justify)
 	return text
 end
 
--- Outlined by default, because the default caller is a string over the world
--- and a shadow disappears against a dark floor. Everything else passes one of
--- the other two roles at the head of this file.
+-- One of the three roles at the head of this file, named by every caller. Which
+-- one is not a default worth having: it is a fact about what is behind the
+-- string, the caller is the only thing that knows it, and the answer is
+-- different for a mob's name over a floor and the same name in a panel row.
 function UI.Label(parent, size, color, justify, flags)
 	return String(parent, UI.Font(size, flags), color, justify)
 end

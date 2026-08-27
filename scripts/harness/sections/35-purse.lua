@@ -63,6 +63,38 @@ check(strip:GetScript("OnUpdate") ~= nil, "the status strip registered no ticker
 check(strip:GetParent() == _G.WarriorKitLootFeed,
 	"the strip is not a child of the feed it hangs under")
 
+-- All three cells outlined, and tall enough to carry the outline.
+--
+-- This is the one that got reported by eye, and the first fix for it was wrong.
+-- The strip looks like it is painted on a surface, but the surface is a slider
+-- the player drags and it reaches zero, at which point the strip is three
+-- numbers over the world. So the rim stays. What was actually wrong is the
+-- size: 12, two under UI.OutlineFloor(), and an outline spends a pixel of every
+-- stroke, so the hole in a 6 closed and the waist of an 8 filled in on the one
+-- line in the window that is nothing but digits.
+--
+-- Both halves are asserted, because either on its own is the state that got
+-- reported: an outline under the floor eats the digits, and no outline at all
+-- loses them completely the moment the background goes.
+--
+-- Checked here as well as by the grep in scripts/check.sh, because the grep
+-- reads the call and this reads the font the client actually ended up with.
+local floor = ns.UI.OutlineFloor()
+for _, entry in ipairs({
+	{ "the held cell", held },
+	{ "the account cell", hoard },
+	{ "the rate cell", rate },
+}) do
+	local _, size, flags = entry[2]:GetFont()
+	flags = flags or ""
+	check(flags:find("OUTLINE", 1, true),
+		("%s went flat, and the background under it slides to nothing")
+			:format(entry[1]))
+	check(size and size >= floor,
+		("%s is outlined at %s pixels, under the floor of %d")
+			:format(entry[1], tostring(size), floor))
+end
+
 -- One second of the client, which is one beat of the strip.
 local function beat()
 	strip:GetScript("OnUpdate")(strip, 1)

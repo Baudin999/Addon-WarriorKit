@@ -316,16 +316,16 @@ function Ability.New(parent, name, template, palette)
 	-- frame does with the mouse is the template's business, and a square you
 	-- cannot press is indistinguishable from a square that is drawn wrong.
 
-	w.timer = UI.Label(w, 12, nil, "CENTER")
+	w.timer = UI.Label(w, 12, nil, "CENTER", UI.SHADOW)
 	w.timer:SetPoint("CENTER")
 
 	-- The stack or charge count, bottom right, where every action bar in the
 	-- game has put it for twenty years.
-	w.count = UI.Label(w, 10, nil, "RIGHT")
+	w.count = UI.Label(w, 10, nil, "RIGHT", UI.SHADOW)
 
 	-- The key that presses it. Set once by the caller and never touched by the
 	-- tick, because a binding changes when you change it and not otherwise.
-	w.key = UI.Label(w, 10, nil, "RIGHT")
+	w.key = UI.Label(w, 10, nil, "RIGHT", UI.SHADOW)
 
 	-- How much of the look's own alpha to draw at, which is the caller's half
 	-- of visibility. A look says how loud a status is; a fade says whether the
@@ -432,8 +432,8 @@ function Ability.Size(w, side)
 
 	-- Whole pixels, because a font size that lands on a fraction is a glyph
 	-- rasterised across two rows and that is exactly what a timer must not be.
-	-- UI.NumberFont drops the outline below the size it starts eating the
-	-- counters at, which at a 27 pixel square is where the count lands.
+	-- UI.NumberFont is the shadowed role at every size, which is what all three
+	-- of these want: they sit on a spell icon this addon did not paint.
 	local timer = math.max(math.floor(side * TIMER_SHARE), 8)
 	local count = math.max(math.floor(side * COUNT_SHARE), 7)
 	local key = math.max(math.floor(side * KEY_SHARE), 7)

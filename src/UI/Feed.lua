@@ -85,6 +85,19 @@ local AMOUNT = 42
 -- over the world with whatever background the player asked for, and at zero
 -- background that is outlined text on grass. Flat text does not get softer
 -- there, it goes.
+-- Outlined, every string in this file, and both sizes at UI.OutlineFloor().
+--
+-- A feed looks like it is drawn on a surface, and it is not one this addon can
+-- promise anything about: the background is a slider the player drags, it goes
+-- to zero, and Feeds/Feature.lua tells them in writing that the text reads all
+-- the way down to nothing. At zero a feed is rows of text over the world, so
+-- the rim is the only thing holding them off it.
+--
+-- That is also why neither size is a setting and why both are 14 rather than
+-- the panel's 12. An outlined glyph spends a pixel of every stroke on the rim,
+-- so a string that must be outlined must also be tall enough to survive one,
+-- and UI/Text.lua puts that floor at 14. Anything smaller here would be wrong
+-- both ways at once: too small to carry a rim and unable to drop it.
 local ROW_TEXT = 14
 local HEADER_TEXT = 14
 
@@ -166,21 +179,21 @@ local function BuildRow(feed, index)
 	-- columns disagree row to row. A clipped name is still the right item; a
 	-- clipped number is a lie, which is Meter/Window.lua's rule and is why the
 	-- number is the column that never gives way.
-	row.name = UI.Label(row, ROW_TEXT, C.text, "LEFT")
+	row.name = UI.Label(row, ROW_TEXT, C.text, "LEFT", UI.OUTLINE)
 	row.name:SetPoint("LEFT", row, "LEFT", (STRIPE + INSET + ICON + GUTTER) * unit, 0)
 
-	row.note = UI.Label(row, ROW_TEXT, C.dim, "RIGHT")
+	row.note = UI.Label(row, ROW_TEXT, C.dim, "RIGHT", UI.OUTLINE)
 	row.note:SetPoint("RIGHT", row, "RIGHT", -(INSET + AMOUNT + PAD) * unit, 0)
 	row.note:Hide()
 
-	row.amount = UI.Label(row, ROW_TEXT, C.text, "RIGHT")
+	row.amount = UI.Label(row, ROW_TEXT, C.text, "RIGHT", UI.OUTLINE)
 	row.amount:SetPoint("RIGHT", row, "RIGHT", -INSET * unit, 0)
 
 	-- The word on a marker, which starts where the icon would and therefore
 	-- cannot be the same font string as the name. Its own string rather than the
 	-- name moved, because moving it means a SetPoint on the repaint path and a
 	-- second font string per row is both cheaper and incapable of going stale.
-	row.caption = UI.Label(row, ROW_TEXT, C.text, "LEFT")
+	row.caption = UI.Label(row, ROW_TEXT, C.text, "LEFT", UI.OUTLINE)
 	row.caption:SetPoint("LEFT", row, "LEFT", (STRIPE + INSET) * unit, 0)
 	row.caption:Hide()
 
@@ -248,11 +261,11 @@ function UI.Feed(parent, opts)
 	end
 
 	if feed.title then
-		feed.heading = UI.Label(feed.frame, HEADER_TEXT, C.dim, "LEFT")
+		feed.heading = UI.Label(feed.frame, HEADER_TEXT, C.dim, "LEFT", UI.OUTLINE)
 		feed.heading:SetPoint("TOPLEFT", feed.frame, "TOPLEFT", INSET * feed.unit, -INSET * feed.unit)
 		feed.heading:SetText(feed.title)
 
-		feed.tally = UI.Label(feed.frame, HEADER_TEXT, C.quiet, "RIGHT")
+		feed.tally = UI.Label(feed.frame, HEADER_TEXT, C.quiet, "RIGHT", UI.OUTLINE)
 		feed.tally:SetPoint("TOPRIGHT", feed.frame, "TOPRIGHT", -INSET * feed.unit, -INSET * feed.unit)
 
 		feed.rule = ns.Fill(feed.frame, "ARTWORK", C.hairline[1], C.hairline[2], C.hairline[3], 1)
@@ -260,7 +273,7 @@ function UI.Feed(parent, opts)
 		feed.rule:SetHeight(RULE * feed.unit)
 	end
 
-	feed.blank = UI.Label(feed.frame, ROW_TEXT, C.quiet, "LEFT")
+	feed.blank = UI.Label(feed.frame, ROW_TEXT, C.quiet, "LEFT", UI.OUTLINE)
 	feed.blank:SetPoint("TOPLEFT", feed.frame, "TOPLEFT",
 		(STRIPE + INSET) * feed.unit, -(feed.title and (HEADER + RULE + INSET) or INSET) * feed.unit)
 	feed.blank:SetText(feed.empty or "")

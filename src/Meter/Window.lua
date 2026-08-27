@@ -168,10 +168,10 @@ local function BuildRow(pane, index)
 	row.icon:SetSize(ICON * unit, ICON * unit)
 	row.icon:SetPoint("LEFT", row, "LEFT", INSET * unit, 0)
 
-	row.name = ns.UI.Label(row, ROW_TEXT, WHITE, "LEFT")
+	row.name = ns.UI.Label(row, ROW_TEXT, WHITE, "LEFT", ns.UI.OUTLINE)
 	row.name:SetPoint("LEFT", row, "LEFT", (INSET + ICON + GUTTER) * unit, 0)
 
-	row.value = ns.UI.Label(row, ROW_TEXT, WHITE, "RIGHT")
+	row.value = ns.UI.Label(row, ROW_TEXT, WHITE, "RIGHT", ns.UI.OUTLINE)
 	row.value:SetPoint("RIGHT", row, "RIGHT", -INSET * unit, 0)
 
 	-- The name gives way to the number, not the other way round. A truncated
@@ -193,10 +193,10 @@ local function BuildPane(clickable, percent)
 	pane.percent = percent and true or false
 	pane:SetSize(1, 1) -- both are set from the settings in MeterWindow.Apply
 
-	pane.left = ns.UI.Label(pane, HEADER_TEXT, DIM, "LEFT")
+	pane.left = ns.UI.Label(pane, HEADER_TEXT, DIM, "LEFT", ns.UI.OUTLINE)
 	pane.left:SetPoint("TOPLEFT", pane, "TOPLEFT", INSET * unit, -INSET * unit)
 
-	pane.right = ns.UI.Label(pane, HEADER_TEXT, DIM, "RIGHT")
+	pane.right = ns.UI.Label(pane, HEADER_TEXT, DIM, "RIGHT", ns.UI.OUTLINE)
 	pane.right:SetPoint("TOPRIGHT", pane, "TOPRIGHT", -INSET * unit, -INSET * unit)
 
 	pane.rule = ns.Fill(pane, "ARTWORK", 0.5, 0.5, 0.55, 0.35)
@@ -632,7 +632,7 @@ events:SetScript("OnEvent", function()
 	-- and hidden rather than made and unmade.
 	grab = ns.UI.Box(frame, nil, ns.UI.Color.edge)
 	grab:Hide()
-	title = ns.UI.Label(frame, HEADER_TEXT, ns.UI.Color.heading, "LEFT")
+	title = ns.UI.Label(frame, HEADER_TEXT, ns.UI.Color.heading, "LEFT", ns.UI.OUTLINE)
 	title:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 2 * unit)
 	title:SetText("WarriorKit meters")
 	title:Hide()

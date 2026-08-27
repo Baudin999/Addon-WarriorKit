@@ -43,7 +43,11 @@ local FRAME_NAME = "WarriorKitBuffs"
 -- between. Meter/Window.lua carries the same number for the same reason.
 local ICON = 27
 local GAP = 4          -- one square to the next
-local CAPTION = 12     -- the line under the row, in pixels
+-- The line under the row, in pixels, and at the outline floor because it is
+-- drawn over the world and UI/Text.lua will not let an outline go under it. It
+-- was 12, which is the one combination that is wrong both ways at once: too
+-- small to carry a rim and with nothing behind it to drop the rim for.
+local CAPTION = ns.UI.OutlineFloor()
 local CAPTION_GAP = 4
 
 -- The two palettes, and the one real difference between the halves.
@@ -603,15 +607,19 @@ events:SetScript("OnEvent", function(_, event, token)
 
 		grab = ns.UI.Box(frame, nil, ns.UI.Color.edge)
 		grab:Hide()
-		title = ns.UI.Label(frame, ns.UI.Metric.font, ns.UI.Color.heading, "LEFT")
+		-- At the outline floor, for the reason the swing bars' title is: it is
+		-- drawn over the world while the row is being placed, so it cannot drop
+		-- the rim, and 12 was too small to carry one.
+		title = ns.UI.Label(frame, ns.UI.OutlineFloor(), ns.UI.Color.heading,
+			"LEFT", ns.UI.OUTLINE)
 		title:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 2 * unit)
 		title:SetText("WarriorKit buffs")
 		title:Hide()
 
-		-- Outlined, which is UI.Label's default and is what the meters use for
-		-- the same reason: this text sits over the world and a drop shadow
-		-- disappears against a dark floor.
-		caption = ns.UI.Label(frame, CAPTION, RED, "CENTER")
+		-- Outlined, which is what the meters use for the same reason: this
+		-- text sits over the world and a drop shadow disappears against a
+		-- dark floor.
+		caption = ns.UI.Label(frame, CAPTION, RED, "CENTER", ns.UI.OUTLINE)
 
 		-- Built once at the ceiling, because a frame cannot be destroyed on
 		-- this client and a pool sized to the list would leak a square every

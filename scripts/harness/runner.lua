@@ -110,6 +110,7 @@ local SECTIONS = {
 	"33-anchors",
 	"34-game-menu",
 	"35-purse",
+	"36-font-roles",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

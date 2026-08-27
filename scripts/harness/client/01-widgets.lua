@@ -114,7 +114,42 @@ function Region:SetDrawLayer(layer, sublevel)
 	self.layer, self.sublevel = layer, sublevel or 0
 end
 function Region:GetDrawLayer() return self.layer, self.sublevel end
-function Region:CreateFontString() return child("fontstring", self) end
+-- Where the string was made, as the addon's own file and line.
+--
+-- A frame records loading.file, which is the TOC file that was being read when
+-- it was created, and that answers "?" or "runtime" for everything built after
+-- login, which is most of the strings in the addon: a feed row is made the
+-- first time a feed has that many rows in it. A font string is the one region
+-- whose creation site is worth keeping exactly, because 36-font-roles.lua
+-- reports on strings rather than on frames and a report that says "runtime" 200
+-- times names nothing anybody can go and fix.
+-- Past UI/Text.lua, because every string in the addon is made by the two
+-- constructors in that file and stopping at the first addon frame would name
+-- the same three lines for all sixteen hundred of them. The site worth
+-- reporting is the one that asked for a string, not the one that makes them.
+local function madeAt()
+	for level = 3, 12 do
+		local info = debug.getinfo(level, "Sl")
+		if not info or not info.short_src then
+			break
+		end
+		local file = info.short_src:gsub("^.*/src/", ""):gsub("^%./", "")
+			:gsub("^src/", "")
+		-- A tail call leaves no frame of its own, and UI.Label ends in one, so
+		-- the level that would name the caller reads "(tail call)" instead.
+		-- Skipped rather than reported: the real site is further up.
+		if not file:find("UI/Text%.lua$") and not file:find("tail call") then
+			return ("%s:%d"):format(file, info.currentline or 0)
+		end
+	end
+	return "?"
+end
+
+function Region:CreateFontString()
+	local text = child("fontstring", self)
+	text.madeAt = madeAt()
+	return text
+end
 
 -- What a button draws between mouse down and mouse up. Modelled rather than
 -- left to the PascalCase no-op above, for that no-op's usual reason: an addon

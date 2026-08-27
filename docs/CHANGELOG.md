@@ -5,28 +5,68 @@
 ### The purse and the tooltip drew their text the wrong way
 
 The three numbers along the bottom of the loot feed looked worse than the rest
-of the window, and they were. They named no font role, and a call that names no
-role got an outline, which is the role for a health number over a mob. Twelve
-pixel Arial Narrow with a rim round it loses the hole in a 6 and the waist of an
-8, which on a line that is nothing but digits is the whole line. Every row of
-the feed above the strip was the same defect one size up.
+of the window. They were outlined at 12 pixels, and `UI/Text.lua` puts the floor
+for an outline at 14 for a reason: a rim spends a pixel of every stroke, so
+below the floor the hole in a 6 closes and the waist of an 8 fills in. On the
+one line in the window that is nothing but digits, that is the whole line. The
+strip is 20 tall now and its text is at the floor.
 
-Nothing was wrong at any of those ten sites. The default was wrong, and a
-default is invisible at the call. So there is no default now: `UI/Text.lua`
-names all three roles, `UI.FLAT`, `UI.SHADOW` and `UI.OUTLINE`, every caller in
-the addon passes one, and `check.sh` fails any `UI.Label` or `UI.Font` that does
-not. The feed and the purse are flat, because they are painted on a background
-this addon owns and the palette already answers for the contrast. The meters,
-the swing bars and the nag row keep their outline and now say so, because they
-have no background at all. The three numbers on an ability square are shadowed,
-which is what `UI.NumberFont` was already giving them a line later.
+Dropping the rim instead would have been the obvious fix and it would have been
+wrong. A feed looks like it is painted on a surface this addon owns, and it is
+not one: the background is a slider the player drags, it goes to zero, and
+`Feeds/Feature.lua` promises them in writing that the text reads all the way
+down to nothing. Flat text there goes with the surface. So the strip keeps the
+outline it had and gets the height to carry one.
 
-The tooltip was the same argument about size rather than about rims. Its body
-was 11, a number the file wrote for itself, and 11 is `UI.Metric.small`, the
-size the panel keeps for a hint under a control. Every line of a tooltip is the
-thing you opened it to read, so a box whose prose was smaller than the panel
-under it had it backwards. Title and body now come off `UI.Metric`, which puts
-them at 13 and 12.
+Two more strings were under the floor and nobody had hovered them: the drag
+captions on the swing bars and the buff row, both at 12 over the world.
+
+The tooltip was a different fault with the same shape. Its body was 11, a number
+the file wrote for itself, and 11 is `UI.Metric.small` - the size the panel keeps
+for a hint under a control. Every line of a tooltip is the thing you opened it to
+read, so a box whose prose was smaller than the panel under it had it backwards.
+Title and body come off `UI.Metric` now, at 13 and 12.
+
+### Every string in the addon says what is behind it, and the addon checks
+
+`UI.Label` used to take an outline when the caller named no role, which is how
+ten sites ended up outlined without anybody choosing it. There is no default
+now: `UI/Text.lua` names all three roles, `UI.FLAT`, `UI.SHADOW` and
+`UI.OUTLINE`, every caller passes one, and `check.sh` fails a call that does not.
+
+A grep can only see that a role was named. Whether it is the right one is a fact
+about what is behind the glyph, and that is not in the source at all, so
+`harness/sections/36-font-roles.lua` asks the built addon instead. It walks every
+string that has text in it, 881 of them, finds what each is standing on by
+climbing its parents until it hits a surface, and fails on three things: an
+outline under the floor, a string with nothing behind it that is not outlined,
+and MONOCHROME.
+
+Then it drags every background opacity to zero and walks them all again. That
+second pass is the one worth having. Three surfaces in this addon are not
+surfaces - the two feeds and the chat window - and a string on one of them is a
+string over the world that looks like it is not.
+
+What counts as a surface is the whole difficulty, and it is a question about
+geometry rather than about art. Taking any texture with a file path throws the
+rule away: a loot row carries the item's icon at its left edge, and that backs
+the name sitting beside it, which is 26 rows excused a rule they were never
+measured by. Demanding a texture pinned corner to corner throws away the aura
+square's icon, which is cropped and single-anchored, and fails 168 strings that
+are right. What settles it is measuring the texture against the frame it is in
+rather than against the glyph: an icon that is most of its square is a surface,
+and a sixteen pixel icon in a two hundred pixel row is a surface for nothing but
+itself.
+
+Three sites are allow-listed with the reason written next to them, and each is
+excused one rule rather than all three. The chat window is the one place the
+three roles do not settle it: its text size is a slider from 9 to 20 and its
+background is a slider to 0, and at the bottom of both there is no role that
+works. It stays flat until one of the two sliders gets a floor. The
+timer over an aura square is the other: it sits above the art rather than on it,
+so it has the world behind it and takes a shadow anyway, because at 8 to 14
+pixels an outline closes the hole in a 6. `UI/Aura.lua` already argued that
+trade where it is made; the allow-list is where it is now enforced.
 
 ### Five icons, cut onto the letters they replace
 

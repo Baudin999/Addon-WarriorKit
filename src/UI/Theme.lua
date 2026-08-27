@@ -93,11 +93,6 @@ UI.Metric = {
 	glyph    = 10,
 }
 
--- Panel text is flat rather than outlined. An outline exists so a number over a
--- mob's head survives a dark floor behind it; over an opaque window it only
--- thickens a twelve pixel glyph until it closes up its own counters.
-UI.FLAT = ""
-
 function UI.Tint(texture, color)
 	texture:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
 	return texture
