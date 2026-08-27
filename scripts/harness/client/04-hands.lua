@@ -122,7 +122,7 @@ end
 -- order ns.ItemValue reads them in. Answering nil for a name this stub does not
 -- carry is the client's "not cached yet", and the vendor sweep has to treat
 -- that as a reason to leave the item alone.
-_G.GetItemInfo = function(link)
+local function itemInfo(link)
 	local name = type(link) == "string" and link:match("%\[(.-)%\]")
 	local item = name and ITEMS[name]
 	if not item then
@@ -132,7 +132,7 @@ _G.GetItemInfo = function(link)
 end
 -- The fourth and fifth returns are the two ns.ItemInfo reads, the equip
 -- location and the icon.
-_G.GetItemInfoInstant = function(link)
+local function itemInfoInstant(link)
 	local name = type(link) == "string" and link:match("%\[(.-)%\]")
 	local item = name and ITEMS[name]
 	if not item then
@@ -140,6 +140,16 @@ _G.GetItemInfoInstant = function(link)
 	end
 	return item.id, name, nil, item.equip, item.icon, item.classId
 end
+
+-- Both homes for the same two lookups, because both are real. The 2.5.6 client
+-- carries the loose globals and the newer one carries C_Item and has taken the
+-- globals away, and Core resolves the pair once at load, so a stub that offered
+-- only one of them would leave the other branch of every item lookup untested.
+-- Named locals rather than one wrapping the other: 40-loot-feed.lua takes the
+-- globals away to stand the addon on the newer client for a moment, and a
+-- C_Item that reached them through _G would go down with them.
+_G.GetItemInfo, _G.GetItemInfoInstant = itemInfo, itemInfoInstant
+_G.C_Item = { GetItemInfo = itemInfo, GetItemInfoInstant = itemInfoInstant }
 _G.GetContainerNumSlots = function(bag) return CARRIED[bag] and #CARRIED[bag] or 0 end
 _G.GetContainerItemLink = function(bag, slot)
 	local held = carrying(bag, slot)

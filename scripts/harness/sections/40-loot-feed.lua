@@ -122,6 +122,44 @@ do
 end
 
 ----------------------------------------------------------------------
+-- The picture on it
+--
+-- The size of the square is not the picture in it, and this is the half that
+-- shipped broken. Every row drew the question mark, because ns.ItemInfo asked
+-- _G.GetItemInfoInstant and the newer client keeps that lookup in C_Item and
+-- has taken the global away. The two functions beside it in Core.lua already
+-- asked C_Item first, so the quality colour and the quest ring went on
+-- working and the feed looked like anything but a lookup asked in the wrong
+-- place.
+--
+-- So the client loses both globals for the length of this block, which is the
+-- newer client as far as the addon can tell, and the same drop has to come
+-- back with the same icon it just had.
+----------------------------------------------------------------------
+
+do
+	local link = _G.WarriorKitItemLink("Arcanite Reaper")
+	feed:Clear()
+	drop("You receive loot: %s.", link)
+	local want = newest().icon
+	check(want == "Interface\\Icons\\Axe",
+		"the stub has no icon for an item, so nothing below this proves anything")
+
+	local instant, cached = _G.GetItemInfoInstant, _G.GetItemInfo
+	_G.GetItemInfoInstant, _G.GetItemInfo = nil, nil
+	feed:Clear()
+	drop("You receive loot: %s.", link)
+	check(newest().icon == want,
+		"with the item lookups only in C_Item the row drew " .. tostring(newest().icon))
+
+	-- And the two that were already right, checked here rather than assumed,
+	-- because the whole reason this went unnoticed is that they kept working.
+	check(newest().quality == 4, "the quality went with the globals")
+	check(newest().price == 9100, "the vendor price went with the globals")
+	_G.GetItemInfoInstant, _G.GetItemInfo = instant, cached
+end
+
+----------------------------------------------------------------------
 -- The chips
 --
 -- The quality floor that used to sit here worked at the door and this does

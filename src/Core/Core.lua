@@ -655,6 +655,20 @@ end
 -- yet, which for something sitting in your own bags is rare and not
 -- impossible, so GetItemInfoInstant is preferred where it exists: it reads the
 -- client's own item database and cannot miss.
+--
+-- Both lookups go through C_Item first, the same as ns.ItemValue and
+-- ns.ItemKind below. This function did not, and that was the loot feed drawing
+-- a question mark on every row: the newer client moved the item lookups into
+-- C_Item and took the loose globals away, so the icon came back nil while the
+-- quality colour and the quest ring, which are the two functions underneath
+-- this one, went on working. A missing global here is not a client that cannot
+-- answer, it is a client that was asked in the wrong place.
+--
+-- The fallback is on the icon rather than the equip location. Both callers
+-- that read the location can do without it and no caller can do without the
+-- picture, and an item with nowhere to equip it answers "" rather than nil,
+-- which is a value that reads as an answer and stopped the second lookup ever
+-- running for a stack of cloth.
 function ns.ItemInfo(link)
 	if type(link) ~= "string" then
 		return nil
@@ -664,15 +678,17 @@ function ns.ItemInfo(link)
 	local color = link:match("|c(%x%x%x%x%x%x%x%x)")
 	local equip, icon
 
-	if type(_G.GetItemInfoInstant) == "function" then
-		local _, _, _, loc, texture = _G.GetItemInfoInstant(link)
+	local instant = (C_Item and C_Item.GetItemInfoInstant) or _G.GetItemInfoInstant
+	if type(instant) == "function" then
+		local _, _, _, loc, texture = instant(link)
 		equip, icon = loc, texture
 	end
 
-	if not equip and type(_G.GetItemInfo) == "function" then
-		local _, _, _, _, _, _, _, _, loc, texture = _G.GetItemInfo(link)
-		equip = loc
-		icon = icon or texture
+	local cached = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+	if not icon and type(cached) == "function" then
+		local _, _, _, _, _, _, _, _, loc, texture = cached(link)
+		equip = equip or loc
+		icon = texture
 	end
 
 	return name, icon, equip, color
