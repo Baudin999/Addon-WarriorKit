@@ -409,7 +409,12 @@ events:SetScript("OnEvent", function(_, event, token)
 		grab = ns.UI.Box(frame, nil, ns.UI.Color.edge)
 		grab:SetAllPoints(frame)
 		grab:Hide()
-		title = ns.UI.Label(frame, ns.UI.Metric.font, ns.UI.Color.heading, "LEFT")
+		-- At the outline floor rather than the panel's body size. This sits
+		-- over the world while the bars are being placed, so it has to carry a
+		-- rim, and a rim costs a pixel of every stroke: at 12 it was closing up
+		-- its own counters to buy an edge it could not do without.
+		title = ns.UI.Label(frame, ns.UI.OutlineFloor(), ns.UI.Color.heading,
+			"LEFT", ns.UI.OUTLINE)
 		title:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 2 * unit)
 		title:SetText("WarriorKit swing")
 		title:Hide()

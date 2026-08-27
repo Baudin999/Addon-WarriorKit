@@ -910,7 +910,7 @@ local function LayoutWidget(widget, width, onPlate)
 	-- and the bar carries one type size. The max stays because `bars zoom` can
 	-- take the widget off the grid on a client with no SetIgnoreParentScale, and
 	-- there the two part company again.
-	local openFont = ns.UI.Font(math.max(fontSize, ns.UI.OutlineFloor()))
+	local openFont = ns.UI.Font(math.max(fontSize, ns.UI.OutlineFloor()), ns.UI.OUTLINE)
 
 	-- Both numbers on an icon are sized off the icon rather than off the bar,
 	-- because the icon is a setting now: a fourteen pixel timer on a sixteen

@@ -63,10 +63,16 @@ local KEYS = { "Rows", "Width", "Zoom", "Alpha", "Mouse", "Shown", "Point" }
 -- stops calling it the moment the feed is hidden.
 --------------------------------------------------------------------------
 
-local STATUS = 17     -- the strip's own height
+local STATUS = 20     -- the strip's own height
 local STATUS_RULE = 1 -- the hairline over it
 local STATUS_INSET = 4
-local STATUS_TEXT = 12
+-- UI.OutlineFloor(), and the strip is 20 to hold it. This was 12 in a 17 tall
+-- strip and it is what the report about the purse's font was looking at: an
+-- outlined glyph spends a pixel of every stroke on its rim, so at 12 the hole
+-- in a 6 closed and the waist of an 8 filled in, on the one line in the window
+-- that is nothing but digits. Written as the floor rather than as 14, because
+-- the two numbers are the same rule and only one of them should be edited.
+local STATUS_TEXT = 14
 
 -- One second. The three readings behind this change about once a minute
 -- between them, so a faster beat would be four comparisons a frame to write
@@ -233,13 +239,17 @@ function Instance:BuildStatus()
 	-- Yours in the addon's heading gold, the account's dim in the middle
 	-- because it is context rather than news, and the rate on the right in
 	-- whatever colour the rate has earned.
-	self.held = UI.Label(strip, STATUS_TEXT, C.heading, "LEFT")
+	--
+	-- Outlined, like every row of the feed above, and for the same reason: the
+	-- background under all of it is a slider that reaches zero, and at zero
+	-- this strip is three numbers over the world.
+	self.held = UI.Label(strip, STATUS_TEXT, C.heading, "LEFT", UI.OUTLINE)
 	self.held:SetPoint("LEFT", strip, "LEFT", STATUS_INSET * unit, 0)
 
-	self.hoard = UI.Label(strip, STATUS_TEXT, C.dim, "CENTER")
+	self.hoard = UI.Label(strip, STATUS_TEXT, C.dim, "CENTER", UI.OUTLINE)
 	self.hoard:SetPoint("CENTER", strip, "CENTER", 0, 0)
 
-	self.rate = UI.Label(strip, STATUS_TEXT, C.quiet, "RIGHT")
+	self.rate = UI.Label(strip, STATUS_TEXT, C.quiet, "RIGHT", UI.OUTLINE)
 	self.rate:SetPoint("RIGHT", strip, "RIGHT", -STATUS_INSET * unit, 0)
 
 	strip:SetScript("OnUpdate", function(this, elapsed)
@@ -332,7 +342,11 @@ function Instance:Build()
 	self.grab = UI.Box(frame, nil, C.accent)
 	self.grab:SetAllPoints()
 	self.grab:Hide()
-	self.caption = UI.Label(frame, 14, C.heading, "LEFT")
+	-- The outline floor rather than a 14 written here, which is the same number
+	-- and the same rule as the drag captions on the swing bars and the buff
+	-- row. This one was already tall enough; it just was not saying why.
+	self.caption = UI.Label(frame, UI.OutlineFloor(), C.heading, "LEFT",
+		UI.OUTLINE)
 	self.caption:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 2 * self.unit)
 	self.caption:SetText(self.title)
 	self.caption:Hide()

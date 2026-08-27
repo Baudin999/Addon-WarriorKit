@@ -474,6 +474,67 @@ while IFS= read -r bad; do
 	status=1
 done < <(grep -rnE 'ui\.Section\("[^"]*"\)' --include='*.lua' . || true)
 
+# Every string in the addon names the role it is drawn in.
+#
+# UI/Text.lua has three: flat over a surface this addon painted, shadowed over
+# art it did not, outlined over the world. Which one a string wants is a fact
+# about what is behind it, the caller is the only thing that knows it, and until
+# now a caller that said nothing got an outline.
+#
+# That default is what the gate replaces. It went wrong the way an unnamed
+# default always does: nowhere anybody looked. The purse along the bottom of the
+# loot feed and every row of the feed above it are painted on an opaque
+# background this addon owns and asked for no role, so they were drawn with a
+# rim meant for a health number over a mob, and twelve pixel Arial Narrow with a
+# rim round it closes up the counters of its own digits. Nothing was wrong at
+# any one site. The reviewer would have had to know the default to see it.
+#
+# UI/Text.lua is skipped: it is where the three roles are defined and where the
+# fallback lives.
+font_roles='
+function depth(s,   i, c, d) {
+	d = 0
+	for (i = 1; i <= length(s); i++) {
+		c = substr(s, i, 1)
+		if (c == "(") d++
+		else if (c == ")") d--
+	}
+	return d
+}
+FNR == 1 { pending = "" }
+{
+	if (pending == "") {
+		if ($0 !~ /UI[.](Label|Font)[(]/) next
+		start = FNR
+		pending = $0
+	} else {
+		pending = pending " " $0
+	}
+	# A call wrapped onto a second line carries its role there, so the check
+	# waits for the brackets to close rather than reading half of one.
+	if (depth(pending) > 0) next
+	if (pending !~ /UI[.](FLAT|SHADOW|OUTLINE)/) {
+		sub(/^[\t ]+/, "", pending)
+		printf "%s:%d: names no font role: %s\n", FILENAME, start, pending
+	}
+	pending = ""
+}
+'
+
+while IFS= read -r f; do
+	f="${f#./}"
+	# The file the three roles are defined in, and the one that holds the
+	# fallback a call the gate never sees still draws with.
+	if [ "$f" = "UI/Text.lua" ]; then
+		continue
+	fi
+	found=$(awk "$font_roles" "$f")
+	if [ -n "$found" ]; then
+		echo "$found"
+		status=1
+	fi
+done < <(find . -name '*.lua' -type f | sort)
+
 # What shape the code is in, measured per function.
 #
 # This replaced a per-file line ceiling and the replacement is the point. A

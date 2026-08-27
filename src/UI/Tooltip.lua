@@ -1,7 +1,7 @@
 local ADDON, ns = ...
 
 local UI = ns.UI
-local C = UI.Color
+local C, M = UI.Color, UI.Metric
 
 --------------------------------------------------------------------------
 -- The tooltip
@@ -78,8 +78,20 @@ local OFFSET = 4    -- the owner to the tooltip
 
 -- Two sizes and no more. A title that is the body size is not a title, and a
 -- third size in a box this small is a typeface competition.
-local TITLE = 13
-local BODY = 11
+--
+-- Both come off UI.Metric rather than being written here. They were 13 and 11,
+-- and the 11 was the mistake: it is UI.Metric.small, the size the panel keeps
+-- for a hint under a control, and a tooltip is not a footnote. Every line of a
+-- tooltip is the thing you opened it to read, so its body is the addon's body
+-- size and the panel it hangs over no longer has larger text than the box
+-- describing it.
+--
+-- One pixel now separates the title from the body, which on its own would not
+-- be a title. It does not carry that on its own: the title is the heading gold
+-- against C.text below it, and it has a hairline under it that no other line
+-- gets.
+local TITLE = M.heading
+local BODY = M.font
 
 local Tooltip = {}
 UI.Tooltip = Tooltip
@@ -566,6 +578,20 @@ function Tooltip.Text(index)
 		return nil
 	end
 	return row.left:GetText(), row.paired and row.right:GetText() or nil
+end
+
+-- And what size it was drawn at. Handed out for the reason the rest of these
+-- are: the tooltip's body has to be the addon's body size, that claim is the
+-- whole of the fix for a box whose text was smaller than the panel under it,
+-- and reading it off the font string from outside would mean this file handing
+-- out its pool.
+function Tooltip.Size(index)
+	local row = rows[index]
+	if not row or index > count then
+		return nil
+	end
+	local _, size = row.left:GetFont()
+	return size
 end
 
 --------------------------------------------------------------------------
