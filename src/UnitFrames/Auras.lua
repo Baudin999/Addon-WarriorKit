@@ -409,14 +409,25 @@ end
 -- a time, because a row of ours is standing in for exactly that row of theirs
 -- and a name is the only handle a button built on demand has.
 --
--- `/wk auras off` is a different question and it takes the other handle. It is
--- for a player who does not want the client's row on the screen whatever this
--- addon is drawing, so it hides the two frames the client hangs that row off
--- rather than the buttons inside them. Two globals instead of fifty-one names,
--- and a button this backport calls something the list above never guessed goes
--- down with the frame it is parented to. That failure is real: the sweep stops
--- at the first name that is not a frame, and the screenshot that started this
--- was the client's row drawing over ours.
+-- That handle is not good enough on its own, and the frames below are the
+-- other one. A name this backport spells differently is a button the sweep
+-- never reaches, and the sweep stops at the first name that is not a frame, so
+-- one renamed button leaves the whole run above it up. The screenshot that
+-- started this was the client's row drawing over ours.
+--
+-- So the frames the client hangs that row off go down whenever the player
+-- block is skinned, whatever the sweep did or did not find: two globals instead
+-- of fifty-one names, and a button called something nobody guessed goes down
+-- with the frame it is parented to. That is not a preference, it is the rule
+-- the whole file is built on. An aura this addon draws has exactly one place on
+-- the screen, and the block is that place the moment the skin is on.
+--
+-- `/wk auras` is what is left of the question: the client's row on a screen
+-- where nothing of ours is standing in for it. With the skin off, or the player
+-- frame turned off on its own, your buffs are the client's row and nothing
+-- else, and taking it away without being asked would leave nothing on the
+-- screen saying what is on you. Off is a real preference and that is where it
+-- lives. On is not a way to ask for two copies.
 --
 -- The two never argue over a region. The sweep holds buttons, this holds their
 -- frames, and ns.Strip marks what it holds, so turning either off gives back
@@ -430,6 +441,23 @@ local CLIENT_FRAMES = { "BuffFrame", "TemporaryEnchantFrame" }
 
 local clientPending = false
 
+-- Whether a row of ours is standing where the client's is. It is the player
+-- block being skinned and nothing narrower: with the block up, the client's row
+-- has nowhere to be. Both aura counts at 0 does not make it a place again,
+-- because the sweep takes the client's buttons down at every count including
+-- that one, and a frame hidden here would only be hiding an empty row.
+--
+-- The question is whether the block came out, not whether it was asked for. A
+-- client that does not carry PlayerFrame answers yes to the setting and has no
+-- block, and taking the client's row down for a block that never drew is how
+-- you end up with nothing on the screen saying what is on you. So this reads
+-- what UnitFrames/Skin.lua did rather than what it was told to do, and that
+-- file calls back here at the end of every apply, so a block held up by a
+-- lockdown takes the row down when it lands rather than never.
+local function Standing()
+	return ns.FrameSkin and ns.FrameSkin.Styled("player") and true or false
+end
+
 -- Both frames, hidden or given back. False where combat refused, which cannot
 -- happen on either of these two today: neither is protected, and ns.Strip only
 -- ever refuses a protected region. It is written the way every other strip in
@@ -442,7 +470,7 @@ function Auras.Client()
 		return
 	end
 
-	local hide = not ns.db.blizzAuras
+	local hide = Standing() or not ns.db.blizzAuras
 	local complete = true
 	for index = 1, #CLIENT_FRAMES do
 		local frame = _G[CLIENT_FRAMES[index]]
@@ -844,15 +872,20 @@ end
 -- something else: nothing hidden and nothing found is a name that has moved,
 -- not a switch that did nothing.
 local function DescribeClient()
-	if ns.db.blizzAuras then
-		return "the client's own row is up"
+	local standing = Standing()
+	if not standing and ns.db.blizzAuras then
+		return "the client's own row is up, because nothing here is standing in"
+			.. " for it"
 	end
+	local why = standing and "the player block is drawing it"
+		or "it is switched off"
 	local found, of = Auras.ClientFound()
 	if found == 0 then
-		return ("the client's own row is switched off and this client carries"
-			.. " neither of the %d frames it hangs off"):format(of)
+		return ("the client's own row is down because %s, and this client"
+			.. " carries neither of the %d frames it hangs off"):format(why, of)
 	end
-	return ("the client's own row is hidden, %d of %d frames"):format(found, of)
+	return ("the client's own row is hidden because %s, %d of %d frames")
+		:format(why, found, of)
 end
 
 function Auras.Describe()

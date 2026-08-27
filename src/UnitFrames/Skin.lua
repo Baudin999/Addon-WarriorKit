@@ -1691,6 +1691,19 @@ function Skin.Wanted(key)
 	return ns.db.skin and ns.db.skinFrames[key] ~= false
 end
 
+-- Whether that frame actually came out skinned, which is a different question
+-- and the one anything standing in for a piece of the client's interface has to
+-- ask. Wanted is a reading of two settings and answers yes on a client that
+-- does not carry the frame at all; this answers for the block on the screen.
+function Skin.Styled(key)
+	for _, entry in ipairs(entries) do
+		if entry.spec.key == key then
+			return entry.styled and true or false
+		end
+	end
+	return false
+end
+
 function Skin.Apply()
 	if not ns.db or #entries == 0 then
 		return
@@ -1724,6 +1737,13 @@ function Skin.Apply()
 	for _, entry in ipairs(entries) do
 		Refresh(entry)
 	end
+
+	-- The client's own aura frames follow the player block, so they are settled
+	-- on every apply rather than only when the switch that used to own them is
+	-- touched. This is where the skin going on or the player frame being turned
+	-- off on its own becomes visible, and it is the only place that knows both
+	-- have happened.
+	ns.FrameAuras.Client()
 end
 
 -- Blizzard re-lays a unit frame out when the unit under it changes, so the

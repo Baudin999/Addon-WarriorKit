@@ -435,16 +435,15 @@ ns.Register({
 		skinAuraBuffs = 8,
 
 		-- The client's own aura row, in the top corner of the screen. On, and
-		-- on a default install that changes nothing you can see: the skin is
-		-- drawing your buffs under the block and has hidden the client's
-		-- buttons by name to do it, so the row above them is empty.
+		-- on a default install that changes nothing you can see: the player
+		-- block is skinned, so it is drawing your buffs and the client's frames
+		-- are down whatever this says.
 		--
-		-- It ships on because the switch is not about a default install. It is
-		-- for the player running with `skin off`, or with the player frame left
-		-- alone, whose buffs are the client's row and nothing else, and taking
-		-- that away from them without being asked would leave nothing on the
-		-- screen saying what is on you. Off is a real preference and this is
-		-- where it lives.
+		-- It ships on because the switch is only about the install where that
+		-- is not true. With `skin off`, or the player frame turned off on its
+		-- own, your buffs are the client's row and nothing else, and taking that
+		-- away without being asked would leave nothing on the screen saying what
+		-- is on you. Off is a real preference and this is where it lives.
 		blizzAuras = true,
 	},
 
@@ -463,8 +462,15 @@ ns.Register({
 			ns.FrameAuras.Client()
 			if ns.db.blizzAuras then
 				ns.Print("the client's own aura row is back in the corner of the"
-					.. " screen. What the skin draws under the blocks is"
-					.. " `skin auras`, and this is the client's.")
+					.. " screen wherever nothing here is standing in for it."
+					.. " What the skin draws under the blocks is `skin auras`,"
+					.. " and this is the client's.")
+				if ns.FrameSkin.Wanted("player") then
+					ns.Print("the player block is skinned, so your buffs are"
+						.. " under it and the client's row stays down: two copies"
+						.. " of one aura is not something this switch will do."
+						.. " `/wk skin player off` is what puts it back.")
+				end
 			else
 				ns.Print("the client's own aura row is hidden: your buffs, your"
 					.. " debuffs and the weapon enchant beside them. Right click"
