@@ -351,13 +351,13 @@ local function Frames(ui)
 			ns.FrameSkin.Relayout()
 		end)
 
-	ui.Check("show the client's own aura row",
+	ui.Check("show the client's own aura row where nothing here replaces it",
 		function() return ns.db.blizzAuras end,
 		function(value)
 			ns.db.blizzAuras = value
 			ns.FrameAuras.Client()
 		end)
-	ui.Hint("Right click to cancel one of your own buffs goes with the client's row, because cancelling a buff is a call an addon is not allowed to make.")
+	ui.Hint("A skinned player block draws your buffs and keeps the client's row down whatever this says; turn the player frame off and this decides. Right click to cancel a buff goes with that row.")
 
 	ui.Reading("the frames", ns.FrameSkin.Describe)
 	ui.Reading("the corridor", ns.FrameSkin.DescribeLink)

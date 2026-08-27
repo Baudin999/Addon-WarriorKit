@@ -490,23 +490,26 @@ ns.FrameSkin.Relayout()
 debuffs.target, buffs.target = nil, nil
 tick()
 
--- The client's own row, which is the other switch and takes the other handle.
+-- The client's own row, which takes the other handle.
 --
 -- The sweep above hides buttons by name, one at a time, because a row of ours
--- is standing in for that row of theirs. `/wk auras off` hides the two frames
--- the client hangs the row off, so a button this backport calls something the
--- name list never guessed goes down with its parent. That is the whole reason
--- the setting exists as well as the sweep, and it is why this asserts the
--- frames rather than the buttons under them.
-check(_G.BuffFrame:IsShown() and _G.TemporaryEnchantFrame:IsShown(),
-	"the client's own aura frames are down with nothing having asked for it")
-
-ns.db.blizzAuras = false
-ns.FrameAuras.Client()
+-- is standing in for that row of theirs. It is not enough on its own: a button
+-- this backport calls something the name list never guessed survives it, and
+-- the sweep stops at the first name that is not a frame, so one renamed button
+-- leaves the run above it up. The two frames the client hangs the row off go
+-- down as well whenever the player block is skinned, and every button under
+-- them goes with its parent whatever it is called. That is why this asserts
+-- the frames rather than the buttons under them.
+--
+-- The default install is the case worth asserting, because it is the one
+-- nobody switches: the block is drawing your buffs, so the client's row is
+-- down with `blizzAuras` still at its default of on.
+check(ns.db.blizzAuras and ns.FrameSkin.Styled("player"),
+	"this check is not measuring a skinned player block on a default setting")
 check(not _G.BuffFrame:IsShown(),
-	"auras off left the client's buff row up in the corner of the screen")
+	"the player block is drawing your buffs and the client's row is up too")
 check(not _G.TemporaryEnchantFrame:IsShown(),
-	"auras off left the client's weapon enchant up beside the row it hides")
+	"the player block is drawing the weapon enchant and the client's is up too")
 
 -- Held, the way every other strip in the addon holds what it hides: the
 -- client turns its own row back on whenever it redraws, so hiding it once is
@@ -515,11 +518,36 @@ _G.BuffFrame:Show()
 check(not _G.BuffFrame:IsShown(),
 	"the client showed its own buff row again and the strip did not hold it")
 
--- And given back whole, because a switch you cannot turn off is not a switch.
+-- And given back whole where nothing is standing in for it, because a row
+-- taken from a player who has no other reading of what is on them is a row
+-- taken for no reason. The player block off on its own is the smallest way to
+-- ask for that.
+ns.db.skinFrames.player = false
+ns.FrameSkin.Apply()
+check(_G.BuffFrame:IsShown() and _G.TemporaryEnchantFrame:IsShown(),
+	"the player block came off and the client's own row stayed hidden")
+
+-- The switch still answers there, which is the whole of what it is for now.
+ns.db.blizzAuras = false
+ns.FrameAuras.Client()
+check(not _G.BuffFrame:IsShown(),
+	"auras off left the client's buff row up in the corner of the screen")
+check(not _G.TemporaryEnchantFrame:IsShown(),
+	"auras off left the client's weapon enchant up beside the row it hides")
+
 ns.db.blizzAuras = ns.DefaultFor("blizzAuras")
 ns.FrameAuras.Client()
 check(_G.BuffFrame:IsShown() and _G.TemporaryEnchantFrame:IsShown(),
 	"auras on left one of the client's own aura frames hidden")
+
+-- And the block coming back takes the client's row down again without the
+-- switch being touched, which is the failure that started this: a player who
+-- has never heard of `/wk auras` should never see two copies of one buff.
+ns.db.skinFrames.player = ns.DefaultFor("skinFrames").player
+ns.FrameSkin.Apply()
+check(not _G.BuffFrame:IsShown() and not _G.TemporaryEnchantFrame:IsShown(),
+	"the player block came back and the client's own row stayed up under it")
+tick()
 
 print(("auras  debuffs %d wide under each block and buffs %d over it, square"
 	.. " %.0f px under a %.0f px strip for the time, the client's own rows"
