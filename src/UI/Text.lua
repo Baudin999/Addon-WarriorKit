@@ -28,6 +28,26 @@ local UI = ns.UI
 local PATH = "Fonts\\ARIALN.TTF"
 local DEFAULT_FLAGS = "OUTLINE"
 
+-- The glyph face.
+--
+-- Five marks of Font Awesome Free, subset into Media/Glyphs.ttf by
+-- scripts/bake-glyphs.sh and cut onto the letters they replace: `v` and `>` are
+-- the chevrons on a group that folds, `x` is the close cross, `+` and `-` are
+-- the two ends of a stepper. Nothing that draws one knows it is drawing a font
+-- at all. UI.Glyph hands back a string in this face and every caller carries on
+-- writing the same letter it wrote before.
+--
+-- Cutting the icons onto letters rather than onto their own codepoints is what
+-- makes the fallback free. A client that will not take the file leaves the font
+-- object empty, the readback below puts Arial Narrow in its place, and what
+-- comes out is the `v` and the `>` this window drew until the font existed.
+-- Nothing checks a flag and there is no second path through any caller.
+--
+-- A glyph is not an icon. An icon is the game's own art for a spell and
+-- UI/Draw.lua crops it; a glyph is a mark this addon draws at the size of a
+-- letter. Two words, kept apart.
+local GLYPHS = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Glyphs.ttf"
+
 -- Three roles, and every string in the addon is exactly one of them. This is
 -- the whole font policy and it is here rather than argued again at each site.
 --
@@ -80,11 +100,12 @@ end
 -- One object per size and flag pair, made on first ask and never freed. The key
 -- is the caller's own string rather than the composed one, because two callers
 -- that asked differently are allowed to land on one object and neither should
--- have to know that they did. The path is not in the key because the path is
--- not a setting: one font, chosen here.
+-- have to know that they did. The face is in the key and the path is not: there
+-- are two faces and neither is a setting, so which one you get is a function
+-- you called rather than a string you passed.
 function UI.Font(size, flags)
 	flags = flags or DEFAULT_FLAGS
-	local key = size .. flags
+	local key = "text" .. size .. flags
 	local font = fonts[key]
 	if font then
 		return font
@@ -139,12 +160,34 @@ function UI.OutlineFloor()
 	return OUTLINE_FLOOR
 end
 
--- Outlined by default, because the default caller is a string over the world
--- and a shadow disappears against a dark floor. Everything else passes one of
--- the other two roles at the head of this file.
-function UI.Label(parent, size, color, justify, flags)
+-- The glyph face at one size, or Arial Narrow at that size on a client that
+-- would not take it. Flat and unshadowed, because every glyph in the addon sits
+-- on a surface this addon painted, which is the same argument UI.FLAT is.
+function UI.GlyphFont(size)
+	local key = "glyph" .. size
+	local font = fonts[key]
+	if font then
+		return font
+	end
+
+	made = made + 1
+	font = CreateFont(ADDON .. "Font" .. made)
+	font:SetFont(GLYPHS, size, "")
+	-- The same readback UI.Font does, and here it is load bearing rather than
+	-- defensive: this file is in the addon folder rather than in the client, so
+	-- it is the one font path that can be missing on a working install.
+	if not font:GetFont() then
+		font:SetFont(PATH, size, "")
+	end
+	fonts[key] = font
+	return font
+end
+
+-- What both of the calls below are: a font string on a shared font object, in a
+-- colour, justified. The object is the only thing that differs between them.
+local function String(parent, object, color, justify)
 	local text = parent:CreateFontString(nil, "OVERLAY")
-	text:SetFontObject(UI.Font(size, flags))
+	text:SetFontObject(object)
 	if color then
 		text:SetTextColor(color[1], color[2], color[3])
 	end
@@ -158,9 +201,29 @@ function UI.Label(parent, size, color, justify, flags)
 	return text
 end
 
+-- Outlined by default, because the default caller is a string over the world
+-- and a shadow disappears against a dark floor. Everything else passes one of
+-- the other two roles at the head of this file.
+function UI.Label(parent, size, color, justify, flags)
+	return String(parent, UI.Font(size, flags), color, justify)
+end
+
+-- One mark in the glyph face: a chevron, a cross, a plus. The caller sets the
+-- letter it has always set.
+function UI.Glyph(parent, size, color, justify)
+	return String(parent, UI.GlyphFont(size), color, justify)
+end
+
 function UI.FontName()
 	local path = UI.Font(10):GetFont()
 	return (path == PATH) and "Arial Narrow" or "the client default"
+end
+
+-- Whether the glyph face took, which is what tells a chevron from the letter v
+-- in a bug report.
+function UI.GlyphName()
+	local path = UI.GlyphFont(10):GetFont()
+	return (path == GLYPHS) and "the glyph face" or "Arial Narrow, so the letters"
 end
 
 -- Word wrap is off in UI.Label because a mob's name over a nameplate wants

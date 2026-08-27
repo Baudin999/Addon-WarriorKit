@@ -2,6 +2,67 @@
 
 ## Unreleased
 
+### The purse and the tooltip drew their text the wrong way
+
+The three numbers along the bottom of the loot feed looked worse than the rest
+of the window, and they were. They named no font role, and a call that names no
+role got an outline, which is the role for a health number over a mob. Twelve
+pixel Arial Narrow with a rim round it loses the hole in a 6 and the waist of an
+8, which on a line that is nothing but digits is the whole line. Every row of
+the feed above the strip was the same defect one size up.
+
+Nothing was wrong at any of those ten sites. The default was wrong, and a
+default is invisible at the call. So there is no default now: `UI/Text.lua`
+names all three roles, `UI.FLAT`, `UI.SHADOW` and `UI.OUTLINE`, every caller in
+the addon passes one, and `check.sh` fails any `UI.Label` or `UI.Font` that does
+not. The feed and the purse are flat, because they are painted on a background
+this addon owns and the palette already answers for the contrast. The meters,
+the swing bars and the nag row keep their outline and now say so, because they
+have no background at all. The three numbers on an ability square are shadowed,
+which is what `UI.NumberFont` was already giving them a line later.
+
+The tooltip was the same argument about size rather than about rims. Its body
+was 11, a number the file wrote for itself, and 11 is `UI.Metric.small`, the
+size the panel keeps for a hint under a control. Every line of a tooltip is the
+thing you opened it to read, so a box whose prose was smaller than the panel
+under it had it backwards. Title and body now come off `UI.Metric`, which puts
+them at 13 and 12.
+
+### Five icons, cut onto the letters they replace
+
+The chevron on a folded group was a lowercase `v`, the shut one was a `>`, the
+close button was an `x` and both ends of every stepper were `+` and `-`. Those
+are not icons, they are the letters that look most like icons, and at ten pixels
+of Arial Narrow they read as a typo.
+
+`Media/Glyphs.ttf` is five marks of Font Awesome Free Solid, subset by
+`scripts/bake-glyphs.sh` out of the copy already on the machine that builds it.
+It is 2,172 bytes.
+
+The part worth writing down is where the five sit in the font. They are not on
+Font Awesome's own codepoints, they are on `v`, `>`, `x`, `+` and `-`. So no
+call site carries a codepoint escape, no call site knows it is drawing an icon,
+and nothing anywhere checks whether the font loaded: a client that refuses the
+file leaves the font object empty, `UI/Text.lua` puts Arial Narrow in its place
+at the same size, and the window draws the letters it drew last week. The
+fallback is what the code was already doing, so there is no second path through
+any caller to get wrong.
+
+`ns.UI.Glyph` is a string in that face and `ns.UI.Button` takes `glyph = true`.
+A glyph is not an icon here: an icon is the game's own art for a spell and
+`ns.UI.Icon` still means that. Marks draw at 10 pixels against the body's 12,
+because a Font Awesome glyph fills its em box and a letter of Arial Narrow uses
+about two thirds of one.
+
+The font is under the SIL OFL, which reserves the name Font Awesome, so the
+subset goes out as WarriorKit Glyphs with the licence beside it in `Media/`.
+`check.sh` learned that Media holds three kinds of file: a texture is TGA or BLP
+with both sides a power of two, a font is a TTF and is measured for nothing but
+has to have its licence next to it, and a licence is allowed there only because
+its font is. `release.sh` fails a zip missing either file, and the harness walks
+every string in the window, asserts the five marks are in the glyph face and
+everything else is not, and drives the branch where the client refuses the file.
+
 ### The /wk window is sorted by what you came to change
 
 `Core/Menu.lua` put a WarriorKit button in the client's own Escape menu last

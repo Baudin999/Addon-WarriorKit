@@ -225,6 +225,70 @@ if window then
 		end
 	end
 
+	-- The glyph face.
+	--
+	-- Five marks of Font Awesome subset onto the five letters they replace, so
+	-- what is asserted is not that a chevron came out. It is that the strings
+	-- carrying those letters are in the other font and every other string in the
+	-- window is not, because the whole trick is that a caller writes `v` either
+	-- way and only the font object says which of the two it gets.
+	local GLYPHS = "Interface\\AddOns\\WarriorKit\\Media\\Glyphs.ttf"
+	local glyphed, lettered = 0, 0
+
+	local function Faces(frame)
+		for _, region in ipairs(frame.regions or {}) do
+			if region.kind == "fontstring" then
+				local path, size = region:GetFont()
+				if path == GLYPHS then
+					glyphed = glyphed + 1
+					check(size == ns.UI.Metric.glyph,
+						("a glyph is drawn at %s and the metric is %d")
+							:format(tostring(size), ns.UI.Metric.glyph))
+					check(#plain(region.text or "") <= 1,
+						("the glyph face was given %q, which is not one mark")
+							:format(plain(region.text or "")))
+				elseif path then
+					lettered = lettered + 1
+				end
+			end
+		end
+		for _, child in ipairs(frame.children or {}) do
+			Faces(child)
+		end
+	end
+	Faces(window.frame)
+
+	check(glyphed > 0, "not one string in the window is drawn in the glyph face")
+	check(lettered > glyphed, "more marks than words in a window made of sentences")
+	check(window.close.text:GetFont() == GLYPHS, "the close cross is a letter x")
+	check(window.rail.groups[1].button.fold:GetFont() == GLYPHS, "the fold mark is a letter v")
+
+	-- The letters underneath, which is the branch that runs on a client that
+	-- will not take the file. It is worth driving because it is the branch
+	-- nobody sees: the window still works, and it works by drawing exactly what
+	-- it drew before the font existed.
+	do
+		local real = _G.CreateFont
+		_G.CreateFont = function(...)
+			local font = real(...)
+			local set = font.SetFont
+			font.SetFont = function(self, path, ...)
+				if path == GLYPHS then
+					return false
+				end
+				return set(self, path, ...)
+			end
+			return font
+		end
+		-- A size nothing else asks for, because the objects are cached and a size
+		-- already made would hand back the one that loaded.
+		local refused = ns.UI.GlyphFont(97)
+		_G.CreateFont = real
+		check(refused:GetFont() == "Fonts\\ARIALN.TTF",
+			("a client that refused the glyph file left the font at %s")
+				:format(tostring(refused:GetFont())))
+	end
+
 	-- Folding, which is the one thing the rail does that a strip of tabs could
 	-- not. Shutting the group you are in leaves its page up and moves the mark
 	-- onto the group's own line, so the rail can be folded flat to eight lines
@@ -343,6 +407,8 @@ if window then
 	print(("panel  %d controls, %d switches, %d ledes, %d hints, %d readings, %d characters of prose")
 		:format(controls, switches, ledes, hints, readings, prose))
 	print(("panel  every one of the %d findable by its own label"):format(searched))
+	print(("panel  %s at %d px, %d marks against %d words")
+		:format(ns.UI.GlyphName(), ns.UI.Metric.glyph, glyphed, lettered))
 	print(("panel  viewport %.0f x %.0f, tallest section %.0f, rail %d px shut in %.0f, clipping by %s")
 		:format(window.view.width, window.view.height, tallest, railHeight,
 			window.rail.view.height, window.view.mechanism))

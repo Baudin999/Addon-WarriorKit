@@ -83,8 +83,12 @@ rm -f "$zip_path"
 listing=$(unzip -l "$zip_path")
 
 # A zip that is missing a TOC installs as a folder the client ignores, and the
-# symptom is an addon that simply never appears in the list.
-for required in WarriorKit/WarriorKit.toc WarriorKit/WarriorKit_Vanilla.toc WarriorKit/Bindings.xml WarriorKit/Media/Icon.tga; do
+# symptom is an addon that simply never appears in the list. Media/Glyphs.ttf is
+# here because a font that did not travel takes the chevrons back to the letter
+# v and says nothing about it, and its licence is here because the OFL says the
+# licence goes wherever the font goes.
+for required in WarriorKit/WarriorKit.toc WarriorKit/WarriorKit_Vanilla.toc WarriorKit/Bindings.xml \
+	WarriorKit/Media/Icon.tga WarriorKit/Media/Glyphs.ttf WarriorKit/Media/Glyphs-LICENSE.txt; do
 	if ! grep -qF "$required" <<<"$listing"; then
 		echo "the zip is missing $required" >&2
 		exit 1

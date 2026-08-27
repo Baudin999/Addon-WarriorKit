@@ -67,7 +67,14 @@ function UI.Button(parent, opts)
 	button.edges = ns.Outline(button, C.edge[1], C.edge[2], C.edge[3], 1)
 	ns.EdgeSize(button.edges, ns.Pixel(button))
 
-	button.text = UI.Label(button, opts.size or M.small, C.text, "CENTER", UI.FLAT)
+	-- opts.glyph says the label is a mark rather than a word, which is the close
+	-- cross and both ends of every stepper. The letter passed is the same letter
+	-- either way; see UI/Text.lua.
+	if opts.glyph then
+		button.text = UI.Glyph(button, opts.size or M.glyph, C.text, "CENTER")
+	else
+		button.text = UI.Label(button, opts.size or M.small, C.text, "CENTER", UI.FLAT)
+	end
 	button.text:SetPoint("CENTER")
 	button.text:SetText(opts.label or "")
 
@@ -707,10 +714,10 @@ function UI.Kit(host)
 			Changed()
 		end
 
-		local minus = UI.Button(row, { label = "-", width = M.control,
+		local minus = UI.Button(row, { label = "-", glyph = true, width = M.control,
 			onClick = function() Nudge(-1) end })
 		minus:SetPoint("TOPRIGHT", row, "TOPRIGHT", -(M.control + valueWidth + M.rowGap * 2), 0)
-		local plus = UI.Button(row, { label = "+", width = M.control,
+		local plus = UI.Button(row, { label = "+", glyph = true, width = M.control,
 			onClick = function() Nudge(1) end })
 		plus:SetPoint("TOPRIGHT")
 
@@ -865,11 +872,11 @@ function UI.Kit(host)
 				slider:Hide()
 			end
 			track:Hide()
-			local minus = UI.Button(row, { label = "-", width = M.control,
+			local minus = UI.Button(row, { label = "-", glyph = true, width = M.control,
 				onClick = function() Commit(get() - step) end })
 			minus:SetPoint("TOPRIGHT", row, "TOPRIGHT",
 				-(M.control + valueWidth + M.gutter + M.rowGap), 0)
-			local plus = UI.Button(row, { label = "+", width = M.control,
+			local plus = UI.Button(row, { label = "+", glyph = true, width = M.control,
 				onClick = function() Commit(get() + step) end })
 			plus:SetPoint("TOPRIGHT", row, "TOPRIGHT", -(valueWidth + M.gutter), 0)
 		end
@@ -934,7 +941,7 @@ function UI.Kit(host)
 		icon:SetSize(M.check, M.check)
 		icon:SetPoint("LEFT", 3, 0)
 
-		local arrow = UI.Label(button, M.small, C.dim, "RIGHT", UI.FLAT)
+		local arrow = UI.Glyph(button, M.glyph, C.dim, "RIGHT")
 		arrow:SetPoint("RIGHT", -M.rowGap, 0)
 		arrow:SetText("v")
 
@@ -1330,7 +1337,9 @@ function UI.Kit(host)
 			button.text:SetTextColor(color[1], color[2], color[3])
 		end
 
-		local function Make(onClick)
+		-- One tab. The last one is the plus that makes a new loadout and it is a
+		-- mark rather than a word, which is the only thing the flag decides.
+		local function Make(onClick, glyph)
 			local button = CreateFrame("Button", nil, row)
 			button:SetHeight(M.tab)
 			button.bg = ns.Fill(button, "BACKGROUND", C.chrome[1], C.chrome[2], C.chrome[3], 1)
@@ -1339,7 +1348,11 @@ function UI.Kit(host)
 			button.mark:SetPoint("TOPLEFT")
 			button.mark:SetPoint("TOPRIGHT")
 			button.mark:SetHeight(2)
-			button.text = UI.Label(button, M.small, C.dim, "CENTER", UI.FLAT)
+			if glyph then
+				button.text = UI.Glyph(button, M.glyph, C.dim, "CENTER")
+			else
+				button.text = UI.Label(button, M.small, C.dim, "CENTER", UI.FLAT)
+			end
 			button.text:SetPoint("CENTER")
 			UI.Wrap(button.text, false)
 			button:SetScript("OnClick", onClick)
@@ -1393,7 +1406,7 @@ function UI.Kit(host)
 					add = Make(function()
 						opts.onAdd()
 						Changed()
-					end)
+					end, true)
 					add.text:SetText("+")
 				end
 				Paint(add, false)

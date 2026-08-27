@@ -118,18 +118,49 @@ while IFS= read -r declared; do
 	[ -f "$path" ] || { echo "a TOC names a missing texture: $declared"; status=1; }
 done < <(grep -hE '^## IconTexture:' WarriorKit*.toc | sed 's/^[^:]*: *//' | sort -u)
 
-# The client reads BLP and TGA and nothing else, and on these clients a texture
-# whose sides are not powers of two is not drawn. Neither failure says anything
-# out loud, which is why this is a gate rather than a convention.
+# Three kinds of file live in Media/ and each has its own rule.
+#
+# A texture is BLP or TGA, because the client reads nothing else, and both its
+# sides are powers of two, because a texture that is not is not drawn. Neither
+# failure says anything out loud, which is why this is a gate.
+#
+# A font is TTF. It is not measured, because a glyph has no power of two to keep,
+# and it carries one more rule instead: somebody else's licence has to travel
+# with it. Media/Glyphs.ttf is a subset of Font Awesome Free under the SIL OFL,
+# and a font in this folder with no <name>-LICENSE.txt beside it is a licence
+# that got left behind in a refactor.
+#
+# A licence is that file, and it is allowed here only because a font it belongs
+# to is here too.
+#
+# Everything is named by something in the addon, licences apart, because an
+# asset nothing names is weight in every download and nobody notices it.
 while IFS= read -r asset; do
 	asset="${asset#./}"
+	named=1
 	case "$asset" in
-		*.tga|*.blp) ;;
+		*.tga|*.blp) kind=texture ;;
+		*.ttf) kind=font ;;
+		*-LICENSE.txt)
+			kind=licence
+			named=0
+			[ -f "${asset%-LICENSE.txt}.ttf" ] \
+				|| { echo "$asset is a licence for a font that is not here"; status=1; }
+			;;
 		*) echo "$asset is not a format the client reads"; status=1; continue ;;
 	esac
 
-	grep -qrF "$(basename "$asset")" --include='*.lua' --include='*.toc' --include='*.xml' . \
-		|| { echo "nothing in the addon names $asset"; status=1; }
+	if [ "$named" -eq 1 ]; then
+		grep -qrF "$(basename "$asset")" --include='*.lua' --include='*.toc' --include='*.xml' . \
+			|| { echo "nothing in the addon names $asset"; status=1; }
+	fi
+
+	if [ "$kind" = "font" ]; then
+		[ -f "${asset%.ttf}-LICENSE.txt" ] \
+			|| { echo "$asset ships with no ${asset%.ttf}-LICENSE.txt beside it"; status=1; }
+	fi
+
+	[ "$kind" = "texture" ] || continue
 
 	if [ -x "$(command -v identify || true)" ]; then
 		read -r w h < <(identify -format '%w %h' "$asset" 2>/dev/null || echo "0 0")

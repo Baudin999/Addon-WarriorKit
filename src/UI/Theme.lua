@@ -86,6 +86,11 @@ UI.Metric = {
 	font     = 12,
 	small    = 11,
 	heading  = 13,
+	-- A chevron or a cross in the glyph face. Two under the body size, because a
+	-- Font Awesome mark fills its em box while a letter of Arial Narrow uses
+	-- about two thirds of one, so matching the numbers would draw an arrow half
+	-- again the height of the word beside it.
+	glyph    = 10,
 }
 
 -- Panel text is flat rather than outlined. An outline exists so a number over a

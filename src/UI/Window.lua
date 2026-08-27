@@ -163,7 +163,8 @@ function UI.Window(opts)
 	window.title:SetPoint("TOPLEFT", M.pad, -math.floor((M.title - M.heading) / 2) - px)
 	window.title:SetText(opts.title or "")
 
-	window.close = UI.Button(frame, { label = "x", width = M.title - 8, height = M.title - 8,
+	window.close = UI.Button(frame, { label = "x", glyph = true,
+		width = M.title - 8, height = M.title - 8,
 		onClick = function() window:Hide() end })
 	window.close:SetPoint("TOPRIGHT", -4, -4)
 
@@ -332,9 +333,18 @@ end
 local Rail = {}
 Rail.__index = Rail
 
--- The fold glyph, in the same letters the dropdown arrow uses, because a
--- triangle is a texture and a texture is a file, a path and a power of two.
+-- The fold mark. A chevron down when the group is open and a chevron right when
+-- it is shut, drawn out of Media/Glyphs.ttf by UI.Glyph. The letters here are
+-- the letters that face cuts the two chevrons onto, and they are also what you
+-- see if the file does not load, which is the whole reason it is done this way.
 local OPEN, SHUT = "v", ">"
+
+-- The column the fold mark sits in, and the step a section hangs under its
+-- group. One number for both, because the two have to agree: a chevron is
+-- nearly a full em wide where the letter it replaced was a third of one, and
+-- the first version of this put the mark and the group's own name in the same
+-- four pixels.
+local FOLD = M.rowGap + M.glyph + M.rowGap
 
 local function PaintRail(button)
 	local shade = button.selected and C.selected or (button.hovered and C.hover or C.rail)
@@ -401,12 +411,12 @@ end
 function Rail:Add(label)
 	local at = #self.groups + 1
 	local group = { at = at, children = {}, current = 1 }
-	local button = RailRow(self, M.gutter + M.rowGap)
+	local button = RailRow(self, FOLD)
 
 	-- The fold, in the margin the indent leaves free on the rows below it, so a
 	-- group's own letters and its sections' letters do not start in the same
 	-- column and the shape of the list is legible with the words unread.
-	button.fold = UI.Label(button, M.small, C.quiet, "LEFT", UI.FLAT)
+	button.fold = UI.Glyph(button, M.glyph, C.quiet, "LEFT")
 	button.fold:SetPoint("LEFT", M.rowGap, 0)
 	UI.Wrap(button.fold, false)
 
@@ -425,7 +435,7 @@ function Rail:Add(label)
 	-- the right and the air round both. Recorded rather than worked out again,
 	-- because the gate that refuses a rail line too long to read has to measure
 	-- against the same number the anchors above use.
-	button.room = M.gutter + M.rowGap + 3 + M.rowGap * 2
+	button.room = FOLD + 3 + M.rowGap * 2
 
 	button:SetScript("OnClick", function()
 		self:Toggle(at)
@@ -465,7 +475,7 @@ function Rail:Layout()
 		for _, child in ipairs(group.children) do
 			child:SetShown(group.open and true or false)
 			if group.open then
-				self.stack:Add(child, { height = M.railRow, gap = 1, indent = M.indent })
+				self.stack:Add(child, { height = M.railRow, gap = 1, indent = FOLD })
 			end
 		end
 	end

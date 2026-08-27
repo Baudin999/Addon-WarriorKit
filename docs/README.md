@@ -87,7 +87,8 @@ name of none of them.
     UI/Draw.lua          a filled rectangle, a hairline outline, a crisp icon
     UI/Gauge.lua         a status bar with a flat fill and the spent part
                          of it behind, in the fill's own colour at a fifth
-    UI/Text.lua          one shared font object per size, a label, wrapped height
+    UI/Text.lua          one shared font object per size, a label, a glyph,
+                         wrapped height
     UI/Flow.lua          a stack panel: rows, columns, wrapping and alignment
     UI/Theme.lua         the palette and the pixel metrics, in one table each
     UI/Stack.lua         a column of rows, each one asked how tall it is
@@ -759,6 +760,30 @@ The typeface is `Fonts\ARIALN.TTF` and it is not a setting. Friz Quadrata is the
 client's default and it is a serif cut for a 2004 headline, not for a ten pixel
 number over a moving nameplate. Every client since the first ships Arial Narrow,
 so it costs no asset in the addon folder and no dependency.
+
+**The second face is five marks, and they are cut onto letters.**
+`Media/Glyphs.ttf` is a subset of Font Awesome Free Solid: the two chevrons on a
+group that folds, the close cross, and the two ends of a stepper.
+`scripts/bake-glyphs.sh` builds it from the system copy and it comes to about
+two kilobytes.
+
+What makes it worth doing this way is where those five glyphs sit in the font.
+They are not on their own codepoints, they are on `v`, `>`, `x`, `+` and `-`,
+the letters this window drew before the font existed. So no call site carries a
+codepoint escape, nothing checks whether the font loaded, and a client that
+refuses the file gets Arial Narrow at the same size and draws the letters again.
+The fallback is the thing the code was already doing.
+
+`ns.UI.Glyph(parent, size, colour, justify)` is a string in that face and
+`ns.UI.Button` takes `glyph = true` for a button whose label is a mark rather
+than a word. A glyph is not an icon: an icon is the game's own art for a spell,
+which `UI/Draw.lua` crops and `ns.UI.Icon` hands out. Marks are drawn two pixels
+under the body size, because a Font Awesome glyph fills its em box while a
+letter of Arial Narrow uses about two thirds of one.
+
+The font is under the SIL OFL and the licence travels beside it in `Media/`.
+`check.sh` fails a font in there with no `<name>-LICENSE.txt` next to it, and
+`release.sh` fails a zip that is missing either file.
 
 **Three roles, and every string is exactly one of them.** This is the whole font
 policy. Pick the role from what is behind the glyph, never from how it looks.
