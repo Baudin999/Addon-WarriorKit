@@ -459,6 +459,33 @@ function Panel.Draw(ui)
 			.. " an addon is not allowed to make. "
 			.. ns.FrameAuras.Describe() .. "."
 	end)
+	ui.Check("show the client's own aura row",
+		function() return ns.db.blizzAuras end,
+		function(value)
+			ns.db.blizzAuras = value
+			ns.FrameAuras.Client()
+		end)
+	ui.Note(function()
+		if not ns.db.blizzAuras then
+			return "Hidden, whatever else is on the screen. Both of the client's"
+				.. " frames are down: your buffs and debuffs in the top corner and"
+				.. " the weapon enchant beside them. Right click to cancel a buff"
+				.. " goes with them, because cancelling one is a call an addon is"
+				.. " not allowed to make."
+		end
+		if ns.db.skin and ns.db.skinFrames.player ~= false then
+			return "Allowed on screen, and there is nothing left in it: the row"
+				.. " above is drawing your buffs, and every button the client would"
+				.. " have put in the corner is hidden by name to keep one aura in"
+				.. " one place. This switch is what answers when the skin is not"
+				.. " doing that."
+		end
+		return "Your buffs are the client's row in the corner of the screen and"
+			.. " nothing here is standing in for it, because the row above hangs"
+			.. " off a block the player frame is not wearing. Switch it off and"
+			.. " nothing draws what is on you: the stone on your weapon included,"
+			.. " which the missing-buff row only speaks about once it has run out."
+	end)
 	ui.Note(function()
 		if not ns.db.skin then
 			return "Blizzard's own frames, exactly as they shipped. "

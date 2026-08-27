@@ -542,6 +542,12 @@ goes through `Feature.lua` or through the shared surface below:
                                  what now sits between a block and its first
                                  row, which Perch is the only thing that knows
     ns.FrameAuras.Describe() / Probe(entry) / SizeRange() / CountCeiling(key)
+    ns.FrameAuras.Client() / ClientFound()
+                                 hide or give back the client's own aura row
+                                 from ns.db.blizzAuras, and how many of the two
+                                 frames it hangs off this client carries. Not
+                                 part of the skin: it answers with every
+                                 Blizzard unit frame left alone
     ns.FrameSkin.Landed()        Edit Mode dropped a linked frame: read the gap
                                  and the level back off where it came to rest
     ns.FrameSkin.LinkRange()     gap low, gap high, level low, level high, so the
@@ -2691,6 +2697,18 @@ returning false, so a button the client builds mid fight is retried and lands
 the moment combat drops. Whether these buttons are protected at all on this
 backport is in the untested list below.
 
+That sweep is the skin standing in for exactly the rows it draws, and it is not
+the only question. `/wk auras off` is the other one: the client's row off the
+screen whatever this addon is drawing, for the player who runs with no skin at
+all. It takes the other handle. `BuffFrame` and `TemporaryEnchantFrame` are two
+globals rather than fifty-one names, and a button this backport spells some
+other way goes down with the frame it is parented to instead of surviving a
+sweep that stopped at it. The two never argue over a region: the sweep holds
+buttons, the switch holds their frames, `ns.Strip` marks what it holds, so
+turning either off gives back only what that one took. It ships on, because on
+a skinned frame it has nothing left to hide and on an unskinned one the client's
+row is the only thing on the screen saying what is on you.
+
 A run is one name the client counts from 1, and a row can stand in for more
 than one of them: your buff row replaces `BuffButton` and `TempEnchant` both.
 Each run carries its own mark, because the two do not fill together. A sweep
@@ -3867,6 +3885,7 @@ nothing ever runs is a branch that is wrong.
     /wk skin debuffs 12          0 to 16, how long the debuff row runs
     /wk skin buffs 8             0 to 32, how long the buff row runs
     /wk skin probe               what this client answered for each frame
+    /wk auras on|off             the client's own aura row in the corner
     /wk buttons apply            fill the bars with the warrior loadout
     /wk buttons restore          put back exactly what was there before
     /wk buttons                  what it would do, and whether a backup is held
@@ -4216,6 +4235,13 @@ Everything below was written from the API contract and has never executed:
   hidden within a fifth of a second and nobody sees it. What would prove it: get
   a target to nine or more debuffs for the first time in a session while in
   combat, and watch whether one of Blizzard's icons appears below the block.
+- Whether `BuffFrame` and `TemporaryEnchantFrame` are what these clients call
+  the two frames the client's own aura row hangs off. `/wk auras off` hides
+  those two globals rather than the buttons inside them, which is the point of
+  it: a button named something the sweep never guessed still goes down with its
+  parent. A client that renamed the frames as well hides nothing, and
+  `/wk status` says so by reporting 0 of 2 frames found rather than reporting a
+  row that is hidden.
 - Whether the four rows are the right shape at the size the blocks actually end
   up. Everything about the wrap, the mirroring and the row heights is asserted
   in `harness/sections/14-aura-row.lua` against a 202 pixel block, and the

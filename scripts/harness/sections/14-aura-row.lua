@@ -490,6 +490,37 @@ ns.FrameSkin.Relayout()
 debuffs.target, buffs.target = nil, nil
 tick()
 
+-- The client's own row, which is the other switch and takes the other handle.
+--
+-- The sweep above hides buttons by name, one at a time, because a row of ours
+-- is standing in for that row of theirs. `/wk auras off` hides the two frames
+-- the client hangs the row off, so a button this backport calls something the
+-- name list never guessed goes down with its parent. That is the whole reason
+-- the setting exists as well as the sweep, and it is why this asserts the
+-- frames rather than the buttons under them.
+check(_G.BuffFrame:IsShown() and _G.TemporaryEnchantFrame:IsShown(),
+	"the client's own aura frames are down with nothing having asked for it")
+
+ns.db.blizzAuras = false
+ns.FrameAuras.Client()
+check(not _G.BuffFrame:IsShown(),
+	"auras off left the client's buff row up in the corner of the screen")
+check(not _G.TemporaryEnchantFrame:IsShown(),
+	"auras off left the client's weapon enchant up beside the row it hides")
+
+-- Held, the way every other strip in the addon holds what it hides: the
+-- client turns its own row back on whenever it redraws, so hiding it once is
+-- not hiding it.
+_G.BuffFrame:Show()
+check(not _G.BuffFrame:IsShown(),
+	"the client showed its own buff row again and the strip did not hold it")
+
+-- And given back whole, because a switch you cannot turn off is not a switch.
+ns.db.blizzAuras = ns.DefaultFor("blizzAuras")
+ns.FrameAuras.Client()
+check(_G.BuffFrame:IsShown() and _G.TemporaryEnchantFrame:IsShown(),
+	"auras on left one of the client's own aura frames hidden")
+
 print(("auras  debuffs %d wide under each block and buffs %d over it, square"
 	.. " %.0f px under a %.0f px strip for the time, the client's own rows"
 	.. " hidden as they are built")

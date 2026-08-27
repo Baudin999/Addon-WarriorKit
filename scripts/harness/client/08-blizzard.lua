@@ -105,9 +105,17 @@ end
 -- reading of the stone on the screen and was deliberately left up; the moment
 -- the row drew one, leaving the client's up was a second copy of the same
 -- number in the corner.
-for _, name in ipairs({ "BuffButton1", "DebuffButton1", "TempEnchant1" }) do
-	child("button", _G.UIParent, name)
+--
+-- The two frames they hang off are stood up as well, and the parenting is the
+-- client's: your buffs and your debuffs are both children of BuffFrame, and
+-- the enchant is not, which is why `/wk auras off` has two frames to take down
+-- and not one.
+local buffFrame = child("frame", _G.UIParent, "BuffFrame")
+local enchantFrame = child("frame", _G.UIParent, "TemporaryEnchantFrame")
+for _, name in ipairs({ "BuffButton1", "DebuffButton1" }) do
+	child("button", buffFrame, name)
 end
+child("button", enchantFrame, "TempEnchant1")
 
 -- What each unit frame was built as, taken before PLAYER_LOGIN and so before
 -- the skin has fitted any of them. The fit is only reversible if these are the

@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+### The client's own aura row has a switch of its own
+
+`/wk auras off`, and the corner of the screen is empty: your buffs, your
+debuffs and the temporary weapon enchant beside them. The panel carries the same
+switch on the frame skin's aura tab, under the rows this addon draws.
+
+It exists because the sweep that was already hiding those buttons could not be
+relied on to. The skin hides them one name at a time, `BuffButton1` through
+`BuffButton32` and the three enchant buttons, because a button the client builds
+the first time you carry nine buffs has no other handle. A name this backport
+spells some other way stops the sweep and hides nothing, which is what two
+reported screenshots were: the client's row drawing over ours, in gold, saying
+the same thing.
+
+So the switch takes the other handle. It hides `BuffFrame` and
+`TemporaryEnchantFrame`, two globals rather than fifty-one names, and every
+button the client parents to them goes down whatever it is called. The two
+mechanisms never argue over a region. The sweep holds buttons, the switch holds
+their frames, `ns.Strip` marks what it holds, so turning either off gives back
+only what that one took.
+
+On by default, and on a default install you will not see it do anything: the
+skin is drawing your auras under the block and the client's buttons are already
+hidden. The switch is for the player running with `skin off` or with the player
+frame left alone, whose buffs are the client's row and nothing else. That player
+loses the last reading of the stone on their weapon when they switch it off,
+because the missing-buff row only speaks once the stone has run out, and the
+panel note says so rather than letting them find out in a raid. Right click to
+cancel a buff goes with the row too.
+
+`/wk status` says which of the two frames this client carries. Nothing hidden
+and neither frame found is a client that names its aura frames something else,
+which is a different failure from a switch that did nothing.
+
+Section 14 asserts both frames down, the strip holding against the client
+showing its own row again, and both frames back on the way out. The harness
+client parents `BuffButton1` and `DebuffButton1` to `BuffFrame` and
+`TempEnchant1` to `TemporaryEnchantFrame`, the way both clients do.
+
 ### The addon is in the game menu, and there is a spec for the window it opens
 
 A slash command is a thing you have to be told about. Escape is a thing everyone

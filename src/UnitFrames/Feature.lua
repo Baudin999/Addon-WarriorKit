@@ -427,6 +427,19 @@ ns.Register({
 		-- `skin auras off` said the long way.
 		skinAuraDebuffs = 12,
 		skinAuraBuffs = 8,
+
+		-- The client's own aura row, in the top corner of the screen. On, and
+		-- on a default install that changes nothing you can see: the skin is
+		-- drawing your buffs under the block and has hidden the client's
+		-- buttons by name to do it, so the row above them is empty.
+		--
+		-- It ships on because the switch is not about a default install. It is
+		-- for the player running with `skin off`, or with the player frame left
+		-- alone, whose buffs are the client's row and nothing else, and taking
+		-- that away from them without being asked would leave nothing on the
+		-- screen saying what is on you. Off is a real preference and this is
+		-- where it lives.
+		blizzAuras = true,
 	},
 
 	words = {
@@ -435,6 +448,24 @@ ns.Register({
 		end,
 
 		skin = SkinWord,
+
+		-- The client's own aura row, which is not part of the skin and is a
+		-- word of its own for that reason: it answers on a client where every
+		-- Blizzard unit frame is standing where it always was.
+		auras = function(arg)
+			ns.db.blizzAuras = ns.Command.Toggle(arg)
+			ns.FrameAuras.Client()
+			if ns.db.blizzAuras then
+				ns.Print("the client's own aura row is back in the corner of the"
+					.. " screen. What the skin draws under the blocks is"
+					.. " `skin auras`, and this is the client's.")
+			else
+				ns.Print("the client's own aura row is hidden: your buffs, your"
+					.. " debuffs and the weapon enchant beside them. Right click"
+					.. " to cancel a buff goes with it, because cancelling one is"
+					.. " a call an addon is not allowed to make.")
+			end
+		end,
 
 		-- The palette, as numbers you can check against what is on screen.
 		--
@@ -470,6 +501,7 @@ ns.Register({
 		"skin aura <12 up to the block height>, one aura square, in screen pixels",
 		"skin debuffs <0-16>, skin buffs <0-32>, how long each row runs",
 		"skin probe, what this client answered for each frame",
+		"auras on|off, the client's own buff row in the corner of the screen",
 		"colors, every class fill and how far the name on it is from it",
 	},
 
@@ -526,6 +558,12 @@ ns.Register({
 		ns.db.skinAuraSize = ns.DefaultFor("skinAuraSize")
 		ns.db.skinAuraDebuffs = ns.DefaultFor("skinAuraDebuffs")
 		ns.db.skinAuraBuffs = ns.DefaultFor("skinAuraBuffs")
+		-- Reset means put the frames back, and the client's own row is a frame
+		-- this part took down. Somebody who hid it deliberately loses that in a
+		-- reset, which is the same trade every other setting here makes and the
+		-- reason `/wk reset` prints what it did.
+		ns.db.blizzAuras = ns.DefaultFor("blizzAuras")
+		ns.FrameAuras.Client()
 		ns.FrameSkin.Apply()
 	end,
 
