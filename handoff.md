@@ -111,6 +111,11 @@ hide`, and a key beats the combat switch rather than being read alongside it.
 `ns.BarLook.CanDrive` probes for the calls, so a client with neither leaves every
 bar up and says so.
 
+How big a square is is a setting too, 16 to 54 pixels, defaulting to the 27 that
+draws sharp and saying "blended" in the readout at every stop that does not. Two
+buttons centre one bar on one axis, by dropping half of its anchor rather than by
+measuring the screen, so it stays centred at every resolution.
+
 While the options window is open, the bar the page's tab strip names wears an
 accent rim, two pixels outside it. That needed `showing` on the registry, which
 is the window opening and closing, fired off the frame's own `OnShow` and

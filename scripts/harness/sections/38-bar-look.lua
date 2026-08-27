@@ -49,9 +49,10 @@ local def = one.def
 -- every shape, and a bar that agreed with itself would prove nothing.
 local PAD, GAP, SQUARE = 3, 2, 27
 
-local function shape(columns, rows)
-	return PAD * 2 + columns * SQUARE + (columns - 1) * GAP,
-		PAD * 2 + rows * SQUARE + (rows - 1) * GAP
+local function shape(columns, rows, size)
+	size = size or SQUARE
+	return PAD * 2 + columns * size + (columns - 1) * GAP,
+		PAD * 2 + rows * size + (rows - 1) * GAP
 end
 
 --------------------------------------------------------------------------
@@ -97,6 +98,46 @@ check(Look.Rows(def) == 4, ("a step down from six rows landed on %d"):format(Loo
 check(Look.SetRows(def, 1), "one row was refused and it is what bar 1 ships as")
 check(Look.Decided() == 0, "a bar folded and unfolded again is still carrying a record")
 check(Look.SetRows(def, 4), "four rows was refused and it is one of the six")
+
+--------------------------------------------------------------------------
+-- How big a square is
+--
+-- A setting now, and the one number in the addon that used to be a constant
+-- with an argument attached to it. The argument still holds, so what is
+-- asserted is that the default is one of the sharp sizes and that the readout
+-- says so when it is not.
+--------------------------------------------------------------------------
+
+check(Look.Size(def) == 27, ("a square ships at %dpx"):format(Look.Size(def)))
+check(Look.Sharp(Look.Size(def)),
+	"the size a square ships at is not one this client can draw sharp")
+
+local low, high = Look.SizeRange()
+check(not Look.SetSize(def, high + 1), "a square bigger than the range was taken")
+check(not Look.SetSize(def, low - 1), "a square smaller than the range was taken")
+
+check(Look.SetSize(def, 40), "a size inside the range was refused")
+check(ns.Bars.Restyle(), "the restyle reported combat deferring the resize")
+check(one.buttons[1]:GetWidth() == 40,
+	("the square came out %s wide and the setting says 40"):format(
+		tostring(one.buttons[1]:GetWidth())))
+-- Four rows of three at this point, which is where the stepper above left it.
+width, height = shape(3, 4, 40)
+check(one.frame:GetWidth() == width and one.frame:GetHeight() == height,
+	("four rows of three at 40px came out %s by %s, the arithmetic says %d by %d")
+		:format(tostring(one.frame:GetWidth()), tostring(one.frame:GetHeight()),
+			width, height))
+
+-- 40 is the client blending two stored copies, and the readout says so rather
+-- than reporting a number and letting the player wonder why the art went soft.
+check(not Look.Sharp(40), "40px is being reported as a size that draws sharp")
+check(Look.Shape(def):find("blended"),
+	("the readout for a blended size says %q"):format(Look.Shape(def)))
+
+Look.SetSize(def, 27)
+check(ns.Bars.Restyle(), "the restyle reported combat deferring the way back")
+check(not Look.Shape(def):find("blended"),
+	"a sharp size is being reported as blended")
 
 --------------------------------------------------------------------------
 -- The paint
@@ -211,6 +252,79 @@ check(Look.Rows(ns.BarLook.Find("bottomleft")) == 2,
 	"a row count that is not a shape was refused and written")
 
 --------------------------------------------------------------------------
+-- The middle of the screen
+--
+-- One axis at a time, and the other axis left exactly where it was, which is
+-- the whole of what the two buttons are for. Asserted on the anchor rather than
+-- on a coordinate: an anchor with its horizontal half dropped is centred by the
+-- client at every resolution, and a number this addon worked out is centred at
+-- the one it was worked out on.
+--------------------------------------------------------------------------
+
+-- Scoped, because a chunk in Lua 5.1 gets two hundred names and every one of
+-- these reads a five value anchor back.
+do
+	-- Bar 1 along the bottom, pushed off centre and lifted, the way a drag leaves
+	-- it.
+	ns.db.barPoints.bar1 = { "BOTTOM", "UIParent", "BOTTOM", 40, 260 }
+	ns.BarPlace.Put(one)
+	check(ns.Bars.Centre(def, "x"), "centring bar 1 left to right was refused")
+	local saved = ns.db.barPoints.bar1
+	check(saved[1] == "BOTTOM" and saved[3] == "BOTTOM" and saved[4] == 0,
+		("centring left to right left bar 1 on %s at x %s"):format(
+			tostring(saved[1]), tostring(saved[4])))
+	check(saved[5] == 260,
+		("centring left to right moved the bar up or down, to y %s"):format(tostring(saved[5])))
+	local point, _, relative, x, y = one.frame:GetPoint(1)
+	check(point == "BOTTOM" and relative == "BOTTOM" and x == 0 and y == 260,
+		"the bar itself was not moved to where the record says it is")
+
+	-- A bar held to the side of the screen. Dropping the horizontal half of RIGHT
+	-- leaves nothing, so the anchor becomes CENTER and the offset becomes zero,
+	-- which is the same sentence for a bar that has no vertical half to keep.
+	local side
+	for index = 1, #bars do
+		if bars[index].def.key == "right" then
+			side = bars[index]
+		end
+	end
+
+	if side then
+		ns.db.barPoints.right = { "RIGHT", "UIParent", "RIGHT", -8, 120 }
+		ns.BarPlace.Put(side)
+		check(ns.Bars.Centre(side.def, "x"), "centring the right bar left to right was refused")
+		saved = ns.db.barPoints.right
+		check(saved[1] == "CENTER" and saved[3] == "CENTER" and saved[4] == 0,
+			("centring the right bar left it on %s at x %s"):format(
+				tostring(saved[1]), tostring(saved[4])))
+		check(saved[5] == 120,
+			("centring left to right moved the right bar up or down, to y %s")
+				:format(tostring(saved[5])))
+
+		check(ns.Bars.Centre(side.def, "y"), "centring the right bar up and down was refused")
+		saved = ns.db.barPoints.right
+		check(saved[5] == 0 and saved[4] == 0,
+			("centring up and down left the right bar at %s, %s"):format(
+				tostring(saved[4]), tostring(saved[5])))
+	end
+
+	-- Refused in combat, and nothing written, so a refusal leaves the bar where it
+	-- was rather than saving a position it never took.
+	do
+		local realLockdown = _G.InCombatLockdown
+		_G.InCombatLockdown = function() return true end
+		ns.db.barPoints.bar1 = { "BOTTOM", "UIParent", "BOTTOM", 40, 260 }
+		local moved, why = ns.Bars.Centre(def, "x")
+		_G.InCombatLockdown = realLockdown
+		check(not moved and why == "combat", "centring a bar in combat was allowed")
+		check(ns.db.barPoints.bar1[4] == 40,
+			"centring was refused in combat and the position was written anyway")
+	end
+end
+
+check(ns.Bars.ResetPlacing() > 0, "reset dropped no dragged position")
+
+--------------------------------------------------------------------------
 -- The bars' own lock
 --
 -- Shift and a drag, without unlocking every frame in the addon to do it. The
@@ -290,15 +404,17 @@ check(up == 1 and on == "bottomleft",
 -- Anchored outside the bar on both corners. A rim on the bar's own edge covers
 -- the hairline that is already there and reads as the colour setting having
 -- moved, so the offsets are what is asserted rather than the colour.
-local rim = bars[2].rim
-local topLeft, _, _, left, top = rim:GetPoint(1)
-local bottomRight, _, _, right, bottom = rim:GetPoint(2)
-check(topLeft == "TOPLEFT" and left < 0 and top > 0,
-	("the rim's top left corner is at %s, %s and is not outside the bar")
-		:format(tostring(left), tostring(top)))
-check(bottomRight == "BOTTOMRIGHT" and right > 0 and bottom < 0,
-	("the rim's bottom right corner is at %s, %s and is not outside the bar")
-		:format(tostring(right), tostring(bottom)))
+do
+	local rim = bars[2].rim
+	local topLeft, _, _, left, top = rim:GetPoint(1)
+	local bottomRight, _, _, right, bottom = rim:GetPoint(2)
+	check(topLeft == "TOPLEFT" and left < 0 and top > 0,
+		("the rim's top left corner is at %s, %s and is not outside the bar")
+			:format(tostring(left), tostring(top)))
+	check(bottomRight == "BOTTOMRIGHT" and right > 0 and bottom < 0,
+		("the rim's bottom right corner is at %s, %s and is not outside the bar")
+			:format(tostring(right), tostring(bottom)))
+end
 
 -- And it goes with the window, by the route Escape takes.
 window.frame:GetScript("OnHide")(window.frame)
@@ -322,7 +438,9 @@ check(_G.WarriorKitDriver(one.frame, "visibility") == nil,
 	"plain left the client still deciding when to show bar 1")
 check(one.frame.edges[1]:GetAlpha() == 1, "plain left bar 1 without its hairline")
 
-print(("look   %d shapes, bar 1 folded to 4 and back to 12, %d colours, "
-	.. "shift lifts %d handles"):format(#Look.ROWS, #Look.PALETTE, #bars))
+local sizeLow, sizeHigh = Look.SizeRange()
+print(("look   %d shapes, bar 1 folded to 4 and back to 12, squares %d to %dpx "
+	.. "and sharp at 27, %d colours, centred on either axis, shift lifts %d handles")
+	:format(#Look.ROWS, sizeLow, sizeHigh, #Look.PALETTE, #bars))
 
 end

@@ -24,6 +24,20 @@ panel's stepper counts in ones and walks between the six on the direction of
 travel, because snapping to the nearest is a control that does nothing on every
 second press. A typed number that is not a shape is refused rather than rounded.
 
+How big a square is was a constant with an argument attached to it, and it is a
+setting now with the argument intact. 27 and 54 are the only two drawn sizes
+where one stored icon texel lands on one screen pixel, so the default is the
+sharp one, the range is 16 to 54 to cover both, the step is one pixel so neither
+can be stepped over, and the readout says "blended" at every other stop rather
+than reporting a number and letting the art go soft unexplained.
+
+Two buttons put one bar's middle on the middle of the screen, one axis at a time,
+leaving the other axis where it was. Neither asks the screen how wide it is: an
+anchor with its horizontal half taken off, held to UIParent at zero, is centred
+by the client at every resolution, and the vertical half is kept, so a bar along
+the bottom of the screen is still along the bottom of it. Refused in combat, with
+nothing written when it is.
+
 Eight named colours rather than three sliders. This is an addon for one person
 who wants the same interface on every install, and a colour you dialled in lives
 in one WTF folder. Two of the eight are the theme's own and the other six are
@@ -65,7 +79,7 @@ closes the panel through `UISpecialFrames` and never comes past `Core/Panel.lua`
 A mark that outlived the window would be an accent rectangle round one bar for
 the rest of the session with nothing on screen to say why.
 
-`harness/sections/38-bar-look.lua` is 61 checks: the arithmetic of every shape,
+`harness/sections/38-bar-look.lua` is 85 checks: the arithmetic of every shape,
 a shape put back to the plan's being dropped rather than stored, the colour
 reaching the texture, the hairline going with the background, the macro each pair
 of switches registers, the driver count after three restyles, the driver being

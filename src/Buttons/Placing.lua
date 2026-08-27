@@ -99,6 +99,58 @@ function Place.Put(entry)
 	end
 end
 
+--------------------------------------------------------------------------
+-- The middle of the screen
+--
+-- Two buttons on the panel's page, one per axis, and each leaves the other axis
+-- exactly where it was. Centring both at once is one button nobody wants: a bar
+-- in the middle of the screen is a bar over your character.
+--
+-- Not "ask the screen how wide it is and halve it". An anchor with its
+-- horizontal half taken off, held to UIParent at zero, is centred by the client
+-- at every resolution and stays centred when the resolution changes, and no
+-- number this addon worked out can say that. The vertical half is kept, so
+-- `BOTTOM, y = 8` becomes `BOTTOM, x = 0, y = 8` and a bar along the bottom of
+-- the screen stays along the bottom of the screen.
+--------------------------------------------------------------------------
+
+-- An anchor in its two halves. "TOPLEFT" is TOP and LEFT, "BOTTOM" is BOTTOM
+-- and nothing, "CENTER" is neither.
+local function Halves(anchor)
+	return anchor:match("^TOP") or anchor:match("^BOTTOM") or "",
+		anchor:match("LEFT$") or anchor:match("RIGHT$") or ""
+end
+
+-- Returns the anchor, the anchor it is held to, and the two offsets, so a
+-- caller can say what it did.
+function Place.Centre(entry, axis)
+	local def = entry.def
+	local saved = ns.db.barPoints[def.key]
+	local point = saved and saved[1] or def.point
+	local to = saved and saved[3] or def.to
+	local x = saved and saved[4] or def.x
+	local y = saved and saved[5] or def.y
+
+	-- The half this axis is centring is dropped and the other half is kept.
+	-- CENTER where nothing is left, because an anchor is a string and "" is not
+	-- one the client answers to.
+	local function Middle(anchor)
+		local vertical, horizontal = Halves(anchor)
+		local kept = axis == "x" and vertical or horizontal
+		return kept ~= "" and kept or "CENTER"
+	end
+
+	if axis == "x" then
+		point, to, x = Middle(point), Middle(to), 0
+	else
+		point, to, y = Middle(point), Middle(to), 0
+	end
+
+	ns.db.barPoints[def.key] = { point, "UIParent", to, x, y }
+	Place.Put(entry)
+	return point, to, x, y
+end
+
 -- Nearest whole unit, negatives included. On the grid one unit is one physical
 -- pixel, so this is the difference between a bar whose every edge lands on a
 -- pixel boundary and one that is half a pixel out along both axes.

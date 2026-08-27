@@ -111,6 +111,20 @@ local function Plain()
 	Restyle()
 end
 
+-- One axis of one bar put on the middle of the screen. The other axis is left
+-- exactly where it was, which is the whole of what the two buttons are for.
+local function Centre(axis)
+	local def = Chosen()
+	local ok, why = ns.Bars.Centre(def, axis)
+	if not ok then
+		ns.Print(why == "combat" and "that has to wait until combat ends."
+			or (def.label .. " is not up, so there is nothing to centre."))
+		return
+	end
+	ns.Print(def.label .. " centred " .. (axis == "x" and "left to right." or "up and down."))
+	ns.Options.Refresh()
+end
+
 -- Back to cloning whatever you have on, which is the shipping state and is what
 -- makes this feature quick to start with: no list to tick, no bar to place, the
 -- bars you already had with the keys you already set.
@@ -212,7 +226,17 @@ local function EachBarPage(ui)
 			ns.BarLook.StepRows(Chosen(), value)
 			Restyle()
 		end)
-	ui.Hint("Twelve buttons, so the shapes are 1, 2, 3, 4, 6 and 12 rows and the stepper walks between them. One row is a bar and twelve is a column down the side.")
+	ui.Hint("Twelve buttons, so the shapes are 1, 2, 3, 4, 6 and 12 rows and the stepper walks between them.")
+
+	local sizeLow, sizeHigh = ns.BarLook.SizeRange()
+	ui.Slider("square", sizeLow, sizeHigh, 1,
+		function() return ns.BarLook.Size(Chosen()) end,
+		function(value)
+			ns.BarLook.SetSize(Chosen(), value)
+			Restyle()
+		end,
+		function(value) return value .. "px" end)
+	ui.Hint("27 and 54 are the two sizes a stored icon lands on a pixel at. In between, the client blends two copies and the art softens.")
 
 	ui.Picker("colour",
 		function() return ns.BarLook.Color(Chosen()) end,
@@ -234,7 +258,7 @@ local function EachBarPage(ui)
 			ns.BarLook.SetAlpha(Chosen(), value)
 			Restyle()
 		end)
-	ui.Hint("The colour is the ground under the squares and this is how much of it you see. At nothing the hairline goes too and the squares stand on the world.")
+	ui.Hint("How much of that colour you see. At nothing the hairline goes with it and the squares stand on the world.")
 
 	ui.Check("down in combat",
 		function() return ns.BarLook.Combat(Chosen()) end,
@@ -258,6 +282,14 @@ local function EachBarPage(ui)
 			return options
 		end)
 	ui.Hint("A key hides the bar until you hold it, in a fight or out of one, so a bar waiting on one leaves the switch above nothing to decide.")
+
+	ui.ActionPair(
+		function() return "centre left to right" end,
+		function() Centre("x") end,
+		function() return ns.Bars.Standing(Chosen()) end,
+		function() return "centre up and down" end,
+		function() Centre("y") end,
+		function() return ns.Bars.Standing(Chosen()) end)
 
 	ui.Check("lock the bars",
 		function() return ns.db.barsLocked end,
@@ -288,10 +320,35 @@ end
 --
 -- Returns false for a word this does not own, so the caller can go on to its
 -- own list rather than this one having to know it.
+-- The words this owns, as a lookup rather than a chain of comparisons, so
+-- adding the next one is a line and not a branch.
+local LOOK_WORDS = {
+	rows = true, square = true, colour = true, background = true,
+	combat = true, key = true, centre = true,
+}
+
+-- The odd one out, in a function of its own: every other word writes a setting
+-- and this one moves a bar, and it is the only one whose value is not a number
+-- or a name out of a table.
+local function CentreWord(def, value)
+	local axis = (value == "across" and "x") or (value == "down" and "y")
+	if not axis then
+		ns.Print("centre takes across or down.")
+		return
+	end
+	local moved, why = ns.Bars.Centre(def, axis)
+	if moved then
+		ns.Print(def.label .. " centred.")
+	elseif why == "combat" then
+		ns.Print("that has to wait until combat ends.")
+	else
+		ns.Print(def.label .. " is not up, so there is nothing to centre.")
+	end
+end
+
 local function LookWord(word, rest)
 	local ROWS = ns.BarLook.ROWS
-	if word ~= "rows" and word ~= "colour" and word ~= "background"
-		and word ~= "combat" and word ~= "key" then
+	if not LOOK_WORDS[word] then
 		return false
 	end
 
@@ -309,6 +366,15 @@ local function LookWord(word, rest)
 		if rows and not ok then
 			ns.Print("twelve buttons make 1, 2, 3, 4, 6 or 12 rows and nothing else.")
 		end
+	elseif word == "square" then
+		local low, high = ns.BarLook.SizeRange()
+		local size = ns.Command.Number(value, low, high, "square")
+		ok = size ~= nil and ns.BarLook.SetSize(def, size)
+	elseif word == "centre" then
+		-- Named by the axis in words rather than as x and y, because the two
+		-- buttons on the page say "left to right" and "up and down", and a
+		-- command that says something else is a second name for one thing.
+		CentreWord(def, value)
 	elseif word == "colour" then
 		ok = ns.BarLook.SetColor(def, value)
 		if not ok then
@@ -452,7 +518,8 @@ ns.Register({
 				ns.Print("actionbars on clones every bar you have, with its keys, and hides Blizzard's. actionbars off gives them back.")
 				ns.Print("tick bars one at a time in the panel, or actionbars match to follow your own again.")
 				ns.Print("/wk unlock to drag them, actionbars where to print what you dragged, actionbars reset to undo it.")
-				ns.Print("actionbars rows|colour|background|combat|key <bar> <value> shapes one bar. actionbars plain drops the lot.")
+				ns.Print("actionbars rows|square|colour|background|combat|key <bar> <value> shapes one bar. actionbars plain drops the lot.")
+				ns.Print("actionbars centre <bar> across|down puts its middle on the middle of the screen, one axis at a time.")
 				ns.Print("actionbars unlock to drag them with shift held, actionbars lock to stop that.")
 				ns.Print("actionbars trace when a square will not take a drop: it prints what the mouse is really touching.")
 			end
@@ -487,7 +554,8 @@ ns.Register({
 		"actionbars on|off, our own bars over Blizzard's, same slots and same keys",
 		"actionbars match, back to cloning whichever bars you have on",
 		"actionbars where, actionbars reset, after dragging them with /wk unlock",
-		"actionbars rows|colour|background|combat|key <bar> <value>, one bar's shape, ground and hours",
+		"actionbars rows|square|colour|background|combat|key <bar> <value>, one bar's shape, ground and hours",
+		"actionbars centre <bar> across|down, its middle on the middle of the screen",
 		"actionbars plain, every bar back to the plan's own shape",
 		"actionbars lock|unlock, whether shift and a drag moves a bar",
 		"actionbars trace, what the mouse is really touching, for a square that will not take a drop",

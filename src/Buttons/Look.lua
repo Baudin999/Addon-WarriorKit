@@ -59,6 +59,24 @@ local SLOTS = 12
 -- folded.
 Look.ROWS = { 1, 2, 3, 4, 6, 12 }
 
+-- 27, and it is not a taste decision. UI.IconSizes answers { 54, 27 } on this
+-- client: an icon is stored at 64 texels, the crop that takes the border baked
+-- into every one of them off leaves 54, and the client keeps each copy at half
+-- the size of the one above. Those two are the only drawn sizes where one
+-- stored texel lands on one pixel. 32 and 36, which is what every bar addon
+-- ships, are the client blending two copies, and halfway between two of them is
+-- the worst place to stand.
+--
+-- It is a setting anyway, and the two facts sit together rather than one
+-- winning. A bar you want out of the way at the edge of the screen is worth
+-- more small than it is worth sharp, and a bar you press all night is worth
+-- more sharp than it is worth any particular size. So the default is the sharp
+-- one, the range covers both of them, the step is one pixel so neither can be
+-- stepped over, and Look.Sharp says which is which rather than the panel
+-- pretending every stop is as good as the next.
+local DEFAULT_SIZE = 27
+local SIZE_LOW, SIZE_HIGH = 16, 54
+
 -- Ninety five rather than the ninety seven the window colour carries, because
 -- the opacity control is in fives and a stop the panel cannot reach is a
 -- number nobody can put back. Two hundredths of an alpha on a background is
@@ -199,6 +217,38 @@ function Look.StepRows(def, value)
 		end
 	end
 	return Look.SetRows(def, rows)
+end
+
+-- One square's edge, in pixels.
+function Look.Size(def)
+	return Field(def, "size") or DEFAULT_SIZE
+end
+
+-- The range the panel and the slash word both clamp to, handed out rather than
+-- written twice, which is the rule ns.FrameSkin.LinkRange already states.
+function Look.SizeRange()
+	return SIZE_LOW, SIZE_HIGH
+end
+
+function Look.SetSize(def, size)
+	if size < SIZE_LOW or size > SIZE_HIGH or size ~= math.floor(size) then
+		return false
+	end
+	return Write(def, "size", size, DEFAULT_SIZE)
+end
+
+-- Whether a stored icon texel lands on a screen pixel at that size, which is
+-- true of exactly two sizes and is what the readout says out loud. Asked of
+-- UI.IconSizes rather than compared against 27 and 54, because that function is
+-- where the crop and the halving are worked out and a second copy of the answer
+-- would be a second thing to get wrong.
+function Look.Sharp(size)
+	for _, sharp in ipairs(UI.IconSizes()) do
+		if sharp == size then
+			return true
+		end
+	end
+	return false
 end
 
 --------------------------------------------------------------------------
@@ -423,8 +473,10 @@ end
 -- page and the first line of the tooltip on a bar's drag handle.
 function Look.Shape(def)
 	local rows = Look.Rows(def)
-	return ("%d row%s of %d, %s at %d%%"):format(rows, rows == 1 and "" or "s",
-		Look.Columns(def), Look.Color(def), Look.Alpha(def))
+	local size = Look.Size(def)
+	return ("%d row%s of %d at %dpx%s, %s at %d%%"):format(
+		rows, rows == 1 and "" or "s", Look.Columns(def), size,
+		Look.Sharp(size) and "" or ", blended", Look.Color(def), Look.Alpha(def))
 end
 
 -- And when it is on the screen, which is the other readout and is a different

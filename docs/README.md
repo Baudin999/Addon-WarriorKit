@@ -613,6 +613,11 @@ goes through `Feature.lua` or through the shared surface below:
                                  plan's own columns where nothing is saved
     ns.BarLook.SetRows(def, n) / StepRows(def, n)   one of the six shapes twelve
                                  makes, set outright or walked up and down
+    ns.BarLook.Size(def) / SetSize(def, px) / SizeRange()
+                                 one square's edge, and the range the panel and
+                                 the slash word both clamp to
+    ns.BarLook.Sharp(px)         whether a stored icon texel lands on a screen
+                                 pixel at that size, which is true of two of them
     ns.BarLook.Color(def) / Tint(def) / SetColor(def, key)
     ns.BarLook.Alpha(def) / SetAlpha(def, percent)
     ns.BarLook.Paint(entry)      the ground under one bar's squares, painted
@@ -629,8 +634,13 @@ goes through `Feature.lua` or through the shared surface below:
                                  page is showing, up with that window and off
                                  again with it
     ns.BarLook.Find(word) / Plain() / Decided()
+    ns.BarPlace.Centre(entry, axis)   one axis of one bar's anchor put on the
+                                 middle of the screen, the other axis untouched
     ns.BarPlace.Loose()          whether a bar can be dragged right now: every
                                  frame unlocked, or the bars loose and shift held
+    ns.Bars.Standing(def)        whether that bar is up, which is not the same
+                                 question as whether it is wanted
+    ns.Bars.Centre(def, axis)    that, refused in combat, on the bar it names
     ns.Layout.SlotOf(name)       which action slot one of Blizzard's buttons drives
     ns.Layout.CanWrite()         the action API is here, combat is not, cursor is empty
     ns.Layout.CanApply()         that, and you are a warrior
@@ -2181,6 +2191,37 @@ in, down takes the next below. Snapping to the nearest instead is a control that
 does nothing on every second press, because +1 from four lands on five and five
 is nearer four than six. A typed number that is not a shape is refused rather
 than rounded, which is `ns.Command.Number`'s rule everywhere else in the addon.
+
+*How big a square is.* It was a constant with an argument attached to it, 27,
+because `UI.IconSizes` answers 54 and 27 on this client and those are the only
+two drawn sizes where one stored icon texel lands on one screen pixel. It is a
+setting now and the argument still holds, so both facts sit together rather than
+one winning: the default is the sharp one, the range is 16 to 54 so it covers
+both, the step is one pixel so neither can be stepped over, and
+`ns.BarLook.Sharp` is what the readout uses to say "blended" at every other stop.
+A bar you want out of the way at the edge of the screen is worth more small than
+it is worth sharp; a bar you press all night is the other way round.
+
+The size lands through `Arrange`, which is also the one function a row count
+change runs, because `UI.Ability.Size` re-places every region on a square and
+that is the whole of what a resize is. The gap between two squares and the pad
+round the twelve stay at two pixels and three: they are what makes a bar look
+like one thing rather than twelve, and nothing is answered by asking for them.
+
+*The middle of the screen.* Two buttons, one per axis, and each leaves the other
+axis exactly where it was. Centring both at once is a button nobody wants,
+because a bar in the middle of the screen is a bar over your character.
+
+Neither asks the screen how wide it is. An anchor with its horizontal half taken
+off, held to `UIParent` at zero, is centred by the client at every resolution and
+stays centred when the resolution changes, and no number this addon worked out
+can say that. The other half is kept, so `BOTTOM, y = 8` becomes `BOTTOM, x = 0,
+y = 8` and a bar along the bottom of the screen is still along the bottom of it.
+A bar held to the side has no half left to keep, so `RIGHT` becomes `CENTER`,
+which is the same sentence for a bar that was already at the middle height.
+
+Refused in combat, and nothing is written when it is, so a refusal leaves the bar
+where it was rather than saving a position it never took.
 
 *Colour and opacity.* Eight named colours rather than three sliders, for the
 reason the geometry in `Which.lua` is source code: this is an addon for one
@@ -4424,6 +4465,10 @@ and a row with nothing on it costs one comparison.
     /wk actionbars reset         drop every dragged position
     /wk actionbars lock|unlock   whether shift and a drag moves a bar
     /wk actionbars rows bar1 3   1, 2, 3, 4, 6 or 12 rows of the twelve
+    /wk actionbars square bar1 32        one square's edge, 16 to 54, sharp at
+                                 27 and 54
+    /wk actionbars centre bar1 across|down   its middle on the middle of the
+                                 screen, one axis at a time
     /wk actionbars colour bar1 blue      window, black, slate, steel, blue,
                                  green, red or purple
     /wk actionbars background bar1 40    that colour's opacity, 0 to 100 in fives

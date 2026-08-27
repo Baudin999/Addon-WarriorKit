@@ -107,7 +107,9 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   nothing, which leaves the icons standing on the world. Send a bar off the
   screen when a fight starts, or keep it off the screen until you hold shift,
   ctrl or alt, with its keys working the whole time either way. Unlock the bars
-  and shift-drag one where you want it. Every bar answers for itself, and one
+  and shift-drag one where you want it, or put its middle on the middle of the
+  screen with a button, one axis at a time. Make the squares bigger or smaller,
+  16 pixels to 54, and the panel says which sizes draw sharp. Every bar answers for itself, and one
   press puts the lot back to plain. While the settings window is open, whichever
   bar you have picked wears a blue rim on the screen, so you are never editing
   the one you thought was the other one.

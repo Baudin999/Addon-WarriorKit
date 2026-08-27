@@ -87,15 +87,13 @@ local STANCES = { "battle", "defensive", "berserker" }
 -- The plan
 --------------------------------------------------------------------------
 
--- 27, and it is not a taste decision. UI.IconSizes answers { 54, 27 } on this
--- client: an icon is stored at 64 texels, the crop that takes the border baked
--- into every one of them off leaves 54, and the client keeps each copy at half
--- the size of the one above. Those two are the only drawn sizes where one
--- stored texel lands on one pixel. 32 and 36, which is what every bar addon
--- ships, are the client blending two copies, and halfway between two of them is
--- the worst place to stand. scripts/harness.lua asserts this number is on that
--- list, so an edit to it cannot quietly go soft.
-local SIZE = 27
+-- How big a square is is a setting now, in Buttons/Look.lua, which is also
+-- where the argument for the 27 it defaults to is written down and where the
+-- harness asserts that default is a size this client can draw sharp.
+--
+-- The gap between two squares and the pad round the twelve are not settings.
+-- They are two pixels and three, they are what makes a bar look like one thing
+-- rather than twelve, and nothing is answered by asking a player for them.
 local GAP = 2
 local PAD = 3
 
@@ -238,7 +236,6 @@ local function BuildBar(entry)
 		pool = pool + 1
 		local w = Ability.New(header, ("WarriorKitBarButton%d"):format(pool),
 			"SecureActionButtonTemplate", Ability.QUIET)
-		Ability.Size(w, SIZE)
 		-- Two edges, and they are two separate switches. The registration is
 		-- what the mouse obeys, and it is the up edge because that is what this
 		-- client's own action buttons register and because a square you can
@@ -277,6 +274,7 @@ local function Arrange(entry)
 	-- for a bar nobody has reshaped, which is what makes this the same call in
 	-- both cases.
 	local columns = ns.BarLook.Columns(entry.def)
+	local size = ns.BarLook.Size(entry.def)
 	local rows = { direction = "column", gap = GAP, pad = PAD }
 	local row
 
@@ -285,7 +283,12 @@ local function Arrange(entry)
 			row = { direction = "row", gap = GAP }
 			rows[#rows + 1] = row
 		end
-		row[#row + 1] = { frame = entry.buttons[index], width = SIZE, height = SIZE }
+		-- Sized here rather than at build, because how big a square is is a
+		-- setting and this is the one function that runs on every change to it.
+		-- Ability.Size re-places every region on the square, so it is the whole
+		-- of what a resize is.
+		Ability.Size(entry.buttons[index], size)
+		row[#row + 1] = { frame = entry.buttons[index], width = size, height = size }
 	end
 
 	Flow.Arrange(entry.frame, rows)
@@ -476,6 +479,36 @@ end
 -- the reason the lock above is: `order` is this file's.
 function Bars.ApplyMark()
 	ns.BarLook.Mark(order)
+end
+
+-- Whether one bar is up right now, which is a different question from whether
+-- it is wanted: a bar you have ticked is not standing until an apply has run.
+function Bars.Standing(def)
+	for index = 1, #order do
+		if order[index].def == def then
+			return true
+		end
+	end
+	return false
+end
+
+-- One bar's middle put on the middle of the screen, in one axis, leaving the
+-- other where it is. Buttons/Placing.lua does the arithmetic; this finds the
+-- bar and answers for combat.
+--
+-- Refused in lockdown for the reason the drag is: the bar carries twelve secure
+-- buttons and moving what they hang off in a fight is not something this addon
+-- does. Nothing is written either, so a refusal leaves the bar exactly as it
+-- was rather than saving a position it did not take.
+function Bars.Centre(def, axis)
+	if not Bars.Standing(def) then
+		return false, "that bar is not up"
+	end
+	if InCombatLockdown() then
+		return false, "combat"
+	end
+	ns.BarPlace.Centre(built[def.key], axis)
+	return true
 end
 
 function Bars.Where()
@@ -767,11 +800,7 @@ UI.OnRescale(function()
 		return
 	end
 	for index = 1, #order do
-		local entry = order[index]
-		for slot = 1, PER_BAR do
-			Ability.Size(entry.buttons[slot], SIZE)
-		end
-		Arrange(entry)
+		Arrange(order[index])
 	end
 end)
 
