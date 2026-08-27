@@ -49,9 +49,16 @@ local M = ns.UI.Metric
 check(_G.WarriorKitChatRooms:GetWidth() == M.rooms,
 	("the room rail is %s wide and the theme says %d")
 		:format(tostring(_G.WarriorKitChatRooms:GetWidth()), M.rooms))
-check(_G.WarriorKitChatRooms:GetHeight()
-	== ns.db.chatHeight - M.title - M.footer,
-	("the room rail is %s tall in a %d window")
+-- And a row of it is wide enough to hold the icon that is the only thing on it.
+-- The rail is a column of pictures now, so a row narrower than a picture is a
+-- rail that draws nothing at all, and the width above is still correct while it
+-- happens.
+check(Window.Rail() >= M.roomIcon,
+	("a room row came out %d wide and the icon on it is %d")
+		:format(Window.Rail(), M.roomIcon))
+
+check(_G.WarriorKitChatRooms:GetHeight() == ns.db.chatHeight - M.entry,
+	("the room rail is %s tall in a %d window, which has no title bar")
 		:format(tostring(_G.WarriorKitChatRooms:GetHeight()), ns.db.chatHeight))
 
 ----------------------------------------------------------------------
@@ -165,6 +172,23 @@ do
 	check(g == d + 1, "a whisper did not reach Conversation")
 	check(i == f + 1, "a whisper from somebody in a group did not reach that group's room")
 	check(Window.Count(whisper) == 1, "a whisper did not open a room with that person")
+
+	-- And that room's log is the size of every other room's.
+	--
+	-- A log is made on the first line that lands in it, which for a room that
+	-- did not exist a moment ago is long after the window laid itself out. The
+	-- version of this that shipped placed the logs it knew about and left every
+	-- later one anchored to nothing at no size: the lines went into the buffer,
+	-- the count in the rail went up, and the room drew nothing. Say was the room
+	-- that showed it, because the first thing you say all evening is what makes
+	-- its log.
+	local wide, tall = Window.Shape(whisper)
+	local roomWide, roomTall = Window.Shape(Rooms.ALL)
+	check(wide == roomWide and tall == roomTall,
+		("a room made after the window was laid out came out %sx%s, and the "
+			.. "rooms laid out with it are %sx%s")
+			:format(tostring(wide), tostring(tall), tostring(roomWide), tostring(roomTall)))
+	check(wide > 0 and tall > 0, "the logs came out at no size at all")
 	check(Window.Count("party") == e,
 		"a whisper was filed in the party room as well")
 

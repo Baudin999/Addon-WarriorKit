@@ -405,10 +405,13 @@ ns.Register({
 		-- did not build.
 		chatWhy = "",
 
-		-- Wider than the window this replaced, because the rail down the left
-		-- takes a hundred pixels that used to be the message.
-		chatWidth = 520,
-		chatHeight = 260,
+		-- Small. The rail is one icon wide rather than a hundred pixels of
+		-- words, there is no title bar over it and no heading row under that,
+		-- so the same message and the same number of lines fit in a rectangle
+		-- a third smaller than the one this shipped with. Both steppers are
+		-- still there for anyone who wants the window bigger.
+		chatWidth = 400,
+		chatHeight = 210,
 		chatFont = 12,
 		-- Not opaque. A chat window sits in a corner all evening and the world
 		-- behind it is the game.

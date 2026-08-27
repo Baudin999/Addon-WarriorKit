@@ -79,11 +79,17 @@ UI.Metric = {
 	tab      = 22, -- one button in the tab strip
 	railRow  = 22, -- one button in the side rail
 	rail     = 180, -- the folding column down the left of the options window
-	-- The column of rooms down the left of the chat window. Narrower than the
-	-- rail above, because every row in it is one word and the rest of the width
-	-- is what a sentence somebody said is read in.
-	rooms    = 104,
+	-- The column of rooms down the left of the chat window. One icon wide, and
+	-- that is the whole of it: a word costs sixty pixels of every line anybody
+	-- said to name a room you already know by sight, and thirteen of them cost a
+	-- quarter of the window. The name is in the hover.
+	rooms    = 30,
+	roomIcon = 18, -- the picture on one of those rows
+	roomRow  = 22, -- one of those rows
 	footer   = 30,
+	-- The strip the chat window's line is typed in. Shorter than the footer
+	-- above, which is sized for the buttons a settings window puts in it.
+	entry    = 22,
 	bar      = 8,  -- the scrollbar column
 	thumb    = 24, -- the shortest a scroll thumb is allowed to get
 

@@ -113,6 +113,32 @@ local function Compose(flags)
 	return (flags:gsub(UI.SHADOW, ""):gsub("^[%s,]+", ""):gsub("[%s,]+$", "")), true
 end
 
+-- Left, and top to bottom the middle, on every object this file hands out.
+--
+-- A font object carries a justification as well as a face, the client's default
+-- for a fresh one is centred, and a frame given the object takes both. Nothing
+-- noticed for a year because UI.Label justifies each font string itself after
+-- it sets the object, so the object's own answer never reached the screen.
+--
+-- Then the chat window put a ScrollingMessageFrame on one of these. That frame
+-- has no font strings a caller can reach: it makes its own, and the only place
+-- to say how they are justified is the frame, which SetFontObject then
+-- overwrites with the object's centred default. Every line anybody spoke came
+-- out centred, and the SetJustifyH("LEFT") in UI/Log.lua three lines above the
+-- SetFontObject was doing nothing at all.
+--
+-- So it is set here, once, where a font is made. A caller that wants something
+-- else still says so on its own string and still wins.
+local function Justify(font)
+	if type(font.SetJustifyH) == "function" then
+		font:SetJustifyH("LEFT")
+	end
+	if type(font.SetJustifyV) == "function" then
+		font:SetJustifyV("MIDDLE")
+	end
+	return font
+end
+
 -- One object per size and flag pair, made on first ask and never freed. The key
 -- is the caller's own string rather than the composed one, because two callers
 -- that asked differently are allowed to land on one object and neither should
@@ -140,6 +166,7 @@ function UI.Font(size, flags)
 		font:SetShadowColor(0, 0, 0, 1)
 		font:SetShadowOffset(SHADOW_OFFSET, -SHADOW_OFFSET)
 	end
+	Justify(font)
 	fonts[key] = font
 	return font
 end
@@ -188,6 +215,7 @@ function UI.GlyphFont(size)
 
 	made = made + 1
 	font = CreateFont(ADDON .. "Font" .. made)
+	Justify(font)
 	font:SetFont(GLYPHS, size, "")
 	-- The same readback UI.Font does, and here it is load bearing rather than
 	-- defensive: this file is in the addon folder rather than in the client, so

@@ -144,8 +144,18 @@ local function Bar(view, parent)
 	end)
 end
 
-function UI.ScrollView(parent)
+-- opts.overlay floats the bar over the right edge of the content instead of
+-- reserving a column for it.
+--
+-- The column is right everywhere else and wrong in one place: the chat window's
+-- rail is thirty pixels wide, the bar column is sixteen of them, and reserving
+-- it leaves fourteen pixels for a sixteen pixel icon. A view narrower than the
+-- bar it is making room for is a view with nothing in it. Overlaying costs the
+-- right few pixels of a row on the rare column long enough to scroll, and the
+-- alternative there is no bar at all and no sign that there is more.
+function UI.ScrollView(parent, opts)
 	local view = setmetatable({ offset = 0, extent = 0, scrollable = false }, View)
+	view.overlay = opts and opts.overlay and true or false
 	view.frame = CreateFrame("Frame", nil, parent)
 
 	local port, canvas, move, mechanism = Viewport(view.frame)
@@ -174,7 +184,7 @@ end
 -- it knows how wide its rows are before it measures any of them.
 function View:Resize(width, height)
 	local M = UI.Metric
-	self.width = width - M.bar - M.gutter
+	self.width = self.overlay and width or (width - M.bar - M.gutter)
 	self.height = height
 	self.frame:SetSize(width, height)
 	self.port:SetSize(self.width, height)

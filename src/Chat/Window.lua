@@ -33,9 +33,25 @@ local C, M = UI.Color, UI.Metric
 -- of state to disagree with the first, and nothing to press twice.
 --
 -- **What marks a room.** A count of what arrived while you were reading
--- somewhere else, in the accent colour against the right edge of its row.
--- Selecting a room clears its own count. That is the whole of the alert design:
--- no flashing, no toast, no sound unless somebody in one of your groups spoke.
+-- somewhere else, in the accent colour in the corner of its icon, and the icon
+-- brighter than a room with nothing in it. Selecting a room clears its own
+-- count. That is the whole of the alert design: no flashing, no toast, no sound
+-- unless somebody in one of your groups spoke.
+--
+-- **Why the rail is icons and the window has no title bar.**
+--
+-- Both are the same sum. Thirteen room names are a hundred and four pixels of
+-- every line anybody said, spent labelling rooms you know by sight; a title bar
+-- is twenty four more naming a window you have had open all evening; the
+-- heading and the note under it were twenty eight under that. That is a third
+-- of a small chat window given over to captions.
+--
+-- Nothing they said was thrown away. A room's name, what the enter key would do
+-- in it and how much is waiting are in its hover. Which room you are in and
+-- what enter will do are written into the empty line you type on, which is
+-- where you are looking when it matters and is the same argument the slash in
+-- the field has always been. The way out of the window is a cross at the foot
+-- of the rail, because a bare window has no close box.
 --------------------------------------------------------------------------
 
 local FRAME_NAME = "WarriorKitChat"
@@ -45,8 +61,12 @@ local FRAME_NAME = "WarriorKitChat"
 -- frame is named at all.
 local ENTER_NAME = "WarriorKitChatEnterButton"
 
-local window, rail, entry, enterButton
-local title, note
+local window, rail, entry, enterButton, closer
+
+-- Where a log goes and how big it is, written in the layout section below and
+-- named here because the log pool above needs it: a room's log is made the
+-- first time somebody speaks in that room, which is after the layout ran.
+local Frame, Place
 
 -- One log per room that has ever held a line, and the ones whose rooms have
 -- gone. A frame cannot be destroyed on this client, so a whisper conversation
@@ -139,6 +159,10 @@ local function LogFor(id)
 		every[#every + 1] = log
 	end
 
+	-- Placed here rather than only in Relayout, because a room's log is made on
+	-- the first line that lands in it and that is usually long after the window
+	-- was laid out.
+	Place(log)
 	log.frame:Hide()
 	logs[id] = log
 	return log
@@ -163,10 +187,19 @@ end
 -- Which room is up
 --------------------------------------------------------------------------
 
+-- What the empty line says: which room you are in, and what the enter key is
+-- about to do in it.
+--
+-- It is written into the field rather than above the log, and that is what
+-- replaced the heading row and the note beside it. Those two cost twenty eight
+-- pixels of every window to answer a question the field itself is the answer
+-- to, and they answered it in the one place you are not looking when you start
+-- typing. Here it is under the cursor, and the moment there is a character in
+-- the line it gets out of the way, because from then on the line says it.
 local function Paint()
 	local kind, target = ns.Rooms.Target(active)
-	title:SetText(ns.Rooms.Title(active))
-	note:SetText(ns.Compose.Note(kind, target))
+	entry.ghost:SetText(("%s, %s"):format(ns.Rooms.Title(active),
+		ns.Compose.Note(kind, target)))
 end
 
 local function Show(id)
@@ -279,36 +312,66 @@ end
 -- cached rectangle that is wrong once is wrong until a reload.
 --------------------------------------------------------------------------
 
+-- Where the log sits in the window: the rail's width and a gutter in from the
+-- left, a gutter in from every other side. One function because two places that
+-- answer it would be two places to disagree, and because a log made after the
+-- window was laid out has to be able to ask.
+function Frame()
+	local left = M.rooms + M.gutter
+	local top = M.rowGap
+	local room = (window.width or 0) - left - M.gutter
+	local body = window:Body()
+	return left, top, math.max(room, M.row), math.max(body - top - M.rowGap, M.row)
+end
+
+-- One log, put where the logs go and sized to it.
+--
+-- Called from Relayout for the ones that exist and from LogFor for the one
+-- being made, and that second call is the whole reason this is a function. A
+-- room's log is made on the first line that lands in it, which for Say is the
+-- first thing you say all evening, long after the window was laid out. Without
+-- this the frame came out anchored to nothing and no size, so the line went
+-- into the buffer, the count went up on the rail, and the room drew nothing at
+-- all: you could see what you had said in Conversation and not in Say.
+function Place(log)
+	local left, top, room, height = Frame()
+	log.frame:ClearAllPoints()
+	log.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT", left, -top)
+	log:SetFontSize(ns.db.chatFont)
+	log:Resize(room, height)
+end
+
 local function Relayout()
 	if not built then
 		return
 	end
 
 	local db = ns.db
-	local width, height = window:Resize(db.chatWidth, db.chatHeight)
+	window:Resize(db.chatWidth, db.chatHeight)
 	local px = ns.Pixel(window.frame)
-	local body = height - M.title - M.footer
+	local body = window:Body()
 
 	rail.frame:ClearAllPoints()
 	rail.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT")
 	rail:Resize(M.rooms, body)
 
-	local left = M.rooms + M.pad
-	local room = width - left - M.pad
-
-	title:ClearAllPoints()
-	title:SetPoint("TOPLEFT", window.content, "TOPLEFT", left, -M.rowGap)
-	note:ClearAllPoints()
-	note:SetPoint("TOPRIGHT", window.content, "TOPRIGHT", -M.pad, -M.rowGap)
-	note:SetPoint("LEFT", title, "RIGHT", M.gutter, 0)
-
-	local top = M.rowGap + M.row + M.rowGap
 	for _, log in ipairs(every) do
-		log.frame:ClearAllPoints()
-		log.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT", left, -top)
-		log:SetFontSize(db.chatFont)
-		log:Resize(math.max(room, M.row), math.max(body - top - M.rowGap, M.row))
+		Place(log)
 	end
+
+	-- The line you type in starts where the lines you read start, so the rail
+	-- runs the whole height of the window and the cross that closes it sits in
+	-- the rail's own column, under the rooms.
+	window.footer:ClearAllPoints()
+	window.footer:SetPoint("BOTTOMLEFT", M.rooms + M.gutter, 0)
+	window.footer:SetPoint("BOTTOMRIGHT", -M.gutter, 0)
+	window.footerRule:ClearAllPoints()
+	window.footerRule:SetPoint("BOTTOMLEFT", M.rooms, window.foot)
+	window.footerRule:SetPoint("BOTTOMRIGHT", -M.gutter, window.foot)
+
+	closer:ClearAllPoints()
+	closer:SetPoint("BOTTOMLEFT", window.frame, "BOTTOMLEFT", 0, 0)
+	closer:SetSize(M.rooms, window.foot)
 
 	entry.box:ClearAllPoints()
 	entry.box:SetPoint("LEFT", window.footer, "LEFT", 0, 0)
@@ -356,6 +419,19 @@ local function BuildEntry()
 	-- so it is better to stop the typing than to lose the sentence.
 	edit:SetMaxLetters(255)
 
+	-- What the empty line says: the room you are in and what enter will do in
+	-- it. Drawn behind the text rather than above the log, which is where the
+	-- heading row that used to say it went. Hidden the moment there is a
+	-- character in the field, because from then on the field says it better.
+	local ghost = UI.Label(box, M.small, C.quiet, "LEFT", UI.FLAT)
+	ghost:SetPoint("LEFT", 5, 0)
+	ghost:SetPoint("RIGHT", -5, 0)
+	UI.Wrap(ghost, false)
+
+	edit:SetScript("OnTextChanged", function(self)
+		ghost:SetShown((self:GetText() or "") == "")
+	end)
+
 	edit:SetScript("OnEnterPressed", function(self)
 		ChatWindow.Send(self:GetText())
 		self:SetText("")
@@ -389,28 +465,36 @@ local function BuildEntry()
 		ChatWindow.Focus()
 	end)
 
-	return { box = box, edit = edit }
+	return { box = box, edit = edit, ghost = ghost }
 end
 
-local function BuildHeader()
-	title = UI.Label(window.content, M.heading, C.heading, "LEFT", UI.FLAT)
-	title:SetHeight(M.row)
-	UI.Wrap(title, false)
-
-	-- What the enter key is about to do, in the words it will do it in. It is
-	-- here rather than beside the field because this line is about the room and
-	-- the room's name is the thing beside it.
-	note = UI.Label(window.content, M.small, C.quiet, "RIGHT", UI.FLAT)
-	note:SetHeight(M.row)
-	UI.Wrap(note, false)
+-- What a room's hover says: its name, what enter would do there, and how much
+-- is waiting in it. The rail is a column of pictures, so this is where the
+-- words went, and it has to carry all three of them because none of them is on
+-- the screen any more.
+local function Describe(row)
+	local kind, target = ns.Rooms.Target(row.id)
+	local waiting = row.unread or 0
+	return {
+		title = row.label,
+		{ ns.Compose.Note(kind, target) },
+		waiting > 0 and { ("%d waiting"):format(waiting) } or nil,
+	}
 end
 
 local function Build()
 	window = UI.Window({
 		name = FRAME_NAME,
-		title = "Chat",
 		width = ns.db.chatWidth,
 		height = ns.db.chatHeight,
+		-- No title bar. A bar across the top of a window says which window it
+		-- is, and this one is a window you have had open all evening drawing
+		-- the conversation it is named after. The twenty four pixels are worth
+		-- more as another line of what somebody said.
+		bare = true,
+		-- One line of text rather than a row of buttons, which is what the
+		-- default footer is sized for.
+		footer = M.entry,
 		-- Under the tooltip and under anything the client puts over the world.
 		-- A chat window is furniture, not a dialog.
 		strata = "MEDIUM",
@@ -432,10 +516,20 @@ local function Build()
 
 	rail = UI.List(window.content, {
 		name = "WarriorKitChatRooms",
+		-- A picture per room rather than a word. Thirteen words down the left
+		-- were a hundred and four pixels of every line anybody said, spent
+		-- naming rooms you know by sight; the name is in the hover now.
+		icons = true,
+		describe = Describe,
 		onSelect = function(id) Show(id) end,
 	})
-	BuildHeader()
 	entry = BuildEntry()
+
+	-- The way out, at the foot of the rail. A bare window has no close box, and
+	-- a window with no way to shut it is one you have to know a slash word to
+	-- be rid of.
+	closer = UI.Button(window.frame, { label = "x", glyph = true,
+		onClick = function() ChatWindow.Hide() end })
 
 	enterButton = CreateFrame("Button", ENTER_NAME, window.frame)
 	enterButton:SetScript("OnClick", function() ChatWindow.Focus() end)
@@ -446,11 +540,6 @@ local function Build()
 		built = false
 		return false
 	end
-
-	-- The close box is the window's own and hides the frame. Here it has to
-	-- record that you closed it, or the next thing that applies a setting would
-	-- put the window straight back up.
-	window.close:SetScript("OnClick", function() ChatWindow.Hide() end)
 
 	Relayout()
 	Refresh()
@@ -745,6 +834,33 @@ function ChatWindow.Rooms()
 	return count
 end
 
+-- How wide a row of the rail came out. Named for the harness, and for the
+-- failure in List:RowWidth's own note: a rail that is the right width with rows
+-- that are not is invisible to everything else that measures this window.
+function ChatWindow.Rail()
+	if not built then
+		return 0
+	end
+	return rail:RowWidth()
+end
+
+-- How big one room's log came out, in the window's own units.
+--
+-- Named for the harness, and it earns the surface. A log is made on the first
+-- line that lands in its room, which for a whisper from somebody new is hours
+-- after the window was laid out, and a log that is never placed comes out
+-- anchored to nothing at no size. It still takes lines, the count against it in
+-- the rail still rises, and it draws nothing at all. Nothing that reads a line
+-- or a count can see that, which is why it survived: what you said in Say went
+-- into the buffer and only Conversation ever showed it.
+function ChatWindow.Shape(id)
+	local log = logs[id]
+	if not log then
+		return 0, 0
+	end
+	return log.frame:GetWidth() or 0, log.frame:GetHeight() or 0
+end
+
 -- How many lines one room is holding.
 function ChatWindow.Count(id)
 	local log = logs[id]
@@ -829,6 +945,28 @@ end
 
 --------------------------------------------------------------------------
 
+-- The size the window shipped with before the chrome came off it.
+--
+-- A saved pair that is exactly this is a pair nobody chose: it is what a player
+-- who never touched the two steppers has in their file. The window under it is
+-- a different window now, a hundred pixels of rail and fifty of chrome
+-- narrower and shorter, so that pair is a rectangle sized for furniture that is
+-- gone. It is moved to the new default once and anything else is left alone,
+-- because a number somebody set is a number somebody set.
+--
+-- Delete this and its call a release after 1.10, when nobody's file still has
+-- the old pair in it. 1.9 is what shipped it.
+local WAS = { width = 520, height = 260 }
+
+local function Shrink()
+	if ns.db.chatWidth ~= WAS.width or ns.db.chatHeight ~= WAS.height then
+		return false
+	end
+	ns.db.chatWidth = ns.DefaultFor("chatWidth")
+	ns.db.chatHeight = ns.DefaultFor("chatHeight")
+	return true
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -842,6 +980,7 @@ end
 
 events:SetScript("OnEvent", function(_, event)
 	if event == "PLAYER_LOGIN" then
+		Shrink()
 		-- Written before anything is tried, so a session where this file never
 		-- reached login is told apart from one that reached it and failed. Those
 		-- are two different bugs, and from a chair they are the same blank

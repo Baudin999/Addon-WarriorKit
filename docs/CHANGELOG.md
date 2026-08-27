@@ -2,6 +2,76 @@
 
 ## Unreleased
 
+### The chat window gives its screen back
+
+It shipped taking a third of the corner it sits in, and most of what it took was
+not conversation. A hundred and four pixels of every line went to a column of
+room names, twenty four more to a title bar naming a window you have had open
+all evening, twenty eight under that to a heading and a note. The default
+rectangle was 520 by 260 and the message inside it was 396 wide.
+
+The column is one icon wide now. A room is a picture rather than a word, its
+name and what the enter key would do in it are in the hover, and the count of
+what arrived while you were reading somewhere else sits in the corner of the
+icon rather than beside a name. `UI.List` takes `icons` and `describe` for it,
+and a header in that mode is a hairline with air round it, because "Channels"
+does not fit in thirty pixels and the air says the same thing.
+
+The title bar is gone with it. `UI.Window` takes `bare`, which costs the bar,
+the name and the close box, and a window that asks for it owes its player
+another way out: the chat window's is a cross at the foot of its own rail. The
+footer is a second number now rather than the one constant, because a strip
+holding one line of text is not a strip holding a row of buttons.
+
+The heading row and the note beside it are gone too, and what they said is in
+the empty line you type on: **Party, enter types /p**, until there is a
+character in the field, at which point the field says it better. That is the
+same argument the slash in the field has always been. The window is 400 by 210
+by default and the message in it is 358 wide, which is thirty five per cent less
+window for a wider line.
+
+A file that still holds exactly 520 by 260 is a file where nobody touched the
+two steppers, and that pair was chosen for a window with fifty pixels of chrome
+and a hundred pixel rail in it. It is moved to the new default once at login.
+Any other pair is left alone, because a number somebody set is a number somebody
+set.
+
+### A font object carries a justification, and every line of chat was centred
+
+`CreateFont` hands back an object justified centre, a frame given one takes both
+the face and the justification, and `UI/Text.lua` had never said otherwise. It
+went unseen for as long as it did because `UI.Label` justifies each font string
+itself after it sets the object, so the object's own answer never reached the
+screen.
+
+Then the chat window put a `ScrollingMessageFrame` on one. That frame makes its
+own font strings and no caller can reach them, so the only place to say how they
+are justified is the frame, and `SetFontObject` overwrites that with the
+object's. Every line anybody spoke came out centred, and the `SetJustifyH` three
+lines above it in `UI/Log.lua` was doing nothing at all. Every object this addon
+makes is justified left where it is made.
+
+### A room made after the window was laid out drew nothing
+
+A room's log is built on the first line that lands in it, which for Say is the
+first thing you say all evening and for a whisper is somebody you have never
+spoken to. `Relayout` placed the logs that existed when it ran and nothing
+placed the ones made after it, so those came out anchored to nothing at no size.
+
+Every symptom pointed somewhere else. The line went into the buffer, the count
+went up against the room in the rail, `/wk status` counted it, and the room drew
+an empty rectangle. You could see what you had just said in Conversation and not
+in Say. `ChatWindow.Shape` reports a room's log size so the harness can state
+the claim from outside the file, and `List:RowWidth` reports a row's width for
+the same reason: a rail that is the right width with rows that are two pixels
+wide answers every other question correctly and draws nothing.
+
+That second one is not hypothetical. `UI.ScrollView` reserves sixteen pixels for
+the scrollbar column, which is right at a hundred and eighty and absurd at
+thirty, so the first icon rail had fourteen pixels of room for an eighteen pixel
+icon. The view takes `overlay` now and floats the bar over the content on a
+column that narrow.
+
 ### A font size is a pixel height, and two places had it in units
 
 The loot feed's filter chips shipped drawing nothing. Every measurement in a

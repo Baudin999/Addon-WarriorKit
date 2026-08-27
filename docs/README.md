@@ -4278,10 +4278,17 @@ and middle buttons are handed back where the client has
 `SetPassThroughButtons`, and where it does not, a right drag begun on the feed
 will not turn the camera.
 
-**Chat.** A rail of rooms down the left of a window of the addon's own, and the
-room you pick filling the rest. A room is one conversation: your party, your
+**Chat.** A column of rooms down the left of a window of the addon's own, and
+the room you pick filling the rest. A room is one conversation: your party, your
 guild, the family, each person whispering you. Every line keeps its channel
 colour, names are class coloured, and a click on a name answers it.
+
+The column is one icon wide and the window has no title bar. Both are the same
+argument: thirteen room names cost a hundred pixels of every line anybody said
+to label rooms you know by sight, and a bar across the top says which window
+this is to somebody who has had it open all evening. The name of a room, what
+the enter key would do in it and how much is waiting are in its hover, and the
+room you are in is written into the empty line you type on.
 
 **The room you are reading is the channel you are typing into.** That is the
 whole design and everything else follows from it. Select the party room, start
@@ -4311,9 +4318,9 @@ look. A room is drawn while the channel behind it exists, or while it holds
 something you have not read, which is what keeps a party line that arrived as
 you left the group reachable instead of deleting the row it was on.
 
-What marks a room is a count against its name in the accent colour. Selecting it
-clears the count. There is no flashing, no toast, and no sound unless somebody in
-one of your groups spoke.
+What marks a room is a count in the corner of its icon in the accent colour, and
+the icon itself brightening. Selecting it clears the count. There is no flashing,
+no toast, and no sound unless somebody in one of your groups spoke.
 
 **Groups are the people who matter, in named sets.** Family, the officers, the
 four you level with. The first version of this was one flat list of important

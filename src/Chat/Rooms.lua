@@ -98,10 +98,36 @@ local function Hiding()
 end
 
 --------------------------------------------------------------------------
+-- The picture on a room
+--
+-- The rail is a column of icons twenty six pixels wide and the label is in the
+-- hover, so this is what you actually navigate by. Every one is a texture the
+-- client has shipped since the first release, because a path that does not
+-- resolve draws a green question mark and writes nothing to the log.
+--
+-- They are chosen to be told apart at sixteen pixels rather than to be right in
+-- a glossary. Say is a shout, because say carries yells and emotes as well.
+-- Your groups are the prayer, because a group is the people you would answer
+-- first and nothing else in the set is a huddle of figures.
+local ICON = "Interface\\Icons\\"
+Rooms.ICONS = {
+	all      = ICON .. "INV_Misc_Note_01",
+	system   = ICON .. "INV_Misc_Gear_01",
+	say      = ICON .. "Ability_Warrior_BattleShout",
+	party    = ICON .. "INV_Misc_GroupLooking",
+	raid     = ICON .. "INV_Misc_GroupNeedMore",
+	instance = ICON .. "INV_Misc_Key_04",
+	guild    = ICON .. "INV_Shirt_GuildTabard_01",
+	group    = ICON .. "Spell_Holy_PrayerOfHealing",
+	whisper  = ICON .. "INV_Letter_15",
+}
+
+--------------------------------------------------------------------------
 -- The rooms that are not made by you
 --
 --   id       what a line is routed to and what the rail selects by
---   label    what the row says
+--   label    what the row says, and what its hover says in the rail
+--   icon     the picture on its row
 --   under    the heading the row is drawn beneath
 --   kind     what SendChatMessage is told when you type here
 --   live     whether the channel behind it exists right now
@@ -129,6 +155,14 @@ local CHANNELS = {
 	  live = InLFG },
 	{ id = "guild",    label = "Guild",    under = "Channels", kind = "GUILD", live = InGuild },
 }
+
+-- Every fixed room is named after its own icon, so the picture is looked up by
+-- the id rather than written twice.
+for _, list in ipairs({ TOP, CHANNELS }) do
+	for _, room in ipairs(list) do
+		room.icon = Rooms.ICONS[room.id]
+	end
+end
 
 local byId = {}
 for _, list in ipairs({ TOP, CHANNELS }) do
@@ -257,23 +291,26 @@ end
 -- reading it is what makes the row go away.
 --------------------------------------------------------------------------
 
-local function Add(rows, id, label, header)
+local function Add(rows, id, label, header, icon)
 	if header and rows.under ~= header then
 		rows[#rows + 1] = { header = header }
 		rows.under = header
 	end
-	rows[#rows + 1] = { id = id, label = label, unread = unread[id] or 0 }
+	rows[#rows + 1] = { id = id, label = label, icon = icon,
+		unread = unread[id] or 0 }
 end
 
 local function AddGroups(rows)
 	for position, group in ipairs(ns.People.All()) do
-		Add(rows, "group:" .. group.key, ns.People.Name(position), "Groups")
+		Add(rows, "group:" .. group.key, ns.People.Name(position), "Groups",
+			Rooms.ICONS.group)
 	end
 end
 
 local function AddWhispers(rows)
 	for _, entry in ipairs(whispers) do
-		Add(rows, "whisper:" .. entry.key, entry.name:gsub("%-.*$", ""), "Whispers")
+		Add(rows, "whisper:" .. entry.key, entry.name:gsub("%-.*$", ""), "Whispers",
+			Rooms.ICONS.whisper)
 	end
 end
 
@@ -281,7 +318,7 @@ local function AddFixed(rows, list)
 	for _, room in ipairs(list) do
 		local id = room.id
 		if room.live() or (unread[id] or 0) > 0 then
-			Add(rows, id, room.label, room.under)
+			Add(rows, id, room.label, room.under, room.icon)
 		end
 	end
 end
@@ -315,6 +352,22 @@ function Rooms.Exists(id)
 		end
 	end
 	return false
+end
+
+-- The picture for one room, by id. The rail asks through Rooms.List; this is
+-- for anything holding an id on its own, which is the window's hover.
+function Rooms.Icon(id)
+	local fixed = byId[id]
+	if fixed then
+		return fixed.icon
+	end
+	if type(id) == "string" and id:sub(1, 6) == "group:" then
+		return Rooms.ICONS.group
+	end
+	if type(id) == "string" and id:sub(1, 8) == "whisper:" then
+		return Rooms.ICONS.whisper
+	end
+	return Rooms.ICONS.all
 end
 
 function Rooms.Title(id)

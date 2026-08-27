@@ -154,32 +154,48 @@ function UI.Window(opts)
 	local px = ns.Pixel(frame)
 	ns.EdgeSize(window.edges, px)
 
-	local bar = ns.Fill(frame, "ARTWORK", C.chrome[1], C.chrome[2], C.chrome[3], 1)
-	bar:SetPoint("TOPLEFT", px, -px)
-	bar:SetPoint("TOPRIGHT", -px, -px)
-	bar:SetHeight(M.title)
+	-- How much of the window is chrome, top and bottom. Both are numbers rather
+	-- than the two constants they used to be, because the chat window wants
+	-- neither of the defaults: no title bar at all, and a footer sized for one
+	-- line of text instead of for a row of buttons.
+	--
+	-- **A bare window has no title bar and no close box.** A title bar says
+	-- which window this is, which is worth twenty four pixels in a settings
+	-- window you opened on purpose and worth nothing in a window that is up all
+	-- evening drawing the thing it is named after. A window that asks for bare
+	-- owes its player some other way out, and the chat window's is a cross at
+	-- the foot of its own rail.
+	window.chrome = opts.bare and 0 or M.title
+	window.foot = opts.footer or M.footer
 
-	window.title = UI.Label(frame, M.heading, C.heading, "LEFT", UI.FLAT)
-	window.title:SetPoint("TOPLEFT", M.pad, -math.floor((M.title - M.heading) / 2) - px)
-	window.title:SetText(opts.title or "")
+	if not opts.bare then
+		local bar = ns.Fill(frame, "ARTWORK", C.chrome[1], C.chrome[2], C.chrome[3], 1)
+		bar:SetPoint("TOPLEFT", px, -px)
+		bar:SetPoint("TOPRIGHT", -px, -px)
+		bar:SetHeight(M.title)
 
-	window.close = UI.Button(frame, { label = "x", glyph = true,
-		width = M.title - 8, height = M.title - 8,
-		onClick = function() window:Hide() end })
-	window.close:SetPoint("TOPRIGHT", -4, -4)
+		window.title = UI.Label(frame, M.heading, C.heading, "LEFT", UI.FLAT)
+		window.title:SetPoint("TOPLEFT", M.pad, -math.floor((M.title - M.heading) / 2) - px)
+		window.title:SetText(opts.title or "")
+
+		window.close = UI.Button(frame, { label = "x", glyph = true,
+			width = M.title - 8, height = M.title - 8,
+			onClick = function() window:Hide() end })
+		window.close:SetPoint("TOPRIGHT", -4, -4)
+	end
 
 	-- Everything between the title bar and the footer. Content parents to this,
 	-- so nothing below has to know how tall the chrome is.
 	window.content = CreateFrame("Frame", nil, frame)
-	window.content:SetPoint("TOPLEFT", 0, -M.title)
+	window.content:SetPoint("TOPLEFT", 0, -window.chrome)
 
 	window.footer = CreateFrame("Frame", nil, frame)
 	window.footer:SetPoint("BOTTOMLEFT", M.pad, 0)
 	window.footer:SetPoint("BOTTOMRIGHT", -M.pad, 0)
-	window.footer:SetHeight(M.footer)
+	window.footer:SetHeight(window.foot)
 	window.footerRule = UI.Rule(frame, C.hairline)
-	window.footerRule:SetPoint("BOTTOMLEFT", M.pad, M.footer)
-	window.footerRule:SetPoint("BOTTOMRIGHT", -M.pad, M.footer)
+	window.footerRule:SetPoint("BOTTOMLEFT", M.pad, window.foot)
+	window.footerRule:SetPoint("BOTTOMRIGHT", -M.pad, window.foot)
 
 	window:Resize(opts.width or 540, opts.height or 450)
 
@@ -215,8 +231,16 @@ function Window:Resize(width, height)
 
 	self.width, self.height = width, height
 	self.frame:SetSize(width, height)
-	self.content:SetSize(width, height - M.title - M.footer)
+	self.content:SetSize(width, self:Body(height))
 	return width, height
+end
+
+-- How tall the content area is in a window of this height: everything the
+-- chrome does not take. Public because a caller that lays out inside the
+-- content has to be able to ask, and because the two numbers it subtracts are
+-- per window now rather than two constants anybody could read off the theme.
+function Window:Body(height)
+	return (height or self.height or 0) - self.chrome - self.foot
 end
 
 -- A search field in the title bar.
@@ -280,7 +304,14 @@ function Window:Search(opts)
 end
 
 function Window:SetTitle(text)
+	-- A bare window has no title to set. Refused rather than raised, because the
+	-- caller that asks is a page naming itself and a page in a window with no
+	-- title bar is not a bug.
+	if not self.title then
+		return false
+	end
 	self.title:SetText(text)
+	return true
 end
 
 -- How much of the world comes through the window, as a fraction of the
@@ -812,41 +843,83 @@ end
 local List = {}
 List.__index = List
 
+-- How much of a room's icon you see. The same three steps the words used to be
+-- drawn in: the room you are reading is whole, a room holding something you
+-- have not read is nearly whole, and a quiet room is half there. A picture has
+-- no colour to lend a state, so brightness is what carries it.
+local FULL, WAITING, QUIET = 1, 0.9, 0.5
+
+local function PaintCount(button)
+	local waiting = button.unread and button.unread > 0 and not button.selected
+	if not waiting then
+		button.badge:Hide()
+		if button.badgeBg then
+			button.badgeBg:Hide()
+		end
+		return false
+	end
+	button.badge:SetText(button.unread > 99 and "99+" or tostring(button.unread))
+	button.badge:Show()
+	if button.badgeBg then
+		button.badgeBg:Show()
+	end
+	return true
+end
+
 local function PaintListRow(button)
 	if button.header then
 		UI.Tint(button.bg, C.rail)
 		button.text:SetTextColor(C.quiet[1], C.quiet[2], C.quiet[3])
 		button.mark:Hide()
 		button.badge:Hide()
+		if button.badgeBg then
+			button.badgeBg:Hide()
+		end
+		if button.rule then
+			button.rule:SetShown(button.icons and true or false)
+		end
 		return
 	end
 
 	local shade = button.selected and C.selected or (button.hovered and C.hover or C.rail)
 	UI.Tint(button.bg, shade)
 	button.mark:SetShown(button.selected and true or false)
+	if button.rule then
+		button.rule:Hide()
+	end
 
 	-- Three shades, the same three the rail uses. The room you are reading is
 	-- the heading colour, a room with something in it is the body colour, and a
 	-- quiet room is dim. The count on the right is what says how much; the
 	-- colour is what you see without reading it.
 	local color = C.dim
+	local light = QUIET
 	if button.selected then
-		color = C.heading
+		color, light = C.heading, FULL
 	elseif button.unread and button.unread > 0 then
-		color = C.text
+		color, light = C.text, WAITING
 	end
 	button.text:SetTextColor(color[1], color[2], color[3])
-
-	if button.unread and button.unread > 0 and not button.selected then
-		button.badge:SetText(button.unread > 99 and "99+" or tostring(button.unread))
-		button.badge:Show()
-	else
-		button.badge:Hide()
+	if button.icon then
+		button.icon:SetAlpha(button.hovered and FULL or light)
 	end
+
+	PaintCount(button)
 end
 
+-- opts.icons draws a picture per row instead of a word, which is what the chat
+-- window's rail is: thirteen rooms down a column twenty six pixels wide, and
+-- the name of each in its hover. A header is a hairline there rather than a
+-- caption, because "Channels" does not fit in twenty six pixels and the air
+-- between two runs of icons says the same thing.
+--
+-- opts.describe is handed a row and answers a tooltip, which is the only place
+-- an icon rail can put a name. Without it the rail is a column of pictures
+-- nobody can read.
 function UI.List(parent, opts)
 	local list = setmetatable({ pool = {}, rows = {}, onSelect = opts and opts.onSelect }, List)
+	list.icons = opts and opts.icons and true or false
+	list.describe = opts and opts.describe
 	-- Named if the caller asks, for the reason the aura rows and the meter are:
 	-- a column that has laid itself out wrongly has to be measurable from a
 	-- macro and from scripts/harness.lua, and the alternative is the file that
@@ -855,7 +928,7 @@ function UI.List(parent, opts)
 	local bg = ns.Fill(list.frame, "BACKGROUND", C.rail[1], C.rail[2], C.rail[3], 1)
 	bg:SetAllPoints()
 
-	list.view = UI.ScrollView(list.frame)
+	list.view = UI.ScrollView(list.frame, { overlay = list.icons })
 	list.view.frame:SetPoint("TOPLEFT", M.rowGap, -M.rowGap)
 	list.stack = UI.Stack(list.view.canvas)
 	return list
@@ -864,6 +937,42 @@ end
 -- One row's frame, made once and reused for whatever row lands on it next. It
 -- carries every part either kind of row can want, because a header that became
 -- an entry on the next refresh would otherwise need a frame of its own.
+-- The picture on an icon row, and the count that sits in its corner.
+--
+-- The count is over the icon rather than beside it, because there is no beside
+-- in a column this narrow, and it carries its own dark rectangle: an accent
+-- coloured 3 on top of whatever art the room's icon happens to be is a number
+-- you can lose against a bright corner.
+local function IconRow(button)
+	button.icon = UI.Icon(button, "ARTWORK")
+	button.icon:SetSize(M.roomIcon, M.roomIcon)
+	button.icon:SetPoint("CENTER")
+
+	button.badgeBg = ns.Fill(button, "OVERLAY", C.shadow[1], C.shadow[2], C.shadow[3], 0.85)
+	button.badge:ClearAllPoints()
+	button.badge:SetPoint("BOTTOMRIGHT", button.icon, "BOTTOMRIGHT", 1, -1)
+	button.badgeBg:SetPoint("TOPLEFT", button.badge, "TOPLEFT", -1, 1)
+	button.badgeBg:SetPoint("BOTTOMRIGHT", button.badge, "BOTTOMRIGHT", 1, -1)
+	button.badgeBg:Hide()
+
+	-- A header is a hairline across the column with air either side of it. It is
+	-- drawn on the same pooled frame as a room, because a run that gains a
+	-- header on the next refresh would otherwise need a frame of its own.
+	button.rule = UI.Rule(button, C.hairline)
+	button.rule:SetPoint("LEFT", M.rowGap, 0)
+	button.rule:SetPoint("RIGHT", -M.rowGap, 0)
+	button.rule:Hide()
+	button.text:Hide()
+
+	button.icons = true
+	-- The hover scripts are the row's own, because they paint as well as
+	-- describe. What UI.Tip would have done for free is the one thing left, and
+	-- it is the thing a frame under the cursor all evening cannot do without:
+	-- a right drag over the rail has to turn the camera rather than stop dead.
+	UI.PassCamera(button)
+	return button
+end
+
 local function ListRow(list, index)
 	local button = CreateFrame("Button", nil, list.stack.frame)
 	button.bg = ns.Fill(button, "BACKGROUND", C.rail[1], C.rail[2], C.rail[3], 1)
@@ -887,24 +996,79 @@ local function ListRow(list, index)
 			list:Select(this.id)
 		end
 	end)
+	-- The hover paints as well as describes, so the two scripts are hung here
+	-- and the tooltip is opened from inside them rather than through UI.Tip,
+	-- which would take both.
 	button:SetScript("OnEnter", function(this)
 		this.hovered = true
 		PaintListRow(this)
+		if list.describe and this.id then
+			UI.Tooltip.Show(this, list.describe(this))
+		end
 	end)
 	button:SetScript("OnLeave", function(this)
 		this.hovered = nil
 		PaintListRow(this)
+		if list.describe then
+			UI.Tooltip.Close()
+		end
 	end)
+
+	if list.icons then
+		IconRow(button)
+	end
 
 	list.pool[index] = button
 	return button
 end
 
+-- One row, filled in from what the caller said is on it. Split out of Set
+-- because a column of words and a column of icons fill a row in differently
+-- and Set is the part that is the same for both.
+function List:Row(index, row)
+	local button = self.pool[index] or ListRow(self, index)
+	button.header = row.header and true or false
+	button.id = row.id
+	button.unread = row.unread or 0
+	button.selected = (row.id ~= nil and row.id == self.selected)
+
+	if self.icons then
+		button.icon:SetShown(not button.header)
+		button.icon:SetTexture(row.icon or "")
+		button.label = row.header or row.label or ""
+	else
+		button.text:SetText(row.header or row.label or "")
+		button.text:SetFontObject(UI.Font(row.header and M.small or M.font,
+			UI.FLAT))
+	end
+
+	-- A header is a caption rather than a control, so it must not take the
+	-- click meant for the room under it or light up on the way past.
+	button:EnableMouse(not button.header)
+	button:Show()
+	PaintListRow(button)
+	return button
+end
+
+-- How tall one row is. A header in an icon column is a hairline with air round
+-- it rather than a word, so it takes a fraction of the height a word would.
+function List:RowHeight(button)
+	if not self.icons then
+		return M.railRow
+	end
+	if button.header then
+		return M.rowGap * 2 + 1
+	end
+	return M.roomRow
+end
+
 -- What the column holds now.
 --
---   row.header  the word above a run of rooms, drawn dim and not clickable
+--   row.header  the word above a run of rooms, drawn dim and not clickable,
+--               and a hairline with air round it in an icon column
 --   row.id      what Select and the caller's onSelect name this row by
---   row.label   what it says
+--   row.label   what it says, or what its hover says in an icon column
+--   row.icon    the texture on it, in an icon column
 --   row.unread  how many lines arrived here while you were somewhere else
 --
 -- The selection is kept by id across a refresh, so a whisper arriving while you
@@ -914,20 +1078,7 @@ function List:Set(rows)
 	self.stack.cells = {}
 
 	for index = 1, #rows do
-		local row = rows[index]
-		local button = self.pool[index] or ListRow(self, index)
-		button.header = row.header and true or false
-		button.id = row.id
-		button.unread = row.unread or 0
-		button.selected = (row.id ~= nil and row.id == self.selected)
-		button.text:SetText(row.header or row.label or "")
-		button.text:SetFontObject(UI.Font(row.header and M.small or M.font,
-			UI.FLAT))
-		-- A header is a caption rather than a control, so it must not take the
-		-- click meant for the room under it or light up on the way past.
-		button:EnableMouse(not button.header)
-		button:Show()
-		PaintListRow(button)
+		local button = self:Row(index, rows[index])
 
 		-- Air above a header and none above anything else, which is what makes
 		-- the runs read as runs. It is put on the row before rather than on the
@@ -937,7 +1088,7 @@ function List:Set(rows)
 		if button.header and previous then
 			previous.gap = M.rowGap
 		end
-		self.stack:Add(button, { height = M.railRow, gap = 1 })
+		self.stack:Add(button, { height = self:RowHeight(button), gap = 1 })
 	end
 
 	for index = #rows + 1, #self.pool do
@@ -950,6 +1101,17 @@ function List:Set(rows)
 		self.view:Update(extent)
 	end
 	return #rows
+end
+
+-- How wide one row in the column came out.
+--
+-- Public because a column whose rows are two pixels wide draws nothing, clicks
+-- nowhere, and answers every other question correctly: the frame is the width
+-- the theme says, the rows are the count the caller handed over, and the only
+-- symptom is an empty strip. That is exactly what reserving a scrollbar column
+-- inside a thirty pixel rail did.
+function List:RowWidth()
+	return self.stack.width or 0
 end
 
 function List:Resize(width, height)

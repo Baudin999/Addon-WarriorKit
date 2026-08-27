@@ -261,6 +261,14 @@ function Log:SetFontSize(size)
 	if type(self.view.SetFontObject) == "function" then
 		self.view:SetFontObject(UI.Font(size, UI.FLAT))
 	end
+	-- After the object, never before. A font object carries a justification and
+	-- the frame takes the object's, so a SetJustifyH written above this line is
+	-- overwritten by it. UI/Text.lua now makes every object left justified,
+	-- which is the fix; this is the assertion that the window this file draws
+	-- does not depend on remembering it.
+	if type(self.view.SetJustifyH) == "function" then
+		self.view:SetJustifyH("LEFT")
+	end
 	return true
 end
 
