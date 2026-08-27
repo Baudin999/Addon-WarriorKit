@@ -1,6 +1,6 @@
 ## Interface: 11509
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window with a tab for the people you name and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
@@ -388,13 +388,18 @@ Comfort\Destroy.lua
 Comfort\Feature.lua
 
 # The social part. Who you play with, what they said and how you talk to them.
-# People.lua is the list of names and Feed.lua captures the conversation, so
-# both load before Window.lua, which draws what the feed produces and names the
-# feed's three streams as it loads. Voice.lua shares nothing with the other
-# three: it is one setting and a channel to join, and it knows nothing about a
-# window. Feature.lua last, as everywhere else.
+# People.lua holds the groups and Rooms.lua reads them to work out which
+# conversation a line belongs to, so it loads before Feed.lua, which routes
+# through it. Compose.lua is the line you type and knows only about channels.
+# Blizzard.lua takes the client's own chat window off the screen and hands what
+# it would have drawn to the feed. Voice.lua shares nothing with any of them: it
+# is one setting and a channel to join. Window.lua draws what the other five
+# produce, and Feature.lua is last, as everywhere else.
 Chat\People.lua
+Chat\Rooms.lua
+Chat\Compose.lua
 Chat\Feed.lua
+Chat\Blizzard.lua
 Chat\Voice.lua
 Chat\Window.lua
 Chat\Feature.lua

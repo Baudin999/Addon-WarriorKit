@@ -780,3 +780,246 @@ function Tabs:Select(index)
 	return true
 end
 
+
+--------------------------------------------------------------------------
+-- The list
+--
+-- A column of rows down the left of a window, where the rows change while the
+-- window is open. That is the whole difference between this and the rail above
+-- it, and it is why there are two of them rather than one with a flag.
+--
+-- The rail is the options window's: forty five sections that are known at load,
+-- built once, folded and unfolded. The list is the chat window's: a room per
+-- conversation, and the set of conversations changes every time you join a
+-- party, leave a guild, or get a whisper from somebody you have never spoken to.
+-- Folding is not the question there. What is drawn at all is.
+--
+-- So a caller hands over the rows it wants and gets them, and this file works
+-- out which frames to reuse. A frame cannot be destroyed on this client, so
+-- rows are pooled and the ones past the end are hidden rather than unmade,
+-- which is the same trick the loadout tabs use and for the same reason.
+--
+-- A row is one of two things. A header is a dim word with no background and no
+-- click, there to say what the rows under it are. An entry is a button with a
+-- label, an accent mark down its left edge when it is the one you are reading,
+-- and a count on the right when it holds something you have not read.
+--
+-- Rows are addressed by a string id rather than by position, because the
+-- position of a whisper moves every time somebody else whispers you and the
+-- selection has to survive that.
+--------------------------------------------------------------------------
+
+local List = {}
+List.__index = List
+
+local function PaintListRow(button)
+	if button.header then
+		UI.Tint(button.bg, C.rail)
+		button.text:SetTextColor(C.quiet[1], C.quiet[2], C.quiet[3])
+		button.mark:Hide()
+		button.badge:Hide()
+		return
+	end
+
+	local shade = button.selected and C.selected or (button.hovered and C.hover or C.rail)
+	UI.Tint(button.bg, shade)
+	button.mark:SetShown(button.selected and true or false)
+
+	-- Three shades, the same three the rail uses. The room you are reading is
+	-- the heading colour, a room with something in it is the body colour, and a
+	-- quiet room is dim. The count on the right is what says how much; the
+	-- colour is what you see without reading it.
+	local color = C.dim
+	if button.selected then
+		color = C.heading
+	elseif button.unread and button.unread > 0 then
+		color = C.text
+	end
+	button.text:SetTextColor(color[1], color[2], color[3])
+
+	if button.unread and button.unread > 0 and not button.selected then
+		button.badge:SetText(button.unread > 99 and "99+" or tostring(button.unread))
+		button.badge:Show()
+	else
+		button.badge:Hide()
+	end
+end
+
+function UI.List(parent, opts)
+	local list = setmetatable({ pool = {}, rows = {}, onSelect = opts and opts.onSelect }, List)
+	-- Named if the caller asks, for the reason the aura rows and the meter are:
+	-- a column that has laid itself out wrongly has to be measurable from a
+	-- macro and from scripts/harness.lua, and the alternative is the file that
+	-- owns it handing out a reference to its own tables.
+	list.frame = CreateFrame("Frame", opts and opts.name, parent)
+	local bg = ns.Fill(list.frame, "BACKGROUND", C.rail[1], C.rail[2], C.rail[3], 1)
+	bg:SetAllPoints()
+
+	list.view = UI.ScrollView(list.frame)
+	list.view.frame:SetPoint("TOPLEFT", M.rowGap, -M.rowGap)
+	list.stack = UI.Stack(list.view.canvas)
+	return list
+end
+
+-- One row's frame, made once and reused for whatever row lands on it next. It
+-- carries every part either kind of row can want, because a header that became
+-- an entry on the next refresh would otherwise need a frame of its own.
+local function ListRow(list, index)
+	local button = CreateFrame("Button", nil, list.stack.frame)
+	button.bg = ns.Fill(button, "BACKGROUND", C.rail[1], C.rail[2], C.rail[3], 1)
+	button.bg:SetAllPoints()
+	button.mark = ns.Fill(button, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
+	button.mark:SetPoint("TOPLEFT")
+	button.mark:SetPoint("BOTTOMLEFT")
+	button.mark:SetWidth(2)
+
+	button.badge = UI.Label(button, M.small, C.accent, "RIGHT", UI.FLAT)
+	button.badge:SetPoint("RIGHT", -M.rowGap, 0)
+	UI.Wrap(button.badge, false)
+
+	button.text = UI.Label(button, M.font, C.dim, "LEFT", UI.FLAT)
+	button.text:SetPoint("LEFT", M.gutter, 0)
+	button.text:SetPoint("RIGHT", button.badge, "LEFT", -M.rowGap, 0)
+	UI.Wrap(button.text, false)
+
+	button:SetScript("OnClick", function(this)
+		if this.id then
+			list:Select(this.id)
+		end
+	end)
+	button:SetScript("OnEnter", function(this)
+		this.hovered = true
+		PaintListRow(this)
+	end)
+	button:SetScript("OnLeave", function(this)
+		this.hovered = nil
+		PaintListRow(this)
+	end)
+
+	list.pool[index] = button
+	return button
+end
+
+-- What the column holds now.
+--
+--   row.header  the word above a run of rooms, drawn dim and not clickable
+--   row.id      what Select and the caller's onSelect name this row by
+--   row.label   what it says
+--   row.unread  how many lines arrived here while you were somewhere else
+--
+-- The selection is kept by id across a refresh, so a whisper arriving while you
+-- are reading the guild does not move you.
+function List:Set(rows)
+	self.rows = rows
+	self.stack.cells = {}
+
+	for index = 1, #rows do
+		local row = rows[index]
+		local button = self.pool[index] or ListRow(self, index)
+		button.header = row.header and true or false
+		button.id = row.id
+		button.unread = row.unread or 0
+		button.selected = (row.id ~= nil and row.id == self.selected)
+		button.text:SetText(row.header or row.label or "")
+		button.text:SetFontObject(UI.Font(row.header and M.small or M.font,
+			UI.FLAT))
+		-- A header is a caption rather than a control, so it must not take the
+		-- click meant for the room under it or light up on the way past.
+		button:EnableMouse(not button.header)
+		button:Show()
+		PaintListRow(button)
+
+		-- Air above a header and none above anything else, which is what makes
+		-- the runs read as runs. It is put on the row before rather than on the
+		-- header itself, because a stack spaces rows by what sits under them,
+		-- and the first header has no row before it to widen.
+		local previous = self.stack.cells[#self.stack.cells]
+		if button.header and previous then
+			previous.gap = M.rowGap
+		end
+		self.stack:Add(button, { height = M.railRow, gap = 1 })
+	end
+
+	for index = #rows + 1, #self.pool do
+		self.pool[index]:Hide()
+	end
+
+	self.stack:SetWidth(self.view.width or 0)
+	local extent = self.stack:Reflow()
+	if self.view.height then
+		self.view:Update(extent)
+	end
+	return #rows
+end
+
+function List:Resize(width, height)
+	self.frame:SetSize(width, height)
+	self.view:Resize(width - M.rowGap * 2, height - M.rowGap * 2)
+	self:Set(self.rows)
+end
+
+-- The row with this id, if it is drawn. Selecting one that is not there keeps
+-- the id anyway, because the caller's own state is what decides which rooms
+-- exist and this widget is not the place to argue with it.
+function List:Select(id)
+	if self.selected == id then
+		return false
+	end
+	self.selected = id
+	for index = 1, #self.pool do
+		local button = self.pool[index]
+		button.selected = (button.id ~= nil and button.id == id)
+		PaintListRow(button)
+	end
+	if self.onSelect then
+		self.onSelect(id)
+	end
+	return true
+end
+
+function List:Selected()
+	return self.selected
+end
+
+-- One row's count, without rebuilding the column.
+--
+-- This is the whole reason the count is not just another field of Set. A line
+-- of chat changes exactly one number on one row, and rebuilding thirteen rows
+-- to draw it would be thirteen SetText calls per message on a raid night.
+-- Returns false when there is no such row, which is how the caller knows a
+-- rebuild is the thing it actually wanted.
+function List:Mark(id, unread)
+	for index = 1, #self.pool do
+		local button = self.pool[index]
+		if button.id ~= nil and button.id == id then
+			if button.unread ~= unread then
+				button.unread = unread
+				PaintListRow(button)
+			end
+			return true
+		end
+	end
+	return false
+end
+
+-- Which way to step through the rooms from where you are, skipping the headers.
+-- Tab in the chat window is what calls this, so it has to wrap and it has to
+-- answer something on a column that is all headers and one room.
+function List:Step(delta)
+	local rows, at = self.rows, nil
+	for index = 1, #rows do
+		if rows[index].id ~= nil and rows[index].id == self.selected then
+			at = index
+		end
+	end
+	if not at then
+		at = delta > 0 and #rows or 1
+	end
+	for offset = 1, #rows do
+		local index = ((at - 1 + delta * offset) % #rows) + 1
+		if rows[index].id ~= nil then
+			return rows[index].id
+		end
+	end
+	return nil
+end

@@ -8,9 +8,9 @@ ns.ChatFeed = Feed
 --
 -- Every line of conversation the client hands out, turned into one string with
 -- a colour, and handed to whoever is drawing. This file knows nothing about
--- windows, tabs or fonts. It knows which events carry a person talking, what
--- one line of that reads like, and which of the three streams a line belongs
--- to.
+-- windows, rooms or fonts. It knows which events carry a person talking, what
+-- one line of that reads like, and who said it. Chat/Rooms.lua decides where
+-- that goes and Chat/Window.lua draws it.
 --
 -- **Two mechanisms, one job each, and they are not the same job.**
 --
@@ -27,23 +27,21 @@ ns.ChatFeed = Feed
 -- twice, once here and once behind, which is exactly the doubled, unreadable
 -- screen this part was asked to replace.
 --
--- Nothing is hidden and nothing is unregistered. Blizzard's window keeps
--- everything we do not claim, which is loot, experience, faction, system text,
--- the combat log and every other addon's output, including this one's. That
--- is deliberate: a chat replacement that hides the frame every addon prints to
--- is a chat replacement that eats half of what the game says to you, and there
--- is no supported way to know which of the lines arriving at AddMessage came
--- from an event we already drew.
+-- Nothing is unregistered. Blizzard's window keeps everything we do not claim,
+-- which is loot, experience, faction, system text, the combat log and every
+-- other addon's output, including this one's, and for as long as that window is
+-- up it is where you read them. Whether it is up is a setting of its own:
+-- Chat/Blizzard.lua hides it and forwards what would have been drawn there to
+-- Feed.System below, which is the only way this part ever draws a line it did
+-- not capture itself.
 --
 -- Turning the claim off leaves both windows drawing, which is a real thing to
 -- want for a session or two while you decide whether this one is better.
 --------------------------------------------------------------------------
 
--- The three streams. A line can be in more than one, and most whispers from
--- somebody on your list are in all three.
-Feed.CHAT = "chat"
-Feed.WHISPER = "whisper"
-Feed.PEOPLE = "people"
+-- Which rooms a line belongs to is Chat/Rooms.lua's question, not this file's.
+-- What this file contributes is the two facts a router needs and only the
+-- capture knows: which channel the line came off, and whose line it is.
 
 -- How many lines are held for a window that does not exist yet. The events
 -- start at load and the window is built at PLAYER_LOGIN, and between those two
@@ -59,7 +57,9 @@ local PENDING = 100
 -- color    the key into the client's own ChatTypeInfo, so a player who has
 --          recoloured guild chat in the client's settings gets that colour
 --          here too. Falling back to the theme where the client has no table.
--- whisper  whether it belongs in the whispers stream as well
+-- room     which of the fixed rooms this kind belongs to. Say carries yells
+--          and emotes, because all three are the people standing near you.
+-- whisper  whether it belongs in a conversation with one person as well
 -- emote    the message is already a whole sentence with the name in it, so it
 --          is drawn without a name and without a colon
 -- target   the person the line is about is the recipient rather than the
@@ -67,19 +67,19 @@ local PENDING = 100
 --------------------------------------------------------------------------
 
 local KINDS = {
-	CHAT_MSG_SAY                  = { tag = "s",  color = "SAY" },
-	CHAT_MSG_YELL                 = { tag = "y",  color = "YELL" },
-	CHAT_MSG_EMOTE                = { tag = "e",  color = "EMOTE" },
-	CHAT_MSG_TEXT_EMOTE           = { tag = "e",  color = "EMOTE", emote = true },
-	CHAT_MSG_PARTY                = { tag = "p",  color = "PARTY" },
-	CHAT_MSG_PARTY_LEADER         = { tag = "p",  color = "PARTY_LEADER" },
-	CHAT_MSG_RAID                 = { tag = "r",  color = "RAID" },
-	CHAT_MSG_RAID_LEADER          = { tag = "r",  color = "RAID_LEADER" },
-	CHAT_MSG_RAID_WARNING         = { tag = "rw", color = "RAID_WARNING" },
-	CHAT_MSG_INSTANCE_CHAT        = { tag = "i",  color = "INSTANCE_CHAT" },
-	CHAT_MSG_INSTANCE_CHAT_LEADER = { tag = "i",  color = "INSTANCE_CHAT_LEADER" },
-	CHAT_MSG_GUILD                = { tag = "g",  color = "GUILD" },
-	CHAT_MSG_OFFICER              = { tag = "o",  color = "OFFICER" },
+	CHAT_MSG_SAY                  = { tag = "s",  color = "SAY", room = "say" },
+	CHAT_MSG_YELL                 = { tag = "y",  color = "YELL", room = "say" },
+	CHAT_MSG_EMOTE                = { tag = "e",  color = "EMOTE", room = "say" },
+	CHAT_MSG_TEXT_EMOTE           = { tag = "e",  color = "EMOTE", room = "say", emote = true },
+	CHAT_MSG_PARTY                = { tag = "p",  color = "PARTY", room = "party" },
+	CHAT_MSG_PARTY_LEADER         = { tag = "p",  color = "PARTY_LEADER", room = "party" },
+	CHAT_MSG_RAID                 = { tag = "r",  color = "RAID", room = "raid" },
+	CHAT_MSG_RAID_LEADER          = { tag = "r",  color = "RAID_LEADER", room = "raid" },
+	CHAT_MSG_RAID_WARNING         = { tag = "rw", color = "RAID_WARNING", room = "raid" },
+	CHAT_MSG_INSTANCE_CHAT        = { tag = "i",  color = "INSTANCE_CHAT", room = "instance" },
+	CHAT_MSG_INSTANCE_CHAT_LEADER = { tag = "i",  color = "INSTANCE_CHAT_LEADER", room = "instance" },
+	CHAT_MSG_GUILD                = { tag = "g",  color = "GUILD", room = "guild" },
+	CHAT_MSG_OFFICER              = { tag = "o",  color = "OFFICER", room = "guild" },
 	CHAT_MSG_WHISPER              = { tag = "w",  color = "WHISPER", whisper = true },
 	CHAT_MSG_WHISPER_INFORM       = { tag = "to", color = "WHISPER_INFORM", whisper = true, target = true },
 	CHAT_MSG_BN_WHISPER           = { tag = "w",  color = "BN_WHISPER", whisper = true },
@@ -185,16 +185,16 @@ end
 -- way in rather than indexed at each use.
 --------------------------------------------------------------------------
 
-local function Emit(streams, line, key, important)
+local function Emit(rooms, line, key, important)
 	local r, g, b = LineColor(key)
 	if not Feed.OnLine then
 		if #pending < PENDING then
-			pending[#pending + 1] = { streams = streams, line = line, r = r, g = g, b = b,
+			pending[#pending + 1] = { rooms = rooms, line = line, r = r, g = g, b = b,
 				important = important }
 		end
 		return false
 	end
-	Feed.OnLine(streams, line, r, g, b, important)
+	Feed.OnLine(rooms, line, r, g, b, important)
 	return true
 end
 
@@ -214,14 +214,9 @@ function Feed.Handle(event, text, sender, _, _, target, _, _, channelIndex,
 		who = sender
 	end
 
-	local entry = ns.People.Match(who)
-	local streams = { Feed.CHAT }
-	if kind.whisper then
-		streams[#streams + 1] = Feed.WHISPER
-	end
-	if entry then
-		streams[#streams + 1] = Feed.PEOPLE
-	end
+	local rooms = ns.Rooms.Route(kind.room, who, kind.whisper)
+	-- Worth a sound and a mark: somebody you named, in a group of your own.
+	local important = ns.People.Match(who) ~= nil
 
 	local tag = kind.tag
 	if kind.channel then
@@ -247,7 +242,43 @@ function Feed.Handle(event, text, sender, _, _, target, _, _, channelIndex,
 	end
 
 	local line = ("%s%s %s"):format(Stamp(), GRAY:format("[" .. tag .. "]"), body)
-	Emit(streams, line, kind.color, entry ~= nil)
+	Emit(rooms, line, kind.color, important)
+	return true
+end
+
+--------------------------------------------------------------------------
+-- What Blizzard's window would have drawn
+--
+-- Loot, experience, faction, reputation, system text and every addon's output,
+-- this one's included. None of it is a chat event we could register for: it
+-- arrives at a chat frame's AddMessage as a finished, coloured string, and
+-- there is no supported way to ask where it came from.
+--
+-- That is why it was left in Blizzard's window for as long as Blizzard's window
+-- was on screen, and it is why hiding that window is what brings this function
+-- into use. Chat/Blizzard.lua hooks the default frame and hands everything that
+-- reaches it here.
+--
+-- There is no doubling, and the reason is exact rather than lucky. Hiding the
+-- client's window forces the claim, the claim takes every conversation event
+-- out of its frames before they are drawn, and what is left arriving at
+-- AddMessage is precisely what this addon did not capture.
+--------------------------------------------------------------------------
+
+function Feed.System(text, r, g, b)
+	if type(text) ~= "string" or text == "" then
+		return false
+	end
+	if not Feed.OnLine then
+		return false
+	end
+	local line = Stamp() .. text
+	local red, green, blue = r, g, b
+	if type(red) ~= "number" then
+		local color = ns.UI.Color.text
+		red, green, blue = color[1], color[2], color[3]
+	end
+	Feed.OnLine({ ns.Rooms.SYSTEM }, line, red, green, blue, false)
 	return true
 end
 
@@ -285,8 +316,14 @@ end
 -- exists at all. Holding it back until something is attached is what keeps the
 -- client's login replay in Blizzard's window instead of in the hundred line
 -- pending buffer, where everything past the hundredth was dropped.
+--
+-- Hiding Blizzard's window forces the claim, which is the second clause below.
+-- A hidden frame that is still being handed the conversation is a conversation
+-- drawn in two places, one of which nobody can see, and the System room only
+-- holds what it holds because everything we captured was taken out first.
 local function Claiming()
-	return ns.db.chat and ns.db.chatClaim and Feed.OnLine ~= nil and watched
+	return ns.db.chat and (ns.db.chatClaim or ns.db.hideBlizzChat)
+		and Feed.OnLine ~= nil and watched
 end
 
 -- A filter per claimed event, made once and kept, because
@@ -379,7 +416,7 @@ function Feed.Attach(onLine)
 	end
 	local held = #pending
 	for _, held_line in ipairs(pending) do
-		onLine(held_line.streams, held_line.line, held_line.r, held_line.g, held_line.b,
+		onLine(held_line.rooms, held_line.line, held_line.r, held_line.g, held_line.b,
 			held_line.important)
 	end
 	pending = {}
@@ -403,7 +440,7 @@ function Feed.Describe()
 	if not ns.db.chat then
 		return "off, Blizzard's chat draws everything"
 	end
-	if not ns.db.chatClaim then
+	if not ns.db.chatClaim and not ns.db.hideBlizzChat then
 		return "on, and Blizzard's chat still draws the same lines"
 	end
 	if not Feed.Installed() then

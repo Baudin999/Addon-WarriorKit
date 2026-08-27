@@ -2,6 +2,114 @@
 
 ## Unreleased
 
+### The chat window is a rail of rooms, and the room is the channel
+
+Three tabs became thirteen rooms. A room is one conversation: Conversation and
+System at the top, then your groups, then Say, Party, Raid, Instance and Guild,
+then a room per person whispering you, eight of them at once. Each has its own
+log, its own scroll position and a count against its name for what arrived while
+you were reading something else.
+
+Three is what fits across the top of a window, and that number was deciding the
+design. Everything anybody said went into one column because there was nowhere
+else to put it, which is the sliding spill this part was supposed to be the
+answer to. A rail down the left has room for thirteen, so a room can be one
+conversation rather than one compromise.
+
+The other half is the part worth arguing about. The old window had a button
+beside the field that cycled six channels, and it had nothing to do with the tab
+you were reading: you could be reading Whispers and typing into guild all
+evening and nothing on the screen would have said so. The room is now the
+channel. Selecting the party room is the same act as choosing to talk to your
+party, and when you start typing the field already reads `/p ` with the cursor
+after it.
+
+The slash is in the field rather than on a label beside it. A label is the addon
+telling you where the line will go; the slash is the line. You can see it, delete
+it, or change the p to a g, and `/w Aria` typed inside the guild room whispers
+Aria and leaves the guild room where it was. There is no second piece of state
+holding which channel you are in, which is why there is nothing left that can
+disagree with the rail. Tab steps to the next room and rewrites the slash.
+
+Every channel prefix the addon knows is one `SendChatMessage`. Everything else
+with a slash on the front still goes to `ChatEdit_SendText`, which is what
+Blizzard's field calls, because keeping up with every command in the game is not
+this file's job. `/raid` is raid and `/r` is reply, the way the client has it.
+
+A room is a view and not a box. One line lands in every room it belongs in, so a
+whisper from your wife is in Whispers under her name, in Family, and in
+Conversation. A room is drawn while the channel behind it exists or while it
+holds something unread, so a party line that arrived as you left the group is
+still reachable and reading it is what makes the row go away.
+
+### Groups, in place of one flat list of important people
+
+The old list was one column of names and one tab for all of them, on the
+argument that what you want to know is whether anybody you care about has
+spoken. That holds until there are two kinds of person on it. A wife in party
+chat and an officer asking about raid times are both on the list, and one of
+them you answer now while the other you answer at some point this week.
+
+Six groups, twenty people each, a room per group, and a person may be in two of
+them with their line going to both. Everybody on an existing list is carried
+into a group called People at the first login and the old key is dropped, so
+nothing is retyped. The panel page is the loadouts page's shape twice over: a
+strip of groups, a strip of who is in the one you picked, a field under each and
+one button that adds everyone standing with you.
+
+### Blizzard's chat window is hidden, and nothing it drew is lost
+
+This is the change the old README said could not be made. Loot, experience,
+faction, system text and every addon's output arrive at a chat frame's
+`AddMessage` as finished strings with nothing on them saying where they came
+from, so hiding that frame without more would delete all of it.
+
+What makes it safe is that hiding forces the claim. The claim takes every
+conversation event out of Blizzard's frames before FrameXML draws it, so what is
+left arriving at `AddMessage` is exactly what this addon did not capture, and
+forwarding it whole to a System room cannot double anything. That was never true
+with the claim off, which is still the case and is why the claim cannot be turned
+off while the window is hidden.
+
+The switch is one line in `UnitFrames/Blizzard.lua`'s table, beside the other six
+that say hide Blizzard's copy of a thing this addon draws, so there is one page
+and one word for all of them. What is not a line is the mechanism, and that is
+`Chat/Blizzard.lua`, registered through a new `Blizz.Also`. The rule that file
+states is that the next thing to hide should be a row rather than a file, and it
+holds for a frame that goes down when a boolean says so. It does not hold for a
+window whose hiding deletes the game's own output unless the forward goes with
+it.
+
+Nothing is unregistered and nothing is destroyed. The frames go down through
+`ns.Strip`, which puts a frame's own `Hide` where its `Show` was and so survives
+the client showing it again, and only a frame that was on screen is taken, so
+putting the window back does not turn on eight tabs nobody ever opened. They keep
+their own scrollback, so one tick puts the window back with the evening still in
+it. Closing this window puts Blizzard's back on the next call, which is
+the coupling the claim already had and for the same reason: the first version of
+the claim did not have it, and one press of a close box deleted every line of
+conversation from the screen.
+
+The enter key comes here while that window is hidden, through an override
+binding that is dropped by one call and handed back the moment the window is
+shown. It is not a setting of its own on purpose. The client's enter opens the
+client's chat line, and with that window hidden the line it opens is invisible,
+so the key has to move or typing is broken. Every slash command still works from
+this field.
+
+### UI.List, which is the rail for a column that changes
+
+`UI.Rail` is the options window's: forty five sections known at load, built once,
+folded and unfolded. The chat rail is the opposite problem. Which rooms exist
+changes every time you join a party, leave a guild or get a whisper from
+somebody new, and folding is not the question there. What is drawn at all is.
+
+So a caller hands `UI.List` the rows it wants and the widget works out which
+frames to reuse, pooling them because a frame cannot be destroyed on this client.
+Rows are addressed by a string id rather than by position, because the position
+of a whisper moves every time somebody else whispers you and the selection has to
+survive that. `List:Mark` moves one row's count without rebuilding the column,
+which is what keeps a raid night from costing thirteen `SetText` calls a message.
 ### The loot feed, made worth looking at
 
 Five changes, and four of them are one argument: the loot feed was a column

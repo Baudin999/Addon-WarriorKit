@@ -50,6 +50,13 @@ local SWITCHES = {
 		label = "Blizzard's own cast bar",
 		hint = "Read this one with our cast bar switch. Both off is the one combination that leaves you no cast bar at all." },
 	{ key = "hideBlizzParty", word = "party", label = "Blizzard's party frames" },
+	-- The one switch in this list whose frames are not named in FRAMES below.
+	-- Hiding the client's chat window is twenty five names, a forward of
+	-- everything that window would have drawn so none of it is lost, and a
+	-- coupling to whether ours is open at all, which is a file rather than a
+	-- row: Chat/Blizzard.lua, registered through Blizz.Also.
+	{ key = "hideBlizzChat", word = "chat", label = "Blizzard's chat window",
+		hint = "Everything it would have drawn goes to the System room in ours, and the enter key comes with it." },
 	{ key = "hideBlizzRaid", word = "raid", label = "Blizzard's raid frames",
 		hint = "The manager re-shows its container on its own layout pass, so this one is hooked onto that pass as well as hidden." },
 }
@@ -125,6 +132,23 @@ end
 
 local pending = false
 
+-- A part whose frames need more than a name in the table above, and whose
+-- switch still belongs on the same page as these.
+--
+-- The rule this bends is the one in the header: the next thing to hide should
+-- be a line in FRAMES rather than a file. It holds for a frame that goes down
+-- when a boolean says so, which is every entry above. It does not hold for the
+-- client's chat window, where hiding without forwarding what that window draws
+-- would delete the loot, the experience and every addon's output, so the hide
+-- and the forward have to be one mechanism. What stays here is the switch, so
+-- there is still one page and one word for all of them.
+local extra = {}
+
+function Blizz.Also(apply)
+	extra[#extra + 1] = apply
+	return #extra
+end
+
 local function Asked(needs)
 	for index = 1, #needs do
 		if not ns.db[needs[index]] then
@@ -170,6 +194,10 @@ function Blizz.Apply()
 			end
 			complete = complete and done
 		end
+	end
+
+	for index = 1, #extra do
+		extra[index]()
 	end
 	pending = not complete
 end

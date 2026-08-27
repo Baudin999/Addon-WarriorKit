@@ -9,234 +9,192 @@ local C, M = UI.Color, UI.Metric
 --------------------------------------------------------------------------
 -- The chat window
 --
--- Three tabs, one log each, and a line to type in. Everything in it comes out
--- of UI/: the chrome is UI.Window, the strip is UI.TabStrip, each log is
--- UI.Log, the bar beside it is UI.ScrollBar and the colours and the pixel
--- metrics are the theme's. There is no Blizzard template anywhere in it and no
--- art asset behind it.
+-- A column of rooms down the left, the room you picked filling the rest, and
+-- one line to type in. Everything in it comes out of UI/: the chrome is
+-- UI.Window, the column is UI.List, each log is UI.Log, the bar beside it is
+-- UI.ScrollBar and the colours and the pixel metrics are the theme's. There is
+-- no Blizzard template anywhere in it and no art asset behind it.
 --
--- **Why three tabs and not one, and not eight.**
+-- **Why a column of rooms and not a row of tabs.**
 --
--- People is the reason the part exists. Anything anyone on your list says, in
--- any channel, lands here, and so does anything you whisper to them. One tab
--- for all of them: what you want to know is whether anybody you care about has
--- said something, and that is one question. It is not drawn at all until there
--- is somebody on the list, which is what makes it appear on its own when you
--- add the first name.
+-- The window this replaced had three tabs. Three is what fits across the top of
+-- a chat window, and that number is what decided the design rather than
+-- anything about a conversation: everything anyone said went in one column,
+-- because there was nowhere else to put it. A rail has room for thirteen, so a
+-- room can be one conversation instead of one compromise. Your party is a room.
+-- Your guild is a room. Each family member whispering you is a room. What was
+-- one river with a search problem is a list with a count against each name.
 --
--- Chat is every person talking, in every channel the addon captures, in one
--- column. That is what a chat window is, and the reason Blizzard's is hard to
--- read is not that it lacks tabs, it is the fifteen kinds of system text
--- running through the same column. Those stay where they were.
+-- The other half of it is that a tab strip only ever answered where you were
+-- reading. This rail answers where you are talking, because they are the same
+-- thing now: the room you have selected is the channel the line goes to, and
+-- Chat/Compose.lua puts that room's own slash in the field when you start
+-- typing. There is no channel button beside the field any more, no second piece
+-- of state to disagree with the first, and nothing to press twice.
 --
--- Whispers is the one stream that must never scroll past, on the one screen
--- where it does.
---
--- The tabs mark themselves when something arrives on one you are not looking
--- at, and selecting a tab clears its own mark. That is the whole of the alert
--- design: no flashing, no toast, no sound unless you asked for one.
+-- **What marks a room.** A count of what arrived while you were reading
+-- somewhere else, in the accent colour against the right edge of its row.
+-- Selecting a room clears its own count. That is the whole of the alert design:
+-- no flashing, no toast, no sound unless somebody in one of your groups spoke.
 --------------------------------------------------------------------------
 
 local FRAME_NAME = "WarriorKitChat"
 
--- The strip, in order. The id is what Chat/Feed.lua streams a line to, so the
--- feed and the window agree on three strings and on nothing else.
-local TABS = {
-	{ id = ns.ChatFeed.PEOPLE,  label = "People" },
-	{ id = ns.ChatFeed.CHAT,    label = "Chat" },
-	{ id = ns.ChatFeed.WHISPER, label = "Whispers" },
-}
+-- The button the enter key is bound onto while Blizzard's window is hidden. A
+-- name is what SetOverrideBindingClick binds to, which is the whole reason this
+-- frame is named at all.
+local ENTER_NAME = "WarriorKitChatEnterButton"
 
--- How wide the button that says which channel you are typing into is. Fixed,
--- because it changes label as you cycle it and a control that resizes under
--- your cursor is a control you misclick.
-local SEND_W = 58
+local window, rail, entry, enterButton
+local title, note
 
-local window, tabs, entry, sendButton
-local logs, byId = {}, {}
-local active = 1
+-- One log per room that has ever held a line, and the ones whose rooms have
+-- gone. A frame cannot be destroyed on this client, so a whisper conversation
+-- that fell off the end of the rail leaves its log here to be emptied and given
+-- to the next one rather than kept forever.
+local logs, spare, every = {}, {}, {}
+
+local active
 local built = false
 
--- Who a plain message goes to when the channel is a whisper. Set by clicking a
--- name in the log, by a whisper arriving, and by the reply word. Not saved: who
--- you were talking to is a fact about this session.
-local replyTo
+-- Work the client refused because combat was up, retried at
+-- PLAYER_REGEN_ENABLED. Only the enter key can land here: everything else this
+-- window does is an ordinary frame and works in a fight.
+local pending = false
 
 --------------------------------------------------------------------------
--- What you are typing into
---
--- Only the channels that exist right now. A guild line typed by somebody with
--- no guild is an error message from the server, and a party line typed alone is
--- the same, so the button skips them rather than offering them and letting the
--- server say no.
+-- Logs
 --------------------------------------------------------------------------
 
-local function InGroup()
-	if type(_G.IsInGroup) == "function" then
-		return _G.IsInGroup()
+local function LogFor(id)
+	local log = logs[id]
+	if log then
+		return log
 	end
-	if type(_G.GetNumGroupMembers) == "function" then
-		return (_G.GetNumGroupMembers() or 0) > 0
-	end
-	if type(_G.GetNumPartyMembers) == "function" then
-		return (_G.GetNumPartyMembers() or 0) > 0
-	end
-	return false
-end
 
-local function InRaid()
-	if type(_G.IsInRaid) == "function" then
-		return _G.IsInRaid()
-	end
-	if type(_G.GetNumRaidMembers) == "function" then
-		return (_G.GetNumRaidMembers() or 0) > 0
-	end
-	return false
-end
-
-local CHANNELS = {
-	{ key = "SAY", label = "say", live = function() return true end },
-	{ key = "PARTY", label = "party", live = InGroup },
-	{ key = "RAID", label = "raid", live = InRaid },
-	{ key = "GUILD", label = "guild",
-		live = function() return type(_G.IsInGuild) == "function" and _G.IsInGuild() end },
-	{ key = "YELL", label = "yell", live = function() return true end },
-	{ key = "WHISPER", label = "reply", live = function() return replyTo ~= nil end },
-}
-
-local channel = 1
-
-local function Channel()
-	local row = CHANNELS[channel]
-	if row and row.live() then
-		return row
-	end
-	-- Whatever was chosen has stopped being possible, which is what leaving a
-	-- party looks like from here. Say is always possible and is where the
-	-- client's own field lands too.
-	channel = 1
-	return CHANNELS[1]
-end
-
-local function PaintSend()
-	if not sendButton then
-		return
-	end
-	local row = Channel()
-	local label = row.label
-	if row.key == "WHISPER" and replyTo then
-		label = replyTo:gsub("%-.*$", "")
-	end
-	sendButton.text:SetText(label)
-end
-
-function ChatWindow.Cycle(step)
-	local count = #CHANNELS
-	for offset = 1, count do
-		local index = ((channel - 1 + step * offset) % count) + 1
-		if CHANNELS[index].live() then
-			channel = index
-			PaintSend()
-			return true
+	log = table.remove(spare)
+	if log then
+		log:Clear()
+	else
+		local made, why = UI.Log(window.content, { onLink = ChatWindow.OnLink })
+		if not made then
+			ns.Print("no chat window: " .. why .. ".")
+			return nil
 		end
+		log = made
+		every[#every + 1] = log
 	end
-	return false
+
+	log.frame:Hide()
+	logs[id] = log
+	return log
 end
 
---------------------------------------------------------------------------
--- Sending
---
--- Two paths, and the split is at the slash.
---
--- Anything starting with a slash is the client's own business: /w, /join,
--- /dance, another addon's command. Rebuilding that parser here would mean
--- keeping up with every command in the game, so the text is handed to
--- ChatEdit_SendText, which is FrameXML's own and is what Blizzard's field
--- calls when you press enter in it.
---
--- Everything else is a message to the channel the button says, which is one
--- SendChatMessage. Doing that through the client's field instead would mean
--- driving the field's own channel state, which is a second place for "which
--- channel am I typing into" to live and disagree.
---------------------------------------------------------------------------
-
-local function SendSlash(text)
-	local box = _G.ChatFrame1EditBox or (_G.DEFAULT_CHAT_FRAME and _G.DEFAULT_CHAT_FRAME.editBox)
-	if not box or type(_G.ChatEdit_SendText) ~= "function" then
-		ns.Print("this client will not let the addon run a slash command for you, so type it in the client's own chat line.")
+-- A room that has gone. Its log is emptied and put back in the pool, because
+-- the alternative is one ScrollingMessageFrame per person you have ever
+-- whispered, kept for the session.
+local function Close(id)
+	local log = logs[id]
+	if not log then
 		return false
 	end
-	box:SetText(text)
-	_G.ChatEdit_SendText(box, 1)
-	box:SetText("")
+	logs[id] = nil
+	log.frame:Hide()
+	log:Clear()
+	spare[#spare + 1] = log
 	return true
 end
 
--- Public, because the edit box is not the only thing that sends: a key
--- binding, a slash word and the harness all want the same path, and a send
--- that lives inside a script handler is a send nothing else can reach.
-function ChatWindow.Send(text)
-	if type(text) ~= "string" then
-		return false
-	end
-	text = text:gsub("^%s+", ""):gsub("%s+$", "")
-	if text == "" then
-		return false
-	end
+--------------------------------------------------------------------------
+-- Which room is up
+--------------------------------------------------------------------------
 
-	if text:sub(1, 1) == "/" then
-		return SendSlash(text)
-	end
+local function Paint()
+	local kind, target = ns.Rooms.Target(active)
+	title:SetText(ns.Rooms.Title(active))
+	note:SetText(ns.Compose.Note(kind, target))
+end
 
-	local row = Channel()
-	if type(_G.SendChatMessage) ~= "function" then
-		return false
+local function Show(id)
+	active = id
+	for _, log in ipairs(every) do
+		log.frame:SetShown(logs[id] == log)
 	end
-	if row.key == "WHISPER" then
-		if not replyTo then
-			return false
-		end
-		_G.SendChatMessage(text, "WHISPER", nil, replyTo)
-		return true
+	local log = logs[id]
+	if log then
+		log:Sync()
 	end
-	_G.SendChatMessage(text, row.key)
-	return true
+	ns.Rooms.Read(id)
+	rail:Mark(id, 0)
+	Paint()
+end
+
+-- The column, rebuilt from what exists right now. Called when a room appears or
+-- goes away, which is a roster change, a guild change, a group edited in the
+-- panel and the first whisper from somebody new. Not called per line: a line
+-- moves one number and List:Mark is what moves it.
+local function Refresh()
+	local rows = ns.Rooms.List()
+	rail:Set(rows)
+	if not ns.Rooms.Exists(active) then
+		-- Whatever you were reading has stopped existing, which is what leaving
+		-- a party looks like from here. Everything is where a line always is.
+		Show(ns.Rooms.ALL)
+	end
+	rail:Select(active)
+	Paint()
 end
 
 --------------------------------------------------------------------------
 -- Lines arriving
+--
+-- A line goes to every room it belongs to, and each room holds its own copy,
+-- because each has its own scroll position and a shared buffer would mean
+-- scrolling one scrolls the others.
 --------------------------------------------------------------------------
 
--- A line goes to every stream it belongs to, which for a whisper from somebody
--- on the list is all three. Each log holds its own copy, because each has its
--- own scroll position and a shared buffer would mean scrolling one scrolls the
--- others.
-local function OnLine(streams, text, r, g, b, important)
-	for _, id in ipairs(streams) do
-		local log = byId[id]
+local function Sound(important)
+	if not important or not ns.db.chatSound then
+		return false
+	end
+	-- Only while you are not already looking at one of your groups. A sound for
+	-- a line you are watching arrive is a sound you turn off, and then you have
+	-- no sound for the one you miss.
+	local watching = window and window:IsShown() and type(active) == "string"
+		and active:sub(1, 6) == "group:"
+	if watching then
+		return false
+	end
+	local kit = _G.SOUNDKIT
+	if type(_G.PlaySound) ~= "function" or not kit or not kit.TELL_MESSAGE then
+		return false
+	end
+	_G.PlaySound(kit.TELL_MESSAGE)
+	return true
+end
+
+local function OnLine(rooms, text, r, g, b, important)
+	local appeared = false
+	for _, id in ipairs(rooms) do
+		local log = LogFor(id)
 		if log then
 			log:Add(text, r, g, b)
-			-- Whether or not the window is up. A mark is what you look at when
-			-- you open it, and one that was only set while you were watching
-			-- would tell you nothing about the hour you were not.
-			if log.index ~= active then
-				tabs:SetUnread(log.index, true)
+			-- Marked whether or not the window is up. A count that was only kept
+			-- while you were watching would tell you nothing about the hour you
+			-- were not.
+			if id ~= active then
+				local count = ns.Rooms.Mark(id)
+				if not rail:Mark(id, count) then
+					appeared = true
+				end
 			end
 		end
 	end
 
-	if important and ns.db.chatSound and byId[ns.ChatFeed.PEOPLE] then
-		-- Only when you are not already looking at them. A sound for a line you
-		-- are watching arrive is a sound you turn off, and then you have no
-		-- sound for the one you miss.
-		local shown = window and window:IsShown() and active == byId[ns.ChatFeed.PEOPLE].index
-		if not shown then
-			local kit = _G.SOUNDKIT
-			if type(_G.PlaySound) == "function" and kit and kit.TELL_MESSAGE then
-				_G.PlaySound(kit.TELL_MESSAGE)
-			end
-		end
+	if appeared then
+		Refresh()
 	end
+	Sound(important)
 end
 
 --------------------------------------------------------------------------
@@ -256,26 +214,31 @@ local function Relayout()
 	local db = ns.db
 	local width, height = window:Resize(db.chatWidth, db.chatHeight)
 	local px = ns.Pixel(window.frame)
+	local body = height - M.title - M.footer
 
-	tabs.frame:ClearAllPoints()
-	tabs.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT", M.pad, -M.rowGap)
-	local strip = tabs:Resize(width - M.pad * 2)
+	rail.frame:ClearAllPoints()
+	rail.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT")
+	rail:Resize(M.rooms, body)
 
-	local top = M.rowGap + strip + M.rowGap
-	local body = height - M.title - M.footer - top - M.rowGap
-	for _, log in ipairs(logs) do
+	local left = M.rooms + M.pad
+	local room = width - left - M.pad
+
+	title:ClearAllPoints()
+	title:SetPoint("TOPLEFT", window.content, "TOPLEFT", left, -M.rowGap)
+	note:ClearAllPoints()
+	note:SetPoint("TOPRIGHT", window.content, "TOPRIGHT", -M.pad, -M.rowGap)
+	note:SetPoint("LEFT", title, "RIGHT", M.gutter, 0)
+
+	local top = M.rowGap + M.row + M.rowGap
+	for _, log in ipairs(every) do
 		log.frame:ClearAllPoints()
-		log.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT", M.pad, -top)
+		log.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT", left, -top)
 		log:SetFontSize(db.chatFont)
-		log:Resize(width - M.pad * 2, math.max(body, M.row))
+		log:Resize(math.max(room, M.row), math.max(body - top - M.rowGap, M.row))
 	end
 
-	sendButton:ClearAllPoints()
-	sendButton:SetPoint("LEFT", window.footer, "LEFT", 0, 0)
-	sendButton:SetSize(SEND_W, M.control)
-
 	entry.box:ClearAllPoints()
-	entry.box:SetPoint("LEFT", sendButton, "RIGHT", M.rowGap, 0)
+	entry.box:SetPoint("LEFT", window.footer, "LEFT", 0, 0)
 	entry.box:SetPoint("RIGHT", window.footer, "RIGHT", 0, 0)
 	entry.box:SetHeight(M.control)
 	-- The line you type in is drawn at the size the lines you read are. A field
@@ -296,25 +259,12 @@ end
 -- Building it
 --------------------------------------------------------------------------
 
-local function Select(index)
-	active = index
-	for _, log in ipairs(logs) do
-		log.frame:SetShown(log.index == index)
-		if log.index == index then
-			log:Sync()
-		end
-	end
-end
-
 -- A click on a name in the log. Ours rather than the client's, because the
 -- client's answer is to open its own chat field, and a window with its own
 -- field that sends you to another one is two fields.
-local function OnLink(link, _, button)
+function ChatWindow.OnLink(link, _, button)
 	local name = link:match("^player:([^:]+)")
-	if not name then
-		return false
-	end
-	if button == "RightButton" then
+	if not name or button == "RightButton" then
 		return false
 	end
 	ChatWindow.Reply(name)
@@ -351,10 +301,11 @@ local function BuildEntry()
 	edit:SetScript("OnHide", function(self)
 		self:ClearFocus()
 	end)
-	-- Tab cycles the channel, which is the one shortcut worth keeping from every
-	-- chat field in every game.
+	-- Tab steps to the next room, which rewrites the slash in front of the
+	-- cursor. It is the same key that cycled the channel in the window this
+	-- replaced, and it means the same thing: change where this line is going.
 	edit:SetScript("OnTabPressed", function()
-		ChatWindow.Cycle(1)
+		ChatWindow.Step(IsShiftKeyDown and IsShiftKeyDown() and -1 or 1)
 	end)
 
 	-- The box is a frame rather than a button, so the click that lands on the
@@ -362,10 +313,23 @@ local function BuildEntry()
 	-- field.
 	box:EnableMouse(true)
 	box:SetScript("OnMouseDown", function()
-		edit:SetFocus()
+		ChatWindow.Focus()
 	end)
 
 	return { box = box, edit = edit }
+end
+
+local function BuildHeader()
+	title = UI.Label(window.content, M.heading, C.heading, "LEFT", UI.FLAT)
+	title:SetHeight(M.row)
+	UI.Wrap(title, false)
+
+	-- What the enter key is about to do, in the words it will do it in. It is
+	-- here rather than beside the field because this line is about the room and
+	-- the room's name is the thing beside it.
+	note = UI.Label(window.content, M.small, C.quiet, "RIGHT", UI.FLAT)
+	note:SetHeight(M.row)
+	UI.Wrap(note, false)
 end
 
 local function Build()
@@ -393,36 +357,22 @@ local function Build()
 		ns.db.chatPoint = { point, "UIParent", relativePoint, x, y }
 	end)
 
-	tabs = UI.TabStrip(window.content, { onSelect = Select })
-
-	for index, tab in ipairs(TABS) do
-		tabs:Add(tab.label)
-		local log, why = UI.Log(window.content, { onLink = OnLink })
-		if not log then
-			ns.Print("no chat window: " .. why .. ".")
-			return false
-		end
-		log.index = index
-		log.id = tab.id
-		logs[index] = log
-		byId[tab.id] = log
-	end
-
-	sendButton = UI.Button(window.footer, {
-		label = "say",
-		width = SEND_W,
-		height = M.control,
-		-- Left goes forward through the channels and right goes back, because
-		-- six is enough that cycling past the one you wanted is a real thing to
-		-- do and going round again is four more clicks.
-		onClick = function(_, pressed)
-			ChatWindow.Cycle(pressed == "RightButton" and -1 or 1)
-		end,
+	rail = UI.List(window.content, {
+		name = "WarriorKitChatRooms",
+		onSelect = function(id) Show(id) end,
 	})
-	sendButton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-
+	BuildHeader()
 	entry = BuildEntry()
+
+	enterButton = CreateFrame("Button", ENTER_NAME, window.frame)
+	enterButton:SetScript("OnClick", function() ChatWindow.Focus() end)
+
 	built = true
+	active = ns.Rooms.ALL
+	if not LogFor(ns.Rooms.ALL) then
+		built = false
+		return false
+	end
 
 	-- The close box is the window's own and hides the frame. Here it has to
 	-- record that you closed it, or the next thing that applies a setting would
@@ -430,13 +380,53 @@ local function Build()
 	window.close:SetScript("OnClick", function() ChatWindow.Hide() end)
 
 	Relayout()
-	-- Chat, not People, because People is empty on a fresh install and a window
-	-- that opens on an empty tab looks broken. The strip remembers nothing
-	-- across a reload on purpose: where you were in a chat window an hour ago is
-	-- not a preference.
-	tabs:Select(2)
+	Refresh()
+	Show(ns.Rooms.ALL)
 
+	ns.Rooms.OnClose = Close
 	ns.ChatFeed.Attach(OnLine)
+	return true
+end
+
+--------------------------------------------------------------------------
+-- The enter key
+--
+-- Taken exactly while Blizzard's chat window is hidden, and handed back the
+-- moment it is not. That is not a setting of its own on purpose. The client's
+-- enter key opens the client's chat line; with that window hidden the line it
+-- opens is invisible, so the key has to come here or typing is broken. With
+-- that window on screen the key still works and there is nothing to fix.
+--
+-- An override sits on top of whatever the key already carried and is dropped by
+-- one call, unlike SetBinding, which the next SaveBindings would make permanent.
+-- Both calls are refused in combat, so a fight defers the work to
+-- PLAYER_REGEN_ENABLED, which is the shape Buttons/Bars.lua uses for the same
+-- reason.
+--------------------------------------------------------------------------
+
+local function WantsEnter()
+	return built and ns.db.chat and ns.db.hideBlizzChat and window:IsShown()
+end
+
+function ChatWindow.Keys()
+	if not built then
+		return false
+	end
+	if InCombatLockdown and InCombatLockdown() then
+		pending = true
+		return false
+	end
+	pending = false
+
+	if type(ClearOverrideBindings) == "function" then
+		pcall(ClearOverrideBindings, enterButton)
+	end
+	if not WantsEnter() or type(SetOverrideBindingClick) ~= "function" then
+		return true
+	end
+	for _, key in ipairs({ "ENTER", "NUMPADENTER" }) do
+		pcall(SetOverrideBindingClick, enterButton, true, key, ENTER_NAME, "LeftButton")
+	end
 	return true
 end
 
@@ -446,6 +436,10 @@ end
 
 function ChatWindow.Built()
 	return built
+end
+
+function ChatWindow.Shown()
+	return built and window:IsShown() and true or false
 end
 
 -- The window, built if it is not already. Nothing is built while the part is
@@ -468,21 +462,18 @@ function ChatWindow.Apply()
 	if not built then
 		return false
 	end
-
-	-- The people tab is drawn only when there is somebody on the list, which is
-	-- what makes it appear the moment you add the first name.
-	local people = ns.People.Count() > 0
-	tabs:SetShown(1, people)
-	if not people and active == 1 then
-		tabs:Select(2)
-	end
-
 	Relayout()
+	Refresh()
+
 	local shown = (ns.db.chat and ns.db.chatShown) and true or false
 	window.frame:SetShown(shown)
-	-- The claim on Blizzard's frames follows the window. A closed window that
-	-- kept the claim is a conversation deleted from both windows at once.
+	-- Three things follow the window rather than the settings, and all three for
+	-- the same reason: each of them takes something off the screen on the
+	-- promise that this window is drawing it instead, and a closed window keeps
+	-- no such promise.
 	ns.ChatFeed.Watched(shown)
+	ns.ChatBlizzard.Apply()
+	ChatWindow.Keys()
 	return true
 end
 
@@ -505,6 +496,8 @@ function ChatWindow.Hide()
 	ns.db.chatShown = false
 	window.frame:Hide()
 	ns.ChatFeed.Watched(false)
+	ns.ChatBlizzard.Apply()
+	ChatWindow.Keys()
 	return true
 end
 
@@ -524,27 +517,88 @@ function ChatWindow.Reset()
 	return ChatWindow.Apply()
 end
 
--- Who a plain line goes to while the button says reply. Also what a click on a
--- name in the log does, which is the whole of "answer that".
-function ChatWindow.Reply(name)
-	if type(name) ~= "string" or name == "" then
+--------------------------------------------------------------------------
+-- Rooms, from outside
+--------------------------------------------------------------------------
+
+-- Go to a room by id. Anything that is not there right now is refused rather
+-- than made, because the rooms that exist are a fact about your party and your
+-- guild rather than something a caller gets to assert.
+function ChatWindow.Go(id)
+	if not built or not ns.Rooms.Exists(id) then
 		return false
 	end
-	replyTo = name
-	for index, row in ipairs(CHANNELS) do
-		if row.key == "WHISPER" then
-			channel = index
-		end
+	rail:Select(id)
+	if active ~= id then
+		Show(id)
 	end
-	PaintSend()
+	return true
+end
+
+function ChatWindow.Step(delta)
+	if not built then
+		return false
+	end
+	local id = rail:Step(delta)
+	if not id then
+		return false
+	end
+	ChatWindow.Go(id)
+	ChatWindow.Fill()
+	return true
+end
+
+function ChatWindow.Room()
+	return active
+end
+
+-- Which channel a line typed right now goes to, and who it is addressed to when
+-- that channel is a whisper.
+function ChatWindow.Channel()
+	return ns.Rooms.Target(active)
+end
+
+-- Answer that person: their own room if there is one, and their name in the
+-- field either way. A click on a name in the log is what calls this.
+function ChatWindow.Reply(name)
+	if not built or type(name) ~= "string" or name == "" then
+		return false
+	end
+	local id = ns.Rooms.Whisper(name)
+	if id then
+		Refresh()
+		ChatWindow.Go(id)
+	end
 	ChatWindow.Focus()
 	return true
 end
 
+--------------------------------------------------------------------------
+-- Typing
+--------------------------------------------------------------------------
+
+-- What the field starts with: the room's own slash, so the line reads /p with
+-- the cursor after it the moment you start typing into your party. Only into an
+-- empty field, because a half typed sentence you clicked away from is not
+-- something to write over.
+function ChatWindow.Fill()
+	if not built or not ns.db.chatPrefix then
+		return false
+	end
+	local text = entry.edit:GetText() or ""
+	if text ~= "" and text:sub(1, 1) ~= "/" then
+		return false
+	end
+	local prefix = ns.Compose.Prefix(ns.Rooms.Target(active))
+	entry.edit:SetText(prefix)
+	if type(entry.edit.SetCursorPosition) == "function" then
+		entry.edit:SetCursorPosition(#prefix)
+	end
+	return true
+end
+
 -- Put the cursor in the field, opening the window first if it is shut. This is
--- what the key binding calls, and it is the only way to type in this window
--- without reaching for the mouse: the client owns the enter key and an addon
--- that took it would be taking it from the client's own field.
+-- what the enter key calls and what the key binding calls.
 function ChatWindow.Focus()
 	if not built then
 		return false
@@ -552,9 +606,33 @@ function ChatWindow.Focus()
 	if not window:IsShown() then
 		ChatWindow.Show()
 	end
+	ChatWindow.Fill()
 	entry.edit:SetFocus()
 	return true
 end
+
+-- What is in the line right now. Public because the field is where the answer
+-- to "which channel is this going to" is written down: there is no second piece
+-- of state holding it, which is the whole point of the redesign, so anything
+-- checking that behaviour has to be able to read the text.
+function ChatWindow.Line()
+	if not built then
+		return ""
+	end
+	return entry.edit:GetText() or ""
+end
+
+-- One line, sent to wherever the room and the text between them say. Public
+-- because a slash word and the harness want the same path, and a send that
+-- lives inside a script handler is a send nothing else can reach.
+function ChatWindow.Send(text)
+	local kind, target = ns.Rooms.Target(active)
+	return ns.Compose.Send(text, kind, target)
+end
+
+--------------------------------------------------------------------------
+-- What it is doing
+--------------------------------------------------------------------------
 
 function ChatWindow.Lock()
 	if not built then
@@ -571,37 +649,35 @@ function ChatWindow.Describe()
 	if not built then
 		return "not built yet"
 	end
-	local log = logs[active]
-	return ("%s, %s"):format(window:IsShown() and "open" or "closed",
-		log and log:Describe() or "no log")
+	return ("%s, %s, in %s"):format(window:IsShown() and "open" or "closed",
+		ns.Rooms.Describe(), ns.Rooms.Title(active))
 end
 
--- Which channel a plain line goes to right now, and who it is addressed to
--- when that channel is a whisper.
-function ChatWindow.Channel()
-	local row = Channel()
-	return row.key, replyTo
+-- How many rooms are drawn right now. Named for the panel and for /wk status,
+-- so nothing outside has to know that a room is a row or that a row is a frame.
+function ChatWindow.Rooms()
+	if not built then
+		return 0
+	end
+	local count = 0
+	for _, row in ipairs(ns.Rooms.List()) do
+		if row.id then
+			count = count + 1
+		end
+	end
+	return count
 end
 
--- How many tabs are drawn right now, which is two until somebody is on the
--- people list and three after. The strip holds three either way: a tab with
--- nothing behind it is hidden rather than unmade, because a frame cannot be
--- destroyed on this client.
-function ChatWindow.Tabs()
-	return (built and tabs.shown) or 0
-end
-
--- How many lines are on one tab. Named by the feed's own stream ids, so
--- nothing outside has to know that a tab is a log or that a log is a frame.
+-- How many lines one room is holding.
 function ChatWindow.Count(id)
-	local log = byId[id]
+	local log = logs[id]
 	return log and log:Count() or 0
 end
 
--- What the tabs are holding, for the panel and for /wk status.
+-- What every room is holding, for the panel and for /wk status.
 function ChatWindow.Held()
 	local total = 0
-	for _, log in ipairs(logs) do
+	for _, log in ipairs(every) do
 		total = total + log:Count()
 	end
 	return total
@@ -617,19 +693,44 @@ function WarriorKit_ChatEnter()
 	ChatWindow.Focus()
 end
 
+--------------------------------------------------------------------------
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
-events:SetScript("OnEvent", function()
-	if not ns.db.chat then
-		-- Nothing is built while the part is off, so a player who has turned it
-		-- off pays nothing at all for it: no frames, no logs, no font objects.
-		-- Turning it back on builds it.
+events:RegisterEvent("PLAYER_REGEN_ENABLED")
+-- What changes which rooms exist. Two spellings of the roster change, because
+-- the two clients this addon ships for do not use the same one, and registering
+-- an event a client has never heard of raises rather than answering.
+for _, event in ipairs({ "GROUP_ROSTER_UPDATE", "PARTY_MEMBERS_CHANGED",
+	"RAID_ROSTER_UPDATE", "PLAYER_GUILD_UPDATE" }) do
+	pcall(events.RegisterEvent, events, event)
+end
+
+events:SetScript("OnEvent", function(_, event)
+	if event == "PLAYER_LOGIN" then
+		if not ns.db.chat then
+			-- Nothing is built while the part is off, so a player who has turned
+			-- it off pays nothing at all for it: no frames, no logs, no font
+			-- objects. Turning it back on builds it.
+			return
+		end
+		if Build() then
+			ChatWindow.Lock()
+			ChatWindow.Apply()
+		end
 		return
 	end
-	if Build() then
-		ChatWindow.Lock()
-		ChatWindow.Apply()
+
+	if not built then
+		return
 	end
+	if event == "PLAYER_REGEN_ENABLED" then
+		if pending then
+			ChatWindow.Keys()
+		end
+		return
+	end
+	Refresh()
 end)
 
 -- The window is on the pixel grid, so a resolution change or a UI size change
@@ -643,4 +744,3 @@ ns.UI.OnRescale(function()
 	window.zoom = UI.WindowZoom()
 	Relayout()
 end)
-

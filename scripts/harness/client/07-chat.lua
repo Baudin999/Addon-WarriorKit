@@ -68,6 +68,27 @@ _G.SOUNDKIT = { TELL_MESSAGE = 3081 }
 _G.PlaySound = function(id) chat.sound = id end
 _G.IsInGuild = function() return chat.inGuild == true end
 
+----------------------------------------------------------------------
+-- The client's own chat window
+--
+-- Real frames rather than the no-op regions the rest of this file uses for
+-- Blizzard's furniture, because Chat/Blizzard.lua hides them and puts them
+-- back, and a stub that swallows Hide cannot tell the version that restores
+-- what it took from the version that leaves the window off the screen forever.
+--
+-- Two windows and their tabs, which is enough to prove the walk runs over more
+-- than the one it was written against.
+----------------------------------------------------------------------
+
+_G.NUM_CHAT_WINDOWS = 2
+for index = 1, _G.NUM_CHAT_WINDOWS do
+	region("frame", nil, "ChatFrame" .. index)
+	region("frame", nil, "ChatFrame" .. index .. "Tab")
+end
+_G.ChatFrameMenuButton = region("frame", nil, "ChatFrameMenuButton")
+_G.DEFAULT_CHAT_FRAME = _G.ChatFrame1
+
+
 -- The communities, shaped the way the client's own Chat Channels window reads:
 -- a club with more than one stream, and a second club with one. Every one of
 -- those rows carries a voice button in game, which is the whole reason the

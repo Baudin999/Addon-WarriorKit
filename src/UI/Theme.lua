@@ -79,6 +79,10 @@ UI.Metric = {
 	tab      = 22, -- one button in the tab strip
 	railRow  = 22, -- one button in the side rail
 	rail     = 180, -- the folding column down the left of the options window
+	-- The column of rooms down the left of the chat window. Narrower than the
+	-- rail above, because every row in it is one word and the rest of the width
+	-- is what a sentence somebody said is read in.
+	rooms    = 104,
 	footer   = 30,
 	bar      = 8,  -- the scrollbar column
 	thumb    = 24, -- the shortest a scroll thumb is allowed to get

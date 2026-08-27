@@ -165,9 +165,10 @@ _G.UnitPowerType, _G.UnitPower, _G.UnitPowerMax = constant(1), constant(40), con
 _G.UnitPlayerOrPetInParty, _G.UnitPlayerOrPetInRaid = constant(false), constant(false)
 _G.UnitIsGroupLeader, _G.UnitIsGroupAssistant = constant(true), constant(false)
 -- How many are in the group. A variable rather than a constant, because
--- People.AddGroup walks party tokens up to this number and a constant zero
+-- People.AddParty walks party tokens up to this number and a constant zero
 -- would make that button untestable. Every section that does not set it sees
--- the nothing it saw before.
+-- the nothing it saw before, and 09-group.lua writes it when a section sets a
+-- roster.
 _G.GetNumGroupMembers, _G.IsInRaid = function() return chat.groupSize end, constant(false)
 _G.GetRaidTargetIndex, _G.SetRaidTarget = constant(nil), function() end
 _G.SetRaidTargetIconTexture = function() end

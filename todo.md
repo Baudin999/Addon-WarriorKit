@@ -21,6 +21,12 @@ in `docs/CHANGELOG.md` and `docs/README.md`; this list is only the receipt.
 6. Party and raid frames. Ours rather than Blizzard's skinned, off a secure
    group header, in a slot order that is role then name and is only rewritten
    out of combat. Done, untested in game. e3de603
+12. The chat window, reimagined. Three tabs became a rail of rooms, the room
+   you are reading is the channel you type into and fills the line in with its
+   own slash, the important people are in named groups with a room each, and
+   Blizzard's chat window is hidden with everything it would have drawn
+   forwarded to a System room. Done, untested in game; three things to look at
+   are in the README's untested list.
 
 ## Open
 

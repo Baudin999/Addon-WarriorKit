@@ -121,6 +121,15 @@ globals = {
 	-- off the screen can be found from a macro or from scripts/harness.lua
 	-- without Chat/Window.lua handing out a reference to its own tables.
 	"WarriorKitChat",
+	-- the column of rooms down its left. Named for the reason the aura rows
+	-- are: a column that has laid itself out wrongly has to be measurable from
+	-- a macro and from scripts/harness.lua without Chat/Window.lua handing out
+	-- a reference to its own tables.
+	"WarriorKitChatRooms",
+	-- the button the enter key is bound onto while Blizzard's chat window is
+	-- hidden. SetOverrideBindingClick binds to a name rather than to a frame,
+	-- which is the whole reason it has one.
+	"WarriorKitChatEnterButton",
 	"WarriorKit_ChatEnter",
 	-- the two feeds, and the tooltip they open. All three are named for the
 	-- reason the meter and the chat window are: a frame that has wandered off

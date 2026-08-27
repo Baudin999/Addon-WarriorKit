@@ -1,16 +1,19 @@
 local ADDON, ns = ...
 
 -- Everything Core and the panel need to know about the social part.
--- People.lua holds the list, Feed.lua captures what is said, Window.lua draws
--- it and Voice.lua puts you in a voice channel, and none of them names anything
--- outside this folder.
+--
+-- People.lua holds the groups, Rooms.lua decides which conversation a line
+-- belongs to, Feed.lua captures what is said, Compose.lua turns what you type
+-- into a send, Blizzard.lua takes the client's own window off the screen,
+-- Window.lua draws all of it, and Voice.lua puts you in a voice channel. None
+-- of them names anything outside this folder.
 --
 -- Three sections under one rail entry, because they are one subject: who you
--- play with. The people list feeds the window's first tab and the voice pick is
--- how you talk to the same people out loud.
+-- play with. The groups feed the window's rooms and the voice pick is how you
+-- talk to the same people out loud.
 
-local WIDTH_LOW, WIDTH_HIGH, WIDTH_STEP = 260, 900, 10
-local HEIGHT_LOW, HEIGHT_HIGH, HEIGHT_STEP = 120, 700, 10
+local WIDTH_LOW, WIDTH_HIGH, WIDTH_STEP = 320, 900, 10
+local HEIGHT_LOW, HEIGHT_HIGH, HEIGHT_STEP = 140, 700, 10
 local FONT_LOW, FONT_HIGH = 9, 20
 
 local function SetChat(value)
@@ -19,16 +22,29 @@ local function SetChat(value)
 		-- Nothing is built while the part is off, so turning it on after login
 		-- has to build what login skipped.
 		ns.ChatWindow.Ensure()
+	else
+		-- Which conversations are open and what is unread in them are facts
+		-- about this session rather than settings, so turning the part off drops
+		-- them. Turning it back on starts with a clean rail instead of
+		-- resurrecting a whisper from before the switch.
+		ns.Rooms.Wipe()
 	end
 	ns.ChatFeed.Apply()
 	if ns.ChatWindow.Built() then
 		ns.ChatWindow.Apply()
+	else
+		-- The window is gone and the client's has to come back with it, which
+		-- Apply would have done had there been a window to apply.
+		ns.ChatBlizzard.Apply()
 	end
 end
 
 local function SetClaim(value)
 	ns.db.chatClaim = value
 	ns.ChatFeed.Apply()
+	if not value and ns.db.hideBlizzChat then
+		ns.Print("the conversation stays out of Blizzard's window while that window is hidden, or it would be drawn in two places and one of them is off the screen.")
+	end
 end
 
 local function SetChannels(value)
@@ -42,22 +58,20 @@ local function Redraw(key, value)
 end
 
 --------------------------------------------------------------------------
--- The people page
+-- The groups page
 --
--- The same shape the loadouts page has, because it is the same job: a strip of
--- rows with a + on the end, a field for the one you picked, and a delete. A
--- person is one name, so there is one field.
+-- Two strips of tabs, one under the other: your groups, and who is in the one
+-- you picked. It is the loadouts page's shape twice over, because it is the
+-- same job twice over, and a person is one name so there is one field under
+-- each.
 --------------------------------------------------------------------------
 
-local function PeoplePage(ui)
-	ui.Section("People", "Readouts")
-	ui.Lede("Names whose every line, in any channel, is copied to the People tab of the chat window.")
-
+local function GroupTabs(ui)
 	ui.Tabs(
 		function()
 			local labels = {}
-			for index, entry in ipairs(ns.People.All()) do
-				labels[index] = entry.name ~= "" and entry.name or "unnamed"
+			for index in ipairs(ns.People.All()) do
+				labels[index] = ns.People.Name(index)
 			end
 			return labels
 		end,
@@ -65,8 +79,41 @@ local function PeoplePage(ui)
 		function(index) ns.People.Show(index) end,
 		{
 			onAdd = function()
-				local index, why = ns.People.Add("")
+				local index, why = ns.People.AddGroup("")
 				if not index then
+					ns.Print(why .. ".")
+				end
+				ns.ChatWindow.Apply()
+			end,
+		})
+
+	ui.TextField("group name",
+		function()
+			local group = ns.People.Get(ns.People.Shown())
+			return group and group.name or ""
+		end,
+		function(value)
+			ns.People.RenameGroup(ns.People.Shown(), value)
+			ns.ChatWindow.Apply()
+		end)
+end
+
+local function MemberTabs(ui)
+	ui.Tabs(
+		function()
+			local labels = {}
+			local group = ns.People.Get(ns.People.Shown())
+			for index, name in ipairs(group and group.members or {}) do
+				labels[index] = name ~= "" and name or "unnamed"
+			end
+			return labels
+		end,
+		ns.People.Member,
+		function(index) ns.People.ShowMember(index) end,
+		{
+			onAdd = function()
+				local at, why = ns.People.Add(ns.People.Shown(), "")
+				if not at then
 					ns.Print(why .. ".")
 				end
 			end,
@@ -74,19 +121,19 @@ local function PeoplePage(ui)
 
 	ui.TextField("name",
 		function()
-			local entry = ns.People.Get(ns.People.Shown())
-			return entry and entry.name or ""
+			local group = ns.People.Get(ns.People.Shown())
+			return group and group.members[ns.People.Member()] or ""
 		end,
 		function(value)
-			local ok, why = ns.People.Rename(ns.People.Shown(), value)
+			local ok, why = ns.People.Rename(ns.People.Shown(), ns.People.Member(), value)
 			if not ok and why then
 				ns.Print(why .. ".")
 			end
 			ns.ChatWindow.Apply()
 		end)
+end
 
-	ui.Hint("The realm is not needed and is ignored if you type it, so one row covers somebody whether they are beside you or whispering from another realm.")
-
+local function GroupActions(ui)
 	ui.ActionPair(
 		function()
 			local size = 0
@@ -94,39 +141,210 @@ local function PeoplePage(ui)
 				size = GetNumGroupMembers() or 0
 			end
 			if size <= 1 then
-				return "add everyone in your group"
+				return "add everyone in your party"
 			end
 			return ("add the %d with you"):format(size - 1)
 		end,
 		function()
-			local added, skipped = ns.People.AddGroup()
+			local added, skipped = ns.People.AddParty(ns.People.Shown())
 			if added == 0 then
-				ns.Print(skipped > 0 and "everyone with you is already on the list."
+				ns.Print(skipped > 0 and "everyone with you is already in this group."
 					or "you are not in a group.")
 			else
-				ns.Print(("%d added, %s on the list.")
-					:format(added, ns.People.Describe()))
+				ns.Print(("%d added, %s."):format(added, ns.People.Describe()))
 			end
 			ns.ChatWindow.Apply()
 		end,
-		function() return true end,
+		function() return ns.People.Get(ns.People.Shown()) ~= nil end,
 		function()
-			local entry = ns.People.Get(ns.People.Shown())
-			if not entry then
+			local group = ns.People.Get(ns.People.Shown())
+			if not group or #group.members == 0 then
 				return "remove"
 			end
-			return "remove " .. (entry.name ~= "" and entry.name or "this row")
+			local name = group.members[ns.People.Member()]
+			return "remove " .. ((name and name ~= "") and name or "this row")
 		end,
 		function()
-			ns.People.Remove(ns.People.Shown())
+			ns.People.Remove(ns.People.Shown(), ns.People.Member())
+			ns.ChatWindow.Apply()
+		end,
+		function()
+			local group = ns.People.Get(ns.People.Shown())
+			return group ~= nil and #group.members > 0
+		end)
+
+	ui.Action(
+		function()
+			return "delete " .. ns.People.Name(ns.People.Shown())
+		end,
+		function()
+			ns.People.RemoveGroup(ns.People.Shown())
 			ns.ChatWindow.Apply()
 		end,
 		function() return ns.People.Get(ns.People.Shown()) ~= nil end)
-	ui.Hint("The list is shared by every character on this account, because who matters to you is not a fact about the character you happen to be standing in.")
+end
 
-	ui.Reading("rows used", function()
-		return ("%d of %d"):format(ns.People.Count(), ns.People.MAX)
+local function GroupsPage(ui)
+	ui.Section("Groups", "Readouts")
+	ui.Lede("A room in the chat window per group, holding every line anybody in it says and every whisper you send them.")
+
+	GroupTabs(ui)
+	MemberTabs(ui)
+
+	ui.Hint("The realm is ignored if you type it, so one row covers somebody beside you or whispering from another realm.")
+
+	GroupActions(ui)
+	ui.Hint("The groups are shared by every character on this account, because who matters to you is not a fact about the character you happen to be standing in.")
+
+	ui.Reading("groups", function()
+		return ("%d of %d, %d people"):format(ns.People.Count(), ns.People.GROUPS,
+			ns.People.Total())
 	end)
+end
+
+--------------------------------------------------------------------------
+-- Words
+--------------------------------------------------------------------------
+
+local function RoomWord(arg)
+	if not arg or arg == "" then
+		for _, row in ipairs(ns.Rooms.List()) do
+			if row.id then
+				local waiting = ns.Rooms.Unread(row.id)
+				ns.Print(("  %s%s"):format(row.label,
+					waiting > 0 and (", %d unread"):format(waiting) or ""))
+			end
+		end
+		return
+	end
+
+	for _, row in ipairs(ns.Rooms.List()) do
+		if row.id and row.label:lower() == arg:lower() then
+			ns.ChatWindow.Show()
+			ns.ChatWindow.Go(row.id)
+			return
+		end
+	end
+	ns.Print("no room called " .. arg .. ". /wk chat room lists them.")
+end
+
+local function ChatWord(arg, raw)
+	if arg == "show" then
+		ns.ChatWindow.Show()
+		return
+	end
+	if arg == "hide" then
+		ns.ChatWindow.Hide()
+		return
+	end
+	if arg == "room" then
+		RoomWord((raw:match("^%s*room%s+(.+)$")))
+		return
+	end
+	if arg == "claim" then
+		SetClaim(not ns.db.chatClaim)
+		ns.Print("chat " .. ns.ChatFeed.Describe() .. ".")
+		return
+	end
+	if arg == "on" or arg == "off" then
+		SetChat(arg == "on")
+		ns.Print("chat window " .. (ns.db.chat and "on" or "off") .. ".")
+		return
+	end
+	ns.ChatWindow.Toggle()
+end
+
+-- Everything a slash word can do to one group, once the group has been found.
+-- Split off because the word itself is a dispatcher and a dispatcher that also
+-- does the work is a function nobody can read.
+local function GroupEdit(position, verb, name)
+	if verb == "add" and name then
+		local at, why = ns.People.Add(position, name)
+		ns.Print(at and (name .. " is in " .. ns.People.Name(position) .. ".") or (why .. "."))
+		return true
+	end
+	if verb == "remove" and name then
+		local group = ns.People.Get(position)
+		local key = ns.People.Key(name)
+		for at, held in ipairs(group.members) do
+			if ns.People.Key(held) == key then
+				ns.People.Remove(position, at)
+				ns.Print(name .. " is out of " .. ns.People.Name(position) .. ".")
+				return true
+			end
+		end
+		ns.Print(name .. " is not in " .. ns.People.Name(position) .. ".")
+		return true
+	end
+	if verb == "party" then
+		local added = ns.People.AddParty(position)
+		ns.Print(("%d added, %s."):format(added, ns.People.Describe()))
+		return true
+	end
+	if verb == "drop" then
+		local was = ns.People.Name(position)
+		ns.People.RemoveGroup(position)
+		ns.Print(was .. " is gone.")
+		return true
+	end
+	return false
+end
+
+local function GroupWord(arg, raw)
+	if not arg or arg == "" or arg == "list" then
+		if ns.People.Count() == 0 then
+			ns.Print("no groups. /wk group new <name>.")
+			return
+		end
+		for index, group in ipairs(ns.People.All()) do
+			ns.Print(("  %s: %s"):format(ns.People.Name(index),
+				#group.members > 0 and table.concat(group.members, ", ") or "nobody yet"))
+		end
+		return
+	end
+
+	if arg == "new" then
+		local name = raw:match("^%s*new%s+(.+)$")
+		local index, why = ns.People.AddGroup(name or "")
+		ns.Print(index and ((name or "a group") .. " is a group.") or (why .. "."))
+		ns.ChatWindow.Apply()
+		return
+	end
+
+	local which, verb, name = raw:match("^%s*(%S+)%s+(%a+)%s*(.*)$")
+	local position = which and ns.People.Find(which)
+	if position and GroupEdit(position, verb, name ~= "" and name or nil) then
+		ns.ChatWindow.Apply()
+		return
+	end
+	ns.Print("group list|new <name>|<group> add <name>|<group> remove <name>|<group> party|<group> drop.")
+end
+
+local function VoiceWord(arg)
+	if arg == "off" then
+		ns.Voice.Set(ns.Voice.NONE)
+		ns.Print("voice: " .. ns.Voice.Describe() .. ".")
+		return
+	end
+	if arg == "group" then
+		ns.Voice.Set(ns.Voice.GROUP)
+		ns.Print("voice: " .. ns.Voice.Describe() .. ".")
+		return
+	end
+	if arg == "join" then
+		local _, why = ns.Voice.Apply(true)
+		ns.Print("voice: " .. why .. ".")
+		return
+	end
+	-- Every answer the client gave, rather than the one sentence this part
+	-- decided out of them. The first bug in this part was a probe refusing a
+	-- join the client would have taken, and there was no way to see which probe
+	-- it was without reading the source.
+	if arg == "why" then
+		ns.Print("voice: " .. ns.Voice.Diagnose() .. ".")
+		return
+	end
+	ns.Print("voice: " .. ns.Voice.Describe() .. ".")
 end
 
 --------------------------------------------------------------------------
@@ -144,7 +362,7 @@ ns.Register({
 	defaults = {
 		-- On, because a part whose whole point is that the window it replaces is
 		-- unreadable does not ship switched off. Everything it does is
-		-- reversible in one press and nothing of Blizzard's is hidden.
+		-- reversible in one press and nothing of Blizzard's is destroyed.
 		chat = true,
 		chatShown = true,
 
@@ -154,6 +372,24 @@ ns.Register({
 		-- looks missing.
 		chatClaim = true,
 
+		-- Blizzard's window goes off the screen, for the reason the part is on
+		-- at all: a chat window whose whole point is that the one it replaces
+		-- is unreadable does not ship beside it. Loot, experience, system text
+		-- and every addon's output move to the System room, and the enter key
+		-- moves to this window's line, because the line the client's own enter
+		-- opens would be behind a window nobody can see.
+		--
+		-- Named the way the other six are and drawn on their page, because it
+		-- answers the same question they do. The mechanism is Chat/Blizzard.lua
+		-- and the switch is one line in UnitFrames/Blizzard.lua's table.
+		hideBlizzChat = true,
+
+		-- The room's own slash, put in the line when you start typing in it.
+		-- This is the part's headline behaviour and it is a setting because it
+		-- is also a habit: somebody who types /p by hand every time wants an
+		-- empty field, and one tick gives them one.
+		chatPrefix = true,
+
 		-- The numbered channels are off. General and Trade are most of the
 		-- volume in a city and none of the conversation, and they stay in
 		-- Blizzard's window where scrolling past them costs nothing.
@@ -162,17 +398,23 @@ ns.Register({
 		chatStamp = true,
 		chatSound = true,
 
-		chatWidth = 440,
-		chatHeight = 240,
+		-- Wider than the window this replaced, because the rail down the left
+		-- takes a hundred pixels that used to be the message.
+		chatWidth = 520,
+		chatHeight = 260,
 		chatFont = 12,
 		-- Not opaque. A chat window sits in a corner all evening and the world
 		-- behind it is the game.
 		chatAlpha = 80,
 		chatPoint = { "BOTTOMLEFT", "UIParent", "BOTTOMLEFT", 16, 120 },
 
-		-- Account-wide, both of them. Who matters to you and which voice channel
+		-- Account-wide, all of them. Who matters to you and which voice channel
 		-- you want to be in are facts about you rather than about one character.
-		people = {},
+		groups = {},
+		-- The number the next group's key comes off. A room is named by that key
+		-- rather than by the group's position, so deleting the first group does
+		-- not hand its unread lines to the second.
+		groupSeq = 0,
 		voiceJoin = "none",
 		-- What the pick was called on the row you clicked. The communities are
 		-- not loaded for the first few seconds of a session, so without this the
@@ -182,102 +424,18 @@ ns.Register({
 	},
 
 	words = {
-		chat = function(arg)
-			if arg == "show" then
-				ns.ChatWindow.Show()
-				return
-			end
-			if arg == "hide" then
-				ns.ChatWindow.Hide()
-				return
-			end
-			if arg == "claim" then
-				SetClaim(not ns.db.chatClaim)
-				ns.Print("chat " .. ns.ChatFeed.Describe() .. ".")
-				return
-			end
-			if arg == "on" or arg == "off" then
-				SetChat(arg == "on")
-				ns.Print("chat window " .. (ns.db.chat and "on" or "off") .. ".")
-				return
-			end
-			ns.ChatWindow.Toggle()
-		end,
-
-		people = function(arg, raw)
-			if arg == "list" or arg == nil or arg == "" then
-				if ns.People.Count() == 0 then
-					ns.Print("nobody on the list. /wk people add <name>.")
-					return
-				end
-				for _, entry in ipairs(ns.People.All()) do
-					ns.Print("  " .. (entry.name ~= "" and entry.name or "an unnamed row"))
-				end
-				return
-			end
-			if arg == "group" then
-				local added = ns.People.AddGroup()
-				ns.Print(("%d added, %s on the list."):format(added, ns.People.Describe()))
-				ns.ChatWindow.Apply()
-				return
-			end
-
-			local verb, name = raw:match("^%s*(%a+)%s+(.+)$")
-			if verb == "add" then
-				local index, why = ns.People.Add(name)
-				ns.Print(index and (name .. " is on the list.") or (why .. "."))
-				ns.ChatWindow.Apply()
-				return
-			end
-			if verb == "remove" then
-				local key = ns.People.Key(name)
-				for position, entry in ipairs(ns.People.All()) do
-					if ns.People.Key(entry.name) == key then
-						ns.People.Remove(position)
-						ns.Print(name .. " is off the list.")
-						ns.ChatWindow.Apply()
-						return
-					end
-				end
-				ns.Print(name .. " is not on the list.")
-				return
-			end
-			ns.Print("people list|group|add <name>|remove <name>.")
-		end,
-
-		voice = function(arg)
-			if arg == "off" then
-				ns.Voice.Set(ns.Voice.NONE)
-				ns.Print("voice: " .. ns.Voice.Describe() .. ".")
-				return
-			end
-			if arg == "group" then
-				ns.Voice.Set(ns.Voice.GROUP)
-				ns.Print("voice: " .. ns.Voice.Describe() .. ".")
-				return
-			end
-			if arg == "join" then
-				local _, why = ns.Voice.Apply(true)
-				ns.Print("voice: " .. why .. ".")
-				return
-			end
-			-- Every answer the client gave, rather than the one sentence this
-			-- part decided out of them. The first bug in this part was a probe
-			-- refusing a join the client would have taken, and there was no way
-			-- to see which probe it was without reading the source.
-			if arg == "why" then
-				ns.Print("voice: " .. ns.Voice.Diagnose() .. ".")
-				return
-			end
-			ns.Print("voice: " .. ns.Voice.Describe() .. ".")
-		end,
+		chat = ChatWord,
+		group = GroupWord,
+		voice = VoiceWord,
 	},
 
 	help = {
 		"chat, open or close the chat window",
 		"chat on|off, draw it at all",
+		"chat room, list the rooms; chat room <name>, go to one",
 		"chat claim, whether the same lines still draw in Blizzard's window",
-		"people list|group|add <name>|remove <name>, who gets their own tab",
+		"group, list your groups and who is in them",
+		"group new <name>, group <group> add|remove <name>, group <group> party",
 		"voice, what the voice pick is doing",
 		"voice group|off, join your party or raid channel, or nothing",
 		"voice join, ask for it again now",
@@ -285,9 +443,9 @@ ns.Register({
 	},
 
 	status = function()
-		return ("window %s; feed %s; people %s; voice %s")
+		return ("window %s; feed %s; Blizzard's %s; %s; voice %s")
 			:format(ns.ChatWindow.Describe(), ns.ChatFeed.Describe(),
-				ns.People.Describe(), ns.Voice.Describe())
+				ns.ChatBlizzard.Describe(), ns.People.Describe(), ns.Voice.Describe())
 	end,
 
 	lock = function()
@@ -300,13 +458,16 @@ ns.Register({
 
 	panel = function(ui)
 		ui.Section("Chat", "Readouts")
-		ui.Lede("A chat window of the addon's own: three tabs, class coloured names, a click to answer one.")
-		ui.Hint("Blizzard's window is not hidden and nothing of it is unregistered. It keeps loot, experience, system text and every addon's output, this one's included.")
-
+		ui.Lede("A window of the addon's own: a room per conversation, and that room's own slash already in the line.")
 		ui.Check("take those lines out of Blizzard's window",
 			function() return ns.db.chatClaim end,
 			SetClaim)
-		ui.Hint("This is FrameXML's own filter rather than a hidden frame, so turning it off puts the conversation back in Blizzard's window on the next line, with no reload.")
+		ui.Hint("FrameXML's own filter rather than a hidden frame, so turning it off puts the conversation back in Blizzard's window on the next line. It stays on while that window is hidden.")
+
+		ui.Check("start the line with the room's slash",
+			function() return ns.db.chatPrefix end,
+			function(value) Redraw("chatPrefix", value) end)
+		ui.Hint("In the party room the field reads /p with the cursor after it. Change the p to a g and it goes to guild instead.")
 
 		ui.Check("include the numbered channels",
 			function() return ns.db.chatChannels end,
@@ -320,7 +481,7 @@ ns.Register({
 		ui.Check("a sound when one of your people speaks",
 			function() return ns.db.chatSound end,
 			function(value) Redraw("chatSound", value) end)
-		ui.Hint("The client's own whisper sound, and only while you are not already looking at the People tab. A sound for a line you watched arrive is a sound you turn off.")
+		ui.Hint("The client's own whisper sound, and only while you are not already reading one of your groups.")
 
 		ui.Gap()
 		ui.Size("width", WIDTH_LOW, WIDTH_HIGH, WIDTH_STEP,
@@ -342,7 +503,7 @@ ns.Register({
 		end,
 			function() ns.ChatWindow.Show() end,
 			function() return ns.ChatWindow.Built() end)
-		ui.Hint("There is a key for it under WarriorKit in the client's own key bindings, which opens the window and puts the cursor in the line.")
+		ui.Hint("There is a key for it under WarriorKit in the client's own key bindings. Hiding Blizzard's window gives the enter key that job instead.")
 
 		ui.Reading("chat", function()
 			if not ns.ChatFeed.Installed() then
@@ -350,8 +511,10 @@ ns.Register({
 			end
 			return ns.ChatFeed.Describe()
 		end)
+		ui.Reading("rooms", ns.Rooms.Describe)
+		ui.Reading("Blizzard's window", ns.ChatBlizzard.Describe)
 
-		PeoplePage(ui)
+		GroupsPage(ui)
 
 		ui.Section("Voice", "Readouts")
 		ui.Lede("Joins one of the client's own voice channels for you at every login.")

@@ -5,7 +5,8 @@ marking, one button that casts Charge, Intervene or Intercept depending on what
 you are looking at, one key that takes the next enemy and swings at it, weapon
 loadouts with a key each that swap your stance and both your hands, a warrior
 loadout that fills the action bars, enemy bars that replace the
-Blizzard nameplate and carry a cast bar of their own, a chat window with a tab for the people you name and a voice
+Blizzard nameplate and carry a cast bar of their own, a chat window with a room
+per conversation in place of the client's own and a voice
 channel joined at login, a strip of the Blizzard bar art, three chores the
 client makes you do by hand, a swing timer with the Slam window marked on it,
 a loot stream and a combat log drawn as scrolling feeds, and one Edit Mode
@@ -108,7 +109,9 @@ name of none of them.
                          coloured stripe, with markers that band the whole row;
                          a ring behind it and rows that repaint rather than move
     UI/Widgets.lua       the widget kit a page is built out of
-    UI/Window.lua        window chrome, the folding side rail and the tab strip
+    UI/Window.lua        window chrome, the folding side rail, the tab strip
+                         and the list, which is the rail's twin for a column
+                         whose rows change while the window is open
 
     Perf/Perf.lua        what each ticker costs and what the addon is holding
     Perf/Feature.lua
@@ -212,12 +215,17 @@ name of none of them.
     Minimap/Corral.lua       borrows the other addons' minimap buttons into one tray
     Minimap/Feature.lua
 
-    Chat/People.lua          the important-people list, matched on the name
+    Chat/People.lua          the groups and who is in them, matched on the name
                              with the realm and the case taken off
-    Chat/Feed.lua            every chat event turned into one coloured line,
-                             routed to the tabs it belongs on
+    Chat/Rooms.lua           which conversations exist right now, where a line
+                             goes and what is unread in each
+    Chat/Compose.lua         the slash a room fills the line in with, and the
+                             send that reads it back
+    Chat/Feed.lua            every chat event turned into one coloured line
+    Chat/Blizzard.lua        the client's own chat window off the screen, and
+                             everything it would have drawn forwarded here
     Chat/Voice.lua           the voice channel pick, and the join it asks for
-    Chat/Window.lua          the window: the tab strip, three logs, the field
+    Chat/Window.lua          the window: the room rail, a log each, the field
     Chat/Feature.lua
 
     Comfort/Loot.lua         empties a corpse on LOOT_READY, before the window draws
@@ -685,22 +693,38 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Layout.CanWrite()         the action API is here, combat is not, cursor is empty
     ns.Layout.CanApply()         that, and you are a warrior
     ns.Layout.Apply / Restore    fill the action bars, or put back what was there
-    ns.People.All() / Count() / Get(i) / Shown() / Show(i)
-    ns.People.Add(name) / Remove(i) / Rename(i, name)
-    ns.People.AddGroup()         everyone you are grouped with, in one press
+    ns.People.All() / Count() / Get(i) / Name(i) / Find(name)
+    ns.People.AddGroup(name) / RemoveGroup(i) / RenameGroup(i, name)
+    ns.People.Add(i, name) / Remove(i, at) / Rename(i, at, name)
+    ns.People.AddParty(i)        everyone you are grouped with, in one press
     ns.People.Key(name)          what two names have to agree on to be the same
                                  person: the realm off, the case flattened
-    ns.People.Match(sender) / Describe()
+    ns.People.Match(sender)      every group holding that name, or nil
+    ns.People.Total() / Describe()
+    ns.Rooms.Route(room, who, whisper)  which rooms one line belongs in
+    ns.Rooms.List()              the rail, headers and rooms, in order
+    ns.Rooms.Target(id)          the channel a line typed in that room goes to,
+                                 and who it is addressed to when it is a whisper
+    ns.Rooms.Whisper(name) / WhisperId(name) / Recent() / Exists(id) / Title(id)
+    ns.Rooms.Mark(id) / Read(id) / Unread(id) / Waiting() / Describe()
+    ns.Compose.Prefix(kind, target)  the slash the field starts with
+    ns.Compose.Note(kind, target)    the same thing in a sentence
+    ns.Compose.Parse(text, kind, target)  channel, recipient and body, or nil
+                                 when the line belongs to the client's parser
+    ns.Compose.Send(text, kind, target)
     ns.ChatFeed.Apply()          register or unregister the chat events, and
                                  claim or hand back Blizzard's frames
     ns.ChatFeed.Attach(onLine)   set the sink, and get what arrived before it
+    ns.ChatFeed.System(text, r, g, b)  a line Blizzard's window would have drawn
     ns.ChatFeed.Installed() / Claimed() / Describe()
-    ns.ChatWindow.Ensure() / Show() / Hide() / Toggle() / Focus()
-    ns.ChatWindow.Apply() / Lock() / Reset() / Built()
-    ns.ChatWindow.Send(text)     a line to the channel the button says, or to
-                                 the client's own parser when it starts with /
-    ns.ChatWindow.Cycle(step) / Channel() / Reply(name)
-    ns.ChatWindow.Tabs() / Count(id) / Held() / Describe()
+    ns.ChatBlizzard.Apply()      the client's chat window off the screen, or back
+    ns.ChatBlizzard.Wanted() / Hiding() / Count() / Describe()
+    ns.ChatWindow.Ensure() / Show() / Hide() / Toggle() / Focus() / Shown()
+    ns.ChatWindow.Apply() / Lock() / Reset() / Built() / Keys()
+    ns.ChatWindow.Send(text)     a line to wherever the room and the text
+                                 between them say
+    ns.ChatWindow.Go(id) / Step(delta) / Room() / Channel() / Reply(name)
+    ns.ChatWindow.Fill() / Line() / Rooms() / Count(id) / Held() / Describe()
     ns.Voice.Supported() / Ready()   whether there is a voice service, and
                                  whether it has signed in yet
     ns.Voice.Options() / Label(value) / Set(value)
@@ -4253,41 +4277,96 @@ and middle buttons are handed back where the client has
 `SetPassThroughButtons`, and where it does not, a right drag begun on the feed
 will not turn the camera.
 
-**Chat.** Three tabs in a window of the addon's own: the people you have named,
-everything anyone said, and whispers on their own. Every line keeps its channel
+**Chat.** A rail of rooms down the left of a window of the addon's own, and the
+room you pick filling the rest. A room is one conversation: your party, your
+guild, the family, each person whispering you. Every line keeps its channel
 colour, names are class coloured, and a click on a name answers it.
 
-**Blizzard's window is not hidden and nothing of it is unregistered.** It keeps
-loot, experience, faction, system text, the combat log and every addon's output,
-including this one's, because there is no way to know which lines arriving there
-came from an event we already drew. Shrink it into a corner and this window is
-the one you read. Taking the conversation out of it is FrameXML's own chat
-message filter rather than a hidden frame, so turning that off puts the
-conversation back in Blizzard's window on the next line, with no reload. A
-client with no filter draws the same conversation in both.
+**The room you are reading is the channel you are typing into.** That is the
+whole design and everything else follows from it. Select the party room, start
+typing, and the line already reads `/p ` with the cursor after it. Select the
+guild room and it reads `/g `. A conversation with one person reads `/w Aria `.
+Tab steps to the next room and rewrites the slash.
 
-The numbered channels are off by default. General, Trade and anything else you
-have joined are most of the volume in a city and none of the conversation. The
-sound for one of your people speaking is the client's own whisper sound and only
-plays while you are not already looking at the People tab: a sound for a line
-you are watching arrive is a sound you turn off, and then there is none for the
-one you miss.
+The slash is in the field rather than on a label beside it, and the difference
+matters. A label is the addon telling you where the line will go. The slash is
+the line, so you can see it, delete it, or change the p to a g, and everything
+you already know about typing in this game still works: `/w Aria` from inside
+the guild room whispers Aria and leaves the guild room where it was. There is no
+second piece of state anywhere saying which channel you are in. The window this
+replaced had one, in a button beside the field that cycled six channels, and it
+could disagree with the tab you were reading all evening without saying so.
+
+Every channel prefix the addon knows is sent with one `SendChatMessage`.
+Everything else with a slash on the front, from `/dance` to another addon's
+command, goes to `ChatEdit_SendText`, which is what Blizzard's own field calls.
+`/raid` is raid and `/r` is reply, the way the client has it: getting that the
+wrong way round sends a whisper meant for one person to forty.
+
+**A room is a view, not a box.** One line lands in every room it belongs in, so
+a whisper from your wife is in Whispers under her name, in Family, and in
+Conversation. Nothing is filed away somewhere you have to remember to go and
+look. A room is drawn while the channel behind it exists, or while it holds
+something you have not read, which is what keeps a party line that arrived as
+you left the group reachable instead of deleting the row it was on.
+
+What marks a room is a count against its name in the accent colour. Selecting it
+clears the count. There is no flashing, no toast, and no sound unless somebody in
+one of your groups spoke.
+
+**Groups are the people who matter, in named sets.** Family, the officers, the
+four you level with. The first version of this was one flat list of important
+people and one tab for all of them, which holds up until you have two kinds of
+person on it: a wife in party chat and an officer asking about raid times are
+both important and neither belongs in the same column as the other. People are
+matched on the name alone, case ignored and realm ignored, so one row covers
+somebody whether they are standing beside you or whispering from another realm.
+A person may be in two groups and their line goes to both. The groups are shared
+by every character on the account, because who matters to you is not a fact
+about the character you happen to be standing in.
+
+**Blizzard's chat window is hidden, and everything it would have drawn is
+forwarded here.** That is the default. The switch is on the **Blizzard's own
+frames** page with the other six, because it answers the same question they do,
+and `/wk hide chat` is the word for it. Loot,
+experience, faction, system text, the combat log and every addon's output,
+including this one's, arrive at a chat frame's `AddMessage` as finished strings
+with nothing to say where they came from, so they go to the System room whole.
+
+There is no doubling, and the reason is exact rather than lucky: hiding forces
+the claim, the claim takes every conversation event out of Blizzard's frames
+before FrameXML draws it, and what is left arriving at `AddMessage` is precisely
+what this addon did not capture. That is what the README used to say could not be
+done. It could not be done with the claim off, which is still true and is why the
+claim cannot be turned off while the window is hidden.
+
+Nothing is unregistered and nothing is destroyed. The frames go down through
+`ns.Strip`, which puts a frame's own `Hide` where its `Show` was and so survives
+the client showing it again, and only a frame that was on screen is taken, so
+putting the window back does not turn on eight tabs nobody ever opened. They keep
+their own scrollback, so turning the setting off puts the window back with the
+evening still in it. Closing this window puts Blizzard's back on the
+next call, because a game with neither has no chat at all.
+
+**The enter key comes here while that window is hidden**, through an override
+binding that is dropped by one call, and goes back the moment the window is
+shown again. That coupling is deliberate rather than a setting of its own: the
+client's enter opens the client's chat line, and with that window hidden the
+line it opens is invisible. Every slash command still works from this field,
+because the ones the addon does not know are handed to the client's parser.
+There is also a key under WarriorKit in the client's own key bindings, for
+somebody who keeps Blizzard's window and wants this one on a key of their own.
+
+The numbered channels are off by default and have no room of their own. General,
+Trade and anything else you have joined are most of the volume in a city and none
+of the conversation. The sound for one of your people speaking is the client's
+own whisper sound and only plays while you are not already reading one of your
+groups: a sound for a line you are watching arrive is a sound you turn off, and
+then there is none for the one you miss.
 
 There is no drag handle on the corner. A window that resizes on the mouse means
 a reflow of every wrapped line on every mouse move, and two steppers say the
-same thing exactly. Drag the window itself while frames are unlocked. There is a
-key for opening it under WarriorKit in the client's own key bindings, which
-opens the window and puts the cursor in the line. The enter key still belongs to
-Blizzard's field: taking it would be taking it from the window every other addon
-types into.
-
-**People are matched on the name alone**, case ignored and realm ignored, so one
-row covers somebody whether they are standing beside you or whispering from
-another realm. Anything a person on the list says, in any channel, is copied to
-the People tab together with anything you whisper to them, and the tab is not
-drawn at all while the list is empty. The list is shared by every character on
-the account, because who matters to you is not a fact about the character you
-happen to be standing in.
+same thing exactly. Drag the window itself while frames are unlocked.
 
 **Voice only ever joins.** The pick is everything the client's own Chat Channels
 window draws a voice button on: your party or raid, and every stream of every
@@ -5088,6 +5167,25 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- Whether hiding Blizzard's chat window holds. `Chat/Blizzard.lua` strips ten
+  chat frames, their tabs, their button frames, the dock manager and five other
+  named pieces of furniture. Every name is probed, so a name these clients spell
+  differently costs that frame and nothing else, and `/wk status` reports how
+  many frames are held. What would prove it: log in, look for anything left
+  of the client's chat window in a corner, then dock and undock a tab through
+  the client's own menu and see whether it stays down.
+- Whether `hooksecurefunc` on `DEFAULT_CHAT_FRAME.AddMessage` catches everything
+  Blizzard's window would have drawn. Loot, experience and every addon's output
+  should reach the System room and nothing should reach it twice. The doubling
+  is the half that is argued rather than measured: it depends on the claim
+  taking each conversation event out of FrameXML before `AddMessage` sees it.
+  What would prove it: hide the window, loot something, and check the System
+  room has the loot line and the Conversation room does not.
+- Whether taking the enter key with an override binding is a good trade in
+  practice. It is what the client does with `OPENCHAT` and it is dropped by one
+  call, but a static popup that wanted the same key while the chat window was
+  open would lose it. What would prove it: hide Blizzard's window, press enter,
+  type, and then take a dialog that offers an accept button.
 - Whether any of the four auction scanners answers on these clients. Each is
   probed by name and pcalled, so a scanner whose API has moved costs the auction
   line and nothing else, and a player with none of them was never going to get
