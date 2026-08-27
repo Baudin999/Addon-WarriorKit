@@ -38,7 +38,13 @@ local SAMPLE_RATE = 1.0
 
 -- Declared here, in the order they are shown, because a table built per frame is
 -- the thing this file exists to catch.
-local ORDER = { "marker", "swing", "icon", "action", "bars", "skin", "meter", "buffs" }
+-- "cast" and "playercast" are the two that run on every frame beside the swing
+-- bars. The first of them was named by UnitFrames/EnemyBars.lua and by the
+-- performance tab and was missing from this list, so the row for it read as
+-- unavailable for the whole life of the enemy cast row: Perf.Start finds no
+-- slot for a key that is not here and returns without doing anything.
+local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast",
+	"skin", "meter", "buffs" }
 local slots = {}
 local gauges, gaugeOrder = {}, {}
 

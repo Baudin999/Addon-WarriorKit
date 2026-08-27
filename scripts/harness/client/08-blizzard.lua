@@ -97,6 +97,12 @@ end
 -- UnitFrames/Blizzard.lua's list that a lockdown can refuse.
 child("statusbar", targetFrame, "TargetFrameSpellBar")
 
+-- And the client's own cast bar for you, which this addon draws on a bar of
+-- its own under the swing timer. A child of UIParent rather than of a unit
+-- frame, so unlike the one above it nothing about it is protected and no
+-- lockdown can refuse to take it down.
+child("statusbar", _G.UIParent, "CastingBarFrame")
+
 -- The head of each of your own two rows, and the client's own weapon enchant.
 -- None of the three is a child of PlayerFrame on any client: the client hangs
 -- your buffs off BuffFrame in the top corner of the screen and the enchants off

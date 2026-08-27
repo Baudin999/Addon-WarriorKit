@@ -1,7 +1,9 @@
 # Handoff
 
-Items 8 and 9 are both on main and neither has been confirmed in game. That is
-the whole of where things stand.
+Items 8 and 9 are on main and neither has been confirmed in game. Two things
+have landed since and neither has been seen in the game either: the `/wk hide`
+switches that take the client's own copy of what this addon draws off the
+screen, and your own cast bar. That is the whole of where things stand.
 
 ## On main
 
@@ -14,8 +16,15 @@ the whole of where things stand.
 - `750cabe` settles item 9's open question: the new rows are the target's only.
   Your own buffs stay with item 4's nag row, because a temporary weapon enchant
   appears at no aura index and `Buffs/Upkeep.lua:17` already says so.
-- `check.sh` exits 0, luacheck 0 warnings and 0 errors across 101 files,
-  harness ok on both flavours.
+- `UnitFrames/Blizzard.lua` holds one switch per thing you can see twice, all
+  of them shipping on: your buffs, your debuffs, the target's auras, the
+  target's cast bar and Blizzard's own cast bar. `/wk hide <word>` and a section
+  of the panel walk the same list.
+- `UnitFrames/PlayerCast.lua` is your own cast bar, under the swing timer and
+  the same width as it. `/wk cast on|off`, `cast width|height|zoom|reset`, its
+  own section in the panel, and `hide playercast` for Blizzard's.
+- `check.sh` exits 0, luacheck 0 warnings and 0 errors across 105 files,
+  harness ok on both flavours, 37 sections.
 
 ## Item 9, as it landed
 
@@ -51,6 +60,28 @@ Settings: `/wk skin auras on|off`, `skin aura <12-32>`, `skin debuffs <0-16>`,
 is the block and the client's own row would land in the gauge. `/wk skin off`
 gives it back, because that is what gives the frame its size back.
 
+## The cast bar, as it landed
+
+A bar of its own with a point you drag, not a chamber under the player block.
+The enemy row opens downward out of the bar it belongs to because a mob's cast
+is one more thing about that mob; under the player block is where your debuff
+row hangs, and a chamber there would push that row down and pull it back up on
+every cast.
+
+Four answers come out of `UnitFrames/Cast.lua` and none is written twice:
+`Cast.Live`, `Cast.Fraction`, `Cast.Seconds` and `Cast.Preview`. Two of those
+were private to that file and two were extracted out of its own tick and sweep,
+so the enemy row and your bar are drawing the same cast through the same code.
+
+What is new is the cast that failed: red, held where it stopped for seven tenths
+of a second, because an empty bar is what a finished cast leaves behind too.
+
+`Perf/Perf.lua` gained two keys while this was being written and one of them is
+a fix. `Perf.Start("cast")` has bracketed the enemy cast sweep since that row
+shipped and the performance tab has drawn a line for it, but `cast` was never in
+`ORDER`, so the row read as unavailable for the life of the feature and nothing
+said so.
+
 ## What to do next
 
 - Confirm item 8 and item 9 in game. Item 8's geometry has been looked at once
@@ -63,6 +94,15 @@ gives it back, because that is what gives the frame its size back.
   for it. Not written up as an item yet.
 
 ## Untested against the live client
+
+The cast bar: whether the nine `UNIT_SPELLCAST_*` names it watches fire on these
+clients, and whether `CastingBarFrame` is what they call Blizzard's own. The
+events fail soft, because the poll behind them asks `UnitCastingInfo("player")`
+five times a second whatever the events do, so a missing name costs a fifth of a
+second and the failed-cast hold. A missing frame name is the louder one: `hide
+playercast` would hide nothing and you would have two cast bars. To settle both:
+cast anything and watch the bar fill, then walk out of range mid cast and see
+whether it goes red.
 
 Item 8: how this Edit Mode signals a drop, whether a frame anchored to another
 frame can still be dragged in it, and whether `EDIT_MODE_LAYOUTS_UPDATED` exists

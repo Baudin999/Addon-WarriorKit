@@ -82,6 +82,11 @@ globals = {
 	-- scripts/harness.lua without Meter/Window.lua handing out a reference to its
 	-- own row pool.
 	"WarriorKitMeter",
+	-- your own cast bar. Named for the same reason the swing bars below it are:
+	-- the harness has to measure what was drawn, and a bar that is empty almost
+	-- all of the time has to be findable from a macro when it has wandered off
+	-- the screen.
+	"WarriorKitPlayerCast",
 	-- the swing timer's frame, holding a gauge per hand. Named for the same
 	-- reason the meter is: scripts/harness.lua has to measure what was drawn,
 	-- and Swing/Gauges.lua handing out a reference to its own bars would be a

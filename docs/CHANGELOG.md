@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+### Your own cast bar
+
+The last Blizzard frame this HUD had left alone. Every unit around you was drawn
+by the addon and the one bar you time a press against was still Blizzard's, in
+gold, under an interface that has none.
+
+`UnitFrames/PlayerCast.lua` draws it: 180 by 16 at `CENTER, 0, -250`, which is
+under the swing bars and the same width as them, so the charge icon, the swing
+bars and this read as one column of things you are timing against rather than
+three features that happen to be near each other. `/wk cast on|off`, `cast
+width`, `cast height`, `cast zoom` and `cast reset`, plus a section of its own in
+the panel. `/wk hide playercast` takes Blizzard's down and ships on, like the
+four switches beside it.
+
+It is a bar of its own rather than a chamber under the player block, and that is
+the decision the file is about. The enemy row opens downward out of the bar it
+belongs to, because a mob's cast is one more thing about that mob. Under the
+player block is where your debuff row hangs, so a chamber there would push that
+row down and pull it back up on every cast, which is the row moving every time
+the fight gets interesting.
+
+Four answers come out of `UnitFrames/Cast.lua` and none is written twice:
+whether there is a cast worth drawing, how far along it is, what the seconds
+read, and what an unlocked frame previews. Two of those were private to that
+file and are public now; two were extracted out of its own tick and sweep on the
+way. The enemy row and your bar therefore cannot drift apart on a channel
+draining backwards or on a rounded number promising a tenth of a second it has
+not got.
+
+What is new is the cast that failed. Interrupted, moved out of, or refused, the
+bar turns red and holds where it stopped for seven tenths of a second rather
+than emptying, because an empty bar is exactly what a cast that finished leaves
+behind. `UNIT_SPELLCAST_FAILED` also fires for a press the client refused before
+anything started, so the hold does nothing where the bar was already down.
+
+`harness/sections/37-player-cast.lua` holds the fill to the same three
+statements the swing bar is held to at 60 and 144 fps, drives the interrupt and
+its hold, and measures the sweep at 0.00 KB per 200 frames of casting.
+
+### The performance tab had a row that could never fill
+
+`Perf.Start("cast")` has been bracketing the enemy cast sweep since that row
+shipped, and `Perf/Feature.lua` has been drawing a line for it, but `cast` was
+never in `Perf/Perf.lua`'s `ORDER`. `Perf.Start` looks the key up in a table
+built from that list and returns without doing anything when it finds nothing,
+so the row read as unavailable for the whole life of the feature and nothing
+said so. Both `cast` and the new `playercast` are in the list now.
+
 ### The purse and the tooltip drew their text the wrong way
 
 The three numbers along the bottom of the loot feed looked worse than the rest

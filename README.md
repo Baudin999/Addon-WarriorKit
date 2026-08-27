@@ -33,6 +33,15 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   client's own, measured off your last Slam, and it follows your haste, so the
   band moves when Flurry lands. The bars are drawn for anybody holding a weapon;
   the band is a warrior's.
+- **Your own cast bar.** One bar under the swing timer, the same width as it, in
+  the same flat colours as everything else here. The spell on the left and the
+  seconds left on the right, counted in tenths because that is what an interrupt
+  is timed in, and a channel drains from the other end rather than filling. A
+  cast that does not finish, because you were interrupted or walked out of range
+  or the client refused the press, turns the bar red and holds it where it
+  stopped for most of a second: an empty bar is what a cast that finished leaves
+  behind, so a cast that died has to look like something else. Blizzard's own
+  goes off the screen, and one tick box puts it back.
 - **A nag for what you forgot.** A row of squares over your character when
   something that should be up is not: a sharpening stone worn off either hand,
   Battle Shout lapsed, no food. It is not there at all when nothing is wrong, so

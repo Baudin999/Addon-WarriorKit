@@ -360,6 +360,54 @@ local function Frames(ui)
 	end)
 end
 
+-- Its own section rather than a corner of the frames page above. Nothing on it
+-- touches a Blizzard frame and nothing on it touches a nameplate: it is a bar
+-- of ours that sits where you drag it, which is the swing timer's shape and not
+-- the skin's.
+local function CastBar(ui)
+	ui.Section("Your cast bar", "You")
+	ui.Lede("Your own casts, on a bar under the swing timer rather than on Blizzard's.")
+
+	ui.Check("draw your own cast bar",
+		function() return ns.db.playerCast end,
+		function(value)
+			ns.db.playerCast = value
+			ns.PlayerCast.Apply()
+		end)
+	ui.Hint("Unlock the frames and it previews itself, a cast then a channel, because a cast bar is empty almost all of the time and you cannot place what you cannot see.")
+
+	local wideLow, wideHigh, tallLow, tallHigh = ns.PlayerCast.SizeRange()
+	ui.Size("width", wideLow, wideHigh, 10,
+		function() return ns.db.playerCastWidth end,
+		function(value)
+			ns.db.playerCastWidth = value
+			ns.PlayerCast.Apply()
+		end)
+	ui.Size("height", tallLow, tallHigh, 2,
+		function() return ns.db.playerCastHeight end,
+		function(value)
+			ns.db.playerCastHeight = value
+			ns.PlayerCast.Apply()
+		end)
+	ui.Hint("The swing bars ship 180 wide. Matching them is what makes the two read as one instrument rather than as two features that happen to be near each other.")
+
+	ui.Zoom(
+		function() return ns.db.playerCastZoom end,
+		function(value)
+			ns.db.playerCastZoom = value
+			ns.PlayerCast.Apply()
+		end)
+
+	ui.Action(function() return "back under the swing timer" end, function()
+		ns.PlayerCast.Reset()
+	end)
+
+	ui.Reading("your cast bar", ns.PlayerCast.Describe)
+	ui.Reading("a cast that fails", function()
+		return "holds red where it stopped, so it does not read as one that finished"
+	end)
+end
+
 -- One line per thing this addon draws that Blizzard also draws. Nothing here
 -- reads another setting, so every line does what it says whatever else is
 -- switched on.
@@ -386,5 +434,6 @@ function Panel.Draw(ui)
 	EnemyBars(ui)
 	Debuffs(ui)
 	Frames(ui)
+	CastBar(ui)
 	Blizzard(ui)
 end

@@ -139,7 +139,11 @@ name of none of them.
     UnitFrames/Plates.lua    the client settings that decide where a plate goes
     UnitFrames/Cast.lua      the cast row one enemy bar carries: what the mob is
                              casting, how long is left of it, and whether the
-                             client says you can stop it
+                             client says you can stop it, plus the four answers
+                             about a cast that both bars in the addon share
+    UnitFrames/PlayerCast.lua your own cast bar, on a frame you drag, under the
+                             swing timer. The same four answers, drawn in a
+                             rectangle of its own, plus the cast that failed
     UnitFrames/EnemyBars.lua enemy bars, nameplate replacement and list fallback
     UnitFrames/Auras.lua     your own and the target's buff and debuff rows,
                              and hiding the client's, which cannot be moved
@@ -547,8 +551,16 @@ goes through `Feature.lua` or through the shared surface below:
                                  where its switch says. Not part of the skin: it
                                  answers with every Blizzard unit frame left
                                  alone
+    ns.PlayerCast.Apply()        your own cast bar laid out where the settings
+                                 say, and locked or unlocked with them
+    ns.PlayerCast.Update(now) / Sweep(now)
+                                 what the client says, five times a second, and
+                                 the fill, on every frame
+    ns.PlayerCast.Fail(word)     a cast that stopped without finishing, held red
+                                 for seven tenths of a second
+    ns.PlayerCast.Bar() / SizeRange() / Describe() / Reset()
     ns.BlizzHide.Switches() / Find(word)
-                                 the four switches in panel order, and the one a
+                                 the five switches in panel order, and the one a
                                  `/wk hide` word names. The panel and the slash
                                  word both walk this rather than writing the
                                  list out again
@@ -2585,6 +2597,67 @@ row never goes out again.
 in the same breath, which is what makes it a real off switch rather than a way
 to stop seeing casts.
 
+**Your own cast bar.** `UnitFrames/PlayerCast.lua`, and the last Blizzard frame
+on the screen this HUD had left alone. Every unit around you was being drawn by
+this addon and the one bar you time a press against was still a 2007 gold frame,
+which is a mismatch you can see from across the room.
+
+It is a bar of its own with a point you drag, not a chamber under the player
+block, and that is the whole design decision in the file. The enemy row opens
+downward out of the bar it belongs to, because a mob's cast is one more thing
+about that mob. Yours is not. Under the player block is where your debuff row
+hangs, and a chamber opening there would push that row down and pull it back up
+on every cast, which is the row moving every time the fight gets interesting.
+So this is furniture, placed the way the swing bars and the meters are placed.
+
+It ships at 180 by 16 at `CENTER, 0, -250`, under the swing bars at -220 and
+under the charge icon at -160. The width is the swing bars' width and
+`harness/sections/37-player-cast.lua` asserts that the two defaults still match:
+charge icon, swing bars, cast bar is one column of things you time a press
+against, and two bars of different lengths stacked on each other read as two
+features that happen to be near each other.
+
+**Four answers come out of `UnitFrames/Cast.lua` and none of them is written
+twice.** That file already knew whether there is a cast worth drawing
+(`Cast.Live`), how far along it is (`Cast.Fraction`), what the seconds read
+(`Cast.Seconds`, off a table of about thirty strings built once ever) and what
+an unlocked frame previews (`Cast.Preview`). Two of the four were private and
+are public now, and two were extracted out of `Cast.Update` and `Cast.Sweep` on
+the way. So the enemy row and your own bar cannot disagree about a channel
+draining backwards, about a cast that has run out still being answered for by
+the client, or about a rounded number promising a tenth of a second it has not
+got. Neither of them decides any of it.
+
+**What the file does own is the cast that failed.** Interrupted, moved out of,
+or refused, your cast stops and the bar turns red and holds where it stopped for
+seven tenths of a second rather than emptying. That is the one state a mob's
+cast bar has no use for and it is not a nicety: an empty bar is exactly what a
+cast that finished leaves behind, so a cast that died has to look like something
+else or the bar has answered the wrong question. On a warrior it is Slam, which
+is the one cast in the rotation and the one `Swing/Slam.lua` exists to time.
+
+`UNIT_SPELLCAST_FAILED` is also what the client says when a press was refused
+before anything started, so the hold does nothing where the bar was already
+down. A red bar for a spell you never began is the addon inventing a cast in
+order to report the failure of it.
+
+**Events and a poll, and the poll is the belt.** Seven `UNIT_SPELLCAST_*` names
+put a cast up at once and two more say why one stopped. None of them is proven
+on both of these clients, so every registration goes through `pcall` and every
+one is filtered to the player where `RegisterUnitEvent` exists, with the token
+tested again in the handler where it does not. Behind them the client is asked
+five times a second regardless. A name this client has never heard of therefore
+costs a bar up to a fifth of a second late, and not a bar that never comes up.
+
+**Blizzard's own goes down through the same five switches as everything else.**
+`hide playercast` in `UnitFrames/Blizzard.lua`, which names `CastingBarFrame` and
+`PlayerCastingBarFrame` because 2.5.6 and the clients this Edit Mode was
+backported from call it different things. It is a plain boolean like the other
+four and it does not read the setting above it, which means both off is the one
+combination that leaves you with no cast bar at all. That is said in the hint
+under the switch, in what `/wk cast off` prints, and in the panel's readout,
+because a switch whose effect you cannot predict from its label is not a switch.
+
 **The debuff row is a setting, not a constant.** It ships tracking Sunder Armor,
 Demoralizing Shout, Thunder Clap and Rend, and `ns.db.barsSpells` is what it
 actually draws: an array of spell IDs in the order they appear, up to ten of
@@ -4618,6 +4691,20 @@ Everything below was written from the API contract and has never executed:
   hidden within a fifth of a second and nobody sees it. What would prove it: get
   a target to nine or more debuffs for the first time in a session while in
   combat, and watch whether one of Blizzard's icons appears below the block.
+- Whether the nine `UNIT_SPELLCAST_*` names your own cast bar watches fire on
+  these clients, and whether `CastingBarFrame` is what they call Blizzard's own.
+  The events fail soft by design: every registration is a `pcall` and the poll
+  behind them asks `UnitCastingInfo("player")` five times a second regardless, so
+  a name that never arrives costs a fifth of a second and the failed-cast hold,
+  which is the only thing on that bar an event is the sole source of. A missing
+  frame name is louder, because `hide playercast` would then hide nothing and
+  leave two cast bars on the screen; the panel says how many of the six names
+  this client carries rather than claiming a row is hidden. What would prove
+  both: cast anything, watch the bar fill, then walk out of range mid cast and
+  see whether it goes red.
+- Whether a 16 pixel bar at 180 wide is the right size for a spell name and the
+  seconds beside it. The arithmetic is exact and asserted, but whether it reads
+  at a glance during a pull is a thing you look at.
 - Whether `BuffFrame`, `TemporaryEnchantFrame`, `DebuffFrame` and
   `TargetFrameSpellBar` are what these clients call those four frames. Each
   `/wk hide` switch takes a global down rather than the buttons inside it, which

@@ -33,7 +33,7 @@ ns.BlizzHide = Blizz
 --   word   what `/wk hide` calls it
 --   label  the panel's line, and the sentence the slash word prints back
 --   hint   the one thing about this switch a label cannot hold, where there is
---          one. Two of the four have a catch and the other two do not, and a
+--          one. Three of the five have a catch and the other two do not, and a
 --          line of reassurance under a switch that has nothing to warn about
 --          is how a page teaches you to stop reading the hints
 local SWITCHES = {
@@ -46,6 +46,9 @@ local SWITCHES = {
 	{ key = "hideBlizzTargetCast", word = "cast",
 		label = "Blizzard's target cast bar",
 		hint = "The cast is drawn on the enemy bar instead, in the second chamber of the box." },
+	{ key = "hideBlizzPlayerCast", word = "playercast",
+		label = "Blizzard's own cast bar",
+		hint = "Read this one with our cast bar switch. Both off is the one combination that leaves you no cast bar at all." },
 }
 
 -- What each switch takes down, by name, and what it takes to take it down.
@@ -66,11 +69,18 @@ local SWITCHES = {
 -- The target's auras name no frame here on purpose. Every icon in those two
 -- rows is a child of TargetFrame, so there is nothing between the buttons and
 -- the frame you are targeting with, and the sweep is the only handle.
+--
+-- Your own cast bar is named twice for DebuffFrame's reason. 2.5.6 calls it
+-- CastingBarFrame and the clients this Edit Mode was backported from call it
+-- PlayerCastingBarFrame, and neither name is worth a branch when an absent one
+-- costs a lookup against nil.
 local FRAMES = {
 	{ name = "BuffFrame", needs = { "hideBlizzBuffs", "hideBlizzDebuffs" } },
 	{ name = "TemporaryEnchantFrame", needs = { "hideBlizzBuffs" } },
 	{ name = "DebuffFrame", needs = { "hideBlizzDebuffs" } },
 	{ name = "TargetFrameSpellBar", needs = { "hideBlizzTargetCast" } },
+	{ name = "CastingBarFrame", needs = { "hideBlizzPlayerCast" } },
+	{ name = "PlayerCastingBarFrame", needs = { "hideBlizzPlayerCast" } },
 }
 
 local pending = false

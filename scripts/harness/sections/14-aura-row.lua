@@ -492,7 +492,7 @@ tick()
 
 -- The switches that take the client's own copies off the screen.
 --
--- Four of them, one per thing you can see twice, and each is a plain boolean
+-- Five of them, one per thing you can see twice, and each is a plain boolean
 -- that does what its label says. They are asserted through ns.db and
 -- ns.BlizzHide.Apply rather than through the panel, because the panel is one
 -- of two callers and the slash word is the other.

@@ -296,6 +296,54 @@ local function SkinWord(arg)
 		.. ", " .. ns.FrameSkin.Describe() .. ".")
 end
 
+-- Your own cast bar, which is its own word rather than a corner of `skin` or of
+-- `bars`. It is neither: it draws nothing on a Blizzard frame and nothing on a
+-- nameplate, and it is a bar of its own that you drag where you want it.
+local function CastWord(arg)
+	local option, value = arg:match("^(%S*)%s*(.-)$")
+
+	if option == "width" or option == "height" then
+		local wideLow, wideHigh, tallLow, tallHigh = ns.PlayerCast.SizeRange()
+		local low, high = wideLow, wideHigh
+		if option == "height" then
+			low, high = tallLow, tallHigh
+		end
+		local size = ns.Command.Number(value, low, high, "cast " .. option)
+		if size then
+			ns.db[option == "width" and "playerCastWidth" or "playerCastHeight"] = size
+			ns.PlayerCast.Apply()
+			ns.Print("cast " .. option .. " " .. size .. " pixels.")
+		end
+		return
+	end
+
+	if option == "zoom" then
+		local zoom = ns.Command.Number(value, ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH, "cast zoom")
+		if zoom then
+			ns.db.playerCastZoom = zoom
+			ns.PlayerCast.Apply()
+			ns.Print("cast zoom " .. zoom .. ", so one pixel of the design is "
+				.. zoom .. " on screen.")
+		end
+		return
+	end
+
+	if option == "reset" then
+		ns.PlayerCast.Reset()
+		ns.Print("cast bar back under the swing timer.")
+		return
+	end
+
+	ns.db.playerCast = ns.Command.Toggle(option)
+	ns.PlayerCast.Apply()
+	ns.Print("your cast bar " .. (ns.db.playerCast and "on" or "off")
+		.. ": " .. ns.PlayerCast.Describe() .. ".")
+	if not ns.db.playerCast and ns.db.hideBlizzPlayerCast then
+		ns.Print("Blizzard's own is hidden by `/wk hide playercast`, so nothing"
+			.. " is drawing your casts at all.")
+	end
+end
+
 -- What the bars cost is one number and what they cost per mob is another, and
 -- the performance tab cannot tell them apart without being told how many are
 -- up. Registered from here rather than from EnemyBars, because a behaviour file
@@ -444,7 +492,29 @@ ns.Register({
 		skinAuraDebuffs = 12,
 		skinAuraBuffs = 8,
 
-		-- The client's own copies of what this addon draws. Four switches, one
+		-- Your own cast bar, drawn by this addon rather than by the client.
+		-- On by default for the reason the skin is: it is a thing the addon
+		-- draws and the client's copy is hidden below, so shipping it off
+		-- would ship a screen with no cast bar on it.
+		playerCast = true,
+
+		-- The same width as the swing bars, because it sits under them and two
+		-- bars of different lengths stacked on each other read as two features
+		-- rather than as one instrument. 16 is tall enough to hold a spell name
+		-- and the seconds beside it at a size worth reading.
+		playerCastWidth = 180,
+		playerCastHeight = 16,
+
+		-- A whole number, like every other zoom in the addon, because a
+		-- fractional one puts every edge back on a half pixel.
+		playerCastZoom = 1,
+
+		-- Under the swing bars, which sit at -220 and are ten pixels tall on
+		-- one hand and twenty two on two. Both numbers are whole, because half
+		-- of an odd one is half a pixel and this frame is on the grid.
+		playerCastPoint = { "CENTER", "UIParent", "CENTER", 0, -250 },
+
+		-- The client's own copies of what this addon draws. Five switches, one
 		-- per thing you can see twice, and every one of them means exactly what
 		-- its label says.
 		--
@@ -456,6 +526,7 @@ ns.Register({
 		hideBlizzDebuffs = true,
 		hideBlizzTargetAuras = true,
 		hideBlizzTargetCast = true,
+		hideBlizzPlayerCast = true,
 	},
 
 	words = {
@@ -464,6 +535,8 @@ ns.Register({
 		end,
 
 		skin = SkinWord,
+
+		cast = CastWord,
 
 		-- The client's own copies, one word each. Its own word rather than a
 		-- corner of `skin`, because none of these four is part of the skin:
@@ -520,6 +593,9 @@ ns.Register({
 		"skin aura <12 up to the block height>, one aura square, in screen pixels",
 		"skin debuffs <0-16>, skin buffs <0-32>, how long each row runs",
 		"skin probe, what this client answered for each frame",
+		"cast on|off, your own cast bar, which sits under the swing timer",
+		"cast width <90-400>, cast height <10-40>, cast zoom <1-3>",
+		"cast reset, the bar back where it started",
 		"auras on|off, the client's own buff row in the corner of the screen",
 		"colors, every class fill and how far the name on it is from it",
 	},
@@ -536,10 +612,12 @@ ns.Register({
 			.. ("; debuffs at %dpx: %s"):format(ns.db.barsIconSize, ns.EnemyBars.DescribeSpells())
 			.. ("; cast bar %s"):format(ns.Cast.Describe())
 			.. ("; %s"):format(ns.FrameAuras.Describe())
+			.. ("; your cast bar %s"):format(ns.PlayerCast.Describe())
 	end,
 
 	lock = function()
 		ns.EnemyBars.ApplyLock()
+		ns.PlayerCast.Lock()
 	end,
 
 	reset = function()
@@ -584,6 +662,13 @@ ns.Register({
 		for _, switch in ipairs(ns.BlizzHide.Switches()) do
 			ns.db[switch.key] = ns.DefaultFor(switch.key)
 		end
+		ns.db.playerCast = ns.DefaultFor("playerCast")
+		ns.db.playerCastWidth = ns.DefaultFor("playerCastWidth")
+		ns.db.playerCastHeight = ns.DefaultFor("playerCastHeight")
+		ns.db.playerCastZoom = ns.DefaultFor("playerCastZoom")
+		-- PlayerCast.Reset puts the point back and lays the bar out again, so
+		-- the four above it land in the same pass.
+		ns.PlayerCast.Reset()
 		ns.BlizzHide.Apply()
 		ns.FrameSkin.Apply()
 	end,

@@ -25,6 +25,7 @@ local ROWS = {
 	{ key = "action", label = "action bars", hz = 10 },
 	{ key = "bars", label = "enemy bars", hz = 5 },
 	{ key = "cast", label = "enemy cast fills", hz = 60, rate = "every frame" },
+	{ key = "playercast", label = "your cast bar", hz = 60, rate = "every frame" },
 	{ key = "skin", label = "unit frames", hz = 5 },
 	{ key = "meter", label = "meters", hz = 5 },
 	{ key = "buffs", label = "buff nag", hz = 10 },

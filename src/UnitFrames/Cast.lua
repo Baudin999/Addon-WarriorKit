@@ -92,9 +92,13 @@ local REMAINING = "%.1f"
 --
 -- Keyed by the tenth rather than by the float, which is what makes it a cache
 -- at all: there are ten values a second and not sixty.
+--
+-- Public, because the player's own cast bar draws the same number off the same
+-- clock and a second table of the same thirty strings is a second table to keep
+-- true. UnitFrames/PlayerCast.lua is the other caller.
 local seconds = {}
 
-local function Seconds(tenths)
+function Cast.Seconds(tenths)
 	local held = seconds[tenths]
 	if not held then
 		-- Once per tenth this addon ever draws. The lookup above is the guard,
@@ -270,6 +274,9 @@ local heard = 0
 
 -- What an unlocked frame draws instead of asking the client.
 --
+-- Public for the reason Cast.Seconds is: the player's own bar is empty just as
+-- often and is placed the same way, by unlocking the frames and looking at it.
+--
 -- The row is empty almost all of the time, which makes "unlock the frames and
 -- look" a thing with nothing to look at: a feature you cannot see until a
 -- caster pulls you is one you cannot place, size or judge. Buffs/Nag.lua has
@@ -286,11 +293,50 @@ local heard = 0
 -- previewing.
 local PREVIEW = 2.5
 
-local function Preview(now)
+function Cast.Preview(now)
 	local phase = now % (PREVIEW * 2)
 	local channel = phase >= PREVIEW
 	local start = now - (channel and (phase - PREVIEW) or phase)
 	return channel and "channel" or "cast", start, start + PREVIEW, channel
+end
+
+-- A cast worth drawing, or nothing.
+--
+-- The client keeps answering for a cast that has already run out, and a bar
+-- reading that answer puts a finished cast straight back on the screen for as
+-- long as it does. So the run-out is tested here rather than in either caller:
+-- both draw the same picture and both would otherwise carry their own copy of
+-- the same four comparisons.
+--
+-- `now` is passed rather than read, because both callers already have one and a
+-- second GetTime inside a per-frame path is a second answer to what time it is.
+function Cast.Live(unit, now)
+	local name, start, finish, channel, immune = ns.CastingInfo(unit)
+	if not name or not finish or finish <= start or finish <= now then
+		return nil
+	end
+	return name, start, finish, channel, immune
+end
+
+-- How far along a cast is, as the fraction a gauge fills to.
+--
+-- A channel counts the other way, which is the whole of what tells the two
+-- apart on the bar: a cast fills towards its finish and a channel drains
+-- towards its end, and neither needs a colour of its own to say so.
+--
+-- Clamped at the bottom and not at the top. A start in the future is the
+-- client's own arithmetic on a spell that has been pushed back, and drawing a
+-- negative fill is a bar that flickers; a fraction over one cannot be reached,
+-- because a caller that has run out of time has already cleared the bar.
+function Cast.Fraction(start, finish, now, channel)
+	local done = (now - start) / (finish - start)
+	if done < 0 then
+		done = 0
+	end
+	if channel then
+		return 1 - done
+	end
+	return done
 end
 
 -- The guarded writes, shared by the client's answer and by the preview, so the
@@ -346,7 +392,7 @@ function Cast.Update(widget, unit, fromEvent)
 	-- with nothing is a row you place by memory.
 	if not ns.db.locked then
 		box.preview = true
-		Show(box, Preview(GetTime()))
+		Show(box, Cast.Preview(GetTime()))
 		return
 	end
 	if box.preview then
@@ -356,12 +402,8 @@ function Cast.Update(widget, unit, fromEvent)
 		Cast.Clear(widget)
 	end
 
-	-- A cast that has already run out is nothing to draw, whatever the client
-	-- still has in its own table. Cast.Sweep takes a finished cast off the row
-	-- on the frame it ends, and without this line the next tick would put it
-	-- straight back for as long as the client kept answering.
-	local name, start, finish, channel, immune = ns.CastingInfo(unit)
-	if not name or not finish or finish <= start or finish <= GetTime() then
+	local name, start, finish, channel, immune = Cast.Live(unit, GetTime())
+	if not name then
 		if box:IsShown() then
 			Cast.Clear(widget)
 		end
@@ -395,7 +437,7 @@ function Cast.Sweep(widget, now)
 	-- of a second of empty row on every loop is exactly the flicker a preview
 	-- exists to rule out.
 	if box.preview and box.finish - now <= 0 then
-		Show(box, Preview(now))
+		Show(box, Cast.Preview(now))
 	end
 
 	local left = box.finish - now
@@ -404,18 +446,14 @@ function Cast.Sweep(widget, now)
 		return
 	end
 
-	local done = (now - box.start) / (box.finish - box.start)
-	if done < 0 then
-		done = 0
-	end
-	box.bar:SetValue(box.channel and (1 - done) or done) -- unguarded: the moving edge, and a frame it does not write is a frame it does not move on
+	box.bar:SetValue(Cast.Fraction(box.start, box.finish, now, box.channel)) -- unguarded: the moving edge, and a frame it does not write is a frame it does not move on
 
 	-- Guarded on the tenth that gets drawn, not on the float behind it. A cast
 	-- has about fifteen of them and this runs on every frame.
 	local tenths = math.floor(left * 10)
 	if box.shownTenths ~= tenths then
 		box.shownTenths = tenths
-		box.timer:SetText(Seconds(tenths))
+		box.timer:SetText(Cast.Seconds(tenths))
 	end
 end
 
