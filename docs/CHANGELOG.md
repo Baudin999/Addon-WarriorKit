@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### `/wk skin probe` measures the aura square rather than repeating the setting
+
+Reported from the game with a screenshot: the aura squares draw their timer and
+nothing else. No art, no hairline, at a size that had been working.
+
+The screenshot settles more than it looks like it does. The block is 68 pixels
+tall, the two numbers over it sit 31.5 apart, which is a 28 pixel square and the
+3 pixel gap, and they are right aligned on the block's top corner one gap up. So
+the row is exactly where the row belongs and the layout is not what is wrong.
+What is gone is everything that is a region of the square, because a font string
+draws off its own anchor whatever the square does while the art and the hairline
+take their size from the square's edges.
+
+Every number the probe printed was a number that went in rather than one the
+client used, which is why none of them said anything about this. Each row's line
+now carries the width the square came out at, the width the art came out at,
+whether the art was ever handed a texture, and how thick the hairline is, all
+read back off the widget.
+
+**The resize itself is measured now.** Section 14 lays the rows out at 12, 20 and
+28 and asserts the square, both corners of the art's one pixel inset, the
+hairline and that the square still holds its texture afterwards. It passes,
+which is the point: it says the arithmetic in `Auras.Place` is not the fault and
+narrows what is.
+
+**The harness could not have caught an inset bug at all.** The client stub took
+`SetPoint("TOPLEFT", x, y)`, which is how every inset in the addon is written,
+and stored the two offsets in the fields `GetPoint` hands back as the relative
+frame and the relative point. So the offset read back as zero and the relative
+frame read back as a number, and anything asserting on an inset was asserting on
+nothing. The stub models both shapes.
+
 ### The client's weapon enchant goes off the screen with the rest of its auras
 
 Reported from the game: with the addon's own rows on, the client is still

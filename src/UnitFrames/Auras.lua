@@ -686,6 +686,36 @@ function Auras.Under(entry, frame)
 	list.head = nil
 end
 
+-- What square one actually came out as, measured off the widget rather than
+-- read back out of the numbers that went into it.
+--
+-- It is here because of the one failure the placement numbers cannot see. The
+-- timer is a font string and draws off its own anchor whatever the square does,
+-- while the art and the hairline are regions sized by the square's own edges.
+-- So a square that is not the size it was asked for still shows its number in
+-- roughly the right place and shows nothing else, and every number in the rest
+-- of this line is the number that was asked for rather than the one the client
+-- used. Three measurements settle it: how wide the square came out, how wide
+-- the art inside it came out, and whether the art was ever handed a texture.
+--
+-- In pixels, like the rest of the line, so the answer can be read against
+-- `/wk skin aura` without converting anything.
+local function Drawn(row)
+	local square = row.squares[1]
+	if not square then
+		return "no square built"
+	end
+	local unit = ns.UI.Unit(row.frame)
+	if not unit or unit <= 0 then
+		unit = 1
+	end
+	return ("square %.1fpx, art %.1fpx %s, hairline %.2fpx"):format(
+		(ns.Measure(square, "GetWidth") or 0) / unit,
+		(ns.Measure(square.icon, "GetWidth") or 0) / unit,
+		square.shownIcon and "held" or "none",
+		(ns.Measure(square.edges[1], "GetHeight") or 0) / unit)
+end
+
 -- One line for /wk skin probe, per frame that has rows.
 function Auras.Probe(entry)
 	local list = entry.auras
@@ -695,8 +725,8 @@ function Auras.Probe(entry)
 	local parts = {}
 	for index = 1, #list do
 		local row = list[index]
-		parts[index] = ("%s %d of %d wide, %d of the client's hidden")
-			:format(row.key, row.wanted, row.perLine, Swept(row))
+		parts[index] = ("%s %d of %d wide, %s, %d of the client's hidden")
+			:format(row.key, row.wanted, row.perLine, Drawn(row), Swept(row))
 	end
 	return table.concat(parts, ", ")
 end

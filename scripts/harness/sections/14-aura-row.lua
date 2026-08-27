@@ -354,6 +354,74 @@ do
 		"a square is still lit with nothing on you")
 end
 
+-- The square at another size, because the size is a setting and everything
+-- inside the square is anchored to the square's own edges.
+--
+-- This is the one failure the anchors above cannot see. The timer is a font
+-- string and draws off its own anchor whatever the square does, so a square
+-- that came out the wrong size still puts its number roughly where the number
+-- belongs and shows nothing else at all: no art, no hairline. Reported from the
+-- game as "I changed the size and the icon is gone", which is what that looks
+-- like from the other end.
+--
+-- Measured off the widget at three sizes rather than trusting the one the
+-- default happens to be, because the range runs from 12 to the block's own
+-- height and the arithmetic in between is where a resize goes wrong.
+do
+	local held = ns.db.skinAuraSize
+	for _, want in ipairs({ 12, ns.DefaultFor("skinAuraSize"), 28 }) do
+		ns.db.skinAuraSize = want
+		ns.FrameSkin.Relayout()
+		tick()
+
+		local square = squares(rowD)[1]
+		local edge = ns.Pixel(square)
+		check(math.abs(square:GetWidth() - want * px) < 1e-6,
+			("skin aura %d drew a square %.2f wide and a pixel is %.2f")
+				:format(want, square:GetWidth(), px))
+		check(math.abs(square:GetHeight() - square:GetWidth()) < 1e-6,
+			("skin aura %d drew a square %.2f by %.2f, which is not a square")
+				:format(want, square:GetWidth(), square:GetHeight()))
+
+		-- The art, inset by one pixel on all four sides. Both corners, because
+		-- a texture takes its size from its anchors here and one corner leaves
+		-- it with no size at all, which draws nothing.
+		check(square.icon:GetNumPoints() == 2,
+			("skin aura %d left the art on %d anchors, and it needs two corners"
+				.. " to have a size"):format(want, square.icon:GetNumPoints()))
+		local top, relative, relativePoint, x, y = square.icon:GetPoint(1)
+		check(top == "TOPLEFT" and relative == square and relativePoint == "TOPLEFT"
+			and math.abs(x - edge) < 1e-6 and math.abs(y + edge) < 1e-6,
+			("skin aura %d anchored the art %s to %s at %.2f, %.2f and the inset"
+				.. " is one pixel of %.2f")
+				:format(want, tostring(top), tostring(relativePoint), x, y, edge))
+		local bottom, brelative, brelativePoint, bx, by = square.icon:GetPoint(2)
+		check(bottom == "BOTTOMRIGHT" and brelative == square
+			and brelativePoint == "BOTTOMRIGHT"
+			and math.abs(bx + edge) < 1e-6 and math.abs(by - edge) < 1e-6,
+			("skin aura %d anchored the far corner of the art %s to %s at %.2f,"
+				.. " %.2f"):format(want, tostring(bottom),
+					tostring(brelativePoint), bx, by))
+
+		-- And the hairline round it, which is the other thing that goes quiet
+		-- rather than wrong: an edge sized to nothing is an edge the client
+		-- does not draw and does not complain about.
+		check(math.abs(square.edges[1]:GetHeight() - edge) < 1e-6,
+			("skin aura %d drew a hairline %.2f tall and a pixel is %.2f")
+				:format(want, square.edges[1]:GetHeight(), edge))
+
+		-- And it still has its art after the resize, because the guard in
+		-- ns.UI.Aura writes the texture once and a square that lost it on a
+		-- relayout would never be handed it again.
+		check(square.shownIcon == "bleed",
+			("skin aura %d left square one holding %s")
+				:format(want, tostring(square.shownIcon)))
+	end
+	ns.db.skinAuraSize = held
+	ns.FrameSkin.Relayout()
+	tick()
+end
+
 -- Off, and neither frame then has a row at all. That is the honest answer
 -- rather than an oversight: each frame is its block, so handing the client's
 -- row back would hang it in the gauge. Only the skin coming off gives it back,

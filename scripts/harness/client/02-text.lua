@@ -197,7 +197,20 @@ end
 -- and places the whole block on the first of them. With GetNumPoints answering
 -- nothing the snapshot recorded nothing, the block fell to its fallback anchor,
 -- and the one conversion in the file that matters was never exercised.
+--
+-- Both shapes the client takes, because the addon writes both and this used to
+-- record only one. SetPoint("TOPLEFT", x, y) means the parent's own corner at
+-- that offset, and it is what every inset in the addon is written as; stored
+-- as it arrived, the offsets landed in the fields GetPoint hands back as the
+-- relative frame and the relative point, so an anchor read back out of here
+-- was two numbers where a frame belonged and no offset at all. Anything
+-- asserting on an inset was asserting on zero.
 function Region:SetPoint(point, relative, relativePoint, x, y)
+	if type(relative) == "number" then
+		relative, relativePoint, x, y = self.parent, point, relative, relativePoint
+	elseif type(relativePoint) == "number" then
+		relativePoint, x, y = point, relativePoint, x
+	end
 	self.points = self.points or {}
 	self.points[#self.points + 1] = { point, relative, relativePoint, x or 0, y or 0 }
 end
