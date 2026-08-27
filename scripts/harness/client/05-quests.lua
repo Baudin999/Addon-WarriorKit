@@ -344,6 +344,20 @@ _G.WarriorKitDriver = function(frame, state)
 	return nil
 end
 
+-- How many drivers are registered for that frame and state. One, always: a
+-- visibility driver registered twice on one frame is two answers to the same
+-- question and the client keeps both, which is exactly the leak a re-apply
+-- would cause and exactly the leak nothing on screen would show.
+_G.WarriorKitDrivers = function(frame, state)
+	local count = 0
+	for index = 1, #drivers do
+		if drivers[index].frame == frame and drivers[index].state == state then
+			count = count + 1
+		end
+	end
+	return count
+end
+
 -- One state transition, as the client would deliver it.
 _G.WarriorKitDriveState = function(frame, state, newstate)
 	local body = frame:GetAttribute("_onstate-" .. state)
@@ -403,7 +417,17 @@ _G.GetBindingAction = function(key, checkOverride)
 	local held = checkOverride and overrides[key]
 	return held and held.action or ""
 end
-_G.IsControlKeyDown, _G.IsShiftKeyDown, _G.IsAltKeyDown = constant(false), constant(false), constant(false)
+_G.IsControlKeyDown, _G.IsAltKeyDown = constant(false), constant(false)
+
+-- Shift, readable rather than constant, because the cloned bars carry a lock of
+-- their own and the key is what unlocks it. A drag handle that only comes up
+-- while shift is held cannot be tested against a false that never moves.
+local shift = false
+_G.IsShiftKeyDown = function() return shift end
+_G.WarriorKitShift = function(down)
+	shift = down and true or false
+	return shift
+end
 
 -- Which stance you are standing in, and which bonus bar page the client has bar
 -- 1 on because of it. Both are readable rather than constant, because

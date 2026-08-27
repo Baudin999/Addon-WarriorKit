@@ -35,11 +35,13 @@ local Which = ns.WhichBars
 --   off your own bars: one you have on is one we clone. This file builds what
 --   that question returns and hands back what it does not.
 --
--- The geometry is source code and not a setting. This is a personal addon for
--- one person who wants the same interface on every install, so the plan is a
--- table in git exactly the way Layout.BAR1 is, and changing it is an edit and a
--- reload. The one saved setting is the master switch, because a feature with no
--- setting has no status line and no panel row.
+-- Where a bar sits and what shape it is are two different answers and neither
+-- is in this file. Buttons/Placing.lua owns the position, because a position is
+-- the one thing you cannot sensibly type. Buttons/Look.lua owns the rest of the
+-- bar you can see: how many rows the twelve break into, what colour the ground
+-- under them is, how much of it there is, and whether the bar is on screen in
+-- combat or only while a key is held. This file asks that one what to draw and
+-- draws it.
 --
 -- What the client will not let this file do, and how each is answered:
 --
@@ -260,6 +262,7 @@ local function BuildBar(entry)
 	end
 
 	ns.BarPlace.Handle(entry)
+	ns.BarLook.Paint(entry)
 end
 
 -- Lay one bar out and put it where the plan says. Called at build and again on
@@ -269,12 +272,16 @@ end
 -- needs a width to wrap against and a width here would be the same arithmetic
 -- stated a second time, in a second place, ready to disagree.
 local function Arrange(entry)
-	local def = entry.def
+	-- The shape is a setting, so it is asked for on every layout rather than
+	-- read off the plan once. Buttons/Look.lua answers the plan's own columns
+	-- for a bar nobody has reshaped, which is what makes this the same call in
+	-- both cases.
+	local columns = ns.BarLook.Columns(entry.def)
 	local rows = { direction = "column", gap = GAP, pad = PAD }
 	local row
 
 	for index = 1, PER_BAR do
-		if (index - 1) % def.columns == 0 then
+		if (index - 1) % columns == 0 then
 			row = { direction = "row", gap = GAP }
 			rows[#rows + 1] = row
 		end
@@ -473,6 +480,31 @@ function Bars.ResetPlacing()
 	return ns.BarPlace.Reset(order)
 end
 
+-- Every standing bar drawn again to what Buttons/Look.lua now says: the twelve
+-- folded into their rows, the ground under them repainted, and the client told
+-- again when each of them is allowed on the screen.
+--
+-- Refused in lockdown for the reason every other entry point in this file is.
+-- Laying a bar out moves twelve secure buttons, and a state driver is not
+-- something this addon registers in combat either. It comes back at
+-- PLAYER_REGEN_ENABLED with the rest of the deferred work.
+function Bars.Restyle()
+	if InCombatLockdown() then
+		pending = true
+		return false
+	end
+	for index = 1, #order do
+		local entry = order[index]
+		Arrange(entry)
+		ns.BarLook.Paint(entry)
+		ns.BarLook.Watch(entry)
+	end
+	-- A bar the client has just taken off the screen must not leave a drag
+	-- handle floating where it was.
+	ns.BarPlace.Lock(order)
+	return true
+end
+
 --------------------------------------------------------------------------
 -- On and off
 --------------------------------------------------------------------------
@@ -569,6 +601,11 @@ function Bars.Apply()
 	for index = 1, #Which.PLAN do
 		local entry = built[Which.PLAN[index].key]
 		if entry then
+			-- The client holds a bar's visibility while a driver is on it, so
+			-- the driver is handed back before the frame goes down. Left on, the
+			-- next time its macro changed its mind the client would show a bar
+			-- this addon had already taken away.
+			ns.BarLook.Unwatch(entry)
 			entry.frame:Hide()
 		end
 	end
@@ -581,7 +618,13 @@ function Bars.Apply()
 
 	live = #order > 0
 	for index = 1, #order do
-		order[index].frame:Show()
+		local entry = order[index]
+		entry.frame:Show()
+		-- Shown first and driven second. Registering the driver is what asks
+		-- the client to decide, so a bar that is only up while a key is held is
+		-- put up here and taken down again by the client on the same pass,
+		-- rather than being left up by us until the first time you press one.
+		ns.BarLook.Watch(entry)
 	end
 
 	-- Exactly the buttons the bars that are up stand over, and every other one
@@ -671,6 +714,10 @@ function Bars.Describe()
 	end
 	if order[1].def.pages and not paging then
 		line = line .. "; no state driver, so bar 1 pages only out of combat"
+	end
+	local hours = ns.BarLook.Summary(order)
+	if hours then
+		line = line .. "; " .. hours
 	end
 	if Which.Decided() > 0 then
 		line = line .. ("; %d bar%s picked by hand rather than off your own"):format(

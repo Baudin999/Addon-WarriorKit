@@ -78,6 +78,39 @@ local function SetBar(def, value)
 	ns.Options.Refresh()
 end
 
+-- One bar's shape, colour or hours changed, and the screen made to agree.
+--
+-- Every control on the page below ends here, because all six of them are one
+-- job: write the record in Buttons/Look.lua and lay the standing bars out
+-- again. Restyle refuses in combat and says so, the same as everything else in
+-- this part that touches a secure frame.
+local function Restyle()
+	if not ns.Bars.Restyle() then
+		ns.Print("part of that needs combat to end first, and will run then.")
+	end
+	ns.Options.Refresh()
+end
+
+-- Which bar the page is showing. The tab strip picks it and every control on
+-- the page reads it, so a control is written once rather than five times.
+local function Chosen()
+	return ns.BarLook.Chosen()
+end
+
+-- Every per-bar look dropped, so all five are the plan again. The counterpart
+-- of Match on the rows above, and a deletion for the same reason: the shipping
+-- state has no records in it.
+local function Plain()
+	local dropped = ns.BarLook.Plain()
+	if dropped == 0 then
+		ns.Print("every bar is already the plain shape the plan draws.")
+	else
+		ns.Print(("dropped the look on %d bar%s, back to the plain shape."):format(
+			dropped, dropped == 1 and "" or "s"))
+	end
+	Restyle()
+end
+
 -- Back to cloning whatever you have on, which is the shipping state and is what
 -- makes this feature quick to start with: no list to tick, no bar to place, the
 -- bars you already had with the keys you already set.
@@ -140,6 +173,166 @@ local function Trace()
 	end
 end
 
+-- The page for one bar at a time
+--
+-- Five bars times six controls is thirty rows, and thirty rows is a page you
+-- search rather than read. So the strip picks a bar and one set of controls
+-- answers for whichever is in front, which is the shape the loadouts page and
+-- the people page already have.
+--
+-- Its own function rather than forty more lines inside `panel`, along the seam
+-- the file already has: everything in here is about one bar and nothing in here
+-- is about the loadout, the clone as a whole or the spell ranks.
+local function EachBarPage(ui)
+	ui.Section("Each bar", "Fighting")
+	ui.Lede("What one bar looks like: how the twelve fold, what they stand on, and when it is on the screen.")
+
+	ui.Tabs(
+		function()
+			local labels = {}
+			for index, def in ipairs(ns.WhichBars.PLAN) do
+				labels[index] = def.tab
+			end
+			return labels
+		end,
+		ns.BarLook.Shown,
+		function(index) ns.BarLook.Show(index) end)
+
+	ui.Check("clone this bar",
+		function() return ns.WhichBars.Wanted(Chosen()) end,
+		function(value) SetBar(Chosen(), value) end)
+
+	ui.Count("rows", ns.BarLook.ROWS[1], ns.BarLook.ROWS[#ns.BarLook.ROWS],
+		function() return ns.BarLook.Rows(Chosen()) end,
+		function(value)
+			ns.BarLook.StepRows(Chosen(), value)
+			Restyle()
+		end)
+	ui.Hint("Twelve buttons, so the shapes are 1, 2, 3, 4, 6 and 12 rows and the stepper walks between them. One row is a bar and twelve is a column down the side.")
+
+	ui.Picker("colour",
+		function() return ns.BarLook.Color(Chosen()) end,
+		function(value)
+			ns.BarLook.SetColor(Chosen(), value)
+			Restyle()
+		end,
+		function()
+			local options = {}
+			for index, entry in ipairs(ns.BarLook.PALETTE) do
+				options[index] = { value = entry.key, text = entry.label }
+			end
+			return options
+		end)
+
+	ui.Opacity("background",
+		function() return ns.BarLook.Alpha(Chosen()) end,
+		function(value)
+			ns.BarLook.SetAlpha(Chosen(), value)
+			Restyle()
+		end)
+	ui.Hint("The colour is the ground under the squares and this is how much of it you see. At nothing the hairline goes too and the squares stand on the world.")
+
+	ui.Check("down in combat",
+		function() return ns.BarLook.Combat(Chosen()) end,
+		function(value)
+			ns.BarLook.SetCombat(Chosen(), value)
+			Restyle()
+		end)
+	ui.Hint("The client hides it for us, because a bar full of secure buttons cannot be hidden from Lua once a fight has started. Its keys go on working while it is down.")
+
+	ui.Picker("up while holding",
+		function() return ns.BarLook.Key(Chosen()) end,
+		function(value)
+			ns.BarLook.SetKey(Chosen(), value)
+			Restyle()
+		end,
+		function()
+			local options = {}
+			for index, entry in ipairs(ns.BarLook.KEYS) do
+				options[index] = { value = entry.key, text = entry.label }
+			end
+			return options
+		end)
+	ui.Hint("A key hides the bar until you hold it, in a fight or out of one, so a bar waiting on one leaves the switch above nothing to decide.")
+
+	ui.Check("lock the bars",
+		function() return ns.db.barsLocked end,
+		function(value)
+			ns.db.barsLocked = value and true or false
+			ns.Bars.ApplyLock()
+			ns.Print("bars " .. (ns.db.barsLocked and "locked."
+				or "loose: hold shift and drag one."))
+			ns.Options.Refresh()
+		end)
+	ui.Hint("Locked, a bar moves only while /wk unlock has every frame loose. Unlocked, hold shift to drag one, and a shift-click over a bar belongs to the bar while you hold it.")
+
+	ui.Action(
+		function() return "back to the plain bars" end,
+		Plain,
+		function() return ns.BarLook.Decided() > 0 end)
+
+	ui.Reading("this bar", function() return ns.BarLook.Shape(Chosen()) end)
+	ui.Reading("on screen", function() return ns.BarLook.Hours(Chosen()) end)
+end
+
+-- The words that set one bar's look
+--
+-- Five settings, each `actionbars <word> <bar> <value>`, split out of the
+-- dispatcher below because they share every line of their parsing: which bar,
+-- then what to do to it. The bar is named by the plan's key or by the label the
+-- tab strip carries, so both `bottomleft` and "bottom left" arrive here.
+--
+-- Returns false for a word this does not own, so the caller can go on to its
+-- own list rather than this one having to know it.
+local function LookWord(word, rest)
+	local ROWS = ns.BarLook.ROWS
+	if word ~= "rows" and word ~= "colour" and word ~= "background"
+		and word ~= "combat" and word ~= "key" then
+		return false
+	end
+
+	local name, value = rest:match("^(%S*)%s*(.-)%s*$")
+	local def = ns.BarLook.Find(name)
+	if not def then
+		ns.Print("name a bar: bar1, bottomleft, bottomright, right or right2.")
+		return true
+	end
+
+	local ok = false
+	if word == "rows" then
+		local rows = ns.Command.Number(value, ROWS[1], ROWS[#ROWS], "rows")
+		ok = rows ~= nil and ns.BarLook.SetRows(def, rows)
+		if rows and not ok then
+			ns.Print("twelve buttons make 1, 2, 3, 4, 6 or 12 rows and nothing else.")
+		end
+	elseif word == "colour" then
+		ok = ns.BarLook.SetColor(def, value)
+		if not ok then
+			ns.Print("colour takes one of: " .. ns.BarLook.Colours() .. ".")
+		end
+	elseif word == "background" then
+		local alpha = ns.Command.Step(value, ns.UI.ALPHA_LOW, ns.UI.ALPHA_HIGH,
+			ns.UI.ALPHA_STEP, "background")
+		ok = alpha ~= nil and ns.BarLook.SetAlpha(def, alpha)
+	elseif word == "combat" then
+		-- `actionbars combat bar1 on` reads as "combat: on", which is the bar
+		-- going down when one starts. Off is the shipping answer.
+		ok = ns.BarLook.SetCombat(def, ns.Command.Toggle(value))
+	elseif word == "key" then
+		ok = ns.BarLook.SetKey(def, value)
+		if not ok then
+			ns.Print("key takes one of: " .. ns.BarLook.Keys() .. ".")
+		end
+	end
+
+	if ok then
+		Restyle()
+		ns.Print(def.label .. ": " .. ns.BarLook.Shape(def)
+			.. ", " .. ns.BarLook.Hours(def) .. ".")
+	end
+	return true
+end
+
 ns.Register({
 	name = "buttons",
 	order = 5,
@@ -165,6 +358,22 @@ ns.Register({
 		-- prints it in the plan's own shape to paste in, and `actionbars reset`
 		-- drops it again once you have.
 		barPoints = {},
+
+		-- What each bar looks like and when it is up, keyed by the plan's bar
+		-- key: the rows the twelve fold into, the colour and the opacity of the
+		-- ground under them, whether the bar goes down in combat and which key
+		-- holds it up. Empty is the normal state and means every bar is the
+		-- plan's own shape in the window colour, always up. Buttons/Look.lua
+		-- owns every one of those answers and the defaults behind them.
+		barLook = {},
+
+		-- Whether the cloned bars can be dragged with shift alone. On is the
+		-- shipping answer and means they move only while every frame in the
+		-- addon is unlocked, which is what /wk unlock does. Off means holding
+		-- shift puts a drag handle over each bar for as long as you hold it, and
+		-- a shift-click on a square goes to that handle rather than to the
+		-- square while it is up. That cost is why this is a setting.
+		barsLocked = true,
 
 		-- Which bars are cloned, keyed by the plan's bar key. Empty is the
 		-- normal state and means every bar follows your own: one you have on is
@@ -199,6 +408,12 @@ ns.Register({
 		-- Not "bars": the enemy bars part claimed that word years ago and Core
 		-- asserts at login that no two features share one.
 		actionbars = function(arg)
+			-- The two word forms first, because everything below is one word and
+			-- a look word carries a bar name and a value after it.
+			local head, rest = arg:match("^(%S*)%s*(.-)%s*$")
+			if LookWord(head, rest) then
+				return
+			end
 			if arg == "on" or arg == "off" then
 				SetBars(ns.Command.Toggle(arg))
 			elseif arg == "where" then
@@ -207,6 +422,13 @@ ns.Register({
 				Match()
 			elseif arg == "trace" then
 				Trace()
+			elseif arg == "plain" then
+				Plain()
+			elseif arg == "lock" or arg == "unlock" then
+				ns.db.barsLocked = arg == "lock"
+				ns.Bars.ApplyLock()
+				ns.Print("bars " .. (ns.db.barsLocked and "locked."
+					or "loose: hold shift and drag one."))
 			elseif arg == "reset" then
 				local dropped = ns.Bars.ResetPlacing()
 				ns.Print(dropped == 0 and "nothing was dragged, so the plan was already what you see."
@@ -217,6 +439,8 @@ ns.Register({
 				ns.Print("actionbars on clones every bar you have, with its keys, and hides Blizzard's. actionbars off gives them back.")
 				ns.Print("tick bars one at a time in the panel, or actionbars match to follow your own again.")
 				ns.Print("/wk unlock to drag them, actionbars where to print what you dragged, actionbars reset to undo it.")
+				ns.Print("actionbars rows|colour|background|combat|key <bar> <value> shapes one bar. actionbars plain drops the lot.")
+				ns.Print("actionbars unlock to drag them with shift held, actionbars lock to stop that.")
 				ns.Print("actionbars trace when a square will not take a drop: it prints what the mouse is really touching.")
 			end
 		end,
@@ -250,6 +474,9 @@ ns.Register({
 		"actionbars on|off, our own bars over Blizzard's, same slots and same keys",
 		"actionbars match, back to cloning whichever bars you have on",
 		"actionbars where, actionbars reset, after dragging them with /wk unlock",
+		"actionbars rows|colour|background|combat|key <bar> <value>, one bar's shape, ground and hours",
+		"actionbars plain, every bar back to the plan's own shape",
+		"actionbars lock|unlock, whether shift and a drag moves a bar",
 		"actionbars trace, what the mouse is really touching, for a square that will not take a drop",
 		"ranks, ranks refresh",
 	},
@@ -326,6 +553,8 @@ ns.Register({
 			local decided = ns.WhichBars.Decided()
 			return decided == 0 and "none" or (decided .. " of the rows above")
 		end)
+
+		EachBarPage(ui)
 
 		ui.Section("Spell ranks", "Fighting")
 		ui.Lede("Moves any spell on a bar that is holding an old rank up to the best one you know.")

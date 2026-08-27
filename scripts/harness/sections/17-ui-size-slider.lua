@@ -54,9 +54,10 @@ if window then
 		end
 	end
 	check(size ~= nil, "no UI size slider was built, so the client refused the Slider type")
-	check(sliders == 6,
-		("%d sliders in the panel, expected the UI size, the debuff icon and four"
-			.. " backgrounds: the meters, the chat window and one per feed")
+	check(sliders == 7,
+		("%d sliders in the panel, expected the UI size, the debuff icon and five"
+			.. " backgrounds: the meters, the chat window, one per feed and the"
+			.. " bar this page of the buttons part is showing")
 			:format(sliders))
 
 	if size then

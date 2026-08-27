@@ -161,6 +161,15 @@ Buttons\Blizzard.lua
 # a tick box per bar, and because the plan is the one part of the bars that is
 # source code rather than a setting.
 Buttons\Which.lua
+
+# What one bar looks like and when it is on the screen: the rows the twelve
+# fold into, the colour and the opacity of the ground under them, and whether
+# the bar goes down in combat or waits on a key. After Which.lua, whose plan
+# holds the default shape of every bar, and before Bars.lua, which asks this
+# file what to draw on every layout. Its own file because none of it knows what
+# an action slot is and because two of the five answers are a state driver
+# rather than a setting the addon can act on itself.
+Buttons\Look.lua
 Buttons\Bars.lua
 
 # The trace, before the squares that print through it. Read only and off unless

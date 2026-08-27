@@ -1,9 +1,10 @@
 # Handoff
 
-Items 8 and 9 are on main and neither has been confirmed in game. Two things
-have landed since and neither has been seen in the game either: the `/wk hide`
+Items 8 and 9 are on main and neither has been confirmed in game. Three things
+have landed since and none has been seen in the game either: the `/wk hide`
 switches that take the client's own copy of what this addon draws off the
-screen, and your own cast bar. That is the whole of where things stand.
+screen, your own cast bar, and the five settings per cloned action bar. That is
+the whole of where things stand.
 
 ## On main
 
@@ -23,8 +24,14 @@ screen, and your own cast bar. That is the whole of where things stand.
 - `UnitFrames/PlayerCast.lua` is your own cast bar, under the swing timer and
   the same width as it. `/wk cast on|off`, `cast width|height|zoom|reset`, its
   own section in the panel, and `hide playercast` for Blizzard's.
-- `check.sh` exits 0, luacheck 0 warnings and 0 errors across 105 files,
-  harness ok on both flavours, 37 sections.
+- `Buttons/Look.lua` is five settings per cloned bar: the rows the twelve fold
+  into, the colour and opacity of the ground under them, whether the bar goes
+  down in combat and which key holds it up. Plus the bars' own lock, which is
+  shift-dragging. `actionbars rows|colour|background|combat|key <bar> <value>`,
+  `actionbars lock|unlock`, `actionbars plain`, and a tab strip page in the
+  panel.
+- `check.sh` exits 0, luacheck 0 warnings and 0 errors across 106 files,
+  harness ok on both flavours, 38 sections.
 
 ## Item 9, as it landed
 
@@ -82,6 +89,38 @@ shipped and the performance tab has drawn a line for it, but `cast` was never in
 `ORDER`, so the row read as unavailable for the life of the feature and nothing
 said so.
 
+## The bars' shape and hours, as it landed
+
+Five settings per bar in `Buttons/Look.lua`, keyed by the plan's bar key in
+`ns.db.barLook`, and every one of them defaults to something that is not a
+setting: the plan's own columns in `Which.lua`, the window colour, and no for
+both visibility answers. A bar nobody has touched carries no record, so
+`actionbars plain` is a deletion and a fresh clone of the repo looks like the
+machine it was written on. Same shape as the tick boxes.
+
+Rows are the six numbers that divide twelve. The stepper walks between them on
+the direction of travel, because snapping to the nearest does nothing on every
+second press. Colours are eight names in source rather than three sliders, two
+of them the theme's own and six deliberately dark, because the background is the
+ground under twelve pieces of Blizzard icon art.
+
+The two that decide when a bar is up are a visibility state driver, because
+everything inside a bar is a secure button and a frame with one of those under
+it cannot be hidden in lockdown. `[combat] hide; show`, or `[mod:shift] show;
+hide`, and a key beats the combat switch rather than being read alongside it.
+`ns.BarLook.CanDrive` probes for the calls, so a client with neither leaves every
+bar up and says so.
+
+`Buttons/Placing.lua` gained the bars' own lock. Off, holding shift puts the drag
+handles up, watched off `MODIFIER_STATE_CHANGED`. It ships locked because a
+handle takes every click that lands on it.
+
+`harness/sections/38-bar-look.lua` is the section, self-contained and last in the
+run order. Writing it turned up one thing worth knowing: `22-chores.lua` had been
+replacing `IsShiftKeyDown` with a constant and leaving it replaced, so every
+section after it ran with shift welded off. It goes through the stub's own switch
+now.
+
 ## What to do next
 
 - Confirm item 8 and item 9 in game. Item 8's geometry has been looked at once
@@ -94,6 +133,15 @@ said so.
   for it. Not written up as an item yet.
 
 ## Untested against the live client
+
+The bar settings: whether a visibility state driver hides one of these bars on
+2.5.6. It is the same unknown as the page driver and reached through the same two
+calls, so a client that runs one runs the other; what is untested is the
+condition rather than the machinery. The harness asserts the macro that is
+registered and nothing about what the client does with it. To settle it: set a
+bar to go down in combat, pull something, and watch it. Shift-dragging is the
+other one to look at, because the handle eating a shift-click while it is up is
+the cost of it and is a thing you feel rather than measure.
 
 The cast bar: whether the nine `UNIT_SPELLCAST_*` names it watches fire on these
 clients, and whether `CastingBarFrame` is what they call Blizzard's own. The

@@ -100,6 +100,15 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   stance. Every icon is drawn at the one size this client can draw sharp, and
   the border says whether a press would land. Your keybindings are read and
   never written, so `off` gives everything back with no reload.
+
+  Then every bar is yours to shape. Fold its twelve into 1, 2, 3, 4, 6 or 12
+  rows, so a bar is a row along the bottom or a column down the side. Pick the
+  colour of the ground under the squares and how much of it you see, down to
+  nothing, which leaves the icons standing on the world. Send a bar off the
+  screen when a fight starts, or keep it off the screen until you hold shift,
+  ctrl or alt, with its keys working the whole time either way. Unlock the bars
+  and shift-drag one where you want it. Every bar answers for itself, and one
+  press puts the lot back to plain.
 - **Stripped bar art**, so the bars read as a row of icons. `/wk art on` puts
   the Blizzard art back.
 - **A square minimap, as wide as you asked for.** The mask and the ring come

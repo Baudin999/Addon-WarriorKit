@@ -6,10 +6,10 @@ ns.BarPlace = Place
 -- Where each cloned bar sits, and how you move it.
 --
 -- Its own file because Buttons/Bars.lua is what a bar *is* and this is where it
--- *goes*, and because the two answer to different masters. The bar's shape is
--- decided by the plan in that file and is not negotiable at runtime. Its
--- position is the one thing you cannot sensibly type, so this is the only part
--- of the bars you drive with the mouse.
+-- *goes*, and because the two answer to different masters. What shape a bar is
+-- and what colour it is drawn in are settings, in Buttons/Look.lua, and you
+-- type them. Its position is the one thing you cannot sensibly type, so this is
+-- the only part of the bars you drive with the mouse.
 --
 -- The drag handle here is the third in the addon, after Charge/Icon.lua and
 -- Meter/Window.lua. If a fourth turns up it belongs in the UI layer as one
@@ -17,6 +17,22 @@ ns.BarPlace = Place
 -- their second copy. Three is the point at which that becomes worth saying out
 -- loud and not yet the point at which Meter's version, which enables the mouse
 -- on the frame itself rather than laying a handle over it, is worth rewriting.
+--
+-- Two locks reach these bars and they answer different questions.
+--
+--   `ns.db.locked` is the addon's. /wk unlock puts every frame in the addon
+--   into placing mode at once, and every handle in here comes up with it.
+--
+--   `ns.db.barsLocked` is the bars' own, and it is what shift-dragging is. On,
+--   which is the shipping answer, a bar cannot be moved at all without the
+--   command above. Off, holding shift puts the handles up for as long as you
+--   hold it, so a bar can be nudged mid-session without a command and without
+--   leaving every other frame in the addon unlocked while you do it.
+--
+-- The cost of the second one is stated rather than hidden: a handle is a frame
+-- laid over the whole bar and it takes every click that lands on it, so while
+-- shift is down a shift-click on a square goes to the handle instead of to the
+-- square. That is why it is a setting and why the setting ships off.
 
 -- How deep a bar stands, which is the other half of where it is.
 --
@@ -90,7 +106,25 @@ local function Whole(value)
 	return math.floor(value + 0.5)
 end
 
--- A plain frame laid over the bar, shown only while the frames are unlocked.
+-- Whether the bars can be moved right now, which is also the answer to whether
+-- their handles are up.
+--
+-- IsShiftKeyDown is asked here rather than tracked, because the event below is
+-- what makes the handles agree with it and this is what the drag itself checks.
+-- A key released between the two is a drag that refuses, which is the safe way
+-- round.
+function Place.Loose()
+	if not ns.db.locked then
+		return true
+	end
+	if ns.db.barsLocked then
+		return false
+	end
+	return type(IsShiftKeyDown) == "function" and IsShiftKeyDown() and true or false
+end
+
+-- A plain frame laid over the bar, shown while the frames are unlocked or,
+-- where the bars have been let loose on their own, while shift is held.
 --
 -- The two jobs cannot share one frame, which is the note Charge/Icon.lua
 -- already carries and is more true here. Everything inside a bar is a secure
@@ -108,7 +142,7 @@ function Place.Handle(entry)
 	entry.handle = handle
 
 	handle:SetScript("OnDragStart", function()
-		if not ns.db.locked and not InCombatLockdown() then
+		if Place.Loose() and not InCombatLockdown() then
 			entry.frame:StartMoving()
 		end
 	end)
@@ -134,6 +168,8 @@ function Place.Handle(entry)
 		GameTooltip:SetOwner(self, "ANCHOR_TOP")
 		GameTooltip:AddLine(entry.def.label)
 		GameTooltip:AddLine("drag to move it", 0.8, 0.8, 0.8)
+		GameTooltip:AddLine(ns.BarLook.Shape(entry.def), 0.8, 0.8, 0.8)
+		GameTooltip:AddLine(ns.BarLook.Hours(entry.def), 0.8, 0.8, 0.8)
 		GameTooltip:AddLine("/wk actionbars where prints it for the plan", 0.8, 0.8, 0.8)
 		GameTooltip:Show()
 	end)
@@ -144,15 +180,44 @@ end
 
 -- Show or hide every handle. Registered as the buttons feature's `lock`, so
 -- /wk unlock reaches the bars the same way it reaches the charge icon and the
--- meters.
+-- meters, and called again on every shift press once the bars are loose.
+--
+-- The order it was last given is kept, because the modifier below arrives as an
+-- event rather than as a call from Bars.lua and has to reach the same bars.
+-- Buttons/Bars.lua empties and refills that table rather than replacing it, so
+-- what is held here cannot go stale.
+local placed = {}
+
 function Place.Lock(order)
+	placed = order
+	local loose = Place.Loose()
 	for index = 1, #order do
-		local handle = order[index].handle
-		if handle then
-			handle:SetShown(not ns.db.locked)
+		local entry = order[index]
+		if entry.handle then
+			-- Not on a bar the client has taken off the screen. A handle over a
+			-- bar that is only up while a key is held would be a rectangle you
+			-- can drag with nothing inside it.
+			entry.handle:SetShown(loose and entry.frame:IsShown())
 		end
 	end
 end
+
+-- Shift, watched, so the handles can follow it.
+--
+-- Registered always and answered only while the bars are loose, because the
+-- event is two lines of work on a key almost nobody holds by accident and the
+-- alternative is registering and unregistering an event from a setter. It is
+-- also the reason this is MODIFIER_STATE_CHANGED rather than a ticker: the
+-- client already knows, and an OnUpdate asking IsShiftKeyDown ten times a
+-- second would be a ticker the addon then has to defend forever.
+local keys = CreateFrame("Frame")
+keys:RegisterEvent("MODIFIER_STATE_CHANGED")
+keys:SetScript("OnEvent", function(_, _, key)
+	if ns.db and not ns.db.barsLocked and ns.db.locked
+		and type(key) == "string" and key:find("SHIFT") then
+		Place.Lock(placed)
+	end
+end)
 
 -- The plan lines for wherever the bars are standing now, ready to paste over
 -- the geometry in Buttons/Bars.lua.

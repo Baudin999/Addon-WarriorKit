@@ -176,10 +176,14 @@ check(misused == 0, "the sale used something instead of selling it")
 -- myself" everywhere else at a merchant.
 refill()
 _G.MerchantFrame:Show()
-_G.IsShiftKeyDown = constant(true)
+-- Through the stub's own switch rather than by replacing the call. Replaced,
+-- the reader stays replaced for every section after this one, and the bars'
+-- own lock is shift too: 38-bar-look asked for a key that had been a constant
+-- false since this line ran.
+_G.WarriorKitShift(true)
 fire("MERCHANT_SHOW")
 check(not ns.Vendor.Running(), "shift did not hold the sale off")
-_G.IsShiftKeyDown = constant(false)
+_G.WarriorKitShift(false)
 
 ns.db.sellTrash = false
 ns.Vendor.Apply()
@@ -278,10 +282,10 @@ state.repairsMerchant = true
 -- Shift holds it off, the same key that holds the sale off.
 damage(400)
 state.purse = 1000
-_G.IsShiftKeyDown = constant(true)
+_G.WarriorKitShift(true)
 fire("MERCHANT_SHOW")
 check(state.repairBill == 400, "shift did not hold the repair off")
-_G.IsShiftKeyDown = constant(false)
+_G.WarriorKitShift(false)
 
 -- Off is a branch inside the handler, and deliberately not an unregister.
 -- The repair keeps both edges of the merchant window whatever the setting

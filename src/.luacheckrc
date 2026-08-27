@@ -139,7 +139,8 @@ globals = {
 read_globals = {
 	"CreateFrame", "UIParent", "WorldFrame", "GameFontNormal", "DEFAULT_CHAT_FRAME",
 	"GameTooltip", "GameFontHighlightSmall", "GetBindingAction",
-	"RegisterStateDriver", "SetOverrideBindingClick", "ClearOverrideBindings",
+	"RegisterStateDriver", "UnregisterStateDriver",
+	"SetOverrideBindingClick", "ClearOverrideBindings",
 	"UISpecialFrames", "tinsert", "pcall",
 	-- the client's own menu, and the call that takes a frame off its panel
 	-- stack. Core/Menu.lua adds one button to the first and closes it with

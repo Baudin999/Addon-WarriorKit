@@ -132,8 +132,16 @@ name of none of them.
     Buttons/Slot.lua         what one action slot is doing, as one of ten statuses
     Buttons/Layout.lua       the warrior loadout, and the backup of what it replaced
     Buttons/Ranks.lua        moves bar slots up to the best rank you know
+    Buttons/Which.lua        which bars this client can have, and which of them
+                             you want cloned
+    Buttons/Look.lua         what one bar looks like and when it is up: the rows
+                             the twelve fold into, the colour and opacity of the
+                             ground under them, whether it goes down in combat
+                             and which key holds it up
     Buttons/Bars.lua         a clone of every action bar you have, on the same
                              slots and the same keys, with Blizzard's hidden
+    Buttons/Placing.lua      where each cloned bar sits, and the handle you drag
+                             it by
     Buttons/Feature.lua
 
     UnitFrames/Plates.lua    the client settings that decide where a plate goes
@@ -594,7 +602,31 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Bars.Count() / Hidden() / Keys()   squares drawn, Blizzard buttons
                                  hidden, and keys the override layer took
     ns.Bars.Short(key)           a binding shortened to fit a 27 pixel square
+    ns.Bars.Restyle()            lay every standing bar out again to what
+                                 ns.BarLook says; false when combat deferred it
     ns.Bars.Describe()           one line for /wk status and the panel
+    ns.WhichBars.PLAN            every bar this client can have, in draw order
+    ns.WhichBars.Wanted(def) / Want(key, value) / Follow() / Decided()
+                                 which of them we clone: the saved answer, or
+                                 your own interface options where there is none
+    ns.BarLook.Rows(def) / Columns(def)   the shape one bar is drawn in, the
+                                 plan's own columns where nothing is saved
+    ns.BarLook.SetRows(def, n) / StepRows(def, n)   one of the six shapes twelve
+                                 makes, set outright or walked up and down
+    ns.BarLook.Color(def) / Tint(def) / SetColor(def, key)
+    ns.BarLook.Alpha(def) / SetAlpha(def, percent)
+    ns.BarLook.Paint(entry)      the ground under one bar's squares, painted
+    ns.BarLook.Combat(def) / Key(def) / SetCombat / SetKey
+                                 when the bar is on the screen
+    ns.BarLook.Visibility(def)   the macro the client evaluates for it, or nil
+    ns.BarLook.Watch(entry) / Unwatch(entry) / CanDrive()
+                                 hand one bar's visibility to the client, take it
+                                 back, and whether this client can do it at all
+    ns.BarLook.Shape(def) / Hours(def) / Summary(order)   the two readings on the
+                                 panel's page, and one line across every bar
+    ns.BarLook.Find(word) / Plain() / Decided()
+    ns.BarPlace.Loose()          whether a bar can be dragged right now: every
+                                 frame unlocked, or the bars loose and shift held
     ns.Layout.SlotOf(name)       which action slot one of Blizzard's buttons drives
     ns.Layout.CanWrite()         the action API is here, combat is not, cursor is empty
     ns.Layout.CanApply()         that, and you are a warrior
@@ -2117,6 +2149,85 @@ crash until the next `/reload`, which is why applying says so.
 *Macros.* Five, prefixed `WK `, created per character. Restore deletes exactly
 the ones it created, by name, and leaves anything you renamed alone. Applying
 checks for free macro slots before it starts.
+
+**Our own bars.** `/wk actionbars on` reads whichever action bars you have up,
+stands one of ours up for each of them on the same action slots, moves your keys
+onto it with an override binding and hides Blizzard's twelve behind it. Nothing
+in it invents a slot space, a key or a bar: `Buttons/Which.lua` holds the plan of
+the five bars this client can have and answers which of them you want, and the
+shipping answer is read off your own interface options, so turning the feature on
+gives you back the interface you already had.
+
+What is negotiable at runtime is what one bar looks like and when it is up. Five
+settings per bar, in `Buttons/Look.lua`, keyed by the plan's bar key, and every
+one of them defaults to something that is not a setting: the plan's own columns,
+the window colour every other surface in the addon is painted in, and no for both
+visibility answers. A bar nobody has touched therefore has no record at all,
+`ns.db.barLook` is empty on a fresh install, and `actionbars plain` is a deletion
+rather than a write. That is `Which.lua`'s shape for the tick boxes and the
+argument is the same one: the shipping state travels with a clone of the repo,
+and a saved variable that merely restates it is one that can drift from it.
+
+*Rows.* Six shapes and not twelve, because 1, 2, 3, 4, 6 and 12 are the numbers
+that divide twelve and a last row with a gap on the end of it is a bar and a
+stump. One row is the bar every client ships. Twelve is a column down the side of
+the screen. The stepper in the panel counts in ones and walks between the six on
+the direction of travel: up takes the next shape above the one you are standing
+in, down takes the next below. Snapping to the nearest instead is a control that
+does nothing on every second press, because +1 from four lands on five and five
+is nearer four than six. A typed number that is not a shape is refused rather
+than rounded, which is `ns.Command.Number`'s rule everywhere else in the addon.
+
+*Colour and opacity.* Eight named colours rather than three sliders, for the
+reason the geometry in `Which.lua` is source code: this is an addon for one
+person who wants the same interface on every install, and a colour you dialled in
+lives in one WTF folder. Two of the eight are the theme's own, so a bar left alone
+matches every other surface the addon paints; the other six are deliberately dark
+and flat, because this is the ground under twelve pieces of Blizzard icon art and
+anything with saturation in it fights the art rather than holding it. The opacity
+is the one control the addon already had three of, so it is `ui.Opacity` and runs
+0 to 100 in fives like the others. At nothing the hairline goes with the
+background, which is `Feeds/Stream.lua`'s rule: a rectangle of hairline round
+nothing is a window frame with no window in it.
+
+*When a bar is on the screen.* Two settings, and neither can be done from Lua at
+all. Everything inside a bar is a secure button, so the frame cannot be shown or
+hidden while the client is in lockdown, and combat starting is exactly the moment
+you want it to go. So both are a visibility state driver: the addon hands the
+client a macro and the client evaluates it inside the restricted environment and
+does the hiding on its own account. `[combat] hide; show` for a bar that goes
+down in a fight, `[mod:shift] show; hide` for one that is up only while a key is
+held. Same machinery as the page driver in `Bars.lua` and the charge key's
+binder, probed the same way, and `ns.BarLook.CanDrive` reports whether this
+client has it. A bar's keys go on working while it is off the screen, which is
+the point of a bar you only look at sometimes.
+
+A key beats the combat switch rather than being read alongside it, and that is a
+decision rather than a shortcut. A bar you hold a key for is down unless you are
+holding the key, in a fight or out of one, so there is nothing left for a combat
+rule to decide. `[mod:shift] show; [combat] hide; show` would mean a bar that is
+up all the time except in combat, which is the other setting wearing this one's
+name.
+
+The driver is registered on the bar's frame and always through `Unwatch` first,
+because a driver registered twice on one frame is two answers to the same
+question and the client keeps both. Handing a bar back drops it: left on, the
+client would go on deciding when to show a bar this addon had already given up.
+
+*The bars' own lock.* `ns.db.barsLocked` ships on, and on means a bar moves only
+while `/wk unlock` has every frame in the addon loose. Off means holding shift
+puts a drag handle over each bar for as long as you hold it, watched through
+`MODIFIER_STATE_CHANGED` rather than through a ticker asking `IsShiftKeyDown` ten
+times a second. The cost is stated rather than hidden: a handle is a frame laid
+over the whole bar and it takes every click that lands on it, so while shift is
+down a shift-click on a square goes to the handle instead of to the square. That
+is why it is a setting and why the setting ships off.
+
+*The panel page.* One tab strip and one set of controls, rather than five bars
+times six controls down a page, which is thirty rows to find one in. The strip
+picks a bar and every control answers for whichever is in front, which is the
+shape the loadouts page and the people page already have. Which tab is in front
+is not a saved setting, the same as `ns.People.Shown`.
 
 **Options panel.** `/wk` with nothing after it opens it, Escape closes it, and
 every row has a slash command behind it so nothing is only reachable by mouse.
@@ -4288,6 +4399,19 @@ and a row with nothing on it costs one comparison.
     /wk switch TAB               next enemy and swing at it, override binding only
     /wk switch none              hand that key back
     /wk actionbars on|off        our own bars over Blizzard's, same slots, same keys
+    /wk actionbars match         back to cloning whichever bars you have on
+    /wk actionbars where         the plan lines for wherever you dragged them
+    /wk actionbars reset         drop every dragged position
+    /wk actionbars lock|unlock   whether shift and a drag moves a bar
+    /wk actionbars rows bar1 3   1, 2, 3, 4, 6 or 12 rows of the twelve
+    /wk actionbars colour bar1 blue      window, black, slate, steel, blue,
+                                 green, red or purple
+    /wk actionbars background bar1 40    that colour's opacity, 0 to 100 in fives
+    /wk actionbars combat bar1 on        the bar goes down when a fight starts
+    /wk actionbars key bar1 shift        up only while that key is held
+    /wk actionbars plain         every bar back to the plan's own shape
+    /wk actionbars trace         what the mouse is really touching, for a drop
+                                 that goes nowhere
     /wk bars on|off
     /wk bars mode auto|plates|list
     /wk bars style replace|attach
@@ -4828,6 +4952,15 @@ Everything below was written from the API contract and has never executed:
   probes for the template and the global before either is used, and
   `ns.Bars.CanPage` reports which path is live, so a client with neither pages
   bar 1 out of combat and says so in `/wk status`.
+- Whether a visibility state driver hides one of these bars on 2.5.6. It is the
+  same unknown as the page driver above and it is reached through the same two
+  calls, so a client that runs one runs the other; what is untested is the
+  condition rather than the machinery. `scripts/harness/sections/38-bar-look.lua`
+  asserts the macro that is registered, which settles that `[mod:shift] show;
+  hide` is what the client is handed and nothing about what the client does with
+  it. `ns.BarLook.CanDrive` is probed before either call, so a client with
+  neither leaves every bar up and the panel's own reading says so. To settle it:
+  set a bar to go down in combat, pull something, and watch it.
 - Whether `GetBindingKey` answers a secondary key on this client. Nothing
   installed calls it. It is probed by name and pcalled, and both returns are put
   on the override layer and read straight back with `GetBindingAction`, so a key

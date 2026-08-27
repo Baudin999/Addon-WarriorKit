@@ -112,6 +112,7 @@ local SECTIONS = {
 	"35-purse",
 	"36-font-roles",
 	"37-player-cast",
+	"38-bar-look",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

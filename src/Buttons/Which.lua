@@ -33,6 +33,11 @@ ns.WhichBars = Which
 
 -- Every bar this client can have, in draw order.
 --
+--   label     what the bar is called in a sentence, and `tab` the same name
+--             short enough to sit in a tab strip. Two rather than one because
+--             "bottom left bar" reads correctly in a status line and takes
+--             three lines of a 180 pixel rail; the strip in the panel carries
+--             one of these per bar and has to fit five of them.
 --   buttons   the Blizzard button name the slot is read off and which then gets
 --             hidden. Hiding the twelve buttons rather than the frame holding
 --             them is deliberate: bar 1's buttons live on MainMenuBarArtFrame
@@ -44,21 +49,26 @@ ns.WhichBars = Which
 --   pages     bar 1 alone, which the client re-points at a different twelve
 --             slots in each stance
 --
--- The rest is geometry: how many columns the twelve break into, and where the
--- bar's corner lands on UIParent. Those offsets are in the bar's own units, and
--- every bar goes on the pixel grid, so they are whole screen pixels and mean
--- the same thing on a 1080p panel as on a 4K one.
+-- The rest is geometry: how many columns the twelve break into by default, and
+-- where the bar's corner lands on UIParent. Those offsets are in the bar's own
+-- units, and every bar goes on the pixel grid, so they are whole screen pixels
+-- and mean the same thing on a 1080p panel as on a 4K one.
+--
+-- `columns` is the default and not the answer. Buttons/Look.lua holds a row
+-- count per bar and the plan is what it falls back to, so what is written here
+-- is what the client draws that bar as and what a bar nobody has reshaped
+-- comes up as.
 Which.PLAN = {
-	{ key = "bar1", label = "bar 1", pages = true,
+	{ key = "bar1", label = "bar 1", tab = "bar 1", pages = true,
 		buttons = "ActionButton%d", command = "ACTIONBUTTON%d",
 		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 8 },
 
-	{ key = "bottomleft", label = "bottom left bar",
+	{ key = "bottomleft", label = "bottom left bar", tab = "bottom left",
 		buttons = "MultiBarBottomLeftButton%d", command = "MULTIACTIONBAR1BUTTON%d",
 		frame = "MultiBarBottomLeft",
 		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 44 },
 
-	{ key = "bottomright", label = "bottom right bar",
+	{ key = "bottomright", label = "bottom right bar", tab = "bottom right",
 		buttons = "MultiBarBottomRightButton%d", command = "MULTIACTIONBAR2BUTTON%d",
 		frame = "MultiBarBottomRight",
 		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 80 },
@@ -67,12 +77,12 @@ Which.PLAN = {
 	-- 2", which sits to its left. The names are the wrong way round and have
 	-- been since 2005; the command numbers are what the binding set actually
 	-- carries and those are right.
-	{ key = "right", label = "right bar",
+	{ key = "right", label = "right bar", tab = "right",
 		buttons = "MultiBarRightButton%d", command = "MULTIACTIONBAR3BUTTON%d",
 		frame = "MultiBarRight",
 		columns = 2, point = "RIGHT", to = "RIGHT", x = -8, y = 0 },
 
-	{ key = "right2", label = "right bar 2",
+	{ key = "right2", label = "right bar 2", tab = "right 2",
 		buttons = "MultiBarLeftButton%d", command = "MULTIACTIONBAR4BUTTON%d",
 		frame = "MultiBarLeft",
 		columns = 2, point = "RIGHT", to = "RIGHT", x = -73, y = 0 },

@@ -2,6 +2,70 @@
 
 ## Unreleased
 
+### Full flexibility on the cloned bars
+
+The clone shipped with the shape of every bar in source and one tick box per bar.
+That was the right default and too little of an answer: bar 1 was a row of twelve
+because the plan said twelve columns, and there was no way to fold it, tint it,
+take it off the screen in a fight or bring it up on a key.
+
+`Buttons/Look.lua` holds five settings per bar and `ns.db.barLook` keys them by
+the plan's bar key. Rows, the colour of the ground under the squares, that
+colour's opacity, whether the bar goes down in combat, and which modifier holds
+it up. Every one of them defaults to something that is not a setting, so a bar
+nobody has touched carries no record at all and `actionbars plain` is a deletion
+rather than a write. That is `Buttons/Which.lua`'s shape for the tick boxes and
+it is what makes a fresh clone of the repo look like the machine it was written
+on.
+
+Six shapes, not twelve: 1, 2, 3, 4, 6 and 12 rows are the numbers that divide
+twelve, and a last row with a gap on the end of it is a bar and a stump. The
+panel's stepper counts in ones and walks between the six on the direction of
+travel, because snapping to the nearest is a control that does nothing on every
+second press. A typed number that is not a shape is refused rather than rounded.
+
+Eight named colours rather than three sliders. This is an addon for one person
+who wants the same interface on every install, and a colour you dialled in lives
+in one WTF folder. Two of the eight are the theme's own and the other six are
+deliberately dark and flat, because the background is the ground under twelve
+pieces of Blizzard icon art. The opacity is `ui.Opacity`, 0 to 100 in fives like
+the other three in the addon, and at nothing the hairline goes with it.
+
+The two that decide when a bar is on the screen cannot be done from Lua at all.
+Everything inside a bar is a secure button, so the frame cannot be hidden once
+the client is in lockdown, and a fight starting is the moment you want it gone.
+Both are a visibility state driver instead: `[combat] hide; show`, or `[mod:shift]
+show; hide` for a bar that is up only while a key is held. A key beats the combat
+switch rather than being read alongside it, because a bar you hold a key for is
+down unless you are holding the key, and `[mod:shift] show; [combat] hide; show`
+is the other setting wearing this one's name. Keys go on working while a bar is
+off the screen, which is the point of a bar you only look at sometimes.
+
+`actionbars unlock` is the bars' own lock and it is shift-dragging: the handles
+come up while shift is held, watched off `MODIFIER_STATE_CHANGED` rather than a
+ticker, and no other frame in the addon is unlocked while you nudge one. It ships
+locked, because a handle takes every click that lands on it and a shift-click
+over a bar belongs to the handle while it is up.
+
+The panel page is a tab strip and one set of controls rather than five bars times
+six controls down a column, which is the shape the loadouts page and the people
+page already have. Every setting has a slash word: `actionbars rows|colour|
+background|combat|key <bar> <value>`, and `actionbars plain` drops the lot.
+
+`harness/sections/38-bar-look.lua` is 55 checks: the arithmetic of every shape,
+a shape put back to the plan's being dropped rather than stored, the colour
+reaching the texture, the hairline going with the background, the macro each pair
+of switches registers, the driver count after three restyles, the driver being
+handed back with the bar, the words parsing a bar name and refusing a value
+without writing it, and the handles following shift. It is
+a section of its own rather than two hundred more lines in `05-action-bars.lua`,
+along the seam that file already had: that one is the clone, and nothing in this
+one knows what an action slot is.
+
+One thing the harness found rather than proved: `22-chores.lua` replaced
+`IsShiftKeyDown` with a constant and left it replaced, so every section after it
+had been running with shift welded off. It goes through the stub's own switch now.
+
 ### Your own cast bar
 
 The last Blizzard frame this HUD had left alone. Every unit around you was drawn
