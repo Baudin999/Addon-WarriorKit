@@ -188,24 +188,20 @@ if window then
 		end
 	end
 
-	-- Every label the window drew, taken off the kits rather than off the
+	-- Every label the window drew, taken off the index rather than off the
 	-- source, so a label built by concatenation is measured as the player reads
-	-- it. `"Collect " .. entry.collects` was the one that made this necessary:
+	-- it. `"collect " .. entry.collects` is the one that made this necessary:
 	-- the string in the file ends in a space and only reads correctly once the
 	-- feed's name is glued on.
 	local controls = 0
-	for _, kit in ipairs(window.kits) do
-		for _, widget in ipairs(kit.widgets) do
-			local label = widget.text and widget.text.text
-			if label then
-				controls = controls + 1
-				label = plain(label)
-				check(label ~= "", "a control was drawn with an empty label")
-				check(label == label:gsub("%s+$", ""),
-					("the label %q ends in whitespace"):format(label))
-				labels[#labels + 1] = label
-			end
-		end
+	for _, entry in ipairs(window.indexed) do
+		local label = plain(type(entry.label) == "function" and entry.label() or entry.label)
+		controls = controls + 1
+		check(label ~= "", ("a control on %s / %s was drawn with an empty label")
+			:format(entry.section.group.name, entry.section.title))
+		check(label == label:gsub("%s+$", ""),
+			("the label %q ends in whitespace"):format(label))
+		labels[#labels + 1] = label
 	end
 
 	-- Every part with a boolean in its defaults declares a switch, or is on the
@@ -232,6 +228,35 @@ if window then
 		check(why ~= "", ("%s is allow-listed for having no switch with no reason given"):format(name))
 	end
 
+	-- Search finds every row.
+	--
+	-- Each control's own label, typed in full, has to come back with at least
+	-- that control's row. This is what stops a control being added to a page and
+	-- left out of the index: it would build, draw and work, and be unreachable
+	-- by any route except knowing which of forty five tabs it was on.
+	local searched, missed = 0, 0
+	for _, entry in ipairs(window.indexed) do
+		local label = plain(type(entry.label) == "function" and entry.label() or entry.label)
+		searched = searched + 1
+		local hits = ns.Options.Find(label)
+		if hits == 0 then
+			missed = missed + 1
+			check(false, ("search for %q found nothing, and it is a label in the index")
+				:format(label))
+		end
+	end
+	ns.Options.Find("")
+	check(missed == 0, ("%d of %d labels are not findable"):format(missed, searched))
+
+	-- And the three other things a query is matched against: a group name, a
+	-- section title and a part's slash word. The last one is the reason search
+	-- exists in the shape it does, because `skin` is what somebody who already
+	-- knows the addon types and it is not the label on any control.
+	check(ns.Options.Find("Readouts") > 0, "no row matched the group name Readouts")
+	check(ns.Options.Find("Swing timer") > 0, "no row matched the section title Swing timer")
+	check(ns.Options.Find("skin") > 0, "no row matched the slash word skin")
+	ns.Options.Find("")
+
 	check(wrapped > 0, "not one string in the whole panel wrapped, so nothing was measured")
 	check(tallest > window.view.height,
 		("the tallest section is %.0f pixels in a %.0f viewport, so scrolling was never exercised")
@@ -245,6 +270,7 @@ if window then
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))
 	print(("panel  %d controls, %d switches, %d ledes, %d hints, %d readings, %d characters of prose")
 		:format(controls, switches, ledes, hints, readings, prose))
+	print(("panel  every one of the %d findable by its own label"):format(searched))
 	print(("panel  viewport %.0f x %.0f, tallest section %.0f, rail %d px in %.0f, clipping by %s")
 		:format(window.view.width, window.view.height, tallest, railHeight,
 			window.rail.view.height, window.view.mechanism))

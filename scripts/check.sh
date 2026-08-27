@@ -371,6 +371,58 @@ while IFS= read -r f; do
 	esac
 done < <(grep -lE 'SetScript\("OnUpdate"' --include='*.lua' -r . | sort)
 
+# The options window's own rules, in the half a grep can settle.
+#
+# The harness measures the strings a feature actually produced, which is the
+# only way to check a label built by concatenation or a lede that reports live
+# state. This is the other half: a call that is wrong on the face of it, caught
+# on a file that does not have to load. It is here as well as in the harness
+# because a grep is instant and because the message can name the call to use
+# instead, which a measurement after the fact cannot.
+#
+# Each entry is a pattern, then what to write instead.
+#
+# A label finished by concatenation is not here and cannot be: `"collect " ..
+# entry.collects` reads correctly only once the feed's name is glued on, and no
+# grep can tell that from a label somebody left a space on the end of. The
+# harness checks the string the feature actually produced, which is the only
+# place that question can be answered.
+PANEL_RULES='
+ui\.Header\(|ui.Section(title, group): a section names the group it belongs in
+ui\.Note\(|ui.Lede for what the section does, ui.Hint for one control, ui.Reading for a live number
+ui\.Text\(|ui.Lede, ui.Hint or ui.Reading
+ui\.Stepper\("zoom"|ui.Zoom(get, set): there is one zoom range and it is 1 to 3
+ui\.Slider\("zoom"|ui.Zoom(get, set)
+ui\.Slider\("background"|ui.Opacity(label, get, set): there is one opacity range and it is 0 to 100 in fives
+ui\.Slider\("opacity"|ui.Opacity(label, get, set)
+ui\.Slider\("bar opacity"|ui.Opacity("background", get, set): all three of these do the same thing and are called the same thing
+ui\.Stepper\("rows"|ui.Count(label, low, high, get, set)
+ui\.Stepper\("list bars"|ui.Count("rows", low, high, get, set)
+ui\.[A-Za-z]*\("[^"]*in pixels"|ui.Size(label, low, high, step, get, set): the widget writes px after the number
+^local [A-Z_, ]*(LOW_ZOOM|HIGH_ZOOM)|ns.UI.ZOOM_LOW and ns.UI.ZOOM_HIGH
+^local [A-Z_, ]*(ALPHA_LOW|LOW_ALPHA)|ns.UI.ALPHA_LOW, ns.UI.ALPHA_HIGH and ns.UI.ALPHA_STEP
+'
+
+while IFS='|' read -r pattern instead; do
+	[ -n "$pattern" ] || continue
+	# UI/Widgets.lua is where all of these are defined and where the kit calls
+	# its own Stepper and Slider, so it is the one file the rules do not read.
+	hits=$(grep -rnE "$pattern" --include='*.lua' . | grep -v '^\./UI/Widgets\.lua:' || true)
+	if [ -n "$hits" ]; then
+		printf '%s\n' "$hits" | sed "s|^|use $instead -- |"
+		status=1
+	fi
+done <<PANELEOF
+$PANEL_RULES
+PANELEOF
+
+# Every section names a group, which means two arguments. A one argument call
+# would load and then fail at login, which is later than it needs to.
+while IFS= read -r bad; do
+	echo "a section names no group: $bad"
+	status=1
+done < <(grep -rnE 'ui\.Section\("[^"]*"\)' --include='*.lua' . || true)
+
 # What shape the code is in, measured per function.
 #
 # This replaced a per-file line ceiling and the replacement is the point. A

@@ -399,7 +399,14 @@ local function BuildFeature(feature)
 	-- A lede belongs to the section it opened rather than to the row that drew
 	-- it, because Start here quotes the lede of a part's first page under that
 	-- part's switch and has nowhere else to read it from.
+	--
+	-- One per section, and a second is a login error rather than the first one
+	-- quietly overwritten. A page that wants two ledes wants two sections, which
+	-- is most of what stops the notes growing back.
 	host.Lede = function(text)
+		assert(not host.section.lede,
+			("%s wrote a second lede on the section %q: %s")
+				:format(feature.name, host.section.title, text))
 		host.section.lede = text
 	end
 	host.Index = function(widget, label)
@@ -444,6 +451,9 @@ local function BuildStart()
 	host.Section = function(title, group)
 		return AddSection(host, title, group)
 	end
+	-- Start here is the one page in the window that carries a lede per row rather
+	-- than one at the top, so it takes no section lede at all: the sentences on
+	-- it belong to the parts they were read off, not to this page.
 	host.Lede = function() end
 	-- Start here is not indexed. Every switch on it is the same switch as the
 	-- one at the top of that part's own page, and a search that answered twice

@@ -2,6 +2,92 @@
 
 ## Unreleased
 
+### The /wk window is sorted by what you came to change
+
+`Core/Menu.lua` put a WarriorKit button in the client's own Escape menu last
+week, and that raised the stakes on what the button opens. Until then the only
+way in was a slash command, so everyone who opened the window had already read
+something about the addon. Now somebody who has never heard of it can press
+Escape, see a name and click.
+
+What they found was eighteen rail entries, each one a registered part with a
+capital letter on it. Three sat below the fold of a 390 pixel view and nothing
+on screen said so. Behind them were 44 tabs, 134 controls and 134 notes holding
+40,268 characters, about fifteen pages of prose with switches embedded in it.
+
+**A section names its own group.** `ui.Header(title)` is now
+`ui.Section(title, group)`, and the panel declares eight groups: Start here,
+Fighting, You, Them, Readouts, The screen, Chores, Under the hood. A group that
+does not exist is a login error rather than a section quietly landing in a
+default. Eight entries come to 184 pixels, so the rail fits without scrolling
+for the first time.
+
+That also lets one part's sections sit apart. `UnitFrames/Panel.lua` has three
+and two of them are about your own frames while the third is about enemy
+nameplates; they are in **You** and in **Them** now without a line of code
+moving between files.
+
+`order` no longer decides rail position, because the rail is not made of parts.
+It decides tab order inside a group, and `ns.Register` refuses anything that is
+not a whole number or that another part already took. `artwork` and `minimap`
+were both on 8 and their relative position was whatever `table.sort` felt like.
+
+**One switch per part, drawn by the panel.** A part declares
+`switch = { key, label, apply }` and the panel draws the check box in the same
+place on every part's first page. Eleven features had each written their own for
+the same idea: `show the row`, `show the icon`, `Show the meters`, `Show the
+swing bars`, `show enemy bars`, `draw the WarriorKit chat window`. The rail now
+marks any group holding a part that is on, which is the one question the window
+could never answer without opening forty five tabs, and **Start here** is a
+whole page of nothing but those switches and their ledes.
+
+**Notes are gone and three capped calls replace them.** `ui.Lede` is one line
+under a section title at most 160 characters, `ui.Hint` is at most 200 and draws
+in the addon's own tooltip on hover, and `ui.Reading` is a live number in the
+accent colour that never wraps. 44 ledes, 75 hints and 81 readings come to
+14,375 characters against 40,268, and the harness fails past 16,000. The
+reasoning the notes carried moved to `docs/README.md`, which is where explaining
+the addon belongs and which can be read on a second monitor while the game runs.
+Five parts had no notes there at all before this: the feeds, the chat window,
+the minimap, the performance tab and the breakdown were documented only inside
+the panel.
+
+**A search field in the title bar, focused when the window opens.** Every
+control records its label, its section and its group as it is built. Typing
+filters and each result reads `group / section / label`; clicking one selects
+the group, selects the tab and marks the row. A query matches the label, the
+section title, the group name and the part's slash words, so typing `skin` finds
+the frame controls that `/wk skin` drives.
+
+**Four kit calls for the four knobs every part had reinvented.** `ui.Zoom` has
+no range because there is one and it is 1 to 3; four files had declared
+`LOW_ZOOM, HIGH_ZOOM = 1, 3` at the top of themselves. `ui.Opacity` has no range
+for the same reason, and the meters' `bar opacity` is called `background` like
+the other two. `ui.Size` keeps the caller's range, because a feed is 200 to 520
+wide and a minimap is 120 to 300, and writes `px` after the number so four pages
+can all say `width`. `ui.Count` is rows and bars, and `list bars` is called
+`rows`. Charge's three icon steppers became `icon size` on the button and a
+`size` and a `height` in a section called **The icon over the mob**.
+
+Three controls were deleted: the zoom stepper on Buffs, Feeds and Meters. Those
+three are read between fights, and the argument for a private zoom is that a
+thing you read mid swing has to stay exact at a size you chose. That covers the
+enemy bars and the swing timer and it does not cover a loot feed. Every setting
+they wrote is still there and every slash word still takes it.
+
+Nothing about the slash commands changed. Every word keeps working, `/wk` on its
+own still opens the window, and the words are sitting inside people's macros.
+Nothing on the game screen moved.
+
+Section 16 of the harness grew the rules: every section names a group that
+exists, no group holds two sections with one title, no title repeats its group's
+name, every lede and hint is inside its cap, every reading fits one line, no
+label is empty or ends in whitespace, all 147 labels are findable by typing them
+in full, and every part with a boolean in its defaults declares a switch or is
+allow-listed with a reason. `check.sh` got the half a grep can settle, with each
+rule naming the kit call to use instead.
+
+
 ### The client's own aura row has a switch of its own
 
 `/wk auras off`, and the corner of the screen is empty: your buffs, your

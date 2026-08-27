@@ -906,6 +906,8 @@ first thing built on them and is not meant to be the last.
     ns.UI.Size / ns.UI.SetSize     what the player dragged the size slider to
     ns.UI.ScreenZoom / WindowZoom  the screen's whole step, and it times the size
     ns.UI.Kit(host)                the widget kit
+    ns.UI.ZOOM_LOW / ZOOM_HIGH     the one zoom range, 1 to 3
+    ns.UI.ALPHA_LOW / HIGH / STEP  the one opacity range, 0 to 100 in fives
     ns.UI.Window(opts)             chrome, adopted onto the grid
     ns.UI.Rail / ns.UI.TabStrip    the two levels of navigation
     ns.UI.Windows                  every window the library has made
@@ -914,13 +916,28 @@ first thing built on them and is not meant to be the last.
 its stack a measure function. Reflow sets the row's width first, asks second,
 snaps the answer to a whole pixel and only then places the row under it. Doing
 those two in the other order is the whole of the overflow bug that was in the
-old panel: a note measured against the previous pass's width is a note drawn on
+old panel: a row measured against the previous pass's width is a row drawn on
 top of whatever follows it.
 
-**A page has two levels.** The rail is the parts, and each `ui.Header` a feature
-writes opens a tab within that part. Nothing in a `Feature.lua` changed for it:
-`ui.Header` used to draw a rule and now opens a section, and the kit asks its
-host where sections go. A host that answers nothing gets the rule back.
+**A page has two levels and the kit names both.** `ui.Section(title, group)`
+says which of the window's eight groups the rows after it belong in, and the
+title becomes one tab inside that group. The kit asks its host where sections
+go; a host that answers nothing gets a heading rule in the same column instead,
+which is what this call was before the window had a rail.
+
+**Prose is three capped calls, and controls register themselves.** `ui.Lede` is
+one 160 character line under a section title, `ui.Hint` is a 200 character
+sentence drawn in the tooltip on hover, and `ui.Reading` is a live value on the
+right of its own row that never wraps. Every control also records its label into
+the host's index as it is built, which is what the search field walks and what
+the harness counts labels out of.
+
+**Four calls carry the ranges that are genuinely one range.** `ui.Zoom` takes
+neither a label nor a range, `ui.Opacity` takes no range, `ui.Size` keeps the
+caller's range and writes `px` after the number, and `ui.Count` is whole numbers
+one at a time. `ns.UI.ZOOM_LOW`, `ns.UI.ZOOM_HIGH` and the three `ALPHA_`
+numbers are public for the slash words that take the same value, so a range is
+written once in the addon rather than once per part.
 
 **The window is adopted, so it is exact.** Unlike a nameplate it is a frame the
 addon owns and anchors to UIParent, so every number in `UI.Metric` is a count of
@@ -2061,21 +2078,113 @@ checks for free macro slots before it starts.
 **Options panel.** `/wk` with nothing after it opens it, Escape closes it, and
 every row has a slash command behind it so nothing is only reachable by mouse.
 
-One tab per part down the left, one page each, both built out of the same
-registry walk, so a seventh part takes a seventh tab without `Panel.lua`
-changing. It was one column of every setting in the addon before that. Six parts
-made it 700 pixels tall and the window scaled itself down to fit the screen,
-which bought room for settings you were not looking at by shrinking the text of
-the one you were. Every page is sized to the tallest of them, so changing tabs
-does not resize the window under the mouse.
+Eight groups down the left, declared in `Core/Panel.lua` and owned by no
+feature, and a tab strip inside each. A feature calls `ui.Section(title, group)`
+and its rows land on that tab. Naming a group that does not exist is a login
+error rather than a section quietly landing in a default.
+
+It was one rail entry per registered part before that: eighteen module names,
+three of them below the fold of a 390 pixel view with nothing on screen saying
+so, and a new player asked to guess that the camera distance was under Comfort,
+Blizzard's action bar art under Artwork, the Edit Mode layout under Interface
+and the window's own size under Settings. Three of those four were junk drawers
+with different names. A part is a folder of code; a group is what somebody was
+thinking about when they opened the window, and those are not the same axis.
+Eight entries come to 184 pixels, so the rail fits for the first time.
+
+Letting a section choose its own group also lets one part's sections sit apart.
+`UnitFrames/Panel.lua` has three and two of them are about your own frames while
+the third is about enemy nameplates; they are in **You** and in **Them** now
+without a line of code moving between files.
+
+`order` on a part no longer decides where it sits in the rail, because the rail
+is not made of parts. It decides where that part's tabs sit inside whichever
+group they named, and `ns.Register` refuses anything that is not a whole number
+or that another part has already taken. `artwork` and `minimap` were both on 8
+and their relative position was whatever `table.sort` felt like on the day.
 
 A page is a list of rows laid out top down rather than a running cursor. The
-cursor could not survive a note. A note is as tall as its text wraps, its text
-changes while the panel is open, and a row whose height was fixed before its
-text was written gets drawn over by the row under it. So notes measure
-themselves on every refresh, and a note that gains a line pushes the rows under
-it down and the window out. Out only: the window never shrinks back, because a
-panel that breathes while you read it is worse than one that is too tall.
+cursor could not survive a row that wraps. A lede is as tall as its text wraps
+and its width is not known until it has been placed, and a row whose height was
+fixed before its text was written gets drawn over by the row under it. So a row
+that carries prose measures itself, the stack sets its width before it asks, and
+the answer is what the row is set to.
+
+**One switch per part, drawn by the panel.** A part declares
+`switch = { key, label, apply }` and the panel draws the check box, in the same
+place on every part's first page. Eleven features each wrote their own for the
+same idea and no two worded it the same way: `show the row`, `show the icon`,
+`Show the meters`, `Show the swing bars`, `show enemy bars` and `draw the
+WarriorKit chat window`. The wording stops being each author's choice, which is
+most of why those six were six different shapes.
+
+The rail marks any group holding a part that is on. That is the one question the
+window could never answer without opening forty five tabs, and it is what
+**Start here** is a whole page of: every switch in one column, each under the
+lede of the page it belongs to, and no numbers at all.
+
+Seven parts declare no switch and the harness holds the list of them with a
+reason each. Targeting's only setting is a key binding and a key nobody bound is
+already off. A loadout is a row in a list. Feeds has two feeds with a collect
+and a show each, and one switch would name whichever came first and lie about
+the other. Artwork's boolean turns Blizzard's art on rather than the part's own
+drawing, so a lit rail dot would mean the opposite of what it means everywhere
+else. Comfort is five unrelated chores. Interface imports a layout once at
+login. Settings is one slider.
+
+**Prose is three capped calls and the caps are the point.** There were 134
+notes holding 40,268 characters, one per control, about fifteen pages of writing
+with switches embedded in it. They did three different jobs and the window drew
+all three the same way, so the one sentence a control needed was buried in four
+paragraphs about why the pixel grid prefers whole stops.
+
+`ui.Lede(text)` is one line under a section title, at most 160 characters,
+present tense, saying what the section changes on screen. One per section, and a
+second is a login error. `ui.Hint(text)` is at most 200 characters and is drawn
+in the addon's own tooltip on hover, so the column gets its vertical space back
+and the sentence is one hover away. `ui.Reading(label, fn)` is a live number or
+a short state in the accent colour on the right of its own row; it is not capped
+by character count, but it never wraps and the harness measures that.
+
+44 ledes, 75 hints and 81 readings come to 14,375 characters against 40,268, and
+the harness fails past 16,000. What the caps pushed out is in this file, under
+the part it belongs to.
+
+**Search, in the title bar, focused when the window opens.** Every control
+records its label, its section and its group into an index as it is built.
+Typing filters and the result is a list of rows reading `group / section /
+label`; clicking one selects the group, selects the tab and marks the row. They
+are links rather than the live controls, because a control is built into one
+section's stack and cannot be in two at once, and a link is the honest answer
+anyway: it teaches you where the thing lives, so the second time you go straight
+there.
+
+A query is matched against the label, the section title, the group name, the
+part's name and every slash word it answers to. That last one is what makes
+typing `skin` find the frame controls, because `/wk skin` is what drives them
+and it is the word somebody who already knows the addon reaches for.
+
+The index pays for itself twice. The harness types all 147 labels in full and
+fails if any one of them comes back with nothing, which is what stops a control
+being added to a page and left out; and it is where the label rules are checked,
+on the string the feature produced rather than on the source, because
+`"collect " .. entry.collects` only reads correctly once the feed's name is
+glued on.
+
+**Four kit calls for the four knobs every part had reinvented.** `ui.Zoom` takes
+no label and no range, because there is one range and it is 1 to 3; four files
+declared `LOW_ZOOM, HIGH_ZOOM = 1, 3` at the top of themselves. `ui.Opacity`
+takes no range for the same reason, 0 to 100 in fives, and the meters control is
+renamed from `bar opacity` to `background` so all three match. `ui.Size` keeps
+the range with the caller, because a feed is 200 to 520 wide and a minimap is
+120 to 300 and those differ for real reasons, and writes `px` after the number
+so four pages can all say `width`. `ui.Count` is rows and bars, and the enemy
+bars' `list bars` is called `rows` like everywhere else.
+
+Three controls were deleted with them: the zoom stepper on Buffs, Feeds and
+Meters. Those three are read between fights, and the argument for a private zoom
+is that a thing you read mid swing has to stay exact at a size you chose. That
+covers the enemy bars and the swing timer and it does not cover a loot feed.
 
 A picker row opens one popup shared by every picker, with a pool of rows inside
 it, and asks for its list at the moment it opens rather than holding one. That
@@ -3574,6 +3683,175 @@ house; that one is `buffs resting` for anyone who buffs in the bank.
 are on both flavours, and whether 19705 is spelled exactly "Well Fed" in every
 locale. All three are in the untested list below.
 
+**Breakdown.** One row per ability, counted out of the combat log and kept
+between sessions: how much of your damage it is, how often it lands, how often
+it crits, and what stopped it when it did not. It is not the meters. They total
+the pull you are in and forget it; this is the month.
+
+Only your own hits are counted, and that is what keeps the record small.
+Counting the group would grow the table by every stranger you have ever been in
+a party with.
+
+**The fourth band is the honest one.** Rows can be filtered to one band of
+target level against yours. The combat log does not carry a target's level, so a
+mob you never targeted and never saw a nameplate for lands in `level not seen`
+rather than being quietly counted as your own level. Picking one band is worth
+doing before you believe a crit or a miss rate: in this era the target's level
+drives both of them hard, and a number pooled across grey trash and an elite is
+the average of two unrelated things.
+
+**The table is a window, not a page.** A left click on the meter's header opens
+it, which is where you are looking when the question occurs to you. A right
+click on that header swaps the meter between damage and healing. Escape or the
+cross closes the table.
+
+Only abilities that have swung at something are listed. A shout, a stance and
+Charge are counted like everything else and kept out of a table ranked by
+damage, because there they can only ever be a run of zeroes above the rows you
+opened it to read. An ability that has only ever been dodged does get its row:
+no damage across four dodges is not the same fact as no damage because the thing
+does none.
+
+Ranks are added up under one name. A rate pools across ranks correctly, because
+it is per attempt either way. An average hit does not: for an ability you have
+used at several ranks it is a blend of the rank you outgrew and the one you use
+now.
+
+**Feeds.** Two columns of the same shape, one fed by loot and one by the combat
+log. A loot row is the item's icon, its name in its own quality colour and how
+many there were, with a stripe down the left in that colour, so a run of drops
+reads as a ribbon before you read a word of it. A combat row reads what
+happened, then who it was, then the number. The stripe says which way it went,
+white out, red in, green healed and grey missed, and a critical draws its number
+in gold with a mark after it, so the crit is not a hue you have to be able to
+see. Entering and leaving combat draw a band across the feed, which is what
+separates one pull from the one before it, and the closing band says how long
+the fight took.
+
+**Two switches per feed, and they are not the same question.** Collect is
+whether anything is recorded. Show is whether the column is drawn. Hidden and
+still collecting is close to free, because drawing the column is the expensive
+half, and showing it again brings back everything that happened while it was
+away. Off, the loot feed reads no loot message at all, and the combat feed turns
+an event away on one table lookup, which in a raid is the difference between a
+few hundred lookups a second and a few hundred rows a second.
+
+The loot quality floor ships at everything, grey vendor trash included, because
+this addon sells that trash for you at the next merchant and the feed is the
+only place you will ever see what it was. The group's drops are off by default:
+everyone else's loot is what makes the client's own chat unreadable in a raid,
+and a feed that reproduced it would have replaced one unreadable column with a
+prettier one.
+
+**The combat floor is a setting because there is no right number.** At zero this
+is every tick of every bleed on every mob in the pack, which in a fury pull
+scrolls faster than it can be read. The right floor at level 20 and the right
+floor in a raid differ by an order of magnitude. Misses and dodges earn a row
+with no number on it: four dodges in a row is the reason your rotation stalled
+and nothing else on the screen says so.
+
+At zero background the feed is rows of outlined text over the world, the way the
+meters are drawn, and the edge goes with the background: a hairline rectangle
+round bare world is a window frame with no window in it. The scrollbar goes too,
+in everything but the thumb, which is the only thing left saying there is more
+above and below what you can see.
+
+Rows answering the mouse buys the tooltip and the wheel at the price a mouse
+enabled frame always costs: it swallows every button that lands on it. The right
+and middle buttons are handed back where the client has
+`SetPassThroughButtons`, and where it does not, a right drag begun on the feed
+will not turn the camera.
+
+**Chat.** Three tabs in a window of the addon's own: the people you have named,
+everything anyone said, and whispers on their own. Every line keeps its channel
+colour, names are class coloured, and a click on a name answers it.
+
+**Blizzard's window is not hidden and nothing of it is unregistered.** It keeps
+loot, experience, faction, system text, the combat log and every addon's output,
+including this one's, because there is no way to know which lines arriving there
+came from an event we already drew. Shrink it into a corner and this window is
+the one you read. Taking the conversation out of it is FrameXML's own chat
+message filter rather than a hidden frame, so turning that off puts the
+conversation back in Blizzard's window on the next line, with no reload. A
+client with no filter draws the same conversation in both.
+
+The numbered channels are off by default. General, Trade and anything else you
+have joined are most of the volume in a city and none of the conversation. The
+sound for one of your people speaking is the client's own whisper sound and only
+plays while you are not already looking at the People tab: a sound for a line
+you are watching arrive is a sound you turn off, and then there is none for the
+one you miss.
+
+There is no drag handle on the corner. A window that resizes on the mouse means
+a reflow of every wrapped line on every mouse move, and two steppers say the
+same thing exactly. Drag the window itself while frames are unlocked. There is a
+key for opening it under WarriorKit in the client's own key bindings, which
+opens the window and puts the cursor in the line. The enter key still belongs to
+Blizzard's field: taking it would be taking it from the window every other addon
+types into.
+
+**People are matched on the name alone**, case ignored and realm ignored, so one
+row covers somebody whether they are standing beside you or whispering from
+another realm. Anything a person on the list says, in any channel, is copied to
+the People tab together with anything you whisper to them, and the tab is not
+drawn at all while the list is empty. The list is shared by every character on
+the account, because who matters to you is not a fact about the character you
+happen to be standing in.
+
+**Voice only ever joins.** The pick is everything the client's own Chat Channels
+window draws a voice button on: your party or raid, and every stream of every
+community and guild you are in. There are no voice channels of your own to name,
+because Blizzard's voice chat is attached to the groups you are already in. A
+channel does not have to exist to be picked: a party channel is made when you
+group up and a community one when the first person joins it, so the addon asks
+for the one you named again at every login, at every roster change and whenever
+the voice service comes back, and stops asking after five refusals. Nothing here
+leaves a channel, mutes anyone, picks a device or moves a volume. Those are the
+client's own settings and you pressed something to get them where they are.
+
+**Minimap.** The mask, the ring, the north tag and the two zoom buttons come
+off, the map is squared and resized, and the mousewheel zooms instead.
+Everything goes back in one call, so off is a state rather than a reload.
+
+The round mask throws away the corners of a map the client has already drawn,
+and the ring round it spends about twenty pixels of every edge on rivets.
+Blizzard's own mail, tracking and battleground icons are moved to the corners of
+the square, because they were anchored to points on the arc and a square has no
+arc to hang them on.
+
+**The ring was the only thing ending the picture**, which is why the black edge,
+the hairline and the clock all wait for the square. The square gets the same
+edge the action bars are built on, and the clock hangs off the bottom of it in
+the middle with the realm's time on its tooltip. The sun and moon and Blizzard's
+own clock come off with the ring: the sun says whether it is day in a game whose
+sky says the same thing, and the clock draws its numbers on a strip of the old
+stone minimap tile, which on a stripped square is the last piece of Blizzard's
+map left on the screen.
+
+**Every addon that wants to be reachable puts a round icon on the minimap
+edge.** With eight installed the map is a ring of icons with a map in the
+middle. The corral collects them behind one square you press to open a tray.
+Each button is borrowed rather than taken: its parent, its position and its own
+`SetPoint` are handed back the moment the corral goes off, and nothing about the
+button itself is changed, so it does in the tray exactly what it did on the
+ring.
+
+Blizzard's own icons are left alone. The mail, the tracking and the calendar are
+read at a glance without being pressed, and squaring the map has already put
+them on the corners.
+
+The scan runs at login, whenever an addon finishes loading, and whenever you
+open the tray. Nothing polls, so an addon that puts its button up on a timer of
+its own is found the next time you open the tray rather than the second it
+appears.
+
+**A pin is not a button.** The minimap is also where every addon that draws on
+the map hangs its pins, and those are left where they are. They arrive in pools
+with generated names, which is what tells them apart from a button. The corral
+also refuses to hold more than it can lay out, and `/wk minimap list` says what
+it took, what it left as pins and what it refused, because nothing should be
+taken quietly.
+
 **Interface.** One Edit Mode layout, carried inside the addon folder. This
 client has Edit Mode: the backported retail manager, with the layouts written to
 `WTF/Account/<account>/edit-mode-cache-account.txt`. That file is per install,
@@ -3673,6 +3951,33 @@ vendor actually paid, which is the number still right when a vendor refuses an
 item halfway down the list. Holding shift as you open a merchant skips the whole
 thing for that visit, the same key that already means "let me do this myself"
 everywhere else at a vendor.
+
+**Repair pays the guild first, and only as far as your rank goes.** Every
+damaged piece at once, the moment the window opens, on any merchant the client
+says can mend. Guild funds come first and only as far as your rank's own
+withdraw allowance reaches; past that, or with no guild bank on this client, it
+comes out of your purse. A purse that cannot cover the whole bill is left alone
+rather than half spent, because a half repaired set is worse than an unrepaired
+one you knew about. Holding shift as you open a merchant skips the repair for
+that one visit, the same as it skips the sale.
+
+The durability reading is the client's, and some clients do not quote it. The
+merchant's own price is what the repair is decided on either way, so a client
+that answers nothing about wear still repairs correctly and simply says nothing
+about how worn you are.
+
+**Error filtering stands in front of `UIErrorsFrame` and drops what you have
+ticked.** Nothing is hidden that you have not ticked, and the sound and the
+flash are untouched, so a refusal you did not mute still reads exactly as it
+did. The list is shared by every character on the account, and it is kept and
+consulted again the moment filtering goes back on.
+
+There is one preset and it is the one the charge button costs you: what a
+positional ability shouts when it misses, which is too far away, facing the
+wrong way, out of range and not in front of you. Everything else you mute by
+ticking it after it has come past, which is why the list fills as you play. A
+client with no `UIErrorsFrame` to stand in front of filters nothing whatever the
+list says, and your ticks are still saved for a client that has one.
 
 **Max zoom is one CVar and a readback.** `cameraDistanceMaxZoomFactor` ships at
 1.9 and Leatrix has been writing 4.0 into it on both of these clients for years,
@@ -3811,6 +4116,37 @@ called `Hide` on a string. The harness now builds the row a second time with
 `CreateFrame` refusing `Slider` and clicks both buttons, because a branch
 nothing ever runs is a branch that is wrong.
 
+**Performance.** What the addon costs, measured rather than claimed: how much
+Lua it is holding, how fast that is growing, and how long each ticker takes.
+
+**Read the memory figure as churn, not as size.** The client attributes Lua
+allocation to an addon and nothing else. Frames and textures live on the C side
+and never appear in that number, and for a UI addon they are most of the real
+footprint. A fall in the figure is the collector running, which is why the rate
+counts rises only.
+
+The memory walk is the expensive half and it runs only while the tab is on
+screen. The row that owns the sampler is a child of the section, so the client
+shows it when the tab is chosen and hides it when the window closes or another
+tab is, which is exactly the window in which walking every addon's memory is
+worth doing.
+
+**Timing is two clock reads per tick**, about forty a second across the whole
+addon, and what that costs is one of the lines it measures. A client with no
+`debugprofilestop` has no clock to time with and leaves those figures empty; the
+memory half still works.
+
+Per addon CPU through the client's own profiler needs the `scriptProfile` CVar
+and a reload, and it slows the whole client while it is on. Nothing here turns
+it on. If something else already has, the tab says what the profiler puts this
+addon at, and the per tick timings above it are the addon's own clock either
+way.
+
+Gauges are what the timings are timings of. A part registers one with
+`ns.Perf.Gauge(label, fn)` and it draws under **What is on screen**: a
+millisecond figure means nothing without the count of things it was spent on,
+and a row with nothing on it costs one comparison.
+
 ## Commands
 
     /wk                          open the settings panel
@@ -3854,7 +4190,7 @@ nothing ever runs is a branch that is wrong.
     /wk meter threat on|off      the right pane
     /wk meter rows 6             3 to 10, per pane
     /wk meter width 150          one pane, 120 to 400
-    /wk meter alpha 15           bar opacity, 0 to 100 in fives
+    /wk meter alpha 15           the background behind the bars, 0 to 100 in fives
     /wk meter zoom 1             1 to 3
     /wk swing on|off             the main hand and off hand swing bars
     /wk swing width 180          80 to 400, one bar
