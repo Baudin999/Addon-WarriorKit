@@ -398,7 +398,14 @@ function PlayerCast.Apply()
 	-- made taller instead.
 	local size = math.max(TEXT_FLOOR,
 		math.min(TEXT_CEILING, math.floor(height * TEXT_SHARE)))
-	local font = ns.UI.Font(size * unit, ns.UI.FLAT)
+	-- Raw, not in units. Everything else here is a design pixel multiplied by
+	-- the zoom and a font size is the one thing that is not: inside a frame
+	-- ns.UI.Adopt has taken onto the grid, a font size already is a pixel
+	-- height. Multiplied, this asked for a fraction at any UI scale that is not
+	-- a whole number of pixels, SetFont refuses one, and the readback in
+	-- UI/Text.lua then failed its fallback too and handed back a font object
+	-- with no font on it. The bar drew no spell name and no seconds.
+	local font = ns.UI.Font(size, ns.UI.FLAT)
 	spellName:SetFontObject(font)
 	timer:SetFontObject(font)
 

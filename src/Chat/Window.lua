@@ -450,12 +450,7 @@ function ChatWindow.Ensure()
 	if built or not ns.db.chat then
 		return false
 	end
-	if Build() then
-		ChatWindow.Lock()
-		ChatWindow.Apply()
-		return true
-	end
-	return false
+	return ChatWindow.Start()
 end
 
 function ChatWindow.Apply()
@@ -684,6 +679,52 @@ function ChatWindow.Held()
 end
 
 --------------------------------------------------------------------------
+-- Standing the window up, out loud
+--
+-- Every route into this window goes through here, and it is pcalled, and the
+-- reason is worth writing down because it cost an evening.
+--
+-- The client swallows a Lua error raised inside an event handler unless
+-- scriptErrors is on, and it ships off. A window that fails to build is then
+-- three silences at once: no window, no message, and Blizzard's own chat left on
+-- the screen by the coupling that is supposed to be a safety net. From the
+-- outside that is indistinguishable from a part that did nothing, which is
+-- exactly what it looked like.
+--
+-- So the build says what went wrong, in the window every addon prints to, which
+-- during a failure is the only chat window there is. The same shape as the log
+-- refusing a ScrollingMessageFrame and saying so: a part that cannot draw has to
+-- be able to say why.
+--------------------------------------------------------------------------
+
+function ChatWindow.Start()
+	if built or not ns.db.chat then
+		return built
+	end
+
+	local ok, made = pcall(Build)
+	if not ok then
+		built = false
+		ns.Print("the chat window did not build, so Blizzard's is still your chat: "
+			.. tostring(made))
+		return false
+	end
+	if not made then
+		return false
+	end
+
+	local applied, why = pcall(function()
+		ChatWindow.Lock()
+		ChatWindow.Apply()
+	end)
+	if not applied then
+		ns.Print("the chat window built and would not lay itself out: " .. tostring(why))
+		return false
+	end
+	return true
+end
+
+--------------------------------------------------------------------------
 
 -- What the client's own key binding list calls it. Beside the function it
 -- calls, the way the marking keys are.
@@ -714,10 +755,7 @@ events:SetScript("OnEvent", function(_, event)
 			-- objects. Turning it back on builds it.
 			return
 		end
-		if Build() then
-			ChatWindow.Lock()
-			ChatWindow.Apply()
-		end
+		ChatWindow.Start()
 		return
 	end
 

@@ -491,6 +491,31 @@ while IFS= read -r bad; do
 	status=1
 done < <(grep -rnE 'ui\.Section\("[^"]*"\)' --include='*.lua' . || true)
 
+# A font size is a pixel height, never a unit measurement.
+#
+# Every number in a widget file is a design pixel multiplied by the zoom, so
+# `16 * unit` is the shape of nearly every line in UI/. A font size is the one
+# thing that is not: inside a frame ns.UI.Adopt has taken onto the grid, a font
+# size already is a pixel height, which is why UI.Metric keeps the three of them
+# beside the pixel measurements and why every call in the addon passes one of
+# them raw.
+#
+# The loot feed's filter chips got this wrong and it is worth writing the gate
+# rather than the fix. `UI.Glyph(chip, CHIP_MARK * unit, ...)` asked for 26.25,
+# SetFont refuses a fraction, the readback in UI/Text.lua then failed the
+# fallback too, GetFont came back nil, and every chip drew an empty square. The
+# geometry was correct and only the picture was missing, so nothing that
+# measures a rectangle could see it, and the harness runs at one unit per pixel
+# where the fraction never appears at all. It took a screenshot to find.
+#
+# One line calls only, which is every one of them: a font size is an argument
+# short enough that nobody wraps it.
+while IFS= read -r bad; do
+	echo "a font size is multiplied by a unit, and a font size is already pixels: $bad"
+	status=1
+done < <(grep -rnE 'UI\.(Label|Glyph|Font|GlyphFont|NumberFont)\([^)]*\*[[:space:]]*[A-Za-z_.]*unit' \
+	--include='*.lua' . || true)
+
 # Every string in the addon names the role it is drawn in.
 #
 # UI/Text.lua has three: flat over a surface this addon painted, shadowed over

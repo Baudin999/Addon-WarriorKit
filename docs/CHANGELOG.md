@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+### A font size is a pixel height, and two places had it in units
+
+The loot feed's filter chips shipped drawing nothing. Every measurement in a
+widget file is a design pixel multiplied by the zoom, so `16 * unit` is the
+shape of nearly every line in `UI/`, and the chip's mark was written the same
+way: `UI.Glyph(chip, CHIP_MARK * unit, ...)`. A font size is the one thing that
+is not a unit measurement. Inside a frame `ns.UI.Adopt` has taken onto the grid
+a font size already is a pixel height, so this asked `UI.GlyphFont` for 26.25,
+`SetFont` refused the fraction, the readback in `UI/Text.lua` then failed its
+fallback as well, `GetFont` came back nil, and every chip drew an empty square.
+
+Nothing that measures a rectangle could see it. The geometry was right and only
+the picture was missing, and the harness runs at one unit per pixel where the
+fraction never appears at all. It took a screenshot.
+
+So the fix is a gate rather than an edit. `check.sh` refuses a font size
+multiplied by a unit anywhere in the addon, and the first run of it found the
+same mistake a second time in `UnitFrames/PlayerCast.lua`, where the spell name
+and the seconds left on your own cast bar are sized off the bar's height. That
+one has been on main since the cast bar landed and would have drawn no text at
+any UI scale that is not a whole number of pixels.
+
+### A tooltip can open above the thing it describes
+
+Beside is right for anything the width of a row. It is wrong for anything
+smaller than the cursor: the pointer's hotspot is its top left corner and the
+arrow hangs down and to the right, so a box pinned to the top right of a sixteen
+pixel chip opens underneath the arrow that opened it and you read it round the
+pointer.
+
+`Tooltip.Show` takes a third argument for it and `Anchor` still picks a side the
+same way, so a chip on a feed dragged to the right of the screen throws its box
+left rather than off the edge. The chips are the only caller. `Tooltip.Frame` is
+published so the harness can assert the box's bottom edge is above the chip's
+top, which is the only way to state that claim from outside the file.
+
 ### The chat window is a rail of rooms, and the room is the channel
 
 Three tabs became thirteen rooms. A room is one conversation: Conversation and

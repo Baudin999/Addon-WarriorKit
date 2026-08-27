@@ -424,13 +424,33 @@ end
 -- from. Right of the owner normally, and left of it once the owner is past the
 -- middle of the screen, because a tooltip clamped to the screen edge is one
 -- that covers the thing you are hovering.
-local function Anchor(owner)
+--
+-- **And above it where the caller asks.** Beside is right for anything the
+-- width of a row: the cursor is somewhere in the middle of a wide thing and the
+-- box opens clear of it. It is wrong for anything small. The cursor's hotspot
+-- is the pointer's top left corner and the arrow hangs down and to the right
+-- from there, so a box pinned to the top right of a sixteen pixel square opens
+-- underneath the arrow that opened it and you read it round the pointer. That
+-- is the loot feed's filter chips, and it was the first thing anybody said
+-- about them.
+--
+-- Above still picks a side, and picks it the same way, so a chip on a feed the
+-- player has dragged to the right of the screen throws its box left rather than
+-- off the edge.
+local function Anchor(owner, above)
 	local centre = UIParent:GetWidth() / 2
 	local left = ns.Measure(owner, "GetLeft")
 	local right = ns.Measure(owner, "GetRight")
+	local far = left and right and (left + right) / 2 > centre
 
 	frame:ClearAllPoints()
-	if left and right and (left + right) / 2 > centre then
+	if above then
+		if far then
+			frame:SetPoint("BOTTOMRIGHT", owner, "TOPRIGHT", 0, OFFSET)
+		else
+			frame:SetPoint("BOTTOMLEFT", owner, "TOPLEFT", 0, OFFSET)
+		end
+	elseif far then
 		frame:SetPoint("TOPRIGHT", owner, "TOPLEFT", -OFFSET, 0)
 	else
 		frame:SetPoint("TOPLEFT", owner, "TOPRIGHT", OFFSET, 0)
@@ -511,7 +531,9 @@ end
 -- to nag about: an empty box the size of its own padding is worse than no box,
 -- and without the refusal the last hover's sentence stays on screen pointing at
 -- this one.
-function Tooltip.Show(owner, data)
+-- `above` opens the box over the owner rather than beside it, which is what
+-- anything smaller than the cursor has to ask for. See Anchor.
+function Tooltip.Show(owner, data, above)
 	if not frame then
 		Build()
 	end
@@ -531,7 +553,10 @@ function Tooltip.Show(owner, data)
 	end
 
 	Layout()
-	Anchor(owner)
+	-- After Layout, and it has to be. Above hangs the box's bottom edge off the
+	-- owner's top, so where its top lands is its own height, and its height is
+	-- not known until the lines have been measured and wrapped.
+	Anchor(owner, above)
 	opened = owner
 	frame:Show()
 	return true
@@ -549,6 +574,14 @@ end
 -- the thing you hovered" is a claim scripts/harness.lua has to be able to make,
 -- and reading it back off the anchor would be asserting the client's own
 -- bookkeeping rather than this file's.
+-- The box itself, so scripts/harness.lua can measure where it opened. Handed
+-- out for the reason Owner is: "the tooltip sits above the chip rather than
+-- beside it" is a claim about two rectangles, and there is no answering it from
+-- the outside without one of them.
+function Tooltip.Frame()
+	return frame
+end
+
 function Tooltip.Owner()
 	return opened
 end

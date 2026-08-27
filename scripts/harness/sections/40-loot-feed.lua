@@ -164,6 +164,34 @@ do
 	check(Loot.Lit(0), "clicking the first chip twice did not put it back")
 	check(feed:Shown() == 2, "clicking the first chip twice did not bring the grey back")
 
+	-- A chip draws a mark, and the mark has a font on it.
+	--
+	-- This is the one that shipped broken. UI.Glyph takes a pixel height and
+	-- every measurement in UI/Feed.lua is a design pixel multiplied by the
+	-- zoom, so the size went in multiplied: UI.GlyphFont was asked for 26.25,
+	-- SetFont refused the fraction, GetFont came back nil and every chip drew
+	-- an empty square. Nothing measured it, because the geometry was right and
+	-- only the picture was missing.
+	check(chip.mark:GetText() == "*",
+		"the first chip carries no mark: " .. tostring(chip.mark:GetText()))
+	local face, size = chip.mark:GetFont()
+	check(face ~= nil and size ~= nil,
+		"a chip's mark has no font on it, so it draws nothing at all")
+	check(size == math.floor(size),
+		("a chip's mark is set at %s, and a font size has to be a whole number of pixels")
+			:format(tostring(size)))
+
+	-- And the tooltip opens over it rather than beside it. The cursor's
+	-- hotspot is the pointer's top left corner and the arrow hangs down and to
+	-- the right, so a box pinned beside a sixteen pixel square opens under the
+	-- arrow that opened it.
+	ns.UI.Tooltip.Close()
+	chip:GetScript("OnEnter")(chip)
+	check(ns.UI.Tooltip.IsShown(), "hovering a chip said nothing")
+	check(ns.Measure(ns.UI.Tooltip.Frame(), "GetBottom") >= ns.Measure(chip, "GetTop"),
+		"a chip's tooltip opens beside it, which puts it under the cursor")
+	chip:GetScript("OnLeave")(chip)
+
 	-- With the mouse off the feed is a picture, and a picture does not have
 	-- seven clickable squares on it. That setting is somebody getting the
 	-- right button back for the camera, and a chip still swallowing it is the

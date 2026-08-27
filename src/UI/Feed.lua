@@ -568,7 +568,15 @@ function Feed:BuildChips(specs)
 			-- whole thing back to Arial Narrow on a client that refuses the
 			-- font, and scripts/bake-glyphs.sh picked the three letters so that
 			-- what comes back is still a mark: `*`, `!` and `$`.
-			chip.mark = UI.Glyph(chip, CHIP_MARK * unit, spec.color, "CENTER")
+			-- The size raw, not in units. Every measurement in this file is a
+			-- design pixel multiplied up by the zoom, and a font size is the one
+			-- thing that is not: inside a frame ns.UI.Adopt has taken onto the
+			-- grid, a font size already is a pixel height. Multiplied, this
+			-- asked UI.GlyphFont for 26.25, SetFont refused the fraction,
+			-- GetFont came back nil and the chip drew nothing at all. Every
+			-- other caller of UI.Glyph in the addon passes ns.UI.Metric.glyph
+			-- and this one now reads like them.
+			chip.mark = UI.Glyph(chip, CHIP_MARK, spec.color, "CENTER")
 			chip.mark:SetPoint("CENTER")
 			chip.mark:SetText(spec.mark)
 
@@ -580,6 +588,12 @@ function Feed:BuildChips(specs)
 			end)
 			chip:SetScript("OnEnter", function(this)
 				UI.Tint(this.bg, C.hover)
+				-- Opened above rather than beside. A tooltip hung off the right
+				-- of a sixteen pixel square lands underneath the cursor that
+				-- opened it, because the pointer's hotspot is its top left
+				-- corner and the arrow itself hangs down and to the right. On a
+				-- feed row, which is the width of the window, the same anchor
+				-- is fine and this would throw the box up over the rows.
 				-- Called rather than read where the caller gave a function. A
 				-- chip that names a quality names it in the client's own
 				-- language, and the client's own language is a global that is
@@ -587,7 +601,7 @@ function Feed:BuildChips(specs)
 				-- loading, which is the same trap Feeds/Loot.lua builds its
 				-- loot patterns at login to avoid.
 				local tip = this.tip
-				UI.Tooltip.Show(this, { { type(tip) == "function" and tip() or tip } })
+				UI.Tooltip.Show(this, { { type(tip) == "function" and tip() or tip } }, true)
 			end)
 			chip:SetScript("OnLeave", function(this)
 				UI.Tint(this.bg, C.control)
