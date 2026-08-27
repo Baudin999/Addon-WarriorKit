@@ -1,8 +1,8 @@
 -- The options window
 --
--- Opened, then walked: every entry in the rail, every tab under every entry,
--- and every row on every tab. What is asserted here is what reading the source
--- cannot settle, and all of it is a complaint the rewrite was for.
+-- Opened, then walked: every group in the rail, every section folded out under
+-- it, and every row on every section. What is asserted here is what reading the
+-- source cannot settle, and all of it is a complaint the rewrite was for.
 --
 -- The window is on the grid and sized in whole pixels, so a hairline is a
 -- hairline and a row is not half a pixel tall.
@@ -21,6 +21,10 @@
 -- group's name, every lede and hint is inside its cap, no label ends in
 -- whitespace or is empty, every reading fits one line, and every part with a
 -- boolean in its defaults declares a switch or is allow-listed with a reason.
+--
+-- Then the fold. One group open at a time, one line under it per section, every
+-- line short enough to be read whole in the column it sits in, and the page
+-- staying up when the group it belongs to is folded shut over it.
 
 local H = ...
 local state = H.state
@@ -60,11 +64,14 @@ if window then
 	check(window.view.mechanism ~= "none",
 		"neither SetClipsChildren nor the ScrollFrame type came up, so nothing clips")
 
-	-- The rail fits without scrolling, which is the number the eighteen entries
-	-- could not make. Three of them sat below the fold and nothing said so.
+	-- The rail fits folded shut, which is the number the eighteen entries could
+	-- not make: three of them sat below the fold and nothing said so. Open is
+	-- allowed to be taller than the view, because the longest group is eleven
+	-- sections and the rail scrolls; what is not allowed is the chosen line
+	-- ending up outside the viewport, which is checked on every group below.
 	local railHeight = #window.groups * (ns.UI.Metric.railRow + 1)
 	check(railHeight <= window.rail.view.height,
-		("the rail is %d pixels of entries in a %.0f pixel view")
+		("the rail folded shut is %d pixels of entries in a %.0f pixel view")
 			:format(railHeight, window.rail.view.height))
 
 	local rows, tabs, wrapped, tallest, shortest = 0, 0, 0, 0, math.huge
@@ -75,11 +82,24 @@ if window then
 		local group = window.groups[index]
 		check(window.rail:Select(index), ("rail entry %d refused to select"):format(index))
 		check(#group.sections >= 1, ("%s has no section"):format(group.name))
-		check(group.tabs.frame:IsShown(),
-			("%s is selected in the rail and its tab strip is hidden"):format(group.name))
-		check(whole(group.tabs.frame:GetHeight()),
-			("%s has a tab strip %.2f pixels tall"):format(group.name, group.tabs.frame:GetHeight()))
 		tabs = tabs + #group.sections
+
+		-- The fold. The group you chose is open and holds one line per section,
+		-- and it is the only one open: seven groups folded out at once is the
+		-- eighteen entry rail again with more steps.
+		local folder = window.rail.groups[index]
+		check(folder.open, ("%s was chosen in the rail and did not fold open"):format(group.name))
+		check(folder.button.text:GetStringWidth() + folder.button.room
+			<= folder.button:GetWidth() + 1e-6,
+			("%s is %.0f pixels of text in %.0f pixels of rail"):format(group.name,
+				folder.button.text:GetStringWidth(), folder.button:GetWidth() - folder.button.room))
+		check(#folder.children == #group.sections,
+			("%s has %d sections and %d lines under it in the rail")
+				:format(group.name, #group.sections, #folder.children))
+		for other = 1, #window.groups do
+			check(other == index or not window.rail.groups[other].open,
+				("%s is open in the rail while %s is"):format(window.groups[other].name, group.name))
+		end
 
 		titles[group.name] = {}
 
@@ -98,13 +118,30 @@ if window then
 				("%s: two sections under one group carry the same title"):format(where))
 			titles[group.name][page.title] = true
 
-			check(stack.frame:IsShown(), where .. " did not show when its tab was chosen")
+			check(stack.frame:IsShown(), where .. " did not show when its line was chosen")
 			for other = 1, #group.sections do
 				if other ~= section then
 					check(not group.sections[other].stack.frame:IsShown(),
 						where .. " is showing while another section of the same page is too")
 				end
 			end
+
+			-- The line in the rail and the title over the page both say which
+			-- section this is. With the tab strip gone these are the only two
+			-- things that do, and one of them has to survive a fold.
+			check(folder.children[section].selected,
+				where .. " is showing and its line in the rail is not marked")
+			check(plain(window.header.text.text) == page.title,
+				("%s: the title over the page reads %q")
+					:format(where, plain(window.header.text.text)))
+
+			-- Every line in the rail fits the column it is in. A title too long
+			-- for the rail is a title cut off mid word, and the rail is now the
+			-- only place a section is named before you open it.
+			local line = folder.children[section]
+			check(line.text:GetStringWidth() + line.room <= line:GetWidth() + 1e-6,
+				("%s: the rail line is %.0f pixels of text in %.0f pixels of room")
+					:format(where, line.text:GetStringWidth(), line:GetWidth() - line.room))
 
 			if page.lede then
 				ledes = ledes + 1
@@ -188,6 +225,26 @@ if window then
 		end
 	end
 
+	-- Folding, which is the one thing the rail does that a strip of tabs could
+	-- not. Shutting the group you are in leaves its page up and moves the mark
+	-- onto the group's own line, so the rail can be folded flat to eight lines
+	-- without the window going blank. Opening it again comes back to the section
+	-- you were reading rather than to the first one.
+	ns.Options.SelectGroup(2)
+	ns.Options.SelectSection(3)
+	local held = window.groups[2].sections[3]
+	check(window.rail:Toggle(2), "the open group refused to fold shut")
+	check(not window.rail.groups[2].open, "the open group is still open after folding it shut")
+	check(held.stack.frame:IsShown(), "folding the rail shut took the page down with it")
+	check(window.rail.groups[2].button.selected,
+		"the group is folded shut over the page that is showing and nothing in the rail is marked")
+	check(window.rail:Toggle(2), "the shut group refused to fold open")
+	check(window.groups[2].current == 3,
+		("opening the group again landed on section %d, not the third")
+			:format(window.groups[2].current))
+	check(window.rail.groups[2].children[3].selected,
+		"opening the group again did not mark the section it was left on")
+
 	-- Every label the window drew, taken off the index rather than off the
 	-- source, so a label built by concatenation is measured as the player reads
 	-- it. `"collect " .. entry.collects` is the one that made this necessary:
@@ -248,6 +305,21 @@ if window then
 	ns.Options.Find("")
 	check(missed == 0, ("%d of %d labels are not findable"):format(missed, searched))
 
+	-- What a query does to the page behind it, both ways round. The page and its
+	-- title go down while results are up, because a result is a link to one of
+	-- them, and both come back when the field is emptied. Coming back is the half
+	-- that was broken: the strip returned and the section under it did not, so
+	-- clearing the field left the window blank until you clicked a tab.
+	ns.Options.SelectGroup(2)
+	ns.Options.SelectSection(1)
+	local behind = window.groups[2].sections[1]
+	ns.Options.Find("swing")
+	check(not behind.stack.frame:IsShown(), "results are up and the page behind them is drawn")
+	check(not window.header.frame:IsShown(), "results are up and the page title behind them is drawn")
+	ns.Options.Find("")
+	check(behind.stack.frame:IsShown(), "clearing the field left the window empty")
+	check(window.header.frame:IsShown(), "clearing the field left the page with no title")
+
 	-- And the three other things a query is matched against: a group name, a
 	-- section title and a part's slash word. The last one is the reason search
 	-- exists in the shape it does, because `skin` is what somebody who already
@@ -266,12 +338,12 @@ if window then
 	check(prose < 16000,
 		("the window holds %d characters of prose and the budget is 16,000"):format(prose))
 
-	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d tabs, %d rows, %d wrapped strings")
+	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))
 	print(("panel  %d controls, %d switches, %d ledes, %d hints, %d readings, %d characters of prose")
 		:format(controls, switches, ledes, hints, readings, prose))
 	print(("panel  every one of the %d findable by its own label"):format(searched))
-	print(("panel  viewport %.0f x %.0f, tallest section %.0f, rail %d px in %.0f, clipping by %s")
+	print(("panel  viewport %.0f x %.0f, tallest section %.0f, rail %d px shut in %.0f, clipping by %s")
 		:format(window.view.width, window.view.height, tallest, railHeight,
 			window.rail.view.height, window.view.mechanism))
 

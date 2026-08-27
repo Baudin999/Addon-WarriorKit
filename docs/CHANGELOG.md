@@ -19,8 +19,8 @@ on screen said so. Behind them were 44 tabs, 134 controls and 134 notes holding
 `ui.Section(title, group)`, and the panel declares eight groups: Start here,
 Fighting, You, Them, Readouts, The screen, Chores, Under the hood. A group that
 does not exist is a login error rather than a section quietly landing in a
-default. Eight entries come to 184 pixels, so the rail fits without scrolling
-for the first time.
+default. Eight entries come to 184 pixels, so the rail fits a 390 pixel view
+folded shut, which the eighteen never did.
 
 That also lets one part's sections sit apart. `UnitFrames/Panel.lua` has three
 and two of them are about your own frames while the third is about enemy
@@ -28,9 +28,28 @@ nameplates; they are in **You** and in **Them** now without a line of code
 moving between files.
 
 `order` no longer decides rail position, because the rail is not made of parts.
-It decides tab order inside a group, and `ns.Register` refuses anything that is
-not a whole number or that another part already took. `artwork` and `minimap`
-were both on 8 and their relative position was whatever `table.sort` felt like.
+It decides where a part's sections sit inside a group, and `ns.Register`
+refuses anything that is not a whole number or that another part already took.
+`artwork` and `minimap` were both on 8 and their relative position was whatever
+`table.sort` felt like.
+
+**The rail folds.** The group you are in stands open with its sections listed
+under it, indented, and choosing one is a single click on the thing you came
+for. It replaced a strip of tabs across the top of the page, which had two
+faults. The strip could only show the sections of the group you were already on,
+so the window never showed more than an eighth of itself at once. And Fighting's
+eleven wrapped onto three lines of stubs, which took a fifth of the page's
+height to say what a column says in a column.
+
+One group is open at a time. Clicking the open one shuts it and leaves its page
+up, with the mark moved onto the group's own line, so the rail can be folded
+flat to eight lines without the window going blank; clicking a shut one opens it
+onto whichever of its sections you were last reading. The rail is 180 pixels
+wide because a section title has to be readable in it, and the window is 608 so
+that the page keeps the 400 pixels it had. Open is taller than the view when
+Fighting is out, and the rail scrolls; whatever is selected is kept inside the
+viewport. The title of the section you are on is drawn over the page, on the
+hairline that used to be the underside of the tab strip.
 
 **One switch per part, drawn by the panel.** A part declares
 `switch = { key, label, apply }` and the panel draws the check box in the same
@@ -38,7 +57,7 @@ place on every part's first page. Eleven features had each written their own for
 the same idea: `show the row`, `show the icon`, `Show the meters`, `Show the
 swing bars`, `show enemy bars`, `draw the WarriorKit chat window`. The rail now
 marks any group holding a part that is on, which is the one question the window
-could never answer without opening forty five tabs, and **Start here** is a
+could never answer without opening forty five pages, and **Start here** is a
 whole page of nothing but those switches and their ledes.
 
 **Notes are gone and three capped calls replace them.** `ui.Lede` is one line
@@ -54,10 +73,14 @@ the panel.
 
 **A search field in the title bar, focused when the window opens.** Every
 control records its label, its section and its group as it is built. Typing
-filters and each result reads `group / section / label`; clicking one selects
-the group, selects the tab and marks the row. A query matches the label, the
-section title, the group name and the part's slash words, so typing `skin` finds
-the frame controls that `/wk skin` drives.
+filters and each result reads `group / section / label`; clicking one opens the
+group, selects the section and marks the row. Emptying the field puts the page
+back. It did not while the tab strip existed. The strip returned and the section
+under it stayed hidden, so the window sat blank until you clicked a tab, and the
+harness now clears a query and checks the page is there.
+
+A query matches the label, the section title, the group name and the part's
+slash words, so typing `skin` finds the frame controls that `/wk skin` drives.
 
 **Four kit calls for the four knobs every part had reinvented.** `ui.Zoom` has
 no range because there is one and it is 1 to 3; four files had declared
@@ -84,7 +107,10 @@ exists, no group holds two sections with one title, no title repeats its group's
 name, every lede and hint is inside its cap, every reading fits one line, no
 label is empty or ends in whitespace, all 147 labels are findable by typing them
 in full, and every part with a boolean in its defaults declares a switch or is
-allow-listed with a reason. `check.sh` got the half a grep can settle, with each
+allow-listed with a reason. The fold has its own: one group open at a time, one
+line under it per section, every line short enough to be read whole in the
+column it sits in, and the page still up when the group it belongs to is folded
+shut over it. `check.sh` got the half a grep can settle, with each
 rule naming the kit call to use instead.
 
 

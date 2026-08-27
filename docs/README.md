@@ -103,7 +103,7 @@ name of none of them.
                          coloured stripe, with markers that band the whole row;
                          a ring behind it and rows that repaint rather than move
     UI/Widgets.lua       the widget kit a page is built out of
-    UI/Window.lua        window chrome, the side rail and the tab strip
+    UI/Window.lua        window chrome, the folding side rail and the tab strip
 
     Perf/Perf.lua        what each ticker costs and what the addon is holding
     Perf/Feature.lua
@@ -921,7 +921,7 @@ top of whatever follows it.
 
 **A page has two levels and the kit names both.** `ui.Section(title, group)`
 says which of the window's eight groups the rows after it belong in, and the
-title becomes one tab inside that group. The kit asks its host where sections
+title becomes one line under that group when the rail folds it open. The kit asks its host where sections
 go; a host that answers nothing gets a heading rule in the same column instead,
 which is what this call was before the window had a rail.
 

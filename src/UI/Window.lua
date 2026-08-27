@@ -307,30 +307,60 @@ end
 --------------------------------------------------------------------------
 -- The rail
 --
--- A column of choices down the left edge, one selected at a time. It sits in a
--- scroll view of its own rather than assuming its entries fit, because the
--- number of them is the number of parts the addon has and that number only goes
--- up. The view hides its bar while they do fit, so today it costs nothing but
--- the reserved column.
+-- A column down the left edge that folds. Eight groups, and the one you are in
+-- stands open with its sections listed under it, indented. Choosing a section
+-- is one click on the thing you came for rather than a click on the rail and a
+-- second one on a strip of tabs across the top of the page.
+--
+-- The strip was the thing this replaced and it had two faults a fold does not.
+-- It could only show the sections of the group you were already on, so the
+-- window never showed more than an eighth of itself at once. And a group with
+-- eleven of them wrapped onto three lines of stubs, which took a fifth of the
+-- page's height to say what a column says in a column.
+--
+-- One group is open at a time. Clicking a shut one opens it onto whichever
+-- section you were last reading there; clicking the open one shuts it, and the
+-- page stays up with the group's own row carrying the mark instead. So the rail
+-- can be folded flat to eight lines without the window going blank.
+--
+-- It sits in a scroll view of its own, because open is taller than shut: eight
+-- groups fit the rail with room over, and eight plus the eleven sections of
+-- Fighting do not. Reveal keeps whatever is selected inside the viewport, so
+-- opening a long group never scrolls the chosen row off the bottom.
 --------------------------------------------------------------------------
 
 local Rail = {}
 Rail.__index = Rail
 
+-- The fold glyph, in the same letters the dropdown arrow uses, because a
+-- triangle is a texture and a texture is a file, a path and a power of two.
+local OPEN, SHUT = "v", ">"
+
 local function PaintRail(button)
 	local shade = button.selected and C.selected or (button.hovered and C.hover or C.rail)
 	UI.Tint(button.bg, shade)
 	button.mark:SetShown(button.selected and true or false)
-	button.dot:SetShown(button.dot.lit and true or false)
-	if button.selected then
-		button.text:SetTextColor(C.heading[1], C.heading[2], C.heading[3])
-	else
-		button.text:SetTextColor(C.dim[1], C.dim[2], C.dim[3])
+	if button.dot then
+		button.dot:SetShown(button.dot.lit and true or false)
 	end
+	if button.fold then
+		button.fold:SetText(button.open and OPEN or SHUT)
+	end
+
+	-- Three shades rather than two. A section that is showing is the heading
+	-- colour, an open group is the body colour because it is the heading of a
+	-- list you are reading, and everything shut is dim.
+	local color = C.dim
+	if button.selected then
+		color = C.heading
+	elseif button.open then
+		color = C.text
+	end
+	button.text:SetTextColor(color[1], color[2], color[3])
 end
 
 function UI.Rail(parent, opts)
-	local rail = setmetatable({ buttons = {}, onSelect = opts and opts.onSelect }, Rail)
+	local rail = setmetatable({ groups = {}, onSelect = opts and opts.onSelect }, Rail)
 	rail.frame = CreateFrame("Frame", nil, parent)
 	local bg = ns.Fill(rail.frame, "BACKGROUND", C.rail[1], C.rail[2], C.rail[3], 1)
 	bg:SetAllPoints()
@@ -341,9 +371,11 @@ function UI.Rail(parent, opts)
 	return rail
 end
 
-function Rail:Add(label)
-	local index = #self.buttons + 1
-	local button = CreateFrame("Button", nil, self.stack.frame)
+-- The half of a row that is the same whichever kind it is. A row is built once
+-- and kept: a frame cannot be destroyed on this client, so folding hides rows
+-- and rebuilds the column's cell list rather than unmaking anything.
+local function RailRow(rail, left)
+	local button = CreateFrame("Button", nil, rail.stack.frame)
 	button.bg = ns.Fill(button, "BACKGROUND", C.rail[1], C.rail[2], C.rail[3], 1)
 	button.bg:SetAllPoints()
 	button.mark = ns.Fill(button, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
@@ -351,24 +383,10 @@ function Rail:Add(label)
 	button.mark:SetPoint("BOTTOMLEFT")
 	button.mark:SetWidth(2)
 
-	-- Whether anything filed under this entry is drawing on your screen. Three
-	-- pixels in the accent colour against the right edge, which is the one part
-	-- of a rail button nothing else uses. It is the single question the window
-	-- could never answer without opening forty four tabs.
-	button.dot = ns.Fill(button, "OVERLAY", C.accent[1], C.accent[2], C.accent[3], 1)
-	button.dot:SetSize(3, 3)
-	button.dot:SetPoint("RIGHT", -M.rowGap, 0)
-	button.dot:Hide()
-
 	button.text = UI.Label(button, M.font, C.dim, "LEFT", UI.FLAT)
-	button.text:SetPoint("LEFT", M.gutter, 0)
-	button.text:SetPoint("RIGHT", button.dot, "LEFT", -M.rowGap, 0)
+	button.text:SetPoint("LEFT", left, 0)
 	UI.Wrap(button.text, false)
-	button.text:SetText(label)
 
-	button:SetScript("OnClick", function()
-		self:Select(index)
-	end)
 	button:SetScript("OnEnter", function(this)
 		this.hovered = true
 		PaintRail(this)
@@ -377,57 +395,206 @@ function Rail:Add(label)
 		this.hovered = nil
 		PaintRail(this)
 	end)
+	return button
+end
 
+function Rail:Add(label)
+	local at = #self.groups + 1
+	local group = { at = at, children = {}, current = 1 }
+	local button = RailRow(self, M.gutter + M.rowGap)
+
+	-- The fold, in the margin the indent leaves free on the rows below it, so a
+	-- group's own letters and its sections' letters do not start in the same
+	-- column and the shape of the list is legible with the words unread.
+	button.fold = UI.Label(button, M.small, C.quiet, "LEFT", UI.FLAT)
+	button.fold:SetPoint("LEFT", M.rowGap, 0)
+	UI.Wrap(button.fold, false)
+
+	-- Whether anything filed under this group is drawing on your screen. Three
+	-- pixels in the accent colour against the right edge, which is the one part
+	-- of a rail row nothing else uses. It is the single question the window
+	-- could never answer without opening forty five tabs.
+	button.dot = ns.Fill(button, "OVERLAY", C.accent[1], C.accent[2], C.accent[3], 1)
+	button.dot:SetSize(3, 3)
+	button.dot:SetPoint("RIGHT", -M.rowGap, 0)
+	button.dot:Hide()
+	button.text:SetPoint("RIGHT", button.dot, "LEFT", -M.rowGap, 0)
+	button.text:SetText(label)
+
+	-- What the label has to fit in: the row less the fold on the left, the dot on
+	-- the right and the air round both. Recorded rather than worked out again,
+	-- because the gate that refuses a rail line too long to read has to measure
+	-- against the same number the anchors above use.
+	button.room = M.gutter + M.rowGap + 3 + M.rowGap * 2
+
+	button:SetScript("OnClick", function()
+		self:Toggle(at)
+	end)
+
+	group.button = button
 	PaintRail(button)
-	self.buttons[index] = button
-	self.stack:Add(button, { height = M.railRow, gap = 1 })
+	self.groups[at] = group
+	return at
+end
+
+function Rail:AddChild(at, label)
+	local group = self.groups[at]
+	if not group then
+		return nil
+	end
+	local index = #group.children + 1
+	local button = RailRow(self, M.gutter)
+	button.text:SetPoint("RIGHT", -M.rowGap, 0)
+	button.text:SetText(label)
+	button.room = M.gutter + M.rowGap
+	button:SetScript("OnClick", function()
+		self:Select(at, index)
+	end)
+	PaintRail(button)
+	group.children[index] = button
 	return index
+end
+
+-- The column, rebuilt from what is open. Cells are thrown away and re-added
+-- rather than shown and hidden in place, because a hidden frame still holds its
+-- cell's height and the fold would cost nothing at all.
+function Rail:Layout()
+	self.stack.cells = {}
+	for _, group in ipairs(self.groups) do
+		self.stack:Add(group.button, { height = M.railRow, gap = 1 })
+		for _, child in ipairs(group.children) do
+			child:SetShown(group.open and true or false)
+			if group.open then
+				self.stack:Add(child, { height = M.railRow, gap = 1, indent = M.indent })
+			end
+		end
+	end
+	-- Nothing has said how big the rail is until Resize runs, and the window
+	-- chooses its first line before that. So the column is laid out and the
+	-- viewport is told about it only once there is a viewport to tell.
+	self.stack:SetWidth(self.view.width or 0)
+	local extent = self.stack:Reflow()
+	if self.view.height then
+		self.view:Update(extent)
+	end
+end
+
+function Rail:Paint()
+	for at, group in ipairs(self.groups) do
+		local holds = (at == self.selected)
+		group.button.open = group.open
+		group.button.selected = holds and not group.open
+		PaintRail(group.button)
+		for index, child in ipairs(group.children) do
+			child.selected = holds and group.open and index == self.section
+			PaintRail(child)
+		end
+	end
+end
+
+-- Keep a row inside the viewport. Opening the longest group puts its last
+-- sections below the fold, and a selection you cannot see is a rail that has
+-- stopped saying where you are.
+function Rail:Reveal(button)
+	if not self.view.height then
+		return false
+	end
+	local top = 0
+	for _, cell in ipairs(self.stack.cells) do
+		if cell.frame == button then
+			if top < self.view.offset then
+				self.view:ScrollTo(top)
+			elseif top + cell.height > self.view.offset + self.view.height then
+				self.view:ScrollTo(top + cell.height - self.view.height)
+			end
+			return true
+		end
+		top = top + cell.height + cell.gap
+	end
+	return false
 end
 
 function Rail:Resize(width, height)
 	self.frame:SetSize(width, height)
 	self.view:Resize(width - M.rowGap * 2, height - M.rowGap * 2)
-	self.stack:SetWidth(self.view.width)
-	self.view:Update(self.stack:Reflow())
+	self:Layout()
 end
 
--- Whether this entry holds something that is on. Returns whether it changed, so
--- a caller refreshing every entry does not repaint the eight of them every time
+-- Whether this group holds something that is on. Returns whether it changed, so
+-- a caller refreshing every group does not repaint the eight of them every time
 -- anything anywhere in the window is clicked.
-function Rail:SetDot(index, lit)
-	local button = self.buttons[index]
-	if not button or (button.dot.lit and true or false) == (lit and true or false) then
+function Rail:SetDot(at, lit)
+	local group = self.groups[at]
+	if not group or (group.button.dot.lit and true or false) == (lit and true or false) then
 		return false
 	end
-	button.dot.lit = lit and true or false
-	PaintRail(button)
+	group.button.dot.lit = lit and true or false
+	PaintRail(group.button)
 	return true
 end
 
-function Rail:Select(index)
-	if not self.buttons[index] then
+-- A section, named by its group and its place in it. The section is optional
+-- and defaults to whichever one that group was last left on, which is what a
+-- click on a folded group means.
+function Rail:Select(at, index)
+	local group = self.groups[at]
+	if not group then
 		return false
 	end
-	self.selected = index
-	for i = 1, #self.buttons do
-		self.buttons[i].selected = (i == index)
-		PaintRail(self.buttons[i])
+	index = index or group.current or 1
+	if not group.children[index] then
+		return false
 	end
+
+	for _, other in ipairs(self.groups) do
+		other.open = (other == group)
+	end
+	group.current = index
+	self.selected, self.section = at, index
+
+	self:Layout()
+	self:Paint()
+	-- Told first, revealed second. What the window does with the choice is lay
+	-- itself out again, and that hands the rail its size, so a scroll worked out
+	-- before it would be worked out against the last one.
 	if self.onSelect then
-		self.onSelect(index)
+		self.onSelect(at, index)
 	end
+	self:Reveal(group.children[index])
+	return true
+end
+
+-- What a click on a group row does. Open it onto where you left it, or shut the
+-- one that is already open and leave its page up.
+function Rail:Toggle(at)
+	local group = self.groups[at]
+	if not group then
+		return false
+	end
+	if not group.open then
+		return self:Select(at, group.current)
+	end
+	group.open = false
+	self:Layout()
+	self:Paint()
 	return true
 end
 
 --------------------------------------------------------------------------
 -- The tab strip
 --
--- A row of choices across the top of whatever the rail chose, one per section
--- of the page. Each tab is as wide as its own title, because a title is what a
--- tab is for and cutting it in half to make the row tidy loses the only
--- information on it. A row that runs out of width wraps onto the next one and
--- the strip grows by a whole tab, so a part with eight sections is a taller
--- strip rather than eight unreadable stubs.
+-- A row of choices across the top of a window or a page, one per thing behind
+-- it. The options window used to navigate with one and now folds its rail
+-- instead; what is left are the two places a strip is the right shape: the chat
+-- window's channels, and the list of loadouts inside one page of the panel.
+-- Both are short, both are one word each, and neither is the top level of
+-- anything.
+--
+-- Each tab is as wide as its own title, because a title is what a tab is for
+-- and cutting it in half to make the row tidy loses the only information on it.
+-- A row that runs out of width wraps onto the next one and the strip grows by a
+-- whole tab, so eight of them is a taller strip rather than eight unreadable
+-- stubs.
 --------------------------------------------------------------------------
 
 local TABPAD = 10

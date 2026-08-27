@@ -10,12 +10,20 @@ local M = UI.Metric
 -- rest at PLAYER_LOGIN by walking the registry, handing each feature the widget
 -- kit from UI/Widgets.lua and letting it draw its own rows.
 --
--- Two levels of navigation, and the top one is not the registry.
+-- One piece of navigation, and it is not the registry.
 --
 -- The rail down the left is eight groups, declared below and owned by no
 -- feature. A group is what somebody was thinking about when they opened the
--- window. Choosing one puts up its tab strip, and the tabs are the sections
--- filed under it: every `ui.Section(title, group)` a feature writes opens one.
+-- window. It folds: the group you are in stands open with its sections listed
+-- under it, and every `ui.Section(title, group)` a feature writes is one of
+-- those lines.
+--
+-- The fold replaced a strip of tabs across the top of the page, and the reason
+-- is that the strip could only ever show one group's sections. Forty five of
+-- them behind eight rail entries meant the window showed an eighth of itself at
+-- a time, and Fighting's eleven wrapped onto three lines of stubs that took a
+-- fifth of the page's height. A column says the same thing in a column, and it
+-- says it about the group you are in while the other seven stay one line each.
 --
 -- That is the whole of the change from one rail entry per part. A part is a
 -- folder of code, and eighteen folder names down the left asked a new player to
@@ -26,9 +34,9 @@ local M = UI.Metric
 -- three now sit in You and in Them without a line of code moving between files.
 --
 -- A part's `order` no longer decides where it sits in the rail, because the
--- rail is not made of parts. It decides where its tabs sit inside whichever
--- group they named, and it is a whole unique number so that two parts cannot
--- land in the same place and leave the answer to table.sort.
+-- rail is not made of parts. It decides where a part's sections sit inside
+-- whichever group they named, and it is a whole unique number so that two parts
+-- cannot land in the same place and leave the answer to table.sort.
 --
 -- One switch per part is drawn here rather than by the part. Eleven features
 -- each wrote their own check box for "does this draw anything", no two of them
@@ -43,9 +51,15 @@ local M = UI.Metric
 -- kit, and UI/Window.lua is the chrome. What is left here is which groups exist,
 -- where each section goes and what the footer does.
 
-local WINDOW_W = 544
+local WINDOW_W = 608
 local WINDOW_H = 452
 local BODY_PAD = 8
+
+-- The strip above the page: the title of the section you are on, and the
+-- hairline that used to be the underside of the tab strip. The rail says where
+-- you are in the list; this says it over the thing you are reading, which is
+-- where you are looking while you change a number.
+local HEADER_H = 22
 
 -- The rail, in full. Eight entries, fixed, in this order.
 --
@@ -53,8 +67,8 @@ local BODY_PAD = 8
 -- were the two that would otherwise have been folded into The screen. Selling
 -- grey items is not a screen setting and neither is what a ticker costs, and
 -- either fold would have rebuilt the junk drawer the groups exist to take
--- apart. Nothing here holds more than eleven tabs, and all eight fit the rail
--- without scrolling, which the eighteen never did.
+-- apart. Nothing here holds more than eleven sections, and all eight fit the
+-- rail folded shut with room over, which the eighteen never did.
 local GROUPS = {
 	"Start here",
 	"Fighting",
@@ -66,11 +80,11 @@ local GROUPS = {
 	"Under the hood",
 }
 
--- The one page this file draws itself, and the tab its single section takes.
+-- The one page this file draws itself, and the line its single section takes.
 local START = GROUPS[1]
 local START_SECTION = "Turn things on"
 
-local window, rail, view, divider
+local window, rail, view, divider, header
 local groups, byName, kits = {}, {}, {}
 local active = 1
 local chrome = {}
@@ -86,7 +100,7 @@ local marked
 -- Layout
 --
 -- One function that places everything, run when the window is built, when a
--- rail entry or a tab is chosen, and when the grid moves under the addon. It is
+-- line in the rail is chosen, and when the grid moves under the addon. It is
 -- cheap and it is never on a ticker, so it recomputes rather than caches: a
 -- cached rectangle that is wrong once is a window that is wrong until a reload.
 --------------------------------------------------------------------------
@@ -134,25 +148,17 @@ local function Relayout()
 	local bodyWidth = window.width - left - M.pad
 	local bodyHeight = height - BODY_PAD * 2
 
-	local strip = 0
-	for index = 1, #groups do
-		local group = groups[index]
-		group.tabs.frame:ClearAllPoints()
-		group.tabs.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT", left, -BODY_PAD)
-		local own = group.tabs:Resize(bodyWidth)
-		if index == active then
-			strip = own
-		end
-		group.tabs.frame:SetShown(index == active)
-	end
+	header.frame:ClearAllPoints()
+	header.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT", left, -BODY_PAD)
+	header.frame:SetSize(bodyWidth, HEADER_H)
 
 	view.frame:ClearAllPoints()
-	view.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT", left, -(BODY_PAD + strip + BODY_PAD))
-	view:Resize(bodyWidth, bodyHeight - strip - BODY_PAD)
+	view.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT", left, -(BODY_PAD + HEADER_H + BODY_PAD))
+	view:Resize(bodyWidth, bodyHeight - HEADER_H - BODY_PAD)
 
-	-- The results take the tab strip's room as well as the page's, because while
-	-- a query is up there is no tab strip: what you are looking at spans every
-	-- group and a strip belonging to one of them would be lying about it.
+	-- The results take the title's room as well as the page's, because while a
+	-- query is up there is no one section: what you are looking at spans every
+	-- group and a title belonging to one of them would be lying about it.
 	if finder then
 		finder.frame:ClearAllPoints()
 		finder.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT", left, -BODY_PAD)
@@ -166,6 +172,10 @@ end
 -- Choosing
 --------------------------------------------------------------------------
 
+-- Show one section of the group that is already selected. Every other section
+-- in the window is hidden, not only the others in this group, because a rail
+-- that folds can put you on a different group's section without the group you
+-- came from being touched.
 local function ShowSection(index)
 	local group = groups[active]
 	if not group or not group.sections[index] then
@@ -174,13 +184,13 @@ local function ShowSection(index)
 	UI.CloseDropdown()
 	UI.StopCapture()
 
-	for i = 1, #group.sections do
-		group.sections[i].stack.frame:SetShown(i == index)
+	for _, other in ipairs(groups) do
+		for at, section in ipairs(other.sections) do
+			section.stack.frame:SetShown(other == group and at == index)
+		end
 	end
 	group.current = index
-	if group.tabs.selected ~= index then
-		group.tabs:Select(index)
-	end
+	header.text:SetText(group.sections[index].title)
 	-- Back to the top. Carrying the last section's scroll position into a
 	-- section of a different length lands you somewhere arbitrary in it.
 	view:ScrollTo(0)
@@ -188,30 +198,21 @@ local function ShowSection(index)
 	return true
 end
 
-local function ShowGroup(index)
+-- What the rail calls when a line in it is chosen. The rail owns which group is
+-- open and which section is marked; this owns which page is up.
+local function Choose(index, section)
 	if not groups[index] then
 		return false
 	end
-	UI.CloseDropdown()
-	UI.StopCapture()
-
-	for i = 1, #groups do
-		local group = groups[i]
-		group.tabs.frame:SetShown(i == index)
-		for _, section in ipairs(group.sections) do
-			section.stack.frame:SetShown(false)
-		end
-	end
 	active = index
 	Relayout()
-	ShowSection(groups[index].current or 1)
-	return true
+	return ShowSection(section or groups[index].current or 1)
 end
 
 --------------------------------------------------------------------------
 -- Search
 --
--- 131 controls behind 45 tabs behind 8 groups, and until now no way to type
+-- 131 controls behind 45 sections behind 8 groups, and until now no way to type
 -- "swing" and be shown the three that mention it.
 --
 -- The results are links rather than the live controls. A control is built into
@@ -269,8 +270,7 @@ end
 
 local function Reveal(entry)
 	window.search:SetText("")
-	rail:Select(entry.section.group.at)
-	ShowSection(entry.section.at)
+	rail:Select(entry.section.group.at, entry.section.at)
 	Options.Refresh()
 	Mark(entry.widget)
 end
@@ -300,6 +300,11 @@ local function Find(query)
 
 	if query == "" then
 		finder.frame:Hide()
+		header.frame:Show()
+		local section = ActiveSection()
+		if section then
+			section.stack.frame:Show()
+		end
 		Relayout()
 		return 0
 	end
@@ -326,9 +331,7 @@ local function Find(query)
 		finderRows[at].entry = nil
 	end
 
-	for _, group in ipairs(groups) do
-		group.tabs.frame:Hide()
-	end
+	header.frame:Hide()
 	local section = ActiveSection()
 	if section then
 		section.stack.frame:Hide()
@@ -426,7 +429,7 @@ end
 
 -- Whether a group has anything on. Read by the rail, which marks the groups
 -- holding a part that is drawing something, so what the addon is doing is
--- legible without opening a single tab.
+-- legible without opening a single group.
 local function GroupIsOn(group)
 	for _, section in ipairs(group.sections) do
 		local switch = section.feature and section.feature.switch
@@ -488,17 +491,27 @@ local function Build()
 		height = WINDOW_H,
 	})
 
-	rail = UI.Rail(window.content, { onSelect = ShowGroup })
+	rail = UI.Rail(window.content, { onSelect = Choose })
 	divider = UI.Rule(window.content, UI.Color.hairline, true)
+
+	-- The title of the page you are on, and the hairline under it. Both were the
+	-- tab strip's, and the strip is gone.
+	header = { frame = CreateFrame("Frame", nil, window.content) }
+	header.text = UI.Label(header.frame, M.heading, UI.Color.heading, "LEFT", UI.FLAT)
+	header.text:SetPoint("LEFT")
+	header.text:SetPoint("RIGHT")
+	UI.Wrap(header.text, false)
+	header.rule = UI.Rule(header.frame, UI.Color.hairline)
+	header.rule:SetPoint("BOTTOMLEFT")
+	header.rule:SetPoint("BOTTOMRIGHT")
 
 	-- The scroll view has to exist before any page is built, because a page's
 	-- sections parent to its canvas and take their width from it. This size is
-	-- provisional: Relayout works out the real one once it knows how tall the
-	-- selected page's tab strip came out, and every section is re-widened from
-	-- the view before it is measured.
+	-- provisional: Relayout works out the real one once the window knows its own
+	-- pixel, and every section is re-widened from the view before it is measured.
 	view = UI.ScrollView(window.content)
 	view:Resize(WINDOW_W - M.rail - ns.Pixel(window.frame) - M.pad * 2,
-		WINDOW_H - M.title - M.footer - BODY_PAD * 2)
+		WINDOW_H - M.title - M.footer - BODY_PAD * 2 - HEADER_H)
 
 	-- The results list. A second view over the same rectangle rather than rows
 	-- pushed onto the page's own stack, because a result is a link to somewhere
@@ -509,23 +522,14 @@ local function Build()
 	finder.frame:Hide()
 
 	for at, name in ipairs(GROUPS) do
-		local group = { name = name, sections = {}, current = 1 }
-		group.tabs = UI.TabStrip(window.content, {
-			onSelect = function(section)
-				if active == at then
-					ShowSection(section)
-				end
-			end,
-		})
-		group.tabs.frame:Hide()
-		group.at = at
+		local group = { name = name, sections = {}, current = 1, at = at }
 		groups[at] = group
 		byName[name] = group
 		rail:Add(name)
 	end
 
 	-- The registry is already in order, and a group's sections are appended as
-	-- they are opened, so a tab strip comes out in part order and then in the
+	-- they are opened, so a group's list comes out in part order and then in the
 	-- order that part wrote its sections. Nothing is sorted here.
 	for _, feature in ipairs(ns.features) do
 		if feature.panel then
@@ -534,10 +538,13 @@ local function Build()
 	end
 	BuildStart()
 
-	for _, group in ipairs(groups) do
+	-- The rail's own lines, added once every section exists. A group with none
+	-- would fold open onto nothing, which is a rail entry that does not work and
+	-- an empty page rather than a mistake anybody would see.
+	for at, group in ipairs(groups) do
 		assert(#group.sections > 0, ("the group %q has no sections"):format(group.name))
 		for _, section in ipairs(group.sections) do
-			group.tabs:Add(section.title)
+			rail:AddChild(at, section.title)
 		end
 	end
 
@@ -564,11 +571,11 @@ local function Build()
 	end })
 
 	-- What is in this window, recorded on the window. Nothing in the addon reads
-	-- it. The harness walks it to drive every rail entry and every tab and then
-	-- measure what came out, which is a seam worth having: the alternative is a
-	-- hook cut into this file for the test's benefit and nothing else.
+	-- it. The harness walks it to open every group and every section under it and
+	-- then measure what came out, which is a seam worth having: the alternative
+	-- is a hook cut into this file for the test's benefit and nothing else.
 	window.rail, window.view, window.groups, window.kits = rail, view, groups, kits
-	window.finder, window.indexed = finder, indexed
+	window.finder, window.indexed, window.header = finder, indexed, header
 
 	rail:Select(1)
 	Options.Refresh()
@@ -674,11 +681,14 @@ function Options.SelectGroup(index)
 	end
 end
 
+-- One section of the group already selected, chosen through the rail rather
+-- than by showing the page directly, so the line that is marked in the rail is
+-- always the page that is up.
 function Options.SelectSection(index)
 	if not window then
 		return
 	end
-	if ShowSection(index) then
+	if rail:Select(active, index) then
 		Options.Refresh()
 	end
 end

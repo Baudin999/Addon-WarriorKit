@@ -281,6 +281,36 @@ including the glued part, is in the index.
 That last one exists so search can find `Collect enemy damage` when the source
 says `"Collect " .. entry.collects`.
 
+### 8. The rail folds, and the tab strip goes
+
+Written after points 1 to 7 were built, and it amends point 1. Groups down the
+left and sections across the top was still two pieces of navigation, and the
+strip was the weaker one. It could only ever show the sections of the group you
+were already on, so a window of 45 sections showed an eighth of itself at a
+time. Fighting's eleven wrapped onto three lines of stubs and took 68 of the
+page's 420 pixels to do it.
+
+So the rail folds. The group you are in stands open with its sections listed
+under it, indented one step, and choosing one is a single click on the thing you
+came for rather than a click on the rail and a second one on a strip. One group
+is open at a time. Clicking the open one shuts it, the page it was on stays up
+and the mark moves to the group's own line, so the rail folds flat to eight
+lines without the window going blank.
+
+Two numbers move with it. The rail goes from 118 pixels to 180, because
+`Player and target frames` has to be readable in it and 118 cuts it in half; the
+window goes from 544 to 608 so the page keeps the 400 pixels it had. Folded shut
+the rail is 184 pixels in a 390 pixel view, and open with Fighting out it is
+459, so it scrolls and keeps whatever is selected inside the viewport.
+
+The title of the section you are on is drawn over the page, on the hairline that
+was the underside of the strip. It is the only thing left that names the page
+once the rail is folded shut.
+
+`UI.TabStrip` stays. Two places still want a row of tabs and neither is the top
+level of anything: the chat window's channels and the list of loadouts inside
+one page of the panel.
+
 ## What gets deleted
 
 The zoom stepper on Buffs, Feeds and Meters. Three controls. Those three widgets
@@ -310,7 +340,7 @@ question you have is worth more than a small one that does not.
 | controls | 134 | 131 |
 | prose blocks | 134 | about 130, capped |
 | prose characters | 40,268 | under 16,000 |
-| rail pixels against a 390 pixel view | 464 | 208 |
+| rail pixels against a 390 pixel view | 464 | 184 folded shut |
 
 Sections go up by two: Start here is a page, and Charge's icon controls split
 into a section of their own. The rail fits without scrolling for the first time.
@@ -321,7 +351,10 @@ Three layers, as everywhere else in this repo: a harness section, the pre-commit
 hook and `check.sh`.
 
 `scripts/harness/sections/16-options-window.lua` already walks every rail entry,
-every tab and every row and measures what came out. It grows six assertions.
+every section and every row and measures what came out. It grows six assertions,
+and four more for the fold: one group open at a time, one line under it per
+section, every line short enough to be read whole in the column it sits in, and
+the page still up when the group it belongs to is folded shut over it.
 
 Every section names a group, and every group named exists. A section that names
 no group is a login error, not a section that quietly lands in a default.
