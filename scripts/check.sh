@@ -222,6 +222,17 @@ Minimap/Clock.lua:Clock.Reading
 Minimap/Clock.lua:Clock.Update
 Comfort/Vendor.lua:Sweep
 Comfort/Vendor.lua:Tick
+Feeds/Stream.lua:Refresh
+Feeds/Purse.lua:Purse.Line
+Feeds/Purse.lua:Purse.Account
+Feeds/Purse.lua:Purse.Rate
+Feeds/Purse.lua:Purse.Coin
+Feeds/Purse.lua:Others
+Feeds/Purse.lua:Purse.Mine
+Feeds/Purse.lua:Who
+Feeds/Purse.lua:Group
+Feeds/Purse.lua:RateText
+Feeds/Purse.lua:Tone
 Perf/Perf.lua:Perf.Start
 Perf/Perf.lua:Perf.Stop
 Perf/Perf.lua:Perf.Sample
@@ -380,7 +391,11 @@ done < <(grep -lE 'SetScript\("OnUpdate"' --include='*.lua' -r . | sort)
 # because a grep is instant and because the message can name the call to use
 # instead, which a measurement after the fact cannot.
 #
-# Each entry is a pattern, then what to write instead.
+# Each entry is a pattern, then what to write instead, separated by a pipe. That
+# means no pattern may contain one: `read` splits on the first, so an
+# alternation would land half in the pattern and half in the message, and the
+# only symptom is grep complaining about an unmatched bracket while the rule
+# quietly stops checking anything. Write two entries instead.
 #
 # A label finished by concatenation is not here and cannot be: `"collect " ..
 # entry.collects` reads correctly only once the feed's name is glued on, and no
@@ -399,8 +414,10 @@ ui\.Slider\("bar opacity"|ui.Opacity("background", get, set): all three of these
 ui\.Stepper\("rows"|ui.Count(label, low, high, get, set)
 ui\.Stepper\("list bars"|ui.Count("rows", low, high, get, set)
 ui\.[A-Za-z]*\("[^"]*in pixels"|ui.Size(label, low, high, step, get, set): the widget writes px after the number
-^local [A-Z_, ]*(LOW_ZOOM|HIGH_ZOOM)|ns.UI.ZOOM_LOW and ns.UI.ZOOM_HIGH
-^local [A-Z_, ]*(ALPHA_LOW|LOW_ALPHA)|ns.UI.ALPHA_LOW, ns.UI.ALPHA_HIGH and ns.UI.ALPHA_STEP
+^local [A-Z_, ]*LOW_ZOOM|ns.UI.ZOOM_LOW and ns.UI.ZOOM_HIGH
+^local [A-Z_, ]*HIGH_ZOOM|ns.UI.ZOOM_LOW and ns.UI.ZOOM_HIGH
+^local [A-Z_, ]*ALPHA_LOW|ns.UI.ALPHA_LOW, ns.UI.ALPHA_HIGH and ns.UI.ALPHA_STEP
+^local [A-Z_, ]*LOW_ALPHA|ns.UI.ALPHA_LOW, ns.UI.ALPHA_HIGH and ns.UI.ALPHA_STEP
 '
 
 while IFS='|' read -r pattern instead; do
