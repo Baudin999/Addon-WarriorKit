@@ -64,6 +64,8 @@ local STREAMS = {
 		title = "Loot",
 		point = { "BOTTOMRIGHT", "UIParent", "BOTTOMRIGHT", -20, 180 },
 		describe = LootFeed.Describe,
+		collects = "what drops",
+		costs = "no loot message is read at all.",
 	},
 	combat = {
 		stream = CombatFeed.Stream(),
@@ -71,6 +73,10 @@ local STREAMS = {
 		title = "Combat",
 		point = { "BOTTOMLEFT", "UIParent", "BOTTOMLEFT", 20, 180 },
 		describe = CombatFeed.Describe,
+		collects = "what happens to you",
+		costs = "a combat log event is turned away on one table lookup, which in a raid"
+			.. " is the difference between a few hundred lookups a second and a few"
+			.. " hundred rows a second.",
 	},
 }
 
@@ -143,6 +149,15 @@ local function Shared(entry, option, value)
 			Apply(entry)
 			ns.Print(("the %s feed background at %d%%."):format(entry.title:lower(), alpha))
 		end
+		return true
+	end
+
+	if option == "show" or option == "hide" then
+		db[prefix .. "Shown"] = (option == "show")
+		entry.stream:Show()
+		ns.Print(("the %s feed is %s. It %s collecting."):format(entry.title:lower(),
+			(option == "show") and "on screen" or "hidden",
+			db[prefix] and "is still" or "is not"))
 		return true
 	end
 
@@ -244,7 +259,10 @@ local function FeedWord(arg)
 
 	local option, value = rest:match("^(%S*)%s*(.-)$")
 
-	if option == "" or option == "show" then
+	-- A bare `/wk feed combat` and nothing else. `show` is not a synonym for it
+	-- any more: it is the word that puts a hidden feed back on the screen, and
+	-- one word cannot be both a question and an instruction.
+	if option == "" then
 		ns.Print(("the %s feed is %s."):format(which, entry.describe()))
 		return
 	end
@@ -257,10 +275,13 @@ local function FeedWord(arg)
 	end
 
 	-- Anything left is the on/off switch, which is what a bare word means
-	-- everywhere else in this addon.
+	-- everywhere else in this addon. On this feature it is the collecting
+	-- switch rather than the visibility one: off records nothing, and `hide`
+	-- above is the word for taking a working feed off the screen.
 	ns.db[entry.prefix] = ns.Command.Toggle(option)
 	Apply(entry)
-	ns.Print(("the %s feed is %s."):format(which, ns.db[entry.prefix] and "on" or "off"))
+	ns.Print(("the %s feed is %s."):format(which,
+		ns.db[entry.prefix] and "collecting" or "off, and recording nothing"))
 end
 
 --------------------------------------------------------------------------
@@ -273,11 +294,35 @@ local function SharedPage(ui, entry)
 	local prefix = entry.prefix
 	local lower = entry.title:lower()
 
-	ui.Check("Show the " .. lower .. " feed", function() return ns.db[prefix] end,
+	ui.Check("Collect " .. entry.collects, function() return ns.db[prefix] end,
 		function(on)
 			ns.db[prefix] = on
 			entry.stream:Show()
 		end)
+
+	ui.Check("Show the " .. lower .. " feed", function() return ns.db[prefix .. "Shown"] end,
+		function(on)
+			ns.db[prefix .. "Shown"] = on
+			entry.stream:Show()
+		end)
+
+	ui.Note(function()
+		if not ns.db[prefix] then
+			return "Off, so nothing is recorded and there is nothing to show. This is"
+				.. " the switch to reach for if you want the feature to cost nothing:"
+				.. " " .. entry.costs
+		end
+		if not ns.db[prefix .. "Shown"] then
+			return "Hidden, and still collecting. The rows are being written and the"
+				.. " column is not being drawn, which is the expensive half, so a"
+				.. " hidden feed is close to free. Show it again and it comes back"
+				.. " with everything that happened while it was away."
+		end
+		return "The top switch is whether anything is recorded and this one is whether"
+			.. " you can see it. Hide it and it keeps collecting, so what comes back"
+			.. " is the last few hundred rows rather than a blank column. Switch it"
+			.. " off and nothing is recorded at all."
+	end)
 
 	ui.Stepper("rows", LOW_ROWS, HIGH_ROWS, 1,
 		function() return ns.db[prefix .. "Rows"] end,
@@ -500,7 +545,8 @@ ns.Register({
 	},
 
 	help = {
-		"feed loot on|off, and feed combat on|off",
+		"feed loot on|off, and feed combat on|off, which is whether it collects",
+		"feed <which> show|hide takes the column off the screen and leaves it collecting",
 		"feed <which> rows 3 to 24, width 200 to 520, zoom 1 to 3, alpha 0 to 100, mouse on|off",
 		"feed loot quality 0 to 4, group on|off, money on|off",
 		"feed combat out|in|misses on|off, floor 0",
@@ -516,7 +562,11 @@ ns.Register({
 	reset = function()
 		for _, key in ipairs(ORDER) do
 			local entry = STREAMS[key]
-			for _, word in ipairs({ "Rows", "Width", "Zoom", "Alpha", "Mouse" }) do
+			-- Shown is in the list and the switch beside it is not. A feed hidden
+			-- and forgotten is exactly the "why can I not see this" that brings
+			-- somebody to a reset button; a feed switched off is a decision about
+			-- what the addon records, which is not this button's business.
+			for _, word in ipairs({ "Rows", "Width", "Zoom", "Alpha", "Mouse", "Shown" }) do
 				ns.db[entry.prefix .. word] = ns.DefaultFor(entry.prefix .. word)
 			end
 			entry.stream:Reset({ entry.point[1], entry.point[2], entry.point[3],

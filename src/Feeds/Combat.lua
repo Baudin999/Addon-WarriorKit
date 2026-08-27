@@ -42,6 +42,18 @@ local C = ns.UI.Color
 -- separate from the one that draws the rows.
 --
 -- **Nothing is on a ticker.** A row arrives when the log says so.
+--
+-- **Collecting and being on screen are two settings.** `combatFeed` is whether
+-- this file does anything at all, and it is read on the first line of the
+-- handler, so a feed that is off costs one table lookup per combat log event
+-- and nothing else. `combatFeedShown` only decides whether you can see the
+-- column, and a feed hidden with that one keeps filling: what you get when you
+-- bring it back is the last four hundred things that happened rather than a
+-- blank. That matters because the two are nowhere near the same price. Reaching
+-- the end of this file and pushing a row costs roughly thirty times what
+-- turning an event away at the top costs, and nearly all of that thirty is
+-- UI/Feed.lua repainting the column. Feeds/Stream.lua puts the hidden feed's
+-- widget to sleep for exactly that reason.
 --------------------------------------------------------------------------
 
 -- Where the amount and the crit flag sit for each shape of event.
@@ -186,6 +198,12 @@ function CombatFeed.Defaults()
 	defaults.combatFeedWidth = 320
 	defaults.combatFeedRows = 12
 
+	-- combatFeed and combatFeedShown both come from Stream.Defaults above and
+	-- both start true. The first is the one this file reads: off means no row is
+	-- ever built and no marker is ever drawn, which is the setting to reach for
+	-- if you want the combat log left alone entirely. The second only takes the
+	-- column off the screen.
+
 	-- What you do, and what is done to you. Both on, because either alone is
 	-- half a conversation, and separate because they answer different questions
 	-- and a tank wants the second one on its own.
@@ -212,7 +230,17 @@ end
 -- One event
 --------------------------------------------------------------------------
 
-local CombatLogGetCurrentEventInfo = _G.CombatLogGetCurrentEventInfo
+-- Asked once at load rather than once per event.
+--
+-- It used to be a `type(...) == "function"` on the first line of the handler,
+-- which is a call and a comparison on the path the combat log drives, to answer
+-- a question that cannot change after login: a client either carries the call
+-- or it does not. Nil where it does not, so the guard below is a truth test on
+-- an upvalue.
+local readLog = _G.CombatLogGetCurrentEventInfo
+if type(readLog) ~= "function" then
+	readLog = nil
+end
 
 -- Whether a GUID is you or something of yours. Roster.Owner answers the owner
 -- for a pet and nil for anything that is not one of the group's, so one call
@@ -311,12 +339,12 @@ local function Add(subevent, shape, outgoing, source, dest, spellId, spellName,
 end
 
 function CombatFeed.OnLog()
-	if not ns.db.combatFeed or type(CombatLogGetCurrentEventInfo) ~= "function" then
+	if not readLog or not ns.db.combatFeed then
 		return false
 	end
 
 	local _, subevent, _, sourceGUID, sourceName, _, _, destGUID, destName,
-		_, _, a12, a13, _, a15, a16, _, a18, _, _, a21 = CombatLogGetCurrentEventInfo()
+		_, _, a12, a13, _, a15, a16, _, a18, _, _, a21 = readLog()
 
 	local shape = SHAPES[subevent]
 	if not shape then
@@ -423,7 +451,7 @@ end
 -- and a client without it has to say so in the panel rather than draw an empty
 -- column with no explanation in it.
 function CombatFeed.Ready()
-	return type(CombatLogGetCurrentEventInfo) == "function"
+	return readLog ~= nil
 end
 
 function CombatFeed.Describe()

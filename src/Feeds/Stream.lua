@@ -24,7 +24,16 @@ local C = UI.Color
 -- prefix and every setting it reads is that prefix and a word: lootFeed,
 -- lootFeedRows, lootFeedWidth. The names are resolved once here rather than
 -- concatenated at each read, so nothing builds a string to look a setting up,
--- and Feature.lua registers exactly the seven keys this file will ask for.
+-- and Feature.lua registers exactly the eight keys this file will ask for.
+--
+-- **On and shown are two settings, not one.** They were one, called after the
+-- prefix, and it meant the only way to get a feed off the screen was to stop it
+-- recording: hide it and it stopped collecting, so what came back when you
+-- wanted it again was an empty column. Hiding a feed and switching it off are
+-- different requests and now they are different keys. `lootFeed` is whether it
+-- collects, which is what the capture files read before they do any work, and
+-- `lootFeedShown` is whether you can see it. Off implies hidden, because a
+-- frozen list left on screen reads as a bug rather than as a setting.
 --
 -- **Locked is the normal state.** Unlocked draws an outline and a name above
 -- it, which is Meter/Window.lua's trade and is here for the same reason: a feed
@@ -32,10 +41,11 @@ local C = UI.Color
 -- find from memory.
 --------------------------------------------------------------------------
 
--- The seven settings a stream owns, as the words that follow its prefix. Named
--- here so Feeds/Feature.lua registers the same list this file reads and neither
--- can drift without the other failing to find a key.
-local KEYS = { "Rows", "Width", "Zoom", "Alpha", "Mouse", "Point" }
+-- The seven settings a stream owns beyond the one named after its prefix, as
+-- the words that follow it. Named here so Feeds/Feature.lua registers the same
+-- list this file reads and neither can drift without the other failing to find
+-- a key.
+local KEYS = { "Rows", "Width", "Zoom", "Alpha", "Mouse", "Shown", "Point" }
 
 local Instance = {}
 Instance.__index = Instance
@@ -45,7 +55,8 @@ local streams = {}
 --------------------------------------------------------------------------
 -- Building
 --
--- spec.prefix    the setting that switches it on, and the stem of the other six
+-- spec.prefix    the setting that switches it collecting, and the stem of the
+--                other seven
 -- spec.name      the global the frame is made under, so a stream that has
 --                wandered off the screen can be found from a macro
 -- spec.title     the word over the column, and the name shown while unlocked
@@ -74,7 +85,7 @@ function Stream.New(spec)
 	return stream
 end
 
--- The defaults for one stream's six shaped settings, merged by Feature.lua into
+-- The defaults for one stream's seven shaped settings, merged by Feature.lua into
 -- the table it registers. Written here rather than there so the file that reads
 -- a setting is the file that says what it means.
 --
@@ -99,6 +110,11 @@ function Stream.Defaults(prefix, point)
 		-- can read a grey item name on and still see the floor through.
 		[prefix .. "Alpha"] = 70,
 		[prefix .. "Mouse"] = true,
+		-- Shown by default, and separate from the switch above it. A feed you
+		-- have hidden goes on collecting, so bringing it back shows the last few
+		-- hundred things that happened rather than a blank column; a feed you
+		-- have switched off collects nothing and is hidden with it.
+		[prefix .. "Shown"] = true,
 		[prefix .. "Point"] = point,
 	}
 end
@@ -173,6 +189,10 @@ function Instance:Build()
 		onTooltip = self.onTooltip,
 	})
 	self.feed.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+	-- Told here rather than left to Apply. Apply resizes before it shows, and a
+	-- resize repaints, so a feed the player has hidden would draw its whole
+	-- column once at every login for nobody.
+	self.feed:Awake(self:Visible())
 
 	return true
 end
@@ -233,11 +253,28 @@ function Instance:Lock()
 	return true
 end
 
+-- On screen or not, and the feed told either way.
+--
+-- The frame being hidden is not on its own enough. UI/Feed.lua repaints every
+-- drawn row on every arrival whether or not anybody can see the result, and a
+-- hidden feed still collecting would do all of that drawing into nothing. It is
+-- most of what a row costs: about four fifths of the work of putting a combat
+-- log event on the screen is the repaint, so the same answer goes to the
+-- widget, which stops painting and paints once when it comes back.
+-- Whether anybody can see this, which is both settings and neither one on its
+-- own. Off implies hidden: there is nothing to look at in a column nothing is
+-- being written to, and a frozen list left on screen reads as a bug.
+function Instance:Visible()
+	return (self:Setting("on") and self:Setting("shown")) and true or false
+end
+
 function Instance:Show()
 	if not self.frame then
 		return false
 	end
-	self.frame:SetShown(self:Setting("on") and true or false)
+	local visible = self:Visible()
+	self.frame:SetShown(visible)
+	self.feed:Awake(visible)
 	return true
 end
 
@@ -258,6 +295,9 @@ function Instance:Describe()
 		return "not built yet"
 	end
 	local line = self.feed:Describe()
+	if not self:Setting("shown") then
+		line = line .. ", hidden but still collecting"
+	end
 	if not self:Setting("mouse") then
 		line = line .. ", not taking the mouse, so no tooltips"
 	end

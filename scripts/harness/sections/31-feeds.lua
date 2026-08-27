@@ -478,6 +478,71 @@ do
 	ns.db.combatFeed = true
 
 	----------------------------------------------------------------
+	-- Hidden and off are different states
+	--
+	-- They were one setting and it made the cheap request impossible: the
+	-- only way to get the column off the screen was to stop recording, so
+	-- what came back when you wanted it again was blank.
+	--
+	-- Three claims, and the middle one is the only one worth a harness. A
+	-- hidden feed collecting is easy to assert against the entry count and
+	-- easy to get wrong on the screen, because Feed:Paint is called on
+	-- every arrival and does not know whether anybody can see it. So the
+	-- assertion is against what was drawn: the row keeps the text it had
+	-- while the ring behind it moves on, and showing the feed again brings
+	-- the row up to date in one paint. An implementation that hid the frame
+	-- and left the widget painting would pass every count below and fail
+	-- none of them, which is why the reads are of a font string.
+	----------------------------------------------------------------
+
+	combat:Clear()
+	log("SPELL_DAMAGE", me, "Baudin", "Creature-77", "Ragged Wolf",
+		{ [12] = 12294, [13] = "Mortal Strike", [15] = 400 })
+	check(combat:Row(1).name:GetText() == "Mortal Strike",
+		"the row a shown feed drew is not the entry that arrived: "
+			.. tostring(combat:Row(1).name:GetText()))
+
+	ns.db.combatFeedShown = false
+	combatStream:Show()
+	check(not _G.WarriorKitCombatFeed:IsShown(), "hiding the combat feed left it on screen")
+
+	held = combat:Count()
+	log("SPELL_DAMAGE", me, "Baudin", "Creature-77", "Ragged Wolf",
+		{ [12] = 1464, [13] = "Slam", [15] = 700 })
+	check(combat:Count() == held + 1, "a hidden feed stopped collecting")
+	check(combat:At(0).name == "Slam",
+		"the entry a hidden feed collected is not the one that arrived: "
+			.. tostring(combat:At(0).name))
+	check(combat:Row(1).name:GetText() == "Mortal Strike",
+		"a hidden feed repainted its rows, which is the whole cost it exists to save")
+
+	ns.db.combatFeedShown = true
+	combatStream:Show()
+	check(_G.WarriorKitCombatFeed:IsShown(), "showing the combat feed left it hidden")
+	check(combat:Row(1).name:GetText() == "Slam",
+		"a feed brought back is showing what it drew before it went away: "
+			.. tostring(combat:Row(1).name:GetText()))
+
+	-- Off implies hidden. There is nothing to look at in a column nothing
+	-- is being written to, and a frozen list left on screen reads as a bug
+	-- rather than as a setting.
+	ns.db.combatFeed = false
+	combatStream:Show()
+	check(not _G.WarriorKitCombatFeed:IsShown(),
+		"a feed switched off is still on screen, showing a list that will never move")
+	ns.db.combatFeed = true
+	combatStream:Show()
+
+	-- And the loot feed carries the same pair, because the two settings
+	-- belong to Feeds/Stream.lua rather than to either capture file.
+	ns.db.lootFeedShown = false
+	lootStream:Show()
+	check(not _G.WarriorKitLootFeed:IsShown(), "hiding the loot feed left it on screen")
+	ns.db.lootFeedShown = true
+	lootStream:Show()
+	check(_G.WarriorKitLootFeed:IsShown(), "showing the loot feed left it hidden")
+
+	----------------------------------------------------------------
 	-- The tooltip is the size of the thing it describes
 	--
 	-- One frame serves every hover in the addon, so it has one zoom and
