@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+### The addon is in the game menu, and there is a spec for the window it opens
+
+A slash command is a thing you have to be told about. Escape is a thing everyone
+already presses. **There is one button in the client's own game menu now**, it
+says WarriorKit, and it opens the panel `/wk` opens. No setting guards it,
+because a check box that hides the way into the settings is a check box nobody
+can find their way back to.
+
+The menu belongs to Blizzard and the two clients this addon ships for do not
+build it the same way, so `Core/Menu.lua` names no Blizzard button, reads no
+localised string and assumes no count. It reads the anchor chain the menu is
+already laid out with, hangs our button off the end of it and grows the frame by
+exactly what it added. Our button takes the foot's anchor verbatim and the foot
+takes the same anchor again off ours, so whatever gap the client leaves between
+two buttons is the gap above ours and below it. A client that lays its menu out
+some other way gets no button, no error, and a reason in `/wk status`.
+
+The foot is the button nothing else hangs off. Every button in the column
+contributes what it hangs off, shown or hidden, and only shown ones can be the
+foot, because Blizzard hides buttons in that column and a walk that skipped one
+would lose track of the button above it and find two feet where there is one.
+
+The work is on the menu's `OnShow` rather than done once at login, because a
+client that lays its own menu out on show will have dropped us out of the chain
+by the time it is next opened. Everything the attach reads it reads fresh, and a
+run that changes nothing writes nothing. A version that grew the frame on every
+show would reach the top of the screen inside a session.
+
+**`SPEC-menu.md` is the redesign of the window that button now leads to**, and
+it starts by counting what is in there: eighteen entries in the rail, 44
+sections behind them, 134 controls, and 134 notes holding 40,268 characters of
+prose. One note per control, exactly. The spec asks for eight groups a player
+can rank instead of eighteen module names, capped prose in three narrower kinds
+with what is cut moving to the README, one declared switch per part so you can
+see what the addon draws without opening 44 tabs, four kit calls for the four
+knobs that were reinvented once per part, a search field, and a Start here page
+of nothing but switches. Nothing in it changes a slash word.
+
 ### The aura square reads the way the client's own row does
 
 Reported from the game with a screenshot of Blizzard's buff row above ours. Two
