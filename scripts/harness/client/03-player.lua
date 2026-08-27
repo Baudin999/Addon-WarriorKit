@@ -293,6 +293,12 @@ local ITEMS = {
 	["Tattered Cloth"]    = { id = 2002, classId = 7, quality = 0, price = 12 },
 	["Broken Twig"]       = { id = 2003, classId = 7, quality = 0, price = 0 },
 	["Emerald Pigment"]   = { id = 2004, classId = 7, quality = 2, price = 1900 },
+	-- A white item that is not a quest item, and the only one. It is in no bag:
+	-- it exists so the loot feed's quest chip can be tested at all, because that
+	-- chip is an override on the white quality and a quest item is white. With
+	-- nothing white beside it, "the whites are off and the quest item is still
+	-- drawn" is a claim about a column with one row in it.
+	["Linen Cloth"]       = { id = 2005, classId = 7, quality = 1, price = 8 },
 	-- The third bag, one item per branch the clutter verdict can take. Which of
 	-- them is clutter and which is not is decided by the quest fixtures below,
 	-- not here.

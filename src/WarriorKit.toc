@@ -316,6 +316,13 @@ Buffs\Feature.lua
 # that file folds the purse's defaults into its own as it loads.
 Feeds\Stream.lua
 Feeds\Purse.lua
+# Auction.lua asks whichever auction addon the player has installed what an
+# item goes for, and answers nothing at all where they have none. Nothing in
+# the addon requires it and no TOC names one as a dependency: it is one line of
+# one tooltip, and a player with no scanner is told nothing about that.
+#
+# Before Loot.lua because the loot feed's tooltip is the only thing that asks.
+Feeds\Auction.lua
 Feeds\Loot.lua
 Feeds\Combat.lua
 Feeds\Feature.lua

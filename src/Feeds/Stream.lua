@@ -41,11 +41,20 @@ local C = UI.Color
 -- find from memory.
 --------------------------------------------------------------------------
 
--- The seven settings a stream owns beyond the one named after its prefix, as
+-- The eleven settings a stream owns beyond the one named after its prefix, as
 -- the words that follow it. Named here so Feeds/Feature.lua registers the same
 -- list this file reads and neither can drift without the other failing to find
 -- a key.
-local KEYS = { "Rows", "Width", "Zoom", "Alpha", "Mouse", "Shown", "Point" }
+--
+-- The last four arrived together and are all one subject: how much of a window
+-- a feed is. Icon is the size of the picture on a row and therefore the height
+-- of the row. Header is the word over the column. Edge is the hairline round
+-- the whole thing. Filters is the strip of chips, which is the loot feed's and
+-- which a stream with no chips ignores rather than special cases.
+local KEYS = {
+	"Rows", "Width", "Zoom", "Alpha", "Mouse", "Shown", "Point",
+	"Icon", "Header", "Edge", "Filters",
+}
 
 --------------------------------------------------------------------------
 -- The status strip
@@ -97,6 +106,10 @@ local streams = {}
 -- spec.note      how wide the dim middle column is, in units, and nothing for a
 --                stream whose rows are a name and a number
 -- spec.onTooltip function(entry), answering the table UI/Tooltip.lua renders
+-- spec.chips     the filter strip over the rows, or nothing for a stream with
+--                none. See UI/Feed.lua's own header for one chip's shape
+-- spec.filter    function(entry), whether an entry is drawn, and nothing at all
+--                for a stream that draws everything it holds
 -- spec.onStatus  function(), answering the three readings along the bottom and
 --                the colour of the last one, or nothing at all for a stream
 --                whose strip is switched off. Absent for a stream with no strip
@@ -111,6 +124,8 @@ function Stream.New(spec)
 		empty = spec.empty,
 		note = spec.note,
 		onTooltip = spec.onTooltip,
+		chips = spec.chips,
+		filter = spec.filter,
 		onStatus = spec.onStatus,
 		onStatusTooltip = spec.onStatusTooltip,
 		keys = { on = spec.prefix },
@@ -136,7 +151,14 @@ end
 -- need the width back and then some, and a loot feed narrower than the combat
 -- feed sitting in the opposite corner reads as a mistake rather than as a
 -- decision, so both moved.
-function Stream.Defaults(prefix, point)
+--
+-- `chrome` is whether this stream ships with a word over it and a line round
+-- it. It is an argument rather than a constant because the two feeds answer it
+-- differently and both answers are right: the loot feed's rows are an icon, a
+-- name in the item's own colour and a count, with a row of quality chips over
+-- them, and none of that needs the word "Loot" written above it. A combat feed
+-- is three columns of numbers and does.
+function Stream.Defaults(prefix, point, chrome)
 	return {
 		[prefix] = true,
 		[prefix .. "Rows"] = 10,
@@ -155,6 +177,19 @@ function Stream.Defaults(prefix, point)
 		-- have switched off collects nothing and is hidden with it.
 		[prefix .. "Shown"] = true,
 		[prefix .. "Point"] = point,
+
+		-- The picture on a row, and the row height that follows it. 27 is the
+		-- size at which the client's own icon art draws one stored texel per
+		-- screen pixel, which is why it is the default and why the panel says
+		-- so when you move off it.
+		[prefix .. "Icon"] = ns.UI.FEED_ICON,
+
+		[prefix .. "Header"] = chrome and true or false,
+		[prefix .. "Edge"] = chrome and true or false,
+
+		-- On for the stream that has chips, and read by the one that has none
+		-- without either of them knowing about the other.
+		[prefix .. "Filters"] = true,
 	}
 end
 
@@ -357,6 +392,8 @@ function Instance:Build()
 		empty = self.empty,
 		note = self.note,
 		onTooltip = self.onTooltip,
+		chips = self.chips,
+		filter = self.filter,
 	})
 	self.feed.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
 	-- Told here rather than left to Apply. Apply resizes before it shows, and a
@@ -388,18 +425,28 @@ function Instance:Apply()
 	self.frame:SetPoint(point[1], UIParent, point[3], point[4], point[5])
 	UI.Rezoom(self.frame, self:Setting("zoom"))
 
-	local width, height = self.feed:Resize(self:Setting("width"), self:Setting("rows"))
+	-- What the column is dressed in, before what size it is. The strip over the
+	-- rows is either there or not and everything below it is measured off that
+	-- answer, so a resize that ran first would place every row against the last
+	-- answer and then be told the new one.
+	self.feed:Chrome(self:Setting("header"), self:Setting("filters"))
+
+	local width, height = self.feed:Resize(self:Setting("width"), self:Setting("rows"),
+		self:Setting("icon"))
 	-- The strip is measured after the feed and before the frame, because it is
 	-- the only thing in here whose height is a decision rather than a setting.
 	self.frame:SetSize(width, height + self:Dress())
 
-	-- The edge follows the background. At zero opacity the player has asked for
-	-- rows over the world, and a hairline rectangle round nothing is a window
-	-- frame with no window in it.
+	-- The edge follows the background and its own switch, and it needs both. At
+	-- zero opacity the player has asked for rows over the world, and a hairline
+	-- rectangle round nothing is a window frame with no window in it; with the
+	-- switch off they have asked for a surface with no line round it, which is
+	-- what the loot feed ships as.
 	local alpha = self:Setting("alpha") / 100
+	local edged = (alpha > 0 and self:Setting("edge")) and 1 or 0
 	self.bg:SetColorTexture(C.window[1], C.window[2], C.window[3], alpha)
 	for index = 1, 4 do
-		self.edges[index]:SetAlpha(alpha > 0 and 1 or 0)
+		self.edges[index]:SetAlpha(edged)
 	end
 	-- The strip's hairline goes with them, for the same reason. Over bare world
 	-- a line under the last row is a rule dividing nothing from nothing.

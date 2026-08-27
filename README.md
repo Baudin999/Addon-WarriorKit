@@ -73,8 +73,17 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   happened, newest at the top and older underneath, scrolled with the wheel. A
   loot row is the item's icon, its name in its own quality colour and how many
   dropped, with a stripe down the left in that same colour, so a pull reads as a
-  ribbon before you read a word of it. A combat row is three columns off the
-  combat log: what happened, who it was, and the number. The stripe says which
+  ribbon before you read a word of it. A quest item carries a ring round its
+  icon, because a quest item is white and so is a stack of linen. The loot feed
+  has no word over it and no line round it, and over the rows are seven small
+  squares in the quality colours: click one and that kind stops being drawn.
+  They filter what you are looking at rather than what is recorded, so turning
+  one back on brings its history with it. Hover a row and the tooltip carries
+  what a vendor pays for one and what the stack came to, plus what it goes for
+  at auction if you have Auctionator, TSM, Auctioneer or RECrystallize
+  installed. None of them is required and the line names whichever answered. A
+  combat row is three columns off the combat log: what happened, who it was, and
+  the number. The stripe says which
   way the blow went and a critical draws its number in gold with a mark after
   it, so the crit is not a hue you have to be able to see. Entering and leaving
   combat draw a band across the feed, which is what separates one pull from the

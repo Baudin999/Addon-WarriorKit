@@ -84,7 +84,7 @@ check(newest().name == "Tattered Cloth",
 
 -- A sentence that is not loot, and one that matches the shape while
 -- carrying no item link in it. Neither may become a row.
-local held = feed:Count()
+local held, drawn = feed:Count(), feed:Shown()
 fire("CHAT_MSG_LOOT", "You receive loot: a rumour.")
 fire("CHAT_MSG_LOOT", "Ragnaros says something about firelands.")
 check(feed:Count() == held, "a sentence with no item link in it became a row")
@@ -103,14 +103,6 @@ drop("You receive loot: %s.", _G.WarriorKitItemLink("Aegis"))
 check(newest().color == rare, "two rares came back with different colour tables")
 drop("You receive loot: %s.", _G.WarriorKitItemLink("Chipped Boar Tusk"))
 check(newest().color ~= rare, "a grey and a rare came back the same colour")
-
-ns.db.lootFeedQuality = 3
-held = feed:Count()
-drop("You receive loot: %s.", _G.WarriorKitItemLink("Chipped Boar Tusk"))
-check(feed:Count() == held, "a grey got a row under a quality floor of rare")
-drop("You receive loot: %s.", _G.WarriorKitItemLink("Arcanite Reaper"))
-check(feed:Count() == held + 1, "an epic was turned away by a quality floor of rare")
-ns.db.lootFeedQuality = 0
 
 ----------------------------------------------------------------------
 -- Whose drop it was
@@ -138,11 +130,18 @@ check(newest().money, "coin did not reach the feed")
 check(newest().name == "12 Silver, 39 Copper",
 	"the coin phrase did not survive the sentence around it: " .. tostring(newest().name))
 
+-- Coin is recorded whatever its chip says, the same as everything else. What
+-- the chip decides is whether it gets a row, and the purse along the bottom
+-- has the number either way.
 ns.db.lootFeedMoney = false
-held = feed:Count()
+feed:Chipped()
+held, drawn = feed:Count(), feed:Shown()
 fire("CHAT_MSG_MONEY", "You loot 4 Copper")
-check(feed:Count() == held, "coin reached the feed with the setting off")
+check(feed:Count() == held + 1, "coin did not reach the ring with its chip off")
+check(feed:Shown() == drawn, "coin got a row with its chip off")
 ns.db.lootFeedMoney = true
+feed:Chipped()
+check(feed:Shown() == drawn + 2, "turning the coin chip back on did not bring both coin rows back")
 
 ----------------------------------------------------------------------
 -- Which way it reads, and scrolling back

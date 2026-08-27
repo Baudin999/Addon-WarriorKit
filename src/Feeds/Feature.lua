@@ -16,35 +16,16 @@ local LOW_WIDTH, HIGH_WIDTH = 200, 520
 local LOW_QUALITY, HIGH_QUALITY = 0, 4
 local LOW_FLOOR, HIGH_FLOOR = 0, 100000
 
--- The word for each quality the floor can be set to, in the client's own
--- language where it has one. ITEM_QUALITY0_DESC and its siblings are what the
--- client calls them in its own tooltips, so a player reading "Uncommon" here
--- reads the same word the item does.
-local QUALITY_WORDS = { [0] = "Poor", "Common", "Uncommon", "Rare", "Epic" }
+-- The word for a quality is Feeds/Loot.lua's, because the chips over the loot
+-- feed name one and so does this page, and two tables of five words is how one
+-- of them ends up saying "Grey" while the other says "Poor".
+local QualityWord = ns.QualityWord
 
-local function QualityWord(level)
-	local named = _G["ITEM_QUALITY" .. level .. "_DESC"]
-	return (type(named) == "string" and named) or QUALITY_WORDS[level] or tostring(level)
-end
-
--- The words the quality control cycles through, in level order, built out of
--- the same function that reads one back. UI.Kit's Cycle matches what get()
--- returns against the list it was given, so a list typed in English beside a
--- reader that answers the client's own word would never match on a German
--- client and every click would jump back to Poor.
-local QUALITY_LIST = {}
-for level = LOW_QUALITY, HIGH_QUALITY do
-	QUALITY_LIST[level - LOW_QUALITY + 1] = QualityWord(level)
-end
-
-local function QualityLevel(word)
-	for index, candidate in ipairs(QUALITY_LIST) do
-		if candidate == word then
-			return index - 1 + LOW_QUALITY
-		end
-	end
-	return LOW_QUALITY
-end
+-- The word a filter chip is turned on and off by, in the order the chips are
+-- drawn. Typed in English rather than read off the client, because this is a
+-- slash command and a command you have to type in German on a German client is
+-- one nobody can write down.
+local FILTERS = { "poor", "common", "uncommon", "rare", "epic" }
 
 --------------------------------------------------------------------------
 -- The two streams, said once
@@ -108,6 +89,47 @@ local function Apply(entry)
 	entry.stream:Apply()
 end
 
+-- What a feed is dressed in: how large the picture on a row is, whether there
+-- is a word over the column, a line round the frame, a strip of chips.
+--
+-- Split out of Shared rather than written in it, and the reason is worth
+-- stating because it is the only reason: Shared was a hundred and two lines and
+-- thirty three branches with these in it, and scripts/shape.lua puts the
+-- ceilings at a hundred and thirty. The four words below are one subject and
+-- the seven above are the other, which is where a function of eleven if
+-- statements was always going to come apart.
+local function Chrome(entry, option, value)
+	local db, prefix = ns.db, entry.prefix
+
+	if option == "icon" then
+		local icon = ns.Command.Number(value, ns.UI.FEED_ICON_LOW, ns.UI.FEED_ICON_HIGH,
+			entry.title .. " icon")
+		if icon then
+			db[prefix .. "Icon"] = icon
+			Apply(entry)
+			local drawn, sharp = ns.UI.FeedIcons(icon, db[prefix .. "Zoom"])
+			ns.Print(("the %s feed draws a %d pixel icon on a %d pixel row%s."):format(
+				entry.title:lower(), drawn, drawn + 2,
+				sharp and "" or ", which the client has to resample"))
+		end
+		return true
+	end
+
+	if option == "header" or option == "edge" or option == "filters" then
+		local key = prefix .. option:sub(1, 1):upper() .. option:sub(2)
+		db[key] = ns.Command.Toggle(value)
+		Apply(entry)
+		ns.Print(("the %s feed %s %s."):format(entry.title:lower(),
+			db[key] and "has" or "has no",
+			(option == "header") and "a word over it"
+				or (option == "edge") and "a line round it"
+				or "filter chips, and draws everything it holds"))
+		return true
+	end
+
+	return false
+end
+
 -- The options every stream answers to. Returns true when it dealt with the
 -- word, so the caller can fall through to the ones that are specific to it.
 local function Shared(entry, option, value)
@@ -130,6 +152,10 @@ local function Shared(entry, option, value)
 			Apply(entry)
 			ns.Print(("the %s feed is %d pixels wide."):format(entry.title:lower(), width))
 		end
+		return true
+	end
+
+	if Chrome(entry, option, value) then
 		return true
 	end
 
@@ -195,18 +221,32 @@ local function LootOption(_, option, value)
 		return true
 	end
 
-	if option == "quality" then
-		local level = ns.Command.Number(value, LOW_QUALITY, HIGH_QUALITY, "loot quality")
-		if level then
-			ns.db.lootFeedQuality = level
-			ns.Print(("the loot feed shows %s and better."):format(QualityWord(level)))
+	for level = LOW_QUALITY, HIGH_QUALITY do
+		if option == FILTERS[level + 1] then
+			ns.LootFeed.Light(level, ns.Command.Toggle(value))
+			STREAMS.loot.stream:Feed():Chipped()
+			ns.Print(("%s items are %s the column. The feed records them either"
+				.. " way."):format(QualityWord(level),
+				ns.LootFeed.Lit(level) and "on" or "off"))
+			return true
 		end
+	end
+
+	if option == "quest" then
+		ns.db.lootFeedQuest = ns.Command.Toggle(value)
+		STREAMS.loot.stream:Feed():Chipped()
+		ns.Print("quest items are " .. (ns.db.lootFeedQuest
+			and "drawn whatever their own quality chip says."
+			or "graded by their own quality like anything else."))
 		return true
 	end
 
 	if option == "money" then
 		ns.db.lootFeedMoney = ns.Command.Toggle(value)
-		ns.Print("coin " .. (ns.db.lootFeedMoney and "goes in the feed." or "stays out of the feed."))
+		STREAMS.loot.stream:Feed():Chipped()
+		ns.Print("coin " .. (ns.db.lootFeedMoney
+			and "gets a row in the column."
+			or "stays out of the column and in the purse under it."))
 		return true
 	end
 
@@ -310,14 +350,14 @@ local function SharedPage(ui, entry)
 			ns.db[prefix] = on
 			entry.stream:Show()
 		end)
-	ui.Hint("This is the switch to reach for if you want the feed to cost nothing: off, " .. entry.cheap .. ".")
+	ui.Hint("Reach for this to make the feed cost nothing: off, " .. entry.cheap .. ".")
 
 	ui.Check("show the " .. lower .. " feed", function() return ns.db[prefix .. "Shown"] end,
 		function(on)
 			ns.db[prefix .. "Shown"] = on
 			entry.stream:Show()
 		end)
-	ui.Hint("Hidden and still collecting is close to free, because drawing the column is the expensive half. Show it again and the last few hundred rows come back with it.")
+	ui.Hint("Hidden and still collecting is close to free: drawing the column is the expensive half, and the history comes back with it.")
 
 	ui.Count("rows", LOW_ROWS, HIGH_ROWS,
 		function() return ns.db[prefix .. "Rows"] end,
@@ -333,20 +373,46 @@ local function SharedPage(ui, entry)
 			Apply(entry)
 		end)
 
+	ui.Size("icon", ns.UI.FEED_ICON_LOW, ns.UI.FEED_ICON_HIGH, 1,
+		function() return ns.db[prefix .. "Icon"] end,
+		function(value)
+			ns.db[prefix .. "Icon"] = value
+			Apply(entry)
+		end)
+	ui.Reading("the picture on a row", function()
+		local drawn, sharp = ns.UI.FeedIcons(ns.db[prefix .. "Icon"],
+			ns.db[prefix .. "Zoom"])
+		return ("%d px, %s"):format(drawn,
+			sharp and "one stored texel per pixel" or "resampled by the client")
+	end)
+	ui.Hint("The row is the icon plus two pixels, so this sets the line height too. Only 27 draws the client's art sharp.")
+
+	ui.Check("a word over the column", function() return ns.db[prefix .. "Header"] end,
+		function(on)
+			ns.db[prefix .. "Header"] = on
+			Apply(entry)
+		end)
+
+	ui.Check("a line round the frame", function() return ns.db[prefix .. "Edge"] end,
+		function(on)
+			ns.db[prefix .. "Edge"] = on
+			Apply(entry)
+		end)
+
 	ui.Opacity("background",
 		function() return ns.db[prefix .. "Alpha"] end,
 		function(value)
 			ns.db[prefix .. "Alpha"] = value
 			Apply(entry)
 		end)
-	ui.Hint("The text is outlined either way, so it reads all the way down to nothing. At zero the edge goes with the background and the feed is rows of text over the world.")
+	ui.Hint("The text is outlined either way and the line above goes with it, so at zero the feed is rows of text over the world.")
 
 	ui.Check("rows answer the mouse", function() return ns.db[prefix .. "Mouse"] end,
 		function(on)
 			ns.db[prefix .. "Mouse"] = on
 			Apply(entry)
 		end)
-	ui.Hint("On, hovering a row opens its tooltip and the wheel scrolls back. Off, the feed is a picture and the wheel goes past it to the camera.")
+	ui.Hint("On, a hover opens the row's tooltip and the wheel scrolls back. Off, the wheel goes past it to the camera.")
 
 	ui.Reading("the mouse", ns.UI.Tooltip.Describe)
 
@@ -358,41 +424,63 @@ end
 
 local function Panel(ui)
 	ui.Section("Loot feed", "Readouts")
-	ui.Lede("A column of what dropped, newest at the top, each row in the item's own quality colour.")
+	ui.Lede("What dropped, newest at the top, in the item's own quality colour, filtered by the chips over it.")
 
 	SharedPage(ui, STREAMS.loot)
 
 	ui.Divider()
 
-	ui.Cycle("show", QUALITY_LIST,
-		function() return QualityWord(ns.db.lootFeedQuality) end,
-		function(word)
-			ns.db.lootFeedQuality = QualityLevel(word)
+	ui.Check("the filter chips over the column",
+		function() return ns.db.lootFeedFilters end,
+		function(on)
+			ns.db.lootFeedFilters = on
+			STREAMS.loot.stream:Apply()
 		end)
-	ui.Hint("Everything is the default, grey vendor trash included, because the addon sells that trash for you and the feed is the only place you will see what it was.")
+	ui.Hint("Six squares in the quality colours, plus one for quest items. Off, the strip goes and the column draws everything it holds.")
+
+	for level = LOW_QUALITY, HIGH_QUALITY do
+		ui.Check(QualityWord(level):lower(),
+			function() return ns.LootFeed.Lit(level) end,
+			function(on)
+				ns.LootFeed.Light(level, on)
+				STREAMS.loot.stream:Feed():Chipped()
+			end)
+	end
+	ui.Hint("The same switches as the chips. The feed records everything either way, so turning one back on brings its history with it.")
+
+	ui.Check("quest items whatever their quality",
+		function() return ns.db.lootFeedQuest end,
+		function(on)
+			ns.db.lootFeedQuest = on
+			STREAMS.loot.stream:Feed():Chipped()
+		end)
+	ui.Hint("A quest item is white, the same white as linen. It gets a ring round its icon, and this keeps it on screen once the whites are off.")
 
 	ui.Check("the group's drops too", function() return ns.db.lootFeedGroup end,
 		function(on) ns.db.lootFeedGroup = on end)
 	ui.Hint("Off by default. Everyone else's loot is what makes the client's own chat unreadable in a raid.")
 
 	ui.Check("coin", function() return ns.db.lootFeedMoney end,
-		function(on) ns.db.lootFeedMoney = on end)
+		function(on)
+			ns.db.lootFeedMoney = on
+			STREAMS.loot.stream:Feed():Chipped()
+		end)
 
 	ui.Check("the purse along the bottom", function() return ns.db.lootFeedPurse end,
 		function(on)
 			ns.db.lootFeedPurse = on
 			STREAMS.loot.stream:Apply()
 		end)
-	ui.Hint("What you are carrying, what every character on the account is carrying between them, and gold an hour since you logged in. Hover it for the list. Off, the feed gives the height back.")
+	ui.Hint("What you carry, what the account carries between it, and gold an hour since you logged in. Hover it for the list.")
 
 	ui.Reading("rows so far", function()
-		local seen, dropped = ns.LootFeed.Counts()
-		return ("%d, and %d under the quality floor"):format(seen, dropped)
+		return tostring(ns.LootFeed.Counts())
 	end)
 	ui.Reading("loot messages this client carries", function()
 		local live, total = ns.LootFeed.Rules()
 		return ("%d of %d"):format(live, total)
 	end)
+	ui.Reading("what an item goes for", ns.Auction.Describe)
 
 	ui.Section("Combat feed", "Readouts")
 	ui.Lede("The same column fed by the combat log: one row per thing that landed on you or on something.")
@@ -409,12 +497,12 @@ local function Panel(ui)
 
 	ui.Check("misses and dodges", function() return ns.db.combatFeedMisses end,
 		function(on) ns.db.combatFeedMisses = on end)
-	ui.Hint("A miss is a row with no number on it and it earns one: four dodges in a row is why your rotation stalled, and nothing else on screen says so.")
+	ui.Hint("A miss is a row with no number and it earns one: four dodges in a row is why your rotation stalled.")
 
 	ui.Stepper("smallest hit", LOW_FLOOR, 2000, 25,
 		function() return ns.db.combatFeedFloor end,
 		function(value) ns.db.combatFeedFloor = value end)
-	ui.Hint("At zero this is every tick of every bleed on every mob in the pack, which in a fury pull scrolls faster than it can be read. This is the number that fixes it.")
+	ui.Hint("At zero this is every tick of every bleed on every mob in the pack, which scrolls faster than it can be read.")
 
 	ui.Reading("rows so far", function()
 		if not ns.CombatFeed.Ready() then
@@ -448,8 +536,10 @@ ns.Register({
 	help = {
 		"feed loot on|off, and feed combat on|off, which is whether it collects",
 		"feed <which> show|hide takes the column off the screen and leaves it collecting",
-		"feed <which> rows 3 to 24, width 200 to 520, zoom 1 to 3, alpha 0 to 100, mouse on|off",
-		"feed loot quality 0 to 4, group on|off, money on|off, purse on|off",
+		"feed <which> rows 3 to 24, width 200 to 520, icon 16 to 40, zoom 1 to 3",
+		"feed <which> alpha 0 to 100, mouse|header|edge|filters on|off",
+		"feed loot poor|common|uncommon|rare|epic|quest|money on|off, which is what the column draws",
+		"feed loot group on|off, purse on|off",
 		"feed combat out|in|misses on|off, floor 0",
 		"feed <which> clear empties it, reset puts it back where it started",
 	},
@@ -467,12 +557,23 @@ ns.Register({
 			-- and forgotten is exactly the "why can I not see this" that brings
 			-- somebody to a reset button; a feed switched off is a decision about
 			-- what the addon records, which is not this button's business.
-			for _, word in ipairs({ "Rows", "Width", "Zoom", "Alpha", "Mouse", "Shown" }) do
+			for _, word in ipairs({ "Rows", "Width", "Icon", "Zoom", "Alpha", "Mouse",
+				"Shown", "Header", "Edge", "Filters" }) do
 				ns.db[entry.prefix .. word] = ns.DefaultFor(entry.prefix .. word)
 			end
 			entry.stream:Reset({ entry.point[1], entry.point[2], entry.point[3],
 				entry.point[4], entry.point[5] })
 		end
+
+		-- The chips go back with them, for the reason Shown is in the list
+		-- above: a quality you turned off an hour ago and forgot is exactly the
+		-- "why can I not see this" that brings somebody to a reset button, and
+		-- unlike the switch beside it, it is not a decision about what the
+		-- addon records.
+		for _, key in ipairs({ "lootFeedShow", "lootFeedQuest", "lootFeedMoney" }) do
+			ns.db[key] = ns.DefaultFor(key)
+		end
+		STREAMS.loot.stream:Feed():Chipped()
 	end,
 
 	panel = Panel,

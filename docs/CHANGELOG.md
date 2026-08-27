@@ -2,6 +2,85 @@
 
 ## Unreleased
 
+### The loot feed, made worth looking at
+
+Five changes, and four of them are one argument: the loot feed was a column
+dressed as a window, and a window is not what it is.
+
+**The chrome is gone and it is a setting either way.** The word "Loot" sat over
+a column whose rows are an item icon, an item name in the item's own quality
+colour and a stack size, and a hairline rectangle sat round the whole thing.
+Neither was carrying information. `Stream.Defaults` takes a third argument for
+whether a stream ships with them, the loot feed says no and the combat feed says
+yes, and both are `<prefix>Header` and `<prefix>Edge` for anybody who disagrees.
+The combat feed keeps them because its rows are three columns of numbers and a
+column of numbers with nothing named over it is one you have to work out.
+
+What the header is worth is not the setting but the geometry. A strip that stops
+being drawn without the rows moving up is a band of empty window, so
+`Feed:Chrome` owns one number and Resize and Sync read it rather than each
+deciding again.
+
+**Filter chips instead of a quality floor.** Seven small squares over the rows:
+five in the quality colours, then a break, then quest and coin. Each is on or
+off and each says which it is by its colour, because the quality ramp is a thing
+every player in this game already reads.
+
+The floor they replace worked at the door. An item under it never became a row
+and no amount of changing your mind got it back, which is the wrong end to
+filter at for a window whose whole job is answering "what did I just get". Now
+everything that drops is recorded and the chips decide what is drawn, so turning
+one back on brings its history with it. `lootFeedQuality` is gone and
+`lootFeedShow` is a five bit mask in its place; the panel carries the same
+switches, and the tally over the column reads "4/40" whenever a chip is hiding
+something, because a feed showing four rows when forty things dropped otherwise
+looks broken.
+
+Filtering costs a walk of the ring rather than the one step an unfiltered feed
+takes, so `UI/Feed.lua` walks it once per paint into a window it owns rather
+than once per row, and caches the count. A feed with no filter is exactly the
+file it was.
+
+**A quest item gets a ring round its icon.** It is white, the same white as a
+stack of linen, so the row that hands in your chain of five kills read exactly
+like the row that hands you a bandage. `ns.ItemKind` already answered class 12
+for Comfort/Clutter.lua and now answers it here. The quest chip is an override
+rather than an eighth tier: on, a quest item is drawn whatever the white chip
+says, which is the combination that makes the feed useful while questing.
+
+**The hover says what the thing is worth.** Two numbers and they answer
+different questions. The vendor price is the client's own and is per item, so a
+stack gets a second line with the total on it, which is the number you actually
+decide on and which no tooltip in the game gives you. An item a vendor will not
+take says so in words rather than showing 0c, because nought copper and "not
+cached yet" are the same number and different facts.
+
+The auction price is not the client's at all. There is no API in this game for
+what an item goes for, so `Feeds/Auction.lua` asks whichever scanner the player
+has installed, in order, and takes the first answer: Auctionator on either of
+its two interfaces, TradeSkillMaster, Auctioneer, RECrystallize. Nothing is
+required and no TOC names one as a dependency. A player with none of them loses
+one line of one tooltip and is told nothing about it. The line names the addon
+that supplied the number, because a price with no source on it is one the player
+cannot check, and that is also why the first scanner wins rather than an average
+of two: two scanners disagreeing is a real thing, and averaging them is a number
+nobody's addon holds.
+
+**And the row is a size.** `<prefix>Icon` runs 16 to 40 and the row is the icon
+plus two, so one stepper moves the picture, the line height and the height of
+the whole frame. The floor is the text rather than the art: every string on a
+row is outlined, `UI.OutlineFloor` puts an outlined glyph at 14 or above, and a
+row shorter than 16 is one whose name does not fit however small the picture
+gets. `UI.FeedIcons` takes the size as an argument now that it is a setting,
+because the panel note it feeds was otherwise telling every player the same
+thing whatever they had dragged the slider to.
+
+`31-feeds.lua` stayed what a feed is and `40-loot-feed.lua` is what is only ever
+true of loot, which is where the section went over the eight hundred line limit
+rather than under an allow-list. The client stub gained one white item that is
+not a quest item, because "the whites are off and the quest item is still drawn"
+is not a claim you can make about a column with one row in it.
+
 ### Full flexibility on the cloned bars
 
 The clone shipped with the shape of every bar in source and one tick box per bar.

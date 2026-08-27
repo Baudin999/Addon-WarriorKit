@@ -4170,8 +4170,9 @@ now.
 **Feeds.** Two columns of the same shape, one fed by loot and one by the combat
 log. A loot row is the item's icon, its name in its own quality colour and how
 many there were, with a stripe down the left in that colour, so a run of drops
-reads as a ribbon before you read a word of it. A combat row reads what
-happened, then who it was, then the number. The stripe says which way it went,
+reads as a ribbon before you read a word of it. A quest item carries a ring
+round its icon, because a quest item is white and so is a stack of linen. A
+combat row reads what happened, then who it was, then the number. The stripe says which way it went,
 white out, red in, green healed and grey missed, and a critical draws its number
 in gold with a mark after it, so the crit is not a hue you have to be able to
 see. Entering and leaving combat draw a band across the feed, which is what
@@ -4186,12 +4187,51 @@ away. Off, the loot feed reads no loot message at all, and the combat feed turns
 an event away on one table lookup, which in a raid is the difference between a
 few hundred lookups a second and a few hundred rows a second.
 
-The loot quality floor ships at everything, grey vendor trash included, because
-this addon sells that trash for you at the next merchant and the feed is the
-only place you will ever see what it was. The group's drops are off by default:
-everyone else's loot is what makes the client's own chat unreadable in a raid,
-and a feed that reproduced it would have replaced one unreadable column with a
-prettier one.
+**The loot feed ships bare and filters with chips.** No word over the column and
+no line round the frame: the rows say what they are by the colour of the name on
+them and the chrome was carrying nothing. Both are settings, `feed loot header`
+and `feed loot edge`, and the combat feed keeps both because its rows are three
+columns of numbers.
+
+Over the rows are seven small squares, five in the quality colours and then, past
+a break, quest and coin. Each is on or off and each says which it is by its
+colour, which is a thing every player in this game already reads. They filter
+what is drawn rather than what is kept: everything that drops is recorded either
+way, so turning a chip back on brings its history with it. The tally on the right
+of the strip reads "4/40" whenever a chip is hiding something, because a column
+of four rows on an evening that dropped forty things otherwise looks broken.
+
+Quest is an override rather than an eighth quality. On, a quest item is drawn
+whatever the white chip says, which is the combination worth having while
+questing: the whites off and the five wolf livers still on screen.
+
+Every quality ships lit, grey vendor trash included, because this addon sells
+that trash for you at the next merchant and the feed is the only place you will
+ever see what it was. The group's drops are off by default: everyone else's loot
+is what makes the client's own chat unreadable in a raid, and a feed that
+reproduced it would have replaced one unreadable column with a prettier one.
+
+**Hovering a loot row says what the thing is worth, twice.** The vendor price is
+the client's own and is per item, so a stack gets a second line with the total on
+it, which is the number you actually decide on and which no tooltip in the game
+gives you. An item a vendor will not take says so in words, because nought copper
+and "not cached yet" are the same number and different facts.
+
+What an item goes for at auction is not a number this client holds at all.
+`Feeds/Auction.lua` asks whichever scanner the player has installed, in order,
+and takes the first answer: Auctionator on either of its interfaces,
+TradeSkillMaster, Auctioneer, RECrystallize. None is required, no TOC names one,
+and a player with none of them loses one line of one tooltip and is told nothing
+about it. The line names the addon that supplied the number, because a price with
+no source on it is one you cannot check.
+
+**A row is a size.** `feed <which> icon` runs 16 to 40 and the row is the icon
+plus two, so one stepper moves the picture, the line height and the height of the
+whole feed. The floor is the text rather than the art: every string on a row is
+outlined and an outlined glyph needs 14 pixels, so a row shorter than 16 is one
+whose name does not fit however small the picture gets. 27 is the only size in
+the range that draws one stored texel per screen pixel, and the panel says so
+when you move off it.
 
 **The combat floor is a setting because there is no right number.** At zero this
 is every tick of every bleed on every mob in the pack, which in a fury pull
@@ -4201,8 +4241,9 @@ with no number on it: four dodges in a row is the reason your rotation stalled
 and nothing else on the screen says so.
 
 At zero background the feed is rows of outlined text over the world, the way the
-meters are drawn, and the edge goes with the background: a hairline rectangle
-round bare world is a window frame with no window in it. The scrollbar goes too,
+meters are drawn, and the edge goes with the background whether or not its own
+switch is on: a hairline rectangle round bare world is a window frame with no
+window in it. The scrollbar goes too,
 in everything but the thumb, which is the only thing left saying there is more
 above and below what you can see.
 
@@ -5046,6 +5087,26 @@ Aiming at a mob out of combat with no target selected is the whole test.
 ## Untested against the live client
 
 Everything below was written from the API contract and has never executed:
+
+- Whether any of the four auction scanners answers on these clients. Each is
+  probed by name and pcalled, so a scanner whose API has moved costs the auction
+  line and nothing else, and a player with none of them was never going to get
+  one. What would settle it: install one, scan, hover a loot row, and read the
+  panel's "what an item goes for" line, which names whichever answered or says
+  none did. Auctionator's modern interface is the one this file is least sure
+  of on a classic realm, because `Auctionator.API.v1` is a retail-era shape and
+  the classic build may only carry `Atr_GetAuctionBuyout`. Both are in the list
+  and the second is tried after the first.
+- Whether the seven filter chips fit the strip at every width the loot feed
+  goes to. Seven squares of eleven units plus their gaps is about a hundred and
+  ten, the strip is the feed's full width, and the narrowest a feed goes is two
+  hundred, so the arithmetic says yes at every stop. What it does not say is
+  whether eleven units reads as a square you can hit with a mouse at UI scale
+  0.53, which is a thing you look at.
+- Whether a row's icon at 16 pixels is still an icon. The floor is set by the
+  text rather than the art and the art is the client's own 54 texel crop being
+  resampled down, so a small row is legible by construction and recognisable by
+  hope.
 
 - The whole party and raid header. `SecureGroupHeaderTemplate` is FrameXML's and
   `harness/client/09-group.lua` is a model of it written from the contract, so
