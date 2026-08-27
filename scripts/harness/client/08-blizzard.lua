@@ -128,6 +128,26 @@ for _, name in ipairs({ "BuffButton1", "DebuffButton1" }) do
 end
 child("button", enchantFrame, "TempEnchant1")
 
+-- Blizzard's own party and raid frames, which this addon draws itself out of a
+-- secure group header and takes down by name.
+--
+-- The party is four separate frames on both clients, which is why one switch
+-- names four of them. The raid is a container and the manager that lays it out,
+-- and the manager is the reason that switch needs more than a strip: it
+-- re-shows the container on its own layout pass, through SetShown, which is
+-- resolved in C and never reads the Lua Show that ns.Strip replaced. A fixture
+-- without that function could not tell the hook in UnitFrames/Blizzard.lua from
+-- an addon that never wrote one.
+for index = 1, 4 do
+	child("frame", _G.UIParent, "PartyMemberFrame" .. index)
+end
+local raidContainer = child("frame", _G.UIParent, "CompactRaidFrameContainer")
+child("frame", _G.UIParent, "CompactRaidFrameManager")
+
+function _G.CompactRaidFrameManager_UpdateShown()
+	raidContainer.shown = true
+end
+
 -- What each unit frame was built as, taken before PLAYER_LOGIN and so before
 -- the skin has fitted any of them. The fit is only reversible if these are the
 -- numbers that come back.

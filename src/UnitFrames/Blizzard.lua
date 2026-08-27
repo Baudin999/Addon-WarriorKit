@@ -49,6 +49,9 @@ local SWITCHES = {
 	{ key = "hideBlizzPlayerCast", word = "playercast",
 		label = "Blizzard's own cast bar",
 		hint = "Read this one with our cast bar switch. Both off is the one combination that leaves you no cast bar at all." },
+	{ key = "hideBlizzParty", word = "party", label = "Blizzard's party frames" },
+	{ key = "hideBlizzRaid", word = "raid", label = "Blizzard's raid frames",
+		hint = "The manager re-shows its container on its own layout pass, so this one is hooked onto that pass as well as hidden." },
 }
 
 -- What each switch takes down, by name, and what it takes to take it down.
@@ -81,7 +84,44 @@ local FRAMES = {
 	{ name = "TargetFrameSpellBar", needs = { "hideBlizzTargetCast" } },
 	{ name = "CastingBarFrame", needs = { "hideBlizzPlayerCast" } },
 	{ name = "PlayerCastingBarFrame", needs = { "hideBlizzPlayerCast" } },
+	{ name = "PartyMemberFrame1", needs = { "hideBlizzParty" } },
+	{ name = "PartyMemberFrame2", needs = { "hideBlizzParty" } },
+	{ name = "PartyMemberFrame3", needs = { "hideBlizzParty" } },
+	{ name = "PartyMemberFrame4", needs = { "hideBlizzParty" } },
+	{ name = "CompactRaidFrameContainer", needs = { "hideBlizzRaid" } },
+	{ name = "CompactRaidFrameManager", needs = { "hideBlizzRaid" } },
 }
+
+-- The raid is the one entry in the list that will not stay down on its own.
+--
+-- CompactRaidFrameManager re-shows its container whenever it lays itself out,
+-- which is every time somebody joins, and it does it through SetShown. ns.Strip
+-- replaces a frame's Show method with its Hide, which survives a Show and does
+-- nothing at all about a SetShown, because that one is resolved in C and never
+-- reads the Lua field.
+--
+-- So the pass itself is hooked, and the hook does what every other retry in
+-- this file does: run Apply again. It is post-hooked rather than replaced, so
+-- the client's own layout finishes first and this is the last word. Probed by
+-- name, because neither the function nor hooksecurefunc is proven on both of
+-- these clients, and a client with no raid manager has nothing to re-show.
+--
+-- Like every hook in this addon it cannot be taken off again, which is why it
+-- reads the switch on every call rather than being installed when the switch
+-- goes on.
+local HOOKED = "CompactRaidFrameManager_UpdateShown"
+local hooked = false
+
+local function HookManager()
+	if hooked or type(_G[HOOKED]) ~= "function" or type(hooksecurefunc) ~= "function" then
+		return
+	end
+	hooked = pcall(hooksecurefunc, HOOKED, function()
+		if ns.db and ns.db.hideBlizzRaid then
+			Blizz.Apply()
+		end
+	end)
+end
 
 local pending = false
 
@@ -103,6 +143,10 @@ function Blizz.Apply()
 	if not ns.db then
 		return
 	end
+	-- Here rather than at login, because the raid manager is load on demand on
+	-- one of these clients and this is the call that runs again when it turns
+	-- up. It is a no-op from the second time onward.
+	HookManager()
 
 	local complete = true
 	for index = 1, #FRAMES do
@@ -112,6 +156,15 @@ function Blizz.Apply()
 			local done
 			if Asked(entry.needs) then
 				done = ns.Strip(frame)
+				-- Stripped and back on the screen, which is one frame in this
+				-- list and is the whole reason the hook below exists. ns.Strip
+				-- answers true for a frame it has already taken down, which is
+				-- right for every other caller here and exactly wrong for a
+				-- container the raid manager re-shows: this pass has to read
+				-- what is on the screen rather than what the last one did.
+				if done and frame:IsShown() and not ns.Blocked(frame) then
+					frame:Hide()
+				end
 			else
 				done = ns.Unstrip(frame)
 			end

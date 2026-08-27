@@ -81,6 +81,10 @@ name of none of them.
     Unit/Level.lua       the level tag, the elite suffix, what a kill is worth
     Unit/Roster.lua      who is in the group, whose pet is whose, and what a
                          GUID was called when it last was
+    Unit/Spec.lua        which talent tree somebody took, out of your own trees
+                         or out of an inspect, and the icon of it
+    Unit/Role.lua        tank, healer or damage, out of four sources that
+                         disagree, with the class as the floor
     Unit/Threat.lua      what the threat API says, for one mob or across a group
 
     UI/Pixel.lua         the pixel grid: screen size, scale, snapping, rescale
@@ -156,11 +160,12 @@ name of none of them.
     UnitFrames/Auras.lua     your own and the target's buff and debuff rows,
                              and hiding the client's, which cannot be moved
     UnitFrames/Skin.lua      the square skin on player, target and target of target
+    UnitFrames/Member.lua    one party or raid member's block: build, lay out, tick
+    UnitFrames/Group.lua     the secure group header, its attributes, and the
+                             slot order every member falls into
     UnitFrames/Panel.lua     the part's page in the options window
     UnitFrames/Feature.lua
 
-    Meter/Spec.lua           the icon beside a name: a talent tree where the
-                             client will say which, a class icon where it will not
     Meter/Meter.lua          damage and healing per player, out of the combat log
     Meter/Threat.lua         each member's threat on your target, and how fast it
                              is climbing
@@ -555,6 +560,41 @@ goes through `Feature.lua` or through the shared surface below:
                                  what now sits between a block and its first
                                  row, which Perch is the only thing that knows
     ns.FrameAuras.Describe() / Probe(entry) / SizeRange() / CountCeiling(key)
+    ns.Group.Apply()             everything a setting can move about the party
+                                 and raid list: where it sits, its zoom, its
+                                 attributes and every block under it
+    ns.Group.Rebuild()           the slot order recomputed and every block laid
+                                 out under it. What the roster events reach, and
+                                 the one entry a harness drives
+    ns.Group.Update()            every block redrawn, five times a second
+    ns.Group.Order()             the slot order as the header was last told it.
+                                 Empty while `party order group` is running,
+                                 because the header is deciding it then
+    ns.Group.OnMember(callback)  what to do to each new button the header makes.
+                                 It exists for ctrl-click marking, which a
+                                 behaviour file may not reach across for
+    ns.Group.Header() / Members() / Count() / Deferred() / Describe()
+    ns.Group.SizeRange() / GapRange() / ColumnRange() / Lock() / Reset() / Fits()
+    ns.GroupMember.Build(button) / Place(button, look) / Update(button)
+                                 one member's block, built, laid out and ticked.
+                                 `look` is the whole of what that file knows
+                                 about the settings
+    ns.GroupMember.Rails(button) whether the block still wants the power rail it
+                                 was laid out with, which is a relayout rather
+                                 than a write
+    ns.Unit.Role.Of(unit)        tank, healer or damage, out of four sources
+                                 that disagree, cached per GUID where the answer
+                                 is settled and never where it is a guess
+    ns.Unit.Role.Band(role) / Art(role)
+                                 where a role sorts, and the sheet and crop
+                                 Blizzard draws it with
+    ns.Unit.Role.Set(name, role) / Override(name) / Forget() / Overrides()
+    ns.Unit.Role.Describe()      which of the four sources this client carries
+    ns.Unit.Spec.Icon(guid, class) / Tree(guid)
+                                 the picture of the winning talent tree, and its
+                                 index and points. Was ns.MeterSpec
+    ns.Marking.Watch(frame)      hook ctrl-click marking onto a frame this addon
+                                 made after login, which is every party block
     ns.BlizzHide.Apply()         every frame in UnitFrames/Blizzard.lua put
                                  where its switch says. Not part of the skin: it
                                  answers with every Blizzard unit frame left
@@ -568,7 +608,7 @@ goes through `Feature.lua` or through the shared surface below:
                                  for seven tenths of a second
     ns.PlayerCast.Bar() / SizeRange() / Describe() / Reset()
     ns.BlizzHide.Switches() / Find(word)
-                                 the five switches in panel order, and the one a
+                                 the seven switches in panel order, and the one a
                                  `/wk hide` word names. The panel and the slash
                                  word both walk this rather than writing the
                                  list out again
@@ -1166,17 +1206,19 @@ become new ratchets.
 
 ### Ticker discipline
 
-Eight `OnUpdate` tickers run at once and none of them ever stops. A ninth runs
+Ten `OnUpdate` tickers run at once and none of them ever stops. An eleventh runs
 only while you are looking at it.
 
     Swing/Gauges.lua      every frame   two gauges and the Slam band
     UnitFrames/EnemyBars.lua every frame  the cast fill on every bar on screen
+    UnitFrames/PlayerCast.lua every frame  your own cast fill and its seconds
     Charge/Marker.lua        20 Hz      it tracks the camera
     Charge/Icon.lua          10 Hz      the HUD icon and the macro
     Buttons/Bars.lua         10 Hz      every square on every cloned bar
     Buffs/Nag.lua            10 Hz      the missing buff row, and its pulse
     UnitFrames/EnemyBars.lua  5 Hz      everything else on every bar on screen
     UnitFrames/Skin.lua       5 Hz      the three Blizzard unit frames
+    UnitFrames/Group.lua      5 Hz      every party or raid block on screen
     Meter/Window.lua          5 Hz      the two panes of numbers
     Perf/Perf.lua             1 Hz      only while the performance tab is on screen
 
@@ -3452,6 +3494,124 @@ skin on is the answer that matters: it means the walk found no textures on
 these frames, which says this client builds them out of something else rather
 than that they were already bare.
 
+**Party and raid frames.** `UnitFrames/Group.lua` and `UnitFrames/Member.lua`.
+Blocks for the people you are grouped with, in the addon's own look, and
+Blizzard's party and raid frames off the screen behind them. The Charge button
+casts Intervene at whoever you are looking at and there was no fast way to look
+at a party member, which is the whole reason this exists.
+
+**These are our frames, not Blizzard's wearing our skin, and everything else
+follows from that.** `UnitFrames/Skin.lua` skins the player, target and target of
+target because those three carry targeting, the dropdown and a cast bar, and a
+frame drawn from scratch would have to earn all of that back. That argument does
+not carry over. `PartyMemberFrame1` is bound to `party1` in XML and there is no
+supported way to point it at anyone else, so the moment the order is decided by
+role rather than by party index the client's frames cannot draw it. The raid is
+worse: `CompactRaidFrameContainer` runs its own layout pass and puts back
+whatever an addon moves.
+
+`SecureGroupHeaderTemplate` is the answer the client already ships and both
+flavours carry it. It makes one secure unit button per member, shows and hides
+them itself as the roster changes, and takes every decision about the shape of
+the list as an attribute written out of combat.
+
+**Three things follow from the header being secure and they are most of the
+file.** Every attribute write is refused in lockdown and retried at
+`PLAYER_REGEN_ENABLED`, which is the pattern `Charge/Icon.lua` already carries. A
+button the header has just made cannot be laid out until combat drops, because
+it is protected, and that costs nothing in practice: the header defers its own
+update in lockdown too, so there is no new button waiting. And the size of one
+button has to be written from inside the header's own restricted environment,
+because the header reads it while placing the column. That is
+`initialConfigFunction`, it is the only snippet in the addon, and it sets a size
+and two attributes and nothing else, so it needs nothing off the restricted
+whitelist that is in any doubt.
+
+**The order is a role band and then a name, and it is recomputed out of combat
+and nowhere else.** Tanks, then healers, then damage, and by name inside a band.
+By name is arbitrary as an ordering and it is the only one that is stable: the
+same five people produce the same five slots in every group they are ever in
+together, whoever formed it and whoever zoned in first. Party index does not do
+that, and sorting by class does not either, because a class can be two roles.
+
+The out-of-combat rule is what makes fixed placing true rather than
+aspirational. An inspect that resolves mid pull is recorded by `Unit/Role.lua`
+and changes nothing on the screen until the fight ends. The list settles over
+the first minute you are in a group and then stops moving.
+
+The header takes it as `sortMethod = "NAMELIST"` with the names in order, which
+is the one sorting the template offers that an addon can decide for itself.
+`/wk party order group` swaps that for `groupBy = "GROUP"`, which is what
+somebody running twenty five with assignments per group wants; a party is always
+by role, because every group number in a party is 1 and grouping by it is the
+order the client handed the units over.
+
+**Four sources answer what role somebody is playing, and the last is a guess.**
+`Unit/Role.lua`, cached per GUID, best answer first: an override you typed, then
+`UnitGroupRolesAssigned` where the client has it and says something other than
+`NONE`, then `GetPartyAssignment("MAINTANK")`, then the winning talent tree
+through `Unit/Spec.lua`, then the class.
+
+Only the guess is not cached. A settled answer is settled for the session; a
+class floor has to be asked again, or a warrior stays in the damage band for the
+rest of the night after the client finally said Protection.
+
+The floor is worth defending. A member with no slot until an inspect lands is a
+frame that arrives late, and a frame that arrives late is a frame that moves. A
+priest with no talents read yet is a healer and everyone else is damage, which is
+the most common answer for every remaining class and is the band with the most
+room in it.
+
+The override is per character and by name rather than by GUID, because the point
+of it is that you type it for the people you play with and it is still right next
+week. A GUID would be right and unreadable. `/wk party role <name>
+tank|healer|dps|none`, or the picker on the page, which walks one name round the
+three bands and then off again.
+
+**One block is the block the skin draws, at the same default numbers.** They are
+the same instrument and a party frame that does not match the player frame reads
+as a second addon. Class colour on the health fill, which is already under the
+palette's luminance ceiling so the name on it reads at every state of the bar.
+Power under it in `Color.power[powerType]`, keyed by the number `UnitPowerType`
+returns rather than the token beside it. Name left, health percent right. The
+role icon on the portrait side, in Blizzard's own art, because it is the art
+everyone in the group already recognises.
+
+A member with no power draws no rail rather than an empty one, which is
+`ns.Unit.Power` answering a maximum of zero, and the health bar takes back both
+the rail and the hairline that was between them, or that block would carry a
+pixel of backdrop along its bottom edge that no other block has.
+
+Out of range, dead, offline and a ghost all draw the same way: the fill goes to
+the track colour and the name says which. Out of range is in that list on
+purpose. A member you cannot reach and a member who is not there are the same
+fact as far as the next thing you were going to press is concerned, and the slot
+is what says who it is, which is the whole point of a fixed order.
+
+**`UnitFrames/Member.lua` reads no setting at all.** What one block is drawn from
+arrives as one table at layout time: the two sizes, the role, and the two
+switches. One table reused rather than one per member, because a raid relayout is
+forty of them. It is the same seam `UnitFrames/Cast.lua` sits on and it is what
+lets `Group.lua` be about attributes and slots and nothing else.
+
+**Ctrl-click marking had to be put back by hand.** `Marking/Marking.lua` hooks
+frames by name and `PartyMemberFrame1` through `4` are on that list, so hiding
+Blizzard's party frames takes marking on a party member off the screen with them.
+The blocks that replace them are made by a header at whatever moment somebody
+joins, so there is no name to add and no login at which to look for one.
+`ns.Marking.Watch(frame)` is the one exposed function, called from
+`UnitFrames/Feature.lua` as each button is built, because a behaviour file may
+not name a file outside its own folder.
+
+**The raid manager puts its own container back and a strip cannot stop it.**
+`ns.Strip` replaces a frame's `Show` with its `Hide`, which survives a `Show` and
+does nothing at all about a `SetShown`, because that one is resolved in C and
+never reads the Lua field. `CompactRaidFrameManager` re-shows the container on
+every layout pass. So `hide raid` hooks that pass as well as stripping the frame,
+and `BlizzHide.Apply` now looks at what is on the screen rather than at what it
+did last time: `ns.Strip` answers true for a frame it has already taken down,
+which is right for every other switch there and is exactly wrong for this one.
+
 **Meters.** Two panes in one frame: damage or healing on the left, threat on the right. No
 window around either, no backdrop, no title bar and nothing to open. A row is a
 spec icon, a name, a number and a class-coloured bar as long as that player's
@@ -3497,7 +3657,9 @@ stays off the pane.
 group, and never forgets. The combat log carries neither, and somebody who
 leaves mid-fight keeps their row until the segment ends.
 
-**Spec icons, on clients that have no specs.** There is no
+**Spec icons, on clients that have no specs.** `Unit/Spec.lua`, which was
+`Meter/Spec.lua` until the party frames wanted the same answer for a different
+reason. There is no
 `GetSpecialization` here and no spec id on a unit. A TBC character is three
 talent trees with points in them, and which tree has the most is the whole of
 what anyone means by a spec. Details resolves its own player that way and shows
@@ -4526,11 +4688,27 @@ and a row with nothing on it costs one comparison.
     /wk skin debuffs 12          0 to 16, how long the debuff row runs
     /wk skin buffs 8             0 to 32, how long the buff row runs
     /wk skin probe               what this client answered for each frame
-    /wk hide                     the four switches, and what each is doing
+    /wk party on|off             blocks for the people you are grouped with
+    /wk party self on|off        whether your own block is in the list
+    /wk party order role|group   role bands, or the raid's own group numbers
+    /wk party role <name> tank|healer|dps|none   an answer you type
+    /wk party icons on|off       the role icon on each block
+    /wk party range on|off       drain a member you cannot reach
+    /wk party width 168          90 to 360, the gauge's width
+    /wk party height 34          18 to 72, the block's height
+    /wk party gap 4              0 to 20, between two blocks
+    /wk party grow up|down       which way the list runs from its corner
+    /wk party columns 8          1 to 8, the raid only
+    /wk party percolumn 5        1 to 40, the raid only
+    /wk party zoom 1             1 to 3
+    /wk party reset              the list back on its own corner of the screen
+    /wk hide                     the seven switches, and what each is doing
     /wk hide buffs on|off        Blizzard's buffs, in the corner of the screen
     /wk hide debuffs on|off      Blizzard's debuffs, beside them
     /wk hide target on|off       Blizzard's icons on the target frame
     /wk hide cast on|off         Blizzard's cast bar for your target
+    /wk hide party on|off        Blizzard's four party frames
+    /wk hide raid on|off         Blizzard's raid container and its manager
     /wk buttons apply            fill the bars with the warrior loadout
     /wk buttons restore          put back exactly what was there before
     /wk buttons                  what it would do, and whether a backup is held
@@ -4868,6 +5046,48 @@ Aiming at a mob out of combat with no target selected is the whole test.
 ## Untested against the live client
 
 Everything below was written from the API contract and has never executed:
+
+- The whole party and raid header. `SecureGroupHeaderTemplate` is FrameXML's and
+  `harness/client/09-group.lua` is a model of it written from the contract, so
+  every assertion about a slot is an assertion against that model. Four things
+  ride on it and none has run in the game. Whether the template exists under that
+  name on 2.5.6 and on Era, which fails loudly: `CreateFrame` is pcalled and
+  `/wk status` says the client has none rather than drawing nothing and saying
+  nothing. Whether `sortMethod = "NAMELIST"` really places one button per name in
+  the order given, which is the whole of the role ordering. Whether
+  `initialConfigFunction` accepts `SetWidth`, `SetHeight` and `SetAttribute` in
+  the restricted environment, which is the only snippet in the addon. And whether
+  re-writing the `point` attribute makes the header arrange again, which is what
+  puts a resized block back in the column it belongs in. What would settle all
+  four: join a party, read `/wk status`, and change `party height` with the list
+  on screen.
+- Whether `UnitGroupRolesAssigned` and `GetPartyAssignment` are on these two
+  clients. Both are probed by name and a missing one costs that source rather
+  than raising, so the failure mode is a list ordered by talents and the class
+  floor alone. `/wk party role` prints which of the four sources answered.
+- Whether `Interface\LFGFrame\UI-LFG-ICON-ROLES` is on both flavours and is cut
+  as a 256 square of 75 pixel cells. A path that does not resolve draws as a
+  green question mark and writes nothing to the log, so this is the one thing
+  here with no failure mode that announces itself. SPEC-party.md's answer if it
+  turns out missing is three more codepoints in `Media/Glyphs.ttf` and a rerun of
+  `bake-glyphs.sh`, which is not worth spending until somebody looks at a block
+  and sees a question mark.
+- Whether `CompactRaidFrameManager_UpdateShown` is what these clients call the
+  raid manager's layout pass, and whether that pass is the one that re-shows the
+  container. The hook is probed and pcalled, and where the name is wrong the
+  symptom is loud: Blizzard's raid frames come back the first time somebody
+  joins. `/wk hide` reports how many of the frames it names this client carries.
+- Whether a block at 202 by 34 is the right size for a raid. The party is the
+  player block repeated and that is the point; forty of them is not a screen, so
+  the sizes are settings and a raid is expected to run smaller. Which numbers
+  read at raid size is a thing you look at rather than measure.
+- Whether the shaman's first talent tree is Elemental Combat on both flavours.
+  `Unit/Role.lua` files it as damage, against SPEC-party.md, which listed shaman
+  trees one and three as the ones that are not damage. Tree three is Restoration
+  and is a healer; tree one is Elemental and is a caster, so following the spec
+  there would have sorted every Elemental shaman into the healer band. A client
+  that orders the tabs differently would put the mistake back, and `/wk party
+  role` beside the icon on the block is what would show it.
 
 - Whether the client's own aura buttons are protected on this backport, and
   therefore whether hiding one is refused in combat. `UnitFrames/Auras.lua`

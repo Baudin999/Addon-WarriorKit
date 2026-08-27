@@ -223,10 +223,10 @@ ns.Register({
 		end)
 		ui.Reading("row icons", function()
 			local guid = UnitGUID("player")
-			if not ns.MeterSpec.Ready() then
+			if not ns.Unit.Spec.Ready() then
 				return "class icons: no talent API on this client"
 			end
-			if not ns.MeterSpec.Known(guid) then
+			if not ns.Unit.Spec.Known(guid) then
 				return "class icons until you have spent enough points to have a tree"
 			end
 			return "spec icons, sharpening from class as each inspect lands"

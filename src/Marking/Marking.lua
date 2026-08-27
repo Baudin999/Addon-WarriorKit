@@ -142,6 +142,21 @@ local function Hook(frame)
 	end
 end
 
+-- A frame this file did not know about, hooked from outside.
+--
+-- The party and raid blocks are the caller. Marking hooks frames by name and
+-- PartyMemberFrame1 through 4 are on the list below, so hiding Blizzard's party
+-- frames takes ctrl-click marking on a party member off the screen with them.
+-- The blocks that replace them are made by a secure header at whatever moment
+-- somebody joins, so there is no name to put on that list and no login at which
+-- to look for one.
+--
+-- Called from UnitFrames/Feature.lua rather than from the file that makes the
+-- button, because a behaviour file may not name a file outside its own folder.
+function Marking.Watch(frame)
+	Hook(frame)
+end
+
 -- Frames that handle their own clicks instead of passing them to the world.
 local UNIT_FRAMES = {
 	"PlayerFrame", "TargetFrame", "TargetFrameToT", "FocusFrame", "FocusFrameToT",

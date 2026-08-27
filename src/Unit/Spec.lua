@@ -1,16 +1,24 @@
 local ADDON, ns = ...
 
+local Unit = ns.Unit
 local Spec = {}
-ns.MeterSpec = Spec
+Unit.Spec = Spec
 
 --------------------------------------------------------------------------
--- What to draw beside a name
+-- What a character has spent its points on
 --
 -- Neither of these clients has a spec. There is no GetSpecialization, no spec
 -- id and nothing on a unit that says "Arms": a TBC character is three talent
 -- trees with points in them, and which tree has the most is the whole of what
 -- anyone means by a spec here. Details resolves its own player that way and
 -- shows a class icon for everybody else, which is the honest floor.
+--
+-- This was Meter/Spec.lua and it drew one icon beside one name. It is under
+-- Unit/ because a second part now wants the same answer for a different reason:
+-- Unit/Role.lua maps the winning tree onto tank, healer or damage, and a part
+-- may not name a file outside its own tree. The alternative was Role.lua
+-- resolving ns.MeterSpec at call time the way the tickers resolve ns.Perf.Start,
+-- which works and hides a dependency that is real.
 --
 -- This goes one step past that floor, because the tree icon is a better row
 -- than the class icon and the client will hand it over if you ask properly.
@@ -62,6 +70,14 @@ local INSPECT_RANGE = 1 -- CheckInteractDistance's inspect index
 
 -- guid -> talent icon path, or false for "asked, and this client would not say"
 local icons = {}
+-- guid -> the index of the tree that won, and how many points are in it. Two
+-- flat tables rather than one of pairs, because every reader wants one of the
+-- two numbers and a table per GUID would be a table to build on the one call
+-- that fills it.
+--
+-- Written together with the icon and never on their own, so a GUID in one is a
+-- GUID in all three.
+local trees, points = {}, {}
 -- guid -> when it was last asked, so a miss is retried rather than given up on
 local asked = {}
 
@@ -101,27 +117,40 @@ local function Tree(index, inspect)
 	return second, tonumber(third) or 0
 end
 
--- The icon of whichever tree has the most points in it, or nil where nobody has
--- committed to anything yet. Ties go to the first tree, which is arbitrary and
--- is also what every other addon does with them.
+-- Whichever tree has the most points in it: its icon, its index and its points.
+-- Nil where nobody has committed to anything yet. Ties go to the first tree,
+-- which is arbitrary and is also what every other addon does with them.
+--
+-- The index is the half Unit/Role.lua reads. It is here rather than derived
+-- from the icon, because mapping a picture back to a tree would be a table of
+-- art paths, one per class per tree, that this client already answers.
 local function Resolve(inspect)
 	local tabs = TABS
 	if type(GetNumTalentTabs) == "function" then
 		tabs = tonumber(GetNumTalentTabs()) or TABS
 	end
 
-	local bestIcon, bestPoints = nil, 0
+	local bestIcon, bestIndex, bestPoints = nil, nil, 0
 	for index = 1, tabs do
-		local icon, points = Tree(index, inspect)
-		if icon and points > bestPoints then
-			bestIcon, bestPoints = icon, points
+		local icon, spent = Tree(index, inspect)
+		if icon and spent > bestPoints then
+			bestIcon, bestIndex, bestPoints = icon, index, spent
 		end
 	end
 
 	if bestPoints < MIN_POINTS then
 		return nil
 	end
-	return bestIcon
+	return bestIcon, bestIndex, bestPoints
+end
+
+-- One character's answer, written into all three tables at once. False rather
+-- than nil in `icons`, because "asked and this client would not say" has to
+-- guard apart from "never asked", which is what Spec.Request tests.
+local function Record(guid, inspect)
+	local icon, index, spent = Resolve(inspect)
+	icons[guid] = icon or false
+	trees[guid], points[guid] = index, spent
 end
 
 --------------------------------------------------------------------------
@@ -180,7 +209,7 @@ function Spec.Request(guid)
 		return false
 	end
 
-	local unit = ns.Unit.Roster.UnitFor(guid)
+	local unit = Unit.Roster.UnitFor(guid)
 	if not Inspectable(unit) then
 		-- Recorded as asked anyway. Someone out of range on every tick for the
 		-- next minute is someone this must stop reconsidering five times a
@@ -204,9 +233,9 @@ local function InspectReady(guid)
 	end
 	pending = nil
 
-	local unit = ns.Unit.Roster.UnitFor(guid)
+	local unit = Unit.Roster.UnitFor(guid)
 	if unit and UnitExists(unit) then
-		icons[guid] = Resolve(true) or false
+		Record(guid, true)
 	end
 
 	if type(ClearInspectPlayer) == "function" then
@@ -249,8 +278,25 @@ function Spec.Known(guid)
 	return (guid and icons[guid]) and true or false
 end
 
+-- Which tree won, and how many points are in it. Nil and zero for a GUID
+-- nobody has resolved, which Unit/Role.lua reads as "no talents yet" and
+-- answers from the class instead.
+--
+-- Two returns rather than a table, for the reason Spec.Icon hands back five:
+-- the caller asks once per member whenever the list is rebuilt, and a table
+-- per member would be a table to collect.
+function Spec.Tree(guid)
+	local index = guid and trees[guid]
+	if not index then
+		return nil, 0
+	end
+	return index, points[guid] or 0
+end
+
 function Spec.Forget()
 	wipe(icons)
+	wipe(trees)
+	wipe(points)
 	wipe(asked)
 	pending, pendingAt = nil, nil
 end
@@ -262,7 +308,7 @@ function Spec.Refresh()
 	if not guid or not Spec.Ready() then
 		return
 	end
-	icons[guid] = Resolve(false) or false
+	Record(guid, false)
 end
 
 --------------------------------------------------------------------------

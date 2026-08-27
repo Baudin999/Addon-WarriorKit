@@ -42,6 +42,19 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   stopped for most of a second: an empty bar is what a cast that finished leaves
   behind, so a cast that died has to look like something else. Blizzard's own
   goes off the screen, and one tick box puts it back.
+- **Party and raid frames that stop moving.** The same block your own frame
+  wears, one per person you are grouped with: class colour on the health, the
+  power under it, the name and the percent, and the role each one is playing
+  said with Blizzard's own icon. The slot is decided by role and then by name,
+  so the healer is in the same place in every group you are ever in, and it is
+  worked out between fights and never during one. Left click targets, which is
+  the point of the whole thing, because the Charge button casts Intervene at
+  whoever you are looking at. Somebody out of range, dead, offline or running
+  back drains to the empty colour and their block says which. A member the
+  client will not name a power for gets no rail rather than an empty one. Where
+  the addon guesses a role wrong, tell it: `/wk party role <name> healer` is
+  kept for that character and beats everything the client thinks. Blizzard's
+  party and raid frames go off the screen, and one tick box each puts them back.
 - **A nag for what you forgot.** A row of squares over your character when
   something that should be up is not: a sharpening stone worn off either hand,
   Battle Shout lapsed, no food. It is not there at all when nothing is wrong, so

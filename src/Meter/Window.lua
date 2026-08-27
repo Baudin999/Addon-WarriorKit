@@ -411,7 +411,7 @@ local function PaintRow(row, guid, class, label, value, color)
 
 	if row.shownGuid ~= guid then
 		row.shownGuid = guid
-		local texture, left, right, top, bottom = ns.MeterSpec.Icon(guid, class)
+		local texture, left, right, top, bottom = ns.Unit.Spec.Icon(guid, class)
 		row.icon:SetTexture(texture)
 		row.icon:SetTexCoord(left, right, top, bottom)
 	end
@@ -505,7 +505,7 @@ local function PaintDamage()
 			local rate = ns.Meter.Rate(slot, mode)
 			PaintRow(row, slot.guid, class, name or "?", math.floor(rate + 0.5), WHITE)
 			PaintBar(row, (top > 0) and (rate / top) or 0, width)
-			ns.MeterSpec.Request(slot.guid)
+			ns.Unit.Spec.Request(slot.guid)
 		end
 	end
 	Blank(damage, shown + 1)
@@ -568,7 +568,7 @@ local function PaintThreat()
 			local color = slot.eta and WARN or (slot.tanking and WHITE or DIM)
 			PaintRow(row, slot.guid, class, name or "?", math.floor(slot.pct + 0.5), color)
 			PaintBar(row, slot.pct / 100, width)
-			ns.MeterSpec.Request(slot.guid)
+			ns.Unit.Spec.Request(slot.guid)
 		end
 	end
 	Blank(threat, shown + 1)

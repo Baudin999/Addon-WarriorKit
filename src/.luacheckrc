@@ -106,6 +106,13 @@ globals = {
 	"WarriorKitSkinPlayer",
 	"WarriorKitSkinTarget",
 	"WarriorKitSkinToT",
+	-- The party and raid list: the frame you drag, and the secure group header
+	-- hung off it. Both named for the reason the three blocks above are, and the
+	-- header for one more: it is a Blizzard template doing the work, so a list
+	-- that came out in the wrong order has to be readable from a macro one
+	-- attribute at a time.
+	"WarriorKitGroup",
+	"WarriorKitGroupHeader",
 	"WarriorKit_MarkSkull",
 	"WarriorKit_MarkCross",
 	"WarriorKit_MarkMoon",
@@ -226,6 +233,16 @@ read_globals = {
 	"UnitReaction",
 	"UnitDetailedThreatSituation", "UnitAura", "C_UnitAuras",
 	"GetNumGroupMembers", "SetRaidTargetIconTexture",
+	-- The group, for the party and raid blocks. UnitInRange, UnitIsGhost and
+	-- UnitIsDeadOrGhost are what say a block has no reading to take;
+	-- UnitGroupRolesAssigned and GetPartyAssignment are two of the four sources
+	-- Unit/Role.lua reads. None of the five is called unguarded by anything in
+	-- this install, so all five are probed by name before they are called and a
+	-- client missing one loses that answer rather than raising once per member
+	-- five times a second. They are entries here rather than shims in Core,
+	-- because the probe is the shim and it lives beside the caller.
+	"UnitInRange", "UnitIsGhost", "UnitIsDeadOrGhost",
+	"UnitGroupRolesAssigned", "GetPartyAssignment",
 	-- SoftTargetEnemy is read and written by Charge/SoftTarget.lua, which owns
 	-- the CVar out of combat and hands it back in. Both calls are pcalled: no
 	-- addon here proves SetCVar takes that name on 2.5.6.

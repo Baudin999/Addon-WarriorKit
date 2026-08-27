@@ -344,6 +344,110 @@ local function CastWord(arg)
 	end
 end
 
+-- Which of the six numbers a `party` word is setting, and what it is allowed to
+-- be. A table would be six entries repeating the same three fields; this is the
+-- one place the ranges are read, and every one of them comes off the file that
+-- owns it rather than being typed here a second time.
+local function PartyRange(option)
+	local wide, wideHigh, tall, tallHigh = ns.Group.SizeRange()
+	local gapLow, gapHigh = ns.Group.GapRange()
+	local columns, columnsHigh, per, perHigh = ns.Group.ColumnRange()
+	if option == "width" then
+		return "partyWidth", wide, wideHigh
+	elseif option == "height" then
+		return "partyHeight", tall, tallHigh
+	elseif option == "gap" then
+		return "partyGap", gapLow, gapHigh
+	elseif option == "columns" then
+		return "partyRaidColumns", columns, columnsHigh
+	elseif option == "percolumn" then
+		return "partyRaidPerColumn", per, perHigh
+	elseif option == "zoom" then
+		return "partyZoom", ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH
+	end
+	return nil
+end
+
+-- True where the word was one of the six, whether or not the number was any
+-- good, so the dispatcher below knows it has been dealt with.
+local function PartyNumber(option, value)
+	local key, low, high = PartyRange(option)
+	if not key then
+		return false
+	end
+	local size = ns.Command.Number(value, low, high, "party " .. option)
+	if size then
+		ns.db[key] = size
+		ns.Group.Apply()
+		ns.Print(("party %s %d."):format(option, size))
+	end
+	return true
+end
+
+local ROLE_WORDS = { tank = true, healer = true, dps = true, none = true }
+
+-- One name given a role by hand, which beats every source Unit/Role.lua reads.
+-- It exists because inspection fails in the exact case where you already know
+-- the answer: the friend standing next to you who has just respecced.
+local function PartyRole(arg)
+	local name, role = arg:match("^(%S*)%s*(%S*)$")
+	if name == "" then
+		ns.Print("party role <name> tank|healer|dps|none, kept for this character.")
+		ns.Print(ns.Unit.Role.Describe() .. ".")
+		return
+	end
+	if not ROLE_WORDS[role] then
+		ns.Print("party role takes tank, healer, dps or none after the name.")
+		return
+	end
+	ns.Unit.Role.Set(name, role ~= "none" and role or nil)
+	ns.Group.Rebuild()
+	ns.Print(role == "none"
+		and (name .. " goes back to whatever the client and their talents say.")
+		or ("%s sits in the %s band until you say otherwise."):format(name, role))
+end
+
+local function PartyWord(option, value)
+	if PartyNumber(option, value) then
+		return
+	end
+
+	if option == "self" then
+		ns.db.partySelf = ns.Command.Toggle(value)
+		ns.Group.Apply()
+		ns.Print("your own block in the list " .. (ns.db.partySelf and "on" or "off")
+			.. ": the skin already draws you as a block, so it ships off.")
+	elseif option == "order" then
+		ns.db.partyOrder = value == "group" and "group" or "role"
+		ns.Group.Apply()
+		ns.Print("party order " .. ns.db.partyOrder .. ": " .. ns.Group.Describe() .. ".")
+	elseif option == "grow" then
+		ns.db.partyGrow = value == "up" and "up" or "down"
+		ns.Group.Apply()
+		ns.Print("the list grows " .. ns.db.partyGrow .. " from where you dragged it.")
+	elseif option == "icons" then
+		ns.db.partyRoleIcon = ns.Command.Toggle(value)
+		ns.Group.Apply()
+		ns.Print("role icons " .. (ns.db.partyRoleIcon and "on" or "off")
+			.. ", drawn in Blizzard's own art on the portrait side of each block.")
+	elseif option == "range" then
+		ns.db.partyRange = ns.Command.Toggle(value)
+		ns.Group.Apply()
+		ns.Print("out of range " .. (ns.db.partyRange and "on" or "off")
+			.. ": a member you cannot reach drains to the track colour and says so.")
+	elseif option == "role" then
+		PartyRole(value)
+	elseif option == "reset" then
+		ns.Group.Reset()
+		ns.Print("the list is back on its own corner of the screen.")
+	else
+		ns.db.party = ns.Command.Toggle(option)
+		ns.Group.Apply()
+		ns.Print("party and raid frames " .. (ns.db.party and "on" or "off")
+			.. ", " .. ns.Group.Describe() .. ".")
+	end
+end
+
 -- What the bars cost is one number and what they cost per mob is another, and
 -- the performance tab cannot tell them apart without being told how many are
 -- up. Registered from here rather than from EnemyBars, because a behaviour file
@@ -352,7 +456,22 @@ if ns.Perf then
 	ns.Perf.Gauge("enemy bars on screen", function()
 		return ns.EnemyBars.Count()
 	end)
+	ns.Perf.Gauge("party blocks on screen", function()
+		return ns.Group.Count()
+	end)
 end
+
+-- Ctrl-click marking on a party member, which goes off the screen with
+-- Blizzard's party frames unless something puts it back.
+--
+-- Registered from here rather than from UnitFrames/Group.lua, because a
+-- behaviour file may not name a file outside its own folder and this is the one
+-- file in this part that is allowed to name Marking.
+ns.Group.OnMember(function(button)
+	if ns.Marking then
+		ns.Marking.Watch(button)
+	end
+end)
 
 ns.Register({
 	name = "unit frames",
@@ -527,6 +646,63 @@ ns.Register({
 		hideBlizzTargetAuras = true,
 		hideBlizzTargetCast = true,
 		hideBlizzPlayerCast = true,
+		hideBlizzParty = true,
+		hideBlizzRaid = true,
+
+		-- The party and raid blocks, drawn by this addon out of a secure group
+		-- header. On for the reason the skin is: it is the point of the item,
+		-- and the two switches above take Blizzard's copies down, so shipping
+		-- it off would ship a screen with no group frames on it at all.
+		party = true,
+
+		-- Your own block in the list. Off, because UnitFrames/Skin.lua already
+		-- draws you as a block and two of your own frames on one screen is the
+		-- exact complaint UnitFrames/Blizzard.lua exists to answer. On puts you
+		-- in at your own role's slot rather than at the top.
+		partySelf = false,
+
+		-- "role" is tanks, then healers, then damage, by name inside each band.
+		-- "group" is the raid's own group numbers, which is what somebody
+		-- running twenty five with assignments per group actually wants, and it
+		-- does nothing in a party, where every group number is 1.
+		partyOrder = "role",
+
+		partyRoleIcon = true,
+
+		-- The same two numbers as the skin, because a party block and the
+		-- player block are the same instrument and a party frame that does not
+		-- match the player frame reads as a second addon. Width is the gauge;
+		-- the block is that plus the height again for the role icon's square.
+		partyWidth = 168,
+		partyHeight = 34,
+		partyGap = 4,
+		partyGrow = "down",
+
+		-- Only these two mean anything in a raid. Forty blocks at the party
+		-- size is not a screen, so the sizes above are settings and a raid is
+		-- expected to run smaller.
+		partyRaidColumns = 8,
+		partyRaidPerColumn = 5,
+
+		-- A whole number, like every other zoom in the addon, because a
+		-- fractional one puts every edge back on a half pixel.
+		partyZoom = 1,
+
+		-- Whether a member you cannot reach drains to the track colour. On,
+		-- because the whole reason the list exists is the Charge button casting
+		-- Intervene at whoever you are looking at, and a block that says
+		-- nothing about range is a block you aim at and miss.
+		partyRange = true,
+
+		partyPoint = { "LEFT", "UIParent", "LEFT", 40, 120 },
+	},
+
+	charDefaults = {
+		-- Roles you typed, name to role, lower cased. Per character rather than
+		-- per account, because the answer is about the people this character
+		-- plays with, and by name rather than by GUID, because a GUID would be
+		-- right and unreadable.
+		partyRoles = {},
 	},
 
 	words = {
@@ -537,6 +713,10 @@ ns.Register({
 		skin = SkinWord,
 
 		cast = CastWord,
+
+		party = function(arg)
+			PartyWord(arg:match("^(%S*)%s*(.-)$"))
+		end,
 
 		-- The client's own copies, one word each. Its own word rather than a
 		-- corner of `skin`, because none of these four is part of the skin:
@@ -596,6 +776,15 @@ ns.Register({
 		"cast on|off, your own cast bar, which sits under the swing timer",
 		"cast width <90-400>, cast height <10-40>, cast zoom <1-3>",
 		"cast reset, the bar back where it started",
+		"party on|off, blocks for the people you are grouped with",
+		"party self on|off, whether your own block is in the list",
+		"party order role|group, role bands or raid group numbers",
+		"party role <name> tank|healer|dps|none, an answer you type",
+		"party icons on|off, party range on|off",
+		"party width <90-360>, party height <18-72>, party gap <0-20>",
+		"party grow up|down, party zoom <1-3>",
+		"party columns <1-8>, party percolumn <1-40>, the raid only",
+		"party reset, the list back on its own corner of the screen",
 		"auras on|off, the client's own buff row in the corner of the screen",
 		"colors, every class fill and how far the name on it is from it",
 	},
@@ -613,11 +802,13 @@ ns.Register({
 			.. ("; cast bar %s"):format(ns.Cast.Describe())
 			.. ("; %s"):format(ns.FrameAuras.Describe())
 			.. ("; your cast bar %s"):format(ns.PlayerCast.Describe())
+			.. ("; party %s; %s"):format(ns.Group.Describe(), ns.Unit.Role.Describe())
 	end,
 
 	lock = function()
 		ns.EnemyBars.ApplyLock()
 		ns.PlayerCast.Lock()
+		ns.Group.Lock()
 	end,
 
 	reset = function()
@@ -669,6 +860,19 @@ ns.Register({
 		-- PlayerCast.Reset puts the point back and lays the bar out again, so
 		-- the four above it land in the same pass.
 		ns.PlayerCast.Reset()
+		for _, key in ipairs({ "party", "partySelf", "partyOrder", "partyRoleIcon",
+			"partyWidth", "partyHeight", "partyGap", "partyGrow", "partyRaidColumns",
+			"partyRaidPerColumn", "partyZoom", "partyRange" }) do
+			ns.db[key] = ns.DefaultFor(key)
+		end
+		-- The roles you typed are deliberately not in that list. A reset means
+		-- put the frames back, and who your friend heals on is not a frame: it
+		-- is a fact about them that would have to be typed again. `party role
+		-- <name> none` is how one of them comes off.
+		--
+		-- Group.Reset puts the point back and lays the list out again, so the
+		-- twelve above it land in the same pass.
+		ns.Group.Reset()
 		ns.BlizzHide.Apply()
 		ns.FrameSkin.Apply()
 	end,

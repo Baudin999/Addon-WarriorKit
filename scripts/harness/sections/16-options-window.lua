@@ -399,8 +399,21 @@ if window then
 			:format(tallest, window.view.height))
 	check(shortest <= window.view.height,
 		("every section overflows, so the bar was never asked to hide"))
-	check(prose < 16000,
-		("the window holds %d characters of prose and the budget is 16,000"):format(prose))
+	-- How much reading the whole window asks for, in characters of lede and
+	-- hint. It is a budget rather than a ratchet, because the two things that
+	-- move it are not the same: a page that explains itself twice should come
+	-- back under, and a part that did not exist last week is entitled to a lede
+	-- and a hint per control it puts up.
+	--
+	-- So the number moves when a page arrives and never when one is edited. It
+	-- was 16,000 with forty-two sections. The cloned bars page arrived under it
+	-- and left it alone, at 15,908 across forty-eight. The party and raid page
+	-- costs 1,166 characters and takes the window to 17,101 across forty-nine,
+	-- none of its strings longer than the ones already here. 17,150 is that
+	-- measurement plus one hint's worth of room, checked on the warrior run,
+	-- which is the class with the most sections.
+	check(prose < 17150,
+		("the window holds %d characters of prose and the budget is 17,150"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

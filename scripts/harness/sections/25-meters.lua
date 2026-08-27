@@ -372,9 +372,9 @@ log("SPELL_HEAL", FROST, nil, nil, 600, 100)
 -- Spec icons
 ----------------------------------------------------------------------
 
-ns.MeterSpec.Refresh()
-check(ns.MeterSpec.Known(BAUDIN), "your own spec did not resolve out of your talent trees")
-local icon = ns.MeterSpec.Icon(BAUDIN, "WARRIOR")
+ns.Unit.Spec.Refresh()
+check(ns.Unit.Spec.Known(BAUDIN), "your own spec did not resolve out of your talent trees")
+local icon = ns.Unit.Spec.Icon(BAUDIN, "WARRIOR")
 check(icon:find("SavageBlow", 1, true) ~= nil,
 	("the spec icon is %q, and 31 points are in Arms"):format(icon))
 
@@ -382,32 +382,32 @@ check(icon:find("SavageBlow", 1, true) ~= nil,
 -- with the tree's name, and the addon tells them apart on the type of the
 -- first value rather than on how far down the tail a nil turns up.
 state.talentShape = "old"
-ns.MeterSpec.Forget()
-ns.MeterSpec.Refresh()
-check(ns.MeterSpec.Known(BAUDIN), "the older GetTalentTabInfo signature was not read")
+ns.Unit.Spec.Forget()
+ns.Unit.Spec.Refresh()
+check(ns.Unit.Spec.Known(BAUDIN), "the older GetTalentTabInfo signature was not read")
 state.talentShape = "modern"
 
 -- Nobody has committed to anything yet, so there is no spec to draw and the
 -- class icon stands in.
 local spent = talentTrees.player[2].points
 talentTrees.player[1].points, talentTrees.player[2].points = 2, 1
-ns.MeterSpec.Forget()
-ns.MeterSpec.Refresh()
-check(not ns.MeterSpec.Known(BAUDIN), "three points in a tree were taken for a spec")
-local sheet, left = ns.MeterSpec.Icon(BAUDIN, "WARRIOR")
+ns.Unit.Spec.Forget()
+ns.Unit.Spec.Refresh()
+check(not ns.Unit.Spec.Known(BAUDIN), "three points in a tree were taken for a spec")
+local sheet, left = ns.Unit.Spec.Icon(BAUDIN, "WARRIOR")
 check(sheet:find("CharacterCreate", 1, true) ~= nil and left == 0,
 	("the fallback drew %q rather than the class sheet"):format(sheet))
 talentTrees.player[1].points, talentTrees.player[2].points = 31, spent
 
 -- And somebody else's, which is an inspect and an answer rather than a read.
-ns.MeterSpec.Forget()
-ns.MeterSpec.Refresh()
-check(ns.MeterSpec.Request(SNEAKY), "no inspect went out for a party member in range")
+ns.Unit.Spec.Forget()
+ns.Unit.Spec.Refresh()
+check(ns.Unit.Spec.Request(SNEAKY), "no inspect went out for a party member in range")
 check(state.inspecting == "party1",
 	("the inspect went to %s"):format(tostring(state.inspecting)))
 fire("INSPECT_READY", SNEAKY)
-check(ns.MeterSpec.Known(SNEAKY), "the inspect was answered and no spec came back")
-local hunter = ns.MeterSpec.Icon(SNEAKY, "HUNTER")
+check(ns.Unit.Spec.Known(SNEAKY), "the inspect was answered and no spec came back")
+local hunter = ns.Unit.Spec.Icon(SNEAKY, "HUNTER")
 check(hunter:find("Marksmanship", 1, true) ~= nil,
 	("the inspected spec icon is %q, and 40 points are in Marksmanship"):format(hunter))
 check(state.inspecting == nil, "the inspect was never handed back")
@@ -416,18 +416,18 @@ check(state.inspecting == nil, "the inspect was never handed back")
 -- only thing standing between a dropped request and a queue parked forever
 -- is the expiry. Asked for, never answered, and then the next member has to
 -- get a request of their own.
-ns.MeterSpec.Forget()
+ns.Unit.Spec.Forget()
 state.inspecting = nil
 advance(10)
-check(ns.MeterSpec.Request(SNEAKY), "the first inspect did not go out")
+check(ns.Unit.Spec.Request(SNEAKY), "the first inspect did not go out")
 check(state.inspecting == "party1", "the first inspect went to the wrong unit")
 state.inspecting = nil
 advance(10)
-check(ns.MeterSpec.Request(FROST), "a dropped inspect parked the queue for good")
+check(ns.Unit.Spec.Request(FROST), "a dropped inspect parked the queue for good")
 check(state.inspecting == "party2",
 	("the second inspect went to %s"):format(tostring(state.inspecting)))
 fire("INSPECT_READY", FROST)
-check(ns.MeterSpec.Known(FROST), "the second inspect was answered and nothing came back")
+check(ns.Unit.Spec.Known(FROST), "the second inspect was answered and nothing came back")
 
 ----------------------------------------------------------------------
 -- Threat

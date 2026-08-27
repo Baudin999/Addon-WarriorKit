@@ -408,6 +408,188 @@ local function CastBar(ui)
 	end)
 end
 
+-- One name given a role by hand, which beats every source Unit/Role.lua reads.
+--
+-- A picker over whoever is in the group rather than a text field, because the
+-- one case this exists for is the friend standing next to you who has just
+-- respecced, and they are in the list you are looking at. Choosing a name walks
+-- it round the three bands and then off again, so one control gives all four
+-- answers and there is nothing to press afterwards.
+-- Tank, healer, damage, and then off again. The fourth stop is the one that
+-- matters: an override you cannot take back is a wrong answer you are stuck
+-- with. There is no entry for damage, because the step after it is nothing.
+local NEXT = { tank = "healer", healer = "dps" }
+
+local function Cycle(name)
+	local Role = ns.Unit.Role
+	local typed = Role.Override(name)
+	if not typed then
+		Role.Set(name, Role.TANK)
+		return
+	end
+	-- Nil for damage, which is the step off the end of the table and is the one
+	-- that takes the override away again.
+	Role.Set(name, NEXT[typed])
+end
+
+-- One row per member: the name, and either the role you typed or the one the
+-- client and their talents came to. Saying which of the two it is out loud is
+-- most of the point, because an override that is doing nothing and an override
+-- that agrees with the guess look identical on the frames.
+local function RoleOptions()
+	local Role = ns.Unit.Role
+	local options = {}
+	for _, unit in ipairs(ns.Unit.Roster.Units()) do
+		local name = UnitName(unit)
+		local typed = name and Role.Override(name)
+		if name then
+			options[#options + 1] = { value = name,
+				text = ("%s, %s%s"):format(name, typed or Role.Of(unit),
+					typed and " (yours)" or " by guess") }
+		end
+	end
+	if #options == 0 then
+		options[1] = { text = "nobody in the group to give one to" }
+	end
+	return options
+end
+
+local function Roles(ui)
+	ui.Picker("give someone a role",
+		function() return "pick a name" end,
+		function(name)
+			if type(name) ~= "string" then
+				return
+			end
+			Cycle(name)
+			ns.Group.Rebuild()
+			ns.Options.Refresh()
+		end,
+		RoleOptions)
+	ui.Hint("Choosing a name walks it round tank, healer, damage and back to the guess. What you type wins over the client and over their talents, and is kept for this character.")
+end
+
+local function Placing(ui)
+	local wideLow, wideHigh, tallLow, tallHigh = ns.Group.SizeRange()
+	ui.Size("gauge width", wideLow, wideHigh, 6,
+		function() return ns.db.partyWidth end,
+		function(value)
+			ns.db.partyWidth = value
+			ns.Group.Apply()
+		end)
+	ui.Size("block height", tallLow, tallHigh, 2,
+		function() return ns.db.partyHeight end,
+		function(value)
+			ns.db.partyHeight = value
+			ns.Group.Apply()
+		end)
+	ui.Hint("A block is the height again on the left for the role icon, then the gauge. Both ship at the player block's numbers, because they are the same instrument.")
+
+	local gapLow, gapHigh = ns.Group.GapRange()
+	ui.Size("gap between blocks", gapLow, gapHigh, 1,
+		function() return ns.db.partyGap end,
+		function(value)
+			ns.db.partyGap = value
+			ns.Group.Apply()
+		end)
+	ui.Cycle("grow", { "down", "up" },
+		function() return ns.db.partyGrow end,
+		function(value)
+			ns.db.partyGrow = value
+			ns.Group.Apply()
+		end)
+
+	local columnsLow, columnsHigh, perLow, perHigh = ns.Group.ColumnRange()
+	ui.Count("columns in a raid", columnsLow, columnsHigh,
+		function() return ns.db.partyRaidColumns end,
+		function(value)
+			ns.db.partyRaidColumns = value
+			ns.Group.Apply()
+		end)
+	ui.Count("blocks in a column", perLow, perHigh,
+		function() return ns.db.partyRaidPerColumn end,
+		function(value)
+			ns.db.partyRaidPerColumn = value
+			ns.Group.Apply()
+		end)
+	ui.Hint("Forty blocks at the party size is not a screen, so a raid runs smaller. Neither of these does anything in a party.")
+
+	ui.Zoom(
+		function() return ns.db.partyZoom end,
+		function(value)
+			ns.db.partyZoom = value
+			ns.Group.Apply()
+		end)
+
+	ui.Action(function() return "back on its own corner of the screen" end, function()
+		ns.Group.Reset()
+	end)
+end
+
+-- The people you are grouped with. Its own section rather than a corner of the
+-- frames page above, for the reason the cast bar has one: nothing on it touches
+-- a Blizzard frame. These blocks are made by a secure group header, and the
+-- client's own party and raid frames come off in the section below.
+local function Party(ui)
+	ui.Section("Party and raid", "You")
+	ui.Lede("Blocks for the people you are grouped with, in role order, drawn by this addon rather than by the client.")
+
+	ui.Check("draw party and raid blocks",
+		function() return ns.db.party end,
+		function(value)
+			ns.db.party = value
+			ns.Group.Apply()
+		end)
+	ui.Hint("Left click targets, right click opens the unit menu, ctrl click marks. Targeting is the point: the Charge button aims at whoever you are looking at.")
+
+	ui.Check("put your own block in the list",
+		function() return ns.db.partySelf end,
+		function(value)
+			ns.db.partySelf = value
+			ns.Group.Apply()
+		end)
+	ui.Hint("Off, because the frames page above already draws you as a block.")
+
+	ui.Cycle("order", { "role", "group" },
+		function() return ns.db.partyOrder end,
+		function(value)
+			ns.db.partyOrder = value
+			ns.Group.Apply()
+		end)
+	ui.Hint("Role is tanks, healers, then damage, by name inside each band, so the same five people fill the same five slots in every group. Group is raid group numbers and does nothing in a party.")
+
+	ui.Check("role icon on each block",
+		function() return ns.db.partyRoleIcon end,
+		function(value)
+			ns.db.partyRoleIcon = value
+			ns.Group.Apply()
+		end)
+
+	ui.Check("drain a member you cannot reach",
+		function() return ns.db.partyRange end,
+		function(value)
+			ns.db.partyRange = value
+			ns.Group.Apply()
+		end)
+	ui.Hint("Out of range, dead, offline and ghost all draw the same way: the fill goes to the track colour and the name says which.")
+
+	Roles(ui)
+	Placing(ui)
+
+	ui.Reading("the list", ns.Group.Describe)
+	ui.Reading("where a role comes from", ns.Unit.Role.Describe)
+	ui.Reading("the order", function()
+		local order = ns.Group.Order()
+		if #order > 0 then
+			return table.concat(order, ", ")
+		end
+		if ns.Group.Count() > 0 then
+			return "the header's own, by raid group number"
+		end
+		return "nothing to place, because you are not in a group"
+	end)
+end
+
 -- One line per thing this addon draws that Blizzard also draws. Nothing here
 -- reads another setting, so every line does what it says whatever else is
 -- switched on.
@@ -435,5 +617,6 @@ function Panel.Draw(ui)
 	Debuffs(ui)
 	Frames(ui)
 	CastBar(ui)
+	Party(ui)
 	Blizzard(ui)
 end

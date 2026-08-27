@@ -192,6 +192,26 @@ function Region:SetSwipeColor(r, g, b, a)
 end
 function Region:SetScript(name, fn) self.scripts[name] = fn end
 function Region:GetScript(name) return self.scripts[name] end
+
+-- A hook on a script, chained under whatever was there, the way the client
+-- chains one.
+--
+-- Real, rather than the metatable's PascalCase no-op, because that no-op is the
+-- whole of ctrl-click marking on a frame this addon did not build.
+-- Marking/Marking.lua hooks OnMouseDown and nothing else, so a swallowed call
+-- reads exactly like a frame that was hooked, and a party block that answers no
+-- marks at all would pass every assertion in the suite.
+function Region:HookScript(name, fn)
+	local existing = self.scripts[name]
+	if not existing then
+		self.scripts[name] = fn
+		return
+	end
+	self.scripts[name] = function(...)
+		existing(...)
+		fn(...)
+	end
+end
 function Region:SetSize(w, h) self.width, self.height = w, h end
 function Region:SetWidth(w) self.width = w end
 function Region:SetHeight(h) self.height = h end

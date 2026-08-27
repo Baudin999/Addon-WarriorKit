@@ -288,6 +288,14 @@ UnitFrames/Auras.lua:Fill
 UnitFrames/Auras.lua:Auras.Update
 UnitFrames/Skin.lua:Refresh
 UnitFrames/Skin.lua:HealSlice
+UnitFrames/Group.lua:Group.Update
+UnitFrames/Member.lua:Member.Update
+UnitFrames/Member.lua:Member.Clear
+UnitFrames/Member.lua:Member.Shade
+UnitFrames/Member.lua:Member.Paint
+UnitFrames/Member.lua:Member.Divider
+UnitFrames/Member.lua:Member.Numbers
+UnitFrames/Member.lua:Member.Label
 Unit/Unit.lua:Unit.Health
 Unit/Unit.lua:Unit.Power
 Unit/Unit.lua:Unit.TargetToken
@@ -308,7 +316,7 @@ Unit/Threat.lua:Threat.State
 Unit/Threat.lua:Threat.Swinging
 Meter/Meter.lua:Meter.Rank
 Meter/Meter.lua:Meter.Total
-Meter/Spec.lua:Spec.Request
+Unit/Spec.lua:Spec.Request
 Meter/Threat.lua:Sample
 Meter/Threat.lua:ThreatMeter.Update
 Meter/Threat.lua:ThreatMeter.Rank

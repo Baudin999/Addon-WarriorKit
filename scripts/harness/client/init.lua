@@ -57,6 +57,7 @@ local CHURN = {
 	swing = 0.05,
 	buffs = 0.05,
 	cast = 0.05,
+	party = 0.05,
 }
 
 -- The bars' steady state, in KB per fifty ticks with two bars up, covering the
@@ -164,6 +165,12 @@ for _, part in ipairs({
 	"05-quests",
 	"06-log",
 	"07-chat",
+	-- Last of the seven that were here, because it layers over what 03-player
+	-- and 06-log installed: a token the group knows about is answered from its
+	-- own record and everything else falls through to the constants those two
+	-- shipped. It also wraps CreateFrame, which every file above it defines or
+	-- uses, so it has to be the last word on that as well.
+	"09-group",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

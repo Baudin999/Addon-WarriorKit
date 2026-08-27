@@ -1,6 +1,6 @@
 ## Interface: 11509
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, square class-coloured player and target frames, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window with a tab for the people you name and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window with a tab for the people you name and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
@@ -27,14 +27,22 @@ Core\Gear.lua
 Core\Stance.lua
 
 # The shared unit layer. What a mob or a group member is, asked once: the
-# palette, the level tag, who is in the group and what the threat API says.
-# Between Core and UI because none of it draws anything and everything that
-# draws a unit wants it. Order inside the folder is dependency order: Color
-# before Level, Roster before Threat.
+# palette, the level tag, who is in the group, what they have spent their points
+# on, which role that makes them and what the threat API says. Between Core and
+# UI because none of it draws anything and everything that draws a unit wants
+# it. Order inside the folder is dependency order: Color before Level, Roster
+# before Threat, and Roster then Spec then Role, because Role asks the first two
+# which unit a GUID is and which tree that unit took.
+#
+# Spec.lua was Meter\Spec.lua. It reads talent trees for you and for anyone the
+# client will let you inspect, which is the only source of a real role on a
+# client that has none, and a part may not name a file outside its own tree.
 Unit\Unit.lua
 Unit\Color.lua
 Unit\Level.lua
 Unit\Roster.lua
+Unit\Spec.lua
+Unit\Role.lua
 Unit\Threat.lua
 
 # The drawing layer, between Core and everything that draws. It owns the pixel
@@ -230,6 +238,24 @@ UnitFrames\Blizzard.lua
 
 UnitFrames\Skin.lua
 
+# One party or raid member's block: build it, lay it out, tick it. Its own file
+# for the reason UnitFrames\Cast.lua is: it knows nothing about a header, an
+# order or a setting other than the two sizes handed to it, and everything in it
+# takes one button and draws on it. Before Group.lua, which is the only caller.
+UnitFrames\Member.lua
+
+# The party and raid header: its attributes, the slot order and where the block
+# of frames sits. These are our frames rather than Blizzard's wearing our skin,
+# because PartyMemberFrame1 is bound to party1 in XML and there is no supported
+# way to point it at anyone else, so the moment the order is decided by role the
+# client's frames cannot draw it. SecureGroupHeaderTemplate is the answer the
+# client already ships: it makes one secure unit button per member and shows and
+# hides them itself as the roster changes.
+#
+# After Unit\Role.lua, which decides the band each member sorts into, and after
+# UnitFrames\Member.lua, which draws one of them. Both are far above this line.
+UnitFrames\Group.lua
+
 # The part's page in the options window, before Feature.lua, which is the only
 # file that hands it to Core. Split out of Feature.lua at the 800 line gate,
 # along the seam that file already had: everything in here reads a setting,
@@ -239,14 +265,14 @@ UnitFrames\Panel.lua
 UnitFrames\Feature.lua
 
 # The meters. A damage and healing readout and a threat readout, two panes in
-# one frame with no window round them. Who is in the group used to be the first
-# file here and is Unit\Roster.lua now, because the enemy bars wanted the same
-# answer and were walking the raid on their own ticker to get it. Spec before
-# Window, which is the only file that draws an icon. Meter and Threat are
-# independent of each other: one reads the combat log and one samples the
-# client's threat API, and neither knows the other exists. Feature.lua last, as
-# everywhere else.
-Meter\Spec.lua
+# one frame with no window round them. Two files that used to be here are under
+# Unit\ now, both because a second part wanted the same answer: who is in the
+# group is Unit\Roster.lua, because the enemy bars were walking the raid on
+# their own ticker to get it, and which tree somebody took is Unit\Spec.lua,
+# because the party frames sort by the role that tree makes them. Meter and
+# Threat are independent of each other: one reads the combat log and one samples
+# the client's threat API, and neither knows the other exists. Feature.lua last,
+# as everywhere else.
 Meter\Meter.lua
 Meter\Threat.lua
 Meter\Window.lua

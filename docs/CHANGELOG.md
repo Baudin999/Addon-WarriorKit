@@ -93,6 +93,58 @@ One thing the harness found rather than proved: `22-chores.lua` replaced
 `IsShiftKeyDown` with a constant and left it replaced, so every section after it
 had been running with shift welded off. It goes through the stub's own switch now.
 
+### Party and raid frames
+
+Todo item 6. Blocks for the people you are grouped with, in the addon's own
+look, and Blizzard's party and raid frames off the screen behind them. The
+Charge button casts Intervene at whoever you are looking at and there was no
+fast way to look at a party member, which is the whole reason the item exists.
+
+These are our frames rather than Blizzard's wearing our skin, and everything
+else follows from that. `PartyMemberFrame1` is bound to `party1` in XML and
+there is no supported way to point it at anyone else, so the moment the order is
+decided by role the client's frames cannot draw it. `UnitFrames/Group.lua` is a
+`SecureGroupHeaderTemplate`, its attributes and the slot order;
+`UnitFrames/Member.lua` is one member's block, and it knows nothing about a
+header or an order and reads no setting of its own.
+
+The order is tanks, then healers, then damage, and by name inside a band. By
+name is arbitrary as an ordering and it is the only one that is stable: the same
+five people produce the same five slots in every group they are ever in
+together. It is recomputed out of combat and nowhere else, which is what makes
+fixed placing true rather than aspirational, and it reaches the header as
+`sortMethod = "NAMELIST"`. `/wk party order group` swaps that for the raid's own
+group numbers; a party is always by role.
+
+`Unit/Role.lua` answers what somebody is playing out of four sources that
+disagree: an answer you typed, `UnitGroupRolesAssigned`,
+`GetPartyAssignment("MAINTANK")`, then the winning talent tree, then the class.
+Only the last is not cached, because caching a guess is how a warrior stays in
+the damage band for the rest of the night after the client finally said
+Protection. `Meter/Spec.lua` moved to `Unit/Spec.lua` to be reachable from it and
+grew one function, which answers the winning tree's index and points beside the
+icon it already answered.
+
+`/wk hide party` and `/wk hide raid` take the client's copies down and both ship
+on. The raid needed more than a strip: `CompactRaidFrameManager` re-shows its
+container through `SetShown`, which is resolved in C and never reads the Lua
+`Show` that `ns.Strip` replaced, so that layout pass is hooked and
+`BlizzHide.Apply` now looks at what is on the screen rather than at what it did
+last time.
+
+Ctrl-click marking had to be put back by hand. `Marking/Marking.lua` hooks frames
+by name and the four party frames are on that list, so hiding them took marking
+on a party member with them; `ns.Marking.Watch(frame)` is the one exposed
+function and `UnitFrames/Feature.lua` calls it as each button is built.
+
+`harness/client/09-group.lua` is a party, a raid and a model of the header
+written from the contract, because the stub had no group tokens, no roles and no
+templates at all. `harness/sections/39-party-raid.lua` drives the slot order
+under three rosters and all four role sources, holds the class colour, the power
+colour, the missing rail and the role icon's crop to the palette and to
+Blizzard's own grid, proves the order does not move in combat, and measures the
+tick at 0.00 KB per 50 ticks over four blocks.
+
 ### Your own cast bar
 
 The last Blizzard frame this HUD had left alone. Every unit around you was drawn
