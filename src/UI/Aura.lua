@@ -96,11 +96,26 @@ end
 -- the addon.
 function Aura.Size(w, side, px, timerCeiling, countCeiling)
 	w:SetSize(side, side)
-	ns.EdgeSize(w.edges, px)
 
+	-- Every region of the square is given a size as well as an anchor, which is
+	-- the one rule that separates this widget from the rest of the addon and it
+	-- is earned. The square's edge is a setting, so the frame is resized while
+	-- the addon is up, and the art and the hairline are the two things on it
+	-- that had no size of their own: the art hung off two opposite corners and
+	-- each edge off two adjacent ones, so both were rectangles the client had
+	-- to derive from a frame that had just changed under it.
+	--
+	-- The failure that makes it worth the four extra calls is silent. A region
+	-- the client cannot work a rectangle out for draws nothing and raises
+	-- nothing, and the timer is a font string and is as big as its text either
+	-- way, so what is left on the screen is a number floating over the block
+	-- with no square around it and no icon in it. That is what got reported.
+	ns.EdgeSize(w.edges, px, side, side)
+
+	local inner = math.max(side - px * 2, px)
 	w.icon:ClearAllPoints()
-	w.icon:SetPoint("TOPLEFT", px, -px)
-	w.icon:SetPoint("BOTTOMRIGHT", -px, px)
+	w.icon:SetSize(inner, inner)
+	w.icon:SetPoint("TOPLEFT", w, "TOPLEFT", px, -px)
 
 	w.timer:SetFontObject(UI.NumberFont(math.max(TIMER_FLOOR,
 		math.min(timerCeiling, math.floor(side * TIMER_SHARE)))))

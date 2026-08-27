@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### The aura square draws its art again
+
+Reported from the game with a screenshot: the squares over the block show their
+timer and nothing else. No icon, no hairline, at a size that had been working.
+
+Two things could do that and both are fixed, because the screenshot cannot tell
+them apart and either one on its own leaves the same empty square.
+
+**Every region of the square has a size of its own now.** The art hung off two
+opposite corners of the square and each hairline off two adjacent ones, so all
+five were rectangles the client had to derive from a frame that had just been
+resized under them. The square's edge is a setting, which makes it the one
+widget in the addon that gets resized while the addon is up, and a region the
+client declines to work a rectangle out for draws nothing and raises nothing.
+The timer cannot fail that way, because a font string is as big as its text and
+is anchored to a corner rather than sized by one, which is exactly why a number
+was the only thing left on the screen. `ns.EdgeSize` takes an optional length
+for this and nothing else passes it.
+
+**An aura with no art falls back to its spell's own texture.** A client is
+allowed to hand back an aura carrying no icon, and these rows are the only
+reader in the addon that takes one off the aura rather than off a spell it
+already holds: the enemy bars draw the list you asked them to watch and have
+`ns.SpellTexture` for every entry in it. So the same picture is asked for from
+the other end, at the cost of one call on the aura that has no art rather than
+one on every aura.
+
+Both are measured. Section 14 lays the rows out at 12, 20 and 28 and asserts the
+art's inset and size, both hairlines, and that an aura answering no icon still
+draws the spell's. Reverting either fix fails the run.
+
 ### `/wk skin probe` measures the aura square rather than repeating the setting
 
 Reported from the game with a screenshot: the aura squares draw their timer and

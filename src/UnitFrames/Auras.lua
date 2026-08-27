@@ -152,11 +152,33 @@ local ROWS = {
 -- Reading the client
 --------------------------------------------------------------------------
 
+-- The art for one aura, and where to look when the aura carries none.
+--
+-- The comment below has always said a client may hand back an aura with no art,
+-- and until now the only thing that followed from it was that the walk did not
+-- stop. The square drew empty, which on a row that also draws a timer is a
+-- number floating over the block with nothing behind it.
+--
+-- These rows are the only reader in the addon that takes an icon off the aura
+-- rather than off a spell it already knows: the enemy bars draw the list you
+-- asked them to watch and have ns.SpellTexture for every entry in it. So this
+-- is the same picture asked for from the other end, and it costs one call on
+-- the aura that has no art rather than one on every aura.
+local function Art(icon, spell)
+	if icon then
+		return icon
+	end
+	if not spell then
+		return nil
+	end
+	return ns.SpellTexture(spell)
+end
+
 -- One aura slot, whichever API this client has. The shape is EnemyBars.lua's,
 -- because it is the same question asked of a mob rather than of your target,
 -- and the positional read of UnitAura is the only way that call can be read on
 -- 2.5.6: name is first, the icon second, the stack count third, the expiry
--- sixth and the caster seventh.
+-- sixth, the caster seventh and the spell tenth.
 --
 -- The name is the existence flag rather than the icon, because a client is
 -- allowed to hand back an aura with no art and the walk must not stop there.
@@ -175,14 +197,15 @@ local function AuraAt(unit, index, filter)
 		if not aura then
 			return nil
 		end
-		return aura.name, aura.icon, aura.expirationTime, aura.applications,
-			aura.sourceUnit
+		return aura.name, Art(aura.icon, aura.spellId), aura.expirationTime,
+			aura.applications, aura.sourceUnit
 	end
 	if type(UnitAura) ~= "function" then
 		return nil
 	end
-	local name, icon, count, _, _, expires, source = UnitAura(unit, index, filter)
-	return name, icon, expires, count, source
+	local name, icon, count, _, _, expires, source, _, _, spell =
+		UnitAura(unit, index, filter)
+	return name, Art(icon, spell), expires, count, source
 end
 
 -- Fill one row's slots from the unit, yours first, and answer how many came

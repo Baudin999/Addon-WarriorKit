@@ -25,11 +25,28 @@ function ns.Pixel(frame)
 	return UI.Pixel(frame)
 end
 
-function ns.EdgeSize(edges, size)
+-- How thick the four edges are, and how long, where the caller knows.
+--
+-- The length is optional and almost nobody passes it. An edge is pinned to two
+-- of its frame's corners, so its length is the frame's and the client works it
+-- out. That holds for anything laid out once and left alone, which is every
+-- window and every bar in the addon.
+--
+-- It does not hold for a widget whose size is a setting. Pass the frame's own
+-- width and height there and each edge gets a length of its own as well as the
+-- two anchors, so an edge is a rectangle the client has been given rather than
+-- one it has to derive from a frame that was resized under it.
+function ns.EdgeSize(edges, size, width, height)
 	edges[1]:SetHeight(size)
 	edges[2]:SetHeight(size)
 	edges[3]:SetWidth(size)
 	edges[4]:SetWidth(size)
+	if width and height then
+		edges[1]:SetWidth(width)
+		edges[2]:SetWidth(width)
+		edges[3]:SetHeight(height)
+		edges[4]:SetHeight(height)
+	end
 end
 
 -- Returns the four edges so a caller that recolours on state, the way a bar

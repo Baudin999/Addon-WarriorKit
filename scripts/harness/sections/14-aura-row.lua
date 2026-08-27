@@ -354,6 +354,23 @@ do
 		"a square is still lit with nothing on you")
 end
 
+-- An aura the client answers with no art at all.
+--
+-- Allowed, and this row is the only reader in the addon that takes an icon off
+-- the aura rather than off a spell it already holds, so it is the only one that
+-- can be handed nothing. What it drew before was an empty square with a timer
+-- on it, which is a number over the block with nothing behind it. The spell's
+-- own texture is the same picture asked for from the other end.
+do
+	debuffs.target = {
+		{ name = "Rend", spell = 772, expires = now + 12, source = "player" },
+	}
+	tick()
+	check(squares(rowD)[1].shownIcon == _G.GetSpellTexture(772),
+		("an aura with no icon drew %s, and the spell it came from has art")
+			:format(tostring(squares(rowD)[1].shownIcon)))
+end
+
 -- The square at another size, because the size is a setting and everything
 -- inside the square is anchored to the square's own edges.
 --
@@ -383,37 +400,41 @@ do
 			("skin aura %d drew a square %.2f by %.2f, which is not a square")
 				:format(want, square:GetWidth(), square:GetHeight()))
 
-		-- The art, inset by one pixel on all four sides. Both corners, because
-		-- a texture takes its size from its anchors here and one corner leaves
-		-- it with no size at all, which draws nothing.
-		check(square.icon:GetNumPoints() == 2,
-			("skin aura %d left the art on %d anchors, and it needs two corners"
-				.. " to have a size"):format(want, square.icon:GetNumPoints()))
+		-- The art, inset by one pixel and given a size of its own. The size is
+		-- the half that matters: a region hung off two of the square's corners
+		-- has no rectangle until the client works one out, and one it declines
+		-- to work out draws nothing and says nothing.
 		local top, relative, relativePoint, x, y = square.icon:GetPoint(1)
 		check(top == "TOPLEFT" and relative == square and relativePoint == "TOPLEFT"
 			and math.abs(x - edge) < 1e-6 and math.abs(y + edge) < 1e-6,
 			("skin aura %d anchored the art %s to %s at %.2f, %.2f and the inset"
 				.. " is one pixel of %.2f")
 				:format(want, tostring(top), tostring(relativePoint), x, y, edge))
-		local bottom, brelative, brelativePoint, bx, by = square.icon:GetPoint(2)
-		check(bottom == "BOTTOMRIGHT" and brelative == square
-			and brelativePoint == "BOTTOMRIGHT"
-			and math.abs(bx + edge) < 1e-6 and math.abs(by - edge) < 1e-6,
-			("skin aura %d anchored the far corner of the art %s to %s at %.2f,"
-				.. " %.2f"):format(want, tostring(bottom),
-					tostring(brelativePoint), bx, by))
+		check(math.abs(square.icon:GetWidth() - (want * px - 2 * edge)) < 1e-6
+			and math.abs(square.icon:GetHeight() - square.icon:GetWidth()) < 1e-6,
+			("skin aura %d drew the art %.2f by %.2f inside a %.2f square")
+				:format(want, square.icon:GetWidth(), square.icon:GetHeight(),
+					square:GetWidth()))
 
-		-- And the hairline round it, which is the other thing that goes quiet
-		-- rather than wrong: an edge sized to nothing is an edge the client
-		-- does not draw and does not complain about.
-		check(math.abs(square.edges[1]:GetHeight() - edge) < 1e-6,
-			("skin aura %d drew a hairline %.2f tall and a pixel is %.2f")
-				:format(want, square.edges[1]:GetHeight(), edge))
+		-- And the hairline round it, thick one way and as long as the square
+		-- the other, for the same reason.
+		check(math.abs(square.edges[1]:GetHeight() - edge) < 1e-6
+			and math.abs(square.edges[1]:GetWidth() - want * px) < 1e-6,
+			("skin aura %d drew the top hairline %.2f by %.2f on a %.2f square")
+				:format(want, square.edges[1]:GetWidth(),
+					square.edges[1]:GetHeight(), square:GetWidth()))
+		check(math.abs(square.edges[3]:GetWidth() - edge) < 1e-6
+			and math.abs(square.edges[3]:GetHeight() - want * px) < 1e-6,
+			("skin aura %d drew the left hairline %.2f by %.2f on a %.2f square")
+				:format(want, square.edges[3]:GetWidth(),
+					square.edges[3]:GetHeight(), square:GetWidth()))
 
 		-- And it still has its art after the resize, because the guard in
 		-- ns.UI.Aura writes the texture once and a square that lost it on a
-		-- relayout would never be handed it again.
-		check(square.shownIcon == "bleed",
+		-- relayout would never be handed it again. The art here is the one the
+		-- block above fell back to, so the fallback is measured at every size
+		-- as well.
+		check(square.shownIcon == _G.GetSpellTexture(772),
 			("skin aura %d left square one holding %s")
 				:format(want, tostring(square.shownIcon)))
 	end
