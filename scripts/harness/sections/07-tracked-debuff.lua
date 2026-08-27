@@ -44,14 +44,30 @@ local function Square()
 end
 
 debuffs.nameplate1 = {
-	{ name = "Deep Wound", count = 3, expires = _G.GetTime() + 9, source = "player" },
+	{ name = "Deep Wound", count = 3, expires = _G.GetTime() + 9,
+	  duration = 12, source = "player" },
 }
 ns.EnemyBars.Update()
 check(Square().shownState == "mine",
 	("the mob is bleeding from Deep Wound and slot %d reads %q, expected mine")
 		:format(slot, tostring(Square().shownState)))
-check(Square().shownSeconds == 9,
-	("the square says %s seconds, the aura has 9"):format(tostring(Square().shownSeconds)))
+-- The number and the unit it is in, which is one reading and not two. Nine
+-- seconds is read in seconds, so the unit is empty; a half hour buff on the
+-- same square reads 28 and "m", which is what stopped four digits landing on a
+-- sixteen pixel icon.
+check(Square().shownLeft == 9 and Square().shownUnit == "",
+	("the square says %s%s, the aura has 9 seconds")
+		:format(tostring(Square().shownLeft), tostring(Square().shownUnit)))
+
+-- The sweep, which is the other half of the timer and the half you read from
+-- across the screen. The client is handed the application time and the length,
+-- reversed, so the square fills as the bleed runs out rather than emptying the
+-- way a cooldown does.
+local swipe = Square().swipe
+check(swipe.cdDuration == 12 and math.abs(swipe.cdStart - (_G.GetTime() - 3)) < 1e-6,
+	("the square's sweep runs %s from %s, expected 12 from three seconds ago")
+		:format(tostring(swipe.cdDuration), tostring(swipe.cdStart)))
+check(swipe.cdReverse == true, "the sweep empties the square as the bleed runs out")
 check(Square().shownCount == 3,
 	("the square says a stack of %s, the aura has 3"):format(tostring(Square().shownCount)))
 
@@ -66,8 +82,10 @@ debuffs.nameplate1 = nil
 ns.EnemyBars.Update()
 check(Square().shownState == "none",
 	("the bleed fell off and the square reads %q, expected none"):format(tostring(Square().shownState)))
-check(Square().shownSeconds == 0 and Square().shownCount == 0,
+check(Square().shownLeft == 0 and Square().shownCount == 0,
 	"the square kept the timer and the stack after the bleed fell off")
+check(Square().swipe.cdDuration == 0,
+	"the square kept its sweep after the bleed fell off")
 
 -- The saved list is what outlives the fix. Defaults are read once on a
 -- fresh account, so anyone who picked Deep Wounds before it still carries

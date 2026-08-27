@@ -234,6 +234,11 @@ function UI.Feed(parent, opts)
 		rows = {},
 		hovered = nil,
 		width = 1,
+		-- On screen until told otherwise. Feeds/Stream.lua writes this from the
+		-- setting at login, and a feed built by anything else is one somebody is
+		-- looking at.
+		awake = true,
+		stale = false,
 	}, Feed)
 
 	feed.frame = CreateFrame("Frame", nil, parent)
@@ -691,7 +696,38 @@ local function PaintRow(row, entry, faded)
 	end
 end
 
+-- Whether anybody can see this, and the whole reason a hidden feed is cheap.
+--
+-- Everything above the repaint still runs while it is asleep: an arrival wipes
+-- a ring slot, fills it and pushes it, and that is a handful of table writes.
+-- What does not run is Feed:Paint, and Paint is the expensive half by an order
+-- of magnitude. It writes five regions on every one of up to twenty four rows
+-- on every arrival, and in a pull arrivals come faster than frames do. A column
+-- nobody is looking at, redrawing itself two hundred times a second, is the
+-- clearest case of work nobody asked for in the addon.
+--
+-- The skipped redraw is not lost. Anything that would have painted while asleep
+-- leaves the feed stale, and waking it paints once, so what comes back is the
+-- list as it is now rather than as it was when it went away.
+function Feed:Awake(on)
+	on = on and true or false
+	if self.awake == on then
+		return false
+	end
+	self.awake = on
+	if on and self.stale then
+		self.stale = false
+		self:Paint()
+	end
+	return true
+end
+
 function Feed:Paint()
+	if not self.awake then
+		self.stale = true
+		return false
+	end
+
 	local count = self:Count()
 	local room = self:Room()
 
@@ -752,6 +788,7 @@ function Feed:Paint()
 	end
 
 	self:Sync()
+	return true
 end
 
 -- Puts the bar back in step with the offset. Called after anything that could

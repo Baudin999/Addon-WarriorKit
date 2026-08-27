@@ -177,8 +177,12 @@ end
 -- One aura slot, whichever API this client has. The shape is EnemyBars.lua's,
 -- because it is the same question asked of a mob rather than of your target,
 -- and the positional read of UnitAura is the only way that call can be read on
--- 2.5.6: name is first, the icon second, the stack count third, the expiry
--- sixth, the caster seventh and the spell tenth.
+-- 2.5.6: name is first, the icon second, the stack count third, the duration
+-- fifth, the expiry sixth, the caster seventh and the spell tenth.
+--
+-- The duration comes back with the expiry and is the sweep's half of the
+-- answer. The expiry alone says when the aura ends and nothing about how much
+-- of it is left, and a wedge is a fraction.
 --
 -- The name is the existence flag rather than the icon, because a client is
 -- allowed to hand back an aura with no art and the walk must not stop there.
@@ -198,14 +202,14 @@ local function AuraAt(unit, index, filter)
 			return nil
 		end
 		return aura.name, Art(aura.icon, aura.spellId), aura.expirationTime,
-			aura.applications, aura.sourceUnit
+			aura.duration, aura.applications, aura.sourceUnit
 	end
 	if type(UnitAura) ~= "function" then
 		return nil
 	end
-	local name, icon, count, _, _, expires, source, _, _, spell =
+	local name, icon, count, _, duration, expires, source, _, _, spell =
 		UnitAura(unit, index, filter)
-	return name, Art(icon, spell), expires, count, source
+	return name, Art(icon, spell), expires, duration, count, source
 end
 
 -- Fill one row's slots from the unit, yours first, and answer how many came
@@ -258,6 +262,10 @@ local function Enchants(row, found, wanted, taken, now)
 			local gear = (hand == 1) and ns.Gear.MAINHAND or ns.Gear.OFFHAND
 			slot.icon = GetInventoryItemTexture("player", gear)
 			slot.expires = (left and left > 0) and (now + left) or 0
+			-- No sweep on a stone or an oil, because the client says how long
+			-- one has left and never says how long it was for. A wedge here
+			-- would be drawn against a number this file made up.
+			slot.duration = 0
 			slot.count, slot.mine, slot.index, slot.gear = 0, true, nil, gear
 		end
 	end
@@ -275,7 +283,8 @@ local function Scan(row, unit, now)
 	for pass = 1, 2 do
 		local index = 1
 		while taken < wanted do
-			local name, icon, expires, count, source = AuraAt(unit, index, filter)
+			local name, icon, expires, duration, count, source =
+				AuraAt(unit, index, filter)
 			if not name then
 				break
 			end
@@ -288,6 +297,7 @@ local function Scan(row, unit, now)
 					found[taken] = slot
 				end
 				slot.icon, slot.expires = icon, expires or 0
+				slot.duration = duration or 0
 				slot.count, slot.mine, slot.index = count or 0, mine, index
 				slot.gear = nil
 			end
@@ -449,7 +459,7 @@ local function Fill(row, unit, now)
 		local square = squares[slot]
 		square.auraIndex, square.auraGear = found.index, found.gear
 		Aura.Draw(square, found.icon, found.mine and "mine" or "theirs",
-			found.expires, found.count, now)
+			found.expires, found.duration, found.count, now)
 		if not square:IsShown() then
 			square:Show()
 		end

@@ -50,8 +50,10 @@ UI\Gauge.lua
 
 UI\Text.lua
 
-# One aura, drawn: the cropped icon, the hairline round it, the seconds left
-# and the stack count, and whether it is yours. The debuff row on an enemy bar
+# One aura, drawn: the cropped icon, the hairline round it, the sweep over the
+# art, the time left and the stack count, and whether it is yours. The client's
+# Cooldown frame draws the wedge, reversed, so an aura fills as it runs out
+# where a cooldown empties. The debuff row on an enemy bar
 # and the row under the skinned target block are both made of these. After
 # UI\Draw.lua for the cropped icon and UI\Text.lua for the shared fonts, and
 # after Unit\Color.lua, because what a debuff of yours looks like belongs to

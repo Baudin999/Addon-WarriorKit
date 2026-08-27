@@ -205,6 +205,7 @@ UnitFrames/EnemyBars.lua:Member
 UnitFrames/EnemyBars.lua:Record
 UnitFrames/EnemyBars.lua:ThreatState
 UnitFrames/EnemyBars.lua:ScanDebuffs
+UnitFrames/EnemyBars.lua:DrawDebuffs
 UnitFrames/EnemyBars.lua:UpdateWidget
 UnitFrames/EnemyBars.lua:UpdateList
 UnitFrames/EnemyBars.lua:EnemyBars.Sweep

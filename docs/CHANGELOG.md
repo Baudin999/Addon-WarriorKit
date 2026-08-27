@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### The aura square sweeps, and says the time the way the client does
+
+Reported from the game with a screenshot of Blizzard's buff row beside ours:
+theirs reads `28 m`, ours read `1972`.
+
+Both halves of that are fixed and they are one reading between them.
+
+**The square sweeps.** A wedge over the art, drawn by the client's own Cooldown
+frame, reversed so it fills as the aura runs out rather than emptying the way a
+cooldown does. That is the difference worth having: a number is a thing you read
+and a wedge is a thing you see, and a row of twelve squares is read at a glance
+or not at all. The refreshed square is the bright one and the square about to
+drop is the dark one.
+
+The wedge needs a fraction, so both scans now carry the aura's duration beside
+its expiry. A temporary weapon enchant has an expiry and no duration anywhere in
+the client's API, so its square counts down in text and never sweeps. That is
+the truth about what is known rather than a wedge drawn against a guess.
+
+**The number is in the largest unit that still says something true.** Whole
+seconds, at any range, is what put four digits across a sixteen pixel icon: a
+half hour buff read `1972`, which is a precision nobody uses, over the art that
+says which buff it is. It reads `28m` now, and `2h`, and plain seconds under a
+minute, rounded up in every unit so a square never reads 0 while the aura is
+still on the unit. The type is sized at under half the square rather than six
+tenths, because the string is three characters wide now and was two.
+
+The last seconds get a colour and nothing else does: amber under ten, red under
+five, paper white above. One amber number in a row of white ones is a row you
+glance at.
+
+Measured in section 7, which now asserts the reading and its unit, the two
+numbers handed to the sweep, and that the sweep is reversed. The harness client
+records `SetReverse` for that, because an aura sweep and a cooldown sweep are
+the same two numbers and opposite pictures.
+
+`UpdateWidget` on the enemy bars gave up its tracked row to a function of its
+own on the way through, and shape.lua's entry for it comes down from 142 lines
+and 41 branches to 123 and 31.
+
 ### The aura square draws its art again
 
 Reported from the game with a screenshot: the squares over the block show their

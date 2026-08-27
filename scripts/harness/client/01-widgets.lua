@@ -132,6 +132,18 @@ function Region:GetBlendMode() return self.blend end
 function Region:SetCooldown(start, duration)
 	self.cdStart, self.cdDuration = start, duration
 end
+
+-- Which way the wedge runs. Recorded for the same reason the pair above is: an
+-- aura sweep and a cooldown sweep are the same two numbers and opposite
+-- pictures, and a square that fills as the buff runs out and one that empties
+-- as it runs out are indistinguishable from the numbers alone.
+function Region:SetReverse(on) self.cdReverse = on and true or false end
+function Region:SetHideCountdownNumbers(on) self.cdNumbers = not on end
+function Region:SetDrawEdge(on) self.cdEdge = on and true or false end
+function Region:SetDrawBling(on) self.cdBling = on and true or false end
+function Region:SetSwipeColor(r, g, b, a)
+	self.cdColor = { r, g, b, a }
+end
 function Region:SetScript(name, fn) self.scripts[name] = fn end
 function Region:GetScript(name) return self.scripts[name] end
 function Region:SetSize(w, h) self.width, self.height = w, h end

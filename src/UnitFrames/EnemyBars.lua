@@ -629,19 +629,22 @@ local function ScanDebuffs(unit, found)
 
 	local index = 1
 	while index <= 40 do
-		local name, count, expires, source
+		local name, count, expires, duration, source
 		if C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex then
 			local aura = C_UnitAuras.GetDebuffDataByIndex(unit, index)
 			if not aura then
 				break
 			end
-			name, count, expires, source = aura.name, aura.applications, aura.expirationTime, aura.sourceUnit
+			name, count, expires = aura.name, aura.applications, aura.expirationTime
+			duration, source = aura.duration, aura.sourceUnit
 		else
-			local auraName, _, auraCount, _, _, expirationTime, unitCaster = UnitAura(unit, index, "HARMFUL")
+			local auraName, _, auraCount, _, auraDuration, expirationTime, unitCaster =
+				UnitAura(unit, index, "HARMFUL")
 			if not auraName then
 				break
 			end
-			name, count, expires, source = auraName, auraCount, expirationTime, unitCaster
+			name, count, expires = auraName, auraCount, expirationTime
+			duration, source = auraDuration, unitCaster
 		end
 
 		for slot, trackedName in ipairs(trackedNames) do
@@ -650,10 +653,45 @@ local function ScanDebuffs(unit, found)
 				slotData.active = true
 				slotData.count = count or 0
 				slotData.expires = expires or 0
+				-- The sweep's half of the timing, and the reason the fallback
+				-- reads the fifth return rather than skipping it: the expiry
+				-- says when the debuff ends and a wedge needs the fraction.
+				slotData.duration = duration or 0
 				slotData.mine = (source == "player")
 			end
 		end
 		index = index + 1
+	end
+end
+
+-- The tracked row, one square per spell on the list.
+--
+-- Three states per square and not eight: nobody has it, someone else has it,
+-- you have it. What each of the three looks like is ns.UI.Aura's, and what
+-- stays here is which of them this slot is in, which is the only part of the
+-- answer a tracked list has and a live aura row does not.
+--
+-- Bounded by the widget as well as by the list. FitIcons makes the row as long
+-- as the list and LayoutWidget calls it, but this runs five times a second
+-- whether or not a layout has happened since the list last moved, and a nil
+-- index on a ticker is a thousand errors a minute rather than one.
+--
+-- It is a function rather than a block in UpdateWidget because it is the one
+-- part of that tick that is about a list rather than about a unit, and because
+-- the tick is on shape.lua's list and every line of it has to be paid for.
+local function DrawDebuffs(widget, unit, now)
+	ScanDebuffs(unit, scratch)
+	for slot = 1, math.min(#trackedNames, #widget.icons) do
+		local aura = scratch[slot]
+		local active = aura and aura.active
+		-- The art is the same texture every tick for the life of the setting,
+		-- because a slot here stands for a spell you asked to watch rather than
+		-- for an aura the mob happens to have. ns.UI.Aura guards it, so passing
+		-- it every pass costs one comparison.
+		Aura.Draw(widget.icons[slot], trackedIcons[slot],
+			active and (aura.mine and "mine" or "theirs") or "none",
+			active and aura.expires or 0, active and aura.duration or 0,
+			active and aura.count or 0, now)
 	end
 end
 
@@ -1193,26 +1231,7 @@ local function UpdateWidget(widget, unit, guid)
 		widget.targetedBy:SetText(by)
 	end
 
-	-- Three states per holder and not eight: nobody has it, someone else has
-	-- it, you have it. What each of the three looks like is ns.UI.Aura's, and
-	-- what stays here is which of them this slot is in, which is the only part
-	-- of the answer a tracked list has and a live aura row does not.
-	ScanDebuffs(unit, scratch)
-	-- Bounded by the widget as well as by the list. FitIcons makes the row as
-	-- long as the list and LayoutWidget calls it, but this runs five times a
-	-- second whether or not a layout has happened since the list last moved, and
-	-- a nil index on a ticker is a thousand errors a minute rather than one.
-	for slot = 1, math.min(#trackedNames, #widget.icons) do
-		local aura = scratch[slot]
-		local active = aura and aura.active
-		-- The art is the same texture every tick for the life of the setting,
-		-- because a slot here stands for a spell you asked to watch rather than
-		-- for an aura the mob happens to have. ns.UI.Aura guards it, so passing
-		-- it every pass costs one comparison.
-		Aura.Draw(widget.icons[slot], trackedIcons[slot],
-			active and (aura.mine and "mine" or "theirs") or "none",
-			active and aura.expires or 0, active and aura.count or 0, now)
-	end
+	DrawDebuffs(widget, unit, now)
 
 	-- What the client says this mob is casting. Last, because it is the one
 	-- thing on the widget that is not read out of the unit's own state, and

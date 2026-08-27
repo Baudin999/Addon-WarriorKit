@@ -146,7 +146,7 @@ _G.UnitAura = function(unit, index, filter)
 		if not aura then
 			return nil
 		end
-		return aura.name, aura.icon, aura.count, nil, nil, aura.expires,
+		return aura.name, aura.icon, aura.count, nil, aura.duration, aura.expires,
 			aura.source or (unit == "player" and "player" or nil), nil, nil,
 			aura.spell
 	end
@@ -158,8 +158,8 @@ _G.UnitAura = function(unit, index, filter)
 	if not aura then
 		return nil
 	end
-	return aura.name, aura.icon, aura.count, nil, nil, aura.expires, aura.source,
-		nil, nil, aura.spell
+	return aura.name, aura.icon, aura.count, nil, aura.duration, aura.expires,
+		aura.source, nil, nil, aura.spell
 end
 _G.UnitPowerType, _G.UnitPower, _G.UnitPowerMax = constant(1), constant(40), constant(100)
 _G.UnitPlayerOrPetInParty, _G.UnitPlayerOrPetInRaid = constant(false), constant(false)
