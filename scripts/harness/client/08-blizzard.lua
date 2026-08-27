@@ -206,5 +206,55 @@ do
 	pinFrame:SetPoint("CENTER", map, "CENTER", 40, -40)
 end
 
+-- The client's own menu, shaped the way both clients shape it: a column of
+-- buttons, each hung off the bottom of the one above it, and a frame tall
+-- enough to hold exactly that column.
+--
+-- Stood up here rather than in 02-text.lua because it is Blizzard's frame and
+-- because Core/Menu.lua reads it at PLAYER_LOGIN, which is the window this file
+-- exists to fill.
+--
+-- One of the buttons is hidden, which is the case the chain walk in that file
+-- has to survive: the button below a hidden one still hangs off it, so a walk
+-- that only looks at shown buttons loses track of the button above and finds
+-- two feet where there is one. Blizzard hides buttons in this menu for real.
+local MENU_BUTTON_W, MENU_BUTTON_H, MENU_GAP = 144, 21, 1
+
+do
+	local menu = child("frame", _G.UIParent, "GameMenuFrame")
+	local buttons = {}
+	local names = { "GameMenuButtonOptions", "GameMenuButtonKeybindings",
+		"GameMenuButtonMacros", "GameMenuButtonAddons", "GameMenuButtonLogout",
+		"GameMenuButtonContinue" }
+
+	local above
+	for index, name in ipairs(names) do
+		local entry = child("button", menu, name)
+		entry:SetSize(MENU_BUTTON_W, MENU_BUTTON_H)
+		entry:SetPoint("TOP", above or menu, above and "BOTTOM" or "TOP", 0, -MENU_GAP)
+		above = entry
+		if name == "GameMenuButtonMacros" then
+			entry:Hide()
+		end
+		buttons[index] = entry
+	end
+
+	menu:SetSize(MENU_BUTTON_W + 32,
+		#names * (MENU_BUTTON_H + MENU_GAP) + MENU_GAP)
+	H.menu, H.menuButtons = menu, buttons
+end
+
+H.MENU_BUTTON_H, H.MENU_GAP = MENU_BUTTON_H, MENU_GAP
+
+-- Taking a frame off the client's panel stack. Real rather than the no-op the
+-- metatable would give it, because the game menu button closes the menu with
+-- this and a stub that swallowed the call could not tell a button that closes
+-- the menu from one that leaves it open over the panel it just opened.
+function _G.HideUIPanel(frame)
+	if frame then
+		frame:Hide()
+	end
+end
+
 H.playerFrame, H.targetFrame, H.totFrame = playerFrame, targetFrame, totFrame
 H.BUILT = BUILT

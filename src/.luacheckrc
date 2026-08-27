@@ -33,6 +33,10 @@ globals = {
 	"WarriorKitTargetDebuffs", "WarriorKitTargetBuffs",
 	"WarriorKitPlayerDebuffs", "WarriorKitPlayerBuffs",
 	"WarriorKitChargeButton",
+	-- the button Core/Menu.lua puts in the client's own game menu. Named
+	-- because a button that did not turn up has to be findable from a macro,
+	-- which is the same reason the corral and the aura rows are named.
+	"WarriorKitGameMenuButton",
 	"WarriorKitSwitchButton",
 	-- one per loadout, each a secure button carrying that loadout's macro. All
 	-- ten are made at load: a button cannot be given attributes in combat, and a
@@ -132,6 +136,11 @@ read_globals = {
 	"GameTooltip", "GameFontHighlightSmall", "GetBindingAction",
 	"RegisterStateDriver", "SetOverrideBindingClick", "ClearOverrideBindings",
 	"UISpecialFrames", "tinsert", "pcall",
+	-- the client's own menu, and the call that takes a frame off its panel
+	-- stack. Core/Menu.lua adds one button to the first and closes it with
+	-- the second, and both are probed before they are touched: neither is
+	-- built the same way on the two clients this addon ships for.
+	"GameMenuFrame", "HideUIPanel",
 	"IsAltKeyDown", "GetShapeshiftForm",
 	"UnitPlayerOrPetInParty", "UnitPlayerOrPetInRaid", "UnitIsPlayer",
 	"C_NamePlate", "C_Spell",

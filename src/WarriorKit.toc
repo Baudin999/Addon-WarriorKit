@@ -105,6 +105,12 @@ UI\Window.lua
 Core\Command.lua
 Core\Panel.lua
 
+# One button in the client's own menu, which opens the panel above. After
+# Core\Panel.lua because that is the file that owns the window it opens, and
+# before every part because it belongs to the addon rather than to any of
+# them.
+Core\Menu.lua
+
 # The parts. Within each, behaviour first and Feature.lua last, because
 # Feature.lua is the only file that names anything outside its own folder.
 # Perf first among the parts, because Charge/Icon.lua and the three other
