@@ -18,15 +18,11 @@ in `docs/CHANGELOG.md` and `docs/README.md`; this list is only the receipt.
    distance off the player, which put the line the pair mirrored about wherever
    Edit Mode had left the player. Reflected in the middle of the screen
    instead, confirmed in game. 0d1ad42, 2b90c7f, 2a999b5
+6. Party and raid frames. Ours rather than Blizzard's skinned, off a secure
+   group header, in a slot order that is role then name and is only rewritten
+   out of combat. Done, untested in game. e3de603
 
 ## Open
-
-## 6. Party frames
-
-`UnitFrames/Skin.lua:180-223` skins player, target and target of target, then
-stops. The Charge button casts Intervene at whoever you are looking at and
-there is no fast way to look at a party member, so the frames close a loop the
-addon already opened.
 
 ## 7. Cooldown row for the long cooldowns
 
