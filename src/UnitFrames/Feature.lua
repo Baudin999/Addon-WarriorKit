@@ -233,17 +233,17 @@ local function SkinWord(arg)
 	if option == "auras" then
 		ns.db.skinAuras = ns.Command.Toggle(value)
 		ns.FrameSkin.Relayout()
-		ns.Print("target aura rows " .. (ns.db.skinAuras and "on" or "off") .. ".")
+		ns.Print("aura rows " .. (ns.db.skinAuras and "on" or "off")
+			.. " under the player and target blocks.")
 		if ns.db.skinAuras then
-			ns.Print("what is on the target, drawn here rather than by the client:"
-				.. " yours in colour, everyone else's drained, and yours first so a"
-				.. " raid's worth of other people's bleeds cannot push your Rend off"
-				.. " the end of the row.")
+			ns.Print("what is on you and on the target, drawn here rather than by"
+				.. " the client: yours in colour, everyone else's drained, and"
+				.. " yours first so a raid cannot push your Rend off the end.")
 		else
-			ns.Print("the target frame now carries no aura row at all. It is the size"
-				.. " of the block, so the client's own row would hang inside the"
-				.. " gauge; /wk skin off gives the frame back its size and its row"
-				.. " with it.")
+			ns.Print("neither frame now carries an aura row at all. Each is the size"
+				.. " of its block, so the client's own rows would hang inside the"
+				.. " gauges; /wk skin off gives both frames back their size and"
+				.. " their rows with it.")
 		end
 		return
 	end
@@ -254,7 +254,7 @@ local function SkinWord(arg)
 		if size then
 			ns.db.skinAuraSize = size
 			ns.FrameSkin.Relayout()
-			ns.Print("target aura square " .. size .. " pixels.")
+			ns.Print("aura square " .. size .. " pixels on both blocks.")
 		end
 		return
 	end
@@ -266,7 +266,7 @@ local function SkinWord(arg)
 		if many then
 			ns.db[key] = many
 			ns.FrameSkin.Relayout()
-			ns.Print(("up to %d %s on the target block%s.")
+			ns.Print(("up to %d %s under each block%s.")
 				:format(many, option, many == 0 and ", so that row is off" or ""))
 		end
 		return
@@ -466,7 +466,7 @@ ns.Register({
 		"skin link on|off, mirror the target block off the player block",
 		"skin level <-100-100>, the target's drop from the player",
 		"skin heals on|off, the incoming heal on the health gauge",
-		"skin auras on|off, our own buff and debuff rows under the target block",
+		"skin auras on|off, our own aura rows under the player and target blocks",
 		"skin aura <12-32>, the size of one aura square, in screen pixels",
 		"skin debuffs <0-16>, skin buffs <0-32>, how long each row runs",
 		"skin probe, what this client answered for each frame",

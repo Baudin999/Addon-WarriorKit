@@ -26,7 +26,7 @@
 local H = ...
 local ns, check = H.ns, H.check
 local targetFrame, debuffs, buffs = H.targetFrame, H.debuffs, H.buffs
-local child, Region = H.child, H.Region
+local child, Region, own = H.child, H.Region, H.own
 local skinTicker = H.carry.skinTicker
 
 -- One pass of the skin's own ticker, which is what draws the rows. REFRESH is
@@ -211,6 +211,76 @@ do
 	_G.InCombatLockdown, Region.IsProtected = realLockdown, realProtected
 end
 
+--------------------------------------------------------------------------
+-- Your own two rows, under the player block
+--
+-- The same rows off the same settings, drawn by the same file, which is the
+-- reason ROWS is keyed by frame rather than copied. Two things differ and both
+-- come off the spec. The player block is not mirrored, so its rows run left to
+-- right from the corner the portrait is on. And nothing is ever parked under
+-- that block, so the debuff row hangs on the block itself rather than on a
+-- perch the way the target's hangs under target of target.
+--------------------------------------------------------------------------
+do
+	local playerBox = _G.WarriorKitSkinPlayer
+	local yourD, yourB = _G.WarriorKitPlayerDebuffs, _G.WarriorKitPlayerBuffs
+	check(yourD ~= nil and yourB ~= nil,
+		"the skin built no aura rows under the player block")
+
+	local ppoint, prelative, prelativePoint = anchor(yourD)
+	check(ppoint == "TOPLEFT" and prelativePoint == "BOTTOMLEFT",
+		("your debuff row is anchored %s to %s, and the player block is not"
+			.. " mirrored"):format(tostring(ppoint), tostring(prelativePoint)))
+	check(prelative == playerBox,
+		"your debuff row is not hanging off the player block itself, and there"
+		.. " is nothing parked under that block for it to hang off instead")
+	local bp, br = anchor(yourB)
+	check(bp == "TOPLEFT" and br == yourD,
+		"your buff row is not hanging off the bottom of your debuff row")
+
+	local yours = squares(yourD)
+	check(leftOf(yours[1]) < leftOf(yours[2]),
+		("square 1 is at x=%.1f and square 2 at x=%.1f, so your row runs the"
+			.. " wrong way for a block that is not mirrored")
+			:format(leftOf(yours[1]), leftOf(yours[2])))
+	check(math.abs(leftOf(yours[1])) < 1e-6,
+		("square 1 starts %.1f in from the block's own edge, and it should be"
+			.. " against it"):format(leftOf(yours[1])))
+
+	-- What is on you, put on the same two stub tables the buff nag walks, and
+	-- taken off again at the end of this block so no later section sees a buff
+	-- appear under it.
+	local heldAuras = own.auras
+	debuffs.player = {
+		{ name = "Crippling Poison", icon = "poison", expires = now + 8 },
+		{ name = "Demoralizing Shout", icon = "demo", expires = now + 25,
+			source = "party1" },
+	}
+	own.auras = {
+		{ name = "Battle Shout", icon = "shout", expires = now + 100 },
+		{ name = "Power Word: Fortitude", icon = "fort", expires = now + 900,
+			source = "party2" },
+	}
+	tick()
+	check(yours[1].shownIcon == "poison" and yours[2].shownIcon == "demo",
+		"your debuff row drew nothing for the two debuffs on you")
+	local mine = squares(yourB)
+	check(mine[1].shownIcon == "shout" and mine[1].shownState == "mine",
+		"your own Battle Shout is not drawn as yours on your own buff row")
+	check(mine[2].shownState == "theirs",
+		"a buff somebody else put on you is not drained")
+
+	-- The client's own two, hidden by the same sweep and by name, because
+	-- BuffButton1 is built on demand exactly the way TargetFrameDebuff1 is.
+	check(not _G.BuffButton1:IsShown() and not _G.DebuffButton1:IsShown(),
+		"the client is still drawing your own auras in the corner of the screen")
+
+	debuffs.player, own.auras = nil, heldAuras
+	tick()
+	check(not yours[1]:IsShown() and not mine[1]:IsShown(),
+		"a square is still lit with nothing on you")
+end
+
 -- Off, and the target then has no row at all. That is the honest answer rather
 -- than an oversight: the frame is the block, so handing the client's row back
 -- would hang it inside the gauge. Only the skin coming off gives it back, and
@@ -227,5 +297,6 @@ ns.FrameSkin.Relayout()
 debuffs.target, buffs.target = nil, nil
 tick()
 
-print(("auras  debuffs %d wide and buffs %d, square %.0f px, the client's own"
-	.. " row hidden as it is built"):format(#squares(rowD), #squares(rowB), side))
+print(("auras  debuffs %d wide and buffs %d under each of the two blocks,"
+	.. " square %.0f px, the client's own rows hidden as they are built")
+	:format(#squares(rowD), #squares(rowB), side))

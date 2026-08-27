@@ -140,8 +140,8 @@ name of none of them.
                              casting, how long is left of it, and whether the
                              client says you can stop it
     UnitFrames/EnemyBars.lua enemy bars, nameplate replacement and list fallback
-    UnitFrames/Auras.lua     the target's own buff and debuff rows, and hiding
-                             the client's, which cannot be moved
+    UnitFrames/Auras.lua     your own and the target's buff and debuff rows,
+                             and hiding the client's, which cannot be moved
     UnitFrames/Skin.lua      the square skin on player, target and target of target
     UnitFrames/Panel.lua     the part's page in the options window
     UnitFrames/Feature.lua
@@ -536,7 +536,7 @@ goes through `Feature.lua` or through the shared surface below:
                                  ns.db.skin says they should be
     ns.FrameSkin.Describe()      one line on what the skin did or did not find
     ns.FrameAuras.Build/Place/Update/Style/Unstyle(entry)
-                                 the target's aura rows, called only by
+                                 the aura rows under a block, called only by
                                  UnitFrames/Skin.lua and in that order
     ns.FrameAuras.Under(entry, frame)
                                  what now sits between a block and its first
@@ -2583,10 +2583,10 @@ now, the one the portrait is on, and `PlayerFrame`, `TargetFrame` and
 `TargetFrameToT` are each resized to the block over them. What Edit Mode drags
 is what is drawn and the hit region is the block.
 
-**The target's aura rows are ours, and the client's is hidden.** This is the
-one place the addon walks away from a Blizzard frame instead of restyling it,
-and the reason is that the row cannot be moved. Every icon in it is a child of a
-secure unit button, so an addon may anchor one out of combat only, and the
+**The aura rows are ours, and the client's are hidden.** This is the one place
+the addon walks away from a Blizzard frame instead of restyling it, and the
+reason is that the row cannot be moved. Every icon in the target's is a child of
+a secure unit button, so an addon may anchor one out of combat only, and the
 client re-anchors the head of each row on every aura the target gains or loses.
 Anything placed there is back inside the gauge one refresh into the first pull.
 
@@ -2603,10 +2603,30 @@ What draws instead is `UnitFrames/Auras.lua`: `C_UnitAuras` with the `UnitAura`
 fallback every other aura reader here uses, our own squares out of `UI/Aura.lua`,
 laid out by `ns.UI.Flow`. Debuffs against the block and buffs under them, both
 wrapping downwards, both mirrored off the corner the block's portrait is on.
-`/wk skin auras off` leaves the target with no row at all, which is the honest
-answer rather than an oversight: the frame is the block, so handing the client's
-row back would hang it in the gauge. Only `/wk skin off` gives it back, because
-that is what gives the frame its size back.
+`/wk skin auras off` leaves both frames with no row at all, which is the honest
+answer rather than an oversight: each frame is its block, so handing the
+client's row back would hang it in the gauge. Only `/wk skin off` gives it back,
+because that is what gives the frame its size back.
+
+**The player has the same two rows, and that was the second answer.** The first
+build drew them on the target only, on the argument that Blizzard does not hang
+your buffs off `PlayerFrame` at all: they are `BuffFrame`, a system of its own
+in the top corner of the screen, and `Buffs/Nag.lua` already had something to
+say about your own buffs. That was wrong once the target became the player
+mirrored. The two blocks are one HUD, and what is on you belongs beside what is
+on the target rather than in a corner you have to look away to read. `ROWS` in
+`UnitFrames/Auras.lua` is keyed by frame for exactly this: the player is one
+entry in it, the rows are the same rows, the settings are the same settings, and
+nothing else in the file knows the difference.
+
+Two things stay with the client's row and go off the screen with it. Cancelling
+one of your own buffs is a protected call, so a square drawn here cannot offer
+right click to cancel; the client's row could, and it is hidden. And the
+temporary weapon enchant sits at no aura index at all, so no walk over
+`C_UnitAuras` can find it, which is why `TemporaryEnchantFrame` is deliberately
+left where the client draws it. `Buffs/Nag.lua` says when the sharpening stone
+is missing. The client's own frame is still the only thing that says how long
+the one on your weapon has left.
 
 Your own auras go first, and it is the one opinion in the file. The client's
 order is the order the auras landed in, so on anything with a raid on it a row
@@ -2623,9 +2643,9 @@ tells the row below where to sit. The gap between rows is folded into each row's
 height, so a target with no debuffs puts the buff row against the block rather
 than one gap below where the debuffs would have been.
 
-Hiding the client's row is a sweep rather than a walk. Those buttons are built
+Hiding the client's rows is a sweep rather than a walk. Those buttons are built
 on demand, so it cannot be done once when the skin goes on, and walking all
-forty-eight names every tick to find that out would be silly. They are built in
+ninety-six names every tick to find that out would be silly. They are built in
 order, so the only one that can have appeared since the last look is the one
 after the last one hidden: one global lookup per row per tick once the row has
 settled. `ns.Strip` refuses on a protected region in combat and says so by
@@ -2633,8 +2653,10 @@ returning false, so a button the client builds mid fight is retried and lands
 the moment combat drops. Whether these buttons are protected at all on this
 backport is in the untested list below.
 
-Target of target is parked on exactly the corner the rows hang from, so `Perch`
-tells them it is there and the first row hangs under it instead of through it.
+Target of target is parked on exactly the corner the target's rows hang from,
+so `Perch` tells them it is there and the first row hangs under it instead of
+through it. Nothing is ever parked under the player block, so over there the
+same comparison is against nil and the rows sit on the block itself.
 That is on the ticker rather than at layout, because the client shows and hides
 that frame with the unit and a target with nothing targeted would otherwise
 leave a hole the size of it. Writing it there is allowed in combat where
@@ -4135,8 +4157,8 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
-- Whether the client's own target aura buttons are protected on this backport,
-  and therefore whether hiding one is refused in combat. `UnitFrames/Auras.lua`
+- Whether the client's own aura buttons are protected on this backport, and
+  therefore whether hiding one is refused in combat. `UnitFrames/Auras.lua`
   does not assume either way: it calls `ns.Strip`, which asks
   `IsProtected` and `InCombatLockdown` and returns false rather than raising, and
   the sweep retries on the next tick. If they are protected, the cost is one
@@ -4146,11 +4168,18 @@ Everything below was written from the API contract and has never executed:
   hidden within a fifth of a second and nobody sees it. What would prove it: get
   a target to nine or more debuffs for the first time in a session while in
   combat, and watch whether one of Blizzard's icons appears below the block.
-- Whether the two aura rows are the right shape at the size the block actually
-  ends up. Everything about the wrap, the mirroring and the row heights is
-  asserted in `harness/sections/14-aura-row.lua` against a 202 pixel block, and
-  the arithmetic is exact, but whether twelve debuffs over two lines under the
-  target block reads well is a thing you look at rather than measure.
+- Whether the four rows are the right shape at the size the blocks actually end
+  up. Everything about the wrap, the mirroring and the row heights is asserted
+  in `harness/sections/14-aura-row.lua` against a 202 pixel block, and the
+  arithmetic is exact, but whether twelve debuffs over two lines under a block
+  reads well is a thing you look at rather than measure. The player's pair is
+  the one to look at first: you carry more buffs than a target does, and the
+  buff count ships at 8 for both.
+- Whether right click to cancel a buff is worth getting back. It goes off the
+  screen with `BuffFrame`, because cancelling one is a protected call and a
+  square drawn by this addon cannot make it. Getting it back means a secure
+  button per square on the player's buff row, which is a real piece of work and
+  is not worth starting until somebody misses the feature.
 
 - The whole enemy cast row. `UnitCastingInfo` and `UnitChannelInfo` answering
   for a unit that is not you is inferred from Details deleting its own
@@ -4629,21 +4658,13 @@ Everything below was written from the API contract and has never executed:
   load all reach `Relayout` already. A layout switch that leaves the target
   frame parked at Edit Mode's own point until the next target change is what a
   missing event looks like.
-- Whether Edit Mode's magnetism snaps against the frame's rectangle or against
-  the selection's. They are the same rectangle on the player and on target of
-  target, and on the target the frame is the block plus the strip the aura row
-  hangs in, so a client that snaps by the frame snaps the target a row of icons
-  low.
-- Whether this client names the head of each aura row `TargetFrameBuff1` and
-  `TargetFrameDebuff1`. Both are the Classic names. A client that names them
-  something else measures no lift, gets no tail, and puts its icons back inside
-  the gauge, which is where they were before this; `/wk skin probe` says which
-  happened.
-- Whether the lift read off that anchor is the whole of what the client adds.
-  It is the Y offset of the icon's own anchor against the frame, which is the
-  number `TargetFrame.lua` keeps in a local, but a client that also insets the
-  row inside a container frame would need that measured too. The row landing a
-  few pixels off the block's bottom edge is what that looks like.
+- Whether this client names its aura buttons `TargetFrameBuff1`,
+  `TargetFrameDebuff1`, `BuffButton1` and `DebuffButton1`. All four are the
+  Classic names and none is called by anything installed here. A name that is
+  not a frame stops that row's sweep at slot one and hides nothing, so the
+  client's icons stay where they are, on top of ours in the player's case and
+  inside the gauge in the target's. `/wk skin probe` prints how many of each row
+  it has hidden, so one look at a full list settles all four.
 - Where the target's cast bar lands. `Target_Spellbar_AdjustPosition` anchors it
   under the last aura row where there are auras, which now follows the block in,
   and against the frame where there are none. The second case has not been

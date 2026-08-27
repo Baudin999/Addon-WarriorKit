@@ -92,6 +92,16 @@ for _, name in ipairs({ "TargetFrameBuff1", "TargetFrameDebuff1" }) do
 	child("button", targetFrame, name)
 end
 
+-- The head of each of your own two rows. Not children of PlayerFrame on any
+-- client: the client hangs your buffs off BuffFrame in the top corner of the
+-- screen, which is a system of its own and is why the addon leaves the frame
+-- alone and hides the buttons. What the harness needs from them is the same
+-- thing it needs from the two above, a button under each name that starts out
+-- shown, so the sweep has something to take off the screen.
+for _, name in ipairs({ "BuffButton1", "DebuffButton1" }) do
+	child("button", _G.UIParent, name)
+end
+
 -- What each unit frame was built as, taken before PLAYER_LOGIN and so before
 -- the skin has fitted any of them. The fit is only reversible if these are the
 -- numbers that come back.

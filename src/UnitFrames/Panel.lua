@@ -406,7 +406,7 @@ function Panel.Draw(ui)
 			.. " and a half. It is drawn under Blizzard's fill: the moment a heal"
 			.. " lands, the fill covers the slice that predicted it."
 	end)
-	ui.Check("draw the target's buffs and debuffs",
+	ui.Check("draw your own and the target's buffs and debuffs",
 		function() return ns.db.skinAuras end,
 		function(value)
 			ns.db.skinAuras = value
@@ -421,13 +421,13 @@ function Panel.Draw(ui)
 				ns.FrameSkin.Relayout()
 			end)
 	end
-	ui.Stepper("debuffs on the row", 0, ns.FrameAuras.CountCeiling("debuffs"), 1,
+	ui.Stepper("debuffs on each row", 0, ns.FrameAuras.CountCeiling("debuffs"), 1,
 		function() return ns.db.skinAuraDebuffs end,
 		function(value)
 			ns.db.skinAuraDebuffs = value
 			ns.FrameSkin.Relayout()
 		end)
-	ui.Stepper("buffs on the row", 0, ns.FrameAuras.CountCeiling("buffs"), 1,
+	ui.Stepper("buffs on each row", 0, ns.FrameAuras.CountCeiling("buffs"), 1,
 		function() return ns.db.skinAuraBuffs end,
 		function(value)
 			ns.db.skinAuraBuffs = value
@@ -435,21 +435,25 @@ function Panel.Draw(ui)
 		end)
 	ui.Note(function()
 		if not ns.db.skin then
-			return "The rows hang off the target block, so they need the target"
-				.. " frame skinned before they mean anything."
+			return "The rows hang off the two blocks, so they need those frames"
+				.. " skinned before they mean anything."
 		end
 		if not ns.db.skinAuras then
-			return "Off, and the target frame then carries no aura row at all. The"
-				.. " frame is the size of the block, so the client's own row hangs"
-				.. " inside the gauge rather than under it, which is why it is"
-				.. " hidden either way. Turn the skin off to get both back."
+			return "Off, and neither frame then carries an aura row at all. Each is"
+				.. " the size of its block, so the client's own rows hang inside the"
+				.. " gauges rather than under them, which is why they are hidden"
+				.. " either way. Turn the skin off to get all of it back."
 		end
 		return "Debuffs against the block and buffs under them, wrapping downwards"
-			.. " when a row runs past the block's width. What you cast is drawn in"
-			.. " colour and everything else is drained, and yours are placed first,"
-			.. " so a raid's worth of other people's bleeds cannot push your Rend"
-			.. " off the end. Hovering a square gives you the client's own tooltip"
-			.. " for that aura. "
+			.. " when a row runs past the block's width, under your own block and"
+			.. " under the target's. What you cast is drawn in colour and everything"
+			.. " else is drained, and yours are placed first, so a raid's worth of"
+			.. " other people's bleeds cannot push your Rend off the end. Hovering a"
+			.. " square gives you the client's own tooltip for that aura. Right"
+			.. " click to cancel one of your own buffs goes with the client's row,"
+			.. " because cancelling a buff is a call an addon is not allowed to"
+			.. " make, and the temporary weapon enchant stays where the client"
+			.. " draws it because it sits at no aura index at all. "
 			.. ns.FrameAuras.Describe() .. "."
 	end)
 	ui.Note(function()

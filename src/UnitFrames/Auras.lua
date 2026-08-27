@@ -4,12 +4,12 @@ local Auras = {}
 ns.FrameAuras = Auras
 
 --------------------------------------------------------------------------
--- The target's aura rows
+-- The aura rows on the skinned frames
 --
--- Two rows of squares under the target block: what the target is bleeding
--- from, and what is helping it. Ours, out of C_UnitAuras with the UnitAura
--- fallback every other aura reader in this addon uses, drawn with UI/Aura.lua
--- and laid out by ns.UI.Flow.
+-- Two rows of squares under each block: what the unit is bleeding from, and
+-- what is helping it. The player has a pair and so does the target. Ours, out
+-- of C_UnitAuras with the UnitAura fallback every other aura reader in this
+-- addon uses, drawn with UI/Aura.lua and laid out by ns.UI.Flow.
 --
 -- The client's own row is hidden, and that is the point of the file rather
 -- than a side effect. UnitFrames/Skin.lua used to leave Blizzard's row where
@@ -35,14 +35,22 @@ ns.FrameAuras = Auras
 -- docs/README.md, because the honest answer is that nobody has watched a target
 -- gain its ninth debuff in a raid yet.
 --
--- The player is not here. Blizzard does not hang your own buffs off PlayerFrame
--- at all; they are BuffFrame, a top level Edit Mode system of its own carrying
--- thirty-two buffs, sixteen debuffs, three temporary weapon enchants and right
--- click to cancel, and none of the payoff above is on that side. What this
--- addon has to say about your own buffs is Buffs/Nag.lua's, which reads
--- GetWeaponEnchantInfo as well as your auras and so can see the sharpening
--- stone that no aura scan reports. Adding the player later is one entry in
--- ROWS below and an answer to the BuffFrame question, in that order.
+-- The player has the same two rows under its own block. That was left out of
+-- the first build and it was the wrong call: the two blocks are one HUD now
+-- that the target is the player mirrored, and what is on you belongs beside
+-- what is on the target rather than in the top corner of the screen where the
+-- client keeps it. The rows are the same rows, off the same settings, drawn by
+-- the same code, which is the whole reason ROWS is a table keyed by frame.
+--
+-- The client's own buffs and debuffs are hidden the same way the target's are,
+-- by name and one at a time, because BuffButton1 and DebuffButton1 are built
+-- the same way on demand. Two things this addon does not take off the screen.
+-- Right click to cancel a buff goes with the client's row, because cancelling
+-- one is a protected call and a square drawn here cannot make it. And the
+-- temporary weapon enchant stays where the client draws it: it appears at no
+-- aura index at all, so nothing below can find it, and Buffs/Nag.lua only says
+-- when the sharpening stone is missing rather than how long the one on your
+-- weapon has left.
 --------------------------------------------------------------------------
 
 local Aura = ns.UI.Aura
@@ -64,27 +72,42 @@ local TIMER_CEILING, COUNT_CEILING = 14, 11
 
 -- Which rows a skinned frame gets, by the key UnitFrames/Skin.lua's SPECS uses.
 --
--- Debuffs first, nearest the block. This is a warrior's addon and the target's
--- debuffs are the row it is for: your Rend, your Sunder stacks, Demoralizing
--- Shout still up. What is helping the target is worth knowing and is worth
--- knowing second.
+-- Debuffs first, nearest the block, on both frames. This is a warrior's addon
+-- and the target's debuffs are the row it is for: your Rend, your Sunder
+-- stacks, Demoralizing Shout still up. What is helping the target is worth
+-- knowing and is worth knowing second. The player keeps the same order rather
+-- than a second rule, and it costs nothing to read that way: an empty row is
+-- one pixel tall, so with nothing on you your buffs sit against the block
+-- exactly as if the debuff row were not there.
 --
 --   filter    what the client calls this half of the aura list
 --   head      the client's own button names, which are what gets hidden
---   ceiling   how many of those the client will ever build
+--   max       what the client calls its own ceiling, asked of the client
+--             first so a backport that raised it is followed rather than
+--             argued with
+--   ceiling   how many of those the client will ever build, for a client
+--             that does not carry the global above
 --   setting   how many of ours to draw
 --   global    what this row is called, for the reason UnitFrames/Skin.lua
 --             names the block: a row that lands in the wrong place can then be
 --             measured from a macro or from the harness without this file
 --             handing out a reference to its own tables
 local ROWS = {
+	player = {
+		{ key = "debuffs", filter = "HARMFUL", head = "DebuffButton",
+			max = "DEBUFF_MAX_DISPLAY", ceiling = 16,
+			setting = "skinAuraDebuffs", global = "WarriorKitPlayerDebuffs" },
+		{ key = "buffs", filter = "HELPFUL", head = "BuffButton",
+			max = "BUFF_MAX_DISPLAY", ceiling = 32,
+			setting = "skinAuraBuffs", global = "WarriorKitPlayerBuffs" },
+	},
 	target = {
 		{ key = "debuffs", filter = "HARMFUL", head = "TargetFrameDebuff",
-			ceiling = 16, setting = "skinAuraDebuffs",
-			global = "WarriorKitTargetDebuffs" },
+			max = "MAX_TARGET_DEBUFFS", ceiling = 16,
+			setting = "skinAuraDebuffs", global = "WarriorKitTargetDebuffs" },
 		{ key = "buffs", filter = "HELPFUL", head = "TargetFrameBuff",
-			ceiling = 32, setting = "skinAuraBuffs",
-			global = "WarriorKitTargetBuffs" },
+			max = "MAX_TARGET_BUFFS", ceiling = 32,
+			setting = "skinAuraBuffs", global = "WarriorKitTargetBuffs" },
 	},
 }
 
@@ -170,17 +193,24 @@ local function Scan(row, unit)
 end
 
 --------------------------------------------------------------------------
--- Hiding the client's row
+-- Hiding the client's rows
 --
 -- The buttons are built on demand: the client makes TargetFrameDebuff5 the
--- first time a target carries five debuffs, and never before. So this cannot be
--- a walk done once at style time, and it must not be a walk of all forty-eight
--- names on every tick either.
+-- first time a target carries five debuffs, and BuffButton9 the first time you
+-- carry nine buffs, and never before. So this cannot be a walk done once at
+-- style time, and it must not be a walk of all ninety-six names on every tick
+-- either.
 --
 -- It is neither. The buttons are built in order, so the only one that can have
 -- appeared since the last look is the one after the last one hidden. That is a
 -- single global lookup per row per tick once the row has settled, and a run of
--- them the first time a target turns up with a full list.
+-- them the first time a unit turns up with a full list.
+--
+-- A name this client does not use costs nothing and hides nothing, which is
+-- the honest failure: the sweep stops at the first name that is not a frame
+-- and /wk skin probe then says none of the client's are hidden. Whether these
+-- four names are what this backport calls its own buttons is in the untested
+-- list in docs/README.md.
 --------------------------------------------------------------------------
 
 -- False when combat refused, which is the caller's signal to try again at
@@ -235,7 +265,9 @@ end
 --
 -- Target of target is parked on exactly the corner these rows hang from, three
 -- pixels under the block, so while it is there the rows go under it and while
--- it is not they go against the block. Guarded on the frame itself, so this is
+-- it is not they go against the block. Nothing is ever parked under the player
+-- block, so over there this is one comparison against nil and the rows sit on
+-- the block itself for the life of the session. Guarded on the frame itself, so this is
 -- one comparison a tick until that frame is shown or hidden, which happens
 -- when the target picks something up or drops it.
 --
@@ -342,12 +374,7 @@ function Auras.Build(entry)
 		-- them would allocate a string per name per pass to answer a question
 		-- whose answer never changes.
 		local names = {}
-		local ceiling = spec.ceiling
-		if spec.filter == "HARMFUL" then
-			ceiling = _G.MAX_TARGET_DEBUFFS or ceiling
-		else
-			ceiling = _G.MAX_TARGET_BUFFS or ceiling
-		end
+		local ceiling = _G[spec.max] or spec.ceiling
 		for slot = 1, ceiling do
 			names[slot] = spec.head .. slot
 		end
@@ -534,10 +561,10 @@ end
 
 function Auras.Describe()
 	if not ns.db.skinAuras then
-		return "no aura row on the target: the frame is the block, so the"
-			.. " client's own row would land inside the gauge"
+		return "no aura rows on the player or the target: each frame is its"
+			.. " block, so the client's own rows would land inside the gauges"
 	end
-	return ("target auras at %dpx, %d debuffs and %d buffs")
+	return ("aura rows under both blocks at %dpx, %d debuffs and %d buffs")
 		:format(ns.db.skinAuraSize, ns.db.skinAuraDebuffs, ns.db.skinAuraBuffs)
 end
 
@@ -547,12 +574,19 @@ function Auras.SizeRange()
 	return SIZE_MIN, SIZE_MAX
 end
 
+-- The most of one kind of aura any frame will draw, which is what the slash
+-- word and the panel stepper clamp to. Read across every frame rather than off
+-- the target's, so a row given a longer ceiling than the others cannot end up
+-- with a setting that refuses to reach it.
 function Auras.CountCeiling(key)
-	local plan = ROWS.target
-	for index = 1, #plan do
-		if plan[index].key == key then
-			return plan[index].ceiling
+	local most = 0
+	for _, plan in pairs(ROWS) do
+		for index = 1, #plan do
+			local spec = plan[index]
+			if spec.key == key and spec.ceiling > most then
+				most = spec.ceiling
+			end
 		end
 	end
-	return 0
+	return most
 end

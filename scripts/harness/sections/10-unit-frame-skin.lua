@@ -120,12 +120,18 @@ for _, block in ipairs(blocks) do
 			and anchor[3] == corner and anchor[4] == 0 and anchor[5] == 0,
 			key .. ": the block is not pinned to the frame's own " .. corner)
 
-		-- The square is the one frame the block parents nothing to and pins
-		-- nothing over: the two rails are children of the box and the text
-		-- frame covers the whole of it.
+		-- The square is the one frame the skin hangs on the block without
+		-- naming it and without covering the block with it. The two rails are
+		-- children of the box rather than of the frame, the text frame covers
+		-- the whole of it, and the two aura rows are named globals so that a
+		-- row that lands in the wrong place can be measured from a macro. That
+		-- last one is why the name is in this walk: without it the debuff row
+		-- is also a child of the frame pinned to the block, and the search
+		-- came back with whichever of the two the client had built last.
 		local slot
 		for _, f in ipairs(frame.children) do
-			if not f.allPoints and f.points and f.points[1] and f.points[1][2] == box then
+			if not f.name and not f.allPoints
+				and f.points and f.points[1] and f.points[1][2] == box then
 				slot = f
 			end
 		end

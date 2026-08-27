@@ -2,6 +2,51 @@
 
 ## Unreleased
 
+### Your own buffs and debuffs, under your own block
+
+The aura rows were built for the target only, on the argument that Blizzard
+does not hang your buffs off `PlayerFrame` at all. That was the wrong half of
+the job once the target became the player mirrored, and it was reported the
+plain way: "I do not see them anchored to the character." The two blocks are
+one HUD. What is on you belongs beside what is on the target, not in the corner
+of the screen you have to look away to read.
+
+**The player is one entry in `ROWS` and nothing else moved.**
+`UnitFrames/Auras.lua` was already a table keyed by frame, so the player's two
+rows are the same rows off the same settings, drawn by the same code and hidden
+the same way. `UnitFrames/Skin.lua` is untouched: it already called `Build`,
+`Place`, `Style` and `Update` for every frame it skins, and the player simply
+started having rows to draw. Both differences come off the spec the file
+already had. The player block is not mirrored, so its rows start on the corner
+the portrait is on and run right. And nothing is ever parked under it, so its
+debuff row hangs on the block itself while the target's hangs under target of
+target.
+
+**Two things go off the screen with the client's row.** Cancelling one of your
+own buffs is a protected call, so a square drawn here cannot offer right click
+to cancel. Getting that back means a secure button per square, which is its own
+piece of work and is not worth starting until somebody misses it. The temporary
+weapon enchant is the other, and it is the reason `TemporaryEnchantFrame` is
+deliberately left alone: it sits at no aura index, so nothing here can find it,
+and hiding it would take the only reading of the sharpening stone on your
+weapon off the screen. `Buffs/Nag.lua` says when it is missing and says nothing
+about how long the one you have has left.
+
+**Each row asks the client for its own ceiling by name.** `MAX_TARGET_DEBUFFS`
+for the target and `BUFF_MAX_DISPLAY` for you, out of a `max` field on the spec
+rather than out of a branch on the filter that only knew about the target.
+`Auras.CountCeiling` reads across every frame instead of off the target's, so a
+row given a longer ceiling than the others cannot end up with a setting that
+refuses to reach it.
+
+**One harness check was finding the portrait square by luck.** Section 10 walks
+a unit frame's children for one pinned to the block, and the two aura rows are
+pinned to the block as well. On the target that never showed, because the rows
+hang off target of target instead. On the player it came back with the debuff
+row and failed on the spot. It now skips the children that carry a name, which
+is the real difference between them: every frame this addon has to be findable
+from a macro is a named global, and the portrait square is not one.
+
 ### The target block is the player block mirrored, and the gap setting is gone
 
 `/wk skin gap` is retired. There is no number between the two blocks any more,
