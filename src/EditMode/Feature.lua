@@ -39,7 +39,7 @@ end
 
 ns.Register({
 	name = "interface",
-	order = 12,
+	order = 15,
 
 	defaults = {
 		uiAuto = true, -- import the baked layout on a client that does not have it
@@ -93,10 +93,8 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Header("Interface")
-		ui.Note(function()
-			return "Carries one Edit Mode layout inside the addon folder, so a computer that has the addon and none of your WTF gets the same UI."
-		end)
+		ui.Section("Interface layout", "The screen")
+		ui.Lede("Carries one Edit Mode layout in the addon folder, so a fresh computer gets the same UI.")
 		ui.Check("import the baked layout on a client that lacks it",
 			function() return ns.db.uiAuto end,
 			function(value) ns.db.uiAuto = value end)
@@ -107,17 +105,17 @@ ns.Register({
 			function() return "apply the baked layout" end,
 			Apply,
 			function() return ns.EditMode.Saved() ~= nil and (ns.EditMode.CanApply()) end)
-		ui.Note(function()
+		ui.Hint("Capture, /reload, then run ./bake-ui.sh in the addon folder. That is what writes the layout into the addon rather than into your WTF.")
+		ui.Reading("the baked layout", function()
 			local can, why = ns.EditMode.CanApply()
 			if not can then
-				return "|cffd08040" .. why .. "|r"
+				return why
 			end
 			local _, name = ns.EditMode.Saved()
 			if not name then
-				return "Nothing baked yet. Capture, /reload, then run ./bake-ui.sh in the addon folder."
+				return "nothing baked yet"
 			end
-			return ("%s. It is %s on this client."):format(Describe(),
-				ns.EditMode.IndexOf(name) and "already present" or "not here yet")
+			return ns.EditMode.IndexOf(name) and "already on this client" or "not here yet"
 		end)
 	end,
 })

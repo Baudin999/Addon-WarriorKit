@@ -13,8 +13,6 @@ local LOW_ROWS, HIGH_ROWS = 3, 24
 -- two glyphs each. 200 is the narrowest that still leaves a name readable once
 -- the fixed number column and half of what is left have been taken off it.
 local LOW_WIDTH, HIGH_WIDTH = 200, 520
-local LOW_ZOOM, HIGH_ZOOM = 1, 3
-local LOW_ALPHA, HIGH_ALPHA, ALPHA_STEP = 0, 100, 5
 local LOW_QUALITY, HIGH_QUALITY = 0, 4
 local LOW_FLOOR, HIGH_FLOOR = 0, 100000
 
@@ -66,6 +64,9 @@ local STREAMS = {
 		describe = LootFeed.Describe,
 		collects = "what drops",
 		costs = "no loot message is read at all.",
+		-- The same fact as `costs`, inside the hint cap. `costs` is a sentence
+		-- the slash help prints and this is the clause a hover has room for.
+		cheap = "no loot message is read at all",
 	},
 	combat = {
 		stream = CombatFeed.Stream(),
@@ -77,6 +78,7 @@ local STREAMS = {
 		costs = "a combat log event is turned away on one table lookup, which in a raid"
 			.. " is the difference between a few hundred lookups a second and a few"
 			.. " hundred rows a second.",
+		cheap = "a combat log event is turned away on one table lookup",
 	},
 }
 
@@ -132,7 +134,7 @@ local function Shared(entry, option, value)
 	end
 
 	if option == "zoom" then
-		local zoom = ns.Command.Number(value, LOW_ZOOM, HIGH_ZOOM, entry.title .. " zoom")
+		local zoom = ns.Command.Number(value, ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH, entry.title .. " zoom")
 		if zoom then
 			db[prefix .. "Zoom"] = zoom
 			Apply(entry)
@@ -142,7 +144,7 @@ local function Shared(entry, option, value)
 	end
 
 	if option == "alpha" then
-		local alpha = ns.Command.Step(value, LOW_ALPHA, HIGH_ALPHA, ALPHA_STEP,
+		local alpha = ns.Command.Step(value, ns.UI.ALPHA_LOW, ns.UI.ALPHA_HIGH, ns.UI.ALPHA_STEP,
 			entry.title .. " background")
 		if alpha then
 			db[prefix .. "Alpha"] = alpha
@@ -205,6 +207,15 @@ local function LootOption(_, option, value)
 	if option == "money" then
 		ns.db.lootFeedMoney = ns.Command.Toggle(value)
 		ns.Print("coin " .. (ns.db.lootFeedMoney and "goes in the feed." or "stays out of the feed."))
+		return true
+	end
+
+	if option == "purse" then
+		ns.db.lootFeedPurse = ns.Command.Toggle(value)
+		STREAMS.loot.stream:Apply()
+		ns.Print("the purse " .. (ns.db.lootFeedPurse
+			and "sits along the bottom of the feed."
+			or "is off and the feed has the height back."))
 		return true
 	end
 
@@ -294,110 +305,50 @@ local function SharedPage(ui, entry)
 	local prefix = entry.prefix
 	local lower = entry.title:lower()
 
-	ui.Check("Collect " .. entry.collects, function() return ns.db[prefix] end,
+	ui.Check("collect " .. entry.collects, function() return ns.db[prefix] end,
 		function(on)
 			ns.db[prefix] = on
 			entry.stream:Show()
 		end)
+	ui.Hint("This is the switch to reach for if you want the feed to cost nothing: off, " .. entry.cheap .. ".")
 
-	ui.Check("Show the " .. lower .. " feed", function() return ns.db[prefix .. "Shown"] end,
+	ui.Check("show the " .. lower .. " feed", function() return ns.db[prefix .. "Shown"] end,
 		function(on)
 			ns.db[prefix .. "Shown"] = on
 			entry.stream:Show()
 		end)
+	ui.Hint("Hidden and still collecting is close to free, because drawing the column is the expensive half. Show it again and the last few hundred rows come back with it.")
 
-	ui.Note(function()
-		if not ns.db[prefix] then
-			return "Off, so nothing is recorded and there is nothing to show. This is"
-				.. " the switch to reach for if you want the feature to cost nothing:"
-				.. " " .. entry.costs
-		end
-		if not ns.db[prefix .. "Shown"] then
-			return "Hidden, and still collecting. The rows are being written and the"
-				.. " column is not being drawn, which is the expensive half, so a"
-				.. " hidden feed is close to free. Show it again and it comes back"
-				.. " with everything that happened while it was away."
-		end
-		return "The top switch is whether anything is recorded and this one is whether"
-			.. " you can see it. Hide it and it keeps collecting, so what comes back"
-			.. " is the last few hundred rows rather than a blank column. Switch it"
-			.. " off and nothing is recorded at all."
-	end)
-
-	ui.Stepper("rows", LOW_ROWS, HIGH_ROWS, 1,
+	ui.Count("rows", LOW_ROWS, HIGH_ROWS,
 		function() return ns.db[prefix .. "Rows"] end,
 		function(value)
 			ns.db[prefix .. "Rows"] = value
 			Apply(entry)
 		end)
 
-	ui.Stepper("width", LOW_WIDTH, HIGH_WIDTH, 10,
+	ui.Size("width", LOW_WIDTH, HIGH_WIDTH, 10,
 		function() return ns.db[prefix .. "Width"] end,
 		function(value)
 			ns.db[prefix .. "Width"] = value
 			Apply(entry)
 		end)
 
-	ui.Slider("background", LOW_ALPHA, HIGH_ALPHA, ALPHA_STEP,
+	ui.Opacity("background",
 		function() return ns.db[prefix .. "Alpha"] end,
 		function(value)
 			ns.db[prefix .. "Alpha"] = value
 			Apply(entry)
-		end,
-		function(value) return value .. "%" end)
-
-	ui.Note(function()
-		if ns.db[prefix .. "Alpha"] > 0 then
-			return "How solid the panel behind the rows is. The text is outlined either"
-				.. " way, so it stays readable all the way down to nothing, and at zero"
-				.. " the edge goes with the background: a hairline rectangle round bare"
-				.. " world is a window frame with no window in it."
-		end
-		return "No background, so this is rows of outlined text over the world, the way"
-			.. " the meters are drawn. The scrollbar goes with it in everything but the"
-			.. " thumb, which is the only thing left saying there is more above and"
-			.. " below what you can see."
-	end)
-
-	ui.Stepper("zoom", LOW_ZOOM, HIGH_ZOOM, 1,
-		function() return ns.db[prefix .. "Zoom"] end,
-		function(value)
-			ns.db[prefix .. "Zoom"] = value
-			Apply(entry)
 		end)
+	ui.Hint("The text is outlined either way, so it reads all the way down to nothing. At zero the edge goes with the background and the feed is rows of text over the world.")
 
-	ui.Note(function()
-		local drawn, exact = ns.UI.FeedIcons(ns.db[prefix .. "Zoom"])
-		if exact then
-			return ("A row icon draws %d screen pixels of art, one stored texel per"
-				.. " pixel, which is as sharp as an icon gets."):format(drawn)
-		end
-		return ("|cffd08040A row icon draws %d screen pixels of art|r, blended from two"
-			.. " stored copies. The crop in UI/Draw.lua leaves 54 texels and only 54"
-			.. " and 27 land one texel on one pixel, so zoom 1 and zoom 2 are exact"
-			.. " and this one is not."):format(drawn)
-	end)
-
-	ui.Check("Rows answer the mouse", function() return ns.db[prefix .. "Mouse"] end,
+	ui.Check("rows answer the mouse", function() return ns.db[prefix .. "Mouse"] end,
 		function(on)
 			ns.db[prefix .. "Mouse"] = on
 			Apply(entry)
 		end)
+	ui.Hint("On, hovering a row opens its tooltip and the wheel scrolls back. Off, the feed is a picture and the wheel goes past it to the camera.")
 
-	ui.Note(function()
-		if not ns.db[prefix .. "Mouse"] then
-			return "Off, so the feed is a picture. Nothing on it can be hovered and the"
-				.. " wheel goes past it to the camera, which means there is no way to"
-				.. " see the older rows but to make the feed taller."
-		end
-		return "Hovering a row opens the addon's own tooltip beside it, and the wheel"
-			.. " scrolls back through what has already happened. The price is that a"
-			.. " mouse enabled frame swallows every button that lands on it: the right"
-			.. " and middle buttons are handed back where this client has"
-			.. " SetPassThroughButtons, and where it does not, a right drag begun on"
-			.. " the feed will not turn the camera. |cffd08040" .. ns.UI.Tooltip.Describe()
-			.. "|r"
-	end)
+	ui.Reading("the mouse", ns.UI.Tooltip.Describe)
 
 	ui.Action(function() return "put the " .. lower .. " feed back" end, function()
 		entry.stream:Reset({ entry.point[1], entry.point[2], entry.point[3],
@@ -406,27 +357,8 @@ local function SharedPage(ui, entry)
 end
 
 local function Panel(ui)
-	ui.Header("Loot feed")
-
-	ui.Note(function()
-		return "What dropped, newest at the top, older underneath it. A row is the"
-			.. " item's icon, its name in its own quality colour and how many there"
-			.. " were, with a stripe down the left in that same colour so a run of"
-			.. " drops reads as a ribbon before you read a word of it. Hover one for"
-			.. " the item's own tooltip, drawn in this interface rather than in"
-			.. " Blizzard's parchment."
-	end)
-
-	ui.Note(function()
-		local seen, dropped = ns.LootFeed.Counts()
-		local live, total = ns.LootFeed.Rules()
-		if live < total then
-			return ("|cffd08040This client carries %d of the %d loot messages|r, so some"
-				.. " of what drops will not be recognised. %d rows so far, %d under the"
-				.. " quality floor."):format(live, total, seen, dropped)
-		end
-		return ("%d rows so far, %d under the quality floor."):format(seen, dropped)
-	end)
+	ui.Section("Loot feed", "Readouts")
+	ui.Lede("A column of what dropped, newest at the top, each row in the item's own quality colour.")
 
 	SharedPage(ui, STREAMS.loot)
 
@@ -437,90 +369,59 @@ local function Panel(ui)
 		function(word)
 			ns.db.lootFeedQuality = QualityLevel(word)
 		end)
+	ui.Hint("Everything is the default, grey vendor trash included, because the addon sells that trash for you and the feed is the only place you will see what it was.")
 
-	ui.Note(function()
-		if ns.db.lootFeedQuality == 0 then
-			return "Everything, grey vendor trash included. That is the default because"
-				.. " this addon sells that trash for you at the next merchant, so the"
-				.. " feed is the only place you will ever see what it was."
-		end
-		return ("%s and better. Anything under it is picked up as before and simply"
-			.. " does not get a row."):format(QualityWord(ns.db.lootFeedQuality))
-	end)
-
-	ui.Check("The group's drops too", function() return ns.db.lootFeedGroup end,
+	ui.Check("the group's drops too", function() return ns.db.lootFeedGroup end,
 		function(on) ns.db.lootFeedGroup = on end)
+	ui.Hint("Off by default. Everyone else's loot is what makes the client's own chat unreadable in a raid.")
 
-	ui.Note(function()
-		return "Off by default. Everyone else's loot is what makes the client's own"
-			.. " chat unreadable in a raid, and a feed that reproduced it would have"
-			.. " replaced one unreadable column with a prettier one."
-	end)
-
-	ui.Check("Coin", function() return ns.db.lootFeedMoney end,
+	ui.Check("coin", function() return ns.db.lootFeedMoney end,
 		function(on) ns.db.lootFeedMoney = on end)
 
-	--------------------------------------------------------------------
+	ui.Check("the purse along the bottom", function() return ns.db.lootFeedPurse end,
+		function(on)
+			ns.db.lootFeedPurse = on
+			STREAMS.loot.stream:Apply()
+		end)
+	ui.Hint("What you are carrying, what every character on the account is carrying between them, and gold an hour since you logged in. Hover it for the list. Off, the feed gives the height back.")
 
-	ui.Header("Combat feed")
-
-	ui.Note(function()
-		return "The same column, fed by the combat log: one row per thing that landed"
-			.. " on you or that you landed on something. A row reads what happened,"
-			.. " then who it was, then the number. The stripe says which way it went,"
-			.. " white out, red in, green healed and grey missed, and a critical draws"
-			.. " its number in gold with a mark after it, so the crit is not a hue you"
-			.. " have to be able to see. Entering and leaving combat draw a band across"
-			.. " the feed, which is what separates one pull from the one before it, and"
-			.. " the band at the end says how long the fight took. Hover a row for the"
-			.. " whole event."
+	ui.Reading("rows so far", function()
+		local seen, dropped = ns.LootFeed.Counts()
+		return ("%d, and %d under the quality floor"):format(seen, dropped)
+	end)
+	ui.Reading("loot messages this client carries", function()
+		local live, total = ns.LootFeed.Rules()
+		return ("%d of %d"):format(live, total)
 	end)
 
-	ui.Note(function()
-		if not ns.CombatFeed.Ready() then
-			return "|cffd08040This client has no combat log API|r, so the feed stays"
-				.. " empty. Nothing here can be made to work without it and a made up"
-				.. " row would be worse than a blank."
-		end
-		local seen, ignored = ns.CombatFeed.Counts()
-		return ("%d rows so far, %d under the floor. This is not the meters: they"
-			.. " total a fight and this is a list of moments, and the two share"
-			.. " nothing."):format(seen, ignored)
-	end)
+	ui.Section("Combat feed", "Readouts")
+	ui.Lede("The same column fed by the combat log: one row per thing that landed on you or on something.")
 
 	SharedPage(ui, STREAMS.combat)
 
 	ui.Divider()
 
-	ui.Check("What you do", function() return ns.db.combatFeedOut end,
+	ui.Check("what you do", function() return ns.db.combatFeedOut end,
 		function(on) ns.db.combatFeedOut = on end)
 
-	ui.Check("What hits you", function() return ns.db.combatFeedIn end,
+	ui.Check("what hits you", function() return ns.db.combatFeedIn end,
 		function(on) ns.db.combatFeedIn = on end)
 
-	ui.Check("Misses and dodges", function() return ns.db.combatFeedMisses end,
+	ui.Check("misses and dodges", function() return ns.db.combatFeedMisses end,
 		function(on) ns.db.combatFeedMisses = on end)
-
-	ui.Note(function()
-		return "A miss is a row with no number on it and it earns one: four dodges in a"
-			.. " row is the reason your rotation stalled, and nothing else on the"
-			.. " screen says so."
-	end)
+	ui.Hint("A miss is a row with no number on it and it earns one: four dodges in a row is why your rotation stalled, and nothing else on screen says so.")
 
 	ui.Stepper("smallest hit", LOW_FLOOR, 2000, 25,
 		function() return ns.db.combatFeedFloor end,
 		function(value) ns.db.combatFeedFloor = value end)
+	ui.Hint("At zero this is every tick of every bleed on every mob in the pack, which in a fury pull scrolls faster than it can be read. This is the number that fixes it.")
 
-	ui.Note(function()
-		if ns.db.combatFeedFloor == 0 then
-			return "Every hit, including every tick of every bleed on every mob in the"
-				.. " pack. In a fury pull that is a feed which scrolls faster than it"
-				.. " can be read, and this is the number that fixes it."
+	ui.Reading("rows so far", function()
+		if not ns.CombatFeed.Ready() then
+			return "this client has no combat log API, so the feed stays empty"
 		end
-		return ("Nothing under %d gets a row. The right floor at level 20 and the right"
-			.. " floor in a raid differ by an order of magnitude, which is why this is"
-			.. " a setting rather than a number the addon picked.")
-			:format(ns.db.combatFeedFloor)
+		local seen, ignored = ns.CombatFeed.Counts()
+		return ("%d, and %d under the floor"):format(seen, ignored)
 	end)
 end
 
@@ -536,7 +437,7 @@ end
 
 ns.Register({
 	name = "feeds",
-	order = 7.7,
+	order = 11,
 
 	defaults = defaults,
 
@@ -548,7 +449,7 @@ ns.Register({
 		"feed loot on|off, and feed combat on|off, which is whether it collects",
 		"feed <which> show|hide takes the column off the screen and leaves it collecting",
 		"feed <which> rows 3 to 24, width 200 to 520, zoom 1 to 3, alpha 0 to 100, mouse on|off",
-		"feed loot quality 0 to 4, group on|off, money on|off",
+		"feed loot quality 0 to 4, group on|off, money on|off, purse on|off",
 		"feed combat out|in|misses on|off, floor 0",
 		"feed <which> clear empties it, reset puts it back where it started",
 	},

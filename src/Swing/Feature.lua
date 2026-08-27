@@ -10,7 +10,6 @@ local Gauges = ns.SwingGauges
 
 local LOW_WIDTH, HIGH_WIDTH = 80, 400
 local LOW_HEIGHT, HIGH_HEIGHT = 4, 32
-local LOW_ZOOM, HIGH_ZOOM = 1, 3
 
 --------------------------------------------------------------------------
 
@@ -43,7 +42,7 @@ local function SwingWord(arg)
 	end
 
 	if option == "zoom" then
-		local zoom = ns.Command.Number(value, LOW_ZOOM, HIGH_ZOOM, "swing zoom")
+		local zoom = ns.Command.Number(value, ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH, "swing zoom")
 		if zoom then
 			ns.db.swingZoom = zoom
 			Gauges.Apply()
@@ -61,11 +60,13 @@ end
 
 ns.Register({
 	name = "swing",
+	order = 8,
 
-	-- Between the meters and the bar art. Not a whole number, because every
-	-- one from 1 to 12 is already taken and renumbering five parts to insert
-	-- one readout is a bigger change than a fraction is a wart.
-	order = 7.5,
+	switch = {
+		key = "swing",
+		label = "the swing bars",
+		apply = function() Gauges.Apply() end,
+	},
 
 	defaults = {
 		swing = true,
@@ -110,129 +111,74 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Header("Swing timer")
+		ui.Section("Swing timer", "You")
+		ui.Lede("One bar per hand under your character, filling towards the next white swing.")
 
-		ui.Check("Show the swing bars", function() return ns.db.swing end,
-			function(on)
-				ns.db.swing = on
-				Gauges.Apply()
-			end)
-
-		ui.Note(function()
-			if not Swing.Ready() then
-				return "|cffd08040This client has no UnitAttackSpeed|r, so there is no swing"
-					.. " length to draw and nothing here runs."
-			end
-			if not Swing.HasMainhand() then
-				return "Nothing in your main hand, so there is no swing to time and the"
-					.. " bars are not drawn. They come back the moment you equip a"
-					.. " weapon."
-			end
-			return "One bar per hand, filling towards the next swing. The off hand bar is"
-				.. " only there while you are holding something in that hand. The clock"
-				.. " is the combat log: every swing that lands or misses is the same"
-				.. " instant the next one starts, so a bar is empty until your first"
-				.. " white hit of a fight and exact from then on."
-		end)
-
-		ui.Note(function()
-			return "Haste moves the length of a swing already in flight, and what is left"
-				.. " of it is scaled rather than restarted. Flurry landing halfway"
-				.. " through leaves you halfway through a shorter swing. That is the"
-				.. " single thing a warrior's swing timer has to get right, because"
-				.. " Flurry is up for most of a fight."
-		end)
-
-		ui.Stepper("width", LOW_WIDTH, HIGH_WIDTH, 10,
+		ui.Size("width", LOW_WIDTH, HIGH_WIDTH, 10,
 			function() return ns.db.swingWidth end,
 			function(value)
 				ns.db.swingWidth = value
 				Gauges.Apply()
 			end)
 
-		ui.Stepper("height", LOW_HEIGHT, HIGH_HEIGHT, 1,
+		ui.Size("height", LOW_HEIGHT, HIGH_HEIGHT, 1,
 			function() return ns.db.swingHeight end,
 			function(value)
 				ns.db.swingHeight = value
 				Gauges.Apply()
 			end)
 
-		ui.Stepper("zoom", LOW_ZOOM, HIGH_ZOOM, 1,
+		ui.Zoom(
 			function() return ns.db.swingZoom end,
 			function(value)
 				ns.db.swingZoom = value
 				Gauges.Apply()
 			end)
+		ui.Hint("Its own zoom rather than the UI size slider, because a bar you read mid swing is worth keeping exact at the size you chose.")
+
+		ui.Reading("the bars", function()
+			if not Swing.Ready() then
+				return "this client has no UnitAttackSpeed, so nothing here runs"
+			end
+			if not Swing.HasMainhand() then
+				return "nothing in your main hand, so there is no swing to time"
+			end
+			return ("main hand %.2fs"):format(Swing.Speed(Swing.MAIN))
+		end)
 
 		ui.Action(function() return "put the swing bars back" end, function()
 			Gauges.Reset()
 		end)
 
 		-- The Slam window is the one part of this that is warrior only, so on
-		-- anyone else it is one sentence rather than a tab of numbers about a
-		-- spell they do not have.
+		-- anyone else there is no tab of numbers about a spell they do not have.
 		if not ns.IsWarrior() then
-			ui.Note(function()
-				return "The green press window is Slam's, so it is drawn on a warrior and"
-					.. " nowhere else. The bars themselves are worth the same to anybody"
-					.. " standing in melee and are drawn here."
-			end)
 			return
 		end
 
-		ui.Header("The Slam window")
+		ui.Section("The Slam window", "You")
+		ui.Lede("A green band on the main hand bar marking the one press of Slam that costs no swing.")
 
-		ui.Note(function()
-			return "Slam has a cast time, it does not interrupt the swing while it casts,"
-				.. " and finishing it restarts the swing. Press early and the restart"
-				.. " throws away the charge you had. Press late and the swing is pushed"
-				.. " out to the end of the cast. The one right press is where the cast"
-				.. " ends as the swing ends, which is the moment the swing has exactly a"
-				.. " cast time left to run."
-		end)
-
-		ui.Note(function()
+		ui.Reading("Slam", function()
 			if not Slam.Known() then
-				return "|cffd08040Slam is not on this character yet|r, so there is nothing to"
-					.. " mark. The band appears the moment you learn it."
+				return "not on this character yet"
 			end
 			if Slam.Longer() then
-				return ("|cffd08040Slam casts in %.2fs and your swing is %.2fs|r, so the cast"
-					.. " does not fit inside the swing and there is no press that costs"
-					.. " nothing. No band is drawn, because a mark there would be a lie.")
+				return ("%.2fs cast against a %.2fs swing: no band, it does not fit")
 					:format(Slam.Cast(), Swing.Speed(Swing.MAIN))
 			end
 			local _, _, at = Slam.Window()
-			return ("The band sits at %.0f%% of the main hand bar, which is a %.2fs cast"
-				.. " against a %.2fs swing. Your weapon speed is the only thing that"
-				.. " moves it: a shorter swing spends a bigger share of itself on the"
-				.. " same cast, so Flurry landing walks the band back down the bar."):format(
-					(at or 0) * 100, Slam.Cast(), Swing.Duration(Swing.MAIN))
+			return ("band at %.0f%% of the bar, %.2fs cast"):format((at or 0) * 100, Slam.Cast())
 		end)
 
-		ui.Note(function()
+		ui.Reading("the cast time", function()
 			local rank = Slam.Rank()
 			if Slam.Measured() then
-				return ("The cast time is the client's own: %.2fs, taken off the first Slam"
-					.. " you cast this session and held. Haste does not touch Slam's cast"
-					.. " time on this client, so that number is a constant until you move"
-					.. " a talent point, and re-reading it every cast would only move the"
-					.. " mark you are aiming at. Improved Slam reads as %d point%s.")
+				return ("%.2fs measured, Improved Slam reads as %d point%s")
 					:format(Slam.Measured(), rank, rank == 1 and "" or "s")
 			end
-			return ("No Slam cast yet this session, so the band is drawn from an estimate:"
-				.. " the spell's own cast time less %.1fs for %d point%s of Improved Slam."
-				.. " Cast one and the client's real number replaces it, once."):format(
-					rank * 0.1, rank, rank == 1 and "" or "s")
-		end)
-
-		ui.Note(function()
-			return "The band is two tenths of a second wide because a key press lands"
-				.. " within about a tenth of where you aimed, and a mark with no width is"
-				.. " one you can only hit by luck. The line down the middle is the exact"
-				.. " press. The whole bar goes green while the fill is inside the band,"
-				.. " because four percent of a bar is not enough to catch out of the"
-				.. " corner of an eye and all of it is."
+			return ("estimated, less %.1fs for %d point%s: cast one to measure it")
+				:format(rank * 0.1, rank, rank == 1 and "" or "s")
 		end)
 	end,
 })

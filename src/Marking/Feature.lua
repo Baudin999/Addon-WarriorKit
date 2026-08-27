@@ -14,7 +14,13 @@ end
 
 ns.Register({
 	name = "marking",
-	order = 1,
+	order = 2,
+
+	switch = {
+		key = "marking",
+		label = "marking by modifier click",
+		apply = function() ns.MarkKeys.Apply() end,
+	},
 
 	defaults = {
 		marking = true,
@@ -84,14 +90,8 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Header("Marking")
-		ui.Check("mark by clicking with a modifier held",
-			function() return ns.db.marking end,
-			function(value)
-				ns.db.marking = value
-				ns.MarkKeys.Apply()
-			end)
-
+		ui.Section("Marking", "Fighting")
+		ui.Lede("A held key and a click puts a raid icon on whatever is under the cursor.")
 		for _, mark in ipairs(ns.Marking.MARKS) do
 			local id = mark.id
 			ui.KeyField(mark.label,
@@ -103,21 +103,16 @@ ns.Register({
 					end
 				end,
 				function() ns.MarkKeys.Bind(id, "") end)
+			ui.Hint("Click the field and press what you want, mouse buttons included. Plain left and right click are refused: they belong to targeting and to the camera.")
 		end
-
-		ui.Note(function()
-			return "Click the field and press the combination you want, mouse buttons included. A modified left click is the one worth having: it marks whatever is under the cursor out in the world, on a nameplate and on a unit frame, all the same way. Plain left and right click are refused, because they belong to targeting and the camera."
-		end)
 
 		ui.Gap()
 		ui.Check("fall back to ctrl-targeting",
 			function() return ns.db.targetMark end,
 			function(value) ns.db.targetMark = value end)
-		ui.Note(function()
-			if ns.MarkKeys.Active() then
-				return "Not in use: the keys above are doing the job. This only runs on a client that refuses them."
-			end
-			return "No marking key is held, so out in the world ctrl to target marks skull and ctrl-shift marks cross."
+		ui.Hint("Out in the world, ctrl to target marks skull and ctrl-shift marks cross. It only runs on a client that refuses the keys above.")
+		ui.Reading("the fallback", function()
+			return ns.MarkKeys.Active() and "idle, the keys are doing the job" or "in use"
 		end)
 	end,
 })

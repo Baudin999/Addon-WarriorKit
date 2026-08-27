@@ -31,7 +31,13 @@ end
 
 ns.Register({
 	name = "minimap",
-	order = 8,
+	order = 13,
+
+	switch = {
+		key = "minimapSquare",
+		label = "the square minimap",
+		apply = function(value) SetSquare(value) end,
+	},
 
 	defaults = {
 		-- On, the way the stripped bar art is on and for the same reason. Both
@@ -126,53 +132,26 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Header("Minimap")
-		ui.Check("square rather than round",
-			function() return ns.db.minimapSquare end,
-			SetSquare)
-		ui.Note(function()
-			return "Minimap " .. ns.MinimapShape.Describe() .. "."
-		end)
-		ui.Note(function()
-			if not ns.db.minimapSquare then
-				return "The round mask throws away the corners of a map the client has already drawn, and the ring round it spends about twenty pixels of every edge on rivets."
-			end
-			return "The mask, the ring, the north tag and the two zoom buttons come off, and the mousewheel zooms instead. Everything goes back in one call, so off is a state rather than a reload."
-		end)
-		ui.Stepper("width in pixels", 120, 300, 10,
+		ui.Section("Minimap", "The screen")
+		ui.Lede("Takes the mask, the ring, the north tag and the zoom buttons off, and squares the map.")
+
+		ui.Size("width", 120, 300, 10,
 			function() return ns.db.minimapSize end,
 			SetSize)
-		ui.Note(function()
-			if not ns.db.minimapSquare then
-				return "The width only applies while the square is on. Round, the map is left at whatever this client draws it at."
-			end
-			return "Blizzard's own mail, tracking and battleground icons are moved to the corners of the square, because they were anchored to points on the arc and a square has no arc to hang them on."
-		end)
-		ui.Note(function()
-			if not ns.db.minimapSquare then
-				return "The ring is the only thing ending the picture on a round map, which is why the sun, the clock and the black edge below all wait for the square."
-			end
-			local reading = ns.MinimapClock.Describe()
-			return ("The ring ended the picture and nothing else on it did, so the square gets the same black edge and hairline the action bars are built on. The clock hangs off the bottom of that edge in the middle%s, and the realm's time is on its tooltip.")
-				:format(reading and (", reading " .. reading) or "")
-		end)
-		ui.Note(function()
-			return "The sun and moon and Blizzard's own clock come off with the ring. The sun says whether it is day in a game whose sky says the same thing, and the clock draws its numbers on a strip of the old stone minimap tile, which on a stripped square is the last piece of Blizzard's map left on the screen."
+		ui.Hint("The width only applies while the square is on. Round, the map is left at whatever this client draws it at.")
+
+		ui.Reading("minimap", ns.MinimapShape.Describe)
+		ui.Reading("the clock", function()
+			return ns.MinimapClock.Describe() or "not drawn until the square is on"
 		end)
 
-		ui.Header("Addon buttons")
+		ui.Section("Addon buttons", "The screen")
+		ui.Lede("Collects the round icons other addons hang on the minimap edge into one tray.")
 		ui.Check("collect them behind one square",
 			function() return ns.db.minimapCorral end,
 			SetCorral)
-		ui.Note(function()
-			return "Addon buttons " .. ns.Corral.Describe() .. ". Press the square to open the tray."
-		end)
-		ui.Note(function()
-			if not ns.db.minimapCorral then
-				return "Every addon that wants to be reachable puts a round icon on the edge of the minimap. With eight installed the map is a ring of icons with a map in the middle."
-			end
-			return "Each button is borrowed rather than taken. Its parent, its position and its own SetPoint are handed back the moment this goes off, and nothing about the button itself is changed, so it does in the tray exactly what it did on the ring."
-		end)
+		ui.Hint("Each button is borrowed rather than taken: its parent, its position and its own SetPoint are handed back the moment this goes off.")
+
 		ui.Action(function()
 			return ("look for new buttons (%d held)"):format(ns.Corral.Count())
 		end,
@@ -181,35 +160,26 @@ ns.Register({
 				ns.Options.Refresh()
 			end,
 			function() return ns.db.minimapCorral end)
-		ui.Note(function()
-			return "The scan runs at login, whenever an addon finishes loading, and whenever you open the tray. Nothing polls, so an addon that puts its button up on a timer of its own is found the next time you open the tray rather than the second it appears."
-		end)
-		ui.Note(function()
-			return "Blizzard's own icons are left alone. The mail, the tracking and the calendar are read at a glance without being pressed, and the square above has already put them on the corners."
-		end)
-		ui.Note(function()
-			local pooled, refused = ns.Corral.Skipped()
-			if pooled == 0 and refused == 0 then
-				return "The minimap is also where every addon that draws a pin on the map hangs the pin, and a pin is not a button. Nothing on this map looked like one."
-			end
-			if refused > 0 then
-				return ("%d frames were left where they were as map pins, and %d more were refused because the corral will not hold more than it can lay out. Nothing is taken quietly.")
-					:format(pooled, refused)
-			end
-			return ("%d frames on this map are pins rather than buttons and were left alone. They come in pools with generated names, which is what tells them apart from a button.")
-				:format(pooled)
-		end)
+		ui.Hint("The scan runs at login, whenever an addon finishes loading and whenever you open the tray. Nothing polls, so a button put up on a timer is found next time you open it.")
+
 		ui.Action(function() return "put the square back under the map" end,
 			function()
 				ns.Corral.Reset()
 				ns.Options.Refresh()
 			end,
 			function() return ns.Corral.Moved() end)
-		ui.Note(function()
-			if not ns.Corral.Moved() then
-				return "Unlock the frames with /wk unlock and the square can be dragged anywhere. It starts under the bottom left corner of the map, off the frame rather than on it, so it covers none of the world the square was widened to show."
+		ui.Hint("Unlock the frames with /wk unlock and the square can be dragged anywhere. It starts under the bottom left corner of the map rather than on it.")
+
+		ui.Reading("addon buttons", ns.Corral.Describe)
+		ui.Reading("left alone", function()
+			local pooled, refused = ns.Corral.Skipped()
+			if pooled == 0 and refused == 0 then
+				return "nothing on this map looked like a map pin"
 			end
-			return "Dragged. The button above puts it back under the corner of the map."
+			if refused > 0 then
+				return ("%d map pins, and %d refused because the tray was full"):format(pooled, refused)
+			end
+			return ("%d map pins rather than buttons"):format(pooled)
 		end)
 	end,
 })

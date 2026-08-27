@@ -54,19 +54,20 @@ ns.ChargeIcon.Bind(held)
 -- check on the message would be a check on the missing stub. It reads the
 -- same ns.IsWarrior as everything above.
 
--- The page in the options window. Four tabs of controls on a warrior, one
--- page saying why on anyone else, rather than check boxes that write a
--- setting nothing on this character reads.
-local page
-for _, part in ipairs(window.parts) do
-	if part.name == "Charge" then
-		page = part
+-- The charge part's own tabs in the options window. Five on a warrior, one
+-- page saying why on anyone else, rather than check boxes that write a setting
+-- nothing on this character reads. Counted off the sections rather than off a
+-- rail entry, because the rail is groups now and Fighting holds four parts.
+local tabs = 0
+for _, group in ipairs(window.groups) do
+	for _, section in ipairs(group.sections) do
+		if section.feature and section.feature.name == "charge" then
+			tabs = tabs + 1
+		end
 	end
 end
-check(page ~= nil, "the options window has no Charge page")
-check(page and #page.sections == (WARRIOR and 4 or 1),
-	("the Charge page has %s tabs on a %s"):format(page and #page.sections or "no",
-		PLAYER_CLASS))
+check(tabs == (WARRIOR and 5 or 1),
+	("the charge part opened %d tabs on a %s"):format(tabs, PLAYER_CLASS))
 
 local status
 for _, feature in ipairs(ns.features) do
@@ -83,4 +84,4 @@ print(("class   %s: charge button %s, world marker %s, action targeting %s, Char
 		_G.WarriorKitChargeButton and "built" or "not built",
 		_G.WarriorKitChargeMarker and "built" or "not built",
 		cvars.SoftTargetEnemy == "0" and "left alone" or ("driven to " .. cvars.SoftTargetEnemy),
-		page and #page.sections or 0, (page and #page.sections == 1) and "" or "s"))
+		tabs, tabs == 1 and "" or "s"))

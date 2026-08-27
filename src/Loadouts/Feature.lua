@@ -74,7 +74,8 @@ end
 --------------------------------------------------------------------------
 
 local function Page(ui)
-	ui.Header("Loadouts")
+	ui.Section("Loadouts", "Fighting")
+	ui.Lede("A named pair of weapons and a stance, on one key. Drag a weapon onto a hand.")
 
 	ui.Paperdoll({
 		slots = {
@@ -119,14 +120,15 @@ local function Page(ui)
 			end,
 		})
 
-	ui.Note(function()
+	ui.Hint("Right click a hand to clear it. An empty hand means leave it alone: there is no macro line for taking something off.")
+
+	ui.Reading("this pair", function()
 		local loadout = Current()
 		if not loadout then
-			return "No loadouts. Press + to make one."
+			return "none yet, press +"
 		end
 		if ns.Loadouts.TwoHanded(Shown()) == true then
-			return ("|cffd08040%s is a two hander, so the off hand line is left out of the macro.|r")
-				:format(loadout.main)
+			return loadout.main .. " is a two hander, no off hand line"
 		end
 		local missing = {}
 		if loadout.main ~= "" and not ns.Gear.Held(ns.Gear.MAINHAND, loadout.main) then
@@ -136,10 +138,9 @@ local function Page(ui)
 			missing[#missing + 1] = loadout.off
 		end
 		if #missing > 0 then
-			return ("|cffd08040%s is not on this character, so that half of the swap does nothing until it is.|r")
-				:format(table.concat(missing, " and "))
+			return table.concat(missing, " and ") .. ": not on this character"
 		end
-		return "Drag a weapon or a shield onto a hand. Right click a hand to clear it. An empty hand means leave it alone: there is no macro line for taking something off."
+		return "ready"
 	end)
 
 	ui.Gap()
@@ -185,30 +186,25 @@ local function Page(ui)
 			end
 		end,
 		function() ns.Loadouts.Bind(Shown(), "") end)
+	ui.Hint("Your saved bindings are untouched, so clearing this key hands it straight back. Or put the button's /click line in a macro on a bar.")
 
-	ui.Note(function()
+	ui.Reading("this key", function()
 		local loadout = Current()
-		if not loadout then
-			return ""
-		end
-		if loadout.key == "" then
-			return ("One press draws this pair%s. Or put /click %s in a macro on a bar.")
-				:format(loadout.stance and " and puts you in the stance" or "",
-					ns.Loadouts.ButtonName(Shown()))
+		if not loadout or loadout.key == "" then
+			return "not bound"
 		end
 		if loadout.displaced ~= "" then
-			return "Shadows " .. loadout.displaced .. ". Your saved bindings are untouched, so clearing this key hands it straight back."
+			return "shadows " .. loadout.displaced
 		end
-		return "Nothing else was bound to it."
+		return "nothing else wanted it"
 	end)
 
-	ui.Gap()
-	ui.Note(function()
+	ui.Reading("the button carries", function()
 		local macro = ns.Loadouts.Macro(Shown())
 		if macro == "" then
-			return "The button carries nothing yet."
+			return "nothing yet"
 		end
-		return "The button carries:\n" .. macro
+		return (macro:gsub("%s*\n%s*", " "))
 	end)
 
 	ui.Gap()
@@ -298,27 +294,21 @@ ns.Register({
 	panel = function(ui)
 		Page(ui)
 
-		ui.Header("Swapping")
+		ui.Section("Swapping", "Fighting")
+		ui.Lede("Whether a loadout key changes your weapons mid fight or waits until the fight is over.")
 		ui.Check("swap weapons in combat too", function()
 			return ns.dbc.loadoutSwapCombat
 		end, function(value)
 			ns.dbc.loadoutSwapCombat = value
 			ns.Loadouts.Apply()
 		end)
-		ui.Note(function()
-			if ns.dbc.loadoutSwapCombat then
-				return "A swap mid fight resets your swing timer, which is the price of dancing and usually worth paying. Turn this off and every /equipslot line takes a nocombat conditional, so a key pressed in a fight changes stance and leaves your hands alone."
-			end
-			return "Every /equipslot line carries nocombat, so a key pressed in a fight changes stance and nothing else. The weapons follow when you drop combat and press it again."
-		end)
+		ui.Hint("A swap mid fight resets your swing timer, which is the price of dancing. Off, every /equipslot line takes a nocombat conditional and the stance still changes.")
 
-		ui.Gap()
-		ui.Note(function()
+		ui.Reading("the macros", function()
 			if InCombatLockdown() then
-				return "|cffd08040A macro cannot be rewritten in combat, so anything changed here lands when the fight ends.|r"
+				return "held: a macro cannot be rewritten in combat"
 			end
-			return ("Each key is an override binding, so it sits on top of your saved bindings rather than in them and clearing it hands the key straight back. %d loadouts is the cap, one secure button each.")
-				:format(ns.Loadouts.MAX)
+			return ("%d loadouts is the cap, one secure button each"):format(ns.Loadouts.MAX)
 		end)
 	end,
 })

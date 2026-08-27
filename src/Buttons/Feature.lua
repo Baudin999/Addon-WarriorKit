@@ -144,6 +144,12 @@ ns.Register({
 	name = "buttons",
 	order = 5,
 
+	switch = {
+		key = "actionBars",
+		label = "our own action bars",
+		apply = function(value) SetBars(value) end,
+	},
+
 	defaults = {
 		-- Off, and it is the only default in this addon that is off because of
 		-- what turning it on does rather than because of what it is worth. On
@@ -270,10 +276,8 @@ ns.Register({
 	-- the switch that says so.
 
 	panel = function(ui)
-		ui.Header("Buttons")
-		ui.Note(function()
-			return "Fills bar 1 with a role per key in all three stances, and the shift layer above it. Your keybindings are never touched."
-		end)
+		ui.Section("Buttons", "Fighting")
+		ui.Lede("Fills bar 1 with a role per key in all three stances, and the shift layer above it.")
 		ui.ActionPair(
 			function() return ns.Layout.HasBackup() and "re-fill the bars" or "fill the bars" end,
 			Apply,
@@ -281,31 +285,23 @@ ns.Register({
 			function() return "put mine back" end,
 			Restore,
 			function() return ns.Layout.HasBackup() and (ns.Layout.CanApply()) end)
-		ui.Note(function()
+		ui.Hint("Your keybindings are never touched, and nothing is overwritten until you press it. What was in the slots is kept, so the right button hands it all back.")
+		ui.Reading("the bars", function()
 			local can, why = ns.Layout.CanApply()
 			if not can then
-				return "|cffd08040" .. why .. "|r"
+				return why
 			end
-			if ns.Layout.HasBackup() then
-				return "Your old bars are held from " .. ns.Layout.BackupStamp() .. ". " .. ns.Layout.Describe() .. "."
+			return ns.Layout.Describe()
+		end)
+		ui.Reading("your old bars", function()
+			if not ns.Layout.HasBackup() then
+				return "not held"
 			end
-			return ns.Layout.Describe() .. ". Nothing is overwritten until you press it."
+			return "held from " .. ns.Layout.BackupStamp()
 		end)
 
-		ui.Gap()
-		ui.Header("Our own bars")
-		ui.Note(function()
-			return "Reads every action bar you have on, and stands up one of ours for each: the same action slots, the same keys, and Blizzard's buttons hidden behind it. Your keybindings are read, never written."
-		end)
-		ui.Check("clone my action bars",
-			function() return ns.db.actionBars end,
-			SetBars)
-		ui.Note(function()
-			if not ns.db.actionBars then
-				return "Your bars are Blizzard's. Nothing is hidden and no key is taken."
-			end
-			return ns.Bars.Describe() .. "."
-		end)
+		ui.Section("Our own bars", "Fighting")
+		ui.Lede("Stands up one of our bars for each of yours: same slots, same keys, Blizzard's hidden behind.")
 
 		-- One row per bar the client can have, so a bar that misbehaves can be
 		-- handed back on its own without turning the whole feature off and
@@ -319,20 +315,20 @@ ns.Register({
 			function() return "match my current bars" end,
 			Match,
 			function() return ns.WhichBars.Decided() > 0 end)
-		ui.Note(function()
-			local decided = ns.WhichBars.Decided()
-			if decided == 0 then
-				return "Every row follows your own interface options. Turn a bar on there and it is cloned too."
+		ui.Hint("A row left alone follows your own interface options, so turning a bar on there clones it too. Match puts every row back to following.")
+		ui.Reading("cloning", function()
+			if not ns.db.actionBars then
+				return "off, your bars are Blizzard's"
 			end
-			return ("%d bar%s set by hand. Match puts them all back to following your own bars."):format(
-				decided, decided == 1 and " is" or "s are")
+			return ns.Bars.Describe()
+		end)
+		ui.Reading("set by hand", function()
+			local decided = ns.WhichBars.Decided()
+			return decided == 0 and "none" or (decided .. " of the rows above")
 		end)
 
-		ui.Gap()
-		ui.Header("Spell ranks")
-		ui.Note(function()
-			return "Walks every action slot and moves any spell holding an old rank up to the best one you know. Macros, items and empty slots are left alone."
-		end)
+		ui.Section("Spell ranks", "Fighting")
+		ui.Lede("Moves any spell on a bar that is holding an old rank up to the best one you know.")
 		ui.Action(
 			function()
 				local count = #ns.Ranks.Stale()
@@ -340,12 +336,13 @@ ns.Register({
 			end,
 			RefreshRanks,
 			function() return (ns.Ranks.CanApply()) and #ns.Ranks.Stale() > 0 end)
-		ui.Note(function()
+		ui.Hint("Macros, items and empty slots are left alone. Only a spell whose rank is behind what you have trained is moved.")
+		ui.Reading("your bars", function()
 			local can, why = ns.Ranks.CanApply()
 			if not can then
-				return "|cffd08040" .. why .. "|r"
+				return why
 			end
-			return ns.Ranks.Describe() .. "."
+			return ns.Ranks.Describe()
 		end)
 	end,
 })

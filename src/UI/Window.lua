@@ -218,6 +218,66 @@ function Window:Resize(width, height)
 	return width, height
 end
 
+-- A search field in the title bar.
+--
+-- Chrome rather than a widget, because it belongs to the window and not to any
+-- page in it: what it searches is everything the window holds, and a control
+-- that lives on one page cannot say anything about the other forty four.
+--
+-- opts.onType is called on every keystroke with the whole field. Filtering as
+-- you type rather than on enter, because a settings window is something you
+-- rummage in: you type two letters, see whether it is there, and type two more.
+function Window:Search(opts)
+	local width = opts.width or 150
+	local height = M.title - 8
+
+	local box = UI.Box(self.frame, C.sunken, C.edge)
+	box:SetSize(width, height)
+	box:SetPoint("TOPRIGHT", self.close, "TOPLEFT", -M.rowGap, 0)
+
+	local ghost = UI.Label(box, M.small, C.quiet, "LEFT", UI.FLAT)
+	ghost:SetPoint("LEFT", 4, 0)
+	ghost:SetText(opts.placeholder or "search")
+
+	local edit = CreateFrame("EditBox", nil, box)
+	edit:SetPoint("TOPLEFT", 4, 0)
+	edit:SetPoint("BOTTOMRIGHT", -4, 0)
+	edit:SetFontObject(UI.Font(M.small, UI.FLAT))
+	edit:SetTextColor(C.text[1], C.text[2], C.text[3])
+	edit:SetAutoFocus(false)
+	edit:SetMaxLetters(40)
+
+	edit:SetScript("OnTextChanged", function(field)
+		ghost:SetShown(field:GetText() == "")
+		opts.onType(field:GetText())
+	end)
+	-- Escape empties the field before it closes the window, so the first press
+	-- puts the page back and the second is the one that leaves.
+	edit:SetScript("OnEscapePressed", function(field)
+		if field:GetText() ~= "" then
+			field:SetText("")
+			return
+		end
+		field:ClearFocus()
+	end)
+	edit:SetScript("OnEnterPressed", function(field)
+		if opts.onEnter then
+			opts.onEnter(field:GetText())
+		end
+	end)
+	edit:SetScript("OnEditFocusGained", function()
+		UI.CloseDropdown()
+		UI.StopCapture()
+		UI.Tint(box.bg, C.selected)
+	end)
+	edit:SetScript("OnEditFocusLost", function()
+		UI.Tint(box.bg, C.sunken)
+	end)
+
+	self.search = edit
+	return edit
+end
+
 function Window:SetTitle(text)
 	self.title:SetText(text)
 end
@@ -261,6 +321,7 @@ local function PaintRail(button)
 	local shade = button.selected and C.selected or (button.hovered and C.hover or C.rail)
 	UI.Tint(button.bg, shade)
 	button.mark:SetShown(button.selected and true or false)
+	button.dot:SetShown(button.dot.lit and true or false)
 	if button.selected then
 		button.text:SetTextColor(C.heading[1], C.heading[2], C.heading[3])
 	else
@@ -290,9 +351,18 @@ function Rail:Add(label)
 	button.mark:SetPoint("BOTTOMLEFT")
 	button.mark:SetWidth(2)
 
+	-- Whether anything filed under this entry is drawing on your screen. Three
+	-- pixels in the accent colour against the right edge, which is the one part
+	-- of a rail button nothing else uses. It is the single question the window
+	-- could never answer without opening forty four tabs.
+	button.dot = ns.Fill(button, "OVERLAY", C.accent[1], C.accent[2], C.accent[3], 1)
+	button.dot:SetSize(3, 3)
+	button.dot:SetPoint("RIGHT", -M.rowGap, 0)
+	button.dot:Hide()
+
 	button.text = UI.Label(button, M.font, C.dim, "LEFT", UI.FLAT)
 	button.text:SetPoint("LEFT", M.gutter, 0)
-	button.text:SetPoint("RIGHT", -M.rowGap, 0)
+	button.text:SetPoint("RIGHT", button.dot, "LEFT", -M.rowGap, 0)
 	UI.Wrap(button.text, false)
 	button.text:SetText(label)
 
@@ -319,6 +389,19 @@ function Rail:Resize(width, height)
 	self.view:Resize(width - M.rowGap * 2, height - M.rowGap * 2)
 	self.stack:SetWidth(self.view.width)
 	self.view:Update(self.stack:Reflow())
+end
+
+-- Whether this entry holds something that is on. Returns whether it changed, so
+-- a caller refreshing every entry does not repaint the eight of them every time
+-- anything anywhere in the window is clicked.
+function Rail:SetDot(index, lit)
+	local button = self.buttons[index]
+	if not button or (button.dot.lit and true or false) == (lit and true or false) then
+		return false
+	end
+	button.dot.lit = lit and true or false
+	PaintRail(button)
+	return true
 end
 
 function Rail:Select(index)

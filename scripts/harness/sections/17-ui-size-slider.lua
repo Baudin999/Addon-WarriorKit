@@ -39,34 +39,24 @@ if window then
 			:format(tostring(window.zoom), screen))
 
 	-- The row the player actually drags, found the way the panel finds anything:
-	-- through the parts recorded on the window. Nothing reaches into the feature
-	-- for it.
+	-- through the index every control registers itself in. Nothing reaches into
+	-- the feature for it.
 	-- Named, not "the last slider on any page". The debuff icon row is a slider
 	-- now too, and picking whichever came last would silently test the wrong
 	-- control the next time a part gains one.
-	local size
-	for _, part in ipairs(window.parts) do
-		if part.name == "Settings" then
-			for _, widget in ipairs(part.kit.widgets) do
-				if widget.slider then
-					size = widget.slider
-				end
+	local size, sliders = nil, 0
+	for _, entry in ipairs(window.indexed) do
+		if entry.widget.slider then
+			sliders = sliders + 1
+			if entry.section.title == "UI size" then
+				size = entry.widget.slider
 			end
 		end
 	end
 	check(size ~= nil, "no UI size slider was built, so the client refused the Slider type")
-
-	local sliders = 0
-	for _, part in ipairs(window.parts) do
-		for _, widget in ipairs(part.kit.widgets) do
-			if widget.slider then
-				sliders = sliders + 1
-			end
-		end
-	end
-	check(sliders == 9,
-		("%d sliders in the panel, expected the UI size, the debuff icon, the meter"
-			.. " bar opacity, the chat window's four and one background per feed")
+	check(sliders == 6,
+		("%d sliders in the panel, expected the UI size, the debuff icon and four"
+			.. " backgrounds: the meters, the chat window and one per feed")
 			:format(sliders))
 
 	if size then
@@ -100,8 +90,8 @@ if window then
 
 			-- The zoom multiplies the scale and must not reach the layout, so
 			-- every row on the section showing is still whole units.
-			local part = window.parts[1]
-			for _, cell in ipairs(part.sections[part.current or 1].stack.cells) do
+			local group = window.groups[1]
+			for _, cell in ipairs(group.sections[group.current or 1].stack.cells) do
 				check(whole(cell.height),
 					("%s made a row %.3f units tall"):format(where, cell.height))
 			end

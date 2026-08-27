@@ -24,7 +24,7 @@ end
 
 ns.Register({
 	name = "artwork",
-	order = 8,
+	order = 14,
 
 	defaults = {
 		-- False means the gryphons and the metal strip are gone, which is the
@@ -51,15 +51,12 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Header("Bar art")
+		ui.Section("Bar art", "The screen")
+		ui.Lede("The gryphons, the metal strip behind bar 1 and the page arrows, on or off.")
 		ui.Check("show Blizzard bar art",
 			function() return ns.db.blizzArt end,
 			Set)
-		ui.Note(function()
-			if ns.db.blizzArt then
-				return "The gryphons, the metal strip behind bar 1 and the page arrows are visible."
-			end
-			return "Gryphons, metal strip and page arrows stripped. The experience bar is left alone."
-		end)
+		ui.Hint("The experience bar is left alone either way. Everything goes back in one call, so off is a state rather than a reload.")
+		ui.Reading("bar art", Describe)
 	end,
 })

@@ -58,7 +58,7 @@ local ALLOWED = {
 	  why = "places every region of one nameplate widget in one pass" },
 	{ path = "./UnitFrames/Skin.lua", fn = "Place", own = 195,
 	  why = "places every region of one block in one pass; item 11 splits it" },
-	{ path = "./UI/Widgets.lua", fn = "UI.Kit", own = 170,
+	{ path = "./UI/Widgets.lua", fn = "UI.Kit", own = 157,
 	  why = "the kit's own body, one closure per control, returned as a table" },
 	{ path = "./UnitFrames/EnemyBars.lua", fn = "UpdateWidget", own = 123,
 	  branches = 31,

@@ -129,7 +129,18 @@ end
 
 ns.Register({
 	name = "performance",
-	order = 11,
+	order = 18,
+
+	switch = {
+		key = "perf",
+		label = "timing each ticker",
+		apply = function(value)
+			if not value then
+				ns.Perf.Reset()
+			end
+			Paint()
+		end,
+	},
 
 	defaults = {
 		-- On, because two clock reads on forty ticks a second is not a cost
@@ -155,7 +166,8 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Header("Performance")
+		ui.Section("Performance", "Under the hood")
+		ui.Lede("What the addon costs: how much Lua it holds, and how long each ticker takes.")
 
 		-- One row that owns the sampler. It is a child of this section, so the
 		-- client shows it when the tab is chosen and hides it when the window
@@ -173,17 +185,13 @@ ns.Register({
 			return nil
 		end, { height = 1 })
 
+		-- ui.Reading draws the row and the sampler writes it, which is why the
+		-- string is taken back off the row rather than left to kit.Refresh. That
+		-- walks every row on every page and re-measures the ones that wrap, which
+		-- is the right thing when a setting changed and the wrong thing once a
+		-- second forever.
 		local function Readout(label, read)
-			ui.Custom(function(row)
-				local name = ns.UI.Label(row, ns.UI.Metric.small, ns.UI.Color.dim, "LEFT")
-				name:SetPoint("LEFT", row, "LEFT", 0, 0)
-				name:SetText(label)
-				local value = ns.UI.Label(row, ns.UI.Metric.small, ns.UI.Color.text, "RIGHT")
-				value:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-				value:SetPoint("LEFT", name, "RIGHT", ns.UI.Metric.gutter, 0)
-				Track(value, read)
-				return nil
-			end)
+			Track(ui.Reading(label, read).reading, read)
 		end
 
 		Readout("lua memory held", function()
@@ -198,16 +206,14 @@ ns.Register({
 			local fps = GetFramerate and GetFramerate()
 			return fps and ("%.0f fps"):format(fps) or "unknown"
 		end)
-
-		ui.Note(function()
-			return "The client attributes Lua allocation to an addon and nothing else."
-				.. " Frames and textures live on the C side and never appear in that"
-				.. " figure, and for a UI addon they are most of the real footprint, so"
-				.. " read this as the churn rather than the size. A fall is the"
-				.. " collector running, which is why the rate counts rises only."
+		Readout("the client's own profiler", function()
+			local cpu = ns.Perf.ClientCPU()
+			return cpu and ("%.0f ms since it started counting"):format(cpu)
+				or "off, and nothing here turns it on"
 		end)
 
-		ui.Header("What each ticker costs")
+		ui.Section("What each ticker costs", "Under the hood")
+		ui.Lede("One line per ticker in the addon, timed on its own clock, at the rate it runs at.")
 		for index = 1, #ROWS do
 			local entry = ROWS[index]
 			Readout(("%s, %s"):format(entry.label, entry.rate or ("%d Hz"):format(entry.hz)), function()
@@ -219,23 +225,10 @@ ns.Register({
 			return Milliseconds(ns.Perf.SelfCost()) .. " per second while open"
 		end)
 
-		ui.Note(function()
-			local cpu = ns.Perf.ClientCPU()
-			if cpu then
-				return ("The client's own profiler is on and puts the addon at %.0f ms since"):format(cpu)
-					.. " it started counting. Per tick timing above is this addon's own"
-					.. " clock and does not need it."
-			end
-			return "Per addon CPU through the client's profiler needs the scriptProfile"
-				.. " CVar and a reload, and it slows the whole client while it is on."
-				.. " TitanPerformance owns that setting in this install, so nothing here"
-				.. " turns it on. The timings above are the addon's own clock and need"
-				.. " none of it."
-		end)
-
 		local gaugeOrder, gauges = ns.Perf.Gauges()
 		if #gaugeOrder > 0 then
-			ui.Header("What is on screen")
+			ui.Section("What is on screen", "Under the hood")
+			ui.Lede("How many of each thing the addon is drawing right now, which is what the timings are of.")
 			for index = 1, #gaugeOrder do
 				local label = gaugeOrder[index]
 				Readout(label, function()
@@ -244,29 +237,16 @@ ns.Register({
 			end
 		end
 
-		ui.Header("Timing")
-		ui.Check("time each ticker",
-			function() return ns.db.perf end,
-			function(value)
-				ns.db.perf = value
-				if not value then
-					ns.Perf.Reset()
-				end
-				Paint()
-			end)
-		ui.Note(function()
-			if not ns.Perf.Ready() then
-				return "This client has no debugprofilestop, so there is no clock to time"
-					.. " with and the figures above will stay empty. The memory half still"
-					.. " works."
-			end
-			return "Two clock reads per tick, about forty a second across the whole addon."
-				.. " The cost of the measurement is on the line above, measured the same"
-				.. " way as everything else here."
-		end)
+		ui.Section("Timing", "Under the hood")
+		ui.Lede("The clock the figures above are taken on, and the button that clears what it has counted.")
 		ui.Action(function() return "clear the counters" end, function()
 			ns.Perf.Reset()
 			Paint()
+		end)
+		ui.Hint("Two clock reads per tick, about forty a second across the whole addon. What that costs is one of the lines it measures.")
+		ui.Reading("the clock", function()
+			return ns.Perf.Ready() and "debugprofilestop, this client has one"
+				or "this client has no debugprofilestop, so there is nothing to time with"
 		end)
 	end,
 })

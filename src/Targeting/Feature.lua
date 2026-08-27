@@ -41,7 +41,8 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Header("Switch target")
+		ui.Section("Switch target", "Fighting")
+		ui.Lede("One key takes the next enemy and starts swinging at it.")
 		ui.KeyField("key",
 			function()
 				if ns.db.switchKey ~= "" then
@@ -56,15 +57,16 @@ ns.Register({
 				end
 			end,
 			function() ns.Switch.Bind("") end)
+		ui.Hint("TAB is the key worth putting it on: TAB already cycles and the only thing it is missing is the attack. Or put /click WarriorKitSwitchButton in a macro.")
 
-		ui.Note(function()
+		ui.Reading("this key", function()
 			if ns.db.switchKey == "" then
-				return "One press takes the next enemy and starts swinging at it. TAB is the key worth putting it on, because TAB already cycles and the only thing it is missing is the attack. Or put /click WarriorKitSwitchButton in a macro on a bar."
+				return "not bound"
 			end
 			if ns.db.switchKeyDisplaced ~= "" then
-				return "Shadows " .. ns.db.switchKeyDisplaced .. ". Your saved bindings are untouched, so clearing this key hands it straight back."
+				return "shadows " .. ns.db.switchKeyDisplaced
 			end
-			return "Nothing else was bound to it."
+			return "nothing else wanted it"
 		end)
 	end,
 })

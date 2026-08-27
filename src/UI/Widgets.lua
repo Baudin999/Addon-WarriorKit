@@ -31,6 +31,15 @@ local C, M = UI.Color, UI.Metric
 -- 2.5.6, and this file leans on none of them.
 --------------------------------------------------------------------------
 
+-- The two ranges that are one range.
+--
+-- Zoom and background were declared at the top of four and three feature files
+-- respectively, the same numbers written seven times. They are here so the kit
+-- calls below can supply them, and public so the slash words that take the same
+-- number can read them rather than keeping a private copy that drifts.
+UI.ZOOM_LOW, UI.ZOOM_HIGH = 1, 3
+UI.ALPHA_LOW, UI.ALPHA_HIGH, UI.ALPHA_STEP = 0, 100, 5
+
 -- At most one of each in the whole interface, which is the behaviour you want
 -- and also the reason they are module state rather than per kit. Two open
 -- dropdowns is a bug, and two fields listening for the same keypress is worse.
@@ -274,6 +283,236 @@ end
 -- already call.
 --------------------------------------------------------------------------
 
+--------------------------------------------------------------------------
+-- Refreshing
+--
+-- Every row registers what puts it back in step with whatever it is showing, so
+-- one refresh after any change covers the lot, no matter whether the change came
+-- from a click here or from a slash command. Rows on a section nobody is looking
+-- at refresh too: they cost nothing, and it means opening a section never shows
+-- a stale value.
+--------------------------------------------------------------------------
+
+--------------------------------------------------------------------------
+-- The index
+--
+-- Every control records what it is called as it is built, and the host says
+-- where that is: which section, and which group that section named. Nothing in
+-- this file reads the index back. It is what the options window's search field
+-- walks and what the harness counts labels out of, and a control that forgot to
+-- register is a control search cannot find.
+--
+-- So it is one call at the end of each constructor rather than a walk over the
+-- frames afterwards, which would have to guess which font string on a row was
+-- the label. A label is a string, or a function for the rows whose label says
+-- what pressing them would do right now.
+--------------------------------------------------------------------------
+
+--------------------------------------------------------------------------
+-- Sections and the groups they name
+--
+-- kit.Section opens a section and says which group of the options window it
+-- belongs in. Both are the caller's to choose, which is the point: a group is
+-- what somebody was thinking about when they opened the window, and a feature
+-- is a folder of code. UnitFrames is the case that settles it. Its three
+-- sections are two about your own frames and one about enemy nameplates, and
+-- until a section could name its own group those three had to share a rail
+-- entry called after the folder they happen to live in.
+--
+-- Where the host has somewhere to put sections, which is what the options
+-- window's rail and tab strip are, the rows after the call go on that tab's own
+-- stack. Where it has not, the title is a heading rule in the same column and
+-- the group is not used, because there is nothing to file it under.
+--------------------------------------------------------------------------
+
+--------------------------------------------------------------------------
+-- Prose, in three capped kinds
+--
+-- There used to be one call, Note, and one note per control: a hundred and
+-- thirty four of them holding forty thousand characters, about fifteen pages of
+-- writing with switches embedded in it. They did three different jobs and the
+-- window drew all three the same way, so the one sentence a control actually
+-- needed was buried in four paragraphs about why the pixel grid prefers whole
+-- stops.
+--
+-- So there are three calls now and each of them is capped, because a cap is the
+-- only thing that has ever stopped this growing back. What the caps push out
+-- goes to docs/README.md, which is where explaining the addon belongs and which
+-- can be read on a second monitor while the game runs.
+--
+-- Installed onto a kit rather than written inside UI.Kit, because these three
+-- are one subject and the kit's body is a list of controls. `ctx` is the handful
+-- of closures every row in this file is built out of: the stack a row lands on,
+-- the frame it parents to, a wrapping label, the width that label gets, and the
+-- register-for-refresh call.
+--------------------------------------------------------------------------
+
+local LEDE_MAX, HINT_MAX = 160, 200
+
+local function Capped(kind, text, limit)
+	assert(type(text) == "string" and text ~= "",
+		("a %s was given no text"):format(kind))
+	assert(#text <= limit,
+		("a %s is %d characters and the cap is %d: %s"):format(kind, #text, limit, text))
+	return text
+end
+
+local function InstallProse(kit, ctx)
+	-- One line under a section title, saying what this section changes on
+	-- screen. Present tense, one sentence, and one per section: a page that
+	-- wants a second one wants a second section.
+	--
+	-- A plain string rather than a function, unlike everything below it. A lede
+	-- describes what a page is for, and what a page is for does not change while
+	-- you are looking at it. Live state is Reading's job.
+	function kit.Lede(text)
+		text = Capped("lede", text, LEDE_MAX)
+		if ctx.host.Lede then
+			ctx.host.Lede(text)
+		end
+
+		local stack = ctx.Stack()
+		local row = CreateFrame("Frame", nil, ctx.Parent())
+		local line = ctx.Prose(row, M.small, C.dim)
+		line:SetText(text)
+
+		local cell = stack:Add(row, {
+			indent = M.indent,
+			-- A lede introduces the group under it, so it carries the wider gap.
+			-- Even air between every row reads as one undifferentiated list
+			-- however carefully it is measured.
+			gap = M.gutter,
+			measure = function(this)
+				line:SetWidth(ctx.TextWidth(stack, this))
+				return UI.TextHeight(line, M.small + 3)
+			end,
+		})
+
+		return ctx.Remember(row, function()
+			line:SetWidth(ctx.TextWidth(stack, cell))
+		end)
+	end
+
+	-- The sentence one control needs, drawn in the addon's own tooltip on hover
+	-- rather than in the column. It attaches to the row above it, which is the
+	-- row the caller wrote last, so a hint reads at the call site exactly where a
+	-- note used to and costs the page no vertical space at all.
+	--
+	-- Two hundred characters, and most controls do not need one. A control that
+	-- cannot be explained in two hundred characters is a control whose label is
+	-- wrong.
+	function kit.Hint(text)
+		text = Capped("hint", text, HINT_MAX)
+		local owner = kit.widgets[#kit.widgets]
+		assert(owner, "a hint was written before the control it belongs to")
+		assert(not owner.hint, ("two hints on one control: %s"):format(text))
+		owner.hint = text
+
+		-- Hung over whatever the widget already does on the way in and out,
+		-- because a check box repaints its own label there and a picker its own
+		-- background.
+		local enter, leave = owner:GetScript("OnEnter"), owner:GetScript("OnLeave")
+		owner:SetScript("OnEnter", function(self, ...)
+			if enter then
+				enter(self, ...)
+			end
+			UI.Tooltip.Show(self, { { self.hint } })
+		end)
+		owner:SetScript("OnLeave", function(self, ...)
+			if leave then
+				leave(self, ...)
+			end
+			UI.Tooltip.Close()
+		end)
+		UI.PassCamera(owner)
+		return owner
+	end
+
+	-- A live number or a short state, in the accent colour, on the right of a row
+	-- of its own. This is what the feed counters, the performance counters and
+	-- the "Now:" lines under the size slider become.
+	--
+	-- It is not prose and it is not capped by character count. It is capped by
+	-- the column: it never wraps, so it has to fit one line at the narrowest
+	-- width the window is ever laid out at, and the harness measures that rather
+	-- than trusting it.
+	function kit.Reading(label, getText)
+		local stack = ctx.Stack()
+		local row = CreateFrame("Frame", nil, ctx.Parent())
+
+		local name = UI.Label(row, M.small, C.dim, "LEFT", UI.FLAT)
+		UI.Wrap(name, false)
+		name:SetPoint("TOPLEFT")
+		name:SetText(label)
+
+		local value = UI.Label(row, M.small, C.accent, "RIGHT", UI.FLAT)
+		UI.Wrap(value, false)
+		value:SetPoint("TOPRIGHT")
+		value:SetPoint("LEFT", name, "RIGHT", M.gutter, 0)
+
+		stack:Add(row, {
+			indent = M.indent,
+			height = M.small + M.rowGap,
+		})
+
+		row.reading = value
+		return ctx.Remember(row, function()
+			value:SetText(getText() or "")
+		end)
+	end
+end
+
+--------------------------------------------------------------------------
+-- The four knobs every part reinvented
+--
+-- Zoom, background, width and rows. Each of them had been written once per
+-- part, with the range declared at the top of that part's own file, and the
+-- copies had drifted: four separate `LOW_ZOOM, HIGH_ZOOM = 1, 3` pairs, three
+-- separate 0-to-100-in-fives, and the same idea called `bar opacity` on one
+-- page, `background` on two others and `list bars` where every other page says
+-- `rows`.
+--
+-- So the range lives here where the range is genuinely one range, and the label
+-- lives here where the label is genuinely one label. Where the range really does
+-- differ per caller, which is every pixel measurement, the caller keeps it and
+-- this file supplies the unit.
+--
+-- Every one of these is a composition of Stepper or Slider and nothing else, so
+-- they are installed rather than written inside the kit for the same reason the
+-- prose is.
+--------------------------------------------------------------------------
+
+local function InstallKnobs(kit)
+	-- Whole steps, one to three. No label and no range, because there is one of
+	-- each: a widget you read mid swing is worth keeping exact, and exact means a
+	-- whole number of source texels per screen pixel.
+	function kit.Zoom(get, set)
+		return kit.Stepper("zoom", UI.ZOOM_LOW, UI.ZOOM_HIGH, 1, get, set,
+			function(value) return value .. "x" end)
+	end
+
+	-- Nought to a hundred in fives, which is the only range this has ever had.
+	function kit.Opacity(label, get, set)
+		return kit.Slider(label, UI.ALPHA_LOW, UI.ALPHA_HIGH, UI.ALPHA_STEP, get, set,
+			function(value) return value .. "%" end)
+	end
+
+	-- Any pixel measurement. The range stays with the caller, because a feed is
+	-- 200 to 520 wide and a minimap is 120 to 300 and those differ for real
+	-- reasons. The unit does not stay with the caller: it goes after the number
+	-- where it belongs, so a label can be `width` on all four pages instead of
+	-- `width in pixels` on one and nothing at all on the other three.
+	function kit.Size(label, low, high, step, get, set)
+		return kit.Stepper(label, low, high, step, get, set,
+			function(value) return value .. "px" end)
+	end
+
+	-- How many of something. Whole numbers, one at a time.
+	function kit.Count(label, low, high, get, set)
+		return kit.Stepper(label, low, high, 1, get, set)
+	end
+end
+
 function UI.Kit(host)
 	local kit = { host = host, widgets = {} }
 
@@ -289,11 +528,6 @@ function UI.Kit(host)
 		return (host.Popup and host.Popup()) or UIParent
 	end
 
-	-- Every row registers what puts it back in step with whatever it is showing,
-	-- so one refresh after any change covers the lot, no matter whether the
-	-- change came from a click here or from a slash command. Rows on a section
-	-- nobody is looking at refresh too: they cost nothing, and it means opening a
-	-- section never shows a stale value.
 	local function Remember(frame, refresh)
 		frame.Refresh = refresh
 		kit.widgets[#kit.widgets + 1] = frame
@@ -338,17 +572,20 @@ function UI.Kit(host)
 		return math.max(1, stack.width - cell.indent - (reserved or 0))
 	end
 
-	----------------------------------------------------------------------
-	-- Sections and prose
-	----------------------------------------------------------------------
+	local function Index(widget, label)
+		widget.label = label
+		if host.Index then
+			host.Index(widget, label)
+		end
+		return widget
+	end
 
-	-- Opens a section. Where the host has somewhere to put sections, which is
-	-- what the options window's tab strip is, the title becomes a tab and the
-	-- rows after it go on that tab's own stack. Where it has not, the title is a
-	-- heading rule in the same column, which is what this used to be.
-	function kit.Header(title)
+	local ctx = { host = host, Stack = Stack, Parent = Parent,
+		Prose = Prose, TextWidth = TextWidth, Remember = Remember }
+
+	function kit.Section(title, group)
 		if host.Section then
-			return host.Section(title)
+			return host.Section(title, group)
 		end
 
 		local row = CreateFrame("Frame", nil, Parent())
@@ -362,56 +599,7 @@ function UI.Kit(host)
 		return Stack()
 	end
 
-	kit.Section = kit.Header
-
-	-- A paragraph of quiet explanatory prose. getText is a function rather than a
-	-- string because most of these report live state, and it is called on every
-	-- refresh so the row is re-measured when the wording changes under it.
-	function kit.Note(getText)
-		local stack = Stack()
-		local row = CreateFrame("Frame", nil, Parent())
-		local line = Prose(row, M.small, C.dim)
-
-		local cell = stack:Add(row, {
-			indent = M.indent,
-			-- A note belongs to the control above it and is followed by the next
-			-- group, so it carries the wider gap. Even air between every row reads
-			-- as one undifferentiated list however carefully it is measured.
-			gap = M.gutter,
-			measure = function(this)
-				line:SetWidth(TextWidth(stack, this))
-				return UI.TextHeight(line, M.small + 3)
-			end,
-		})
-
-		return Remember(row, function()
-			line:SetText(getText() or "")
-			line:SetWidth(TextWidth(stack, cell))
-		end)
-	end
-
-	-- The same shape in the reading colour rather than the quiet one, for a line
-	-- that is instruction rather than footnote. Nothing calls it yet; it is here
-	-- because Note is not the only kind of prose a page will want and the second
-	-- one should not be a copy of the first.
-	function kit.Text(getText)
-		local stack = Stack()
-		local row = CreateFrame("Frame", nil, Parent())
-		local line = Prose(row, M.font, C.text)
-
-		local cell = stack:Add(row, {
-			indent = M.indent,
-			measure = function(this)
-				line:SetWidth(TextWidth(stack, this))
-				return UI.TextHeight(line, M.font + 3)
-			end,
-		})
-
-		return Remember(row, function()
-			line:SetText(getText() or "")
-			line:SetWidth(TextWidth(stack, cell))
-		end)
-	end
+	InstallProse(kit, ctx)
 
 	function kit.Gap(height)
 		return Stack():Space(height or M.gutter)
@@ -469,6 +657,7 @@ function UI.Kit(host)
 		end)
 
 		button.text:SetText(label)
+		Index(button, label)
 		return Remember(button, function()
 			button.tick:SetShown(get() and true or false)
 			-- IsAvailable is set on the returned widget by the caller, after the
@@ -498,7 +687,10 @@ function UI.Kit(host)
 		return row, text
 	end
 
-	function kit.Stepper(label, low, high, step, get, set)
+	-- format turns the value into what the readout says, the same as the
+	-- slider's, so a caller can put a unit after the number without this file
+	-- learning what the unit means. Left out, the number speaks for itself.
+	function kit.Stepper(label, low, high, step, get, set, format)
 		local valueWidth = 34
 		local reserved = M.control * 2 + valueWidth + M.rowGap * 2
 		local row, text = Paired(reserved, M.control)
@@ -527,10 +719,13 @@ function UI.Kit(host)
 		value:SetPoint("LEFT", minus, "RIGHT", M.rowGap, 0)
 		value:SetPoint("RIGHT", plus, "LEFT", -M.rowGap, 0)
 
+		Index(row, label)
 		return Remember(row, function()
-			value:SetText(tostring(get()))
+			value:SetText(format and format(get()) or tostring(get()))
 		end)
 	end
+
+	InstallKnobs(kit)
 
 	-- A value you drag
 	--
@@ -679,6 +874,7 @@ function UI.Kit(host)
 			plus:SetPoint("TOPRIGHT", row, "TOPRIGHT", -(valueWidth + M.gutter), 0)
 		end
 
+		Index(row, label)
 		return Remember(row, function()
 			local current = get()
 			if row.slider then
@@ -709,6 +905,7 @@ function UI.Kit(host)
 		end })
 		button:SetPoint("TOPRIGHT")
 
+		Index(row, label)
 		return Remember(row, function()
 			button.text:SetText(get())
 		end)
@@ -766,6 +963,7 @@ function UI.Kit(host)
 			end
 		end)
 
+		Index(row, label)
 		return Remember(row, function()
 			local current = get()
 			local shown, texture = current, nil
@@ -789,6 +987,7 @@ function UI.Kit(host)
 		local button = UI.Button(Parent(), { width = 1, height = M.row, onClick = onClick })
 		Stack():Add(button, { indent = M.indent, height = M.row })
 
+		Index(button, getLabel)
 		return Remember(button, function()
 			button.text:SetText(getLabel())
 			Enable(button, isAvailable == nil or isAvailable())
@@ -805,6 +1004,11 @@ function UI.Kit(host)
 		left:SetPoint("TOPLEFT")
 		local right = UI.Button(row, { width = 1, height = M.row, onClick = rightClick })
 		right:SetPoint("TOPRIGHT")
+
+		-- Two entries on one row, because a pair is two things you can do and
+		-- searching for either has to land you here.
+		Index(row, leftLabel)
+		Index(row, rightLabel)
 
 		return Remember(row, function()
 			-- Half the row each, less the gutter between them, worked out on every
@@ -895,6 +1099,7 @@ function UI.Kit(host)
 			end
 		end)
 
+		Index(field, label)
 		return Remember(field, function()
 			if capturing == field then
 				field.text:SetText("|cffffd100press a key|r")
@@ -1029,6 +1234,7 @@ function UI.Kit(host)
 		value:SetPoint("LEFT", square, "RIGHT", M.gutter, 0)
 		value:SetPoint("RIGHT", row, "RIGHT")
 
+		Index(row, label)
 		return Remember(row, function()
 			value:SetText(square.Refresh() or "")
 		end)
@@ -1256,6 +1462,7 @@ function UI.Kit(host)
 			self:ClearFocus()
 		end)
 
+		Index(row, label)
 		return Remember(row, function()
 			-- Never while it is being typed into, or every refresh would put the
 			-- saved value back under the cursor.

@@ -15,17 +15,33 @@ ns.version = "1.9"
 -- the addon reaches across parts to find out what exists.
 --
 --   name          the word that heads its slash help and its status line
---   order         where it sits in the panel and in /wk status
+--   order         a whole number, unique across the addon: where this part's
+--                 tabs sit inside whichever group they named, and where its
+--                 line sits in /wk status
 --   defaults      merged into ns.db, the account-wide saved variables
 --   charDefaults  merged into ns.dbc, this character's saved variables
+--   switch        { key, label, available } the one boolean that decides
+--                 whether this part puts anything on your screen
 --   words         slash words this part answers to, word = function(arg, raw)
 --   help          lines printed by /wk help
 --   status        function returning one line for /wk status
 --   lock          function applying ns.db.locked to this part's frames
 --   reset         function putting this part's frames back where they started
---   panel         function(ui) building this part's section of the panel
+--   panel         function(ui) building this part's sections of the panel
 --
 -- Every field except name is optional. A part with no frames has no lock.
+--
+-- order is whole and unique because it used to be neither. Two parts sat on 8
+-- and a third on 7.6, so where they came out was whatever table.sort felt like
+-- on the day, and the only way to find out was to open the window. A collision
+-- is a login error now.
+--
+-- switch is the one boolean the panel draws itself, at the top of the part's
+-- first page, and the rail reads to say which groups are doing something. It
+-- exists because eleven parts each wrote their own check box for the same idea
+-- and no two of them worded it the same way. available is optional and gates
+-- the row where the part is not built on this character, which is Charge on
+-- anything that is not a warrior.
 --
 -- Two scopes, because they are two different questions. A preference is yours
 -- and belongs to the account. A record of what was in your action bars before
@@ -87,16 +103,33 @@ local function Claim(into, source)
 	end
 end
 
+local taken = {}
+
 function ns.Register(feature)
 	assert(type(feature) == "table" and type(feature.name) == "string",
 		"a feature must register a table with a name")
+	assert(type(feature.order) == "number" and feature.order == math.floor(feature.order),
+		("%s registered the order %s, and an order is a whole number")
+			:format(feature.name, tostring(feature.order)))
+	assert(not taken[feature.order],
+		("%s and %s both registered the order %d")
+			:format(feature.name, tostring(taken[feature.order]), feature.order))
+	taken[feature.order] = feature.name
+
+	if feature.switch then
+		assert(type(feature.switch.key) == "string" and type(feature.switch.label) == "string",
+			("%s registered a switch with no key or no label"):format(feature.name))
+		assert(type((feature.defaults or {})[feature.switch.key]) == "boolean",
+			("%s says its switch is %q and no boolean of that name is in its defaults")
+				:format(feature.name, feature.switch.key))
+	end
 
 	Claim(defaults, feature.defaults)
 	Claim(charDefaults, feature.charDefaults)
 
 	ns.features[#ns.features + 1] = feature
 	table.sort(ns.features, function(a, b)
-		return (a.order or 99) < (b.order or 99)
+		return a.order < b.order
 	end)
 	return feature
 end

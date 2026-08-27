@@ -350,16 +350,16 @@ end
 -- The page, which is where the check box lives
 ----------------------------------------------------------------------
 
-local page
-for _, part in ipairs(window.parts) do
-	if part.name == "Swing" then
-		page = part
+local tabs = 0
+for _, group in ipairs(window.groups) do
+	for _, section in ipairs(group.sections) do
+		if section.feature and section.feature.name == "swing" then
+			tabs = tabs + 1
+		end
 	end
 end
-check(page ~= nil, "the options window has no Swing page")
-check(page and #page.sections == (WARRIOR and 2 or 1),
-	("the Swing page has %s tabs on a %s"):format(page and #page.sections or "no",
-		PLAYER_CLASS))
+check(tabs == (WARRIOR and 2 or 1),
+	("the swing part opened %d tabs on a %s"):format(tabs, PLAYER_CLASS))
 
 -- On and off, from the setting the check box writes.
 ns.db.swing = false

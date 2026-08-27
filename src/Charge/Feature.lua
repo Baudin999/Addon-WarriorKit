@@ -64,7 +64,17 @@ end
 
 ns.Register({
 	name = "charge",
-	order = 2,
+	order = 1,
+
+	switch = {
+		key = "charge",
+		label = "the charge button",
+		apply = function() ns.ChargeIcon.ApplySecure() end,
+		-- Nothing here is built on anything but a warrior, so the row is drawn
+		-- and refuses rather than being left out: a switch that vanishes on one
+		-- class reads as a switch you have lost.
+		available = function() return ns.IsWarrior() end,
+	},
 
 	defaults = {
 		charge = true,
@@ -195,17 +205,14 @@ ns.Register({
 		-- and a check box you can tick that changes nothing on screen is worse
 		-- than a sentence.
 		if not ns.IsWarrior() then
-			ui.Header("Charge")
-			ui.Note(function()
-				return "|cffd08040" .. ns.Charge.NOT_WARRIOR .. ".|r"
-			end)
-			ui.Note(function()
-				return "The button, the icon in the world and the key override are not built here, and action targeting is left exactly as your client has it. Every other part of the addon works the same as it does on a warrior."
-			end)
+			ui.Section("Charge", "Fighting")
+			ui.Lede("Charge, Intercept and Intervene on one button, which is a warrior's three openers.")
+			ui.Reading("on this character", function() return ns.Charge.NOT_WARRIOR end)
 			return
 		end
 
-		ui.Header("Charge key")
+		ui.Section("Charge key", "Fighting")
+		ui.Lede("The key that presses the charge button, taken from your bindings and handed back on clear.")
 		ui.KeyField("key",
 			function()
 				if ns.db.chargeKey ~= "" then
@@ -220,15 +227,17 @@ ns.Register({
 				end
 			end,
 			function() ns.ChargeIcon.Bind("") end)
-		ui.Note(function()
+		ui.Hint("Your saved bindings are never written, so clearing this hands the key straight back. Or put /click WarriorKitChargeButton in a macro on a bar.")
+		ui.Reading("this key", function()
 			if ns.db.chargeKey == "" then
-				return "Unbound. Or put /click WarriorKitChargeButton in a macro on a bar."
+				return "not bound"
 			end
 			if ns.db.chargeKeyDisplaced ~= "" then
-				return "Shadows " .. ns.db.chargeKeyDisplaced .. ". Your saved bindings are untouched."
+				return "shadows " .. ns.db.chargeKeyDisplaced
 			end
-			return "Nothing else was bound to it."
+			return "nothing else wanted it"
 		end)
+
 		local release = ui.Check("hand the key back in combat",
 			function() return ns.db.chargeKeyRelease end,
 			function(value)
@@ -236,47 +245,41 @@ ns.Register({
 				ns.ChargeIcon.ApplyBinding()
 			end)
 		release.IsAvailable = function() return ns.ChargeIcon.CanRelease() end
-		ui.Note(function()
-			if not ns.ChargeIcon.CanRelease() then
-				return "This client has no state driver, so the key is held the whole time."
-			end
-			return "Off means the key also casts Intervene and Intercept on your mouseover."
-		end)
+		ui.Hint("Off means the key also casts Intervene and Intercept on your mouseover. A client with no state driver holds the key the whole time whatever this says.")
 
-		ui.Header("Charge")
-		ui.Check("show the icon",
-			function() return ns.db.charge end,
-			function(value)
-				ns.db.charge = value
-				ns.ChargeIcon.ApplySecure()
-			end)
+		ui.Section("Charge", "Fighting")
+		ui.Lede("The button itself: a square over your character with the opener that fits right now on it.")
 		ui.Check("only while it can be cast",
 			function() return ns.db.chargeMode == "ready" end,
 			function(value) ns.db.chargeMode = value and "ready" or "always" end)
-		ui.Stepper("icon size", 16, 128, 2,
+		ui.Size("icon size", 16, 128, 2,
 			function() return ns.db.size end,
 			function(value)
 				ns.db.size = value
 				ns.ChargeIcon.ApplyLayout()
 			end)
-		ui.Check("icon in the world over the mob",
+
+		ui.Section("The icon over the mob", "Fighting")
+		ui.Lede("A copy of the icon out in the world, on the nameplate of whatever the macro would charge.")
+		ui.Check("draw it",
 			function() return ns.db.chargeMarker end,
 			function(value) ns.db.chargeMarker = value end)
-		ui.Stepper("world icon size", 16, 96, 2,
+		ui.Size("size", 16, 96, 2,
 			function() return ns.db.chargeMarkerSize end,
 			function(value)
 				ns.db.chargeMarkerSize = value
 				ns.ChargeMarker.ApplyLayout()
 			end)
-		ui.Stepper("world icon height", -60, 60, 2,
+		ui.Size("height", -60, 60, 2,
 			function() return ns.db.chargeMarkerOffset end,
 			function(value)
 				ns.db.chargeMarkerOffset = value
 				ns.ChargeMarker.ApplyLayout()
 			end)
+		ui.Hint("Height nudges the icon up or down its nameplate, for a UI where something else is already sitting there.")
 
-		ui.Gap()
-		ui.Header("Action targeting")
+		ui.Section("Action targeting", "Fighting")
+		ui.Lede("The client's own aim token, turned on out of combat and handed back the moment a fight starts.")
 		ui.Check("on out of combat, off in combat",
 			function() return ns.db.softAuto end,
 			function(value)
@@ -287,20 +290,18 @@ ns.Register({
 					ns.SoftTarget.Restore()
 				end
 			end)
-		ui.Note(function()
-			if not ns.db.softAuto then
-				return ("The CVar is yours, %s. The marker falls back to your target and your cursor whenever it is off.")
-					:format(ns.SoftTarget.Describe())
-			end
+		ui.Hint("Charge is an out of combat ability, so the camera aims the pull and nothing re-aims you mid-fight. Off, the marker falls back to your target and your cursor.")
+		ui.Reading("the CVar", function() return ns.SoftTarget.Describe() end)
+		ui.Reading("the token", function()
 			local state = ns.Charge.SoftTargetState()
 			if state == "on" then
-				return "The token answers on this client, so the marker follows your camera on the pull and hands the aim back to your cursor in the fight."
+				return "answers on this client"
 			end
-			return "Set for you on every combat transition, so the camera aims the pull and nothing re-aims you mid-fight. The token has not answered yet: aim at a mob out of combat with no target and watch the marker."
+			return "has not answered yet"
 		end)
 
-		ui.Gap()
-		ui.Header("Weapon")
+		ui.Section("Weapon", "Fighting")
+		ui.Lede("A weapon the charge draws first, out of combat only, so a press mid-fight cannot reset your swing.")
 		ui.Picker("main hand",
 			function() return ns.db.chargeWeapon end,
 			function(value)
@@ -308,16 +309,15 @@ ns.Register({
 				ApplyChargeChange()
 			end,
 			function() return ns.Gear.List(ns.Gear.MAINHAND, ns.db.chargeWeapon, "|cff909090no weapon swap|r") end)
-		ui.Note(function()
+		ui.Hint("An empty pick leaves the macro with no /equipslot line at all.")
+		ui.Reading("the swap", function()
 			if ns.db.chargeWeapon == "" then
-				return "The macro carries no /equipslot line. Pick a weapon and a charge draws it first."
+				return "no weapon"
 			end
 			if not ns.Gear.Held(ns.Gear.MAINHAND, ns.db.chargeWeapon) then
-				return ("|cffd08040%s is not in your bags, so the swap does nothing until it is.|r")
-					:format(ns.db.chargeWeapon)
+				return ns.db.chargeWeapon .. ", not in your bags"
 			end
-			return ("A charge equips %s into slot %d first, out of combat only, so a press mid-fight cannot reset your swing timer.")
-				:format(ns.db.chargeWeapon, ns.Gear.MAINHAND)
+			return ("%s into slot %d"):format(ns.db.chargeWeapon, ns.Gear.MAINHAND)
 		end)
 	end,
 })

@@ -72,59 +72,46 @@ local function DebuffRow(ui, slot)
 	end })
 end
 
-function Panel.Draw(ui)
-	ui.Header("Enemy bars")
-	ui.Check("show enemy bars",
-		function() return ns.db.bars end,
-		function(value)
-			ns.db.bars = value
-			ns.EnemyBars.Rebuild()
-		end)
+-- Three sections in two groups, one function each. They were one function
+-- while they were one rail entry called after this folder; now that a section
+-- names its own group, the enemy bars and your own frames are not the same
+-- subject and there is no reason for them to share a body.
+local function EnemyBars(ui)
+	ui.Section("Enemy bars", "Them")
+	ui.Lede("Our own health bar on every hostile nameplate, or a list of them beside the screen.")
+
 	ui.Cycle("mode", { "auto", "plates", "list" },
 		function() return ns.db.barsMode end,
 		function(value)
 			ns.db.barsMode = value
 			ns.EnemyBars.Rebuild()
 		end)
+	ui.Hint("Auto follows the client's own nameplate setting. Plates and list force one or the other, whatever the CVar says.")
+
 	ui.Cycle("style", { "replace", "attach" },
 		function() return ns.db.barsStyle end,
 		function(value)
 			ns.db.barsStyle = value
 			ns.EnemyBars.Rebuild()
 		end)
+	ui.Hint("Replace takes over the nameplate's look. Attach rides above Blizzard's and leaves it where it is.")
+
 	ui.Cycle("button a plate hands back to the camera", { "right", "left", "both", "off" },
 		function() return ns.db.barsCamera end,
 		function(value)
 			ns.db.barsCamera = value
 			ns.EnemyBars.Rebuild()
 		end)
-	ui.Note(function()
-		local state = ns.EnemyBars.CameraState()
-		if state == "moot" then
-			return "clickthrough is on below, so the plate has no mouse and every button already reaches the camera."
-		elseif state == "unavailable" then
-			return "this client has no SetPassThroughButtons, so it is the whole plate or none of it. Use clickthrough below."
-		elseif state == "off" then
-			return "the plate keeps every button, so a drag that starts on a bar will not turn the camera."
-		elseif state == "unproven" then
-			return "nothing has come up yet. This answers once a nameplate appears."
-		elseif state == "right" then
-			return "right button turns the camera, left still targets and ctrl-left still marks. Ctrl-right-click cross marking on a plate is the cost."
-		end
-		return "click targeting on a plate is gone with the button you handed back."
-	end)
+	ui.Hint("A plate swallows every button that lands on it, and the right button drag that turns the camera is one of them. Handing one back costs whatever that button did.")
+
 	ui.Check("plates pass the mouse through (camera turns, no click targeting)",
 		function() return ns.db.barsClickThrough end,
 		function(value)
 			ns.db.barsClickThrough = value
 			ns.EnemyBars.Rebuild()
 		end)
-	ui.Note(function()
-		if ns.db.locked then
-			return "unlock the frames to outline what each plate actually takes the mouse over."
-		end
-		return "the red outline on each plate is the region that takes the mouse. Our bar is anchored to it, so the two should agree."
-	end)
+	ui.Hint("Unlock the frames and each plate outlines the region that takes the mouse in red. Our bar is anchored to it, so the two should agree.")
+
 	ui.Check("mob level inside the bar, coloured by XP value",
 		function() return ns.db.barsLevel end,
 		function(value)
@@ -132,6 +119,7 @@ function Panel.Draw(ui)
 			ns.EnemyBars.ApplyLayout()
 			ns.EnemyBars.Rebuild()
 		end)
+
 	ui.Check("cast bar under each enemy bar",
 		function() return ns.db.barsCast end,
 		function(value)
@@ -139,113 +127,69 @@ function Panel.Draw(ui)
 			ns.EnemyBars.ApplyLayout()
 			ns.EnemyBars.Rebuild()
 		end)
-	ui.Note(function()
-		if not ns.HasCastInfo() then
-			return "This client answers no UnitCastingInfo for a unit that is not"
-				.. " you, so the row never draws whatever this is set to. Blizzard's"
-				.. " own plate cast bar is left alone in that case."
-		end
-		if not ns.db.barsCast then
-			return "Off, so Blizzard's own cast bar on the plate is left where it is"
-				.. " and that is what says when to Pummel."
-		end
-		return "The row is under the gauge and is kept clear whether or not the mob"
-			.. " is casting, so a cast starting does not shove the health bar"
-			.. " upwards. Empty it draws nothing at all. A cast fills left to"
-			.. " right, a channel drains right to left, and the number is the"
-			.. " seconds left to interrupt it. |cffd08040Now:|r "
-			.. ns.Cast.Describe() .. "."
-	end)
-	ui.Note(function()
-		if not ns.db.locked then
-			return "Unlocked, so every bar on screen is drawing a preview rather than"
-				.. " asking the client: a cast, then a channel, five seconds around."
-				.. " Lock the frames and the row goes back to what the mob is really"
-				.. " doing. You still need an enemy bar to look at, which means a"
-				.. " hostile target, or a nameplate up with V."
-		end
-		return "A mob that casts is not something you can arrange, so unlock the"
-			.. " frames to see the row: every bar previews a cast and then a"
-			.. " channel until you lock them again. Any hostile target will do."
-	end)
+	ui.Hint("The row is kept clear whether or not the mob is casting, so a cast starting does not shove the health bar upwards. Unlock the frames to preview one.")
+
 	ui.Check("draw our own raid marker",
 		function() return ns.db.barsMarker end,
 		function(value)
 			ns.db.barsMarker = value
 			ns.EnemyBars.Rebuild()
 		end)
-	ui.Stepper("bar height on the plate", -60, 60, 2,
-		function() return ns.db.barsOffset end,
-		function(value)
-			ns.db.barsOffset = value
-			ns.EnemyBars.Rebuild()
-		end)
-	ui.Stepper("list bars", 1, 15, 1,
-		function() return ns.db.barsMax end,
-		function(value) ns.db.barsMax = value end)
-	ui.Stepper("bar width, in pixels", 120, 400, 10,
-		function() return ns.db.barsWidth end,
-		function(value)
-			ns.db.barsWidth = value
-			ns.EnemyBars.ApplyLayout()
-		end)
-	ui.Stepper("zoom, whole steps only", 1, 3, 1,
-		function() return ns.db.barsZoom end,
-		function(value)
-			ns.db.barsZoom = value
-			ns.EnemyBars.ApplyLayout()
-			ns.EnemyBars.Rebuild()
-		end)
-	ui.Note(function()
-		return "Every size in the bars is a count of screen pixels, so a bar is the"
-			.. " same physical size on any monitor and its edges are exactly one pixel."
-			.. " Zoom multiplies that by a whole number, which is the only way to make"
-			.. " a pixel grid bigger without leaving it. " .. ns.UI.Describe() .. "."
-	end)
+
 	ui.Check("let the client space nameplates by the size of our bar",
 		function() return ns.db.barsStack end,
 		function(value)
 			ns.db.barsStack = value
 			ns.Plates.Apply()
 		end)
-	ui.Note(function()
-		if not ns.db.barsStack then
-			return "Off, so nameplate motion, nameplate overlap and plate size are the"
-				.. " client's own. Two mobs standing together will put two bars on top"
-				.. " of each other, because the client is spacing Blizzard's nameplate"
-				.. " and ours is twice the height of it."
-		end
-		return "Blizzard's driver decides where a plate goes, and it spaces them by how"
-			.. " big it thinks a plate is. This tells it the real figure and asks it to"
-			.. " stack rather than overlap. The cost is that a plate takes the mouse over"
-			.. " the whole bar, which is more to click and more of a camera drag swallowed."
-			.. " Turning it off puts all three back. Now: " .. ns.Plates.Describe() .. "."
-	end)
+	ui.Hint("Off, two mobs standing together put two bars on top of each other, because the client is spacing Blizzard's plate and ours is twice its height.")
 
-	ui.Header("Debuffs on the bar")
-	ui.Note(function()
-		return "The row above each bar, left to right. Bright is yours, grey is"
-			.. " somebody else's and faint is nobody's, with the seconds left along"
-			.. " the bottom edge and the stack count in the corner. Matching is on"
-			.. " the spell's name rather than its id, so rank 1 covers every rank"
-			.. " and another warrior's Sunder counts."
+	ui.Size("bar height on the plate", -60, 60, 2,
+		function() return ns.db.barsOffset end,
+		function(value)
+			ns.db.barsOffset = value
+			ns.EnemyBars.Rebuild()
+		end)
+	ui.Count("rows", 1, 15,
+		function() return ns.db.barsMax end,
+		function(value) ns.db.barsMax = value end)
+	ui.Hint("How many bars the list shows at once. It does nothing in plates mode, where the client decides how many nameplates there are.")
+
+	ui.Size("width", 120, 400, 10,
+		function() return ns.db.barsWidth end,
+		function(value)
+			ns.db.barsWidth = value
+			ns.EnemyBars.ApplyLayout()
+		end)
+	ui.Zoom(
+		function() return ns.db.barsZoom end,
+		function(value)
+			ns.db.barsZoom = value
+			ns.EnemyBars.ApplyLayout()
+			ns.EnemyBars.Rebuild()
+		end)
+	ui.Hint("Every size here is a count of screen pixels, so a bar is the same physical size on any monitor. Zoom multiplies that by a whole number, which keeps the grid.")
+
+	ui.Reading("the camera", ns.EnemyBars.CameraState)
+	ui.Reading("nameplate spacing", ns.Plates.Describe)
+	ui.Reading("cast bars", function()
+		if not ns.HasCastInfo() then
+			return "this client answers no UnitCastingInfo for anyone but you"
+		end
+		return ns.Cast.Describe()
 	end)
+	ui.Reading("the grid", ns.UI.Describe)
+
+end
+
+local function Debuffs(ui)
+	ui.Section("Debuffs on the bar", "Them")
+	ui.Lede("A row of icons over each bar: bright is yours, grey is somebody else's, faint is nobody's.")
+
 	for slot = 1, ns.EnemyBars.MaxSpells() do
 		DebuffRow(ui, slot)
 	end
-	ui.Note(function()
-		local spells = ns.EnemyBars.Spells()
-		if #spells == 0 then
-			return "Nothing tracked. The row is empty and each bar is a debuff row shorter."
-		end
-		local unknown = ns.EnemyBars.Unresolved()
-		if #unknown > 0 then
-			return ("%d of %d slots used. This client cannot name %s, so nothing draws"
-				.. " for them. They keep their place in case you log in on the flavour that can.")
-				:format(#spells, ns.EnemyBars.MaxSpells(), table.concat(unknown, ", "))
-		end
-		return ("%d of %d slots used."):format(#spells, ns.EnemyBars.MaxSpells())
-	end)
+
 	ui.Picker("add a warrior debuff",
 		function() return "pick one" end,
 		function(spellID)
@@ -271,6 +215,8 @@ function Panel.Draw(ui)
 			end
 			return options
 		end)
+	ui.Hint("The picker is the warrior's own debuffs and a shortlist, not the limit. Matching is by name, so rank 1 covers every rank and another warrior's Sunder counts.")
+
 	ui.TextField("or add any spell by id",
 		function() return "" end,
 		function(text)
@@ -280,101 +226,52 @@ function Panel.Draw(ui)
 			local ok, message = ns.EnemyBars.AddSpell(text)
 			ns.Print(ok and (message .. " is on the bar.") or message)
 		end)
-	ui.Note(function()
-		return "The picker is the warrior's own debuffs and the shortlist, not the"
-			.. " limit. Anything a mob can carry goes on by id, which is the last"
-			.. " part of the spell's address on Wowhead. Use the id of the aura"
-			.. " that lands on the mob, not the id of the spell or talent that"
-			.. " puts it there. For a ranked spell those are the same and rank 1"
-			.. " covers every rank, because the match is by name. For a proc they"
-			.. " are two spells: the Deep Wounds talent is 12162, the bleed it"
-			.. " applies is 12721, and the client spells that one Deep Wound."
-	end)
+	ui.Hint("Use the id of the aura that lands on the mob, not of the spell that puts it there. The Deep Wounds talent is 12162; the bleed it applies is 12721.")
+
 	-- One pixel a step. It used to be two, which stepped straight over the
 	-- sizes that draw sharp, on a range that stopped short of the biggest of
 	-- them.
 	local iconLow, iconHigh = ns.EnemyBars.IconRange()
-	ui.Slider("icon size, in pixels", iconLow, iconHigh, 1,
+	ui.Slider("icon size", iconLow, iconHigh, 1,
 		function() return ns.db.barsIconSize end,
 		function(value)
 			ns.db.barsIconSize = value
 			ns.EnemyBars.ApplyLayout()
 			ns.EnemyBars.Rebuild()
 		end,
-		function(value) return value .. " px" end)
-	ui.Note(function()
-		return "|cffd08040Now:|r " .. ns.EnemyBars.DescribeIcon() .. "."
-	end)
-	ui.Note(function()
-		local _, _, nearest = ns.EnemyBars.IconAdvice()
-		return "The client keeps half sized copies of every texture and picks the"
-			.. " pair nearest the size asked for. The square carries a one pixel"
-			.. " border and the art sits inside it, and the art itself is cropped"
-			.. " five texels a side to lose the border the client bakes in, so"
-			.. " what actually gets sampled is 54 texels drawn two pixels smaller"
-			.. " than the number above. " .. (nearest and (nearest .. " is the size")
-				or "No size in this range is one") .. " where that lands one texel"
-			.. " on one pixel. Everything else is a blend of two copies, which is"
-			.. " what soft icons are."
-	end)
-	ui.Note(function()
-		return "The row is packed against the right end of the gauge and wraps"
-			.. " upwards when it no longer fits, so a long list on a narrow bar"
-			.. " becomes two rows rather than icons hanging off the left edge."
-	end)
+		function(value) return value .. "px" end)
+	ui.Hint("The row packs against the right end of the gauge and wraps upwards, so a long list on a narrow bar becomes two rows rather than icons hanging off the left edge.")
+
 	ui.Action(function() return "back to the four it ships with" end, function()
 		ns.EnemyBars.ResetSpells()
 		ns.Options.Refresh()
 	end)
 
-	ui.Header("Player, target and target of target")
+	ui.Reading("slots used", function()
+		local spells = ns.EnemyBars.Spells()
+		local unknown = ns.EnemyBars.Unresolved()
+		if #unknown > 0 then
+			return ("%d of %d, and this client cannot name %s")
+				:format(#spells, ns.EnemyBars.MaxSpells(), table.concat(unknown, ", "))
+		end
+		return ("%d of %d"):format(#spells, ns.EnemyBars.MaxSpells())
+	end)
+	ui.Reading("icons", ns.EnemyBars.DescribeIcon)
+
+end
+
+local function Frames(ui)
+	ui.Section("Player and target frames", "You")
+	ui.Lede("Squares Blizzard's own player, target and target of target frames in your class colour.")
+
 	ui.Check("square frames in your class colour",
 		function() return ns.db.skin end,
 		function(value)
 			ns.db.skin = value
 			ns.FrameSkin.Apply()
 		end)
-	ui.Stepper("frame height, in pixels", 18, 72, 2,
-		function() return ns.db.skinHeight end,
-		function(value)
-			ns.db.skinHeight = value
-			ns.FrameSkin.Relayout()
-		end)
-	ui.Stepper("frame width, in pixels", 90, 360, 6,
-		function() return ns.db.skinWidth end,
-		function(value)
-			ns.db.skinWidth = value
-			ns.FrameSkin.Relayout()
-		end)
-	local levelLow, levelHigh = ns.FrameSkin.LinkRange()
-	ui.Check("mirror the target block off the player block",
-		function() return ns.db.skinLink end,
-		function(value)
-			ns.db.skinLink = value
-			ns.FrameSkin.Apply()
-		end)
-	ui.Stepper("the target's drop from the player, in pixels", levelLow, levelHigh, 5,
-		function() return ns.db.skinLevel end,
-		function(value)
-			ns.db.skinLevel = value
-			ns.FrameSkin.Relayout()
-		end)
-	ui.Note(function()
-		if not ns.db.skinLink then
-			return "Off, so Edit Mode positions both blocks and the two are free to"
-				.. " sit at unmatched heights and unmatched distances apart. "
-				.. ns.FrameSkin.DescribeLink() .. "."
-		end
-		return "Edit Mode positions the player block and this addon positions"
-			.. " everything against it: the target is the player reflected in the"
-			.. " middle of the screen and target of target hangs off the target."
-			.. " Drag the player to widen or close the corridor between them, and"
-			.. " drag the player past the centre to make the pair cross. Dragging"
-			.. " the target still works and sets the drop above. Both blocks are"
-			.. " mirrored, so the two gauges face each other across the corridor"
-			.. " and both portraits turn outward. |cffd08040Now:|r "
-			.. ns.FrameSkin.DescribeLink() .. "."
-	end)
+	ui.Hint("The ring and banner are hidden, the portrait is square and the gauge takes the class colour. Clicking, the dropdown and the cast bar are still Blizzard's.")
+
 	for _, frame in ipairs({ { "player", "the player frame" },
 		{ "target", "the target frame" },
 		{ "tot", "target of target, which sits on the target's auras" } }) do
@@ -385,124 +282,94 @@ function Panel.Draw(ui)
 				ns.FrameSkin.Apply()
 			end)
 	end
+
+	ui.Size("frame height", 18, 72, 2,
+		function() return ns.db.skinHeight end,
+		function(value)
+			ns.db.skinHeight = value
+			ns.FrameSkin.Relayout()
+		end)
+	ui.Size("frame width", 90, 360, 6,
+		function() return ns.db.skinWidth end,
+		function(value)
+			ns.db.skinWidth = value
+			ns.FrameSkin.Relayout()
+		end)
+	ui.Hint("Each Blizzard frame is resized to the block over it, so a frame you have already placed in Edit Mode needs placing again after these move.")
+
+	local levelLow, levelHigh = ns.FrameSkin.LinkRange()
+	ui.Check("mirror the target block off the player block",
+		function() return ns.db.skinLink end,
+		function(value)
+			ns.db.skinLink = value
+			ns.FrameSkin.Apply()
+		end)
+	ui.Hint("The target becomes the player reflected in the middle of the screen. Drag the player to widen or close the corridor, or past the centre to make the pair cross.")
+
+	ui.Size("the target's drop from the player", levelLow, levelHigh, 5,
+		function() return ns.db.skinLevel end,
+		function(value)
+			ns.db.skinLevel = value
+			ns.FrameSkin.Relayout()
+		end)
+
 	ui.Check("show incoming heals on the health gauge",
 		function() return ns.db.skinHeals end,
 		function(value)
 			ns.db.skinHeals = value
 			ns.FrameSkin.Apply()
 		end)
-	ui.Note(function()
-		if not ns.HasHealPrediction() then
-			return "This client answers no UnitGetIncomingHeals, so the slice never"
-				.. " draws. Nothing else about the frames changes."
-		end
-		if not ns.db.skinHeals then
-			return "Off, so the gauge shows what the unit has and nothing about what"
-				.. " is on the way to it."
-		end
-		return "A green slice from where the gauge stops to where the heals already"
-			.. " in the air will take it, clamped to what the unit is actually"
-			.. " missing, so an overheal reads as a full bar rather than as a bar"
-			.. " and a half. It is drawn under Blizzard's fill: the moment a heal"
-			.. " lands, the fill covers the slice that predicted it."
-	end)
+	ui.Hint("A green slice from where the gauge stops to where the heals in the air will take it, clamped to what the unit is missing, so an overheal reads as a full bar.")
+
 	ui.Check("draw your own and the target's buffs and debuffs",
 		function() return ns.db.skinAuras end,
 		function(value)
 			ns.db.skinAuras = value
 			ns.FrameSkin.Relayout()
 		end)
+	ui.Hint("Debuffs under each block and buffs over it. Yours are placed first, so a raid's worth of other people's bleeds cannot push your Rend off the end.")
+
 	do
 		local low, high = ns.FrameAuras.SizeRange()
-		ui.Stepper("aura square, in pixels", low, high, 2,
+		ui.Size("aura square", low, high, 2,
 			function() return ns.db.skinAuraSize end,
 			function(value)
 				ns.db.skinAuraSize = value
 				ns.FrameSkin.Relayout()
 			end)
 	end
-	ui.Stepper("debuffs on each row", 0, ns.FrameAuras.CountCeiling("debuffs"), 1,
+	ui.Count("debuffs on each row", 0, ns.FrameAuras.CountCeiling("debuffs"),
 		function() return ns.db.skinAuraDebuffs end,
 		function(value)
 			ns.db.skinAuraDebuffs = value
 			ns.FrameSkin.Relayout()
 		end)
-	ui.Stepper("buffs on each row", 0, ns.FrameAuras.CountCeiling("buffs"), 1,
+	ui.Count("buffs on each row", 0, ns.FrameAuras.CountCeiling("buffs"),
 		function() return ns.db.skinAuraBuffs end,
 		function(value)
 			ns.db.skinAuraBuffs = value
 			ns.FrameSkin.Relayout()
 		end)
-	ui.Note(function()
-		if not ns.db.skin then
-			return "The rows hang off the two blocks, so they need those frames"
-				.. " skinned before they mean anything."
-		end
-		if not ns.db.skinAuras then
-			return "Off, and neither frame then carries an aura row at all. Each is"
-				.. " the size of its block, so the client's own rows hang inside the"
-				.. " gauges rather than under them, which is why they are hidden"
-				.. " either way. Turn the skin off to get all of it back."
-		end
-		return "Debuffs under each block and buffs over it, wrapping away from the"
-			.. " block when a row runs past its width, so a row that fills moves"
-			.. " nothing you were already reading. Every row starts on the block's"
-			.. " gauge end and runs outward, which puts yours running left and the"
-			.. " target's running right. What you cast is drawn in colour and"
-			.. " everything else is drained, and yours are placed first, so a raid's"
-			.. " worth of other people's bleeds cannot push your Rend off the end."
-			.. " Hovering a square gives you the client's own tooltip for that aura."
-			.. " The temporary weapon enchant on each hand leads your buff row,"
-			.. " because it sits at no aura index and the client's row was the only"
-			.. " thing drawing it. Right click to cancel one of your own buffs is"
-			.. " the one thing that goes with that row: cancelling a buff is a call"
-			.. " an addon is not allowed to make. "
-			.. ns.FrameAuras.Describe() .. "."
-	end)
+
 	ui.Check("show the client's own aura row",
 		function() return ns.db.blizzAuras end,
 		function(value)
 			ns.db.blizzAuras = value
 			ns.FrameAuras.Client()
 		end)
-	ui.Note(function()
-		if not ns.db.blizzAuras then
-			return "Hidden, whatever else is on the screen. Both of the client's"
-				.. " frames are down: your buffs and debuffs in the top corner and"
-				.. " the weapon enchant beside them. Right click to cancel a buff"
-				.. " goes with them, because cancelling one is a call an addon is"
-				.. " not allowed to make."
-		end
-		if ns.db.skin and ns.db.skinFrames.player ~= false then
-			return "Allowed on screen, and there is nothing left in it: the row"
-				.. " above is drawing your buffs, and every button the client would"
-				.. " have put in the corner is hidden by name to keep one aura in"
-				.. " one place. This switch is what answers when the skin is not"
-				.. " doing that."
-		end
-		return "Your buffs are the client's row in the corner of the screen and"
-			.. " nothing here is standing in for it, because the row above hangs"
-			.. " off a block the player frame is not wearing. Switch it off and"
-			.. " nothing draws what is on you: the stone on your weapon included,"
-			.. " which the missing-buff row only speaks about once it has run out."
+	ui.Hint("Right click to cancel one of your own buffs goes with the client's row, because cancelling a buff is a call an addon is not allowed to make.")
+
+	ui.Reading("the frames", ns.FrameSkin.Describe)
+	ui.Reading("the corridor", ns.FrameSkin.DescribeLink)
+	ui.Reading("the aura rows", ns.FrameAuras.Describe)
+	ui.Reading("incoming heals", function()
+		return ns.HasHealPrediction() and "this client answers UnitGetIncomingHeals"
+			or "this client answers no UnitGetIncomingHeals, so the slice never draws"
 	end)
-	ui.Note(function()
-		if not ns.db.skin then
-			return "Blizzard's own frames, exactly as they shipped. "
-				.. ns.FrameSkin.Describe() .. "."
-		end
-		return "The ring and the banner are hidden, the portrait is square, and the"
-			.. " gauge and its edge take the class colour, or the reaction colour on"
-			.. " anything without a class. The raid marker stays. Almost nothing is"
-			.. " rebuilt: clicking, the dropdown and the cast bar are still"
-			.. " Blizzard's, and turning this off puts every piece back without a"
-			.. " reload. The target's aura row is the one exception and it has its"
-			.. " own switch above."
-			.. " Each Blizzard frame is resized to the block over it, so the"
-			.. " rectangle Edit Mode selects and snaps is the one you can see and"
-			.. " the empty space around it no longer takes clicks. The two sizes"
-			.. " above move that rectangle, so a frame you have already placed"
-			.. " needs placing again. "
-			.. ns.FrameSkin.Describe() .. "."
-	end)
+end
+
+function Panel.Draw(ui)
+	EnemyBars(ui)
+	Debuffs(ui)
+	Frames(ui)
 end

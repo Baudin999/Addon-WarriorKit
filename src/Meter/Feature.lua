@@ -12,7 +12,6 @@ local MODES = { "dps", "hps" }
 
 local LOW_ROWS, HIGH_ROWS = 3, 10
 local LOW_WIDTH, HIGH_WIDTH = 120, 400
-local LOW_ZOOM, HIGH_ZOOM = 1, 3
 
 -- The bar opacity, in whole percent. Zero is a stop rather than an accident: a
 -- meter with no bars at all is three columns of text over the world, which is a
@@ -24,7 +23,6 @@ local LOW_ZOOM, HIGH_ZOOM = 1, 3
 -- Fives, so the panel's stops and a macro's are the same twenty one values.
 -- Command.Step refuses anything off them rather than rounding it, for the
 -- reason it refuses a fractional zoom.
-local LOW_ALPHA, HIGH_ALPHA, ALPHA_STEP = 0, 100, 5
 
 --------------------------------------------------------------------------
 
@@ -88,7 +86,7 @@ local function MeterWord(arg)
 	end
 
 	if option == "alpha" then
-		local alpha = ns.Command.Step(value, LOW_ALPHA, HIGH_ALPHA, ALPHA_STEP,
+		local alpha = ns.Command.Step(value, ns.UI.ALPHA_LOW, ns.UI.ALPHA_HIGH, ns.UI.ALPHA_STEP,
 			"meter bar opacity")
 		if alpha then
 			ns.db.meterBarAlpha = alpha
@@ -99,7 +97,7 @@ local function MeterWord(arg)
 	end
 
 	if option == "zoom" then
-		local zoom = ns.Command.Number(value, LOW_ZOOM, HIGH_ZOOM, "meter zoom")
+		local zoom = ns.Command.Number(value, ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH, "meter zoom")
 		if zoom then
 			ns.db.meterZoom = zoom
 			MeterWindow.Apply()
@@ -118,6 +116,12 @@ end
 ns.Register({
 	name = "meters",
 	order = 7,
+
+	switch = {
+		key = "meter",
+		label = "the meters",
+		apply = function() MeterWindow.Show() end,
+	},
 
 	defaults = {
 		meter = true,
@@ -173,21 +177,8 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Header("Meters")
-
-		ui.Check("Show the meters", function() return ns.db.meter end,
-			function(on)
-				ns.db.meter = on
-				MeterWindow.Show()
-			end)
-
-		ui.Note(function()
-			return "Two columns with no window round them: who is doing damage, and"
-				.. " who is about to take the mob off you. A row is a spec icon, a"
-				.. " name and a number, and the class coloured bar behind it is that"
-				.. " player's share of the top row. There is no breakdown to open,"
-				.. " because there is nothing behind a row to open."
-		end)
+		ui.Section("Meters", "Readouts")
+		ui.Lede("Two columns with no window round them: who is doing damage, and who is about to take the mob.")
 
 		ui.Cycle("left pane counts", MODES,
 			function() return ns.db.meterMode end,
@@ -195,108 +186,50 @@ ns.Register({
 				ns.db.meterMode = mode
 				MeterWindow.Update()
 			end)
-
-		ui.Note(function()
-			return "Clicking the header on the meter itself does the same thing, which"
-				.. " is the way you will actually do it. The header takes the mouse"
-				.. " even while the frames are locked, because a control you cannot"
-				.. " click is not a control. The rest of the meter never does, so the"
-				.. " rows cannot swallow the right button drag that turns the camera."
-				.. " The header can: a drag begun on that one strip, fourteen pixels"
-				.. " tall, will not turn it. That is the whole price and it is why the"
-				.. " strip is the only part that takes the mouse."
-		end)
+		ui.Hint("Clicking the header on the meter itself does the same thing. That strip is the only part of the meter that takes the mouse, so the rows cannot swallow a camera drag.")
 
 		ui.Check("Threat pane", function() return ns.db.meterThreat end,
 			function(on)
 				ns.db.meterThreat = on
 				MeterWindow.Apply()
 			end)
+		ui.Hint("The percentage is the client's own: 100 means that player takes the mob. The seconds beside it are ours, and only appear while somebody is converging on you.")
 
-		ui.Note(function()
-			if not ns.MeterThreat.Ready() then
-				return "|cffd08040This client has no threat API|r, so the pane says so and"
-					.. " stays empty. Vanilla computes no threat at all, which is why"
-					.. " every Classic threat meter is a combat log simulation with a"
-					.. " table of coefficients in it. That is a different addon, and a"
-					.. " made up number here would be worse than a blank."
-			end
-			return "The percentage is the client's own: 100 means that player takes the"
-				.. " mob, thresholds and talents already folded in. The seconds beside"
-				.. " it are this addon's, worked out from how fast the percentage is"
-				.. " climbing, and they appear only while someone is actually"
-				.. " converging on you inside the next minute."
-		end)
-
-		ui.Stepper("rows", LOW_ROWS, HIGH_ROWS, 1,
+		ui.Count("rows", LOW_ROWS, HIGH_ROWS,
 			function() return ns.db.meterRows end,
 			function(value)
 				ns.db.meterRows = value
 				MeterWindow.Apply()
 			end)
 
-		ui.Stepper("width", LOW_WIDTH, HIGH_WIDTH, 10,
+		ui.Size("width", LOW_WIDTH, HIGH_WIDTH, 10,
 			function() return ns.db.meterWidth end,
 			function(value)
 				ns.db.meterWidth = value
 				MeterWindow.Apply()
 			end)
 
-		ui.Slider("bar opacity", LOW_ALPHA, HIGH_ALPHA, ALPHA_STEP,
+		ui.Opacity("background",
 			function() return ns.db.meterBarAlpha end,
 			function(value)
 				ns.db.meterBarAlpha = value
 				MeterWindow.Apply()
-			end,
-			function(value) return value .. "%" end)
-
-		ui.Note(function()
-			return "How much of the floor the bars cover. The top row's bar is the full"
-				.. " width of the pane every tick, by definition, so this is really"
-				.. " asking how bright a rectangle you want lying across that part of"
-				.. " the screen during a pull. 15 is a tint you can rank four players"
-				.. " by over a dark floor, and over a bright one it is nothing at all,"
-				.. " which is why it is a slider and not the number this addon picked."
-				.. " At 0 there are no bars and the meter is columns of outlined text"
-				.. " over the world."
-		end)
-
-		ui.Stepper("zoom", LOW_ZOOM, HIGH_ZOOM, 1,
-			function() return ns.db.meterZoom end,
-			function(value)
-				ns.db.meterZoom = value
-				MeterWindow.Apply()
 			end)
+		ui.Hint("How much of the floor the bars cover. At 0 there are no bars and the meter is columns of outlined text over the world.")
 
-		ui.Note(function()
-			local drawn, exact = ns.MeterWindow.IconAdvice()
-			if exact then
-				return ("A row icon draws %d screen pixels of art, one stored texel per"
-					.. " pixel, which is as sharp as a spell icon gets."):format(drawn)
-			end
-			return ("|cffd08040A row icon draws %d screen pixels of art|r, blended from"
-				.. " two stored copies. The client keeps each icon at half the size of"
-				.. " the one above, the crop leaves 54 texels, and only 54 and 27 land"
-				.. " one texel on one pixel. Zoom 1 and zoom 2 are both exact; this"
-				.. " zoom is not."):format(drawn)
+		ui.Reading("threat", function()
+			return ns.MeterThreat.Ready() and "the client's own numbers"
+				or "this client has no threat API, so the pane stays empty"
 		end)
-
-		ui.Note(function()
+		ui.Reading("row icons", function()
 			local guid = UnitGUID("player")
 			if not ns.MeterSpec.Ready() then
-				return "|cffd08040No talent API on this client|r, so every row draws a"
-					.. " class icon."
+				return "class icons: no talent API on this client"
 			end
 			if not ns.MeterSpec.Known(guid) then
-				return "Your own spec icon comes from whichever talent tree has the most"
-					.. " points in it, and you have not spent enough for that to mean"
-					.. " anything yet, so your row draws a class icon."
+				return "class icons until you have spent enough points to have a tree"
 			end
-			return "Spec icons come from talent trees, because these clients have no"
-				.. " specs to ask about. Yours is read directly. Everyone else's needs"
-				.. " an inspect, which needs them inside about 28 yards and you out of"
-				.. " combat, so their icons sharpen from class to spec over the first"
-				.. " minute in a group and never block anything while they do."
+			return "spec icons, sharpening from class as each inspect lands"
 		end)
 
 		ui.Action(function() return "put the meters back" end, function()

@@ -12,7 +12,6 @@ local ADDON, ns = ...
 local WIDTH_LOW, WIDTH_HIGH, WIDTH_STEP = 260, 900, 10
 local HEIGHT_LOW, HEIGHT_HIGH, HEIGHT_STEP = 120, 700, 10
 local FONT_LOW, FONT_HIGH = 9, 20
-local ALPHA_LOW, ALPHA_HIGH, ALPHA_STEP = 0, 100, 5
 
 local function SetChat(value)
 	ns.db.chat = value
@@ -51,15 +50,8 @@ end
 --------------------------------------------------------------------------
 
 local function PeoplePage(ui)
-	ui.Header("People")
-
-	ui.Note(function()
-		if ns.People.Count() == 0 then
-			return "Nobody yet. Press + and type a name, or add everyone you are grouped with in one press. Anything a person on this list says, in any channel, is copied to the People tab of the chat window, and so is anything you whisper to them."
-		end
-		return ("Anything these %d say, in any channel, lands on the People tab together with anything you whisper to them. The tab is not drawn at all while the list is empty.")
-			:format(ns.People.Count())
-	end)
+	ui.Section("People", "Readouts")
+	ui.Lede("Names whose every line, in any channel, is copied to the People tab of the chat window.")
 
 	ui.Tabs(
 		function()
@@ -93,17 +85,7 @@ local function PeoplePage(ui)
 			ns.ChatWindow.Apply()
 		end)
 
-	ui.Note(function()
-		local entry = ns.People.Get(ns.People.Shown())
-		if not entry then
-			return ""
-		end
-		if entry.name == "" then
-			return "Type the character's name. The realm is not needed and is ignored if you type it, so one row covers them whether they are standing beside you or whispering from another realm."
-		end
-		return ("Matched on the name alone, case ignored, realm ignored. %s on any realm is this row.")
-			:format(entry.name)
-	end)
+	ui.Hint("The realm is not needed and is ignored if you type it, so one row covers somebody whether they are beside you or whispering from another realm.")
 
 	ui.ActionPair(
 		function()
@@ -140,10 +122,10 @@ local function PeoplePage(ui)
 			ns.ChatWindow.Apply()
 		end,
 		function() return ns.People.Get(ns.People.Shown()) ~= nil end)
+	ui.Hint("The list is shared by every character on this account, because who matters to you is not a fact about the character you happen to be standing in.")
 
-	ui.Note(function()
-		return ("The list is shared by every character on this account, because who matters to you is not a fact about the character you are standing in. %d of %d rows used.")
-			:format(ns.People.Count(), ns.People.MAX)
+	ui.Reading("rows used", function()
+		return ("%d of %d"):format(ns.People.Count(), ns.People.MAX)
 	end)
 end
 
@@ -151,7 +133,13 @@ end
 
 ns.Register({
 	name = "chat",
-	order = 9,
+	order = 12,
+
+	switch = {
+		key = "chat",
+		label = "the chat window",
+		apply = function(value) SetChat(value) end,
+	},
 
 	defaults = {
 		-- On, because a part whose whole point is that the window it replaces is
@@ -311,103 +299,68 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Header("Chat")
-		ui.Check("draw the WarriorKit chat window",
-			function() return ns.db.chat end,
-			SetChat)
-		ui.Note(function()
-			if not ns.db.chat then
-				return "Nothing is drawn and nothing is captured. Blizzard's chat window carries everything, exactly as it did before this addon was installed."
-			end
-			return "Three tabs: the people you have named, everything anyone said, and whispers on their own. Every line keeps its channel colour, names are class coloured, and a click on a name answers it."
-		end)
-		ui.Note(function()
-			return "Blizzard's chat window is not hidden and nothing of it is unregistered. It keeps loot, experience, faction, system text, the combat log and every addon's output, including this one's, because there is no way to know which lines arriving there came from an event we already drew. Shrink it into a corner and this window is the one you read."
-		end)
+		ui.Section("Chat", "Readouts")
+		ui.Lede("A chat window of the addon's own: three tabs, class coloured names, a click to answer one.")
+		ui.Hint("Blizzard's window is not hidden and nothing of it is unregistered. It keeps loot, experience, system text and every addon's output, this one's included.")
 
 		ui.Check("take those lines out of Blizzard's window",
 			function() return ns.db.chatClaim end,
 			SetClaim)
-		ui.Note(function()
-			if not ns.ChatFeed.Installed() then
-				return "|cffd08040This client has no chat message filter, so the same conversation draws in both windows whatever this says.|r"
-			end
-			if not ns.db.chatClaim then
-				return "Every line drawn here is also drawn behind, which is useful for an evening while you decide whether this window is better and is a doubled screen if you leave it on."
-			end
-			return "Chat " .. ns.ChatFeed.Describe() .. ". This is FrameXML's own filter rather than a hidden frame, so turning it off puts the conversation back in Blizzard's window on the next line, with no reload."
-		end)
+		ui.Hint("This is FrameXML's own filter rather than a hidden frame, so turning it off puts the conversation back in Blizzard's window on the next line, with no reload.")
 
 		ui.Check("include the numbered channels",
 			function() return ns.db.chatChannels end,
 			SetChannels)
-		ui.Note(function()
-			if not ns.db.chatChannels then
-				return "General, Trade and anything else you have joined stay in Blizzard's window. They are most of the volume in a city and none of the conversation."
-			end
-			return "Numbered channels are captured too, tagged with the number you would type to answer them."
-		end)
+		ui.Hint("General, Trade and anything else you have joined. They are most of the volume in a city and none of the conversation, which is why they are off.")
 
 		ui.Check("a timestamp on every line",
 			function() return ns.db.chatStamp end,
 			function(value) Redraw("chatStamp", value) end)
+
 		ui.Check("a sound when one of your people speaks",
 			function() return ns.db.chatSound end,
 			function(value) Redraw("chatSound", value) end)
-		ui.Note(function()
-			return "The sound is the client's own whisper sound, and it only plays when you are not already looking at the People tab. A sound for a line you are watching arrive is a sound you turn off, and then there is none for the one you miss."
-		end)
+		ui.Hint("The client's own whisper sound, and only while you are not already looking at the People tab. A sound for a line you watched arrive is a sound you turn off.")
 
 		ui.Gap()
-		ui.Slider("width", WIDTH_LOW, WIDTH_HIGH, WIDTH_STEP,
+		ui.Size("width", WIDTH_LOW, WIDTH_HIGH, WIDTH_STEP,
 			function() return ns.db.chatWidth end,
 			function(value) Redraw("chatWidth", value) end)
-		ui.Slider("height", HEIGHT_LOW, HEIGHT_HIGH, HEIGHT_STEP,
+		ui.Size("height", HEIGHT_LOW, HEIGHT_HIGH, HEIGHT_STEP,
 			function() return ns.db.chatHeight end,
 			function(value) Redraw("chatHeight", value) end)
-		ui.Slider("text size", FONT_LOW, FONT_HIGH, 1,
+		ui.Size("text size", FONT_LOW, FONT_HIGH, 1,
 			function() return ns.db.chatFont end,
 			function(value) Redraw("chatFont", value) end)
-		ui.Slider("background", ALPHA_LOW, ALPHA_HIGH, ALPHA_STEP,
+		ui.Opacity("background",
 			function() return ns.db.chatAlpha end,
-			function(value) Redraw("chatAlpha", value) end,
-			function(value) return value .. "%" end)
-		ui.Note(function()
-			return "There is no drag handle on the corner. A window that resizes on the mouse means a reflow of every wrapped line on every mouse move, and two sliders say the same thing exactly. Drag the window itself while frames are unlocked."
-		end)
+			function(value) Redraw("chatAlpha", value) end)
+		ui.Hint("There is no drag handle on the corner: resizing on the mouse means reflowing every wrapped line on every mouse move, and two steppers say the same thing exactly.")
 
 		ui.Action(function()
 			return ns.ChatWindow.Built() and "open the chat window" or "not built yet"
 		end,
 			function() ns.ChatWindow.Show() end,
 			function() return ns.ChatWindow.Built() end)
-		ui.Note(function()
-			return "There is a key for it under WarriorKit in the client's own key bindings, which opens the window and puts the cursor in the line. The enter key still belongs to Blizzard's field: taking it would be taking it from the window every other addon types into."
+		ui.Hint("There is a key for it under WarriorKit in the client's own key bindings, which opens the window and puts the cursor in the line.")
+
+		ui.Reading("chat", function()
+			if not ns.ChatFeed.Installed() then
+				return "this client has no chat message filter, so both windows draw it"
+			end
+			return ns.ChatFeed.Describe()
 		end)
 
 		PeoplePage(ui)
 
-		ui.Header("Voice")
+		ui.Section("Voice", "Readouts")
+		ui.Lede("Joins one of the client's own voice channels for you at every login.")
 		ui.Picker("join at login",
 			function() return ns.db.voiceJoin end,
 			function(value) ns.Voice.Set(value) end,
 			function() return ns.Voice.Options() end)
-		ui.Note(function()
-			local ok, why = ns.Voice.Supported()
-			if not ok then
-				return "|cffd08040" .. why:sub(1, 1):upper() .. why:sub(2) .. ".|r"
-			end
-			return "Voice: " .. ns.Voice.Describe() .. "."
-		end)
-		ui.Note(function()
-			return "Everything the client's own Chat Channels window draws a voice button on: your party or raid, and every stream of every community and guild you are in. There are no voice channels to name of your own, because Blizzard's voice chat is attached to the groups you are already in."
-		end)
-		ui.Note(function()
-			return "A channel does not have to exist to be picked. A party channel is made when you group up and a community one when the first person joins it, so this asks for the one you named again at every login, at every roster change and whenever the voice service comes back, and stops asking after five refusals."
-		end)
-		ui.Note(function()
-			return ns.Voice.Diagnose():sub(1, 1):upper() .. ns.Voice.Diagnose():sub(2) .. "."
-		end)
+		ui.Hint("A channel does not have to exist to be picked: this asks again at every login, at every roster change and whenever the voice service comes back, then stops after five refusals.")
+
 		ui.Action(function() return "join it now" end,
 			function()
 				local _, why = ns.Voice.Apply(true)
@@ -415,8 +368,12 @@ ns.Register({
 				ns.Options.Refresh()
 			end,
 			function() return ns.db.voiceJoin ~= ns.Voice.NONE end)
-		ui.Note(function()
-			return "This only ever joins. Nothing here leaves a channel, mutes anyone, picks a device or moves a volume: those are the client's own settings and you pressed something to get them where they are."
+		ui.Hint("This only ever joins. Nothing here leaves a channel, mutes anyone, picks a device or moves a volume: those are the client's own settings.")
+
+		ui.Reading("voice", function()
+			local ok, why = ns.Voice.Supported()
+			return ok and ns.Voice.Describe() or why
 		end)
+		ui.Reading("the last attempt", ns.Voice.Diagnose)
 	end,
 })

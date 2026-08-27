@@ -103,79 +103,21 @@ end
 local armed = false
 
 local function Panel(ui)
-	ui.Header("Breakdown")
-
-	ui.Note(function()
-		return "What this character actually does, counted out of the combat log and"
-			.. " kept between sessions. One row per ability: how much of your damage"
-			.. " it is, how often it lands, how often it crits, and what stopped it"
-			.. " when it did not land. It is not the meters, which total the pull you"
-			.. " are in and forget it; this is the month."
-	end)
-
-	ui.Check("Count what this character does", function() return ns.db.breakdown end,
-		function(on)
-			ns.db.breakdown = on
-		end)
-
-	ui.Note(function()
-		if not Breakdown.Ready() then
-			return "|cffd08040This client has no combat log API|r, so nothing can be"
-				.. " counted and the table stays empty."
-		end
-		return ("%s. Only your own hits are counted, which is what keeps this small:"
-			.. " counting the group would grow the table by every stranger you have"
-			.. " ever been in a party with."):format(Breakdown.Describe())
-	end)
+	ui.Section("Breakdown", "Readouts")
+	ui.Lede("What this character actually does, counted out of the combat log and kept between sessions.")
 
 	ui.Cycle("targets", BAND_LIST, BandWord,
 		function(word)
 			ns.db.breakdownBand = (word == EVERY) and 0 or BandFor(word)
 		end)
-
-	ui.Note(function()
-		if Breakdown.Band() then
-			return "One band on its own. Worth doing before you believe a crit or a miss"
-				.. " rate: in this era the target's level drives both of them hard, and"
-				.. " a number pooled across grey trash and an elite is the average of"
-				.. " two unrelated things."
-		end
-		return "Every band added together. The four bands are the target's level"
-			.. " against yours, and the fourth is the honest one: the combat log does"
-			.. " not carry a target's level, so a mob you never targeted and never saw"
-			.. " a nameplate for lands in |cffd08040level not seen|r rather than being"
-			.. " quietly counted as your own level."
-	end)
+	ui.Hint("Worth picking one band before you believe a crit or a miss rate: in this era the target's level drives both hard, and a pooled number averages two unrelated things.")
 
 	ui.Action(function()
 		return Window.IsShown() and "close the table" or "open the table"
 	end, function()
 		Window.Toggle()
 	end)
-
-	ui.Note(function()
-		return "The table is a window of its own rather than a page in here, and"
-			.. " the way you open it is a left click on the meter's header, which is"
-			.. " where you are looking when the question occurs to you. Right click"
-			.. " that header to swap the meter between damage and healing. Escape or"
-			.. " the cross closes the table."
-	end)
-
-	ui.Note(function()
-		return "Only abilities that have swung at something are listed. A shout, a"
-			.. " stance and Charge are counted like everything else, and they are kept"
-			.. " out of a table ranked by damage because there they can only ever be a"
-			.. " run of zeroes above the rows you opened it to read. An ability that has"
-			.. " only ever been dodged does get its row: no damage across four dodges is"
-			.. " not the same fact as no damage because the thing does none."
-	end)
-
-	ui.Note(function()
-		return "Ranks are added up under one name. A rate pools across ranks correctly,"
-			.. " because it is per attempt either way, and an average hit does not: for"
-			.. " an ability you have used at several ranks the average is a blend of the"
-			.. " rank you outgrew and the one you use now."
-	end)
+	ui.Hint("A left click on the meter's header opens it too, which is where you are looking when the question occurs to you. Right click that header to swap damage and healing.")
 
 	ui.Action(function()
 		if armed then
@@ -190,13 +132,25 @@ local function Panel(ui)
 		armed = false
 		Breakdown.Reset()
 	end)
+
+	ui.Reading("the record", function()
+		if not Breakdown.Ready() then
+			return "this client has no combat log API, so nothing can be counted"
+		end
+		return Breakdown.Describe()
+	end)
 end
 
 --------------------------------------------------------------------------
 
 ns.Register({
 	name = "breakdown",
-	order = 7.8,
+	order = 10,
+
+	switch = {
+		key = "breakdown",
+		label = "the breakdown record",
+	},
 
 	defaults = {
 		-- The switch and the band are the account's, because they are preferences

@@ -122,7 +122,7 @@ end
 
 ns.Register({
 	name = "comfort",
-	order = 10,
+	order = 16,
 
 	defaults = {
 		-- All four on. Every one of them is a thing you would otherwise do by
@@ -244,53 +244,28 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Header("Loot")
+		ui.Section("Loot", "Chores")
+		ui.Lede("Empties a corpse the moment the server says what is on it, so the loot window never draws.")
 		ui.Check("empty a corpse in one go",
 			function() return ns.db.fastLoot end,
 			SetLoot)
-		ui.Note(function()
-			if not ns.db.fastLoot then
-				return "The client opens the loot window and takes one slot per frame, which is where the pause over each corpse comes from."
-			end
-			return "The corpse is emptied the moment the server says what is on it, so the loot window never draws. It only runs when auto loot is what your click asked for, so a shift-click to open the window still opens it."
-		end)
-		ui.Note(function()
-			return "Under master loot only the slots below the threshold are taken. Everything at or above it is the master looter's to assign, and taking one of those yourself is not something an addon should do quietly."
-		end)
+		ui.Hint("Only when auto loot is what your click asked for, so a shift-click still opens the window. Under master loot only the slots below the threshold are taken.")
+		ui.Reading("looting", ns.Loot.Describe)
 
-		ui.Header("Vendor")
+		ui.Section("Vendor", "Chores")
+		ui.Lede("Sells your grey items at every merchant you open, and nothing else.")
 		ui.Check("sell grey items at every merchant",
 			function() return ns.db.sellTrash end,
 			SetVendor)
-		ui.Note(function()
-			if not ns.db.sellTrash then
-				return "Greys stay in your bags."
-			end
-			return "Grey quality only, and only what a vendor will pay something for. Hold shift as you open a merchant to skip it for that one visit."
-		end)
-		ui.Note(function()
-			if not ns.db.sellTrash then
-				return "Nothing is sold while this is off, and a sale already in flight stops the moment you turn it off."
-			end
-			return "An item this client has not cached yet is left alone rather than sold on a guess, and the sweep asks again a fifth of a second later."
-		end)
+		ui.Hint("Hold shift as you open a merchant to skip it for that one visit. An item this client has not cached yet is left alone rather than sold on a guess.")
+		ui.Reading("selling", ns.Vendor.Describe)
 
-		ui.Header("Repair")
+		ui.Section("Repair", "Chores")
+		ui.Lede("Mends every damaged piece the moment a merchant who can mend opens.")
 		ui.Check("repair at every merchant who will",
 			function() return ns.db.autoRepair end,
 			SetRepair)
-		ui.Note(function()
-			if not ns.db.autoRepair then
-				return "Nothing is repaired for you. Your gear wears down until you press the anvil yourself, and a weapon at zero durability does no damage at all."
-			end
-			return "Every damaged piece at once, the moment the window opens, on any merchant the client says can mend. Hold shift as you open him to skip it for that one visit."
-		end)
-		ui.Note(function()
-			if not ns.db.autoRepair then
-				return "Repair " .. ns.Repair.Describe() .. "."
-			end
-			return "Guild funds first, and only as far as your rank's own withdraw allowance goes. Past that, or with no guild bank on this client, it comes out of your purse, and a purse that cannot cover it is left alone rather than half spent."
-		end)
+		ui.Hint("Guild funds first, as far as your rank's withdraw allowance goes, then your purse. A purse that cannot cover it is left alone rather than half spent.")
 		ui.Action(function()
 			local cost = ns.Repair.Cost()
 			if cost == nil then
@@ -311,41 +286,39 @@ ns.Register({
 				end
 			end,
 			function() return (ns.Repair.Cost() or 0) > 0 end)
-		ui.Note(function()
+		ui.Reading("repairing", ns.Repair.Describe)
+		ui.Reading("worst piece", function()
 			local worst, counted = ns.Repair.Durability()
 			if not worst then
-				return "This client is not quoting durability, so there is no wear to report. The merchant's own price is what the repair is decided on either way."
+				return "this client is not quoting durability"
 			end
-			return ("Worst piece at %d%% across %d that wear."):format(worst, counted)
+			return ("%d%% of %d that wear"):format(worst, counted)
 		end)
 
-		ui.Header("Camera")
+		ui.Section("Clutter", "The screen")
+		ui.Lede("A window for the finished quest items that sit in your bags and cannot be sold.")
+		ui.Action(function() return "review them one at a time" end,
+			function() ns.Destroy.Show() end,
+			function() return ns.Clutter.Ready() end)
+		ui.Hint("One card at a time, the quest written on it, a destroy and a skip. Read the card first: a repeatable quest never flags as completed, so its turn-in reads as finished with.")
+		ui.Reading("Questie", function()
+			return ns.Clutter.Ready() and "answering" or "not answering, so the window stays empty"
+		end)
+
+		ui.Section("Camera", "The screen")
+		ui.Lede("Pulls the camera further back than the client's own options slider will go.")
 		ui.Check("pull the camera back further",
 			function() return ns.db.maxZoom end,
 			SetZoom)
-		ui.Note(function()
-			return "Camera " .. ns.Camera.Describe() .. "."
-		end)
-		ui.Note(function()
-			return "This is the client's own cameraDistanceMaxZoomFactor, not a frame this addon draws, so it survives a logout and it is written again at every entry to the world in case something else put it back."
-		end)
+		ui.Hint("This is the client's own cameraDistanceMaxZoomFactor rather than a frame, so it survives a logout and is written again at every entry to the world.")
+		ui.Reading("camera", ns.Camera.Describe)
 
-		ui.Header("Errors")
+		ui.Section("Errors", "The screen")
+		ui.Lede("Drops the red messages you have ticked before they reach the middle of the screen.")
 		ui.Check("filter the red text in the middle of the screen",
 			function() return ns.db.errorFilter end,
 			SetErrors)
-		ui.Note(function()
-			if not ns.Errors.Installed() then
-				return "This client has no UIErrorsFrame to stand in front of, so nothing is filtered whatever the list below says. Your ticks are still saved and would take effect on a client that has one."
-			end
-			if not ns.db.errorFilter then
-				return "Every error reaches the screen. The list below is kept and consulted again the moment this goes back on."
-			end
-			return "Error " .. ns.Errors.Describe() .. ". Nothing is hidden that you have not ticked, and the list is shared by every character on this account."
-		end)
-		ui.Note(function()
-			return "Ticked messages are dropped before they draw. Everything else is untouched, including the sound and the flash, so a refusal you did not mute still reads exactly as it did."
-		end)
+		ui.Hint("Nothing is hidden that you have not ticked, and the sound and the flash are untouched, so a refusal you did not mute still reads exactly as it did.")
 		ui.ActionPair(
 			function() return "mute a missed charge" end, function()
 				ns.Errors.SilencePositional()
@@ -358,38 +331,24 @@ ns.Register({
 				ns.Errors.Clear()
 				ns.Options.Refresh()
 			end, function() return ns.Errors.Count() > 0 end)
-		ui.Note(function()
-			return "The left button mutes what a positional ability shouts when it misses: too far away, facing the wrong way, out of range, not in front of you. That is what the charge button's aim costs you and it is the only preset here."
-		end)
+		ui.Hint("The left button mutes what a positional ability shouts when it misses: too far, facing the wrong way, out of range. It is the only preset here.")
 
 		for slot = 1, ns.Errors.RowLimit() do
 			ErrorRow(ui, slot)
 		end
 
-		ui.Note(function()
+		ui.Reading("filtering", function()
+			if not ns.Errors.Installed() then
+				return "this client has no UIErrorsFrame to stand in front of"
+			end
+			return ns.Errors.Describe()
+		end)
+		ui.Reading("the list", function()
 			local rows = ns.Errors.Rows()
 			if #rows == 0 then
-				return "Nothing has come past yet. Play for a minute and every error the client shows you appears in this list with a tick beside it."
+				return "nothing has come past yet"
 			end
-			return ("%d muted of %d listed. What you have muted is at the top, what has come past this session is under it, newest first.")
-				:format(ns.Errors.Count(), #rows)
-		end)
-
-		ui.Header("Clutter")
-		ui.Note(function()
-			return "Quest items for quests you have finished sit in your bags forever. Most of them cannot be sold, so a vendor is no help and the only way out is to destroy them."
-		end)
-		ui.Action(function() return "review them one at a time" end,
-			function() ns.Destroy.Show() end,
-			function() return ns.Clutter.Ready() end)
-		ui.Note(function()
-			if not ns.Clutter.Ready() then
-				return "Questie is not answering. The client will tell you an item is a quest item and will not tell you which quest, so without Questie's database there is nothing to trace and the window stays empty."
-			end
-			return "One card at a time, with the quest it came from written on it, and a destroy and a skip. Nothing is destroyed without a press, nothing runs in the background, and an item that starts a quest you have not done is never offered at all."
-		end)
-		ui.Note(function()
-			return "Read the card before you press. Repeatable quests never flag as completed, so their turn-in items read as finished with when they are not, and a chain can drop part three's item while you are still on part one."
+			return ("%d muted of %d listed"):format(ns.Errors.Count(), #rows)
 		end)
 	end,
 })

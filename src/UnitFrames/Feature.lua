@@ -300,6 +300,12 @@ ns.Register({
 	name = "unit frames",
 	order = 6,
 
+	switch = {
+		key = "bars",
+		label = "enemy bars",
+		apply = function() ns.EnemyBars.Rebuild() end,
+	},
+
 	defaults = {
 		bars = true,
 		barsMode = "auto",     -- "auto" follows the nameplate cvar, or force "plates" / "list"
