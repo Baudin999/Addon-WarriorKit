@@ -53,7 +53,18 @@ local TYPES = {
 	statusbar = "StatusBar", button = "Button", font = "Font",
 }
 
+-- The kind is lower cased on the way in, because there are two spellings of it
+-- and they have to answer GetObjectType the same. This file builds Blizzard's
+-- frames with the lower case names TYPES is keyed by; the addon builds its own
+-- through CreateFrame, where the client's own spelling is "Button", "Frame",
+-- "StatusBar". Left alone, TYPES missed on every frame the addon made and all
+-- of them came back as "Frame", so a walk that asks a frame what it is could
+-- not see anything this addon had built. That is not a small lie. It is
+-- invisible to every test that does not walk the addon's own frames, and it
+-- made the walk over the client's game menu unable to find the button we had
+-- just put in it.
 local function region(kind, parent, name)
+	kind = kind:lower()
 	local self = setmetatable({
 		kind = kind, parent = parent, name = name, scripts = {}, shown = true,
 		width = 0, height = 0, scale = 1, ignoreScale = false, frameLevel = 0,

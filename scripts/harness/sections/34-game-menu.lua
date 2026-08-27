@@ -88,7 +88,8 @@ if button then
 	check(menu:GetHeight() == before,
 		("attaching again took the menu from %g to %g"):format(before, menu:GetHeight()))
 	check(anchored(button) == ours and anchored(continue) == foot,
-		"attaching again moved the button or the foot")
+		("attaching again moved something: button %s -> %s, foot %s -> %s")
+			:format(ours, anchored(button), foot, anchored(continue)))
 end
 
 -- The client relaying its own column, which is what a version of this that ran
@@ -122,6 +123,66 @@ if button then
 	check(ns.UI.Windows[1]:IsShown(), "clicking the button did not open the panel")
 	ns.Options.Hide()
 end
+
+-- And the other menu.
+--
+-- Blizzard rewrote this frame on the modern clients and the rewrite lays every
+-- button out against the frame itself, so there is no chain to read: every
+-- button hangs off the menu and nothing hangs off any button, which makes every
+-- one of them look like the end of a chain. The walk that reads anchors gives
+-- up on that and the one that reads the screen takes over.
+--
+-- Modelled by re-anchoring the stub's column the way a layout frame would, and
+-- unplacing our button, which is the state a client that relaid its menu leaves
+-- behind. Blizzard's buttons must come out of this untouched: theirs are placed
+-- by code we cannot see and re-placed whenever it likes, and one of ours that
+-- re-anchored one of them would be undone on the next show and would take one
+-- of Blizzard's with it.
+if button then
+	local placed = {}
+	for index, entry in ipairs(buttons) do
+		entry:ClearAllPoints()
+		entry:SetPoint("TOP", menu, "TOP", 0, -(H.MENU_GAP + (index - 1) * STEP))
+		placed[entry] = anchored(entry)
+	end
+	button:ClearAllPoints()
+	menu:SetHeight(BARE)
+
+	check(Menu.Attach(), "the button would not go into a menu laid out against its frame")
+
+	local point, relative, _, _, y = button:GetPoint(1)
+	check(relative == continue and point == "TOP",
+		("the button hangs off %s rather than under the lowest button")
+			:format(tostring(relative and relative.name)))
+	check(y == -H.MENU_GAP,
+		("the button sits %g under the foot and the column's own gap is %g")
+			:format(-y, H.MENU_GAP))
+	check(button:GetHeight() == continue:GetHeight(),
+		"the button did not take the foot's height")
+	check(menu:GetHeight() == BARE + STEP,
+		("the menu is %g tall and one button taller than %g is %g")
+			:format(menu:GetHeight(), BARE, BARE + STEP))
+
+	local moved = 0
+	for _, entry in ipairs(buttons) do
+		if anchored(entry) ~= placed[entry] then
+			moved = moved + 1
+		end
+	end
+	check(moved == 0, ("%d of Blizzard's own buttons were moved"):format(moved))
+
+	local height = menu:GetHeight()
+	Menu.Attach()
+	check(menu:GetHeight() == height and anchored(button) == anchored(button),
+		"attaching again into a laid out menu moved something")
+	check(Menu.Describe():find("under the last button") ~= nil,
+		"the status line does not say the button went under: " .. Menu.Describe())
+end
+
+-- The probe runs. It is the only thing in the addon that reports on somebody
+-- else's frame, so it is the thing somebody will type when the button has not
+-- turned up, and a probe that raises at that moment is worse than no probe.
+check(pcall(SlashCmdList.WARRIORKIT, "menu"), "/wk menu raised")
 
 print(("game menu one button, column %g to %g tall, %s")
 	:format(BARE, menu:GetHeight(), Menu.Describe()))
