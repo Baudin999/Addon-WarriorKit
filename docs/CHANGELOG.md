@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+### /wk status errored on a class with no bar plan
+
+`Layout.Describe` read the plan straight after being refused over it, and on a
+character with none that is the length of a nil. The panel row calls it, the
+status line calls it, and the status line calls it whether or not anything
+refused, so a hunter typing `/wk status` in combat got a Lua error instead of a
+line.
+
+The refusals in `Buttons/Layout.lua` come in two kinds and the file had them in
+the wrong order. Combat and a full cursor clear on their own. A missing
+`PickupSpell` and an unwritten plan do not, and never will on that character.
+`Describe` tells the two apart by comparing the sentence against
+`Layout.BUSY_COMBAT` and `Layout.BUSY_CURSOR`, and carries on past either,
+because reading what your bars would be filled from is an ordinary thing to do
+mid fight. That test is only sound if every permanent refusal is reached before
+the first transient one, and it was not. `CanApply` asked about combat before it
+asked for the plan, so a plan-less character was refused in a sentence that
+promised to clear, and `Describe` walked past it into the plan.
+
+So `CanApply` asks for the plan first, and `CanWrite` probes the five compose
+calls before it asks `CanCarry` about combat. Nothing else moved. The same
+reordering fixes a quieter version of the same bug: a client without
+`PickupSpell` used to report "you are in combat" for the length of every fight,
+which reads as a client that will manage it in a minute and never will.
+
+The harness calls `CanApply` and `Describe` under lockdown on every class it
+runs as, and reads which of the two refusals came back rather than reading the
+sentence itself. Put the old order back and the hunter run fails on that line
+and then dies in `Describe`, which is the whole report.
+
+### A priest, which is one fact and no page
+
+The fifth class file, and the shortest. A priest fills in one of the six fields:
+Fortitude and Inner Fire on the buff nag row, both silent when they lapse and
+both gone after a death. No bar plan, because nobody here has levelled a priest,
+and a plan written off a talent calculator would fill your bars with a guess and
+take a backup you then have to put back.
+
+That shape is the one the options rail had no run for. A class that registers a
+file but opens no page of its own is dropped from the rail by `FillRail`, and
+neither the mage nor the shaman reaches that branch: both carry a bar plan and a
+plan opens a page. `check.sh` runs the harness as a priest now, so the rail is
+gated on five shapes rather than four.
+
 ### The chat window gives its screen back
 
 It shipped taking a third of the corner it sits in, and most of what it took was

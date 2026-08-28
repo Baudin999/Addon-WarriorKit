@@ -29,6 +29,7 @@ Class\Class.lua
 Class\Warrior.lua
 Class\Mage.lua
 Class\Shaman.lua
+Class\Priest.lua
 
 # Two shared files that wrap a client API and own no setting, the same shape
 # ns.ItemInfo has. Gear is what the client will let into each hand and which

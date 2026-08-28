@@ -5175,6 +5175,16 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- Whether the priest's three upkeep ids name what this addon thinks they name.
+  1243 is Power Word: Fortitude rank 1, 21562 is Prayer of Fortitude and 588 is
+  Inner Fire, all matched by the name the client spells them, and the Fortitude
+  square is cleared by either of its two. The one that is a guess is whether
+  Prayer of Fortitude lands as its own aura name on 2.5.6 or as the single
+  version's; if it lands as the single version's, 21562 resolves to a name
+  already in the table and nothing is worse than it was. Nobody here plays a
+  priest, so this is the one entry on the buff row written without a character
+  to look at. What would settle it: buff a priest with each of the three and
+  read the row.
 - Whether hiding Blizzard's chat window holds. `Chat/Blizzard.lua` strips ten
   chat frames, their tabs, their button frames, the dock manager and five other
   named pieces of furniture. Every name is probed, so a name these clients spell

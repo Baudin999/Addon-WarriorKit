@@ -106,13 +106,42 @@ check(ns.Stance.Count() == #(Class.Of("forms") or {}),
 	("the stance list is %d long and the registry gave %d")
 		:format(ns.Stance.Count(), #(Class.Of("forms") or {})))
 
--- The loadout refuses by naming the class rather than by naming a warrior. This
--- stub has no PickupSpell, so CanApply refuses on the client before the class is
--- reached; Layout.Refusal is the sentence the panel and the status line read and
--- is asked directly.
+-- The loadout refuses by naming the class rather than by naming a warrior, and
+-- the sentence it names it in is the one the panel and the status line print.
 check(ns.Layout.Refusal():find(Class.Label(), 1, true) ~= nil,
 	("the loadout refusal on a %s does not name the class: %s")
 		:format(PLAYER_CLASS, ns.Layout.Refusal()))
+
+-- The same refusal, in combat, which is where it went wrong. CanApply asks for
+-- the plan before it asks about the moment, so a class with no plan is told the
+-- permanent thing rather than the passing one, and everyone else is told what
+-- this stub is missing, which is PickupSpell. Read the pair rather than the
+-- sentence: which of the two comes back is the whole ordering.
+--
+-- Then the status line itself, on every class, in the state that broke it. It
+-- used to page the plan it had just been refused over and index the length of a
+-- nil. Combat must not reach the reading as a reason it is unavailable either:
+-- that sentence clears on its own and the reading may carry on past it.
+do
+	local realLockdown = _G.InCombatLockdown
+	_G.InCombatLockdown = function() return true end
+
+	local can, refusal = ns.Layout.CanApply()
+	check(not can,
+		("the loadout can be applied in combat on a %s"):format(PLAYER_CLASS))
+	check((refusal == ns.Layout.Refusal()) == (ns.Layout.Plan() == nil),
+		("in combat a %s is refused with %q"):format(PLAYER_CLASS, tostring(refusal)))
+
+	local reading = ns.Layout.Describe()
+	check(type(reading) == "string" and reading ~= "",
+		("the bar reading in combat on a %s came back %s")
+			:format(PLAYER_CLASS, tostring(reading)))
+	check(reading:find(ns.Layout.BUSY_COMBAT, 1, true) == nil,
+		("the bar reading on a %s calls combat a reason it cannot be done: %s")
+			:format(PLAYER_CLASS, reading))
+
+	_G.InCombatLockdown = realLockdown
+end
 
 -- What your class puts on the buff row is merged in, and nobody else's is.
 local shipped = ns.Upkeep.Fixed()

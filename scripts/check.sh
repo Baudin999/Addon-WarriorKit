@@ -610,20 +610,23 @@ fi
 # PLAYER_LOGIN off what Class/<yours>.lua registered and there is no way to flip
 # that mid-run.
 #
-# There are three shapes and one file each proves. A warrior fills in all six
+# There are four shapes and one class each proves. A warrior fills in all six
 # fields, so that run is the only one where the charge button, the world marker,
 # the reaction windows and the swing band are built at all. A mage and a shaman
 # fill in two, so those runs prove the other four parts are absent rather than
 # merely quiet: a hidden charge button is still a secure frame holding a key
 # override, and the action targeting CVar has to come out with the value it went
-# in with. A hunter has no file, which is a supported class and the one that
-# proves the ten class-agnostic parts still stand up with nothing registered.
+# in with. A priest fills in one, and it is the field that opens no page: the
+# rail entry named after you is dropped, which is a branch neither of the other
+# two files reaches, because both carry a bar plan and a plan opens a page. A
+# hunter has no file, which is a supported class and the one that proves the ten
+# class-agnostic parts still stand up with nothing registered.
 #
 # Everything else in the addon is asserted again on every run, which is the
 # point: a part that quietly needed a warrior fails here rather than in
 # someone's game.
 if [ -f ../scripts/harness.lua ]; then
-	for class in WARRIOR MAGE SHAMAN HUNTER; do
+	for class in WARRIOR MAGE SHAMAN PRIEST HUNTER; do
 		if ! lua5.1 ../scripts/harness.lua . "$class"; then
 			echo "harness FAIL as $class"
 			status=1

@@ -102,20 +102,20 @@ rewrite.
 
 ## 13. What the class split left behind
 
-Five things out of a read of `c536c44`. The split itself is right: the registry
-is the correct shape, the load order is correct, and the "nil is the gate" rule
-holds everywhere it was traced. All four harness shapes pass. These are what
-did not come with it.
+Four things out of a read of `c536c44`, down from five. The split itself is
+right: the registry is the correct shape, the load order is correct, and the
+"nil is the gate" rule holds everywhere it was traced. All five harness shapes
+pass. These are what did not come with it.
 
-`Layout.Describe` errors on a class with no plan. `Buttons/Layout.lua:452`
-calls `Paging(plan)` with `plan` possibly nil, and `CanApply` tests combat and
-the cursor before it tests the plan, so `BUSY_COMBAT` and `BUSY_CURSOR` fall
-past the early return and reach `#plan.pages` at `Buttons/Layout.lua:237`.
-`/wk status` reaches it through `Buttons/Feature.lua:604`. It needs
-`Bar1Bases` to answer, so it is a druid in a form and not a hunter in a field.
-A regression: `Layout.PLAN` was a constant table and was never nil. Proved
-against the harness as a hunter, with `InCombatLockdown` forced true and the
-client put in stance 1: `attempt to index local 'plan' (a nil value)`.
+The `Layout.Describe` crash is fixed and is off this list. `CanApply` asks for
+the plan before it asks about combat, `CanWrite` probes the five compose calls
+before `CanCarry` asks about combat, and the reason is written in
+`docs/CHANGELOG.md`: the file has permanent refusals and transient ones,
+`Describe` carries on past a transient one by name, and that test is only sound
+if every permanent refusal is reached first. The coverage gap went with it.
+Section 21 calls `CanApply` and `Describe` under lockdown on every class, and
+`Class/Priest.lua` is the fifth harness shape, a class that registers a file and
+opens no page, which is `FillRail`'s drop branch.
 
 `Class.Is` is dead and its comment says otherwise. `Class/Class.lua:118` reads
 "Everything that decides once at login goes through here" and nothing in `src`
@@ -143,9 +143,3 @@ appear nowhere in it.
 `Class.Label()` falls back to `"this character"`, which reads "a this character
 has none" through `Charge.Refusal` and `Layout.Refusal`. Only reachable before
 the client answers, so it is cosmetic.
-
-One coverage gap to close with the fix. `FillRail`'s drop branch, where a class
-registers a file but opens no page under its own rail entry, runs on no harness
-shape, because Mage and Shaman both carry a `loadout`. Add a check that calls
-`Layout.Describe` under lockdown on every run, and a shape that registers
-`upkeep` and nothing else.

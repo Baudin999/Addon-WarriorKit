@@ -98,6 +98,13 @@ end
 -- value to decide whether a refusal is worth reporting as unavailability or as
 -- something that will clear on its own. Two copies of a sentence is one typo
 -- away from that test never matching again.
+--
+-- These two are the only refusals in this file that clear on their own, and
+-- every other one is tested before them. That order is what makes the test
+-- above sound: a refusal that is not one of these two is still there after the
+-- fight, and Describe may say so. Reached in the other order, a permanent
+-- refusal wears a transient sentence for as long as the fight lasts and
+-- Describe carries on past it into the state that refused.
 Layout.BUSY_COMBAT = "you are in combat"
 Layout.BUSY_CURSOR = "put down what you are holding first"
 function Layout.Refusal()
@@ -130,15 +137,19 @@ end
 -- Ranks uses this one. Moving a slot up to the best rank you know is the same
 -- job in every class.
 function Layout.CanWrite()
-	local can, why = Layout.CanCarry()
-	if not can then
-		return false, why
-	end
+	-- Before CanCarry rather than after it, because CanCarry ends on combat.
+	-- A client with no PickupSpell answered "you are in combat" for the length
+	-- of every fight, which reads as a client that will be able to do this in
+	-- a minute and never will.
 	if composing == nil then
 		composing = Absent(COMPOSE)
 	end
 	if composing ~= true then
 		return false, composing
+	end
+	local can, why = Layout.CanCarry()
+	if not can then
+		return false, why
 	end
 	if GetCursorInfo() then
 		return false, Layout.BUSY_CURSOR
@@ -150,15 +161,16 @@ end
 -- so running someone else's would fill the bars with things they cannot cast
 -- and take a backup only that character can put back. A class with no plan
 -- refuses here rather than anywhere further in.
+--
+-- The plan is asked for first because it is the one refusal here that no amount
+-- of waiting fixes. Asked last, a hunter in combat was refused with "you are in
+-- combat", Describe read that as a wait and went on to page a plan that was
+-- never written, and /wk status errored on the length of a nil.
 function Layout.CanApply()
-	local can, why = Layout.CanWrite()
-	if not can then
-		return false, why
-	end
 	if not Layout.Plan() then
 		return false, Layout.Refusal()
 	end
-	return true
+	return Layout.CanWrite()
 end
 
 --------------------------------------------------------------------------
@@ -560,6 +572,13 @@ function Layout.Restore()
 	return true, { restored = restored, failed = failed }
 end
 
+-- What the bars would be filled from, for the panel and for /wk status. Called
+-- in combat and with something on the cursor, because both are ordinary states
+-- to read a status line in, so neither is reported as unavailability.
+--
+-- Past that line the plan exists. CanApply asks for it before it asks about
+-- either of those two, so they are the only sentences that can come back with a
+-- plan in hand, and the two tests are what says so.
 function Layout.Describe()
 	local can, why = Layout.CanApply()
 	if not can and why ~= Layout.BUSY_COMBAT and why ~= Layout.BUSY_CURSOR then
