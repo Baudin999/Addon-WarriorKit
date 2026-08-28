@@ -304,6 +304,71 @@ local function Target()
 	return (ok and channel) or nil, "club", clubId, streamId
 end
 
+--------------------------------------------------------------------------
+-- The client's own voice window
+--
+-- Blizzard's Chat Channels window is the one place on either of these clients
+-- that lists who is in your voice channel and puts a volume slider against each
+-- of them. This addon does not draw that and should not: it is the client's own
+-- roster with a mixer attached, it is already written, and a second copy of a
+-- mixer is a second set of numbers to disagree with the first.
+--
+-- It has to be reachable from our chat window because of what Chat/Blizzard.lua
+-- does. ChatFrameChannelButton is in that file's furniture list and goes off
+-- the screen with the rest of the client's chat frame, and that button is what
+-- opened this window. Hiding the chat frame without putting the door back
+-- somewhere takes the volume controls out of the game.
+--------------------------------------------------------------------------
+
+-- The Channels window is load on demand and the call that loads it is spelled
+-- two ways across these clients, so both spellings are looked up and neither is
+-- assumed.
+local function LoadChannels()
+	local addons = _G.C_AddOns
+	local loaded = (addons and addons.IsAddOnLoaded) or _G.IsAddOnLoaded
+	local load = (addons and addons.LoadAddOn) or _G.LoadAddOn
+	if loaded and loaded("Blizzard_Channels") then
+		return true
+	end
+	if not load then
+		return false
+	end
+	local ok, done = pcall(load, "Blizzard_Channels")
+	return (ok and done) and true or false
+end
+
+-- Open it, or say why not. Toggling rather than showing, because this is the
+-- behaviour the button it replaced had and a window you cannot shut with the
+-- control that opened it is a window you hunt for a close box on.
+function Voice.Open()
+	LoadChannels()
+
+	local toggle = _G.ToggleChannelFrame
+	if type(toggle) == "function" and pcall(toggle) then
+		return true, "the client's Chat Channels window"
+	end
+
+	-- No ToggleChannelFrame on this client, or it raised. The frame itself is
+	-- the fallback, through the client's panel manager where there is one so it
+	-- lands in the same place and closes with escape the same way.
+	local frame = _G.ChannelFrame
+	if not frame then
+		return false, "this client has no Chat Channels window"
+	end
+	local shown = frame.IsShown and frame:IsShown()
+	local move = shown and (_G.HideUIPanel or frame.Hide) or (_G.ShowUIPanel or frame.Show)
+	if not pcall(move, frame) then
+		return false, "this client refused to open its Chat Channels window"
+	end
+	return true, "the client's Chat Channels window"
+end
+
+-- What to run when the answer to Voice.Active may have changed. Set by whatever
+-- is drawing that answer, which is the chat window's microphone. A field rather
+-- than a list because there is one such thing and a list of one is a list to
+-- keep in step for nothing.
+Voice.OnChange = nil
+
 -- The channel this character is talking in right now, whatever put them there.
 function Voice.Active()
 	local activeId = API("GetActiveChannelID")
@@ -487,6 +552,7 @@ local EVENTS = {
 	"VOICE_CHAT_CONNECTION_SUCCESS",
 	"VOICE_CHAT_CHANNEL_JOINED",
 	"VOICE_CHAT_CHANNEL_ACTIVATED",
+	"VOICE_CHAT_CHANNEL_DEACTIVATED",
 	"VOICE_CHAT_CHANNEL_REMOVED",
 	"CLUB_STREAMS_LOADED",
 }
@@ -501,6 +567,12 @@ end
 frame:SetScript("OnEvent", function(_, event)
 	if not ns.db then
 		return
+	end
+	-- Whatever the event was, the answer to "am I in a channel" may have moved,
+	-- and the microphone in the chat window is drawing that answer. Told before
+	-- anything else happens, because two of the branches below return.
+	if Voice.OnChange then
+		pcall(Voice.OnChange)
 	end
 	if event == "VOICE_CHAT_CHANNEL_ACTIVATED" then
 		-- Somebody or something got us into a channel, which is the end state

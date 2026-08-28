@@ -1,6 +1,6 @@
 -- The social part
 --
--- Six questions no amount of reading Chat/ will answer.
+-- Five questions no amount of reading Chat/ will answer.
 --
 -- Does a line reach the rooms it belongs in, and only those. The whole feature
 -- is a routing decision made once per message, and the two ways it can be
@@ -20,10 +20,9 @@
 -- window hidden and the forward broken, every line of loot, experience and
 -- addon output in the game is drawn nowhere at all.
 --
--- Does the voice pick ask the service exactly once for a channel that is not
--- there, and activate rather than ask for one that is. The events that drive it
--- arrive in bursts, and a join request per event is an addon hammering a
--- Battle.net service.
+-- Voice is not one of them any more. It is a Battle.net service rather than a
+-- chat room and it is 41-voice.lua now, which is what took this file back under
+-- the eight hundred line budget.
 --
 -- And does a client that refuses a ScrollingMessageFrame, or refuses one of the
 -- two spellings of its insert mode, cost the log rather than the window.
@@ -57,8 +56,13 @@ check(Window.Rail() >= M.roomIcon,
 	("a room row came out %d wide and the icon on it is %d")
 		:format(Window.Rail(), M.roomIcon))
 
-check(_G.WarriorKitChatRooms:GetHeight() == ns.db.chatHeight - M.entry,
-	("the room rail is %s tall in a %d window, which has no title bar")
+-- The window has no title bar, so the rail gets everything the entry strip at
+-- the foot and the voice button under it do not take. The voice button is in
+-- the rail's own column and is the reason for the second subtraction: a rail
+-- still measuring the full body would be drawing its last room underneath it.
+check(_G.WarriorKitChatRooms:GetHeight() == ns.db.chatHeight - M.entry - M.roomRow,
+	("the room rail is %s tall in a %d window, which has no title bar and a "
+		.. "voice button in the rail's column")
 		:format(tostring(_G.WarriorKitChatRooms:GetHeight()), ns.db.chatHeight))
 
 ----------------------------------------------------------------------
@@ -461,6 +465,59 @@ do
 	check(Window.Line() == "/raid ",
 		("the raid room filled the line in with %q"):format(Window.Line()))
 
+	-- The line you type in is drawn only while the cursor is in it. Not drawn
+	-- means no fill and no hairline, so what is behind it is the window's own
+	-- background at the player's own opacity, which is the same surface every
+	-- line of the conversation sits on.
+	--
+	-- The focus is dropped through the edit box itself rather than through a
+	-- method on the window, because the window has no reason to grow one: every
+	-- way out of the field in the game is the client taking the focus away.
+	local field = Window.Field()
+	local line = field:GetChildren()
+	Window.Focus()
+	check(field.bg:IsShown(), "the line is not drawn with the cursor in it")
+	check(field.edges[1]:IsShown(), "the line has no hairline with the cursor in it")
+	line:ClearFocus()
+	check(not field.bg:IsShown(),
+		"the line is still painted over the window with the cursor out of it")
+	check(not field.edges[1]:IsShown(),
+		"the line's hairline is still drawn with the cursor out of it")
+
+	-- The slash key. It is the second of the client's two chat keys and it was
+	-- the one this window did not take, so pressing it opened Blizzard's
+	-- invisible line and every slash command in the game went nowhere.
+	--
+	-- Bound off the client's own binding set rather than off the character "/",
+	-- and read back through GetBindingAction, because a client that takes
+	-- SetOverrideBindingClick and does nothing with it leaves no other trace.
+	local hidBlizz = ns.db.hideBlizzChat
+	ns.db.hideBlizzChat = true
+	Window.Keys()
+	check(_G.GetBindingAction("/", true) == "CLICK WarriorKitChatSlashButton:LeftButton",
+		("the slash key runs %q with Blizzard's window hidden")
+			:format(_G.GetBindingAction("/", true)))
+	check(_G.GetBindingAction("ENTER", true) == "CLICK WarriorKitChatEnterButton:LeftButton",
+		("the enter key runs %q with Blizzard's window hidden")
+			:format(_G.GetBindingAction("ENTER", true)))
+
+	-- And what it opens is a line with a slash in it and no room prefix. The
+	-- prefix would turn every slash command into a sentence said out loud.
+	Window.Go("party")
+	Window.Slash()
+	check(Window.Line() == "/",
+		("the slash key opened the line with %q, expected \"/\""):format(Window.Line()))
+
+	-- Both keys handed back the moment Blizzard's window is on screen again,
+	-- because with that window up its own line works and there is nothing to fix.
+	ns.db.hideBlizzChat = false
+	Window.Keys()
+	check(_G.GetBindingAction("/", true) == "",
+		("the slash key is still held as %q with Blizzard's window up")
+			:format(_G.GetBindingAction("/", true)))
+	ns.db.hideBlizzChat = hidBlizz
+	Window.Keys()
+
 	-- A slash the player typed beats the room, because the text in the field is
 	-- the only thing deciding where the line goes.
 	Window.Send("/g anyone on")
@@ -554,151 +611,6 @@ do
 end
 
 ----------------------------------------------------------------------
--- Voice
-----------------------------------------------------------------------
-
-check(Voice.Supported(), "the stub voice service was not recognised")
-
-local calls = #chat.voice.calls
-Voice.Set(Voice.NONE)
-check(#chat.voice.calls == calls, "the voice pick asked for a channel with nothing picked")
-
--- Nothing to activate, so exactly one request, and no second one until the
--- retry window has passed however many events arrive.
-Voice.Set(Voice.GROUP)
-check(#chat.voice.calls == calls + 1,
-	("picking the group channel made %d calls, expected one")
-		:format(#chat.voice.calls - calls))
-check(chat.voice.calls[#chat.voice.calls].what == "requestType",
-	"the group pick did not ask to join by channel type")
-check(chat.voice.calls[#chat.voice.calls].autoActivate == true,
-	"the join request did not ask for the channel to be activated")
-
-local asked = #chat.voice.calls
-fire("GROUP_ROSTER_UPDATE")
-fire("GROUP_ROSTER_UPDATE")
-check(#chat.voice.calls == asked,
-	("two roster changes in a burst made %d more requests")
-		:format(#chat.voice.calls - asked))
-
--- The service signing in is not a burst of the same news, it is new news,
--- and it clears the rate limit rather than waiting it out. Everything this
--- file gave up on before the service existed is worth one more ask the
--- moment it does.
-fire("VOICE_CHAT_LOGIN")
-check(#chat.voice.calls > asked, "the voice service signed in and nothing was asked for")
-
--- The channel turns up. Now there is something to activate, and asking the
--- service again would be the wrong call entirely.
-chat.voice.channels[2] = { channelID = 7, name = "Party", isActive = false }
-advance(10)
-fire("VOICE_CHAT_CHANNEL_JOINED")
-check(chat.voice.calls[#chat.voice.calls].what == "activate",
-	"a channel that exists was requested again instead of activated")
-check(chat.voice.calls[#chat.voice.calls].channelID == 7,
-	"the wrong channel was activated")
-
--- Already in it, so nothing at all.
-local settled = #chat.voice.calls
-advance(10)
-fire("GROUP_ROSTER_UPDATE")
-check(#chat.voice.calls == settled, "a channel already active was joined again")
-check(Voice.Describe():find("Party") ~= nil,
-	("voice says %q with the party channel active"):format(Voice.Describe()))
-
--- The communities. Every stream is offered, not only the ones that already
--- have a voice channel, because a community channel is made when the first
--- person joins it and at login nobody has.
-local options = Voice.Options()
-local offered = {}
-for _, row in ipairs(options) do
-	offered[row.value] = row.text
-end
-check(offered["club:11:1"] == "C & F: General",
-	("the picker offered %s for the first community stream")
-		:format(tostring(offered["club:11:1"])))
-check(offered["club:11:2"] ~= nil and offered["club:22:1"] ~= nil,
-	("%d options offered, expected both clubs and all three streams"):format(#options))
-
--- Picking one asks for it by club and stream, which are the two numbers that
--- survive a logout.
-advance(10)
-Voice.Set("club:11:1")
-local asked_club = chat.voice.calls[#chat.voice.calls]
-check(asked_club.what == "requestClub" and asked_club.clubId == 11 and asked_club.streamId == 1,
-	"picking a community channel did not ask for it by club and stream")
-
--- And the name it was picked under is kept, so a login that has not loaded
--- the communities yet still says what you chose rather than the numbers.
-check(ns.db.voiceLabel == "C & F: General",
-	("the pick was remembered as %q"):format(tostring(ns.db.voiceLabel)))
-local clubs = _G.C_Club
-_G.C_Club = nil
-check(Voice.Label() == "C & F: General",
-	("with the communities not loaded the pick reads as %q"):format(Voice.Label()))
-_G.C_Club = clubs
-
--- The channel turns up once somebody is in it, and then it is activated
--- rather than asked for again.
-chat.voice.channels["club:11:1"] = { channelID = 9, name = "C & F General", isActive = false }
-advance(10)
-fire("VOICE_CHAT_CHANNEL_JOINED")
-check(chat.voice.calls[#chat.voice.calls].what == "activate"
-	and chat.voice.calls[#chat.voice.calls].channelID == 9,
-	"a community channel that exists was asked for again instead of activated")
-chat.voice.channels["club:11:1"] = nil
-chat.voice.active = nil
-Voice.Set(Voice.GROUP)
-
--- A service that says it is not signed in is told to sign in, and the join
--- is asked for anyway.
---
--- This was a refusal at the top of Apply, and it was wrong on the only
--- client that matters: IsLoggedIn reads false there with voice plainly
--- working, and pressing the voice button in the client's own window joins
--- the channel while it is still saying no. Nothing was ever tried. The rule
--- it broke is the one the rest of the addon holds to, which is to probe what
--- you are about to call rather than the weather around it, so the assertion
--- is now that a false answer costs nothing.
-chat.voice.loggedIn = false
-chat.voice.channels[2] = nil
-chat.voice.active = nil
-advance(10)
-local before_login = #chat.voice.calls
-local ok, why = Voice.Apply(true)
-check(ok, ("a join was refused because the service said it was not signed in: %s")
-	:format(tostring(why)))
-
-local sawLogin, sawRequest = false, false
-for index = before_login + 1, #chat.voice.calls do
-	local call = chat.voice.calls[index]
-	sawLogin = sawLogin or call.what == "login"
-	sawRequest = sawRequest or call.what == "requestType"
-end
-check(sawLogin, "the service said it was not signed in and was never asked to sign in")
-check(sawRequest, "the channel was never asked for")
-
--- And the diagnostic says what each probe answered, because the sentence
--- this part prints is a decision made out of four of them and the first bug
--- in it was invisible without them.
-check(Voice.Diagnose():find("signed in false") ~= nil,
-	("the diagnostic reads %q"):format(Voice.Diagnose()))
-chat.voice.loggedIn = true
-
--- Asking forever is not an option. Past the attempt cap the requests stop
--- until something changes.
-for _ = 1, 20 do
-	advance(10)
-	Voice.Apply()
-end
-local capped = #chat.voice.calls
-advance(10)
-Voice.Apply()
-check(#chat.voice.calls == capped, "the voice pick kept asking past its own cap")
-
-Voice.Set(Voice.NONE)
-
-----------------------------------------------------------------------
 -- The log, on a client that says no
 ----------------------------------------------------------------------
 
@@ -732,6 +644,6 @@ check(refused == nil and type(reason) == "string",
 -- for.
 group.Forget()
 
-print(("chat   %d rooms, %d lines held, %d unread; %d filters; Blizzard's %s; voice %s")
+print(("chat   %d rooms, %d lines held, %d unread; %d filters; Blizzard's %s")
 	:format(Window.Rooms(), Window.Held(), Rooms.Waiting(), Feed.Claimed(),
-		ns.ChatBlizzard.Describe(), Voice.Describe()))
+		ns.ChatBlizzard.Describe()))

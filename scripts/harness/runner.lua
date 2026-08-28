@@ -115,6 +115,7 @@ local SECTIONS = {
 	"38-bar-look",
 	"39-party-raid",
 	"40-loot-feed",
+	"41-voice",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

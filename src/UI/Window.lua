@@ -104,6 +104,27 @@ end
 local Window = {}
 Window.__index = Window
 
+-- The bar across the top: the strip, the name on it and the close box. Its own
+-- function because it is the whole of what a window that is not bare has and
+-- none of what a bare one does, so the alternative is fifteen lines of one
+-- window's chrome sitting inside the constructor both kinds run through.
+local function TitleBar(window, px, title)
+	local frame = window.frame
+	local bar = ns.Fill(frame, "ARTWORK", C.chrome[1], C.chrome[2], C.chrome[3], 1)
+	bar:SetPoint("TOPLEFT", px, -px)
+	bar:SetPoint("TOPRIGHT", -px, -px)
+	bar:SetHeight(M.title)
+
+	window.title = UI.Label(frame, M.heading, C.heading, "LEFT", UI.FLAT)
+	window.title:SetPoint("TOPLEFT", M.pad, -math.floor((M.title - M.heading) / 2) - px)
+	window.title:SetText(title or "")
+
+	window.close = UI.Button(frame, { label = "x", glyph = true,
+		width = M.title - 8, height = M.title - 8,
+		onClick = function() window:Hide() end })
+	window.close:SetPoint("TOPRIGHT", -4, -4)
+end
+
 function UI.Window(opts)
 	local window = setmetatable({}, Window)
 	local zoom = opts.zoom or UI.WindowZoom()
@@ -150,9 +171,20 @@ function UI.Window(opts)
 	-- player decides how much of the world comes through it.
 	window.bg = ns.Fill(frame, "BACKGROUND", C.window[1], C.window[2], C.window[3], C.window[4])
 	window.bg:SetAllPoints()
-	window.edges = ns.Outline(frame, C.edge[1], C.edge[2], C.edge[3], 1)
 	local px = ns.Pixel(frame)
-	ns.EdgeSize(window.edges, px)
+	-- A hairline round the outside, unless the caller says no.
+	--
+	-- The line is there to say where a window ends, and that is worth having on
+	-- a settings window: it is opaque, it lands over the game for a minute and
+	-- the edge is what tells the panel from the world behind it. The chat window
+	-- is the opposite case. It is eighty percent transparent and up all evening,
+	-- so the line is not marking a boundary you needed marking, it is a bright
+	-- rectangle drawn round the trees. Take it off and the window is what is
+	-- written in it, which is what a chat window should be.
+	if opts.edge ~= false then
+		window.edges = ns.Outline(frame, C.edge[1], C.edge[2], C.edge[3], 1)
+		ns.EdgeSize(window.edges, px)
+	end
 
 	-- How much of the window is chrome, top and bottom. Both are numbers rather
 	-- than the two constants they used to be, because the chat window wants
@@ -169,19 +201,7 @@ function UI.Window(opts)
 	window.foot = opts.footer or M.footer
 
 	if not opts.bare then
-		local bar = ns.Fill(frame, "ARTWORK", C.chrome[1], C.chrome[2], C.chrome[3], 1)
-		bar:SetPoint("TOPLEFT", px, -px)
-		bar:SetPoint("TOPRIGHT", -px, -px)
-		bar:SetHeight(M.title)
-
-		window.title = UI.Label(frame, M.heading, C.heading, "LEFT", UI.FLAT)
-		window.title:SetPoint("TOPLEFT", M.pad, -math.floor((M.title - M.heading) / 2) - px)
-		window.title:SetText(opts.title or "")
-
-		window.close = UI.Button(frame, { label = "x", glyph = true,
-			width = M.title - 8, height = M.title - 8,
-			onClick = function() window:Hide() end })
-		window.close:SetPoint("TOPRIGHT", -4, -4)
+		TitleBar(window, px, opts.title)
 	end
 
 	-- Everything between the title bar and the footer. Content parents to this,
@@ -949,6 +969,11 @@ local function IconRow(button)
 	button.icon:SetPoint("CENTER")
 
 	button.badgeBg = ns.Fill(button, "OVERLAY", C.shadow[1], C.shadow[2], C.shadow[3], 0.85)
+	-- A size under the one a word row's count is drawn at, because this one is
+	-- not beside the row's text but in the corner of a fourteen pixel picture,
+	-- and a number as tall as three quarters of the icon is a badge with an
+	-- icon behind it rather than the other way round.
+	button.badge:SetFontObject(UI.Font(M.glyph, UI.FLAT))
 	button.badge:ClearAllPoints()
 	button.badge:SetPoint("BOTTOMRIGHT", button.icon, "BOTTOMRIGHT", 1, -1)
 	button.badgeBg:SetPoint("TOPLEFT", button.badge, "TOPLEFT", -1, 1)

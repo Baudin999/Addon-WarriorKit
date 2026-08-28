@@ -431,6 +431,45 @@ function Region:AtBottom() return (self.scrollOffset or 0) <= 0 end
 -- layout that puts seven pages on top of each other pass.
 function Region:Show() self.shown = true end
 function Region:Hide() self.shown = false end
+
+-- The keyboard focus on an edit box, modelled rather than swallowed.
+--
+-- The chat window's line is drawn only while the cursor is in it, and the two
+-- scripts that do that drawing hang off these two calls. A no-op here meant the
+-- field could never be focused in a run, so every assertion about how it looks
+-- while you are typing was an assertion about a state the harness could not
+-- reach. One frame holds the focus at a time, the way the client's does.
+local focused
+function Region:SetFocus()
+	if focused == self then
+		return
+	end
+	if focused then
+		focused:ClearFocus()
+	end
+	focused = self
+	self.focused = true
+	local gained = self.scripts and self.scripts.OnEditFocusGained
+	if gained then
+		gained(self)
+	end
+end
+
+function Region:ClearFocus()
+	if not self.focused then
+		return
+	end
+	self.focused = false
+	if focused == self then
+		focused = nil
+	end
+	local lost = self.scripts and self.scripts.OnEditFocusLost
+	if lost then
+		lost(self)
+	end
+end
+
+function Region:HasFocus() return self.focused and true or false end
 -- Idempotent, the way the client's is. A frame that registers the same event
 -- twice is registered once and is handed the event once, and a stub that
 -- appended instead delivered every line twice to any part that reapplies its

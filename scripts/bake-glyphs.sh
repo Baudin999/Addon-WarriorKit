@@ -6,11 +6,13 @@
 # crops and UI.Icon hands out. Two different things, two words, and this is the
 # first.
 #
-# Eight glyphs, and each is drawn on a letter the addon can stand to fall back
+# Nine glyphs, and each is drawn on a letter the addon can stand to fall back
 # to. Five were the panel's and were already the letter it drew: the chevrons on
 # `v` and `>`, the close cross on `x`, and the stepper's own `+` and `-`. Three
-# are the loot feed's filter chips and are new, so the letter was a choice: `*`
-# for the gem that grades an item, `!` for the quest mark, and `$` for coin.
+# are the loot feed's filter chips, so the letter was a choice: `*` for the gem
+# that grades an item, `!` for the quest mark, and `$` for coin. The ninth is
+# the chat window's voice button on `m`, which is the first letter of the word
+# the button is about and is what a client with no font face draws instead.
 #
 # That choice is the whole trick. Nothing in the Lua carries a codepoint escape
 # and nothing has to know it is looking at an icon. A string given the icon font
@@ -64,6 +66,7 @@ PICK = {
     0xF3A5: "*",  # gem, one per quality on the loot feed's filter strip
     0xF12A: "!",  # exclamation, the quest chip and the ring it turns on
     0xF51E: "$",  # coins, the coin chip
+    0xF130: "m",  # microphone, the voice button at the foot of the chat rail
 }
 
 font = TTFont(src)

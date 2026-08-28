@@ -389,6 +389,12 @@ end
 -- losing the second one silently is exactly the kind of thing that ships.
 bindings.ACTIONBUTTON1 = { "E", "SHIFT-BUTTON3" }
 
+-- The client's two chat keys, under the names FrameXML gives them. The chat
+-- window reads these back rather than assuming the defaults, so a stub that did
+-- not carry them would let it fall through to a path no player is on.
+bindings.OPENCHAT = { "ENTER", "NUMPADENTER" }
+bindings.OPENCHATSLASH = { "/" }
+
 _G.GetBindingKey = function(command)
 	local held = bindings[command]
 	if not held then

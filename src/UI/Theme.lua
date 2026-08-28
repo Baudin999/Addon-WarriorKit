@@ -83,13 +83,25 @@ UI.Metric = {
 	-- that is the whole of it: a word costs sixty pixels of every line anybody
 	-- said to name a room you already know by sight, and thirteen of them cost a
 	-- quarter of the window. The name is in the hover.
-	rooms    = 30,
-	roomIcon = 18, -- the picture on one of those rows
-	roomRow  = 22, -- one of those rows
+	--
+	-- These six numbers are the chat window's only ones, and they are smaller
+	-- than the settings window's equivalents on purpose. A settings window is
+	-- opened, read and shut; a control in it is a thing you aim at once. The
+	-- chat window is up all evening beside the game, and every pixel its rail,
+	-- its field and its margins take is a pixel the conversation does not get.
+	-- It is furniture, so it is drawn at furniture size.
+	rooms    = 24,
+	roomIcon = 14, -- the picture on one of those rows
+	roomRow  = 18, -- one of those rows
 	footer   = 30,
 	-- The strip the chat window's line is typed in. Shorter than the footer
 	-- above, which is sized for the buttons a settings window puts in it.
-	entry    = 22,
+	entry    = 18,
+	field    = 16, -- the box inside that strip
+	-- The log's margin from the rail and from the window's own edge. Half the
+	-- gutter, which is the distance from a label to the control it names and is
+	-- twice what a wall of text wants around it.
+	chatPad  = 4,
 	bar      = 8,  -- the scrollbar column
 	thumb    = 24, -- the shortest a scroll thumb is allowed to get
 

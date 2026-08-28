@@ -56,12 +56,19 @@ local C, M = UI.Color, UI.Metric
 
 local FRAME_NAME = "WarriorKitChat"
 
--- The button the enter key is bound onto while Blizzard's window is hidden. A
--- name is what SetOverrideBindingClick binds to, which is the whole reason this
--- frame is named at all.
+-- The buttons the client's two chat keys are bound onto while Blizzard's window
+-- is hidden. A name is what SetOverrideBindingClick binds to, which is the whole
+-- reason either frame is named at all.
+--
+-- Two rather than one, because the client has two keys and they do different
+-- things. Enter opens an empty line. Slash opens a line with a slash already in
+-- it, which is how every slash command in the game gets typed, and a player who
+-- presses it expecting that and gets an empty line has to type the character
+-- again.
 local ENTER_NAME = "WarriorKitChatEnterButton"
+local SLASH_NAME = "WarriorKitChatSlashButton"
 
-local window, rail, entry, enterButton, closer
+local window, rail, entry, enterButton, slashButton, closer, voice
 
 -- Where a log goes and how big it is, written in the layout section below and
 -- named here because the log pool above needs it: a room's log is made the
@@ -220,6 +227,37 @@ end
 -- goes away, which is a roster change, a guild change, a group edited in the
 -- panel and the first whisper from somebody new. Not called per line: a line
 -- moves one number and List:Mark is what moves it.
+-- The microphone, painted for the answer to one question: are you in a voice
+-- channel right now. Green for yes and the quiet grey every unclickable thing
+-- in this interface is drawn in for no.
+--
+-- Two colours rather than three. "Voice is off in the client's settings" and
+-- "you picked nothing" and "the channel has not come up yet" are all the same
+-- thing from a chair, which is that nobody can hear you, and the sentence that
+-- tells them apart is one hover away in Voicing below.
+local function Lit()
+	if not built then
+		return false
+	end
+	local on = ns.Voice.Active() and true or false
+	local color = on and C.tick or C.quiet
+	voice.text:SetTextColor(color[1], color[2], color[3])
+	return on
+end
+
+-- What the microphone's hover says. All three of the things the colour cannot:
+-- which channel, what the setting is doing about it, and what the click opens.
+local function Voicing()
+	local ok, why = ns.Voice.Supported()
+	local channel = ok and ns.Voice.Active()
+	return {
+		title = "Voice",
+		{ ok and ns.Voice.Describe() or why },
+		{ channel and "Who is in it, and how loud each of them is."
+			or "Opens the client's own Chat Channels window." },
+	}
+end
+
 local function Refresh()
 	local rows = ns.Rooms.List()
 	rail:Set(rows)
@@ -230,6 +268,7 @@ local function Refresh()
 	end
 	rail:Select(active)
 	Paint()
+	Lit()
 end
 
 --------------------------------------------------------------------------
@@ -312,16 +351,16 @@ end
 -- cached rectangle that is wrong once is wrong until a reload.
 --------------------------------------------------------------------------
 
--- Where the log sits in the window: the rail's width and a gutter in from the
--- left, a gutter in from every other side. One function because two places that
--- answer it would be two places to disagree, and because a log made after the
--- window was laid out has to be able to ask.
+-- Where the log sits in the window: the rail's width and a margin in from the
+-- left, the same margin in from every other side. One function because two
+-- places that answer it would be two places to disagree, and because a log made
+-- after the window was laid out has to be able to ask.
 function Frame()
-	local left = M.rooms + M.gutter
-	local top = M.rowGap
-	local room = (window.width or 0) - left - M.gutter
+	local left = M.rooms + M.chatPad
+	local top = M.chatPad
+	local room = (window.width or 0) - left - M.chatPad
 	local body = window:Body()
-	return left, top, math.max(room, M.row), math.max(body - top - M.rowGap, M.row)
+	return left, top, math.max(room, M.row), math.max(body - top - M.chatPad, M.row)
 end
 
 -- One log, put where the logs go and sized to it.
@@ -353,7 +392,7 @@ local function Relayout()
 
 	rail.frame:ClearAllPoints()
 	rail.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT")
-	rail:Resize(M.rooms, body)
+	rail:Resize(M.rooms, math.max(body - M.roomRow, M.roomRow))
 
 	for _, log in ipairs(every) do
 		Place(log)
@@ -363,20 +402,31 @@ local function Relayout()
 	-- runs the whole height of the window and the cross that closes it sits in
 	-- the rail's own column, under the rooms.
 	window.footer:ClearAllPoints()
-	window.footer:SetPoint("BOTTOMLEFT", M.rooms + M.gutter, 0)
-	window.footer:SetPoint("BOTTOMRIGHT", -M.gutter, 0)
+	window.footer:SetPoint("BOTTOMLEFT", M.rooms + M.chatPad, 0)
+	window.footer:SetPoint("BOTTOMRIGHT", -M.chatPad, 0)
 	window.footerRule:ClearAllPoints()
 	window.footerRule:SetPoint("BOTTOMLEFT", M.rooms, window.foot)
-	window.footerRule:SetPoint("BOTTOMRIGHT", -M.gutter, window.foot)
+	window.footerRule:SetPoint("BOTTOMRIGHT", -M.chatPad, window.foot)
 
 	closer:ClearAllPoints()
 	closer:SetPoint("BOTTOMLEFT", window.frame, "BOTTOMLEFT", 0, 0)
 	closer:SetSize(M.rooms, window.foot)
 
+	-- The voice button sits at the foot of the rail, one room row tall, in the
+	-- column the rooms are in and directly over the cross. That is where it
+	-- belongs because it is the same question the rail asks: the rooms are who
+	-- you are typing to and this is who you are talking to. It is last in the
+	-- column rather than first because it is the one row there that is not a
+	-- room, and the rail is shortened by exactly its height so the two never
+	-- overlap.
+	voice:ClearAllPoints()
+	voice:SetPoint("BOTTOMLEFT", window.content, "BOTTOMLEFT", 0, 0)
+	voice:SetSize(M.rooms, M.roomRow)
+
 	entry.box:ClearAllPoints()
 	entry.box:SetPoint("LEFT", window.footer, "LEFT", 0, 0)
 	entry.box:SetPoint("RIGHT", window.footer, "RIGHT", 0, 0)
-	entry.box:SetHeight(M.control)
+	entry.box:SetHeight(M.field)
 	-- The line you type in is drawn at the size the lines you read are. A field
 	-- that stays at twelve while the log goes to eighteen is the one part of the
 	-- window that did not take the setting.
@@ -386,9 +436,11 @@ local function Relayout()
 	local point = db.chatPoint
 	window.frame:ClearAllPoints()
 	window.frame:SetPoint(point[1], UIParent, point[3], point[4], point[5])
-	-- The window is on the grid, so the hairline it is drawn with has to be
-	-- resized whenever the grid moves under it.
-	ns.EdgeSize(window.edges, px)
+	-- Nothing to resize while the window is drawn without an edge, and it is.
+	-- The line stays gone rather than coming back at the next grid change.
+	if window.edges then
+		ns.EdgeSize(window.edges, px)
+	end
 end
 
 --------------------------------------------------------------------------
@@ -407,11 +459,36 @@ function ChatWindow.OnLink(link, _, button)
 	return true
 end
 
+-- The line you type in, drawn or not drawn.
+--
+-- Not drawn means nothing at all: no fill, no hairline, so what is behind the
+-- line is the window's own background at whatever opacity the player set. That
+-- is the whole change. A sunken near black strip across the foot of a window
+-- that is eighty percent transparent is not a field, it is a bar of paint over
+-- the picture, and it was the heaviest thing on a screen whose design is that
+-- the conversation is the only thing on it. Where the line is was never in
+-- doubt: the ghost text sitting in it names the room and says what enter does.
+--
+-- Drawn is the moment the cursor lands in it, and at that moment the rectangle
+-- earns its ink, because it is the difference between a key going into your
+-- sentence and a key going into the game.
+local function Light(box, on)
+	box.bg:SetShown(on)
+	for _, edge in ipairs(box.edges) do
+		edge:SetShown(on)
+	end
+end
+
 local function BuildEntry()
-	local box = UI.Box(window.footer, C.sunken, C.edge)
+	-- Built in the colours it wears while you are typing, and then switched off.
+	-- The alternative is a second pair of colours meaning "invisible", and a
+	-- colour that is not a colour is a thing to explain at every site that reads
+	-- it.
+	local box = UI.Box(window.footer, C.selected, C.edge)
+	Light(box, false)
 	local edit = CreateFrame("EditBox", nil, box)
-	edit:SetPoint("TOPLEFT", 4, 0)
-	edit:SetPoint("BOTTOMRIGHT", -4, 0)
+	edit:SetPoint("TOPLEFT", 3, 0)
+	edit:SetPoint("BOTTOMRIGHT", -3, 0)
 	edit:SetFontObject(UI.Font(M.font, UI.FLAT))
 	edit:SetTextColor(C.text[1], C.text[2], C.text[3])
 	edit:SetAutoFocus(false)
@@ -424,8 +501,8 @@ local function BuildEntry()
 	-- heading row that used to say it went. Hidden the moment there is a
 	-- character in the field, because from then on the field says it better.
 	local ghost = UI.Label(box, M.small, C.quiet, "LEFT", UI.FLAT)
-	ghost:SetPoint("LEFT", 5, 0)
-	ghost:SetPoint("RIGHT", -5, 0)
+	ghost:SetPoint("LEFT", 4, 0)
+	ghost:SetPoint("RIGHT", -4, 0)
 	UI.Wrap(ghost, false)
 
 	edit:SetScript("OnTextChanged", function(self)
@@ -442,10 +519,10 @@ local function BuildEntry()
 		self:ClearFocus()
 	end)
 	edit:SetScript("OnEditFocusGained", function()
-		UI.Tint(box.bg, C.selected)
+		Light(box, true)
 	end)
 	edit:SetScript("OnEditFocusLost", function()
-		UI.Tint(box.bg, C.sunken)
+		Light(box, false)
 	end)
 	edit:SetScript("OnHide", function(self)
 		self:ClearFocus()
@@ -492,6 +569,11 @@ local function Build()
 		-- the conversation it is named after. The twenty four pixels are worth
 		-- more as another line of what somebody said.
 		bare = true,
+		-- No hairline round the outside either. Eighty percent transparent with
+		-- a bright rectangle drawn round it is a window that is trying to be
+		-- both a pane of glass and a box; the conversation is the thing on the
+		-- screen and the box was the part saying otherwise.
+		edge = false,
 		-- One line of text rather than a row of buttons, which is what the
 		-- default footer is sized for.
 		footer = M.entry,
@@ -531,8 +613,34 @@ local function Build()
 	closer = UI.Button(window.frame, { label = "x", glyph = true,
 		onClick = function() ChatWindow.Hide() end })
 
+	-- Voice, at the foot of the rail. A microphone rather than a word, the same
+	-- as every room above it, and lit green while you are in a channel.
+	--
+	-- **The colour is the point.** The setting joins you at login and says so in
+	-- a panel you are not looking at; from the game there was nothing at all
+	-- that said whether the join had landed. A player who cannot see that they
+	-- are connected has voice chat they do not trust, which is voice chat they
+	-- do not use.
+	--
+	-- **What it opens is the client's own window,** through Voice.Open. The one
+	-- that lists who is in the channel with you and puts a volume slider against
+	-- each of them. That is the thing you reach for voice to get at, none of it
+	-- is drawn by this addon, and the button that used to open it is
+	-- ChatFrameChannelButton, which Chat/Blizzard.lua takes off the screen along
+	-- with the rest of the client's chat frame. So this is not a new door. It is
+	-- the same door, back on the window that hid it.
+	voice = UI.Button(window.frame, { label = "m", glyph = true,
+		onClick = function() ChatWindow.Voice() end })
+	UI.Tip(voice, Voicing)
+
+	-- The colour follows the service rather than a ticker: Chat/Voice.lua already
+	-- listens to every event that can move the answer, so it says when it moves.
+	ns.Voice.OnChange = Lit
+
 	enterButton = CreateFrame("Button", ENTER_NAME, window.frame)
 	enterButton:SetScript("OnClick", function() ChatWindow.Focus() end)
+	slashButton = CreateFrame("Button", SLASH_NAME, window.frame)
+	slashButton:SetScript("OnClick", function() ChatWindow.Slash() end)
 
 	built = true
 	active = ns.Rooms.ALL
@@ -551,23 +659,56 @@ local function Build()
 end
 
 --------------------------------------------------------------------------
--- The enter key
+-- The chat keys
 --
 -- Taken exactly while Blizzard's chat window is hidden, and handed back the
 -- moment it is not. That is not a setting of its own on purpose. The client's
--- enter key opens the client's chat line; with that window hidden the line it
--- opens is invisible, so the key has to come here or typing is broken. With
--- that window on screen the key still works and there is nothing to fix.
+-- chat keys open the client's chat line; with that window hidden the line they
+-- open is invisible, so the keys have to come here or typing is broken. With
+-- that window on screen they still work and there is nothing to fix.
+--
+-- **Both keys, not one.** This took ENTER and NUMPADENTER and left the slash
+-- key alone, and the slash key is the one half the things you type in a chat
+-- window start with. Pressing it opened Blizzard's invisible line, which from
+-- the outside is a window that swallows every slash command in the game.
+--
+-- **Asked for rather than assumed.** The keys are read back out of the client's
+-- own binding set by the two actions FrameXML names them by, so a player who
+-- moved OPENCHAT off enter gets the key they moved it to. A key the player has
+-- unbound comes back nil and is left unbound, because taking a key somebody
+-- deliberately cleared is the addon deciding it knows better. The literal
+-- defaults are the answer only where the client has no GetBindingKey at all,
+-- which is a client that cannot be asked rather than one that answered no.
 --
 -- An override sits on top of whatever the key already carried and is dropped by
 -- one call, unlike SetBinding, which the next SaveBindings would make permanent.
 -- Both calls are refused in combat, so a fight defers the work to
 -- PLAYER_REGEN_ENABLED, which is the shape Buttons/Bars.lua uses for the same
--- reason.
+-- reason. One owner frame for every override, so one clear drops all of them.
 --------------------------------------------------------------------------
+
+local CHAT_KEYS = {
+	{ action = "OPENCHAT", button = ENTER_NAME, keys = { "ENTER", "NUMPADENTER" } },
+	{ action = "OPENCHATSLASH", button = SLASH_NAME, keys = { "/" } },
+}
 
 local function WantsEnter()
 	return built and ns.db.chat and ns.db.hideBlizzChat and window:IsShown()
+end
+
+-- Which keys carry one of the client's chat actions right now.
+local function BoundTo(action, fallback)
+	local get = _G.GetBindingKey
+	if type(get) ~= "function" then
+		return fallback
+	end
+	local held = {}
+	local ok, first, second = pcall(get, action)
+	if ok then
+		held[#held + 1] = first
+		held[#held + 1] = second
+	end
+	return held
 end
 
 function ChatWindow.Keys()
@@ -586,8 +727,10 @@ function ChatWindow.Keys()
 	if not WantsEnter() or type(SetOverrideBindingClick) ~= "function" then
 		return true
 	end
-	for _, key in ipairs({ "ENTER", "NUMPADENTER" }) do
-		pcall(SetOverrideBindingClick, enterButton, true, key, ENTER_NAME, "LeftButton")
+	for _, chat in ipairs(CHAT_KEYS) do
+		for _, key in ipairs(BoundTo(chat.action, chat.keys)) do
+			pcall(SetOverrideBindingClick, enterButton, true, key, chat.button, "LeftButton")
+		end
 	end
 	return true
 end
@@ -595,6 +738,22 @@ end
 --------------------------------------------------------------------------
 -- The surface everything else uses
 --------------------------------------------------------------------------
+
+-- The line you type in, for the harness. Handed out for the reason the
+-- microphone below is: what is being checked is whether a texture is drawn, and
+-- a boolean this file computed is a boolean this file could compute wrongly and
+-- still agree with itself.
+function ChatWindow.Field()
+	return built and entry.box or nil
+end
+
+-- The microphone, for the harness. Handed out rather than answered about,
+-- because what is being checked is the colour on a font string and a boolean
+-- this file computed is a boolean this file could compute wrongly and still
+-- agree with itself.
+function ChatWindow.Mic()
+	return built and voice.text or nil
+end
 
 function ChatWindow.Built()
 	return built
@@ -656,6 +815,21 @@ function ChatWindow.Hide()
 	ns.ChatBlizzard.Apply()
 	ChatWindow.Keys()
 	return true
+end
+
+-- The client's own Chat Channels window, which is where the voice roster and
+-- the per person volume live. A method here rather than a call written into the
+-- button so the slash word and the harness reach the same door.
+--
+-- A refusal is printed rather than swallowed. The failure this has is a client
+-- with no such window, and a button that does nothing on a client that cannot
+-- do it looks exactly like a button that is broken.
+function ChatWindow.Voice()
+	local ok, what = ns.Voice.Open()
+	if not ok then
+		ns.Print("voice: " .. what .. ".")
+	end
+	return ok
 end
 
 function ChatWindow.Toggle()
@@ -764,6 +938,36 @@ function ChatWindow.Focus()
 		ChatWindow.Show()
 	end
 	ChatWindow.Fill()
+	entry.edit:SetFocus()
+	return true
+end
+
+-- The slash key, which opens the line with a slash already in it. That is what
+-- the client's own OPENCHATSLASH does and it is the whole reason the key exists
+-- separately from enter: every slash command in the game starts with it.
+--
+-- No room prefix here, unlike Focus. A slash is you addressing the client
+-- rather than a room, and Chat/Compose.lua already sends a line it cannot parse
+-- as a channel through to the client's own slash handler. Prefixing it with the
+-- room would turn /dance into a sentence said out loud in party.
+--
+-- A sentence already half typed is left alone and only focused. The test for
+-- that is Fill's: an empty line or one starting with a slash is a line nobody
+-- has invested anything in, and anything else is a draft you clicked away from.
+function ChatWindow.Slash()
+	if not built then
+		return false
+	end
+	if not window:IsShown() then
+		ChatWindow.Show()
+	end
+	local text = entry.edit:GetText() or ""
+	if text == "" or text:sub(1, 1) == "/" then
+		entry.edit:SetText("/")
+		if type(entry.edit.SetCursorPosition) == "function" then
+			entry.edit:SetCursorPosition(1)
+		end
+	end
 	entry.edit:SetFocus()
 	return true
 end
@@ -954,17 +1158,26 @@ end
 -- gone. It is moved to the new default once and anything else is left alone,
 -- because a number somebody set is a number somebody set.
 --
+-- The same argument covers the log's size. Twelve was the default until the
+-- window was drawn at furniture size, and a file holding exactly twelve is a
+-- file nobody typed a number into.
+--
 -- Delete this and its call a release after 1.10, when nobody's file still has
--- the old pair in it. 1.9 is what shipped it.
-local WAS = { width = 520, height = 260 }
+-- the old numbers in it. 1.9 is what shipped it.
+local WAS = { width = 520, height = 260, font = 12 }
 
 local function Shrink()
-	if ns.db.chatWidth ~= WAS.width or ns.db.chatHeight ~= WAS.height then
-		return false
+	local moved = false
+	if ns.db.chatWidth == WAS.width and ns.db.chatHeight == WAS.height then
+		ns.db.chatWidth = ns.DefaultFor("chatWidth")
+		ns.db.chatHeight = ns.DefaultFor("chatHeight")
+		moved = true
 	end
-	ns.db.chatWidth = ns.DefaultFor("chatWidth")
-	ns.db.chatHeight = ns.DefaultFor("chatHeight")
-	return true
+	if ns.db.chatFont == WAS.font then
+		ns.db.chatFont = ns.DefaultFor("chatFont")
+		moved = true
+	end
+	return moved
 end
 
 local events = CreateFrame("Frame")

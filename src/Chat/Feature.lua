@@ -336,6 +336,14 @@ local function VoiceWord(arg)
 		ns.Print("voice: " .. why .. ".")
 		return
 	end
+	-- The same door the microphone at the foot of the chat rail opens, on the
+	-- keyboard. It goes to the client's own Chat Channels window, which is where
+	-- the voice roster and the volume per person are.
+	if arg == "who" or arg == "open" then
+		local ok, what = ns.Voice.Open()
+		ns.Print("voice: " .. (ok and ("opened " .. what) or what) .. ".")
+		return
+	end
 	-- Every answer the client gave, rather than the one sentence this part
 	-- decided out of them. The first bug in this part was a probe refusing a
 	-- join the client would have taken, and there was no way to see which probe
@@ -412,7 +420,11 @@ ns.Register({
 		-- still there for anyone who wants the window bigger.
 		chatWidth = 400,
 		chatHeight = 210,
-		chatFont = 12,
+		-- One under the interface's body size. The log is a wall of text read
+		-- from the corner of the eye rather than a label you aim at, and a
+		-- point off it buys another line of what somebody said in the same
+		-- rectangle. The stepper goes to twenty for anyone who wants it back.
+		chatFont = 11,
 		-- Not opaque. A chat window sits in a corner all evening and the world
 		-- behind it is the game.
 		chatAlpha = 80,
@@ -449,6 +461,7 @@ ns.Register({
 		"voice, what the voice pick is doing",
 		"voice group|off, join your party or raid channel, or nothing",
 		"voice join, ask for it again now",
+		"voice who, the client's own window, for who is in it and how loud",
 		"voice why, every answer the client gives about voice",
 	},
 

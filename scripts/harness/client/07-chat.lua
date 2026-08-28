@@ -151,3 +151,19 @@ _G.C_VoiceChat = {
 			{ what = "requestClub", clubId = clubId, streamId = streamId }
 	end,
 }
+
+-- The client's Chat Channels window, which is where its voice roster and the
+-- volume slider per person live. Counted rather than drawn: what the addon is
+-- responsible for is asking for it, and a frame here would be a frame this file
+-- invented rather than one the client has.
+--
+-- Blizzard_Channels is load on demand in the game, so the loaded probe answers
+-- true and the load call is never reached. A run that reached it would be
+-- testing this file's idea of LoadAddOn rather than the addon.
+_G.IsAddOnLoaded = function(name)
+	return name == "Blizzard_Channels"
+end
+
+_G.ToggleChannelFrame = function()
+	chat.voice.channelWindow = (chat.voice.channelWindow or 0) + 1
+end
