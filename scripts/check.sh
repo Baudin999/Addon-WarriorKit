@@ -209,6 +209,7 @@ HOT="
 Core/Core.lua:ns.OutOfRange
 UI/Ability.lua:Ability.Look
 UI/Ability.lua:Ability.Draw
+UI/Ability.lua:Countdown
 UI/Ability.lua:Quantum
 Buttons/Bars.lua:Bars.Update
 Buttons/Trace.lua:Trace.Sample
@@ -360,6 +361,11 @@ Buffs/Nag.lua:Nag.MissingMask
 Buffs/Nag.lua:Pulse
 Buffs/Nag.lua:Paint
 Buffs/Nag.lua:Nag.Update
+Cooldowns/Cooldowns.lua:Cooldowns.State
+Cooldowns/Cooldowns.lua:Cooldowns.Busy
+Cooldowns/Row.lua:Row.Wanted
+Cooldowns/Row.lua:Paint
+Cooldowns/Row.lua:Row.Update
 "
 
 hot_scan='

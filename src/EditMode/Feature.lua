@@ -39,7 +39,7 @@ end
 
 ns.Register({
 	name = "interface",
-	order = 15,
+	order = 16,
 
 	defaults = {
 		uiAuto = true, -- import the baked layout on a client that does not have it

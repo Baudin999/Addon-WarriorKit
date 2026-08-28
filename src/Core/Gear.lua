@@ -22,6 +22,13 @@ ns.Gear = Gear
 Gear.MAINHAND = 16 -- INVSLOT_MAINHAND, the number the macro equips into
 Gear.OFFHAND = 17  -- INVSLOT_OFFHAND
 
+-- The two trinkets, for the one part that reads a worn item's cooldown rather
+-- than what fits in a hand. They take no FITS entry and no SLOT_NAMES entry,
+-- because nothing offers you a trinket to equip: the cooldown row reads what
+-- you are already wearing and never puts anything on.
+Gear.TRINKET1 = 13 -- INVSLOT_TRINKET1
+Gear.TRINKET2 = 14 -- INVSLOT_TRINKET2
+
 -- A one hander, a main hander and a two hander go in the main hand. A shield,
 -- a held-in-off-hand item, an off hander and, because warriors dual wield, a
 -- plain one hander go in the off hand. Anything else builds an /equipslot line

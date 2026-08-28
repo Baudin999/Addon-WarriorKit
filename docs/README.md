@@ -9,6 +9,7 @@ Blizzard nameplate and carry a cast bar of their own, a chat window with a room
 per conversation in place of the client's own and a voice
 channel joined at login, a strip of the Blizzard bar art, three chores the
 client makes you do by hand, a swing timer with the Slam window marked on it,
+a row over your character counting down the cooldowns that decide fights,
 a loot stream and a combat log drawn as scrolling feeds, and one Edit Mode
 layout carried inside the addon folder. Settings live in a panel opened with
 `/wk`.
@@ -66,7 +67,7 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is seventeen parts and a core. Each part is a folder, and Core knows the
+The addon is eighteen parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
@@ -76,15 +77,16 @@ name of none of them.
                          because all of them read facts off it
     Class/Warrior.lua    the whole of what the addon knows about a warrior: the
                          forms, the charge abilities, the two a fight hands you,
-                         Slam, Battle Shout, and the bar plan
-    Class/Mage.lua       two of those six
-    Class/Shaman.lua     two of those six
-    Class/Priest.lua     one, and it is the one that opens no page
+                         Slam, Battle Shout, the four long cooldowns, and the
+                         bar plan
+    Class/Mage.lua       three of those seven
+    Class/Shaman.lua     three of those seven
+    Class/Priest.lua     two, and neither of them opens a page
                          Nothing outside a class file names one of its spells,
                          and a class with no file here is a supported class
 
-    Core/Gear.lua        what the client will let into each hand, and the two
-                         slot numbers those hands are
+    Core/Gear.lua        what the client will let into each hand, the two slot
+                         numbers those hands are, and the two the trinkets are
     Core/Stance.lua      your class's own form list, read off the registry
                          above: their names, and which one you are standing in
     Core/Command.lua     slash dispatch, built from the registry
@@ -211,6 +213,14 @@ name of none of them.
                              cooldown, and whether it is one worth nagging about
     Buffs/Nag.lua            the row of squares, and the tick that paints it
     Buffs/Feature.lua
+
+    Cooldowns/Cooldowns.lua  what is on the long-cooldown row: your class's own
+                             list, filtered by what this character has learned
+                             and left switched on, plus whichever trinket you
+                             are wearing has something to press
+    Cooldowns/Row.lua        the row of squares, when it is on the screen, and
+                             the tick that paints it
+    Cooldowns/Feature.lua
 
     Feeds/Stream.lua         one feed put on the screen: its frame, its anchor,
                              its drag and the seven settings behind it, found by
@@ -1261,8 +1271,8 @@ become new ratchets.
 
 ### Ticker discipline
 
-Ten `OnUpdate` tickers run at once and none of them ever stops. An eleventh runs
-only while you are looking at it.
+Eleven `OnUpdate` tickers run at once and none of them ever stops. A twelfth
+runs only while you are looking at it.
 
     Swing/Gauges.lua      every frame   two gauges and the Slam band
     UnitFrames/EnemyBars.lua every frame  the cast fill on every bar on screen
@@ -1271,6 +1281,7 @@ only while you are looking at it.
     Charge/Icon.lua          10 Hz      the HUD icon and the macro
     Buttons/Bars.lua         10 Hz      every square on every cloned bar
     Buffs/Nag.lua            10 Hz      the missing buff row, and its pulse
+    Cooldowns/Row.lua        10 Hz      the long-cooldown row and its countdowns
     UnitFrames/EnemyBars.lua  5 Hz      everything else on every bar on screen
     UnitFrames/Paint.lua      5 Hz      the three Blizzard unit frames
     UnitFrames/Group.lua      5 Hz      every party or raid block on screen
@@ -1283,7 +1294,14 @@ correct at one hertz. Ten is the rate the pulse on the racial square needs: 1.6
 seconds a cycle at ten hertz is sixteen alpha steps, which reads as a breath. At
 five it reads as a blink.
 
-Nothing in that tick walks your auras. UNIT_AURA fires for every buff you gain
+The cooldown row is ten for a different reason, and it is the readout. Under ten
+seconds a square counts in tenths, so the number on it moves ten times a second
+and a five hertz tick would draw every second one of those. Above ten seconds
+nothing on the row changes faster than once a second and the tick costs one
+comparison per square, because UI/Ability.lua builds the string only when the
+number behind it has moved.
+
+Nothing in either tick walks your auras. UNIT_AURA fires for every buff you gain
 and every one you lose, so the scan runs from the event and the tick reads a
 field. The two weapon enchants are the exception and are read live, because a
 stone running out fires nothing at all, and that costs two numbers out of one
@@ -5216,6 +5234,35 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- Whether the cooldown ids in the four class files name what this addon thinks
+  they name. The warrior's four are the ones somebody here plays and are the
+  least in doubt: 12292 Death Wish, 1719 Recklessness, 871 Shield Wall, 12975
+  Last Stand. The other nineteen were read off Wowhead and nobody here has the
+  character to check them on. The failure mode is quiet and small in both
+  directions: an id this client cannot name and an id this character has not
+  learned both leave no square, so a wrong number costs one square rather than
+  drawing the wrong picture. What would settle it: `/wk cooldowns list` on each
+  character, which prints every entry with the name this client gave it, or
+  "not learned on this character" where it gave none.
+- Whether Ice Block answers to 45438 on both flavours. It is the one entry
+  written with two ids for one spell, 45438 and 27619, because the number has
+  moved between builds and the list takes whichever this client knows. If both
+  miss, a mage sees no Ice Block square and the rest of the row is unaffected.
+- Whether GetItemSpell is on both clients and answers for a trinket you are
+  wearing. It is what tells a trinket you press from a trinket you wear, it is
+  probed through C_Item first and the loose global second, and a client with
+  neither leaves both trinket squares off the row and nothing else. What would
+  settle it: wear a trinket with a use effect and read `/wk cooldowns list`,
+  which names the effect rather than the item.
+- Whether GetInventoryItemCooldown answers for slots 13 and 14 on these
+  clients. Same probe, same failure: a missing call reads as ready forever,
+  which is a square that never counts down rather than an error.
+- Whether the cooldown row reads at a glance at the size it ships. It draws at
+  1x where the buff nag draws at 2x, and the argument for the difference is that
+  this row is up for the whole fight and carries a number per square, so double
+  sized squares over your character would be in the way rather than in view.
+  Against that, the thing you are doing when you look at it is glancing away
+  from a mob mid-pull. `/wk cooldowns zoom 2` is one command and settles it.
 - Whether the priest's three upkeep ids name what this addon thinks they name.
   1243 is Power Word: Fortitude rank 1, 21562 is Prayer of Fortitude and 588 is
   Inner Fire, all matched by the name the client spells them, and the Fortitude

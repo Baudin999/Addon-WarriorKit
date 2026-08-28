@@ -6,13 +6,14 @@ local Spell, Macro = ns.Class.Spell, ns.Class.Macro
 -- Warrior
 --
 -- Everything this addon knows about a warrior, and the only file in it that
--- names a warrior spell. Six fields, each read by exactly one part:
+-- names a warrior spell. Seven fields, each read by exactly one part:
 --
 --   forms      Core\Stance.lua, and through it the charge macro
 --   charge     Charge\Charge.lua
 --   reactive   Buttons\Reaction.lua
 --   swing      Swing\Slam.lua
 --   upkeep     Buffs\Upkeep.lua, added to the row everybody gets
+--   cooldowns  Cooldowns\Cooldowns.lua, the row of long ones
 --   loadout    Buttons\Layout.lua
 --
 -- No frames, no events, no drawing. A class file is facts.
@@ -213,6 +214,39 @@ ns.Class.Register("WARRIOR", {
 			hint = "Battle Shout has lapsed. Any rank counts and somebody else's shout"
 				.. " counts as yours, because the attack power is on you either way.",
 		},
+	},
+
+	--------------------------------------------------------------------------
+	-- The long cooldowns
+	--
+	-- The four a warrior spends a fight counting in their head, and the reason
+	-- the row exists. Every one of them is minutes long, none of them is on the
+	-- global, and the bar square for each says only "not now" while what you
+	-- want to know is how much longer.
+	--
+	-- Rank one of each and every one of them a single rank, because none of the
+	-- four was ever ranked. The list is walked with IsSpellKnown, so a warrior
+	-- who has not spent the talent point sees no square rather than a square
+	-- for something they cannot cast: Death Wish and Last Stand are talents,
+	-- Recklessness and Shield Wall are trained, and a levelling warrior below
+	-- either trainer gets a shorter row that grows on its own.
+	--
+	-- The ids: 12292 Death Wish, 1719 Recklessness, 871 Shield Wall, 12975 Last
+	-- Stand. All four are on Wowhead's TBC Classic database at those ids with
+	-- the cooldowns the row draws, and all four are the same id on Era.
+	--
+	-- What is deliberately not here. Bloodrage and Sweeping Strikes are on the
+	-- bar plan above, they come back inside a minute, and a row of things that
+	-- are nearly always ready is furniture. Retaliation is thirty minutes on
+	-- these clients, which is not a fight cooldown, it is a wing cooldown.
+	-- Berserker Rage sits on bar 1 where you press it as a snare break rather
+	-- than on a timer.
+	--------------------------------------------------------------------------
+	cooldowns = {
+		{ key = "deathwish", spells = { 12292 } },
+		{ key = "recklessness", spells = { 1719 } },
+		{ key = "shieldwall", spells = { 871 } },
+		{ key = "laststand", spells = { 12975 } },
 	},
 
 	loadout = LOADOUT,

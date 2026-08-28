@@ -31,7 +31,7 @@ end
 
 ns.Register({
 	name = "settings",
-	order = 17,
+	order = 18,
 
 	defaults = {
 		-- 1, which is the size everything in this addon was drawn at. The screen

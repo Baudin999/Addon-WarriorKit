@@ -180,10 +180,11 @@ ns.Register({
 		apply = function(value) SetBuffs(value) end,
 	},
 
-	-- Beside the swing timer, which is the other thing on screen that says what
-	-- to press next. Not a whole number for the reason Swing/Feature.lua's is
-	-- not: renumbering five parts to make room for one row is a bigger change
-	-- than a fraction is a wart.
+	-- Beside the swing timer and the cooldown row, which are the other two
+	-- things on screen that say what to press next. Whole, like every other
+	-- order: the registry refuses a fraction, so making room in the middle of
+	-- the rail renumbers what comes after it, which is what putting the
+	-- cooldown row at 10 did to the nine parts below it.
 	order = 9,
 
 	defaults = {

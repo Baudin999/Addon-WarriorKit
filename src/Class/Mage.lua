@@ -5,7 +5,7 @@ local Spell, Macro = ns.Class.Spell, ns.Class.Macro
 --------------------------------------------------------------------------
 -- Mage
 --
--- Two of the six fields, and the four that are missing are the point of the
+-- Three of the seven fields, and the four that are missing are the point of the
 -- registry: a mage has no stances, no opener the charge button could cast, no
 -- ability that opens on a dodge and nothing that casts inside a swing. Four
 -- parts of the addon read those fields, find nothing, and are not built. No
@@ -125,6 +125,39 @@ ns.Class.Register("MAGE", {
 				.. " count, so any one of them clears this square, and all of them"
 				.. " come off when you die.",
 		},
+	},
+
+	--------------------------------------------------------------------------
+	-- The long cooldowns
+	--
+	-- Eight, which is more than any other class file lists, and the row is
+	-- nothing like eight squares long: IsSpellKnown decides which of them a
+	-- character actually has, and no mage owns the arcane, fire and frost lists
+	-- at once. A frost mage sees Evocation, Ice Block, Cold Snap and Icy Veins.
+	-- A fire mage sees Evocation, Ice Block and Combustion. That is the whole
+	-- reason the list is spells rather than a spec.
+	--
+	-- The ids, all from Wowhead's Classic and TBC Classic databases: 12051
+	-- Evocation, 45438 Ice Block, 11958 Cold Snap, 12472 Icy Veins, 12042 Arcane
+	-- Power, 12043 Presence of Mind, 11129 Combustion, 66 Invisibility.
+	--
+	-- Ice Block carries two ids for the one entry. 45438 is what both of these
+	-- clients answer for it and 27619 is the older number the same spell has
+	-- been filed under, and the list takes whichever one this client knows.
+	-- Every other entry is a single unranked spell.
+	--
+	-- Invisibility is Burning Crusade only and never resolves on Era, which
+	-- costs one square on one client and nothing else.
+	--------------------------------------------------------------------------
+	cooldowns = {
+		{ key = "evocation", spells = { 12051 } },
+		{ key = "iceblock", spells = { 45438, 27619 } },
+		{ key = "coldsnap", spells = { 11958 } },
+		{ key = "icyveins", spells = { 12472 } },
+		{ key = "arcanepower", spells = { 12042 } },
+		{ key = "presence", spells = { 12043 } },
+		{ key = "combustion", spells = { 11129 } },
+		{ key = "invisibility", spells = { 66 } },
 	},
 
 	loadout = LOADOUT,

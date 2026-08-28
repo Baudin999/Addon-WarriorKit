@@ -498,6 +498,28 @@ function ns.SpellUsable(spell)
 	return _G.IsUsableSpell(spell)
 end
 
+-- One of your own buffs, by slot, as the name alone.
+--
+-- UnitAura is asked first and C_UnitAuras second, which is the opposite way
+-- round from the spell shims above and is deliberate: the old call hands back a
+-- string and the new one hands back a table it built to put the string in.
+-- Every caller of this wants the string. Where only the new call exists the
+-- table is made and dropped, which is the cost of that client.
+--
+-- Nil at the first empty slot, which is how both callers know to stop walking.
+-- Buffs/Upkeep.lua asks what is missing and Cooldowns/Cooldowns.lua asks which
+-- burst window is open, and both walk the same list for the same string.
+function ns.BuffName(unit, index)
+	if type(_G.UnitAura) == "function" then
+		return (_G.UnitAura(unit, index, "HELPFUL"))
+	end
+	if C_UnitAuras and C_UnitAuras.GetBuffDataByIndex then
+		local aura = C_UnitAuras.GetBuffDataByIndex(unit, index)
+		return aura and aura.name
+	end
+	return nil
+end
+
 -- Returns 1 in range, 0 out of range, nil when the check does not apply.
 function ns.SpellInRange(spell, unit)
 	if C_Spell and C_Spell.IsSpellInRange then
@@ -675,6 +697,41 @@ function ns.ItemInfo(link)
 	end
 
 	return name, icon, equip, color
+end
+
+-- The name of an item's use effect, or nil for an item that has none.
+--
+-- This is what tells a trinket you press from a trinket you wear. The client
+-- answers a spell name for the first and nothing at all for the second, which
+-- is a better test than a cooldown reading: a passive trinket with a proc on it
+-- carries a cooldown too, and a square for a cooldown you cannot spend is a
+-- square that says press me about nothing.
+function ns.ItemSpell(link)
+	if type(link) ~= "string" then
+		return nil
+	end
+	local lookup = (C_Item and C_Item.GetItemSpell) or _G.GetItemSpell
+	if type(lookup) ~= "function" then
+		return nil
+	end
+	return (lookup(link))
+end
+
+-- What a worn item's own cooldown reads, by inventory slot, in the three values
+-- ns.SpellCooldown answers in. Zeroes where the client has no such call, which
+-- reads as ready and is the honest answer: an addon that cannot ask has nothing
+-- to say about a trinket's cooldown.
+--
+-- Probed rather than trusted, the same as UnitRace in Buffs/Racials.lua.
+-- Nothing installed here calls it unguarded and a nil call on a ticker is what
+-- gets the whole addon offered up for disabling.
+function ns.InventoryCooldown(slot)
+	local lookup = _G.GetInventoryItemCooldown
+	if type(lookup) ~= "function" then
+		return 0, 0, false
+	end
+	local start, duration, enabled = lookup("player", slot)
+	return start or 0, duration or 0, enabled ~= 0
 end
 
 -- Quality and what a vendor pays, for an item link. Quality is the number the

@@ -462,20 +462,50 @@ end
 -- the widget, and check.sh enforces both.
 --------------------------------------------------------------------------
 
--- Whole seconds above ten, tenths below it. Returned as an integer so the
--- caller can compare it against the last one without building the string it
--- would print: the string is the expensive half and it is only worth making
--- when the number behind it has actually moved.
+-- Minutes above a minute, whole seconds above ten, tenths below it. Returned as
+-- an integer so the caller can compare it against the last one without building
+-- the string it would print: the string is the expensive half and it is only
+-- worth making when the number behind it has actually moved.
 --
--- The tenths come back negative so the two branches cannot collide. Without
--- that, a countdown at 5.0 seconds and one at 50 both answer 50, and the tick
--- that crossed from one scale to the other would compare equal and leave the
--- last string of the old scale on screen.
+-- Three scales and each one is offset out of the others' range, because a
+-- countdown crossing from one to the next has to compare unequal or the tick
+-- that crossed leaves the old scale's string on screen. The tenths come back
+-- negative and the minutes come back past ten thousand; without either, 5.0
+-- seconds and 50 both answer 50, and two minutes and the number 2 both answer 2.
+--
+-- The minute scale is what the cooldown row asked for and every action bar
+-- square gets it too. A thirty minute Recklessness drew "1798" on a 27 pixel
+-- square, which is four digits of false precision about a number nobody reads
+-- to the second.
+--
+-- It rounds down, so 1m means a minute or more and the ladder has no gap in it:
+-- 3m, 2m, 1m, then 59 and the seconds. Rounding up reads as the safer choice
+-- and is not, because ceil(119/60) and ceil(61/60) are both 2 and the label
+-- would go from 2m straight to 59 without ever saying 1m, which looks like a
+-- square that skipped a number.
 local function Quantum(remaining)
+	if remaining >= 60 then
+		return 10000 + math.floor(remaining / 60)
+	end
 	if remaining >= 10 then
 		return math.floor(remaining)
 	end
 	return -math.floor(remaining * 10)
+end
+
+-- The three scales written out, on the ticks where Quantum says the number has
+-- moved. Its own function rather than four more lines inside Ability.Draw,
+-- which is at the shape gate's hundred line ceiling: what a countdown reads is
+-- a different job from what a square draws, and this is the only part of the
+-- tick that builds a string.
+local function Countdown(text, remaining)
+	if remaining >= 60 then
+		text:SetText(("%dm"):format(math.floor(remaining / 60)))
+	elseif remaining >= 10 then
+		text:SetText(("%d"):format(remaining))
+	else
+		text:SetText(("%.1f"):format(remaining))
+	end
 end
 
 -- One square, one tick. `texture` is the art, `status` one of Ability.STATUS,
@@ -557,11 +587,7 @@ function Ability.Draw(w, texture, status, start, duration, count, active, equipp
 		local tick = Quantum(remaining)
 		if tick ~= w.shownTick then
 			w.shownTick = tick
-			if remaining >= 10 then
-				w.timer:SetText(("%d"):format(remaining))
-			else
-				w.timer:SetText(("%.1f"):format(remaining))
-			end
+			Countdown(w.timer, remaining)
 		end
 	elseif w.shownTick ~= nil then
 		w.shownTick = nil

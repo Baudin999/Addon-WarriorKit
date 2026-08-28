@@ -43,8 +43,9 @@ check(mine == nil or mine.token == PLAYER_CLASS,
 		:format(PLAYER_CLASS, tostring(mine and mine.token)))
 check((mine ~= nil) == (Class.Of("loadout") ~= nil or Class.Of("charge") ~= nil
 	or Class.Of("reactive") ~= nil or Class.Of("swing") ~= nil
-	or Class.Of("upkeep") ~= nil or Class.Of("forms") ~= nil),
-	("a %s registered a file that fills in none of the six fields"):format(PLAYER_CLASS))
+	or Class.Of("upkeep") ~= nil or Class.Of("forms") ~= nil
+	or Class.Of("cooldowns") ~= nil),
+	("a %s registered a file that fills in none of the seven fields"):format(PLAYER_CLASS))
 
 --------------------------------------------------------------------------
 -- The charge button, which is built on one of those facts

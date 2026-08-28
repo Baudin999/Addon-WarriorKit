@@ -30,6 +30,7 @@ local ROWS = {
 	{ key = "party", label = "party and raid", hz = 5 },
 	{ key = "meter", label = "meters", hz = 5 },
 	{ key = "buffs", label = "buff nag", hz = 10 },
+	{ key = "cooldowns", label = "cooldown row", hz = 10 },
 }
 
 local lines = {}   -- every font string the sampler writes, and what writes it
@@ -131,7 +132,7 @@ end
 
 ns.Register({
 	name = "performance",
-	order = 18,
+	order = 19,
 
 	switch = {
 		key = "perf",

@@ -23,6 +23,15 @@ local own = {
 	resting = false, dead = false,
 	auras = {},
 	cooldowns = {},
+	-- Spell ids this character has not learned, which is what a talent nobody
+	-- spent a point on looks like to the addon. Empty in the shipped scene, so
+	-- IsSpellKnown answers true for everything the way the constant it replaced
+	-- did, and the cooldown row's section fills it to prove that an unlearned
+	-- entry takes no square.
+	unknown = {},
+	-- What a worn item's own cooldown reads, keyed by inventory slot. The two
+	-- trinket slots are the only ones anything asks about.
+	worn = {},
 }
 
 -- The race, as the client answers it: a localised name first and a token
@@ -271,7 +280,15 @@ _G.GetSpellCooldown = function(id)
 	end
 	return entry[1], entry[2], 1
 end
-_G.IsUsableSpell, _G.IsSpellInRange, _G.IsSpellKnown = constant(true), constant(1), constant(true)
+_G.IsUsableSpell, _G.IsSpellInRange = constant(true), constant(1)
+-- Table driven, and true unless a section says otherwise. What it is here for
+-- is the cooldown row: every entry in a class file is walked with this call, a
+-- talent nobody took has to leave no square behind, and a stub that answered
+-- true for every id in the game could not tell that from a row that draws
+-- whatever it is handed.
+_G.IsSpellKnown = function(id)
+	return not own.unknown[id]
+end
 _G.GetNumSpellTabs = constant(0)
 -- Three items in the backpack and empty hands. Enough for the gear scan to
 -- have something to offer, and chosen so all three rules it enforces are
@@ -310,6 +327,15 @@ local ITEMS = {
 	["Rogue's Token"]     = { id = 3005, classId = 12, quality = 1, price = 0 },
 	["Old Cipher"]        = { id = 3006, classId = 12, quality = 1, price = 0 },
 	["Unknown Trinket"]   = { id = 3007, classId = 12, quality = 1, price = 0 },
+	-- Two trinkets, in no bag, worn by 42-cooldown-row.lua. `use` is what
+	-- GetItemSpell answers and it is the whole difference between them: one is
+	-- a thing you press and takes a square on the cooldown row, and one is a
+	-- thing you wear and must not.
+	["Bloodlust Brooch"]  = { id = 4001, classId = 4, quality = 4, price = 0,
+		equip = "INVTYPE_TRINKET", icon = "Interface\\Icons\\Brooch",
+		use = "Increased Strength" },
+	["Mark of Tyranny"]   = { id = 4002, classId = 4, quality = 3, price = 0,
+		equip = "INVTYPE_TRINKET", icon = "Interface\\Icons\\Mark" },
 }
 
 local BAG = { "Bloodspiller", "Aegis", "Arcanite Reaper" }

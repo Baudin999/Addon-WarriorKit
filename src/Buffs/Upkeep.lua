@@ -50,7 +50,6 @@ local MAIN, OFF = ns.Gear.MAINHAND, ns.Gear.OFFHAND
 -- offered up for disabling.
 local GetWeaponEnchantInfo = _G.GetWeaponEnchantInfo
 local OffhandHasWeapon = _G.OffhandHasWeapon
-local UnitAura = _G.UnitAura
 
 -- How many of your own aura slots the client will answer for. Forty is the
 -- number every aura scan in the game uses and the number the enemy bars' own
@@ -430,20 +429,10 @@ end
 -- The list
 --------------------------------------------------------------------------
 
--- One aura slot's name. UnitAura is asked first and C_UnitAuras second, which
--- is the opposite way round from the spell shims in Core and is deliberate: the
--- old call hands back a string and the new one hands back a table it built to
--- put the string in. This scan wants the string. Where only the new call
--- exists the table is made and dropped, which is the cost of that client.
+-- One aura slot's name. ns.BuffName is the shim, in Core with the rest of them
+-- since the cooldown row started walking the same list for the same string.
 local function AuraName(index)
-	if type(UnitAura) == "function" then
-		return (UnitAura("player", index, "HELPFUL"))
-	end
-	if C_UnitAuras and C_UnitAuras.GetBuffDataByIndex then
-		local aura = C_UnitAuras.GetBuffDataByIndex("player", index)
-		return aura and aura.name
-	end
-	return nil
+	return ns.BuffName("player", index)
 end
 
 -- One spell id into the lookup, under whatever this client calls it. The first

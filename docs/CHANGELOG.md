@@ -2,6 +2,60 @@
 
 ## Unreleased
 
+### A row for the cooldowns that decide fights
+
+Todo item 7. Death Wish, Recklessness, Shield Wall, Last Stand and your
+trinkets, drawn as a row of squares over your character with what is left of
+each one on it. It is up for the whole fight, it stays up afterwards while
+something is still recovering, and it is gone otherwise.
+
+The bars already draw a swipe on every square and that is not the same thing. A
+swipe answers "can I press this" about a square you are looking at, and the
+cooldowns that decide a pull are the ones you are not looking at: on bar 2, on a
+stance page you are not standing in, or off the bottom of the screen. Counting
+three minutes in your head is what this replaces.
+
+**It is a class part, not a warrior part.** The list is a seventh field in the
+class registry, so `Class/Warrior.lua` names the four warrior cooldowns and no
+file outside a class file names a spell. A mage brings eight, a shaman six, a
+priest five, and a class nobody has written a file for brings none and still
+gets its trinkets. Nothing was edited outside `Class/` to add any of them.
+
+Three filters decide what is actually drawn, and each one drops a square on its
+own. A spell this client cannot name is left out, which is most of what
+separates Era from Burning Crusade in those files. A spell this character has
+not learned is left out, which is how a talent nobody spent a point on and a
+trainer nobody visited both come out right without the class file knowing about
+specs. And one switch per entry, per character, drops whatever you do not want
+to look at: a raiding main and a levelling alt on the same account disagree
+about Shield Wall, and only you can settle that.
+
+The trinkets are not a class fact and are decided by the client rather than by a
+list. An item with a use effect answers `GetItemSpell` and a passive one answers
+nothing, so the row carries the trinket you press and skips the one you merely
+wear. That is a better test than a cooldown reading, because a passive trinket
+with a proc on it has a cooldown too, and a square saying "ready" about a proc
+is a square telling you to press something you cannot press.
+
+Two things came out of this that are not the row.
+
+`UI/Ability.lua` counts in minutes above a minute. A thirty minute Recklessness
+drew "1798" on a 27 pixel square, which is four digits of false precision about
+a number nobody reads to the second, and every action bar square had the same
+defect. It rounds down, so 1m means a minute or more and the ladder has no gap
+in it: 3m, 2m, 1m, then 59 and the seconds. Rounding up reads as the safer
+choice and is not, because 119 seconds and 61 seconds both round to 2m and the
+label would go from 2m straight to 59 without ever saying 1m.
+
+`ns.BuffName` is in Core with the rest of the API shims, because the cooldown
+row walks your own buffs for the same string `Buffs/Upkeep.lua` walks them for:
+whether a burst window is still open is a question the client will not answer
+from a cooldown, since the cooldown starts the moment you press the ability and
+says nothing about the fifteen seconds you pressed it for.
+
+The rail renumbered. The registry takes whole numbers only and the row belongs
+next to the buff nag, so it took 10 and the nine parts below it moved down one.
+
 ### The skin is four files, one per subject
 
 `UnitFrames/Skin.lua` was 1,988 lines holding three jobs that never spoke to

@@ -24,6 +24,11 @@ local swing = {
 }
 _G.WarriorKitSwing = swing
 
+-- The two hands and the two trinkets. The hands are the swing timer's and the
+-- trinkets are the cooldown row's, and they sit in one table because the client
+-- answers all four out of one call.
+local worn = { [13] = nil, [14] = nil }
+
 _G.GetInventoryItemLink = function(unit, slot)
 	if unit ~= "player" then
 		return nil
@@ -34,7 +39,29 @@ _G.GetInventoryItemLink = function(unit, slot)
 	if slot == 17 then
 		return swing.offhand
 	end
-	return nil
+	return worn[slot]
+end
+
+-- The name of an item's use effect, or nil for one you merely wear. This is
+-- what tells the cooldown row a trinket it can put on the row from a trinket it
+-- cannot, and it is a field on the item rather than a guess off the link, so a
+-- passive trinket is a real fixture rather than an absent one.
+_G.GetItemSpell = function(link)
+	local name = type(link) == "string" and link:match("%\[(.-)%\]")
+	local item = name and ITEMS[name]
+	return item and item.use or nil
+end
+
+-- A worn item's own cooldown, which is a different call from a spell's and is
+-- the one thing about a trinket square that cannot be read off a spell id.
+-- Table driven off the same scene the spell cooldowns are driven from, so a
+-- section puts a trinket on cooldown the way it puts Death Wish on one.
+_G.GetInventoryItemCooldown = function(unit, slot)
+	local entry = unit == "player" and H.own.worn[slot]
+	if not entry then
+		return 0, 0, 1
+	end
+	return entry[1], entry[2], 1
 end
 
 -- The art on the hand, which is what the aura row draws for a temporary weapon
@@ -297,4 +324,5 @@ _G.GetLootMethod = function() return state.lootMethod end
 _G.IsModifiedClick = constant(false)
 
 H.swing, H.enemyCasts, H.misused = swing, enemyCasts, misused
+H.worn = worn
 H.GUILD, H.CORPSE, H.looted = GUILD, CORPSE, looted

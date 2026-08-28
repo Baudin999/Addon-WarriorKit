@@ -1,6 +1,6 @@
 ## Interface: 20506
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, a row counting down the cooldowns that decide fights, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
@@ -332,6 +332,14 @@ Buffs\Upkeep.lua
 Buffs\Racials.lua
 Buffs\Nag.lua
 Buffs\Feature.lua
+
+# The long cooldowns. Cooldowns.lua is what is on the row, out of your class's
+# own list and the two trinket slots; Row.lua draws it; Feature.lua last as
+# everywhere else. After the buff nag because it is the same question one step
+# out, and it needs UI\Ability.lua, which is far above this line.
+Cooldowns\Cooldowns.lua
+Cooldowns\Row.lua
+Cooldowns\Feature.lua
 
 # The feeds. Two columns of what just happened: what dropped, and what landed on
 # you. Stream.lua is the frame one of them sits in, its anchor and its settings,

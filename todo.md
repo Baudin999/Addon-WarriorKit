@@ -25,6 +25,46 @@ the check that the cut was a move.
 Death Wish, Recklessness, Shield Wall, Last Stand, trinkets. The bars draw a
 swipe, but the cooldowns that matter are the ones not under your eyes.
 
+Built, and it stays here until it has been looked at in game.
+
+It is a class part rather than a warrior one, which is the half worth writing
+down. The list is a seventh field in the class registry, so `Class/Warrior.lua`
+names those four and no file outside `Class/` names a spell. A mage brings
+eight, a shaman six, a priest five, and a class nobody has written a file for
+brings none and still gets its trinkets. Adding a class is still one file.
+
+Three filters decide what is actually drawn and each one drops a square on its
+own: an id this client cannot name, which is most of what separates Era from
+Burning Crusade in those files; a spell this character has not learned, which is
+how an unspent talent and an unvisited trainer both come out right without the
+class file knowing about specs; and one switch per entry, per character, for
+whatever you do not want to look at.
+
+The trinkets are the client's answer rather than a list. An item with a use
+effect answers `GetItemSpell` and a passive one answers nothing, so the row
+carries the one you press and skips the one you wear.
+
+`Cooldowns/Cooldowns.lua` is what is on the row, `Row.lua` is when it is on the
+screen and what it looks like, `Feature.lua` is the settings.
+`42-cooldown-row.lua` runs it on all five class shapes and measures the counts
+against the class file rather than against a number written in the test.
+
+Two things fell out of it that are not the row. `UI/Ability.lua` counts in
+minutes above a minute, so a thirty minute cooldown reads 30m rather than 1798
+on every square in the addon. `ns.BuffName` moved into Core, because two parts
+now walk your own buffs for the same string. The rail renumbered as well: the
+row took 10 and the nine parts below it moved down one, because the registry
+takes whole numbers only.
+
+Four things to look at in game rather than measure. Whether the nineteen ids in
+the mage, shaman and priest files name what this addon thinks they name, which
+`/wk cooldowns list` answers per character in one look. Whether Ice Block
+answers to either of its two ids. Whether `GetItemSpell` and
+`GetInventoryItemCooldown` answer at all on these clients, which decides whether
+the trinket half exists. And whether a row of five squares over your character
+at 1x reads at a glance mid-pull, or wants the buff nag's 2x. All four are in
+the README's untested list with what would settle them.
+
 ## 9. Our own buff and debuff rows on the skinned frames
 
 Built on both frames. Not confirmed in game, and it stays here until it is.

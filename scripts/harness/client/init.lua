@@ -56,6 +56,7 @@ local CHURN = {
 	bars = 0.05,
 	swing = 0.05,
 	buffs = 0.05,
+	cooldowns = 0.05,
 	cast = 0.05,
 	party = 0.05,
 }

@@ -5,9 +5,9 @@ local Spell, Macro = ns.Class.Spell, ns.Class.Macro
 --------------------------------------------------------------------------
 -- Shaman
 --
--- Two of the six fields, for the same reason the mage file has two: nothing
--- here opens on a dodge, nothing casts inside a swing, and nothing closes on a
--- unit the way the charge button's three do.
+-- Three of the seven fields, for the same reason the mage file has three:
+-- nothing here opens on a dodge, nothing casts inside a swing, and nothing
+-- closes on a unit the way the charge button's three do.
 --
 -- Ghost Wolf is deliberately not a form. GetShapeshiftForm counts it, so the
 -- client would answer 1 for a shaman running between mobs, but `forms` exists
@@ -131,6 +131,36 @@ ns.Class.Register("SHAMAN", {
 				.. " any one of them clears this square, and all of them are spent"
 				.. " down to nothing without saying so.",
 		},
+	},
+
+	--------------------------------------------------------------------------
+	-- The long cooldowns
+	--
+	-- Six, and four of them are Burning Crusade only, so an Era shaman sees the
+	-- two that were always there and nothing is wrong. IsSpellKnown decides the
+	-- rest: Elemental Mastery and Nature's Swiftness are talents at the foot of
+	-- two different trees and nobody has both.
+	--
+	-- The ids, from Wowhead's Classic and TBC Classic databases: 2825 Bloodlust,
+	-- 32182 Heroism, 30823 Shamanistic Rage, 16166 Elemental Mastery, 16188
+	-- Nature's Swiftness, 2894 Fire Elemental Totem, 2062 Earth Elemental Totem.
+	--
+	-- Bloodlust and Heroism are one entry with two ids, because they are the
+	-- same button on two factions and a shaman has exactly one of them. The
+	-- entry takes whichever this character knows, which is what the two id form
+	-- is for.
+	--
+	-- Mana Tide Totem is not here. It is a restoration talent, this shaman is
+	-- enhancement, and a row written for a spec nobody plays is a row written
+	-- from a talent calculator. Add it the day somebody heals on one.
+	--------------------------------------------------------------------------
+	cooldowns = {
+		{ key = "lust", spells = { 2825, 32182 } },
+		{ key = "rage", spells = { 30823 } },
+		{ key = "mastery", spells = { 16166 } },
+		{ key = "swiftness", spells = { 16188 } },
+		{ key = "fireelemental", spells = { 2894 } },
+		{ key = "earthelemental", spells = { 2062 } },
 	},
 
 	loadout = LOADOUT,
