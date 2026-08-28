@@ -62,23 +62,22 @@ local GetNumTalentTabs = _G.GetNumTalentTabs
 local GetNumTalents = _G.GetNumTalents
 local GetTalentInfo = _G.GetTalentInfo
 
--- Slam, rank one. Only the name is taken off it, and every rank of Slam shares
--- that name, so one id covers a warrior at level 30 and one at 70 and there is
--- no table of ranks to keep true.
-local SLAM = 1464
-
--- What one point of Improved Slam takes off the cast, in seconds. Warcraft
--- wiki's rank table gives 0.1 per point across five points for Classic and for
--- Burning Crusade, and dates the two point, 0.5 per point version to patch
--- 3.0.2, which is one expansion past both of these clients. Wowhead's TBC entry
--- for spell 12330 reads -1000 milliseconds, which does not agree with that, and
--- there is no API that will settle it: a talent's effect lives in its tooltip
--- text and parsing that is a worse dependency than this number.
+-- The cast that lives inside a swing, and what a talent point takes off it.
+-- Both are facts about your class and live in Class/<yours>.lua as `swing`:
+-- for a warrior that is Slam and Improved Slam, and on these clients no other
+-- class has anything of the shape. Nil for a class that named none, and nil is
+-- the whole gate: Slam.Known answers false, the band is never measured and
+-- Swing/Feature.lua opens no page about it.
 --
--- Which is why it is a seed for the first cast and nothing more. The
--- measurement below replaces it the moment the player casts one, and the panel
--- says "estimated" until it has.
-local PER_POINT = 0.1
+-- Read on demand rather than held at load, because the class is not reliably
+-- known while the files load.
+local function Facts()
+	return ns.Class.Of("swing")
+end
+
+function Slam.Available()
+	return Facts() ~= nil
+end
 
 -- What a measurement is rounded to, in seconds.
 --
@@ -125,8 +124,14 @@ end
 
 function Slam.Name()
 	if not nameKnown then
-		nameKnown = true
-		name = ns.SpellName(SLAM)
+		local facts = Facts()
+		-- Not latched until there is a class to ask. A nil written before the
+		-- client settled the class would cost a warrior the band for the session,
+		-- which is the trap Class/Class.lua exists to keep out of every file.
+		if facts then
+			nameKnown = true
+			name = ns.SpellName(facts.cast)
+		end
 	end
 	return name
 end
@@ -167,8 +172,9 @@ function Slam.Estimate()
 	-- Asked by id rather than by the name resolved above. Every rank of Slam
 	-- casts in the same time, so rank one answers for a warrior at any level,
 	-- and an id cannot collide with another spell the way a name can.
-	local base = Slam.Name() and ns.SpellCastTime(SLAM) or 0
-	estimate = base - Slam.Rank() * PER_POINT
+	local facts = Facts()
+	local base = (facts and Slam.Name()) and ns.SpellCastTime(facts.cast) or 0
+	estimate = base - Slam.Rank() * ((facts and facts.perPoint) or 0)
 	if estimate < 0 then
 		estimate = 0
 	end
@@ -185,11 +191,11 @@ function Slam.Cast()
 	return measured or Slam.Estimate()
 end
 
--- Whether this character has Slam at all. Warrior is asked first because
--- ns.SpellName answers for any spell id on any class and a hunter would
+-- Whether this character has the cast at all. The class is asked first because
+-- ns.SpellName answers for any spell id on any class, and a hunter would
 -- otherwise be told about a warrior's cast time.
 function Slam.Known()
-	return ns.IsWarrior() and Slam.Name() ~= nil and Slam.Cast() > 0
+	return Slam.Available() and Slam.Name() ~= nil and Slam.Cast() > 0
 end
 
 --------------------------------------------------------------------------
@@ -329,7 +335,8 @@ local function Learn()
 	-- A client with no cast time to give has nothing to compare against and the
 	-- reading is taken on its own, because a bar drawn from a measurement is
 	-- still better than a bar drawn from an estimate of nothing.
-	local base = ns.SpellCastTime(SLAM)
+	local facts = Facts()
+	local base = facts and ns.SpellCastTime(facts.cast)
 	if type(base) == "number" and base > 0 and taken > base * SANE then
 		return
 	end

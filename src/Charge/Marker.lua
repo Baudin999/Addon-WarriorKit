@@ -189,7 +189,7 @@ events:SetScript("OnEvent", function(_, event)
 	-- cast one. Unregistered on another class rather than built and left
 	-- hidden, because the cost this file carries is the twenty-a-second
 	-- nameplate scan below and a hidden frame would still be paying it.
-	if not ns.IsWarrior() then
+	if not ns.Charge.Available() then
 		events:UnregisterAllEvents()
 		return
 	end

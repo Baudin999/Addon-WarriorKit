@@ -10,26 +10,32 @@ ns.Charge = Charge
 
 local GCD = 1.5
 
-Charge.ABILITIES = {
-	charge = {
-		ranks = { 100, 6178, 11578 },
-		stance = 1,
-		hostile = true,
-		inCombat = false, -- Charge only works out of combat
-	},
-	intervene = {
-		ranks = { 3411 },
-		stance = 2,
-		hostile = false,
-		inCombat = true,
-	},
-	intercept = {
-		ranks = { 20252, 20616, 20617 },
-		stance = 3,
-		hostile = true,
-		inCombat = true,
-	},
-}
+--------------------------------------------------------------------------
+-- The three openers
+--
+-- Which abilities this button casts is a fact about your class and lives in
+-- Class\<yours>.lua as `charge`. Nil for a class that closes distance some
+-- other way or not at all, and nil is the whole gate: Feature.lua builds no
+-- page, Icon.lua builds no secure button, Marker.lua scans no nameplates and
+-- SoftTarget.lua leaves the client's own CVar exactly as it found it.
+--
+-- Asked on demand rather than held at load. The class is not reliably known
+-- while the files load, and a nil taken then would leave a warrior without the
+-- button until they reloaded.
+--------------------------------------------------------------------------
+
+function Charge.Abilities()
+	return ns.Class.Of("charge")
+end
+
+function Charge.Available()
+	return Charge.Abilities() ~= nil
+end
+
+function Charge.Ability(key)
+	local set = Charge.Abilities()
+	return set and set[key] or nil
+end
 
 -- The palette both charge displays draw in. One icon on the HUD and one in the
 -- world, each on its own with nothing beside it to compare against, so ready is
@@ -69,7 +75,7 @@ local nameEpoch = 0
 -- after this one for it to work.
 function Charge.Name(key)
 	if not names[key] then
-		local info = Charge.ABILITIES[key]
+		local info = Charge.Ability(key)
 		names[key] = info and ns.SpellName(info.ranks[1])
 	end
 	return names[key]
@@ -77,7 +83,7 @@ end
 
 function Charge.Texture(key)
 	if not textures[key] then
-		local info = Charge.ABILITIES[key]
+		local info = Charge.Ability(key)
 		textures[key] = info and ns.SpellTexture(info.ranks[1])
 	end
 	return textures[key]
@@ -100,13 +106,13 @@ end
 
 -- Said once here so the panel, the slash word and the status line all give the
 -- same reason, rather than three sentences that have to be kept in step.
-Charge.NOT_WARRIOR = "the charge button casts three warrior abilities and you are not a warrior"
+function Charge.Refusal()
+	return ("the charge button is built on three openers and a %s has none")
+		:format(ns.Class.Label())
+end
 
 function Charge.Known(key)
-	if not ns.IsWarrior() then
-		return false
-	end
-	local info = Charge.ABILITIES[key]
+	local info = Charge.Ability(key)
 	if not info then
 		return false
 	end
@@ -297,7 +303,7 @@ end
 -- start and duration when there is one. Order is deliberate: what you cannot fix at all comes first,
 -- then what a stance swap or a few seconds of rage fixes, then range.
 function Charge.State(key, unit)
-	local info = Charge.ABILITIES[key]
+	local info = Charge.Ability(key)
 	local name = Charge.Name(key)
 	if not info or not name or not Charge.Known(key) then
 		return "unknown"

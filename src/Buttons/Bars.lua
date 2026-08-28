@@ -79,9 +79,6 @@ local UPDATE_INTERVAL = 0.1
 -- one bar's slots and the next.
 local PER_BAR = 12
 
--- Stance one, two and three, in the order GetShapeshiftForm counts them, which
--- is also the order Layout.Bar1Bases keys its answer by.
-local STANCES = { "battle", "defensive", "berserker" }
 
 --------------------------------------------------------------------------
 -- The plan
@@ -310,8 +307,8 @@ local function DrivePages(entry)
 	end
 
 	header:SetAttribute("count", PER_BAR)
-	for index = 1, #STANCES do
-		header:SetAttribute("page" .. index, entry.pages[STANCES[index]])
+	for index = 1, ns.Layout.PAGES do
+		header:SetAttribute("page" .. index, entry.pages[index])
 	end
 	for index = 1, PER_BAR do
 		header:SetFrameRef("button" .. index, entry.buttons[index])
@@ -338,7 +335,7 @@ function Bars.Page()
 		local base = entry.base
 		if entry.pages then
 			local form = GetShapeshiftForm and GetShapeshiftForm() or 0
-			base = entry.pages[STANCES[form] or ""] or entry.pages.battle or base
+			base = entry.pages[form] or entry.pages[1] or base
 		end
 		for slot = 1, PER_BAR do
 			entry.buttons[slot]:SetAttribute("action", base + slot - 1)

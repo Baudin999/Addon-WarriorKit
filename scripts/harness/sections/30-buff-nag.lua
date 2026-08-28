@@ -484,8 +484,20 @@ tick()
 ----------------------------------------------------------------------
 
 own.main = true
-own.auras[1] = { name = "Well Fed", expires = _G.GetTime() + 900 }
-own.auras[2] = { name = "Battle Shout", expires = _G.GetTime() + 120 }
+
+-- Every aura the row is actually watching, read off the live list rather than
+-- written out as two names here. The list is the three that ship plus whatever
+-- Class/<yours>.lua added, so a pair of literals would only ever buff a warrior
+-- and would leave a mage's armour square lit with nothing wrong.
+for index = #own.auras, 1, -1 do
+	own.auras[index] = nil
+end
+for index = 1, ns.Upkeep.Count() do
+	local entry = ns.Upkeep.Entry(index)
+	if entry.name then
+		own.auras[#own.auras + 1] = { name = entry.name, expires = _G.GetTime() + 900 }
+	end
+end
 fire("UNIT_AURA", "player")
 tick()
 check(Nag.Mode() == "quiet", "a fully buffed character was still shown a row")
@@ -514,11 +526,15 @@ check(Upkeep.Count() == tracked + 1, "an added spell did not reach the list")
 tick()
 check(says("Spell17038"), "an added buff that is not on you was not nagged about")
 
-own.auras[3] = { name = "Spell17038", expires = _G.GetTime() + 3600 }
+-- Appended rather than written to a fixed index. The aura scan stops at the
+-- first slot the client will not name, so a gap left by a class whose row is
+-- shorter would hide everything after it.
+local at = #own.auras + 1
+own.auras[at] = { name = "Spell17038", expires = _G.GetTime() + 3600 }
 fire("UNIT_AURA", "player")
 tick()
 check(not says("Spell17038"), "an added buff that is on you was nagged about anyway")
-own.auras[3] = nil
+own.auras[at] = nil
 fire("UNIT_AURA", "player")
 
 check(Upkeep.Add(17038) == false, "the same spell went on the row twice")
@@ -547,7 +563,9 @@ check(Upkeep.Count() == tracked, "the list did not come back to what it was")
 ----------------------------------------------------------------------
 
 own.main, own.off = false, false
-own.auras[1], own.auras[2] = nil, nil
+for index = #own.auras, 1, -1 do
+	own.auras[index] = nil
+end
 fire("UNIT_AURA", "player")
 
 local shipped = ns.db.buffZoom

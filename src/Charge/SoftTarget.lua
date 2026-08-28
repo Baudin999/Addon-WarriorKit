@@ -70,7 +70,7 @@ end
 -- also called straight from the panel and the slash word, and one authority
 -- for "should this be written" is what stops those three paths disagreeing.
 local function Wanted()
-	if not ns.db.softAuto or not ns.IsWarrior() then
+	if not ns.db.softAuto or not ns.Charge.Available() then
 		return nil
 	end
 	return UnitAffectingCombat("player") and OFF or ON
@@ -136,7 +136,7 @@ function SoftTarget.Describe()
 	end
 	local on = (tonumber(value) or 0) > 0
 
-	if not ns.IsWarrior() then
+	if not ns.Charge.Available() then
 		return ("yours, currently %s"):format(on and "on" or "off")
 	end
 	if not ns.db.softAuto then

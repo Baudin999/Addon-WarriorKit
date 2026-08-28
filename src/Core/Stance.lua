@@ -4,24 +4,37 @@ local Stance = {}
 ns.Stance = Stance
 
 --------------------------------------------------------------------------
--- The three stances
+-- The forms you can stand in
 --
 -- Which spell each one is, what it is called in this client's language, and
--- which one you are standing in. Three numbers and two questions, and they are
--- here rather than in a part because two parts ask them now. The charge button
--- swaps stance on the way to Charge, Intervene and Intercept; the stance keys
--- are the whole of what they do. Held in one place so the two cannot disagree
--- about what stance 2 is called.
+-- which one you are standing in. Two parts ask: the charge button swaps stance
+-- on the way to Charge, Intervene and Intercept, and the loadouts page offers
+-- one per stance to bind a weapon set to. Held in one place so the two cannot
+-- disagree about what stance 2 is called.
 --
--- The index is the number the `stance:` macro conditional counts in, so the
--- order of SPELLS is the order the generated macros are written against.
+-- Which forms exist is a fact about your class and lives in Class\<yours>.lua
+-- as `forms`. The index is the number the `stance:` macro conditional counts
+-- in, so the order that file writes them in is the order the generated macros
+-- are written against. A class with no forms answers zero here and both callers
+-- fall away: the charge macro is not built at all on that class, and the
+-- loadouts page offers a weapon set with no stance on it, which is a thing it
+-- already supports.
+--
+-- Nothing here is read at load. The class is not reliably known while the files
+-- load, so a form list taken then would be empty for the session.
 --------------------------------------------------------------------------
-
-Stance.SPELLS = { 2457, 71, 2458 } -- 1 Battle, 2 Defensive, 3 Berserker
-Stance.COUNT = #Stance.SPELLS
 
 local names = {}
 local epoch = 0
+
+local function Spells()
+	return ns.Class.Of("forms")
+end
+
+function Stance.Count()
+	local spells = Spells()
+	return spells and #spells or 0
+end
 
 -- Resolved lazily and never cached as nil, so a name the client has not handed
 -- over yet is asked for again rather than latched empty. Spell names are not
@@ -29,7 +42,9 @@ local epoch = 0
 -- the empty string is a macro line that casts nothing.
 function Stance.Name(index)
 	if not names[index] then
-		names[index] = ns.SpellName(Stance.SPELLS[index])
+		local spells = Spells()
+		local spell = spells and spells[index]
+		names[index] = spell and ns.SpellName(spell)
 	end
 	return names[index]
 end

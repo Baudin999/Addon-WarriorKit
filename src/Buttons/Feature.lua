@@ -403,6 +403,36 @@ local function LookWord(word, rest)
 	return true
 end
 
+-- The loadout page, which is the one page of this part that only exists on a
+-- class somebody has written a plan for. Lifted out of the panel builder so the
+-- gate on it reads as one line there rather than as a fold around half the
+-- function.
+local function LoadoutPage(ui)
+	ui.Section("Buttons", ns.Options.CLASS)
+	ui.Lede("Fills bar 1 with a role per key on every page it has, and the shift layer above it.")
+	ui.ActionPair(
+		function() return ns.Layout.HasBackup() and "re-fill the bars" or "fill the bars" end,
+		Apply,
+		function() return (ns.Layout.CanApply()) end,
+		function() return "put mine back" end,
+		Restore,
+		function() return ns.Layout.HasBackup() and (ns.Layout.CanApply()) end)
+	ui.Hint("Your keybindings are never touched, and nothing is overwritten until you press it. What was in the slots is kept, so the right button hands it all back.")
+	ui.Reading("the bars", function()
+		local can, why = ns.Layout.CanApply()
+		if not can then
+			return why
+		end
+		return ns.Layout.Describe()
+	end)
+	ui.Reading("your old bars", function()
+		if not ns.Layout.HasBackup() then
+			return "not held"
+		end
+		return "held from " .. ns.Layout.BackupStamp()
+	end)
+end
+
 ns.Register({
 	name = "buttons",
 	order = 5,
@@ -584,29 +614,13 @@ ns.Register({
 	-- the switch that says so.
 
 	panel = function(ui)
-		ui.Section("Buttons", "Fighting")
-		ui.Lede("Fills bar 1 with a role per key in all three stances, and the shift layer above it.")
-		ui.ActionPair(
-			function() return ns.Layout.HasBackup() and "re-fill the bars" or "fill the bars" end,
-			Apply,
-			function() return (ns.Layout.CanApply()) end,
-			function() return "put mine back" end,
-			Restore,
-			function() return ns.Layout.HasBackup() and (ns.Layout.CanApply()) end)
-		ui.Hint("Your keybindings are never touched, and nothing is overwritten until you press it. What was in the slots is kept, so the right button hands it all back.")
-		ui.Reading("the bars", function()
-			local can, why = ns.Layout.CanApply()
-			if not can then
-				return why
-			end
-			return ns.Layout.Describe()
-		end)
-		ui.Reading("your old bars", function()
-			if not ns.Layout.HasBackup() then
-				return "not held"
-			end
-			return "held from " .. ns.Layout.BackupStamp()
-		end)
+		-- The loadout is the one page of this part that belongs to a class, so it
+		-- sits under the rail entry named after you and is not built at all where
+		-- nobody has written a plan. The two pages under it are the same job on
+		-- every character and stay where they are.
+		if ns.Layout.Plan() then
+			LoadoutPage(ui)
+		end
 
 		ui.Section("Our own bars", "Fighting")
 		ui.Lede("Stands up one of our bars for each of yours: same slots, same keys, Blizzard's hidden behind.")

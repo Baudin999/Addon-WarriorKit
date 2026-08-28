@@ -4,13 +4,14 @@ local Reaction = {}
 ns.Reaction = Reaction
 
 --------------------------------------------------------------------------
--- The two abilities the fight hands you
+-- The abilities the fight hands you
 --
--- Overpower is pressable for a few seconds after your target dodges you.
+-- A warrior's Overpower is pressable for a few seconds after the target dodges.
 -- Revenge is the same mechanism seen from the other side: it opens when you
--- block, dodge or parry. Nothing else a warrior owns works this way.
+-- block, dodge or parry. Nothing else a warrior owns works this way, and on
+-- these clients no other class owns anything that does.
 --
--- One file for both, because they are one idea. The trigger differs by which
+-- One file for however many there are, because they are one idea. The trigger differs by which
 -- end of the swing you are on and everything after that is identical: a clock
 -- that starts on a combat log line, runs for a fixed few seconds, and stops
 -- early when you spend it. Two copies of that clock is how the two drift, and
@@ -30,52 +31,50 @@ ns.Reaction = Reaction
 -- way: one handler, one subevent test, positional reads by index, and no state
 -- the log did not put there.
 --
--- Warrior only, decided once at PLAYER_LOGIN the way Charge/Feature.lua decides
--- it. On another class nothing registers, the two clocks never move, and
--- Reaction.Of answers nil for every square, so no bar anywhere is gated on a
--- window that could not open.
+-- Which abilities work this way, and what opens each, is a fact about your
+-- class and lives in Class/<yours>.lua as `reactive`. This file knows two
+-- triggers and nothing else: `dodged` is your own attack being dodged, and
+-- `defended` is you blocking, dodging or parrying. A class that names neither
+-- registers nothing, the clocks never move, and Reaction.Of answers nil for
+-- every square, so no bar anywhere is gated on a window that could not open.
+--
+-- Decided once at PLAYER_LOGIN the way Charge/Feature.lua decides it, because
+-- everything below is one table built off the class and then read on the tick.
 --------------------------------------------------------------------------
 
 local CombatLogGetCurrentEventInfo = _G.CombatLogGetCurrentEventInfo
 
-Reaction.OVERPOWER = "overpower"
-Reaction.REVENGE = "revenge"
+-- The two triggers this file can watch. A class names one of these against
+-- each of its reactive abilities and nothing else here is a class fact.
+Reaction.DODGED = "dodged"     -- your own attack was dodged
+Reaction.DEFENDED = "defended" -- you blocked, dodged or parried
 
--- Rank 1 of each. Every other rank is matched by name against these, so the
--- file carries two ids rather than a rank list that goes stale at the next
--- trainer visit and is wrong on a client that shipped a rank nobody wrote down.
+-- Filled at PLAYER_LOGIN off the class, and read on the tick after that.
+--
+--   keys      the class's own keys, in the order it wrote them
+--   spellOf   key to the rank 1 id the client is asked to name it by
+--   openUntil key to when its window shuts, on the client's own clock
+--   opens     trigger to the key it opens, or nil for a trigger this class
+--             has nothing on
+--
+-- Rank 1 of each, because every other rank is matched by name against it. A
+-- rank list would go stale at the next trainer visit and be wrong on a client
+-- that shipped a rank nobody wrote down.
 --
 -- Matching on the name is locale-proof for the reason the debuff scan in
 -- UnitFrames/EnemyBars.lua is: both sides of the comparison are the client's
 -- own name for a spell, so a localised name is being matched against itself.
 -- Nothing here ever compares against an English string.
-local ROOT = {
-	overpower = 7384, -- Overpower, rank 1
-	revenge = 6572,   -- Revenge, rank 1
-}
+--
+-- Written in place forever. A reaction tracker that built a record per window
+-- would be the shape check.sh's allocation gate exists to refuse.
+local keys, spellOf, openUntil, opens = {}, {}, {}, {}
 
--- How long a window stays open, in seconds, and the one number in this file
--- that is not read off the client.
---
--- Five, and the sources do not all agree. The player-facing figure is five
--- everywhere it is written down: the Vanilla wiki says Overpower is "only
--- usable if your target dodges, for a short amount of time (5 second period)",
--- every Classic warrior guide says the same, and both abilities carry a five
--- second cooldown, so a warrior who presses on every window presses exactly on
--- the cooldown. Against that, the MaNGOS and TrinityCore server cores both hold
--- REACTIVE_TIMER_START at 4000 milliseconds, which is where four seconds comes
--- from when someone quotes it.
---
--- Five is the number here because the two errors do not cost the same. Running
--- a second long means a square says pressable when it is not, which costs a
--- glance. Running a second short means the square goes grey while a free five
--- rage attack is still sitting there, which costs the attack. A bar exists to
--- show you the press, so it errs towards showing it.
---
--- Settling this needs the live client and a stopwatch: get something to dodge
--- you, count, and watch when the client starts refusing the press. Until then
--- the README lists it under what has never been measured.
-local WINDOW = 5
+-- How long a window stays open, in seconds. The one number in this file that is
+-- neither read off the client nor a class fact this file settles: the class
+-- names it, because how long the server holds a reactive open is a property of
+-- the ability. Class/Warrior.lua carries the reasoning for the five it gives.
+local window = 0
 
 -- The miss types that open Revenge. Blocking, dodging and parrying are the
 -- three the tooltip names and no others count: a mob that simply misses you has
@@ -84,14 +83,6 @@ local DEFENDED = {
 	BLOCK = true,
 	DODGE = true,
 	PARRY = true,
-}
-
--- When each window shuts, on the client's own clock. Two numbers, written in
--- place forever, because a reaction tracker that built a record per window
--- would be the shape check.sh's allocation gate exists to refuse.
-local openUntil = {
-	overpower = 0,
-	revenge = 0,
 }
 
 -- nil until PLAYER_LOGIN, then true or the reason nothing is being tracked.
@@ -115,7 +106,7 @@ local keyOf = {}  -- spell id to key, or false for a spell that is neither
 -- this one for it to work. Same shape as Charge.Name.
 function Reaction.Name(key)
 	if names[key] == nil then
-		names[key] = ns.SpellName(ROOT[key]) or false
+		names[key] = (spellOf[key] and ns.SpellName(spellOf[key])) or false
 	end
 	return names[key] or nil
 end
@@ -136,19 +127,27 @@ local function KeyForSpell(id)
 	if known ~= nil then
 		return known or nil
 	end
-	local overpower, revenge = Reaction.Name(Reaction.OVERPOWER), Reaction.Name(Reaction.REVENGE)
-	if not overpower and not revenge then
-		return nil
-	end
 	local name = ns.SpellName(id)
 	if not name then
 		return nil
 	end
-	local found = false
-	if name == overpower then
-		found = Reaction.OVERPOWER
-	elseif name == revenge then
-		found = Reaction.REVENGE
+	local found, answered = false, false
+	for index = 1, #keys do
+		local key = keys[index]
+		local mine = Reaction.Name(key)
+		if mine then
+			answered = true
+			if name == mine then
+				found = key
+				break
+			end
+		end
+	end
+	-- Not cached until the client has named at least one of them. A false
+	-- written before the spell data arrived would lock every square out of every
+	-- window for the rest of the session.
+	if not answered then
+		return nil
 	end
 	keyOf[id] = found
 	return found or nil
@@ -260,8 +259,8 @@ local function OnLog()
 		elseif subevent == "SPELL_MISSED" then
 			missed = arg15
 		end
-		if missed == "DODGE" then
-			openUntil[Reaction.OVERPOWER] = GetTime() + WINDOW
+		if missed == "DODGE" and opens[Reaction.DODGED] then
+			openUntil[opens[Reaction.DODGED]] = GetTime() + window
 		end
 		return
 	end
@@ -278,8 +277,8 @@ local function OnLog()
 		missed = arg15
 	end
 	if missed then
-		if DEFENDED[missed] then
-			openUntil[Reaction.REVENGE] = GetTime() + WINDOW
+		if DEFENDED[missed] and opens[Reaction.DEFENDED] then
+			openUntil[opens[Reaction.DEFENDED]] = GetTime() + window
 		end
 		return
 	end
@@ -290,8 +289,8 @@ local function OnLog()
 	elseif subevent == "SPELL_DAMAGE" then
 		blocked = arg19
 	end
-	if type(blocked) == "number" and blocked > 0 then
-		openUntil[Reaction.REVENGE] = GetTime() + WINDOW
+	if type(blocked) == "number" and blocked > 0 and opens[Reaction.DEFENDED] then
+		openUntil[opens[Reaction.DEFENDED]] = GetTime() + window
 	end
 end
 
@@ -304,12 +303,19 @@ function Reaction.Describe()
 	if watching ~= true then
 		return watching
 	end
-	local overpower = Reaction.Remaining(Reaction.OVERPOWER)
-	local revenge = Reaction.Remaining(Reaction.REVENGE)
-	if overpower <= 0 and revenge <= 0 then
-		return ("%gs windows, both shut"):format(WINDOW)
+	local open = ""
+	for index = 1, #keys do
+		local key = keys[index]
+		local left = Reaction.Remaining(key)
+		if left > 0 then
+			open = open .. (open == "" and "" or ", ")
+				.. (Reaction.Name(key) or key) .. (", %.1fs"):format(left)
+		end
 	end
-	return ("%gs windows, Overpower %.1fs, Revenge %.1fs"):format(WINDOW, overpower, revenge)
+	if open == "" then
+		return ("%gs windows, all %d shut"):format(window, #keys)
+	end
+	return ("%gs windows, "):format(window) .. open
 end
 
 --------------------------------------------------------------------------
@@ -326,8 +332,10 @@ local function Arm()
 	if watching ~= nil then
 		return
 	end
-	if not ns.IsWarrior() then
-		watching = "Overpower and Revenge are warrior abilities and you are not a warrior"
+	local list = ns.Class.Of("reactive")
+	if not list or #list == 0 then
+		watching = ("no ability a %s owns opens on a dodge or on a block")
+			:format(ns.Class.Label())
 		return
 	end
 	if type(CombatLogGetCurrentEventInfo) ~= "function" then
@@ -339,6 +347,18 @@ local function Arm()
 		return
 	end
 	readAction = _G.GetActionInfo
+
+	-- Built once, here, and read on the tick after that. Everything above has
+	-- already refused, so nothing half-filled is ever left behind.
+	window = list.window or 0
+	for index = 1, #list do
+		local entry = list[index]
+		keys[index] = entry.key
+		spellOf[entry.key] = entry.spell
+		openUntil[entry.key] = 0
+		opens[entry.on] = entry.key
+	end
+
 	watching = true
 	events:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 	events:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -351,7 +371,9 @@ events:SetScript("OnEvent", function(_, event)
 		-- The fight is over, so nothing else is going to dodge you and nothing
 		-- else is going to hit your shield. Shut both rather than let them run
 		-- out, the same way Swing.lua stops a swing that is not coming.
-		openUntil[Reaction.OVERPOWER], openUntil[Reaction.REVENGE] = 0, 0
+		for index = 1, #keys do
+			openUntil[keys[index]] = 0
+		end
 	else
 		Arm()
 	end

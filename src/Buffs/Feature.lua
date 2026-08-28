@@ -5,11 +5,11 @@ local ADDON, ns = ...
 -- and are not pressing, Nag.lua draws the row, and none of the three names
 -- anything outside this folder.
 --
--- Not gated on warrior. A lapsed sharpening stone costs a hunter's melee weapon
+-- Not gated on class. A lapsed sharpening stone costs a hunter's melee weapon
 -- exactly what it costs a warrior's, and a troll rogue forgets Berserking the
--- same way. The one warrior-only entry is Battle Shout and it is gated inside
--- Upkeep.Rebuild, which is the same seam Charge/Feature.lua draws: the part
--- runs for everybody and the class-specific piece asks ns.IsWarrior.
+-- same way. What your class adds to the row is written in Class/<yours>.lua and
+-- merged in by Upkeep.Fixed, so this part runs for everybody and knows the name
+-- of nobody's spell.
 
 
 local function SetBuffs(value)
@@ -93,16 +93,21 @@ local function BuffWord(arg)
 	-- the toggle the way it always did.
 	local entry = ns.Upkeep.ByWord(option)
 	if entry then
-		if entry.warrior and not ns.IsWarrior() then
-			ns.Print(entry.fixed .. " is on the row for a warrior and nowhere else,"
-				.. " so there is nothing here to switch off.")
-			return
-		end
 		ns.Upkeep.SetWatched(entry.key, ns.Command.Toggle(value))
 		ns.BuffNag.Apply()
 		ns.Print(entry.fixed .. (ns.Upkeep.Watched(entry.key)
 			and " is watched again on this character."
 			or " is switched off on this character."))
+		return
+	end
+
+	-- A word another class puts on the row, said as such. Without this it would
+	-- fall through to the toggle below, switch the whole nag off and report that
+	-- it had done something else entirely.
+	local elsewhere = ns.Upkeep.Elsewhere(option)
+	if elsewhere then
+		ns.Print(option .. " is on the row for a " .. elsewhere .. " and nowhere"
+			.. " else, so there is nothing here to switch off.")
 		return
 	end
 
@@ -291,23 +296,22 @@ ns.Register({
 		ui.Section("What it watches", "You")
 		ui.Lede("One switch per thing the row watches. Switched off is not watched, not drawn, not counted.")
 
-		-- Built from Upkeep's own list rather than from four literals here, so a
-		-- fifth entry would arrive with its switch already on the page. Battle
-		-- Shout is skipped on anyone who cannot cast it, which is the same call
-		-- the Charge page makes: a tick box that writes a setting nothing reads
-		-- is worse than leaving it out.
-		for index = 1, #ns.Upkeep.Fixed() do
-			local entry = ns.Upkeep.Fixed()[index]
-			if not entry.warrior or ns.IsWarrior() then
-				ui.Check(entry.switch,
-					function() return ns.Upkeep.Watched(entry.key) end,
-					function(value)
-						ns.Upkeep.SetWatched(entry.key, value)
-						ns.BuffNag.Apply()
-					end)
-			end
+		-- Built from Upkeep's own list rather than from literals here, so an entry
+		-- added to the shipped three, or by your class, arrives with its switch
+		-- already on the page. The list is already this character's: Upkeep.Fixed
+		-- merges in your class's entries and nobody else's, so a tick box that
+		-- writes a setting nothing on this character reads cannot be drawn.
+		local watched = ns.Upkeep.Fixed()
+		for index = 1, #watched do
+			local entry = watched[index]
+			ui.Check(entry.switch,
+				function() return ns.Upkeep.Watched(entry.key) end,
+				function(value)
+					ns.Upkeep.SetWatched(entry.key, value)
+					ns.BuffNag.Apply()
+				end)
 		end
-		ui.Hint("These four are per character, because whether a bare weapon is worth a square is a raiding main's answer and not a bank alt's. Everything else here is the account's.")
+		ui.Hint("These are per character, because whether a bare weapon is worth a square is a raiding main's answer and not a bank alt's. Everything else here is the account's.")
 
 		ui.Reading("switched off", function()
 			local silent, names = ns.Upkeep.Silent()

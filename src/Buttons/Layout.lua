@@ -23,82 +23,36 @@ ns.Layout = Layout
 --------------------------------------------------------------------------
 -- The plan
 --
--- The whole design is this table. Changing the loadout is editing data, not
--- code. Every cell is { kind, name } where kind is "spell" or "macro", or nil
--- for a slot the plan leaves alone.
+-- Not here. What goes in which slot is a fact about your class and lives in
+-- Class/<yours>.lua as `loadout`. This file is the mechanism: which action
+-- slots the bars drive, how to put a spell in one, and how to hand back exactly
+-- what was there before. None of that changes with the class.
 --
--- Names are English because this install is enUS. A localised client needs
--- the names swapping, which is the one thing in this file that is not
--- locale-proof.
+-- A plan is four fields.
+--
+--   pages   the page keys, in the order the `stance:` macro conditional counts
+--           them. One key for a class that does not page bar 1 at all, which is
+--           most of them.
+--   single  which page to write when the plan has several and the client is not
+--           paging: no stance, or a bar the client will not tell us about.
+--   macros  what has to exist before the plan can be placed. Created per
+--           character, prefixed so Restore finds exactly what was made.
+--   bar1    twelve rows, one per physical key, each with a cell per page. The
+--           row is the job that key does and the cells are how that job is done
+--           on each page, which is what makes them one row.
+--   bar2    twelve cells, the shift layer, which does not page.
+--
+-- Nil for a class nobody has written a plan for. Nil is the whole gate:
+-- CanApply refuses, Buttons/Feature.lua opens no page, and nothing is ever
+-- written to a bar it could not fill.
+--
+-- Read on demand rather than held at load, because the class is not reliably
+-- known while the files load.
 --------------------------------------------------------------------------
 
-local function Spell(name)
-	return { kind = "spell", name = name }
+function Layout.Plan()
+	return ns.Class.Of("loadout")
 end
-
-local function Macro(name)
-	return { kind = "macro", name = name }
-end
-
--- Macros the plan needs. Created per character, prefixed so Restore can find
--- exactly what was made and delete nothing else.
-Layout.MACROS = {
-	{
-		name = "WK Taunt",
-		body = "#showtooltip\n/cast [stance:1] Mocking Blow; [@mouseover,harm,nodead] Taunt; Taunt",
-	},
-	{
-		name = "WK Bash",
-		body = "#showtooltip\n/cast [@mouseover,harm,nodead] Shield Bash; Shield Bash",
-	},
-	{
-		name = "WK Pummel",
-		body = "#showtooltip\n/cast [@mouseover,harm,nodead] Pummel; Pummel",
-	},
-	{
-		name = "WK Sunder",
-		body = "#showtooltip\n/startattack\n/cast [@mouseover,harm,nodead] Sunder Armor; Sunder Armor",
-	},
-	{
-		name = "WK Strike",
-		body = "#showtooltip\n/startattack\n/cast Heroic Strike",
-	},
-}
-
--- Bar 1, paged by stance. Same finger, same job, in every stance.
--- index 1 to 12 is the physical slot, which on this install is E Q Z X C V F 1 2 3 4 5.
-Layout.BAR1 = {
-	{ role = "rage dump",   battle = Macro("WK Strike"),        defensive = Macro("WK Strike"),           berserker = Macro("WK Strike") },
-	{ role = "aoe dump",    battle = Spell("Cleave"),           defensive = Spell("Cleave"),              berserker = Spell("Cleave") },
-	{ role = "builder",     battle = Spell("Rend"),             defensive = Macro("WK Sunder"),           berserker = Spell("Whirlwind") },
-	{ role = "proc window", battle = Spell("Overpower"),        defensive = Spell("Revenge"),             berserker = Spell("Intercept") },
-	{ role = "aoe hit",     battle = Spell("Thunder Clap"),     defensive = Spell("Thunder Clap"),        berserker = Spell("Berserker Rage") },
-	{ role = "snare",       battle = Spell("Hamstring"),        defensive = Spell("Hamstring"),           berserker = Spell("Hamstring") },
-	{ role = "interrupt",   battle = Macro("WK Bash"),          defensive = Macro("WK Bash"),             berserker = Macro("WK Pummel") },
-	{ role = "execute",     battle = Spell("Execute"),          defensive = Spell("Execute"),             berserker = Spell("Execute") },
-	{ role = "rage",        battle = Spell("Bloodrage"),        defensive = Spell("Bloodrage"),           berserker = Spell("Bloodrage") },
-	{ role = "pull it back", battle = Macro("WK Taunt"),        defensive = Macro("WK Taunt"),            berserker = Spell("Challenging Shout") },
-	{ role = "mitigation",  battle = Spell("Spell Reflection"), defensive = Spell("Shield Block"),        berserker = Spell("Recklessness") },
-	{ role = "shout",       battle = Spell("Battle Shout"),     defensive = Spell("Demoralizing Shout"),  berserker = Spell("Battle Shout") },
-}
-
--- Bar 2, the shift layer. Does not page, which is the point of it.
-Layout.BAR2 = {
-	Spell("Shield Wall"),
-	Spell("Last Stand"),
-	Spell("Battle Shout"),
-	Spell("Demoralizing Shout"),
-	Spell("Commanding Shout"),
-	Spell("Intimidating Shout"),
-	Spell("Disarm"),
-	nil, -- healing potion, yours to drag, the addon will not guess an item
-	nil, -- healthstone or bandage, same
-	Spell("Battle Stance"),
-	Spell("Defensive Stance"),
-	Spell("Berserker Stance"),
-}
-
-local STANCES = { "battle", "defensive", "berserker" }
 
 --------------------------------------------------------------------------
 -- Can this client do it
@@ -146,7 +100,9 @@ end
 -- away from that test never matching again.
 Layout.BUSY_COMBAT = "you are in combat"
 Layout.BUSY_CURSOR = "put down what you are holding first"
-Layout.NOT_WARRIOR = "this is a warrior loadout and you are not a warrior"
+function Layout.Refusal()
+	return ("there is no bar loadout written for a %s yet"):format(ns.Class.Label())
+end
 
 -- Whether the cursor may be picked up or put down at all: the API is here and
 -- combat is not. Says nothing about what the cursor is holding, which is the
@@ -190,17 +146,17 @@ function Layout.CanWrite()
 	return true
 end
 
--- The loadout on top of that. Every spell in BAR1 and BAR2 is a warrior spell,
--- so on anyone else this fills the bars with things they cannot cast and takes
--- a backup only that character can put back. ns.IsWarrior owns the question and
--- owns the reason it is not cached; the charge part asks the same one.
+-- The loadout on top of that. Every spell in a plan is a spell of that class,
+-- so running someone else's would fill the bars with things they cannot cast
+-- and take a backup only that character can put back. A class with no plan
+-- refuses here rather than anywhere further in.
 function Layout.CanApply()
 	local can, why = Layout.CanWrite()
 	if not can then
 		return false, why
 	end
-	if not ns.IsWarrior() then
-		return false, Layout.NOT_WARRIOR
+	if not Layout.Plan() then
+		return false, Layout.Refusal()
 	end
 	return true
 end
@@ -226,8 +182,22 @@ function Layout.SlotOf(name)
 	return nil
 end
 
--- Returns a map of stance key to the slot its bar 1 button 1 writes to, or
--- nil plus a reason when this client does not page bar 1 by stance.
+-- How many pages bar 1 has beyond the one it starts on. Three, which is what
+-- the `stance:` conditional counts to on both of these clients and what
+-- Buttons/Bars.lua's page macro is written against. It is a fact about the
+-- client's bonus bar and not about any class: a warrior reaches all three and a
+-- druid reaches them with different names on.
+Layout.PAGES = 3
+
+-- Returns the slot each of bar 1's pages starts at, indexed by the number the
+-- `stance:` conditional counts in, or nil plus a reason when this client is not
+-- paging bar 1 at all.
+--
+-- Nothing about the loadout is read here, and that is the rule. Whether bar 1
+-- re-points at another twelve slots is the client's business, and the clone in
+-- Buttons/Bars.lua has to follow it whatever class you are, which is the same
+-- "do not invent a slot space" this whole file is built on. A druid pages bar 1
+-- and has no plan written for it; the clone still has to page.
 function Layout.Bar1Bases()
 	local base = Layout.SlotOf("ActionButton1")
 	if not base then
@@ -236,17 +206,37 @@ function Layout.Bar1Bases()
 
 	local form = GetShapeshiftForm and GetShapeshiftForm() or 0
 	local offset = GetBonusBarOffset and GetBonusBarOffset() or 0
-	if form < 1 or form > 3 or offset < 1 then
+	if form < 1 or form > Layout.PAGES or offset < 1 then
 		return nil, "bar 1 is not paging by stance"
 	end
 
 	local bases = {}
-	for index, key in ipairs(STANCES) do
+	for index = 1, Layout.PAGES do
 		local slot = base + (index - form) * 12
 		if slot < 1 or slot + 11 > 120 then
 			return nil, "stance page " .. index .. " lands outside the action slots"
 		end
-		bases[key] = slot
+		bases[index] = slot
+	end
+	return bases
+end
+
+-- Which of the plan's pages go where, or nil plus a reason for a plan that
+-- writes one page.
+--
+-- A plan writes every page or it writes one. Anything between would put the
+-- same twelve spells on two of the three and leave the third holding whatever
+-- was under it, which is a bar that looks filled and is not. So the pages are
+-- taken only where the plan has a cell for each of the client's, and every
+-- other case falls to plan.single on the twelve slots the bar is on now.
+local function Paging(plan)
+	local bases, why = Layout.Bar1Bases()
+	if not bases then
+		return nil, why
+	end
+	if #plan.pages ~= Layout.PAGES then
+		return nil, ("this loadout has %d page and bar 1 has %d")
+			:format(#plan.pages, Layout.PAGES)
 	end
 	return bases
 end
@@ -361,13 +351,13 @@ end
 
 -- Every slot the plan is about to touch, so the snapshot covers exactly the
 -- damage and no more.
-local function TargetSlots()
+local function TargetSlots(plan)
 	local slots = {}
-	local bases = Layout.Bar1Bases()
+	local bases = Paging(plan)
 	if bases then
-		for _, key in ipairs(STANCES) do
+		for page = 1, Layout.PAGES do
 			for index = 1, 12 do
-				slots[#slots + 1] = bases[key] + index - 1
+				slots[#slots + 1] = bases[page] + index - 1
 			end
 		end
 	else
@@ -409,9 +399,9 @@ local MACRO_CAP = 18
 
 -- Returns how many of the plan's macros are missing, so Apply can check for
 -- room before it creates any of them.
-local function MissingMacros()
+local function MissingMacros(plan)
 	local missing = 0
-	for _, macro in ipairs(Layout.MACROS) do
+	for _, macro in ipairs(plan.macros) do
 		local index = GetMacroIndexByName and GetMacroIndexByName(macro.name) or 0
 		if not index or index == 0 then
 			missing = missing + 1
@@ -420,8 +410,8 @@ local function MissingMacros()
 	return missing
 end
 
-local function EnsureMacros(report)
-	for _, macro in ipairs(Layout.MACROS) do
+local function EnsureMacros(plan, report)
+	for _, macro in ipairs(plan.macros) do
 		local index = GetMacroIndexByName and GetMacroIndexByName(macro.name) or 0
 		if index and index > 0 then
 			-- Ours already, so keep it in step with the plan.
@@ -479,7 +469,8 @@ function Layout.Apply()
 		return false, why
 	end
 
-	local slots = TargetSlots()
+	local plan = Layout.Plan()
+	local slots = TargetSlots(plan)
 	if #slots == 0 then
 		return false, "cannot work out which action slots the bars use"
 	end
@@ -487,7 +478,7 @@ function Layout.Apply()
 	-- Everything that can refuse has to refuse before the snapshot is taken.
 	-- Recording a backup and then bailing would leave the addon believing a
 	-- loadout was applied that never was.
-	local missing = MissingMacros()
+	local missing = MissingMacros(plan)
 	local room = MACRO_CAP - (GetNumMacros and select(2, GetNumMacros()) or 0)
 	if missing > room then
 		return false, ("needs %d character macro slots, %d free"):format(missing, room)
@@ -505,23 +496,25 @@ function Layout.Apply()
 	end
 
 	local report = { placed = 0, skipped = {} }
-	EnsureMacros(report)
+	EnsureMacros(plan, report)
 
-	local bases, paging = Layout.Bar1Bases()
+	local bases, paging = Paging(plan)
 	if bases then
-		for _, key in ipairs(STANCES) do
+		for page = 1, Layout.PAGES do
+			local key = plan.pages[page]
 			for index = 1, 12 do
-				PlaceSpec(Layout.BAR1[index][key], bases[key] + index - 1, report)
+				PlaceSpec(plan.bar1[index][key], bases[page] + index - 1, report)
 			end
 		end
 	else
-		-- No stance paging, so there is one page to fill and the tank set is
-		-- the one worth having on it. TargetSlots guards this read, and so must
-		-- this one: with the bar unreadable there is no slot to write to.
+		-- The plan wanted pages and the client is not giving any, so there is one
+		-- page to fill and the plan says which of its own is worth having when
+		-- there is only one. TargetSlots guards this read, and so must this one:
+		-- with the bar unreadable there is no slot to write to.
 		local base = Layout.SlotOf("ActionButton1")
 		if base then
 			for index = 1, 12 do
-				PlaceSpec(Layout.BAR1[index].defensive, base + index - 1, report)
+				PlaceSpec(plan.bar1[index][plan.single], base + index - 1, report)
 			end
 		end
 		report.note = paging
@@ -530,7 +523,7 @@ function Layout.Apply()
 	local two = Layout.Bar2Base()
 	if two then
 		for index = 1, 12 do
-			PlaceSpec(Layout.BAR2[index], two + index - 1, report)
+			PlaceSpec(plan.bar2[index], two + index - 1, report)
 		end
 	else
 		report.note = "bottom left bar is off, so the shift layer was skipped"
@@ -572,9 +565,12 @@ function Layout.Describe()
 	if not can and why ~= Layout.BUSY_COMBAT and why ~= Layout.BUSY_CURSOR then
 		return "unavailable: " .. why
 	end
-	local bases, paging = Layout.Bar1Bases()
+	local plan = Layout.Plan()
+	local bases, paging = Paging(plan)
 	if not bases then
-		return "single page only: " .. (paging or "unknown")
+		local base = Layout.SlotOf("ActionButton1")
+		return ("one page from slot %s: %s")
+			:format(tostring(base or "?"), paging or "unknown")
 	end
-	return ("three stance pages from slot %d"):format(bases.battle)
+	return ("%d stance pages from slot %d"):format(Layout.PAGES, bases[1])
 end

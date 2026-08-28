@@ -18,10 +18,22 @@
 # signs into, and the panel walks that registry at PLAYER_LOGIN.
 Core\Core.lua
 
+# What the addon knows about a class, and one file per class that knows it.
+# Class.lua is the registry and the question "which class is this"; each file
+# beside it is the whole of what the addon knows about one class, and nothing
+# outside that file names one of its spells. A class nobody has written a file
+# for gets everything below that never asks. Loads before Core\Stance.lua and
+# before every part, because all of them read facts off it and none of them
+# reads one at load.
+Class\Class.lua
+Class\Warrior.lua
+Class\Mage.lua
+Class\Shaman.lua
+
 # Two shared files that wrap a client API and own no setting, the same shape
 # ns.ItemInfo has. Gear is what the client will let into each hand and which
-# number that hand is; Stance is the three stance spells, their localised names
-# and which one you are standing in. Both were a part's private knowledge until
+# number that hand is; Stance reads your class's own form list off the registry
+# above and hands back their localised names and which one you are standing in. Both were a part's private knowledge until
 # a second part needed the same answer, and both load before anything that asks.
 Core\Gear.lua
 Core\Stance.lua

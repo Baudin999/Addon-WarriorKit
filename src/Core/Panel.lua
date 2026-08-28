@@ -61,7 +61,8 @@ local BODY_PAD = 8
 -- where you are looking while you change a number.
 local HEADER_H = 22
 
--- The rail, in full. Eight entries, fixed, in this order.
+-- The rail. Eight fixed entries in this order, and one more that is named after
+-- you and sits third.
 --
 -- Eight rather than the six this started as, because Chores and Under the hood
 -- were the two that would otherwise have been folded into The screen. Selling
@@ -83,6 +84,26 @@ local GROUPS = {
 -- The one page this file draws itself, and the line its single section takes.
 local START = GROUPS[1]
 local START_SECTION = "Turn things on"
+
+--------------------------------------------------------------------------
+-- The group named after you
+--
+-- Every other group is what somebody was thinking about when they opened the
+-- window. This one is what they are: it holds the pages that exist because of
+-- your class and would say nothing on any other, which is the charge button on
+-- a warrior and the bar loadout on anyone a plan has been written for.
+--
+-- A feature names it with Options.CLASS rather than with a string, because the
+-- string is the client's own word for your class and no feature may know it. A
+-- class that opened no page on it has no such rail entry at all, and neither
+-- does a class nobody has written a file for.
+--
+-- Third, under Fighting, because most of what lands here is about fighting and
+-- the alternative was a ninth line at the bottom that reads as an afterthought.
+--------------------------------------------------------------------------
+
+Options.CLASS = "\0class"
+local CLASS_UNDER = "Fighting"
 
 local window, rail, view, divider, header
 local groups, byName, kits = {}, {}, {}
@@ -424,7 +445,12 @@ local function BuildFeature(feature)
 	host.kit = UI.Kit(host)
 	kits[#kits + 1] = host.kit
 	feature.panel(host.kit)
-	assert(host.opened, ("%s has a panel and opened no section"):format(feature.name))
+	-- A part that is not built on this character opens nothing, and that is the
+	-- whole of how a page disappears: no rail line, no switch on Start here, and
+	-- no tick box writing a setting nothing here reads. Anything else opening
+	-- nothing is a panel that lost its sections and is still a login error.
+	assert(host.opened or not Options.SwitchAvailable(feature),
+		("%s has a panel and opened no section"):format(feature.name))
 end
 
 -- Whether a group has anything on. Read by the rail, which marks the groups
@@ -473,12 +499,67 @@ local function BuildStart()
 	-- turning it on puts on your screen, eleven times over. The sentence is the
 	-- lede of that part's own first page, read back rather than written twice.
 	for _, feature in ipairs(ns.features) do
-		if feature.switch and feature.panel then
+		-- A part that is not built on this character is left off entirely rather
+		-- than drawn greyed. It has no page in the rail to be a shortcut to and
+		-- no lede to sit under, so a greyed row here would be a switch pointing
+		-- at nothing with no sentence saying so.
+		if feature.switch and feature.panel and Options.SwitchAvailable(feature) then
 			Options.Switch(ui, feature)
 			local lede = Options.LedeOf(feature)
 			if lede then
 				ui.Lede(lede)
 			end
+		end
+	end
+end
+
+-- The groups, made before any section is opened, because a section names the
+-- group it belongs in and the group has to be there to be named. The rail's own
+-- lines are not added here: the group named after you is dropped where nothing
+-- opened a page on it, and the entries after it would then be numbered wrong.
+local function OpenGroups()
+	local function Open(name, key)
+		local at = #groups + 1
+		groups[at] = { name = name, sections = {}, current = 1, at = at }
+		byName[key] = groups[at]
+	end
+
+	for _, name in ipairs(GROUPS) do
+		Open(name, name)
+		if name == CLASS_UNDER and ns.Class.Mine() then
+			Open(ns.Class.Name() or ns.Class.Label(), Options.CLASS)
+		end
+	end
+end
+
+-- The rail's own lines, added once every section exists and the numbering has
+-- settled.
+--
+-- The group named after you is the one that may legitimately come out empty: a
+-- class can bring facts that open no page of their own, such as one more entry
+-- on the buff row. It is dropped rather than folded open onto nothing. A fixed
+-- group with none is a section that lost its group in a refactor, which is a
+-- rail entry that does not work and an empty page rather than a mistake anybody
+-- would see, so that one is a login error.
+local function FillRail()
+	local mine = byName[Options.CLASS]
+	if mine and #mine.sections == 0 then
+		for at = #groups, 1, -1 do
+			if groups[at] == mine then
+				table.remove(groups, at)
+			end
+		end
+		byName[Options.CLASS] = nil
+	end
+
+	for at, group in ipairs(groups) do
+		group.at = at
+		assert(#group.sections > 0, ("the group %q has no sections"):format(group.name))
+		rail:Add(group.name)
+	end
+	for at, group in ipairs(groups) do
+		for _, section in ipairs(group.sections) do
+			rail:AddChild(at, section.title)
 		end
 	end
 end
@@ -541,12 +622,7 @@ local function Build()
 	finderStack = UI.Stack(finder.canvas, finder.width)
 	finder.frame:Hide()
 
-	for at, name in ipairs(GROUPS) do
-		local group = { name = name, sections = {}, current = 1, at = at }
-		groups[at] = group
-		byName[name] = group
-		rail:Add(name)
-	end
+	OpenGroups()
 
 	-- The registry is already in order, and a group's sections are appended as
 	-- they are opened, so a group's list comes out in part order and then in the
@@ -558,15 +634,7 @@ local function Build()
 	end
 	BuildStart()
 
-	-- The rail's own lines, added once every section exists. A group with none
-	-- would fold open onto nothing, which is a rail entry that does not work and
-	-- an empty page rather than a mistake anybody would see.
-	for at, group in ipairs(groups) do
-		assert(#group.sections > 0, ("the group %q has no sections"):format(group.name))
-		for _, section in ipairs(group.sections) do
-			rail:AddChild(at, section.title)
-		end
-	end
+	FillRail()
 
 	local lock = UI.Button(window.footer, { width = 160, height = M.row, onClick = function()
 		ns.db.locked = not ns.db.locked

@@ -101,7 +101,7 @@ local BY_RACE = {
 }
 
 -- Asked every time and looked up only when the answer moves, which is the shape
--- ns.IsWarrior uses and for the same reason. Race data is not reliably there
+-- ns.Class.Token uses and for the same reason. Race data is not reliably there
 -- while files load, and a nil cached at load would lock an orc out of this for
 -- the whole session. What is cached is the lookup, not the client's answer, so
 -- the entry table stays the same table between ticks and nothing that compares

@@ -295,7 +295,7 @@ function ChargeIcon.Bind(key)
 	-- before the combat check, because "not in combat" is advice that would
 	-- never come true here.
 	if not frame then
-		return nil, ns.Charge.NOT_WARRIOR .. "."
+		return nil, ns.Charge.Refusal() .. "."
 	end
 	if InCombatLockdown() then
 		return nil, "keys cannot be rebound in combat."
@@ -399,7 +399,7 @@ events:SetScript("OnEvent", function(_, event)
 		-- behind it, all to draw an ability that cannot be cast. Unregister
 		-- rather than return, so the file is silent for the rest of the
 		-- session instead of waking on every SPELLS_CHANGED to decide again.
-		if not ns.IsWarrior() then
+		if not ns.Charge.Available() then
 			events:UnregisterAllEvents()
 			return
 		end

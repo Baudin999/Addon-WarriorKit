@@ -16,10 +16,10 @@ end
 -- addon has deliberately left alone. Saying so once beats four settings that
 -- take a value and then do nothing with it.
 local function Refuse()
-	if ns.IsWarrior() then
+	if ns.Charge.Available() then
 		return false
 	end
-	ns.Print(ns.Charge.NOT_WARRIOR .. ", so nothing here is running on this character.")
+	ns.Print(ns.Charge.Refusal() .. ", so nothing here is running on this character.")
 	return true
 end
 
@@ -73,7 +73,7 @@ ns.Register({
 		-- Nothing here is built on anything but a warrior, so the row is drawn
 		-- and refuses rather than being left out: a switch that vanishes on one
 		-- class reads as a switch you have lost.
-		available = function() return ns.IsWarrior() end,
+		available = function() return ns.Charge.Available() end,
 	},
 
 	defaults = {
@@ -172,8 +172,8 @@ ns.Register({
 	},
 
 	status = function()
-		if not ns.IsWarrior() then
-			return "off, " .. ns.Charge.NOT_WARRIOR
+		if not ns.Charge.Available() then
+			return "off, " .. ns.Charge.Refusal()
 		end
 		return ("icon %s (%s), marker %s, key %s, action targeting %s, token %s")
 			:format(ns.db.charge and "on" or "off", ns.db.chargeMode,
@@ -199,19 +199,18 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		-- One page saying why, rather than four tabs of controls that write a
-		-- setting nothing reads. The rest of this function builds live widgets
+		-- No page at all on a class the button was not built for, rather than
+		-- tabs of controls that write a setting nothing reads. The rest of this
+		-- function builds live widgets
 		-- against a button and a marker that were never created on this class,
 		-- and a check box you can tick that changes nothing on screen is worse
-		-- than a sentence.
-		if not ns.IsWarrior() then
-			ui.Section("Charge", "Fighting")
-			ui.Lede("Charge, Intercept and Intervene on one button, which is a warrior's three openers.")
-			ui.Reading("on this character", function() return ns.Charge.NOT_WARRIOR end)
+		-- than nothing at all. The part keeps its slash words, which say why, and
+		-- its line in /wk status, which says the same.
+		if not ns.Charge.Available() then
 			return
 		end
 
-		ui.Section("Charge key", "Fighting")
+		ui.Section("Charge key", ns.Options.CLASS)
 		ui.Lede("The key that presses the charge button, taken from your bindings and handed back on clear.")
 		ui.KeyField("key",
 			function()
@@ -247,7 +246,7 @@ ns.Register({
 		release.IsAvailable = function() return ns.ChargeIcon.CanRelease() end
 		ui.Hint("Off means the key also casts Intervene and Intercept on your mouseover. A client with no state driver holds the key the whole time whatever this says.")
 
-		ui.Section("Charge", "Fighting")
+		ui.Section("Charge", ns.Options.CLASS)
 		ui.Lede("The button itself: a square over your character with the opener that fits right now on it.")
 		ui.Check("only while it can be cast",
 			function() return ns.db.chargeMode == "ready" end,
@@ -259,7 +258,7 @@ ns.Register({
 				ns.ChargeIcon.ApplyLayout()
 			end)
 
-		ui.Section("The icon over the mob", "Fighting")
+		ui.Section("The icon over the mob", ns.Options.CLASS)
 		ui.Lede("A copy of the icon out in the world, on the nameplate of whatever the macro would charge.")
 		ui.Check("draw it",
 			function() return ns.db.chargeMarker end,
@@ -278,7 +277,7 @@ ns.Register({
 			end)
 		ui.Hint("Height nudges the icon up or down its nameplate, for a UI where something else is already sitting there.")
 
-		ui.Section("Action targeting", "Fighting")
+		ui.Section("Action targeting", ns.Options.CLASS)
 		ui.Lede("The client's own aim token, turned on out of combat and handed back the moment a fight starts.")
 		ui.Check("on out of combat, off in combat",
 			function() return ns.db.softAuto end,
@@ -300,7 +299,7 @@ ns.Register({
 			return "has not answered yet"
 		end)
 
-		ui.Section("Weapon", "Fighting")
+		ui.Section("Weapon", ns.Options.CLASS)
 		ui.Lede("A weapon the charge draws first, out of combat only, so a press mid-fight cannot reset your swing.")
 		ui.Picker("main hand",
 			function() return ns.db.chargeWeapon end,

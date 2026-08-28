@@ -57,20 +57,38 @@ local UnitAura = _G.UnitAura
 -- debuff walk stops at.
 local SLOTS = 40
 
--- How many spells of your own you may add on top of the four below. Six,
+-- How many spells of your own you may add on top of the list below. Six,
 -- because the list this covers in practice is a flask and one or two elixirs,
 -- and a nag row long enough to need scrolling is a nag row nobody reads.
 local MAX_EXTRA = 6
 
+-- How many entries a class may add. Four, which is more than any class file
+-- written so far uses, and it is a cap rather than a count because Nag.lua
+-- builds the row's squares once at login off Upkeep.Ceiling. A ceiling that
+-- moved with the class would have to be right before the client will say what
+-- you are, and it is not: that is the trap Class/Class.lua exists to keep out
+-- of every file. Built to the cap, shown to the length.
+local MAX_CLASS = 4
+
+-- Handed back in place of a class list that is not there, so no caller builds a
+-- table to iterate nothing.
+local NONE = {}
+
 --------------------------------------------------------------------------
--- The four that ship
+-- The three that ship, and whatever your class adds
 --
 -- Each is here because it is silent when it lapses and expensive while it is
 -- lapsed. Nothing that announces itself belongs on this list.
 --
 -- Two of them are hands rather than auras, and they are the reason this file
--- exists at all. The other two are the cheapest buffs in the game to keep up
--- and the two most often forgotten after a wipe.
+-- exists at all. The third is the cheapest buff in the game to keep up and the
+-- one most often forgotten after a wipe.
+--
+-- Nothing on this list is a class ability, and that is the rule. A lapsed
+-- sharpening stone costs a hunter's weapon exactly what it costs a warrior's.
+-- What your class wants kept up is written in Class/<yours>.lua as `upkeep`,
+-- in the same shape as an entry here, and Upkeep.Fixed hands the two back as
+-- one list.
 --
 -- Five fields carry the words, and they are five because they are read in five
 -- places that cannot share one string.
@@ -86,7 +104,11 @@ local MAX_EXTRA = 6
 --            because every other tick box on that page is one.
 --   hint     the tooltip, which is where the detail the caption cannot hold
 --            goes: what the square is about and what fixes it.
---   warrior  gated on class, and only Battle Shout is.
+--
+-- An entry names one aura with `spell` or a set of them with `spells`, and a
+-- set means any one of them counts. That is what a mage's armour is: four
+-- spells, one of which should always be up, and nagging about the particular
+-- one they are not running would be nagging about a choice.
 --
 -- The slash words name the thing rather than the slot, with one deliberate
 -- exception. `weapon`, `shout` and `food` are the things. `offhand` is the hand,
@@ -123,24 +145,6 @@ local FIXED = {
 		hint = "Nothing on the weapon in your off hand. A shield takes no stone and"
 			.. " is never nagged about, so this square only ever means a real"
 			.. " weapon in that hand with nothing on it.",
-	},
-
-	-- Battle Shout, rank 1. Warrior only, because it is the one entry on this
-	-- list that is a class ability rather than something anybody standing in
-	-- melee wants. Rank 1 covers all eight, because the match is by name.
-	--
-	-- 6673 is Battle Shout rank 1: Wowhead's TBC database gives 6673 as Battle
-	-- Shout, 10 rage, +15 attack power for 2 minutes, which is rank 1's own
-	-- number. Rank 3 of the same spell, 6192, is in this install's Details
-	-- saved variables off a live 2.5.6 session, so the ranked chain is real on
-	-- this client.
-	{
-		key = "shout", spell = 6673, warrior = true,
-		fixed = "battle shout",
-		word = "shout",
-		switch = "tell me when Battle Shout has lapsed",
-		hint = "Battle Shout has lapsed. Any rank counts and somebody else's shout"
-			.. " counts as yours, because the attack power is on you either way.",
 	},
 
 	-- Food. Every food buff in the game lands as one aura called Well Fed, and
@@ -197,7 +201,7 @@ end
 -- on this client, only hidden, so Nag.lua builds this many squares once and
 -- shows as many of them as the list is long.
 function Upkeep.Ceiling()
-	return #FIXED + MAX_EXTRA
+	return #FIXED + MAX_CLASS + MAX_EXTRA
 end
 
 function Upkeep.Count()
@@ -208,16 +212,61 @@ function Upkeep.Entry(index)
 	return order[index]
 end
 
--- The four that ship, read only, so Feature.lua builds a tick box and a slash
--- word per entry off this list instead of naming the four twice.
+-- What ships, plus whatever your class added, as one list. Read only, so
+-- Feature.lua builds a tick box and a slash word per entry off this instead of
+-- naming any of them twice.
+--
+-- Built once the client will say what you are and held after that. Not held
+-- before: a list taken while the class was still unresolved would be missing
+-- your class's entries for the rest of the session, and nothing on screen would
+-- say why. Until then the shipped three are handed back on their own, which is
+-- correct for every character and short for one.
+local shipped
+
 function Upkeep.Fixed()
-	return FIXED
+	if shipped then
+		return shipped
+	end
+	if not ns.Class.Token() then
+		return FIXED
+	end
+
+	local mine = ns.Class.Of("upkeep") or NONE
+	assert(#mine <= MAX_CLASS,
+		("%s puts %d entries on the upkeep row and the cap is %d")
+			:format(ns.Class.Label(), #mine, MAX_CLASS))
+
+	shipped = {}
+	for index = 1, #FIXED do
+		shipped[index] = FIXED[index]
+	end
+	for index = 1, #mine do
+		shipped[#shipped + 1] = mine[index]
+	end
+	return shipped
+end
+
+-- Which class claims a slash word this character has no entry for, or nil for a
+-- word nobody claims, which is an ordinary typo. Named rather than left to fall
+-- through to the bare on|off toggle, because `/wk buffs shout` on a mage would
+-- otherwise switch the whole row off and report that it had done something else.
+function Upkeep.Elsewhere(word)
+	for _, def in pairs(ns.Class.All()) do
+		local list = def.upkeep or NONE
+		for index = 1, #list do
+			if list[index].word == word then
+				return def.label
+			end
+		end
+	end
+	return nil
 end
 
 function Upkeep.ByWord(word)
-	for index = 1, #FIXED do
-		if FIXED[index].word == word then
-			return FIXED[index]
+	local list = Upkeep.Fixed()
+	for index = 1, #list do
+		if list[index].word == word then
+			return list[index]
 		end
 	end
 	return nil
@@ -263,8 +312,9 @@ end
 -- know why. `/wk status` and the panel both say this.
 function Upkeep.Silent()
 	local count, names = 0, ""
-	for index = 1, #FIXED do
-		local entry = FIXED[index]
+	local list = Upkeep.Fixed()
+	for index = 1, #list do
+		local entry = list[index]
 		if not Upkeep.Watched(entry.key) then
 			count = count + 1
 			names = names .. (count > 1 and ", " or "") .. entry.fixed
@@ -396,6 +446,39 @@ local function AuraName(index)
 	return nil
 end
 
+-- One spell id into the lookup, under whatever this client calls it. The first
+-- one that resolves gives the entry its name and its picture.
+local function TrackName(entry, id)
+	local name = ns.SpellName(id)
+	if not name then
+		return
+	end
+	wanted[name] = entry
+	if not entry.name then
+		entry.name = name
+		entry.texture = ns.SpellTexture(id)
+	end
+end
+
+-- Every aura one entry is watching. A set means any one of them counts: a mage
+-- in Molten Armor is not missing Ice Armor and an enhancement shaman running
+-- Water Shield is not missing Lightning Shield, so all of the names point at the
+-- one entry and the scan cannot tell which of them arrived.
+--
+-- Named rather than written inside Rebuild, where the set inside the entry walk
+-- was five levels deep and the shape gate stops at four. The gate was right:
+-- what the inner loop does is a different job from rebuilding the list.
+local function Track(entry)
+	entry.name, entry.texture = nil, nil
+	if entry.spells then
+		for at = 1, #entry.spells do
+			TrackName(entry, entry.spells[at])
+		end
+	elseif entry.spell then
+		TrackName(entry, entry.spell)
+	end
+end
+
 -- Which of the tracked auras are on you. Called from an event, never a tick.
 function Upkeep.Scan()
 	for index = 1, #order do
@@ -432,13 +515,8 @@ function Upkeep.Refit()
 	end
 end
 
--- Rebuild the live list from the four above and whatever you have added.
---
--- Battle Shout is the one entry gated on class, and it is gated here rather
--- than at the top of the file so that the rest of the part works for anyone.
--- ns.IsWarrior is asked at every rebuild rather than cached, for the reason
--- Core states: the class is not reliably known while files load, and a wrong no
--- cached at load would cost a warrior the entry for the whole session.
+-- Rebuild the live list from what ships, what your class added and whatever you
+-- have put on it yourself.
 function Upkeep.Rebuild()
 	for index = #order, 1, -1 do
 		order[index] = nil
@@ -447,9 +525,10 @@ function Upkeep.Rebuild()
 		wanted[name] = nil
 	end
 
-	for index = 1, #FIXED do
-		local entry = FIXED[index]
-		if (not entry.warrior or ns.IsWarrior()) and Upkeep.Watched(entry.key) then
+	local watched = Upkeep.Fixed()
+	for index = 1, #watched do
+		local entry = watched[index]
+		if Upkeep.Watched(entry.key) then
 			order[#order + 1] = entry
 		end
 	end
@@ -464,17 +543,12 @@ function Upkeep.Rebuild()
 	for index = 1, #order do
 		local entry = order[index]
 		entry.present = false
-		if entry.spell then
-			entry.name = ns.SpellName(entry.spell)
-			entry.texture = ns.SpellTexture(entry.spell)
-			if entry.name then
-				wanted[entry.name] = entry
-			end
-		end
+		Track(entry)
 		-- A shipped entry says what it is in the caption's own words; one you
 		-- added says whatever this client calls it, because "flask" is not a
 		-- word the client would use and the spell's name is.
-		entry.label = entry.fixed or entry.name or ("spell " .. entry.spell)
+		entry.label = entry.fixed or entry.name
+			or (entry.spell and ("spell " .. entry.spell)) or "?"
 	end
 
 	Upkeep.Refit()

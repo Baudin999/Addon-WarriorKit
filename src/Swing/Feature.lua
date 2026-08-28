@@ -150,16 +150,20 @@ ns.Register({
 			Gauges.Reset()
 		end)
 
-		-- The Slam window is the one part of this that is warrior only, so on
-		-- anyone else there is no tab of numbers about a spell they do not have.
-		if not ns.IsWarrior() then
+		-- The window is the one part of this that belongs to a class rather than
+		-- to a swing, so on anyone whose class named no such cast there is no tab
+		-- of numbers about a spell they do not have. The spell names the page,
+		-- because a page called "the cast window" says nothing on any character.
+		if not Slam.Available() then
 			return
 		end
+		local cast = Slam.Name() or "the cast"
 
-		ui.Section("The Slam window", "You")
-		ui.Lede("A green band on the main hand bar marking the one press of Slam that costs no swing.")
+		ui.Section(("The %s window"):format(cast), ns.Options.CLASS)
+		ui.Lede(("A green band on the main hand bar marking the one press of %s that costs no swing.")
+			:format(cast))
 
-		ui.Reading("Slam", function()
+		ui.Reading(cast, function()
 			if not Slam.Known() then
 				return "not on this character yet"
 			end

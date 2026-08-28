@@ -56,12 +56,6 @@ local MAX = 10
 -- binding eats plain targeting and the camera drag.
 local BARE = { BUTTON1 = true, BUTTON2 = true }
 
-local DEFAULTS = {
-	{ name = "Battle", stance = 1 },
-	{ name = "Defensive", stance = 2 },
-	{ name = "Berserker", stance = 3 },
-}
-
 Loadouts.MAX = MAX
 
 local buttons = {}
@@ -87,19 +81,43 @@ end
 
 -- Seeded on first read rather than in the defaults table, because ApplyDefaults
 -- copies a default one level deep and a list of tables would hand every
--- character the same inner tables. A character that deletes all three gets an
+-- character the same inner tables. A character that deletes them all gets an
 -- empty list and keeps it: the seed runs once, recorded by loadoutsSeeded, so
--- deleting Berserker does not bring it back on the next login.
+-- deleting one does not bring it back on the next login.
+--
+-- One per form your class has, named by the client's own word for it, and none
+-- at all for a class with no forms. Stance dancing is what this started as and
+-- a warrior wants those three whatever else they want; a mage wants a weapon set
+-- with a key on it and has nothing to dance between, so handing them three empty
+-- rows bound to stances they cannot enter is three rows to delete.
+--
+-- The seed waits for the client to name the forms. A row seeded with an empty
+-- name is a row nobody can tell from another, and the name is written once.
 function Loadouts.All()
 	local list = ns.dbc.loadouts
-	if not ns.dbc.loadoutsSeeded then
+	if ns.dbc.loadoutsSeeded then
+		return list
+	end
+
+	local forms = ns.Stance.Count()
+	if forms == 0 then
 		ns.dbc.loadoutsSeeded = true
-		for _, seed in ipairs(DEFAULTS) do
-			list[#list + 1] = {
-				name = seed.name, stance = seed.stance,
-				main = "", off = "", key = "", displaced = "",
-			}
+		return list
+	end
+
+	for index = 1, forms do
+		local name = ns.Stance.Name(index)
+		if not name then
+			return list
 		end
+	end
+
+	ns.dbc.loadoutsSeeded = true
+	for index = 1, forms do
+		list[#list + 1] = {
+			name = ns.Stance.Name(index), stance = index,
+			main = "", off = "", key = "", displaced = "",
+		}
 	end
 	return list
 end

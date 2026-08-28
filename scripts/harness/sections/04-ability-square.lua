@@ -262,12 +262,23 @@ if not WARRIOR then
 	check(ns.Reaction.Of(SLOT) == nil, "a slot is read as a reaction on another class")
 	check(Slot.State(SLOT) == "ready", "a square is gated on a window that could never open")
 	logLine("SWING_MISSED", ME, MOB, 12, "DODGE")
-	check(not ns.Reaction.Open(ns.Reaction.OVERPOWER),
+	-- The warrior's own key, written out rather than read off the registry,
+	-- because the point of this branch is that a class which never registered it
+	-- has nothing answering to it.
+	check(not ns.Reaction.Open("overpower"),
 		"a dodge opened a window on a class with nothing to press")
 	check(Slot.State(SLOT) == "ready", "a dodge changed a square on another class")
 	put({ texture = ART })
 else
-	check(ns.Reaction.Of(SLOT) == ns.Reaction.OVERPOWER,
+	-- The key is the class's own and is read off the registry rather than
+	-- written here, because Class/Warrior.lua is where a reactive ability is
+	-- named now and a literal here would keep passing after that file dropped it.
+	local reactive = ns.Class.Of("reactive")
+	check(reactive and reactive[1] and reactive[1].key == "overpower",
+		"the warrior file no longer registers Overpower as its first reactive")
+	local OVERPOWER_KEY = reactive and reactive[1] and reactive[1].key
+
+	check(ns.Reaction.Of(SLOT) == OVERPOWER_KEY,
 		"a slot holding a later rank of Overpower is not recognised as Overpower")
 	check(Slot.State(SLOT) == "reaction",
 		"Overpower is drawn ready with nothing having dodged you, which is the whole bug")

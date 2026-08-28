@@ -162,7 +162,7 @@ local function Page(ui)
 		end,
 		function()
 			local list = { { value = NO_STANCE, text = "|cff909090no stance change|r" } }
-			for index = 1, ns.Stance.COUNT do
+			for index = 1, ns.Stance.Count() do
 				list[index + 1] = {
 					value = index,
 					text = ns.Stance.Name(index) or ("stance " .. index),

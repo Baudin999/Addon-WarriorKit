@@ -22,21 +22,48 @@ end
 
 local link = _G.WarriorKitItemLink
 
--- Three seeded, one per stance, and seeded once rather than on every login.
-check(ns.Loadouts.Count() == 3,
-	("the three stance loadouts were not seeded, %d rows"):format(ns.Loadouts.Count()))
-check(ns.Loadouts.Get(DEFENSIVE).stance == 2, "the second seeded loadout is not Defensive Stance")
+-- One seeded per form your class has, and seeded once rather than on every
+-- login. A class with no forms is seeded nothing at all, because a row bound to
+-- a stance it cannot enter is a row to delete; it gets the same three by hand
+-- here, since everything below this is about what a press sends and that is the
+-- same job either way.
+local FORMS = ns.Stance.Count()
+
+if FORMS > 0 then
+	check(ns.Loadouts.Count() == FORMS,
+		("%d loadouts were seeded for %d forms"):format(ns.Loadouts.Count(), FORMS))
+	check(ns.Loadouts.Get(DEFENSIVE).stance == 2,
+		"the second seeded loadout is not bound to the second form")
+else
+	check(ns.Loadouts.Count() == 0,
+		("%d loadouts were seeded on a class with no forms"):format(ns.Loadouts.Count()))
+	for index = 1, 3 do
+		ns.Loadouts.Add("Set " .. index)
+	end
+end
+
+-- The stance line, or nothing on a class that has none. A loadout with no stance
+-- is a weapon set with a key on it, which is a path this section reaches twice.
+local function Lines(...)
+	local want = {}
+	if FORMS > 0 then
+		want[1] = "/cast [nostance:2] " .. ns.Stance.Name(2)
+	end
+	for index = 1, select("#", ...) do
+		want[#want + 1] = select(index, ...)
+	end
+	return table.concat(want, "\n")
+end
 
 ns.Loadouts.SetItem(DEFENSIVE, ns.Gear.MAINHAND, link("Bloodspiller"))
 ns.Loadouts.SetItem(DEFENSIVE, ns.Gear.OFFHAND, link("Aegis"))
 
 -- Main hand before off hand, because going from a two hander to a one hander
 -- and a shield the first line is what frees the hand the second one needs.
-check(LoadoutMacro(DEFENSIVE) == table.concat({
-	"/cast [nostance:2] " .. ns.Stance.Name(2),
+check(LoadoutMacro(DEFENSIVE) == Lines(
 	"/equipslot 16 Bloodspiller",
-	"/equipslot 17 Aegis",
-}, "\n"), "the defensive macro is not the three lines in order:\n" .. LoadoutMacro(DEFENSIVE))
+	"/equipslot 17 Aegis"),
+	"the defensive macro is not its lines in order:\n" .. LoadoutMacro(DEFENSIVE))
 
 -- A shield is not a main hand and a two hander is not an off hand. Both are
 -- refused with a reason rather than saved and left to fail as a macro line.
@@ -56,11 +83,10 @@ check(not LoadoutMacro(BATTLE):find("equipslot 17", 1, true),
 -- stance still swaps mid fight; only the hands wait.
 ns.dbc.loadoutSwapCombat = false
 ns.Loadouts.Apply()
-check(LoadoutMacro(DEFENSIVE) == table.concat({
-	"/cast [nostance:2] " .. ns.Stance.Name(2),
+check(LoadoutMacro(DEFENSIVE) == Lines(
 	"/equipslot [nocombat] 16 Bloodspiller",
-	"/equipslot [nocombat] 17 Aegis",
-}, "\n"), "the combat rule did not reach both equip lines:\n" .. LoadoutMacro(DEFENSIVE))
+	"/equipslot [nocombat] 17 Aegis"),
+	"the combat rule did not reach both equip lines:\n" .. LoadoutMacro(DEFENSIVE))
 ns.dbc.loadoutSwapCombat = true
 ns.Loadouts.Apply()
 

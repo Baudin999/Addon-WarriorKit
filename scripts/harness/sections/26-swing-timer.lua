@@ -226,10 +226,13 @@ _G.WarriorKitSpellCast[SLAM] = 1500
 swing.talent = 5
 ns.Slam.Forget()
 
-if not WARRIOR then
+-- Whether there is a window at all is the registry's answer, not a warrior's.
+-- A class whose file named no cast that lives inside a swing must be given no
+-- band, no measurement and no page.
+if not ns.Slam.Available() then
 	check(ns.Slam.Window() == nil,
-		("a %s was given a Slam window"):format(PLAYER_CLASS))
-	check(not ns.Slam.Known(), ("a %s knows Slam"):format(PLAYER_CLASS))
+		("a %s was given a swing window"):format(PLAYER_CLASS))
+	check(not ns.Slam.Known(), ("a %s knows a cast it was never given"):format(PLAYER_CLASS))
 else
 	check(ns.Slam.Rank() == 5,
 		("Improved Slam read as %d points, and the tree holds 5"):format(ns.Slam.Rank()))
@@ -409,7 +412,8 @@ check(swingKb <= CHURN.swing,
 print(("swing  %d x %d px per hand, main %.2fs off %.2fs, Slam window %s, %.2f KB per 50 ticks, gate is %.2f")
 	:format(ns.db.swingWidth, ns.db.swingHeight, ns.Swing.Speed(ns.Swing.MAIN),
 		ns.Swing.Speed(ns.Swing.OFF),
-		WARRIOR and ("%.0f%% of the bar"):format(select(3, ns.Slam.Window()) * 100) or "not a warrior",
+		ns.Slam.Available() and ("%.0f%% of the bar"):format(select(3, ns.Slam.Window()) * 100)
+			or "no cast to mark",
 		swingKb, CHURN.swing))
 
 ----------------------------------------------------------------------
