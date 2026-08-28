@@ -116,3 +116,53 @@ Measure the three files after the cut and say what they came out at. Nothing is
 owed back, and a function that moves without changing has to come back with the
 same three numbers, which is the check that the cut was a move and not a
 rewrite.
+
+## 13. What the class split left behind
+
+Five things out of a read of `c536c44`. The split itself is right: the registry
+is the correct shape, the load order is correct, and the "nil is the gate" rule
+holds everywhere it was traced. All four harness shapes pass. These are what
+did not come with it.
+
+`Layout.Describe` errors on a class with no plan. `Buttons/Layout.lua:452`
+calls `Paging(plan)` with `plan` possibly nil, and `CanApply` tests combat and
+the cursor before it tests the plan, so `BUSY_COMBAT` and `BUSY_CURSOR` fall
+past the early return and reach `#plan.pages` at `Buttons/Layout.lua:237`.
+`/wk status` reaches it through `Buttons/Feature.lua:604`. It needs
+`Bar1Bases` to answer, so it is a druid in a form and not a hunter in a field.
+A regression: `Layout.PLAN` was a constant table and was never nil. Proved
+against the harness as a hunter, with `InCombatLockdown` forced true and the
+client put in stance 1: `attempt to index local 'plan' (a nil value)`.
+
+`Class.Is` is dead and its comment says otherwise. `Class/Class.lua:118` reads
+"Everything that decides once at login goes through here" and nothing in `src`
+calls it. `Charge.Available`, `Reaction.Arm`, `Loadouts.All`, `Icon.lua` and
+`Marker.lua` all go through `Class.Of`, which answers no on an unresolved
+class, which is the failure `Class.Is` was written against. Every one of them
+fires at `PLAYER_LOGIN` where `UnitClass` answers, so nothing is broken today,
+but `Loadouts.All` writes `loadoutsSeeded` off `Stance.Count() == 0` and that
+write is one way. Either wire the login deciders through `Class.Is` or delete
+it and rewrite the comment to say the guard is to ask at `PLAYER_LOGIN` and
+never earlier.
+
+`Charge/Feature.lua:72` states the opposite of what the code does. It says the
+row is drawn and refuses rather than being left out, and `BuildStart` at
+`Core/Panel.lua:506` now leaves it out. The commit message carries the reason
+for the reversal; the comment never got it.
+
+`docs/README.md` still documents `ns.IsWarrior()` as live API in three places:
+the index at line 735, the gotcha at 1562, which teaches the removed
+unresolved-answers-yes semantics and is now wrong in a way that would mislead
+the next reader, and the Charge section at 1745, which says that page is one
+sentence instead of four tabs when it is no page. `ns.Class` and `Class/`
+appear nowhere in it.
+
+`Class.Label()` falls back to `"this character"`, which reads "a this character
+has none" through `Charge.Refusal` and `Layout.Refusal`. Only reachable before
+the client answers, so it is cosmetic.
+
+One coverage gap to close with the fix. `FillRail`'s drop branch, where a class
+registers a file but opens no page under its own rail entry, runs on no harness
+shape, because Mage and Shaman both carry a `loadout`. Add a check that calls
+`Layout.Describe` under lockdown on every run, and a shape that registers
+`upkeep` and nothing else.
