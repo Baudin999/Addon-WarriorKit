@@ -6,10 +6,17 @@ on a branch named `worktree-<name>`, and merged into main when
 
 ## Landed
 
-Items 1 to 6, 8 and 12 are on main. The list, with the commit that put each one
-there, is this file at `e7ef4ca`; the reasons are in `docs/CHANGELOG.md` and
+Items 1 to 6, 8, 11 and 12 are on main. The list, with the commit that put each
+one there, is this file at `e7ef4ca`; the reasons are in `docs/CHANGELOG.md` and
 `docs/README.md`, and what is still unconfirmed in game is in the README's
 untested list.
+
+Item 11 split `UnitFrames/Skin.lua` into four rather than three: `Art.lua` for
+the walk, `Block.lua` for the geometry, `Paint.lua` for the tick, and `Skin.lua`
+left as the part. Taking three subjects out of a file leaves a fourth behind.
+The three functions the item asked to be measured came out at what they went in
+at, `Place` at 195 lines of its own, `Build` at 83 and `Refresh` at 99, which is
+the check that the cut was a move.
 
 ## Open
 
@@ -82,23 +89,6 @@ wandering once, changed once in `4ab4480`, and has not been looked at in game
 since. Nothing in the smoothness work that closed item 1 touched it, and the
 bar being smooth says nothing about where the mark sits. Ask before assuming it
 is fixed.
-
-## 11. Split Skin.lua, because it has three subjects
-
-The number this item used to be about is gone. `8ad829f` deleted the file line
-ceiling and put `scripts/shape.lua` in its place, which measures a function's
-own lines, its depth and its branches, so cutting a file in half moves nothing
-it reports. What is left is the reason that was always underneath: the file
-holds three unrelated jobs. The region walk that strips Blizzard's art and puts
-it back. The block geometry that sizes and places what we draw. The tick.
-
-Item 9 no longer blocks it. The lift machinery is deleted and the rows are
-`UnitFrames/Auras.lua`, so nothing is left that belongs to none of the three.
-
-Measure the three files after the cut and say what they came out at. Nothing is
-owed back, and a function that moves without changing has to come back with the
-same three numbers, which is the check that the cut was a move and not a
-rewrite.
 
 ## 13. What the class split left behind
 

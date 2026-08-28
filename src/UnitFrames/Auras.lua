@@ -556,7 +556,7 @@ end
 -- is anchored or sized here: where a row goes is Auras.Place's, and how many
 -- squares it holds is a setting that moves while the addon is up.
 --
--- On the grid, like the three frames UnitFrames/Skin.lua builds beside it, so
+-- On the grid, like the three frames UnitFrames/Block.lua builds beside it, so
 -- every number in Place is a whole count of physical pixels.
 function Auras.Build(entry)
 	local plan = ROWS[entry.spec.key]
@@ -692,7 +692,7 @@ function Auras.Place(entry, px, width, mirror)
 end
 
 --------------------------------------------------------------------------
--- What UnitFrames/Skin.lua calls
+-- What the skin calls
 --------------------------------------------------------------------------
 
 -- Put the client's copy of each row where its switch says, and show ours. False
@@ -750,7 +750,7 @@ function Auras.Update(entry)
 end
 
 -- What sits between the block and the first row, or nothing. Called by
--- UnitFrames/Skin.lua's Perch, which is the only thing that knows whether
+-- UnitFrames/Block.lua's Perch, which is the only thing that knows whether
 -- target of target is currently parked on the corner these rows hang from.
 function Auras.Under(entry, frame)
 	local list = entry and entry.auras

@@ -145,8 +145,6 @@ now.
 
 - Confirm item 8 and item 9 in game. Item 8's geometry has been looked at once
   and read right; the aura rows have not been seen at all.
-- Todo item 11, the `Skin.lua` split, for the reason the file has three subjects
-  rather than because of a line count.
 - Target of target reads as an orphan under the target block's inner edge.
   `TOT_GAP` at three and `TOT_SCALE` at 0.62 were both chosen when the target
   block sat somewhere else, and the corridor item 8 opened is the natural place

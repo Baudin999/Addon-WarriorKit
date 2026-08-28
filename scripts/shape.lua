@@ -30,7 +30,7 @@
 -- The three numbers, set at what the code measures today. Every function in
 -- the addon is under them, so nothing new may be worse than the worst thing
 -- that already exists, and the entries below are what stands between these and
--- numbers worth having. Todo item 11 is where they come down.
+-- numbers worth having.
 local FUNCTION_LINES = 100
 local NESTING = 4
 local BRANCHES = 30
@@ -56,8 +56,8 @@ local BRANCHES = 30
 local ALLOWED = {
 	{ path = "./UnitFrames/EnemyBars.lua", fn = "LayoutWidget", own = 185,
 	  why = "places every region of one nameplate widget in one pass" },
-	{ path = "./UnitFrames/Skin.lua", fn = "Place", own = 195,
-	  why = "places every region of one block in one pass; item 11 splits it" },
+	{ path = "./UnitFrames/Block.lua", fn = "Block.Place", own = 195,
+	  why = "places every region of one block in one pass" },
 	{ path = "./UI/Widgets.lua", fn = "UI.Kit", own = 157,
 	  why = "the kit's own body, one closure per control, returned as a table" },
 	{ path = "./UnitFrames/EnemyBars.lua", fn = "UpdateWidget", own = 123,

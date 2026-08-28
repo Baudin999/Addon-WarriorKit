@@ -247,6 +247,27 @@ UnitFrames\Auras.lua
 # with no skin at all and knows nothing about a row.
 UnitFrames\Blizzard.lua
 
+# The skin, in four files. Skin.lua is the part: which of the three frames this
+# client has, whether each one is wanted, and the order that styles and unstyles
+# them without losing half a skin to combat. The three below it are the three
+# subjects it used to hold, and each is loaded before the file that calls it.
+#
+# Everything the skin does to a region Blizzard owns: record it, hide it, hand
+# it back. It knows nothing about a rectangle, and Block.lua reads the two lists
+# in it rather than writing them out again.
+UnitFrames\Art.lua
+
+# The block itself: the square, the two rails, the four strings, and where the
+# three blocks hang off each other. After Art.lua, whose kept-badge list it
+# places, and after Auras.lua, whose rows it builds and lays out.
+UnitFrames\Block.lua
+
+# One pass over one block: the colours off the unit, the four numbers and the
+# incoming heal. Its own file for the reason UnitFrames\Cast.lua is: it knows
+# nothing about a walk, an anchor or an Edit Mode selection, and everything in
+# it takes a block that already exists and writes what changed.
+UnitFrames\Paint.lua
+
 UnitFrames\Skin.lua
 
 # One party or raid member's block: build it, lay it out, tick it. Its own file

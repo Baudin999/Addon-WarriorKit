@@ -2,6 +2,71 @@
 
 ## Unreleased
 
+### The skin is four files, one per subject
+
+`UnitFrames/Skin.lua` was 1,988 lines holding three jobs that never spoke to
+each other. Splitting it was todo item 11, and the reason was never the line
+count: `8ad829f` deleted the file ceiling and put `scripts/shape.lua` in its
+place, which measures a function's own lines, its depth and its branches, so
+cutting a file in half moves nothing it reports. The reason is that a reader
+looking for where a badge lands had to walk past a texture walk and a ticker to
+find it.
+
+`UnitFrames/Art.lua` is everything the skin does to a region Blizzard owns.
+Record it before the first change reaches it, hide it, hand it back. Two of the
+four rules in the old file's header are this file's, and they are the two about
+the walk: textures go and frames stay, and walk the regions rather than naming
+them. It knows nothing about a rectangle.
+
+`UnitFrames/Block.lua` is the geometry. The square, the two rails pinned to the
+grid, the four strings, the badges on the corners, and where the three blocks
+hang off each other. The other two rules are this file's: fit the frame to the
+block, and draw on the grid while measuring off it.
+
+`UnitFrames/Paint.lua` is the tick. Given a block that already exists, read the
+unit and write what changed.
+
+`UnitFrames/Skin.lua` is what is left, and it is the part rather than any of the
+three. Which frames this client has, whether each one is wanted, the order that
+styles and unstyles them without losing half a skin to combat, and what the
+slash commands and the panel are told.
+
+Four files rather than the three the item named, because taking three subjects
+out of a file leaves a fourth behind. The part was always in there. It was never
+the thing anybody would have said the file was about.
+
+The cut is a move and the numbers say so. `Place` came out at 195 lines of its
+own, 2 deep and 16 branches, which is exactly what it measured going in, and so
+did `Build` at 83, `StripArt` at 78, `Refresh` at 99 and `HealSlice` at 29.
+Nothing was rewritten to fit through a door.
+
+Four things did change, and each one is the seam rather than the code. `Link`,
+`Perch` and `Landed` are handed the entry they hang off instead of looking it
+up, because the entry list is the part's and a geometry file has no business
+walking it. `Style` went from 62 lines to 39 and `Unstyle` from 32 to 19,
+because both were doing the walk's bookkeeping inline and now ask for it in one
+call each. `Skin.Probe` reads a recorded width through `Art.Was` rather than
+reaching into a table two files away. And the ticker's own body is a named
+`Tick` rather than an anonymous closure, so `check.sh`'s hot path scan can see
+it, which it could not before.
+
+`BADGES` and `BARS` stayed in `Art.lua`, and `Block.lua` reads both at load.
+Which of Blizzard's regions the skin spares is the walk's question; which corner
+each one lands on is the block's. Splitting that table down the seam between
+them would be two lists free to disagree about how many badges there are.
+
+The local `Blocked(entry)` wrapper is gone. It was one line around `ns.Blocked`,
+which `Core/Core.lua` already documents, and keeping it would have meant writing
+it in two files.
+
+`scripts/shape.lua`'s allow-list points at `Block.Place` now, at the same 195,
+and its `why` no longer says item 11 will split it. `check.sh`'s HOT list names
+`Paint.Refresh`, `HealSlice` and `Skin.lua`'s `Tick`. Both TOCs load the three
+new files before `Skin.lua`, `Art.lua` first because `Block.lua` reads its two
+lists as it loads. `docs/README.md`'s file layout, its ticker table and its two
+notes about where the skin flattens a bar and hides a texture all name the file
+that does it now.
+
 ### The loadout seed could latch on a class the client had not named yet
 
 `Loadouts.All` seeds one loadout per stance the first time it is read, records

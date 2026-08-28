@@ -137,7 +137,8 @@ end
 -- Through the setter the bar came with, or through the copy the skin put aside
 -- when it froze the client's own: a frozen bar's SetStatusBarColor is a no-op
 -- and the original lives under the same wk-prefixed key ns.Strip and
--- Skin.lua's Freeze use, so painting one has to go the long way round.
+-- UnitFrames/Art.lua's Freeze use, so painting one has to go the long way
+-- round.
 --
 -- No guard in here, and that is the one difference from ns.Recolor. Both
 -- callers already compare the colour table's identity against the one they

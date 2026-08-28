@@ -175,7 +175,16 @@ name of none of them.
     UnitFrames/EnemyBars.lua enemy bars, nameplate replacement and list fallback
     UnitFrames/Auras.lua     your own and the target's buff and debuff rows,
                              and hiding the client's, which cannot be moved
-    UnitFrames/Skin.lua      the square skin on player, target and target of target
+    UnitFrames/Art.lua       what the skin does to a region Blizzard owns:
+                             record it, hide it, hand it back
+    UnitFrames/Block.lua     the square itself: portrait, two gauges, four
+                             strings, and where the three blocks hang off
+                             each other
+    UnitFrames/Paint.lua     one pass over one block: the colours off the unit,
+                             the four numbers and the incoming heal
+    UnitFrames/Skin.lua      the part: which frames this client has, whether
+                             each is wanted, and styling them in an order that
+                             survives combat
     UnitFrames/Member.lua    one party or raid member's block: build, lay out, tick
     UnitFrames/Group.lua     the secure group header, its attributes, and the
                              slot order every member falls into
@@ -575,8 +584,9 @@ goes through `Feature.lua` or through the shared surface below:
                                  ns.db.skin says they should be
     ns.FrameSkin.Describe()      one line on what the skin did or did not find
     ns.FrameAuras.Build/Place/Update/Style/Unstyle(entry)
-                                 the aura rows under a block, called only by
-                                 UnitFrames/Skin.lua and in that order
+                                 the aura rows under a block, built and placed
+                                 by UnitFrames/Block.lua and styled by
+                                 UnitFrames/Skin.lua, in that order
     ns.FrameAuras.Under(entry, frame)
                                  what now sits between a block and its first
                                  row, which Perch is the only thing that knows
@@ -1262,7 +1272,7 @@ only while you are looking at it.
     Buttons/Bars.lua         10 Hz      every square on every cloned bar
     Buffs/Nag.lua            10 Hz      the missing buff row, and its pulse
     UnitFrames/EnemyBars.lua  5 Hz      everything else on every bar on screen
-    UnitFrames/Skin.lua       5 Hz      the three Blizzard unit frames
+    UnitFrames/Paint.lua      5 Hz      the three Blizzard unit frames
     UnitFrames/Group.lua      5 Hz      every party or raid block on screen
     Meter/Window.lua          5 Hz      the two panes of numbers
     Perf/Perf.lua             1 Hz      only while the performance tab is on screen
@@ -1366,7 +1376,7 @@ cannot see. The seventh is the addon's only `unguarded:`, and it is the swing
 fill: the one write here that is meant to run on every frame whatever it is
 about to draw.
 
-What is deliberately not guarded: `Skin.lua` re-applies `Flatten` and the
+What is deliberately not guarded: `Paint.lua` re-applies `Flatten` and the
 portrait crop on every tick because Blizzard's own code puts the texture and the
 crop back whenever it swaps the art underneath, and ours has to be the last
 word. That is three frames at 5 Hz.
@@ -1483,7 +1493,7 @@ it costs nothing and prevents error spam if that assumption is wrong.
 **Never hide a unit frame either, and for the same reason.** `PlayerFrame`,
 `TargetFrame` and `TargetFrameToT` are secure unit buttons: the click that
 targets, the right-click dropdown and every ctrl-click mark that lands on one
-go through the frame itself. `UnitFrames/Skin.lua` hides their textures the way
+go through the frame itself. `UnitFrames/Art.lua` hides their textures the way
 the enemy bars hide a nameplate's, one region at a time through `ns.Strip`, and
 never touches the frame.
 

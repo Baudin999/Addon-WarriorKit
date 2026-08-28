@@ -27,7 +27,7 @@ globals = {
 	-- its own tables.
 	"WarriorKitCorral",
 	-- The four aura rows, two on each block, named for the reason the three
-	-- blocks in UnitFrames/Skin.lua are: a row that lands in the wrong place has
+	-- blocks in UnitFrames/Block.lua are: a row that lands in the wrong place has
 	-- to be measurable from a macro and from the harness without Auras.lua
 	-- handing out a reference to its own tables.
 	"WarriorKitTargetDebuffs", "WarriorKitTargetBuffs",
@@ -99,8 +99,9 @@ globals = {
 	"WarriorKitBuffs",
 	-- the block the skin draws over each of the three Blizzard unit frames.
 	-- Named so a block that lands in the wrong place can be measured from a
-	-- macro or from scripts/harness.lua without Skin.lua handing out a
-	-- reference to its own entry tables. Built by concatenation in SPECS, so
+	-- macro or from scripts/harness.lua without UnitFrames/Block.lua handing out
+	-- a reference to its own entry tables. Named in Skin.lua's SPECS and read
+	-- from there rather than written as a literal, so
 	-- luacheck never sees the write; listed here because the game makes the
 	-- global and the README says every one of those is written down.
 	"WarriorKitSkinPlayer",

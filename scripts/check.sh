@@ -286,8 +286,9 @@ UnitFrames/Auras.lua:Sweep
 UnitFrames/Auras.lua:Hang
 UnitFrames/Auras.lua:Fill
 UnitFrames/Auras.lua:Auras.Update
-UnitFrames/Skin.lua:Refresh
-UnitFrames/Skin.lua:HealSlice
+UnitFrames/Paint.lua:Paint.Refresh
+UnitFrames/Paint.lua:HealSlice
+UnitFrames/Skin.lua:Tick
 UnitFrames/Group.lua:Group.Update
 UnitFrames/Member.lua:Member.Update
 UnitFrames/Member.lua:Member.Clear

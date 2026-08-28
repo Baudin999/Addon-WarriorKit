@@ -2,8 +2,9 @@ local ADDON, ns = ...
 
 -- Everything Core needs to know about the three halves of this part: the enemy
 -- bars on the mobs, the skin on the player, target and target of target
--- frames, and the target's own aura rows. EnemyBars.lua, Skin.lua and
--- Auras.lua hold the behaviour and none of them talks to Core or to the panel.
+-- frames, and the target's own aura rows. EnemyBars.lua, Auras.lua and the
+-- skin's own four files hold the behaviour, and none of them talks to Core or
+-- to the panel.
 --
 -- The page itself is UnitFrames/Panel.lua. It was here until the aura settings
 -- took this file past the 800 line gate, and the seam it left along is a real
