@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### Five refusals read "a this character"
+
+Todo item 13, the last thing the class split left behind.
+
+`Class.Label()` is the addon's own word for what you are, and it is what a
+refusal reads out. It answers the class file's label once the client has named a
+class, the client's own name for a class no file has been written for, and a
+phrase for the moment before the client will answer at all. That phrase was
+"this character", and five of the sentences that read it put an indefinite
+article straight in front of it: "no ability a this character owns opens on a
+dodge or on a block", "the charge button is built on three openers and a this
+character has none", and three more in `Buttons/Layout.lua`,
+`Cooldowns/Cooldowns.lua` and `Cooldowns/Feature.lua`.
+
+The fallback was wrong rather than the call sites. Two asserts and the panel's
+rail entry take the same string bare and read correctly, so fixing it at the
+call sites means rewriting five sentences around one word that is right in three
+other places. It is now "character of unknown class", which is a noun phrase and
+follows an article.
+
+It is cosmetic and only reachable in the window before `UnitClass` answers,
+which is why nothing caught it.
+
+`21-which-class` gates the shape rather than the words. Whatever `Class.Label`
+returns may not begin with a determiner, checked on the label as it stands on
+every class shape and again on the fallback with `UnitClass` taken away. A class
+file that labels itself "the shaman" fails the same check. The fallback half
+runs on the shape with no class file of its own, because `Class.Token` holds the
+first answer that was not nil and finds the file under it; `Class.Name` reads the
+global on every call, so taking it away and putting it back is the whole of that
+moment.
+
 ### A row for the cooldowns that decide fights
 
 Todo item 7. Death Wish, Recklessness, Shield Wall, Last Stand and your

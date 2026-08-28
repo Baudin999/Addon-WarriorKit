@@ -148,12 +148,19 @@ end
 -- to the client's name for a class no file has been written for, and to a
 -- phrase for the moment before the client will say, because a refusal that
 -- names nothing reads as a bug in the addon rather than an answer about you.
+--
+-- Whatever comes back has to be a noun phrase that follows an indefinite
+-- article, because five of the sentences that read it put one in front: "a
+-- warrior", "a mage", and before the client answers, "a character of unknown
+-- class". The last fallback used to be "this character", so all five read "a
+-- this character" for as long as the client stayed quiet. Section 21 gates the
+-- shape rather than the words.
 function Class.Label()
 	local mine = Class.Mine()
 	if mine then
 		return mine.label
 	end
-	return Class.Name() or "this character"
+	return Class.Name() or "character of unknown class"
 end
 
 -- Every class that has signed in, for the one caller that has to look past your

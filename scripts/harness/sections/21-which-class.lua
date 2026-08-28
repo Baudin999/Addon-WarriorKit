@@ -47,6 +47,44 @@ check((mine ~= nil) == (Class.Of("loadout") ~= nil or Class.Of("charge") ~= nil
 	or Class.Of("cooldowns") ~= nil),
 	("a %s registered a file that fills in none of the seven fields"):format(PLAYER_CLASS))
 
+-- The word the refusals read out, and the one rule every answer it can give has
+-- to keep. Five sentences in the addon put an indefinite article straight in
+-- front of it, so whatever comes back is a noun phrase or it is broken English:
+-- "a warrior" and "a mage" read, "a this character" did not, which is what the
+-- fallback used to be for as long as the client stayed quiet at login. The
+-- shape is what is gated rather than the words, so a class file that labels
+-- itself "the shaman" is caught by the same check.
+local DETERMINER = {
+	a = true, an = true, the = true, this = true, that = true,
+	these = true, those = true, my = true, your = true, its = true,
+}
+local function Article(label, when)
+	local first = type(label) == "string" and label:match("^(%a+)") or nil
+	check(first ~= nil,
+		("the class label %s names nothing to put an article in front of")
+			:format(when))
+	check(first == nil or not DETERMINER[first:lower()],
+		('the class label %s reads "a %s" in the five sentences that name it')
+			:format(when, tostring(label)))
+end
+
+Article(Class.Label(), ("on a %s"):format(PLAYER_CLASS))
+
+-- And the fallback underneath it, which is the moment before the client will
+-- name a class at all. Only reachable on a shape with no class file of its own,
+-- because the token is held from the first answer that was not nil and the file
+-- is found under it. UnitClass is read on every call rather than held, so
+-- taking it away and putting it back is the whole of that moment.
+if Class.Mine() == nil then
+	local held = _G.UnitClass
+	_G.UnitClass = function() return nil end
+	local ok, fallback = pcall(Class.Label)
+	_G.UnitClass = held
+	check(ok, ("the class label errored with no client answer: %s")
+		:format(tostring(fallback)))
+	Article(ok and fallback or nil, "before the client names the class")
+end
+
 --------------------------------------------------------------------------
 -- The charge button, which is built on one of those facts
 --------------------------------------------------------------------------
