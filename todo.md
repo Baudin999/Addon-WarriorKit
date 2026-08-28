@@ -102,44 +102,24 @@ rewrite.
 
 ## 13. What the class split left behind
 
-Four things out of a read of `c536c44`, down from five. The split itself is
+One thing left out of a read of `c536c44`, down from five. The split itself is
 right: the registry is the correct shape, the load order is correct, and the
 "nil is the gate" rule holds everywhere it was traced. All five harness shapes
-pass. These are what did not come with it.
-
-The `Layout.Describe` crash is fixed and is off this list. `CanApply` asks for
-the plan before it asks about combat, `CanWrite` probes the five compose calls
-before `CanCarry` asks about combat, and the reason is written in
-`docs/CHANGELOG.md`: the file has permanent refusals and transient ones,
-`Describe` carries on past a transient one by name, and that test is only sound
-if every permanent refusal is reached first. The coverage gap went with it.
-Section 21 calls `CanApply` and `Describe` under lockdown on every class, and
-`Class/Priest.lua` is the fifth harness shape, a class that registers a file and
-opens no page, which is `FillRail`'s drop branch.
-
-`Class.Is` is dead and its comment says otherwise. `Class/Class.lua:118` reads
-"Everything that decides once at login goes through here" and nothing in `src`
-calls it. `Charge.Available`, `Reaction.Arm`, `Loadouts.All`, `Icon.lua` and
-`Marker.lua` all go through `Class.Of`, which answers no on an unresolved
-class, which is the failure `Class.Is` was written against. Every one of them
-fires at `PLAYER_LOGIN` where `UnitClass` answers, so nothing is broken today,
-but `Loadouts.All` writes `loadoutsSeeded` off `Stance.Count() == 0` and that
-write is one way. Either wire the login deciders through `Class.Is` or delete
-it and rewrite the comment to say the guard is to ask at `PLAYER_LOGIN` and
-never earlier.
-
-`Charge/Feature.lua:72` states the opposite of what the code does. It says the
-row is drawn and refuses rather than being left out, and `BuildStart` at
-`Core/Panel.lua:506` now leaves it out. The commit message carries the reason
-for the reversal; the comment never got it.
-
-`docs/README.md` still documents `ns.IsWarrior()` as live API in three places:
-the index at line 735, the gotcha at 1562, which teaches the removed
-unresolved-answers-yes semantics and is now wrong in a way that would mislead
-the next reader, and the Charge section at 1745, which says that page is one
-sentence instead of four tabs when it is no page. `ns.Class` and `Class/`
-appear nowhere in it.
+pass.
 
 `Class.Label()` falls back to `"this character"`, which reads "a this character
 has none" through `Charge.Refusal` and `Layout.Refusal`. Only reachable before
 the client answers, so it is cosmetic.
+
+The other four landed. The `Layout.Describe` crash went first, with the refusal
+ordering that caused it and the coverage gap that hid it: `CanApply` asks for
+the plan before it asks about combat, section 21 calls both under lockdown on
+every class, and `Class/Priest.lua` is the fifth harness shape. `Class.Is` is
+deleted, because nothing called it and the guard it claimed to be was never in
+the path; the rule it stood for is the section comment in `Class/Class.lua` plus
+one explicit check in `Loadouts.All`, which was the one place a wrong answer was
+written down and kept, and `20-loadouts` fails without it.
+`Charge/Feature.lua` no longer says its row on Start is drawn and refuses when
+`BuildStart` leaves it out. `docs/README.md` names `ns.Class` in all three
+places it used to name `ns.IsWarrior()`, and its file layout lists `Class/`. The
+reasons are in `docs/CHANGELOG.md`.

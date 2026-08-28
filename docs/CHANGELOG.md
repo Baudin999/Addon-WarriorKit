@@ -2,6 +2,61 @@
 
 ## Unreleased
 
+### The loadout seed could latch on a class the client had not named yet
+
+`Loadouts.All` seeds one loadout per stance the first time it is read, records
+that it has in `loadoutsSeeded`, and never seeds again. That flag is the one
+answer in the addon that is kept across a session, and it was being written off
+a count that cannot tell two states apart.
+
+`Stance.Count` reads `forms` off your class file through `ns.Class.Of`. An
+unresolved class has no file, so it counts zero forms exactly as a mage does. A
+read taken before the client would say what you are therefore looked like a
+class with no stances, latched the flag, and left a warrior with an empty
+loadouts list for the life of that character. A reload does not undo it: the
+flag is the record that the seed already ran.
+
+Nothing reaches it today. `Loadouts.Apply` runs at `PLAYER_LOGIN`, where
+`UnitClass` answers, and the panel is built later still. That is a fact about
+the current call order rather than about the code, and it is the reason to guard
+instead of to argue: what a wrong answer costs here is a saved variable the
+player cannot clear from inside the addon.
+
+So the seed asks for the token before it counts anything. A read with no token
+is answered out of the list and records nothing.
+
+`20-loadouts` takes the token away and reads the list, which is the state the
+addon is in for the whole of `ADDON_LOADED`. It stubs `ns.Class.Token` rather
+than `UnitClass`, because Token caches the first answer that is not nil and by
+that point it has one, and because `Mine` and `Of` both go through it. Take the
+guard out and the section fails on the latch.
+
+### Class.Is is deleted, and the guard it carried is written down
+
+`Class.Is(want)` answered true on an unresolved class, on the argument that a
+wrong yes costs a moment of a button that will not cast and a wrong no costs a
+warrior their charge button until they reload. The argument is right. The
+function was not in the path. Nothing in `src` called it: `Charge.Available`,
+`Reaction.Arm`, `Loadouts.All`, `Icon.lua` and `Marker.lua` all go through
+`Class.Of`, which answers nil on an unresolved class, so every login decider
+took the branch the function existed to prevent. Only the harness called it, and
+it called it as a warrior, so it passed.
+
+Deleting it puts the rule where it holds. The section comment in
+`Class/Class.lua` now says what the guard is: ask at `PLAYER_LOGIN` or later,
+never at file scope, and check for the nil anywhere the answer is written down.
+There is one such place and it checks.
+
+`docs/README.md` documented `ns.IsWarrior()` in three places, and it has been
+gone since the class split. It sat in the API index, it taught the removed
+unresolved-answers-yes rule in the gotchas, which would have misled the next
+reader into believing a guard that is not there, and the Charge section said
+that page is one sentence instead of four tabs when the part opens no page at
+all. All three describe `ns.Class` instead, the gotcha carries the nil rule and
+the one place it bites, and the file layout lists `Class/`, which it had never
+mentioned. `Charge/Feature.lua` said its row on Start is drawn and refuses;
+`BuildStart` leaves it out, and the comment now says so and why.
+
 ### /wk status errored on a class with no bar plan
 
 `Layout.Describe` read the plan straight after being refused over it, and on a

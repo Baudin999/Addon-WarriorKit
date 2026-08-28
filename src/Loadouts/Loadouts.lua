@@ -93,9 +93,21 @@ end
 --
 -- The seed waits for the client to name the forms. A row seeded with an empty
 -- name is a row nobody can tell from another, and the name is written once.
+--
+-- It waits for the client to name the class first, which is the same wait one
+-- step earlier and is not the same question. An unresolved class has no file,
+-- so it has no forms, so it counts zero and reads exactly like a mage. This is
+-- the one answer in the addon that is kept: loadoutsSeeded is written once and
+-- nothing rewinds it, so latching on that zero would hand a warrior an empty
+-- list for the life of the character. A read this early is answered out of the
+-- list and records nothing.
 function Loadouts.All()
 	local list = ns.dbc.loadouts
 	if ns.dbc.loadoutsSeeded then
+		return list
+	end
+
+	if not ns.Class.Token() then
 		return list
 	end
 

@@ -91,6 +91,18 @@ end
 -- are on the way to deciding where a band goes, which is ten times a second, and
 -- a character does not change class between two of those. So the first answer
 -- that is not nil is the answer, and every call after it is a local read.
+--
+-- The guard on the rest of the addon is when it asks, not what this returns.
+-- Ask at PLAYER_LOGIN or later, never at file scope, and never cache the answer
+-- of your own. A nil here does not mean no, it means the client has not said
+-- yet, so anything that would turn a nil into a decision it then writes down
+-- has to ask for the token first: Loadouts\Loadouts.lua is the one place in the
+-- addon that keeps such an answer, and it is the one place that checks.
+--
+-- There was a Class.Is(want) here that answered true on a nil for that reason,
+-- and nothing called it. Every part that decides at login goes through Class.Of,
+-- which answers nil, so the guard sat in a function outside the path while the
+-- path itself had none. Timing and that one explicit check are the guard.
 --------------------------------------------------------------------------
 
 local token
@@ -107,17 +119,6 @@ end
 -- while the client will not say, which is the same moment Token is nil.
 function Class.Name()
 	return (UnitClass("player"))
-end
-
--- Whether this character is that class.
---
--- An unresolved class answers true, because the two wrong answers do not cost
--- the same. A wrong yes is a moment of a button that will not cast. A wrong no,
--- taken once at PLAYER_LOGIN, is a warrior with no charge button until they
--- reload. Everything that decides once at login goes through here.
-function Class.Is(want)
-	local mine = Class.Token()
-	return mine == nil or mine == want
 end
 
 --------------------------------------------------------------------------

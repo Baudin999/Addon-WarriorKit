@@ -70,10 +70,23 @@ The addon is seventeen parts and a core. Each part is a folder, and Core knows t
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
+
+    Class/Class.lua      the class registry, and the question "which class is
+                         this". Loads straight after Core and before every part,
+                         because all of them read facts off it
+    Class/Warrior.lua    the whole of what the addon knows about a warrior: the
+                         forms, the charge abilities, the two a fight hands you,
+                         Slam, Battle Shout, and the bar plan
+    Class/Mage.lua       two of those six
+    Class/Shaman.lua     two of those six
+    Class/Priest.lua     one, and it is the one that opens no page
+                         Nothing outside a class file names one of its spells,
+                         and a class with no file here is a supported class
+
     Core/Gear.lua        what the client will let into each hand, and the two
                          slot numbers those hands are
-    Core/Stance.lua      the three stance spells, their names, and which one
-                         you are standing in
+    Core/Stance.lua      your class's own form list, read off the registry
+                         above: their names, and which one you are standing in
     Core/Command.lua     slash dispatch, built from the registry
     Core/Panel.lua       the options window and the widget kit
 
@@ -732,8 +745,16 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Voice.Active() / Describe()
     ns.EditMode.CanApply / Capture / Apply / Saved / IndexOf
     ns.interface / ns.vanilla    the interface number, and whether this is 1.x
-    ns.IsWarrior()               whether the charge part and the loadout apply
-                                 to this character at all
+    ns.Class.Register(token, def)     one call per Class\<yours>.lua, at load
+    ns.Class.Token() / Name() / Label()   what the client says you are, its own
+                                 localised word for it, and the addon's word for
+                                 a refusal to read out. All three are nil, or a
+                                 stand-in, until the client will say
+    ns.Class.Mine() / Of(field)  your class's table, and one field off it. Nil
+                                 is the gate: a part that wants a fact gets nil
+                                 and does not build
+    ns.Class.All()               every class file that signed in, read only
+    ns.Class.Spell(name) / Macro(name)   the two cells a bar plan is built of
     ns.HasThreat() / ns.Threat(source, unit)   the threat API, or nil on vanilla
     ns.HasHealPrediction() / ns.IncomingHeals(unit)   what is already in the air
                                  for that unit, 0 when nothing is, nil when the
@@ -1559,13 +1580,21 @@ One line each. A bug that survived a shipped fix gets a full write-up in
   straight back off. The icon has to be part of the key: keyed on the GUID
   alone it also swallowed a deliberate second click, so marking a mob skull and
   changing your mind to cross inside half a second did nothing.
-- Class data is not reliably available while files load. Ask `ns.IsWarrior()`
-  at PLAYER_LOGIN or later, never at file scope, and never cache the answer of
-  your own: a cache taken while the files load would lock a warrior out of the
-  charge button for the whole session. `ns.IsWarrior()` reads the class every
-  time for that reason, and answers yes while the class is unresolved, because
-  a wrong yes costs a moment of a button that will not cast and a wrong no
-  costs a warrior their button until they reload.
+- Class data is not reliably available while files load. Ask `ns.Class` at
+  PLAYER_LOGIN or later, never at file scope, and never cache the answer of your
+  own: a cache taken while the files load would lock a warrior out of the charge
+  button for the whole session. `Class.Token` caches the first answer that is
+  not nil and asks again every time until it gets one, which is that rule in one
+  place.
+- A nil out of `ns.Class` does not mean no, it means the client has not said
+  yet, and the two are indistinguishable at the call site. That costs nothing
+  where the answer is only used to decide what to draw this frame, because the
+  next frame asks again. It costs a character where the answer is written down.
+  `Loadouts.All` is the only place in the addon that keeps one: it seeds a
+  loadout per stance, records that it has, and never seeds again, and an
+  unresolved class counts zero stances exactly as a mage does. So it asks for
+  the token first and records nothing without one. Anything else that latches a
+  decision off a class fact has to do the same.
 - MONOCHROME is not a sharpness setting, it is a font choice. It gives a purpose
   built pixel font hard clean edges and it gives an unhinted humanist face like
   Arial Narrow broken ones, because at eleven to fourteen pixels the stems do not
@@ -1742,14 +1771,16 @@ warrior abilities, so on a hunter the whole part is cost with nothing on the
 other side of it: a secure frame holding a key override, a ten-a-second ticker
 on the icon, a twenty-a-second nameplate scan on the marker, and a client CVar
 written on every combat transition. `Icon.lua` and `Marker.lua` ask
-`ns.IsWarrior()` at PLAYER_LOGIN and unregister their event frames outright
-rather than building something and hiding it, because a hidden marker is still
-paying for the scan. `SoftTarget.Wanted` asks the same question, so the CVar is
-never written either; that gate is on `Wanted` and not on the event frame,
-because `Apply` is also called straight from the panel and the slash word and
-one authority is what stops those three paths disagreeing. `/wk charge`,
-`/wk size` and `/wk bind` say why instead of writing a setting nothing reads,
-and the Charge page in the options window is one sentence instead of four tabs.
+`ns.Charge.Available()` at PLAYER_LOGIN and unregister their event frames
+outright rather than building something and hiding it, because a hidden marker
+is still paying for the scan. That call reads `charge` off your class file, so
+the question is which abilities you were given rather than which class you are.
+`SoftTarget.Wanted` asks the same question, so the CVar is never written either;
+that gate is on `Wanted` and not on the event frame, because `Apply` is also
+called straight from the panel and the slash word and one authority is what
+stops those three paths disagreeing. `/wk charge`, `/wk size` and `/wk bind` say
+why instead of writing a setting nothing reads, and the Charge part opens no
+page at all, so it takes no row on Start and no entry in the rail.
 
 The saved settings are left alone. They are account-wide, a warrior alt shares
 them, and a class gate is a fact about this character rather than a preference

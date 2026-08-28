@@ -70,9 +70,13 @@ ns.Register({
 		key = "charge",
 		label = "the charge button",
 		apply = function() ns.ChargeIcon.ApplySecure() end,
-		-- Nothing here is built on anything but a warrior, so the row is drawn
-		-- and refuses rather than being left out: a switch that vanishes on one
-		-- class reads as a switch you have lost.
+		-- Nothing here is built on a class whose file names no charge
+		-- abilities, so the row is left out rather than drawn and refusing.
+		-- It used to refuse, on the argument that a switch which vanishes
+		-- reads as a switch you have lost. What it points at is the argument
+		-- that won: there is no page in the rail to be a shortcut to and no
+		-- lede to sit under, so the row would be a switch pointing at nothing
+		-- with no sentence saying why. BuildStart in Core\Panel.lua drops it.
 		available = function() return ns.Charge.Available() end,
 	},
 

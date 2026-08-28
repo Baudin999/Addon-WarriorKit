@@ -42,6 +42,35 @@ else
 	end
 end
 
+-- The seed has to tell "no forms" from "the client has not said yet", and the
+-- two read the same: an unresolved class has no file, so it counts zero forms
+-- exactly as a mage does. loadoutsSeeded is the one answer in the addon that is
+-- kept, so a read before the client answers must record nothing, or a warrior
+-- who was asked one event too early carries an empty list for the life of the
+-- character. Take the token away rather than the class, because Mine and Of
+-- both go through it and this is the state the addon is in for the whole of
+-- ADDON_LOADED.
+do
+	local realToken = ns.Class.Token
+	local held = ns.dbc.loadoutsSeeded
+	local before = #ns.dbc.loadouts
+
+	ns.dbc.loadoutsSeeded = nil
+	ns.Class.Token = function() return nil end
+
+	local list = ns.Loadouts.All()
+	check(not ns.dbc.loadoutsSeeded,
+		"the loadout seed latched before the client had named the class")
+	check(#list == before,
+		("the loadout list came back %d long before the class was known and was %d")
+			:format(#list, before))
+
+	ns.Class.Token = realToken
+	ns.dbc.loadoutsSeeded = held
+	check(ns.dbc.loadoutsSeeded == true,
+		"the seed had not run by the time the section that reads it did")
+end
+
 -- The stance line, or nothing on a class that has none. A loadout with no stance
 -- is a weapon set with a key on it, which is a path this section reaches twice.
 local function Lines(...)

@@ -32,10 +32,7 @@ local Class = ns.Class
 check(Class.Token() == PLAYER_CLASS,
 	("the registry reads the class as %s and the client says %s")
 		:format(tostring(Class.Token()), PLAYER_CLASS))
-check(Class.Is(PLAYER_CLASS), ("a %s is not itself"):format(PLAYER_CLASS))
-check(Class.Is("DRUID") == (PLAYER_CLASS == "DRUID"),
-	("a %s reads as a druid"):format(PLAYER_CLASS))
-check(Class.Is("WARRIOR") == WARRIOR,
+check((Class.Token() == "WARRIOR") == WARRIOR,
 	("the addon thinks a %s is%s a warrior"):format(PLAYER_CLASS, WARRIOR and " not" or ""))
 
 -- A class nobody has written a file for is a supported class, not an error. It
