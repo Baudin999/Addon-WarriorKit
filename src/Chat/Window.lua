@@ -50,8 +50,15 @@ local C, M = UI.Color, UI.Metric
 -- in it and how much is waiting are in its hover. Which room you are in and
 -- what enter will do are written into the empty line you type on, which is
 -- where you are looking when it matters and is the same argument the slash in
--- the field has always been. The way out of the window is a cross at the foot
--- of the rail, because a bare window has no close box.
+-- the field has always been.
+--
+-- **There is no close box, and no saved hidden state.** A cross sat at the foot
+-- of the rail once. It took the conversation off the screen in one press, wrote
+-- that down, and left nothing behind saying where it had gone, so the window
+-- stayed gone across reloads and the way back was a slash word you had to know.
+-- The way to be rid of the window is the setting that turns the part off, which
+-- is where every other part of this addon is switched off and which the panel
+-- lists. /wk chat still hides it for the session, and a reload brings it back.
 --------------------------------------------------------------------------
 
 local FRAME_NAME = "WarriorKitChat"
@@ -68,7 +75,7 @@ local FRAME_NAME = "WarriorKitChat"
 local ENTER_NAME = "WarriorKitChatEnterButton"
 local SLASH_NAME = "WarriorKitChatSlashButton"
 
-local window, rail, entry, enterButton, slashButton, closer, voice
+local window, rail, entry, enterButton, slashButton, voice
 
 -- Where a log goes and how big it is, written in the layout section below and
 -- named here because the log pool above needs it: a room's log is made the
@@ -399,8 +406,8 @@ local function Relayout()
 	end
 
 	-- The line you type in starts where the lines you read start, so the rail
-	-- runs the whole height of the window and the cross that closes it sits in
-	-- the rail's own column, under the rooms.
+	-- runs the whole height of the window, down its own column to the left of
+	-- everything you read.
 	window.footer:ClearAllPoints()
 	window.footer:SetPoint("BOTTOMLEFT", M.rooms + M.chatPad, 0)
 	window.footer:SetPoint("BOTTOMRIGHT", -M.chatPad, 0)
@@ -408,17 +415,12 @@ local function Relayout()
 	window.footerRule:SetPoint("BOTTOMLEFT", M.rooms, window.foot)
 	window.footerRule:SetPoint("BOTTOMRIGHT", -M.chatPad, window.foot)
 
-	closer:ClearAllPoints()
-	closer:SetPoint("BOTTOMLEFT", window.frame, "BOTTOMLEFT", 0, 0)
-	closer:SetSize(M.rooms, window.foot)
-
 	-- The voice button sits at the foot of the rail, one room row tall, in the
-	-- column the rooms are in and directly over the cross. That is where it
-	-- belongs because it is the same question the rail asks: the rooms are who
-	-- you are typing to and this is who you are talking to. It is last in the
-	-- column rather than first because it is the one row there that is not a
-	-- room, and the rail is shortened by exactly its height so the two never
-	-- overlap.
+	-- column the rooms are in. That is where it belongs because it is the same
+	-- question the rail asks: the rooms are who you are typing to and this is
+	-- who you are talking to. It is last in the column rather than first because
+	-- it is the one row there that is not a room, and the rail is shortened by
+	-- exactly its height so the two never overlap.
 	voice:ClearAllPoints()
 	voice:SetPoint("BOTTOMLEFT", window.content, "BOTTOMLEFT", 0, 0)
 	voice:SetSize(M.rooms, M.roomRow)
@@ -607,12 +609,6 @@ local function Build()
 	})
 	entry = BuildEntry()
 
-	-- The way out, at the foot of the rail. A bare window has no close box, and
-	-- a window with no way to shut it is one you have to know a slash word to
-	-- be rid of.
-	closer = UI.Button(window.frame, { label = "x", glyph = true,
-		onClick = function() ChatWindow.Hide() end })
-
 	-- Voice, at the foot of the rail. A microphone rather than a word, the same
 	-- as every room above it, and lit green while you are in a channel.
 	--
@@ -781,7 +777,7 @@ function ChatWindow.Apply()
 	Relayout()
 	Refresh()
 
-	local shown = (ns.db.chat and ns.db.chatShown) and true or false
+	local shown = ns.db.chat and true or false
 	window.frame:SetShown(shown)
 	-- Three things follow the window rather than the settings, and all three for
 	-- the same reason: each of them takes something off the screen on the
@@ -800,7 +796,6 @@ function ChatWindow.Show()
 	if not built then
 		return false
 	end
-	ns.db.chatShown = true
 	ChatWindow.Apply()
 	return true
 end
@@ -809,7 +804,6 @@ function ChatWindow.Hide()
 	if not built then
 		return false
 	end
-	ns.db.chatShown = false
 	window.frame:Hide()
 	ns.ChatFeed.Watched(false)
 	ns.ChatBlizzard.Apply()
@@ -934,6 +928,11 @@ function ChatWindow.Focus()
 	if not built then
 		return false
 	end
+	-- Going back to the field is a change of mind about a line the client was
+	-- going to run from the enter key, so the key comes back here. The script
+	-- below catches the click that lands on the field directly; this catches
+	-- the same decision made from the window, the slash key or a hover.
+	ns.Compose.Disarm()
 	if not window:IsShown() then
 		ChatWindow.Show()
 	end
@@ -1214,6 +1213,11 @@ events:SetScript("OnEvent", function(_, event)
 		return
 	end
 	if event == "PLAYER_REGEN_ENABLED" then
+		-- A line loaded onto the enter key is dropped when the fight ends if it
+		-- was not pressed. The client refuses a binding change under lockdown,
+		-- so a key armed before the pull and fired during it could not give
+		-- itself back at the time, and this is when it can.
+		ns.Compose.Disarm()
 		if pending then
 			ChatWindow.Keys()
 		end

@@ -93,6 +93,14 @@ local RETIRED = {
 	-- reads is a setting somebody will try to change.
 	skinGap = true,
 
+	-- 1.2: whether the chat window was left open, written by a cross at the
+	-- foot of its rail. The cross is gone: it took the conversation off the
+	-- screen in one press and wrote that down, so the window stayed gone across
+	-- reloads and the way back was a slash word you had to know. The way to be
+	-- rid of the window is the chat setting, and this key has to be wiped or a
+	-- player who pressed the cross once would never see the window again.
+	chatShown = true,
+
 	-- 1.9: one switch for the client's own aura row, which meant a different
 	-- thing depending on what the skin was doing. It is four switches now, one
 	-- per thing you can see twice, and each says what it does on its own line.

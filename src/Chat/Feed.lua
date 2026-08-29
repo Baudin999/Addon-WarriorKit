@@ -307,10 +307,12 @@ end
 -- A filter installed while nothing is drawing does not move the conversation,
 -- it deletes it: the line comes out of Blizzard's frames and lands in a window
 -- that is closed, or in no window at all when the build failed, and the only
--- symptom is a chat log that has gone quiet. That is not a corner case. The
--- window has a close box, the closed state is saved, and Feed.Apply runs again
--- at every login, so one press deleted every say, party, guild, raid and
--- whisper line from the screen until the player found /wk chat.
+-- symptom is a chat log that has gone quiet. That is not a corner case: it is
+-- what the close box on this window used to do. One press took the
+-- conversation off the screen, the closed state was saved, and Feed.Apply runs
+-- again at every login, so every say, party, guild, raid and whisper line
+-- stayed deleted until the player found /wk chat. The close box is gone for
+-- that reason, and the claim below is still tied to something being drawn.
 --
 -- The claim is also asked for at ADDON_LOADED, which is before the window
 -- exists at all. Holding it back until something is attached is what keeps the

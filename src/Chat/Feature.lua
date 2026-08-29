@@ -372,7 +372,6 @@ ns.Register({
 		-- unreadable does not ship switched off. Everything it does is
 		-- reversible in one press and nothing of Blizzard's is destroyed.
 		chat = true,
-		chatShown = true,
 
 		-- The conversation is taken out of Blizzard's frames rather than drawn
 		-- twice. This is the setting that makes the window a replacement rather
