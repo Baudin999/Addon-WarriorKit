@@ -5,7 +5,7 @@ local ADDON, ns = ...
 
 ns.Register({
 	name = "targeting",
-	order = 3,
+	order = 4,
 
 	defaults = {
 		switchKey = "",          -- the key that takes the next enemy and swings at it

@@ -219,7 +219,7 @@ end
 
 ns.Register({
 	name = "loadouts",
-	order = 4,
+	order = 5,
 
 	-- A loadout is the gear of the character carrying it, so all of this is
 	-- character scoped. Account scope here would be the layoutBackup trap

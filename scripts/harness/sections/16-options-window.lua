@@ -410,11 +410,13 @@ if window then
 	-- and left it alone, at 15,908 across forty-eight. The party and raid page
 	-- costs 1,166 characters and took the window to 17,101 across forty-nine.
 	-- The cooldown row's four sections cost 793 and take it to 17,894 across
-	-- fifty-three, none of its strings longer than the ones already here. 18,000
-	-- is that measurement plus a hint's worth of room, checked on the warrior
-	-- run, which is the class with the most sections.
-	check(prose < 18000,
-		("the window holds %d characters of prose and the budget is 18,000"):format(prose))
+	-- fifty-three, none of its strings longer than the ones already here. The
+	-- mouseover casting page costs 897 across three sections and takes it to
+	-- 18,685 across fifty-six. 18,900 is that measurement plus a hint's worth of
+	-- room, checked on the warrior run, which is the class with the most
+	-- sections.
+	check(prose < 18900,
+		("the window holds %d characters of prose and the budget is 18,900"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

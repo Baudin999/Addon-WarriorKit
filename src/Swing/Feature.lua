@@ -60,7 +60,7 @@ end
 
 ns.Register({
 	name = "swing",
-	order = 8,
+	order = 9,
 
 	switch = {
 		key = "swing",

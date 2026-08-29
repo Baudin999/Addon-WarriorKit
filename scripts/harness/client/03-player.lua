@@ -328,6 +328,25 @@ _G.IsSpellKnown = function(id)
 	return not own.unknown[id]
 end
 _G.GetNumSpellTabs = constant(0)
+-- The spellbook, as much of it as one reader needs.
+--
+-- GetNumSpellTabs stays at zero, because Buttons/Ranks.lua walks the tabs and
+-- has always been tested against a book it cannot read: GetSpellTabInfo is
+-- still absent, so its probe refuses at the same rung it always did.
+--
+-- What is here is the other reader. Hover/Hover.lua asks what a spell dropped
+-- on its slot is, and this client answers that with the spellbook index and the
+-- book it came out of. A stub with no book at all would push that question onto
+-- the last of the three readings it tries, which is the guess rather than the
+-- path this client is actually on, and the guess passes.
+local BOOK = { "Rend", "Thunder Clap", "Battle Shout" }
+_G.WarriorKitSpellBook = BOOK
+_G.GetSpellBookItemName = function(index, book)
+	if book ~= "spell" then
+		return nil
+	end
+	return BOOK[index]
+end
 -- Three items in the backpack and empty hands. Enough for the gear scan to
 -- have something to offer, and chosen so all three rules it enforces are
 -- reachable: a main hander, a shield, and a two hander that must keep the

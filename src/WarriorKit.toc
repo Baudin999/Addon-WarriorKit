@@ -1,6 +1,6 @@
 ## Interface: 20506
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, a row counting down the cooldowns that decide fights, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, a row counting down the cooldowns that decide fights, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
@@ -152,6 +152,23 @@ Perf\Feature.lua
 Marking\Marking.lua
 Marking\Keys.lua
 Marking\Feature.lua
+
+# Casting on what the mouse is over, which is this addon's own Clique. Hover.lua
+# is the model, Cast.lua is the secure button every key presses, Sheet.lua draws
+# the list of what you bound over the world, Panel.lua is the page, and
+# Feature.lua last as everywhere else. Cast and Sheet both read Hover, and
+# nothing reads either of them but the page.
+#
+# After Marking, which is the other part built on a modified key and the thing
+# under the cursor, and which is where the whole of the override binding
+# reasoning is written down. It needs UI\Widgets.lua for the slot you drop a
+# spell on and the pixel grid for the list, both of which are far above this
+# line.
+Hover\Hover.lua
+Hover\Cast.lua
+Hover\Sheet.lua
+Hover\Panel.lua
+Hover\Feature.lua
 
 Charge\Charge.lua
 Charge\Icon.lua

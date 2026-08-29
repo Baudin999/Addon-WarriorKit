@@ -139,6 +139,13 @@ name of none of them.
     Marking/Keys.lua         the override binding behind each marking key
     Marking/Feature.lua
 
+    Hover/Hover.lua          what a binding is, what the cursor is carrying, and
+                             the macro one binding turns into
+    Hover/Cast.lua           the one secure button every hover key presses
+    Hover/Sheet.lua          the list of what you bound, drawn over the world
+    Hover/Panel.lua          the page: the slot, the filter and the key
+    Hover/Feature.lua
+
     Charge/Charge.lua        which ability, which unit, what state; shared colours
     Charge/Icon.lua          the HUD icon, which is also the secure button that casts
     Charge/Marker.lua        the icon in the world above the mob the button will hit
@@ -1847,6 +1854,57 @@ frames gets its unit from `mouseover` the same as the rest.
 Clearing every key hands the mouse back and puts the ctrl-targeting fallback in
 charge. `/wk status` names each mark and its key, and appends `unproven` when
 `GetBindingAction` has not confirmed the override.
+
+**Mouseover casting.** The addon's own Clique, in five files under `Hover/`.
+Drag a spell onto the slot in the panel, press the key you want it on, and that
+key casts it on whatever the cursor is over.
+
+The mechanism is `Marking/Keys.lua`'s with one thing added. An override binding
+claims the key, the click name it passes through is the binding's index, and the
+button on the other end is a `SecureActionButtonTemplate` rather than a plain
+one, because casting is protected and marking is not. `SecureActionButtonTemplate`
+reads `type-<click>` and `macrotext-<click>` before the bare pair, so twelve
+bindings share one button and the click name is the whole of what tells them
+apart.
+
+The filter is a macro conditional and not a unit attribute, because there is no
+attribute that means "only when it is an enemy". An enemy key carries
+`/cast [@mouseover,harm,nodead] Rend`, a friendly key carries `help,nodead`, and
+a key that lands on either carries `exists,nodead`. Two consequences follow. A
+conditional decides at the moment of the press, so a binding survives a fight
+without being rewritten, which matters because attributes cannot be touched once
+lockdown is up. And a conditional that does not match casts nothing and says
+nothing, so one key can carry a heal and another an attack with no chance of
+either firing on the wrong thing.
+
+The spell is stored by name rather than by id, which is what `/cast Thunder Clap`
+needs to pick your best rank. `Buttons/Ranks.lua` exists to keep a plain spell on
+an action bar up to date after a trainer visit; a binding made here never goes
+stale in the first place.
+
+Reading the cursor is the one part written from the documentation. This client
+answers a dragged spell with a spellbook index and the book it came out of, and
+newer builds put a spell id in a fourth slot. `Hover.Carry` tries the fourth
+slot, then `GetSpellBookItemName`, then the first value as an id, and takes the
+first that names a spell. A wrong reading costs nothing, because the name and the
+icon are in the slot before the key is pressed.
+
+Bindings are per character, in `ns.dbc.hoverBinds`. A binding names a spell and a
+spell is something one character knows, so a druid's Rejuvenation key written
+account-wide would be a key that casts nothing on the warrior next door while the
+list on screen went on advertising it.
+
+The list on screen is `Sheet.lua` and it is the only visible part of the feature.
+A mouseover binding has no icon, no cooldown swipe and no keybind text anywhere,
+which is why Clique users forget half of what they set up. One line per binding,
+the key on the left, the spell's own icon and name beside it, red for an enemy
+key, green for a friend key and grey for either. It is drawn on a change and
+never on a ticker, because what is bound changes when you bind something.
+
+`hover target on` adds the same conditional with the `@mouseover` taken off, so a
+key with nothing under the cursor hits your target instead. It ships off: a key
+that quietly hits your target when you meant to hover something is worse than a
+key that does nothing, and the list on screen has no way to draw the difference.
 
 **Charge.** Three abilities, one button. Charge.lua holds the state,
 ChargeIcon.lua draws the HUD icon and is the button that casts, ChargeMarker.lua
@@ -4897,6 +4955,12 @@ and a row with nothing on it costs one comparison.
     /wk markkey skull CTRL-BUTTON1   one key per mark, or none to clear
     /wk markkey cross|moon <key>
     /wk targetmark on|off        the ctrl-targeting fallback
+    /wk hover on|off             a key casts on whatever the mouse is over
+    /wk hover show               every key and the macro it presses
+    /wk hover remove SHIFT-BUTTON3   take one key off
+    /wk hover clear              take them all off
+    /wk hover list on|off        the list drawn over the world
+    /wk hover target on|off      fall back to your target when hovering nothing
     /wk charge on|off
     /wk charge always|ready      always visible, or only when usable
     /wk charge marker on|off     the icon in the world
@@ -5333,6 +5397,29 @@ Aiming at a mob out of combat with no target selected is the whole test.
 ## Untested against the live client
 
 Everything below was written from the API contract and has never executed:
+
+- Whether a secure action button answers a suffixed click delivered by an
+  override binding on 2.5.6. This is the whole of mouseover casting.
+  `Marking/Keys.lua` proves the binding half on an ordinary button and its click
+  name arrives as the mark's id, and Clique does the same thing onto a secure
+  button, which is the closest thing to a proof there is here. What is not
+  proven by anything installed is `type-<click>` and `macrotext-<click>` being
+  read ahead of the bare pair on this build. If they are not, every hover key
+  presses a button with no bare `type` set and nothing happens at all, which is
+  silent. What would settle it: bind a spell, press the key over a mob, and read
+  `/wk hover show`, which prints the macro off the button itself rather than the
+  one the addon meant to write.
+- What shape `GetCursorInfo` answers a dragged spell in on these clients.
+  `Hover.Carry` tries three readings and takes the first that names a spell, so
+  a client that answers any of them is covered, and one that answers none leaves
+  the slot empty with a line in chat. The failure worth watching for is the
+  third reading being reached on a client whose first value is a spellbook index
+  rather than a spell id: that names the wrong spell, and the only thing between
+  it and a wrong binding is that the name is in the slot before you press a key.
+- Whether `[@mouseover,harm,nodead]` resolves inside a macro run off a click
+  binding rather than off a real macro. The charge button already ships
+  `[combat,@mouseover,help,nodead]` in its macro text and is the same shape, so
+  the two stand or fall together.
 
 - Whether the cooldown ids in the four class files name what this addon thinks
   they name. The warrior's four are the ones somebody here plays and are the

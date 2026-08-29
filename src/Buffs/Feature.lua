@@ -185,7 +185,7 @@ ns.Register({
 	-- order: the registry refuses a fraction, so making room in the middle of
 	-- the rail renumbers what comes after it, which is what putting the
 	-- cooldown row at 10 did to the nine parts below it.
-	order = 9,
+	order = 10,
 
 	defaults = {
 		buffs = true,

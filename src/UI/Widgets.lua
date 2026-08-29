@@ -1119,17 +1119,18 @@ function UI.Kit(host)
 	end
 
 	----------------------------------------------------------------------
-	-- Gear
+	-- Slots
 	--
-	-- One square you drop an item onto, and the two things built out of it: a
+	-- One square you drop something onto, and the two things built out of it: a
 	-- labelled row, and a character with its hands under it.
 	--
 	-- get() returns the icon to draw and the text to say about it, and either
 	-- may be nil: no icon draws the empty-slot art opts.empty hands over, no
-	-- text leaves the line blank. set(link) is given the item link the cursor
-	-- was carrying and returns whether it took it, which is where the rule that
-	-- a shield does not go in a main hand lives. This file knows about neither
-	-- inventory slots nor shields, the same as it knows nothing about settings.
+	-- text leaves the line blank. opts.take is handed the whole of GetCursorInfo
+	-- and answers the one value set() gets, or nil to refuse the drop; with none
+	-- named a square takes an item and hands over its link. set() returns whether
+	-- it took it, which is where the rule that a shield does not go in a main
+	-- hand lives, because this file knows about neither shields nor spells.
 	--
 	-- A drop arrives two ways because neither is reliable on its own.
 	-- OnReceiveDrag does not fire when the drop replaced something already on
@@ -1138,9 +1139,8 @@ function UI.Kit(host)
 	-- polls on top; the poll is an OnUpdate, which this layer is not allowed to
 	-- add, so the two handlers are where it stops.
 	--
-	-- The highlight asks CursorHasItem rather than watching the cursor, for the
-	-- same reason. A slot lights up when the mouse arrives carrying something,
-	-- not the moment the item is picked up across the screen.
+	-- The highlight asks opts.take rather than watching the cursor, for the same
+	-- reason. It was CursorHasItem, which never answers for a spell.
 	----------------------------------------------------------------------
 
 	-- Blizzard's own item slot ring, over the addon's own box. It is the one
@@ -1175,12 +1175,23 @@ function UI.Kit(host)
 			ring:SetSize(UI.Round(square, size * RING_SCALE), UI.Round(square, size * RING_SCALE))
 		end
 
+		local function Carried()
+			local kind, a, b, c = GetCursorInfo()
+			if opts.take then
+				return opts.take(kind, a, b, c)
+			end
+			if kind ~= "item" or type(b) ~= "string" then
+				return nil
+			end
+			return b
+		end
+
 		local function Drop()
-			local kind, _, link = GetCursorInfo()
-			if kind ~= "item" or type(link) ~= "string" then
+			local carried = Carried()
+			if carried == nil then
 				return
 			end
-			if set(link) then
+			if set(carried) then
 				ClearCursor()
 			end
 			Changed()
@@ -1201,10 +1212,7 @@ function UI.Kit(host)
 			Drop()
 		end)
 		button:SetScript("OnEnter", function()
-			-- CursorHasItem rather than the accepts test alone, so a slot lights
-			-- up only while something is being carried into it.
-			local carrying = CursorHasItem and CursorHasItem()
-			UI.Tint(square.bg, carrying and C.selected or C.control)
+			UI.Tint(square.bg, Carried() ~= nil and C.selected or C.control)
 		end)
 		button:SetScript("OnLeave", function()
 			UI.Tint(square.bg, C.sunken)
@@ -1227,8 +1235,8 @@ function UI.Kit(host)
 	end
 
 	-- A labelled row with one slot on the right and whatever the getter says
-	-- about it beside that.
-	function kit.ItemSlot(label, get, set, opts)
+	-- about it beside that. It was ItemSlot until opts.take existed.
+	function kit.Slot(label, get, set, opts)
 		local size, nameWidth = 32, 150
 		local row, text = Paired(size + M.gutter + nameWidth, size)
 		text:SetText(label)

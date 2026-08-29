@@ -43,6 +43,15 @@ globals = {
 	-- which is the same reason the corral and the aura rows are named.
 	"WarriorKitGameMenuButton",
 	"WarriorKitSwitchButton",
+	-- the one secure button every mouseover key presses, and the list of what
+	-- you bound drawn over the world. The button is named because
+	-- SetOverrideBindingClick binds to a name rather than to a frame, which is
+	-- the whole reason any button in this addon has one; the sheet is named for
+	-- the reason the meter and the swing bars are, so a list that has wandered
+	-- off the screen can be found from a macro and measured by
+	-- scripts/harness.lua without Hover/Sheet.lua handing out its row pool.
+	"WarriorKitHoverButton",
+	"WarriorKitHoverSheet",
 	-- one per loadout, each a secure button carrying that loadout's macro. All
 	-- ten are made at load: a button cannot be given attributes in combat, and a
 	-- name is what SetOverrideBindingClick binds to, so they are named and they
@@ -232,12 +241,13 @@ read_globals = {
 	"GetContainerNumSlots", "GetContainerItemLink",
 	"GetContainerItemInfo", "UseContainerItem",
 	"GetItemInfo", "GetItemInfoInstant", "C_Container",
-	-- the empty-slot art each hand draws when nothing is set, and whether the
-	-- cursor is carrying something as it arrives over a slot. Baganator calls
+	-- the empty-slot art each hand draws when nothing is set. Baganator calls
 	-- GetInventorySlotInfo unguarded on the TBC client and TitanAmmo calls it on
-	-- both; CursorHasItem is read through an existence test in UI/Widgets.lua
-	-- rather than trusted, because nothing installed here calls it.
-	"GetInventorySlotInfo", "CursorHasItem",
+	-- both. CursorHasItem was here beside it and is gone: it answered for an
+	-- item and nothing else, so a slot that takes a spell could not light up
+	-- from it, and GetCursorInfo, which is already in this list, answers for
+	-- everything a slot will accept.
+	"GetInventorySlotInfo",
 	"UnitExists", "UnitGUID", "UnitClass", "UnitAffectingCombat", "UnitCanAttack",
 	"UnitIsDead", "UnitIsGroupLeader", "UnitIsGroupAssistant", "IsInRaid",
 	"IsControlKeyDown", "IsShiftKeyDown",

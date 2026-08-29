@@ -145,7 +145,7 @@ end
 
 ns.Register({
 	name = "breakdown",
-	order = 11,
+	order = 12,
 
 	switch = {
 		key = "breakdown",

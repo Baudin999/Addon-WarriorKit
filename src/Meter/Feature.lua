@@ -115,7 +115,7 @@ end
 
 ns.Register({
 	name = "meters",
-	order = 7,
+	order = 8,
 
 	switch = {
 		key = "meter",

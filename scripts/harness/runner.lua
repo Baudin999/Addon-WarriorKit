@@ -118,6 +118,7 @@ local SECTIONS = {
 	"41-voice",
 	"42-cooldown-row",
 	"43-blizzard-hide",
+	"44-hover",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

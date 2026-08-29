@@ -84,7 +84,23 @@ _G.GetCursorInfo = function()
 	if not cursor then
 		return nil
 	end
+	if cursor.spell then
+		-- The shape this client answers a spell in: the spellbook index and the
+		-- book it came out of, and nothing in a fourth slot. Modelled that way
+		-- deliberately, because Hover/Hover.lua tries a fourth-slot spell id
+		-- first and a stub that carried one would leave the reading this client
+		-- is on untested.
+		return "spell", cursor.spell, cursor.book
+	end
 	return "item", cursor.id, cursor.link
+end
+
+-- A spell on the cursor, which is what dragging one out of the spellbook
+-- leaves there. Written onto the cursor above rather than onto one of its own,
+-- for the reason PickupAction writes onto it: everything that asks what the
+-- hands are holding asks that one upvalue.
+_G.WarriorKitCarrySpell = function(index, book)
+	cursor = index and { spell = index, book = book or "spell" } or nil
 end
 
 _G.ClearCursor = function() cursor = nil end

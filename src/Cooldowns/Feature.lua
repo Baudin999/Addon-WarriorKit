@@ -97,7 +97,7 @@ ns.Register({
 	-- Straight after the buff nag, which is the other row over your character
 	-- that answers what to press. The nine parts below it moved down one to make
 	-- the room, because the registry takes whole numbers only.
-	order = 10,
+	order = 11,
 
 	defaults = {
 		cooldowns = true,

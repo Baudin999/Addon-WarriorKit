@@ -435,7 +435,7 @@ end
 
 ns.Register({
 	name = "buttons",
-	order = 5,
+	order = 6,
 
 	switch = {
 		key = "actionBars",

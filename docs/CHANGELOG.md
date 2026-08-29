@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### Casting on what the mouse is over
+
+The addon's own Clique, under `Hover/`. Drag a spell onto the slot in the panel,
+press the key you want it on, and that key casts on whatever the cursor is over,
+in the world, on a nameplate, on a party block or on a skinned unit frame.
+
+Every binding carries a filter and the filter is a macro conditional. An enemy
+key is `[@mouseover,harm,nodead]`, a friendly key is `help,nodead`, and a key
+that takes either is `exists,nodead`. `harm` and `help` are exclusive, so a heal
+and an attack can sit on the same key with no chance of one firing where the
+other was meant. A conditional also decides at the moment of the press, which is
+what lets a binding survive a fight: attributes cannot be touched once lockdown
+is up, and nothing here needs to be.
+
+Twelve bindings share one `SecureActionButtonTemplate`, because the template
+reads `type-<click>` and `macrotext-<click>` ahead of the bare pair and the click
+name an override binding passes through is the whole of what tells one binding
+from another. That is `Marking/Keys.lua`'s mechanism with the button swapped for
+a secure one, which is the one thing marking did not need and casting does.
+
+Spells are stored by name, so `/cast` picks your best rank and a trainer visit
+cannot leave a binding pointing at rank 3. Bindings are per character, because a
+binding names a spell and a spell is something one character knows.
+
+`Sheet.lua` draws the list over the world, one line per binding, key on the left
+and the spell's own icon and name beside it, red for an enemy key and green for a
+friend key. A mouseover binding is otherwise completely invisible, which is why
+half of what anybody sets up in Clique gets forgotten. It is written on a change
+and never on a ticker.
+
+`ui.ItemSlot` became `ui.Slot` on the way through. It was a widget nothing
+called, and what it needed to take a spell was one question moved out of the
+widget layer and into the caller: `opts.take` is handed the whole of
+`GetCursorInfo` and answers what the setter gets. `CursorHasItem` went with it,
+because it answers for an item and never for a spell, so the drop highlight asks
+the same question the drop does.
+
 ### The party list fills outward from the middle
 
 The frame you drag is the middle of the block now, not its top left corner. A

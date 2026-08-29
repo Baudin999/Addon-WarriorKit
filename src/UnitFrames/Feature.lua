@@ -477,7 +477,7 @@ end)
 
 ns.Register({
 	name = "unit frames",
-	order = 6,
+	order = 7,
 
 	switch = {
 		key = "bars",
