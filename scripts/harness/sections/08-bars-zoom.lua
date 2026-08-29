@@ -87,6 +87,34 @@ check(widget ~= nil, "no bar on nameplate1 after the zoom sweep")
 check(cvars.nameplateMotion == "1", "nameplates were not asked to stack")
 check(plateSize[1] ~= nil, "the plate size was never set")
 
+-- How far out a plate goes up, which is how far out a bar can be seen at all.
+check(cvars.nameplateMaxDistance == tostring(ns.db.barsDistance),
+	("the range was asked for as %s and the client holds %s")
+		:format(tostring(ns.db.barsDistance), tostring(cvars.nameplateMaxDistance)))
+check(ns.Plates.Distance() == ns.db.barsDistance,
+	"Plates.Distance does not read back what was written")
+
+-- The plate is the frame the game hit-tests, so it has to hold the whole bar
+-- and not merely be as tall as one. The bar hangs off the plate's centre by the
+-- gauge, which puts more of it above that centre than below, and a plate sized
+-- to the bar's own height would leave the debuff row hanging over nothing: a
+-- click there would target the ground.
+--
+-- Measured in UIParent's units on both sides, because that is what the driver
+-- was told in.
+do
+	local half = ns.UI.Convert(widget.gaugeMid, widget, _G.UIParent)
+	local rest = ns.UI.Convert(widget:GetHeight() - widget.gaugeMid, widget, _G.UIParent)
+	check(plateSize[2] >= half * 2 - 1e-6,
+		("the plate is %.1f tall and the bar reaches %.1f above the point it hangs from")
+			:format(plateSize[2], half))
+	check(plateSize[2] >= rest * 2 - 1e-6,
+		("the plate is %.1f tall and the bar reaches %.1f below the point it hangs from")
+			:format(plateSize[2], rest))
+	check(plateSize[1] >= ns.UI.Convert(widget:GetWidth(), widget, _G.UIParent) - 1e-6,
+		"the plate is narrower than the bar on it, so a click near either end misses")
+end
+
 -- Allocation. Every ticker but the bars' is somebody else's measurement.
 local barTicker
 for _, f in ipairs(frames) do

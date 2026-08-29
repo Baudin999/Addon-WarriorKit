@@ -199,6 +199,30 @@ local HEALTH_TEXT = Color.text.value
 local TARGET_ALPHA = 1.00
 local OTHER_ALPHA = 0.55
 
+-- How long a bar takes to arrive and to leave, in seconds.
+--
+-- A plate is put up and taken down in one frame, and a bar that follows it
+-- exactly appears and vanishes the same way: at fifteen plates in a pull that
+-- is fifteen rectangles blinking on, which reads as a glitch rather than as
+-- mobs coming into range. The two numbers are not equal on purpose. Coming in
+-- is information arriving and wants to be quick; going out is a bar you have
+-- already read and the eye is helped by the tail, so it is the slower of the
+-- two by half again.
+--
+-- Both are short enough that the whole ramp is inside the fifth of a second the
+-- readouts tick at, so nothing on the bar is ever drawn stale on the way in.
+--
+-- This is a multiplier on the alpha above, never a replacement for it: the two
+-- say different things and both have to survive. Which bar is yours is 1.00
+-- against 0.55, and a bar arriving is that number climbing from nothing.
+local FADE_IN = 0.15
+local FADE_OUT = 0.22
+
+-- Every widget with a ramp still running, as a set. Empty is the normal state
+-- and the driver's first line, so a screen full of settled bars costs one
+-- `next` per frame.
+local fading = {}
+
 local anchor, header
 -- Assigned in the events section at the foot of the file, because it is the
 -- event frame's business and that frame is made down there. Declared up here
@@ -850,6 +874,44 @@ local function ShowHitbox(widget)
 	widget.hitbox:SetShown(widget.hitbox.hosted and not ns.db.locked and not ns.db.barsClickThrough)
 end
 
+-- What the client needs to know to stop two bars landing on each other, and
+-- what it needs to know for a click on a bar to reach the mob. Sent in
+-- UIParent's units because that is what the nameplate driver counts in, and
+-- only from a widget on a plate: the list spaces itself and nothing under it
+-- takes a click.
+--
+-- The height sent is the casting one unconditionally, because the widget really
+-- does grow and a driver told the idle figure would space plates so a chamber
+-- opened into the bar underneath. Spacing for the taller case is right in both
+-- states; for the shorter one, neither. The width is just the bar now that the
+-- tag is gone.
+--
+-- It is the box round the bar and not the bar, and that is the half that makes
+-- a bar clickable rather than merely spaced. The frame the game hit-tests is
+-- the plate's, our bar takes no mouse of its own, and PlaceOnPlate hangs the
+-- bar off the plate's centre by the gauge: the bar reaches `gaugeMid` above
+-- that centre and the rest below, and the two are not equal, because the debuff
+-- row and the threat line are above the gauge and only the cast chamber is
+-- below. A plate as tall as the bar covers the bar's middle and neither end, so
+-- a click lands on the mob over the health bar and on nothing over the icons.
+-- Twice the longer reach is the smallest box centred where the plate is that
+-- holds the whole bar, and every pixel of that targets.
+--
+-- It costs a little spacing, since two plates now stand as far apart as the
+-- taller half needs on both sides. That is the right way to be wrong: the
+-- alternative is bars that touch.
+local function PlateFootprint(widget, width, unit)
+	local tall = widget:GetHeight() + (widget.boxOpen - widget.boxIdle)
+	local height = tall
+	if ns.db.barsStyle == "replace" then
+		local shift = ns.db.barsOffset * unit
+		height = 2 * math.max(widget.gaugeMid + shift, tall - widget.gaugeMid - shift)
+	end
+	ns.Plates.SetFootprint(
+		ns.UI.Convert(width, widget, UIParent),
+		ns.UI.Convert(height, widget, UIParent))
+end
+
 -- Everything stacks upwards from the gauge, which sits on the widget's bottom
 -- edge. That way one anchor point places the whole thing. The row above the
 -- gauge is shared: threat on the left, debuff icons packed to the right, so
@@ -1055,20 +1117,8 @@ local function LayoutWidget(widget, width, onPlate)
 	widget.gaugeMid = -(gaugeY or 0) + widget.health:GetHeight() / 2
 	widget.boxBottom = widget.gaugeMid + widget.health:GetHeight() / 2 + px
 
-	-- What the client needs to know to stop two of these landing on each other.
-	-- Sent in UIParent's units because that is what the nameplate driver counts
-	-- in, and only from the plate layout: the list spaces itself.
-	--
-	-- The height sent is the casting one unconditionally, because the widget
-	-- really does grow and a driver told the idle figure would space plates so a
-	-- chamber opened into the bar underneath. Spacing for the taller case is
-	-- right in both states; for the shorter one, neither. The width is just the
-	-- bar now that the tag is gone.
 	if onPlate then
-		ns.Plates.SetFootprint(
-			ns.UI.Convert(width, widget, UIParent),
-			ns.UI.Convert(widget:GetHeight() + (widget.boxOpen - widget.boxIdle),
-				widget, UIParent))
+		PlateFootprint(widget, width, unit)
 	end
 end
 
@@ -1155,6 +1205,25 @@ local function PaintMarker(widget, unit)
 		widget.marker:Show()
 	else
 		widget.marker:Hide()
+	end
+end
+
+-- The one place a widget's alpha is written, because two things decide it and
+-- neither knows about the other.
+--
+-- `baseAlpha` is which bar is yours, written by the tick five times a second.
+-- `fade` is how far through arriving or leaving this bar is, written by the
+-- ramp on every frame. They multiply: a bar that is not your target and is
+-- halfway in is 0.55 of half, and both facts are still on screen.
+--
+-- The guard is on the product and not on either half, which is what makes this
+-- safe to call from both of them. A tick that recomputes the same base while a
+-- ramp is stopped writes nothing.
+local function PaintAlpha(widget)
+	local alpha = (widget.baseAlpha or TARGET_ALPHA) * (widget.fade or 1)
+	if widget.shownAlpha ~= alpha then
+		widget.shownAlpha = alpha
+		widget:SetAlpha(alpha)
 	end
 end
 
@@ -1276,9 +1345,9 @@ local function UpdateWidget(widget, unit, guid)
 	PaintWorth(widget, unit, isTarget)
 
 	local alpha = (isTarget or not haveTarget) and TARGET_ALPHA or OTHER_ALPHA
-	if widget.shownAlpha ~= alpha then
-		widget.shownAlpha = alpha
-		widget:SetAlpha(alpha)
+	if widget.baseAlpha ~= alpha then
+		widget.baseAlpha = alpha
+		PaintAlpha(widget)
 	end
 
 	local by = targeters[guid] or ""
@@ -1534,6 +1603,105 @@ function EnemyBars.Mode()
 	return mode
 end
 
+-- A coordinate snapped to the frame's own pixel.
+--
+-- ns.UI.Round is the same arithmetic for a size, and it floors at one pixel,
+-- which is right for a width and wrong for a position: nought is a real place
+-- to stand and so is anywhere left of it.
+local function Snap(frame, value)
+	local px = ns.Pixel(frame)
+	return math.floor(value / px + 0.5) * px
+end
+
+-- Everything that ends a widget's life on a plate, taken out of Release because
+-- a fading bar does half of it now and the other half when the ramp lands.
+local function Unhost(widget)
+	widget.plate = nil
+	-- Cleared before the reparent, so no anchor survives pointing at a plate
+	-- this widget is about to stop being a child of.
+	widget.hitbox:Hide()
+	widget.hitbox:ClearAllPoints()
+	widget.hitbox.hosted = nil
+	widget:ClearAllPoints()
+	widget:SetParent(UIParent)
+end
+
+-- Back in the pool, drawn state and all.
+--
+-- A pooled widget keeps everything the tick drew on it, which is what the
+-- caches on it are for. A half finished cast is the one piece of that which is
+-- about the mob rather than about the widget, so it does not travel.
+local function Retire(widget)
+	Cast.Clear(widget)
+	widget:Hide()
+	fading[widget] = nil
+	widget.fade, widget.fadeGoal, widget.fadeHome = 1, 1, nil
+	pool[#pool + 1] = widget
+end
+
+-- Put a widget on the ramp and answer whether it is really on one.
+--
+-- `from` is where the ramp starts and nil means carry on from wherever the bar
+-- already is, which is what a mob dying halfway through arriving wants: it
+-- turns round from there rather than snapping to full first.
+--
+-- The switch is read here and nowhere else. With `bars fade` off this sets the
+-- alpha and answers false, so every caller has one branch instead of two and a
+-- bar appears and disappears the way it always did.
+local function StartFade(widget, from, goal)
+	if from then
+		widget.fade = from
+	end
+	widget.fadeGoal = goal
+	if ns.db.barsFade then
+		fading[widget] = true
+	else
+		widget.fade = goal
+		fading[widget] = nil
+	end
+	PaintAlpha(widget)
+	return fading[widget] == true
+end
+
+-- The ramp itself, run once per frame off the bars' own ticker.
+--
+-- Per frame and not on the fifth of a second the readouts take, for the reason
+-- the cast fill is: this is a moving edge, and a moving edge drawn five times a
+-- second is drawn in steps. The note at the head of EnemyBars.Sweep is the long
+-- version.
+--
+-- Nothing here allocates and nothing writes unless a bar actually moved, which
+-- is what makes it free to leave running: with no bar arriving or leaving the
+-- set is empty and the whole function is one `next`.
+local function Fades(delta)
+	if not next(fading) then
+		return
+	end
+	for widget in pairs(fading) do
+		local goal = widget.fadeGoal or 1
+		local value = widget.fade or 1
+		if value < goal then
+			value = math.min(goal, value + delta / FADE_IN)
+		elseif value > goal then
+			value = math.max(goal, value - delta / FADE_OUT)
+		end
+		widget.fade = value
+		PaintAlpha(widget)
+		if value == goal then
+			fading[widget] = nil
+			if widget.fadeHome then
+				Retire(widget)
+			elseif goal == 0 then
+				-- A list row, which is not pooled and keeps its slot. The cast
+				-- is cleared here rather than when the row dropped off, so the
+				-- chamber does not close under a bar that is still on screen.
+				Cast.Clear(widget)
+				widget:Hide()
+			end
+		end
+	end
+end
+
 local function Attach(unit)
 	if not ns.db.bars or EnemyBars.Mode() ~= "plates" then
 		return
@@ -1594,35 +1762,60 @@ local function Attach(unit)
 	end
 	ShowHitbox(widget)
 
+	StartFade(widget, 0, 1)
 	widget:Show()
 	attached[unit] = widget
 end
 
-local function Release(unit)
+-- `now` means take it off the screen this frame, which is what a settings
+-- change and a mode switch want: a ghost of the old shape fading out over a
+-- rebuild is a bar drawn to a design that no longer exists.
+local function Release(unit, now)
 	local widget = attached[unit]
 	if not widget then
 		return
 	end
 	attached[unit] = nil
-	widget.plate = nil
-	-- A pooled widget keeps everything the tick drew on it, which is what the
-	-- caches on it are for. A half finished cast is the one piece of that which
-	-- is about the mob rather than about the widget, so it does not travel.
-	Cast.Clear(widget)
-	widget:Hide()
-	-- Cleared before the reparent below, so no anchor survives pointing at a
-	-- plate this widget is about to stop being a child of.
-	widget.hitbox:Hide()
-	widget.hitbox:ClearAllPoints()
-	widget.hitbox.hosted = nil
-	widget:ClearAllPoints()
-	widget:SetParent(UIParent)
-	pool[#pool + 1] = widget
+
+	-- Where the bar stood, in UIParent's units, taken before the reparent
+	-- moves it. A fading bar is held on the screen rather than on the plate,
+	-- because the plate is gone: the client hides it the moment the mob is out
+	-- of range or dead, and a child of a hidden frame does not draw whatever
+	-- its own alpha says.
+	local left, bottom
+	if not now then
+		left = ns.UI.Convert(widget:GetLeft(), widget, UIParent)
+		bottom = ns.UI.Convert(widget:GetBottom(), widget, UIParent)
+	end
+
+	Unhost(widget)
+
+	if now or not left or not bottom or not StartFade(widget, nil, 0) then
+		Retire(widget)
+		return
+	end
+	widget.fadeHome = true -- the ramp pools it when it lands
+	-- Snapped, because the position came off a plate and a plate's origin is
+	-- wherever the mob was standing, which is a fraction of a pixel. Everything
+	-- else on the grid is anchored in whole ones and a bar spending a fifth of a
+	-- second drawn across two rows on the way out is the one thing the eye is
+	-- actually looking at.
+	widget:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT",
+		Snap(widget, ns.UI.Convert(left, UIParent, widget)),
+		Snap(widget, ns.UI.Convert(bottom, UIParent, widget)))
 end
 
 local function ReleaseAll()
 	for unit in pairs(attached) do
-		Release(unit)
+		Release(unit, true)
+	end
+	-- The ghosts of mobs that left a moment ago go with them. A rebuild is a
+	-- shape change, and a bar still fading out is drawn to the shape being
+	-- left behind.
+	for widget in pairs(fading) do
+		if widget.fadeHome then
+			Retire(widget)
+		end
 	end
 	for plate in pairs(stripped) do
 		RestorePlate(plate)
@@ -1737,11 +1930,25 @@ local function UpdateList()
 			end
 		end
 		UpdateWidget(widget, collected[index].unit, collected[index].guid)
-		widget:Show()
+		-- A row arrives on the ramp and a row on its way out turns round on it,
+		-- which is the mob that died and was replaced in the same slot before
+		-- the tail ran out. Neither branch is reached by a row that is already
+		-- up, which is nearly every row on nearly every tick.
+		if not widget:IsShown() then
+			StartFade(widget, 0, 1)
+			widget:Show()
+		elseif widget.fadeGoal == 0 then
+			StartFade(widget, nil, 1)
+		end
 	end
 	for index = shown + 1, #listWidgets do
-		Cast.Clear(listWidgets[index])
-		listWidgets[index]:Hide()
+		local widget = listWidgets[index]
+		if widget:IsShown() and widget.fadeGoal ~= 0 then
+			if not StartFade(widget, nil, 0) then
+				Cast.Clear(widget)
+				widget:Hide()
+			end
+		end
 	end
 end
 
@@ -1834,6 +2041,11 @@ function EnemyBars.Rebuild()
 	SyncPlates()
 	for _, widget in ipairs(listWidgets) do
 		ns.UI.Rezoom(widget, ns.db.barsZoom)
+		-- Off the ramp as well as off the screen. A rebuild is a shape change,
+		-- and a bar left halfway through arriving would finish arriving into a
+		-- layout that no longer exists.
+		fading[widget] = nil
+		widget.fade, widget.fadeGoal = 1, 1
 		widget:Hide()
 	end
 	if ns.db.bars and EnemyBars.Mode() == "plates" then
@@ -2057,9 +2269,13 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	EnemyBars.Rebuild()
 
 	events:SetScript("OnUpdate", function(_, delta)
-		-- The cast fills first and unthrottled. See EnemyBars.Sweep.
+		-- The cast fills and the arrival ramps, both unthrottled and both timed
+		-- under the same gauge: they are one answer to one question, which is
+		-- what on a bar moves faster than a fifth of a second. See
+		-- EnemyBars.Sweep.
 		ns.Perf.Start("cast")
 		EnemyBars.Sweep()
+		Fades(delta)
 		ns.Perf.Stop("cast")
 
 		elapsed = elapsed + delta

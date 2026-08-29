@@ -144,6 +144,24 @@ local function EnemyBars(ui)
 		end)
 	ui.Hint("Off, two mobs standing together put two bars on top of each other, because the client is spacing Blizzard's plate and ours is twice its height.")
 
+	ui.Check("ramp a bar in and out",
+		function() return ns.db.barsFade end,
+		function(value) ns.db.barsFade = value end)
+	ui.Hint("Off, a bar is simply there and then not.")
+
+	do
+		local low, high = ns.Plates.DistanceRange()
+		ui.Stepper("how far out a nameplate goes up", low, high, 1,
+			function() return ns.db.barsDistance end,
+			function(value)
+				ns.db.barsDistance = value
+				ns.Plates.Apply()
+			end,
+			function(value) return value .. " yards" end)
+	end
+	ui.Hint("A bar rides on a plate, so this is how far out the bars work. The client clamps to its own ceiling without saying so.")
+	ui.Reading("nameplate range", ns.Plates.DescribeDistance)
+
 	ui.Size("bar height on the plate", -60, 60, 2,
 		function() return ns.db.barsOffset end,
 		function(value)

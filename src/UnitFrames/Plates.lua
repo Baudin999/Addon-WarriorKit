@@ -4,22 +4,22 @@ local Plates = {}
 ns.Plates = Plates
 
 --------------------------------------------------------------------------
--- Where the client puts a nameplate
+-- Where the client puts a nameplate, how far out, and what takes the click
 --
 -- Bars piling on top of each other when two mobs stand together is not a
 -- drawing bug and no amount of care in the widget fixes it. The client decides
--- where a plate goes, and it decides using two things this addon can reach and
--- one it cannot.
+-- where a plate goes, and it decides using three things this addon can reach
+-- and one it cannot.
 --
 -- The one it cannot is the world. Plates follow mobs, and mobs stand where they
 -- stand.
 --
--- The two it can:
+-- The three it can:
 --
 --   nameplateMotion   0 lets plates overlap freely, 1 makes the driver push
---                     them apart. On 0 there is no avoidance to tune and no
---                     setting below changes anything, which is why this is the
---                     first thing the part takes.
+--                     them apart. On 0 there is no avoidance to tune and
+--                     nameplateOverlapV below changes nothing, which is why
+--                     this is the first thing the part takes.
 --   the plate's size  the driver spaces plates by how big it thinks a plate is,
 --                     and it thinks a plate is Blizzard's nameplate. Ours is
 --                     twice the height of that, and taller again while a mob
@@ -27,27 +27,47 @@ ns.Plates = Plates
 --                     separated are two bars that are not. The figure sent is
 --                     the casting height: spacing for the taller of two
 --                     states is right in both and for the shorter, neither.
+--   nameplateMaxDistance
+--                     how many yards out the client bothers to put a plate up.
+--                     Nothing this addon draws can appear before that does: a
+--                     bar is a child of a plate, so the range the bars work at
+--                     is this CVar's and nothing else's.
 --
 -- SetNamePlateEnemySize tells it the real figure. Where that call is missing,
 -- nameplateOverlapV multiplies the height the driver uses instead, which gets
--- the spacing right and leaves the click target alone.
+-- the spacing right and leaves the click target where it was.
 --
--- Sizing the plate does move the click target with it: a taller plate takes the
--- mouse over more of the screen, which is more room to click a mob and more of
--- a camera drag swallowed. That trade is the one `bars camera` and `bars
--- clickthrough` already manage, and it is why this is one setting the player
--- turns off rather than something the part does quietly.
+-- The plate's size is applied whenever the bars are drawn on plates, and not
+-- only when `bars stack` is on, because it is two jobs and only one of them is
+-- spacing. The other is the click: the frame the game hit-tests is the plate's
+-- own, our bar is drawn over it and takes no mouse of its own, so a plate the
+-- size of Blizzard's nameplate under a bar twice its height is a bar that
+-- targets in the middle and does nothing at the ends. The figure sent is the
+-- one UnitFrames/EnemyBars.lua measures: the smallest box centred where the
+-- plate is that holds the whole bar. `bars stack` keeps the two CVars, which
+-- are the half that is really about spacing.
 --
--- All three are the player's, borrowed. Turning the setting off puts back what
+-- A bigger plate does swallow more of a camera drag, which is the trade `bars
+-- camera` and `bars clickthrough` manage.
+--
+-- All four are the player's, borrowed. Turning a setting off puts back what
 -- was there, the same way Charge/SoftTarget.lua hands SoftTargetEnemy back.
 --------------------------------------------------------------------------
 
 local STACKING = "1"
 local FLAT = "0"
 
+-- What `bars distance` may ask for. The floor is the client's own default on
+-- these two clients and the ceiling is past what either accepts, deliberately:
+-- SetCVar clamps in silence, so the honest thing is to let the setting ask and
+-- report back what the client actually holds rather than to guess the cap here
+-- and be wrong on one of them. Plates.Describe reads the CVar, never the
+-- setting.
+local DISTANCE_LOW, DISTANCE_HIGH = 20, 60
+
 local footprintWidth, footprintHeight -- what a bar actually occupies, in UIParent units
 local naturalWidth, naturalHeight     -- what a plate measured before we touched it
-local sizeApplied, overlapApplied
+local sizeApplied, overlapApplied, distanceApplied
 local pending
 local warned
 
@@ -160,6 +180,53 @@ local function ApplyOverlap()
 	return Write("nameplateOverlapV", ("%.2f"):format(wanted))
 end
 
+local function RestoreDistance()
+	if not distanceApplied then
+		return true
+	end
+	local prior = ns.db and ns.db.platesDistancePrior
+	if prior == nil or prior == "" then
+		distanceApplied = false
+		return true
+	end
+	if Write("nameplateMaxDistance", prior) then
+		distanceApplied = false
+		return true
+	end
+	return false
+end
+
+-- How far out the client puts a plate up, which is how far out a bar can be
+-- seen. Written as a whole number of yards; the client stores it as a string
+-- and clamps it to whatever its own ceiling is without saying so.
+local function ApplyDistance()
+	local wanted = ns.db.barsDistance or 0
+	if wanted <= 0 then
+		return RestoreDistance()
+	end
+	Remember("platesDistancePrior", "nameplateMaxDistance")
+	distanceApplied = true
+	return Write("nameplateMaxDistance", tostring(wanted))
+end
+
+-- What the client actually holds, as a number, or nil where it will not say.
+-- The setting is what was asked for; this is what was given.
+function Plates.Distance()
+	return tonumber(Read("nameplateMaxDistance"))
+end
+
+function Plates.DistanceRange()
+	return DISTANCE_LOW, DISTANCE_HIGH
+end
+
+local function RestoreMotion()
+	local prior = ns.db and ns.db.platesMotionPrior
+	if prior == nil or prior == "" then
+		return true
+	end
+	return Write("nameplateMotion", prior)
+end
+
 local function RestoreOverlap()
 	if not overlapApplied then
 		return true
@@ -189,30 +256,38 @@ function Plates.Apply()
 	end
 
 	local done = true
+
+	-- The range and the click target, which belong to the bars being drawn at
+	-- all rather than to how they are spaced.
+	if ns.db.bars then
+		done = ApplyDistance() and done
+		done = ApplySize() and done
+	else
+		done = RestoreDistance() and done
+		done = RestoreSize() and done
+	end
+
+	-- The spacing, which is what `bars stack` is.
 	if ns.db.barsStack and ns.db.bars then
 		Remember("platesMotionPrior", "nameplateMotion")
 		done = Write("nameplateMotion", STACKING) and done
-		done = ApplySize() and done
 		done = ApplyOverlap() and done
 	else
-		done = Plates.Restore() and done
+		done = RestoreOverlap() and done
+		done = RestoreMotion() and done
 	end
 
 	pending = not done
 end
 
--- Hand all three back. Called when the setting goes off, and at logout by
--- nothing at all: these are the player's CVars and a client that crashes leaves
--- them where we put them, which is why the prior is saved rather than held in a
--- local.
+-- Hand all four back. Called when the bars go off, and at logout by nothing at
+-- all: these are the player's CVars and a client that crashes leaves them where
+-- we put them, which is why the prior is saved rather than held in a local.
 function Plates.Restore()
 	local done = RestoreOverlap()
 	done = RestoreSize() and done
-
-	local prior = ns.db and ns.db.platesMotionPrior
-	if prior and prior ~= "" then
-		done = Write("nameplateMotion", prior) and done
-	end
+	done = RestoreDistance() and done
+	done = RestoreMotion() and done
 	return done
 end
 
@@ -227,6 +302,25 @@ end
 -- Blizzard's own interface options behind our back.
 function Plates.Stacking()
 	return Read("nameplateMotion") == STACKING
+end
+
+-- What the client is holding for the range, said as a range and not as the
+-- setting: SetCVar clamps in silence, so a player who asked for 60 on a client
+-- that stops at 41 has to be told 41 rather than shown their own number back.
+function Plates.DescribeDistance()
+	local held = Plates.Distance()
+	if not held then
+		return "this client will not say how far out it puts a nameplate"
+	end
+	local wanted = ns.db.barsDistance or 0
+	if wanted <= 0 then
+		return ("plates at %d yards, the client's own"):format(held)
+	end
+	if math.abs(held - wanted) < 0.5 then
+		return ("plates out to %d yards"):format(held)
+	end
+	return ("asked for %d yards and the client stopped at %d, which is its ceiling")
+		:format(wanted, held)
 end
 
 function Plates.Describe()

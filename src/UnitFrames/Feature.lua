@@ -45,7 +45,64 @@ local function DebuffWord(action, value)
 	end
 end
 
+-- The words that are about the plate under the bar rather than about the bar:
+-- which buttons it hands back, whether it takes the mouse at all, how the
+-- driver spaces two of them and how far out it puts one up. Answers true when
+-- it took the word, so BarsWord below stays a dispatcher for what we draw.
+--
+-- They are together because they are one subject and they read as one: every
+-- line in here ends in a Plates call or a sentence about the client's own
+-- nameplate driver, and none of them touches the widget.
+local function PlateWord(option, value)
+	if option == "camera" then
+		if value ~= "right" and value ~= "left" and value ~= "both" and value ~= "off" then
+			ns.Print("bars camera takes right, left, both or off.")
+			return true
+		end
+		ns.db.barsCamera = value
+		ns.EnemyBars.Rebuild()
+		if value == "off" then
+			ns.Print("plates keep every button. The camera will not turn over a bar.")
+		else
+			ns.Print(("plates hand the %s button back to the world, so the camera turns over a bar. %s")
+				:format(value == "both" and "left and right" or value,
+					value == "right"
+						and "Click targeting and ctrl-click marking still work."
+						or "Click targeting on a plate is gone with it."))
+		end
+		ns.Print("camera pass-through: " .. ns.EnemyBars.CameraState() .. ".")
+	elseif option == "clickthrough" then
+		ns.db.barsClickThrough = ns.Command.Toggle(value)
+		ns.EnemyBars.Rebuild()
+		ns.Print(ns.db.barsClickThrough
+			and "plates pass the mouse through. The camera turns over a bar again, and clicking a plate no longer targets or marks."
+			or "plates take the mouse. Click targeting and ctrl-click marking work, and the camera will not turn over a bar.")
+	elseif option == "stack" then
+		ns.db.barsStack = ns.Command.Toggle(value)
+		ns.Plates.Apply()
+		ns.Print(ns.db.barsStack
+			and "asking the client to stack nameplates, so two mobs standing together get two bars that do not cover each other."
+			or "nameplate motion handed back to the client. A plate is still sized to the bar on it, because that is what a click on the bar lands on.")
+		ns.Print("plates: " .. ns.Plates.Describe() .. ".")
+	elseif option == "distance" then
+		local low, high = ns.Plates.DistanceRange()
+		local yards = value == "off" and 0 or ns.Command.Number(value, low, high, "bars distance")
+		if yards then
+			ns.db.barsDistance = yards
+			ns.Plates.Apply()
+			ns.Print(ns.Plates.DescribeDistance() .. ".")
+		end
+	else
+		return false
+	end
+	return true
+end
+
 local function BarsWord(option, value)
+	if PlateWord(option, value) then
+		ns.EnemyBars.Update()
+		return
+	end
 	if option == "mode" then
 		if value == "auto" or value == "plates" or value == "list" then
 			ns.db.barsMode = value
@@ -70,29 +127,6 @@ local function BarsWord(option, value)
 			ns.EnemyBars.Rebuild()
 			ns.Print("plate offset " .. offset .. ".")
 		end
-	elseif option == "camera" then
-		if value == "right" or value == "left" or value == "both" or value == "off" then
-			ns.db.barsCamera = value
-			ns.EnemyBars.Rebuild()
-			if value == "off" then
-				ns.Print("plates keep every button. The camera will not turn over a bar.")
-			else
-				ns.Print(("plates hand the %s button back to the world, so the camera turns over a bar. %s")
-					:format(value == "both" and "left and right" or value,
-						value == "right"
-							and "Click targeting and ctrl-click marking still work."
-							or "Click targeting on a plate is gone with it."))
-			end
-			ns.Print("camera pass-through: " .. ns.EnemyBars.CameraState() .. ".")
-		else
-			ns.Print("bars camera takes right, left, both or off.")
-		end
-	elseif option == "clickthrough" then
-		ns.db.barsClickThrough = ns.Command.Toggle(value)
-		ns.EnemyBars.Rebuild()
-		ns.Print(ns.db.barsClickThrough
-			and "plates pass the mouse through. The camera turns over a bar again, and clicking a plate no longer targets or marks."
-			or "plates take the mouse. Click targeting and ctrl-click marking work, and the camera will not turn over a bar.")
 	elseif option == "level" then
 		ns.db.barsLevel = ns.Command.Toggle(value)
 		ns.EnemyBars.ApplyLayout()
@@ -149,13 +183,11 @@ local function BarsWord(option, value)
 			ns.Print(("debuff icons %d pixels square, %s.")
 				:format(size, ns.EnemyBars.DescribeIcon(size)))
 		end
-	elseif option == "stack" then
-		ns.db.barsStack = ns.Command.Toggle(value)
-		ns.Plates.Apply()
-		ns.Print(ns.db.barsStack
-			and "asking the client to stack nameplates and sizing a plate to the bar on it, so two mobs standing together get two bars that do not cover each other."
-			or "nameplate motion and plate size handed back to the client.")
-		ns.Print("plates: " .. ns.Plates.Describe() .. ".")
+	elseif option == "fade" then
+		ns.db.barsFade = ns.Command.Toggle(value)
+		ns.Print(ns.db.barsFade
+			and "bars ramp in as a mob comes into range and out again behind it."
+			or "bars appear and disappear with the plate under them.")
 	else
 		ns.db.bars = ns.Command.Toggle(option)
 		ns.EnemyBars.Rebuild()
@@ -536,17 +568,33 @@ ns.Register({
 		-- small on a 4K one.
 		barsZoom = 1,
 
-		-- Whether the addon owns nameplateMotion, nameplateOverlapV and the
-		-- enemy plate size, which between them are what stops two bars landing
-		-- on top of each other. Off means the client's own, untouched.
+		-- Whether the addon owns nameplateMotion and nameplateOverlapV, which
+		-- between them are what stops two bars landing on top of each other.
+		-- Off means the client's own, untouched. The plate's size is not on
+		-- this switch and has not been since it became the click target too:
+		-- see the head of UnitFrames/Plates.lua.
 		barsStack = true,
 
-		-- What those two CVars were before the addon first wrote to them, so
-		-- turning the setting off puts back what was actually there. Empty is
+		-- How many yards out the client puts an enemy nameplate up, which is
+		-- how far out a bar can be seen: a bar is drawn on a plate, so nothing
+		-- here can appear before one does. 41 is as far as either of these two
+		-- clients goes; ask for more and it clamps, which is why the panel and
+		-- `/wk status` report the CVar and never this number. 0 hands the
+		-- setting back and leaves the client's own alone.
+		barsDistance = 41,
+
+		-- Whether a bar ramps in and out or is simply there and then not.
+		-- On, because a plate is put up and taken down in one frame and
+		-- fifteen bars blinking on at a pull reads as a fault.
+		barsFade = true,
+
+		-- What those three CVars were before the addon first wrote to them, so
+		-- turning a setting off puts back what was actually there. Empty is
 		-- the sentinel for "not remembered yet". Account scoped, because the
 		-- CVars are.
 		platesMotionPrior = "",
 		platesOverlapPrior = "",
+		platesDistancePrior = "",
 		barsPoint = { "CENTER", "UIParent", "CENTER", 280, 120 },
 
 		-- The square skin on the player, target and target of target frames.
@@ -777,6 +825,8 @@ ns.Register({
 		"bars debuff list|reset, bars debuff add|remove <spell id>, what the icon row tracks",
 		"bars icon <16-32>, the size of one debuff square",
 		"bars stack on|off, whether the client spaces plates by the size of our bar",
+		"bars distance <20-60>|off, how many yards out a plate goes up",
+		"bars fade on|off, whether a bar ramps in and out or simply appears",
 		"skin on|off, the square player, target and target of target frames",
 		"skin player|target|tot on|off, one frame at a time",
 		"skin height <18-72>, skin width <90-360>, both in screen pixels",
@@ -814,6 +864,8 @@ ns.Register({
 				ns.HasThreat() and "" or ", no threat api so colour is who each mob is hitting",
 				ns.UI.Describe(), ns.Plates.Describe(), ns.UI.FontName(),
 				ns.FrameSkin.Describe())
+			.. ("; %s; bars %s in and out"):format(ns.Plates.DescribeDistance(),
+				ns.db.barsFade and "ramp" or "do not ramp")
 			.. ("; debuffs at %dpx: %s"):format(ns.db.barsIconSize, ns.EnemyBars.DescribeSpells())
 			.. ("; cast bar %s"):format(ns.Cast.Describe())
 			.. ("; %s"):format(ns.FrameAuras.Describe())

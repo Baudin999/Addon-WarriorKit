@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+### Enemy bars arrive sooner, arrive smoothly, and take a click along their whole length
+
+Three things about the bars on mobs, and all three are the same complaint: the
+bar is an instrument you read at pull range, and it was behaving like one that
+only worked once the fight had started.
+
+**Further out.** `bars distance` is `nameplateMaxDistance`, borrowed the way
+`bars stack` borrows `nameplateMotion`, and it ships at 41. A bar is drawn on a
+nameplate, so the range the bars work at is that CVar's and nothing else's, and
+whatever the client was holding is handed back when the setting goes off. The
+client clamps to a ceiling of its own without saying so, so the panel and
+`/wk status` read the CVar back rather than repeating the number you asked for.
+
+**In and out rather than on and off.** A plate goes up and comes down in one
+frame, and fifteen bars blinking on at a pull reads as a fault rather than as
+mobs coming into range. A bar ramps in over 0.15s and out over 0.22s, the out
+slower on purpose: arriving is information you want now, leaving is a bar you
+have already read. The ramp multiplies the alpha that says which bar is yours
+instead of replacing it, so a bar half arrived that is not your target is dim
+and half arrived at once.
+
+A bar on its way out comes off the plate first and holds its own place on the
+screen, because the client hides a plate the moment its mob is gone and a child
+of a hidden frame does not draw whatever its alpha says. The held position is
+snapped to a whole pixel, since it came off a plate and a plate's origin is
+wherever the mob was standing. `bars fade off` puts back the old behaviour
+exactly.
+
+**Clickable along the whole bar.** The frame the game hit-tests is the plate's
+own, our bar is drawn over it and takes no mouse of its own, and the plate was
+being sized to the bar's height. That is the wrong figure: the bar hangs off the
+plate's centre by its gauge, and more of it is above that centre than below,
+because the debuff row and the threat line are up there and only the cast
+chamber is down. So the middle of a bar targeted and the ends did nothing. The
+figure sent now is the smallest box centred where the plate is that holds the
+whole bar, which costs a little spacing and buys a bar that targets anywhere.
+
+The plate's size also came off `bars stack`, which was one switch over two jobs.
+Spacing is what that setting is; the click is not, and it is applied whenever the
+bars are drawn on plates.
+
 ### Every tooltip is one size
 
 The box took its zoom from whatever you hovered. That was a deliberate rule and

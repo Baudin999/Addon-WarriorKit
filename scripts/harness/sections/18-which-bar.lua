@@ -69,5 +69,61 @@ Tick()
 print(("alpha  yours %.2f, theirs %.2f, and every bar %.2f with nothing targeted")
 	:format(Alpha("nameplate1"), Alpha("nameplate2"), 1))
 
+--------------------------------------------------------------------------
+-- Arriving and leaving
+--
+-- The ramp is a second thing riding on the same channel, so it is checked here
+-- rather than somewhere of its own: what has to hold is that the two multiply.
+-- A bar halfway in that is not your target is dim and half arrived at once, and
+-- a refactor that let either one overwrite the other would still pass every
+-- check above.
+--------------------------------------------------------------------------
+
+guids.target = nil
+local frame = 1 / 60
+
+-- Leaving first, because nameplate1 is up and taking it down is the state the
+-- ramp exists for: the client hides a plate the moment its mob is gone, so a
+-- bar still fading has to be off that plate and holding its own place on the
+-- screen or the tail is invisible whatever its alpha says.
+local leaving = ns.EnemyBars.WidgetFor("nameplate1")
+fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
+check(ns.EnemyBars.WidgetFor("nameplate1") == nil,
+	"the bar is still attached to a plate that is gone")
+check(leaving:IsShown() and leaving:GetAlpha() > 0, "the bar went out in one frame")
+check(leaving:GetParent() == _G.UIParent,
+	"a fading bar is still a child of the plate it is leaving")
+for _ = 1, 4 do
+	barTicker.scripts.OnUpdate(barTicker, frame)
+end
+check(leaving:GetAlpha() < 1 and leaving:GetAlpha() > 0,
+	("four frames out, a bar leaving is at %.2f"):format(leaving:GetAlpha()))
+Tick()
+Tick()
+check(not leaving:IsShown(), "a bar leaving never finished")
+
+-- And arriving, which is the same plate coming back.
+fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
+check(Alpha("nameplate1") == 0, "a bar arrived at full alpha instead of from nothing")
+for _ = 1, 4 do
+	barTicker.scripts.OnUpdate(barTicker, frame)
+end
+local arriving = Alpha("nameplate1")
+check(arriving > 0 and arriving < 1,
+	("four frames in, a bar arriving is at %.2f and should be between the two"):format(arriving))
+Tick()
+check(Alpha("nameplate1") == 1, "a bar never finished arriving")
+
+-- Off has to mean off rather than fast: a plate arriving is a bar at full
+-- alpha on the frame it arrives, which is what the bars did before the ramp.
+ns.db.barsFade = false
+fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
+fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
+check(Alpha("nameplate1") == 1, "with the ramp off a bar still arrived from nothing")
+ns.db.barsFade = true
+
+print(("ramp   four frames in is %.2f, out is off the plate and holding its place, off is full on the frame")
+	:format(arriving))
+
 _G.UnitIsUnit = realIsUnit
 guids.target = nil

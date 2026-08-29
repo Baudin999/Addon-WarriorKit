@@ -249,7 +249,10 @@ UnitFrames/EnemyBars.lua:Record
 UnitFrames/EnemyBars.lua:ThreatState
 UnitFrames/EnemyBars.lua:ScanDebuffs
 UnitFrames/EnemyBars.lua:DrawDebuffs
+UnitFrames/EnemyBars.lua:PaintAlpha
 UnitFrames/EnemyBars.lua:UpdateWidget
+UnitFrames/EnemyBars.lua:StartFade
+UnitFrames/EnemyBars.lua:Fades
 UnitFrames/EnemyBars.lua:UpdateList
 UnitFrames/EnemyBars.lua:EnemyBars.Sweep
 UnitFrames/Cast.lua:Cast.Seconds
