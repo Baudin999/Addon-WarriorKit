@@ -974,8 +974,8 @@ function UI.List(parent, opts)
 	-- macro and from scripts/harness.lua, and the alternative is the file that
 	-- owns it handing out a reference to its own tables.
 	list.frame = CreateFrame("Frame", opts and opts.name, parent)
-	local bg = ns.Fill(list.frame, "BACKGROUND", C.rail[1], C.rail[2], C.rail[3], 1)
-	bg:SetAllPoints()
+	list.bg = ns.Fill(list.frame, "BACKGROUND", C.rail[1], C.rail[2], C.rail[3], 1)
+	list.bg:SetAllPoints()
 
 	list.view = UI.ScrollView(list.frame, { overlay = list.icons })
 	list.view.frame:SetPoint("TOPLEFT", M.rowGap, -M.rowGap)
@@ -997,7 +997,18 @@ local function IconRow(button)
 	button.icon:SetSize(M.roomIcon, M.roomIcon)
 	button.icon:SetPoint("CENTER")
 
-	button.badgeBg = ns.Fill(button, "OVERLAY", C.shadow[1], C.shadow[2], C.shadow[3], 0.85)
+	-- The chip the count stands on, opaque and a rectangle of its own.
+	--
+	-- Both of those were different and both were wrong. It was a 55% black
+	-- pinned to the two corners of the string, which is a chip that darkens
+	-- whatever is behind the number rather than replacing it, and takes its
+	-- shape from a string that has not been measured yet. That was survivable
+	-- while the row behind it was opaque; it stopped being survivable when the
+	-- row learned to fade, because then the thing behind the number is the
+	-- world. A count is the whole of the alert design in this window and it has
+	-- to be legible at every stop of the opacity slider, so it gets a surface
+	-- the slider does not reach.
+	button.badgeBg = ns.Fill(button, "OVERLAY", C.sunken[1], C.sunken[2], C.sunken[3], 1)
 	-- A size under the one a word row's count is drawn at, because this one is
 	-- not beside the row's text but in the corner of a fourteen pixel picture,
 	-- and a number as tall as three quarters of the icon is a badge with an
@@ -1005,8 +1016,9 @@ local function IconRow(button)
 	button.badge:SetFontObject(UI.Font(M.glyph, UI.FLAT))
 	button.badge:ClearAllPoints()
 	button.badge:SetPoint("BOTTOMRIGHT", button.icon, "BOTTOMRIGHT", 1, -1)
-	button.badgeBg:SetPoint("TOPLEFT", button.badge, "TOPLEFT", -1, 1)
-	button.badgeBg:SetPoint("BOTTOMRIGHT", button.badge, "BOTTOMRIGHT", 1, -1)
+	button.badgeBg:SetPoint("LEFT", button.badge, "LEFT", -1, 0)
+	button.badgeBg:SetPoint("RIGHT", button.badge, "RIGHT", 1, 0)
+	button.badgeBg:SetHeight(M.glyph + 2)
 	button.badgeBg:Hide()
 
 	-- A header is a hairline across the column with air either side of it. It is
@@ -1071,6 +1083,11 @@ local function ListRow(list, index)
 	if list.icons then
 		IconRow(button)
 	end
+
+	-- A row made after the column was faded takes the fraction with it. A pool
+	-- fills as the column grows, so the alternative is a rail whose first ten
+	-- rows are transparent and whose eleventh is black.
+	UI.Fade(button.bg, list.opacity)
 
 	list.pool[index] = button
 	return button
@@ -1168,6 +1185,29 @@ end
 -- inside a thirty pixel rail did.
 function List:RowWidth()
 	return self.stack.width or 0
+end
+
+-- How opaque the column is drawn, as a fraction of its own colours.
+--
+-- The chat window is what asks and its rail is what made this necessary. The
+-- window's background takes an opacity setting and the rail did not, so a
+-- window the player had made transparent was a black column with a pane of
+-- glass beside it. Every surface in the column takes the fraction: the strip
+-- behind the rows, each row's own shade, and the bar down the side of it.
+--
+-- The pictures, the counts and the accent mark against the selected room are
+-- left alone. Those are what you read the column by, and a rail you can see
+-- through is not the same request as a rail you cannot read.
+function List:SetOpacity(fraction)
+	self.opacity = fraction
+	UI.Tint(UI.Fade(self.bg, fraction), C.rail)
+	for index = 1, #self.pool do
+		local button = self.pool[index]
+		UI.Fade(button.bg, fraction)
+		PaintListRow(button)
+	end
+	UI.FadeBar(self.view.bar, fraction)
+	return true
 end
 
 function List:Resize(width, height)

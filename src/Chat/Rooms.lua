@@ -192,12 +192,72 @@ local speaker = {}
 Rooms.OnClose = nil
 
 --------------------------------------------------------------------------
+-- Reading an id
+--
+-- A room id is either the name of a fixed room or one of two prefixes and a
+-- key. Four functions below used to spell that out for themselves, each with
+-- its own `id:sub(1, 6) == "group:"` and its own loop over the whispers, and
+-- the prefix was written as a literal in nine places. One reader, so the shape
+-- of an id is decided once.
+--------------------------------------------------------------------------
+
+local GROUP, WHISPER = "group:", "whisper:"
+
+-- The fixed room, or nil where the id names one of yours.
+local function Fixed(id)
+	return byId[id]
+end
+
+-- The key after a prefix, or nil where the id is not that kind.
+local function Keyed(id, prefix)
+	if type(id) ~= "string" or id:sub(1, #prefix) ~= prefix then
+		return nil
+	end
+	return id:sub(#prefix + 1)
+end
+
+-- The conversation this id names, by the key in it.
+local function Whispered(id)
+	local key = Keyed(id, WHISPER)
+	if not key then
+		return nil
+	end
+	for _, entry in ipairs(whispers) do
+		if entry.key == key then
+			return entry
+		end
+	end
+	return nil
+end
+
+-- The group this id names, and where it sits, because a group's name is read
+-- off its position rather than off the group itself.
+local function Grouped(id)
+	local key = Keyed(id, GROUP)
+	if not key then
+		return nil
+	end
+	for position, group in ipairs(ns.People.All()) do
+		if group.key == key then
+			return group, position
+		end
+	end
+	return nil
+end
+
+-- Whether this id names one of your groups. Asked by the window, which plays a
+-- sound for a line in a group you are not already reading.
+function Rooms.IsGroup(id)
+	return Keyed(id, GROUP) ~= nil
+end
+
+--------------------------------------------------------------------------
 -- Whisper rooms
 --------------------------------------------------------------------------
 
 function Rooms.WhisperId(name)
 	local key = ns.People.Key(name)
-	return key and ("whisper:" .. key) or nil
+	return key and (WHISPER .. key) or nil
 end
 
 -- The room for a conversation with one person, made if this is the first thing
@@ -215,20 +275,20 @@ function Rooms.Whisper(name)
 			entry.name = name
 			table.remove(whispers, at)
 			table.insert(whispers, 1, entry)
-			return "whisper:" .. key
+			return WHISPER .. key
 		end
 	end
 
 	table.insert(whispers, 1, { key = key, name = name })
 	while #whispers > WHISPERS do
 		local dropped = table.remove(whispers)
-		local id = "whisper:" .. dropped.key
+		local id = WHISPER .. dropped.key
 		unread[id], speaker[id] = nil, nil
 		if Rooms.OnClose then
 			Rooms.OnClose(id)
 		end
 	end
-	return "whisper:" .. key
+	return WHISPER .. key
 end
 
 -- Who /r answers: the person at the front of that list, which is whoever last
@@ -269,7 +329,7 @@ function Rooms.Route(room, who, whisper)
 	local groups = who and ns.People.Match(who)
 	if groups then
 		for _, group in ipairs(groups) do
-			local id = "group:" .. group.key
+			local id = GROUP .. group.key
 			out[#out + 1] = id
 			speaker[id] = who
 		end
@@ -302,14 +362,14 @@ end
 
 local function AddGroups(rows)
 	for position, group in ipairs(ns.People.All()) do
-		Add(rows, "group:" .. group.key, ns.People.Name(position), "Groups",
+		Add(rows, GROUP .. group.key, ns.People.Name(position), "Groups",
 			Rooms.ICONS.group)
 	end
 end
 
 local function AddWhispers(rows)
 	for _, entry in ipairs(whispers) do
-		Add(rows, "whisper:" .. entry.key, entry.name:gsub("%-.*$", ""), "Whispers",
+		Add(rows, WHISPER .. entry.key, entry.name:gsub("%-.*$", ""), "Whispers",
 			Rooms.ICONS.whisper)
 	end
 end
@@ -337,53 +397,41 @@ end
 -- and then leaving the party has to move you somewhere rather than leave you
 -- typing into nothing.
 function Rooms.Exists(id)
-	local fixed = byId[id]
+	local fixed = Fixed(id)
 	if fixed then
 		return fixed.live() or (unread[id] or 0) > 0
 	end
-	for _, group in ipairs(ns.People.All()) do
-		if id == "group:" .. group.key then
-			return true
-		end
-	end
-	for _, entry in ipairs(whispers) do
-		if id == "whisper:" .. entry.key then
-			return true
-		end
-	end
-	return false
+	return (Grouped(id) or Whispered(id)) ~= nil
 end
 
 -- The picture for one room, by id. The rail asks through Rooms.List; this is
 -- for anything holding an id on its own, which is the window's hover.
 function Rooms.Icon(id)
-	local fixed = byId[id]
+	local fixed = Fixed(id)
 	if fixed then
 		return fixed.icon
 	end
-	if type(id) == "string" and id:sub(1, 6) == "group:" then
+	if Keyed(id, GROUP) then
 		return Rooms.ICONS.group
 	end
-	if type(id) == "string" and id:sub(1, 8) == "whisper:" then
+	if Keyed(id, WHISPER) then
 		return Rooms.ICONS.whisper
 	end
 	return Rooms.ICONS.all
 end
 
 function Rooms.Title(id)
-	local fixed = byId[id]
+	local fixed = Fixed(id)
 	if fixed then
 		return fixed.label
 	end
-	for position, group in ipairs(ns.People.All()) do
-		if id == "group:" .. group.key then
-			return ns.People.Name(position)
-		end
+	local _, position = Grouped(id)
+	if position then
+		return ns.People.Name(position)
 	end
-	for _, entry in ipairs(whispers) do
-		if id == "whisper:" .. entry.key then
-			return entry.name:gsub("%-.*$", "")
-		end
+	local entry = Whispered(id)
+	if entry then
+		return (entry.name:gsub("%-.*$", ""))
 	end
 	return "chat"
 end
@@ -415,21 +463,76 @@ local function GroupTarget(id)
 end
 
 function Rooms.Target(id)
-	local fixed = byId[id]
+	local fixed = Fixed(id)
 	if fixed then
 		return fixed.kind, nil
 	end
-	if type(id) == "string" and id:sub(1, 8) == "whisper:" then
-		for _, entry in ipairs(whispers) do
-			if id == "whisper:" .. entry.key then
-				return "WHISPER", entry.name
-			end
-		end
+	local entry = Whispered(id)
+	if entry then
+		return "WHISPER", entry.name
 	end
-	if type(id) == "string" and id:sub(1, 6) == "group:" then
+	if Keyed(id, GROUP) then
 		return GroupTarget(id)
 	end
 	return "SAY", nil
+end
+
+--------------------------------------------------------------------------
+-- The other direction: which room a channel is
+--
+-- Rooms.Target answers where a line typed in this room goes. This answers the
+-- reverse, and the reverse is a real question because the field is the state.
+-- Typing `/p` into the line does not leave `/p` in it: the client reads the
+-- slash, sets the field's channel from it and takes the slash back out. So a
+-- player who types `/p` has chosen the party room by the only means the design
+-- offers, and without this the rail went on saying Conversation, the room's own
+-- slash was written back over theirs the next time the line opened, and the two
+-- halves of "what you are reading is what you are typing into" had come apart.
+--
+-- More kinds than there are rooms, because Say carries yells and emotes and the
+-- guild room carries officer chat. Those are the same conversation and splitting
+-- them would be rooms that are empty all evening.
+--------------------------------------------------------------------------
+
+local ROOM_FOR = {
+	SAY = "say", YELL = "say", EMOTE = "say",
+	PARTY = "party", PARTY_LEADER = "party",
+	RAID = "raid", RAID_LEADER = "raid", RAID_WARNING = "raid",
+	INSTANCE_CHAT = "instance", INSTANCE_CHAT_LEADER = "instance",
+	GUILD = "guild", OFFICER = "guild",
+}
+
+function Rooms.For(kind, target)
+	if kind == "WHISPER" then
+		-- Only a conversation that is already on the rail. The name arrives one
+		-- letter at a time while somebody types `/w Aria`, and a room made off
+		-- each of them is a rail filling with Ar and Ari.
+		local id = target and Rooms.WhisperId(target)
+		return (id and Whispered(id)) and id or nil
+	end
+	return ROOM_FOR[kind]
+end
+
+-- The room you would be talking in, or nil where that is nobody in particular.
+--
+-- What this is for is the moment you join a party. The rail grows a party room,
+-- nothing selects it, and the first thing you type goes to say in front of the
+-- two strangers standing beside you. The window moves itself on this, and only
+-- ever out of Conversation: a room you picked is a room you picked.
+--
+-- The order is narrowest first. In a dungeon group the channel everybody is
+-- reading is the instance one, and in a raid it is the raid, and both of those
+-- are live at the same time as party.
+local TALKING = { "instance", "raid", "party" }
+
+function Rooms.Talking()
+	for _, id in ipairs(TALKING) do
+		local room = byId[id]
+		if room and room.live() then
+			return id
+		end
+	end
+	return nil
 end
 
 --------------------------------------------------------------------------
@@ -481,7 +584,7 @@ end
 -- conversation from before the reload.
 function Rooms.Wipe()
 	for _, entry in ipairs(whispers) do
-		local id = "whisper:" .. entry.key
+		local id = WHISPER .. entry.key
 		if Rooms.OnClose then
 			Rooms.OnClose(id)
 		end

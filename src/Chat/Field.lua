@@ -97,9 +97,16 @@ Field.OnFill = nil
 -- the rectangle round the line on this and hides the sentence in it.
 Field.OnLight = nil
 
--- The text moving, called with what is in the field. The window shows and hides
--- the sentence behind it on this.
-Field.OnType = nil
+-- Where the client now thinks the line is going, called with the channel and
+-- the person when that channel is a whisper.
+--
+-- This is the only way to see that the player has changed channel by hand.
+-- Typing `/p ` into this frame does not leave `/p ` in it: the client's own
+-- OnTextChanged reads the slash, writes the channel onto two attributes of the
+-- frame and takes the slash back out. So the text says nothing a moment later
+-- and the attributes say everything, and the window follows them into the room
+-- that channel belongs to.
+Field.OnChannel = nil
 
 -- Tab, which steps the window to the next room. Under the client's own handler
 -- rather than instead of it, because the client cycles the field's chat type on
@@ -169,6 +176,46 @@ local function Opened(box, userInput)
 	end
 	waiting = false
 	Fill(box)
+end
+
+--------------------------------------------------------------------------
+-- Which channel the line is on
+--
+-- Read back off the frame rather than off the text, for the reason
+-- Field.OnChannel says: the slash is gone by the time anything of ours runs.
+--
+-- Both spellings of the target, because the client keeps two. A whisper is
+-- addressed through `tellTarget` and a numbered channel through
+-- `channelTarget`, and reading only the second gives every whisper a nil name,
+-- which is a room nobody can be sent to.
+--------------------------------------------------------------------------
+
+local function Channel(box)
+	local kind = box:GetAttribute("chatType")
+	local target = box:GetAttribute("tellTarget") or box:GetAttribute("channelTarget")
+	return type(kind) == "string" and kind or nil,
+		(type(target) == "string" and target ~= "") and target or nil
+end
+
+-- What each field was last seen on, so a keystroke that does not move the
+-- channel costs one string compare rather than a trip into the window.
+local channel = {}
+
+local function Moved(box)
+	local kind, target = Channel(box)
+	local key = tostring(kind) .. "/" .. tostring(target)
+	if channel[box] == key then
+		return false
+	end
+	channel[box] = key
+	-- Not while we are the ones writing. Filling the line in with the room's own
+	-- slash moves the channel to the room the window is already in, and calling
+	-- out on that would be the window telling itself where it is.
+	if filling or not kind then
+		return false
+	end
+	Call(Field.OnChannel, kind, target)
+	return true
 end
 
 --------------------------------------------------------------------------
@@ -353,12 +400,12 @@ end
 local styled = {}
 
 local function Restyle(box, name)
-	local channel = tostring(box:GetAttribute("chatType"))
-		.. "/" .. tostring(box:GetAttribute("channelTarget")) .. "/" .. size
-	if styled[box] == channel then
+	local kind, target = Channel(box)
+	local key = ("%s/%s/%s"):format(tostring(kind), tostring(target), tostring(size))
+	if styled[box] == key then
 		return false
 	end
-	styled[box] = channel
+	styled[box] = key
 	Style(box, name)
 	return true
 end
@@ -418,7 +465,7 @@ local function Dress(box, name)
 		-- move it, and the header changes width with it. A comparison rather
 		-- than a restyle, so an ordinary character costs one string compare.
 		Restyle(self, name)
-		Call(Field.OnType, self:GetText() or "")
+		Moved(self)
 	end)
 	box:HookScript("OnTabPressed", function()
 		Call(Field.OnTab)

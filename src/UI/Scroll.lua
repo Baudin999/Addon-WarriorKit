@@ -132,6 +132,23 @@ function UI.ScrollBar(parent, onValue)
 	return slider
 end
 
+-- The bar, drawn at a fraction of its own alpha.
+--
+-- Its own function rather than two UI.Fade calls at each site, because the two
+-- colours are this file's: the track is sunken and the thumb is an edge, and a
+-- caller that wanted to fade them would have to know both and would go on
+-- knowing them after the palette moved. See UI.Fade in UI/Theme.lua for why the
+-- fraction is kept on the texture.
+function UI.FadeBar(bar, fraction)
+	if not bar or not bar.track or not bar.thumb then
+		return false
+	end
+	local C = UI.Color
+	UI.Tint(UI.Fade(bar.track, fraction), C.sunken)
+	UI.Tint(UI.Fade(bar.thumb, fraction), C.edge)
+	return true
+end
+
 local function Bar(view, parent)
 	return UI.ScrollBar(parent, function(_, value)
 		-- Refresh writes the value back when the extent changes, and that write

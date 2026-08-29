@@ -70,6 +70,24 @@ check(_G.WarriorKitChatRooms:GetHeight() == ns.db.chatHeight - M.entry - M.roomR
 		.. "voice button in the rail's column")
 		:format(tostring(_G.WarriorKitChatRooms:GetHeight()), ns.db.chatHeight))
 
+-- Every surface in the window at the one opacity, and not only the sheet
+-- behind it. The rail was painted at its own full alpha over a background the
+-- player can drag to nothing, so a window at eighty percent was a pane of glass
+-- with a solid black column down the side of it.
+do
+	local strip = _G.WarriorKitChatRooms.regions[1]
+	local held = ns.db.chatAlpha
+	ns.db.chatAlpha = 50
+	Window.Apply()
+	check(strip.a ~= nil and math.abs(strip.a - 0.5) < 1e-6,
+		("the rail is drawn at alpha %s in a window set to half"):format(tostring(strip.a)))
+	ns.db.chatAlpha = held
+	Window.Apply()
+	check(math.abs((strip.a or 0) - held / 100) < 1e-6,
+		("the rail stayed at alpha %s when the setting went back to %d")
+			:format(tostring(strip.a), held))
+end
+
 ----------------------------------------------------------------------
 -- Which rooms exist
 --
@@ -97,6 +115,11 @@ group.Set(PARTY)
 fire("GROUP_ROSTER_UPDATE")
 check(Window.Rooms() == 4, ("%d rooms in a party, expected a party room to appear")
 	:format(Window.Rooms()))
+-- And the window is in it without anybody pressing anything. Conversation types
+-- into say, so a party room nothing selected meant the first line you typed
+-- after joining went to the two strangers standing beside you.
+check(Window.Room() == "party",
+	("joining a party left the window in %s"):format(tostring(Window.Room())))
 check(Window.Go("party"), "the party room could not be selected")
 
 group.Set(PARTY, true)
@@ -267,6 +290,32 @@ do
 	fire("CHAT_MSG_WHISPER", "hello", "Aria", nil, nil, nil, nil, nil, nil, nil, nil, nil, "P2")
 	check(Window.Held() == recycled + 2,
 		"a new conversation did not reuse the log the old one gave back")
+end
+
+----------------------------------------------------------------------
+-- The first line in the room you are already reading
+--
+-- A room's log is made by the first line that lands in it, and that is after
+-- Show picked the room and hid every log there was. Made hidden, the room you
+-- were sitting in drew nothing: the line went into the buffer, the count went
+-- up against its own name, and the window stayed blank until you stepped to
+-- another room and back. The first thing you ever say to somebody is the case,
+-- every time, and nothing that reads a line or a count can see it.
+----------------------------------------------------------------------
+
+do
+	Window.Reply("Newcomer")
+	local room = Rooms.WhisperId("Newcomer")
+	check(Window.Room() == room,
+		("answering somebody new landed in %s"):format(tostring(Window.Room())))
+	check(Window.Count(room) == 0, "the room held a line before either of you spoke")
+
+	fire("CHAT_MSG_WHISPER_INFORM", "hello", "Newcomer")
+	check(Window.Count(room) == 1, "the whisper did not reach the room it opened")
+	check(Window.Drawn(room),
+		"the first line in the room you are reading went into a log nothing ever showed")
+
+	_G.ChatEdit_DeactivateChat(Window.Entry())
 end
 
 ----------------------------------------------------------------------
@@ -588,6 +637,40 @@ do
 		"a slash command was not handed to the client's own parser")
 	check(#chat.sent == quiet, "a slash command was also sent as a chat message")
 
+
+	-- Typing a slash is choosing a room, and the window follows it.
+	--
+	-- This is the half of "what you are reading is what you are typing into"
+	-- that was missing. Typing `/p` does not leave `/p` in the line: the client
+	-- reads the slash, writes the channel onto the field and takes the slash
+	-- back out, so the field is the only record of the choice. The window went
+	-- on saying Conversation, and the next time the line opened it wrote
+	-- Conversation's own slash over what the player had picked.
+	Window.Go(Rooms.ALL)
+	Window.Follow("PARTY")
+	check(Window.Room() == "party",
+		("/p from Conversation left the window in %s"):format(tostring(Window.Room())))
+	Window.Follow("SAY")
+	check(Window.Room() == "say",
+		("/s from the party room left the window in %s"):format(tostring(Window.Room())))
+
+	-- And a channel the room already types into moves nothing. Conversation
+	-- types into say, and so does the fill that puts `/s ` in the line, so a
+	-- window that followed every channel would march itself out of Conversation
+	-- the moment anybody opened the field.
+	Window.Go(Rooms.ALL)
+	Window.Follow("SAY")
+	check(Window.Room() == Rooms.ALL,
+		("opening the line in Conversation moved the window to %s")
+			:format(tostring(Window.Room())))
+
+	-- A channel with no room on the rail moves nothing either, which is a
+	-- whisper to somebody you have not spoken to: a room made out of half a
+	-- name is a rail filling up while you are still spelling it.
+	Window.Follow("WHISPER", "Nob")
+	check(Window.Room() == Rooms.ALL,
+		("half a name typed into the line opened a room and went to %s")
+			:format(tostring(Window.Room())))
 
 	-- Tab steps to the next room and rewrites the slash in front of the cursor,
 	-- which is the same key that cycled the channel in the window this replaced

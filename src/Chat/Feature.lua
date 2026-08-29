@@ -16,6 +16,17 @@ local WIDTH_LOW, WIDTH_HIGH, WIDTH_STEP = 320, 900, 10
 local HEIGHT_LOW, HEIGHT_HIGH, HEIGHT_STEP = 140, 700, 10
 local FONT_LOW, FONT_HIGH = 9, 20
 
+-- "1x", "1.25x", "2.5x". Two decimal places with the dead zeros taken off. The
+-- range and the stops are Chat/Window.lua's, because the clamp there is what
+-- the window will actually honour and a control that offered a stop the clamp
+-- refuses would do nothing at one end of its own travel.
+local function ScaleLabel(value)
+	local text = ("%.2f"):format(tonumber(value) or 1)
+	text = (text:gsub("0+$", ""))
+	text = (text:gsub("%.$", ""))
+	return text .. "x"
+end
+
 local function SetChat(value)
 	ns.db.chat = value
 	if value then
@@ -419,6 +430,19 @@ ns.Register({
 		-- still there for anyone who wants the window bigger.
 		chatWidth = 400,
 		chatHeight = 210,
+		-- How big this window is drawn, and its own rather than the addon-wide
+		-- size on the settings page.
+		--
+		-- Every other window in the addon is something you open, read and shut,
+		-- and one number for all of them is right. This one is up while you
+		-- play: it sits beside the game all evening, and how big you want it
+		-- there is a different question from how big you want a settings panel.
+		-- A player who had sized the interface up found the conversation had
+		-- gone up with it and there was nothing to say otherwise.
+		--
+		-- The screen's own whole step is still underneath this, because that
+		-- one is not a preference. See ChatWindow.Zoom.
+		chatScale = 1,
 		-- One under the interface's body size. The log is a wall of text read
 		-- from the corner of the eye rather than a label you aim at, and a
 		-- point off it buys another line of what somebody said in the same
@@ -516,10 +540,15 @@ ns.Register({
 		ui.Size("text size", FONT_LOW, FONT_HIGH, 1,
 			function() return ns.db.chatFont end,
 			function(value) Redraw("chatFont", value) end)
+		ui.Stepper("scale", ns.ChatWindow.SCALE_LOW, ns.ChatWindow.SCALE_HIGH,
+			ns.ChatWindow.SCALE_STEP,
+			function() return ns.db.chatScale end,
+			function(value) Redraw("chatScale", value) end,
+			ScaleLabel)
+		ui.Hint("This window alone. The size on the settings page moves every other window in the addon and leaves this one where you put it.")
 		ui.Opacity("background",
 			function() return ns.db.chatAlpha end,
 			function(value) Redraw("chatAlpha", value) end)
-		ui.Hint("There is no drag handle on the corner: resizing on the mouse means reflowing every wrapped line on every mouse move, and two steppers say the same thing exactly.")
 
 		ui.Action(function()
 			return ns.ChatWindow.Built() and "open the chat window" or "not built yet"

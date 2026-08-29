@@ -159,8 +159,29 @@ UI.Metric = {
 	glyph    = 10,
 }
 
+-- How much of its own alpha a surface is drawn at, kept on the texture rather
+-- than passed at every site.
+--
+-- A window the player has made transparent has to be transparent the whole way
+-- through. The chat window is the case: its background takes the opacity
+-- setting and the rail, the scroll bar and the button at the foot of the rail
+-- were drawn at their own opaque alpha over it, so a window at twenty percent
+-- was a pane of glass with three black rectangles floating on it.
+--
+-- The fraction cannot be an argument to UI.Tint, because most of the calls to
+-- it are repaints: a row of the rail is retinted on the way past with the
+-- cursor and on selection, a button on hover, and a site that forgot to pass
+-- the fraction would paint the surface solid again on the first mouse move. So
+-- it is a property of the texture, written once by whoever owns the window and
+-- read by every repaint after it.
+function UI.Fade(texture, fraction)
+	texture.fade = fraction
+	return texture
+end
+
 function UI.Tint(texture, color)
-	texture:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
+	texture:SetColorTexture(color[1], color[2], color[3],
+		(color[4] or 1) * (texture.fade or 1))
 	return texture
 end
 

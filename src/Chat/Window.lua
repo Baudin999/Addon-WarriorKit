@@ -171,7 +171,15 @@ local function LogFor(id)
 	-- the first line that lands in it and that is usually long after the window
 	-- was laid out.
 	Place(log)
-	log.frame:Hide()
+	log:SetOpacity(ns.db.chatAlpha / 100)
+	-- Shown when it belongs to the room you are already reading, and that is not
+	-- a nicety. A log is made by the first line that lands in its room, which is
+	-- after Show picked that room and hid every log there was. Hiding it here as
+	-- well meant the room you were sitting in drew nothing: you whispered
+	-- somebody, the rail said one line had arrived, the log held it, and the
+	-- window was blank until you stepped to another room and back. The first
+	-- thing you say to anybody is the case, every time.
+	log.frame:SetShown(id == active)
 	logs[id] = log
 	return log
 end
@@ -276,6 +284,37 @@ local function Voicing()
 	}
 end
 
+-- Which room the last automatic move landed on.
+--
+-- Held so that joining a party moves you into it once and a roster tick five
+-- minutes later does not move you back out of the room you chose in the
+-- meantime. Leaving the group puts this back to nothing, so rejoining moves you
+-- again.
+local followed
+
+-- Into the room you would be talking in, when you have not said otherwise.
+--
+-- The case is joining a party. The rail grows a party room, nothing selects it,
+-- and the first line you type goes to say in front of the two strangers
+-- standing beside you, because Conversation types into say. That is the one
+-- place this window made you press something to get what it had just worked
+-- out for itself.
+--
+-- Only out of Conversation, which is the room nobody chose. A player sitting in
+-- their guild or in a whisper picked that, and a window that moved them out of
+-- it on a roster change would be worse than the thing it fixes.
+local function Joined()
+	local want = ns.Rooms.Talking()
+	if want == followed then
+		return false
+	end
+	followed = want
+	if not want or active ~= ns.Rooms.ALL then
+		return false
+	end
+	return ChatWindow.Go(want)
+end
+
 local function Refresh()
 	local rows = ns.Rooms.List()
 	rail:Set(rows)
@@ -284,6 +323,7 @@ local function Refresh()
 		-- a party looks like from here. Everything is where a line always is.
 		Show(ns.Rooms.ALL)
 	end
+	Joined()
 	rail:Select(active)
 	Paint()
 	Lit()
@@ -304,8 +344,7 @@ local function Sound(important)
 	-- Only while you are not already looking at one of your groups. A sound for
 	-- a line you are watching arrive is a sound you turn off, and then you have
 	-- no sound for the one you miss.
-	local watching = window and window:IsShown() and type(active) == "string"
-		and active:sub(1, 6) == "group:"
+	local watching = window and window:IsShown() and ns.Rooms.IsGroup(active)
 	if watching then
 		return false
 	end
@@ -361,6 +400,44 @@ local function OnLine(rooms, text, r, g, b, important)
 end
 
 --------------------------------------------------------------------------
+-- How big it is drawn
+--
+-- Its own zoom, off its own setting, and not UI.WindowZoom.
+--
+-- Every other window in the addon is something you open, read and shut, so one
+-- size for all of them is right: the slider on the settings page says how big
+-- this addon looks to you and they all take it. The chat window is the one that
+-- is up while you play. It sits in a corner beside the game all evening and how
+-- big you want it there has nothing to do with how big you want a settings
+-- panel you have open for a minute, which is why a player who had sized the
+-- rest of the interface up found the conversation had gone with it.
+--
+-- The screen's own whole step is still in it, because that step is not a
+-- preference: it is what keeps a 21 pixel row from being half a row on a 4K
+-- panel. What is left out is UI.Size, and the setting below stands in its place
+-- for this window alone.
+--------------------------------------------------------------------------
+
+-- The range and the stops, here rather than beside the control that offers
+-- them. The clamp below is what the window will actually honour, and a panel
+-- that offered a stop this refused would be a control that does nothing at one
+-- end of its own travel.
+ChatWindow.SCALE_LOW, ChatWindow.SCALE_HIGH, ChatWindow.SCALE_STEP = 0.5, 3, 0.25
+
+-- Clamped rather than trusted, the same as the addon-wide size is: a file
+-- edited by hand can hold a nought, and a nought here is SetScale(0), which is
+-- a window with no pixels in it and nothing anywhere saying why.
+function ChatWindow.Zoom()
+	local scale = tonumber(ns.db.chatScale) or 1
+	if scale < ChatWindow.SCALE_LOW then
+		scale = ChatWindow.SCALE_LOW
+	elseif scale > ChatWindow.SCALE_HIGH then
+		scale = ChatWindow.SCALE_HIGH
+	end
+	return UI.ScreenZoom() * scale
+end
+
+--------------------------------------------------------------------------
 -- Layout
 --
 -- One function that places everything, run when the window is built, when a
@@ -404,6 +481,13 @@ local function Relayout()
 	end
 
 	local db = ns.db
+	-- Before the measurements, because every number below is in the window's own
+	-- units and the zoom is what decides how big one of those is. Rezoom answers
+	-- false when nothing moved, so a layout run for any other reason costs one
+	-- comparison.
+	local zoom = ChatWindow.Zoom()
+	UI.Rezoom(window.frame, zoom)
+	window.zoom = zoom
 	window:Resize(db.chatWidth, db.chatHeight)
 	local px = ns.Pixel(window.frame)
 	local body = window:Body()
@@ -459,7 +543,25 @@ local function Relayout()
 		ns.ChatField.Anchor(entry.box)
 	end
 
-	window:SetOpacity(db.chatAlpha / 100)
+	-- Every surface in the window at the one opacity, and not only the sheet
+	-- behind it.
+	--
+	-- The rail and the bar beside the log were painted in their own colours at
+	-- full alpha, so a window the player had made transparent came out as a pane
+	-- of glass with a solid black column down one side of it and a solid black
+	-- stripe down the other.
+	--
+	-- The pictures, the counts and the text are left alone, and so is the
+	-- microphone at the foot of the rail. Those are what you read the window by,
+	-- and the microphone is the only control in it: a window you can see through
+	-- is not the same request as a window you cannot read or press.
+	local alpha = db.chatAlpha / 100
+	window:SetOpacity(alpha)
+	rail:SetOpacity(alpha)
+	for _, log in ipairs(every) do
+		log:SetOpacity(alpha)
+	end
+
 	local point = db.chatPoint
 	window.frame:ClearAllPoints()
 	window.frame:SetPoint(point[1], UIParent, point[3], point[4], point[5])
@@ -516,8 +618,8 @@ local function BuildEntry()
 
 	-- What the empty line says: the room you are in and what enter will do in
 	-- it. Drawn behind the text rather than above the log, which is where the
-	-- heading row that used to say it went. Hidden the moment there is a
-	-- character in the field, because from then on the field says it better.
+	-- heading row that used to say it went. Gone the moment the cursor lands in
+	-- the line, because from then on the line itself says it.
 	local ghost = UI.Label(box, M.small, C.quiet, "LEFT", UI.FLAT)
 	ghost:SetPoint("LEFT", 4, 0)
 	ghost:SetPoint("RIGHT", -4, 0)
@@ -539,13 +641,30 @@ local function BuildEntry()
 		return ChatWindow.Fill(field)
 	end
 	-- The rectangle is drawn only while the cursor is in the line, and the
-	-- sentence behind it only while the line is empty.
+	-- sentence behind it only while the cursor is out of it.
+	--
+	-- **Out of it, and not "while the line is empty", which is what this said
+	-- first and what made the line unreadable.** The client draws a word of its
+	-- own in the field saying which channel you are on, at the same margin this
+	-- sentence starts at, and a line the window has just filled in with `/p ` is
+	-- an empty line: the client's parser reads the slash, sets the channel from
+	-- it and takes the slash back out. So the field was empty, the sentence came
+	-- back, and it was drawn underneath the client's word with both of them
+	-- legible through the other. The cursor being in the line is the whole test:
+	-- the line is what says where it is going from that moment on.
 	ns.ChatField.OnLight = function(on)
 		Light(box, on)
 		ghost:SetShown(not on)
 	end
-	ns.ChatField.OnType = function(text)
-		ghost:SetShown(text == "")
+
+	-- Typing `/p` is choosing the party room, so the rail follows the line.
+	--
+	-- This is the other half of "what you are reading is what you are typing
+	-- into", and it was missing: the slash went to the right channel and the
+	-- window went on saying Conversation, so the next time the line opened it
+	-- was filled in with Conversation's slash over the player's own choice.
+	ns.ChatField.OnChannel = function(kind, target)
+		ChatWindow.Follow(kind, target)
 	end
 
 	-- Tab steps to the next room, which rewrites the slash in front of the
@@ -594,6 +713,9 @@ local function Build()
 		name = FRAME_NAME,
 		width = ns.db.chatWidth,
 		height = ns.db.chatHeight,
+		-- Its own, rather than the size every other window in the addon takes.
+		-- See ChatWindow.Zoom.
+		zoom = ChatWindow.Zoom(),
 		-- No title bar. A bar across the top of a window says which window it
 		-- is, and this one is a window you have had open all evening drawing
 		-- the conversation it is named after. The twenty four pixels are worth
@@ -669,8 +791,15 @@ local function Build()
 	end
 
 	Relayout()
-	Refresh()
+	-- Conversation first and the refresh after it, in that order.
+	--
+	-- The refresh is what moves the window into the party room when you log in
+	-- already standing in a party, and a Show written under it put you straight
+	-- back in Conversation and left the move recorded as done, so nothing tried
+	-- again for the rest of the session. That is the same bug as never having
+	-- written the move at all, on the one login where it matters most.
 	Show(ns.Rooms.ALL)
+	Refresh()
 
 	ns.Rooms.OnClose = Close
 	ns.ChatFeed.Attach(OnLine)
@@ -698,12 +827,24 @@ function ChatWindow.Mic()
 	return built and voice.text or nil
 end
 
--- The sentence in the empty line, for the harness. Handed out for the reason
--- the field and the microphone above are: what is being checked is the words a
--- player reads under the cursor, and a string this file recomputed is a string
--- this file could recompute wrongly and still agree with itself.
+-- The sentence in the empty line, or nil while it is not on the screen.
+--
+-- Named for the harness, for the reason the field and the microphone above are:
+-- what is being checked is the words a player reads under the cursor, and a
+-- string this file recomputed is a string this file could recompute wrongly and
+-- still agree with itself.
+--
+-- Whether it is drawn is half the answer rather than a detail. The sentence
+-- sits at the same margin as the word the client draws in the field saying
+-- which channel you are on, so a version that leaves it up while the cursor is
+-- in the line is two strings over each other, both legible through the other.
+-- A getter that only answered the text could not tell that version from this
+-- one.
 function ChatWindow.Ghost()
-	return built and entry.ghost:GetText() or nil
+	if not built or not entry.ghost:IsShown() then
+		return nil
+	end
+	return entry.ghost:GetText()
 end
 
 function ChatWindow.Built()
@@ -838,6 +979,34 @@ end
 
 function ChatWindow.Room()
 	return active
+end
+
+-- Into the room a channel belongs to, because the player has just put that
+-- channel in the line by hand.
+--
+-- Refused where the room the window is already in types into that same channel,
+-- and that clause is what makes this safe to hang off every keystroke. Filling
+-- Conversation's line in with `/s ` sets the channel to say; so does typing it;
+-- and neither is a reason to march the window out of Conversation and into the
+-- Say room. Nothing moves unless the channel is one the room you are in would
+-- not have sent to.
+--
+-- Refused as well where the channel names no room that exists: a whisper to
+-- somebody with no conversation on the rail yet, a channel the client knows and
+-- this window does not, a party you have left.
+function ChatWindow.Follow(kind, target)
+	if not built then
+		return false
+	end
+	local here, at = ns.Rooms.Target(active)
+	if kind == here and (target or "") == (at or "") then
+		return false
+	end
+	local id = ns.Rooms.For(kind, target)
+	if not id or id == active then
+		return false
+	end
+	return ChatWindow.Go(id)
 end
 
 -- Which channel a line typed right now goes to, and who it is addressed to when
@@ -1113,6 +1282,18 @@ function ChatWindow.Shape(id)
 	return log.frame:GetWidth() or 0, log.frame:GetHeight() or 0
 end
 
+-- Whether the room's log is the one on the screen.
+--
+-- Named for the harness, and it earns the surface for the reason Shape above
+-- does. A log is made by the first line that lands in its room, which is after
+-- Show picked that room and hid every log there was, so a log made hidden is a
+-- room that holds the line, raises the count against its own name, and draws
+-- nothing at all. Everything else about it reads correctly.
+function ChatWindow.Drawn(id)
+	local log = logs[id]
+	return (log and log.frame:IsShown()) and true or false
+end
+
 -- How many lines one room is holding.
 function ChatWindow.Count(id)
 	local log = logs[id]
@@ -1269,11 +1450,12 @@ end)
 -- The window is on the pixel grid, so a resolution change or a UI size change
 -- moves every number in it at once. The zoom first, because every measurement
 -- below is in the window's own units and those units are what the zoom decides.
+-- The screen's own step is half of this window's zoom, so a resolution change
+-- still moves it. Relayout is what re-zooms now, because the setting under it
+-- can move without the screen moving at all.
 ns.UI.OnRescale(function()
 	if not built then
 		return
 	end
-	UI.Rezoom(window.frame, UI.WindowZoom())
-	window.zoom = UI.WindowZoom()
 	Relayout()
 end)

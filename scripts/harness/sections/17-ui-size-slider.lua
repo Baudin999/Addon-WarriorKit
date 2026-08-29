@@ -187,12 +187,36 @@ if window then
 
 		-- Every window on the grid, not only the one this section measures. The
 		-- Clutter window is built on first use and inherits the size then.
+		--
+		-- The chat window is the exception and it is a deliberate one. It is the
+		-- only window in the addon that is up while you play, so how big you want
+		-- it beside the game is a different question from how big you want a
+		-- panel you open for a minute, and it has a size of its own. The screen's
+		-- own whole step is still underneath it, which is why this asserts on
+		-- that step times the chat setting rather than skipping the window: a
+		-- chat window that had come off the grid entirely would still fail here.
 		Settings.Set(2)
 		for index = 1, #ns.UI.Windows do
-			check(ns.UI.Windows[index].zoom == screen * 2,
-				("window %d stayed at zoom %s while the size went to 2x")
-					:format(index, tostring(ns.UI.Windows[index].zoom)))
+			local held = ns.UI.Windows[index]
+			local named = held.frame:GetName()
+			local want = named == "WarriorKitChat" and screen * ns.db.chatScale or screen * 2
+			check(held.zoom == want,
+				("window %d (%s) is at zoom %s, expected %s")
+					:format(index, tostring(named), tostring(held.zoom), tostring(want)))
 		end
+
+		-- And the chat window's own control moves it and nothing else.
+		local was = ns.db.chatScale
+		ns.db.chatScale = 1.5
+		ns.ChatWindow.Apply()
+		check(ns.ChatWindow.Zoom() == screen * 1.5,
+			("the chat size went to 1.5x and the window reports zoom %s")
+				:format(tostring(ns.ChatWindow.Zoom())))
+		check(window.zoom == screen * 2,
+			("sizing the chat window moved the settings window to zoom %s")
+				:format(tostring(window.zoom)))
+		ns.db.chatScale = was
+		ns.ChatWindow.Apply()
 
 		Settings.Set(1)
 		check(window.zoom == screen and window.height == 452,

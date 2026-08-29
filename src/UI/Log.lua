@@ -267,6 +267,16 @@ function Log:SetFontSize(size)
 	return true
 end
 
+-- How opaque the bar beside the log is drawn, as a fraction of its own colours.
+--
+-- The chat window is what asks. Its background takes an opacity setting and the
+-- bar was drawn at full alpha over it, so a window at twenty percent had a
+-- black stripe down the side of it that nothing faded.
+function Log:SetOpacity(fraction)
+	self.opacity = fraction
+	return UI.FadeBar(self.bar, fraction)
+end
+
 --------------------------------------------------------------------------
 -- Lines
 --------------------------------------------------------------------------

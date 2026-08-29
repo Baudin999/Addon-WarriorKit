@@ -266,8 +266,28 @@ check(chat.sent[#chat.sent].kind == "SAY",
 -- The room and what enter would do in it, and nothing about pressing enter
 -- twice, because no command waits on a second press any more.
 _G.ChatEdit_DeactivateChat(line)
+Window.Go(ns.Rooms.ALL)
 check(Window.Ghost() == "Conversation, enter types /s",
 	("the empty line reads %q"):format(tostring(Window.Ghost())))
+
+-- And it is gone the moment the cursor lands in the line, rather than staying
+-- up until there is a character in it.
+--
+-- The client draws a word of its own in the field saying which channel you are
+-- on, at the same margin this sentence starts at. A line the window has just
+-- filled in with a room's slash is an empty line as far as the field is
+-- concerned, because the client's parser reads the slash, sets the channel from
+-- it and takes the slash back out. So the sentence came back underneath the
+-- client's word, and what the player saw in the line they were typing into was
+-- two strings drawn over each other.
+_G.ChatFrame_OpenChat("")
+check(Window.Ghost() == nil,
+	("the cursor is in the line and it still reads %q"):format(tostring(Window.Ghost())))
+Window.Type("")
+check(Window.Ghost() == nil,
+	"emptying the line under the cursor put the sentence back over the client's own word")
+_G.ChatEdit_DeactivateChat(line)
+check(Window.Ghost() ~= nil, "the cursor left the line and the sentence did not come back")
 
 ----------------------------------------------------------------------
 -- Putting it back
