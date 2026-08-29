@@ -467,3 +467,122 @@ check(lastDrawn() == _G.ERR_BADATTACKFACING, "clearing did not put the messages 
 print(("chores corpse of %d in one pass, vendor paid %s over %d passes for 2 of 4 slots, repair %s, camera %s, errors %s over %d drawn")
 	:format(#CORPSE, _G.GetCoinText(sale), ticks, ns.Repair.Describe(),
 		ns.Camera.Describe(), ns.Errors.Describe(), drewCount()))
+
+----------------------------------------------------------------------
+-- Thanking a stranger
+----------------------------------------------------------------------
+
+-- The assertions that carry the weight here are the negative ones, the way
+-- they are for the vendor above. This part sends a whisper to somebody who is
+-- not in the group and has not agreed to hear from the addon, so what matters
+-- is every line it refuses: the mob, the pet, your own aura, the debuff, the
+-- person you are grouped with, and the second buff from somebody already
+-- thanked.
+--
+-- The ten minute expiry is not asserted. GetTime is one clock shared by every
+-- section and moving it six hundred seconds here would move it for the purse
+-- and the feeds as well. What is asserted instead is the half of the throttle
+-- that can be proved without touching the clock: that it holds against a
+-- repeat, and that it is per person rather than one gate over everybody.
+do
+	local guids, chat, group, logArgs = H.guids, H.chat, H.group, H.logArgs
+	local ME = "Player-0-00000c01"
+	local MAGE, PRIEST = "Player-0-00000c02", "Player-0-00000c03"
+
+	local function buffLine(source, name, dest, auraType, subevent)
+		for index = 1, 21 do
+			logArgs[index] = nil
+		end
+		logArgs[1] = _G.GetTime()
+		logArgs[2] = subevent or "SPELL_AURA_APPLIED"
+		logArgs[4] = source
+		logArgs[5] = name
+		logArgs[8] = dest
+		logArgs[12] = 1459
+		logArgs[15] = auraType or "BUFF"
+		fire("COMBAT_LOG_EVENT_UNFILTERED")
+	end
+
+	local function sentCount()
+		return #chat.sent
+	end
+
+	local function last()
+		return chat.sent[#chat.sent] or {}
+	end
+
+	guids.player = ME
+	fire("PLAYER_ENTERING_WORLD")
+	for index = #chat.sent, 1, -1 do
+		chat.sent[index] = nil
+	end
+
+	buffLine(MAGE, "Arcanist", ME)
+	check(sentCount() == 1, ("a stranger's buff sent %d whispers, one is right"):format(sentCount()))
+	check(last().text == "ty", ("the whisper said %q"):format(tostring(last().text)))
+	check(last().kind == "WHISPER" and last().target == "Arcanist",
+		("the thank you went out as %s to %s"):format(tostring(last().kind), tostring(last().target)))
+
+	-- A second buff from the same person inside the window. One kindness.
+	buffLine(MAGE, "Arcanist", ME)
+	check(sentCount() == 1, "the same stranger was thanked twice for one visit")
+
+	-- Somebody else, in the same window. The throttle is per person, and a
+	-- single gate over everybody would swallow this one.
+	buffLine(PRIEST, "Healgood", ME)
+	check(sentCount() == 2, "the throttle held against a second stranger as well as the first")
+
+	-- Everything the filter is for. None of these is a stranger being kind.
+	buffLine("Creature-0-00000c04", "Water Elemental", ME)
+	buffLine("Pet-0-00000c05", "Snapjaw", ME)
+	buffLine(ME, "You", ME)
+	buffLine(PRIEST, "Healgood", "Creature-0-00000c06")
+	buffLine(MAGE, "Arcanist", ME, "DEBUFF")
+	buffLine(MAGE, "Arcanist", ME, "BUFF", "SPELL_AURA_REMOVED")
+	check(sentCount() == 2, ("%d whispers went to something that is not a stranger's buff")
+		:format(sentCount() - 2))
+
+	-- One of yours. In a group the buffs are the arrangement, and this is the
+	-- assertion the whole part turns on.
+	group.Set({ { name = "Buffbot", class = "PRIEST", token = "party1" } })
+	fire("GROUP_ROSTER_UPDATE")
+	buffLine(guids.party1, "Buffbot", ME)
+	check(sentCount() == 2, "somebody in the party was whispered a thank you")
+	group.Forget()
+	fire("GROUP_ROSTER_UPDATE")
+
+	-- An emptied word is a real answer and it means send nothing, which is how
+	-- the part is silenced without losing the word you had.
+	ns.db.thankWord = "   "
+	buffLine("Player-0-00000c07", "Shaman", ME)
+	check(sentCount() == 2, "an empty word still sent a whisper")
+	check(ns.db.thankWord == "   ", "the empty word was overwritten rather than kept")
+	ns.db.thankWord = "ty"
+
+	-- Off is unregistered, not a branch inside a handler the client still
+	-- calls. This is the busiest event in the game and the setting off has to
+	-- take the addon off it entirely.
+	local readers = #(events["COMBAT_LOG_EVENT_UNFILTERED"] or {})
+	ns.db.thankStrangers = false
+	ns.Thanks.Apply()
+	check(#(events["COMBAT_LOG_EVENT_UNFILTERED"] or {}) == readers - 1,
+		("thanks off left %d parts on the combat log and %d were on it")
+			:format(#(events["COMBAT_LOG_EVENT_UNFILTERED"] or {}), readers))
+	buffLine("Player-0-00000c08", "Druid", ME)
+	check(sentCount() == 2, "thanks off still whispered somebody")
+
+	ns.db.thankStrangers = true
+	ns.Thanks.Apply()
+	check(#(events["COMBAT_LOG_EVENT_UNFILTERED"] or {}) == readers,
+		"thanks back on did not put the part back on the combat log")
+	buffLine("Player-0-00000c08", "Druid", ME)
+	check(sentCount() == 3, "thanks back on sent nothing")
+
+	print(("chores thanks %s, %d whispers over the run"):format(ns.Thanks.Describe(), sentCount()))
+
+	-- Left as it was found. Every section after this one sets its own player
+	-- and its own roster, and a stale unit list is the kind of fixture that
+	-- makes another section fail for something that is not in it.
+	guids.player = nil
+	fire("GROUP_ROSTER_UPDATE")
+end

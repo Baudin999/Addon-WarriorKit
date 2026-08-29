@@ -1,8 +1,10 @@
 local ADDON, ns = ...
 
 -- Everything Core and the panel need to know about the chores. Loot.lua,
--- Vendor.lua, Repair.lua, Camera.lua, Errors.lua, Clutter.lua and Destroy.lua
--- hold the behaviour and none of them names anything outside this folder.
+-- Vendor.lua, Repair.lua, Camera.lua, Thanks.lua, Errors.lua, Clutter.lua and
+-- Destroy.lua hold the behaviour, and Thanks.lua is the only one of them that
+-- names anything outside this folder: it asks Unit\Roster.lua whether the
+-- player who buffed you is one of yours.
 --
 -- Settings that have nothing to do with each other sharing one part, because
 -- the alternative is a rail entry carrying one tick box each. The panel already
@@ -42,6 +44,11 @@ end
 local function SetErrors(value)
 	ns.db.errorFilter = value
 	ns.Errors.Apply()
+end
+
+local function SetThanks(value)
+	ns.db.thankStrangers = value
+	ns.Thanks.Apply()
 end
 
 -- One row of the muted-message list: a tick box and the message it silences.
@@ -134,6 +141,17 @@ ns.Register({
 		autoRepair = true,
 		maxZoom = true,
 
+		-- On, for the reason the four above it are on: it is a thing you meant
+		-- to do and did not, and the whole part exists because you did not.
+		-- Only strangers are whispered, so a raid night sends nothing.
+		thankStrangers = true,
+
+		-- Two letters, because two letters is what gets typed in the game and a
+		-- sentence from an addon reads like a sentence from an addon. Emptying
+		-- the field sends nothing, which is how you keep the word you had while
+		-- switching the part off.
+		thankWord = "ty",
+
 		-- On, and it mutes nothing, because the list beside it ships empty.
 		-- The switch decides whether the list is consulted; the list decides
 		-- what goes. Shipping the switch off would mean a list you had ticked
@@ -187,6 +205,24 @@ ns.Register({
 			ns.Print("camera " .. ns.Camera.Describe() .. ".")
 		end,
 
+		-- The raw argument for the word and the lowered one for the switch. The
+		-- dispatcher hands over both because a setting that is a piece of text
+		-- is the one kind that has to survive the case you typed it in, and a
+		-- thank you the addon quietly flattened to lower case is not the thank
+		-- you you wrote.
+		--
+		-- No `say` in front of the word, because "thanks cheers" is unambiguous
+		-- and is the one word anybody would type. `thanks off` is the only text
+		-- this costs you, and off is what you would have meant by it anyway.
+		thanks = function(arg, rawArg)
+			if arg == "on" or arg == "off" then
+				SetThanks(arg == "on")
+			elseif rawArg ~= "" then
+				ns.db.thankWord = rawArg
+			end
+			ns.Print("thanking strangers " .. ns.Thanks.Describe() .. ".")
+		end,
+
 		-- One word with four answers, the way `ui` already works. `list` and
 		-- `clear` are here because a list you cannot read from chat is a list
 		-- you have to open a window to audit, and `charge` is the one press
@@ -231,6 +267,8 @@ ns.Register({
 		"repair, pay the merchant in front of you now",
 		"repair on|off, pay every merchant who mends, guild funds first",
 		"zoom on|off, how far the camera pulls back",
+		"thanks on|off, whisper a stranger who buffs you",
+		"thanks <word>, what to whisper them instead of ty",
 		"errors on|off, filter the red text through your muted list",
 		"errors list|clear, what is muted and what has come past, or empty it",
 		"errors charge, mute what a missed charge shouts at you",
@@ -238,9 +276,10 @@ ns.Register({
 	},
 
 	status = function()
-		return ("loot %s; vendor %s; repair %s; camera %s; errors %s; clutter %s")
+		return ("loot %s; vendor %s; repair %s; camera %s; thanks %s; errors %s; clutter %s")
 			:format(ns.Loot.Describe(), ns.Vendor.Describe(), ns.Repair.Describe(),
-				ns.Camera.Describe(), ns.Errors.Describe(), ns.Destroy.Describe())
+				ns.Camera.Describe(), ns.Thanks.Describe(), ns.Errors.Describe(),
+				ns.Destroy.Describe())
 	end,
 
 	panel = function(ui)
@@ -294,6 +333,21 @@ ns.Register({
 			end
 			return ("%d%% of %d that wear"):format(worst, counted)
 		end)
+
+		ui.Section("Thanks", "Chores")
+		ui.Lede("Whispers a stranger who buffs you in passing, and nobody you are grouped with.")
+		ui.Check("thank a stranger who buffs me",
+			function() return ns.db.thankStrangers end,
+			SetThanks)
+		ui.Hint("Party and raid are never whispered: in a group the buffs are the arrangement rather than a kindness. The same person is thanked once every ten minutes, so a re-buff sends nothing.")
+		ui.TextField("what to whisper",
+			function() return ns.db.thankWord end,
+			function(text)
+				ns.db.thankWord = text
+				ns.Print("thanking strangers " .. ns.Thanks.Describe() .. ".")
+			end)
+		ui.Hint("Empty it to send nothing while keeping the word you had. It goes out exactly as typed, once, with nothing of the addon's added to it.")
+		ui.Reading("thanking", ns.Thanks.Describe)
 
 		ui.Section("Clutter", "The screen")
 		ui.Lede("A window for the finished quest items that sit in your bags and cannot be sold.")

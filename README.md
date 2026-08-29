@@ -204,12 +204,14 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   you do not need and they stop drawing. Nothing is hidden that you did not
   tick, the list is shared by every character on the account, and one press
   silences what a missed charge shouts at you.
-- **Four chores done for you.** Corpses empty in one go instead of one slot at
+- **Five chores done for you.** Corpses empty in one go instead of one slot at
   a time. Grey items sell themselves at every merchant. Damaged gear pays for
   its own repair at any merchant who mends, out of the guild bank where your
   rank allows it and out of your purse where it does not. Hold shift as you open
   a merchant to skip both. The camera pulls back four times the base distance
-  instead of 1.9.
+  instead of 1.9. A stranger who buffs you in passing gets a whispered `ty`,
+  once every ten minutes per person, and nobody in your party or raid is ever
+  whispered.
 - **`/wk destroy` clears out finished quest items.** One card at a time, with
   the quest it came from written on it, and a destroy and a skip. It reads
   Questie's database to work out which quest, so it needs Questie installed.

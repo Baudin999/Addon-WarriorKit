@@ -47,7 +47,7 @@ local NO_SWITCH = {
 	loadouts = "a loadout is a row in a list, and an empty list draws nothing",
 	feeds = "two feeds, each with its own collect and its own show; one switch would name whichever came first and lie about the other",
 	artwork = "its boolean turns Blizzard's art on rather than this part's own drawing, so a lit rail dot would mean the opposite of what it means everywhere else",
-	comfort = "five unrelated chores, each with a switch of its own and no sixth boolean over them",
+	comfort = "six unrelated chores, each with a switch of its own and no seventh boolean over them",
 	interface = "its boolean is whether a layout is imported once at login, not whether anything is on screen",
 	settings = "one slider and no boolean at all",
 }
@@ -421,9 +421,11 @@ if window then
 	-- worded by the panel, one lede and one reading. The experience and
 	-- reputation page costs 495 across two checks and two sliders and takes it
 	-- to 20,228 across sixty. 20,400 is that measurement plus a hint's worth of
-	-- room again.
-	check(prose < 20400,
-		("the window holds %d characters of prose and the budget is 20,400"):format(prose))
+	-- room again. The thanks page costs 505 across a check and a field and takes
+	-- it to 20,733 across sixty-one. 20,900 is that measurement plus a hint's
+	-- worth of room once more.
+	check(prose < 20900,
+		("the window holds %d characters of prose and the budget is 20,900"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

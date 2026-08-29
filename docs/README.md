@@ -289,6 +289,7 @@ name of none of them.
     Comfort/Vendor.lua       sells grey items while a merchant window is up
     Comfort/Repair.lua       pays the merchant to mend, guild funds first
     Comfort/Camera.lua       how far cameraDistanceMaxZoomFactor lets you pull back
+    Comfort/Thanks.lua       whispers a stranger who buffs you, and nobody you are grouped with
     Comfort/Errors.lua       the muted-message list, and the method that stands in
                              front of UIErrorsFrame
     Comfort/Clutter.lua      which quest items are finished with, and why
@@ -2639,7 +2640,7 @@ already off. A loadout is a row in a list. Feeds has two feeds with a collect
 and a show each, and one switch would name whichever came first and lie about
 the other. Artwork's boolean turns Blizzard's art on rather than the part's own
 drawing, so a lit rail dot would mean the opposite of what it means everywhere
-else. Comfort is five unrelated chores. Interface imports a layout once at
+else. Comfort is six unrelated chores. Interface imports a layout once at
 login. Settings is one slider.
 
 **Prose is three capped calls and the caps are the point.** There were 134
@@ -4799,6 +4800,21 @@ Plus, which is loaded on both of these clients and is where every API here is
 proved. They share a part because the alternative is three rail entries carrying
 one tick box each; the panel's second level does the rest, so it is one rail
 entry with a tab per chore.
+
+**Thanking a stranger is the fourth chore and the only one that talks to
+another person.** Somebody walks past, buffs you and keeps going, and the two
+letters back do not get typed because by the time your hands are free the name
+has scrolled away. `Comfort/Thanks.lua` reads `SPELL_AURA_APPLIED` off the
+combat log, which is the only place the client names the caster at the moment
+the aura lands: `UnitAura` names one too, but as a unit token, and a stranger
+who buffed you in passing has no token a second later. Four filters stand
+between a log line and a whisper. The aura landed on you, it is a buff rather
+than a debuff, the caster's GUID is under `Player-` so it is not a pet or a
+totem or a mob, and `Unit/Roster.lua` does not know them, because in a party or
+a raid the buffs are the arrangement rather than a kindness. The same name is
+thanked once every ten minutes, so a re-buff sends nothing. Off unregisters the
+frame rather than branching inside the handler, which matters more here than it
+does on the loot path: this is the busiest event in the game.
 
 **Fast loot is a race the client loses on purpose.** Its auto loot opens the
 window, then takes one slot per frame with a pause between each, and the window
