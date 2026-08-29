@@ -27,29 +27,9 @@ in the README's untested list, and the full text of each item is this file at
 12. The chat window, reimagined as a rail of rooms. `1c4de0e`
 13. What the class split left behind, down to the `Class.Label()` fallback.
     `fc6c0e5`
+14. check.sh derives its class shapes from `Class/*.lua` rather than naming
+    them. `371d82d`
 
 ## Open
 
-## 10. The Slam mark, still unconfirmed in game
-
-Carried out of item 1 rather than closed with it. The mark was reported as
-wandering once, changed once in `4ab4480`, and has not been looked at in game
-since. Nothing in the smoothness work that closed item 1 touched it, and the
-bar being smooth says nothing about where the mark sits. Ask before assuming it
-is fixed.
-
-## 14. check.sh names its class shapes by hand
-
-`scripts/check.sh:636` runs the harness as WARRIOR, MAGE, SHAMAN, PRIEST and
-HUNTER, written out as five words with nothing tying them to `src/Class/*.lua`.
-A sixth class file gets no run at all.
-
-What that hides is a login error rather than a wrong answer. The cap of eight
-entries on the cooldown row and four on the upkeep row is an `assert` inside
-`Cooldowns.All` and `Upkeep.Fixed`, which fires on the client, at login, as a
-Lua error, and the only thing that reaches it first is a harness run as that
-class. `Class/Mage.lua` already lists eight cooldowns, so the ninth is the one
-that does it.
-
-The fix is to derive the loop from the files, keeping HUNTER as the shape with
-no file of its own, which turns a login error into a check.sh failure.
+Nothing.

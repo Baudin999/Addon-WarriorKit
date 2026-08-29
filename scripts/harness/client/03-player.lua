@@ -206,7 +206,15 @@ end
 _G.GetTime = function() return wall end
 _G.GetQuestGreenRange, _G.InCombatLockdown = constant(8), constant(false)
 _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
-_G.tinsert, _G.date = table.insert, os.date
+_G.tinsert = table.insert
+-- The machine's clock, frozen for the same reason the realm's one below is. It
+-- was os.date, and Minimap/Clock.lua's guard says a second look inside the same
+-- minute must not touch the font string. A run that crossed a minute boundary
+-- between Apply and that check made the guard tell the truth and the section
+-- fail, for the time of day rather than for anything in the addon. Built from
+-- a table rather than an epoch so the reading is the same in every timezone.
+local frozen = os.time({ year = 2026, month = 3, day = 14, hour = 13, min = 45, sec = 30 })
+_G.date = function(format, when) return os.date(format, when or frozen) end
 -- The realm's clock, which is not the machine's and is what Minimap/Clock.lua
 -- puts in the tooltip under the reading on its face. A fixed pair rather than a
 -- read of the real one, because a test that asserts on a formatted time has to

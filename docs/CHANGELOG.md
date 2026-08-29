@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### The harness clock is frozen, like the realm clock beside it
+
+`03-player.lua` handed the addon `os.date` and every other time in the stub
+client is fixed. `Minimap/Clock.lua`'s guard is that a second look inside the
+same minute must not touch the font string, and `23-minimap.lua` asserts it by
+calling `Update()` and expecting `false`. A run that crossed a minute boundary
+between `Apply` and that call got `true`, which is the guard working, and the
+section failed for the time of day. `date` now formats against one timestamp
+built from a table, so the reading is the same in every timezone and on every
+run.
+
 ### check.sh finds the classes instead of naming them
 
 The harness loop listed WARRIOR, MAGE, SHAMAN, PRIEST and HUNTER as five words
