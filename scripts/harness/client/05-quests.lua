@@ -395,19 +395,32 @@ bindings.ACTIONBUTTON1 = { "E", "SHIFT-BUTTON3" }
 bindings.OPENCHAT = { "ENTER", "NUMPADENTER" }
 bindings.OPENCHATSLASH = { "/" }
 
-_G.GetBindingKey = function(command)
-	local held = bindings[command]
-	if not held then
-		return nil
-	end
-	return held[1], held[2]
-end
 -- The override layer, modelled rather than accepted. Every part that takes a
 -- key reads GetBindingAction back afterwards rather than believing its own
 -- SetOverrideBindingClick, because a client that takes the call and does
 -- nothing with it leaves no other trace. A stub that answered "" to every
 -- readback would make all three of them report a client that refused the key.
 local overrides = {}
+
+-- A key with an override on it carries the override, so it is no longer one of
+-- the keys the command underneath is on. That is what the client answers and it
+-- is why a part that wants to read its own keys back has to give them up first.
+-- A stub that answered with the key anyway let the chat window arm a key it had
+-- already taken, which in the game is an enter that opens a chat line instead
+-- of running the line it was loaded with.
+_G.GetBindingKey = function(command)
+	local held = bindings[command]
+	if not held then
+		return nil
+	end
+	local free = {}
+	for _, key in ipairs(held) do
+		if not overrides[key] then
+			free[#free + 1] = key
+		end
+	end
+	return free[1], free[2]
+end
 _G.ClearOverrideBindings = function(owner)
 	for key, held in pairs(overrides) do
 		if held.owner == owner then

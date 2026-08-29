@@ -552,6 +552,88 @@ do
 		"a slash command was not handed to the client's own parser")
 	check(#chat.sent == quiet, "a slash command was also sent as a chat message")
 
+	-- /logout is not the addon's to run. It ends in Logout(), which is
+	-- protected, and a line handed to the client's parser arrives there on a
+	-- stack this addon has been in, which the client refuses with a red line
+	-- naming the addon. So it goes onto a secure button under the enter key and
+	-- the next press is the client's own work.
+	local handed = #chat.slash
+	Window.Send("/logout")
+	check(#chat.slash == handed,
+		"/logout went to the client's parser, where it comes back as a blocked action")
+	check(Compose.Armed() == "/logout",
+		("the enter key was loaded with %s"):format(tostring(Compose.Armed())))
+	check(_G.GetBindingAction("ENTER", true) == "CLICK WarriorKitChatSecureButton:LeftButton",
+		("enter is on %q"):format(tostring(_G.GetBindingAction("ENTER", true))))
+	check(_G.WarriorKitChatSecureButton:GetAttribute("macrotext") == "/logout",
+		"the button was armed with something other than the line typed")
+
+	-- Coming back to the field is a change of mind, and the window gets enter
+	-- back. A key left loaded is a key that no longer opens the chat line.
+	Window.Focus()
+	check(Compose.Armed() == nil, "coming back to the field left the enter key loaded")
+	-- What enter carries afterwards is the window's business and depends on
+	-- whether it has taken Blizzard's chat over, which it has not here. What
+	-- matters is that it is no longer the secure button, because a key still on
+	-- that one is a key that runs a line nobody typed.
+	check(_G.GetBindingAction("ENTER", true) ~= "CLICK WarriorKitChatSecureButton:LeftButton",
+		"enter was left on the secure button after the line was called off")
+
+	-- And again with Blizzard's window hidden, which is the arrangement every
+	-- player who uses this window is in and the one the two claims collide in.
+	-- The window is already holding enter here, so arming it is one owner
+	-- taking a key off another, and a run that only ever tested the free key
+	-- tested the case nobody is in.
+	local heldBlizz = ns.db.hideBlizzChat
+	ns.db.hideBlizzChat = true
+	Window.Keys()
+	check(_G.GetBindingAction("ENTER", true) == "CLICK WarriorKitChatEnterButton:LeftButton",
+		"the window did not have the enter key to give up")
+	Window.Send("/logout")
+	check(Compose.Armed() == "/logout",
+		("the enter key was loaded with %s while the window held it")
+			:format(tostring(Compose.Armed())))
+	check(_G.GetBindingAction("ENTER", true) == "CLICK WarriorKitChatSecureButton:LeftButton",
+		("enter is on %q with the window's own claim underneath")
+			:format(tostring(_G.GetBindingAction("ENTER", true))))
+	-- The window's claim is gone rather than sitting under the new one. Two
+	-- owners on one key is the client's arrangement to resolve and not ours,
+	-- and the way not to depend on it is to leave one.
+	check(_G.GetBindingAction("NUMPADENTER", true)
+		== "CLICK WarriorKitChatSecureButton:LeftButton",
+		("the second enter key is on %q")
+			:format(tostring(_G.GetBindingAction("NUMPADENTER", true))))
+
+	-- The line ran, so the button hands the key straight back and the window is
+	-- holding both of them again.
+	_G.WarriorKitChatSecureButton:Click("LeftButton", true)
+	check(Compose.Armed() == nil, "the line ran and the enter key was left loaded")
+	check(_G.GetBindingAction("ENTER", true) == "CLICK WarriorKitChatEnterButton:LeftButton",
+		("enter came back as %q rather than the window's own button")
+			:format(tostring(_G.GetBindingAction("ENTER", true))))
+	-- A player who moved the chat key off enter. The line has to land on the key
+	-- they moved it to, and the only way to find out which key that is is to ask
+	-- the client after the window has given it back: while the window's own
+	-- claim is on the key, the key carries the window and not OPENCHAT, and
+	-- asking then answers nothing and falls through to the literal enter.
+	local wasChat = _G.WarriorKitBindings.OPENCHAT
+	_G.WarriorKitBindings.OPENCHAT = { "F12" }
+	Window.Keys()
+	check(_G.GetBindingAction("F12", true) == "CLICK WarriorKitChatEnterButton:LeftButton",
+		"the window did not follow the chat key to where the player moved it")
+	Window.Send("/logout")
+	check(_G.GetBindingAction("F12", true) == "CLICK WarriorKitChatSecureButton:LeftButton",
+		("the line went onto %q rather than onto the key the chat line is on")
+			:format(tostring(_G.GetBindingAction("F12", true))))
+	check(_G.GetBindingAction("ENTER", true) == "",
+		("enter was armed as well, and it carries %q")
+			:format(tostring(_G.GetBindingAction("ENTER", true))))
+	_G.WarriorKitChatSecureButton:Click("LeftButton", true)
+	_G.WarriorKitBindings.OPENCHAT = wasChat
+
+	ns.db.hideBlizzChat = heldBlizz
+	Window.Keys()
+
 	-- Tab steps to the next room and rewrites the slash in front of the cursor,
 	-- which is the same key that cycled the channel in the window this replaced
 	-- and means the same thing.

@@ -521,6 +521,9 @@ local function BuildEntry()
 		self:ClearFocus()
 	end)
 	edit:SetScript("OnEditFocusGained", function()
+		-- A click that lands on the field itself never goes through
+		-- ChatWindow.Focus, and it means the same thing that one does.
+		ns.Compose.Disarm()
 		Light(box, true)
 	end)
 	edit:SetScript("OnEditFocusLost", function()
@@ -728,6 +731,34 @@ function ChatWindow.Keys()
 			pcall(SetOverrideBindingClick, enterButton, true, key, chat.button, "LeftButton")
 		end
 	end
+	return true
+end
+
+-- Hand the chat keys back to whatever carried them, so somebody else can take
+-- one. Chat/Compose.lua does that with the enter key when a line has to be run
+-- by the client rather than by the addon.
+--
+-- Two owners on one key is the bug this exists to stop. An override binding is
+-- a claim by a frame, and which of two claims on the same key wins is the
+-- client's business rather than something this addon should be betting a key
+-- press on. So the window gives the key up before the other claim goes on, and
+-- ChatWindow.Keys takes it back afterwards.
+--
+-- The second reason is quieter and just as load bearing: GetBindingKey answers
+-- with what the key carries now, and while this window's override is on enter
+-- the answer to "which key is OPENCHAT" is nothing at all. A caller that wants
+-- to read the chat keys has to clear them first, which is what this does.
+function ChatWindow.Yield()
+	if not built then
+		return false
+	end
+	if InCombatLockdown and InCombatLockdown() then
+		return false
+	end
+	if type(ClearOverrideBindings) ~= "function" then
+		return false
+	end
+	pcall(ClearOverrideBindings, enterButton)
 	return true
 end
 

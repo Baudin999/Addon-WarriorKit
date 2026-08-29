@@ -316,6 +316,35 @@ function Region:RegisterForClicks(...)
 end
 function Region:GetRegisteredClicks() return self.clicks end
 
+-- A press on a button, which is the only way to find out whether anything is on
+-- the other end of one.
+--
+-- The edge is the point. A button registered for AnyDown does nothing at all on
+-- an up press, and a test that ran the handler regardless would pass on exactly
+-- the bug RegisterForClicks above is recorded to catch. The caller says which
+-- edge because a key binding press and a mouse release are not the same event
+-- and the client does not guess either.
+--
+-- OnClick then PostClick, in the client's order: a secure button does its work
+-- between the two, which is why anything tidying up after a secure press is
+-- written into PostClick rather than OnClick.
+function Region:Click(button, down)
+	button = button or "LeftButton"
+	local edge = down and "Down" or "Up"
+	local clicks = self.clicks
+	if clicks and not (clicks["Any" .. edge] or clicks[button .. edge]) then
+		return false
+	end
+	local scripts = self.scripts
+	if scripts and scripts.OnClick then
+		scripts.OnClick(self, button, down and true or false)
+	end
+	if scripts and scripts.PostClick then
+		scripts.PostClick(self, button, down and true or false)
+	end
+	return true
+end
+
 -- Whether a frame takes the mouse. Recorded for the same reason: a frame laid
 -- over an icon that answers the mouse is a button you cannot press, and it
 -- looks identical to one you can.

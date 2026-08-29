@@ -160,6 +160,197 @@ local function SendSlash(text)
 	return true
 end
 
+--------------------------------------------------------------------------
+-- The commands the client will not take from us
+--
+-- /logout ends in Logout(), and Logout() is protected: the client refuses it
+-- from any call stack an addon has been in. The field above is such a stack, so
+-- what came back from typing it here was not a logout but a red line naming
+-- WarriorKit. Every command that ends in a protected call is the same, which is
+-- most of what people put in macros.
+--
+-- The way through is the way a macro gets there. A button of the secure kind
+-- carries the line as its macrotext and the client runs it as its own work, on
+-- the one condition that the click is a key press. A :Click() from a script is
+-- still us. So the first enter loads the button and says so, and the second,
+-- which the field is no longer holding because the focus went with the first,
+-- runs the line.
+--------------------------------------------------------------------------
+
+-- One entry per slash word whose command ends in a protected call. Everything
+-- else goes to the client's parser above and arrives in one press, because
+-- /dance and /join are nobody's protected business.
+--
+-- A word listed here that turns out not to need it costs one extra key press
+-- and nothing else, so the list errs long. A word missing from it costs the
+-- blocked action this section exists to stop, so add to it when a command comes
+-- back as a red line rather than as what you typed.
+local SECURE = {
+	-- Leaving: Logout() and Quit().
+	logout = true, camp = true, quit = true, exit = true,
+	-- Choosing a unit: TargetUnit, FocusUnit, AssistUnit.
+	target = true, targetexact = true, targetenemy = true,
+	targetfriend = true, targetlasttarget = true, cleartarget = true,
+	assist = true, focus = true, clearfocus = true,
+	-- Doing something: a spell, an item, the pet, a bar page, worn gear.
+	cast = true, castsequence = true, castrandom = true,
+	use = true, userandom = true, equip = true, equipslot = true,
+	startattack = true, stopattack = true, stopcasting = true,
+	cancelaura = true, cancelform = true, dismount = true,
+	petattack = true, petfollow = true, petstay = true,
+	petpassive = true, petdefensive = true, petaggressive = true,
+	click = true, changeactionbar = true, swapactionbar = true,
+}
+
+local BUTTON_NAME = "WarriorKitChatSecureButton"
+
+-- The button, once there has been a line for it, and the line it is holding.
+local secure, armed
+
+-- Made the first time a line needs one rather than at load, because most
+-- evenings nobody types any of the words above and a secure frame is not free.
+--
+-- No size and no anchor, which is Marking/Keys.lua's arrangement and for its
+-- reason: this is never meant to meet a real cursor, and a frame with no size
+-- cannot be hit by one.
+local function Button()
+	if secure ~= nil then
+		return secure or nil
+	end
+	secure = false
+	if type(_G.CreateFrame) ~= "function" then
+		return nil
+	end
+	local ok, made = pcall(_G.CreateFrame, "Button", BUTTON_NAME, _G.UIParent,
+		"SecureActionButtonTemplate")
+	if not ok or not made then
+		return nil
+	end
+	made:RegisterForClicks("AnyDown")
+	made:SetAttribute("type", "macro")
+	-- The client has run the line by the time this fires. What is left is
+	-- handing the enter key back to the chat window.
+	made:SetScript("PostClick", function()
+		Compose.Disarm()
+	end)
+	secure = made
+	return made
+end
+
+-- The keys the field's enter is on, read back rather than assumed, because a
+-- player who moved OPENCHAT off enter would otherwise be told to press a key
+-- that does nothing.
+--
+-- Only true once the window has given the key up. While the chat window's own
+-- override is sitting on enter, the key carries the window's button and not
+-- OPENCHAT, so this asks and is told nothing at all. Every caller below yields
+-- first, and the literal pair is the answer for a client that has no
+-- GetBindingKey rather than one that answered no.
+local function EnterKeys()
+	if type(_G.GetBindingKey) == "function" then
+		local ok, first, second = pcall(_G.GetBindingKey, "OPENCHAT")
+		if ok and first then
+			return { first, second }
+		end
+	end
+	return { "ENTER", "NUMPADENTER" }
+end
+
+-- Whether the key really carries the button now. Read back rather than believed
+-- for the reason Buttons/Bars.lua reads its own back: a client that takes the
+-- call and does nothing with it leaves no other trace, and here the cost of not
+-- noticing is a player told to press enter again and getting a chat line.
+local function Carries(key)
+	if type(_G.GetBindingAction) ~= "function" then
+		return true
+	end
+	local ok, action = pcall(_G.GetBindingAction, key, true)
+	if not ok or type(action) ~= "string" or action == "" then
+		return true
+	end
+	return action == ("CLICK %s:LeftButton"):format(BUTTON_NAME)
+end
+
+-- Loads the line onto the button and puts the button under the enter key.
+-- False when the client will not have it, which is combat: an override binding
+-- is a change to the binding set and the client refuses those under lockdown.
+--
+-- The window gives the key up first. Both claims are override bindings on the
+-- same key, and which one a press reaches is the client's arrangement rather
+-- than ours; the window keeping its claim underneath was an enter that opened
+-- the chat line instead of running the line it had just said it would run. One
+-- owner at a time, and Disarm hands it straight back.
+function Compose.Arm(text)
+	local button = Button()
+	if not button or type(_G.SetOverrideBindingClick) ~= "function" then
+		return false
+	end
+	if _G.InCombatLockdown and _G.InCombatLockdown() then
+		return false
+	end
+	if ns.ChatWindow and ns.ChatWindow.Yield then
+		ns.ChatWindow.Yield()
+	end
+	local bound = false
+	for _, key in ipairs(EnterKeys()) do
+		if pcall(_G.SetOverrideBindingClick, button, true, key, BUTTON_NAME, "LeftButton")
+			and Carries(key) then
+			bound = true
+		end
+	end
+	if not bound then
+		-- Nothing is loaded, so the window takes its key back here rather than
+		-- being left without one until the next thing that calls Keys.
+		if ns.ChatWindow and ns.ChatWindow.Keys then
+			ns.ChatWindow.Keys()
+		end
+		return false
+	end
+	button:SetAttribute("macrotext", text)
+	armed = text
+	return true
+end
+
+-- Takes the key back. Called when the line has run and when the field takes the
+-- focus again, because coming back to the field is a change of mind and an
+-- enter still loaded is an enter that will not open the window.
+function Compose.Disarm()
+	if not armed then
+		return false
+	end
+	if _G.InCombatLockdown and _G.InCombatLockdown() then
+		return false
+	end
+	if type(_G.ClearOverrideBindings) == "function" then
+		pcall(_G.ClearOverrideBindings, secure)
+	end
+	secure:SetAttribute("macrotext", "")
+	armed = nil
+	-- The chat window owns enter the rest of the time, and this is where it
+	-- gets it back rather than being assumed to have survived underneath.
+	if ns.ChatWindow and ns.ChatWindow.Keys then
+		ns.ChatWindow.Keys()
+	end
+	return true
+end
+
+-- The line the enter key is loaded with, or nil. Public because a loaded key is
+-- state a player cannot see and nothing else could read it back.
+function Compose.Armed()
+	return armed
+end
+
+-- A line the client will only take from a key of its own. Loads it and says so,
+-- in the log, where the rest of what the addon has to say already is.
+local function Handover(text)
+	if Compose.Arm(text) then
+		ns.Print(("%s is the client's to run rather than the addon's. Press enter again and it goes."):format(text))
+		return true
+	end
+	ns.Print(("%s is the client's to run and the addon cannot put it on a key now. Type it in the client's own chat line."):format(text))
+	return false
+end
+
 -- One line, in the room named by kind and target. Public because the edit box
 -- is not the only thing that sends: a slash word and the harness want the same
 -- path, and a send that lives inside a script handler is a send nothing else
@@ -175,6 +366,10 @@ function Compose.Send(text, kind, target)
 
 	local channel, who, body = Compose.Parse(text, kind, target)
 	if not channel then
+		local word = text:match("^/(%a+)")
+		if word and SECURE[word:lower()] then
+			return Handover(text)
+		end
 		return SendSlash(text)
 	end
 	if body == "" then

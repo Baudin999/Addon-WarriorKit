@@ -153,8 +153,8 @@ do
 		local entry = bars[index]
 		for slot = 1, 12 do
 			local name = entry.buttons[slot]:GetName()
-			local first, second = _G.GetBindingKey(entry.def.command:format(slot))
-			for _, key in ipairs({ first, second }) do
+			-- The stub's set: an overridden key stops answering to its command.
+			for _, key in ipairs(_G.WarriorKitBindings[entry.def.command:format(slot)] or {}) do
 				claimed = claimed + 1
 				if _G.GetBindingAction(key, true) ~= ("CLICK %s:LeftButton"):format(name) then
 					missed = missed + 1
