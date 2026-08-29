@@ -1,10 +1,10 @@
 local ADDON, ns = ...
 
 -- Everything Core and the panel need to know about the chores. Loot.lua,
--- Vendor.lua, Repair.lua, Camera.lua, Thanks.lua, Errors.lua, Clutter.lua and
--- Destroy.lua hold the behaviour, and Thanks.lua is the only one of them that
--- names anything outside this folder: it asks Unit\Roster.lua whether the
--- player who buffed you is one of yours.
+-- Vendor.lua, Repair.lua, Camera.lua, Thanks.lua, Fanfare.lua, Errors.lua,
+-- Clutter.lua and Destroy.lua hold the behaviour, and Thanks.lua is the only
+-- one of them that names anything outside this folder: it asks Unit\Roster.lua
+-- whether the player who buffed you is one of yours.
 --
 -- Settings that have nothing to do with each other sharing one part, because
 -- the alternative is a rail entry carrying one tick box each. The panel already
@@ -49,6 +49,11 @@ end
 local function SetThanks(value)
 	ns.db.thankStrangers = value
 	ns.Thanks.Apply()
+end
+
+local function SetFanfare(value)
+	ns.db.levelFanfare = value
+	ns.Fanfare.Apply()
 end
 
 -- One row of the muted-message list: a tick box and the message it silences.
@@ -152,6 +157,13 @@ ns.Register({
 		-- switching the part off.
 		thankWord = "ty",
 
+		-- On. It is the one setting in this part that is a joke rather than a
+		-- convenience, and it ships on for that reason and not in spite of it:
+		-- nobody installs this and then goes looking for the horn section, and
+		-- a level up is rare enough that the person it turns out not to be for
+		-- has typed `/wk ding off` once in a character's life.
+		levelFanfare = true,
+
 		-- On, and it mutes nothing, because the list beside it ships empty.
 		-- The switch decides whether the list is consulted; the list decides
 		-- what goes. Shipping the switch off would mean a list you had ticked
@@ -205,15 +217,15 @@ ns.Register({
 			ns.Print("camera " .. ns.Camera.Describe() .. ".")
 		end,
 
+		-- An on or an off sets the switch, anything else is the word itself.
+		-- No `say` in front of it, because "thanks cheers" is unambiguous and
+		-- the one word anybody would type. `thanks off` is the only text this
+		-- costs you, and off is what you would have meant by it anyway.
 		-- The raw argument for the word and the lowered one for the switch. The
 		-- dispatcher hands over both because a setting that is a piece of text
 		-- is the one kind that has to survive the case you typed it in, and a
 		-- thank you the addon quietly flattened to lower case is not the thank
 		-- you you wrote.
-		--
-		-- No `say` in front of the word, because "thanks cheers" is unambiguous
-		-- and is the one word anybody would type. `thanks off` is the only text
-		-- this costs you, and off is what you would have meant by it anyway.
 		thanks = function(arg, rawArg)
 			if arg == "on" or arg == "off" then
 				SetThanks(arg == "on")
@@ -221,6 +233,20 @@ ns.Register({
 				ns.db.thankWord = rawArg
 			end
 			ns.Print("thanking strangers " .. ns.Thanks.Describe() .. ".")
+		end,
+
+		-- No argument plays it, which is the same shape `repair` has and for the
+		-- same reason: this is a sound, the only way to know whether you want it
+		-- is to hear it, and a level up is not something you can arrange in
+		-- order to find out. An on or an off sets the setting instead.
+		ding = function(arg)
+			if arg == "on" or arg == "off" then
+				SetFanfare(arg == "on")
+				ns.Print("the level up fanfare " .. ns.Fanfare.Describe() .. ".")
+				return
+			end
+			local played, why = ns.Fanfare.Play()
+			ns.Print(played and "nothing's gonna ever keep you down." or (why .. "."))
 		end,
 
 		-- One word with four answers, the way `ui` already works. `list` and
@@ -269,6 +295,8 @@ ns.Register({
 		"zoom on|off, how far the camera pulls back",
 		"thanks on|off, whisper a stranger who buffs you",
 		"thanks <word>, what to whisper them instead of ty",
+		"ding, hear the level up fanfare now",
+		"ding on|off, five seconds of the eighties every time you level",
 		"errors on|off, filter the red text through your muted list",
 		"errors list|clear, what is muted and what has come past, or empty it",
 		"errors charge, mute what a missed charge shouts at you",
@@ -276,10 +304,11 @@ ns.Register({
 	},
 
 	status = function()
-		return ("loot %s; vendor %s; repair %s; camera %s; thanks %s; errors %s; clutter %s")
+		return ("loot %s; vendor %s; repair %s; camera %s; thanks %s; fanfare %s;"
+			.. " errors %s; clutter %s")
 			:format(ns.Loot.Describe(), ns.Vendor.Describe(), ns.Repair.Describe(),
-				ns.Camera.Describe(), ns.Thanks.Describe(), ns.Errors.Describe(),
-				ns.Destroy.Describe())
+				ns.Camera.Describe(), ns.Thanks.Describe(), ns.Fanfare.Describe(),
+				ns.Errors.Describe(), ns.Destroy.Describe())
 	end,
 
 	panel = function(ui)
@@ -348,6 +377,20 @@ ns.Register({
 			end)
 		ui.Hint("Empty it to send nothing while keeping the word you had. It goes out exactly as typed, once, with nothing of the addon's added to it.")
 		ui.Reading("thanking", ns.Thanks.Describe)
+
+		ui.Section("Level up", "Chores")
+		ui.Lede("Plays five seconds of You're the Best over the client's own ding, every time you level.")
+		ui.Check("a fanfare when I level",
+			function() return ns.db.levelFanfare end,
+			SetFanfare)
+		ui.Hint("It goes out on the master volume rather than the sound effects slider, so it still sounds for someone who has turned combat noise off. Two levels in one breath play it once.")
+		ui.Action(function() return "hear it now" end, function()
+			local played, why = ns.Fanfare.Play()
+			if not played then
+				ns.Print(why .. ".")
+			end
+		end)
+		ui.Reading("the fanfare", ns.Fanfare.Describe)
 
 		ui.Section("Clutter", "The screen")
 		ui.Lede("A window for the finished quest items that sit in your bags and cannot be sold.")

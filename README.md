@@ -212,6 +212,13 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   instead of 1.9. A stranger who buffs you in passing gets a whispered `ty`,
   once every ten minutes per person, and nobody in your party or raid is ever
   whispered.
+- **A fanfare when you level.** Five seconds of You're the Best over the
+  client's own chime. The snippet is the one out of BestAround, which is where
+  everybody who has heard this joke heard it, and `Media/BestAround-LICENSE.txt`
+  says where it came from. It plays on the master volume rather than the sound
+  effects slider, so combat noise turned down does not take it with it, and two
+  levels in one breath play it once. `/wk ding` plays it now, `/wk ding off`
+  ends it.
 - **`/wk destroy` clears out finished quest items.** One card at a time, with
   the quest it came from written on it, and a destroy and a skip. It reads
   Questie's database to work out which quest, so it needs Questie installed.

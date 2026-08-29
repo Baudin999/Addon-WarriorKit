@@ -14,6 +14,7 @@ local events, constant, advance = H.events, H.constant, H.advance
 local JUNK, refill, misused = H.JUNK, H.refill, H.misused
 local GUILD, CORPSE, looted = H.GUILD, H.CORPSE, H.looted
 local ns, fire, check = H.ns, H.fire, H.check
+local sound = H.sound
 local drawn = H.carry.drawn
 
 local function lootedCount()
@@ -362,6 +363,92 @@ ns.db.maxZoom = true
 ns.Camera.Apply()
 
 ----------------------------------------------------------------------
+-- The fanfare
+--
+-- The part is five seconds of a sound file and one event, so what is worth
+-- asserting is the three ways it can be wrong in silence: the wrong file, a
+-- second copy of it over the first, and a client that answered something the
+-- addon read as a refusal when it was not one.
+----------------------------------------------------------------------
+
+do
+	local SNIPPET = "Interface\\AddOns\\WarriorKit\\Media\\BestAround.mp3"
+
+	local function heard()
+		return #sound.played
+	end
+
+	ns.db.levelFanfare = true
+	ns.Fanfare.Apply()
+
+	local before = heard()
+	advance(60)
+	fire("PLAYER_LEVEL_UP")
+	check(heard() == before + 1, "levelling up played nothing")
+	check(sound.played[heard()].path == SNIPPET,
+		("the fanfare handed the client %s"):format(tostring(sound.played[heard()].path)))
+	check(sound.played[heard()].channel == "Master",
+		"the fanfare went out on the sound effects slider rather than the master one")
+
+	-- Two levels off one turn-in. The client fires the event once a level and the
+	-- second one lands in the same frame as the first, so the throttle is the only
+	-- thing between you and two copies of the same five seconds a frame apart.
+	before = heard()
+	fire("PLAYER_LEVEL_UP")
+	check(heard() == before, "a second level in the same breath started the clip again")
+
+	-- And past the end of the clip it plays again, because the throttle is the
+	-- length of the song and not a rule about how often you may level.
+	advance(6)
+	fire("PLAYER_LEVEL_UP")
+	check(heard() == before + 1, "the throttle never released")
+
+	-- Off is unregistered, not a branch inside a handler the client still calls.
+	ns.db.levelFanfare = false
+	ns.Fanfare.Apply()
+	before = heard()
+	advance(60)
+	fire("PLAYER_LEVEL_UP")
+	check(heard() == before, "the fanfare played with the setting off")
+	check(ns.Fanfare.Describe():match("^off"), "off does not describe itself as off")
+
+	-- A press ignores the switch, the same as `/wk repair` does. This is the whole
+	-- of how anybody decides whether they want the setting on.
+	check(ns.Fanfare.Play(), "the press refused to play with the setting off")
+	check(heard() == before + 1, "the press played nothing")
+
+	-- A muted channel. The client answers nil rather than raising, and a fanfare
+	-- that did not sound has to say so: it is otherwise indistinguishable from a
+	-- setting somebody forgot they turned off.
+	sound.willPlay = false
+	advance(60)
+	local played, why = ns.Fanfare.Play()
+	check(not played, "a muted channel reported as played")
+	check(why == "the master volume is down or the channel is muted",
+		("a muted channel reported %q"):format(tostring(why)))
+
+	-- And the build that answers nothing at all, which is the one the return
+	-- counting exists for. Read positionally, its silence is a refusal, and every
+	-- fanfare that played perfectly well would be reported as one that did not.
+	sound.willPlay = "silent"
+	advance(60)
+	check(ns.Fanfare.Play(), "a client that returns nothing was read as a muted channel")
+	sound.willPlay = true
+
+	-- A client with no PlaySoundFile at all loses the fanfare and nothing else.
+	local play = _G.PlaySoundFile
+	_G.PlaySoundFile = nil
+	advance(60)
+	check(not ns.Fanfare.Play(), "the fanfare played on a client with nothing to play it")
+	check(ns.Fanfare.Describe():match("PlaySoundFile"),
+		"a client that cannot play it does not say so")
+	_G.PlaySoundFile = play
+
+	ns.db.levelFanfare = true
+	ns.Fanfare.Apply()
+end
+
+----------------------------------------------------------------------
 -- The error filter
 --
 -- One replaced method, and everything below is asked of the screen rather
@@ -464,9 +551,9 @@ check(ns.Errors.Count() == 0, "clearing left something muted")
 shout(_G.ERR_BADATTACKFACING)
 check(lastDrawn() == _G.ERR_BADATTACKFACING, "clearing did not put the messages back")
 
-print(("chores corpse of %d in one pass, vendor paid %s over %d passes for 2 of 4 slots, repair %s, camera %s, errors %s over %d drawn")
+print(("chores corpse of %d in one pass, vendor paid %s over %d passes for 2 of 4 slots, repair %s, camera %s, fanfare %d played, errors %s over %d drawn")
 	:format(#CORPSE, _G.GetCoinText(sale), ticks, ns.Repair.Describe(),
-		ns.Camera.Describe(), ns.Errors.Describe(), drewCount()))
+		ns.Camera.Describe(), #sound.played, ns.Errors.Describe(), drewCount()))
 
 ----------------------------------------------------------------------
 -- Thanking a stranger

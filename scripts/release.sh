@@ -87,8 +87,16 @@ listing=$(unzip -l "$zip_path")
 # here because a font that did not travel takes the chevrons back to the letter
 # v and says nothing about it, and its licence is here because the OFL says the
 # licence goes wherever the font goes.
+#
+# Media/BestAround.mp3 is here for the first of those reasons and its licence
+# for the second. A sound that did not travel is a level up that plays nothing
+# and says nothing about why, and the file beside it is the only record in the
+# zip of whose recording it is. If this addon is ever put where strangers
+# download it, that pair is the thing to decide about first: the snippet is not
+# ours to relicense, and taking it out is one line here and one file in Media.
 for required in WarriorKit/WarriorKit.toc WarriorKit/WarriorKit_Vanilla.toc WarriorKit/Bindings.xml \
-	WarriorKit/Media/Icon.tga WarriorKit/Media/Glyphs.ttf WarriorKit/Media/Glyphs-LICENSE.txt; do
+	WarriorKit/Media/Icon.tga WarriorKit/Media/Glyphs.ttf WarriorKit/Media/Glyphs-LICENSE.txt \
+	WarriorKit/Media/BestAround.mp3 WarriorKit/Media/BestAround-LICENSE.txt; do
 	if ! grep -qF "$required" <<<"$listing"; then
 		echo "the zip is missing $required" >&2
 		exit 1

@@ -1,0 +1,22 @@
+BestAround.mp3
+==============
+
+A five second snippet of "You're the Best" (Joe Esposito, 1984), taken byte for
+byte out of the WoW addon it has been shipping in since 2007.
+
+  Addon      BestAround 6.0, bestaround.mp3
+  Author     LittleJoey, fixed for 6.0 by Nephyrin
+  Source     https://www.wowinterface.com/downloads/info18925-BestAround.html
+  MD5        0d2eea650dbba5c750d1afc8477ca11e
+  Format     MPEG layer III, 256 kbps, 44.1 kHz stereo, 5.1 seconds
+
+The recording is not ours and it is not covered by this addon's LICENSE. The
+song is copyright its rights holders; the snippet is here for the same reason it
+is in BestAround, which is that a level up wants a fanfare, and it is not
+licensed for anything past that. If WarriorKit is ever put somewhere strangers
+download it, this file is the one to think about first.
+
+The addon plays it and nothing else. Comfort/Fanfare.lua is the only file that
+names it, `/wk ding off` stops it, and deleting this pair leaves an addon that
+still loads: the part probes for the file's own API and goes quiet when the
+sound will not play.

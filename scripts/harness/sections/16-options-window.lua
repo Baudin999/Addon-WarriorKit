@@ -423,9 +423,11 @@ if window then
 	-- to 20,228 across sixty. 20,400 is that measurement plus a hint's worth of
 	-- room again. The thanks page costs 505 across a check and a field and takes
 	-- it to 20,733 across sixty-one. 20,900 is that measurement plus a hint's
-	-- worth of room once more.
-	check(prose < 20900,
-		("the window holds %d characters of prose and the budget is 20,900"):format(prose))
+	-- worth of room once more. The level up page costs 260 across one check and
+	-- takes it to 20,993 across sixty-two. 21,160 is that measurement plus a
+	-- hint's worth of room again.
+	check(prose < 21160,
+		("the window holds %d characters of prose and the budget is 21,160"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

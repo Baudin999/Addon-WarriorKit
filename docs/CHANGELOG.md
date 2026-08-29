@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### You're the best around
+
+Levelling plays five seconds of the Karate Kid chorus over the client's own
+chime. The snippet is BestAround's, byte for byte: LittleJoey's addon from 2007,
+fixed for 6.0 by Nephyrin, four files and one of them the song.
+`src/Media/BestAround-LICENSE.txt` records where it came from and says plainly
+that the recording is somebody else's and is not covered by this addon's
+licence.
+
+It goes out on the master channel rather than on the sound effects slider, so
+somebody who plays with combat noise down still gets it. A turn-in that levels
+you twice fires the event twice in the same frame, and the part throttles on the
+clip's own length, so that plays once rather than over itself. `/wk ding` plays
+it now, which is the only way anybody can decide whether they want it, and
+`/wk ding off` ends it. Off unregisters the event rather than branching inside
+the handler.
+
+`check.sh` learned about sound. Media/ held three kinds of file and now holds
+four: a sound is OGG or MP3 and carries a `<name>-LICENSE.txt` beside it the way
+a font does, for a harder reason, because an audio file can be the whole of
+somebody else's work rather than a glyph out of a set. A second rule catches the
+other half of the same failure: every `Media\<file>` a Lua file names has to be
+there. Neither of those failures says anything out loud in the game, which is
+the whole reason both are gates.
+
 ### Enemy bars arrive sooner, arrive smoothly, and take a click along their whole length
 
 Three things about the bars on mobs, and all three are the same complaint: the

@@ -1,6 +1,6 @@
 ## Interface: 11509
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, a row counting down the cooldowns that decide fights, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, the addon's own tooltip on a creature you point at in the world with where you stand on it under the name, a mail window that colours a recipient green for one of yours, blue for somebody you know and red for a stranger and splits more than twelve attachments across as many mails as it takes, a quest log three columns wide with every quest you are on down the left grouped by zone, what this one wants in the middle and what it pays on the right, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a whispered thank you to a stranger who buffs you, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, a row counting down the cooldowns that decide fights, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, the addon's own tooltip on a creature you point at in the world with where you stand on it under the name, a mail window that colours a recipient green for one of yours, blue for somebody you know and red for a stranger and splits more than twelve attachments across as many mails as it takes, a quest log three columns wide with every quest you are on down the left grouped by zone, what this one wants in the middle and what it pays on the right, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a whispered thank you to a stranger who buffs you, five seconds of the eighties every time you level, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
@@ -499,6 +499,15 @@ Comfort\Camera.lua
 # back. After Unit\Roster.lua, far above this line, which is what it asks
 # whether a caster is one of yours.
 Comfort\Thanks.lua
+
+# The fanfare when you level: five seconds of an eighties chorus over the
+# client's own chime, out of BestAround, which is the addon everybody who has
+# heard this joke heard it from. Not a chore, and the only thing in the part
+# that saves you nothing at all. It is here because Comfort owns the settings
+# that belong to no feature, and because a tab is a cheaper home for one tick
+# box than a rail entry. Depends on nothing: one event, one file in Media, and
+# it goes quiet on a client that will not take the call.
+Comfort\Fanfare.lua
 
 # The error filter. Not a chore like the four above it, in that nothing runs
 # for you; it is a list of messages you have decided you do not need, and one

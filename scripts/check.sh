@@ -118,7 +118,21 @@ while IFS= read -r declared; do
 	[ -f "$path" ] || { echo "a TOC names a missing texture: $declared"; status=1; }
 done < <(grep -hE '^## IconTexture:' WarriorKit*.toc | sed 's/^[^:]*: *//' | sort -u)
 
-# Three kinds of file live in Media/ and each has its own rule.
+# And the same the other way round, for the paths that are in the code rather
+# than in a TOC. A font, a texture or a sound is named as a string at the point
+# it is used, the client says nothing at all when one does not resolve, and the
+# symptom is a missing glyph or a silence that reads as a setting.
+#
+# Matched on the folder rather than on the whole path, because UI/Text.lua
+# builds its own out of ADDON and a rule that only saw a literal would stop
+# covering the file it was written for.
+while IFS= read -r named; do
+	[ -n "$named" ] || continue
+	[ -f "Media/$named" ] \
+		|| { echo "a Lua file names Media\\$named and it is not there"; status=1; }
+done < <(grep -rhoE 'Media\\\\[A-Za-z0-9_.-]+' --include='*.lua' . | sed 's/.*\\//' | sort -u)
+
+# Four kinds of file live in Media/ and each has its own rule.
 #
 # A texture is BLP or TGA, because the client reads nothing else, and both its
 # sides are powers of two, because a texture that is not is not drawn. Neither
@@ -130,8 +144,16 @@ done < <(grep -hE '^## IconTexture:' WarriorKit*.toc | sed 's/^[^:]*: *//' | sor
 # and a font in this folder with no <name>-LICENSE.txt beside it is a licence
 # that got left behind in a refactor.
 #
-# A licence is that file, and it is allowed here only because a font it belongs
-# to is here too.
+# A sound is OGG or MP3, because PlaySoundFile reads nothing else, and it
+# carries the font's licence rule for a harder reason. Media/BestAround.mp3 is
+# five seconds of a record somebody else made, and an audio file is the one kind
+# of asset here that can be somebody else's whole work rather than a glyph out
+# of a set. A sound with no <name>-LICENSE.txt beside it is a file nobody can
+# tell the provenance of by looking, which is exactly the state you do not want
+# to find a repository in.
+#
+# A licence is that file, and it is allowed here only because a font or a sound
+# it belongs to is here too.
 #
 # Everything is named by something in the addon, licences apart, because an
 # asset nothing names is weight in every download and nobody notices it.
@@ -141,11 +163,13 @@ while IFS= read -r asset; do
 	case "$asset" in
 		*.tga|*.blp) kind=texture ;;
 		*.ttf) kind=font ;;
+		*.ogg|*.mp3) kind=sound ;;
 		*-LICENSE.txt)
 			kind=licence
 			named=0
-			[ -f "${asset%-LICENSE.txt}.ttf" ] \
-				|| { echo "$asset is a licence for a font that is not here"; status=1; }
+			stem="${asset%-LICENSE.txt}"
+			[ -f "$stem.ttf" ] || [ -f "$stem.ogg" ] || [ -f "$stem.mp3" ] \
+				|| { echo "$asset is a licence for nothing that is here"; status=1; }
 			;;
 		*) echo "$asset is not a format the client reads"; status=1; continue ;;
 	esac
@@ -155,9 +179,9 @@ while IFS= read -r asset; do
 			|| { echo "nothing in the addon names $asset"; status=1; }
 	fi
 
-	if [ "$kind" = "font" ]; then
-		[ -f "${asset%.ttf}-LICENSE.txt" ] \
-			|| { echo "$asset ships with no ${asset%.ttf}-LICENSE.txt beside it"; status=1; }
+	if [ "$kind" = "font" ] || [ "$kind" = "sound" ]; then
+		[ -f "${asset%.*}-LICENSE.txt" ] \
+			|| { echo "$asset ships with no ${asset%.*}-LICENSE.txt beside it"; status=1; }
 	fi
 
 	[ "$kind" = "texture" ] || continue

@@ -533,6 +533,31 @@ end
 _G.FACTION_STANDING_LABEL6 = "Honored"
 _G.FACTION_STANDING_LABEL7 = "Revered"
 
+-- The one client call the level up fanfare makes.
+--
+-- Nothing installed on either of these clients calls PlaySoundFile, so
+-- Comfort/Fanfare.lua probes for it, pcalls it and counts what came back. All
+-- three of those are only worth anything against a stub that can be each of the
+-- clients they exist for, so this one is switchable rather than fixed.
+--
+--   played    every call, in order, with the channel it asked for
+--   willPlay  what the client answers: true, nil for a muted channel, or
+--             `silent`, which is a build that returns nothing at all and is the
+--             one the return counting exists for
+local sound = { played = {}, willPlay = true }
+
+_G.PlaySoundFile = function(path, channel)
+	sound.played[#sound.played + 1] = { path = path, channel = channel }
+	if sound.willPlay == "silent" then
+		return
+	end
+	if not sound.willPlay then
+		return nil
+	end
+	return true, #sound.played
+end
+
+H.sound = sound
 H.own, H.realPlayers, H.inCombat = own, realPlayers, inCombat
 H.debuffs, H.buffs, H.advance, H.ITEMS = debuffs, buffs, advance, ITEMS
 H.JUNK, H.QUESTBAG, H.CARRIED = JUNK, QUESTBAG, CARRIED
