@@ -51,6 +51,18 @@ local function HoverWord(arg)
 		return
 	end
 
+	if option == "debug" then
+		ns.db.hoverDebug = ns.Command.Toggle(value)
+		ns.Print(ns.db.hoverDebug
+			and "the log is on. Press a bound key over something and read what it says."
+			or "the log is off.")
+		ns.HoverCast.Watch()
+		if ns.db.hoverDebug then
+			ns.HoverCast.Apply()
+		end
+		return
+	end
+
 	if option == "list" then
 		ns.db.hoverSheet = ns.Command.Toggle(value)
 		ns.HoverSheet.Rebuild()
@@ -99,6 +111,12 @@ ns.Register({
 		-- screen has no way to draw the difference.
 		hoverFallback = false,
 
+		-- Off, and printed to the chat frame rather than drawn anywhere. It is
+		-- for the one question a player cannot answer by looking: a key that is
+		-- bound and casts nothing. Left on it says three or four lines per
+		-- press, which is why it is not a thing you would leave on.
+		hoverDebug = false,
+
 		hoverSheet = true,
 		-- Clear of the middle of the screen and clear of the cooldown row at
 		-- 200 and the buff nag under it. To the right, because the left of the
@@ -126,6 +144,7 @@ ns.Register({
 		"hover on|off, a key casts on whatever the mouse is over",
 		"hover show, every key and the macro it presses",
 		"hover remove <key>, hover clear",
+		"hover debug on|off, say what every press finds and whether it casts",
 		"hover list on|off, the list drawn over the world",
 		"hover target on|off, fall back to your target when hovering nothing",
 	},

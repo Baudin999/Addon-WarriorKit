@@ -355,6 +355,88 @@ function Hover.Macro(bind)
 	return ("%s %s %s"):format(verb, clause, bind.name)
 end
 
+--------------------------------------------------------------------------
+-- What the press finds
+--
+-- Said, never acted on. The conditional in the macro decides for real, at the
+-- moment of the press, inside the secure call; everything below is a second
+-- reading of the same three things taken beside it so the debug log can print
+-- what the conditional was looking at.
+--
+-- It exists because this feature has exactly one failure that leaves no trace.
+-- A key that is bound, arrives at the button and casts nothing looks identical
+-- to a key that was never bound at all, and the usual reason is the filter: a
+-- binding made without touching the target button carries `an enemy`, and a
+-- heal aimed at a friend under `harm` is a press the client discards in
+-- silence. Nothing here is called unless `/wk hover debug on`.
+--------------------------------------------------------------------------
+
+local function Look(unit)
+	if not UnitExists(unit) then
+		return nil
+	end
+	return {
+		name = UnitName(unit) or "?",
+		dead = UnitIsDeadOrGhost(unit) and true or false,
+		harm = UnitCanAttack("player", unit) and true or false,
+		help = type(UnitCanAssist) == "function"
+			and (UnitCanAssist("player", unit) and true or false)
+			or (UnitIsFriend("player", unit) and true or false),
+	}
+end
+
+-- The same three tests the conditional makes, in the same order, so a verdict
+-- printed here and a press that casts nothing disagree only where this file is
+-- wrong about the client.
+local function Matches(who, seen)
+	if not seen or seen.dead then
+		return false
+	end
+	if who.id == "enemy" then
+		return seen.harm
+	end
+	if who.id == "friend" then
+		return seen.help
+	end
+	return true
+end
+
+-- The raw reading, for the line above the verdict. Whether it is attackable and
+-- whether it is assistable both, because a totem, a critter and a duelling
+-- friend are each one and not the other and the verdict alone would not say so.
+function Hover.Sight()
+	local seen = Look("mouseover")
+	if not seen then
+		return "nothing under the cursor"
+	end
+	return ("%s under the cursor, %s, %s"):format(seen.name,
+		seen.dead and "dead" or "alive",
+		seen.harm and (seen.help and "attackable and assistable" or "attackable")
+			or (seen.help and "assistable" or "neither attackable nor assistable"))
+end
+
+-- What one binding would do about that, in one sentence ending in the reason.
+function Hover.Would(bind)
+	local who = Hover.Who(bind.who)
+	local over, at = Look("mouseover"), Look("target")
+
+	if Matches(who, over) then
+		return ("casts %s on %s"):format(bind.name, over.name)
+	end
+
+	local fell = ns.db.hoverFallback and Matches(who, at)
+	if over then
+		if fell then
+			return ("%s is not %s, so it falls back to %s"):format(over.name, who.label, at.name)
+		end
+		return ("%s is not %s, so nothing casts"):format(over.name, who.label)
+	end
+	if fell then
+		return ("nothing under the cursor, so it falls back to %s"):format(at.name)
+	end
+	return "nothing under the cursor, so nothing casts"
+end
+
 -- One binding, said in one line, for the sheet and for /wk status both.
 function Hover.Line(bind)
 	return ("%s  %s on %s"):format(bind.key, bind.name, Hover.Who(bind.who).label)

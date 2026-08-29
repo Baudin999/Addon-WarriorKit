@@ -49,7 +49,85 @@ Cast.BUTTON_NAME = BUTTON_NAME
 -- finds nothing and does nothing, which is the right answer for a button whose
 -- only real callers name themselves.
 local button = CreateFrame("Button", BUTTON_NAME, UIParent, "SecureActionButtonTemplate")
+
+-- `useOnKeyDown` is the second thing that shipped wrong, and it is invisible from
+-- every side an addon can look at. The key bound, the readback agreed, the click
+-- dispatched, and the spell did not go off.
+--
+-- RegisterForClicks decides whether the click is dispatched at all. The attribute
+-- decides whether the secure handler acts on the press or throws it away and
+-- waits for the release. Registered on down with the attribute unset, the click
+-- arrives, every insecure thing about it looks correct, and the protected call
+-- inside is discarded. That is the whole bug, and no PreClick, no readback and no
+-- attribute dump can see it, because the half that fails is the half addons
+-- cannot enter.
+--
+-- Clique is the proof rather than the documentation, and it is installed on this
+-- machine. Its `CliqueSABButton` is this button: one global SecureActionButton,
+-- bound by key through a click, casting on the mouseover. Its default direction
+-- is `down`, and on that setting it sets both of these, in `UpdateGlobalButtonClicks`:
+--
+--     globutton:SetAttribute("useOnKeyDown", true)
+--     globutton:RegisterForClicks("AnyDown")
+--
+-- and its click proxies, which are pinned to the release, set `useOnKeyDown` to
+-- false beside `RegisterForClicks("AnyUp")` with the note that a down-mode proxy
+-- would never fire. The two halves have to agree, and here only one of them was
+-- being set.
+--
+-- Down rather than up because a key that casts when you press it is what a key
+-- that casts feels like, and because that is the direction Clique ships.
+button:SetAttribute("useOnKeyDown", true)
 button:RegisterForClicks("AnyDown")
+
+--------------------------------------------------------------------------
+-- The debug log
+--
+-- Off by default and silent when off. It is here because this feature fails in
+-- three places that all look the same from a chair: the key was never put on
+-- the binding layer, the key was put there and the client is not delivering it,
+-- or the press arrives and the conditional discards it. One of those is a
+-- client that will not take the key, one is a client that takes it and lies,
+-- and one is a filter set to `an enemy` on a healing spell. Nothing about the
+-- three is distinguishable from the outside, and the third is by far the most
+-- common.
+--
+-- So the log says one line where the binding is written, one line where the
+-- press arrives, and one line for the verdict. A press with no `arrived` line
+-- is the second case; a press with one and a verdict of nothing is the third.
+--------------------------------------------------------------------------
+
+local function Log(fmt, ...)
+	if not (ns.db and ns.db.hoverDebug) then
+		return
+	end
+	ns.Print("|cff808080hover|r " .. (select("#", ...) > 0 and fmt:format(...) or fmt))
+end
+
+-- PreClick rather than OnClick, and this is the whole reason the log can exist
+-- at all: PreClick runs before the secure handler and outside it, so it may
+-- print. A print from inside the protected call would be a taint on the frame
+-- that casts, which is the debugging that breaks the thing being debugged.
+--
+-- It runs whether or not the attributes under that suffix hold anything, which
+-- is what makes a click arriving on a suffix with no macro visible rather than
+-- silent.
+button:SetScript("PreClick", function(_, click)
+	if not (ns.db and ns.db.hoverDebug) then
+		return
+	end
+	local index = tonumber(click)
+	local bind = index and ns.Hover.List()[index]
+	Log("arrived on %s", tostring(click))
+	if not bind then
+		Log("  no binding at %s, so the button carries nothing for it", tostring(click))
+		return
+	end
+	Log("  %s, %s", button:GetAttribute("*type" .. index) or "|cffff5555no type|r",
+		button:GetAttribute("*macrotext" .. index) or "|cffff5555no macro|r")
+	Log("  %s", ns.Hover.Sight())
+	Log("  %s", ns.Hover.Would(bind))
+end)
 
 local held = {}   -- index -> the key currently on the override layer
 local heldAny     -- true while at least one is up
@@ -102,6 +180,7 @@ end
 function Cast.Apply()
 	if InCombatLockdown() then
 		pending = true
+		Log("in combat, so the keys are held until the fight ends")
 		return false
 	end
 	pending = nil
@@ -113,6 +192,7 @@ function Cast.Apply()
 	held, heldAny = {}, false
 
 	if not ns.db.hover then
+		Log("mouseover casting is off, so no key is up")
 		return true
 	end
 
@@ -128,10 +208,19 @@ function Cast.Apply()
 				if reads ~= nil then
 					proven = reads
 				end
-			elseif not warned then
-				warned = true
-				ns.Print("this client would not take a key for mouseover casting.")
+				Log("%s is index %d, %s, %s", key, index,
+					reads == nil and "the readback could not be asked"
+						or (reads and "the binding layer agrees" or "|cffff5555the binding layer does not have it|r"),
+					ns.Hover.Macro(bind))
+			else
+				Log("|cffff5555%s was refused by the client|r", key)
+				if not warned then
+					warned = true
+					ns.Print("this client would not take a key for mouseover casting.")
+				end
 			end
+		else
+			Log("|cffff5555%s is not a key this can bind|r", tostring(key))
 		end
 	end
 
@@ -173,12 +262,46 @@ function Cast.Macro(index)
 	return button:GetAttribute("*macrotext" .. index)
 end
 
+--------------------------------------------------------------------------
+-- Did the client do anything with it
+--
+-- The one question the two logs above cannot answer between them. PreClick says
+-- the press reached the button; nothing on this side of the secure handler says
+-- whether the macro ran, because a conditional that does not match and a
+-- protected call that was discarded are both silent and look identical.
+--
+-- UNIT_SPELLCAST_SENT is the client answering. A press with a verdict of `casts`
+-- and no `the client sent` line under it is the press being thrown away, which
+-- is exactly the failure the click registration above was.
+--
+-- Registered only while the log is on, and it fires once per cast rather than on
+-- a ticker, so it costs nothing either way.
+--------------------------------------------------------------------------
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
-events:SetScript("OnEvent", function(_, event)
+events:SetScript("OnEvent", function(_, event, unit, target, _, spell)
+	if event == "UNIT_SPELLCAST_SENT" then
+		if unit == "player" then
+			Log("  the client sent %s at %s",
+				ns.SpellName(spell) or tostring(spell), target or "nothing")
+		end
+		return
+	end
 	if event == "PLAYER_REGEN_ENABLED" and not pending then
 		return
 	end
 	Cast.Apply()
+	Cast.Watch()
 end)
+
+-- Called where the log is turned on and off, and once at login, because a log
+-- that only starts watching at the next reload is a log that lies by omission.
+function Cast.Watch()
+	if ns.db and ns.db.hoverDebug then
+		events:RegisterEvent("UNIT_SPELLCAST_SENT")
+	else
+		events:UnregisterEvent("UNIT_SPELLCAST_SENT")
+	end
+end

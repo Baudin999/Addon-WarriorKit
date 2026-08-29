@@ -130,6 +130,18 @@ check(button:GetAttribute("*type1") == "macro",
 check(button:GetAttribute("type-1") == nil and button:GetAttribute("type1") == nil,
 	"the action is written under a name that only answers with no modifier held")
 
+-- The other half of the press, and the half nothing else in this file can see.
+-- RegisterForClicks decides whether the click is dispatched; useOnKeyDown decides
+-- whether the secure handler acts on it or waits for the release. Registered on
+-- down with this unset, every assertion above still passes and no key casts.
+-- Clique's own global button sets the pair together and this is that pair.
+check(button:GetAttribute("useOnKeyDown") == true,
+	("the button acts on the press only when useOnKeyDown is true, and it is %q")
+		:format(tostring(button:GetAttribute("useOnKeyDown"))))
+local clicks = button:GetRegisteredClicks() or {}
+check(clicks.AnyDown == true and clicks.AnyUp == nil,
+	"the button must be registered for the down edge alone, to match useOnKeyDown")
+
 -- One key, one binding. The second one wins silently on the client, which is
 -- why it is refused here rather than reported afterwards.
 ok, said = bind(2, "spell", "friend", "SHIFT-BUTTON3")

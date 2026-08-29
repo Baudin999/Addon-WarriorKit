@@ -275,6 +275,13 @@ read_globals = {
 	-- because the probe is the shim and it lives beside the caller.
 	"UnitInRange", "UnitIsGhost", "UnitIsDeadOrGhost",
 	"UnitGroupRolesAssigned", "GetPartyAssignment",
+	-- Whether the thing under the cursor is one you could help, for the
+	-- mouseover debug log. It is the reading beside `[help]`, which is the half
+	-- of the filter UnitCanAttack above cannot answer, and a heal bound under
+	-- the enemy filter is the failure the log exists to name. UnitCanAssist is
+	-- probed by name anyway and falls back to UnitIsFriend, because nothing in
+	-- this install calls it unguarded and the two disagree only on a duel.
+	"UnitCanAssist", "UnitIsFriend",
 	-- SoftTargetEnemy is read and written by Charge/SoftTarget.lua, which owns
 	-- the CVar out of combat and hands it back in. Both calls are pcalled: no
 	-- addon here proves SetCVar takes that name on 2.5.6.
