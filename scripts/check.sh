@@ -647,11 +647,28 @@ fi
 # hunter has no file, which is a supported class and the one that proves the ten
 # class-agnostic parts still stand up with nothing registered.
 #
+# The list is read off the files rather than written out here, because a class
+# file this loop did not name got no run at all and what that hid was a login
+# error rather than a wrong answer. The cap of eight entries on the cooldown row
+# and four on the upkeep row is an assert inside Cooldowns.All and Upkeep.Fixed,
+# and it fires on the client, at PLAYER_LOGIN, as a Lua error. Mage already
+# lists eight cooldowns, so the ninth is the one that does it, and the only
+# thing that reaches it before a game does is a harness run as that class.
+# HUNTER stays written out because having no file is the whole of what it
+# proves.
+#
 # Everything else in the addon is asserted again on every run, which is the
 # point: a part that quietly needed a warrior fails here rather than in
 # someone's game.
 if [ -f ../scripts/harness.lua ]; then
-	for class in WARRIOR MAGE SHAMAN PRIEST HUNTER; do
+	# The token the file registers, not the file's name: what the harness is
+	# handed is what Class.Register was called with.
+	classes=$(sed -n 's/^ns\.Class\.Register("\([A-Z_]*\)".*/\1/p' Class/*.lua | sort)
+	if [ -z "$classes" ]; then
+		echo "no file in Class/ calls ns.Class.Register, so no class shape is covered"
+		status=1
+	fi
+	for class in $classes HUNTER; do
 		if ! lua5.1 ../scripts/harness.lua . "$class"; then
 			echo "harness FAIL as $class"
 			status=1

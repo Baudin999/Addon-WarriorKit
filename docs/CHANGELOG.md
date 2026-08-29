@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### check.sh finds the classes instead of naming them
+
+The harness loop listed WARRIOR, MAGE, SHAMAN, PRIEST and HUNTER as five words
+with nothing tying them to `Class/*.lua`. A sixth class file got no run, and the
+failure that hides is a login error rather than a wrong answer: the cap of eight
+entries on the cooldown row and four on the upkeep row is an `assert` inside
+`Cooldowns.All` and `Upkeep.Fixed`, and it fires on the client, at
+`PLAYER_LOGIN`, as a Lua error. `Class/Mage.lua` already lists eight cooldowns,
+so a ninth is all it takes, and nothing reaches that assert before the game does
+unless the harness has been run as that class.
+
+So the list is read off the files. `sed` pulls the token out of every
+`ns.Class.Register("...")` call in `Class/`, which is the string the harness is
+handed, rather than the file's name, which is only a convention. An empty result
+fails the gate, because no class covered at all is the one outcome that would
+otherwise look like a pass. HUNTER stays written out on the loop, since having
+no file is the whole of what that shape proves.
+
 ### Casting on what the mouse is over
 
 The addon's own Clique, under `Hover/`. Drag a spell onto the slot in the panel,
