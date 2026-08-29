@@ -23,13 +23,12 @@ ns.Hover = Hover
 -- owns the button and the keys, Sheet.lua draws the list on screen, and neither
 -- of them decides anything.
 --
--- The filter is a macro conditional rather than a unit attribute, because a
--- unit attribute cannot say "only when it is an enemy". `[@mouseover,harm]` can,
--- it is what every hand written mouseover macro in the game is built on, and it
--- costs nothing at the moment of the press: a conditional that does not match
--- casts nothing and says nothing. That also means a binding survives combat
--- without being rewritten, which an attribute would not, because attributes
--- cannot be touched once lockdown is up.
+-- The filter is a second button name rather than a macro conditional, and the
+-- whole of why is beside WHO below. A conditional needs macro text, macro text
+-- set by insecure code and run off a keypress is what the secure system exists
+-- to refuse, and `harmbutton` says the same thing in a name. The conditional is
+-- still written here, for `/wk hover show` and for the debug log to ask the
+-- client's own parser about, and nothing presses it.
 --------------------------------------------------------------------------
 
 -- Twelve, which is a full action bar's worth of keys and more than anybody
@@ -49,10 +48,21 @@ Hover.MAX = MAX
 -- The order is the order the picker offers them in and the order the sheet
 -- sorts by, so enemy first: this addon's own class is a warrior and the enemy
 -- binding is the one that gets made first.
+--
+-- `remap` is how the filter is said to a secure button, and it is not a
+-- conditional. There is no attribute that means "only when it is an enemy". What
+-- there is instead is a name: `harmbutton` tells the client to send the click to
+-- a different button name when the unit under the cursor can be attacked, and the
+-- action is written under that second name only. A press on a friend never finds
+-- an action at all, because the name it arrives under carries nothing.
+--
+-- `clause` is the same filter written as a macro conditional. Nothing presses it
+-- any more; it is what the debug log asks the client's own parser about, so a
+-- press that casts nothing can say whether the thing under the cursor passed.
 Hover.WHO = {
-	{ id = "enemy",  label = "an enemy",     clause = "harm,nodead", tone = "loss" },
-	{ id = "friend", label = "a friend",     clause = "help,nodead", tone = "tick" },
-	{ id = "any",    label = "anything",     clause = "exists,nodead", tone = "dim" },
+	{ id = "enemy",  label = "an enemy",   clause = "harm,nodead",   tone = "loss", remap = "harmbutton" },
+	{ id = "friend", label = "a friend",   clause = "help,nodead",   tone = "tick", remap = "helpbutton" },
+	{ id = "any",    label = "anything",   clause = "exists,nodead", tone = "dim" },
 }
 
 -- The two the binding system must never lose, refused here for the reason
@@ -345,13 +355,22 @@ end
 -- does nothing, and the sheet has no way to draw the difference.
 --------------------------------------------------------------------------
 
+-- Nothing presses this. It is the binding said in the one line a player already
+-- knows how to read, for `/wk hover show`, and it is what the debug log's
+-- conditional probe is built out of. What the button actually carries is a set of
+-- attributes and Cast.lua is where they are named.
 function Hover.Macro(bind)
 	local who = Hover.Who(bind.who)
 	local verb = bind.kind == "item" and "/use" or "/cast"
-	local clause = ("[@mouseover,%s]"):format(who.clause)
-	if ns.db.hoverFallback then
-		clause = clause .. ("[%s]"):format(who.clause)
-	end
+	-- The mouseover said twice, shorthand then long form. They mean the same
+	-- thing and a client carries one or both; a clause built on a token this
+	-- build does not have never matches and never says so, and the second clause
+	-- costs nothing on a client where the first one already matched.
+	--
+	-- `nodead` stays on both. Dropping it would make a key heal a corpse on the
+	-- clients that do carry it, which is a worse trade than a key that needs one
+	-- more clause.
+	local clause = ("[@mouseover,%s][target=mouseover,%s]"):format(who.clause, who.clause)
 	return ("%s %s %s"):format(verb, clause, bind.name)
 end
 
@@ -401,6 +420,37 @@ local function Matches(who, seen)
 	return true
 end
 
+-- The filter's two spellings, one per line, for the debug log to ask the client
+-- about separately. Hover.Macro joins them into the single line a player reads;
+-- the log wants them apart, because a build that carries `@mouseover` and not
+-- `target=mouseover` answers yes to one and no to the other, and one line each
+-- is what shows which of the two this client is on.
+function Hover.Forms(bind)
+	local who = Hover.Who(bind.who)
+	return {
+		("[@mouseover,%s]"):format(who.clause),
+		("[target=mouseover,%s]"):format(who.clause),
+	}
+end
+
+-- What the client's own parser makes of one form, or nil where it cannot be
+-- asked. True where the conditional matched and the spell would have been sent,
+-- which is the reading that says the filter was never the problem.
+--
+-- The parser is asked rather than reimplemented, because Matches above is this
+-- file's opinion of the same three tests and the whole point of printing both is
+-- to see them disagree.
+function Hover.Understands(form, name)
+	if type(_G.SecureCmdOptionParse) ~= "function" then
+		return nil
+	end
+	local ok, said = pcall(_G.SecureCmdOptionParse, ("%s %s"):format(form, name))
+	if not ok then
+		return nil
+	end
+	return said == name
+end
+
 -- The raw reading, for the line above the verdict. Whether it is attackable and
 -- whether it is assistable both, because a totem, a critter and a duelling
 -- friend are each one and not the other and the verdict alone would not say so.
@@ -418,21 +468,13 @@ end
 -- What one binding would do about that, in one sentence ending in the reason.
 function Hover.Would(bind)
 	local who = Hover.Who(bind.who)
-	local over, at = Look("mouseover"), Look("target")
+	local over = Look("mouseover")
 
 	if Matches(who, over) then
 		return ("casts %s on %s"):format(bind.name, over.name)
 	end
-
-	local fell = ns.db.hoverFallback and Matches(who, at)
 	if over then
-		if fell then
-			return ("%s is not %s, so it falls back to %s"):format(over.name, who.label, at.name)
-		end
 		return ("%s is not %s, so nothing casts"):format(over.name, who.label)
-	end
-	if fell then
-		return ("nothing under the cursor, so it falls back to %s"):format(at.name)
 	end
 	return "nothing under the cursor, so nothing casts"
 end

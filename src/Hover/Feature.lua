@@ -70,15 +70,6 @@ local function HoverWord(arg)
 		return
 	end
 
-	if option == "target" then
-		ns.db.hoverFallback = ns.Command.Toggle(value)
-		ns.Hover.Changed()
-		ns.Print(ns.db.hoverFallback
-			and "a key with nothing under the cursor falls back to your target."
-			or "a key with nothing under the cursor does nothing.")
-		return
-	end
-
 	ns.db.hover = ns.Command.Toggle(option)
 	ns.Hover.Changed()
 	ns.Print("mouseover casting " .. (ns.db.hover and "on" or "off") .. ".")
@@ -105,11 +96,6 @@ ns.Register({
 		-- binds the enemy key before anything else. It is only the value a new
 		-- binding is made with; every binding keeps its own.
 		hoverWho = "enemy",
-
-		-- Off. A key that quietly hits your target when you meant to hover
-		-- something is worse than a key that does nothing, and the list on
-		-- screen has no way to draw the difference.
-		hoverFallback = false,
 
 		-- Off, and printed to the chat frame rather than drawn anywhere. It is
 		-- for the one question a player cannot answer by looking: a key that is
@@ -146,7 +132,6 @@ ns.Register({
 		"hover remove <key>, hover clear",
 		"hover debug on|off, say what every press finds and whether it casts",
 		"hover list on|off, the list drawn over the world",
-		"hover target on|off, fall back to your target when hovering nothing",
 	},
 
 	status = function()

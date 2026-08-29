@@ -282,6 +282,12 @@ read_globals = {
 	-- probed by name anyway and falls back to UnitIsFriend, because nothing in
 	-- this install calls it unguarded and the two disagree only on a duel.
 	"UnitCanAssist", "UnitIsFriend",
+	-- The client's own macro conditional parser, for the mouseover debug log. It
+	-- is the only thing that can tell a clause this build does not understand
+	-- from a clause that understood and did not match, and both of those cast
+	-- nothing and say nothing. Probed by name before it is called, because a
+	-- build without it loses that line of the log and nothing else.
+	"SecureCmdOptionParse",
 	-- SoftTargetEnemy is read and written by Charge/SoftTarget.lua, which owns
 	-- the CVar out of combat and hands it back in. Both calls are pcalled: no
 	-- addon here proves SetCVar takes that name on 2.5.6.

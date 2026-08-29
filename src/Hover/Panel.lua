@@ -233,14 +233,6 @@ local function Binding(ui)
 		return ns.Hover.Describe()
 	end)
 
-	ui.Check("fall back to your target",
-		function() return ns.db.hoverFallback end,
-		function(value)
-			ns.db.hoverFallback = value
-			ns.Hover.Changed()
-		end)
-	ui.Hint("Off, a key with nothing under the cursor does nothing. On, it casts on your target instead, and only when your target passes the same filter.")
-
 	ui.Action(function() return "clear every key" end, function()
 		ns.Hover.Clear()
 		ns.Options.Refresh()
