@@ -37,6 +37,14 @@ local Level = Unit.Level
 local Gauge = ns.UI.Gauge
 local IDLE = Color.reaction.idle
 
+-- What the level tag reads as on something that is not a kill. The XP scale is
+-- an answer to "what is this worth", and your own frame and a friendly target
+-- are not asking it: painting them even yellow would be a number claiming to
+-- be a reward.
+local PLAIN_LEVEL = Color.text.value
+
+local UnitCanAttack = UnitCanAttack
+
 -- The portrait render carries dead space around the head. Blizzard hides it
 -- under the ring; with the ring gone it has to be cropped instead.
 --
@@ -88,6 +96,36 @@ local function HealSlice(entry, span)
 		slice:Show()
 	else
 		slice:Hide()
+	end
+end
+
+-- The level tag, and what the kill is worth.
+--
+-- Guarded on the string, which ns.Unit.Level hands over already built rather
+-- than building one per tick to compare, and on the colour table's identity the
+-- way every other colour on this frame is.
+--
+-- The colour is the newer half. This frame drew the level in one flat shade for
+-- its whole life while the nameplates beside it carried the XP scale on the
+-- same two characters, so the one mob you had actually picked was the one the
+-- addon would not price. Grey here is the plate's grey: the kill pays nothing,
+-- because the mob is too far below you or because somebody else tagged it.
+--
+-- Only on something you can attack. Your own frame and a friendly target are
+-- not asking what a kill is worth, and an even yellow on those two is a reward
+-- being claimed where there is none.
+local function PaintLevel(entry, unit)
+	local tag, xp = Level.Of(unit)
+	if not UnitCanAttack("player", unit) then
+		xp = PLAIN_LEVEL
+	end
+	if entry.levelTag ~= tag then
+		entry.levelTag = tag
+		entry.levelText:SetText(tag)
+	end
+	if entry.levelColor ~= xp then
+		entry.levelColor = xp
+		entry.levelText:SetTextColor(xp[1], xp[2], xp[3])
 	end
 end
 
@@ -155,13 +193,7 @@ function Paint.Refresh(entry)
 		entry.nameText:SetText(name)
 	end
 
-	-- Guarded on the string, which ns.Unit.Level hands over already built rather
-	-- than building one per tick to compare.
-	local tag = Level.Tag(unit)
-	if entry.levelTag ~= tag then
-		entry.levelTag = tag
-		entry.levelText:SetText(tag)
-	end
+	PaintLevel(entry, unit)
 
 	-- Both re-applied rather than set once, because the bars and the portrait
 	-- are Blizzard's and their own code puts a texture and a crop back on them

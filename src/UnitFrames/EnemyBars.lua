@@ -175,6 +175,9 @@ local Aura = ns.UI.Aura
 local BACKDROP = Color.backdrop
 local NAME_TEXT = Color.text.name
 local TARGET_TEXT = Color.text.target
+-- The name's third state, and the same table the level tag wears for the same
+-- fact, so the two of them are one channel saying one thing twice.
+local WORTHLESS = Color.xp.none
 local HEALTH_TEXT = Color.text.value
 
 -- Which bar is yours, said with the one channel nothing else on the bar is
@@ -1137,6 +1140,66 @@ end
 -- The caches live on the widget rather than in a module table because widgets
 -- are pooled and their drawn state survives pooling, so the cache stays true
 -- across a release and a reattach. LayoutWidget clears the ones it invalidates.
+-- The raid target icon, which is the one region on the widget that swaps a
+-- texture rather than writing a colour or a string. Guarded on the index, and
+-- nil covers both halves of off: the marking switch is down, or nobody has
+-- marked this one.
+local function PaintMarker(widget, unit)
+	local raidIcon = ns.db.barsMarker and GetRaidTargetIndex(unit) or nil
+	if widget.shownMarker == raidIcon then
+		return
+	end
+	widget.shownMarker = raidIcon
+	if raidIcon then
+		SetRaidTargetIconTexture(widget.marker, raidIcon)
+		widget.marker:Show()
+	else
+		widget.marker:Hide()
+	end
+end
+
+-- What the kill is worth, said on the two places that can carry it: the level
+-- tag and the name.
+--
+-- Guarded on the string and on the colour table's identity, the way the frame
+-- is: this runs five times a second per mob and a level changes when the mob
+-- does. Two things it used to do and no longer has to: measure its own string
+-- to resize a frame, and call PlaceOnPlate, because a tag that changed width
+-- moved the assembly's centre. The name yields through one anchor now.
+--
+-- The level is asked for outside the barsLevel branch and written inside it,
+-- for the reason the edge is asked for outside: the colour is also what the
+-- name is about to be told, and turning the level number off must not turn off
+-- "this one pays you nothing".
+--
+-- The name carries three states and grey beats the other two. Grey means the
+-- kill pays nothing, because the mob is too far below you or because somebody
+-- else tagged it, and the name is the loudest text on the bar because that is a
+-- decision you make at pull range and a level tag is two characters wide. It
+-- wins over the warm colour your target wears rather than yielding to it: which
+-- mob is yours is already said by the alpha, and a mob you picked up by mistake
+-- is exactly the one that has to tell you it is worth nothing.
+local function PaintWorth(widget, unit, isTarget)
+	local tag, xp = Level.Of(unit)
+	if ns.db.barsLevel then
+		if widget.levelTag ~= tag then
+			widget.levelTag = tag
+			widget.levelText:SetText(tag)
+		end
+		if widget.levelColor ~= xp then
+			widget.levelColor = xp
+			widget.levelText:SetTextColor(xp[1], xp[2], xp[3])
+		end
+	end
+
+	local text = xp == WORTHLESS and WORTHLESS
+		or (isTarget and TARGET_TEXT or NAME_TEXT)
+	if widget.nameColor ~= text then
+		widget.nameColor = text
+		widget.name:SetTextColor(text[1], text[2], text[3])
+	end
+end
+
 local function UpdateWidget(widget, unit, guid)
 	local now = GetTime()
 
@@ -1171,32 +1234,14 @@ local function UpdateWidget(widget, unit, guid)
 	end
 
 	-- The frame, which is reaction and nothing else: hostile draws chrome and
-	-- disappears, neutral draws amber and does not. Outside the barsLevel branch
-	-- below, deliberately, because turning the mob level off turns off what a kill
-	-- is worth and must not turn off "do not cleave this one".
+	-- disappears, neutral draws amber and does not. Read here rather than under
+	-- the barsLevel switch, deliberately, because turning the mob level off
+	-- turns off what a kill is worth and must not turn off "do not cleave this
+	-- one".
 	local edge = Color.Frame(unit)
 	if widget.edgeColor ~= edge then
 		widget.edgeColor = edge
 		ns.Recolor(widget.box.edges, edge)
-	end
-
-	-- Guarded on the string and on the colour table's identity, the way the
-	-- frame is: this runs five times a second per mob and a level changes when
-	-- the mob does.
-	--
-	-- Two things this used to do and no longer has to: measure its own string to
-	-- resize a frame, and call PlaceOnPlate, because a tag that changed width
-	-- moved the assembly's centre. The name yields through one anchor now.
-	if ns.db.barsLevel then
-		local tag, xp = Level.Of(unit)
-		if widget.levelTag ~= tag then
-			widget.levelTag = tag
-			widget.levelText:SetText(tag)
-		end
-		if widget.levelColor ~= xp then
-			widget.levelColor = xp
-			widget.levelText:SetTextColor(xp[1], xp[2], xp[3])
-		end
 	end
 
 	local name = UnitName(unit) or ""
@@ -1214,16 +1259,7 @@ local function UpdateWidget(widget, unit, guid)
 		widget.healthText:SetText(percent >= 0 and (percent .. "%") or "")
 	end
 
-	local raidIcon = ns.db.barsMarker and GetRaidTargetIndex(unit) or nil
-	if widget.shownMarker ~= raidIcon then
-		widget.shownMarker = raidIcon
-		if raidIcon then
-			SetRaidTargetIconTexture(widget.marker, raidIcon)
-			widget.marker:Show()
-		else
-			widget.marker:Hide()
-		end
-	end
+	PaintMarker(widget, unit)
 
 	-- Your current target, said twice: brighter than everything else on the
 	-- screen, and warm rather than white on the name. The alpha is what you see
@@ -1233,12 +1269,11 @@ local function UpdateWidget(widget, unit, guid)
 	-- The alpha guard compares the number and not isTarget, because it moves on
 	-- two things: which mob is yours, and whether you have one at all. Guarding
 	-- on isTarget alone would leave every bar dim after you dropped target.
+	--
+	-- The name is PaintWorth's, because what it says is mostly about the kill
+	-- and only partly about the target.
 	local isTarget = UnitIsUnit(unit, "target")
-	if widget.targeted ~= isTarget then
-		widget.targeted = isTarget
-		local text = isTarget and TARGET_TEXT or NAME_TEXT
-		widget.name:SetTextColor(text[1], text[2], text[3])
-	end
+	PaintWorth(widget, unit, isTarget)
 
 	local alpha = (isTarget or not haveTarget) and TARGET_ALPHA or OTHER_ALPHA
 	if widget.shownAlpha ~= alpha then

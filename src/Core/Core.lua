@@ -427,6 +427,7 @@ end
 
 local GetQuestGreenRange = _G.GetQuestGreenRange
 local UnitClassification = _G.UnitClassification
+local UnitIsTapDenied = _G.UnitIsTapDenied
 
 -- How many levels below yours a mob can be and still pay XP. Questie calls
 -- GetQuestGreenRange("player") unguarded on both clients, which is what proves
@@ -451,6 +452,23 @@ function ns.Classification(unit)
 		return nil
 	end
 	return UnitClassification(unit)
+end
+
+-- Whether somebody else got there first. A mob another player or group tagged
+-- pays you no XP and no loot however high its level reads, which is the second
+-- half of "is this kill worth anything" and the half no colour on this addon's
+-- bars has ever carried.
+--
+-- Probed rather than trusted: it is Blizzard's own TargetFrame test on both
+-- live clients, but nothing installed here calls it, so it takes the same road
+-- as UnitClassification above. Nil rather than false when it is missing, so a
+-- caller can tell "not tapped" from "cannot say" and refuse to write "worth
+-- nothing" on a mob it never asked about.
+function ns.TapDenied(unit)
+	if type(UnitIsTapDenied) ~= "function" then
+		return nil
+	end
+	return UnitIsTapDenied(unit) == true
 end
 
 function ns.SpellName(spell)

@@ -90,8 +90,28 @@ end
 -- log is the other: a quest carries a level and no unit at all, and a second
 -- copy of this ladder written against a number is a second copy that drifts on
 -- the first change to GetQuestGreenRange.
+--
+-- A unit answers one thing the number cannot: whether somebody else tagged it.
+-- A tapped mob pays nothing at any level, so it takes the bottom colour no
+-- matter what its level would have said. Deliberately here and not in WorthOf,
+-- because WorthOf is handed a level by the quest log and a quest cannot be
+-- tagged out from under you.
 function Level.Worth(unit)
+	if ns.TapDenied(unit) then
+		return Color.xp.none
+	end
 	return Level.WorthOf(UnitLevel(unit) or 0)
+end
+
+-- Whether the kill pays anything at all: the five colour scale collapsed to
+-- the one bit you act on while you are choosing what to hit.
+--
+-- The scale is drawn on a two character level tag, and two characters is too
+-- quiet a place to say "walk past this one". Callers that want to say it
+-- louder ask here rather than comparing colours themselves, so there is one
+-- definition of worthless and not one per frame.
+function Level.Pays(unit)
+	return Level.Worth(unit) ~= Color.xp.none
 end
 
 -- Both halves, for the one caller that draws them together. Two returns rather

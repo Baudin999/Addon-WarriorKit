@@ -95,6 +95,13 @@ _G.WarriorKitDeadUnits = deadUnits
 _G.WarriorKitFriendlyUnits = friendlyUnits
 _G.UnitIsDead = function(unit) return deadUnits[unit] == true end
 _G.UnitCanAttack = function(_, unit) return friendlyUnits[unit] ~= true end
+-- Who somebody else got to first. Table driven and empty by default, because a
+-- tagged mob is the exception and the whole point of the XP verdict is that the
+-- exception is what gets marked. A stub answering true to everything would
+-- paint every name grey and pass every assertion about the grey.
+local tappedUnits = {}
+_G.WarriorKitTappedUnits = tappedUnits
+_G.UnitIsTapDenied = function(unit) return tappedUnits[unit] == true end
 _G.UnitName = function(unit) return unitName[unit] or "Target Dummy" end
 -- Health by unit token, defaulting to the same 4200 of 9000 a constant pair
 -- gave. Written down per unit because a threshold read off a target is a rung
@@ -476,8 +483,58 @@ _G.LOOT_MONEY_SPLIT = "You receive %s as your split."
 -- line it is written on.
 _G.time = os.time
 
+-- Experience, the rested pool and the faction you are watching
+--
+-- One table, for the reason `own` above is one: the section drives four
+-- different scenes off these numbers and four separate locals would be four
+-- things to keep in step.
+--
+-- The shipped scene is a character partway through a level with a rested pool
+-- and a faction on the bar, because that is the state where every region of
+-- both rails is drawn at once. `ceiling` sits above the 62 UnitLevel answers,
+-- so the level cap is a state the section reaches by moving one number rather
+-- than one the fixture is stuck in.
+--
+-- GetWatchedFactionInfo is the older clients' shape, which is the one this
+-- fixture ships. C_Reputation is deliberately absent: the newer shape is a
+-- table with different field names, and the section installs it itself so that
+-- both halves of the fold are reached from a run that started without it.
+local progress = {
+	xp = 12000, max = 40000, rested = 8000, disabled = false, ceiling = 70,
+	faction = { name = "Thrallmar", standing = 6, low = 6000, high = 12000, value = 8400 },
+}
+
+_G.UnitXP = function(unit)
+	return unit == "player" and progress.xp or 0
+end
+_G.UnitXPMax = function(unit)
+	return unit == "player" and progress.max or 0
+end
+_G.GetXPExhaustion = function()
+	return progress.rested
+end
+_G.IsXPUserDisabled = function()
+	return progress.disabled
+end
+_G.GetMaxPlayerLevel = function()
+	return progress.ceiling
+end
+_G.GetWatchedFactionInfo = function()
+	local watched = progress.faction
+	if not watched then
+		return nil
+	end
+	return watched.name, watched.standing, watched.low, watched.high, watched.value
+end
+
+-- Two of the eight standing labels and not all eight, on purpose. The addon
+-- prefers the client's word and falls back to its own, and a fixture carrying
+-- every label would leave the fallback unreachable.
+_G.FACTION_STANDING_LABEL6 = "Honored"
+_G.FACTION_STANDING_LABEL7 = "Revered"
+
 H.own, H.realPlayers, H.inCombat = own, realPlayers, inCombat
 H.debuffs, H.buffs, H.advance, H.ITEMS = debuffs, buffs, advance, ITEMS
 H.JUNK, H.QUESTBAG, H.CARRIED = JUNK, QUESTBAG, CARRIED
 H.refill, H.refillQuests, H.carrying = refill, refillQuests, carrying
-H.itemLink = itemLink
+H.itemLink, H.progress = itemLink, progress

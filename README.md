@@ -15,7 +15,9 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   you can add your own. Drag a weapon or a shield onto a hand on the paperdoll
   in `/wk`.
 - **Threat-coloured enemy bars.** They replace the Blizzard nameplate and carry
-  a tag saying what the kill is worth.
+  a tag saying what the kill is worth. A mob that pays you nothing, because it
+  is far below you or because somebody else tagged it, goes grey by name as well
+  as by tag, so you can read it off a screen full of plates.
 - **A damage meter and a threat meter, side by side.** One row per player: the
   spec icon, the name, the number, and a class-coloured bar as long as their
   share of the top row. Click the header for the breakdown of your own damage,

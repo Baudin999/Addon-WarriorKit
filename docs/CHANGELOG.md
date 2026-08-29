@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### A mob that pays nothing says so with its name
+
+The XP scale was already on the bars, on the two characters of the level tag.
+Two characters is the wrong size for a fact you act on. You decide whether a
+kill is worth taking at pull range, across a screen with six plates on it, and
+the addon was answering in a shade of grey on a number you have to squint at.
+
+It is on the name now. A mob whose kill pays you nothing draws its name in the
+same grey the level tag uses, so the two agree and the loud one carries it. Grey
+beats the warm colour your current target wears. Which mob is yours is already
+said by the plate being brighter than the rest, and a mob you picked up by
+mistake is exactly the one that has to tell you.
+
+The other half was missing outright. A mob somebody else tagged pays no XP and
+no loot at any level, and this addon had never asked. It replaces the Blizzard
+plate, and the Blizzard plate greying out was the only place that fact was ever
+drawn. `UnitIsTapDenied` answers it, and a tapped mob now takes the bottom
+colour whatever its level reads.
+
+The target frame was worse. It drew the level in one flat shade for its whole
+life while the plate beside it carried the full scale, so the one mob you had
+actually chosen was the one the addon would not price. It wears the scale now,
+and only on something you can attack. Your own frame and a friendly target keep
+the plain number, because an even yellow on those claims a reward that is not
+there.
+
 ### The tooltip docks in the corner
 
 Every hover in the addon used to open its box next to the thing you hovered.
