@@ -141,7 +141,9 @@ do
 	--
 	-- Meter/Standing.lua registered one line against the unit kind at load and
 	-- knows nothing about this part. Its line lands in the extra band, after
-	-- everything the client said and before the hint.
+	-- everything the client said, and it is the last thing in the box: a hover
+	-- that tracks your pointer carries no standing footnote about its own
+	-- switch.
 	------------------------------------------------------------------
 
 	check(said[4] == "Threat",
@@ -149,10 +151,8 @@ do
 	local _, standing = Box.Text(4)
 	check(standing == "theirs, you are at 62%",
 		"the threat line does not say where you stand: " .. tostring(standing))
-	check(said[5] == "", "the hint is not spaced off the band above it")
-	check(said[6]:find("world off", 1, true) ~= nil,
-		"the hover does not name the switch that turns it off: " .. tostring(said[6]))
-	check(#said == 6, ("the box drew %d lines rather than six"):format(#said))
+	check(#said == 4, ("the box drew %d lines rather than four: %s")
+		:format(#said, table.concat(said, " / ")))
 
 	------------------------------------------------------------------
 	-- Blizzard's own box, held down
@@ -296,8 +296,8 @@ do
 	-- Turned off
 	--
 	-- Including the box already on screen. A hover left standing when the
-	-- setting goes off would sit there describing a mob under a hint line
-	-- offering to do the thing you just did.
+	-- setting goes off would sit there describing a mob you are no longer
+	-- asking about.
 	------------------------------------------------------------------
 
 	guids.mouseover = MOB

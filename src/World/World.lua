@@ -63,15 +63,14 @@ local suppressed
 -- lines at all, and a box carrying a threat reading over an unnamed thing is
 -- worse than a box carrying a name.
 --
--- The one line this part writes itself is the hint, because a tooltip that
--- follows your pointer around the world is the most annoying thing in the addon
--- if you did not want it, and it owes you the sentence that turns it off.
+-- No hint line. The box follows your pointer around the world, so a standing
+-- footnote about the switch that turns it off is on screen the whole time you
+-- are playing, and the panel and the slash word both already say it.
 local function Subject()
 	return {
 		kind = "unit",
 		unit = UNIT,
 		title = UnitName(UNIT),
-		hint = "/wk world off puts the client's own tooltip back.",
 	}
 end
 
@@ -135,8 +134,8 @@ end)
 
 -- The setting, acted on. Closing on the way off is the whole reason this exists
 -- rather than a write: a box already on screen when the setting goes off would
--- sit there until the next hover, describing a mob under a hint line offering
--- to do the thing you just did.
+-- sit there until the next hover, describing a mob you are no longer asking
+-- about.
 --
 -- The panel writes the boolean itself and calls this; the slash word and the
 -- reset go through Set, which writes and then calls this. Two doors and one
