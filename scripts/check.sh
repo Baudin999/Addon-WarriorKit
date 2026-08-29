@@ -383,6 +383,7 @@ Core/Attic.lua:Attic.Sweep
 UnitFrames/Blizzard.lua:Walk
 UnitFrames/Blizzard.lua:Blizz.Apply
 Chat/Blizzard.lua:Blizz.Apply
+UnitFrames/Blizzard.lua:MoveKey
 "
 
 hot_scan='

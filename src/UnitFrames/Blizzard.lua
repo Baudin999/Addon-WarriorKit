@@ -162,14 +162,80 @@ local function Asked(needs)
 	return true
 end
 
+-- What a key entry held, while the frame it named is in the attic.
+--
+-- A caged frame is off the screen and the client is still driving it, and for
+-- the target's cast bar that is not harmless. TargetFrame calls
+-- `self.spellbar:AdjustPosition()` from three places, that function reads
+-- `auraRows` off whatever the bar's parent is, and the attic is a plain frame
+-- with no such field. One evening with the switch on and a target selected was
+-- sixteen hundred Lua errors, one per pass of the target frame's OnUpdate, none
+-- of them in this addon's files and all of them this addon's doing.
+--
+-- Every one of those three call sites is guarded by the key being there, which
+-- is what makes clearing it the fix rather than a second patch: the client stops
+-- reaching for a frame it can no longer see, instead of being handed an answer
+-- that happens to keep it quiet. The cage and the strip both stay, because a key
+-- is the handle FrameXML uses and Show is the handle everything else uses.
+--
+-- Keyed by the entry table rather than by the owner or the name. The entry is a
+-- table that already exists and is unique to the pairing, so the lookup costs
+-- nothing and building a key would allocate on a path that runs every second.
+local stash = {}
+
+-- Whether the frame this key entry names is out of the client's hands.
+-- Public for the harness, which cannot ask the owner: the whole point is that
+-- the owner no longer says.
+function Blizz.Stashed(owner, key)
+	for index = 1, #FRAMES do
+		local keys = FRAMES[index].keys
+		if keys then
+			for slot = 1, #keys do
+				if keys[slot].owner == owner and keys[slot].key == key then
+					return stash[keys[slot]] ~= nil
+				end
+			end
+		end
+	end
+	return false
+end
+
+-- One key entry moved, once the frame it names has gone where it is going.
+--
+-- Down on the way out and back on the way in, which is the whole of it. A
+-- function rather than four more levels inside the walk below, because the walk
+-- is already a loop inside a branch and this is a second question about the
+-- same entry rather than a deeper part of the first.
+--
+-- An owner this client does not carry has no key to move, and the frame was
+-- reached from the stash in that case anyway.
+local function MoveKey(slot, owner, hiding)
+	if type(owner) ~= "table" then
+		return
+	end
+	if not hiding then
+		if stash[slot] ~= nil then
+			owner[slot.key] = stash[slot]
+			stash[slot] = nil
+		end
+	elseif owner[slot.key] ~= nil then
+		stash[slot] = owner[slot.key]
+		owner[slot.key] = nil
+	end
+end
+
 -- Every frame one entry names, whichever way this client names it, handed to
 -- `act`. `act` is ns.Attic.Vanish or ns.Attic.Return, passed by reference rather
 -- than wrapped, because this runs on the second and a closure per pass is
 -- garbage the collector has to walk later.
 --
+-- `hiding` says which of the two it is, because the key above has to move in
+-- one direction on the way down and the other on the way back, and reading that
+-- off the function would be reading it off the wrong thing.
+--
 -- A name this client does not carry is skipped and costs one lookup against
 -- nil. A key whose owner is missing costs two.
-local function Walk(entry, act)
+local function Walk(entry, act, hiding)
 	local complete = true
 	local names = entry.names
 	for index = 1, #names do
@@ -181,10 +247,20 @@ local function Walk(entry, act)
 	local keys = entry.keys
 	if keys then
 		for index = 1, #keys do
-			local owner = _G[keys[index].owner]
-			local frame = type(owner) == "table" and owner[keys[index].key] or nil
-			if type(frame) == "table" and not act(frame) then
-				complete = false
+			local slot = keys[index]
+			local owner = _G[slot.owner]
+			local frame = type(owner) == "table" and owner[slot.key] or nil
+			-- Taken from the stash once the key is gone, because the key is
+			-- how this pass found the frame and the pass runs every second.
+			if frame == nil then
+				frame = stash[slot]
+			end
+			if type(frame) == "table" then
+				if act(frame) then
+					MoveKey(slot, owner, hiding)
+				else
+					complete = false
+				end
 			end
 		end
 	end
@@ -206,8 +282,8 @@ function Blizz.Apply()
 	local complete = true
 	for index = 1, #FRAMES do
 		local entry = FRAMES[index]
-		local act = Asked(entry.needs) and ns.Attic.Vanish or ns.Attic.Return
-		if not Walk(entry, act) then
+		local hiding = Asked(entry.needs)
+		if not Walk(entry, hiding and ns.Attic.Vanish or ns.Attic.Return, hiding) then
 			complete = false
 		end
 	end

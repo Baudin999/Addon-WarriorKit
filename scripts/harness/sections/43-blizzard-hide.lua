@@ -69,7 +69,20 @@ do
 	-- Reached under FrameXML's parent key as well, so a client that renamed the
 	-- global still loses its bar. Same frame both ways, which the pass has to
 	-- take in its stride.
-	check(_G.TargetFrame.spellbar == bar, "the fixture lost the parent key")
+	--
+	-- And the key is gone while the bar is caged, which is the third failure this
+	-- section is written against. TargetFrame calls spellbar:AdjustPosition()
+	-- from three places, that function reads auraRows off the bar's parent, and
+	-- the attic has no such field: an evening with the switch on and a target
+	-- selected was sixteen hundred Lua errors, one per pass of the target
+	-- frame's OnUpdate. All three call sites are guarded by the key, so the key
+	-- coming out is what takes the bar out of the client's hands. The cage is
+	-- still what keeps it off the screen; this is what stops the client driving
+	-- a frame it can no longer see.
+	check(Blizz.Stashed("TargetFrame", "spellbar"),
+		"the target's cast bar is caged and the client is still holding the key to it")
+	check(_G.TargetFrame.spellbar == nil,
+		"TargetFrame still names a cast bar that is in the attic")
 	check(Blizz.Apply() ~= false, "a second pass over the same frame refused")
 
 	-- And off again, all the way back to where it was found.
@@ -79,6 +92,10 @@ do
 	check(bar:GetParent() == _G.TargetFrame,
 		"the cast bar came back parented somewhere other than the target frame")
 	check(Attic.Held(bar) == false, "the attic is still holding a frame it handed back")
+	check(_G.TargetFrame.spellbar == bar,
+		"the switch went off and TargetFrame never got its cast bar key back")
+	check(Blizz.Stashed("TargetFrame", "spellbar") == false,
+		"the key was handed back and this file still thinks it is holding it")
 
 	ns.db.hideBlizzTargetCast = true
 	Blizz.Apply()
