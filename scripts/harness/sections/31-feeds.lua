@@ -542,15 +542,19 @@ do
 	check(_G.WarriorKitLootFeed:IsShown(), "showing the loot feed left it hidden")
 
 	----------------------------------------------------------------
-	-- The tooltip is the size of the thing it describes
+	-- Every tooltip is one size, and it is the addon's
 	--
 	-- One frame serves every hover in the addon, so it has one zoom and
-	-- forty possible owners. It took that zoom from UI.WindowZoom, which is
-	-- the settings window's and has nothing to do with a feed: with the UI
-	-- size slider up, hovering a row opened a box six hundred screen pixels
-	-- across beside the thirty pixel row it was explaining. Nothing outside
-	-- the file can see that but by opening it on two owners at different
-	-- zooms and reading the zoom back, which is why Tooltip.Zoom exists.
+	-- forty possible owners. It took that zoom from the owner, which read
+	-- well one box at a time and badly across a session: the missing buff
+	-- row ships at 2x and the action bar under it at 1x, so the same
+	-- sentence came out in two sizes depending on where the cursor was. The
+	-- size of a HUD widget is how far away you read it from. The size of
+	-- text is the slider.
+	--
+	-- Nothing outside the file can see which rule is in force but by
+	-- opening the box on two owners at different zooms and reading the zoom
+	-- back, which is why Tooltip.Zoom exists.
 	----------------------------------------------------------------
 
 	do
@@ -559,25 +563,29 @@ do
 
 		ns.db.combatFeedZoom = 2
 		combatStream:Apply()
-		-- The slider, put well above both feeds. This is the state the bug
-		-- was reported from and at 1x nothing here can fail.
+		-- The slider, put well above both feeds, so the window's answer and
+		-- either feed's are three different numbers. At 1x nothing here can
+		-- fail.
 		ns.UI.SetSize(3)
 
 		local row = combat:Row(2)
 		row:GetScript("OnEnter")(row)
-		check(Tip.Zoom() == 2,
-			("a tooltip opened on a feed at 2x drew at %s"):format(tostring(Tip.Zoom())))
-		check(Tip.Zoom() ~= ns.UI.WindowZoom(),
-			"the tooltip is still taking the settings window's zoom rather than its owner's")
+		check(Tip.Zoom() == ns.UI.WindowZoom(),
+			("a tooltip opened on a feed at 2x drew at %s and the addon is at %s")
+				:format(tostring(Tip.Zoom()), tostring(ns.UI.WindowZoom())))
 
-		-- And the other feed, at a different zoom again, because a tooltip
-		-- that had simply stopped following the window and started
-		-- following the last thing it saw would pass the check above.
+		-- And the other feed, at a different zoom again. A box that had gone
+		-- on following its owner would answer 2 here and a box following the
+		-- last thing it saw would answer 2 as well, so the two hovers are
+		-- what tells those apart from the one right answer.
 		local loot = feed:Row(1)
 		loot:GetScript("OnEnter")(loot)
-		check(Tip.Zoom() == ns.db.lootFeedZoom,
-			("a tooltip opened on a feed at %sx drew at %s")
-				:format(tostring(ns.db.lootFeedZoom), tostring(Tip.Zoom())))
+		check(Tip.Zoom() == ns.UI.WindowZoom(),
+			("a tooltip opened on a feed at %sx drew at %s and the addon is at %s")
+				:format(tostring(ns.db.lootFeedZoom), tostring(Tip.Zoom()),
+					tostring(ns.UI.WindowZoom())))
+		check(ns.db.lootFeedZoom ~= ns.UI.WindowZoom(),
+			"both feeds are drawn at the addon's own zoom, so this proves nothing")
 		loot:GetScript("OnLeave")(loot)
 
 		ns.UI.SetSize(size)

@@ -219,6 +219,11 @@ local function Collect()
 	if mode == "racial" then
 		racial.texture = ns.Racials.Texture()
 		racial.label = ns.Racials.Name() or ""
+		-- The id as well as the name, because the tooltip reads with it. Written
+		-- every time rather than once, for the same reason the texture is: the
+		-- client can take a moment after login to answer for a spell, and a race
+		-- change answers differently.
+		racial.spell = ns.Racials.Spell()
 		shownCount = 1
 		shown[1] = racial
 		return
@@ -296,6 +301,27 @@ end
 -- value this file returns rather than a sequence it has to perform. The tooltip
 -- that draws it is the addon's own, so hovering a nag square no longer raises a
 -- parchment scroll over an interface that has none anywhere else.
+--
+-- What the square names, which is the last thing that made this box read unlike
+-- every other one.
+--
+-- An action square hands UI/Tip.lua its slot, an aura hands it a unit and an
+-- index, and both get the client's own words at the top with the addon's
+-- underneath. A nag square handed over `note`, which reads nothing, so its head
+-- was "food" in the caption's voice while the box eight pixels away had a spell
+-- name, a rank and a cast time. The reason was real: there is no aura index for
+-- an aura that is not on you.
+--
+-- There is still a handle on all three shapes, and Subject picks the one that
+-- fits. A racial or a watched buff is an id, which UI/Scan.lua now takes. A
+-- bare hand is a worn slot, which it always took, and the weapon's own tooltip
+-- is the right thing to read for a square whose whole complaint is what is not
+-- on that weapon. Only an entry with neither is left saying `note`.
+--
+-- The title goes along regardless. UI/Tooltip.lua draws the client's lines
+-- instead of a title where there are any and the title where there are none, so
+-- the caption's phrase is what an older client and an empty slot fall back to
+-- rather than a second heading nobody sees.
 --------------------------------------------------------------------------
 
 -- The line that names the switch, which is the whole reason a tooltip on a nag
@@ -331,6 +357,27 @@ local function Detail(entry)
 		.. " is not on you. You put it on the row yourself."
 end
 
+-- The subject one square is about, in whichever of the three kinds this square
+-- has a handle for. Everything under the head is the same three lines whichever
+-- one it picks.
+local function Subject(entry)
+	local subject = {
+		kind = "note",
+		title = entry.label,
+		lines = { Detail(entry) },
+		hint = Silencer(entry),
+	}
+	if entry.spell then
+		subject.kind = "spell"
+		subject.spell = entry.spell
+	elseif entry.hand then
+		subject.kind = "inventory"
+		subject.unit = "player"
+		subject.slot = entry.hand
+	end
+	return subject
+end
+
 local function Hover(w)
 	ns.Tip.Hang(w, function()
 		local entry = w.entry
@@ -341,12 +388,7 @@ local function Hover(w)
 		if not entry or (entry.label or "") == "" then
 			return nil
 		end
-		return {
-			kind = "note",
-			title = entry.label,
-			lines = { Detail(entry) },
-			hint = Silencer(entry),
-		}
+		return Subject(entry)
 	end)
 end
 

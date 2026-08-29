@@ -205,32 +205,12 @@ function UI.Adopt(frame, zoom)
 	return true
 end
 
--- The zoom a frame is drawn at, found by walking up to whichever ancestor was
--- adopted.
---
--- A region deep inside a window carries no zoom of its own. It inherits the
--- scale of the frame UI.Adopt took onto the grid, and the only place that
--- number is written down is the table above. Anything that has to match a frame
--- somebody else built has to be able to ask, and there is exactly one of those:
--- the tooltip, which is one frame opened on top of forty different owners and
--- has to come out the size of whichever one it was opened on. It adopted itself
--- at UI.WindowZoom before this existed, which is the settings window's zoom and
--- has nothing to do with a feed, so a player with the UI size slider up got a
--- tooltip three times the height of the rows it was describing.
---
--- Nil where no ancestor is on the grid, so a caller decides what to do about
--- that rather than being handed a 1 it cannot tell from a real answer.
-function UI.ZoomOf(frame)
-	local node = frame
-	while node do
-		local zoom = grid[node]
-		if zoom then
-			return zoom
-		end
-		node = node.GetParent and node:GetParent() or nil
-	end
-	return nil
-end
+-- There was a UI.ZoomOf here, which walked up from a region to whichever
+-- ancestor was adopted and answered what zoom it was drawn at. It had one
+-- caller ever: the tooltip, matching itself to the widget under the cursor.
+-- That rule is gone. A tooltip is drawn at the addon's own size now, so nothing
+-- in the addon asks what somebody else's frame is scaled to, and a query with
+-- no callers is a thing the next reader has to work out the purpose of.
 
 function UI.Rezoom(frame, zoom)
 	if not grid[frame] then

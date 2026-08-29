@@ -58,9 +58,20 @@ local NAME = "WarriorKitTooltipScan"
 -- game writes for a unit is the name, the level and classification tag, the
 -- faction, the guild and on a player the class: five lines the addon has no
 -- other way to word, half of them localised, and all of them already right.
+--
+-- `spell` is an id and is the only kind here whose subject is not on you and
+-- not in a slot. Every other setter asks about a thing at a place: this action
+-- slot, this aura index, this hand. A buff you are missing is at no place at
+-- all, which is exactly the question the nag row has to ask, and the id is the
+-- only handle there is on a spell nobody has cast.
+--
+-- SetSpellByID landed in Wrath. On the older client this kind answers nil like
+-- any other question the client will not take, and the caller draws the name it
+-- knew on its own.
 local KINDS = {
 	item      = { method = "SetHyperlink",     args = 1 },
 	action    = { method = "SetAction",        args = 1 },
+	spell     = { method = "SetSpellByID",     args = 1 },
 	buff      = { method = "SetUnitBuff",      args = 2 },
 	debuff    = { method = "SetUnitDebuff",    args = 2 },
 	inventory = { method = "SetInventoryItem", args = 2 },

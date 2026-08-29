@@ -278,6 +278,39 @@ do
 	check(Box.Text(1) == "Aegis",
 		"a malformed link did not fall back to the name: " .. tostring(Box.Text(1)))
 
+	-- A spell nobody is carrying, which is the kind the nag row reads with and
+	-- the one kind here whose subject is at no place at all. There is no aura
+	-- index for an aura that is not on you, and the id is the only handle left.
+	H.tooltips.spell[20572] = {
+		{ "Blood Fury" },
+		{ "Increases attack power. Lasts 15 sec." },
+	}
+	check(ns.UI.Scan.Ready("spell"), "the scanner will not ask this client about a spell id")
+	Tip.Open(owner, { kind = "spell", spell = 20572, title = "not this" })
+	check(Box.Text(1) == "Blood Fury",
+		"a spell id did not read the client's own name: " .. tostring(Box.Text(1)))
+
+	-- The client that has no setter for it, which is every one before Wrath and
+	-- is the reason the caller keeps writing a title it usually never draws.
+	--
+	-- Written false rather than nil, because a frame here answers a no-op
+	-- function for any PascalCase key it has never heard of and nil would fall
+	-- straight through to that. False is a value the frame has, and it is what
+	-- both guards in UI/Scan.lua actually read: not whether the key is there but
+	-- whether it is a function.
+	local scanner = _G["WarriorKitTooltipScan"]
+	local setter = scanner and rawget(scanner, "SetSpellByID")
+	check(type(setter) == "function", "the scanner never built a tooltip to ask with")
+	scanner.SetSpellByID = false
+	check(ns.UI.Scan.Ready("spell") == false,
+		"a client with no setter for a spell id was reported ready anyway")
+	check(ns.UI.Scan.Read("spell", 20572) == nil, "a missing setter answered text")
+	Tip.Open(owner, { kind = "spell", spell = 20572, title = "Blood Fury" })
+	check(Box.Text(1) == "Blood Fury",
+		"an older client lost the name the caller knew: " .. tostring(Box.Text(1)))
+	scanner.SetSpellByID = setter
+	H.tooltips.spell[20572] = nil
+
 	H.tooltips.item[link] = nil
 	Box.Close()
 

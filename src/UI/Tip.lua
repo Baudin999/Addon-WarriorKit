@@ -53,12 +53,19 @@ ns.Tip = Tip
 -- fields the arguments come from.
 --
 -- A kind absent from this table has no text inside the client, which is `note`
--- and is the whole of the addon's own furniture: a nag square, a filter chip,
--- a settings control. Those draw the caller's title and nothing else in the
--- head band, which is correct and is not a fallback.
+-- and is the addon's own furniture: a filter chip, a settings control. Those
+-- draw the caller's title and nothing else in the head band, which is correct
+-- and is not a fallback.
+--
+-- `spell` is what a subject the client knows but nobody is carrying reads with,
+-- and it is here for the nag row. A square that says a buff is missing was the
+-- one hover in the addon whose head was a phrase this addon wrote, because
+-- there is no aura index for an aura you do not have; with an id there is a
+-- question to ask and the box reads like every other one.
 local READS = {
 	item      = { "link" },
 	action    = { "slot" },
+	spell     = { "spell" },
 	buff      = { "unit", "index" },
 	debuff    = { "unit", "index" },
 	inventory = { "unit", "slot" },
@@ -68,7 +75,7 @@ local READS = {
 -- Every kind a subject may name. `note` is here and not above because it is a
 -- real kind that a source can register against; it simply has no client text.
 local KINDS = {
-	note = true, item = true, action = true,
+	note = true, item = true, action = true, spell = true,
 	buff = true, debuff = true, inventory = true, unit = true,
 }
 

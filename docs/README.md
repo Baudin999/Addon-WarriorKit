@@ -434,9 +434,6 @@ goes through `Feature.lua` or through the shared surface below:
     ns.UI.Adopt(frame, zoom)     put a frame on the pixel grid, so one unit
                                  inside it is one physical pixel
     ns.UI.Rezoom(frame, zoom)    change that frame's whole-number zoom
-    ns.UI.ZoomOf(frame)          what zoom a frame is drawn at, walking up to
-                                 whichever ancestor was adopted, and nil where
-                                 none of them was
     ns.UI.Pixel(frame)           what ns.Pixel forwards to
     ns.UI.Round(frame, size)     a measurement snapped to a whole pixel
     ns.UI.Convert(size, from, to)   a size measured in one frame's units,

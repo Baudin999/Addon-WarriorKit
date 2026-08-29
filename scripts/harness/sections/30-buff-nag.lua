@@ -283,6 +283,31 @@ check(hoverText:find("shield", 1, true) ~= nil,
 check(hoverText:find("/wk buffs offhand off", 1, true) ~= nil,
 	"the tooltip does not name the switch that silences the square: " .. hoverText)
 
+-- The client's own words above them, which is what used to be missing and is
+-- the whole difference between this box and every other one in the addon.
+--
+-- A bare hand has no aura to point a scanner at, and it does have a weapon, so
+-- the square reads with the worn slot the way the buff row's enchant square
+-- does. What the game says about the sword takes the head, exactly where an
+-- action square's spell name goes, and the two lines this file wrote stay under
+-- it. The check above ran before this one on purpose: unseeded, the client
+-- answers nothing and the caption's phrase stands, which is what the older
+-- client and an empty slot both get.
+H.tooltips.inventory[H.tooltipKey("player", ns.Gear.OFFHAND)] = {
+	{ "Thrash Blade" },
+	{ "One-Hand", "Sword" },
+}
+hoverText = hover(1)
+check(hoverText:find("Thrash Blade", 1, true) ~= nil,
+	"a square about a bare weapon never asks the client about that weapon: " .. hoverText)
+check(hoverText:find("Sword", 1, true) ~= nil,
+	"the client's lines came back with only the first of them: " .. hoverText)
+check(hoverText:find("shield", 1, true) ~= nil,
+	"the client's words pushed out what this file had to say: " .. hoverText)
+check(hoverText:find("/wk buffs offhand off", 1, true) ~= nil,
+	"the client's words pushed out the switch: " .. hoverText)
+H.tooltips.inventory[H.tooltipKey("player", ns.Gear.OFFHAND)] = nil
+
 local leave = Nag.Icon(1):GetScript("OnLeave")
 if leave then
 	leave(Nag.Icon(1))
@@ -399,10 +424,26 @@ advance(12)
 local racialText = hover(1)
 check(racialText:find("Blood Fury", 1, true) ~= nil,
 	"the racial tooltip does not name the racial: " .. racialText)
+check(racialText:find("Instant", 1, true) == nil,
+	"a client with no setter for a spell id answered one anyway: " .. racialText)
+
+-- And with the id asked about, which is the shape a racial and an added flask
+-- both have and the shape there is no aura index for. The head is the client's
+-- description of the spell, the same as an action square's, and the elapsed
+-- figure and the switch are still underneath.
+H.tooltips.spell[20572] = {
+	{ "Blood Fury" },
+	{ "Instant", "cast" },
+	{ "Increases attack power. Lasts 15 sec." },
+}
+racialText = hover(1)
+check(racialText:find("Increases attack power", 1, true) ~= nil,
+	"the racial square never asks the client what the racial does: " .. racialText)
 check(racialText:find("12 seconds", 1, true) ~= nil,
 	"the racial tooltip does not say how long it has been ready: " .. racialText)
 check(racialText:find("/wk buffs racial off", 1, true) ~= nil,
 	"the racial tooltip does not name the switch: " .. racialText)
+H.tooltips.spell[20572] = nil
 
 -- Pressed. The cooldown is the only thing that says so and it is what takes
 -- the square off the screen.

@@ -22,16 +22,23 @@ local C, M = UI.Color, UI.Metric
 -- tooltip per hoverable row would be a frame and a dozen font strings per row
 -- in a feed that holds four hundred of them.
 --
--- **It is the size of whatever it was opened on.** One frame serving forty
--- owners has to take its zoom from the owner rather than carry one of its own,
--- and the version of this file that carried one took it from UI.WindowZoom,
--- which is the settings window's. A player with the UI size slider above 1 got
--- a tooltip drawn at the settings window's scale beside a feed drawn at the
--- feed's: a box six hundred pixels across explaining a row thirty pixels tall.
--- UI.ZoomOf answers what the owner is actually drawn at, and UI.Rezoom moves
--- this frame to it on the way in. The cost is one comparison per hover, and it
--- is the only correct answer, because "how big is a tooltip" is a question only
--- the thing being described can answer.
+-- **It is one size, and that size is the addon's.** Every box this file draws
+-- comes out at UI.WindowZoom, whatever it was opened on.
+--
+-- It used to take the owner's zoom instead, on the argument that a box six
+-- hundred pixels across cannot explain a row thirty pixels tall. What that
+-- bought in practice was a tooltip whose text changed size as the cursor
+-- crossed the screen. The missing buff row ships at 2x, because four squares
+-- over your character have to be readable from across a fight, and a square on
+-- it opened a box in text twice the size of the one the action bar under it
+-- opened. Neither box was wrong about its owner. The pair of them was wrong
+-- about the addon, which has one body size and one heading size and had been
+-- drawing both at whatever scale the widget under the cursor happened to want.
+--
+-- A tooltip is not part of the thing you hovered. It is a paragraph about it,
+-- and how big the addon's paragraphs are is the size slider's answer, the same
+-- answer every window here takes. So the size of a HUD widget is now about how
+-- far away you read it from, and the size of text is one setting.
 --
 -- **It sits where the client's own tooltip sits.** The bottom right corner,
 -- clear of the bags and of whatever action bars are switched on, read off the
@@ -121,9 +128,9 @@ UI.Tooltip = Tooltip
 -- no OnEnter, nothing to hang an anchor off and nothing to take a zoom from, so
 -- the box follows the pointer the way the client's own tooltip does.
 --
--- A table rather than a string because an owner is compared with == and handed
--- to UI.ZoomOf, and a table nobody else holds cannot collide with a frame or be
--- produced by accident at a call site that meant something else.
+-- A table rather than a string because an owner is compared with == and asked
+-- for its anchor, and a table nobody else holds cannot collide with a frame or
+-- be produced by accident at a call site that meant something else.
 Tooltip.CURSOR = {}
 
 local frame, shadow, rule
@@ -376,19 +383,16 @@ local function Hairlines()
 	rule:SetHeight(ns.Pixel(frame))
 end
 
--- Take the owner's size. Guarded, because most hovers in a row are on frames
--- at the zoom the last one was and a rezoom is a SetScale on a frame the
--- client has already laid out.
-local function Match(owner)
-	local want
-	if owner == Tooltip.CURSOR then
-		-- Nothing under the pointer was drawn by this addon, so there is no zoom
-		-- to take from it. The box takes the addon's own, which is what every
-		-- window it could be sitting beside is drawn at.
-		want = (UI.WindowZoom and UI.WindowZoom()) or 1
-	else
-		want = UI.ZoomOf(owner) or (UI.WindowZoom and UI.WindowZoom()) or 1
-	end
+-- Take the addon's own size, which is what every window is drawn at and now
+-- what every tooltip is drawn at. Guarded, because the answer only moves when
+-- the player moves the slider and a rezoom is a SetScale on a frame the client
+-- has already laid out.
+--
+-- Nothing about the owner reaches it any more, which is the whole change: the
+-- argument is gone rather than accepted and ignored, so a reader cannot come
+-- away thinking the box still measures the thing it is describing.
+local function Match()
+	local want = (UI.WindowZoom and UI.WindowZoom()) or 1
 	if want == zoom then
 		return false
 	end
@@ -628,7 +632,7 @@ function Tooltip.Show(owner, data, above)
 		return false
 	end
 
-	Match(owner)
+	Match()
 	Render(data)
 
 	if count == 0 then

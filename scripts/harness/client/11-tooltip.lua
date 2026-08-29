@@ -41,7 +41,8 @@ local child = H.child
 -- One entry is an array of lines and one line is `{ left, right, color }`,
 -- where color is three numbers and is left out on every line whose colour does
 -- not carry information.
-local tooltips = { item = {}, action = {}, buff = {}, debuff = {}, inventory = {}, unit = {} }
+local tooltips = { item = {}, action = {}, spell = {}, buff = {}, debuff = {},
+	inventory = {}, unit = {} }
 H.tooltips = tooltips
 
 local function Pair(unit, at)
@@ -107,6 +108,10 @@ local function Dress(frame)
 	end
 
 	frame.SetAction = Setter("action")
+	-- Keyed by the spell id. The setter Wrath added and the older client has
+	-- not, which is why the nag row asks with it and takes nil where it is
+	-- absent; a section that wants the older answer deletes this one.
+	frame.SetSpellByID = Setter("spell")
 	frame.SetUnitBuff = Setter("buff", Pair)
 	frame.SetUnitDebuff = Setter("debuff", Pair)
 	frame.SetInventoryItem = Setter("inventory", Pair)

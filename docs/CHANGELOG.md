@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+### Every tooltip is one size
+
+The box took its zoom from whatever you hovered. That was a deliberate rule and
+it read well one box at a time. Across a session it read badly: the missing buff
+row ships at 2x, because four squares over your character have to be legible
+from across a fight, so a square on it opened a tooltip in text twice the size of
+the one the action bar six pixels below opened. Same font, same palette, same
+layout, two sizes.
+
+A tooltip is not part of the widget you hovered. It is a paragraph about it, and
+how big this addon's paragraphs are is what the UI size slider answers. So the
+box is drawn at `UI.WindowZoom` now, the same as every window here, whichever
+frame it opened on. The size of a HUD widget is about how far away you read it
+from and nothing else.
+
+`UI.ZoomOf` went with the rule. It walked up from a region to whichever ancestor
+was on the pixel grid, it existed for this one caller, and a query nothing calls
+is a thing the next reader has to work out the purpose of.
+
+### A missing buff square says what the game says
+
+Hover an action square and the box names the spell, its rank and its cast time,
+because `UI/Scan.lua` points a hidden tooltip at the slot and reads the client's
+own lines back. Hover a square on the missing buff row and the head was "food",
+in the caption's voice, with a sentence of ours under it. Two boxes eight pixels
+apart, written by two different hands.
+
+The reason was real. There is no aura index for an aura that is not on you, so
+there was nothing to point the scanner at. There is an id, though, and
+`SetSpellByID` takes one, so `spell` is now a subject kind like `action` or
+`debuff`. A racial square and a flask you added yourself read with it, and the
+game's own description of the spell takes the head.
+
+A bare hand has no id and does have a weapon, so those two squares read with the
+worn slot, the same question the buff row's weapon enchant square already asks.
+What the game says about the sword you are swinging is the right thing to put
+above "nothing on the weapon you swing".
+
+`SetSpellByID` landed in Wrath and the older client has no answer for it. That
+path is not a fallback bolted on afterwards: `UI/Tooltip.lua` has always drawn
+the caller's title where the client hands over nothing, so on 1.12 the head is
+the caption's phrase, which is what it was yesterday.
+
 ### The experience bar is ours now
 
 The last Blizzard frame on the screen. `Artwork/Artwork.lua` has stripped the
