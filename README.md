@@ -97,6 +97,17 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   client and redrawn in this interface. Nothing in either feed is on a ticker:
   they change when something happens to you and when you scroll them, and never
   in between.
+- **One tooltip, and parts hook into it.** Every hover in the addon opens the
+  same box: an action square, a nag square, a mail attachment, a link somebody
+  put in chat. Where the words are the client's, which is the stats on an item
+  and the rank and cost on an ability, they are read out of the game and
+  redrawn here rather than raising a gold-bordered parchment over an interface
+  that has none. Each box is a name, then the facts the thing itself knows,
+  then whatever else in the addon has something to say about it, then one blue
+  line telling you what to press or what to type. Adding a line to every
+  tooltip about an item is one call at load. That is how the vendor and auction
+  prices work, which is why they now show up on a mail attachment and not only
+  on the loot row they were written for.
 - **A breakdown of what this character actually does.** One row per ability,
   kept between sessions: how much of your damage it is, how often it lands, how
   often it crits, what it averages, and what stopped it when it did not land.
