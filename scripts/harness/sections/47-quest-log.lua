@@ -179,6 +179,42 @@ check(ns.Unit.Level.WorthOf(62) ~= ns.Unit.Level.WorthOf(11),
 
 check(Window.Paint(), "the window refused to paint")
 
+-- The margins, which is the half of this window a screenshot catches and no
+-- assertion did. The three columns were laid edge to edge inside a content
+-- frame that spans the window, under a footer UI/Window.lua insets by M.pad, so
+-- the reward text ran into the right edge while the buttons under it sat
+-- comfortably in from the same edge. Nothing was wrong at any one site.
+--
+-- What is checked is the arithmetic that cannot be wrong twice: four margins of
+-- one width, three columns, and the whole of it adding up to the window.
+--
+-- Scoped in a do block, because everything in it is read once and this file is
+-- against the harness name budget. An indented local is not a name at chunk
+-- level, which is the shape scripts/check.sh asks every section for.
+do
+	local M = ns.UI.Metric
+	local rail = _G.WarriorKitQuestList
+	local text = _G.WarriorKitQuestText
+	local reward = _G.WarriorKitQuestRewards
+	check(rail and text and reward,
+		"one of the three columns is not on the screen under its own name")
+
+	local _, _, _, railIn, railTop = rail:GetPoint(1)
+	local _, _, _, rewardIn, rewardTop = reward:GetPoint(1)
+	check(railIn == M.pad and -railTop == M.pad,
+		("the list sits %s in and %s down where the margin is %d")
+			:format(railIn, -railTop, M.pad))
+	check(-rewardIn == M.pad and -rewardTop == M.pad,
+		("the reward column sits %s in and %s down where the margin is %d")
+			:format(-rewardIn, -rewardTop, M.pad))
+
+	local spanned = M.pad * 4 + rail:GetWidth() + text:GetWidth() + reward:GetWidth()
+	local across = _G.WarriorKitQuests:GetWidth()
+	check(spanned == across,
+		("the columns and their four margins come to %d in a window %d wide")
+			:format(spanned, across))
+end
+
 -- Clicking through every quest and back, which is what an evening of the window
 -- being open is. The pool has to be the same frames afterwards.
 local before = ns.UI.Windows and #ns.UI.Windows or 0

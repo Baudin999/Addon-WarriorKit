@@ -196,6 +196,25 @@ local function Caption(column, label)
 	return Line(column, { text = label, size = M.small, color = C.quiet })
 end
 
+-- One captioned run of lines, or nothing at all.
+--
+-- Every block in either scrolling column goes through this, which is what makes
+-- the two of them read as one interface: a caption in the small quiet size, its
+-- lines under it a row gap apart, and one gutter of air before whatever comes
+-- next. A block with nothing in it draws neither the caption nor the air, so a
+-- quest with no rewards leaves no heading standing over a blank.
+local function Block(column, caption, lines)
+	if #lines == 0 then
+		return false
+	end
+	Caption(column, caption)
+	for index = 1, #lines do
+		Line(column, lines[index])
+	end
+	column.stack:Space(M.gutter)
+	return true
+end
+
 -- A column ready to be filled in again. Every line past the ones this quest
 -- needs is hidden rather than unmade, and the frames stay in the pool for the
 -- next quest to land on.
@@ -283,9 +302,37 @@ local function Tagline(detail)
 	return table.concat(parts, "  ·  ")
 end
 
+-- What is left to do, and the client's summary sentence where the quest has no
+-- ticked list at all. One or the other, never both: the summary is the same
+-- sentence the objectives spell out, so a quest with objectives that also drew
+-- it would be saying the thing twice under one heading.
+local function Ticks(detail)
+	if #detail.objectives > 0 then
+		local lines = {}
+		for _, line in ipairs(detail.objectives) do
+			lines[#lines + 1] = {
+				text = line.text,
+				color = line.done and C.dim or C.text,
+				mark = line.done and "+" or "-",
+				markColor = line.done and C.tick or C.quiet,
+			}
+		end
+		return lines
+	end
+	if detail.summary ~= "" then
+		return { { text = detail.summary } }
+	end
+	return {}
+end
+
 local function DrawPage(detail)
 	Start(page)
 
+	-- The title and the line under it are one unit and are the only two rows in
+	-- either column outside a block. They carry a row gap between them and a
+	-- gutter under, which is the same air a block leaves behind it, so the first
+	-- caption sits the same distance below them as every later one sits below
+	-- the block above it.
 	Line(page, {
 		text = detail.quest.title,
 		size = M.heading,
@@ -298,26 +345,9 @@ local function DrawPage(detail)
 		gap = M.gutter,
 	})
 
-	if #detail.objectives > 0 then
-		Caption(page, "objectives")
-		for _, line in ipairs(detail.objectives) do
-			Line(page, {
-				text = line.text,
-				color = line.done and C.dim or C.text,
-				mark = line.done and "+" or "-",
-				markColor = line.done and C.tick or C.quiet,
-			})
-		end
-	elseif detail.summary ~= "" then
-		Caption(page, "objectives")
-		Line(page, { text = detail.summary, gap = M.gutter })
-	end
-
-	if detail.description ~= "" then
-		page.stack:Space(M.gutter)
-		Caption(page, "the quest")
-		Line(page, { text = detail.description, color = C.dim })
-	end
+	Block(page, "objectives", Ticks(detail))
+	Block(page, "the quest",
+		detail.description ~= "" and { { text = detail.description, color = C.dim } } or {})
 
 	Finish(page)
 end
@@ -326,27 +356,70 @@ end
 -- The right column
 --------------------------------------------------------------------------
 
+-- Everything a block of the right column can hold, as line specs rather than as
+-- drawn rows.
+--
+-- The two below answer lists and DrawPay decides the captions, which is the
+-- whole reason they are shaped this way. A caption has to be added before the
+-- rows it captions and a block only earns one if it has anything in it, so
+-- something has to know the block is not empty before the first row is drawn.
+-- The version that drew as it went could not, and the symptom was the one in
+-- the screenshot: a quest paying coin and nothing else put two bare numbers at
+-- the top of the column under no heading at all, beside a middle column where
+-- every run of lines has one.
+
+-- The items, whichever list they came off. Each carries the item's picture, its
+-- name in its quality colour, the stack size where there is more than one, and
+-- the item's own text in the hover.
+--
+-- That hover is why Quests/Client.lua reads the link at all. It is the only way
+-- to answer "is this better than what I am wearing" without this addon carrying
+-- an item database, and UI/Scan.lua is what reads the real text out of the
+-- client to fill it.
+local function Given(items)
+	local lines = {}
+	for _, item in ipairs(items) do
+		lines[#lines + 1] = {
+			text = item.count and ("%s x%d"):format(item.name, item.count) or item.name,
+			size = M.small,
+			color = UI.Quality[item.quality or 1] or C.text,
+			icon = item.texture,
+			link = item.link,
+			name = item.name,
+		}
+	end
+	return lines
+end
+
 -- The coin and the counts, in the order they matter to somebody handing a quest
 -- in. Money first, because it is the one every quest has.
-local function Payment(rewards)
+--
+-- These go under the same caption as the items rather than one of their own. A
+-- coin reward is a thing the quest gives you, and three headings over five lines
+-- is a column of headings.
+local function Paid(rewards, lines)
 	if type(rewards.money) == "number" and rewards.money > 0 then
-		Line(pay, { text = ns.Coin(rewards.money), size = M.small })
+		lines[#lines + 1] = { text = ns.Coin(rewards.money), size = M.small }
 	end
 	if type(rewards.required) == "number" and rewards.required > 0 then
-		Line(pay, {
+		lines[#lines + 1] = {
 			text = ("costs %s"):format(ns.Coin(rewards.required)),
 			size = M.small,
 			color = C.loss,
-		})
+		}
 	end
 	if type(rewards.xp) == "number" and rewards.xp > 0 then
-		Line(pay, { text = ("%d experience"):format(rewards.xp), size = M.small, color = C.dim })
+		lines[#lines + 1] = {
+			text = ("%d experience"):format(rewards.xp), size = M.small, color = C.dim,
+		}
 	end
 	if type(rewards.honor) == "number" and rewards.honor > 0 then
-		Line(pay, { text = ("%d honor"):format(rewards.honor), size = M.small, color = C.dim })
+		lines[#lines + 1] = {
+			text = ("%d honor"):format(rewards.honor), size = M.small, color = C.dim,
+		}
 	end
 	if type(rewards.title) == "string" and rewards.title ~= "" then
-		Line(pay, { text = rewards.title, size = M.small, color = C.heading })
+		lines[#lines + 1] = { text = rewards.title, size = M.small, color = C.heading }
 	end
 	-- The spell carries a picture the same way an item does, and it is drawn in
 	-- the same column at the same size, because a reward you can see is a reward
@@ -354,66 +427,37 @@ local function Payment(rewards)
 	-- texture and no spell id, so there is nothing for UI/Scan.lua to point at,
 	-- and a tooltip that repeated the line under it would be worse than none.
 	if rewards.spell then
-		Line(pay, {
+		lines[#lines + 1] = {
 			text = ("teaches %s"):format(rewards.spell.name),
 			size = M.small,
 			color = C.hint,
 			icon = rewards.spell.texture,
-		})
+		}
 	end
-end
-
--- One reward: the item's picture, its name in its quality colour, the stack
--- size when there is more than one, and the item's own text in the hover.
---
--- That hover is why Quests/Client.lua reads the link at all. It is the only way
--- to answer "is this better than what I am wearing" without this addon carrying
--- an item database, and UI/Scan.lua is what reads the real text out of the
--- client to fill it.
-local function Payout(caption, items)
-	if #items == 0 then
-		return false
-	end
-	Caption(pay, caption)
-	for _, item in ipairs(items) do
-		Line(pay, {
-			text = item.count and ("%s x%d"):format(item.name, item.count) or item.name,
-			size = M.small,
-			color = UI.Quality[item.quality or 1] or C.text,
-			icon = item.texture,
-			link = item.link,
-			name = item.name,
-		})
-	end
-	return true
+	return lines
 end
 
 -- The two lines Questie pays for. Absent rather than empty when it is not
 -- installed, because a caption over nothing is a window telling you it is
 -- broken when it is doing exactly what it said it would.
 local function Bearing(quest)
-	local finisher = Where.Finisher(quest.id)
+	local lines = {}
 	local nearest, yards = Where.Nearest(quest.id)
-	if not finisher and not nearest then
-		return false
-	end
-
-	pay.stack:Space(M.gutter)
-	Caption(pay, "where")
 	if nearest then
-		Line(pay, {
+		lines[#lines + 1] = {
 			text = yards and ("%s, %d yards"):format(nearest, yards) or nearest,
 			size = M.small,
-		})
+		}
 	end
+	local finisher = Where.Finisher(quest.id)
 	if finisher then
-		Line(pay, {
+		lines[#lines + 1] = {
 			text = ("hand in to %s"):format(finisher),
 			size = M.small,
 			color = C.dim,
-		})
+		}
 	end
-	return true
+	return lines
 end
 
 local function DrawPay(detail)
@@ -421,15 +465,13 @@ local function DrawPay(detail)
 
 	local rewards = detail.rewards
 	local choices = rewards.choices or {}
-	if Payout("choose one", choices) then
-		pay.stack:Space(M.rowGap)
-	end
-	if Payout(#choices > 0 and "and also" or "you get", rewards.items or {}) then
-		pay.stack:Space(M.rowGap)
-	end
-
-	Payment(rewards)
-	Bearing(detail.quest)
+	Block(pay, "choose one", Given(choices))
+	-- The items you get regardless and the numbers under one caption, named for
+	-- what is above it: after a list of choices these are the rest of the deal,
+	-- and on their own they are the whole of it.
+	Block(pay, #choices > 0 and "and also" or "reward",
+		Paid(rewards, Given(rewards.items or {})))
+	Block(pay, "where", Bearing(detail.quest))
 
 	Finish(pay)
 end
@@ -440,9 +482,13 @@ end
 
 -- A column with its own scroll view, its own stack and its own pool of lines,
 -- which is what both the middle and the right are.
-local function Column(parent)
+local function Column(parent, name)
 	local column = { pool = {}, at = 0 }
-	column.frame = CreateFrame("Frame", nil, parent)
+	-- Named for the reason the list beside it is, and the meter and the aura
+	-- rows before that: a column that has laid itself out wrongly has to be
+	-- measurable from a macro and from scripts/harness.lua, and the alternative
+	-- is this file handing out a reference to its own frames.
+	column.frame = CreateFrame("Frame", name, parent)
 	column.view = UI.ScrollView(column.frame)
 	column.view.frame:SetPoint("TOPLEFT")
 	column.stack = UI.Stack(column.view.canvas)
@@ -460,13 +506,17 @@ end
 
 -- The two rules between the columns, and the three buttons in the footer.
 local function Chrome()
+	-- Down the middle of the gutter it divides rather than against one side of
+	-- it, which is M.pad wide, so both halves of the air read as the same air.
+	local HALF = M.pad / 2
+
 	window.leftRule = UI.Rule(window.content, C.hairline, true)
-	window.leftRule:SetPoint("TOPLEFT", list.frame, "TOPRIGHT", M.gutter, 0)
-	window.leftRule:SetPoint("BOTTOMLEFT", list.frame, "BOTTOMRIGHT", M.gutter, 0)
+	window.leftRule:SetPoint("TOPLEFT", list.frame, "TOPRIGHT", HALF, 0)
+	window.leftRule:SetPoint("BOTTOMLEFT", list.frame, "BOTTOMRIGHT", HALF, 0)
 
 	window.rightRule = UI.Rule(window.content, C.hairline, true)
-	window.rightRule:SetPoint("TOPRIGHT", pay.frame, "TOPLEFT", -M.gutter, 0)
-	window.rightRule:SetPoint("BOTTOMRIGHT", pay.frame, "BOTTOMLEFT", -M.gutter, 0)
+	window.rightRule:SetPoint("TOPRIGHT", pay.frame, "TOPLEFT", -HALF, 0)
+	window.rightRule:SetPoint("BOTTOMRIGHT", pay.frame, "BOTTOMLEFT", -HALF, 0)
 
 	window.tally = UI.Label(window.footer, M.small, C.quiet, "LEFT", UI.FLAT)
 	window.tally:SetPoint("LEFT", 0, 0)
@@ -496,12 +546,24 @@ end
 
 -- Every column sized off the window, in one place rather than nine, because a
 -- resolution change has to be able to call it again.
+--
+-- **The margin is the whole of what this got wrong the first time.** The three
+-- columns were laid edge to edge inside the content frame, which spans the
+-- window, so the list touched the left edge and the reward column ran under the
+-- scrollbar and into the right one. The footer under them did not: UI/Window.lua
+-- insets that by M.pad, and the result was a window whose buttons sat a
+-- comfortable distance in from an edge its text was pressed against.
+--
+-- So the columns take the same M.pad on all four sides, and the two gutters
+-- between them are the same number again. One measurement, five places, and
+-- nothing in the window is a distance the eye has to accept as deliberate
+-- because it is not repeated anywhere else.
 function Window.Fit()
 	if not window then
 		return false
 	end
-	local body = window:Body()
-	local middle = WIDTH - LIST - PAY - M.pad * 2
+	local body = window:Body() - M.pad * 2
+	local middle = WIDTH - LIST - PAY - M.pad * 4
 
 	list:Resize(LIST, body)
 	page.frame:SetSize(middle, body)
@@ -527,13 +589,13 @@ function Window.Build()
 		name = "WarriorKitQuestList",
 		onSelect = Select,
 	})
-	list.frame:SetPoint("TOPLEFT")
+	list.frame:SetPoint("TOPLEFT", M.pad, -M.pad)
 
-	page = Column(window.content)
+	page = Column(window.content, "WarriorKitQuestText")
 	page.frame:SetPoint("TOPLEFT", list.frame, "TOPRIGHT", M.pad, 0)
 
-	pay = Column(window.content)
-	pay.frame:SetPoint("TOPRIGHT")
+	pay = Column(window.content, "WarriorKitQuestRewards")
+	pay.frame:SetPoint("TOPRIGHT", -M.pad, -M.pad)
 
 	Chrome()
 	Window.Fit()

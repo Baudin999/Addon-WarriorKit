@@ -172,6 +172,12 @@ globals = {
 	-- reference to its own pool.
 	"WarriorKitQuests",
 	"WarriorKitQuestList",
+	-- The two scrolling columns beside that list. Named for the same reason and
+	-- for one more: the three of them share the window's width between four
+	-- equal margins, and that arithmetic is only checkable from outside if each
+	-- column can be found and measured.
+	"WarriorKitQuestText",
+	"WarriorKitQuestRewards",
 	"BINDING_HEADER_WARRIORKIT",
 	"BINDING_NAME_WARRIORKIT_MARK_SKULL",
 	"BINDING_NAME_WARRIORKIT_MARK_CROSS",
