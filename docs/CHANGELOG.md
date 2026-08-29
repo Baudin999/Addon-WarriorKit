@@ -33,9 +33,33 @@ no file is the whole of what that shape proves.
 
 ### Casting on what the mouse is over
 
-The addon's own Clique, under `Hover/`. Drag a spell onto the slot in the panel,
-press the key you want it on, and that key casts on whatever the cursor is over,
-in the world, on a nameplate, on a party block or on a skinned unit frame.
+The addon's own Clique, under `Hover/`. Drag a spell onto the empty row at the
+top of the page, press the key you want it on, and that key casts on whatever the
+cursor is over, in the world, on a nameplate, on a party block or on a skinned
+unit frame.
+
+The page is a list of rows and one empty row on top of it. A row is a whole
+binding, four columns wide: the spell, the key, who it lands on, and the cross
+that takes it off. Every column writes straight through to the binding, so
+changing your mind about one of the three decisions costs a click on the row.
+The empty row is the same widget with a draft behind it rather than a saved
+binding, which is why filling it in has no order you have to follow.
+
+It was three stacked controls with a read-only list under them, which is the
+shape a settings page falls into when each control is added on its own. It asked
+for the three decisions in a fixed order in three places on the page, and once a
+binding existed the only thing you could do to it was delete it and start over.
+Every one of those is the same defect: the thing being edited is a row and the
+page was not drawing rows.
+
+`UI.DropSquare` and `UI.KeyBox` came out of the kit to make that possible. Both
+were closures inside `UI.Kit`, reachable only through the labelled full-width row
+built around them, and a page that lays out its own columns needs the piece
+without the row. `ui.Custom` grew an `opts.label` at the same time, so a row a
+page builds itself is in the search index like every other control. `kit.Slot` went with them: the
+labelled row was the only thing that ever called it and the page that called
+that draws its own rows now. `UI.Kit`'s own line count came down from 157 to
+123, and the allow-list entry in `scripts/shape.lua` came down with it.
 
 Every binding carries a filter and the filter is a macro conditional. An enemy
 key is `[@mouseover,harm,nodead]`, a friendly key is `help,nodead`, and a key
@@ -45,11 +69,24 @@ other was meant. A conditional also decides at the moment of the press, which is
 what lets a binding survive a fight: attributes cannot be touched once lockdown
 is up, and nothing here needs to be.
 
-Twelve bindings share one `SecureActionButtonTemplate`, because the template
-reads `type-<click>` and `macrotext-<click>` ahead of the bare pair and the click
-name an override binding passes through is the whole of what tells one binding
-from another. That is `Marking/Keys.lua`'s mechanism with the button swapped for
-a secure one, which is the one thing marking did not need and casting does.
+Twelve bindings share one `SecureActionButtonTemplate`, because a secure button
+looks its action up under `<modifiers>type<click>` and the click name an override
+binding passes through is the whole of what tells one binding from another. That
+is `Marking/Keys.lua`'s mechanism with the button swapped for a secure one, which
+is the one thing marking did not need and casting does.
+
+The attributes are `*type1` and `*macrotext1`, and the `*` is what the first cut
+of this was missing. The modifier prefix is read off the keyboard at the moment
+of the press, so a key on ALT-BUTTON3 arrives asking for `alt-type1`, and every
+key worth putting a mouseover spell on carries a modifier. `*` is the wildcard
+the client falls back to when the modified name holds nothing. Under `type-1` the
+attributes sat where nothing ever looks: the override bound, `GetBindingAction`
+read it back correctly, `/wk hover show` printed the right macro, the page drew
+the key as live, and not one press cast anything. Every reporting path this
+feature has agreed the keys were up, because every one of them asks the binding
+layer and none of them could ask the button what name it answers to.
+`UnitFrames/Group.lua` has written `*type1` since the party frames shipped.
+`44-hover.lua` now asserts the attribute name and not only its value.
 
 Spells are stored by name, so `/cast` picks your best rank and a trainer visit
 cannot leave a binding pointing at rank 3. Bindings are per character, because a

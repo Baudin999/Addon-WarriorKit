@@ -789,10 +789,11 @@ function Options.Show()
 	-- a hidden font string is not obliged to answer.
 	window:Show()
 	Options.Refresh()
-	-- Focused on the way in, because rummaging is what the window is for and a
-	-- field you have to click first is a field you forget is there.
+	-- Emptied on the way in and not focused. The search takes the keyboard when
+	-- you click it and at no other time: a field that grabs it on open eats the
+	-- next press whatever it was for, and the press it ate most often was the
+	-- one meant for a key field.
 	window.search:SetText("")
-	window.search:SetFocus()
 end
 
 function Options.Hide()

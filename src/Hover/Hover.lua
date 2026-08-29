@@ -201,24 +201,38 @@ function Hover.Changed()
 	ns.HoverSheet.Rebuild()
 end
 
+-- Why a key cannot be written, or nil where it can. `mine` is the row already
+-- allowed to hold it, which is what tells rebinding a row to its own key from
+-- taking a key off its neighbour.
+--
+-- One function because the row on a page and the empty row above it write keys
+-- through different calls and must refuse them in the same words. A rule that
+-- lives in one of two writers is a rule the other one does not have.
+local function Refuses(key, mine)
+	if key == "" then
+		return "nothing was pressed."
+	end
+	if BARE[key] then
+		return ("%s belongs to targeting and the camera. Hold a modifier."):format(key)
+	end
+	local owner = Hover.Owner(key)
+	if owner and owner ~= mine then
+		return ("%s already casts %s."):format(key, owner.name)
+	end
+	return nil
+end
+
 -- Returns true, or false and the sentence to print. The slot has to be full,
 -- because the key is the second half of the gesture and a key bound to nothing
 -- is a key that has been taken away from whatever it used to do.
 function Hover.Bind(key)
 	key = key or ""
-	if key == "" then
-		return false, "nothing was pressed."
-	end
-	if BARE[key] then
-		return false, ("%s belongs to targeting and the camera. Hold a modifier."):format(key)
+	local why = Refuses(key, nil)
+	if why then
+		return false, why
 	end
 	if not held then
 		return false, "drop a spell on the slot first, then press the key."
-	end
-
-	local owner = Hover.Owner(key)
-	if owner then
-		return false, ("%s already casts %s."):format(key, owner.name)
 	end
 
 	local list = Hover.List()
@@ -233,6 +247,66 @@ function Hover.Bind(key)
 	held = nil
 	Hover.Changed()
 	return true
+end
+
+--------------------------------------------------------------------------
+-- Changing one that is already there
+--
+-- Three writers, one per column of the row, because a binding is three
+-- decisions and a page that can only add and delete makes you delete a row to
+-- correct the one of them you got wrong.
+--
+-- Each answers true, or false and the sentence to print, which is what Bind
+-- answers and what the panel and the slash words already know how to say.
+--------------------------------------------------------------------------
+
+function Hover.Rebind(index, key)
+	local bind = Hover.List()[index]
+	if not bind then
+		return false, "there is no such key."
+	end
+	key = key or ""
+	local why = Refuses(key, bind)
+	if why then
+		return false, why
+	end
+	bind.key = key
+	Hover.Changed()
+	return true
+end
+
+-- The pick comes off the cursor through Hover.Carry, so what arrives here is
+-- already a spell or an item this client could name.
+function Hover.Respell(index, pick)
+	local bind = Hover.List()[index]
+	if not bind or not pick then
+		return false, "drop a spell on the row to change what it casts."
+	end
+	bind.kind, bind.name, bind.icon = pick.kind, pick.name, pick.icon
+	Hover.Changed()
+	return true
+end
+
+function Hover.Retarget(index, who)
+	local bind = Hover.List()[index]
+	if not bind then
+		return false, "there is no such key."
+	end
+	bind.who = Hover.Who(who).id
+	Hover.Changed()
+	return true
+end
+
+-- The next filter round, for the button on the row that cycles rather than
+-- opens a list. Three entries is short enough that a press each is faster than
+-- a dropdown, and the row has no width for one.
+function Hover.NextWho(who)
+	for index, entry in ipairs(Hover.WHO) do
+		if entry.id == who then
+			return Hover.WHO[index % #Hover.WHO + 1].id
+		end
+	end
+	return Hover.WHO[1].id
 end
 
 -- Returns the name that came off, or nil where that slot held nothing. Indexed

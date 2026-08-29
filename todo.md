@@ -30,6 +30,9 @@ in the README's untested list, and the full text of each item is this file at
 14. check.sh derives its class shapes from `Class/*.lua` rather than naming
     them. `371d82d`
 
+Item 10, the Slam mark carried out of item 1, was dropped rather than
+finished. Nothing tracks it now. Its text is in this file at `d05546c`.
+
 ## Open
 
 Nothing.

@@ -10,11 +10,31 @@ ns.HoverPanel = Panel
 -- reads a setting, draws a control and writes it back, and nothing here decides
 -- anything. What is left in Feature.lua is the part's contract with Core.
 --
--- The gesture the page is built around is two moves and no dialog. Drag a spell
--- onto the square, press the key you want it on. That is what Clique's editor
--- does and it is the one part of Clique nobody has ever needed the manual for,
--- so it is copied on purpose.
+-- The page is a list of rows and one empty row at the top of it. A row is a
+-- whole binding: the spell, the key, who it lands on, and the cross that takes
+-- it off. Fill the empty row and it becomes a bound one and a new empty row is
+-- under your cursor again.
+--
+-- It was three stacked controls and a read-only list underneath, which is the
+-- shape a settings page falls into when each control is added on its own. It
+-- asked for the three decisions in a fixed order, in three different places on
+-- the page, and once a binding was made the only thing you could do to it was
+-- delete it and start again. Every one of those is the same defect: the thing
+-- being edited is a row and the page was not drawing rows.
+--
+-- So the row is the widget and the empty one is the same widget with a draft
+-- behind it rather than a saved binding. Nothing on the page has an order you
+-- have to follow, changing your mind about any one column costs one click, and
+-- what is bound is where you would reach for it, which is on the binding.
 --------------------------------------------------------------------------
+
+local M, C = ns.UI.Metric, ns.UI.Color
+
+-- The row's own geometry, and the only numbers in this file. The key box is
+-- sized for CTRL-SHIFT-BUTTON4 and the target button for "an enemy"; the name
+-- takes whatever is left, because it is the one column that can be trimmed with
+-- an ellipsis and still say which spell it is.
+local SQUARE, KEY_W, WHO_W = M.control, 118, 76
 
 -- What the slot will take off the cursor, handed to the widget layer, which
 -- knows what a square is and nothing about a spell.
@@ -39,115 +59,179 @@ local function Take(kind, a, b, c)
 	return nil
 end
 
--- The icon and the line beside it. A slot with nothing in it says what to do
--- with it, because an empty square with no caption is a square nobody drops
--- anything on.
-local function Slotted()
-	local pick = ns.Hover.Held()
-	if not pick then
-		return nil, "|cff808080drag a spell here|r"
+-- Every writer on this page answers the same way Hover.Bind does, so the page
+-- says the refusal and puts itself back in step in one place.
+local function Said(ok, why)
+	if not ok and why then
+		ns.Print(why)
 	end
-	return pick.icon, pick.name
+	ns.Options.Refresh()
+	return ok
 end
 
--- One row of the list: the key, the spell's icon and name, who it lands on, and
--- the button that takes it off.
+--------------------------------------------------------------------------
+-- One row
+--
+-- Five regions and no decisions. What each column reads and what it writes
+-- comes in as `hooks`, which is the whole of the difference between the empty
+-- row at the top and the twelve bound ones under it.
 --
 -- ui.Custom is the seam, the same as UnitFrames/Panel.lua's debuff rows.
--- UI/Widgets.lua has no list widget and should not grow one for two callers;
--- what it has is a bare row of the right width that measures itself, and an
--- unused slot measures to nothing.
-local function BindRow(ui, index)
-	local M, C = ns.UI.Metric, ns.UI.Color
-	local removeWidth, keyWidth = 62, 128
-	local row, art, key, name
+-- UI/Widgets.lua has the square and the key box as callable pieces and no list
+-- widget over them, which is the right split: a list is a thing a page has an
+-- opinion about and a square is not.
+--------------------------------------------------------------------------
 
-	local function Bind()
-		return ns.Hover.List()[index]
-	end
+local function Row(ui, hooks)
+	local row, square, name, key, who
 
 	ui.Custom(function(frame)
 		row = frame
 
-		key = ns.UI.Label(frame, M.font, C.text, "LEFT", ns.UI.FLAT)
-		key:SetPoint("TOPLEFT")
-		key:SetWidth(keyWidth)
+		square = ns.UI.DropSquare(frame, SQUARE, hooks.slot, hooks.drop,
+			{ take = Take, after = ns.Options.Refresh })
+		square:SetPoint("TOPLEFT")
 
-		art = ns.UI.Icon(frame, "ARTWORK")
-		art:SetSize(M.control, M.control)
-		art:SetPoint("TOPLEFT", frame, "TOPLEFT", keyWidth + M.gutter, 0)
+		-- The cross column is left empty on the row that has nothing to take
+		-- off, rather than closed up. Every row on this page is the same four
+		-- columns and the empty one at the top has to line up with them, or the
+		-- eye reads it as a different kind of thing than the rows it makes.
+		if hooks.remove then
+			local cross = ns.UI.Button(frame, { label = "x", glyph = true,
+				width = SQUARE, onClick = hooks.remove })
+			cross:SetPoint("TOPRIGHT")
+		end
 
-		local remove = ns.UI.Button(frame, { label = "remove", width = removeWidth,
-			onClick = function()
-				if ns.Hover.Remove(index) then
-					ns.Options.Refresh()
-				end
-			end })
-		remove:SetPoint("TOPRIGHT")
+		who = ns.UI.Button(frame, { width = WHO_W, onClick = hooks.cycle })
+		who:SetPoint("TOPRIGHT", -(SQUARE + M.rowGap), 0)
+
+		key = ns.UI.KeyBox(frame, { width = KEY_W, getText = hooks.key,
+			onKey = hooks.bind, after = ns.Options.Refresh })
+		key:SetPoint("TOPRIGHT", who, "TOPLEFT", -M.rowGap, 0)
 
 		name = ns.UI.Label(frame, M.font, C.text, "LEFT", ns.UI.FLAT)
-		name:SetPoint("LEFT", art, "RIGHT", M.gutter, 0)
-		name:SetPoint("RIGHT", remove, "LEFT", -M.gutter, 0)
+		ns.UI.Wrap(name, false)
+		name:SetPoint("LEFT", square, "RIGHT", M.gutter, 0)
+		name:SetPoint("RIGHT", key, "LEFT", -M.gutter, 0)
 
-		-- An unbound slot is not a short row, it is no row: zero height and no
-		-- gap under it, or twelve unused slots would leave a hand's width of air
-		-- between the list and the controls below it.
+		-- An empty slot on the list is not a short row, it is no row: zero
+		-- height and no gap under it, or twelve unused slots would leave a
+		-- hand's width of air between the list and the controls below it.
 		return function(cell)
-			local used = Bind() ~= nil
+			local used = hooks.shown()
 			cell.gap = used and M.rowGap or 0
-			return used and M.control or 0
+			return used and SQUARE or 0
 		end
-	end, { height = M.control, refresh = function()
-		local bind = Bind()
-		row:SetShown(bind ~= nil)
-		if not bind then
+	end, { height = SQUARE, label = hooks.label, refresh = function()
+		local used = hooks.shown()
+		row:SetShown(used)
+		if not used then
 			return
 		end
-		art:SetTexture(bind.icon)
-		name:SetText(("%s, on %s"):format(bind.name, ns.Hover.Who(bind.who).label))
-		-- A key the client refused is drawn in the quiet grey rather than left
-		-- looking bound, because a key that reads as live and casts nothing is
-		-- the one failure this page cannot otherwise show.
-		local tone = ns.HoverCast.Holding(index) and C.text or C.quiet
-		key:SetText(bind.key)
-		key:SetTextColor(tone[1], tone[2], tone[3])
+		name:SetText(square.Refresh() or "")
+		who.text:SetText(ns.Hover.Who(hooks.who()).label)
+		key.Update()
 	end })
 end
 
-local function Who()
-	local options = {}
-	for _, who in ipairs(ns.Hover.WHO) do
-		options[#options + 1] = { value = who.id, text = who.label }
+--------------------------------------------------------------------------
+-- The empty row, and the twelve under it
+--------------------------------------------------------------------------
+
+-- The draft. The slot holds what you dropped and ns.db.hoverWho holds the
+-- filter the next binding is made with, which is what the page had before and
+-- is exactly a row that has not been saved. Pressing a key is what saves it.
+local function Draft()
+	return {
+		label = "a new key",
+		shown = function() return true end,
+		slot = function()
+			local pick = ns.Hover.Held()
+			if not pick then
+				return nil, "|cff808080drag a spell here|r"
+			end
+			return pick.icon, pick.name
+		end,
+		drop = function(pick)
+			ns.Hover.Hold(pick)
+			return true
+		end,
+		key = function()
+			return ns.Hover.Held() and "|cffffd100press a key|r" or "|cff808080a key|r"
+		end,
+		bind = function(combo)
+			Said(ns.Hover.Bind(combo))
+		end,
+		who = function() return ns.db.hoverWho end,
+		cycle = function()
+			ns.db.hoverWho = ns.Hover.NextWho(ns.db.hoverWho)
+			ns.Options.Refresh()
+		end,
+	}
+end
+
+-- One saved binding. Every column writes straight through to the model, so a
+-- row is the binding rather than a picture of it.
+local function Saved(index)
+	local function Bind()
+		return ns.Hover.List()[index]
 	end
-	return options
+	return {
+		shown = function() return Bind() ~= nil end,
+		slot = function()
+			local bind = Bind()
+			return bind and bind.icon, bind and bind.name
+		end,
+		drop = function(pick)
+			return Said(ns.Hover.Respell(index, pick))
+		end,
+		-- A key the client refused is drawn in the quiet grey rather than left
+		-- looking bound, because a key that reads as live and casts nothing is
+		-- the one failure this page cannot otherwise show.
+		key = function()
+			local bind = Bind()
+			if not bind then
+				return ""
+			end
+			if ns.HoverCast.Holding(index) then
+				return bind.key
+			end
+			return ("|cff808080%s|r"):format(bind.key)
+		end,
+		bind = function(combo)
+			Said(ns.Hover.Rebind(index, combo))
+		end,
+		who = function()
+			local bind = Bind()
+			return bind and bind.who
+		end,
+		cycle = function()
+			local bind = Bind()
+			if bind then
+				Said(ns.Hover.Retarget(index, ns.Hover.NextWho(bind.who)))
+			end
+		end,
+		remove = function()
+			ns.Hover.Remove(index)
+			ns.Options.Refresh()
+		end,
+	}
 end
 
 local function Binding(ui)
 	ui.Section("Mouseover casting", "Fighting")
 	ui.Lede("A key casts on whatever is under the cursor, filtered by whether it is a friend or an enemy.")
 
-	ui.Slot("the spell", Slotted, function(pick)
-		ns.Hover.Hold(pick)
-		return true
-	end, { take = Take })
-	ui.Hint("Drag a spell out of your spellbook or off a bar. Right click the square to empty it. An item works too, and is cast with /use.")
+	Row(ui, Draft())
+	ui.Hint("Drag a spell onto the square, press the key you want it on, and click the button to say who it lands on. An item works too.")
 
-	ui.Picker("cast it on", function() return ns.db.hoverWho end,
-		function(value) ns.db.hoverWho = value end, Who)
-	ui.Hint("An enemy is anything you can attack, a friend is anything you can help. Neither ever fires on the other, so one key can carry both.")
+	for index = 1, ns.Hover.MAX do
+		Row(ui, Saved(index))
+	end
 
-	ui.KeyField("bind it to",
-		function()
-			return ns.Hover.Held() and "|cffffd100press a key|r" or "|cff808080fill the slot first|r"
-		end,
-		function(combo)
-			local ok, why = ns.Hover.Bind(combo)
-			if not ok then
-				ns.Print(why)
-			end
-		end,
-		function() ns.Hover.Hold(nil) end)
-	ui.Hint("Click the field and press what you want, mouse buttons included. Plain left and right click are refused: they belong to targeting and to the camera.")
+	ui.Reading("the keys", function()
+		return ns.Hover.Describe()
+	end)
 
 	ui.Check("fall back to your target",
 		function() return ns.db.hoverFallback end,
@@ -156,19 +240,6 @@ local function Binding(ui)
 			ns.Hover.Changed()
 		end)
 	ui.Hint("Off, a key with nothing under the cursor does nothing. On, it casts on your target instead, and only when your target passes the same filter.")
-end
-
-local function Bound(ui)
-	ui.Section("What is bound", "Fighting")
-	ui.Lede("Every key this part holds, in the order you made them.")
-
-	for index = 1, ns.Hover.MAX do
-		BindRow(ui, index)
-	end
-
-	ui.Reading("the keys", function()
-		return ns.Hover.Describe()
-	end)
 
 	ui.Action(function() return "clear every key" end, function()
 		ns.Hover.Clear()
@@ -208,6 +279,5 @@ end
 
 function Panel.Build(ui)
 	Binding(ui)
-	Bound(ui)
 	OnScreen(ui)
 end

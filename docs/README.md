@@ -143,7 +143,7 @@ name of none of them.
                              the macro one binding turns into
     Hover/Cast.lua           the one secure button every hover key presses
     Hover/Sheet.lua          the list of what you bound, drawn over the world
-    Hover/Panel.lua          the page: the slot, the filter and the key
+    Hover/Panel.lua          the page: a row per binding and an empty one on top
     Hover/Feature.lua
 
     Charge/Charge.lua        which ability, which unit, what state; shared colours
@@ -1150,6 +1150,16 @@ right of its own row that never wraps. Every control also records its label into
 the host's index as it is built, which is what the search field walks and what
 the harness counts labels out of.
 
+**Two pieces live outside the kit, because a page sometimes lays out its own
+row.** `ns.UI.DropSquare` is the square you drop a spell or an item onto and
+`ns.UI.KeyBox` is the box you press a key into. Both were closures inside
+`UI.Kit`, reachable only through the labelled full width row built around them,
+and the mouseover casting page needs four of them side by side on a row it draws
+itself. Each takes an `opts.after` to put its page back in step, which is what
+the kit passes its own refresh in. `ui.Custom` takes an `opts.label` for the same
+reason: a row a page builds itself belongs in the search index like any other
+control.
+
 **Four calls carry the ranges that are genuinely one range.** `ui.Zoom` takes
 neither a label nor a range, `ui.Opacity` takes no range, `ui.Size` keeps the
 caller's range and writes `px` after the number, and `ui.Count` is whole numbers
@@ -1856,16 +1866,32 @@ charge. `/wk status` names each mark and its key, and appends `unproven` when
 `GetBindingAction` has not confirmed the override.
 
 **Mouseover casting.** The addon's own Clique, in five files under `Hover/`.
-Drag a spell onto the slot in the panel, press the key you want it on, and that
-key casts it on whatever the cursor is over.
+Drag a spell onto the empty row at the top of the page, press the key you want it
+on, and that key casts it on whatever the cursor is over.
+
+The page is that list and nothing else. One row per binding, four columns wide:
+the spell, the key, who it lands on, and the cross that takes it off. Every
+column writes straight through, so changing your mind about one of the three
+decisions costs one click on the row rather than a delete and a rebuild. The
+empty row at the top is the same widget with a draft behind it instead of a saved
+binding, which is why filling it in has no order you have to follow.
 
 The mechanism is `Marking/Keys.lua`'s with one thing added. An override binding
 claims the key, the click name it passes through is the binding's index, and the
 button on the other end is a `SecureActionButtonTemplate` rather than a plain
-one, because casting is protected and marking is not. `SecureActionButtonTemplate`
-reads `type-<click>` and `macrotext-<click>` before the bare pair, so twelve
-bindings share one button and the click name is the whole of what tells them
-apart.
+one, because casting is protected and marking is not. A secure button looks its
+action up under `<modifiers>type<click>`, so twelve bindings share one button and
+the click name is the whole of what tells them apart.
+
+The attributes are written as `*type1` and `*macrotext1`, and the `*` is the part
+this shipped without. The modifier prefix is read off the keyboard at the moment
+of the press, so a key on ALT-BUTTON3 arrives asking for `alt-type1`, and every
+key worth putting a mouseover spell on carries a modifier. `*` is the wildcard
+the client falls back to when the modified name holds nothing. Written as
+`type-1` the attributes were under a name nothing ever asks for, the override
+bound, `GetBindingAction` read it back correctly, `/wk hover show` printed the
+right macro, and not one key cast anything. `UnitFrames/Group.lua` writes its
+click actions the same way and always did.
 
 The filter is a macro conditional and not a unit attribute, because there is no
 attribute that means "only when it is an enemy". An enemy key carries

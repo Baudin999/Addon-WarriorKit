@@ -9,12 +9,21 @@ ns.HoverCast = Cast
 -- One secure button carrying one macro per binding, and one override binding
 -- per key pointing at it.
 --
--- One button rather than twelve. SecureActionButtonTemplate reads `type-<click>`
--- and `macrotext-<click>` before it reads the bare `type` and `macrotext`, so
--- the click name is the whole of what tells the button which binding fired.
--- SetOverrideBindingClick takes that name as its last argument, which is what
--- Marking/Keys.lua already uses it for: it hands the mark's id over and reads it
--- back out of the OnClick. The same mechanism, one layer more secure.
+-- One button rather than twelve. A secure button looks its action up under
+-- `<modifiers>type<click>`, so the click name is the whole of what tells the
+-- button which binding fired. SetOverrideBindingClick takes that name as its
+-- last argument, which is what Marking/Keys.lua already uses it for: it hands
+-- the mark's id over and reads it back out of the OnClick. The same mechanism,
+-- one layer more secure.
+--
+-- The `*` in front is the part that had to be got right and was not. The
+-- modifier prefix is read off the keyboard at the moment of the press, so a
+-- binding on ALT-BUTTON3 arrives looking for `alt-type1`, and every key worth
+-- putting a mouseover spell on carries a modifier. `*type1` is the wildcard the
+-- client falls back to when the modified name holds nothing, which is why
+-- UnitFrames/Group.lua writes its click actions the same way. Without it the
+-- attributes were written under a name nothing ever asks for and every key was
+-- a key that bound, read back correctly, and cast nothing.
 --
 -- A macro rather than a spell attribute, and the reasoning is in Hover.lua: the
 -- filter is `[@mouseover,harm]` and there is no attribute that says that. The
@@ -84,8 +93,8 @@ end
 -- when a later binding lands on the same index.
 local function Wipe()
 	for index = 1, ns.Hover.MAX do
-		button:SetAttribute("type-" .. index, nil)
-		button:SetAttribute("macrotext-" .. index, nil)
+		button:SetAttribute("*type" .. index, nil)
+		button:SetAttribute("*macrotext" .. index, nil)
 	end
 end
 
@@ -110,8 +119,8 @@ function Cast.Apply()
 	for index, bind in ipairs(ns.Hover.List()) do
 		local key = bind.key
 		if type(key) == "string" and key ~= "" and not ns.Hover.Bare(key) then
-			button:SetAttribute("type-" .. index, "macro")
-			button:SetAttribute("macrotext-" .. index, ns.Hover.Macro(bind))
+			button:SetAttribute("*type" .. index, "macro")
+			button:SetAttribute("*macrotext" .. index, ns.Hover.Macro(bind))
 			if Set(key, index) then
 				held[index] = key
 				heldAny = true
@@ -161,7 +170,7 @@ end
 -- again. `/wk hover show` prints these, and a line that came from the same place
 -- the press comes from is the only line worth printing.
 function Cast.Macro(index)
-	return button:GetAttribute("macrotext-" .. index)
+	return button:GetAttribute("*macrotext" .. index)
 end
 
 local events = CreateFrame("Frame")

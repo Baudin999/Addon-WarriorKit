@@ -43,8 +43,21 @@ UI.ALPHA_LOW, UI.ALPHA_HIGH, UI.ALPHA_STEP = 0, 100, 5
 -- At most one of each in the whole interface, which is the behaviour you want
 -- and also the reason they are module state rather than per kit. Two open
 -- dropdowns is a bug, and two fields listening for the same keypress is worse.
+--
+-- `typing` is the third of them and the one that was missing. An edit box with
+-- the keyboard takes every press before a frame's OnKeyDown ever sees it, so a
+-- search field holding focus meant a key field captured nothing and the key you
+-- pressed was typed into the search instead. Tracked here rather than in the
+-- window, because the field that has to give the keyboard up is in the chrome
+-- and the thing that needs it is a widget on a page, and neither knows the
+-- other exists.
 local dropdown
 local capturing
+local typing
+
+-- What an optional callback defaults to, so a widget can call one without
+-- asking every time whether it was given.
+local function Nothing() end
 
 local function Enable(frame, enabled)
 	frame:SetAlpha(enabled and 1 or 0.4)
@@ -271,6 +284,247 @@ function UI.Capturing()
 	return capturing
 end
 
+-- Said by a field on the way in, so anything that wants the keyboard can take
+-- it back without naming the field or the window it sits in.
+function UI.Typing(field)
+	typing = field
+end
+
+-- Returns whether there was one, the same as UI.StopCapture. Cleared before the
+-- focus is dropped, so the OnEditFocusLost that follows finds nothing to do
+-- rather than coming back round through here.
+function UI.StopTyping()
+	local field = typing
+	if not field then
+		return false
+	end
+	typing = nil
+	field:ClearFocus()
+	return true
+end
+
+----------------------------------------------------------------------------
+-- The box a key is pressed into
+--
+-- Click it, press what you want, and it hands the combination back. Everything
+-- about which key that was is above; everything about what the key then does
+-- belongs to whoever asked for one.
+--
+-- Module scope for the reason UI.DropSquare is: a page laying out its own row
+-- wants the box and not the labelled row around it, and the mouseover casting
+-- page puts one on every row it draws.
+--
+-- opts.getText says what the box reads while it is not listening, opts.onKey
+-- takes the combination, and opts.after puts the page back in step. The box
+-- refreshes itself through field.Update, which the caller registers wherever
+-- its own refreshes are kept.
+--------------------------------------------------------------------------
+
+function UI.KeyBox(parent, opts)
+	local after = opts.after or Nothing
+	local field = CreateFrame("Button", nil, parent)
+	field:SetSize(opts.width or 120, opts.height or M.control)
+	field.bg = ns.Fill(field, "BACKGROUND", C.sunken[1], C.sunken[2], C.sunken[3], 1)
+	field.bg:SetAllPoints()
+	field.edges = ns.Outline(field, C.edge[1], C.edge[2], C.edge[3], 1)
+	ns.EdgeSize(field.edges, ns.Pixel(field))
+	field.text = UI.Label(field, M.font, C.text, "CENTER", UI.FLAT)
+	field.text:SetPoint("CENTER")
+	field.afterCapture = after
+
+	local function Take(key)
+		local combo = Combo(key)
+		if not combo then
+			return
+		end
+		UI.StopCapture()
+		opts.onKey(combo)
+		after()
+	end
+
+	local function Listen(self)
+		UI.CloseDropdown()
+		UI.StopCapture()
+		-- Before the capture is armed, not after. A field still holding the
+		-- keyboard would eat the very next press, which is the press this
+		-- control exists to read.
+		UI.StopTyping()
+		capturing = self
+		self:EnableKeyboard(true)
+		if self.SetPropagateKeyboardInput then
+			-- Without this the key also fires whatever it is already bound to.
+			self:SetPropagateKeyboardInput(false)
+		end
+		after()
+	end
+
+	field:RegisterForClicks("AnyUp")
+	field:SetScript("OnClick", function(self, button)
+		if capturing ~= self then
+			Listen(self)
+			return
+		end
+		-- An unmodified left or right click while listening means cancel.
+		-- Combo returns the bare name when no modifier is down, which is the
+		-- same test the binding itself has to pass.
+		local mapped = MOUSE_KEYS[button]
+		if mapped and not BARE_MOUSE[Combo(mapped) or ""] then
+			Take(mapped)
+		else
+			UI.StopCapture()
+		end
+	end)
+
+	field:SetScript("OnKeyDown", function(self, key)
+		if capturing ~= self then
+			return
+		end
+		if key == "ESCAPE" then
+			UI.StopCapture()
+			return
+		end
+		Take(key)
+	end)
+
+	field:SetScript("OnHide", function(self)
+		if capturing == self then
+			UI.StopCapture()
+		end
+	end)
+
+	field.Update = function()
+		if capturing == field then
+			field.text:SetText("|cffffd100press a key|r")
+			UI.Tint(field.bg, C.selected)
+		else
+			field.text:SetText(opts.getText())
+			UI.Tint(field.bg, C.sunken)
+		end
+	end
+	return field
+end
+
+------------------------------------------------------------------------
+-- Slots
+--
+-- One square you drop something onto, and the two things built out of it: a
+-- labelled row, and a character with its hands under it.
+--
+-- get() returns the icon to draw and the text to say about it, and either
+-- may be nil: no icon draws the empty-slot art opts.empty hands over, no
+-- text leaves the line blank. opts.take is handed the whole of GetCursorInfo
+-- and answers the one value set() gets, or nil to refuse the drop; with none
+-- named a square takes an item and hands over its link. set() returns whether
+-- it took it, which is where the rule that a shield does not go in a main
+-- hand lives, because this file knows about neither shields nor spells.
+--
+-- A drop arrives two ways because neither is reliable on its own.
+-- OnReceiveDrag does not fire when the drop replaced something already on
+-- the cursor, and OnMouseUp does not fire when the press that started the
+-- drag happened somewhere else. OPie's ring editor registers both and then
+-- polls on top; the poll is an OnUpdate, which this layer is not allowed to
+-- add, so the two handlers are where it stops.
+--
+-- The highlight asks opts.take rather than watching the cursor, for the same
+-- reason. It was CursorHasItem, which never answers for a spell.
+--
+-- Module scope rather than inside the kit, because a page that lays out its own
+-- row wants the square without the label and the stack cell around it. opts.after
+-- is what the kit passes its own refresh in; a caller outside the kit passes
+-- whatever puts its page back in step.
+--------------------------------------------------------------------------
+
+-- Blizzard's own item slot ring, over the addon's own box. It is the one
+-- borrowed thing in the widget layer and it is borrowed on purpose: a slot
+-- you drag a weapon into should look like the slot the weapon came out of.
+-- 64 texels of art around a 36 pixel slot is the ratio the client draws it
+-- at, so the ring is that much larger than the square it rings.
+local RING = "Interface\\Buttons\\UI-Quickslot2"
+local RING_SCALE = 64 / 36
+
+function UI.DropSquare(parent, size, get, set, opts)
+	opts = opts or {}
+	local after = opts.after or Nothing
+	local square = UI.Box(parent, C.sunken, C.edge)
+	square:SetSize(size, size)
+
+	-- Two textures rather than one. An item icon is a 64 texel square and
+	-- wants the crop and the snapping fix UI.Icon applies; the empty-slot art
+	-- is Blizzard's own frame for that hand and is already the shape it draws
+	-- at, so cropping it eats its border.
+	local icon = UI.Icon(square, "ARTWORK")
+	icon:SetPoint("TOPLEFT", 2, -2)
+	icon:SetPoint("BOTTOMRIGHT", -2, 2)
+	local empty = square:CreateTexture(nil, "ARTWORK")
+	empty:SetPoint("TOPLEFT", 2, -2)
+	empty:SetPoint("BOTTOMRIGHT", -2, 2)
+	empty:SetVertexColor(1, 1, 1, 0.35)
+
+	if opts.ring then
+		local ring = square:CreateTexture(nil, "OVERLAY")
+		ring:SetTexture(RING)
+		ring:SetPoint("CENTER")
+		ring:SetSize(UI.Round(square, size * RING_SCALE), UI.Round(square, size * RING_SCALE))
+	end
+
+	local function Carried()
+		local kind, a, b, c = GetCursorInfo()
+		if opts.take then
+			return opts.take(kind, a, b, c)
+		end
+		if kind ~= "item" or type(b) ~= "string" then
+			return nil
+		end
+		return b
+	end
+
+	local function Drop()
+		local carried = Carried()
+		if carried == nil then
+			return
+		end
+		if set(carried) then
+			ClearCursor()
+		end
+		after()
+	end
+
+	local button = CreateFrame("Button", nil, parent)
+	button:SetAllPoints(square)
+	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	button:SetScript("OnReceiveDrag", Drop)
+	button:SetScript("OnClick", function(_, which)
+		UI.CloseDropdown()
+		UI.StopCapture()
+		if which == "RightButton" then
+			set(nil)
+			after()
+			return
+		end
+		Drop()
+	end)
+	button:SetScript("OnEnter", function()
+		UI.Tint(square.bg, Carried() ~= nil and C.selected or C.control)
+	end)
+	button:SetScript("OnLeave", function()
+		UI.Tint(square.bg, C.sunken)
+	end)
+
+	square.button = button
+	square.Refresh = function()
+		local texture, shown = get()
+		icon:SetTexture(texture)
+		icon:SetShown(texture and true or false)
+		local fallback = (not texture) and opts.empty and opts.empty() or nil
+		empty:SetTexture(fallback)
+		empty:SetShown(fallback and true or false)
+		local usable = (opts.enabled == nil) or opts.enabled()
+		Enable(button, usable)
+		square:SetAlpha(usable and 1 or 0.4)
+		return shown
+	end
+	return square
+end
 --------------------------------------------------------------------------
 -- The kit
 --
@@ -1043,216 +1297,20 @@ function UI.Kit(host)
 		end })
 		clear:SetPoint("TOPRIGHT")
 
-		local field = CreateFrame("Button", nil, row)
-		field:SetSize(fieldWidth, M.control)
+		local field = UI.KeyBox(row, { width = fieldWidth, getText = getText,
+			onKey = onKey, after = Changed })
 		field:SetPoint("TOPRIGHT", clear, "TOPLEFT", -M.rowGap, 0)
-		field.bg = ns.Fill(field, "BACKGROUND", C.sunken[1], C.sunken[2], C.sunken[3], 1)
-		field.bg:SetAllPoints()
-		field.edges = ns.Outline(field, C.edge[1], C.edge[2], C.edge[3], 1)
-		ns.EdgeSize(field.edges, ns.Pixel(field))
-		field.text = UI.Label(field, M.font, C.text, "CENTER", UI.FLAT)
-		field.text:SetPoint("CENTER")
-		field.afterCapture = Changed
-
-		local function Take(key)
-			local combo = Combo(key)
-			if not combo then
-				return
-			end
-			UI.StopCapture()
-			onKey(combo)
-			Changed()
-		end
-
-		field:RegisterForClicks("AnyUp")
-		field:SetScript("OnClick", function(self, button)
-			if capturing == self then
-				local mapped = MOUSE_KEYS[button]
-				-- An unmodified left or right click while listening means cancel.
-				-- Combo returns the bare name when no modifier is down, which is the
-				-- same test the binding itself has to pass.
-				if mapped and not BARE_MOUSE[Combo(mapped) or ""] then
-					Take(mapped)
-				else
-					UI.StopCapture()
-				end
-				return
-			end
-			UI.CloseDropdown()
-			UI.StopCapture()
-			capturing = self
-			self:EnableKeyboard(true)
-			if self.SetPropagateKeyboardInput then
-				-- Without this the key also fires whatever it is already bound to.
-				self:SetPropagateKeyboardInput(false)
-			end
-			Changed()
-		end)
-
-		field:SetScript("OnKeyDown", function(self, key)
-			if capturing ~= self then
-				return
-			end
-			if key == "ESCAPE" then
-				UI.StopCapture()
-				return
-			end
-			Take(key)
-		end)
-
-		field:SetScript("OnHide", function(self)
-			if capturing == self then
-				UI.StopCapture()
-			end
-		end)
 
 		Index(field, label)
-		return Remember(field, function()
-			if capturing == field then
-				field.text:SetText("|cffffd100press a key|r")
-				UI.Tint(field.bg, C.selected)
-			else
-				field.text:SetText(getText())
-				UI.Tint(field.bg, C.sunken)
-			end
-		end)
+		return Remember(field, field.Update)
 	end
 
-	----------------------------------------------------------------------
-	-- Slots
-	--
-	-- One square you drop something onto, and the two things built out of it: a
-	-- labelled row, and a character with its hands under it.
-	--
-	-- get() returns the icon to draw and the text to say about it, and either
-	-- may be nil: no icon draws the empty-slot art opts.empty hands over, no
-	-- text leaves the line blank. opts.take is handed the whole of GetCursorInfo
-	-- and answers the one value set() gets, or nil to refuse the drop; with none
-	-- named a square takes an item and hands over its link. set() returns whether
-	-- it took it, which is where the rule that a shield does not go in a main
-	-- hand lives, because this file knows about neither shields nor spells.
-	--
-	-- A drop arrives two ways because neither is reliable on its own.
-	-- OnReceiveDrag does not fire when the drop replaced something already on
-	-- the cursor, and OnMouseUp does not fire when the press that started the
-	-- drag happened somewhere else. OPie's ring editor registers both and then
-	-- polls on top; the poll is an OnUpdate, which this layer is not allowed to
-	-- add, so the two handlers are where it stops.
-	--
-	-- The highlight asks opts.take rather than watching the cursor, for the same
-	-- reason. It was CursorHasItem, which never answers for a spell.
-	----------------------------------------------------------------------
-
-	-- Blizzard's own item slot ring, over the addon's own box. It is the one
-	-- borrowed thing in the widget layer and it is borrowed on purpose: a slot
-	-- you drag a weapon into should look like the slot the weapon came out of.
-	-- 64 texels of art around a 36 pixel slot is the ratio the client draws it
-	-- at, so the ring is that much larger than the square it rings.
-	local RING = "Interface\\Buttons\\UI-Quickslot2"
-	local RING_SCALE = 64 / 36
-
+	-- The kit's own squares refresh the page they sit on. Everything else about
+	-- one is in UI.DropSquare.
 	local function GearSquare(parent, size, get, set, opts)
 		opts = opts or {}
-		local square = UI.Box(parent, C.sunken, C.edge)
-		square:SetSize(size, size)
-
-		-- Two textures rather than one. An item icon is a 64 texel square and
-		-- wants the crop and the snapping fix UI.Icon applies; the empty-slot art
-		-- is Blizzard's own frame for that hand and is already the shape it draws
-		-- at, so cropping it eats its border.
-		local icon = UI.Icon(square, "ARTWORK")
-		icon:SetPoint("TOPLEFT", 2, -2)
-		icon:SetPoint("BOTTOMRIGHT", -2, 2)
-		local empty = square:CreateTexture(nil, "ARTWORK")
-		empty:SetPoint("TOPLEFT", 2, -2)
-		empty:SetPoint("BOTTOMRIGHT", -2, 2)
-		empty:SetVertexColor(1, 1, 1, 0.35)
-
-		if opts.ring then
-			local ring = square:CreateTexture(nil, "OVERLAY")
-			ring:SetTexture(RING)
-			ring:SetPoint("CENTER")
-			ring:SetSize(UI.Round(square, size * RING_SCALE), UI.Round(square, size * RING_SCALE))
-		end
-
-		local function Carried()
-			local kind, a, b, c = GetCursorInfo()
-			if opts.take then
-				return opts.take(kind, a, b, c)
-			end
-			if kind ~= "item" or type(b) ~= "string" then
-				return nil
-			end
-			return b
-		end
-
-		local function Drop()
-			local carried = Carried()
-			if carried == nil then
-				return
-			end
-			if set(carried) then
-				ClearCursor()
-			end
-			Changed()
-		end
-
-		local button = CreateFrame("Button", nil, parent)
-		button:SetAllPoints(square)
-		button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-		button:SetScript("OnReceiveDrag", Drop)
-		button:SetScript("OnClick", function(_, which)
-			UI.CloseDropdown()
-			UI.StopCapture()
-			if which == "RightButton" then
-				set(nil)
-				Changed()
-				return
-			end
-			Drop()
-		end)
-		button:SetScript("OnEnter", function()
-			UI.Tint(square.bg, Carried() ~= nil and C.selected or C.control)
-		end)
-		button:SetScript("OnLeave", function()
-			UI.Tint(square.bg, C.sunken)
-		end)
-
-		square.button = button
-		square.Refresh = function()
-			local texture, shown = get()
-			icon:SetTexture(texture)
-			icon:SetShown(texture and true or false)
-			local fallback = (not texture) and opts.empty and opts.empty() or nil
-			empty:SetTexture(fallback)
-			empty:SetShown(fallback and true or false)
-			local usable = (opts.enabled == nil) or opts.enabled()
-			Enable(button, usable)
-			square:SetAlpha(usable and 1 or 0.4)
-			return shown
-		end
-		return square
-	end
-
-	-- A labelled row with one slot on the right and whatever the getter says
-	-- about it beside that. It was ItemSlot until opts.take existed.
-	function kit.Slot(label, get, set, opts)
-		local size, nameWidth = 32, 150
-		local row, text = Paired(size + M.gutter + nameWidth, size)
-		text:SetText(label)
-
-		local square = GearSquare(row, size, get, set, opts)
-		square:SetPoint("TOPRIGHT", row, "TOPRIGHT", -(nameWidth + M.gutter), 0)
-
-		local value = UI.Label(row, M.font, C.text, "LEFT", UI.FLAT)
-		UI.Wrap(value, false)
-		value:SetPoint("LEFT", square, "RIGHT", M.gutter, 0)
-		value:SetPoint("RIGHT", row, "RIGHT")
-
-		Index(row, label)
-		return Remember(row, function()
-			value:SetText(square.Refresh() or "")
-		end)
+		opts.after = Changed
+		return UI.DropSquare(parent, size, get, set, opts)
 	end
 
 	-- The character, and the hands under it
@@ -1473,10 +1531,14 @@ function UI.Kit(host)
 			self:ClearFocus()
 			Changed()
 		end)
-		edit:SetScript("OnEditFocusLost", Commit)
-		edit:SetScript("OnEditFocusGained", function()
+		edit:SetScript("OnEditFocusLost", function(self)
+			UI.StopTyping()
+			Commit(self)
+		end)
+		edit:SetScript("OnEditFocusGained", function(self)
 			UI.CloseDropdown()
 			UI.StopCapture()
+			UI.Typing(self)
 			UI.Tint(box.bg, C.selected)
 		end)
 		edit:SetScript("OnHide", function(self)
@@ -1507,6 +1569,13 @@ function UI.Kit(host)
 			height = opts.height or M.row,
 			measure = measure,
 		})
+		-- A custom row that carries controls says what it is called, the same as
+		-- every other control does, or search cannot reach it. Rows that are
+		-- rows of data rather than controls pass no label and stay out of the
+		-- index, which is what every caller before this one did.
+		if opts.label then
+			Index(row, opts.label)
+		end
 		if opts.refresh then
 			Remember(row, opts.refresh)
 		end

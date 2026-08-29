@@ -18,6 +18,19 @@
 -- suffix is what tells one binding from another, so the readback has to name
 -- the index.
 --
+-- Is the macro written under the name the client looks it up by. This is the
+-- one that shipped wrong. The attributes were `type-1` and `macrotext-1`, a
+-- secure button reads `<modifiers>type1`, and every key bound, read back
+-- correctly and cast nothing. The wildcard prefix is the half that matters
+-- most: a mouseover key carries a modifier, the modifier is read off the
+-- keyboard at the moment of the press, and `*type1` is the only name that
+-- answers whatever is held down.
+--
+-- Can a binding be changed rather than only made and deleted. The page draws a
+-- row per binding and every column of it writes straight through, so the spell,
+-- the key and the filter each have a writer and each has to refuse in the same
+-- words the first press did.
+--
 -- Is a removed binding gone from both places. The list is the easy half. The
 -- attribute on the button is the half that leaks: a macro left on a suffix a
 -- later binding lands on is a key casting the spell you deleted.
@@ -37,7 +50,7 @@ local Hover, Cast, Sheet = ns.Hover, ns.HoverCast, ns.HoverSheet
 local button = _G.WarriorKitHoverButton
 
 local function macro(index)
-	return button:GetAttribute("macrotext-" .. index)
+	return button:GetAttribute("*macrotext" .. index)
 end
 
 local function bound(key)
@@ -107,6 +120,16 @@ check(bound("SHIFT-BUTTON3") == "CLICK WarriorKitHoverButton:1",
 	("SHIFT-BUTTON3 reads back as %q"):format(bound("SHIFT-BUTTON3")))
 check(Cast.Holding(1), "the binding layer took the key and the part says it did not")
 
+-- The name, not only the value. A press arrives carrying whatever modifiers are
+-- held, so the client asks for `shift-type1` first and falls back to `*type1`;
+-- an attribute under any other name is a binding that reads back perfectly and
+-- casts nothing, which is exactly how this shipped.
+check(button:GetAttribute("*type1") == "macro",
+	("the enemy binding's action is under %q, not *type1")
+		:format(tostring(button:GetAttribute("*type1"))))
+check(button:GetAttribute("type-1") == nil and button:GetAttribute("type1") == nil,
+	"the action is written under a name that only answers with no modifier held")
+
 -- One key, one binding. The second one wins silently on the client, which is
 -- why it is refused here rather than reported afterwards.
 ok, said = bind(2, "spell", "friend", "SHIFT-BUTTON3")
@@ -134,6 +157,45 @@ ns.db.hoverWho = "enemy"
 check(Hover.Bind("CTRL-BUTTON5"), "binding an item was refused")
 check(macro(4) == "/use [@mouseover,harm,nodead] Bloodspiller",
 	("the item binding carries %q"):format(tostring(macro(4))))
+
+--------------------------------------------------------------------------
+-- Changing one that is already there
+--
+-- Three writers, one per column of the row. Each is asserted on the macro the
+-- button carries rather than on the list, because the list is the easy half and
+-- a change that never reached the button is a row that says one thing and casts
+-- another.
+--------------------------------------------------------------------------
+
+check(Hover.Retarget(1, "friend"), "the filter on a bound key would not change")
+check(macro(1) == "/cast [@mouseover,help,nodead] Rend",
+	("after retargeting, the first binding carries %q"):format(tostring(macro(1))))
+check(Hover.Retarget(1, "enemy"), "putting the filter back was refused")
+
+check(Hover.Respell(1, Hover.Carry("spell", 2, "spell")),
+	"the spell on a bound key would not change")
+check(macro(1) == "/cast [@mouseover,harm,nodead] Thunder Clap",
+	("after the spell changed, the first binding carries %q"):format(tostring(macro(1))))
+check(Hover.Respell(1, Hover.Carry("spell", 1, "spell")), "putting the spell back was refused")
+
+-- A row keeps its own key. Refusing it would mean pressing the key a row
+-- already has could not confirm it, which is the one press somebody makes by
+-- accident and the one that must do nothing rather than complain.
+check(Hover.Rebind(1, "SHIFT-BUTTON3"), "a row would not be rebound to the key it already has")
+
+local moved, refused_why = Hover.Rebind(1, "ALT-BUTTON3")
+check(not moved and refused_why:find("Thunder Clap") ~= nil,
+	("a row took a key its neighbour holds: %s"):format(tostring(refused_why)))
+
+check(Hover.Rebind(1, "CTRL-BUTTON1"), "a modified left click was refused as a new key")
+check(bound("CTRL-BUTTON1") == "CLICK WarriorKitHoverButton:1",
+	("the rebound key reads back as %q"):format(bound("CTRL-BUTTON1")))
+check(bound("SHIFT-BUTTON3") == "", "the key the row moved off is still on the binding layer")
+check(Hover.Rebind(1, "SHIFT-BUTTON3"), "moving the row back was refused")
+
+moved, refused_why = Hover.Rebind(1, "BUTTON1")
+check(not moved and refused_why:find("modifier") ~= nil,
+	("a bound row took plain left click: %s"):format(tostring(refused_why)))
 
 --------------------------------------------------------------------------
 -- The fallback

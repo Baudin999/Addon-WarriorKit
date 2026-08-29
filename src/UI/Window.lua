@@ -272,6 +272,15 @@ end
 -- opts.onType is called on every keystroke with the whole field. Filtering as
 -- you type rather than on enter, because a settings window is something you
 -- rummage in: you type two letters, see whether it is there, and type two more.
+--
+-- It takes the keyboard when you click it and gives it back on escape, and
+-- never at any other time. It used to be focused the moment the window opened,
+-- on the argument that a field you have to click first is a field you forget is
+-- there, and that argument cost more than it was worth: an edit box with the
+-- keyboard takes every press before anything else on the page sees it, so the
+-- first thing anybody did after opening the window was type into a search box
+-- they had not asked for. Binding a key was the worst of it. The key you
+-- pressed went into the search field and the capture read nothing.
 function Window:Search(opts)
 	local width = opts.width or 150
 	local height = M.title - 8
@@ -296,13 +305,13 @@ function Window:Search(opts)
 		ghost:SetShown(field:GetText() == "")
 		opts.onType(field:GetText())
 	end)
-	-- Escape empties the field before it closes the window, so the first press
-	-- puts the page back and the second is the one that leaves.
+	-- Escape empties the field and gives the keyboard up in one press, so the
+	-- page comes back and the window is listening again. The window still takes
+	-- two presses to leave, because this one is spent on the search and the next
+	-- reaches the window itself, which is what the two-stage version was for.
 	edit:SetScript("OnEscapePressed", function(field)
-		if field:GetText() ~= "" then
-			field:SetText("")
-			return
-		end
+		field:SetText("")
+		UI.StopTyping()
 		field:ClearFocus()
 	end)
 	edit:SetScript("OnEnterPressed", function(field)
@@ -310,13 +319,24 @@ function Window:Search(opts)
 			opts.onEnter(field:GetText())
 		end
 	end)
-	edit:SetScript("OnEditFocusGained", function()
+	edit:SetScript("OnEditFocusGained", function(field)
 		UI.CloseDropdown()
 		UI.StopCapture()
+		UI.Typing(field)
 		UI.Tint(box.bg, C.selected)
 	end)
 	edit:SetScript("OnEditFocusLost", function()
+		UI.StopTyping()
 		UI.Tint(box.bg, C.sunken)
+	end)
+
+	-- The whole rectangle answers the click, not only the letters inside it.
+	-- Four pixels of padding either side is four pixels of a field that looks
+	-- like it should take the cursor and does not, and this is now the only way
+	-- in.
+	box:EnableMouse(true)
+	box:SetScript("OnMouseDown", function()
+		edit:SetFocus()
 	end)
 
 	self.search = edit
