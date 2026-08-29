@@ -163,6 +163,18 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   the one you thought was the other one.
 - **Stripped bar art**, so the bars read as a row of icons. `/wk art on` puts
   the Blizzard art back.
+- **Your experience along the bottom, drawn here.** Two rails: how far into the
+  level you are, and under it the faction you are watching, in the same flat
+  colours as everything else. The rested pool is a second fill running on from
+  where you are, so an evening's rest is something you see rather than something
+  you hover for, and the twenty bubbles this game has always drawn are still on
+  it. A rail with nothing to say is not there at all: at the level cap there is
+  only the reputation rail, watching nothing leaves only the experience one, and
+  a character with neither has no bar on the screen. Hover one and it says what
+  is left of the level, what the rested pool is worth, and how long the rest of
+  the level will take at what you have been earning this session, which is a
+  number the game itself will not tell you. Blizzard's own pair goes off the
+  screen, and one tick box puts it back.
 - **A square minimap, as wide as you asked for.** The mask and the ring come
   off, the mousewheel zooms, and Blizzard's mail and tracking icons move to the
   corners. Every addon button on the edge of the map goes behind one square you

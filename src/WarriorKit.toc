@@ -455,6 +455,16 @@ Breakdown\Feature.lua
 Artwork\Artwork.lua
 Artwork\Feature.lua
 
+# The experience and reputation rails. Progress.lua is every call this part
+# makes to the client, including the session's own experience clock, which no
+# API answers; Rails.lua draws the two bars; Feature.lua last as everywhere
+# else. Directly after Artwork because that file leaves MainMenuExpBar and
+# StatusTrackingBarManager alone on purpose, and this is the part that replaces
+# them. It needs UI\Gauge.lua and Unit\Color.lua, both far above this line.
+Progress\Progress.lua
+Progress\Rails.lua
+Progress\Feature.lua
+
 # The minimap. Shape.lua makes the frame square and as wide as you asked for,
 # Corral.lua holds the other addons' buttons behind one square, and Feature.lua
 # last as everywhere else. Shape first because the corral's default position is

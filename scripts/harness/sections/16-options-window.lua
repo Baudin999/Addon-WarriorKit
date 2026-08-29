@@ -418,9 +418,12 @@ if window then
 	-- measurement plus a hint's worth of room, checked on the warrior run, which
 	-- is the class with the most sections. The world hover page arrived under it
 	-- and left it alone, at 19,733 across fifty-nine: one section, one switch
-	-- worded by the panel, one lede and one reading.
-	check(prose < 19750,
-		("the window holds %d characters of prose and the budget is 19,750"):format(prose))
+	-- worded by the panel, one lede and one reading. The experience and
+	-- reputation page costs 495 across two checks and two sliders and takes it
+	-- to 20,228 across sixty. 20,400 is that measurement plus a hint's worth of
+	-- room again.
+	check(prose < 20400,
+		("the window holds %d characters of prose and the budget is 20,400"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

@@ -81,6 +81,9 @@ local SWITCHES = {
 	{ key = "hideBlizzChat", word = "chat", label = "Blizzard's chat window",
 		hint = "Everything it would have drawn goes to the System room in ours, and the enter key comes with it." },
 	{ key = "hideBlizzRaid", word = "raid", label = "Blizzard's raid frames" },
+	{ key = "hideBlizzXP", word = "xp",
+		label = "Blizzard's experience and reputation bars",
+		hint = "Progress/Rails.lua draws both instead. Its default is the bottom edge of the screen, which is roughly where these two were." },
 }
 
 -- What each switch takes down, and what it takes to take it down.
@@ -132,6 +135,16 @@ local FRAMES = {
 		"PartyMemberFrame2", "PartyMemberFrame3", "PartyMemberFrame4" } },
 	{ needs = { "hideBlizzRaid" },
 		names = { "CompactRaidFrameContainer", "CompactRaidFrameManager" } },
+	-- Five names for two bars, and every one of them is a client disagreeing
+	-- with the others about who owns them. 2.5.6 draws the pair as
+	-- MainMenuExpBar with ReputationWatchBar under it and swaps the first for
+	-- MainMenuBarMaxLevelBar at the cap; the builds this Edit Mode was
+	-- backported from put both inside StatusTrackingBarManager. ExhaustionTick
+	-- is the rested marker, which is a child of the experience bar on the
+	-- clients that have it and is named here anyway, because the attic is
+	-- idempotent and a name this client does not carry costs one lookup.
+	{ needs = { "hideBlizzXP" }, names = { "MainMenuExpBar", "ReputationWatchBar",
+		"MainMenuBarMaxLevelBar", "StatusTrackingBarManager", "ExhaustionTick" } },
 }
 
 -- A part whose frames need more than a name in the table above, and whose

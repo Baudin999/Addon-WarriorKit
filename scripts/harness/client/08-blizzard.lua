@@ -135,6 +135,17 @@ end
 -- lockdown can refuse to take it down.
 child("statusbar", _G.UIParent, "CastingBarFrame")
 
+-- The client's own experience bar, with the reputation bar under it. Two of the
+-- five names UnitFrames/Blizzard.lua looks for, which are the two 2.5.6 carries;
+-- the other three are the max level bar, the newer builds' StatusTrackingBarManager
+-- and the rested tick, and a fixture standing up all five would leave the
+-- "this client does not carry that name" half of the walk unreached.
+--
+-- Children of UIParent, because nothing about either is protected: the pair is
+-- FrameXML furniture and any lockdown can take them down.
+child("statusbar", _G.UIParent, "MainMenuExpBar")
+child("statusbar", _G.UIParent, "ReputationWatchBar")
+
 -- The head of each of your own two rows, and the client's own weapon enchant.
 -- None of the three is a child of PlayerFrame on any client: the client hangs
 -- your buffs off BuffFrame in the top corner of the screen and the enchants off

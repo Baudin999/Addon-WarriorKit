@@ -290,6 +290,25 @@ Color.xp = {
 	deadly = HUE.coral,
 }
 
+-- How far along you are: the experience rail and the rested pool drawn beyond
+-- its fill. The one pair of colours in this palette that is about you rather
+-- than about something you are fighting.
+--
+-- Purple and blue because that is what this game has drawn those two bars in
+-- since it shipped, which is the same argument Color.heal makes for green: a
+-- colour the player has already been taught beats a prettier one. The
+-- reputation rail is not here, because a standing is what a faction thinks of
+-- you and Color.reaction above is already that scale.
+--
+-- Its own entry rather than HUE.violet, which is close enough to reuse and is
+-- spoken for. That one is documented as the colour of a cast you are timing a
+-- press against, and a fill that is on the screen every minute of every session
+-- would spend a hue the addon keeps for the moment it matters.
+Color.progress = {
+	experience = { 0.55, 0.32, 0.86 },
+	rested     = { 0.30, 0.52, 0.92 },
+}
+
 -- The frame round a bar, which is where reaction lives now. A departure
 -- channel: hostile and friendly both draw chrome and only neutral departs from
 -- it, because neutral is the one you need told before you cleave.
@@ -399,7 +418,8 @@ local function Shape(list, apply)
 end
 
 local fills, tokens = { Color.heal }, {}
-for _, group in ipairs({ Color.threat, Color.reaction, Color.cast, Color.power }) do
+for _, group in ipairs({ Color.threat, Color.reaction, Color.cast, Color.power,
+	Color.progress }) do
 	for _, color in pairs(group) do
 		fills[#fills + 1] = color
 	end

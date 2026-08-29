@@ -2,6 +2,51 @@
 
 ## Unreleased
 
+### The experience bar is ours now
+
+The last Blizzard frame on the screen. `Artwork/Artwork.lua` has stripped the
+gryphons and the metal strip off the action bars since the first week and left
+`MainMenuExpBar` alone on purpose, with a comment saying an experience bar is not
+furniture. It is a reading, and it was the one reading still drawn in 2007 art
+under a HUD that has none.
+
+So `Progress/` draws it. Two rails along the bottom edge of the screen: how far
+into the level you are, and under it the faction you are watching. The level and
+the count on one, the faction and the standing on the other, in the same flat
+colours as everything else here. `/wk hide xp` takes the client's own pair down
+and ships on, the same as every other switch on that page.
+
+A rail with nothing to say is not there. At the level cap the frame is the
+reputation rail alone, with no faction watched it is the experience rail alone,
+and with both true there is nothing on the screen. That is the missing buff row's
+rule applied to a readout: a bar drawn empty is a claim about a character who has
+run out of things to earn.
+
+The rested pool is drawn rather than written. Between where you are and where the
+bonus runs out the rail carries a second fill, in the blue this game has used for
+it since it shipped, clamped at the end of the level because a week away is a
+pool bigger than the level. It is the one number on the bar that changes what a
+kill is worth, and it should not need a hover.
+
+The twenty segment marks are the client's own bubbles, and they are still the
+unit people count in. They come off under 160 pixels of width whatever the
+setting says, where twenty of anything reads as hatching.
+
+Hover either rail and the addon's own box says the rest: what is left of the
+level, what the rested pool is worth, and what the session says the rest of the
+level will cost you in minutes. That last one is arithmetic of ours, because
+nothing in the game will tell you what you are earning an hour. The accumulator
+runs whether or not the bars are drawn, and it handles the level landing between
+two readings, where the client's number goes down rather than up and a plain
+difference would report that you are earning backwards.
+
+Nothing here is on a ticker. Experience moves when you kill something and
+reputation moves when the client says it did, so the part draws on five events
+and on nothing else, and none of its functions is in `check.sh`'s `HOT` list.
+
+`/wk xp on|off`, `xp faction`, `xp bubbles`, `xp width`, `xp height`, `xp zoom`,
+`xp reset`, and a page of its own under Readouts.
+
 ### A mob that pays nothing says so with its name
 
 The XP scale was already on the bars, on the two characters of the level tag.

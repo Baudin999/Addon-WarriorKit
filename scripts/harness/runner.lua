@@ -127,6 +127,10 @@ local SECTIONS = {
 	-- line hooked into them.
 	"48-tooltips",
 	"49-world-hover",
+	-- After 48-tooltips, which is fine and is worth saying why: what that
+	-- section leaves registered is a source that answers only a subject
+	-- carrying its own probe field, and nothing here carries one.
+	"50-experience-rails",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

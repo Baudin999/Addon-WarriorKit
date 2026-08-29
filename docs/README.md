@@ -67,7 +67,7 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is eighteen parts and a core. Each part is a folder, and Core knows the
+The addon is twenty-five parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
@@ -252,6 +252,16 @@ name of none of them.
 
     Artwork/Artwork.lua      strips the gryphons and the metal strip off the bars
     Artwork/Feature.lua
+
+    Progress/Progress.lua    every call this part makes to the client: how far
+                             into the level you are, the rested pool, the watched
+                             faction folded out of either shape the client
+                             answers it in, and the session's own experience
+                             clock, which no API answers
+    Progress/Rails.lua       the two bars along the bottom of the screen, the
+                             rested pool drawn beyond the fill, the twenty
+                             segment marks, and a hover on each rail
+    Progress/Feature.lua
 
     Minimap/Shape.lua        squares the minimap, resizes it, moves Blizzard's own
                              icons to the corners, puts the wheel on the zoom
@@ -3211,7 +3221,65 @@ the answer that matters: it means this client calls the art something else, not
 that the art was already gone.
 
 The experience bar is not artwork. `MainMenuExpBar` and
-`StatusTrackingBarManager` are deliberately in neither list.
+`StatusTrackingBarManager` are deliberately in neither list. `Progress/` draws
+both of those bars now and `/wk hide xp` is what takes the client's own down, so
+stripping their textures here would be two parts arguing over one frame.
+
+**The experience and reputation rails.** `Progress/Rails.lua`, along the bottom
+edge of the screen. Two bars: how far into the level you are, and under it the
+faction you are watching. `Progress/Progress.lua` is every call the part makes to
+the client and draws nothing, which is the same seam `Quests/Client.lua` draws
+and is drawn here for the same reason: these are the calls the two clients
+disagree about.
+
+A rail with nothing to say is not there. At the level cap the frame is the
+reputation rail alone, with no faction watched it is the experience rail alone,
+and with both true there is no frame on the screen at all. That is the buff nag's
+rule applied to a readout, and it is worth more here than a tidy rectangle,
+because a bar drawn empty is a claim about a character who has run out of things
+to earn. The three states that mean no experience are one answer to the drawing
+layer: the cap, `IsXPUserDisabled` on a character who switched it off, and a
+client that will not say.
+
+Nothing here runs on a ticker. Experience moves when you kill something and
+reputation moves when the client says it did, so the part draws on five events
+and on nothing else, and no function in it is in `check.sh`'s `HOT` list. That is
+also why the writes are unguarded: a guard buys one comparison against a write
+that happens on every frame, and these happen a few times a minute.
+
+The rested pool is drawn rather than written. The section of the rail between
+where you are and where the bonus runs out is a second fill in the blue this game
+has used for it since it shipped, clamped at the end of the level, because a week
+away is a pool bigger than the level and drawn unclamped it hangs off the end of
+the rail. It is the one number on the bar that changes what a kill is worth.
+
+The twenty segment marks are the client's own bubbles, and they are still the
+unit people count in. They come off under 160 pixels of width whatever the
+setting says, which is eight design pixels a segment, because twenty of anything
+narrower reads as hatching. That floor is inside the widths the rail is allowed
+to be, so it is a state the slider can reach rather than a number nothing can get
+under.
+
+The watched faction comes back in two shapes and both are asked for.
+`C_Reputation.GetWatchedFactionData` answers a table with its own field names on
+the newer builds and `GetWatchedFactionInfo` answers five values on the older
+ones, and this addon ships for a backported client where it is genuinely either.
+Both are folded to the same five numbers, and they are band relative: the client
+says 8400 out of a band running 6000 to 12000, and 8400 of 12000 would draw a
+rail most of the way along a standing you have barely started. The eight
+standings fold onto the three colours in `Color.reaction`, because a standing is
+what a faction thinks of you and that is already the palette for exactly that
+question.
+
+The session clock is this addon's arithmetic and not the client's. Nothing in the
+game will tell you what you are earning an hour, so the accumulator watches every
+experience change since login and divides, and it runs whether or not the bars
+are drawn, because a rate that started counting when you opened the settings
+window is a rate about the settings window. The level up is the case worth
+knowing: the number goes down rather than up, and what you earned is the rest of
+the old level plus what carried into the new one, so the cost of the old level is
+kept from the previous reading. Read as a plain difference it is a large negative,
+and the symptom is an hourly rate saying you are going backwards.
 
 **Frame skin.** The player frame, the target frame and target of target,
 wearing the enemy bars' look: flat fills, one pixel edges, a square portrait,
@@ -5211,19 +5279,29 @@ on different realms read as the same person.
     /wk party percolumn 5        1 to 40, the raid only
     /wk party zoom 1             1 to 3
     /wk party reset              the list back on its own corner of the screen
-    /wk hide                     the seven switches, and what each is doing
+    /wk hide                     the nine switches, and what each is doing
     /wk hide buffs on|off        Blizzard's buffs, in the corner of the screen
     /wk hide debuffs on|off      Blizzard's debuffs, beside them
     /wk hide target on|off       Blizzard's icons on the target frame
     /wk hide cast on|off         Blizzard's cast bar for your target
+    /wk hide playercast on|off   Blizzard's cast bar for you
+    /wk hide chat on|off         Blizzard's chat window, forwarded into ours
     /wk hide party on|off        Blizzard's four party frames
     /wk hide raid on|off         Blizzard's raid container and its manager
+    /wk hide xp on|off           Blizzard's experience and reputation bars
     /wk buttons apply            fill the bars with the warrior loadout
     /wk buttons restore          put back exactly what was there before
     /wk buttons                  what it would do, and whether a backup is held
     /wk ranks                    how many bar slots are holding an older rank
     /wk ranks refresh            move them all up to your best rank
     /wk art on|off               Blizzard bar art, off by default
+    /wk xp on|off                the experience and reputation rails
+    /wk xp faction on|off        the reputation rail under the experience one
+    /wk xp bubbles on|off        the twenty segment marks
+    /wk xp width 480             120 to 900
+    /wk xp height 14             6 to 32
+    /wk xp zoom 1                1 to 3
+    /wk xp reset                 back along the bottom of the screen
     /wk loot on|off              empty a corpse in one go
     /wk sell on|off              grey items at every merchant, shift to skip one
     /wk repair                   pay the merchant in front of you now
@@ -6335,3 +6413,31 @@ Everything below was written from the API contract and has never executed:
   every other combat log read in this addon is. Reading the wrong slot opens the
   Revenge window on every hit you take, which looks like a window that never
   shuts rather than like a parser fault.
+
+- Whether these clients carry `GetXPExhaustion`, `IsXPUserDisabled`,
+  `GetMaxPlayerLevel` and `MAX_PLAYER_LEVEL`, and which of the two watched
+  faction calls each of them answers. Every one of them is probed and pcalled at
+  its call site, so a client missing one loses that answer rather than raising: a
+  missing `GetXPExhaustion` is a rail with no rested pool drawn on it, a missing
+  `IsXPUserDisabled` means an experience-off character keeps a rail nobody
+  wanted, and a client answering neither faction call leaves the reputation rail
+  off forever. The cap is settled by `UnitXPMax` answering zero even where both
+  level calls are missing, which is what every client this addon has been read
+  against does. What would settle it: `/wk xp` on a character partway through a
+  level, which prints the reading and says which of them answered.
+- Whether `MainMenuExpBar`, `ReputationWatchBar`, `MainMenuBarMaxLevelBar`,
+  `StatusTrackingBarManager` and `ExhaustionTick` are what these two clients call
+  those frames. The five are written from the two FrameXML generations this
+  backport straddles and nothing installed here calls any of them. A name this
+  client does not carry is a skipped lookup rather than an error, and the symptom
+  of getting all five wrong is two experience bars on the screen rather than one.
+  `/wk hide probe` prints one line per name and says which are on screen, which
+  settles it in one look.
+- Whether the reputation band the client answers is the standing's own band or
+  the whole scale. `Progress.Faction` folds both calls to a band relative pair by
+  subtracting the low end, which is right for the five value shape as documented
+  and for the table shape's `currentReactionThreshold`. A client that already
+  answers band relative numbers would have the low end taken off twice, and the
+  symptom is a rail that reads nearly empty at a standing you are most of the way
+  through. What would settle it: watch a faction you are partway into and compare
+  the rail against the client's own reputation pane.
