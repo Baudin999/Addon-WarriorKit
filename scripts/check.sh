@@ -278,14 +278,14 @@ Feeds/Stream.lua:Refresh
 Feeds/Purse.lua:Purse.Line
 Feeds/Purse.lua:Purse.Account
 Feeds/Purse.lua:Purse.Rate
-Feeds/Purse.lua:Purse.Coin
+Core/Core.lua:ns.Coin
+Core/Core.lua:Thousands
 Feeds/Purse.lua:Others
 Feeds/Purse.lua:Purse.Mine
 Feeds/Purse.lua:Who
 Feeds/Purse.lua:Purse.Note
 Feeds/Purse.lua:Purse.Start
 Feeds/Purse.lua:Money
-Feeds/Purse.lua:Group
 Feeds/Purse.lua:RateText
 Feeds/Purse.lua:Tone
 Perf/Perf.lua:Perf.Start

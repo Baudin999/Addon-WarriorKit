@@ -157,6 +157,13 @@ globals = {
 	"WarriorKitCombatFeed",
 	"WarriorKitTooltip",
 	"WarriorKitTooltipScan",
+	-- the mail window, and the column of favourites down its left. Both named
+	-- for the reason the chat window and its room rail are: a window that has
+	-- wandered off the screen has to be findable from a macro, and
+	-- scripts/harness.lua has to measure what was drawn without Mail/Window.lua
+	-- handing out a reference to its own row pool.
+	"WarriorKitMail",
+	"WarriorKitMailFavourites",
 	"BINDING_HEADER_WARRIORKIT",
 	"BINDING_NAME_WARRIORKIT_MARK_SKULL",
 	"BINDING_NAME_WARRIORKIT_MARK_CROSS",
@@ -311,6 +318,16 @@ read_globals = {
 	-- missing one would compare a message against nil and stop a sale that was
 	-- fine.
 	"MerchantFrame", "GetMoney", "GetCoinText",
+	-- The mailbox is deliberately absent, all of it. Every call the Mail part
+	-- makes moves somebody's property, so every one of them is reached through
+	-- _G and probed at its own call site rather than named here: SendMail,
+	-- SetSendMailMoney, SetSendMailShowing, GetSendMailItem, GetSendMailPrice,
+	-- GetInboxNumItems, GetInboxHeaderInfo, GetInboxItem, GetInboxText,
+	-- AutoLootMailItem, DeleteInboxItem, ReturnInboxItem, CloseMail,
+	-- ATTACHMENTS_MAX_SEND, MailFrame and the friends list either side of
+	-- C_FriendList. Baganator and Syndicator prove the attach path on this
+	-- client and Mail/Send.lua cites them; proving a call exists is still not
+	-- the same as proving it is safe to make unguarded.
 	-- Repairing, for the same window. TitanRepair and Leatrix Plus are both
 	-- installed on both of these clients and both call all four unguarded,
 	-- inside their own auto-repair feature, which is the same feature and so

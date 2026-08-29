@@ -41,8 +41,9 @@ local C = ns.UI.Color
 -- an event rather than by time.
 --------------------------------------------------------------------------
 
-local GOLD = 10000
-local SILVER = 100
+-- Gold, for the one line here that divides by it. The formatter that used to
+-- need this pair is ns.Coin in Core now, and the silver went with it.
+local GOLD = ns.GOLD
 local HOUR = 3600
 
 -- Under a minute there is no slope worth drawing. The first copper of a session
@@ -50,10 +51,6 @@ local HOUR = 3600
 -- true number and a useless one, so the cell stays empty until the span behind
 -- it is long enough to mean something.
 local SETTLE = 60
-
--- Past this the silver is noise. A five figure purse reading "12,405g 63s"
--- spends four glyphs on the part that changes when you buy a drink.
-local COARSE = 100
 
 --------------------------------------------------------------------------
 -- Whose purse
@@ -101,6 +98,50 @@ function Purse.Mine()
 		mine = Who()
 	end
 	return mine
+end
+
+-- A name with the realm suffix off and the case flattened, which is what two
+-- names have to agree on to be the same character. The ledger's own keys carry
+-- the realm and are compared through here rather than directly, because the
+-- question below is asked with a name somebody typed.
+local function Bare(name)
+	if type(name) ~= "string" then
+		return nil
+	end
+	local trimmed = name:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%-.*$", "")
+	if trimmed == "" then
+		return nil
+	end
+	return trimmed:lower()
+end
+
+-- Whether this is a character on your own account.
+--
+-- The ledger is the only list of those the addon has. It is written at every
+-- login and every change of money, so it holds every character you have played
+-- since the addon arrived and nothing else, which is exactly the question and
+-- is the reason this is a reader here rather than a second list somewhere.
+--
+-- Handed out for the mail window, which colours a recipient by who they are and
+-- has to be able to tell your bank alt from a stranger before it will let a
+-- stack of ore go to either. Mail/Feature.lua is the only caller and it is the
+-- only file in that part allowed to name this one.
+--
+-- Two characters of the same name on different realms read as the same person,
+-- which is the trade Chat/People.lua already documents and takes for the same
+-- reason: a name is what you type, and a realm is not.
+function Purse.Knows(name)
+	local wanted = Bare(name)
+	local ledger = ns.db and ns.db.purse
+	if not wanted or not ledger then
+		return false
+	end
+	for who in pairs(ledger) do
+		if Bare(who) == wanted then
+			return true
+		end
+	end
+	return false
 end
 
 --------------------------------------------------------------------------
@@ -234,41 +275,6 @@ end
 -- Numbers as words
 --------------------------------------------------------------------------
 
--- 1234567 as 1,234,567. A loop rather than one pattern because Lua 5.1 has no
--- lookahead, so the groups have to go in from the right one pass at a time.
-local function Group(number)
-	local text = tostring(number)
-	local runs = 1
-	while runs > 0 do
-		text, runs = text:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
-	end
-	return text
-end
-
--- Copper as the shortest true thing.
---
--- Gold alone once there is real gold, gold and silver under a hundred where the
--- silver is the part that moves, and the whole three when there is no gold at
--- all, which is the only time copper is worth a glyph. The sign is carried
--- rather than dropped: this formats the rate as well as the purse, and an hour
--- that cost you money has to read as one.
-function Purse.Coin(copper)
-	copper = math.floor(tonumber(copper) or 0)
-	local sign = ""
-	if copper < 0 then
-		sign, copper = "-", -copper
-	end
-
-	local gold = math.floor(copper / GOLD)
-	if gold >= COARSE then
-		return sign .. Group(gold) .. "g"
-	end
-	if gold > 0 then
-		return ("%s%dg %ds"):format(sign, gold, math.floor(copper % GOLD / SILVER))
-	end
-	return ("%s%ds %dc"):format(sign, math.floor(copper / SILVER), copper % SILVER)
-end
-
 -- The right hand cell. Empty while the session has no slope yet, because the
 -- honest alternative is a number nobody should read.
 local function RateText(perHour)
@@ -279,9 +285,9 @@ local function RateText(perHour)
 		return "0g/h"
 	end
 	if perHour > 0 then
-		return "+" .. Group(perHour) .. "g/h"
+		return "+" .. ns.Thousands(perHour) .. "g/h"
 	end
-	return "-" .. Group(-perHour) .. "g/h"
+	return "-" .. ns.Thousands(-perHour) .. "g/h"
 end
 
 -- What colour that cell is. Stable tables, handed back rather than built, for
@@ -319,7 +325,7 @@ function Purse.Line()
 	local held = GetMoney() or 0
 	if held ~= heldAt then
 		heldAt = held
-		heldText = Purse.Coin(held)
+		heldText = ns.Coin(held)
 		-- And written down from here, which is what makes the ledger heal
 		-- itself. Every event this file listens to fires once, at a moment
 		-- somebody else decided; this branch fires a second after the loading
@@ -335,7 +341,7 @@ function Purse.Line()
 	local hoard = Purse.Account()
 	if hoard ~= hoardAt then
 		hoardAt = hoard
-		hoardText = "all " .. Purse.Coin(hoard)
+		hoardText = "all " .. ns.Coin(hoard)
 	end
 
 	local rate = Purse.Rate()
@@ -377,7 +383,7 @@ local function Session(rate, elapsed)
 	if not rate then
 		return ("%d min so far, which is too short to divide by"):format(minutes)
 	end
-	return ("%s an hour, over %d min"):format(Purse.Coin(rate), minutes)
+	return ("%s an hour, over %d min"):format(ns.Coin(rate), minutes)
 end
 
 -- What the status line has no room to say: every character on the account and
@@ -394,13 +400,13 @@ function Purse.Ledger()
 		Sorted(ledger)
 		for index = 1, #order do
 			local who = order[index]
-			data[#data + 1] = { who, Purse.Coin(ledger[who]),
+			data[#data + 1] = { who, ns.Coin(ledger[who]),
 				tone = (who == me) and C.text or C.dim }
 		end
 		data[#data + 1] = { blank = true }
 	end
 
-	data[#data + 1] = { "Account", Purse.Coin(Purse.Account()), tone = C.heading }
+	data[#data + 1] = { "Account", ns.Coin(Purse.Account()), tone = C.heading }
 
 	local rate, elapsed = Purse.Rate()
 	data[#data + 1] = { "This session", Session(rate, elapsed) }

@@ -281,6 +281,19 @@ name of none of them.
     Comfort/Destroy.lua      the one-card-at-a-time window that acts on that
     Comfort/Feature.lua
 
+    Mail/Who.lua             which of three a recipient is, and the favourites
+                             list the warning is measured against
+    Mail/Draft.lua           the letter you are writing, how many mails it
+                             divides into, and what each one is titled
+    Mail/Send.lua            the conversation with the server: fill the form,
+                             post, wait, fill it again
+    Mail/Inbox.lua           what is waiting, and the sweep that counts down
+    Mail/Blizzard.lua        the client's own mail frame parked off screen, still
+                             shown, because hiding it closes the mailbox
+    Mail/Window.lua          the window: the favourites column, the attachment
+                             block, the band along the bottom, the inbox list
+    Mail/Feature.lua
+
     EditMode/EditMode.lua    probes Edit Mode, captures a layout, imports the baked one
     EditMode/Saved.lua       generated, the baked layout, written by bake-ui.sh
     EditMode/Feature.lua
@@ -4968,6 +4981,117 @@ Gauges are what the timings are timings of. A part registers one with
 millisecond figure means nothing without the count of things it was spent on,
 and a row with nothing on it costs one comparison.
 
+**Mail.** A mail window of the addon's own, opened by the mailbox rather than by
+you. Sending is a column of favourites down the left, the recipient and the coin
+beside it, the attachments beside that, and the subject and the letter under
+both. Receiving is a list of what is waiting, one row a message.
+
+**The band along the bottom is what the part is for.** Everything else in the
+window is furniture the client also has. The band is one line in the colour of
+whoever you are sending to: green for a character on your own account, blue for
+somebody on your friends list or in one of your groups, red for a name the addon
+has never seen, and it says what is riding on the letter while it says so.
+
+It is one element rather than a warning that appears when something is wrong. A
+warning that appears is a warning you have to notice appearing, and it moves
+everything under it when it does. This is always there and always says who, so
+there is no state in which the window is not telling you.
+
+Red also arms the send. The button turns with the band, reads `send anyway`, and
+takes a second press; anything you change in between disarms it, because the
+thing you changed is the thing the warning was about. `/wk mail warn off` drops
+the second press and keeps the colour.
+
+**Favourites are a different axis from the colour and that is deliberate.** A
+relation is what the client and the addon can work out about a name. A favourite
+is a name you put on a list because you mail it. A guild bank alt you mail every
+week is a stranger by relation and belongs on the list; an alt the addon met
+once is green and does not. The warning is measured against the list, because the
+list is the half you curated.
+
+**More than twelve attachments.** A mail carries twelve and there is no arguing
+with that. What the client then does is make twelve the number you have to think
+in: fill a form, send, walk back to the bag, fill it again. `Mail/Draft.lua`
+holds up to thirty six and divides, `Mail/Send.lua` sends one at a time and waits
+for the server between each, and the block of squares draws the line where the
+split falls so you can see it before you press. Coin rides on the first mail
+only: splitting it three ways would be three ways for half of it to be sitting in
+a mailbox after the second one failed.
+
+**The subject writes itself.** Sending gold titles the mail `money` and sending
+one thing titles it after that thing, because that is what you would have typed
+and because an inbox of mails called nothing is an inbox you open one at a time.
+A subject you type wins over both. A split send numbers the parts and fits the
+number inside the client's sixty four characters rather than letting the server
+cut it off mid-word.
+
+**How an item gets onto the form.** `UseContainerItem`, with the send pane
+flagged as showing by `SetSendMailShowing`. That is the same call that sells a
+grey at a merchant and eats a bread roll anywhere else, and the flag is what
+decides which; it is the shape `Baganator/Transfers/AddToMail.lua` uses on this
+exact client. The pick-up-and-click route is the other way and is worse here: it
+puts an item on the cursor, so a failure halfway leaves you holding a stack of
+ore in the middle of a window, and it needs the attachment slot chosen by hand.
+
+Every slot is resolved twice, once when you drop and once at send, against the
+link recorded at the drop. The bags move while a window is open: something loots,
+a stack splits, the vendor sweep sells and every slot after it shifts by one. An
+item that has genuinely gone is counted and reported rather than replaced by
+whatever is in that slot now.
+
+**There is no send timeout and that is deliberate.** A stalled send waits, the
+window says which mail of how many it is waiting on, and there is a stop button
+under it. The alternative is an `OnUpdate`, and an `OnUpdate` is a ticker this
+addon would then have to defend forever, for a case that is a server not
+answering. `MAIL_FAILED` and the mailbox closing both end a run on their own, and
+a refusal stops the rest: a mail the server would not take has left its
+attachments on the form, and posting the next one on top of them would send
+somebody else's items to this recipient.
+
+**Taking counts down.** `AutoLootMailItem` takes the coin and every attachment
+off one message, and a message with nothing left on it and no text is then
+deleted by the server, which renumbers the inbox. Walking upwards from one skips
+every other message while reporting that it took them all; walking down from the
+end cannot, because deleting message seven moves nothing below seven. A message
+whose load does not go down, which is what a bag filling part way through one
+looks like, is stepped past and counted rather than asked again forever.
+
+**Blizzard's window is parked, not hidden, and it is the one frame that skips
+`Core/Attic.lua`.** `MailFrame` ceasing to be drawn is what tells the server you
+have walked away from the mailbox: TitanPost secure-hooks `MailFrame_Hide` for
+exactly that signal, and the client's own `MAIL_SHOW` handler calls `CloseMail`
+when `ShowUIPanel` could not find room for the frame.
+
+Both of the addon's own mechanisms would therefore close it. `ns.Strip` calls
+`Hide` as its first act. The attic re-parents a frame into a hidden room, which
+is the stronger guarantee everywhere else and the wrong one here for the same
+reason: visibility is a property of the parent chain, a frame whose parent is
+hidden stops being visible, and that is what `MailFrame`'s own handler reacts to.
+
+So the frame stays shown and stays parented to `UIParent`, parked off the side of
+the screen at no opacity, and re-parked on its own `OnShow` because the client
+lays its panels out again whenever a panel opens. The cost against the attic is
+real and is why parking is not the default anywhere else: a client that
+repositions the frame between two re-parks puts it back on the screen, where the
+attic could not. That failure is visible rather than silent, and
+`/wk mail hide off` is the way out of it.
+
+**Who a name is comes from three lists and `Mail/Who.lua` owns one of them.** The
+friends list is the client's and is read there, because it is an API rather than
+another part of this addon. The other two arrive through `Who.Also` and
+`Who.AlsoAlt`, which `Mail/Feature.lua` fills in with `Chat/People.lua`'s groups
+and `Feeds/Purse.lua`'s ledger. A part may not name a file outside its own
+folder, and both of those are one; copying either list would be a second list to
+keep in step.
+
+The guild is deliberately not one of the three. A guild of five hundred is a list
+of people you are in a channel with, not a list of people you know, and a colour
+that says friend for every one of them says nothing at all.
+
+Names are matched with the realm suffix off and the case flattened, which is what
+`Chat/People.lua` does. The cost is the same one: two characters of the same name
+on different realms read as the same person.
+
 ## Commands
 
     /wk                          open the settings panel
@@ -5113,6 +5237,13 @@ and a row with nothing on it costs one comparison.
     /wk ui auto on|off           import it on a client that does not have it
     /wk uisize                   how big the addon's windows are, and what it costs
     /wk uisize 1.5               0.5 to 3 in quarters, refused off a step
+    /wk mail                     the mail window, at a mailbox
+    /wk mail on|off              the addon's window instead of the client's
+    /wk mail hide on|off         move Blizzard's own mail frame out of the way
+    /wk mail fav Aria            put a name on the quick list down the left
+    /wk mail unfav Aria          take it off again
+    /wk mail favs                the list, and who each of them is
+    /wk mail warn on|off         whether value to a name off the list asks twice
 
 **The key field takes mouse buttons.** `ui.KeyField` maps left and right onto
 `BUTTON1` and `BUTTON2` so a modified click can be captured, which is the whole
@@ -5527,6 +5658,46 @@ Everything below was written from the API contract and has never executed:
   text rather than the art and the art is the client's own 54 texel crop being
   resampled down, so a small row is legible by construction and recognisable by
   hope.
+
+- The whole mail part. Every mail API it calls is probed by name and pcalled,
+  and two of them are proved by an installed addon rather than by a run: the
+  attach path is `Baganator/Transfers/AddToMail.lua`'s, which sets
+  `SetSendMailShowing(true)` and then calls `UseContainerItem` on a bag slot, and
+  `GetInboxHeaderInfo`'s return order is Syndicator's and Auctionator's. Proving
+  a call exists is not proving the sequence around it is right, and five things
+  ride on that sequence.
+
+  Whether an attach really lands synchronously, which is what the fill loop
+  assumes when it asks `GetSendMailItem` for the next free slot after every
+  `UseContainerItem`. Baganator's own loop advances the same way, which is the
+  argument; a client that answered a frame later would fill slot one twelve
+  times. What would settle it: attach four things and watch the block, which
+  draws what it thinks is on the form.
+
+  Whether `MAIL_SEND_SUCCESS` arrives once per mail and after the form is
+  empty. The state machine posts the next mail from inside that handler, so an
+  event that arrived before the client cleared the slots would put mail two's
+  items on top of mail one's. What would settle it: attach twenty stacks of
+  anything and send. The footer counts the mails as they go and `/wk status`
+  says what the last send did.
+
+  Whether parking `MailFrame` off the side of the screen holds. It stays shown,
+  so the mailbox stays open, and it is re-parked on its own `OnShow`, which is
+  where the UIPanel layout would otherwise put it back. The failure mode is
+  visible rather than silent: Blizzard's window turns up in the middle of the
+  screen with ours over it, and `/wk mail hide off` is the way out. What would
+  settle it: open a mailbox, then open and close the character sheet, which is
+  what makes the client lay its panels out again.
+
+  Whether the inbox sweep gets all of them. It counts down because taking
+  renumbers, and the harness models that renumbering, but the model is written
+  from the contract like everything else here. What would settle it: five
+  messages with attachments, press take everything, and count what is left.
+
+  And whether the three colours read as three colours on a dark window at UI
+  scale 0.53. The contrast gate in `check.sh` measures each against the surface
+  it is drawn on; it says nothing about whether green and blue are far enough
+  apart to be told at a glance, which is a thing you look at.
 
 - The whole party and raid header. `SecureGroupHeaderTemplate` is FrameXML's and
   `harness/client/09-group.lua` is a model of it written from the contract, so

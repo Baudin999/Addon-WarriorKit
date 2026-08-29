@@ -601,6 +601,86 @@ function ns.OutOfRange(answer)
 end
 
 --------------------------------------------------------------------------
+-- Money
+--
+-- One number turned into the shortest true reading of it, which is the shape
+-- ns.ItemInfo has: arithmetic over a client value, no state, no setting, and no
+-- feature's name anywhere in it.
+--
+-- It was Feeds/Purse.lua's, private to the loot feed's status strip, until the
+-- mail window needed to say what postage costs and what is riding on a letter.
+-- A part may not name a file outside its own folder, and the two honest ways
+-- out of that are a second formatter or this one; a second formatter is a
+-- second set of rounding rules, and gold that reads two different ways in two
+-- windows of the same addon is worse than either rule.
+--
+-- GetCoinText is the client's own and is not what this replaces. It answers
+-- "1 Gold 20 Silver 5 Copper", which is forty glyphs where a status strip has
+-- room for eight.
+--------------------------------------------------------------------------
+
+local GOLD, SILVER = 10000, 100
+
+-- Past this the silver is noise. A five figure purse reading "12,405g 63s"
+-- spends four glyphs on the part that changes when you buy a drink.
+local COARSE = 100
+
+-- 1234567 as 1,234,567. A loop rather than one pattern because Lua 5.1 has no
+-- lookahead, so the groups have to go in from the right one pass at a time.
+--
+-- Called Thousands rather than Group, which is what it was called while it was
+-- private to Feeds/Purse.lua. ns.Group is the party and raid block's namespace,
+-- and a shared name has to be the name of what it does rather than the shortest
+-- word that fits: the collision was silent, it made ns.Group a function for the
+-- length of one file's load and a table afterwards, and the only symptom was
+-- the gold-an-hour cell raising once a second.
+local function Thousands(number)
+	local text = tostring(number)
+	local runs = 1
+	while runs > 0 do
+		text, runs = text:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+	end
+	return text
+end
+
+ns.Thousands = Thousands
+
+-- Copper as the shortest true thing.
+--
+-- Gold alone once there is real gold, gold and silver under a hundred where the
+-- silver is the part that moves, and the whole three when there is no gold at
+-- all, which is the only time copper is worth a glyph. The sign is carried
+-- rather than dropped: this formats a rate as well as a purse, and an hour that
+-- cost you money has to read as one.
+function ns.Coin(copper)
+	copper = math.floor(tonumber(copper) or 0)
+	local sign = ""
+	if copper < 0 then
+		sign, copper = "-", -copper
+	end
+
+	local gold = math.floor(copper / GOLD)
+	if gold >= COARSE then
+		return sign .. Thousands(gold) .. "g"
+	end
+	if gold > 0 then
+		return ("%s%dg %ds"):format(sign, gold, math.floor(copper % GOLD / SILVER))
+	end
+	return ("%s%ds %dc"):format(sign, math.floor(copper / SILVER), copper % SILVER)
+end
+
+-- The same number as its three parts, for a window that puts a field under each
+-- of them. The inverse is a multiply at the call site and needs nothing here.
+function ns.Coins(copper)
+	copper = math.max(0, math.floor(tonumber(copper) or 0))
+	return math.floor(copper / GOLD),
+		math.floor(copper % GOLD / SILVER),
+		copper % SILVER
+end
+
+ns.GOLD, ns.SILVER = GOLD, SILVER
+
+--------------------------------------------------------------------------
 -- Items
 --
 -- Two clients, two container APIs. Era backported C_Container and 2.5.6 may or
@@ -659,10 +739,12 @@ function ns.ContainerItem(bag, slot)
 	return nil
 end
 
--- Use what is in a bag slot. At a merchant that sells it; anywhere else it
--- eats, equips or opens the thing, which is why every caller has to prove the
--- merchant window is up before it calls this. False where the client has
--- neither API, so a caller can say so rather than believe a sale happened.
+-- Use what is in a bag slot, which means whatever the window in front of you
+-- says it means. At a merchant it sells it. With the send-mail pane flagged as
+-- showing it attaches it to the letter. Anywhere else it eats, equips or opens
+-- the thing, which is why every caller has to prove which of the three it is in
+-- before it calls this. False where the client has neither API, so a caller can
+-- say so rather than believe a sale or an attach happened.
 function ns.UseContainerItem(bag, slot)
 	if C_Container and C_Container.UseContainerItem then
 		C_Container.UseContainerItem(bag, slot)

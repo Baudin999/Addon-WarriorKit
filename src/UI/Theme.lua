@@ -51,6 +51,23 @@ UI.Color = {
 	loss     = { 0.86, 0.38, 0.38, 1 },
 	shadow   = { 0, 0, 0, 0.55 },
 
+	-- Who a name belongs to. Three entries, and the mail window is what asks:
+	-- a character on your own account, somebody you know, and everybody else.
+	--
+	-- Their own entries rather than the three colours above that happen to be
+	-- the right hues. `tick` is a box you ticked, `accent` is a control you can
+	-- press and `loss` is a number that went the wrong way, and none of the
+	-- three is a fact about a person. A palette that says the same thing twice
+	-- drifts on the first edit that meant one of them and not the other.
+	--
+	-- Red for a stranger is deliberate and it is not an error state. Mailing
+	-- somebody you have never mailed is a thing you may well want to do; the
+	-- colour is there so that doing it by accident, with a stack of ore or half
+	-- your gold on the mail, is a thing you cannot do without seeing it.
+	alt      = { 0.36, 0.84, 0.46, 1 },
+	friend   = { 0.36, 0.66, 0.98, 1 },
+	stranger = { 0.90, 0.36, 0.36, 1 },
+
 	text     = { 0.87, 0.87, 0.91 },
 	dim      = { 0.56, 0.56, 0.62 },
 	heading  = { 1.00, 0.82, 0.20 },

@@ -173,6 +173,12 @@ for _, part in ipairs({
 	-- shipped. It also wraps CreateFrame, which every file above it defines or
 	-- uses, so it has to be the last word on that as well.
 	"09-group",
+	-- After 09-group, because it makes a frame and 09-group is the last word on
+	-- CreateFrame. It also wraps the UseContainerItem that 04-hands installed:
+	-- the same call sells at a merchant and attaches at a mailbox, and which one
+	-- it does is the flag the send pane sets, so both behaviours have to be
+	-- reachable from one function the way they are in the game.
+	"10-mail",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

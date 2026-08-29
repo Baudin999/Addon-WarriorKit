@@ -319,16 +319,16 @@ end
 feed:Clear()
 drop("You receive loot: %s.", _G.WarriorKitItemLink("Aegis"))
 hover()
-check(said("Vendor") == ns.Purse.Coin(3800),
+check(said("Vendor") == ns.Coin(3800),
 	("the vendor line says %s and the item is worth %s")
-		:format(tostring(said("Vendor")), ns.Purse.Coin(3800)))
+		:format(tostring(said("Vendor")), ns.Coin(3800)))
 check(said("Stack of 1") == nil, "a single item got a stack line")
 check(said("Auctionator") == nil, "an auction price appeared with no auction addon installed")
 
 drop("You receive loot: %sx8.", _G.WarriorKitItemLink("Tattered Cloth"))
 hover()
-check(said("Vendor") == ns.Purse.Coin(12), "the vendor line is not the price of one")
-check(said("Stack of 8") == ns.Purse.Coin(96),
+check(said("Vendor") == ns.Coin(12), "the vendor line is not the price of one")
+check(said("Stack of 8") == ns.Coin(96),
 	("a stack of eight at 12c came to %s"):format(tostring(said("Stack of 8"))))
 
 -- An item a vendor will not take says so in words rather than showing 0c,
@@ -359,9 +359,9 @@ check(ns.Auction.Describe():find("Auctionator", 1, true) ~= nil,
 feed:Clear()
 drop("You receive loot: %s.", _G.WarriorKitItemLink("Aegis"))
 hover()
-check(said("Auctionator") == ns.Purse.Coin(47000),
+check(said("Auctionator") == ns.Coin(47000),
 	("the auction line says %s and the scanner said %s")
-		:format(tostring(said("Auctionator")), ns.Purse.Coin(47000)))
+		:format(tostring(said("Auctionator")), ns.Coin(47000)))
 
 -- An item the scanner has no price for gets no line, rather than a zero.
 drop("You receive loot: %s.", _G.WarriorKitItemLink("Tattered Cloth"))

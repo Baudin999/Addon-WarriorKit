@@ -2,6 +2,80 @@
 
 ## Unreleased
 
+### A mail window that says who you are sending to
+
+The client's has one recipient field and it looks the same whatever you type in
+it. Your bank alt, a guildmate you have never spoken to and a name off the
+auction house are the same eleven pixels of white text, and the only thing
+between the second two and four hundred gold is that you read what you typed.
+
+So the window has a band along the bottom in the colour of whoever it is going
+to. Green is a character on your own account, blue is somebody on your friends
+list or in one of your groups, red is a name the addon has never seen, and the
+band says what is riding on the letter while it says so. It is always there
+rather than appearing when something is wrong: a warning that appears is a
+warning you have to notice appearing, and it moves everything under it when it
+does. Red also arms the send, so value going to a name off your favourites list
+takes two presses. `/wk mail warn off` drops the second press and keeps the
+colour.
+
+Favourites are a list rather than the colour, and the two are different
+questions on purpose. A relation is what the client and the addon can work out
+about a name; a favourite is a name you put on a list because you mail it. A
+guild bank alt is a stranger by relation and belongs on the list; an alt the
+addon met once is green and does not. The list is the column down the left of
+the window and is what the warning is measured against.
+
+Attachments are not capped at twelve. A mail carries twelve, and what the client
+does with that is make twelve the number you have to think in: fill a form,
+send, walk back to the bag, fill it again. The draft holds thirty six and
+divides, the block of squares draws the line where the split falls, and the send
+posts one mail at a time and waits for the server between each. Coin rides on
+the first mail only, because splitting it three ways is three ways for half of
+it to be sitting in a mailbox after the second one failed.
+
+The subject writes itself. Coin titles the mail `money`, one item titles it
+after that item, several title it after the first and a count, and a split send
+numbers the parts and fits the number inside the client's sixty four characters.
+A subject you type wins over all of it.
+
+The inbox is the other tab: a row a message with the sender in the same three
+colours, what is on it, how long is left, and a take-everything that counts down
+rather than up, because taking a message renumbers the inbox and a sweep walking
+upwards skips every other one while reporting that it took them all.
+
+Three things this change is honest about. Blizzard's window is parked off the
+side of the screen rather than hidden, because `MailFrame` going down is what
+tells the server you have walked away from the mailbox; `ns.Strip` would have
+closed it. There is no send timeout, because a timeout is an `OnUpdate` and an
+`OnUpdate` is a ticker this addon would defend forever, so a stalled send waits
+with a stop button under it. And the attach path is `UseContainerItem` with
+`SetSendMailShowing` set, which is `Baganator/Transfers/AddToMail.lua`'s shape
+on this exact client rather than one reasoned from the API list.
+
+One thing the harness was swallowing came out with it, and it was making
+existing code look tested. `Region:Show` and `Region:Hide` now run the frame's
+own `OnShow` and `OnHide`, which is what the client does: `Core/Panel.lua` wraps
+that pair to tell every part the options window opened, `Perf/Feature.lua` starts
+and stops the memory walk with the tab that owns it, and the mail window closes
+the mailbox from its frame's `OnHide` so that escape, the close box and the
+client saying it shut all leave through one door. None of the three could run
+before. It is guarded on the shown state really changing, because the client
+does not raise either script for a call that changed nothing.
+
+`Region:SetText` raising `OnTextChanged` is the same gap one layer over, and the
+chat keys found it in the same week from the other end: a field that reports
+what you typed is a field whose whole behaviour hangs off that script, and a
+stub that dropped it made every one of them look like a box you could not type
+in. That half is `45-chat-keys`' and the mail fields are driven through it.
+
+`Feeds/Purse.lua`'s coin formatter is `ns.Coin` in Core now, and the thousands
+separator beside it is `ns.Thousands`. Two parts needed the same answer, which
+is the rule that moved `Core/Gear.lua` and `Core/Stance.lua` out of the parts
+that invented them. It was called `Group` while it was private, and `ns.Group`
+is the party and raid block's namespace: the collision was silent, made
+`ns.Group` a function for the length of one file's load and a table afterwards,
+and the only symptom was the gold-an-hour cell raising once a second.
 ### The harness clock is frozen, like the realm clock beside it
 
 `03-player.lua` handed the addon `os.date` and every other time in the stub

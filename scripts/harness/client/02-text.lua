@@ -495,8 +495,34 @@ function Region:AtBottom() return (self.scrollOffset or 0) <= 0 end
 -- Real, rather than the metatable's no-op, because the panel hides every
 -- section but one and a stub that answers shown to all of them would let a
 -- layout that puts seven pages on top of each other pass.
-function Region:Show() self.shown = true end
-function Region:Hide() self.shown = false end
+--
+-- Both run the frame's own OnShow and OnHide, and only on a change, which is
+-- what the client does. Three places in the addon hang real work off those two
+-- and none of them could run before: Core/Panel.lua wraps the options window's
+-- pair to tell every part the window opened, Perf/Feature.lua starts and stops
+-- the memory walk with the tab that owns it, and Mail/Window.lua closes the
+-- mailbox from the frame's OnHide so that escape, the close box and the client
+-- saying it shut all leave through one door. A stub that swallowed the scripts
+-- made all three look tested.
+function Region:Show()
+	if self.shown then
+		return
+	end
+	self.shown = true
+	if self.scripts.OnShow then
+		self.scripts.OnShow(self)
+	end
+end
+
+function Region:Hide()
+	if not self.shown then
+		return
+	end
+	self.shown = false
+	if self.scripts.OnHide then
+		self.scripts.OnHide(self)
+	end
+end
 
 -- The keyboard focus on an edit box, modelled rather than swallowed.
 --

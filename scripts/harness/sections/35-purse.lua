@@ -104,17 +104,17 @@ end
 -- Numbers as words
 ------------------------------------------------------------
 
-check(Purse.Coin(0) == "0s 0c", "an empty purse reads " .. Purse.Coin(0))
-check(Purse.Coin(4237) == "42s 37c", "small change reads " .. Purse.Coin(4237))
-check(Purse.Coin(12 * GOLD + 3450) == "12g 34s",
-	"a two figure purse reads " .. Purse.Coin(12 * GOLD + 3450))
+check(ns.Coin(0) == "0s 0c", "an empty purse reads " .. ns.Coin(0))
+check(ns.Coin(4237) == "42s 37c", "small change reads " .. ns.Coin(4237))
+check(ns.Coin(12 * GOLD + 3450) == "12g 34s",
+	"a two figure purse reads " .. ns.Coin(12 * GOLD + 3450))
 -- Past a hundred gold the silver is dropped, and the thousands are grouped.
 -- A five figure purse spends four glyphs on the part that moves when you
 -- buy a drink, and 12405 with no commas in it is a number you have to count.
-check(Purse.Coin(12405 * GOLD + 6300) == "12,405g",
-	"a five figure purse reads " .. Purse.Coin(12405 * GOLD + 6300))
-check(Purse.Coin(-(3 * GOLD)) == "-3g 0s",
-	"an hour that cost you money reads " .. Purse.Coin(-(3 * GOLD)))
+check(ns.Coin(12405 * GOLD + 6300) == "12,405g",
+	"a five figure purse reads " .. ns.Coin(12405 * GOLD + 6300))
+check(ns.Coin(-(3 * GOLD)) == "-3g 0s",
+	"an hour that cost you money reads " .. ns.Coin(-(3 * GOLD)))
 
 ------------------------------------------------------------
 -- When the ledger is written
@@ -283,7 +283,7 @@ check(names == 3, ("the tooltip lists %d of the three characters"):format(names)
 strip:GetScript("OnLeave")(strip)
 
 print(("purse  %s held, %s on the account across %d characters, %s")
-	:format(Purse.Coin(_G.GetMoney()), Purse.Coin(Purse.Account()), names,
+	:format(ns.Coin(_G.GetMoney()), ns.Coin(Purse.Account()), names,
 		rate:GetText() == "" and "no rate yet" or rate:GetText()))
 
 -- The two invented characters go away, because the sections after this one

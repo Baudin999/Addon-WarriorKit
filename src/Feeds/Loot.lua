@@ -355,10 +355,10 @@ local function Vendor(data, entry)
 		return true
 	end
 
-	data[#data + 1] = { "Vendor", ns.Purse.Coin(price) }
+	data[#data + 1] = { "Vendor", ns.Coin(price) }
 	if (entry.count or 1) > 1 then
 		data[#data + 1] = { ("Stack of %d"):format(entry.count),
-			ns.Purse.Coin(price * entry.count), tone = C.heading }
+			ns.Coin(price * entry.count), tone = C.heading }
 	end
 	return true
 end
@@ -379,7 +379,7 @@ local function Fill(entry)
 
 	local going, scanner = ns.Auction.Price(entry.link)
 	if going then
-		data[#data + 1] = { scanner, ns.Purse.Coin(going), tone = C.accent }
+		data[#data + 1] = { scanner, ns.Coin(going), tone = C.accent }
 	end
 
 	data[#data + 1] = { blank = true }
