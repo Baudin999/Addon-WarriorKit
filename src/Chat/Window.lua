@@ -575,17 +575,25 @@ local function BuildEntry()
 	-- One press needs a key of its own, with no field in front of it.
 	edit:SetScript("OnEnterPressed", function(self)
 		local text = self:GetText()
+		-- Up for the whole handler, and unconditionally, which is the repair
+		-- for the way this shipped. It was worked out from the text: if the key
+		-- is holding exactly what the field is holding then the client owns the
+		-- press. That is true and it is not the question. The question is what
+		-- may take the key back while the field tidies up after a press, and
+		-- the answer is nothing, whichever of the two put the line there.
+		--
+		-- Worked out from the text it came back false on a line the field and
+		-- the key disagreed about by a space, and the empty field underneath
+		-- then read as "no line here needs the key" and handed it back. The
+		-- press had nothing left to land on and the log said the key was
+		-- loaded, because it had been, right up until the field emptied.
+		handed = true
 		-- Already on the key, put there while it was being typed, so this press
 		-- is the client's rather than ours and there is nothing here to send.
-		handed = ns.Compose.Armed() ~= nil
-			and ns.Compose.Armed() == ns.Compose.Secure(text)
-		if not handed then
+		local mine = ns.Compose.Armed() == nil
+			or ns.Compose.Armed() ~= ns.Compose.Secure(text)
+		if mine then
 			ChatWindow.Send(text)
-			-- Send may have put the line on the key instead of running it,
-			-- which is what happens to a command that could not be loaded while
-			-- it was being typed. A key holding a line has to keep it past the
-			-- focus going, so the next press is the one that runs it.
-			handed = ns.Compose.Armed() ~= nil
 		end
 		self:SetText("")
 		self:ClearFocus()

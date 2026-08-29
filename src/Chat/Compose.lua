@@ -418,6 +418,7 @@ function Compose.Disarm()
 	if _G.InCombatLockdown and _G.InCombatLockdown() then
 		return false
 	end
+	Log("handed %s back off the key", tostring(armed))
 	if type(_G.ClearOverrideBindings) == "function" then
 		pcall(_G.ClearOverrideBindings, secure)
 	end

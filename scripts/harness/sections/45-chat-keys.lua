@@ -177,12 +177,18 @@ check(Compose.Armed() == nil,
 check(not Compose.ArmedOn("ENTER"), "enter was left carrying a line on an ordinary message")
 Window.Type("")
 
--- The down edge of the press. The field empties and gives the focus up the
--- moment it is told the line is finished, and emptying is a text change like
--- any other: read plainly it says the field no longer holds a line that needs
--- the key, and the key went back to the window out from under the up edge that
--- was about to run it. Which is one press that does nothing at all, and worse
--- than the two this replaced.
+-- The down edge of the press, and what the field must not do on it. The field
+-- empties and gives the focus up the moment it is told the line is finished,
+-- and emptying is a text change like any other: read plainly it says the field
+-- no longer holds a line that needs the key, and the key goes back to the
+-- window out from under the press that was about to run it. Which is a key the
+-- log says is loaded, a readback that agrees, and an enter that does nothing.
+--
+-- That shipped, and it shipped because the field worked out whether to hold on
+-- by comparing its own text against the line on the key. The two can differ by
+-- a space. So the field holds on for the whole handler now, unconditionally,
+-- and this is checked with a line the field never armed as well as with one it
+-- did, because the comparison is exactly what stopped being trusted.
 --
 -- The focus going is the other half and it is not decoration. The bindings
 -- underneath a field that has the focus do not fire at all, so the up edge only
@@ -197,8 +203,19 @@ check(_G.GetBindingAction("ENTER", true) == "CLICK WarriorKitChatSecureButton:Le
 		:format(tostring(_G.GetBindingAction("ENTER", true))))
 check(Window.Line() == "",
 	("the field still reads %q after the line was finished"):format(Window.Line()))
--- And the line goes when the client runs it, which is the press that is
--- already happening rather than the next one.
+-- And the same on a line the field did not put there itself. Handover loads the
+-- key from inside the press rather than before it, so the field has no text to
+-- compare against and the old reading came back false here too.
+Window.Focus()
+Window.Type("")
+Window.Send("/logout")
+check(Compose.Armed() == "/logout", "the handover did not load the key")
+Window.Enter()
+check(Compose.Armed() == "/logout",
+	("the press left the key holding %s after a handover")
+		:format(tostring(Compose.Armed())))
+
+-- And the line goes when the client runs it.
 _G.WarriorKitChatSecureButton:Click("LeftButton", true)
 check(Compose.Armed() == nil, "the line ran and the enter key was left loaded")
 Window.Focus()
