@@ -202,6 +202,31 @@ local function Mark(zone, x, y, name, kind)
 	return true
 end
 
+-- One question of the compiled database, by the name of the call rather than by
+-- the function, because the function does not exist until the database has
+-- compiled and this file holds no reference across that moment.
+--
+-- Every query is pcalled. It is another addon's database, it is compiled rather
+-- than written out, and an id it has no row for is a miss rather than an error,
+-- but none of that is this addon's to guarantee. Comfort/Clutter.lua asks the
+-- same database the same way.
+local function Ask(call, id, field)
+	local db = Module("QuestieDB")
+	local query = db and db[call]
+	if type(query) ~= "function" or type(id) ~= "number" then
+		return nil
+	end
+	local ok, value = pcall(query, id, field)
+	if not ok then
+		return nil
+	end
+	return value
+end
+
+-- Which call answers for a kind of thing. Questie keeps creatures and world
+-- objects in two tables and the row is the same shape in both.
+local ASKS = { monster = "QueryNPCSingle", object = "QueryObjectSingle" }
+
 -- One creature's or object's whole spawn table, which Questie keys by area id.
 local function Scatter(into, spawns, name, kind)
 	for area, places in pairs(spawns) do
@@ -226,13 +251,26 @@ end
 -- Every objective that is not finished. A collected one is left off on purpose:
 -- the map answers "where do I go now", and the four camps you already emptied
 -- are the half of the answer that would make the other half hard to see.
+--
+-- **Finished is Questie's own Completed field and not the two counts beside
+-- it.** This read the counts first, as "needed is not collected", and that is
+-- wrong for a whole kind of objective. Questie forces numRequired to 0 for
+-- anything the client counts no items or kills for, which is every "speak to",
+-- "explore" and "use the thing" step in the game, so the two counts are 0 and 0
+-- and equal, and every such objective was dropped as done. A quest whose only
+-- step is one of those dropped its whole self and the map said Questie had
+-- nothing for it.
 local function FromObjectives(into, objectives)
+	if type(objectives) ~= "table" then
+		return false
+	end
 	for _, objective in pairs(objectives) do
-		if type(objective.spawnList) == "table"
-			and objective.Needed ~= objective.Collected then
+		if type(objective) == "table" and type(objective.spawnList) == "table"
+			and not objective.Completed then
 			FromList(into, objective.spawnList, Where.TODO)
 		end
 	end
+	return true
 end
 
 -- Who takes it back, drawn whether or not the quest is finished.
@@ -246,17 +284,106 @@ local function FromFinisher(into, quest)
 	if type(finisher) ~= "table" or type(finisher.Id) ~= "number" then
 		return false
 	end
-	local db = Module("QuestieDB")
-	local query = db and (finisher.Type == "object"
-		and db.QueryObjectSingle or db.QueryNPCSingle)
-	if type(query) ~= "function" then
-		return false
-	end
-	local ok, spawns = pcall(query, finisher.Id, "spawns")
-	if not ok or type(spawns) ~= "table" then
+	local spawns = Ask(ASKS[finisher.Type] or ASKS.monster, finisher.Id, "spawns")
+	if type(spawns) ~= "table" then
 		return false
 	end
 	Scatter(into, spawns, finisher.Name, Where.BACK)
+	return true
+end
+
+--------------------------------------------------------------------------
+-- The same question, asked of the database instead
+--
+-- **A spawnList is not always there.** Questie fills one in per objective when
+-- it draws that quest's icons and empties it again the moment the objective
+-- completes or the icons are unloaded, so an empty one is an ordinary state and
+-- not a broken one. Turn Questie's icons off, open the log before it has
+-- finished drawing, or come back to a quest it has already tidied up after, and
+-- every objective answers nothing at all.
+--
+-- What is always there is quest.ObjectiveData, which QuestieDB fills in the
+-- moment it builds the quest object, out of the row the quest was compiled
+-- from. It is one entry per objective carrying the kind and the id, and the
+-- coordinates are one more lookup away. So where the live answer is empty the
+-- same question is put to the database, and the map draws whether or not
+-- anything has been drawn on the world map first.
+--------------------------------------------------------------------------
+
+-- One creature or object, by id. The name is asked for as well as the spawns,
+-- because the database's name is the creature's and the objective's text is the
+-- line off the quest, and a dot wants the first one.
+local function FromThing(into, kind, id, text)
+	local call = ASKS[kind]
+	local spawns = call and Ask(call, id, "spawns")
+	if type(spawns) ~= "table" then
+		return false
+	end
+	Scatter(into, spawns, Ask(call, id, "name") or text, Where.TODO)
+	return true
+end
+
+local function FromEach(into, ids, kind, text)
+	for _, id in ipairs(ids) do
+		FromThing(into, kind, id, text)
+	end
+end
+
+-- Where an item comes from, which is the one kind the database cannot answer in
+-- one hop. The row for the item names what carries it and the rows for those
+-- are where the coordinates are.
+local DROPPERS = { npcDrops = "monster", objectDrops = "object" }
+
+local function FromItem(into, id, text)
+	for key, kind in pairs(DROPPERS) do
+		local carriers = Ask("QueryItemSingle", id, key)
+		if type(carriers) == "table" then
+			FromEach(into, carriers, kind, text)
+		end
+	end
+	return true
+end
+
+-- One row of ObjectiveData. Five kinds, and an event carries its coordinates
+-- itself rather than pointing at something that has them: that is the "speak
+-- to", "explore" and "use the thing" objective, and it is exactly the one the
+-- counts used to drop.
+local function FromRow(into, row)
+	if type(row) ~= "table" then
+		return false
+	end
+	if row.Type == "event" then
+		if type(row.Coordinates) ~= "table" then
+			return false
+		end
+		Scatter(into, row.Coordinates, row.Text, Where.TODO)
+		return true
+	end
+	if row.Type == "item" then
+		return FromItem(into, row.Id, row.Text)
+	end
+	if row.Type == "killcredit" then
+		if type(row.IdList) ~= "table" then
+			return false
+		end
+		FromEach(into, row.IdList, "monster", row.Text)
+		return true
+	end
+	return FromThing(into, row.Type, row.Id, row.Text)
+end
+
+-- Nothing here is filtered by what you have already done, and that is the
+-- honest answer rather than a shortcut. This runs only where Questie has said
+-- nothing about the quest's progress at all, so there is nothing to filter on,
+-- and a map with one camp too many on it beats a map with a line saying there
+-- is no map.
+local function FromDatabase(into, quest)
+	if type(quest.ObjectiveData) ~= "table" then
+		return false
+	end
+	for _, row in ipairs(quest.ObjectiveData) do
+		FromRow(into, row)
+	end
 	return true
 end
 
@@ -302,12 +429,18 @@ function Where.Places(questId)
 		return {}
 	end
 	local into = { byArea = {}, order = {} }
-	if type(quest.Objectives) == "table" then
-		FromObjectives(into, quest.Objectives)
+	FromObjectives(into, quest.Objectives)
+	FromObjectives(into, quest.SpecialObjectives)
+	-- The live answer where there is one, the database where there is not, and
+	-- the test is whether anything at all came back rather than whether each
+	-- objective did. An objective Questie has drawn and one it has not are the
+	-- same quest, and asking the database for half of it would draw the camps
+	-- you have already emptied beside the ones you have not.
+	if #into.order == 0 then
+		FromDatabase(into, quest)
 	end
-	if type(quest.SpecialObjectives) == "table" then
-		FromObjectives(into, quest.SpecialObjectives)
-	end
+	-- After the test above, so that a quest whose only live answer is who takes
+	-- it back still reaches the database for the half that says what to do.
 	FromFinisher(into, quest)
 	return Atlas(into.order, (Soonest(quest)))
 end
@@ -320,9 +453,25 @@ function Where.Ready()
 	return Module("QuestiePlayer") ~= nil and Module("QuestieMap") ~= nil
 end
 
+-- Whether the compiled database is answering yet.
+--
+-- Its own question, separate from whether Questie is loaded, because the two
+-- come true minutes apart. Questie compiles after login and nils every query
+-- function out while it works, so a quest log opened in that window finds
+-- Questie present, its quest objects present, and every coordinate in the game
+-- unreachable. That is the state the map used to report as "Questie has no
+-- place on the map for this quest", which is a sentence about the wrong thing.
+function Where.Compiled()
+	local db = Module("QuestieDB")
+	return type(db) == "table" and type(db.QueryNPCSingle) == "function"
+end
+
 function Where.Describe()
 	if not Where.Ready() then
 		return "Questie is not answering, so no quest says where to go"
+	end
+	if not Where.Compiled() then
+		return "Questie is loaded and its database has not compiled yet"
 	end
 	local player = Module("QuestiePlayer")
 	local held = 0

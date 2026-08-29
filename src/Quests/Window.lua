@@ -523,16 +523,20 @@ local function Note(quest, zones, drawn)
 	if not Where.Ready() then
 		return "Questie is not installed, so nothing here knows where a quest is."
 	end
+	if not Where.Compiled() then
+		return "Questie is still compiling its database. This fills in when it is done."
+	end
 	if not quest then
 		return ""
 	end
 	if #zones == 0 then
-		return ("Questie has no place on the map for %s."):format(quest.title)
+		return ("Questie has no row for %s. Type /wk quests where."):format(quest.title)
 	end
 	if drawn == 0 then
 		return "This client has no map picture for that zone."
 	end
 	return "Blue is what is left to do, green is who takes it back, gold is you."
+		.. " The wheel zooms in on whatever you are pointing at."
 end
 
 -- The strip of zones under the map, or nothing at all.
@@ -748,8 +752,19 @@ function Window.Fit()
 	atlas.width = middle
 	atlas.where:SetWidth(middle)
 	atlas.note:SetWidth(middle)
-	atlas.board:Resize(middle)
-	atlas.zones:Resize(middle)
+	-- What the map is allowed to grow into when the wheel is turned. The column
+	-- is taller than any zone's shape asks for at the width it gets, so at rest
+	-- there is a block of nothing under the map and above the zone strip, and
+	-- the wheel is what spends it.
+	--
+	-- Everything under the map is subtracted rather than measured, the strip
+	-- included, and the strip is subtracted whether or not it is showing. One
+	-- quest in ten has two zones, and a box that took the strip's height back on
+	-- the other nine would be a map that changes size when you click a quest.
+	-- The two lines reserved for the sentence at the bottom are the longest that
+	-- sentence gets.
+	atlas.board:Fit(middle, under - (M.heading + M.rowGap)
+		- (M.gutter + atlas.zones:Resize(middle)) - (M.gutter + M.row * 2))
 
 	pay.frame:SetSize(PAY, body)
 	pay.view:Resize(PAY, body)
@@ -941,6 +956,20 @@ end
 -- for the reason Window.Rows is: a map that put the wrong number of places on
 -- the wrong zone is a claim scripts/harness.lua has to be able to make, and the
 -- alternative is this file handing out a reference to the board's own pool.
+-- How far into the map the wheel has taken it, and a way to turn the wheel from
+-- outside. Same argument as Window.Zone below: a zoom that will not move, or
+-- one that keeps going past its own far end, is invisible from inside this file
+-- and is exactly what a screenshot will not catch either.
+function Window.Zoom(delta)
+	if not atlas then
+		return 1
+	end
+	if delta then
+		atlas.board:Zoom(delta, 0.5, 0.5)
+	end
+	return atlas.board:Level()
+end
+
 function Window.Places()
 	if not atlas then
 		return 0, nil

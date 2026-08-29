@@ -289,7 +289,7 @@ ns.QuestBlizzard.Apply()
 -- The map behind the tab
 ----------------------------------------------------------------------
 
--- Four questions the drawing cannot answer and reading it will not either.
+-- Five questions the drawing cannot answer and reading it will not either.
 --
 -- Does the join hold. A spawn is keyed on the area id the server uses, the
 -- picture is keyed on the map id the client's atlas uses, and the only thing
@@ -307,10 +307,15 @@ ns.QuestBlizzard.Apply()
 -- are the half of the answer that hides the other half; a zone with no map id
 -- is not a zone anything can draw. All three are in the stub's data.
 --
--- And does the picture get cropped. A zone is 1002 pixels of art in tiles of
--- 256, so the last column and the last row are part tiles padded out to full
--- size, and drawing them whole puts two black seams through every map in the
--- game.
+-- Does the picture get cropped. A zone is 1002 pixels of art in tiles of 256,
+-- so the last column and the last row are part tiles padded out to full size,
+-- and drawing them whole puts two black seams through every map in the game.
+--
+-- And does the wheel work. A zone at the width of one column is three hundred
+-- pixels across a place that takes twenty minutes to walk, so the picture is
+-- allowed to grow inside a box that does not, and every part of that is a
+-- number: the far end, the box against the column, the dots against the
+-- picture, and which of the two the zoom belongs to.
 --
 -- Scoped in a do block for the reason the margin check above is: an indented
 -- local is not a name at chunk level, and this file is against the budget
@@ -318,6 +323,7 @@ ns.QuestBlizzard.Apply()
 do
 	local diplomat = Log.Zones()[1].quests[1].key
 	local zones = ns.QuestWhere.Places(102)
+	local deepest = 1
 
 	check(#zones == 2,
 		("the quest came back in %d zones where two of its three have a map")
@@ -328,19 +334,50 @@ do
 	local elwynn = zones[2]
 	check(elwynn and elwynn.map == 37,
 		"the quest's other zone did not come back under the client's map id")
-	check(elwynn and #elwynn.points == 3,
-		("Elwynn came back with %s places where it has two camps and a hand-in")
+	check(elwynn and #elwynn.points == 4,
+		("Elwynn came back with %s places where it has two camps, a person to speak to and a hand-in")
 			:format(elwynn and #elwynn.points or "no"))
 
-	local corner, finished, back = false, false, 0
+	local corner, finished, back, speak = false, false, 0, false
 	for _, point in ipairs(elwynn and elwynn.points or {}) do
 		if point.x < 0 or point.y < 0 then corner = true end
 		if point.x == 90 and point.y == 90 then finished = true end
+		if point.x == 22 and point.y == 70 then speak = true end
 		if point.kind == ns.QuestWhere.BACK then back = back + 1 end
 	end
 	check(not corner, "a spawn Questie marks -1 was drawn in the corner of the zone")
 	check(not finished, "a finished objective's camps are still on the map")
 	check(back == 1, ("%d places are marked as the hand-in where one is"):format(back))
+
+	-- The objective the counts used to drop. Questie forces numRequired to 0
+	-- for every step the client counts nothing for, which is every "speak to",
+	-- "explore" and "use the thing" in the game, so 0 of 0 is equal and a filter
+	-- written as "needed is not collected" reads the whole kind as finished. A
+	-- quest whose only step is one of those lost its entire map.
+	check(speak,
+		"an objective Questie files at 0 of 0 was read as finished and left off")
+
+	-- A quest Questie holds and has drawn nothing for, which is Questie's icons
+	-- switched off, or the log opened before it has finished drawing at login.
+	-- Every spawnList on it is empty and the coordinates are still in the row
+	-- the quest was compiled from, so the map has to ask the database instead.
+	-- One place per kind that fallback can take.
+	local dry = ns.QuestWhere.Places(201)
+	check(#dry == 1 and dry[1].map == 37,
+		("a quest with no drawn icons came back in %d zones"):format(#dry))
+	check(dry[1] and #dry[1].points == 3,
+		("the database answered %s places where the quest has a creature, an item and an event")
+			:format(dry[1] and #dry[1].points or "no"))
+
+	local named = {}
+	for _, point in ipairs(dry[1] and dry[1].points or {}) do
+		named[point.name or "?"] = true
+	end
+	check(named["Hogger"], "a creature objective did not come out of the database")
+	check(named["Riverpaw Gnoll"],
+		"an item objective was not traced to what drops it")
+	check(named["Report to Dughan"],
+		"an event objective's own coordinates were not read")
 
 	-- The window, driven through the tab rather than through its buttons, and
 	-- on the one quest of the five the stub files spawns under.
@@ -369,14 +406,19 @@ do
 	-- half of the player marker that is easy to draw on every map at once.
 	Window.Zone(2)
 	dots, where = Window.Places()
-	check(where == "Elwynn Forest" and dots == 3,
+	check(where == "Elwynn Forest" and dots == 4,
 		("stepping to the second zone drew %d dots headed %s")
 			:format(dots, tostring(where)))
 
 	-- The art. Twelve tiles at 1002 by 668, so the map keeps the zone's shape
 	-- and the two part tiles are cropped rather than drawn whole.
+	--
+	-- Two frames down, not one. The board is a box that clips and the picture
+	-- is a frame inside it that the wheel is allowed to make bigger than the
+	-- box, so the tiles hang off the canvas and the canvas hangs off the port.
 	local board = _G.WarriorKitQuestChart
-	local canvas = board and board:GetChildren()
+	local port = board and board:GetChildren()
+	local canvas = port and port:GetChildren()
 	check(canvas ~= nil, "the map has no canvas to draw the zone on")
 	check(board:GetHeight() == ns.UI.Round(board, board:GetWidth() * 668 / 1002),
 		("the map is %d by %d, which is not the shape the client's art is")
@@ -402,10 +444,78 @@ do
 		Window.Zone(1)
 		Window.Zone(2)
 	end
-	check(select(1, Window.Places()) == 3,
+	check(select(1, Window.Places()) == 4,
 		"redrawing the same zone twenty times changed what is on it")
 	check(#ns.UI.Windows == pins,
 		"redrawing the map made windows")
+
+	-- The wheel.
+	--
+	-- A zone at the width of one column is three hundred pixels across a place
+	-- that takes twenty minutes to walk, and the answer is the picture growing
+	-- inside a box that does not. Four things about that cannot be seen in a
+	-- screenshot of the map at rest.
+	--
+	-- Does a notch move it at all, and does it stop. The far end is a constant
+	-- in Quests/Chart.lua and a zoom that ran past it would draw one of the
+	-- client's tiles at ten times its size.
+	--
+	-- Does the picture grow and the box hold. That is the whole shape of it: the
+	-- canvas takes the scale and the port takes what the column will spare.
+	--
+	-- Do the dots stay the size they were. A mark is a thing you look for on a
+	-- screen, so it wants the same pixels at every zoom, and a wash that scaled
+	-- with the map would cover the zone at the far end.
+	--
+	-- And does it come back. Zoom is kept across a repaint of the same zone and
+	-- dropped on a move to another one, which is two different quests' worth of
+	-- state living on one board.
+	check(Window.Zoom() == 1, "the map did not open at rest")
+
+	local dot = canvas:GetChildren()
+	local flat = { canvas:GetWidth(), port:GetHeight(), dot and dot:GetWidth() }
+	local level = Window.Zoom(1)
+	check(level > 1, ("a notch of the wheel left the zoom at %s"):format(tostring(level)))
+	check(canvas:GetWidth() > flat[1],
+		("the picture is %d wide after a notch where it was %d")
+			:format(canvas:GetWidth(), flat[1]))
+	check(port:GetWidth() <= board:GetWidth() and port:GetHeight() <= board:GetHeight(),
+		("the box grew to %d by %d inside a column %d wide")
+			:format(port:GetWidth(), port:GetHeight(), board:GetWidth()))
+	check(port:GetWidth() <= canvas:GetWidth() and port:GetHeight() <= canvas:GetHeight(),
+		("the box is %d by %d looking at a picture %d by %d")
+			:format(port:GetWidth(), port:GetHeight(),
+				canvas:GetWidth(), canvas:GetHeight()))
+	check(dot and dot:GetWidth() == flat[3],
+		"a dot changed size when the picture behind it did")
+
+	for _ = 1, 20 do
+		Window.Zoom(1)
+	end
+	deepest = Window.Zoom()
+	check(deepest <= 6, ("twenty notches took the zoom to %s"):format(tostring(deepest)))
+	check(port:GetHeight() > flat[2],
+		("the box is still %d tall at the far end where it started at %d")
+			:format(port:GetHeight(), flat[2]))
+	check(select(1, Window.Places()) == 4,
+		"zooming in changed how many places are on the map")
+
+	Window.PaintMap()
+	check(Window.Zoom() > 1, "repainting the same zone threw the zoom away")
+
+	for _ = 1, 20 do
+		Window.Zoom(-1)
+	end
+	check(Window.Zoom() == 1,
+		("twenty notches back took the zoom to %s"):format(tostring(Window.Zoom())))
+	check(canvas:GetWidth() == flat[1] and port:GetHeight() == flat[2],
+		("the map came back %d wide in a box %d tall, where it began %d by %d")
+			:format(canvas:GetWidth(), port:GetHeight(), flat[1], flat[2]))
+
+	Window.Zoom(1)
+	Window.Zone(1)
+	check(Window.Zoom() == 1, "stepping to another zone kept the last one's zoom")
+	Window.Zone(2)
 
 	-- A zone Questie knows and this client has no picture for, which is the one
 	-- state a fixture cannot hold permanently. Nothing is drawn and the line
@@ -415,14 +525,24 @@ do
 	Window.PaintMap()
 	check(select(1, Window.Places()) == 0,
 		"dots were drawn on a zone the client has no picture of")
+	-- The box goes too, not just the picture in it. It carries the sunken fill
+	-- and the hairline, so a box left at the last zone's size under a frame
+	-- collapsed to one pixel is an empty rectangle with the zone strip drawn
+	-- over it, and every assertion about the dots still passes.
+	check(not port:IsShown(),
+		"the map's own box was left on screen over a frame with nothing in it")
 	quests.art[37] = art
+
+	Window.PaintMap()
+	check(port:IsShown(), "the box did not come back with the zone's art")
 
 	Window.Zone(1)
 	Window.Tab(1)
 	Log.Detail(diplomat)
 
-	print(("quests map %d of the quest's zones have a picture, %d dots on %s, %d tiles")
-		:format(#zones, select(1, Window.Places()), tostring(select(2, Window.Places())), tiles))
+	print(("quests map %d of the quest's zones have a picture, %d dots on %s, %d tiles, the wheel goes to %gx")
+		:format(#zones, select(1, Window.Places()), tostring(select(2, Window.Places())),
+			tiles, deepest))
 end
 
 print(("quests %s, %d quests in %d zones, %d ready; cursor stranded %d times; Blizzard's %s")

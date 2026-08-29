@@ -405,6 +405,11 @@ local SPAWNS = {
 	rope = { Name = "Trapper's Rope", Type = "object", Spawns = {
 		[12] = { { 90, 90 } },
 	} },
+	-- The one an objective with no counts sends you to. Questie files it at 0
+	-- of 0 like every other "speak to" step in the game.
+	baros = { Name = "Baros Alexston", Type = "monster", Spawns = {
+		[12] = { { 22, 70 } },
+	} },
 }
 
 carrying.currentQuestlog = {
@@ -413,19 +418,66 @@ carrying.currentQuestlog = {
 		Finisher = { Type = "monster", Id = 900, Name = "Baros Alexston" },
 		Objectives = {
 			{ Needed = 8, Collected = 3, spawnList = { [700] = SPAWNS.miners } },
-			{ Needed = 3, Collected = 3, spawnList = { [701] = SPAWNS.rope } },
+			-- Finished, and said so the way Questie says it. The two counts are
+			-- not the test and must not be: Questie forces numRequired to 0 for
+			-- every objective the client counts nothing for, so a "speak to" or
+			-- an "explore" step reads 0 of 0, which is equal, which is how a
+			-- whole kind of quest used to come back with no map at all. The
+			-- third objective below is one of those and is not finished.
+			{ Needed = 3, Collected = 3, Completed = true,
+				spawnList = { [701] = SPAWNS.rope } },
+			{ Needed = 0, Collected = 0, spawnList = { [702] = SPAWNS.baros } },
 		},
 		SpecialObjectives = {},
+	},
+	-- The other half of the same failure: a quest Questie holds and has drawn
+	-- nothing for, so every spawnList on it is empty. That is what an addon
+	-- sees with Questie's icons switched off, before it has finished drawing at
+	-- login, or after it has tidied up behind a finished objective. The
+	-- coordinates are still in ObjectiveData, which is filled in the moment the
+	-- quest object is built, so the map has to fall back to it.
+	--
+	-- One row per kind the fallback can take: a creature, an item that has to be
+	-- traced to what drops it, and an event that carries its own coordinates.
+	[201] = {
+		Id = 201,
+		Objectives = {},
+		SpecialObjectives = {},
+		ObjectiveData = {
+			{ Type = "monster", Id = 901, Text = "Hogger slain" },
+			{ Type = "item", Id = 3010, Text = "Hogger's Head" },
+			{ Type = "event", Text = "Report to Dughan",
+				Coordinates = { [12] = { { 20, 60 } } } },
+		},
 	},
 }
 
 -- The finisher's spawns come off the compiled database rather than off the
 -- quest object, which is why they are a second call and not a third field.
-local NPCS = { [900] = { [12] = { { 35, 45 } } } }
+local NPCS = {
+	[900] = { spawns = { [12] = { { 35, 45 } } }, name = "Baros Alexston" },
+	[901] = { spawns = { [12] = { { 70, 70 } } }, name = "Hogger" },
+	[902] = { spawns = { [12] = { { 80, 30 } } }, name = "Riverpaw Gnoll" },
+}
 knows.QueryNPCSingle = function(id, field)
-	return field == "spawns" and NPCS[id] or nil
+	local npc = NPCS[id]
+	return npc and npc[field] or nil
 end
 knows.QueryObjectSingle = function() return nil end
+
+-- What carries an item, which is the one hop the database cannot answer
+-- directly. Layered over the query 05-quests.lua installed rather than
+-- replacing it, because the clutter scan reads the same call for its own
+-- fields and both sets of fixtures have to keep answering.
+local DROPS = { [3010] = { npcDrops = { 902 } } }
+local asked = knows.QueryItemSingle
+knows.QueryItemSingle = function(id, field)
+	local row = DROPS[id]
+	if row and row[field] ~= nil then
+		return row[field]
+	end
+	return asked(id, field)
+end
 
 -- The join. Area 606 is deliberately absent.
 local ATLAS = { [12] = 37, [40] = 52 }
