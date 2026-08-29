@@ -187,6 +187,18 @@ end
 function Region:SetSnapToPixelGrid(v) self.snapped = v end
 function Region:SetTexelSnappingBias(v) self.bias = v end
 function Region:SetFontObject(o) self.fontObject = o end
+function Region:GetFontObject() return self.fontObject end
+-- The padding inside an edit box, recorded rather than swallowed. The client
+-- writes its own over the addon's every time the chat channel moves, so a no-op
+-- here is an assertion that reads back nil and passes whichever version wrote
+-- last.
+function Region:SetTextInsets(left, right, top, bottom)
+	self.insetLeft, self.insetRight = left or 0, right or 0
+	self.insetTop, self.insetBottom = top or 0, bottom or 0
+end
+function Region:GetTextInsets()
+	return self.insetLeft or 0, self.insetRight or 0, self.insetTop or 0, self.insetBottom or 0
+end
 
 -- A font string given a font object answers that object's font, which is what
 -- the client does and is the only way to read back a size the addon never set

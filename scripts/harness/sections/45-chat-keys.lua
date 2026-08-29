@@ -71,6 +71,76 @@ check(not _G.ChatFrame2EditBoxLeft:IsShown(),
 	"the second window's line kept the client's own border")
 
 ----------------------------------------------------------------------
+-- The style
+--
+-- The client writes its own font, colour and inset over the addon's every time
+-- ChatEdit_UpdateHeader runs, which is on activation and on every change of
+-- channel. So this is not a check that the style was applied. It is a check
+-- that it was applied last, after the client had been at it, which is the only
+-- version of it anybody sees.
+----------------------------------------------------------------------
+
+local UI, C = ns.UI, ns.UI.Color
+
+_G.ChatEdit_DeactivateChat(line)
+_G.ChatFrame_OpenChat("")
+
+local ours = UI.Font(ns.db.chatFont, UI.FLAT)
+check(line:GetFontObject() == ours,
+	"the line you type in is drawn in the client's own font rather than the addon's")
+
+local r, g, b = line:GetTextColor()
+check(r == C.text[1] and g == C.text[2] and b == C.text[3],
+	("the line you type in is %s rather than the addon's own text colour")
+		:format(table.concat({ tostring(r), tostring(g), tostring(b) }, ", ")))
+
+-- The header is the word FrameXML draws where the slash you typed used to be,
+-- and it is the one string here that keeps the channel's own colour. What it
+-- does not keep is the client's font.
+local header = _G.ChatFrame1EditBoxHeader
+check(header:GetFontObject() == ours,
+	"the word in front of the line is drawn in the client's own font")
+local _, headerAt, _, headerX = header:GetPoint(1)
+check(headerAt == line and headerX == 4,
+	("the word in front of the line sits %s px in, on the client's own margin")
+		:format(tostring(headerX)))
+
+-- And the text clears it by the addon's own margin rather than FrameXML's
+-- fifteen, which is what a line of Blizzard's art needed and ours does not.
+local inset = line:GetTextInsets()
+check(inset == 4 + header:GetWidth() + 6 + 4,
+	("the line starts %s px in, expected the header and two margins")
+		:format(tostring(inset)))
+
+-- Blizzard's art off, and off by a walk rather than by a list of names. Every
+-- texture on the frame, because the pieces differ between the two clients this
+-- addon ships for and a name that is right on one is nothing on the other.
+for _, name in ipairs({ "ChatFrame1EditBoxLeft", "ChatFrame1EditBoxRight",
+	"ChatFrame1EditBoxMid" }) do
+	check(not _G[name]:IsShown() and _G[name]:GetAlpha() == 0,
+		("%s is still drawn round the line"):format(name))
+end
+check(line.focusLeft:GetAlpha() == 0,
+	"the client's focus glow is still drawn round the line")
+
+-- Now move the channel, which is what makes this worth a section of its own:
+-- the client repaints on the way through and the addon has to have the last
+-- word every time rather than once at login.
+line:SetAttribute("chatType", "WHISPER")
+_G.ChatEdit_UpdateHeader(line)
+_G.ChatEdit_DeactivateChat(line)
+_G.ChatFrame_OpenChat("")
+check(line:GetFontObject() == ours,
+	"changing channel gave the line the client's font back")
+local wr, wg, wb = line:GetTextColor()
+check(wr == C.text[1] and wg == C.text[2] and wb == C.text[3],
+	"changing channel painted the line you type in the channel's colour")
+check(header:GetFontObject() == ours,
+	"changing channel gave the header the client's font back")
+line:SetAttribute("chatType", "SAY")
+_G.ChatEdit_DeactivateChat(line)
+
+----------------------------------------------------------------------
 -- The keys
 --
 -- Neither of them is the window's. This is the assertion that the fix is still

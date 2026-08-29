@@ -175,23 +175,147 @@ end
 -- Dressing one field
 --------------------------------------------------------------------------
 
--- The art off, in the order Prat takes it off: the three border pieces hidden
--- outright, and the focus glow faded rather than hidden, because on the clients
--- that have it the client shows those three itself every time the field takes
--- the focus and a hidden one would come straight back.
+-- Every texture on the frame, gone.
+--
+-- Walked rather than named. Prat names the three border pieces and the three
+-- focus glows and that is six names against one client; the pieces differ
+-- between the two this addon ships for, and a client that grows a seventh next
+-- patch would draw it over our footer forever. A texture on this frame is
+-- Blizzard's art by definition, because nothing in this addon puts one there.
+--
+-- Faded as well as hidden, and the pair is not belt and braces. FrameXML shows
+-- the focus pieces itself every time the field takes the focus, so a hidden one
+-- comes straight back; alpha survives that and Hide is what stops the ones the
+-- client never touches again from being drawn at all.
+--
+-- The named list is still here as the fallback for a client whose GetRegions
+-- answers nothing, which is the shape of every other client probe in this file.
 local function Strip(box, name)
+	local gone = 0
+	if type(box.GetRegions) == "function" then
+		for _, piece in ipairs({ box:GetRegions() }) do
+			if type(piece) == "table" and type(piece.GetObjectType) == "function"
+				and piece:GetObjectType() == "Texture" then
+				piece:SetAlpha(0)
+				piece:Hide()
+				gone = gone + 1
+			end
+		end
+	end
+	if gone > 0 then
+		return gone
+	end
 	for _, part in ipairs(SKIN) do
 		local piece = _G[name .. part]
 		if type(piece) == "table" and type(piece.Hide) == "function" then
+			piece:SetAlpha(0)
 			piece:Hide()
+			gone = gone + 1
 		end
 	end
 	for _, part in ipairs(GLOW) do
 		local piece = box[part]
 		if type(piece) == "table" and type(piece.SetAlpha) == "function" then
 			piece:SetAlpha(0)
+			gone = gone + 1
 		end
 	end
+	return gone
+end
+
+-- The word in front of the line saying where it is going, and the punctuation
+-- after it. FrameXML's, written by ChatEdit_UpdateHeader, and the reason this
+-- window no longer needs a label of its own beside the field.
+--
+-- Typing `/p ` into this frame does not leave `/p ` in it. The client's own
+-- OnTextChanged parses the line, reads the channel off the slash, sets the
+-- field's chat type from it and takes the slash back out. What is left on the
+-- screen is this word. So the room's slash is still what decides where the line
+-- goes, exactly as the window has always claimed, and the header is that claim
+-- read back in the client's own hand rather than a second piece of state.
+local function Header(box, name)
+	return box.header or _G[name .. "Header"], _G[name .. "HeaderSuffix"]
+end
+
+--------------------------------------------------------------------------
+-- Making it look like the rest of the addon
+--
+-- Applied at dressing and again every time the client has been at it, which is
+-- more often than it sounds. ChatEdit_UpdateHeader runs on activation and on
+-- every change of channel, and it writes three things this file has an opinion
+-- about: the font on the header, the colour of the text you are typing, and the
+-- inset that keeps that text clear of the header. All three are Blizzard's
+-- numbers against Blizzard's art, and against a window drawn without any they
+-- read as a chat line from a different program sitting in ours.
+--
+-- So the hooks below re-apply it rather than setting it once. A style written
+-- at login and never again is a field that looks right until the first time you
+-- whisper somebody.
+--------------------------------------------------------------------------
+
+-- The size the log is drawn at, so the line you type matches the lines you
+-- read. Held rather than passed, because the restyle happens inside a script
+-- hook that has no idea what the setting says.
+local size = 12
+
+-- The gap either side of the text, which is the addon's own margin rather than
+-- FrameXML's fifteen. Four is what every other inset in the chat window is.
+local PAD = 4
+
+local function Style(box, name)
+	Strip(box, name)
+	box:SetFontObject(UI.Font(size, UI.FLAT))
+	-- Flat, and not the channel colour the client writes here.
+	--
+	-- ChatEdit_UpdateHeader paints the text you are typing in the channel's own
+	-- colour, so a whisper is typed in pink and a party line in blue. That is
+	-- Blizzard's window saying something the header beside it already says, and
+	-- in this window it is the one string on the screen that is not the same
+	-- colour as the sentence above it. The header keeps the channel colour,
+	-- because a word is where a colour like that belongs.
+	box:SetTextColor(C.text[1], C.text[2], C.text[3])
+	-- The client's own cap on one line of chat. Set here as well as by FrameXML
+	-- because a longer line is refused whole by the server, and it is better to
+	-- stop the typing than to lose the sentence.
+	box:SetMaxLetters(255)
+
+	local header, suffix = Header(box, name)
+	local width = 0
+	for _, part in ipairs({ header, suffix }) do
+		if type(part) == "table" and type(part.SetFontObject) == "function" then
+			part:SetFontObject(UI.Font(size, UI.FLAT))
+			if part:IsShown() then
+				width = width + (part:GetWidth() or 0)
+			end
+		end
+	end
+	-- The header off our own margin rather than FrameXML's, and the text after
+	-- it by the same margin again. Written here rather than left to the client
+	-- because ChatEdit_UpdateHeader derives its inset from the header's width in
+	-- Blizzard's font, and the header is in ours now.
+	if type(header) == "table" and type(header.ClearAllPoints) == "function" then
+		header:ClearAllPoints()
+		header:SetPoint("LEFT", box, "LEFT", PAD, 0)
+	end
+	if type(box.SetTextInsets) == "function" then
+		box:SetTextInsets(PAD + width + (width > 0 and PAD or 0), PAD, 0, 0)
+	end
+end
+
+-- What the field was last styled against, so the restyle on every keystroke is
+-- a comparison rather than a dozen setters. The channel is what moves the
+-- header, and the header is what moves everything else.
+local styled = {}
+
+local function Restyle(box, name)
+	local channel = tostring(box:GetAttribute("chatType"))
+		.. "/" .. tostring(box:GetAttribute("channelTarget")) .. "/" .. size
+	if styled[box] == channel then
+		return false
+	end
+	styled[box] = channel
+	Style(box, name)
+	return true
 end
 
 -- The field, once. Returns it either way, because every caller wants the frame
@@ -224,13 +348,18 @@ local function Dress(box, name)
 	end
 	home[box] = points
 
-	Strip(box, name)
+	Style(box, name)
 
-	-- HookScript on all three, never SetScript. The client's own handlers stay
+	-- HookScript on all four, never SetScript. The client's own handlers stay
 	-- first and ours run under them, which is the difference between painting a
 	-- field and replacing the one path that can still log you out.
+	--
+	-- Running under them is also what makes the restyle work at all: by the time
+	-- one of these fires, ChatEdit_UpdateHeader has already written Blizzard's
+	-- font and colour over ours, and the last word is the one that shows.
 	box:HookScript("OnEditFocusGained", function(self)
 		waiting = true
+		Style(self, name)
 		Call(Field.OnLight, true)
 		Fill(self)
 	end)
@@ -240,6 +369,10 @@ local function Dress(box, name)
 	end)
 	box:HookScript("OnTextChanged", function(self, userInput)
 		Opened(self, userInput)
+		-- The channel can move on a keystroke, because typing `/g ` is how you
+		-- move it, and the header changes width with it. A comparison rather
+		-- than a restyle, so an ordinary character costs one string compare.
+		Restyle(self, name)
 		Call(Field.OnType, self:GetText() or "")
 	end)
 	box:HookScript("OnTabPressed", function()
@@ -319,18 +452,16 @@ function Field.Anchor(frame)
 	return true
 end
 
--- The font and colour the log is drawn in, so the line you type matches the
--- lines you read. Called from the layout for the same reason Place is: the
--- size is a setting and a field that stays at twelve while the log goes to
+-- The size the log is drawn at. A setting, so the line you type stays the size
+-- of the lines you read: a field that stays at twelve while the log goes to
 -- eighteen is the one part of the window that did not take it.
-function Field.Font(size)
+function Field.Font(points)
+	if type(points) == "number" and points > 0 then
+		size = points
+	end
 	for box in pairs(dressed) do
-		box:SetFontObject(UI.Font(size, UI.FLAT))
-		box:SetTextColor(C.text[1], C.text[2], C.text[3])
-		-- The client's own cap on one line of chat. Set here as well as by
-		-- FrameXML because a longer line is refused whole by the server, and it
-		-- is better to stop the typing than to lose the sentence.
-		box:SetMaxLetters(255)
+		styled[box] = nil
+		Style(box, box.GetName and box:GetName() or "")
 	end
 	return true
 end

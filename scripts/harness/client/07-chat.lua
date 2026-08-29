@@ -9,11 +9,15 @@
 -- the chat section reads what is in it.
 
 local H = ...
-local chat, region, GUILD = H.chat, H.region, H.GUILD
+local chat, region, child, GUILD = H.chat, H.region, H.child, H.GUILD
 
 -- The client's own per type colours. Two entries with numbers that are not the
 -- theme's, so a line that fell back to the theme is visible as a wrong colour
 -- rather than as a coincidence.
+-- The font the client draws its own chat line in, so the restyle in
+-- Chat/Field.lua has something of Blizzard's to take back off.
+_G.ChatFontNormal = region("font", nil, "ChatFontNormal")
+
 _G.ChatTypeInfo = {
 	SAY = { r = 1, g = 1, b = 1 },
 	PARTY = { r = 0.67, g = 0.67, b = 1 },
@@ -79,15 +83,21 @@ local function EditBox(index)
 	box.parent = _G["ChatFrame" .. index]
 	box:SetPoint("BOTTOMLEFT", _G.UIParent, "BOTTOMLEFT", 16, 24)
 	box:Hide()
-	-- Blizzard's three border pieces and the focus glow, so the strip in
-	-- Chat/Field.lua has something to take off and the section can read back
-	-- that it did.
+	-- Blizzard's three border pieces and the focus glow, as real regions of the
+	-- frame, because Chat/Field.lua walks GetRegions rather than naming them:
+	-- a stub that only answered by name could not tell the walk from a version
+	-- that had gone back to the list.
 	for _, part in ipairs({ "Left", "Right", "Mid" }) do
-		region("texture", box, name .. part)
+		child("texture", box, name .. part)
 	end
-	box.focusLeft = region("texture", box)
-	box.focusRight = region("texture", box)
-	box.focusMid = region("texture", box)
+	box.focusLeft = child("texture", box)
+	box.focusRight = child("texture", box)
+	box.focusMid = child("texture", box)
+	-- The word in front of the line, which is what FrameXML draws instead of the
+	-- slash you typed, and the punctuation after it.
+	box.header = child("fontstring", box, name .. "Header")
+	box.header:SetWidth(40)
+	child("fontstring", box, name .. "HeaderSuffix"):SetWidth(6)
 	box:SetScript("OnEnterPressed", function(self)
 		_G.ChatEdit_SendText(self, 1)
 		self:SetText("")
@@ -111,7 +121,31 @@ end
 -- Chat/Field.lua exists to survive it.
 _G.ChatEdit_ActivateChat = function(box)
 	box:Show()
+	_G.ChatEdit_UpdateHeader(box)
 	box:SetFocus()
+end
+
+-- The client writing its own font, colour and inset over whatever an addon put
+-- there, which it does on activation and on every change of channel. Modelled
+-- rather than stubbed, because a style applied once at login and never again
+-- looks right until the first whisper, and that is exactly the bug a no-op here
+-- would hide: the addon would set its colours, nothing would take them off, and
+-- every assertion about them would pass on a client that does.
+--
+-- The numbers are Blizzard's own shape: the channel's colour on the text, the
+-- channel's word in the header, and an inset derived from the header's width.
+_G.ChatEdit_UpdateHeader = function(box)
+	local kind = box:GetAttribute("chatType") or "SAY"
+	local info = _G.ChatTypeInfo[kind] or _G.ChatTypeInfo.SAY
+	box:SetTextColor(info.r, info.g, info.b)
+	box:SetFontObject(_G.ChatFontNormal)
+	if box.header then
+		box.header:SetText(kind)
+		box.header:SetFontObject(_G.ChatFontNormal)
+		box.header:ClearAllPoints()
+		box.header:SetPoint("LEFT", box, "LEFT", 15, 0)
+	end
+	box:SetTextInsets(15 + ((box.header and box.header:GetWidth()) or 0), 13, 0, 0)
 end
 
 _G.ChatEdit_DeactivateChat = function(box)
