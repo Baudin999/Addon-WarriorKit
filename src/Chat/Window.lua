@@ -530,14 +530,66 @@ local function BuildEntry()
 	ghost:SetPoint("RIGHT", -4, 0)
 	UI.Wrap(ghost, false)
 
+	-- True from the moment a key goes down carrying a line the client will only
+	-- run itself, until the field has finished with that press. It is what the
+	-- three handlers below use to tell "the client is running this" apart from
+	-- "this is mine to send", and it is read on the way down rather than asked
+	-- for afterwards because by then the line may already have run and handed
+	-- the key back, which from here looks exactly like it never had it.
+	local handed = false
+
 	edit:SetScript("OnTextChanged", function(self)
-		ghost:SetShown((self:GetText() or "") == "")
+		local text = self:GetText() or ""
+		ghost:SetShown(text == "")
+		-- Not while the client has the press. Emptying the field is a text
+		-- change like any other, and a line handed over is emptied the instant
+		-- it is handed over, so this would read the empty field and take the
+		-- key back out from under the press that was about to run it.
+		if handed then
+			return
+		end
+		-- The line goes on the enter key while you are still typing it, so the
+		-- enter that finishes the line is the press that runs it rather than
+		-- the press that loads it. See Chat/Compose.lua.
+		ns.Compose.Preload(text)
 	end)
 
+	-- The field is not asked to let the key past itself, and that is the whole
+	-- of what was tried and did not work. SetPropagateKeyboardInput looks like
+	-- the answer and is not: a field told to propagate stops handling the key
+	-- itself, a field with the focus blocks the bindings underneath it anyway,
+	-- so the press reached neither and the focus never left to let a second one
+	-- through. A dead enter key is a worse bug than a slow one.
+	--
+	-- So it is still two presses, and Chat/Compose.lua says why: the button runs
+	-- on the down edge, the down edge of a press aimed at a field with the focus
+	-- belongs to the field, and there is no third edge to give the client.
+	--
+	-- What loading the key while you type buys is that the second press is
+	-- certain rather than a race. Arming on the enter meant the binding did not
+	-- exist yet when the key went down, so which press ran the line depended on
+	-- when the client re-read the binding set. Now the key is the client's
+	-- before the first enter is touched, and the press after the focus goes is
+	-- the press that runs it, every time.
+	--
+	-- One press needs a key of its own, with no field in front of it.
 	edit:SetScript("OnEnterPressed", function(self)
-		ChatWindow.Send(self:GetText())
+		local text = self:GetText()
+		-- Already on the key, put there while it was being typed, so this press
+		-- is the client's rather than ours and there is nothing here to send.
+		handed = ns.Compose.Armed() ~= nil
+			and ns.Compose.Armed() == ns.Compose.Secure(text)
+		if not handed then
+			ChatWindow.Send(text)
+			-- Send may have put the line on the key instead of running it,
+			-- which is what happens to a command that could not be loaded while
+			-- it was being typed. A key holding a line has to keep it past the
+			-- focus going, so the next press is the one that runs it.
+			handed = ns.Compose.Armed() ~= nil
+		end
 		self:SetText("")
 		self:ClearFocus()
+		handed = false
 	end)
 	edit:SetScript("OnEscapePressed", function(self)
 		self:SetText("")
@@ -546,10 +598,20 @@ local function BuildEntry()
 	edit:SetScript("OnEditFocusGained", function()
 		-- A click that lands on the field itself never goes through
 		-- ChatWindow.Focus, and it means the same thing that one does.
+		handed = false
 		ns.Compose.Disarm()
 		Light(box, true)
 	end)
 	edit:SetScript("OnEditFocusLost", function()
+		-- Typing stopped without the enter that finishes the line, so the key
+		-- goes back to the window. Leaving it loaded would be an enter that
+		-- runs a half-forgotten command instead of opening the chat line.
+		--
+		-- A line that was handed over keeps the key, because the press that
+		-- took the focus away is the press that is going to run it.
+		if not handed then
+			ns.Compose.Disarm()
+		end
 		Light(box, false)
 	end)
 	edit:SetScript("OnHide", function(self)
@@ -1049,6 +1111,47 @@ function ChatWindow.Line()
 		return ""
 	end
 	return entry.edit:GetText() or ""
+end
+
+-- Typing, as far as the field is concerned: the text, and the work the field
+-- does every time the text moves. That work is what puts a line the client will
+-- only run itself onto the enter key before the enter arrives, so a caller that
+-- only called SetText would leave the key empty and the press slow.
+--
+-- Public for the reason Send below is: what a key press does to the field lives
+-- inside a script handler, and a path nothing else can reach is a path nothing
+-- else can check. The client fires OnTextChanged off SetText on its own, and
+-- running it again costs nothing, because the field's handler asks for what is
+-- already loaded before it loads anything.
+function ChatWindow.Type(text)
+	if not built then
+		return false
+	end
+	entry.edit:SetText(text or "")
+	local changed = entry.edit:GetScript("OnTextChanged")
+	if changed then
+		changed(entry.edit)
+	end
+	return true
+end
+
+-- The down edge of the enter key, as far as the field is concerned: the field
+-- being told the line is finished. The up edge is the client's and lands on the
+-- binding, which is where a line the client will only run itself gets run.
+--
+-- Public for the reason Type above is. The way this went wrong was the field
+-- emptying itself and taking the key back out from under the press that was
+-- about to run the line. Nothing outside the field could reach that, so nothing
+-- outside the field could catch it.
+function ChatWindow.Enter()
+	if not built then
+		return false
+	end
+	local pressed = entry.edit:GetScript("OnEnterPressed")
+	if pressed then
+		pressed(entry.edit)
+	end
+	return true
 end
 
 -- One line, sent to wherever the room and the text between them say. Public

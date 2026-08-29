@@ -172,9 +172,17 @@ end
 -- The way through is the way a macro gets there. A button of the secure kind
 -- carries the line as its macrotext and the client runs it as its own work, on
 -- the one condition that the click is a key press. A :Click() from a script is
--- still us. So the first enter loads the button and says so, and the second,
--- which the field is no longer holding because the focus went with the first,
--- runs the line.
+-- still us.
+--
+-- **The button is loaded while you are still typing.** Compose.Preload runs off
+-- the field's OnTextChanged, so by the time `/logout` is spelled out the enter
+-- key is already carrying it and the press that finishes the line is the press
+-- that runs it. Arming after the enter was the whole reason this used to take
+-- two: the first press was spent loading the key it had just arrived on.
+--
+-- Anything that arms late still works and still takes two, because Handover
+-- below is unchanged and the key it loads is the key the next press lands on.
+-- That is the path a fight leaves, and the path a slash word of ours takes.
 --------------------------------------------------------------------------
 
 -- One entry per slash word whose command ends in a protected call. Everything
@@ -218,10 +226,40 @@ local ALIAS = {
 	exit = "/quit",
 }
 
+--------------------------------------------------------------------------
+-- The debug log
+--
+-- Off by default and silent when off. It is here for the reason Hover/Cast.lua
+-- has one: this fails in three places that are indistinguishable from a chair.
+-- The key was never loaded, the key was loaded and the client is not delivering
+-- the press, or the press arrives and the protected call at the end of it is
+-- dropped. From the field all three are an enter key that did nothing.
+--
+-- One line where the key is written, with the client's own readback beside it.
+-- One line where the press arrives. A load line with no arrived line under it
+-- is the second case; both lines and no character logging out is the third.
+--
+-- PostClick, never PreClick, and Hover/Cast.lua paid for that lesson: PreClick
+-- runs insecure Lua inside the click and before the secure handler, which taints
+-- the path and drops the protected call at the end of it. An early return does
+-- not save you, because the taint is the script running at all. An instrument
+-- that breaks what it measures is worse than no instrument.
+--------------------------------------------------------------------------
+
+local function Log(fmt, ...)
+	if not (ns.db and ns.db.chatDebug) then
+		return
+	end
+	ns.Print("|cff808080chatkey|r " .. (select("#", ...) > 0 and fmt:format(...) or fmt))
+end
+
 local BUTTON_NAME = "WarriorKitChatSecureButton"
 
--- The button, once there has been a line for it, and the line it is holding.
-local secure, armed
+-- The button, once there has been a line for it, the line it is holding, and
+-- the keys it is holding it on. The keys are kept rather than asked for again:
+-- while the override is on them GetBindingKey answers with nothing at all, and
+-- the field has to know on the key going down whether to let it past.
+local secure, armed, armedKeys
 
 -- Made the first time a line needs one rather than at load, because most
 -- evenings nobody types any of the words above and a secure frame is not free.
@@ -242,21 +280,36 @@ local function Button()
 	if not ok or not made then
 		return nil
 	end
-	-- Both edges of the key, and the reason is the press that arms it. The first
-	-- enter arrives at the field as a key down, the field runs the line, loads
-	-- the button and gives the focus up, and the key up that follows lands on a
-	-- key that now carries the button. A button on the up runs there, in the
-	-- same press, which is the one press this ought to have been all along. A
-	-- client that does not deliver that leaves the down of the next press, which
-	-- is the second press this was written for.
+	-- One edge, the down one, and the attribute that names it set beside it.
+	--
+	-- Both edges against an unset attribute is what this shipped as, and it is
+	-- the shape Buttons/Bars.lua settled on a live client and wrote down: a key
+	-- bound with SetOverrideBindingClick fires on whichever edge useOnKeyDown
+	-- names, and with the attribute unset that edge is the down one. So the
+	-- edge this has always run on is the down one, and the second press is the
+	-- press that has always worked. Hover/Cast.lua pairs these two the same way
+	-- and its keys cast.
+	--
+	-- The up edge was tried here, on the reasoning that the down edge of the
+	-- press that finishes the line belongs to the field and the up edge does
+	-- not. It is a good argument and the client does not agree with it, which
+	-- is what three evenings of `/logout` doing nothing cost to find out. The
+	-- edge that works is the one that was already working.
+	--
+	-- So one press is not reachable from a field that has the focus. A key of
+	-- its own would be one press, because there is no field in the way of it.
 	--
 	-- It cannot run twice. PostClick hands the key back and empties the
-	-- macrotext, so whichever edge is second finds a button with nothing on it.
-	made:RegisterForClicks("AnyUp", "AnyDown")
+	-- macrotext, so a second dispatch finds a button with nothing on it.
+	made:RegisterForClicks("AnyDown")
+	made:SetAttribute("useOnKeyDown", true)
 	made:SetAttribute("type", "macro")
 	-- The client has run the line by the time this fires. What is left is
-	-- handing the enter key back to the chat window.
-	made:SetScript("PostClick", function()
+	-- handing the enter key back to the chat window, and saying that the press
+	-- arrived at all, which is the one thing the field cannot tell you.
+	made:SetScript("PostClick", function(_, click, down)
+		Log("arrived on %s, down %s, carrying %s", tostring(click), tostring(down),
+			tostring(made:GetAttribute("macrotext")))
 		Compose.Disarm()
 	end)
 	secure = made
@@ -316,19 +369,22 @@ function Compose.Arm(text)
 		return false, "this client will not let the addon put a line on a key"
 	end
 	if _G.InCombatLockdown and _G.InCombatLockdown() then
+		Log("refused %s: in combat", text)
 		return false, "the addon cannot move a key in combat"
 	end
 	if ns.ChatWindow and ns.ChatWindow.Yield then
 		ns.ChatWindow.Yield()
 	end
-	local bound = false
+	local bound, keys = false, {}
 	for _, key in ipairs(EnterKeys()) do
 		if pcall(_G.SetOverrideBindingClick, button, true, key, BUTTON_NAME, "LeftButton")
 			and Carries(key) then
 			bound = true
+			keys[key] = true
 		end
 	end
 	if not bound then
+		Log("refused %s: no key would take it", text)
 		-- Nothing is loaded, so the window takes its key back here rather than
 		-- being left without one until the next thing that calls Keys.
 		if ns.ChatWindow and ns.ChatWindow.Keys then
@@ -337,7 +393,12 @@ function Compose.Arm(text)
 		return false, "the client would not put the line on the chat key"
 	end
 	button:SetAttribute("macrotext", text)
-	armed = text
+	armed, armedKeys = text, keys
+	for key in pairs(keys) do
+		Log("loaded %s onto %s, which the client reads back as %s", text, key,
+			type(_G.GetBindingAction) == "function"
+				and tostring((_G.GetBindingAction(key, true))) or "nothing it can be asked")
+	end
 	-- The field says what the key is holding. It is the only sentence a player
 	-- who has hidden Blizzard's window is certain to read, because it is under
 	-- the cursor they just pressed enter on.
@@ -361,7 +422,7 @@ function Compose.Disarm()
 		pcall(_G.ClearOverrideBindings, secure)
 	end
 	secure:SetAttribute("macrotext", "")
-	armed = nil
+	armed, armedKeys = nil, nil
 	if ns.ChatWindow and ns.ChatWindow.Paint then
 		ns.ChatWindow.Paint()
 	end
@@ -377,6 +438,81 @@ end
 -- state a player cannot see and nothing else could read it back.
 function Compose.Armed()
 	return armed
+end
+
+-- How many slash words are on the list of ones the client will not take from
+-- us. A count rather than the table, because the table is the thing that has to
+-- err long and a caller that could read it is a caller that could shorten it.
+function Compose.Words()
+	local n = 0
+	for _ in pairs(SECURE) do
+		n = n + 1
+	end
+	return n
+end
+
+-- Whether this key is one of the ones the button is loaded on. The field asks
+-- on every key going down, because a field that lets every key past to the
+-- binding underneath is a field where typing "1" pulls the first thing off the
+-- action bar.
+function Compose.ArmedOn(key)
+	return (armed and armedKeys and key ~= nil and armedKeys[key]) and true or false
+end
+
+-- The line the client would only take from a key of its own, for what you have
+-- typed so far, or nil for everything the client's own parser will take from us
+-- in one press. The translation is here rather than at the two callers because
+-- a word that is on the list at one of them and not the other is the bug this
+-- whole section exists to stop.
+function Compose.Secure(text)
+	if type(text) ~= "string" then
+		return nil
+	end
+	local word, rest = text:match("^/(%a+)(.*)$")
+	word = word and word:lower()
+	if not word or not SECURE[word] then
+		return nil
+	end
+	-- The alias replaces the word and keeps what was typed after it, so a
+	-- translation stays a translation rather than a line with its argument
+	-- dropped on the floor.
+	return ALIAS[word] and (ALIAS[word] .. rest) or text
+end
+
+-- Load the key while the line is still being typed, or hand it back the moment
+-- what is in the field is no longer a line that needs it.
+--
+-- Called on every character, so it says nothing and asks nothing. A refusal
+-- here is not a thing to tell the player about: the line is half typed, and
+-- what happens to a line that could not take the key early is that it takes the
+-- slow path through Handover on the enter, which does have something to say.
+function Compose.Preload(text)
+	local line = Compose.Secure(text)
+	if not line then
+		if armed then
+			Compose.Disarm()
+		end
+		return false
+	end
+	if armed then
+		if armed == line then
+			return true
+		end
+		-- The key is already ours and only the line has changed, which is what
+		-- every character after the command word does. Handing the key back and
+		-- taking it again per keystroke would leave it briefly nobody's, and a
+		-- key that is nobody's is a key a press can fall through.
+		if _G.InCombatLockdown and _G.InCombatLockdown() then
+			return false
+		end
+		secure:SetAttribute("macrotext", line)
+		armed = line
+		if ns.ChatWindow and ns.ChatWindow.Paint then
+			ns.ChatWindow.Paint()
+		end
+		return true
+	end
+	return Compose.Arm(line) and true or false
 end
 
 -- What the addon has to say about a line you just typed, in the room you typed

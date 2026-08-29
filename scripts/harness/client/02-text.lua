@@ -27,7 +27,22 @@ local function plain(s)
 	return (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
 end
 
-function Region:SetText(s) self.text = s end
+-- The client runs the field's OnTextChanged off SetText, and for a long while
+-- this did not, so every decision the chat field takes while you type was a
+-- decision the harness could not reach. The one that went unseen was the field
+-- handing the enter key back the moment it emptied itself, which is the press
+-- the line was supposed to run on.
+function Region:SetText(s)
+	local was = self.text
+	self.text = s
+	if was == s then
+		return
+	end
+	local changed = self.scripts and self.scripts.OnTextChanged
+	if changed then
+		changed(self, true)
+	end
+end
 function Region:GetText() return self.text end
 -- Recorded rather than dropped on the no-op floor, because one string in the
 -- addon says two different things in two colours and the colour is the half a
