@@ -62,13 +62,14 @@ local READS = {
 	buff      = { "unit", "index" },
 	debuff    = { "unit", "index" },
 	inventory = { "unit", "slot" },
+	unit      = { "unit" },
 }
 
 -- Every kind a subject may name. `note` is here and not above because it is a
 -- real kind that a source can register against; it simply has no client text.
 local KINDS = {
 	note = true, item = true, action = true,
-	buff = true, debuff = true, inventory = true,
+	buff = true, debuff = true, inventory = true, unit = true,
 }
 
 -- The bands a source may write into, and the order they are drawn in. `head` is

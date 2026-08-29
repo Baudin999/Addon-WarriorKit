@@ -126,6 +126,7 @@ local SECTIONS = {
 	-- section after this one would be reading tooltips with the harness's own
 	-- line hooked into them.
 	"48-tooltips",
+	"49-world-hover",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

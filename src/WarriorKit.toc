@@ -1,6 +1,6 @@
 ## Interface: 20506
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, a row counting down the cooldowns that decide fights, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, a mail window that colours a recipient green for one of yours, blue for somebody you know and red for a stranger and splits more than twelve attachments across as many mails as it takes, a quest log three columns wide with every quest you are on down the left grouped by zone, what this one wants in the middle and what it pays on the right, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, a row counting down the cooldowns that decide fights, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, the addon's own tooltip on a creature you point at in the world with where you stand on it under the name, a mail window that colours a recipient green for one of yours, blue for somebody you know and red for a stranger and splits more than twelve attachments across as many mails as it takes, a quest log three columns wide with every quest you are on down the left grouped by zone, what this one wants in the middle and what it pays on the right, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
@@ -117,9 +117,11 @@ UI\Log.lua
 # out of an interface that has neither anywhere else.
 #
 # Scan.lua is the only file in the addon that names GameTooltip. It points a
-# hidden one at an item, an action slot or an aura and reads the font strings
-# back, because the stats, the rank and the cost are computed inside the game
-# and no API hands them over.
+# hidden one at an item, an action slot, an aura or a unit and reads the font
+# strings back, because the stats, the rank and the cost are computed inside the
+# game and no API hands them over. It is also where the client's own tooltip is
+# held down while ours is up, which is the world hover's half of the same rule:
+# one file talks to Blizzard's box, whichever direction it is talking in.
 #
 # Tooltip.lua is the box: the theme's palette, the shared font, the pixel grid,
 # and a list of lines drawn on it.
@@ -353,6 +355,15 @@ UnitFrames\Feature.lua
 Meter\Meter.lua
 Meter\Threat.lua
 Meter\Window.lua
+
+# Where you stand on the mob under the cursor, on every tooltip in the addon
+# rather than in the threat pane alone. One source registered into ns.Tip
+# against the unit kind: the percentage on a client that keeps one, and who the
+# mob is swinging at on a client that does not. After Unit\Threat.lua, which it
+# asks, and in this folder rather than beside the part that opens the box,
+# because the part that opens it knows nothing about threat and this knows
+# nothing about hovering. Feeds\Worth.lua is the same shape one kind over.
+Meter\Standing.lua
 Meter\Feature.lua
 
 # The swing timer. Swing.lua is the clock, out of the combat log and
@@ -547,6 +558,22 @@ Quests\Where.lua
 Quests\Window.lua
 Quests\Blizzard.lua
 Quests\Feature.lua
+
+# The world hover. A creature under the cursor, described in the addon's own box
+# instead of Blizzard's.
+#
+# It is the one hover no frame in this addon owns. Everything else is answered
+# by an OnEnter on something the addon drew; the cursor over a mob is on
+# WorldFrame, and the client resolves the unit, fills GameTooltip and shows it
+# with no script in the sequence for an addon to write. So this part hears
+# UPDATE_MOUSEOVER_UNIT, opens ns.Tip on the cursor, and asks UI\Scan.lua to
+# hold the client's own box down while ours is up.
+#
+# Last of the parts that draw over the world, and after Meter, whose threat line
+# is the one thing besides the client that has anything to say about a mob.
+# Feature.lua last, as everywhere else.
+World\World.lua
+World\Feature.lua
 
 # Saved.lua is generated by bake-ui.sh and only assigns a table, so it loads
 # after the module that owns the table and before the part that reads it.

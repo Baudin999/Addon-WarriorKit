@@ -51,12 +51,20 @@ local NAME = "WarriorKitTooltipScan"
 -- `inventory` is a worn slot number and is here for one caller, the weapon
 -- enchant square on the buff row, because a temporary enchant answers to the
 -- hand it is on rather than to an aura index.
+--
+-- `unit` is a token: player, target, mouseover, nameplate3. It is the only kind
+-- here whose subject is not something this addon drew, and the one where the
+-- client's text is the whole answer rather than a supplement to it. What the
+-- game writes for a unit is the name, the level and classification tag, the
+-- faction, the guild and on a player the class: five lines the addon has no
+-- other way to word, half of them localised, and all of them already right.
 local KINDS = {
 	item      = { method = "SetHyperlink",     args = 1 },
 	action    = { method = "SetAction",        args = 1 },
 	buff      = { method = "SetUnitBuff",      args = 2 },
 	debuff    = { method = "SetUnitDebuff",    args = 2 },
 	inventory = { method = "SetInventoryItem", args = 2 },
+	unit      = { method = "SetUnit",          args = 1 },
 }
 
 local tip
@@ -179,6 +187,98 @@ function Scan.Read(kind, a, b)
 		end
 	end
 	return lines
+end
+
+--------------------------------------------------------------------------
+-- Holding the client's own tooltip down
+--
+-- Every other hover in this addon is replaced by replacing the frame it lands
+-- on. There is an OnEnter, the addon writes it, and Blizzard's tooltip is never
+-- asked for. A creature in the world has no such frame: the cursor is over
+-- WorldFrame, the client resolves `mouseover` and fills GameTooltip itself, and
+-- there is nothing to overwrite. So the only way to have one box on screen
+-- rather than two is to take the client's back down after it has gone up.
+--
+-- It is here because this is the file allowed to name GameTooltip, and that
+-- rule is worth more than the convenience of putting the code beside the part
+-- that asks for it. scripts/check.sh fails on the name anywhere else, comments
+-- included.
+--
+-- **Narrow twice, and both narrowings are load bearing.** It is armed only
+-- while the addon has a box of its own on screen, and it acts only on a tooltip
+-- that answers a unit. GameTooltip is shared furniture: a quest reward, an item
+-- somebody linked in chat, a bag slot, a merchant row and every other addon
+-- installed all draw in it, and none of those is this addon's to take away.
+--
+-- What the two ways of being wrong cost is not the same, which is why the test
+-- is the strict one rather than the thorough one.
+--
+--   too broad   a hover that is not a creature loses its tooltip whenever a mob
+--               happens to be under the cursor as well. A linked item says
+--               nothing, a quest reward says nothing, and nothing on screen
+--               says why. That is a bug report nobody can reproduce.
+--   too narrow  Blizzard's parchment stands beside the addon's box and the same
+--               mob is described twice. Ugly for an evening, and nothing is
+--               lost.
+--
+-- **The hook is never taken off.** HookScript chains under whatever the client
+-- and every other addon already put there and there is no call to undo one, so
+-- the flag below is what actually turns this on and off. Disarmed, the hook is
+-- one comparison on a tooltip that was going to be shown anyway.
+--------------------------------------------------------------------------
+
+local suppressing = false
+local hooked = false
+
+-- Take it down if it is up and it is about a unit.
+--
+-- Called from the hook and again the moment suppression is armed, because the
+-- client shows its tooltip and fires UPDATE_MOUSEOVER_UNIT in whichever order
+-- it likes: the addon can hear about the mouseover after the parchment is
+-- already on screen, and then no OnShow is coming.
+local function Hush()
+	if not suppressing then
+		return
+	end
+	local theirs = GameTooltip
+	if type(theirs) ~= "table" or type(theirs.GetUnit) ~= "function" then
+		return
+	end
+	-- The name comes back first and is thrown away. A tooltip describing an
+	-- item has a name too; only the second return says the subject is a unit.
+	local _, unit = theirs:GetUnit()
+	if unit == nil or type(theirs.Hide) ~= "function" then
+		return
+	end
+	theirs:Hide()
+end
+
+-- Arm or disarm, and answer whether it is armed.
+--
+-- False on a client that will not take the hook at all, which is not the same
+-- as being turned off: the caller is drawing its own box either way and has to
+-- be able to tell the player they are about to see two.
+function Scan.Suppress(on)
+	suppressing = on and true or false
+	if not suppressing then
+		return false
+	end
+
+	if not hooked then
+		if type(GameTooltip) ~= "table" or type(GameTooltip.HookScript) ~= "function"
+			or not pcall(GameTooltip.HookScript, GameTooltip, "OnShow", Hush) then
+			suppressing = false
+			return false
+		end
+		hooked = true
+	end
+
+	Hush()
+	return true
+end
+
+function Scan.Suppressing()
+	return suppressing
 end
 
 function Scan.Describe()

@@ -58,6 +58,7 @@ local CHURN = {
 	buffs = 0.05,
 	cooldowns = 0.05,
 	cast = 0.05,
+	world = 0.05,
 	party = 0.05,
 	hide = 0.05,
 }

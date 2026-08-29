@@ -227,6 +227,14 @@ read_globals = {
 	-- diagnostic that raises on a client without it would be a diagnostic that
 	-- makes things worse.
 	"GetMouseFocus", "GetMouseFoci",
+	-- Where the pointer is, in physical pixels. Read by UI/Tooltip.lua and by
+	-- nothing else, for the one box in the addon with no owner frame to hang
+	-- off: a creature in the world. Nothing in this install is here to prove the
+	-- call, so it is probed by name at its call site the way the two above are,
+	-- and a client without it puts the box in the middle of the screen rather
+	-- than not putting one up. It is an entry here because the probe is the
+	-- shim and it lives beside the caller.
+	"GetCursorPosition",
 	-- what one action slot is doing, read by Buttons/Slot.lua on the bar's
 	-- ticker. Probed by name in Slot.CanRead for the same reason the writers
 	-- above are: nothing installed here proves any of them is on 2.5.6, and a

@@ -108,6 +108,16 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   tooltip about an item is one call at load. That is how the vendor and auction
   prices work, which is why they now show up on a mail attachment and not only
   on the loot row they were written for.
+
+  A creature in the world gets the same box. It is the one hover nothing in the
+  addon owns a frame for, since the cursor is over the world itself and the
+  client fills and shows its own tooltip with no script in the way, so the addon
+  opens its box on the pointer and holds Blizzard's down while it is up. That
+  suppression is narrow on purpose. It is armed only while our box is on screen
+  and it acts only on a tooltip that answers a unit, because the client's box is
+  also a linked item, a quest reward and every other addon you have installed.
+  The threat meter hooks a line onto it: point at anything across the room and
+  the box says whose it is before you swing.
 - **A breakdown of what this character actually does.** One row per ability,
   kept between sessions: how much of your damage it is, how often it lands, how
   often it crits, what it averages, and what stopped it when it did not land.

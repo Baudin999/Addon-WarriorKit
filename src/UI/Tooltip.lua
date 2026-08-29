@@ -66,6 +66,11 @@ local RULE = 3      -- the air either side of the hairline under a title
 local SPACER = 4    -- a blank line, which is air rather than an empty line
 local MAX = 210     -- the widest a line is drawn before it wraps
 local OFFSET = 4    -- the owner to the tooltip
+-- The pointer's hotspot to the tooltip, which is a different number from the
+-- one above and has to be. A frame has an edge to open clear of; a cursor has
+-- art that hangs down and to the right of the hotspot, so a box four units off
+-- the hotspot opens underneath the arrow that opened it.
+local POINTER = 20
 
 -- Two sizes and no more. A title that is the body size is not a title, and a
 -- third size in a box this small is a typeface competition.
@@ -86,6 +91,18 @@ local BODY = M.font
 
 local Tooltip = {}
 UI.Tooltip = Tooltip
+
+-- The cursor, handed to Show in place of an owner.
+--
+-- Everything else this box opens on is a frame: a feed row, a nag square, an
+-- action slot, a filter chip. A creature in the 3D world is not one. There is
+-- no OnEnter, nothing to hang an anchor off and nothing to take a zoom from, so
+-- the box follows the pointer the way the client's own tooltip does.
+--
+-- A table rather than a string because an owner is compared with == and handed
+-- to UI.ZoomOf, and a table nobody else holds cannot collide with a frame or be
+-- produced by accident at a call site that meant something else.
+Tooltip.CURSOR = {}
 
 local frame, shadow, rule
 local opened
@@ -327,13 +344,76 @@ end
 -- at the zoom the last one was and a rezoom is a SetScale on a frame the
 -- client has already laid out.
 local function Match(owner)
-	local want = UI.ZoomOf(owner) or (UI.WindowZoom and UI.WindowZoom()) or 1
+	local want
+	if owner == Tooltip.CURSOR then
+		-- Nothing under the pointer was drawn by this addon, so there is no zoom
+		-- to take from it. The box takes the addon's own, which is what every
+		-- window it could be sitting beside is drawn at.
+		want = (UI.WindowZoom and UI.WindowZoom()) or 1
+	else
+		want = UI.ZoomOf(owner) or (UI.WindowZoom and UI.WindowZoom()) or 1
+	end
 	if want == zoom then
 		return false
 	end
 	zoom = want
 	UI.Rezoom(frame, want)
 	Hairlines()
+	return true
+end
+
+-- Where the pointer is, in physical pixels, measured from the bottom left of
+-- the screen. That is the client's own answer and it is left alone here,
+-- because it is the one number in this file that belongs to the screen rather
+-- than to a frame.
+--
+-- Nil where this client has no such call, which is the honest answer and not a
+-- guess at the middle of the screen.
+local function CursorPixels()
+	if type(GetCursorPosition) ~= "function" then
+		return nil, nil
+	end
+	local x, y = GetCursorPosition()
+	if not x or not y then
+		return nil, nil
+	end
+	return x, y
+end
+
+-- The box beside the pointer rather than beside a frame.
+--
+-- Two conversions and both are easy to miss. An anchor offset is in the
+-- anchored frame's own units, and this box is drawn on the addon's pixel grid
+-- at a scale of its own, so the pointer's pixels are divided by that frame's
+-- effective scale and not by UIParent's. The side is decided in pixels, where
+-- the pointer already is, so the screen's middle is converted the other way
+-- rather than the reading being converted twice.
+--
+-- POINTER is the distance from the hotspot, which is the arrow's top left
+-- corner: the art hangs down and to the right of it, so a box pinned to the
+-- hotspot opens under the pointer that opened it. The side is picked the way it
+-- is picked for a frame, so a mob on the right of the screen throws its box
+-- left rather than into the clamp.
+--
+-- False where the client will not say where the pointer is. The caller then
+-- puts the box in the middle of the screen rather than drawing nothing, because
+-- a box in the wrong place still says what the mob is.
+local function AtCursor()
+	local x, y = CursorPixels()
+	local scale = frame:GetEffectiveScale()
+	if not x or not scale or scale == 0 then
+		return false
+	end
+
+	local centre = UIParent:GetWidth() * UIParent:GetEffectiveScale() / 2
+	local ox, oy = x / scale, y / scale
+
+	frame:ClearAllPoints()
+	if x > centre then
+		frame:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", ox - POINTER, oy - POINTER)
+	else
+		frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", ox + POINTER, oy - POINTER)
+	end
 	return true
 end
 
@@ -354,7 +434,19 @@ end
 -- Above still picks a side, and picks it the same way, so a chip on a feed the
 -- player has dragged to the right of the screen throws its box left rather than
 -- off the edge.
+--
+-- **And on the pointer itself where there is no owner at all.** That is
+-- Tooltip.CURSOR, and it is the world hover: a creature is not a frame, so
+-- there is nothing to sit beside and the box follows the arrow instead.
 local function Anchor(owner, above)
+	if owner == Tooltip.CURSOR then
+		if not AtCursor() then
+			frame:ClearAllPoints()
+			frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+		end
+		return
+	end
+
 	local centre = UIParent:GetWidth() / 2
 	local left = ns.Measure(owner, "GetLeft")
 	local right = ns.Measure(owner, "GetRight")
