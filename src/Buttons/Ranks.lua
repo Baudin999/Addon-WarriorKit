@@ -214,10 +214,18 @@ end
 
 -- LEARNED_SPELL_IN_TAB fires at the trainer, ACTIONBAR_SLOT_CHANGED when
 -- anything lands in a slot, and SPELLS_CHANGED covers login and everything
--- else of that shape. All three are vanilla-era, so both clients have them,
--- and all any of them costs here is dropping a table.
+-- else of that shape. All any of them costs here is dropping a table.
+--
+-- Registered through pcall, which is the house pattern for an event a client
+-- may not carry, because the comment that used to be here said all three were
+-- vanilla-era and both clients had them and that was simply wrong. The 2.5.6
+-- Anniversary client has no LEARNED_SPELL_IN_TAB, RegisterEvent raises on a
+-- name it does not know, and the raise came out of a file loading rather than
+-- out of anything anybody did, so it was one error at login every session with
+-- nothing on screen to connect it to. SPELLS_CHANGED covers the trainer on a
+-- client without it.
 local events = CreateFrame("Frame")
-events:RegisterEvent("LEARNED_SPELL_IN_TAB")
+pcall(events.RegisterEvent, events, "LEARNED_SPELL_IN_TAB")
 events:RegisterEvent("SPELLS_CHANGED")
 events:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
 events:SetScript("OnEvent", function()
