@@ -19,11 +19,34 @@ ns.BlizzHide = Blizz
 -- predict from its label is not a switch, and the honest fix was more of them
 -- rather than a cleverer one.
 --
+-- **A switch here holds or it says so.** That is the second rewrite of this
+-- file and the reason for it is worth writing down, because the first version
+-- was correct and still failed twice in game.
+--
+-- It hid each frame once, at login, by putting the frame's own Hide where its
+-- Show was, and then remembered that it had. Both halves were wrong. Replacing
+-- Show does nothing about SetShown, which is resolved in C and never reads the
+-- Lua field, so every FrameXML path written that way walked past it: `FCF_` uses
+-- it on the chat window, which is why `/logout` put the client's chat back, and
+-- the cast bar mixin uses it on the target's bar, which is why the target had
+-- two cast bars with the switch on. And because the file remembered, one frame
+-- that got past it stayed past it for the rest of the session.
+--
+-- So neither half survives. Core/Attic.lua re-parents the frame into a frame
+-- that is hidden and can never be shown, which no call on the frame itself can
+-- undo, and this file verifies rather than remembers: every pass re-resolves
+-- every name, re-reads what is actually on the screen, and puts back anything
+-- that moved. The pass runs at login, when a switch moves, when combat drops
+-- and once a second forever. The raid manager used to have a hook of its own for
+-- exactly this and does not need one now, which is the shape of the fix: one
+-- mechanism instead of a patch per frame that somebody noticed.
+--
 -- Two handles take a row off the screen and this file holds one of them. A
 -- frame goes down here; the buttons inside a frame nobody can hide go down one
--- name at a time in UnitFrames/Auras.lua, off the same switch. The target's
--- rows are the second kind, because every icon in them is a child of
--- TargetFrame and nothing else, and hiding TargetFrame is hiding the target.
+-- name at a time in UnitFrames/Auras.lua, off the same switch and through the
+-- same attic. The target's rows are the second kind, because every icon in them
+-- is a child of TargetFrame and nothing else, and hiding TargetFrame is hiding
+-- the target.
 --------------------------------------------------------------------------
 
 -- Every switch, in the order the panel and `/wk hide` walk them.
@@ -57,11 +80,10 @@ local SWITCHES = {
 	-- row: Chat/Blizzard.lua, registered through Blizz.Also.
 	{ key = "hideBlizzChat", word = "chat", label = "Blizzard's chat window",
 		hint = "Everything it would have drawn goes to the System room in ours, and the enter key comes with it." },
-	{ key = "hideBlizzRaid", word = "raid", label = "Blizzard's raid frames",
-		hint = "The manager re-shows its container on its own layout pass, so this one is hooked onto that pass as well as hidden." },
+	{ key = "hideBlizzRaid", word = "raid", label = "Blizzard's raid frames" },
 }
 
--- What each switch takes down, by name, and what it takes to take it down.
+-- What each switch takes down, and what it takes to take it down.
 --
 -- `needs` is a list rather than a single key because one frame on the older
 -- clients holds both of your rows. BuffFrame is your buffs and your debuffs
@@ -69,68 +91,47 @@ local SWITCHES = {
 -- whichever of the two is on alone is served by the sweep in
 -- UnitFrames/Auras.lua, which works a button at a time and can tell them apart.
 --
--- DebuffFrame is the newer clients splitting that frame in two. It is not on
--- 2.5.6 at all, and a name this client does not carry costs one lookup against
--- nil, so both shapes sit in the list rather than the file asking which one is
--- running. That split is what put a debuff back on the screen under a row
--- already drawing it: hiding BuffFrame took the buffs and left the debuffs
--- exactly where they were.
+-- `names` is a list for the same reason and one more. DebuffFrame is the newer
+-- clients splitting BuffFrame in two; it is not on 2.5.6 at all, and a name this
+-- client does not carry costs one lookup against nil. That split is what put a
+-- debuff back on the screen under a row already drawing it: hiding BuffFrame
+-- took the buffs and left the debuffs exactly where they were. Your own cast bar
+-- is two names for the same reason, CastingBarFrame on 2.5.6 and
+-- PlayerCastingBarFrame on the clients this Edit Mode was backported from.
+--
+-- `keys` is the answer to the failure a list of names cannot cover, which is a
+-- client that renamed the global. FrameXML declares these frames with a
+-- parentKey, and the key outlives the global name across builds far more often
+-- than the other way round, so the target's cast bar is looked for as
+-- TargetFrameSpellBar and as whatever TargetFrame.spellbar is, and a client that
+-- answers to either gets its bar taken down. Both resolving to the same frame
+-- costs one extra table lookup and nothing else: the attic is idempotent.
+--
+-- One key, not several, and that is a rule rather than an accident. A key is
+-- read straight off a frame this addon does not own, so a guess that lands on
+-- the wrong field hides something nobody asked to hide, which is a worse failure
+-- than the one the list exists to fix. `spellbar` is what FrameXML declares the
+-- target's cast bar under and is the only one written from the source. Anything
+-- else goes in after `/wk hide probe` has said ON SCREEN against a name and
+-- somebody has read the key off the client.
 --
 -- The target's auras name no frame here on purpose. Every icon in those two
 -- rows is a child of TargetFrame, so there is nothing between the buttons and
--- the frame you are targeting with, and the sweep is the only handle.
---
--- Your own cast bar is named twice for DebuffFrame's reason. 2.5.6 calls it
--- CastingBarFrame and the clients this Edit Mode was backported from call it
--- PlayerCastingBarFrame, and neither name is worth a branch when an absent one
--- costs a lookup against nil.
+-- the frame you are targeting with, and the sweep in UnitFrames/Auras.lua is the
+-- only handle.
 local FRAMES = {
-	{ name = "BuffFrame", needs = { "hideBlizzBuffs", "hideBlizzDebuffs" } },
-	{ name = "TemporaryEnchantFrame", needs = { "hideBlizzBuffs" } },
-	{ name = "DebuffFrame", needs = { "hideBlizzDebuffs" } },
-	{ name = "TargetFrameSpellBar", needs = { "hideBlizzTargetCast" } },
-	{ name = "CastingBarFrame", needs = { "hideBlizzPlayerCast" } },
-	{ name = "PlayerCastingBarFrame", needs = { "hideBlizzPlayerCast" } },
-	{ name = "PartyMemberFrame1", needs = { "hideBlizzParty" } },
-	{ name = "PartyMemberFrame2", needs = { "hideBlizzParty" } },
-	{ name = "PartyMemberFrame3", needs = { "hideBlizzParty" } },
-	{ name = "PartyMemberFrame4", needs = { "hideBlizzParty" } },
-	{ name = "CompactRaidFrameContainer", needs = { "hideBlizzRaid" } },
-	{ name = "CompactRaidFrameManager", needs = { "hideBlizzRaid" } },
+	{ needs = { "hideBlizzBuffs", "hideBlizzDebuffs" }, names = { "BuffFrame" } },
+	{ needs = { "hideBlizzBuffs" }, names = { "TemporaryEnchantFrame" } },
+	{ needs = { "hideBlizzDebuffs" }, names = { "DebuffFrame" } },
+	{ needs = { "hideBlizzTargetCast" }, names = { "TargetFrameSpellBar" },
+		keys = { { owner = "TargetFrame", key = "spellbar" } } },
+	{ needs = { "hideBlizzPlayerCast" },
+		names = { "CastingBarFrame", "PlayerCastingBarFrame" } },
+	{ needs = { "hideBlizzParty" }, names = { "PartyMemberFrame1",
+		"PartyMemberFrame2", "PartyMemberFrame3", "PartyMemberFrame4" } },
+	{ needs = { "hideBlizzRaid" },
+		names = { "CompactRaidFrameContainer", "CompactRaidFrameManager" } },
 }
-
--- The raid is the one entry in the list that will not stay down on its own.
---
--- CompactRaidFrameManager re-shows its container whenever it lays itself out,
--- which is every time somebody joins, and it does it through SetShown. ns.Strip
--- replaces a frame's Show method with its Hide, which survives a Show and does
--- nothing at all about a SetShown, because that one is resolved in C and never
--- reads the Lua field.
---
--- So the pass itself is hooked, and the hook does what every other retry in
--- this file does: run Apply again. It is post-hooked rather than replaced, so
--- the client's own layout finishes first and this is the last word. Probed by
--- name, because neither the function nor hooksecurefunc is proven on both of
--- these clients, and a client with no raid manager has nothing to re-show.
---
--- Like every hook in this addon it cannot be taken off again, which is why it
--- reads the switch on every call rather than being installed when the switch
--- goes on.
-local HOOKED = "CompactRaidFrameManager_UpdateShown"
-local hooked = false
-
-local function HookManager()
-	if hooked or type(_G[HOOKED]) ~= "function" or type(hooksecurefunc) ~= "function" then
-		return
-	end
-	hooked = pcall(hooksecurefunc, HOOKED, function()
-		if ns.db and ns.db.hideBlizzRaid then
-			Blizz.Apply()
-		end
-	end)
-end
-
-local pending = false
 
 -- A part whose frames need more than a name in the table above, and whose
 -- switch still belongs on the same page as these.
@@ -142,6 +143,9 @@ local pending = false
 -- would delete the loot, the experience and every addon's output, so the hide
 -- and the forward have to be one mechanism. What stays here is the switch, so
 -- there is still one page and one word for all of them.
+--
+-- An entry answers the same true or false Blizz.Apply does: false is work combat
+-- refused, and it puts the whole pass on the retry.
 local extra = {}
 
 function Blizz.Also(apply)
@@ -158,48 +162,102 @@ local function Asked(needs)
 	return true
 end
 
--- Every frame put where its switches say it should be. False where combat
--- refused, which the retry below picks up: TargetFrameSpellBar is a child of a
--- secure unit button and is the one frame in the list that can say no.
+-- Every frame one entry names, whichever way this client names it, handed to
+-- `act`. `act` is ns.Attic.Vanish or ns.Attic.Return, passed by reference rather
+-- than wrapped, because this runs on the second and a closure per pass is
+-- garbage the collector has to walk later.
+--
+-- A name this client does not carry is skipped and costs one lookup against
+-- nil. A key whose owner is missing costs two.
+local function Walk(entry, act)
+	local complete = true
+	local names = entry.names
+	for index = 1, #names do
+		local frame = _G[names[index]]
+		if frame and not act(frame) then
+			complete = false
+		end
+	end
+	local keys = entry.keys
+	if keys then
+		for index = 1, #keys do
+			local owner = _G[keys[index].owner]
+			local frame = type(owner) == "table" and owner[keys[index].key] or nil
+			if type(frame) == "table" and not act(frame) then
+				complete = false
+			end
+		end
+	end
+	return complete
+end
+
+-- Every frame put where its switches say it should be, read off the screen
+-- rather than off a record of the last pass.
+--
+-- False where combat refused, which the retry below picks up: the target's cast
+-- bar is a child of a secure unit button and is the one frame in the list that
+-- can say no.
 function Blizz.Apply()
 	-- Tolerates being called before the saved variables exist, like every other
 	-- Apply in the addon.
 	if not ns.db then
-		return
+		return true
 	end
-	-- Here rather than at login, because the raid manager is load on demand on
-	-- one of these clients and this is the call that runs again when it turns
-	-- up. It is a no-op from the second time onward.
-	HookManager()
-
 	local complete = true
 	for index = 1, #FRAMES do
 		local entry = FRAMES[index]
-		local frame = _G[entry.name]
-		if frame then
-			local done
-			if Asked(entry.needs) then
-				done = ns.Strip(frame)
-				-- Stripped and back on the screen, which is one frame in this
-				-- list and is the whole reason the hook below exists. ns.Strip
-				-- answers true for a frame it has already taken down, which is
-				-- right for every other caller here and exactly wrong for a
-				-- container the raid manager re-shows: this pass has to read
-				-- what is on the screen rather than what the last one did.
-				if done and frame:IsShown() and not ns.Blocked(frame) then
-					frame:Hide()
-				end
-			else
-				done = ns.Unstrip(frame)
-			end
-			complete = complete and done
+		local act = Asked(entry.needs) and ns.Attic.Vanish or ns.Attic.Return
+		if not Walk(entry, act) then
+			complete = false
 		end
 	end
-
-	for index = 1, #extra do
-		extra[index]()
+	-- And everything already down, checked against where it actually is. A cage
+	-- is undone by nothing but somebody else's SetParent, and this is the line
+	-- that says so out loud rather than assuming it.
+	if not ns.Attic.Sweep() then
+		complete = false
 	end
-	pending = not complete
+	for index = 1, #extra do
+		if not extra[index]() then
+			complete = false
+		end
+	end
+	return complete
+end
+
+--------------------------------------------------------------------------
+-- The clock
+--
+-- One hertz, forever, and it is not a workaround for a mechanism that does not
+-- hold. The cage holds. What the second buys is the two things a cage cannot
+-- answer for on its own: a frame the client had not built yet at the last pass,
+-- which is every load-on-demand frame and every chat window a whisper opens, and
+-- a frame somebody else re-parented, which nothing here is known to do and which
+-- is exactly the kind of claim that has already been wrong twice.
+--
+-- So the guarantee this file makes is not "no path we thought of can show it".
+-- It is "nothing the addon replaces stays on the screen for longer than a
+-- second", and that one does not depend on having guessed the client's call
+-- sites correctly.
+--
+-- The cost is a dozen global lookups and a parent comparison per frame held,
+-- once a second, with a write only where a comparison failed. It is bracketed
+-- like every other tick in the addon so the performance tab accounts for it
+-- rather than leaving it as the one pass nobody can see.
+--------------------------------------------------------------------------
+
+local INTERVAL = 1.0
+local elapsed = 0
+
+local function Tick(_, delta)
+	elapsed = elapsed + delta
+	if elapsed < INTERVAL then
+		return
+	end
+	elapsed = 0
+	ns.Perf.Start("hide")
+	Blizz.Apply()
+	ns.Perf.Stop("hide")
 end
 
 -- The switches, for the panel and the slash word, so neither writes the list
@@ -222,13 +280,69 @@ end
 -- worth seeing: it says the client calls these frames something else, which is
 -- a different thing from a switch that did not work.
 function Blizz.Found()
-	local found = 0
+	local found, of = 0, 0
 	for index = 1, #FRAMES do
-		if _G[FRAMES[index].name] then
-			found = found + 1
+		local names = FRAMES[index].names
+		for slot = 1, #names do
+			of = of + 1
+			if _G[names[slot]] then
+				found = found + 1
+			end
 		end
 	end
-	return found, #FRAMES
+	return found, of
+end
+
+--------------------------------------------------------------------------
+-- Saying what actually happened
+--
+-- `/wk hide probe` reports one line per name: whether this client has the frame,
+-- whether the attic is holding it, and whether it is on the screen anyway. That
+-- last column is the one worth having. Every bug this file has had looked
+-- identical from the outside, a switch that was on with the frame still drawn,
+-- and settling which of the three it was took a guess at FrameXML each time.
+-- Now it takes one command.
+--
+-- Rows are built on demand, from the slash word only, which is why this is the
+-- one function here that is allowed to allocate.
+--------------------------------------------------------------------------
+
+local function Row(rows, label, frame, wanted)
+	local state
+	if not frame then
+		state = "this client has no such frame"
+	elseif ns.Measure(frame, "IsVisible") then
+		state = wanted and "ON SCREEN, and the switch says it should not be"
+			or "on screen"
+	elseif not wanted then
+		state = "off screen, and the switch does not ask for that"
+	elseif ns.Attic.Held(frame) then
+		state = "hidden, in the attic"
+	else
+		state = "hidden, but not caged: this client refused the re-parent"
+	end
+	rows[#rows + 1] = ("  %s: %s"):format(label, state)
+end
+
+function Blizz.Probe()
+	local rows = {}
+	if not ns.Attic.Available() then
+		rows[#rows + 1] = "  this client would not make the attic, so every frame below is held by ns.Strip alone"
+	end
+	for index = 1, #FRAMES do
+		local entry = FRAMES[index]
+		local wanted = Asked(entry.needs)
+		for slot = 1, #entry.names do
+			Row(rows, entry.names[slot], _G[entry.names[slot]], wanted)
+		end
+		local keys = entry.keys or {}
+		for slot = 1, #keys do
+			local owner = _G[keys[slot].owner]
+			Row(rows, ("%s.%s"):format(keys[slot].owner, keys[slot].key),
+				type(owner) == "table" and owner[keys[slot].key] or nil, wanted)
+		end
+	end
+	return rows
 end
 
 function Blizz.Describe()
@@ -244,17 +358,20 @@ function Blizz.Describe()
 		return ("nothing of the client's hidden, %d of %d frames on this client")
 			:format(found, of)
 	end
-	return ("hidden: %s; %d of %d frames on this client")
-		:format(table.concat(hidden, ", "), found, of)
+	return ("hidden: %s; %d of %d frames on this client, %d held")
+		:format(table.concat(hidden, ", "), found, of, ns.Attic.Count())
 end
 
--- PLAYER_REGEN_ENABLED is the retry every strip in the addon uses. It costs one
--- comparison against false when combat drops and nothing the rest of the time.
+-- PLAYER_LOGIN starts the clock. PLAYER_REGEN_ENABLED is the retry every strip
+-- in the addon uses, and here it only saves a pass its share of a second: the
+-- tick would have reached the same work anyway, which is the difference between
+-- this file and the one it replaced.
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:SetScript("OnEvent", function(_, event)
-	if event == "PLAYER_LOGIN" or pending then
-		Blizz.Apply()
+	Blizz.Apply()
+	if event == "PLAYER_LOGIN" then
+		events:SetScript("OnUpdate", Tick)
 	end
 end)

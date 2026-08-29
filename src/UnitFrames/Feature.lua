@@ -725,6 +725,18 @@ ns.Register({
 		-- exactly where it always was.
 		hide = function(arg)
 			local word, value = arg:match("^(%S*)%s*(.-)$")
+			-- What is actually on the screen, name by name. Every bug these
+			-- switches have had looked the same from the outside, a switch that
+			-- was on with the frame still drawn, and telling a name this client
+			-- spells differently from a frame the client put back used to take a
+			-- guess at FrameXML. It takes this instead.
+			if word == "probe" then
+				ns.Print("hide: " .. ns.BlizzHide.Describe() .. ".")
+				for _, row in ipairs(ns.BlizzHide.Probe()) do
+					ns.Print(row)
+				end
+				return
+			end
 			local switch = ns.BlizzHide.Find(word)
 			if not switch then
 				ns.Print("hide takes one of: " .. Words() .. ".")
@@ -786,6 +798,8 @@ ns.Register({
 		"party grow up|down, party zoom <1-3>",
 		"party columns <1-8>, party percolumn <1-40>, the raid only",
 		"party reset, the list back on its own corner of the screen",
+		"hide <switch> on|off, one of the client's own frames this addon replaces",
+		"hide probe, every frame those switches name and what is on screen now",
 		"auras on|off, the client's own buff row in the corner of the screen",
 		"colors, every class fill and how far the name on it is from it",
 	},

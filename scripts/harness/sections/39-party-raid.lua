@@ -517,26 +517,21 @@ do
 	check(_G.CompactRaidFrameContainer:IsShown() == false,
 		"the raid container is still on the screen")
 
-	-- The manager's own layout pass, which is what puts the container back.
-	-- hooksecurefunc is installed for this block alone rather than for the whole
-	-- fixture: it would also switch on the two hooks UnitFrames/Skin.lua has
-	-- never been able to install here, and that is a change to what every
-	-- section above this one is measuring.
-	local hooks = {}
-	_G.hooksecurefunc = function(name, fn)
-		hooks[name] = fn
-	end
-	ns.BlizzHide.Apply()
-	check(hooks.CompactRaidFrameManager_UpdateShown ~= nil,
-		"nothing hooked the raid manager's layout pass, so the container comes back")
-
+	-- The manager's own layout pass, which is what puts the container back. It
+	-- does it with SetShown, which is resolved in C and never reads the Lua Show
+	-- that ns.Strip replaced, so the flag on the frame really does come back on
+	-- and nothing the addon can install stops it.
+	--
+	-- What stops it is the parent. The container lives in the attic, the attic is
+	-- hidden and cannot be shown, so the frame's own flag is the only thing that
+	-- moved and the container is still not drawn. This used to be a hook on that
+	-- one function, which is a patch for the one frame somebody noticed rather
+	-- than an answer for the call.
 	_G.CompactRaidFrameManager_UpdateShown()
 	check(_G.CompactRaidFrameContainer:IsShown(),
-		"the fixture cannot put the container back, so the hook proves nothing")
-	hooks.CompactRaidFrameManager_UpdateShown()
-	check(_G.CompactRaidFrameContainer:IsShown() == false,
-		"the hook ran and the raid container is still up")
-	_G.hooksecurefunc = nil
+		"the fixture cannot put the container back, so this proves nothing")
+	check(_G.CompactRaidFrameContainer:IsVisible() == false,
+		"the manager's layout pass put the raid container back on the screen")
 
 	ns.db.hideBlizzParty = false
 	ns.BlizzHide.Apply()

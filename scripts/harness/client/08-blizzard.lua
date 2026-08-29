@@ -95,7 +95,21 @@ end
 -- The client's own cast bar for your target, which this addon draws on the
 -- enemy bar instead. A child of the target frame, so it is the one frame in
 -- UnitFrames/Blizzard.lua's list that a lockdown can refuse.
-child("statusbar", targetFrame, "TargetFrameSpellBar")
+--
+-- Reachable under FrameXML's own parent key as well as under the global, because
+-- that is the pair UnitFrames/Blizzard.lua resolves and a fixture carrying only
+-- the global could not tell a client that renamed one from a client that renamed
+-- both. It is the same frame under both names, which is also worth modelling:
+-- the pass takes it down twice per call and that has to be free.
+local spellBar = child("statusbar", targetFrame, "TargetFrameSpellBar")
+targetFrame.spellbar = spellBar
+
+-- What the cast bar mixin does when a cast starts, which is the call that put a
+-- second cast bar on the screen with the switch on. SetShown, not Show: the
+-- addon can replace Show and cannot replace this.
+function _G.Target_Spellbar_OnEvent()
+	spellBar:SetShown(true)
+end
 
 -- And the client's own cast bar for you, which this addon draws on a bar of
 -- its own under the swing timer. A child of UIParent rather than of a unit
@@ -133,11 +147,14 @@ child("button", enchantFrame, "TempEnchant1")
 --
 -- The party is four separate frames on both clients, which is why one switch
 -- names four of them. The raid is a container and the manager that lays it out,
--- and the manager is the reason that switch needs more than a strip: it
--- re-shows the container on its own layout pass, through SetShown, which is
--- resolved in C and never reads the Lua Show that ns.Strip replaced. A fixture
--- without that function could not tell the hook in UnitFrames/Blizzard.lua from
--- an addon that never wrote one.
+-- and the manager is the reason a strip was never enough: it re-shows the
+-- container on its own layout pass, through SetShown, which is resolved in C and
+-- never reads the Lua Show that ns.Strip replaced.
+--
+-- So the fixture calls SetShown rather than writing the field, because that is
+-- the one call the addon cannot intercept and the whole reason Core/Attic.lua
+-- exists. A fixture that wrote `shown` directly would pass against a hide that
+-- only replaces Show, which is the version this one is here to fail.
 for index = 1, 4 do
 	child("frame", _G.UIParent, "PartyMemberFrame" .. index)
 end
@@ -145,7 +162,7 @@ local raidContainer = child("frame", _G.UIParent, "CompactRaidFrameContainer")
 child("frame", _G.UIParent, "CompactRaidFrameManager")
 
 function _G.CompactRaidFrameManager_UpdateShown()
-	raidContainer.shown = true
+	raidContainer:SetShown(true)
 end
 
 -- What each unit frame was built as, taken before PLAYER_LOGIN and so before

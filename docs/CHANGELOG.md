@@ -2,6 +2,63 @@
 
 ## Unreleased
 
+### Hiding Blizzard's own frames, by the parent rather than by the method
+
+`/logout` put the client's chat window back on the screen with `hide chat` on,
+and the target carried two cast bars with `hide cast` on. Same bug both times,
+and it was in the mechanism rather than in either switch.
+
+Every hide replaced the frame's Lua `Show` with its `Hide` and then recorded that
+it had. `SetShown` is resolved in C and never reads that field, so every FrameXML
+path written that way walked straight past the hide: `FCF_` uses it on the chat
+window, which a slash command run through the client's own edit box reaches, and
+the cast bar mixin uses it on the target's bar, which every cast reaches. And
+because each pass remembered what it had done, the first frame that got past it
+stayed past it until the next reload. `UnitFrames/Blizzard.lua` already had a
+hook on `CompactRaidFrameManager_UpdateShown` for exactly this, which is a patch
+for the one frame somebody happened to notice.
+
+`Core/Attic.lua` is the answer instead. One frame, created hidden, whose `Show`
+and `SetShown` are both replaced with `Hide`, and every frame this addon replaces
+is re-parented into it. Visibility on this client is a property of the parent
+chain, so a frame in the attic is not drawn whatever anybody calls on the frame
+itself. Show, SetShown, SetAlpha, a fade, an animation and a layout pass all
+lose, and none of them had to be guessed in advance, which is the difference
+between this and the four fixes before it.
+
+The passes verify instead of remembering. Every one re-resolves every name, reads
+what is on the screen rather than what the last pass did, and runs at login, when
+a switch moves, when combat drops and once a second forever. `ns.Attic.Sweep`
+walks everything the attic holds and puts back anything whose parent has drifted,
+which is the one call a cage can lose to. So the guarantee is no longer "no path
+we thought of can show it", it is "nothing the addon replaces stays on the screen
+for longer than a second". The raid hook is deleted.
+
+Each entry now carries a list of global names and a list of FrameXML parent keys,
+because a client that spells a name differently is the failure a single global
+cannot survive. The target's cast bar is taken down as `TargetFrameSpellBar` and
+as `TargetFrame.spellbar`, and either one is enough.
+
+`/wk hide probe` prints one line per name: whether this client has the frame,
+whether the attic holds it, and whether it is on the screen anyway. Every bug
+these switches have had looked identical from the outside, a switch that was on
+with the frame still drawn, and settling which of the three it was took a guess
+at FrameXML each time. It takes one command now.
+
+Two things stay out of the attic on purpose. Art does, because a texture is a
+region of the frame it was made on and re-parenting one moves it out of that
+frame's draw order rather than off the screen, so nameplates, bar art and the
+unit frame skin keep `ns.Strip`. Secure action buttons do, because the client's
+bar controller calls methods on them from a stack that goes on to perform
+protected actions, and `Buttons/Blizzard.lua` is unchanged.
+
+`43-blizzard-hide.lua` asserts on `IsVisible` rather than on `IsShown` and fires
+`SetShown` first, because a caged frame is allowed to have its own flag turned
+back on and `IsShown` cannot see the difference. The fixture's raid manager and
+cast bar both call `SetShown` now, which is the call the old hide lost to, so the
+version this replaces fails the section. The pass costs 0.00 KB per 50 ticks and
+is bracketed as `hide` on the performance tab.
+
 ### Five refusals read "a this character"
 
 Todo item 13, the last thing the class split left behind.

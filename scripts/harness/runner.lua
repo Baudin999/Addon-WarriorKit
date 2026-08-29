@@ -117,6 +117,7 @@ local SECTIONS = {
 	"40-loot-feed",
 	"41-voice",
 	"42-cooldown-row",
+	"43-blizzard-hide",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

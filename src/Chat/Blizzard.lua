@@ -19,8 +19,12 @@ ns.ChatBlizzard = Blizz
 -- So hiding is three things that only work together.
 --
 --   The frames go off the screen. Every chat frame, its tab, its buttons and
---   the furniture round them, through ns.Strip, which replaces a frame's Show
---   with its Hide and survives the client showing it again.
+--   the furniture round them, into Core/Attic.lua, which re-parents each one
+--   into a frame that is hidden and can never be shown. That is what `/logout`
+--   defeated in the version before this: the frames were held by putting their
+--   own Hide where their Show was, `FCF_` puts a docked frame back with
+--   SetShown, and SetShown is resolved in C and never reads the Lua field. A
+--   hidden parent has no such hole.
 --
 --   Everything that would have been drawn in the default frame is forwarded to
 --   the System room in our window. That is one hook on AddMessage, and it is
@@ -60,11 +64,11 @@ local FURNITURE = {
 
 -- Frames this file has taken down, so the same set goes back.
 --
--- ns.Unstrip shows what it restores, which is right for every other caller: a
--- frame this addon replaces was on the screen before it did. It is wrong here,
--- because eight of the ten chat frames have never been on screen in most
--- installs and putting the window back would turn on eight tabs nobody has ever
--- opened. So only a frame that was showing when it was taken is stripped at all.
+-- Handing a frame back shows it, which is right for every other caller: a frame
+-- this addon replaces was on the screen before it did. It is wrong here, because
+-- eight of the ten chat frames have never been on screen in most installs and
+-- putting the window back would turn on eight tabs nobody has ever opened. So
+-- only a frame that was showing when it was first seen is taken at all.
 local held = {}
 local hiding = false
 local forwarding = false
@@ -77,24 +81,49 @@ local function Windows()
 	return count
 end
 
+-- The three names one numbered window answers to, built once per window and
+-- kept. The pass used to build them by concatenation, which was free while it
+-- only ran when a setting moved and is thirty throwaway strings a second now it
+-- runs on a clock. Filled on demand rather than at load, because the count is
+-- the client's and a whisper can raise it.
+local NAMES = {}
+
+local function Names(index)
+	local row = NAMES[index]
+	if not row then
+		row = { "ChatFrame" .. index, "ChatFrame" .. index .. "Tab",
+			"ChatFrame" .. index .. "ButtonFrame" }
+		NAMES[index] = row
+	end
+	return row
+end
+
+-- True where there is nothing left to do, which includes a frame this install
+-- has never opened: leaving it alone is the job rather than a refusal, and a
+-- refusal would put the pass on a retry that can never finish. False is combat,
+-- and none of these frames is protected, so it has never been seen.
 local function Take(frame)
 	if type(frame) ~= "table" or type(frame.Hide) ~= "function" then
-		return false
+		return true
 	end
 	if not held[frame] then
 		if not frame:IsShown() then
-			return false
+			return true
 		end
 		held[frame] = true
 	end
-	return ns.Strip(frame)
+	return ns.Attic.Vanish(frame)
 end
 
 local function Give(frame)
 	if type(frame) ~= "table" or not held[frame] then
+		return true
+	end
+	if not ns.Attic.Return(frame) then
 		return false
 	end
-	return ns.Unstrip(frame)
+	held[frame] = nil
+	return true
 end
 
 --------------------------------------------------------------------------
@@ -137,37 +166,45 @@ function Blizz.Wanted()
 	return (ns.db.chat and ns.db.hideBlizzChat and ns.ChatWindow.Shown()) and true or false
 end
 
+-- Run on every pass rather than only where the answer changed.
+--
+-- The version before this returned early when `wanted` matched what it did last
+-- time, and that early return is half of why the client's window came back on
+-- `/logout` and stayed back. A pass that remembers cannot see a frame the client
+-- built since, which is every temporary window a whisper opens, and it cannot
+-- see one the client put back by a route the hide did not cover. So nothing is
+-- remembered: every pass walks every name and reads what is on the screen.
+--
+-- Cheap enough to be the answer. Ten windows is thirty lookups plus seven, once
+-- a second, off UnitFrames/Blizzard.lua's clock, and the attic is a comparison
+-- against the parent for a frame it already holds.
 function Blizz.Apply()
 	local wanted = Blizz.Wanted()
-	-- Asked again on every apply rather than once, and before the comparison
-	-- below rather than after it. hooksecurefunc is probed like everything else
-	-- the client might not have, and a client that grows one later, or an addon
-	-- that installs it after us, would otherwise leave the forward off for the
-	-- session with the window still hidden, which is the one failure here that
-	-- loses lines. It costs one comparison once it has taken.
+	-- Asked again on every apply rather than once. hooksecurefunc is probed like
+	-- everything else the client might not have, and a client that grows one
+	-- later, or an addon that installs it after us, would otherwise leave the
+	-- forward off for the session with the window still hidden, which is the one
+	-- failure here that loses lines. It costs one comparison once it has taken.
 	if wanted then
 		Forward()
 	end
-
-	if wanted == hiding then
-		return false
-	end
 	hiding = wanted
 
+	local complete = true
 	local move = wanted and Take or Give
 	for index = 1, Windows() do
-		local frame = _G["ChatFrame" .. index]
-		if frame then
-			move(frame)
-			move(_G["ChatFrame" .. index .. "Tab"])
-			move(_G["ChatFrame" .. index .. "ButtonFrame"])
+		local names = Names(index)
+		if _G[names[1]] then
+			complete = move(_G[names[1]]) and complete
+			complete = move(_G[names[2]]) and complete
+			complete = move(_G[names[3]]) and complete
 		end
 	end
 
-	for _, name in ipairs(FURNITURE) do
-		move(_G[name])
+	for index = 1, #FURNITURE do
+		complete = move(_G[FURNITURE[index]]) and complete
 	end
-	return true
+	return complete
 end
 
 function Blizz.Hiding()

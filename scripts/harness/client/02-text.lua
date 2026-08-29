@@ -383,6 +383,28 @@ function Region:SetAlpha(v) self.alpha = v end
 function Region:GetAlpha() return self.alpha or 1 end
 function Region:IsShown() return self.shown end
 
+-- Shown, and every parent above it shown too.
+--
+-- Real rather than the metatable's no-op, because that is the whole of what
+-- Core/Attic.lua does: it re-parents a frame of Blizzard's into a frame that is
+-- hidden and can never be shown, and the guarantee it makes is that the frame is
+-- not drawn whatever anybody calls on the frame itself. A fixture where
+-- IsVisible answered nil could not tell that mechanism from one that does
+-- nothing at all, and the two bugs the attic exists for both looked like a frame
+-- whose own flag said shown.
+--
+-- The walk stops where the chain does, which is UIParent, whose parent is nil.
+function Region:IsVisible()
+	local step = self
+	while step do
+		if not step.shown then
+			return false
+		end
+		step = step.parent
+	end
+	return true
+end
+
 -- A slider that behaves like one.
 --
 -- Real, rather than the metatable's no-op, because two things in the addon are

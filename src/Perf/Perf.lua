@@ -44,7 +44,7 @@ local SAMPLE_RATE = 1.0
 -- unavailable for the whole life of the enemy cast row: Perf.Start finds no
 -- slot for a key that is not here and returns without doing anything.
 local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast",
-	"skin", "party", "meter", "buffs", "cooldowns" }
+	"skin", "party", "meter", "buffs", "cooldowns", "hide" }
 local slots = {}
 local gauges, gaugeOrder = {}, {}
 

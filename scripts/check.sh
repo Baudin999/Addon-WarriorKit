@@ -366,6 +366,12 @@ Cooldowns/Cooldowns.lua:Cooldowns.Busy
 Cooldowns/Row.lua:Row.Wanted
 Cooldowns/Row.lua:Paint
 Cooldowns/Row.lua:Row.Update
+Core/Attic.lua:Attic.Take
+Core/Attic.lua:Attic.Vanish
+Core/Attic.lua:Attic.Sweep
+UnitFrames/Blizzard.lua:Walk
+UnitFrames/Blizzard.lua:Blizz.Apply
+Chat/Blizzard.lua:Blizz.Apply
 "
 
 hot_scan='

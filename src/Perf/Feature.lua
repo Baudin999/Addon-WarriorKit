@@ -31,6 +31,7 @@ local ROWS = {
 	{ key = "meter", label = "meters", hz = 5 },
 	{ key = "buffs", label = "buff nag", hz = 10 },
 	{ key = "cooldowns", label = "cooldown row", hz = 10 },
+	{ key = "hide", label = "Blizzard frames held down", hz = 1 },
 }
 
 local lines = {}   -- every font string the sampler writes, and what writes it

@@ -71,6 +71,10 @@ The addon is eighteen parts and a core. Each part is a folder, and Core knows th
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
+    Core/Attic.lua       where a Blizzard frame goes when this addon draws it
+                         instead: one frame, hidden at birth, that nothing can
+                         show. A frame re-parented into it is not drawn whatever
+                         the client calls on the frame itself
 
     Class/Class.lua      the class registry, and the question "which class is
                          this". Loads straight after Core and before every part,
@@ -656,6 +660,9 @@ goes through `Feature.lua` or through the shared surface below:
     ns.BlizzHide.Found() / Describe()
                                  how many of the frames those switches name this
                                  client carries, and what is currently hidden
+    ns.BlizzHide.Probe()         one line per name: whether this client has the
+                                 frame, whether the attic holds it, and whether
+                                 it is on the screen anyway. `/wk hide probe`
     ns.FrameSkin.Landed()        Edit Mode dropped a linked frame: read the gap
                                  and the level back off where it came to rest
     ns.FrameSkin.LinkRange()     gap low, gap high, level low, level high, so the
@@ -779,8 +786,18 @@ goes through `Feature.lua` or through the shared surface below:
     ns.HasHealPrediction() / ns.IncomingHeals(unit)   what is already in the air
                                  for that unit, 0 when nothing is, nil when the
                                  client has no prediction at all
-    ns.Strip(region) / ns.Unstrip(region)   hide a Blizzard region so its own code
-                                            cannot show it again, or give it back
+    ns.Strip(region) / ns.Unstrip(region)   put a Blizzard region's own Hide where
+                                            its Show was, or give it back. For a
+                                            texture. It does nothing about
+                                            SetShown, which is why frames go to
+                                            the attic instead
+    ns.Attic.Vanish(frame) / ns.Attic.Return(frame)
+                                 a whole frame of Blizzard's off the screen, by
+                                 re-parenting it into a frame that is hidden and
+                                 cannot be shown, and back where it was found
+    ns.Attic.Sweep()             everything the attic holds, checked against
+                                 where it actually is, and put back if it moved
+    ns.Attic.Held(frame) / Count() / Frame() / Available() / Cageable(frame)
     ns.Blocked(region)           whether a region is protected and in lockdown,
                                  so the caller can queue the work for regen
     ns.Artwork.Apply()           re-run the bar art strip from ns.db.blizzArt
@@ -1286,6 +1303,7 @@ runs only while you are looking at it.
     UnitFrames/Paint.lua      5 Hz      the three Blizzard unit frames
     UnitFrames/Group.lua      5 Hz      every party or raid block on screen
     Meter/Window.lua          5 Hz      the two panes of numbers
+    UnitFrames/Blizzard.lua   1 Hz      every Blizzard frame the switches hide
     Perf/Perf.lua             1 Hz      only while the performance tab is on screen
 
 The buff row is ten rather than five for one reason and it is not the readout.
@@ -1463,6 +1481,46 @@ the nameplate look, strip its visible regions instead: swap each region's
 hide it. That is `ns.Strip` in Core, and `ns.Unstrip` reverses it. Both refuse
 while a protected region is in lockdown and return false, so the caller can
 finish at PLAYER_REGEN_ENABLED.
+
+**`ns.Strip` is for a texture, and only a texture.** It replaces the Lua `Show`
+field, and `SetShown` is resolved in C and never reads that field. Every
+FrameXML path written as `frame:SetShown(true)` walks straight past a strip, and
+two shipped bugs were exactly that: `FCF_` uses it on the chat window, so
+`/logout` put the client's chat back on the screen, and the cast bar mixin uses
+it on the target's bar, so the target carried two cast bars with the switch on.
+
+So a whole frame of Blizzard's goes to `Core/Attic.lua` instead. The attic is one
+frame, created hidden, whose `Show` and `SetShown` are both replaced with `Hide`,
+and every frame this addon replaces is re-parented into it. Visibility on this
+client is a property of the parent chain, so a frame in the attic is not drawn
+whatever anybody calls on the frame itself: Show, SetShown, SetAlpha, a fade, an
+animation and a layout pass all lose, and none of them has to be predicted in
+advance. `ns.Attic.Vanish` applies both handles, the cage and the strip, and
+`ns.Attic.Return` gives the frame back to the parent it was found on.
+
+The one call that undoes a cage is somebody else's `SetParent`, and nothing in
+the client is known to make one on these frames. That claim is checked rather
+than believed: `ns.Attic.Sweep` walks everything the attic holds, once a second,
+off the clock in `UnitFrames/Blizzard.lua`, and puts back anything whose parent
+has drifted. The same pass re-resolves every name, which is what catches a frame
+the client had not built yet, including the temporary chat window a whisper
+opens. So the guarantee is not "no path we thought of can show it". It is
+"nothing the addon replaces stays on the screen for longer than a second".
+
+Two things deliberately stay out of the attic. Art does: a texture or a font
+string is a region of the frame it was made on, and re-parenting one moves it out
+of that frame's draw order rather than off the screen, so nameplates, bar art and
+the unit frame skin keep `ns.Strip`. Secure action buttons do too, for the reason
+`Buttons/Blizzard.lua` gives in its own header: the client's bar controller calls
+methods on them from a stack that goes on to perform protected actions, and an
+addon's frame in that chain is a taint. Those are hidden with `statehidden` and
+`Hide` and nothing else.
+
+`/wk hide probe` reports one line per name: whether this client has the frame,
+whether the attic holds it, and whether it is on the screen anyway. Every bug
+these switches have had looked identical from the outside, a switch that was on
+with the frame still drawn, and telling a name this client spells differently
+from a frame the client put back used to take a guess at FrameXML.
 
 The cast bar used to be left alone on purpose, so interrupts stayed visible, and
 that was right for as long as nothing here drew one. `replace` style hides it
@@ -3226,10 +3284,33 @@ icon in them is a child of `TargetFrame` and hiding `TargetFrame` is hiding the
 target.
 
 The two never argue over a region: the sweep holds buttons, this holds frames,
-`ns.Strip` marks what it holds, so turning either off gives back only what that
+the attic marks what it holds, so turning either off gives back only what that
 one took. All four switches ship on, because an addon that draws your buffs
 under your portrait and leaves the client's in the corner has not replaced
 anything, it has added to it.
+
+Both handles were rewritten once and the reason is worth reading before the next
+switch is added, because the first version was correct and still failed in game.
+It hid each frame once, at login, by replacing `Show`, and then remembered that
+it had. Both halves were wrong: replacing `Show` does nothing about `SetShown`,
+so the client put frames back by a route the hide never covered, and because the
+file remembered, the first frame that got past it stayed past it for the session.
+The raid manager had a hook of its own for exactly this, which is a patch for the
+one frame somebody noticed rather than an answer for the call.
+
+Neither half survives. Frames go to the attic, which no call on the frame can
+undo, and the pass verifies instead of remembering: it re-resolves every name,
+reads what is on the screen, and runs at login, when a switch moves, when combat
+drops and once a second forever. Each entry carries a list of names and a list of
+FrameXML parent keys, because a name a client spells differently is the failure
+mode a single global cannot survive: the target's cast bar is looked for as
+`TargetFrameSpellBar` and as `TargetFrame.spellbar`, and either one takes it
+down. There is exactly one key in that list and that is a rule: a key is read
+straight off a frame this addon does not own, so a guessed one hides something
+nobody asked to hide, which is worse than the failure the list exists to fix.
+`spellbar` is the only one written from FrameXML source. The next one goes in
+after `/wk hide probe` has printed ON SCREEN against a name. The raid hook is
+gone.
 
 A run is one name the client counts from 1, and a row can stand in for more
 than one of them: your buff row replaces `BuffButton` and `TempEnchant` both.
@@ -5273,13 +5354,16 @@ Everything below was written from the API contract and has never executed:
   priest, so this is the one entry on the buff row written without a character
   to look at. What would settle it: buff a priest with each of the three and
   read the row.
-- Whether hiding Blizzard's chat window holds. `Chat/Blizzard.lua` strips ten
-  chat frames, their tabs, their button frames, the dock manager and five other
-  named pieces of furniture. Every name is probed, so a name these clients spell
-  differently costs that frame and nothing else, and `/wk status` reports how
-  many frames are held. What would prove it: log in, look for anything left
-  of the client's chat window in a corner, then dock and undock a tab through
-  the client's own menu and see whether it stays down.
+- Which of the frame names under `/wk hide` this client actually carries.
+  The mechanism is settled: a frame in the attic cannot be drawn, and
+  `43-blizzard-hide.lua` proves it against the exact call that beat the last
+  version. What is not settled is the naming. Every entry is probed, so a name
+  these clients spell differently costs that frame and nothing else, and each of
+  the two cast bars carries a FrameXML parent key as a second way in. What would
+  settle it: `/wk hide probe`, which prints one line per name saying whether this
+  client has the frame, whether the attic holds it, and whether it is on the
+  screen anyway. Any line reading ON SCREEN is a name to add, not a mechanism to
+  argue with.
 - Whether `hooksecurefunc` on `DEFAULT_CHAT_FRAME.AddMessage` catches everything
   Blizzard's window would have drawn. Loot, experience and every addon's output
   should reach the System room and nothing should reach it twice. The doubling

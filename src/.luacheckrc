@@ -14,6 +14,11 @@ globals = {
 	-- character's, both declared in every TOC.
 	"WarriorKitDB", "WarriorKitCharDB",
 	-- frames created with a name write a global of that name
+	-- Where a frame of Blizzard's goes when this addon draws it instead. Named
+	-- for the reason the blocks are: a frame that has gone missing has to be
+	-- findable from a macro, and `/wk hide probe` reads the parent of every
+	-- frame it reports against this one.
+	"WarriorKitAttic",
 	"WarriorKitChargeBinder",
 	"WarriorKitMarkButton",
 	"WarriorKitOptions",

@@ -59,6 +59,7 @@ local CHURN = {
 	cooldowns = 0.05,
 	cast = 0.05,
 	party = 0.05,
+	hide = 0.05,
 }
 
 -- The bars' steady state, in KB per fifty ticks with two bars up, covering the

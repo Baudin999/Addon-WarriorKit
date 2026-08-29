@@ -28,12 +28,19 @@ ns.FrameAuras = Auras
 -- refresh into the first pull and stay there until it ended.
 --
 -- Hiding is a different question from anchoring and this file gets one answer
--- to it rather than assuming. ns.Strip refuses on a protected region in combat
--- and says so by returning false, so a button the client builds mid fight is
--- retried on the next tick and lands the moment combat drops. Whether these
--- buttons are protected at all on this hybrid client is in the untested list in
+-- to it rather than assuming. The buttons go into Core/Attic.lua, the same place
+-- every Blizzard frame this addon replaces goes, so a client that re-shows one
+-- through SetShown gets nothing: the button's parent is hidden and cannot be
+-- shown. The attic refuses on a protected region in combat and says so by
+-- returning false, so a button the client builds mid fight is retried on the
+-- next tick and lands the moment combat drops. Whether these buttons are
+-- protected at all on this hybrid client is in the untested list in
 -- docs/README.md, because the honest answer is that nobody has watched a target
 -- gain its ninth debuff in a raid yet.
+--
+-- A button the client re-parents back out of the attic is caught by
+-- ns.Attic.Sweep, which UnitFrames/Blizzard.lua runs once a second over
+-- everything the attic holds. Nothing here has to keep its own watch.
 --
 -- The player has the same two rows under its own block. That was left out of
 -- the first build and it was the wrong call: the two blocks are one HUD now
@@ -367,7 +374,7 @@ local function Sweep(row)
 			if not button then
 				break -- the client has not built this one yet
 			end
-			if not ns.Strip(button) then
+			if not ns.Attic.Vanish(button) then
 				complete = false
 				break
 			end
@@ -391,15 +398,15 @@ end
 local function Unsweep(row)
 	local complete = true
 	for button in pairs(row.stripped) do
-		if ns.Unstrip(button) then
+		if ns.Attic.Return(button) then
 			row.stripped[button] = nil
 		else
 			complete = false
 		end
 	end
-	-- Reset whether or not every one came back. ns.Strip is a no-op on a region
+	-- Reset whether or not every one came back. The attic is a no-op on a frame
 	-- it already holds, so a sweep that starts again from one costs a table
-	-- lookup per button that never came back and cannot double-strip anything.
+	-- lookup per button that never came back and cannot double-take anything.
 	local runs = row.runs
 	for index = 1, #runs do
 		runs[index].swept = 0
@@ -436,7 +443,7 @@ end
 -- for those the sweep here is the only handle there is.
 --
 -- The two never argue over a region. The sweep holds buttons, the other file
--- holds frames, and ns.Strip marks what it holds, so turning either off gives
+-- holds frames, and the attic marks what it holds, so turning either off gives
 -- back only what it took.
 --------------------------------------------------------------------------
 

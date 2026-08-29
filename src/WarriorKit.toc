@@ -16,6 +16,14 @@
 # signs into, and the panel walks that registry at PLAYER_LOGIN.
 Core\Core.lua
 
+# Where a Blizzard frame goes when this addon draws it instead: one frame,
+# hidden at birth, that nothing can show. A frame re-parented into it is not
+# drawn whatever the client calls on it, which is the guarantee ns.Strip in
+# Core.lua cannot make on its own, because SetShown is resolved in C and never
+# reads the Lua Show it replaced. Right after Core.lua, which owns ns.Strip and
+# ns.Blocked, and above every part that takes one of the client's frames down.
+Core\Attic.lua
+
 # What the addon knows about a class, and one file per class that knows it.
 # Class.lua is the registry and the question "which class is this"; each file
 # beside it is the whole of what the addon knows about one class, and nothing
