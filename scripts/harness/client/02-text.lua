@@ -38,9 +38,13 @@ function Region:SetText(s)
 	if was == s then
 		return
 	end
+	-- false is the point: the client's second argument says whether a person
+	-- typed this, and SetText is by definition the other kind. A stub that
+	-- called every write user input would have agreed with a field that took
+	-- its own tidying up for someone changing their mind.
 	local changed = self.scripts and self.scripts.OnTextChanged
 	if changed then
-		changed(self, true)
+		changed(self, false)
 	end
 end
 function Region:GetText() return self.text end

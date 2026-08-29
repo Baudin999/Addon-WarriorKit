@@ -225,15 +225,14 @@ local function BuildPane(clickable, percent)
 			end
 			ns.BreakdownWindow.Toggle()
 		end)
-		button:SetScript("OnEnter", function(self)
-			GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
-			GameTooltip:AddLine("WarriorKit meters")
-			GameTooltip:AddLine("Click for the breakdown of what you do.", 0.8, 0.8, 0.8)
-			GameTooltip:AddLine("Right click to swap damage and healing.", 0.8, 0.8, 0.8)
-			GameTooltip:Show()
-		end)
-		button:SetScript("OnLeave", function()
-			GameTooltip:Hide()
+		ns.Tip.Hang(button, function()
+			return {
+				kind = "note",
+				title = "WarriorKit meters",
+				lines = { "One row per player, as long as their share of the top row." },
+				hint = "Click for the breakdown of what you do."
+					.. " Right click to swap damage and healing.",
+			}
 		end)
 		pane.button = button
 	end

@@ -389,10 +389,7 @@ end
 -- What the status line has no room to say: every character on the account and
 -- what each is carrying.
 function Purse.Ledger()
-	local data = {
-		title = "The purse",
-		color = C.heading,
-	}
+	local lines = {}
 
 	local ledger = ns.db and ns.db.purse
 	if ledger then
@@ -400,20 +397,25 @@ function Purse.Ledger()
 		Sorted(ledger)
 		for index = 1, #order do
 			local who = order[index]
-			data[#data + 1] = { who, ns.Coin(ledger[who]),
+			lines[#lines + 1] = { who, ns.Coin(ledger[who]),
 				tone = (who == me) and C.text or C.dim }
 		end
-		data[#data + 1] = { blank = true }
+		lines[#lines + 1] = { blank = true }
 	end
 
-	data[#data + 1] = { "Account", ns.Coin(Purse.Account()), tone = C.heading }
+	lines[#lines + 1] = { "Account", ns.Coin(Purse.Account()), tone = C.heading }
 
 	local rate, elapsed = Purse.Rate()
-	data[#data + 1] = { "This session", Session(rate, elapsed) }
-	data[#data + 1] = { hint = "A character is written down as you play it, so"
-		.. " one you have not logged into since the addon arrived is missing"
-		.. " from the list rather than counted as nothing." }
-	return data
+	lines[#lines + 1] = { "This session", Session(rate, elapsed) }
+
+	return {
+		kind = "note",
+		title = "The purse",
+		lines = lines,
+		hint = "A character is written down as you play it, so one you have not"
+			.. " logged into since the addon arrived is missing from the list"
+			.. " rather than counted as nothing.",
+	}
 end
 
 --------------------------------------------------------------------------

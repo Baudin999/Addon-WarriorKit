@@ -158,23 +158,18 @@ function UI.Log(parent, opts)
 				_G.SetItemRef(link, text, button)
 			end
 		end)
+		-- The addon's own box rather than the client's, which is the whole of
+		-- what a link in a chat line used to get wrong: a line drawn in Arial
+		-- Narrow on a flat black panel raised a gold-bordered parchment when
+		-- you hovered a word in it. UI/Scan.lua reads the item's real text off
+		-- the client and UI/Tooltip.lua draws it here, so the two look like one
+		-- interface. A malformed link is a link somebody typed, and it comes
+		-- back with nothing rather than raising, which opens no box at all.
 		frame:SetScript("OnHyperlinkEnter", function(this, link)
-			if not GameTooltip or type(GameTooltip.SetHyperlink) ~= "function" then
-				return
-			end
-			GameTooltip:SetOwner(this, "ANCHOR_CURSOR")
-			-- A malformed link is a link somebody typed, and the tooltip raises
-			-- on one rather than coming up empty.
-			if not pcall(GameTooltip.SetHyperlink, GameTooltip, link) then
-				GameTooltip:Hide()
-				return
-			end
-			GameTooltip:Show()
+			ns.Tip.Open(this, { kind = "item", link = link })
 		end)
 		frame:SetScript("OnHyperlinkLeave", function()
-			if GameTooltip then
-				GameTooltip:Hide()
-			end
+			ns.Tip.Close()
 		end)
 	end
 

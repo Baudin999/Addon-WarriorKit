@@ -179,6 +179,10 @@ for _, part in ipairs({
 	-- it does is the flag the send pane sets, so both behaviours have to be
 	-- reachable from one function the way they are in the game.
 	"10-mail",
+	-- Last, because it wraps the CreateFrame 09-group already wrapped and has to
+	-- be the outermost of the two: a frame asked for with GameTooltipTemplate
+	-- has to reach this whatever else is layered underneath.
+	"11-tooltip",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

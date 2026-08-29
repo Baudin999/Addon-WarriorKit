@@ -953,7 +953,7 @@ end
 -- caption, because "Channels" does not fit in twenty six pixels and the air
 -- between two runs of icons says the same thing.
 --
--- opts.describe is handed a row and answers a tooltip, which is the only place
+-- opts.describe is handed a row and answers a tooltip subject, which is the only place
 -- an icon rail can put a name. Without it the rail is a column of pictures
 -- nobody can read.
 function UI.List(parent, opts)
@@ -1011,7 +1011,7 @@ local function IconRow(button)
 
 	button.icons = true
 	-- The hover scripts are the row's own, because they paint as well as
-	-- describe. What UI.Tip would have done for free is the one thing left, and
+	-- describe. What ns.Tip.Hang would have done for free is the one thing left, and
 	-- it is the thing a frame under the cursor all evening cannot do without:
 	-- a right drag over the rail has to turn the camera rather than stop dead.
 	UI.PassCamera(button)
@@ -1042,20 +1042,20 @@ local function ListRow(list, index)
 		end
 	end)
 	-- The hover paints as well as describes, so the two scripts are hung here
-	-- and the tooltip is opened from inside them rather than through UI.Tip,
-	-- which would take both.
+	-- and the tooltip is opened from inside them rather than through
+	-- ns.Tip.Hang, which would take both.
 	button:SetScript("OnEnter", function(this)
 		this.hovered = true
 		PaintListRow(this)
 		if list.describe and this.id then
-			UI.Tooltip.Show(this, list.describe(this))
+			ns.Tip.Open(this, list.describe(this))
 		end
 	end)
 	button:SetScript("OnLeave", function(this)
 		this.hovered = nil
 		PaintListRow(this)
 		if list.describe then
-			UI.Tooltip.Close()
+			ns.Tip.Close()
 		end
 	end)
 

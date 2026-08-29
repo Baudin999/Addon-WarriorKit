@@ -266,16 +266,19 @@ end
 local function FavouriteTip(button)
 	local name = button.name
 	if not name then
-		return { title = "add a favourite",
-			{ "Puts whoever is in the name field on this list." },
-			{ hint = "Right click a name on the list to take it off again." } }
+		return {
+			kind = "note",
+			title = "add a favourite",
+			lines = { "Puts whoever is in the name field on this list." },
+			hint = "Right click a name on the list to take it off again.",
+		}
 	end
 	return {
+		kind = "note",
 		title = name,
 		color = ns.MailWho.Color(ns.MailWho.Of(name)),
-		{ ns.MailWho.Say(name) },
-		{ blank = true },
-		{ hint = "Click to send to them. Right click to take them off the list." },
+		lines = { ns.MailWho.Say(name) },
+		hint = "Click to send to them. Right click to take them off the list.",
 	}
 end
 
@@ -302,11 +305,11 @@ local function RailRow(index)
 	end)
 	button:SetScript("OnEnter", function(this)
 		Shade(this, true)
-		UI.Tooltip.Show(this, FavouriteTip(this))
+		ns.Tip.Open(this, FavouriteTip(this))
 	end)
 	button:SetScript("OnLeave", function(this)
 		Shade(this, false)
-		UI.Tooltip.Close()
+		ns.Tip.Close()
 	end)
 	UI.PassCamera(button)
 
@@ -352,16 +355,25 @@ end
 local function SlotTip(button)
 	local entry = ns.MailDraft.At(button.at)
 	if not entry then
-		return { title = "an empty slot",
-			{ "Drag something out of your bags onto the block." },
-			{ hint = ("Six to a line and twelve to a mail. Past twelve the addon sends more than one, up to %d.")
-				:format(ns.MailDraft.MAX) } }
+		return {
+			kind = "note",
+			title = "an empty slot",
+			lines = { "Drag something out of your bags onto the block." },
+			hint = ("Six to a line and twelve to a mail. Past twelve the addon sends more than one, up to %d.")
+				:format(ns.MailDraft.MAX),
+		}
 	end
-	return { item = entry.link, title = entry.name,
-		{ "count", tostring(entry.count) },
-		{ "mail", tostring(math.floor((button.at - 1) / ns.MailDraft.PerMail()) + 1) },
-		{ blank = true },
-		{ hint = "Right click to take it back off." } }
+	return {
+		kind = "item",
+		link = entry.link,
+		title = entry.name,
+		count = entry.count,
+		lines = {
+			{ "count", tostring(entry.count) },
+			{ "mail", tostring(math.floor((button.at - 1) / ns.MailDraft.PerMail()) + 1) },
+		},
+		hint = "Right click to take it back off.",
+	}
 end
 
 -- What is on the cursor, onto the end of the list. Onto the end rather than
@@ -398,11 +410,11 @@ local function GridSlot(index)
 	end)
 	button:SetScript("OnEnter", function(this)
 		UI.Tint(square.bg, C.control)
-		UI.Tooltip.Show(this, SlotTip(this))
+		ns.Tip.Open(this, SlotTip(this))
 	end)
 	button:SetScript("OnLeave", function()
 		UI.Tint(square.bg, C.sunken)
-		UI.Tooltip.Close()
+		ns.Tip.Close()
 	end)
 	UI.PassCamera(button)
 
@@ -583,37 +595,41 @@ local function LetterTip(button)
 	if not row then
 		return nil
 	end
-	local data = {
-		title = row.subject,
-		color = ns.MailWho.Color(ns.MailWho.Of(row.sender)),
+	local lines = {
 		{ "from", row.sender },
 		{ "expires", ("%d days"):format(math.floor(row.days)) },
 	}
 	if row.money > 0 then
-		data[#data + 1] = { "money", ns.Coin(row.money) }
+		lines[#lines + 1] = { "money", ns.Coin(row.money) }
 	end
 	for index = 1, #row.attachments do
 		local held = row.attachments[index]
-		data[#data + 1] = { held.name, held.count > 1 and ("x%d"):format(held.count) or "1" }
+		lines[#lines + 1] = { held.name, held.count > 1 and ("x%d"):format(held.count) or "1" }
 	end
 
 	local read = _G.GetInboxText
 	if type(read) == "function" then
 		local ok, text = pcall(read, row.index)
 		if ok and type(text) == "string" and text ~= "" then
-			data[#data + 1] = { blank = true }
-			data[#data + 1] = { text }
+			lines[#lines + 1] = { blank = true }
+			lines[#lines + 1] = { text }
 		end
 	end
-	data[#data + 1] = { blank = true }
+
+	local hint = "Nothing on it. The cross deletes it."
 	if not ns.MailInbox.Payable(row) then
-		data[#data + 1] = { hint = "Cash on delivery. This window will not pay one for you." }
+		hint = "Cash on delivery. This window will not pay one for you."
 	elseif ns.MailInbox.Holds(row) then
-		data[#data + 1] = { hint = "Click to take what is on it." }
-	else
-		data[#data + 1] = { hint = "Nothing on it. The cross deletes it." }
+		hint = "Click to take what is on it."
 	end
-	return data
+
+	return {
+		kind = "note",
+		title = row.subject,
+		color = ns.MailWho.Color(ns.MailWho.Of(row.sender)),
+		lines = lines,
+		hint = hint,
+	}
 end
 
 local function LetterAct(at, what)
@@ -628,7 +644,7 @@ local function LetterAct(at, what)
 	else
 		ns.MailInbox.Take(row.index)
 	end
-	UI.Tooltip.Close()
+	ns.Tip.Close()
 	Window.Paint()
 end
 
@@ -670,11 +686,11 @@ local function LetterRow(index)
 	end)
 	button:SetScript("OnEnter", function(this)
 		Shade(this, true)
-		UI.Tooltip.Show(this, LetterTip(this))
+		ns.Tip.Open(this, LetterTip(this))
 	end)
 	button:SetScript("OnLeave", function(this)
 		Shade(this, false)
-		UI.Tooltip.Close()
+		ns.Tip.Close()
 	end)
 	UI.PassCamera(button)
 

@@ -532,30 +532,18 @@ end
 -- addon makes.
 local function Hover(square, unit, filter)
 	square:EnableMouse(true)
-	square:SetScript("OnEnter", function(self)
-		if type(GameTooltip) ~= "table" then
-			return
-		end
+	ns.Tip.Hang(square, function(self)
 		-- A weapon enchant answers to the hand it is on rather than to an aura
-		-- index, which is the same call Blizzard's own enchant button makes:
+		-- index, which is the same question Blizzard's own enchant button asks:
 		-- the item's tooltip carries the enchant line.
-		local setter, subject = GameTooltip.SetUnitBuff, self.auraIndex
 		if self.auraGear then
-			setter, subject = GameTooltip.SetInventoryItem, self.auraGear
-		elseif filter == "HARMFUL" then
-			setter = GameTooltip.SetUnitDebuff
+			return { kind = "inventory", unit = unit, slot = self.auraGear }
 		end
-		if not subject or type(setter) ~= "function" then
-			return
+		if not self.auraIndex then
+			return nil
 		end
-		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		setter(GameTooltip, unit, subject)
-		GameTooltip:Show()
-	end)
-	square:SetScript("OnLeave", function()
-		if type(GameTooltip) == "table" and type(GameTooltip.Hide) == "function" then
-			GameTooltip:Hide()
-		end
+		return { kind = filter == "HARMFUL" and "debuff" or "buff",
+			unit = unit, index = self.auraIndex }
 	end)
 end
 

@@ -601,11 +601,12 @@ function Feed:BuildChips(specs)
 				-- loading, which is the same trap Feeds/Loot.lua builds its
 				-- loot patterns at login to avoid.
 				local tip = this.tip
-				UI.Tooltip.Show(this, { { type(tip) == "function" and tip() or tip } }, true)
+				ns.Tip.Open(this, { kind = "note",
+					lines = { type(tip) == "function" and tip() or tip } }, true)
 			end)
 			chip:SetScript("OnLeave", function(this)
 				UI.Tint(this.bg, C.control)
-				UI.Tooltip.Close()
+				ns.Tip.Close()
 			end)
 			UI.PassCamera(chip)
 			PaintChip(chip)
@@ -1089,7 +1090,7 @@ function Feed:Enter(index)
 	if not entry or not self.onTooltip then
 		return false
 	end
-	return UI.Tooltip.Show(row, self.onTooltip(entry))
+	return ns.Tip.Open(row, self.onTooltip(entry))
 end
 
 function Feed:Leave()
@@ -1101,7 +1102,7 @@ function Feed:Leave()
 		self.hovered = nil
 	end
 	self.hoveredEntry, self.hoveredAt = nil, nil
-	UI.Tooltip.Close()
+	ns.Tip.Close()
 	return true
 end
 

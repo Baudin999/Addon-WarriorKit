@@ -577,16 +577,12 @@ do
 		"an empty square draws the fallback question mark, so an unfilled bar reads as broken")
 	check(square.cooldown.cdDuration == 0, "an emptied square kept its swipe")
 
-	-- The tooltip. GameTooltip is the stub's PascalCase catch-all, so the three
-	-- calls are recorded here rather than read back off it: what matters is
-	-- that the square asks about its own slot and refuses to ask at all about
-	-- an empty one, and neither is visible any other way.
-	local asked, owner, dropped
-	local realAction, realOwner, realHide =
-		GameTooltip.SetAction, GameTooltip.SetOwner, GameTooltip.Hide
-	GameTooltip.SetAction = function(_, which) asked = which end
-	GameTooltip.SetOwner = function(_, of) owner = of end
-	GameTooltip.Hide = function() dropped = true end
+	-- The tooltip. The box is the addon's own and the words in it are still the
+	-- client's, read off a hidden one by UI/Scan.lua because the rank and the
+	-- cost are computed inside the game. Both halves are asserted, because
+	-- either alone is a passing test and a broken square.
+	local Tip = ns.UI.Tooltip
+	H.tooltips.action[seat] = { { "Heroic Strike" }, { "Rank 8", "12 rage" } }
 
 	-- Both scripts are checked for before either is called. A square that was
 	-- never given them answers nil here, and calling nil aborts the run with a
@@ -601,27 +597,30 @@ do
 	if enter then
 		enter(square)
 	end
-	check(asked == seat,
-		("hovering a square asked the tooltip about slot %s, not its own %d")
-			:format(tostring(asked), seat))
-	check(owner == square, "the tooltip is not anchored to the square you hovered")
+	check(Tip.IsShown(), "hovering a square opened nothing")
+	check(Tip.Owner() == square, "the tooltip is not anchored to the square you hovered")
+	check(Tip.Text(1) == "Heroic Strike",
+		("the square says %s and the client says Heroic Strike")
+			:format(tostring(Tip.Text(1))))
+	local rank, cost = Tip.Text(2)
+	check(rank == "Rank 8" and cost == "12 rage",
+		("the client's paired line came through as %s / %s")
+			:format(tostring(rank), tostring(cost)))
 	if leave then
 		leave(square)
 	end
-	check(dropped, "the tooltip stays up after the cursor has left the square")
+	check(not Tip.IsShown(), "the tooltip stays up after the cursor has left the square")
 
 	-- An empty slot fills nothing and would leave the last ability's tooltip on
 	-- screen anchored to a square that has none, which is worse than silence.
-	asked = nil
 	slots[seat] = nil
 	Bars.Update()
 	if enter then
 		enter(square)
 	end
-	check(asked == nil, "an empty square asks for a tooltip it cannot fill")
+	check(not Tip.IsShown(), "an empty square opened a tooltip it cannot fill")
 
-	GameTooltip.SetAction, GameTooltip.SetOwner, GameTooltip.Hide =
-		realAction, realOwner, realHide
+	H.tooltips.action[seat] = nil
 	slots[seat] = nil
 
 	--------------------------------------------------------------------------

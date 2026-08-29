@@ -281,10 +281,13 @@ local function Voicing()
 	local ok, why = ns.Voice.Supported()
 	local channel = ok and ns.Voice.Active()
 	return {
+		kind = "note",
 		title = "Voice",
-		{ ok and ns.Voice.Describe() or why },
-		{ channel and "Who is in it, and how loud each of them is."
-			or "Opens the client's own Chat Channels window." },
+		lines = {
+			{ ok and ns.Voice.Describe() or why },
+			{ channel and "Who is in it, and how loud each of them is."
+				or "Opens the client's own Chat Channels window." },
+		},
 	}
 end
 
@@ -530,22 +533,21 @@ local function BuildEntry()
 	ghost:SetPoint("RIGHT", -4, 0)
 	UI.Wrap(ghost, false)
 
-	-- True from the moment a key goes down carrying a line the client will only
-	-- run itself, until the field has finished with that press. It is what the
-	-- three handlers below use to tell "the client is running this" apart from
-	-- "this is mine to send", and it is read on the way down rather than asked
-	-- for afterwards because by then the line may already have run and handed
-	-- the key back, which from here looks exactly like it never had it.
-	local handed = false
-
-	edit:SetScript("OnTextChanged", function(self)
+	edit:SetScript("OnTextChanged", function(self, userInput)
 		local text = self:GetText() or ""
 		ghost:SetShown(text == "")
-		-- Not while the client has the press. Emptying the field is a text
-		-- change like any other, and a line handed over is emptied the instant
-		-- it is handed over, so this would read the empty field and take the
-		-- key back out from under the press that was about to run it.
-		if handed then
+		-- Only what you typed, and the client's own second argument is what
+		-- says so. The field empties itself after a press and fills itself when
+		-- a room is picked, and neither of those is you saying the line no
+		-- longer needs the key.
+		--
+		-- Read as if they were, the empty field after a press handed the key
+		-- straight back and the press had nothing left to land on. The log said
+		-- loaded and then handed back, one line under the other, with no press
+		-- between them. A flag held across the handler was tried first and is
+		-- not enough: it comes down at the end of the handler and the client
+		-- reports the focus going after that.
+		if not userInput then
 			return
 		end
 		-- The line goes on the enter key while you are still typing it, so the
@@ -575,29 +577,16 @@ local function BuildEntry()
 	-- One press needs a key of its own, with no field in front of it.
 	edit:SetScript("OnEnterPressed", function(self)
 		local text = self:GetText()
-		-- Up for the whole handler, and unconditionally, which is the repair
-		-- for the way this shipped. It was worked out from the text: if the key
-		-- is holding exactly what the field is holding then the client owns the
-		-- press. That is true and it is not the question. The question is what
-		-- may take the key back while the field tidies up after a press, and
-		-- the answer is nothing, whichever of the two put the line there.
-		--
-		-- Worked out from the text it came back false on a line the field and
-		-- the key disagreed about by a space, and the empty field underneath
-		-- then read as "no line here needs the key" and handed it back. The
-		-- press had nothing left to land on and the log said the key was
-		-- loaded, because it had been, right up until the field emptied.
-		handed = true
-		-- Already on the key, put there while it was being typed, so this press
-		-- is the client's rather than ours and there is nothing here to send.
-		local mine = ns.Compose.Armed() == nil
-			or ns.Compose.Armed() ~= ns.Compose.Secure(text)
-		if mine then
+		-- Nothing to send when the key is already carrying this line: it was put
+		-- there while you typed it, and sending would only load it again. A
+		-- reading that comes back wrong costs a redundant load and nothing
+		-- else, which is why it is allowed to be a comparison at all.
+		if ns.Compose.Armed() == nil
+			or ns.Compose.Armed() ~= ns.Compose.Secure(text) then
 			ChatWindow.Send(text)
 		end
 		self:SetText("")
 		self:ClearFocus()
-		handed = false
 	end)
 	edit:SetScript("OnEscapePressed", function(self)
 		self:SetText("")
@@ -606,20 +595,17 @@ local function BuildEntry()
 	edit:SetScript("OnEditFocusGained", function()
 		-- A click that lands on the field itself never goes through
 		-- ChatWindow.Focus, and it means the same thing that one does.
-		handed = false
 		ns.Compose.Disarm()
 		Light(box, true)
 	end)
+	-- The focus going takes nothing off the key, and that is deliberate rather
+	-- than an omission. Every way out of this field goes through here: the enter
+	-- that finishes the line, the escape that abandons it, a click elsewhere.
+	-- The first of those is the press the key was loaded for, and a handler that
+	-- cannot tell the three apart has to leave the key alone or it takes it back
+	-- from the one that needed it. Coming back to the field above is where a
+	-- change of mind is answered, and it is the only place that needs to be.
 	edit:SetScript("OnEditFocusLost", function()
-		-- Typing stopped without the enter that finishes the line, so the key
-		-- goes back to the window. Leaving it loaded would be an enter that
-		-- runs a half-forgotten command instead of opening the chat line.
-		--
-		-- A line that was handed over keeps the key, because the press that
-		-- took the focus away is the press that is going to run it.
-		if not handed then
-			ns.Compose.Disarm()
-		end
 		Light(box, false)
 	end)
 	edit:SetScript("OnHide", function(self)
@@ -651,9 +637,12 @@ local function Describe(row)
 	local kind, target = ns.Rooms.Target(row.id)
 	local waiting = row.unread or 0
 	return {
+		kind = "note",
 		title = row.label,
-		{ ns.Compose.Note(kind, target) },
-		waiting > 0 and { ("%d waiting"):format(waiting) } or nil,
+		lines = {
+			{ ns.Compose.Note(kind, target) },
+			waiting > 0 and { ("%d waiting"):format(waiting) } or nil,
+		},
 	}
 end
 
@@ -723,7 +712,7 @@ local function Build()
 	-- the same door, back on the window that hid it.
 	voice = UI.Button(window.frame, { label = "m", glyph = true,
 		onClick = function() ChatWindow.Voice() end })
-	UI.Tip(voice, Voicing)
+	ns.Tip.Hang(voice, Voicing)
 
 	-- The colour follows the service rather than a ticker: Chat/Voice.lua already
 	-- listens to every event that can move the answer, so it says when it moves.
@@ -1138,7 +1127,9 @@ function ChatWindow.Type(text)
 	entry.edit:SetText(text or "")
 	local changed = entry.edit:GetScript("OnTextChanged")
 	if changed then
-		changed(entry.edit)
+		-- As typed, which is the argument the field reads. SetText above is the
+		-- other kind and the field is right to ignore it.
+		changed(entry.edit, true)
 	end
 	return true
 end
@@ -1158,6 +1149,29 @@ function ChatWindow.Enter()
 	local pressed = entry.edit:GetScript("OnEnterPressed")
 	if pressed then
 		pressed(entry.edit)
+	end
+	return true
+end
+
+-- The focus going, on its own and after the fact, which is the shape the client
+-- reports it in and the shape that broke this.
+--
+-- The field clears its own focus at the end of a press. A flag held across that
+-- handler looks like it covers the focus going, and it does not: the flag comes
+-- down when the handler returns and the client says the focus went after that.
+-- So the handler ran against a flag that was already false, read the press as
+-- someone walking away from a half typed line, and handed the loaded key back
+-- with the press still in the air.
+--
+-- Public because that gap is a full frame wide on the client and zero wide in a
+-- stub that fires the script inside ClearFocus. Nothing else can open it.
+function ChatWindow.Blur()
+	if not built then
+		return false
+	end
+	local lost = entry.edit:GetScript("OnEditFocusLost")
+	if lost then
+		lost(entry.edit)
 	end
 	return true
 end

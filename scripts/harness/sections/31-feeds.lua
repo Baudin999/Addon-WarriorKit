@@ -649,7 +649,7 @@ do
 
 	print(("feeds  loot %s, combat %s; %d of %d loot sentences; tooltip %s")
 		:format(lootStream:Describe(), combatStream:Describe(), live, total,
-			ns.UI.Tooltip.Describe()))
+			ns.UI.Scan.Describe()))
 end
 
 -- Put away, because the sections after this one hover things of their own

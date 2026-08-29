@@ -112,14 +112,28 @@ UI\Scroll.lua
 # locals as it loads, the same as everything else on this layer.
 UI\Log.lua
 
-# The tooltip. Every hover in the addon went to GameTooltip until this existed,
-# which meant a parchment scroll with a gold border rising out of an interface
-# that has neither anywhere else. This is the addon's own: the theme's palette,
-# the shared font, the pixel grid, and a scanner that reads an item's real text
-# out of the client so a hovered item is drawn here rather than there. After
-# UI\Theme.lua for the palette and UI\Text.lua for the fonts, and before every
-# part that answers the mouse.
+# The tooltip, in three files. Every hover in the addon went to GameTooltip
+# until this existed, which meant a parchment scroll with a gold border rising
+# out of an interface that has neither anywhere else.
+#
+# Scan.lua is the only file in the addon that names GameTooltip. It points a
+# hidden one at an item, an action slot or an aura and reads the font strings
+# back, because the stats, the rank and the cost are computed inside the game
+# and no API hands them over.
+#
+# Tooltip.lua is the box: the theme's palette, the shared font, the pixel grid,
+# and a list of lines drawn on it.
+#
+# Tip.lua is what goes in the box. A hover names a subject, this works out what
+# the whole addon has to say about it, and a part hooks a line of its own in by
+# calling ns.Tip.Source once at load. It loads after the box because it calls
+# it, and before every part because every part registers into it.
+#
+# All three after UI\Theme.lua for the palette and UI\Text.lua for the fonts,
+# and before every part that answers the mouse.
+UI\Scan.lua
 UI\Tooltip.lua
+UI\Tip.lua
 
 # A column of things that happened, newest at the top, older below it, scrolled
 # by the wheel. It is not UI\Log.lua, which holds strings and cannot carry an
@@ -396,6 +410,13 @@ Feeds\Purse.lua
 #
 # Before Loot.lua because the loot feed's tooltip is the only thing that asks.
 Feeds\Auction.lua
+
+# What an item is worth, on every tooltip in the addon rather than on loot rows
+# alone. One source registered into ns.Tip against the item kind: the vendor
+# price, the stack that price comes to, and whatever Auction.lua's scanner says
+# it goes for. After Auction.lua, which it asks, and before Loot.lua, which
+# hands it the price it recorded when the item dropped.
+Feeds\Worth.lua
 Feeds\Loot.lua
 Feeds\Combat.lua
 Feeds\Feature.lua

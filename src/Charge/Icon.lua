@@ -161,22 +161,20 @@ local function Build()
 		ns.db.point = { point, "UIParent", relativePoint, x, y }
 	end)
 
-	handle:SetScript("OnEnter", function(self)
-		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+	ns.Tip.Hang(handle, function()
 		local key, unit = ns.Charge.Pick()
-		GameTooltip:AddLine(ns.Charge.Name(key) or key)
+		local at = "hover a party member or a mob"
 		if unit and UnitExists(unit) then
-			GameTooltip:AddLine(UnitName(unit) or "?", 0.8, 0.8, 0.8)
+			at = UnitName(unit) or "?"
 		elseif key == "charge" then
-			GameTooltip:AddLine("nothing in view", 0.8, 0.8, 0.8)
-		else
-			GameTooltip:AddLine("hover a party member or a mob", 0.8, 0.8, 0.8)
+			at = "nothing in view"
 		end
-		GameTooltip:AddLine("drag to move it", 0.8, 0.8, 0.8)
-		GameTooltip:Show()
-	end)
-	handle:SetScript("OnLeave", function()
-		GameTooltip:Hide()
+		return {
+			kind = "note",
+			title = ns.Charge.Name(key) or key,
+			lines = { at },
+			hint = "Drag to move it.",
+		}
 	end)
 end
 

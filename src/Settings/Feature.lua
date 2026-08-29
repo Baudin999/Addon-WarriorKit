@@ -75,5 +75,15 @@ ns.Register({
 		end, function()
 			return Settings.Snap(ns.db.uiSize) ~= ns.DefaultFor("uiSize")
 		end)
+
+		-- Here rather than on the feeds page, where the first of these two used
+		-- to live. It was a per-feed reading of an addon-wide fact, printed
+		-- twice, and it stopped being about feeds the moment every hover in the
+		-- addon started going through the same box.
+		ui.Section("Hovers", "The screen")
+		ui.Lede("Every hover in the addon opens the same box, in the same palette as this window. There is no setting here; both lines say what it can do on this client.")
+
+		ui.Reading("the client's own text", ns.UI.Scan.Describe)
+		ui.Reading("hooked into a hover", ns.Tip.Describe)
 	end,
 })

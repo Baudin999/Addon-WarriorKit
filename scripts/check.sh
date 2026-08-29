@@ -449,6 +449,30 @@ done <<HOTEOF
 $HOT
 HOTEOF
 
+# One file talks to Blizzard's tooltip, and it is UI/Scan.lua.
+#
+# The addon draws its own tooltip: a flat box, the theme's palette, Arial
+# Narrow, one physical pixel of edge. GameTooltip is a tiled parchment with a
+# gold border drawn off a corner sheet. Every file that named GameTooltip put
+# one of those on the screen beside the other, and there were six of them: the
+# action squares, the aura squares, the chat log's links, the minimap clock, the
+# meter header and the charge icon. Nothing was wrong at any one site, which is
+# exactly why it went on for six files.
+#
+# The stats, the rank, the cost and the enchant line are computed inside the
+# game and no API hands them over, so reading them off a hidden GameTooltip is
+# the only supported way to get at them. UI/Scan.lua does that and hands the
+# text back as data. Every other file asks for a subject and gets the addon's
+# own box.
+#
+# Comments are read too, on purpose. A file explaining what it does to
+# GameTooltip is a file that thinks it still owns one.
+while IFS= read -r bad; do
+	echo "only UI/Scan.lua may name GameTooltip, and this is a tooltip drawn in two designs: $bad"
+	status=1
+done < <(grep -rn 'GameTooltip' --include='*.lua' . \
+	| grep -v '^\./UI/Scan\.lua:' || true)
+
 # A ticker in a file HOT says nothing about is a ticker nothing above checked.
 while IFS= read -r f; do
 	f="${f#./}"
@@ -712,7 +736,7 @@ HARNESS_LINE_LIMIT=800
 
 # path:ceiling:why it is exempt
 HARNESS_LINE_ALLOWED="
-sections/05-action-bars.lua:1053:one subject, five bars; splits at the keys, the paging and the churn
+sections/05-action-bars.lua:1052:one subject, five bars; splits at the keys, the paging and the churn
 "
 
 harness_names='

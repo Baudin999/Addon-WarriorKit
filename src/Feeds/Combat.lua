@@ -115,21 +115,22 @@ local seen, ignored = 0, 0
 --------------------------------------------------------------------------
 
 local function Marker(entry)
-	local data = {
-		title = entry.name,
-		color = (entry.mark == "in") and IN or C.dim,
+	local lines = {
 		{ (entry.mark == "in")
 			and "A fight started here. Everything above this line is the same pull."
 			or "A fight ended here. Everything below this line was the pull before." },
 		{ "At", ns.Stream.Clock(entry.at) },
 	}
 	if entry.amount and entry.amount ~= "" then
-		data[#data + 1] = { "Lasted", entry.amount }
+		lines[#lines + 1] = { "Lasted", entry.amount }
 	end
-	data[#data + 1] = { blank = true }
-	data[#data + 1] = { hint = "A break in the feed rather than something that"
-		.. " happened to you." }
-	return data
+	return {
+		kind = "note",
+		title = entry.name,
+		color = (entry.mark == "in") and IN or C.dim,
+		lines = lines,
+		hint = "A break in the feed rather than something that happened to you.",
+	}
 end
 
 local function Fill(entry)
@@ -137,35 +138,36 @@ local function Fill(entry)
 		return Marker(entry)
 	end
 
-	local data = {
-		title = entry.name or "?",
-		color = entry.color,
-	}
+	local lines = {}
 	if entry.subevent then
-		data[#data + 1] = { "Event", entry.subevent }
+		lines[#lines + 1] = { "Event", entry.subevent }
 	end
 	if entry.source then
-		data[#data + 1] = { "From", entry.source }
+		lines[#lines + 1] = { "From", entry.source }
 	end
 	if entry.dest then
-		data[#data + 1] = { "To", entry.dest }
+		lines[#lines + 1] = { "To", entry.dest }
 	end
 	if entry.value then
-		data[#data + 1] = { entry.healed and "Healed" or "Damage",
+		lines[#lines + 1] = { entry.healed and "Healed" or "Damage",
 			tostring(entry.value), tone = entry.crit and CRIT or nil }
 	end
 	if entry.crit then
-		data[#data + 1] = { "A critical.", color = CRIT }
+		lines[#lines + 1] = { "A critical.", color = CRIT }
 	end
 	if entry.wasted and entry.wasted > 0 then
-		data[#data + 1] = { entry.healed and "Overheal" or "Overkill",
+		lines[#lines + 1] = { entry.healed and "Overheal" or "Overkill",
 			tostring(entry.wasted), tone = MISS }
 	end
 
-	data[#data + 1] = { blank = true }
-	data[#data + 1] = { hint = "Scroll the feed for what happened before this."
-		.. " /wk feed combat for the rest." }
-	return data
+	return {
+		kind = "note",
+		title = entry.name or "?",
+		color = entry.color,
+		lines = lines,
+		hint = "Scroll the feed for what happened before this."
+			.. " /wk feed combat for the rest.",
+	}
 end
 
 local stream = ns.Stream.New({

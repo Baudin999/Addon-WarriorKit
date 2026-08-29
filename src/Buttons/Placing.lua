@@ -216,17 +216,16 @@ function Place.Handle(entry)
 		Place.Put(entry)
 	end)
 
-	handle:SetScript("OnEnter", function(self)
-		GameTooltip:SetOwner(self, "ANCHOR_TOP")
-		GameTooltip:AddLine(entry.def.label)
-		GameTooltip:AddLine("drag to move it", 0.8, 0.8, 0.8)
-		GameTooltip:AddLine(ns.BarLook.Shape(entry.def), 0.8, 0.8, 0.8)
-		GameTooltip:AddLine(ns.BarLook.Hours(entry.def), 0.8, 0.8, 0.8)
-		GameTooltip:AddLine("/wk actionbars where prints it for the plan", 0.8, 0.8, 0.8)
-		GameTooltip:Show()
-	end)
-	handle:SetScript("OnLeave", function()
-		GameTooltip:Hide()
+	ns.Tip.Hang(handle, function()
+		return {
+			kind = "note",
+			title = entry.def.label,
+			lines = {
+				{ ns.BarLook.Shape(entry.def) },
+				{ ns.BarLook.Hours(entry.def) },
+			},
+			hint = "Drag to move it. /wk actionbars where prints the plan.",
+		}
 	end)
 end
 

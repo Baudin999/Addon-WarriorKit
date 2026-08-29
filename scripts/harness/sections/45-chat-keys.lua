@@ -203,6 +203,17 @@ check(_G.GetBindingAction("ENTER", true) == "CLICK WarriorKitChatSecureButton:Le
 		:format(tostring(_G.GetBindingAction("ENTER", true))))
 check(Window.Line() == "",
 	("the field still reads %q after the line was finished"):format(Window.Line()))
+
+-- And the focus going late, which is how the client reports it and is what took
+-- the key back with the press still in the air. The log said loaded and then
+-- handed back, one line under the other, with no press between them.
+Window.Blur()
+check(Compose.Armed() == "/logout",
+	("the focus going after the press left the key holding %s")
+		:format(tostring(Compose.Armed())))
+check(_G.GetBindingAction("ENTER", true) == "CLICK WarriorKitChatSecureButton:LeftButton",
+	("enter is on %q once the focus has gone")
+		:format(tostring(_G.GetBindingAction("ENTER", true))))
 -- And the same on a line the field did not put there itself. Handover loads the
 -- key from inside the press rather than before it, so the field has no text to
 -- compare against and the old reading came back false here too.
@@ -211,6 +222,7 @@ Window.Type("")
 Window.Send("/logout")
 check(Compose.Armed() == "/logout", "the handover did not load the key")
 Window.Enter()
+Window.Blur()
 check(Compose.Armed() == "/logout",
 	("the press left the key holding %s after a handover")
 		:format(tostring(Compose.Armed())))
@@ -218,6 +230,34 @@ check(Compose.Armed() == "/logout",
 -- And the line goes when the client runs it.
 _G.WarriorKitChatSecureButton:Click("LeftButton", true)
 check(Compose.Armed() == nil, "the line ran and the enter key was left loaded")
+Window.Focus()
+Window.Type("")
+
+-- The log, driven rather than read.
+--
+-- It is an instrument in the click path and in the typing path, which is the
+-- two places in this addon where an instrument has already broken what it was
+-- measuring once. So the word that turns it on is run here as a player runs it,
+-- and every line it writes is written with it on. A debug switch that throws is
+-- a debug switch that costs you the evening you turned it on to save.
+_G.SlashCmdList.WARRIORKIT("chat debug on")
+check(ns.db.chatDebug == true,
+	("the word left the log %s"):format(tostring(ns.db.chatDebug)))
+check(Window.Shown(), "turning the log on closed the chat window")
+
+Window.Focus()
+Window.Type("/logout")
+check(Compose.Armed() == "/logout", "nothing was loaded with the log on")
+Window.Enter()
+check(Compose.Armed() == "/logout", "the press with the log on left the key empty")
+_G.WarriorKitChatSecureButton:Click("LeftButton", true)
+check(Compose.Armed() == nil, "the press with the log on left the key loaded")
+check(Window.Shown(), "a press with the log on closed the chat window")
+
+_G.SlashCmdList.WARRIORKIT("chat debug off")
+check(ns.db.chatDebug == false,
+	("the word left the log %s"):format(tostring(ns.db.chatDebug)))
+check(Window.Shown(), "turning the log off closed the chat window")
 Window.Focus()
 Window.Type("")
 
@@ -298,5 +338,19 @@ _G.WarriorKitBindings.OPENCHAT = wasChat
 ns.db.hideBlizzChat = heldBlizz
 Window.Keys()
 
-print(("chatkey %d words the client keeps to itself, loaded onto the chat key while you type and run on the down edge of a press the field is not holding")
+-- The client's own list and ours, unioned rather than one replacing the other.
+-- /follow is the client's alone and /petattack is ours alone, and both have to
+-- come back as a line for the key, or a word one side names has been dropped.
+check(Compose.Secure("/follow Bob") == "/follow Bob",
+	"a word only the client's IsSecureCmd names did not take the key")
+check(Compose.Secure("/petattack") == "/petattack",
+	"a word only our own list names did not take the key")
+check(Compose.Secure("/dance") == nil,
+	"a word neither side names took the key it does not need")
+-- The alias is asked ahead of the client, because the client has never heard
+-- of /exit and would answer no about the one line that needs the key most.
+check(Compose.Secure("/exit") == "/quit",
+	"/exit did not come back as the client's own word for leaving")
+
+print(("chatkey the client's own IsSecureCmd over %d words of our own, loaded onto the chat key while you type and run on the down edge of a press the field is not holding")
 	:format(Compose.Words()))

@@ -113,7 +113,7 @@ local function Detail(w)
 end
 
 local function Hover(w)
-	ns.UI.Tip(w, function()
+	ns.Tip.Hang(w, function()
 		local entry = w.entry
 		-- A square with nothing to say describes nothing, and a tooltip handed
 		-- nothing does not open. Without that the previous square's sentence
@@ -122,10 +122,10 @@ local function Hover(w)
 			return nil
 		end
 		return {
+			kind = "note",
 			title = entry.name,
-			color = ns.UI.Color.text,
-			{ Detail(w) },
-			{ hint = Silencer(entry) },
+			lines = { Detail(w) },
+			hint = Silencer(entry),
 		}
 	end)
 end

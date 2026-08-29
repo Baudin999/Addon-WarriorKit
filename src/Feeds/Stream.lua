@@ -298,10 +298,10 @@ function Instance:BuildStatus()
 
 	if self.onStatusTooltip then
 		strip:SetScript("OnEnter", function()
-			UI.Tooltip.Show(strip, self.onStatusTooltip())
+			ns.Tip.Open(strip, self.onStatusTooltip())
 		end)
 		strip:SetScript("OnLeave", function()
-			UI.Tooltip.Close()
+			ns.Tip.Close()
 		end)
 	end
 	return true

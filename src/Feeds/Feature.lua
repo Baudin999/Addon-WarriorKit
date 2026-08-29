@@ -414,8 +414,6 @@ local function SharedPage(ui, entry)
 		end)
 	ui.Hint("On, a hover opens the row's tooltip and the wheel scrolls back. Off, the wheel goes past it to the camera.")
 
-	ui.Reading("the mouse", ns.UI.Tooltip.Describe)
-
 	ui.Action(function() return "put the " .. lower .. " feed back" end, function()
 		entry.stream:Reset({ entry.point[1], entry.point[2], entry.point[3],
 			entry.point[4], entry.point[5] })

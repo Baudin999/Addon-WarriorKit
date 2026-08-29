@@ -185,14 +185,18 @@ end
 -- That is the path a fight leaves, and the path a slash word of ours takes.
 --------------------------------------------------------------------------
 
--- One entry per slash word whose command ends in a protected call. Everything
--- else goes to the client's parser above and arrives in one press, because
--- /dance and /join are nobody's protected business.
+-- One entry per slash word whose command ends in a protected call, for a client
+-- that cannot be asked. This is the floor, not the answer: Asked below puts the
+-- client's own IsSecureCmd over the top of it, and a word either of them names
+-- takes the key.
+--
+-- Everything not named goes to the client's parser above and arrives in one
+-- press, because /dance and /join are nobody's protected business.
 --
 -- A word listed here that turns out not to need it costs one extra key press
 -- and nothing else, so the list errs long. A word missing from it costs the
--- blocked action this section exists to stop, so add to it when a command comes
--- back as a red line rather than as what you typed.
+-- blocked action this section exists to stop, which is why the client is asked
+-- first and this is only ever added to, never subtracted from.
 local SECURE = {
 	-- Leaving: Logout() and Quit().
 	logout = true, camp = true, quit = true, exit = true,
@@ -226,6 +230,38 @@ local ALIAS = {
 	exit = "/quit",
 }
 
+-- Whether the client would refuse this word from us.
+--
+-- IsSecureCmd is the client's own answer to exactly this question: it is the
+-- table ChatEdit_ParseText consults before it decides whether a typed line is
+-- the client's work or the parser's, so a word it names is a word that ends in
+-- a protected call, and a word it does not name is one no amount of guessing
+-- here will make protected. Prat asks it on every line it touches rather than
+-- keeping a list, which is how a chat addon ships without a /logout bug.
+--
+-- Asked with the slash on the front, because that is the shape the client's
+-- own list is keyed on, and the client uppercases it itself.
+--
+-- The union rather than the answer. The list above is a floor: if the client
+-- says no about a word we already name, the cost of believing it is the blocked
+-- action this whole section exists to stop, and the cost of not believing it is
+-- one extra key press. Nothing here can narrow the list, only widen it, and
+-- widening is what a live client is here for. It picks up the words we never
+-- thought of and the ones this client spells in another language.
+--
+-- pcalled and type checked like every other client call in this file, because
+-- a client without the function has to fall through to the list rather than
+-- throw inside the field's OnTextChanged, where a throw is a dead enter key.
+local function Asked(word)
+	if type(_G.IsSecureCmd) == "function" then
+		local ok, secure = pcall(_G.IsSecureCmd, "/" .. word)
+		if ok and secure then
+			return true
+		end
+	end
+	return SECURE[word] and true or false
+end
+
 --------------------------------------------------------------------------
 -- The debug log
 --
@@ -246,11 +282,22 @@ local ALIAS = {
 -- that breaks what it measures is worse than no instrument.
 --------------------------------------------------------------------------
 
+-- pcalled, and that is not belt and braces. ns.Print goes to the window this
+-- writes from inside: the load line is written from the field's own
+-- OnTextChanged and the arrived line from inside a click, and printing appends a
+-- line to the log a few frames under the cursor that raised it. An instrument
+-- reaching back into the thing it measures is how Hover/Cast.lua lost four
+-- settings, and with scriptErrors off, which is how it ships, a throw in here
+-- takes the handler with it and says nothing at all.
+--
+-- So the log cannot be the reason anything stopped working. Silence from a
+-- debug line is a debug line that failed; silence from the addon is a bug.
 local function Log(fmt, ...)
 	if not (ns.db and ns.db.chatDebug) then
 		return
 	end
-	ns.Print("|cff808080chatkey|r " .. (select("#", ...) > 0 and fmt:format(...) or fmt))
+	pcall(ns.Print, "|cff808080chatkey|r "
+		.. (select("#", ...) > 0 and fmt:format(...) or fmt))
 end
 
 local BUTTON_NAME = "WarriorKitChatSecureButton"
@@ -441,9 +488,12 @@ function Compose.Armed()
 	return armed
 end
 
--- How many slash words are on the list of ones the client will not take from
--- us. A count rather than the table, because the table is the thing that has to
--- err long and a caller that could read it is a caller that could shorten it.
+-- How many slash words this file names itself, for a client that cannot be
+-- asked. Not the whole list any more: a live client answers IsSecureCmd and
+-- the words it names on top of these never appear in this count.
+--
+-- A count rather than the table, because the table is the thing that has to err
+-- long and a caller that could read it is a caller that could shorten it.
 function Compose.Words()
 	local n = 0
 	for _ in pairs(SECURE) do
@@ -471,7 +521,14 @@ function Compose.Secure(text)
 	end
 	local word, rest = text:match("^/(%a+)(.*)$")
 	word = word and word:lower()
-	if not word or not SECURE[word] then
+	if not word then
+		return nil
+	end
+	-- The alias is checked ahead of the client, and it has to be. /exit is
+	-- nobody's command here, so IsSecureCmd is asked about a word its list has
+	-- never heard of and rightly says no, and the line that needs the key most
+	-- would be the one line that never got it.
+	if not ALIAS[word] and not Asked(word) then
 		return nil
 	end
 	-- The alias replaces the word and keeps what was typed after it, so a
@@ -584,10 +641,13 @@ function Compose.Send(text, kind, target)
 
 	local channel, who, body = Compose.Parse(text, kind, target)
 	if not channel then
-		local word = text:match("^/(%a+)")
-		word = word and word:lower()
-		if word and SECURE[word] then
-			return Handover(ALIAS[word] or text)
+		-- Through Compose.Secure rather than reading the list here. Two
+		-- callers asking the same question two ways is how a word ends up
+		-- secure on the enter key and not secure on a slash word of ours, and
+		-- the alias translation lives in there with it.
+		local line = Compose.Secure(text)
+		if line then
+			return Handover(line)
 		end
 		return SendSlash(text)
 	end

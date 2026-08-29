@@ -121,18 +121,17 @@ end
 -- does not show is a hover away rather than gone.
 local function Hover(w)
 	w:EnableMouse(true)
-	w:SetScript("OnEnter", function(self)
-		GameTooltip:SetOwner(self, "ANCHOR_TOP")
-		GameTooltip:AddLine(date("%A, %d %B %Y"), 1, 0.82, 0.20)
-		GameTooltip:AddDoubleLine("Local", Clock.Reading(), 1, 1, 1, 1, 1, 1)
+	ns.Tip.Hang(w, function()
+		local lines = { { "Local", Clock.Reading() } }
 		local realm = Clock.Realm()
 		if realm then
-			GameTooltip:AddDoubleLine("Realm", realm, 1, 1, 1, 1, 1, 1)
+			lines[#lines + 1] = { "Realm", realm }
 		end
-		GameTooltip:Show()
-	end)
-	w:SetScript("OnLeave", function()
-		GameTooltip:Hide()
+		return {
+			kind = "note",
+			title = date("%A, %d %B %Y"),
+			lines = lines,
+		}
 	end)
 end
 

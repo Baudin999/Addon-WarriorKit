@@ -677,13 +677,13 @@ local function InstallProse(kit, ctx)
 			if enter then
 				enter(self, ...)
 			end
-			UI.Tooltip.Show(self, { { self.hint } })
+			ns.Tip.Open(self, { kind = "note", lines = { self.hint } })
 		end)
 		owner:SetScript("OnLeave", function(self, ...)
 			if leave then
 				leave(self, ...)
 			end
-			UI.Tooltip.Close()
+			ns.Tip.Close()
 		end)
 		UI.PassCamera(owner)
 		return owner

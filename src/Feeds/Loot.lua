@@ -319,80 +319,43 @@ end
 -- The tooltip
 --
 -- The item's own text where the client will hand it over, which is the whole
--- reason UI/Tooltip.lua carries a scanner, and the item's name in its quality
--- colour where it will not. Either way the facts the feed knows and the item
--- does not go underneath.
+-- reason UI/Scan.lua exists, and the item's name in its quality colour where it
+-- will not. Either way the facts the feed knows and the item does not go
+-- underneath.
 --
--- **What an item is worth is two numbers and they answer different questions.**
--- The vendor price is what the merchant hands you and it is a fact the client
--- holds: it is on the item's own tooltip already, in copper, per item, and the
--- thing it does not say is what a stack of eleven silk cloth is worth, which is
--- the number you actually want when deciding whether to walk back. The auction
--- price is not a fact the client holds at all; it comes out of whichever
--- scanner the player has installed, and it is the difference between vendoring
--- a green and posting it. See Feeds/Auction.lua for who is asked and why the
--- line names them.
---
--- **Neither line appears when there is nothing true to put on it.** An item the
--- client has not cached has no vendor price and gets no vendor line, which is
--- not the same as a price of zero: an item a vendor will not take is a real
--- thing and says so in words. A client with no auction addon gets no auction
--- line and no note about it, because a tooltip is not the place to advertise
--- somebody else's addon.
+-- What the item is worth is not here. It is Feeds/Worth.lua, registered against
+-- every item hovered anywhere in the addon, because a mail attachment and a
+-- link in chat deserve the same two lines a loot row gets. The one thing this
+-- file still has to say about the money is the price it recorded when the item
+-- dropped, handed over on the subject: the client answers about something in
+-- your bags and goes quiet about one you have already sold.
 --------------------------------------------------------------------------
 
--- The vendor's two lines: what one is worth, and what the stack came to.
---
--- The stack line only appears where it says something the first does not, which
--- is a stack of more than one that a vendor will actually pay for.
-local function Vendor(data, entry)
-	local price = entry.price
-	if not price then
-		return false
-	end
-	if price <= 0 then
-		data[#data + 1] = { "Vendor", "will not take it", tone = C.quiet }
-		return true
-	end
-
-	data[#data + 1] = { "Vendor", ns.Coin(price) }
-	if (entry.count or 1) > 1 then
-		data[#data + 1] = { ("Stack of %d"):format(entry.count),
-			ns.Coin(price * entry.count), tone = C.heading }
-	end
-	return true
-end
-
 local function Fill(entry)
-	local data = {
-		item = entry.link,
-		title = entry.name or "?",
-		color = entry.color,
-		{ blank = true },
-	}
+	local lines = {}
 
 	if entry.quest then
-		data[#data + 1] = { "Quest item", color = QUEST }
+		lines[#lines + 1] = { "Quest item", color = QUEST }
 	end
-
-	Vendor(data, entry)
-
-	local going, scanner = ns.Auction.Price(entry.link)
-	if going then
-		data[#data + 1] = { scanner, ns.Coin(going), tone = C.accent }
-	end
-
-	data[#data + 1] = { blank = true }
-	data[#data + 1] = { "Looted", ns.Stream.Clock(entry.at) }
+	lines[#lines + 1] = { "Looted", ns.Stream.Clock(entry.at) }
 	if (entry.count or 1) > 1 then
-		data[#data + 1] = { "Stack", tostring(entry.count) }
+		lines[#lines + 1] = { "Stack", tostring(entry.count) }
 	end
 	if entry.who then
-		data[#data + 1] = { "Went to", entry.who }
+		lines[#lines + 1] = { "Went to", entry.who }
 	end
-	data[#data + 1] = { hint = "Scroll the feed for what dropped before this."
-		.. " /wk feed loot for the rest." }
-	return data
+
+	return {
+		kind = "item",
+		link = entry.link,
+		title = entry.name or "?",
+		color = entry.color,
+		count = entry.count,
+		price = entry.price,
+		lines = lines,
+		hint = "Scroll the feed for what dropped before this."
+			.. " /wk feed loot for the rest.",
+	}
 end
 
 --------------------------------------------------------------------------

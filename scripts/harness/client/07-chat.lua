@@ -63,6 +63,23 @@ _G.ChatEdit_SendText = function(box)
 	chat.slash[#chat.slash + 1] = box:GetText()
 end
 
+-- The client's own answer to whether a slash word ends in a protected call.
+-- The real one reads hash_SecureCmdList and uppercases what it is given, so
+-- this is keyed the same way and Chat/Compose.lua's caller hands it a slash.
+--
+-- Deliberately not the same set as Compose's own list. /petattack is on ours
+-- and missing here, and /follow is here and missing from ours, so a run proves
+-- the union widens rather than replaces: both words have to take the key.
+_G.WarriorKitSecureCmds = {
+	["/LOGOUT"] = true, ["/QUIT"] = true, ["/CAMP"] = true,
+	["/CAST"] = true, ["/USE"] = true, ["/TARGET"] = true,
+	["/FOLLOW"] = true,
+}
+_G.IsSecureCmd = function(command)
+	return type(command) == "string"
+		and _G.WarriorKitSecureCmds[command:upper()] == true
+end
+
 _G.SetItemRef = function(link) chat.link = link end
 _G.SOUNDKIT = { TELL_MESSAGE = 3081 }
 _G.PlaySound = function(id) chat.sound = id end

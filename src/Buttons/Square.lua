@@ -47,22 +47,36 @@ ns.Square = Square
 -- it is what a press would actually reach, whether Lua wrote it or the stance
 -- snippet did.
 --
--- Refused for an empty slot rather than left to SetAction. SetAction on a slot
--- with nothing in it fills nothing and leaves whatever the last tooltip said on
--- screen, anchored to a square that has no ability, which is worse than no
--- tooltip at all.
+-- Refused for an empty slot rather than left to the client. Asking for the text
+-- of a slot with nothing in it comes back with nothing, and a hover that draws
+-- nothing leaves whatever the last tooltip said on screen, anchored to a square
+-- that has no ability, which is worse than no tooltip at all.
+--
+-- The box is the addon's own. The words in it are still the client's, read off
+-- a hidden tooltip by UI/Scan.lua, because the rank, the cost and the range on
+-- an action slot are computed inside the game and nothing hands them over as
+-- data. So a square says exactly what Blizzard's own square would have said,
+-- drawn in the same chrome as everything else this addon puts on the screen.
+--
+-- The scripts are hung here rather than through ns.Tip.Hang, and the difference
+-- is the one thing Hang does for free: it hands the right and middle buttons
+-- back to the camera. That is right for everything else in the addon you can
+-- hover and wrong here. A right click on an action square casts, and a square
+-- that let the button through to the world would turn the camera instead of
+-- pressing the ability.
 local function Tooltip(w)
 	w:SetScript("OnEnter", function(self)
 		local slot = self:GetAttribute("action")
 		if not slot or not ns.Slot.Texture(slot) then
+			-- Closed rather than left alone. Without this the last square's
+			-- text stays on screen pointing at one with nothing in it.
+			ns.Tip.Close()
 			return
 		end
-		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:SetAction(slot)
-		GameTooltip:Show()
+		ns.Tip.Open(self, { kind = "action", slot = slot })
 	end)
 	w:SetScript("OnLeave", function()
-		GameTooltip:Hide()
+		ns.Tip.Close()
 	end)
 end
 

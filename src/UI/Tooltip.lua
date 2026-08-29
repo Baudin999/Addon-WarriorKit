@@ -6,9 +6,9 @@ local C, M = UI.Color, UI.Metric
 --------------------------------------------------------------------------
 -- The tooltip
 --
--- Every hover in this addon has gone to GameTooltip until now, and that was
--- always the wrong surface for it. GameTooltip is Blizzard's parchment: a
--- tiled background asset, a gold border drawn from a corner sheet, Friz
+-- Every hover in this addon went to the client's own tooltip until this
+-- existed, and that was always the wrong box for it. Blizzard's is a
+-- parchment: a tiled background asset, a gold border drawn from a corner sheet, Friz
 -- Quadrata at whatever size the client's own tooltip scale says, and a shape
 -- this addon has spent its whole life replacing everywhere else. A window with
 -- a one pixel edge and Arial Narrow on it that raises a parchment scroll when
@@ -39,24 +39,15 @@ local C, M = UI.Color, UI.Metric
 -- can do in the wrong order, and the one that mattered, whether a title had
 -- been written, was bookkeeping every caller had to get right.
 --
--- **What it cannot do, and what it does about it.** An item's text is the
--- client's: the stats, the requirements, the sell price and the six coloured
--- lines under them are computed inside the game and there is no API that hands
--- them over as data. The supported way to read them is to point a tooltip of
--- your own at the link and read the font strings it filled in, which is what
--- `item` in the schema does. That tooltip needs GameTooltipTemplate, which is
--- the one template this file touches and the reason it is probed rather than
--- assumed: a client that refuses it costs the redraw and falls back to the
--- title the caller gave, because a name in the right chrome is a great deal
--- better than an item with no text at all.
+-- **It draws, and it decides nothing.** What a tooltip says about the thing you
+-- hovered is UI/Tip.lua's, and the client's own text for that thing is
+-- UI/Scan.lua's. This file takes the finished description and puts it on the
+-- screen. Three files rather than one because they change for different
+-- reasons: the box changes when the theme does, the registry changes when a
+-- part has something new to say, and the scanner changes when a client does.
 --------------------------------------------------------------------------
 
 local FRAME_NAME = "WarriorKitTooltip"
-
--- The scanner's name is load bearing. A GameTooltip's lines are reachable only
--- as globals built from the frame's own name, so a nameless one has text on it
--- that nothing can read.
-local SCAN_NAME = "WarriorKitTooltipScan"
 
 -- Every number here is a unit, which is one physical pixel inside a frame
 -- ns.UI.Adopt has taken onto the grid, and a whole block of them above zoom 1.
@@ -103,62 +94,6 @@ local count = 0
 local widest = 0
 local titled = false
 local zoom = 1
-
---------------------------------------------------------------------------
--- Reading an item out of the client
---
--- Probed once and remembered, because the answer cannot change inside a
--- session and the alternative is a pcall on a CreateFrame on every hover.
---------------------------------------------------------------------------
-
-local scanner
-local scannable
-
--- Whether a scan has ever actually come back with text on it. Three states and
--- all three are different: nil is nothing has been hovered, false is the frame
--- was made and answered nothing, true is it worked. Kept apart because
--- "refused" and "answered nothing" have different fixes and a Describe that
--- reported the probe rather than the outcome would claim the first was the
--- second.
-local scanned
-
-local function Scanner()
-	if scannable ~= nil then
-		return scanner
-	end
-
-	scannable = false
-	local made, tip = pcall(CreateFrame, "GameTooltip", SCAN_NAME, UIParent, "GameTooltipTemplate")
-	if made and tip and type(tip.SetHyperlink) == "function" and type(tip.NumLines) == "function" then
-		-- ANCHOR_NONE and never shown. This frame exists to be written to and
-		-- read back, and one that anchored itself to the cursor would flash a
-		-- second tooltip on every hover.
-		if type(tip.SetOwner) == "function" then
-			tip:SetOwner(UIParent, "ANCHOR_NONE")
-		end
-		scanner, scannable = tip, true
-	end
-	return scanner
-end
-
--- One side of one line the scanner filled in, as text and three colour
--- components. Nil for a line that is not there or came back empty, which is
--- every right hand side on most lines.
-local function Scanned(index, side)
-	local text = _G[SCAN_NAME .. "Text" .. side .. index]
-	if not text or type(text.GetText) ~= "function" then
-		return nil
-	end
-	local body = text:GetText()
-	if not body or body == "" then
-		return nil
-	end
-	if type(text.GetTextColor) ~= "function" then
-		return body, C.text[1], C.text[2], C.text[3]
-	end
-	local r, g, b = text:GetTextColor()
-	return body, r, g, b
-end
 
 --------------------------------------------------------------------------
 -- The lines
@@ -249,49 +184,26 @@ local function Spacer()
 	return row
 end
 
--- The client's own text for an item, redrawn in this chrome.
+-- The client's own text, redrawn in this chrome.
 --
--- False where the scan is not available or the link is one the client will not
--- resolve, so the caller's own title stands instead of a box with nothing in
--- it. Every line keeps the colour the client gave it, because on an item that
--- colour is information: the name is the quality, the red line is the
+-- The lines arrive from UI/Scan.lua already read off the client, in the shape
+-- Add takes. Every line keeps the colour the client gave it, because on an item
+-- that colour is information: the name is the quality, the red line is the
 -- requirement you do not meet, and the green is the enchant.
-local function ItemText(link)
-	local tip = Scanner()
-	if not tip or type(link) ~= "string" then
+--
+-- False where there is nothing to draw, so the caller's own title stands
+-- instead of a box with nothing in it.
+local function ScanText(lines)
+	if type(lines) ~= "table" or #lines < 1 then
 		return false
 	end
-
-	if type(tip.ClearLines) == "function" then
-		tip:ClearLines()
-	end
-	-- A link somebody built by hand raises here rather than coming back empty,
-	-- the same as it does in the chat log's hyperlink handler.
-	if not pcall(tip.SetHyperlink, tip, link) then
-		return false
-	end
-
-	local lines = tip:NumLines() or 0
-	if lines < 1 then
-		-- The scanner exists and produced nothing, which is not the same state
-		-- as never having tried and is not the same state as the client
-		-- refusing the frame. Recorded so Describe reports what actually
-		-- happens rather than what the probe hoped for.
-		scanned = false
-		return false
-	end
-	scanned = true
-
-	for index = 1, lines do
-		local left, lr, lg, lb = Scanned(index, "Left")
-		local right, rr, rg, rb = Scanned(index, "Right")
-		if left or right then
-			Add(index == 1 and TITLE or BODY,
-				left or "", lr or C.text[1], lg or C.text[2], lb or C.text[3],
-				right, rr, rg, rb)
-			if index == 1 then
-				titled = true
-			end
+	for index = 1, #lines do
+		local line = lines[index]
+		Add(index == 1 and TITLE or BODY,
+			line[1] or "", line[2] or C.text[1], line[3] or C.text[2], line[4] or C.text[3],
+			line[5], line[6], line[7], line[8])
+		if index == 1 then
+			titled = true
 		end
 	end
 	return true
@@ -304,9 +216,9 @@ end
 --
 --   title  the first line, in the heading size, with a hairline under it
 --   color  what colour that line is, C.heading where absent
---   item   an item link. The client's own text for it is drawn instead of the
---          title where this client will hand that text over, and the title
---          stands where it will not.
+--   scan   the client's own lines, from UI/Scan.lua. Drawn instead of the
+--          title where there are any, and the title stands where there are
+--          none.
 --
 -- The array part is the body, in order, one table per line:
 --
@@ -324,6 +236,11 @@ end
 -- and none of them was enforceable. It costs one table and one per line on a
 -- hover, which is a moment and can afford it, and the path that reopens a
 -- tooltip without a hover is guarded in UI/Feed.lua for exactly this reason.
+--
+-- Almost nothing writes this table by hand any more. UI/Tip.lua builds it from
+-- a subject, so the order of the bands and the air between them is decided
+-- once rather than per caller. Show stays public for the one case that has no
+-- subject, which is the harness proving what this file draws.
 --------------------------------------------------------------------------
 
 -- The line that says what to type, or what a click would do.
@@ -353,7 +270,7 @@ local function Line(spec)
 end
 
 local function Render(data)
-	if not (data.item and ItemText(data.item)) and data.title then
+	if not ScanText(data.scan) and data.title then
 		local color = data.color or C.heading
 		titled = true
 		Add(TITLE, data.title, color[1], color[2], color[3])
@@ -372,7 +289,7 @@ local function Build()
 	frame = CreateFrame("Frame", FRAME_NAME, UIParent)
 	-- Above everything the addon draws and above the world, which is what a
 	-- tooltip is for. TOOLTIP is the client's own name for that layer and
-	-- GameTooltip sits on it, so this lands beside it rather than under it.
+	-- Blizzard's own sits on it, so this lands beside it rather than under it.
 	frame:SetFrameStrata("TOOLTIP")
 	frame:SetClampedToScreen(true)
 	frame:Hide()
@@ -625,65 +542,6 @@ function Tooltip.Size(index)
 	end
 	local _, size = row.left:GetFont()
 	return size
-end
-
---------------------------------------------------------------------------
--- Hanging one on a frame
---
--- A mouse enabled frame swallows every button that lands on it, and the right
--- button drag that turns the camera is one of those. Everything in this addon
--- you can hover sits over the middle of the screen, which is exactly where that
--- drag starts, so a tooltip bought at the price of a camera that will not turn
--- is a bad trade made silently.
---
--- SetPassThroughButtons hands the two the camera wants back. It arrived in
--- 1.14.4 and 10.0 and neither target client is proven to carry it, so it is
--- probed and then pcalled rather than trusted: a name that exists while
--- refusing these arguments would raise once per hoverable frame at login.
---
--- Where the client has neither, a right drag begun on one of these frames does
--- not turn the camera. That is the real price of every tooltip in the addon and
--- it is worth saying out loud rather than discovering. It was written once in
--- Buffs/Nag.lua for the four squares of a nag row; a feed of four hundred rows
--- is the same trap at forty times the area, which is what moved it here.
---------------------------------------------------------------------------
-
-function UI.PassCamera(owner)
-	if type(owner.SetPassThroughButtons) ~= "function" then
-		return false
-	end
-	return pcall(owner.SetPassThroughButtons, owner, "RightButton", "MiddleButton")
-end
-
--- The convenience for the ordinary case: a frame whose whole answer to the
--- mouse is a tooltip. `describe` is handed the frame and answers the table
--- above, or nothing at all for a frame that has nothing to say.
---
--- A caller that also wants to paint on the way in and out, which every row in a
--- feed does, hangs its own scripts and calls Show and Close from inside them,
--- and calls UI.PassCamera itself.
-function UI.Tip(owner, describe)
-	owner:SetScript("OnEnter", function(self)
-		Tooltip.Show(self, describe(self))
-	end)
-	owner:SetScript("OnLeave", function()
-		Tooltip.Close()
-	end)
-	UI.PassCamera(owner)
-	return owner
-end
-
-function Tooltip.Describe()
-	if scannable == false then
-		return "this client refused a tooltip of its own, so an item's own text cannot be read"
-	end
-	if scanned == nil then
-		return "no item has been hovered yet"
-	end
-	if not scanned then
-		return "this client hands over no text for an item, so a row shows its name and nothing more"
-	end
-	return "drawing an item's own text in the addon's chrome"
 end
 
 -- The grid moved under the frame. Nothing is laid out here and the zoom is not
