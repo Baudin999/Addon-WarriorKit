@@ -87,6 +87,31 @@ not. A quest that sends you to two zones gets a strip of zone names under the
 map, and the one it opens on is the one Questie says is nearest to where you are
 standing.
 
+The wheel zooms, and it zooms at the point under the cursor. A zone drawn at the
+width of one column is three hundred pixels across a place that takes twenty
+minutes to walk, which says which end of Westfall and not which side of the
+road. Six times is the far end, where one of the client's tiles is drawn at
+twice its own size and the art gives out. Zooming at the cursor is a pan and a
+zoom in one notch, so there is nothing to drag, and nothing to drag means no
+ticker running on a window that is open all evening. The box claims the empty
+height under the map as it goes in, and never outruns the picture inside it.
+
+The dot is nine pixels and it carries a wash of its own colour behind it. Five
+was a three pixel core on a painting of hills, roads and rivers in every colour
+a dot can be: the mark was there and nobody could find it, which for the one
+thing the page exists to say is the same as not drawing it. The wash is what
+does the finding, and where a camp puts four dots inside one step the washes run
+together into one cloud, which is the honest picture. Not four things. One place
+with things in it.
+
+Two questions were being asked the wrong way round underneath. An objective
+counted as done when its two counts matched, and Questie forces both to zero for
+every speak to, explore and use step in the game, so those quests dropped their
+whole selves off the map; `Completed` is the field that answers. And a quest's
+spawn list is empty whenever Questie has not drawn that quest's icons yet, so
+where a thing stands now goes to the database behind it rather than to what is
+currently on the world map.
+
 The picture is the client's own art, in its own twelve tiles, cropped. The last
 column and the last row of a zone map are part tiles padded out to full size, so
 drawing them whole puts two black seams through every map in the game.
