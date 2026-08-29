@@ -159,7 +159,7 @@ local function EnemyBars(ui)
 			end,
 			function(value) return value .. " yards" end)
 	end
-	ui.Hint("A bar rides on a plate, so this is how far out the bars work. The client clamps to its own ceiling without saying so.")
+	ui.Hint("A bar rides on a plate, so this is how far out the bars work. The top of the range is this client's own ceiling.")
 	ui.Reading("nameplate range", ns.Plates.DescribeDistance)
 
 	ui.Size("bar height on the plate", -60, 60, 2,

@@ -58,16 +58,21 @@ local STACKING = "1"
 local FLAT = "0"
 
 -- What `bars distance` may ask for. The floor is the client's own default on
--- these two clients and the ceiling is past what either accepts, deliberately:
--- SetCVar clamps in silence, so the honest thing is to let the setting ask and
--- report back what the client actually holds rather than to guess the cap here
--- and be wrong on one of them. Plates.Describe reads the CVar, never the
--- setting.
+-- these two clients and the top is past what either accepts, deliberately: the
+-- real ceiling is asked of the client rather than guessed here, by Ceiling
+-- below, and DISTANCE_HIGH is only the figure the probe asks with.
+--
+-- Asking matters because on the Anniversary client the ceiling is 41 and 41 is
+-- also the default, so a setting that let the player walk up to 60 was a
+-- setting that did nothing from its shipped value onwards: SetCVar clamps in
+-- silence, the number in the panel climbed, and the bars stayed where they
+-- were. A setting that cannot move must not offer to.
 local DISTANCE_LOW, DISTANCE_HIGH = 20, 60
 
 local footprintWidth, footprintHeight -- what a bar actually occupies, in UIParent units
 local naturalWidth, naturalHeight     -- what a plate measured before we touched it
 local sizeApplied, overlapApplied, distanceApplied
+local ceiling -- the highest range this client will hold, asked of it once
 local pending
 local warned
 
@@ -196,15 +201,44 @@ local function RestoreDistance()
 	return false
 end
 
+-- The highest figure the client will hold, found by asking it for more than it
+-- has and reading back what stuck. The CVar is put back the way it was found,
+-- so this is safe to call from anywhere and costs two writes once a session.
+--
+-- Asked rather than written down here because the two clients this addon runs
+-- on do not answer the same: the Anniversary client stops at 41 and a client
+-- that stops somewhere else gets its own answer without this file learning
+-- which client it is on. A refused write teaches nothing, so nothing is cached
+-- and the next caller asks again.
+local function Ceiling()
+	if ceiling then
+		return ceiling
+	end
+	local held = Read("nameplateMaxDistance")
+	if held == nil or not Write("nameplateMaxDistance", tostring(DISTANCE_HIGH)) then
+		return nil
+	end
+	ceiling = tonumber(Read("nameplateMaxDistance")) or DISTANCE_HIGH
+	Write("nameplateMaxDistance", held)
+	return ceiling
+end
+
 -- How far out the client puts a plate up, which is how far out a bar can be
--- seen. Written as a whole number of yards; the client stores it as a string
--- and clamps it to whatever its own ceiling is without saying so.
+-- seen. Written as a whole number of yards; the client stores it as a string.
+-- A setting above the ceiling is pulled down to it and saved there, so the
+-- panel shows the figure the client is actually holding rather than a number
+-- the player raised against a wall.
 local function ApplyDistance()
 	local wanted = ns.db.barsDistance or 0
 	if wanted <= 0 then
 		return RestoreDistance()
 	end
 	Remember("platesDistancePrior", "nameplateMaxDistance")
+	local cap = Ceiling()
+	if cap and wanted > cap then
+		wanted = cap
+		ns.db.barsDistance = cap
+	end
 	distanceApplied = true
 	return Write("nameplateMaxDistance", tostring(wanted))
 end
@@ -215,8 +249,10 @@ function Plates.Distance()
 	return tonumber(Read("nameplateMaxDistance"))
 end
 
+-- What the stepper and the command may offer. The top is the client's own where
+-- it has said, so the "+" stops at the last figure that changes anything.
 function Plates.DistanceRange()
-	return DISTANCE_LOW, DISTANCE_HIGH
+	return DISTANCE_LOW, Ceiling() or DISTANCE_HIGH
 end
 
 local function RestoreMotion()
@@ -317,6 +353,9 @@ function Plates.DescribeDistance()
 		return ("plates at %d yards, the client's own"):format(held)
 	end
 	if math.abs(held - wanted) < 0.5 then
+		if ceiling and math.abs(held - ceiling) < 0.5 then
+			return ("plates out to %d yards, as far as this client goes"):format(held)
+		end
 		return ("plates out to %d yards"):format(held)
 	end
 	return ("asked for %d yards and the client stopped at %d, which is its ceiling")

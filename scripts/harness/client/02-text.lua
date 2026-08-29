@@ -658,10 +658,26 @@ function _G.GetAddOnMemoryUsage(name)
 	return (name == "WarriorKit") and heap or 0
 end
 
+-- nameplateMaxDistance starts where the Anniversary client starts it, and that
+-- figure is also the highest it will hold: a write past it is clamped and
+-- answered with true, which is the whole reason an addon cannot tell whether a
+-- range it asked for was given. Nothing else here clamps, because nothing else
+-- this addon writes does.
+local NAMEPLATE_MAX_DISTANCE_CEILING = 41
 local cvars = { nameplateShowEnemies = "1", nameplateMotion = "0",
-	nameplateOverlapV = "1.10", SoftTargetEnemy = "0" }
+	nameplateOverlapV = "1.10", SoftTargetEnemy = "0",
+	nameplateMaxDistance = "41" }
 function _G.GetCVar(k) return cvars[k] end
-function _G.SetCVar(k, v) cvars[k] = tostring(v) return true end
+function _G.SetCVar(k, v)
+	if k == "nameplateMaxDistance" then
+		local asked = tonumber(v)
+		if asked and asked > NAMEPLATE_MAX_DISTANCE_CEILING then
+			v = NAMEPLATE_MAX_DISTANCE_CEILING
+		end
+	end
+	cvars[k] = tostring(v)
+	return true
+end
 function _G.GetCVarBool(k) return cvars[k] == "1" end
 
 local plates, plateSize = {}, {}

@@ -94,6 +94,44 @@ check(cvars.nameplateMaxDistance == tostring(ns.db.barsDistance),
 check(ns.Plates.Distance() == ns.db.barsDistance,
 	"Plates.Distance does not read back what was written")
 
+-- The range the setting offers is the range the client will hold.
+--
+-- It was not. The stepper went to 60 on a client that stops at 41, and 41 is
+-- also where that client starts, so every press of "+" from the shipped figure
+-- moved the number in the panel and nothing in the world: SetCVar clamps and
+-- answers true. The cap is asked for rather than written down, so the check
+-- asks the same way.
+do
+	local shipped = ns.db.barsDistance
+	local low, high = ns.Plates.DistanceRange()
+
+	check(low < high, ("the range came back as %s to %s"):format(tostring(low), tostring(high)))
+	check(high == 41, ("this client stops at 41 yards and the setting offers %s")
+		:format(tostring(high)))
+
+	ns.db.barsDistance = 60
+	ns.Plates.Apply()
+	check(ns.db.barsDistance == high,
+		("asked for 60 yards on a client that stops at %d and the setting kept %s")
+			:format(high, tostring(ns.db.barsDistance)))
+	check(ns.Plates.Distance() == high,
+		("the client holds %s after being asked for 60"):format(tostring(ns.Plates.Distance())))
+	check(ns.Plates.DescribeDistance():find("as far as this client goes", 1, true) ~= nil,
+		"at the ceiling the readout does not say it is the ceiling: "
+			.. ns.Plates.DescribeDistance())
+
+	-- Downwards still moves, which is the half of the setting that works.
+	ns.db.barsDistance = 25
+	ns.Plates.Apply()
+	check(ns.Plates.Distance() == 25,
+		("asked for 25 yards and the client holds %s"):format(tostring(ns.Plates.Distance())))
+
+	ns.db.barsDistance = shipped
+	ns.Plates.Apply()
+	print(("plates  range %d to %d yards, the top asked of the client rather than assumed")
+		:format(low, high))
+end
+
 -- The plate is the frame the game hit-tests, so it has to hold the whole bar
 -- and not merely be as tall as one. The bar hangs off the plate's centre by the
 -- gauge, which puts more of it above that centre than below, and a plate sized

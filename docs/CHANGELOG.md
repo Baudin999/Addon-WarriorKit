@@ -15,6 +15,15 @@ whatever the client was holding is handed back when the setting goes off. The
 client clamps to a ceiling of its own without saying so, so the panel and
 `/wk status` read the CVar back rather than repeating the number you asked for.
 
+The range the setting offers is now the range the client will hold. It asks
+once, by writing more than any client takes and reading back what stuck, and
+puts the CVar back the way it found it. On the Anniversary client the answer is
+41, and 41 is also where that client starts, so the old stepper walked up to 60
+past a wall: the number moved, the bars did not, and the setting looked broken
+because from its shipped figure onwards it was. Now the stepper stops at 41, a
+saved setting above the ceiling is pulled down to it, and the readout says the
+range is as far as this client goes.
+
 **In and out rather than on and off.** A plate goes up and comes down in one
 frame, and fifteen bars blinking on at a pull reads as a fault rather than as
 mobs coming into range. A bar ramps in over 0.15s and out over 0.22s, the out
