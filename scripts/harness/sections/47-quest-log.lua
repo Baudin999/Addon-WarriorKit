@@ -118,6 +118,17 @@ check(timed.shareable,
 check(not detail.shareable,
 	"a quest with no group size read as shareable")
 
+-- A spell reward, which is the one payout that is neither an item nor a number.
+-- It carries a name and a texture and no spell id at all, so the column draws
+-- the picture and hangs no hover on it, and the texture is the half that goes
+-- missing without anybody noticing: the line still reads correctly with the
+-- icon thrown away.
+local taught = Log.Detail(Log.Zones()[3].quests[1].key)
+check(taught.rewards.spell ~= nil and taught.rewards.spell.name == "Blessing of the Night",
+	"the spell reward did not come back off the cursor")
+check(type(taught.rewards.spell.texture) == "string" and taught.rewards.spell.texture ~= "",
+	"the spell reward came back with no texture, so its row can draw no icon")
+
 ----------------------------------------------------------------------
 -- The window
 ----------------------------------------------------------------------

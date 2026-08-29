@@ -348,11 +348,17 @@ local function Payment(rewards)
 	if type(rewards.title) == "string" and rewards.title ~= "" then
 		Line(pay, { text = rewards.title, size = M.small, color = C.heading })
 	end
+	-- The spell carries a picture the same way an item does, and it is drawn in
+	-- the same column at the same size, because a reward you can see is a reward
+	-- you can find again. It gets no hover: the client hands over a name and a
+	-- texture and no spell id, so there is nothing for UI/Scan.lua to point at,
+	-- and a tooltip that repeated the line under it would be worse than none.
 	if rewards.spell then
 		Line(pay, {
 			text = ("teaches %s"):format(rewards.spell.name),
 			size = M.small,
 			color = C.hint,
+			icon = rewards.spell.texture,
 		})
 	end
 end
