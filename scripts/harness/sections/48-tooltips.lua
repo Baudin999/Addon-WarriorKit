@@ -178,6 +178,62 @@ do
 		"the collision does not name the source it collided with: " .. tostring(why))
 
 	------------------------------------------------------------------
+	-- Where the box opens
+	--
+	-- Docked out of the box, in the corner the client keeps its own tooltip in,
+	-- and beside the owner once the setting says beside. The corner is read off
+	-- the client's own two clearances, so what is asserted is the arithmetic
+	-- rather than a pair of numbers: the gap on the right is the thirteen units
+	-- the client's default anchor adds, the gap underneath is the clearance it
+	-- keeps for the bags, and both are measured in screen pixels because the
+	-- box sits on the addon's grid at a scale of its own and a comparison that
+	-- skipped that scale would pass against a box docked to the wrong number.
+	--
+	-- The stub stands UIParent up with no size at all, so the corner is the
+	-- origin and both gaps would be the same number as every other frame's.
+	-- This gives the screen a size for the length of the claim and hands it
+	-- straight back, the way 49-world-hover.lua does for the side the box
+	-- picks: a size left behind moves the mirror line 15-skin-fit.lua measures
+	-- its blocks against.
+	------------------------------------------------------------------
+
+	local function pixels(region, method)
+		return ns.Measure(region, method) * region:GetEffectiveScale()
+	end
+
+	check(Box.Docked(), "the box does not dock out of the box, and that is where the game puts one")
+
+	local screen = _G.UIParent
+	screen:SetSize(2560, 1440)
+	local scale = screen:GetEffectiveScale()
+
+	Tip.Open(owner, { kind = "note", title = "In the corner", lines = { { "A fact" } } })
+	local box = Box.Frame()
+	check(math.abs((pixels(screen, "GetRight") - pixels(box, "GetRight")) - 13 * scale) < 1,
+		("the docked box sits %s pixels off the right edge rather than thirteen units")
+			:format(tostring(pixels(screen, "GetRight") - pixels(box, "GetRight"))))
+	check(math.abs((pixels(box, "GetBottom") - pixels(screen, "GetBottom")) - 70 * scale) < 1,
+		("the docked box sits %s pixels off the bottom rather than clear of the bags")
+			:format(tostring(pixels(box, "GetBottom") - pixels(screen, "GetBottom"))))
+
+	-- The owner is at the centre of the screen, so a box beside it is nowhere
+	-- near the corner. Both claims are made about the same hover, because what
+	-- the switch changes is where one box goes and nothing else.
+	check(Box.SetDocked(false), "turning the dock off reported that nothing moved")
+	Tip.Open(owner, { kind = "note", title = "Beside it", lines = { { "A fact" } } })
+	check(pixels(box, "GetLeft") >= pixels(owner, "GetRight"),
+		"undocked, the box did not open beside the thing it describes")
+	check(pixels(screen, "GetRight") - pixels(box, "GetRight") > 13 * scale + 1,
+		"undocked, the box still landed in the corner")
+
+	check(Box.SetDocked(true), "turning the dock back on reported that nothing moved")
+	check(Box.SetDocked(true) == false, "docking a box that is already docked moved it anyway")
+	check(math.abs((pixels(screen, "GetRight") - pixels(box, "GetRight")) - 13 * scale) < 1,
+		"a box that was up when the switch flipped stayed where it was")
+
+	screen:SetSize(0, 0)
+
+	------------------------------------------------------------------
 	-- The client's own words, in the addon's box
 	------------------------------------------------------------------
 

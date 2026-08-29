@@ -457,12 +457,16 @@ goes through `Feature.lua` or through the shared surface below:
                                  that scrolls in units the view cannot count
     ns.UI.Log(parent, opts)      a column of lines that grows from the
                                  bottom, or nil and why this client has none
-    ns.UI.Tooltip.Show(owner, data)   the addon's own tooltip, opened beside
-                                 owner at owner's zoom, from a table of a title,
-                                 a colour, an optional item link and a list of
-                                 lines: { "text" }, { "label", "value" },
+    ns.UI.Tooltip.Show(owner, data)   the addon's own tooltip, at owner's
+                                 zoom, from a table of a title, a colour, an
+                                 optional item link and a list of lines:
+                                 { "text" }, { "label", "value" },
                                  { hint = "..." }, { blank = true }. Nothing to
-                                 say draws nothing
+                                 say draws nothing. Docked in the corner the
+                                 client keeps its own tooltip in, or beside
+                                 owner where the setting says beside
+    ns.UI.Tooltip.SetDocked(on) / Docked()   which of those two, pushed in by
+                                 Settings/Settings.lua off the saved value
     ns.UI.Tooltip.Close() / Lines() / Text(i) / Owner() / Zoom() / IsShown()
     ns.UI.Tip(owner, describe)   hang that on a frame, where describe(owner)
                                  answers the table or nothing

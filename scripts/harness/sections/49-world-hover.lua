@@ -178,7 +178,17 @@ do
 	-- right of the hotspot. The side is picked the way a frame's tooltip picks
 	-- one, so a mob on the right of the screen throws its box left rather than
 	-- into the clamp.
+	--
+	-- All of which is what the box does undocked, and undocked is not the
+	-- default, so the switch is thrown for the length of this claim and handed
+	-- back at the end of it. The docked corner is asserted in 48-tooltips.lua
+	-- where the setting lives; what is proven here is the answer a creature
+	-- gets when the player has asked for a box beside the cursor, which is the
+	-- one anchor in the file that no frame can reach.
 	------------------------------------------------------------------
+
+	local wasDocked = Box.Docked()
+	Box.SetDocked(false)
 
 	-- The stub stands UIParent up with no size at all, so the middle of the
 	-- screen is zero and every tooltip in every section above this one has been
@@ -209,6 +219,7 @@ do
 		"a mob on the right of the screen threw its box further right, into the clamp")
 
 	screen:SetSize(0, 0)
+	Box.SetDocked(wasDocked)
 	cursor.x = 300
 	fire("UPDATE_MOUSEOVER_UNIT")
 
@@ -371,6 +382,8 @@ do
 	World.Close()
 	H.blizzardTooltip(nil)
 
-	print(("world  %s, beside the pointer; the client's own held down for a unit and nothing else; %.2f KB per 50 ticks, gate is %.2f")
-		:format(World.Describe(), churned, CHURN.world))
+	print(("world  %s, %s; the client's own held down for a unit and nothing else; %.2f KB per 50 ticks, gate is %.2f")
+		:format(World.Describe(),
+			Box.Docked() and "docked in the corner" or "beside the pointer",
+			churned, CHURN.world))
 end

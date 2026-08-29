@@ -84,7 +84,7 @@ ns.Register({
 		"quests, open the quest log",
 		"quests on|off, the addon's quest log instead of the client's",
 		"quests hide on|off, put Blizzard's own log in the attic and take the L key",
-		"quests where, whether Questie is answering for the where column",
+		"quests where, whether Questie is answering for the where column and the map",
 	},
 
 	status = function()
@@ -95,7 +95,7 @@ ns.Register({
 
 	panel = function(ui)
 		ui.Section("Quests", "Chores")
-		ui.Lede("A quest log three columns wide: every quest you are on down the left, grouped by zone, what this one wants in the middle, and what it pays on the right.")
+		ui.Lede("Every quest you are on down the left, grouped by zone. In the middle, what this one wants, or a map of where it wants it. On the right, what it pays.")
 		ui.Check("the addon's quest log",
 			function() return ns.db.quests end,
 			SetQuests)
@@ -105,7 +105,7 @@ ns.Register({
 			SetHide)
 		ui.Hint("The L key opens this window while that is ticked. Untick it and both windows work, with the key opening Blizzard's.")
 		ui.Reading("your log", ns.QuestLog.Describe)
-		ui.Reading("the where column", ns.QuestWhere.Describe)
+		ui.Reading("the where column and the map", ns.QuestWhere.Describe)
 		ui.Reading("Blizzard's window", ns.QuestBlizzard.Describe)
 	end,
 })

@@ -223,12 +223,20 @@ do
 	-- hotspot is the pointer's top left corner and the arrow hangs down and to
 	-- the right, so a box pinned beside a sixteen pixel square opens under the
 	-- arrow that opened it.
+	--
+	-- Undocked, because that is the setting the claim is about: a docked box is
+	-- in the corner whatever it was opened on, and the chip's own answer to the
+	-- cursor is still the one that has to be right for anybody who turns the
+	-- dock off.
+	local wasDocked = ns.UI.Tooltip.Docked()
+	ns.UI.Tooltip.SetDocked(false)
 	ns.UI.Tooltip.Close()
 	chip:GetScript("OnEnter")(chip)
 	check(ns.UI.Tooltip.IsShown(), "hovering a chip said nothing")
 	check(ns.Measure(ns.UI.Tooltip.Frame(), "GetBottom") >= ns.Measure(chip, "GetTop"),
 		"a chip's tooltip opens beside it, which puts it under the cursor")
 	chip:GetScript("OnLeave")(chip)
+	ns.UI.Tooltip.SetDocked(wasDocked)
 
 	-- With the mouse off the feed is a picture, and a picture does not have
 	-- seven clickable squares on it. That setting is somebody getting the

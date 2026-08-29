@@ -93,6 +93,15 @@ local function EditBox(index)
 	box.focusLeft = child("texture", box)
 	box.focusRight = child("texture", box)
 	box.focusMid = child("texture", box)
+	-- And the border a newer client wraps in a frame of its own, which is the
+	-- shape that got through the first version of the strip and drew a bright
+	-- rounded rectangle across the foot of a window with no other edge on it.
+	-- Modelled here so a walk that stops at the field's own regions fails rather
+	-- than reporting that it found nothing to hide.
+	box.NineSlice = child("frame", box, name .. "NineSlice")
+	for _, corner in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight" }) do
+		child("texture", box.NineSlice, name .. "NineSlice" .. corner)
+	end
 	-- The word in front of the line, which is what FrameXML draws instead of the
 	-- slash you typed, and the punctuation after it.
 	box.header = child("fontstring", box, name .. "Header")

@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### The tooltip docks in the corner
+
+Every hover in the addon used to open its box next to the thing you hovered.
+That is a fine rule for a label and a bad one here, because everything in this
+addon you can hover sits over the middle of the screen: a loot row, a cooldown
+square, a nag, a mob you are about to hit. The box landed on the row under the
+one you were reading, and on a creature it followed the pointer into whatever
+you were looking at.
+
+So it goes where this game has always put a tooltip. The bottom right corner,
+clear of the bags and of however many action bars are switched on, in the same
+place the client's own box would have been.
+
+The two clearances are the client's own and are read rather than written down.
+It rewrites them whenever the bags open or a bar appears, so the addon's box
+moves when the client's would have. A client that defines neither gets the bare
+corner plus one bag bar. Both numbers land on the pixel grid on the way in: they
+are measured in UIParent's units and this box is on the addon's own scale, and
+an offset that is a fraction of a unit puts the border half on a pixel.
+
+`/wk tips beside` is the way back, and there is a checkbox for it on the
+settings page under Hovers. Beside is not a fallback. On a very wide monitor the
+corner is a long way from what you are reading, and a label on the thing itself
+is worth the cover it costs.
+
 ### The chat line is Blizzard's now, and `/logout` works
 
 Typing `/logout` in this window used to do nothing, or take two presses, or come
@@ -38,6 +63,38 @@ none of which did anything except work around the field.
 This is Prat's arrangement. It has shipped for fifteen years without a `/logout`
 bug, because it never had one to fix: the only two edit boxes in Prat are for
 copying chat and for search, and the line you send from is always the client's.
+
+### The quest log turns over and shows you a map
+
+The middle column has a tab over it now. One side is the quest. The other is the
+zone it sends you to, drawn at the width of the column, with a dot on every
+place that quest has anything at.
+
+This is the question a quest log has never answered on any client. The text says
+eight Kobold Miners and the world does not label a Kobold Miner, so the answer
+has always been a second addon, a second window, or a browser. Questie knows
+where every one of them stands and spends that knowledge on icons scattered over
+the world map, where finding this quest among your other nineteen is its own
+job. The tab asks the same database the other way round: not what is in this
+zone, but where is this quest.
+
+Blue is what is left to do, green is who takes it back, and gold is you. Only
+unfinished objectives are drawn, because the four camps you already emptied are
+the half of the answer that makes the other half hard to see. Hovering a dot
+gives you its name and its coordinates, which is what you can type into whatever
+you already have open, and which is still true tomorrow in a way a distance is
+not. A quest that sends you to two zones gets a strip of zone names under the
+map, and the one it opens on is the one Questie says is nearest to where you are
+standing.
+
+The picture is the client's own art, in its own twelve tiles, cropped. The last
+column and the last row of a zone map are part tiles padded out to full size, so
+drawing them whole puts two black seams through every map in the game.
+
+None of it is required. Questie missing, Questie still compiling, a quest it has
+no row for, or a zone this client has no picture of are four different ways to
+have no map, and the line under it says which one you have rather than leaving
+an empty rectangle to read as a broken addon.
 
 ### A quest log you can see all of
 

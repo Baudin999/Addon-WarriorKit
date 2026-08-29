@@ -178,6 +178,14 @@ globals = {
 	-- column can be found and measured.
 	"WarriorKitQuestText",
 	"WarriorKitQuestRewards",
+	-- The other side of the tab over the middle column, and the zone drawn
+	-- inside it. Both named for the reason the columns are, and the board for
+	-- one more: what it draws is twelve tiles of somebody else's art cropped to
+	-- the shape of a zone, and a map with a seam of black through it is only
+	-- findable from outside if the tiles can be walked one texture coordinate at
+	-- a time.
+	"WarriorKitQuestMap",
+	"WarriorKitQuestChart",
 	"BINDING_HEADER_WARRIORKIT",
 	"BINDING_NAME_WARRIORKIT_MARK_SKULL",
 	"BINDING_NAME_WARRIORKIT_MARK_CROSS",
@@ -200,6 +208,11 @@ read_globals = {
 	-- the second, and both are probed before they are touched: neither is
 	-- built the same way on the two clients this addon ships for.
 	"GameMenuFrame", "HideUIPanel",
+	-- how far the client holds its own tooltip off the bottom right corner,
+	-- rewritten by it whenever the bags open or an action bar appears.
+	-- UI/Tooltip.lua reads both so the addon's box docks where the client's
+	-- would, and falls back where a client defines neither.
+	"CONTAINER_OFFSET_X", "CONTAINER_OFFSET_Y",
 	"IsAltKeyDown", "GetShapeshiftForm",
 	"UnitPlayerOrPetInParty", "UnitPlayerOrPetInRaid", "UnitIsPlayer",
 	"C_NamePlate", "C_Spell",

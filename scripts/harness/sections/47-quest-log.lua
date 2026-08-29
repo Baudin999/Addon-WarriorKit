@@ -285,6 +285,146 @@ check(quests.Opened() == opened + 1,
 ns.db.questsHideBlizz = true
 ns.QuestBlizzard.Apply()
 
+----------------------------------------------------------------------
+-- The map behind the tab
+----------------------------------------------------------------------
+
+-- Four questions the drawing cannot answer and reading it will not either.
+--
+-- Does the join hold. A spawn is keyed on the area id the server uses, the
+-- picture is keyed on the map id the client's atlas uses, and the only thing
+-- between them is a table inside Questie. A part that read one id as the other
+-- draws the right dots on the wrong zone, and every dot is still in the
+-- rectangle, so nothing about the geometry would say so.
+--
+-- Does it thin the crowd out. Forty database rows inside one camp is one place
+-- on a map at this size, and a part that drew all forty makes forty frames on a
+-- client that cannot destroy one. The stub puts two spawns inside one step for
+-- exactly this.
+--
+-- Does it leave things off. A spawn Questie marks -1 is inside an instance and
+-- lands in the corner of the zone if it is drawn; a finished objective's camps
+-- are the half of the answer that hides the other half; a zone with no map id
+-- is not a zone anything can draw. All three are in the stub's data.
+--
+-- And does the picture get cropped. A zone is 1002 pixels of art in tiles of
+-- 256, so the last column and the last row are part tiles padded out to full
+-- size, and drawing them whole puts two black seams through every map in the
+-- game.
+--
+-- Scoped in a do block for the reason the margin check above is: an indented
+-- local is not a name at chunk level, and this file is against the budget
+-- scripts/check.sh holds every section to.
+do
+	local diplomat = Log.Zones()[1].quests[1].key
+	local zones = ns.QuestWhere.Places(102)
+
+	check(#zones == 2,
+		("the quest came back in %d zones where two of its three have a map")
+			:format(#zones))
+	check(zones[1] and zones[1].map == 52,
+		"the map did not open on the zone Questie says is nearest")
+
+	local elwynn = zones[2]
+	check(elwynn and elwynn.map == 37,
+		"the quest's other zone did not come back under the client's map id")
+	check(elwynn and #elwynn.points == 3,
+		("Elwynn came back with %s places where it has two camps and a hand-in")
+			:format(elwynn and #elwynn.points or "no"))
+
+	local corner, finished, back = false, false, 0
+	for _, point in ipairs(elwynn and elwynn.points or {}) do
+		if point.x < 0 or point.y < 0 then corner = true end
+		if point.x == 90 and point.y == 90 then finished = true end
+		if point.kind == ns.QuestWhere.BACK then back = back + 1 end
+	end
+	check(not corner, "a spawn Questie marks -1 was drawn in the corner of the zone")
+	check(not finished, "a finished objective's camps are still on the map")
+	check(back == 1, ("%d places are marked as the hand-in where one is"):format(back))
+
+	-- The window, driven through the tab rather than through its buttons, and
+	-- on the one quest of the five the stub files spawns under.
+	Window.Show()
+	Window.Showing(diplomat)
+	check(Window.Showing() == diplomat,
+		"the window would not be moved onto the quest Questie has spawns for")
+	check(Window.Tab() == 1, "the middle column did not open on the quest")
+	Window.Tab(2)
+	check(Window.Tab() == 2, "the tab would not turn over to the map")
+
+	local text, map = _G.WarriorKitQuestText, _G.WarriorKitQuestMap
+	check(text and map and not text:IsShown() and map:IsShown(),
+		"both sides of the tab are up at once, or neither is")
+
+	-- Westfall, which is where the stub says you are standing, so the quest's
+	-- one camp there and the dot for you are both on it.
+	local dots, where = Window.Places()
+	check(where == "Westfall",
+		("the map is headed %s where Questie sends you to Westfall"):format(tostring(where)))
+	check(dots == 2,
+		("%d dots on the zone you are in, where the quest has one camp and you are the other")
+			:format(dots))
+
+	-- Elwynn, where you are not. Three places and no dot for you, which is the
+	-- half of the player marker that is easy to draw on every map at once.
+	Window.Zone(2)
+	dots, where = Window.Places()
+	check(where == "Elwynn Forest" and dots == 3,
+		("stepping to the second zone drew %d dots headed %s")
+			:format(dots, tostring(where)))
+
+	-- The art. Twelve tiles at 1002 by 668, so the map keeps the zone's shape
+	-- and the two part tiles are cropped rather than drawn whole.
+	local board = _G.WarriorKitQuestChart
+	local canvas = board and board:GetChildren()
+	check(canvas ~= nil, "the map has no canvas to draw the zone on")
+	check(board:GetHeight() == ns.UI.Round(board, board:GetWidth() * 668 / 1002),
+		("the map is %d by %d, which is not the shape the client's art is")
+			:format(board:GetWidth(), board:GetHeight()))
+
+	local tiles, cropped = 0, 0
+	for _, region in ipairs({ canvas:GetRegions() }) do
+		if region:GetTexture() and region:IsShown() then
+			tiles = tiles + 1
+			local right = region.texcoord and region.texcoord[2]
+			if right and right < 1 then cropped = cropped + 1 end
+		end
+	end
+	check(tiles == 12, ("the zone drew %d tiles where its art is twelve"):format(tiles))
+	check(cropped > 0,
+		"every tile was drawn whole, so the padding on the last column is on the map")
+
+	-- Redrawn twenty times, which is an evening of clicking down the left
+	-- column. This client cannot destroy a frame, so the dots have to be the
+	-- same dots afterwards.
+	local pins = #ns.UI.Windows
+	for _ = 1, 20 do
+		Window.Zone(1)
+		Window.Zone(2)
+	end
+	check(select(1, Window.Places()) == 3,
+		"redrawing the same zone twenty times changed what is on it")
+	check(#ns.UI.Windows == pins,
+		"redrawing the map made windows")
+
+	-- A zone Questie knows and this client has no picture for, which is the one
+	-- state a fixture cannot hold permanently. Nothing is drawn and the line
+	-- under the map says which of the four ways to have no map this is.
+	local art = quests.art[37]
+	quests.art[37] = nil
+	Window.PaintMap()
+	check(select(1, Window.Places()) == 0,
+		"dots were drawn on a zone the client has no picture of")
+	quests.art[37] = art
+
+	Window.Zone(1)
+	Window.Tab(1)
+	Log.Detail(diplomat)
+
+	print(("quests map %d of the quest's zones have a picture, %d dots on %s, %d tiles")
+		:format(#zones, select(1, Window.Places()), tostring(select(2, Window.Places())), tiles))
+end
+
 print(("quests %s, %d quests in %d zones, %d ready; cursor stranded %d times; Blizzard's %s")
 	:format(Window.Describe(), (Log.Tally()), Log.Count(), select(2, Log.Tally()),
 		quests.Stranded(), ns.QuestBlizzard.Describe()))

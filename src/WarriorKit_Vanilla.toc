@@ -547,16 +547,21 @@ Mail\Feature.lua
 #
 # Log.lua turns the client's flat run of rows into zones holding quests, which
 # is the shape the left column draws. Where.lua is the optional half: Questie
-# knows who takes a quest back and how far the nearest thing you still have to
-# kill is, and every answer it gives degrades to nil rather than to an error.
-# Window.lua draws the three columns, Blizzard.lua puts the client's own log in
-# the attic and redirects the L key, and Feature.lua last, as everywhere else.
+# knows who takes a quest back, how far the nearest thing you still have to kill
+# is, and every place on the map the quest has anything at, and every answer it
+# gives degrades to nil rather than to an error. Chart.lua is the only file in
+# the addon that reads the client's map art, and it takes a map id and a list of
+# points and knows nothing about quests, which is why it loads after Where.lua
+# and before the window that puts the two together. Window.lua draws the three
+# columns, Blizzard.lua puts the client's own log in the attic and redirects the
+# L key, and Feature.lua last, as everywhere else.
 #
 # After Core\Attic.lua, which is where Blizzard's window goes, and after the UI
 # layer, which is what the window is built out of. Both are far above this line.
 Quests\Client.lua
 Quests\Log.lua
 Quests\Where.lua
+Quests\Chart.lua
 Quests\Window.lua
 Quests\Blizzard.lua
 Quests\Feature.lua

@@ -33,6 +33,14 @@ local C, M = UI.Color, UI.Metric
 -- is the only correct answer, because "how big is a tooltip" is a question only
 -- the thing being described can answer.
 --
+-- **It sits where the client's own tooltip sits.** The bottom right corner,
+-- clear of the bags and of whatever action bars are switched on, read off the
+-- client's own two clearances rather than written down here. A box that opens
+-- beside the row under the cursor is a box covering the next row, and every
+-- hover in this addon is over the middle of the screen where the fighting is.
+-- Beside is still there behind a switch, because on a very wide screen the
+-- corner is a long way from what you are reading.
+--
 -- **A caller hands over data, not a run of calls.** See the schema below. The
 -- imperative writers this file used to publish are still here as locals and
 -- are no longer a surface: five ways to write a line is five things a caller
@@ -72,6 +80,20 @@ local OFFSET = 4    -- the owner to the tooltip
 -- the hotspot opens underneath the arrow that opened it.
 local POINTER = 20
 
+-- Where the client parks its own tooltip when nothing has anchored it: the
+-- bottom right corner of the screen, held clear of the bags and of however many
+-- rows of action bar are switched on. The client keeps that clearance in two
+-- globals it rewrites whenever the bags open or a bar appears, and its own
+-- default anchor puts thirteen more units between the box and the right edge.
+-- Reading them is what "where the client has it" means. A pair of numbers
+-- written here would be that corner on one layout and the wrong corner on the
+-- next.
+local DOCK = 13
+-- What those two are before anything has moved them, for a client that defines
+-- neither. The bare corner and one bag bar, which is the layout every value the
+-- client writes into them is a variation on.
+local DOCK_X, DOCK_Y = 0, 70
+
 -- Two sizes and no more. A title that is the body size is not a title, and a
 -- third size in a box this small is a typeface competition.
 --
@@ -106,11 +128,25 @@ Tooltip.CURSOR = {}
 
 local frame, shadow, rule
 local opened
+local raised = false
 local rows = {}
 local count = 0
 local widest = 0
 local titled = false
 local zoom = 1
+
+-- Whether the box sits in the corner the client keeps its own tooltip in
+-- rather than beside the thing you hovered. Held here rather than read out of
+-- ns.db for the reason UI.Size is: this layer is not allowed to know the name
+-- of a setting, so Settings/Settings.lua reads the saved value and pushes it
+-- in.
+--
+-- Docked to start with, because that is where fifteen years of playing this
+-- game has put the box and because a tooltip that opens under the cursor is a
+-- tooltip covering the row you were about to click. Beside is still there, and
+-- it is the better answer on a wide screen where the corner is a long way from
+-- what you are reading.
+local docked = true
 
 --------------------------------------------------------------------------
 -- The lines
@@ -417,6 +453,35 @@ local function AtCursor()
 	return true
 end
 
+-- A distance the client measured, in the units this frame's anchors are read
+-- in, and on the grid.
+--
+-- Two conversions and both are easy to miss. The client's clearances are in
+-- UIParent's units and an anchor offset is read in the anchored frame's own,
+-- and this box sits on the addon's pixel grid at a scale of its own, so a dock
+-- written without UI.Convert lands half way up the screen at double zoom and
+-- inside the bags at half. What comes out of that is a fraction of a unit,
+-- because the client's numbers were never on this grid, and an offset that is
+-- not a whole number of pixels puts the box's own hairline border half on a
+-- pixel and half off. UI.Round is the second conversion, and it costs at most
+-- half a pixel of a clearance that is measured in tens.
+local function Units(value)
+	return UI.Round(frame, UI.Convert(value, UIParent, frame))
+end
+
+-- The corner, which is the one anchor that does not care what was hovered.
+--
+-- Same corner for a feed row, a filter chip and a creature out in the world:
+-- the box is a place on the screen you look at rather than a label on the thing
+-- under the cursor. That is the whole of what docking buys, and it is why the
+-- owner is not an argument here.
+local function Dock()
+	local x = (tonumber(CONTAINER_OFFSET_X) or DOCK_X) + DOCK
+	local y = tonumber(CONTAINER_OFFSET_Y) or DOCK_Y
+	frame:ClearAllPoints()
+	frame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -Units(x), Units(y))
+end
+
 -- Which side of the owner it opens on, and which corner of itself it hangs
 -- from. Right of the owner normally, and left of it once the owner is past the
 -- middle of the screen, because a tooltip clamped to the screen edge is one
@@ -438,7 +503,17 @@ end
 -- **And on the pointer itself where there is no owner at all.** That is
 -- Tooltip.CURSOR, and it is the world hover: a creature is not a frame, so
 -- there is nothing to sit beside and the box follows the arrow instead.
+--
+-- **None of which happens while the box is docked.** Every side, every corner
+-- and every clearance below is the answer to one question, which is how to put
+-- a box next to a thing without covering it, and docking answers that question
+-- by not being next to the thing at all.
 local function Anchor(owner, above)
+	if docked then
+		Dock()
+		return
+	end
+
 	if owner == Tooltip.CURSOR then
 		if not AtCursor() then
 			frame:ClearAllPoints()
@@ -566,9 +641,32 @@ function Tooltip.Show(owner, data, above)
 	-- owner's top, so where its top lands is its own height, and its height is
 	-- not known until the lines have been measured and wrapped.
 	Anchor(owner, above)
-	opened = owner
+	opened, raised = owner, above
 	frame:Show()
 	return true
+end
+
+-- Dock the box in the corner, or put it back beside what it describes.
+--
+-- Pushed in by Settings/Settings.lua rather than read, and answered as whether
+-- anything moved, which is the shape UI.SetSize has. A box that is up when the
+-- switch flips is re-anchored on the spot: the switch is a checkbox in the
+-- settings window with a hover of its own, so the box that demonstrates the
+-- setting is usually the one on screen while you change it.
+function Tooltip.SetDocked(on)
+	on = on and true or false
+	if on == docked then
+		return false
+	end
+	docked = on
+	if frame and frame:IsShown() and opened then
+		Anchor(opened, raised)
+	end
+	return true
+end
+
+function Tooltip.Docked()
+	return docked
 end
 
 function Tooltip.Close()

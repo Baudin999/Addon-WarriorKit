@@ -175,25 +175,28 @@ end
 -- Dressing one field
 --------------------------------------------------------------------------
 
--- Every texture on the frame, gone.
+-- Every texture under the frame, gone.
 --
--- Walked rather than named. Prat names the three border pieces and the three
--- focus glows and that is six names against one client; the pieces differ
--- between the two this addon ships for, and a client that grows a seventh next
--- patch would draw it over our footer forever. A texture on this frame is
+-- Walked rather than named, and walked down rather than across. Prat names the
+-- three border pieces and the three focus glows, which is six names against one
+-- client. This addon ships for two and the pieces differ between them, so the
+-- walk finds whatever is actually there.
+--
+-- **Down through the children as well, which is what the first version of this
+-- missed.** The border came back on a live client because the art is not
+-- always laid on the field itself: newer FrameXML wraps it in a child frame,
+-- and a walk over the field's own regions finds nothing to hide and reports
+-- success. So this recurses, and a texture at any depth under the field is
 -- Blizzard's art by definition, because nothing in this addon puts one there.
 --
 -- Faded as well as hidden, and the pair is not belt and braces. FrameXML shows
--- the focus pieces itself every time the field takes the focus, so a hidden one
+-- the focus pieces again every time the field takes the focus, so a hidden one
 -- comes straight back; alpha survives that and Hide is what stops the ones the
 -- client never touches again from being drawn at all.
---
--- The named list is still here as the fallback for a client whose GetRegions
--- answers nothing, which is the shape of every other client probe in this file.
-local function Strip(box, name)
+local function Bare(frame, depth)
 	local gone = 0
-	if type(box.GetRegions) == "function" then
-		for _, piece in ipairs({ box:GetRegions() }) do
+	if type(frame.GetRegions) == "function" then
+		for _, piece in ipairs({ frame:GetRegions() }) do
 			if type(piece) == "table" and type(piece.GetObjectType) == "function"
 				and piece:GetObjectType() == "Texture" then
 				piece:SetAlpha(0)
@@ -202,24 +205,59 @@ local function Strip(box, name)
 			end
 		end
 	end
-	if gone > 0 then
-		return gone
-	end
-	for _, part in ipairs(SKIN) do
-		local piece = _G[name .. part]
-		if type(piece) == "table" and type(piece.Hide) == "function" then
-			piece:SetAlpha(0)
-			piece:Hide()
-			gone = gone + 1
+	if depth > 0 and type(frame.GetChildren) == "function" then
+		for _, kid in ipairs({ frame:GetChildren() }) do
+			if type(kid) == "table" then
+				gone = gone + Bare(kid, depth - 1)
+			end
 		end
 	end
-	for _, part in ipairs(GLOW) do
-		local piece = box[part]
-		if type(piece) == "table" and type(piece.SetAlpha) == "function" then
-			piece:SetAlpha(0)
-			gone = gone + 1
+	return gone
+end
+
+-- How many pieces the last strip took off, for the status line. It is the one
+-- number that tells a field the walk stripped from a field the walk could not
+-- see into, and those two look identical from a chair: one is a bare line and
+-- the other is a line in Blizzard's border.
+local stripped = 0
+
+-- Three deep, which is the field, the frame the art is wrapped in and the
+-- pieces inside that. Deeper is a walk over frames that are somebody else's
+-- business and shallower is the border this file already failed to remove once.
+local DEPTH = 3
+
+local function Strip(box, name)
+	local gone = Bare(box, DEPTH)
+
+	-- The backdrop, which is art without being a texture the walk can reach.
+	-- Present only where the field carries the mixin, which is why it is
+	-- probed and pcalled like every other client call in this file.
+	if type(box.SetBackdrop) == "function" then
+		pcall(box.SetBackdrop, box, nil)
+	end
+
+	-- The named pieces last, and only as the fallback for a client whose
+	-- GetRegions answers nothing. This is the shape of every other client probe
+	-- in this file: ask, and name only what the asking could not find.
+	if gone == 0 then
+		for _, part in ipairs(SKIN) do
+			local piece = _G[name .. part]
+			if type(piece) == "table" and type(piece.Hide) == "function" then
+				piece:SetAlpha(0)
+				piece:Hide()
+				gone = gone + 1
+			end
+		end
+		for _, part in ipairs(GLOW) do
+			local piece = box[part]
+			if type(piece) == "table" and type(piece.SetAlpha) == "function" then
+				piece:SetAlpha(0)
+				gone = gone + 1
+			end
 		end
 	end
+
+	stripped = gone
 	return gone
 end
 
@@ -285,7 +323,14 @@ local function Style(box, name)
 		if type(part) == "table" and type(part.SetFontObject) == "function" then
 			part:SetFontObject(UI.Font(size, UI.FLAT))
 			if part:IsShown() then
-				width = width + (part:GetWidth() or 0)
+				-- GetStringWidth rather than GetWidth, because the face has
+				-- just changed under it. A font string measures what it draws
+				-- as soon as it is asked; its frame width is last frame's
+				-- layout, so reading that here insets the line by the width of
+				-- the word in Blizzard's font rather than in ours.
+				local wide = type(part.GetStringWidth) == "function"
+					and part:GetStringWidth() or nil
+				width = width + (wide or part:GetWidth() or 0)
 			end
 		end
 	end
@@ -542,5 +587,10 @@ function Field.Describe()
 	if not anchored then
 		return ("%d of the client's own lines, left where the client had them"):format(count)
 	end
-	return ("the client's own line, in the footer, %d dressed"):format(count)
+	-- The strip count is here rather than left out because it is the one number
+	-- that separates a bare line from a line still in Blizzard's border, and
+	-- those two are the same sentence from anywhere but the screen. Nothing
+	-- stripped on a live client means the walk could not see the art.
+	return ("the client's own line, in the footer, %d dressed, %d pieces of its art off")
+		:format(count, stripped)
 end

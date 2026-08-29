@@ -107,10 +107,20 @@ check(headerAt == line and headerX == 4,
 
 -- And the text clears it by the addon's own margin rather than FrameXML's
 -- fifteen, which is what a line of Blizzard's art needed and ours does not.
+--
+-- Measured off the strings rather than off their frames, the way the addon
+-- measures them, because the face has just changed under both: a font string
+-- answers what it draws as soon as it is asked and its frame width is still
+-- last frame's layout. A check that read the frame would be asserting on the
+-- word in Blizzard's font.
+local suffix = _G.ChatFrame1EditBoxHeaderSuffix
+local words = header:GetStringWidth() + suffix:GetStringWidth()
 local inset = line:GetTextInsets()
-check(inset == 4 + header:GetWidth() + 6 + 4,
-	("the line starts %s px in, expected the header and two margins")
-		:format(tostring(inset)))
+check(inset == 4 + words + 4,
+	("the line starts %s px in, expected %s: the header and two margins")
+		:format(tostring(inset), tostring(4 + words + 4)))
+check(inset < 15 + words,
+	"the line is still inset by the margin the client leaves for its own art")
 
 -- Blizzard's art off, and off by a walk rather than by a list of names. Every
 -- texture on the frame, because the pieces differ between the two clients this
@@ -122,6 +132,16 @@ for _, name in ipairs({ "ChatFrame1EditBoxLeft", "ChatFrame1EditBoxRight",
 end
 check(line.focusLeft:GetAlpha() == 0,
 	"the client's focus glow is still drawn round the line")
+
+-- And the border a newer client wraps in a frame of its own, which is the piece
+-- the first version of the strip walked straight past: it found no textures on
+-- the field, reported that it had nothing to hide, and left a bright rounded
+-- rectangle across the foot of a window drawn without an edge anywhere else.
+check(not _G.ChatFrame1EditBoxNineSliceTopLeft:IsShown(),
+	"the border the client wraps in a frame of its own is still drawn")
+check(ns.ChatField.Describe():find("pieces of its art off", 1, true) ~= nil,
+	("the status line does not say how much art came off: %q")
+		:format(ns.ChatField.Describe()))
 
 -- Now move the channel, which is what makes this worth a section of its own:
 -- the client repaints on the way through and the addon has to have the last

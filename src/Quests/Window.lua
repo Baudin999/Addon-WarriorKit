@@ -5,7 +5,7 @@ ns.QuestWindow = Window
 
 local UI = ns.UI
 local C, M = UI.Color, UI.Metric
-local Log, Where = ns.QuestLog, ns.QuestWhere
+local Log, Where, Chart = ns.QuestLog, ns.QuestWhere, ns.QuestChart
 
 --------------------------------------------------------------------------
 -- The quest log
@@ -28,6 +28,20 @@ local Log, Where = ns.QuestLog, ns.QuestWhere
 -- kill underneath, which is the right order the first time you read it and the
 -- wrong order the other forty. You have read the story. What you came back for
 -- is three of eight, so three of eight is at the top.
+--
+-- **And behind a tab, it is a map instead.** Three of eight what, and where. A
+-- quest log answers the first and has never answered the second on any client:
+-- the text says Kobold Miners and the world does not label them, so the answer
+-- has always been a second addon, or a second window, or a website. Questie
+-- already knows every spawn of every one of them and spends that on icons
+-- scattered over the world map, where you have to go and find the quest again
+-- among the other nineteen. This draws the zone at the size of one column with
+-- that one quest's places on it, which is the same data asked the other way
+-- round: not "what is in this zone" but "where is this quest".
+--
+-- The tab is two words and it stays where you left it. A player who wants the
+-- map wants it for the next quest too, so clicking down the left column keeps
+-- whichever side you are on and redraws it.
 --
 -- **The right column is the payoff and the where.** Rewards alone would leave
 -- it empty for the many quests that pay coin and nothing else, which is a third
@@ -66,7 +80,25 @@ local SLOT, MARK = 22, 10
 
 local window, list
 local page, pay
+local tabs, atlas
 local showing = nil
+
+-- The two sides of the middle column, and which one is up.
+--
+-- Kept between quests on purpose. It is the one piece of state in this window
+-- that is a preference rather than a fact about what is selected: a player who
+-- opened the map for one quest is a player who wants the map for the next one.
+local TEXT, MAP = 1, 2
+local facing = TEXT
+
+-- Which of the quest's zones the map is on. Reset with the quest, because zone
+-- three of the last quest is nothing at all on this one.
+local zoneAt = 1
+
+-- The most zones one quest is offered as a choice between. Six is more than any
+-- quest on these clients has anything in, and a strip that wrapped onto a third
+-- line would take the map's own height to say where the map could be.
+local ZONES = 6
 
 -- Whether the abandon button has been pressed once. Cleared by anything that
 -- changes which quest is showing, because the second press has to be about the
@@ -477,6 +509,141 @@ local function DrawPay(detail)
 end
 
 --------------------------------------------------------------------------
+-- The map behind the tab
+--------------------------------------------------------------------------
+
+-- Everything under the map, as one sentence.
+--
+-- A line rather than a caption over an empty rectangle, because there are four
+-- ways to have no map and a player deserves to know which one they have. Three
+-- of them are somebody else's software not being there, and saying so is the
+-- difference between "this addon is broken" and "Questie has not finished
+-- compiling yet".
+local function Note(quest, zones, drawn)
+	if not Where.Ready() then
+		return "Questie is not installed, so nothing here knows where a quest is."
+	end
+	if not quest then
+		return ""
+	end
+	if #zones == 0 then
+		return ("Questie has no place on the map for %s."):format(quest.title)
+	end
+	if drawn == 0 then
+		return "This client has no map picture for that zone."
+	end
+	return "Blue is what is left to do, green is who takes it back, gold is you."
+end
+
+-- The strip of zones under the map, or nothing at all.
+--
+-- One quest in ten sends you to two places and the rest send you to one, so a
+-- strip that was always drawn would be a row of one button under nine maps out
+-- of ten. It is shown only where there is a choice, which is also the only time
+-- a name on it tells you anything: with one zone the name is already the
+-- heading over the map.
+local function Choices(zones)
+	local strip = atlas.zones
+	for index = 1, ZONES do
+		local zone = zones[index]
+		strip:SetLabel(index, zone and (Chart.Name(zone.map) or "elsewhere") or "")
+		strip:SetShown(index, zone ~= nil and index <= ZONES)
+	end
+	strip.frame:SetShown(#zones > 1)
+	strip:Resize(atlas.width or 1)
+	strip:Select(zoneAt)
+	return #zones
+end
+
+-- What one dot says when you hover it: which zone, and how far across it.
+--
+-- The coordinates rather than the distance, and that is deliberate. A distance
+-- is what the right column already gives for the one nearest thing, and it is
+-- the number that goes stale the moment you walk; a coordinate is what you type
+-- into the thing every player already has open, and it is true tomorrow.
+local function Told(point)
+	return ("%.1f, %.1f"):format(point.x, point.y)
+end
+
+local function DrawMap(quest)
+	local zones = quest and Where.Places(quest.id) or {}
+	if zoneAt > #zones or zoneAt < 1 then
+		zoneAt = 1
+	end
+	local zone = zones[zoneAt]
+
+	local points = {}
+	if zone then
+		for index = 1, #zone.points do
+			local point = zone.points[index]
+			point.note = Told(point)
+			points[index] = point
+		end
+	end
+
+	-- You, last, so the gold dot is drawn over the blue ones rather than under
+	-- them. There is nowhere on a quest map you are more likely to be standing
+	-- than on top of the thing you are looking for.
+	local here, x, y = Chart.Here()
+	if zone and here == zone.map and x then
+		points[#points + 1] = { x = x, y = y, kind = Where.YOU, name = "you", note = Told({ x = x, y = y }) }
+	end
+
+	atlas.where:SetText(zone and (Chart.Name(zone.map) or "somewhere") or
+		(quest and quest.title or ""))
+	local drawn = atlas.board:Draw(zone and zone.map or nil, points)
+	Choices(zones)
+	atlas.note:SetText(Note(quest, zones, drawn))
+	return #points
+end
+
+-- The map page: a heading, the board, the zones and the line under them, in
+-- that order down one column. Built once, like everything else in this window.
+local function Atlas(parent)
+	local map = { width = 0 }
+	map.frame = CreateFrame("Frame", "WarriorKitQuestMap", parent)
+
+	map.where = UI.Label(map.frame, M.heading, C.heading, "LEFT", UI.FLAT)
+	map.where:SetPoint("TOPLEFT")
+	UI.Wrap(map.where, false)
+
+	map.board = Chart.New(map.frame, "WarriorKitQuestChart")
+	map.board.frame:SetPoint("TOPLEFT", map.frame, "TOPLEFT", 0, -(M.heading + M.rowGap))
+
+	-- The strip is anchored under the board rather than measured, so a zone
+	-- whose art is a different shape moves the two lines below it without
+	-- anything here having to know the height. The board sets its own when it
+	-- draws, and a board with nothing on it collapses to one pixel.
+	map.zones = UI.TabStrip(map.frame, { onSelect = function(index)
+		if painting then
+			return
+		end
+		zoneAt = index
+		Window.PaintMap()
+	end })
+	map.zones.frame:SetPoint("TOPLEFT", map.board.frame, "BOTTOMLEFT", 0, -M.gutter)
+	for _ = 1, ZONES do
+		map.zones:Add("")
+	end
+
+	map.note = UI.Label(map.frame, M.small, C.quiet, "LEFT", UI.FLAT)
+	map.note:SetPoint("TOPLEFT", map.zones.frame, "BOTTOMLEFT", 0, -M.gutter)
+	UI.Wrap(map.note, true)
+	map.note:SetSpacing(2)
+
+	return map
+end
+
+-- Which side of the tab is up. Both frames exist all the time and one of them
+-- is hidden, rather than one being built when it is first asked for: a window
+-- that made its map on the first click would take the cost of twelve textures
+-- in the middle of a click instead of at login.
+local function Face()
+	page.frame:SetShown(facing == TEXT)
+	atlas.frame:SetShown(facing == MAP)
+end
+
+--------------------------------------------------------------------------
 -- The whole window
 --------------------------------------------------------------------------
 
@@ -501,6 +668,9 @@ local function Select(key)
 	end
 	showing = key
 	armed = false
+	-- The zone, but not the tab. Zone three of the last quest is nothing at all
+	-- on this one; the side of the tab you are on is a preference and survives.
+	zoneAt = 1
 	Window.Paint()
 end
 
@@ -566,8 +736,21 @@ function Window.Fit()
 	local middle = WIDTH - LIST - PAY - M.pad * 4
 
 	list:Resize(LIST, body)
-	page.frame:SetSize(middle, body)
-	page.view:Resize(middle, body)
+
+	-- The strip is measured rather than assumed, because a tab is as wide as
+	-- its own title and two long ones would wrap onto a second line. What is
+	-- left after it is what both sides of the tab get.
+	local under = body - (tabs:Resize(middle) + M.gutter)
+	page.frame:SetSize(middle, under)
+	page.view:Resize(middle, under)
+
+	atlas.frame:SetSize(middle, under)
+	atlas.width = middle
+	atlas.where:SetWidth(middle)
+	atlas.note:SetWidth(middle)
+	atlas.board:Resize(middle)
+	atlas.zones:Resize(middle)
+
 	pay.frame:SetSize(PAY, body)
 	pay.view:Resize(PAY, body)
 	return true
@@ -591,14 +774,30 @@ function Window.Build()
 	})
 	list.frame:SetPoint("TOPLEFT", M.pad, -M.pad)
 
+	-- The strip sits over the middle column only, and it is the whole of what
+	-- says the two sides are the same column rather than two columns: it is as
+	-- wide as what is under it and no wider.
+	tabs = UI.TabStrip(window.content, { onSelect = function(index)
+		facing = index
+		Face()
+		Window.PaintMap()
+	end })
+	tabs.frame:SetPoint("TOPLEFT", list.frame, "TOPRIGHT", M.pad, 0)
+	tabs:Add("the quest")
+	tabs:Add("the map")
+
 	page = Column(window.content, "WarriorKitQuestText")
-	page.frame:SetPoint("TOPLEFT", list.frame, "TOPRIGHT", M.pad, 0)
+	page.frame:SetPoint("TOPLEFT", tabs.frame, "BOTTOMLEFT", 0, -M.gutter)
+
+	atlas = Atlas(window.content)
+	atlas.frame:SetPoint("TOPLEFT", tabs.frame, "BOTTOMLEFT", 0, -M.gutter)
 
 	pay = Column(window.content, "WarriorKitQuestRewards")
 	pay.frame:SetPoint("TOPRIGHT", -M.pad, -M.pad)
 
 	Chrome()
 	Window.Fit()
+	tabs:Select(facing)
 	return window
 end
 
@@ -656,8 +855,28 @@ function Window.Paint()
 		Start(pay)
 		Finish(pay)
 	end
+	DrawMap(detail and detail.quest or nil)
 
 	Window.PaintFooter(detail)
+	painting = false
+	return true
+end
+
+-- The map on its own, for the two things that move it without changing which
+-- quest is selected: stepping to another of the quest's zones, and turning the
+-- tab over.
+--
+-- Behind the same latch the whole paint is behind, because drawing the map
+-- selects a zone in the strip and selecting one calls back here. Without it the
+-- first click on a zone would draw the map twice and read Questie twice to do
+-- it.
+function Window.PaintMap()
+	if not window or painting then
+		return false
+	end
+	painting = true
+	local detail = showing and Log.Detail(showing) or nil
+	DrawMap(detail and detail.quest or nil)
 	painting = false
 	return true
 end
@@ -717,6 +936,51 @@ function Window.Abandon()
 end
 
 --------------------------------------------------------------------------
+
+-- What the map drew, as the count of dots on it and the zone it is on. Public
+-- for the reason Window.Rows is: a map that put the wrong number of places on
+-- the wrong zone is a claim scripts/harness.lua has to be able to make, and the
+-- alternative is this file handing out a reference to the board's own pool.
+function Window.Places()
+	if not atlas then
+		return 0, nil
+	end
+	local shown = atlas.board:Drawn()
+	return shown, atlas.where:GetText()
+end
+
+-- Which quest the middle and right columns are drawing, and a way to ask for
+-- another. Handed out for the reason the tab below is: driving the left column
+-- by reaching into the list's own row pool is a test asserting the widget
+-- library rather than this window.
+function Window.Showing(key)
+	if key and Log.Quest(key) then
+		Select(key)
+	end
+	return showing
+end
+
+-- Which side of the tab is up, and a way to ask for the other one. The harness
+-- drives the strip through this rather than through its own buttons, the way
+-- the mail window's pages are driven: reaching into a widget's pool from
+-- outside is a test asserting the widget library rather than this window.
+function Window.Tab(index)
+	if index and tabs then
+		tabs:Select(index)
+	end
+	return facing
+end
+
+-- Which of the quest's zones the map is on, and a way to step to another. Same
+-- argument as the tab above, and one more: the strip under the map is drawn
+-- only where there is a choice, so a test that clicked it could not reach the
+-- one-zone case at all.
+function Window.Zone(index)
+	if index and atlas then
+		atlas.zones:Select(index)
+	end
+	return zoneAt
+end
 
 function Window.Built()
 	return window ~= nil

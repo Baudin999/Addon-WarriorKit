@@ -6,6 +6,14 @@ ns.Settings = Settings
 local UI = ns.UI
 
 --------------------------------------------------------------------------
+-- The settings that belong to no feature
+--
+-- Two of them: how big the addon's own windows are, and where a hover's box
+-- opens. Both are questions about the whole addon rather than about any part
+-- of it, which is why neither lives in a feature folder. The first is most of
+-- this file and is described below; the second is further down, next to the
+-- three calls it needs.
+--
 -- How big the addon's own windows are
 --
 -- Every other size in this addon is a count of physical pixels, decided once by
@@ -76,6 +84,7 @@ end
 -- Called at ADDON_LOADED so the panel is built at the right size rather than
 -- built at the design size and resized a moment later.
 function Settings.Apply()
+	UI.Tooltip.SetDocked(Settings.Docked())
 	return UI.SetSize(Settings.Snap(ns.db.uiSize))
 end
 
@@ -83,6 +92,47 @@ function Settings.Set(scale)
 	ns.db.uiSize = Settings.Snap(scale)
 	Settings.Apply()
 	return ns.db.uiSize
+end
+
+--------------------------------------------------------------------------
+-- Where a hover's box opens
+--
+-- The other setting that belongs to no feature. Every hover in the addon opens
+-- the same box, so where that box goes is one answer for the whole addon and
+-- not the loot feed's business or the action bar's.
+--
+-- Docked is the corner the client keeps its own tooltip in, and it is the
+-- default: a box beside the row under the cursor covers the next row, and
+-- everything in this addon you can hover sits over the middle of the screen.
+-- Beside is the other answer and it is not a fallback. On a very wide monitor
+-- the corner is a long way from what you are reading, and a label on the thing
+-- itself is worth the cover it costs.
+--
+-- The value is pushed into UI/Tooltip.lua rather than read out of here, the
+-- same way the size is: that layer is not allowed to know the name of a
+-- setting.
+--------------------------------------------------------------------------
+
+function Settings.Docked()
+	return ns.db.tipDock ~= false
+end
+
+function Settings.SetDocked(on)
+	ns.db.tipDock = on and true or false
+	UI.Tooltip.SetDocked(ns.db.tipDock)
+	return ns.db.tipDock
+end
+
+-- One sentence saying where the next box will open and what that costs, in the
+-- terms Settings.Describe uses for the grid: a control that hides its own cost
+-- is a control you cannot make a decision with.
+function Settings.DescribeDock()
+	if Settings.Docked() then
+		return "in the bottom right corner, where the client keeps its own,"
+			.. " so nothing you hover is covered and nothing is beside it either"
+	end
+	return "beside whatever you hovered, and on the cursor out in the world,"
+		.. " so it is next to the thing it describes and over what is behind it"
 end
 
 -- The stops that keep the grid on this screen, as a phrase a note can drop into

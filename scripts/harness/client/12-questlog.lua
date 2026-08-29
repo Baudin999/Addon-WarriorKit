@@ -360,11 +360,141 @@ _G.ToggleQuestLog = function()
 end
 
 --------------------------------------------------------------------------
+-- Questie, and the client's own map under it
+--------------------------------------------------------------------------
+
+-- Where a quest is, which is two addons' worth of answer.
+--
+-- Questie carries the spawns, keyed on the area ids the server uses. The client
+-- carries the picture, keyed on the map ids its own atlas uses. Neither one is
+-- any good alone and the join between them is Questie's own table, so all three
+-- are modelled here rather than stubbed flat: a fixture that handed over map
+-- ids directly would test a window that cannot exist.
+--
+-- Every branch the map can take is one row of this data.
+--
+--   two zones      the quest has spawns in Elwynn and in Westfall, so the strip
+--                  of zones under the map has something to choose between
+--   a third zone   area 606, which Questie has a row for and the client has no
+--                  map id for. It must not reach the strip: a zone nothing can
+--                  draw is not a choice.
+--   two spawns
+--     on one step  30,40 and 30.4,40.4 are the same camp. Two dots in five
+--                  pixels is one dot drawn twice, and the pool grows to
+--                  whatever the worst quest in the database asks for.
+--   a -1 spawn     Questie saying the thing is inside an instance, whose
+--                  entrance is a row it does not hand over here. Drawn, it
+--                  lands in the top left corner of the zone.
+--   a finished
+--     objective    its spawns are the half of the answer that would make the
+--                  other half hard to see
+--   the finisher   a spawn that comes from the database rather than from the
+--                  quest object, off a different call
+local questie = _G.QuestieLoader
+local knows = questie:ImportModule("QuestieDB")
+local carrying = questie:ImportModule("QuestiePlayer")
+local finding = questie:ImportModule("QuestieMap")
+local placing = questie:ImportModule("ZoneDB")
+
+local SPAWNS = {
+	miners = { Name = "Kobold Miner", Type = "monster", Spawns = {
+		[12] = { { 30, 40 }, { 30.4, 40.4 }, { 60, 20 }, { -1, -1 } },
+		[40] = { { 50, 50 } },
+		[606] = { { 10, 10 } },
+	} },
+	rope = { Name = "Trapper's Rope", Type = "object", Spawns = {
+		[12] = { { 90, 90 } },
+	} },
+}
+
+carrying.currentQuestlog = {
+	[102] = {
+		Id = 102,
+		Finisher = { Type = "monster", Id = 900, Name = "Baros Alexston" },
+		Objectives = {
+			{ Needed = 8, Collected = 3, spawnList = { [700] = SPAWNS.miners } },
+			{ Needed = 3, Collected = 3, spawnList = { [701] = SPAWNS.rope } },
+		},
+		SpecialObjectives = {},
+	},
+}
+
+-- The finisher's spawns come off the compiled database rather than off the
+-- quest object, which is why they are a second call and not a third field.
+local NPCS = { [900] = { [12] = { { 35, 45 } } } }
+knows.QueryNPCSingle = function(id, field)
+	return field == "spawns" and NPCS[id] or nil
+end
+knows.QueryObjectSingle = function() return nil end
+
+-- The join. Area 606 is deliberately absent.
+local ATLAS = { [12] = 37, [40] = 52 }
+placing.GetUiMapIdByAreaId = function(_, area) return ATLAS[area] end
+
+-- Questie's own "where next", which decides which zone the map opens on. It
+-- answers Westfall, so a map that opened on the first zone it happened to
+-- collect would open on the wrong one and this fixture would catch it.
+finding.GetNearestQuestSpawn = function(_, quest)
+	if type(quest) ~= "table" or quest.Id ~= 102 then
+		return nil
+	end
+	return { 50, 50 }, 40, "Kobold Miner", 700, "monster", 260
+end
+
+-- The client's map art, in the shape C_Map really answers it: one layer saying
+-- how big the whole image is and how big a tile of it is, and a flat list of
+-- tiles in reading order. 1002 by 668 in squares of 256 is four across and
+-- three down, and the right column and the bottom row are part tiles padded out
+-- to 256, which is the whole reason the addon crops them.
+local ART = {
+	[37] = { layerWidth = 1002, layerHeight = 668, tileWidth = 256, tileHeight = 256 },
+	[52] = { layerWidth = 1002, layerHeight = 668, tileWidth = 256, tileHeight = 256 },
+}
+local NAMED = { [37] = "Elwynn Forest", [52] = "Westfall" }
+
+-- Where you are standing. Westfall, which is the zone the map opens on, so the
+-- dot for you is drawn; step to Elwynn and it must not be.
+local standing = { map = 52, x = 48, y = 52 }
+
+_G.C_Map = {
+	GetMapArtLayers = function(map)
+		local art = ART[map]
+		return art and { art } or {}
+	end,
+	GetMapArtLayerTextures = function(map)
+		if not ART[map] then
+			return {}
+		end
+		local files = {}
+		for index = 1, 12 do
+			files[index] = 500000 + map * 100 + index
+		end
+		return files
+	end,
+	GetMapInfo = function(map)
+		local name = NAMED[map]
+		return name and { name = name, mapID = map } or nil
+	end,
+	GetBestMapForUnit = function() return standing.map end,
+	GetPlayerMapPosition = function(map)
+		if map ~= standing.map then
+			return nil
+		end
+		return { GetXY = function() return standing.x / 100, standing.y / 100 end }
+	end,
+}
+
+--------------------------------------------------------------------------
 
 -- What a section reads to check the etiquette rather than the drawing. The
 -- cursor is the one that matters: every reading the window takes has to leave
 -- the selection where it found it.
 H.quests = {
+	-- The map art, so a section can take a zone's picture away and reach the
+	-- one branch a fixture cannot hold permanently: a map id Questie knows and
+	-- this client has no picture for.
+	art = ART,
+	standing = standing,
 	rows = ROWS,
 	text = TEXT,
 	watched = watched,

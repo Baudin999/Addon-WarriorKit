@@ -107,7 +107,9 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   line telling you what to press or what to type. Adding a line to every
   tooltip about an item is one call at load. That is how the vendor and auction
   prices work, which is why they now show up on a mail attachment and not only
-  on the loot row they were written for.
+  on the loot row they were written for. The box docks in the corner the client
+  keeps its own tooltip in, clear of the bags, so nothing you hover is covered
+  by what it says. `/wk tips beside` puts it back next to the thing itself.
 
   A creature in the world gets the same box. It is the one hover nothing in the
   addon owns a frame for, since the cursor is over the world itself and the

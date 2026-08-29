@@ -29,6 +29,24 @@ local function SizeWord(arg)
 	ns.Print("UI size " .. Settings.Describe() .. ".")
 end
 
+-- Two words rather than one on/off, because "tips off" would read as turning
+-- the tooltips off and there is no such setting. Both answers have a name and
+-- typing neither reports where the box goes.
+local function TipsWord(arg)
+	local value = arg:match("^(%S*)"):lower()
+
+	if value == "docked" then
+		Settings.SetDocked(true)
+	elseif value == "beside" then
+		Settings.SetDocked(false)
+	elseif value ~= "" then
+		ns.Print("tips takes docked or beside.")
+		return
+	end
+
+	ns.Print("a hover opens " .. Settings.DescribeDock() .. ".")
+end
+
 ns.Register({
 	name = "settings",
 	order = 19,
@@ -39,14 +57,21 @@ ns.Register({
 		-- default is a preference of "leave it alone" rather than a number that
 		-- happens to suit one monitor.
 		uiSize = 1,
+
+		-- Docked. It is where this game has put a tooltip since the day it
+		-- shipped, and a box beside the row under the cursor covers the row you
+		-- were about to click.
+		tipDock = true,
 	},
 
 	words = {
 		uisize = SizeWord,
+		tips = TipsWord,
 	},
 
 	help = {
 		"uisize 0.5 to 3 in quarters, how big the addon's own windows are",
+		"tips docked|beside, where a hover's box opens",
 	},
 
 	status = function()
@@ -55,6 +80,7 @@ ns.Register({
 
 	reset = function()
 		Settings.Set(ns.DefaultFor("uiSize"))
+		Settings.SetDocked(ns.DefaultFor("tipDock"))
 	end,
 
 	panel = function(ui)
@@ -81,8 +107,14 @@ ns.Register({
 		-- twice, and it stopped being about feeds the moment every hover in the
 		-- addon started going through the same box.
 		ui.Section("Hovers", "The screen")
-		ui.Lede("Every hover in the addon opens the same box, in the same palette as this window. There is no setting here; both lines say what it can do on this client.")
+		ui.Lede("Every hover in the addon opens the same box, in this window's palette.")
 
+		ui.Check("dock it where the client keeps its own",
+			Settings.Docked,
+			Settings.SetDocked)
+		ui.Hint("The corner is read off the client rather than guessed, so it moves when the bags do.")
+
+		ui.Reading("a hover opens", Settings.DescribeDock)
 		ui.Reading("the client's own text", ns.UI.Scan.Describe)
 		ui.Reading("hooked into a hover", ns.Tip.Describe)
 	end,
