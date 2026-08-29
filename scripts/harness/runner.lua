@@ -121,10 +121,11 @@ local SECTIONS = {
 	"44-hover",
 	"45-chat-keys",
 	"46-mail",
+	"47-quest-log",
 	-- Last, and it registers a source of its own that stays registered. A
 	-- section after this one would be reading tooltips with the harness's own
 	-- line hooked into them.
-	"47-tooltips",
+	"48-tooltips",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

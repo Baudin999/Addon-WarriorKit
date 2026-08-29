@@ -319,6 +319,7 @@ Unit/Color.lua:Color.Frame
 Unit/Color.lua:Color.OfUnit
 Unit/Color.lua:Color.Dim
 Unit/Level.lua:Level.Tag
+Unit/Level.lua:Level.WorthOf
 Unit/Level.lua:Level.Worth
 Unit/Level.lua:Level.Of
 Unit/Roster.lua:Roster.Units

@@ -81,6 +81,33 @@ UI.Color = {
 	hint     = { 0.55, 0.72, 1.00 },
 }
 
+-- What an item's grade is drawn in, keyed by the number the client grades on.
+--
+-- ITEM_QUALITY_COLORS is the client's own and would do for the numbers, but
+-- every guard in UI/Feed.lua compares a colour by table identity, so a palette
+-- read fresh out of the client on each row would fail every one of those guards
+-- and repaint a colour that had not changed. These are stable references, which
+-- is the same reason Unit/Color.lua owns its own tables.
+--
+-- The numbers are the client's where it will say and the game's well known ones
+-- where it will not, so a client with no ITEM_QUALITY_COLORS draws the right
+-- colours rather than eight greys.
+--
+-- Here rather than in Feeds/Loot.lua, where it was written, because the quest
+-- log's reward column is a second reader and a part may not name a file outside
+-- its own tree. A palette with two readers is a palette, which is what this
+-- file is for.
+UI.Quality = {
+	[0] = { 0.62, 0.62, 0.62 },
+	[1] = { 1.00, 1.00, 1.00 },
+	[2] = { 0.12, 1.00, 0.00 },
+	[3] = { 0.00, 0.44, 0.87 },
+	[4] = { 0.64, 0.21, 0.93 },
+	[5] = { 1.00, 0.50, 0.00 },
+	[6] = { 0.90, 0.80, 0.50 },
+	[7] = { 0.00, 0.80, 1.00 },
+}
+
 -- Whole pixels, every one of them. The three font sizes are pixels too, because
 -- inside an adopted frame a font size is a pixel height rather than a point.
 UI.Metric = {

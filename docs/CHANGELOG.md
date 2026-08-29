@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### A quest log you can see all of
+
+The client's log draws six of your quests through a slot. Twenty do not fit, so
+the log you are carrying is something you scroll a strip to see an eighth of,
+and clicking a quest pushes the list off the window to show you its text. Every
+question you actually open the log to ask is about the whole log at once. What
+can I hand in. What have I outlevelled. None of them can be asked of six lines.
+
+So this one is three columns and the left one is the log, all of it, zone by
+zone, and it does not move when you click something. A quest ready to hand in is
+green, one that failed is red, and everything else is on the same experience
+ladder the enemy bars colour a mob's level with, so what is worth doing now is
+legible before you read a word of it.
+
+The middle column puts the objectives first and the giver's story second, which
+is the opposite of the client's order and the right one after the first read.
+You have read the story. What you came back for is three of eight.
+
+The right column is what the quest pays: the choices apart from the items you
+get regardless, each with its own real tooltip, the coin, and the spell or the
+title where there is one. Under that go two lines the client cannot answer and
+Questie can, when Questie is installed: who takes the quest back, and how far
+away the nearest thing you still have to kill is. Nothing here replaces Questie
+or touches its map icons. It reads what Questie already knows and spends on a
+tracker sorted by zone.
+
+Blizzard's log goes in the attic and `L` opens this one. `/wk quests hide off`
+puts both back the way they were, and `/wk quests off` turns the window off
+entirely.
+
 ### A mail window that says who you are sending to
 
 The client's has one recipient field and it looks the same whatever you type in

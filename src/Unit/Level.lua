@@ -63,9 +63,8 @@ end
 -- A client with no GetQuestGreenRange gets green rather than grey for the mobs
 -- below that line. Grey is a claim that the kill is worth zero, and that claim
 -- needs the number the shim could not get.
-function Level.Worth(unit)
-	local level = UnitLevel(unit) or 0
-	if level <= 0 then
+function Level.WorthOf(level)
+	if type(level) ~= "number" or level <= 0 then
 		return Color.xp.deadly
 	end
 
@@ -83,6 +82,16 @@ function Level.Worth(unit)
 		return Color.xp.none
 	end
 	return Color.xp.easy
+end
+
+-- The same scale read off a unit, which is every caller but one.
+--
+-- The number is the question and the unit is one way of asking it. The quest
+-- log is the other: a quest carries a level and no unit at all, and a second
+-- copy of this ladder written against a number is a second copy that drifts on
+-- the first change to GetQuestGreenRange.
+function Level.Worth(unit)
+	return Level.WorthOf(UnitLevel(unit) or 0)
 end
 
 -- Both halves, for the one caller that draws them together. Two returns rather

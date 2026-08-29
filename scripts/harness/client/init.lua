@@ -183,6 +183,18 @@ for _, part in ipairs({
 	-- be the outermost of the two: a frame asked for with GameTooltipTemplate
 	-- has to reach this whatever else is layered underneath.
 	"11-tooltip",
+	-- After 05-quests and after 09-group, and both matter. It replaces the two
+	-- log calls 05-quests installed with a log that has zone headers in it,
+	-- which is the shape the client really answers and the shape Quests/Log.lua
+	-- exists to fold; the quest that file's clutter fixtures need you to be on
+	-- is still in it. And it makes a frame, so it has to come after the last
+	-- word on CreateFrame.
+	--
+	-- Below 11-tooltip rather than above it, which does not break that file's
+	-- claim to be last: what it is last at is wrapping CreateFrame, and this
+	-- file wraps nothing. It asks for one frame through the region helper and
+	-- installs plain functions on _G beside it.
+	"12-questlog",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

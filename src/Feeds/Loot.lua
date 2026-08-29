@@ -30,27 +30,15 @@ local C = ns.UI.Color
 -- Nothing here is on a ticker. An item drops when it drops.
 --------------------------------------------------------------------------
 
--- The quality palette, as tables this file owns.
+-- The quality palette, which lives in UI/Theme.lua.
 --
--- ITEM_QUALITY_COLORS is the client's and would do for the numbers, but every
--- guard in UI/Feed.lua compares a colour by table identity, so a palette read
--- fresh out of the client on each row would fail every one of those guards and
--- repaint a colour that had not changed. These are stable references, which is
--- the same reason Unit/Color.lua owns its own tables.
---
--- The numbers are the client's where it will say and the game's well known ones
--- where it will not, so a client with no ITEM_QUALITY_COLORS draws the right
--- colours rather than eight greys.
-local QUALITY = {
-	[0] = { 0.62, 0.62, 0.62 },
-	[1] = { 1.00, 1.00, 1.00 },
-	[2] = { 0.12, 1.00, 0.00 },
-	[3] = { 0.00, 0.44, 0.87 },
-	[4] = { 0.64, 0.21, 0.93 },
-	[5] = { 1.00, 0.50, 0.00 },
-	[6] = { 0.90, 0.80, 0.50 },
-	[7] = { 0.00, 0.80, 1.00 },
-}
+-- It was written here and moved when the quest log's reward column became its
+-- second reader. The tables are the same tables, which matters: every guard in
+-- UI/Feed.lua compares a colour by table identity, so a palette read fresh out
+-- of the client on each row would fail every one of those guards and repaint a
+-- colour that had not changed. Taken into a local at load, the same as the
+-- palette and the metrics above it.
+local QUALITY = ns.UI.Quality
 
 -- The number of qualities the chips and the filter know about, which is the
 -- five the game grades an item on. Six and seven exist and are the heirloom and

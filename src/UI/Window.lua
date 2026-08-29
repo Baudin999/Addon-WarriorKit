@@ -932,10 +932,19 @@ local function PaintListRow(button)
 	-- the heading colour, a room with something in it is the body colour, and a
 	-- quiet room is dim. The count on the right is what says how much; the
 	-- colour is what you see without reading it.
+	--
+	-- A row may also carry a colour of its own, which overrides the middle of
+	-- the three and never the selected one. The quest log is what asked: a
+	-- quest's level colour is the difference between a fight you walk into and
+	-- one you die in, and it is a fact about the row rather than about whether
+	-- you have read it. Selected still wins, because which row you are on has
+	-- to be legible before anything the row says is.
 	local color = C.dim
 	local light = QUIET
 	if button.selected then
 		color, light = C.heading, FULL
+	elseif button.tint then
+		color, light = button.tint, WAITING
 	elseif button.unread and button.unread > 0 then
 		color, light = C.text, WAITING
 	end
@@ -1075,6 +1084,7 @@ function List:Row(index, row)
 	button.header = row.header and true or false
 	button.id = row.id
 	button.unread = row.unread or 0
+	button.tint = row.color
 	button.selected = (row.id ~= nil and row.id == self.selected)
 
 	if self.icons then
@@ -1115,6 +1125,7 @@ end
 --   row.label   what it says, or what its hover says in an icon column
 --   row.icon    the texture on it, in an icon column
 --   row.unread  how many lines arrived here while you were somewhere else
+--   row.color   the row's own colour, used when it is not the selected one
 --
 -- The selection is kept by id across a refresh, so a whisper arriving while you
 -- are reading the guild does not move you.

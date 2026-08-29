@@ -164,6 +164,14 @@ globals = {
 	-- handing out a reference to its own row pool.
 	"WarriorKitMail",
 	"WarriorKitMailFavourites",
+	-- the quest log, and the column of quests down its left. Both named for the
+	-- reason the mail window and its favourites column are, and the column for
+	-- one more: a log grouped into zones lays sixty rows out from a model, and a
+	-- column that has laid them out wrongly has to be measurable from a macro
+	-- and from scripts/harness.lua without Quests/Window.lua handing out a
+	-- reference to its own pool.
+	"WarriorKitQuests",
+	"WarriorKitQuestList",
 	"BINDING_HEADER_WARRIORKIT",
 	"BINDING_NAME_WARRIORKIT_MARK_SKULL",
 	"BINDING_NAME_WARRIORKIT_MARK_CROSS",
@@ -339,11 +347,25 @@ read_globals = {
 	-- repair, which is the right way round to be wrong.
 	"CanMerchantRepair", "GetRepairAllCost", "RepairAllItems",
 	"GetInventoryItemDurability",
-	-- The quest log, for the clutter scan. Questie calls both of these
-	-- unguarded on both clients and reads the quest id out of the eighth value
-	-- exactly as Clutter.lua does. IsQuestFlaggedCompleted is not here: it lives
-	-- on the loose global on one client and under C_QuestLog on the other, so it
-	-- is resolved through _G the way Questie resolves it.
+	-- The quest log, for the clutter scan and for the Quests part. Questie calls
+	-- both of these unguarded on both clients and reads the quest id out of the
+	-- eighth value exactly as Clutter.lua and Quests/Client.lua do.
+	-- IsQuestFlaggedCompleted is not here: it lives on the loose global on one
+	-- client and under C_QuestLog on the other, so it is resolved through _G the
+	-- way Questie resolves it.
+	--
+	-- Every other quest log call the addon makes is deliberately absent, all
+	-- eighteen of them. Questie proves some and not others, the two clients
+	-- genuinely differ on the rest, and three of them move somebody's quest, so
+	-- Quests/Client.lua reaches the lot through _G and probes each at its own
+	-- call site: SelectQuestLogEntry, GetQuestLogSelection, ExpandQuestHeader,
+	-- GetQuestLogIndexByID, GetQuestLogQuestText, GetNumQuestLeaderBoards,
+	-- GetQuestLogLeaderBoard, GetQuestLogTimeLeft, the six reward calls,
+	-- GetQuestLogItemLink, GetQuestLogRequiredMoney, IsQuestWatched, the watch
+	-- pair, GetQuestLogPushable, QuestLogPushQuest, the abandon pair and
+	-- ToggleQuestLog. GetQuestLogRewardXP is not a client call at all on either
+	-- of these builds; Questie's own LibQuestXP writes that global, so absent is
+	-- the normal answer rather than a failure.
 	"GetNumQuestLogEntries", "GetQuestLogTitle",
 	-- QuestieLoader, PickupContainerItem's loose fallback and DeleteCursorItem
 	-- are deliberately absent. Questie is another addon and may not be

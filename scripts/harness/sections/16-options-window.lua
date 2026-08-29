@@ -413,11 +413,12 @@ if window then
 	-- fifty-three, none of its strings longer than the ones already here. The
 	-- mouseover casting page costs 897 across three sections and takes it to
 	-- 18,685 across fifty-six. The mail page costs 683 across three controls and
-	-- takes it to 19,368 across fifty-seven. 19,500 is that measurement plus a
-	-- hint's worth of room, checked on the warrior run, which is the class with
-	-- the most sections.
-	check(prose < 19500,
-		("the window holds %d characters of prose and the budget is 19,500"):format(prose))
+	-- took it to 19,147 across fifty-seven. The quest log page costs 444 across
+	-- two controls and takes it to 19,591 across fifty-eight. 19,750 is that
+	-- measurement plus a hint's worth of room, checked on the warrior run, which
+	-- is the class with the most sections.
+	check(prose < 19750,
+		("the window holds %d characters of prose and the budget is 19,750"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))
