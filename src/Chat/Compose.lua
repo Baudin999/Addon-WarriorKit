@@ -202,6 +202,22 @@ local SECURE = {
 	click = true, changeactionbar = true, swapactionbar = true,
 }
 
+-- The line the button carries, when it is not the line you typed.
+--
+-- /exit is nobody's command in this client. The two words it knows for leaving
+-- are /quit and /camp, and a button loaded with /exit would arrive at a slash
+-- list with no such entry and do nothing at all, which is the one failure that
+-- looks exactly like the bug this whole section exists to fix.
+--
+-- Translating here rather than registering /exit as a slash command of our own
+-- is the difference between working and not: a command of ours is our function,
+-- our function is a tainted call stack, and Quit() is refused from one. The
+-- client's own /quit is Blizzard's function, and the button runs it as the
+-- client's work.
+local ALIAS = {
+	exit = "/quit",
+}
+
 local BUTTON_NAME = "WarriorKitChatSecureButton"
 
 -- The button, once there has been a line for it, and the line it is holding.
@@ -226,7 +242,17 @@ local function Button()
 	if not ok or not made then
 		return nil
 	end
-	made:RegisterForClicks("AnyDown")
+	-- Both edges of the key, and the reason is the press that arms it. The first
+	-- enter arrives at the field as a key down, the field runs the line, loads
+	-- the button and gives the focus up, and the key up that follows lands on a
+	-- key that now carries the button. A button on the up runs there, in the
+	-- same press, which is the one press this ought to have been all along. A
+	-- client that does not deliver that leaves the down of the next press, which
+	-- is the second press this was written for.
+	--
+	-- It cannot run twice. PostClick hands the key back and empties the
+	-- macrotext, so whichever edge is second finds a button with nothing on it.
+	made:RegisterForClicks("AnyUp", "AnyDown")
 	made:SetAttribute("type", "macro")
 	-- The client has run the line by the time this fires. What is left is
 	-- handing the enter key back to the chat window.
@@ -272,8 +298,12 @@ local function Carries(key)
 end
 
 -- Loads the line onto the button and puts the button under the enter key.
--- False when the client will not have it, which is combat: an override binding
--- is a change to the binding set and the client refuses those under lockdown.
+--
+-- Returns false and a reason, and the reason is the point. There are three ways
+-- this can refuse and they need three different things from the player: a fight
+-- ends, a client with no override bindings never will, and a key that would not
+-- take the claim is somebody else's key. One "it did not work" for all three is
+-- the sentence that sent this bug round twice.
 --
 -- The window gives the key up first. Both claims are override bindings on the
 -- same key, and which one a press reaches is the client's arrangement rather
@@ -283,10 +313,10 @@ end
 function Compose.Arm(text)
 	local button = Button()
 	if not button or type(_G.SetOverrideBindingClick) ~= "function" then
-		return false
+		return false, "this client will not let the addon put a line on a key"
 	end
 	if _G.InCombatLockdown and _G.InCombatLockdown() then
-		return false
+		return false, "the addon cannot move a key in combat"
 	end
 	if ns.ChatWindow and ns.ChatWindow.Yield then
 		ns.ChatWindow.Yield()
@@ -304,10 +334,16 @@ function Compose.Arm(text)
 		if ns.ChatWindow and ns.ChatWindow.Keys then
 			ns.ChatWindow.Keys()
 		end
-		return false
+		return false, "the client would not put the line on the chat key"
 	end
 	button:SetAttribute("macrotext", text)
 	armed = text
+	-- The field says what the key is holding. It is the only sentence a player
+	-- who has hidden Blizzard's window is certain to read, because it is under
+	-- the cursor they just pressed enter on.
+	if ns.ChatWindow and ns.ChatWindow.Paint then
+		ns.ChatWindow.Paint()
+	end
 	return true
 end
 
@@ -326,6 +362,9 @@ function Compose.Disarm()
 	end
 	secure:SetAttribute("macrotext", "")
 	armed = nil
+	if ns.ChatWindow and ns.ChatWindow.Paint then
+		ns.ChatWindow.Paint()
+	end
 	-- The chat window owns enter the rest of the time, and this is where it
 	-- gets it back rather than being assumed to have survived underneath.
 	if ns.ChatWindow and ns.ChatWindow.Keys then
@@ -340,16 +379,58 @@ function Compose.Armed()
 	return armed
 end
 
--- A line the client will only take from a key of its own. Loads it and says so,
--- in the log, where the rest of what the addon has to say already is.
+-- What the addon has to say about a line you just typed, in the room you typed
+-- it in.
+--
+-- ns.Print writes to Blizzard's window, and every player this window is for has
+-- hidden Blizzard's window. The sentence came back round through the hook on
+-- AddMessage and landed in the System room, which is not the room anybody
+-- typing has open, so the handover below announced itself into an empty theatre
+-- and the whole thing looked from the field like a key press that did nothing.
+local function Say(text)
+	if ns.ChatWindow and ns.ChatWindow.Tell and ns.ChatWindow.Tell(text) then
+		return
+	end
+	ns.Print(text)
+end
+
+-- A line the client will only take from a key of its own. Loads it and says so.
+--
+-- The refusal carries the reason it was given rather than a sentence of its
+-- own, because a player who is told "it did not work" three different ways for
+-- three different causes learns nothing from any of them.
 local function Handover(text)
-	if Compose.Arm(text) then
-		ns.Print(("%s is the client's to run rather than the addon's. Press enter again and it goes."):format(text))
+	local ok, why = Compose.Arm(text)
+	if ok then
+		Say(("%s is the client's to run rather than the addon's, so it is on the enter key. Press enter."):format(text))
 		return true
 	end
-	ns.Print(("%s is the client's to run and the addon cannot put it on a key now. Type it in the client's own chat line."):format(text))
+	Say(("%s is the client's to run and %s. Type it in the client's own chat line."):format(text, why))
 	return false
 end
+
+--------------------------------------------------------------------------
+-- Leaving
+--
+-- /exit, because the client has no word for quitting that reads like one. /quit
+-- is the word it has, and nobody types it, because every other program in the
+-- world calls it exit.
+--
+-- The handler cannot call Quit() itself. It is our function, our function is a
+-- tainted call stack, and Quit() is refused from one, which is the same wall
+-- /logout hits. So it does what the field does and puts the client's own /quit
+-- on the enter key.
+--
+-- Registered whether or not the chat part is on, because a word for leaving is
+-- not a chat feature and Compose.Arm needs no window.
+--------------------------------------------------------------------------
+
+SLASH_WARRIORKITEXIT1 = "/exit"
+SlashCmdList.WARRIORKITEXIT = function()
+	Handover("/quit")
+end
+
+--------------------------------------------------------------------------
 
 -- One line, in the room named by kind and target. Public because the edit box
 -- is not the only thing that sends: a slash word and the harness want the same
@@ -367,8 +448,9 @@ function Compose.Send(text, kind, target)
 	local channel, who, body = Compose.Parse(text, kind, target)
 	if not channel then
 		local word = text:match("^/(%a+)")
-		if word and SECURE[word:lower()] then
-			return Handover(text)
+		word = word and word:lower()
+		if word and SECURE[word] then
+			return Handover(ALIAS[word] or text)
 		end
 		return SendSlash(text)
 	end

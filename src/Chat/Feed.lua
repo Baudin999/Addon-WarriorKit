@@ -128,6 +128,13 @@ local function Stamp()
 	return GRAY:format(date("%H:%M")) .. " "
 end
 
+-- Public because Chat/Window.lua writes one line of its own, into the room you
+-- are reading rather than into the System room, and a line without the stamp
+-- every other line in that log carries reads as a line from somewhere else.
+function Feed.Stamp()
+	return Stamp()
+end
+
 -- The class colour of whoever spoke, as an escape code.
 --
 -- The GUID is the only reliable way to it: the client puts one on every chat

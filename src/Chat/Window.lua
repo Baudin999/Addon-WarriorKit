@@ -210,10 +210,33 @@ end
 -- to, and they answered it in the one place you are not looking when you start
 -- typing. Here it is under the cursor, and the moment there is a character in
 -- the line it gets out of the way, because from then on the line says it.
+--
+-- A line waiting on the enter key takes the sentence over, because that is the
+-- one thing the field could say that you do not already know. The empty line is
+-- where you are looking the moment after you pressed enter, and it is the only
+-- place the addon can put a sentence that the player is certain to read: what
+-- ns.Print writes goes to Blizzard's window, and this window's whole
+-- arrangement is that Blizzard's window is not on the screen.
 local function Paint()
+	local armed = ns.Compose.Armed()
+	if armed then
+		entry.ghost:SetText(("press enter again and %s goes"):format(armed))
+		return
+	end
 	local kind, target = ns.Rooms.Target(active)
 	entry.ghost:SetText(("%s, %s"):format(ns.Rooms.Title(active),
 		ns.Compose.Note(kind, target)))
+end
+
+-- Written again after the enter key was loaded or handed back, from
+-- Chat/Compose.lua, which is the only thing that changes what the line above
+-- has to say without also changing the room.
+function ChatWindow.Paint()
+	if not built then
+		return false
+	end
+	Paint()
+	return true
 end
 
 local function Show(id)
@@ -637,6 +660,13 @@ local function Build()
 	ns.Voice.OnChange = Lit
 
 	enterButton = CreateFrame("Button", ENTER_NAME, window.frame)
+	-- On the key going down, which is where the client's own OPENCHAT is and is
+	-- also what keeps this button out of the way of the secure one. A line run
+	-- off Chat/Compose.lua's button hands the enter key back here the instant it
+	-- has run, which is inside the same press; a button waiting on the key
+	-- coming up would take that release and open the chat line on the end of
+	-- every command you typed.
+	enterButton:RegisterForClicks("AnyDown")
 	enterButton:SetScript("OnClick", function() ChatWindow.Focus() end)
 	slashButton = CreateFrame("Button", SLASH_NAME, window.frame)
 	slashButton:SetScript("OnClick", function() ChatWindow.Slash() end)
@@ -780,6 +810,14 @@ end
 -- agree with itself.
 function ChatWindow.Mic()
 	return built and voice.text or nil
+end
+
+-- The sentence in the empty line, for the harness. Handed out for the reason
+-- the field and the microphone above are: what is being checked is the words a
+-- player reads under the cursor, and a string this file recomputed is a string
+-- this file could recompute wrongly and still agree with itself.
+function ChatWindow.Ghost()
+	return built and entry.ghost:GetText() or nil
 end
 
 function ChatWindow.Built()
@@ -1019,6 +1057,26 @@ end
 function ChatWindow.Send(text)
 	local kind, target = ns.Rooms.Target(active)
 	return ns.Compose.Send(text, kind, target)
+end
+
+-- One line from the addon, in the room you are reading.
+--
+-- The addon's own voice is ns.Print, and ns.Print writes to Blizzard's window.
+-- While that window is hidden the line comes back round through the hook on
+-- AddMessage and lands in the System room, which is not the room anybody typing
+-- has open. A sentence about the line you just typed belongs where you typed
+-- it, so this exists and Chat/Compose.lua uses it.
+--
+-- Refused while the window is down, and the refusal is what sends the caller
+-- back to ns.Print. A window that is not on the screen is a window whose logs
+-- nobody is reading, and Blizzard's own is up in that case anyway.
+function ChatWindow.Tell(text)
+	if not built or not window:IsShown() or type(text) ~= "string" or text == "" then
+		return false
+	end
+	OnLine({ active }, ("%s|cff40c0f0WarriorKit|r: %s"):format(ns.ChatFeed.Stamp(), text),
+		C.quiet[1], C.quiet[2], C.quiet[3], false)
+	return true
 end
 
 --------------------------------------------------------------------------

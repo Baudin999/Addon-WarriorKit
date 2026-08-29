@@ -558,6 +558,7 @@ do
 	-- naming the addon. So it goes onto a secure button under the enter key and
 	-- the next press is the client's own work.
 	local handed = #chat.slash
+	local said = Window.Count(Window.Room())
 	Window.Send("/logout")
 	check(#chat.slash == handed,
 		"/logout went to the client's parser, where it comes back as a blocked action")
@@ -567,6 +568,19 @@ do
 		("enter is on %q"):format(tostring(_G.GetBindingAction("ENTER", true))))
 	check(_G.WarriorKitChatSecureButton:GetAttribute("macrotext") == "/logout",
 		"the button was armed with something other than the line typed")
+
+	-- The empty line says what the key is holding, and that is the whole point
+	-- of the sentence: ns.Print writes to Blizzard's window, every player using
+	-- this window has hidden Blizzard's window, and the hint landed in the
+	-- System room while the player sat looking at the field. From the field it
+	-- looked like a key press that did nothing.
+	check(Window.Ghost() == "press enter again and /logout goes",
+		("the empty line reads %q"):format(tostring(Window.Ghost())))
+	-- And the sentence is in the room the line was typed in rather than in the
+	-- System room, which is the same argument one line further out.
+	check(Window.Count(Window.Room()) == said + 1,
+		("the handover put %d lines in the room the line was typed in")
+			:format(Window.Count(Window.Room()) - said))
 
 	-- Coming back to the field is a change of mind, and the window gets enter
 	-- back. A key left loaded is a key that no longer opens the chat line.
@@ -578,6 +592,43 @@ do
 	-- that one is a key that runs a line nobody typed.
 	check(_G.GetBindingAction("ENTER", true) ~= "CLICK WarriorKitChatSecureButton:LeftButton",
 		"enter was left on the secure button after the line was called off")
+	check(Window.Ghost() ~= nil and Window.Ghost():find("press enter again", 1, true) == nil,
+		("the empty line still reads %q after the line was called off")
+			:format(tostring(Window.Ghost())))
+
+	-- /exit is nobody's command in this client, so the button carries /quit.
+	-- A button loaded with the word the player typed would reach a slash list
+	-- with no such entry and do nothing at all, which looks from the field
+	-- exactly like the bug this whole arrangement is for.
+	Window.Send("/exit")
+	check(Compose.Armed() == "/quit",
+		("/exit loaded the key with %s rather than the client's own word for it")
+			:format(tostring(Compose.Armed())))
+	check(_G.WarriorKitChatSecureButton:GetAttribute("macrotext") == "/quit",
+		"the button was armed with something other than /quit")
+	Window.Focus()
+
+	-- A refusal says which refusal it is. There are three, they need three
+	-- different things from the player, and one "it did not work" for all of
+	-- them is the sentence that sent this bug round twice.
+	local wasCombat = _G.InCombatLockdown
+	_G.InCombatLockdown = function() return true end
+	local told = Window.Count(Window.Room())
+	Window.Send("/logout")
+	check(Compose.Armed() == nil, "a key was loaded in combat, which the client refuses")
+	check(Window.Count(Window.Room()) == told + 1,
+		"a refusal in combat said nothing in the room the line was typed in")
+	_G.InCombatLockdown = wasCombat
+
+	-- And the same word typed anywhere else in the game, because /exit is a
+	-- slash command of the addon's own rather than a spelling the chat field
+	-- knows. The handler cannot call Quit() itself: it is our function, and a
+	-- protected call refuses our call stack the same way /logout's does.
+	_G.SlashCmdList.WARRIORKITEXIT("")
+	check(Compose.Armed() == "/quit",
+		("/exit typed outside the window loaded the key with %s")
+			:format(tostring(Compose.Armed())))
+	Window.Focus()
 
 	-- And again with Blizzard's window hidden, which is the arrangement every
 	-- player who uses this window is in and the one the two claims collide in.

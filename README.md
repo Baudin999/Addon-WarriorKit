@@ -177,7 +177,8 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   the quest it came from written on it, and a destroy and a skip. It reads
   Questie's database to work out which quest, so it needs Questie installed.
 
-`/wk` opens the settings panel. Everything in it has a slash command too.
+`/wk` opens the settings panel. Everything in it has a slash command too, and
+`/exit` quits the client, which the game itself only spells `/quit`.
 
 The Charge button, the bar loadout and the Slam band are warrior only, and on
 any other class they are not there at all: no button, no icon in the world, no
