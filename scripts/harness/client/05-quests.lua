@@ -146,10 +146,34 @@ _G.HasAction = function(slot) return slots[slot] ~= nil end
 -- everything but a plain spell is reachable from a test rather than assumed.
 _G.GetActionInfo = function(slot)
 	local held = slots[slot]
-	if not held or not held.spell then
+	if not held then
+		return nil
+	end
+	-- A macro answers "macro" and the index of the macro, which is where every
+	-- reader in the addon used to stop. The index is not a spell id and asking
+	-- the wrong call about it is the bug the second return exists to catch.
+	if held.macro then
+		return "macro", held.macro
+	end
+	if not held.spell then
 		return nil
 	end
 	return "spell", held.spell
+end
+-- What a macro's conditionals resolve to, which is the only way to ask a macro
+-- square what a press would cast.
+--
+-- Modelled off a table the test writes rather than stubbed flat, because both
+-- halves are reachable defects: a macro that resolves to nothing is a slot that
+-- has to fall back to the action-level answer, and a macro that resolves to a
+-- reactive is the hole the whole macro path was written to close.
+--
+-- Answers the name and not the id, which is one of the two shapes the live call
+-- takes. The other shape is driven from the section by writing a number here.
+local macroSpells = {}
+_G.WarriorKitMacroSpells = macroSpells
+_G.GetMacroSpell = function(index)
+	return macroSpells[index]
 end
 _G.GetActionTexture = function(slot)
 	local held = slots[slot]

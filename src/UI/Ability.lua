@@ -96,16 +96,17 @@ UI.Ability = Ability
 -- swap fixes, then range. Named here rather than in each source so a display
 -- cannot be handed a status no palette has a colour for.
 Ability.STATUS = {
-	empty    = true, -- the slot holds nothing
-	unknown  = true, -- there is an ability, this character cannot cast it
-	cooldown = true, -- on cooldown, longer than the global
-	reaction = true, -- a reactive ability whose window is shut
-	combat   = true, -- right ability, wrong side of the combat line
-	notarget = true, -- nothing to cast it on
-	stance   = true, -- wrong stance, or unusable for a reason that is not cost
-	cost     = true, -- not enough rage, mana, energy or focus
-	range    = true, -- everything else is fine and the unit is too far
-	ready    = true, -- press it
+	empty     = true, -- the slot holds nothing
+	unknown   = true, -- there is an ability, this character cannot cast it
+	cooldown  = true, -- on cooldown, longer than the global
+	reaction  = true, -- a reactive ability whose window is shut
+	condition = true, -- the fight has not met what the ability waits on
+	combat    = true, -- right ability, wrong side of the combat line
+	notarget  = true, -- nothing to cast it on
+	stance    = true, -- wrong stance, or unusable for a reason that is not cost
+	cost      = true, -- not enough rage, mana, energy or focus
+	range     = true, -- everything else is fine and the unit is too far
+	ready     = true, -- press it
 }
 
 -- Which of the six looks a status is worth. Everything absent is "no", which
@@ -147,6 +148,23 @@ Ability.STATUS = {
 -- of colour the paragraph at the top of this file argues against, and it would
 -- spend that colour on the state you are meant to ignore.
 --
+-- Condition and notarget take no new look either, and for the reason reaction
+-- does not. A target above a fifth of its health is not a state you can act on:
+-- you cannot walk out of it, you cannot wait it out on purpose, and the fight
+-- will hand it to you or it will not. That is the definition of "no". What says
+-- Execute has come in is the square leaving "no", which on a bar is a jump from
+-- 55% drained grey to full colour and is the biggest change any square makes.
+--
+-- Swap is drained, and it did not used to be. That was the defect this table
+-- shipped with. Wrong stance is the one outcome here where the press will not
+-- land and the art was drawn at ready brightness anyway, so the whole of what
+-- the square said was an orange hairline, and a Whirlwind in Battle Stance read
+-- as pressable across the room. The rule the rest of the table already follows
+-- is the one it now follows: a fact about you drains the art, a fact about the
+-- mob does not. Out of rage drains, out of range does not, and wrong stance is
+-- a fact about you. The orange keeps saying there is something you can do about
+-- it, which is what makes it worth a colour of its own rather than the grey.
+--
 -- Empty is pulled out for a different reason than range and cost are, and it is
 -- the one that made a half filled bar look broken. An empty slot has no art, so
 -- it fell to "no" and was drawn as the fallback question mark at 55% alpha:
@@ -179,7 +197,7 @@ local OUTCOME = {
 -- against. Ready is worth a colour here.
 Ability.SHOUT = {
 	go    = { color = { 0.16, 0.80, 0.32 }, alpha = 1 },
-	swap  = { color = { 0.96, 0.62, 0.16 }, alpha = 0.6 },
+	swap  = { color = { 0.96, 0.62, 0.16 }, alpha = 0.6, grey = true },
 	range = { color = { 0.85, 0.25, 0.22 }, alpha = 0.6 },
 	cost  = { color = { 0.29, 0.45, 0.85 }, alpha = 0.6, grey = true },
 	empty = { color = { 0.20, 0.20, 0.24 }, alpha = 1, blank = true },
@@ -191,7 +209,7 @@ Ability.SHOUT = {
 -- not ready rather than the twenty that are.
 Ability.QUIET = {
 	go    = { color = { 0.16, 0.16, 0.19 }, alpha = 1 },
-	swap  = { color = { 0.96, 0.62, 0.16 }, alpha = 1 },
+	swap  = { color = { 0.96, 0.62, 0.16 }, alpha = 1, grey = true },
 	range = { color = { 0.85, 0.25, 0.22 }, alpha = 1 },
 	cost  = { color = { 0.29, 0.45, 0.85 }, alpha = 1, grey = true },
 	empty = { color = { 0.13, 0.13, 0.16 }, alpha = 1, blank = true },

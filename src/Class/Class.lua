@@ -6,10 +6,10 @@ ns.Class = Class
 --------------------------------------------------------------------------
 -- What the addon knows about a class
 --
--- Six things in this addon are facts about a warrior rather than facts about
+-- Seven things in this addon are facts about a warrior rather than facts about
 -- Warcraft: the three stance spells, the three abilities the charge button
--- casts, the two abilities a fight hands you, Slam, Battle Shout on the upkeep
--- row, and the bar plan. Until now each lived in the file that used it and each
+-- casts, the two abilities a fight hands you, the one that waits on the
+-- target's health, Slam, Battle Shout on the upkeep row, and the bar plan. Until now each lived in the file that used it and each
 -- asked ns.IsWarrior for itself, so the addon knew it was a warrior addon in
 -- six places and there was nowhere to write down a seventh class.
 --

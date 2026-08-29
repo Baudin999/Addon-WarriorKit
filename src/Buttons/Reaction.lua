@@ -31,6 +31,12 @@ ns.Reaction = Reaction
 -- way: one handler, one subevent test, positional reads by index, and no state
 -- the log did not put there.
 --
+-- A macro counts. This file used to see a plain spell and nothing else, so an
+-- Overpower behind `#showtooltip` drew ready all fight and the gate had a hole
+-- in it exactly where a loadout would put one. Buttons/Slot.lua resolves both
+-- shapes to the client's own name for the spell and this file matches on that,
+-- so neither the hole nor the distinction exists here any more.
+--
 -- Which abilities work this way, and what opens each, is a fact about your
 -- class and lives in Class/<yours>.lua as `reactive`. This file knows two
 -- triggers and nothing else: `dodged` is your own attack being dodged, and
@@ -92,7 +98,6 @@ local DEFENDED = {
 -- states, so a square is never greyed on an answer this file does not have.
 local watching
 
-local readAction -- GetActionInfo, resolved once it has been proven to exist
 local playerGUID
 
 --------------------------------------------------------------------------
@@ -100,7 +105,7 @@ local playerGUID
 --------------------------------------------------------------------------
 
 local names = {}  -- key to this client's name for it, or false for no answer
-local keyOf = {}  -- spell id to key, or false for a spell that is neither
+local keyOf = {}  -- a spell's name to its key, or false for a spell that is neither
 
 -- Resolved on first use rather than at load, so no other file has to load after
 -- this one for it to work. Same shape as Charge.Name.
@@ -111,25 +116,29 @@ function Reaction.Name(key)
 	return names[key] or nil
 end
 
--- Which reactive ability a spell id is, memoised.
+-- Which reactive ability a spell is, taking the client's own name for it.
 --
--- The memo is what keeps this off the tick. ns.SpellName goes through
--- C_Spell.GetSpellInfo where that exists, which hands back a table, and asking
--- it per square per tick would allocate forty-eight of them ten times a second.
--- Asked once per spell id the bars have ever held, it allocates during the
--- first pass over a bar and never again.
+-- Called from Slot.State against every square on every bar ten times a second,
+-- so the answer is memoised. That is one table lookup per square once the bar
+-- has been walked a first time.
 --
--- A client that has not answered yet is not cached. Caching a false there would
--- lock every square out of the window for the rest of the session on the one
--- pass that ran before the spell data arrived.
-local function KeyForSpell(id)
-	local known = keyOf[id]
+-- The name and not the id, because the name is what the match was always
+-- against: every rank of Overpower is called Overpower, which is why one id per
+-- ability is enough here and a rank list would go stale at the next trainer
+-- visit. Taking it as a name is also what lets a macro through. Buttons/Slot.lua
+-- resolves both a plain spell and a macro to the same string, so this file no
+-- longer knows or cares which of the two a square holds.
+--
+-- Not cached until the client has named at least one of them. A false written
+-- before the spell data arrived would lock every square out of every window for
+-- the rest of the session.
+function Reaction.OfSpell(name)
+	if watching ~= true or not name then
+		return nil
+	end
+	local known = keyOf[name]
 	if known ~= nil then
 		return known or nil
-	end
-	local name = ns.SpellName(id)
-	if not name then
-		return nil
 	end
 	local found, answered = false, false
 	for index = 1, #keys do
@@ -143,40 +152,38 @@ local function KeyForSpell(id)
 			end
 		end
 	end
-	-- Not cached until the client has named at least one of them. A false
-	-- written before the spell data arrived would lock every square out of every
-	-- window for the rest of the session.
 	if not answered then
 		return nil
 	end
-	keyOf[id] = found
+	keyOf[name] = found
 	return found or nil
+end
+
+-- Which reactive ability a spell id is. The combat log's side of the same
+-- question: every line names a spell by id and every square names one by
+-- string, so the two meet here rather than in two copies of the match.
+local function KeyForSpell(id)
+	return Reaction.OfSpell(ns.SpellNameHeld(id))
 end
 
 -- Which reactive ability this action slot holds, or nil for the other
 -- twenty-three squares on the bar.
 --
--- Called from Slot.State, so it runs against every square on every bar ten
--- times a second. That is one GetActionInfo and one table lookup on top of the
--- nine client calls the ladder already makes per square, and nothing is cached
--- about the slot itself. Buttons/Slot.lua's rule is that nothing is held that
--- the client already holds, and what is in a slot is the client's to hold: a
--- cache here would need invalidating on every drag, every stance page and every
--- rank refresh, and would be wrong between the change and the event.
+-- A thin call now. Buttons/Slot.lua owns what is in a slot, including the macro
+-- case this used to give up on, and Slot.State reaches OfSpell directly with a
+-- name it has already resolved. What is left is the question asked of a slot,
+-- which is what the status line and the harness ask.
 --
--- Only a plain spell is recognised. A macro's text is yours and the client will
--- not say what a `/cast` line resolves to, so an Overpower wrapped in a macro
--- keeps the old behaviour and draws as ready. That is a real limit and it is
--- the same one Buttons/Ranks.lua takes for the same reason.
+-- Nothing is held against the slot itself. Buttons/Slot.lua's rule is that
+-- nothing is cached that the client already holds, and what is in a slot is the
+-- client's to hold: a cache here would need invalidating on every drag, every
+-- stance page and every rank refresh, and would be wrong between the change and
+-- the event.
 function Reaction.Of(slot)
 	if watching ~= true or not slot then
 		return nil
 	end
-	local kind, id = readAction(slot)
-	if kind ~= "spell" or not id then
-		return nil
-	end
-	return KeyForSpell(id)
+	return Reaction.OfSpell((ns.Slot.Spell(slot)))
 end
 
 --------------------------------------------------------------------------
@@ -342,11 +349,14 @@ local function Arm()
 		watching = "this client has no combat log to read, so neither window can be seen"
 		return
 	end
-	if type(_G.GetActionInfo) ~= "function" then
-		watching = "GetActionInfo is missing on this client, so no square can be told from another"
+	-- Asked of Buttons/Slot.lua rather than probed here. That file resolves
+	-- what is in a slot for the whole addon now, including the macro case, so a
+	-- second probe would be a second answer to a question that has one.
+	local canName, why = ns.Slot.CanName()
+	if not canName then
+		watching = why
 		return
 	end
-	readAction = _G.GetActionInfo
 
 	-- Built once, here, and read on the tick after that. Everything above has
 	-- already refused, so nothing half-filled is ever left behind.

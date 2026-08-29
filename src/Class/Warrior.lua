@@ -6,11 +6,12 @@ local Spell, Macro = ns.Class.Spell, ns.Class.Macro
 -- Warrior
 --
 -- Everything this addon knows about a warrior, and the only file in it that
--- names a warrior spell. Seven fields, each read by exactly one part:
+-- names a warrior spell. Eight fields, each read by exactly one part:
 --
 --   forms      Core\Stance.lua, and through it the charge macro
 --   charge     Charge\Charge.lua
 --   reactive   Buttons\Reaction.lua
+--   requires   Buttons\Requires.lua
 --   swing      Swing\Slam.lua
 --   upkeep     Buffs\Upkeep.lua, added to the row everybody gets
 --   cooldowns  Cooldowns\Cooldowns.lua, the row of long ones
@@ -170,6 +171,33 @@ ns.Class.Register("WARRIOR", {
 		window = 5,
 		{ key = "overpower", spell = 7384, on = "dodged" },
 		{ key = "revenge",   spell = 6572, on = "defended" },
+	},
+
+	--------------------------------------------------------------------------
+	-- What the fight has to have done before the press lands
+	--
+	-- Read by Buttons\Requires.lua, which owns what a condition means and knows
+	-- none of the abilities. One ability on a warrior meets the bar for being
+	-- here, and the bar is that the client has no opinion and the answer is a
+	-- fact rather than a guess.
+	--
+	-- Execute, rank 1, because every rank is called Execute and is matched by
+	-- name against this one. Twenty percent is the number in its own tooltip on
+	-- both of these clients and it is the whole rule: nothing about rage, nothing
+	-- about stance and nothing about talents moves it. Without this the square
+	-- drew ready from the pull, which is a bar shouting the one thing it should
+	-- stay quiet about for four fifths of a fight.
+	--
+	-- Nothing else a warrior owns belongs here yet. Overpower and Revenge are
+	-- next door in `reactive` because a window that arrives down the combat log
+	-- is a clock and not a reading. Pummel and Shield Bash look like candidates
+	-- and are deliberately absent: whether either may be pressed at a target
+	-- that is not casting differs between these two clients and nobody here has
+	-- measured it, and a square greyed on a rule the addon guessed at is worse
+	-- than one that says nothing.
+	--------------------------------------------------------------------------
+	requires = {
+		{ spell = 5308, below = 20 }, -- Execute, rank 1
 	},
 
 	--------------------------------------------------------------------------

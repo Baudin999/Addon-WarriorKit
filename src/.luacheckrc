@@ -155,6 +155,7 @@ globals = {
 	"BINDING_NAME_WARRIORKIT_CHAT",
 	"SLASH_WARRIORKIT1",
 	"SLASH_WARRIORKIT2",
+	"SLASH_WARRIORKITEXIT1",
 	"SlashCmdList",
 }
 
@@ -184,6 +185,12 @@ read_globals = {
 	"ClearCursor", "GetCursorInfo", "GetActionInfo",
 	"CreateMacro", "DeleteMacro", "EditMacro", "GetMacroInfo",
 	"GetMacroIndexByName", "GetNumMacros", "GetBonusBarOffset",
+	-- what a macro's own conditionals resolve to, which is the only way to ask
+	-- a macro square which spell a press would cast. Probed by Buttons/Slot.lua
+	-- for the same reason the rest of this block is: nothing installed here
+	-- proves it exists on 2.5.6, and a square that loses it loses two rungs of
+	-- the ladder rather than the bar.
+	"GetMacroSpell",
 	-- which frame the client says the cursor is over, read by Buttons/Trace.lua
 	-- and by nothing else. Probed by name at every call: this is the one API in
 	-- the addon whose only job is to answer a question about a bug, and a

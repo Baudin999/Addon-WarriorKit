@@ -27,7 +27,8 @@ ns.Slot = Slot
 --
 -- Everything here runs on the bar's ticker against every button on it, so
 -- nothing allocates and nothing is cached that the client already holds.
--- check.sh's HOT list covers Slot.State, Slot.Active and Slot.Equipped.
+-- check.sh's HOT list covers Slot.State, Slot.Spell, Slot.Active and
+-- Slot.Equipped.
 --------------------------------------------------------------------------
 
 -- Below this a cooldown is the global and not the ability's own, and the two
@@ -103,6 +104,15 @@ local probe
 -- the bar the rest of the file is held to, so none is assumed.
 local isCurrent, isRepeating, isEquipped
 
+-- The two that say which spell a press would cast. Same tier as the three
+-- above and for the same reason: a client missing either loses the two rungs
+-- that know more than the client does, and keeps the bar.
+--
+-- GetMacroSpell is the one that was never asked for. GetActionInfo alone says
+-- "macro" and stops there, which is where the honest answer used to end, and it
+-- ends there on five of the twelve keys the warrior plan writes.
+local readAction, macroSpell
+
 function Slot.CanRead()
 	if probe == nil then
 		probe = true
@@ -115,11 +125,76 @@ function Slot.CanRead()
 		isCurrent = type(IsCurrentAction) == "function" and IsCurrentAction or nil
 		isRepeating = type(IsAutoRepeatAction) == "function" and IsAutoRepeatAction or nil
 		isEquipped = type(IsEquippedAction) == "function" and IsEquippedAction or nil
+		readAction = type(GetActionInfo) == "function" and GetActionInfo or nil
+		macroSpell = type(GetMacroSpell) == "function" and GetMacroSpell or nil
 	end
 	if probe ~= true then
 		return false, probe
 	end
 	return true
+end
+
+-- Whether this client can be asked which spell is in a slot at all, and the
+-- reason when it cannot. Its own answer rather than folded into CanRead,
+-- because the two losses are not the same size: without this the bar still
+-- draws every square and only the two rungs that outrank the client go quiet.
+--
+-- Buttons/Reaction.lua asks this once at login instead of probing GetActionInfo
+-- for itself, so there is one answer to the question rather than two that can
+-- disagree.
+function Slot.CanName()
+	local can, why = Slot.CanRead()
+	if not can then
+		return false, why
+	end
+	if not readAction then
+		return false, "GetActionInfo is missing on this client, so no square can be told from another"
+	end
+	return true
+end
+
+-- Which spell a press on this slot would cast, in the client's own name for it,
+-- plus whether the slot got there through a macro.
+--
+-- The macro half is the whole reason this exists. GetActionInfo answers "spell"
+-- for a plain spell and "macro" for a macro, and every part of this addon that
+-- wanted to know what a square held stopped at the second answer. The warrior
+-- plan puts five of its twelve bar 1 keys in macros, so the gates that outrank
+-- the client had a hole in them exactly where the loadout put things: an
+-- Overpower in a macro drew ready all fight, and a Shield Bash in one drew
+-- pressable with no shield on.
+--
+-- GetMacroSpell resolves a macro's conditionals to the spell the client would
+-- actually cast, which is what draws the cooldown and the tooltip on Blizzard's
+-- own macro buttons. Its return shape differs across clients, so all three are
+-- read and the first thing that names a spell wins rather than a fixed index.
+--
+-- Never held against the slot. What a macro resolves to changes with the
+-- cursor and with the target, so a memo keyed on the macro would be wrong
+-- between one tick and the next; ns.SpellNameHeld holds the only part that is
+-- stable, which is what a spell id is called.
+function Slot.Spell(slot)
+	if not slot or not Slot.CanName() then
+		return nil, false
+	end
+	local kind, id = readAction(slot)
+	if kind == "spell" then
+		return ns.SpellNameHeld(id), false
+	end
+	if kind ~= "macro" or not macroSpell then
+		return nil, false
+	end
+	local first, _, third = macroSpell(id)
+	if type(first) == "string" then
+		return first, true
+	end
+	if type(first) == "number" then
+		return ns.SpellNameHeld(first), true
+	end
+	if type(third) == "number" then
+		return ns.SpellNameHeld(third), true
+	end
+	return nil, true
 end
 
 --------------------------------------------------------------------------
@@ -148,6 +223,73 @@ function Slot.Count(slot)
 		return nil
 	end
 	return count
+end
+
+-- The two rungs that know more than the client does, as one question, or nil
+-- when neither has anything to say. Most of the bar is nil in two table
+-- lookups.
+--
+-- Overpower and Revenge are not spells you press, they are spells the fight
+-- hands you, and the client will not say so. IsUsableAction answers yes for
+-- Overpower in Battle Stance whether or not anything has dodged you, so without
+-- this the square said "ready" for the whole of every fight. Execute is the
+-- same defect read off the target instead of out of the log: usable from full
+-- health down, and castable for the last fifth of a fight.
+-- Buttons/Reaction.lua and Buttons/Requires.lua own the two mechanisms; this
+-- asks each of them one question.
+--
+-- Above the usable split rather than below it, and that is the ladder's own
+-- rule rather than a preference: what cannot be fixed at all comes first. A
+-- shut window is not something you can do anything about, and neither is a mob
+-- at half health, and a wrong stance is. Putting them here also fixes the one
+-- square on a warrior's bar that shouted all fight for nothing. Overpower
+-- sitting in Defensive Stance used to draw orange "swap" from the first pull to
+-- the last, which is a colour saying "swap and press this" over a press that
+-- would not land. Now the orange appears on the two or three seconds where
+-- swapping really would let you press it, and the rest of the time the square
+-- is quiet.
+--
+-- The order between the two is arbitrary today, because no ability a class file
+-- names is both a reactive and a condition. Written in the order the harness
+-- already drives.
+local function Beyond(spell)
+	local reactive = ns.Reaction.OfSpell(spell)
+	if reactive and not ns.Reaction.Open(reactive) then
+		return "reaction"
+	end
+	return ns.Requires.State(spell)
+end
+
+-- The client's own answer, as a status or nil for a press that would land.
+--
+-- Two returns from the client, and the second is the whole reason this is not a
+-- boolean. It says no for a spell you cannot afford and for one you cannot cast
+-- in this stance, and on a warrior those are the two states a bar spends its
+-- life in. Collapsing them loses the only distinction worth drawing.
+--
+-- It is also the whole of the stance rule for the two reactive abilities.
+-- Overpower is Battle Stance only and Revenge is Defensive Stance only, and the
+-- client already refuses both in the wrong stance with a "not enough power" of
+-- false, which is exactly the shape this splits on. Nothing above had to learn
+-- about stances.
+--
+-- Asked of the spell rather than of the slot where a macro is what is in it.
+-- IsUsableAction on a macro slot does not answer for the spell the macro would
+-- cast, which is how a Shield Bash behind `#showtooltip` drew pressable with no
+-- shield on. ns.SpellUsable is the same question at the level the client will
+-- answer it, returning the same pair in the same order, and Charge/Charge.lua
+-- has been asking it that way all along.
+local function Refused(slot, spell, macro)
+	local usable, noPower
+	if macro and spell then
+		usable, noPower = ns.SpellUsable(spell)
+	else
+		usable, noPower = IsUsableAction(slot)
+	end
+	if usable then
+		return nil
+	end
+	return noPower and "cost" or "stance"
 end
 
 -- Returns a status from UI/Ability.lua's vocabulary, plus the cooldown start
@@ -180,41 +322,20 @@ function Slot.State(slot)
 		swipeStart, swipeDuration = start, duration
 	end
 
-	-- Overpower and Revenge are not spells you press, they are spells the fight
-	-- hands you, and the client will not say so. IsUsableAction answers yes for
-	-- Overpower in Battle Stance whether or not anything has dodged you, so
-	-- without this rung the square said "ready" for the whole of every fight.
-	-- Buttons/Reaction.lua owns the window and the combat log line that opens
-	-- it; this asks it one question.
-	--
-	-- Above the usable split rather than below it, and that is the ladder's own
-	-- rule rather than a preference: what cannot be fixed at all comes first.
-	-- A shut window is not something you can do anything about, and a wrong
-	-- stance is. Putting it here also fixes the one square on a warrior's bar
-	-- that shouted all fight for nothing. Overpower sitting in Defensive Stance
-	-- used to draw orange "swap" from the first pull to the last, which is a
-	-- colour saying "swap and press this" over a press that would not land.
-	-- Now the orange appears on the two or three seconds where swapping really
-	-- would let you press it, and the rest of the time the square is quiet.
-	local reactive = ns.Reaction.Of(slot)
-	if reactive and not ns.Reaction.Open(reactive) then
-		return "reaction", swipeStart, swipeDuration
+	-- Resolved once and handed to both of the rungs that want it, because
+	-- reading it is a client call and each rung used to make its own. A macro
+	-- resolves through here too, which is the whole of the fix for a plan that
+	-- puts five of its twelve keys in macros.
+	local spell, macro = Slot.Spell(slot)
+
+	local beyond = Beyond(spell)
+	if beyond then
+		return beyond, swipeStart, swipeDuration
 	end
 
-	-- Two returns, and the second is the whole reason this is not a boolean.
-	-- IsUsableAction says no for a spell you cannot afford and for one you
-	-- cannot cast in this stance, and on a warrior those are the two states a
-	-- bar spends its life in. Collapsing them loses the only distinction worth
-	-- drawing.
-	--
-	-- It is also the whole of the stance rule for the two reactive abilities.
-	-- Overpower is Battle Stance only and Revenge is Defensive Stance only, and
-	-- the client already refuses both in the wrong stance with a "not enough
-	-- power" of false, which is exactly the shape this line splits on. Nothing
-	-- above had to learn about stances.
-	local usable, noPower = IsUsableAction(slot)
-	if not usable then
-		return noPower and "cost" or "stance", swipeStart, swipeDuration
+	local refused = Refused(slot, spell, macro)
+	if refused then
+		return refused, swipeStart, swipeDuration
 	end
 
 	-- Asked only when there is something to be at a distance from. Without

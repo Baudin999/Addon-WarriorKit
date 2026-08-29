@@ -77,6 +77,23 @@ check(not Ability.SHOUT.range.grey and not Ability.QUIET.range.grey,
 check(Ability.SHOUT.range.color ~= Ability.SHOUT.no.color,
 	"out of range is its own colour and not the grey everything else falls to")
 
+-- Wrong stance drains too, and it shipped not draining. That is the one
+-- outcome in the table where the press will not land and the art was drawn at
+-- ready brightness anyway, so the whole of what the square said was an orange
+-- hairline and a Whirlwind in Battle Stance read as pressable across the room.
+-- The rule the rest of the table follows: a fact about you drains, a fact
+-- about the mob does not.
+check(Ability.SHOUT.swap.grey and Ability.QUIET.swap.grey,
+	"the wrong stance is drawn in full colour, so a press that cannot land looks like one that can")
+
+-- The two statuses the client has no opinion about fall to the plain no, for
+-- the reason a shut reaction window does: neither is a state you can act on,
+-- so there is nothing for a colour to tell you to do.
+for _, status in ipairs({ "condition", "notarget", "reaction" }) do
+	check(Ability.Look(Ability.QUIET, status) == Ability.QUIET.no,
+		("%s is drawn as something other than the plain no"):format(status))
+end
+
 -- An empty slot draws no art in either palette. Without this it fell to
 -- "no", which has no `blank`, and twelve empty slots came up as twelve grey
 -- question marks: the defect that made a half filled bar read as broken.
@@ -185,6 +202,50 @@ check(Slot.State(SLOT) == "stance", "the wrong stance is not reported as stance"
 -- also on cooldown is one to wait for rather than one to build rage for.
 put({ texture = ART, start = _G.GetTime(), duration = 6, usable = false, noPower = true })
 check(Slot.State(SLOT) == "cooldown", "cost is being reported ahead of cooldown")
+
+--------------------------------------------------------------------------
+-- What is in the slot, and the macro that used to hide it
+--
+-- GetActionInfo answers "macro" and an index, and every reader in the addon
+-- used to stop there. The warrior plan puts five of its twelve bar 1 keys in
+-- macros, so both of the gates that outrank the client had a hole in them
+-- exactly where the loadout puts things.
+--------------------------------------------------------------------------
+
+do
+	local macroSpells = _G.WarriorKitMacroSpells
+	local unusableSpells = _G.WarriorKitUnusableSpells
+
+	put({ texture = ART, spell = 1464 })
+	check(Slot.Spell(SLOT) == "Spell1464", "a slot holding a plain spell does not name it")
+
+	put({ texture = ART, macro = 3 })
+	check(Slot.Spell(SLOT) == nil, "a macro the client resolves to nothing is being named as a spell")
+
+	macroSpells[3] = "Shield Bash"
+	local behind, viaMacro = Slot.Spell(SLOT)
+	check(behind == "Shield Bash", "a macro's conditionals are not resolved to the spell behind them")
+	check(viaMacro, "a macro square is not reported as one, so the ladder asks the wrong call about it")
+
+	-- Which is the whole reason the usable rung asks about the spell. The slot
+	-- answers for the macro and not for what the macro would cast, so a Shield Bash
+	-- behind #showtooltip drew pressable with no shield on: the slot says fine and
+	-- the spell says no.
+	unusableSpells["Shield Bash"] = "other"
+	check(Slot.State(SLOT) == "stance",
+		"a macro whose spell the client refuses is drawn ready, because the slot was asked and not the spell")
+	unusableSpells["Shield Bash"] = "power"
+	check(Slot.State(SLOT) == "cost", "a macro's spell has no rage and the square will not say so")
+	unusableSpells["Shield Bash"] = nil
+	check(Slot.State(SLOT) == "ready", "a macro whose spell is fine is not drawn ready")
+
+	-- A macro with no spell behind it falls back to the slot, which is the honest
+	-- answer: a /startattack with no /cast in it has no spell to ask about.
+	macroSpells[3] = nil
+	put({ texture = ART, macro = 3, usable = false, noPower = true })
+	check(Slot.State(SLOT) == "cost",
+		"a macro with no spell behind it stopped asking the slot as well")
+end
 
 --------------------------------------------------------------------------
 -- Range, and the client that never answers
@@ -367,13 +428,30 @@ else
 	put({ texture = ART, spell = OVERPOWER })
 	check(Slot.State(SLOT) == "reaction", "the window survived the end of the fight")
 
+	-- The same hole, on the gate above the client's. An Overpower behind
+	-- #showtooltip drew ready all fight, because this file asked what spell was
+	-- in the slot and a macro is not a spell.
+	advance(6)
+	local wrapped = _G.WarriorKitMacroSpells
+	wrapped[7] = "Overpower"
+	put({ texture = ART, macro = 7 })
+	check(ns.Reaction.Of(SLOT) == OVERPOWER_KEY,
+		"an Overpower wrapped in a macro is not recognised as Overpower")
+	check(Slot.State(SLOT) == "reaction",
+		"an Overpower wrapped in a macro is drawn ready with nothing having dodged you")
+	logLine("SWING_MISSED", ME, MOB, 12, "DODGE")
+	check(Slot.State(SLOT) == "ready", "the macro square does not open with the window")
+	wrapped[7] = nil
+	advance(6)
+
 	-- Everything that is not one of the two is untouched, which is the other
 	-- twenty-three squares on the bar.
 	put({ texture = ART, spell = 1464 })
 	check(ns.Reaction.Of(SLOT) == nil, "an ordinary spell is being tracked as a reaction")
 	check(Slot.State(SLOT) == "ready", "an ordinary spell is gated on a reaction window")
 	put({ texture = ART })
-	check(ns.Reaction.Of(SLOT) == nil, "a slot holding a macro is being tracked as a reaction")
+	check(ns.Reaction.Of(SLOT) == nil,
+		"a slot the client names no spell for is being tracked as a reaction")
 
 	check(ns.Reaction.Watching(),
 		"no reaction window is tracked on a warrior: " .. ns.Reaction.Describe())
@@ -382,6 +460,118 @@ end
 guids.player = nil
 
 print(("react  %s"):format(ns.Reaction.Describe()))
+
+--------------------------------------------------------------------------
+-- What the fight has to have done first
+--
+-- The other half of "the client has no opinion", and a different mechanism
+-- from the windows above. A reaction window lives on the server, arrives down
+-- the combat log and has to be clocked. Execute's twenty percent is sitting in
+-- the client the whole time and only has to be read. Both end in the same
+-- place: a square that stops shouting for four fifths of every fight.
+--
+-- Driven rather than described, because the number is a class fact and the
+-- rung's whole value is where it sits: above the split that says whether to
+-- swap stance or wait for rage, since neither of those puts a mob under a
+-- fifth of its health.
+--------------------------------------------------------------------------
+
+do
+	local health, healthMax = _G.WarriorKitHealth, _G.WarriorKitHealthMax
+	local deadUnits, friendlyUnits = _G.WarriorKitDeadUnits, _G.WarriorKitFriendlyUnits
+	local EXECUTE = 20662 -- a later rank, on purpose
+
+	guids.target = "Creature-0-0-0-0-1234-00000099"
+	healthMax.target, health.target = 1000, 500
+	put({ texture = ART, spell = EXECUTE })
+
+	if not WARRIOR then
+		-- No class but the warrior names a condition, so nothing is registered and
+		-- no square is gated. Asserted rather than assumed, because a reader that
+		-- came up anyway would grey a square on a rule this character has no
+		-- ability for.
+		check(not ns.Requires.Watching(),
+			"a condition is read on a class that names none: " .. ns.Requires.Describe())
+		check(ns.Requires.State("Execute") == nil, "a spell is gated on another class's condition")
+		check(Slot.State(SLOT) == "ready", "a square is gated on a condition that could never apply")
+	else
+		-- The number is the class file's and is read off the registry rather than
+		-- written here, because a literal would keep passing after that file moved it.
+		local mine = ns.Class.Of("requires")
+		check(mine and mine[1] and mine[1].spell == 5308 and mine[1].below == 20,
+			"the warrior file no longer names Execute's twenty percent")
+
+		check(Slot.State(SLOT) == "condition",
+			"Execute is drawn ready at half health, which is the whole bug")
+
+		-- Both sides of the line and the line itself. The comparison is two
+		-- integers multiplied out rather than a floored percentage, because 20.1%
+		-- floors to 20 and would open the square a tick before the server does.
+		health.target = 201
+		check(Slot.State(SLOT) == "condition", "Execute came in at 20.1%, a tick before the server")
+		health.target = 200
+		check(Slot.State(SLOT) == "ready", "Execute never comes in at exactly twenty percent")
+		health.target = 50
+		check(Slot.State(SLOT) == "ready", "Execute is gated below the threshold as well as above it")
+
+		-- Nothing to aim it at outranks the threshold, because a threshold read off
+		-- no unit is not a fact. All three shapes of no target are driven: none at
+		-- all, a corpse, and something you may not swing at.
+		guids.target = nil
+		check(Slot.State(SLOT) == "notarget", "Execute is drawn ready with nothing targeted")
+		guids.target = "Creature-0-0-0-0-1234-00000099"
+		deadUnits.target = true
+		check(Slot.State(SLOT) == "notarget", "Execute is drawn ready at a corpse")
+		deadUnits.target = nil
+		friendlyUnits.target = true
+		check(Slot.State(SLOT) == "notarget", "Execute is drawn ready at something you cannot attack")
+		friendlyUnits.target = nil
+
+		-- A client that will not say what the target's health is says nothing,
+		-- rather than greying a square for as long as it stays quiet.
+		healthMax.target = 0
+		check(Slot.State(SLOT) == "ready", "an unanswered health reading is blocking the square")
+		healthMax.target, health.target = 1000, 500
+
+		-- Where the rungs meet. A real cooldown outranks the condition, because the
+		-- swipe counts that one down and nothing counts this one down.
+		put({ texture = ART, spell = EXECUTE, start = _G.GetTime(), duration = 6 })
+		check(Slot.State(SLOT) == "cooldown", "a condition is being reported ahead of a real cooldown")
+
+		-- And the condition outranks the wrong stance, because swapping stance would
+		-- not put the mob under a fifth of its health and an orange square saying
+		-- "swap" would be telling you to.
+		put({ texture = ART, spell = EXECUTE, usable = false, noPower = false })
+		check(Slot.State(SLOT) == "condition", "the wrong stance is being reported ahead of a condition")
+		health.target = 100
+		check(Slot.State(SLOT) == "stance", "a met condition hides the wrong stance")
+		health.target = 500
+
+		-- A macro reaches this rung too, which is the whole point of resolving one.
+		local wrapped = _G.WarriorKitMacroSpells
+		wrapped[9] = "Execute"
+		put({ texture = ART, macro = 9 })
+		check(Slot.State(SLOT) == "condition",
+			"an Execute wrapped in a macro is drawn ready at half health")
+		wrapped[9] = nil
+
+		-- Everything else on the bar is untouched, which is the other twenty-three
+		-- squares.
+		put({ texture = ART, spell = 1464 })
+		check(ns.Requires.State("Spell1464") == nil, "an ordinary spell is matched to a condition")
+		check(Slot.State(SLOT) == "ready", "an ordinary spell is gated on a condition")
+
+		check(ns.Requires.Watching(),
+			"no condition is read on a warrior: " .. ns.Requires.Describe())
+	end
+
+	print(("cond   %s"):format(ns.Requires.Describe()))
+
+	-- Put the client back the way the sections after this one expect it.
+	health.target, healthMax.target = nil, nil
+	guids.target = nil
+	slots[SLOT] = nil
+end
 
 --------------------------------------------------------------------------
 -- What a redraw costs

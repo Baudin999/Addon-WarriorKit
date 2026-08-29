@@ -600,6 +600,7 @@ ns.Register({
 		-- line while something is dodging you. Nothing else in the addon can
 		-- show you a number this file guessed.
 		local windows = "reactions " .. ns.Reaction.Describe()
+			.. " | conditions " .. ns.Requires.Describe()
 		if not ns.Layout.HasBackup() then
 			return "not applied, " .. ns.Layout.Describe()
 				.. " | " .. ranks .. " | " .. bars .. " | " .. windows

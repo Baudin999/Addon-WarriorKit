@@ -86,9 +86,24 @@ _G.UnitDetailedThreatSituation = function(source, unit)
 	return true, 3, 100, 0, 1200
 end
 
-_G.UnitIsDead, _G.UnitCanAttack = constant(false), constant(true)
+-- Dead, and whether you may swing at it. Table driven rather than a constant
+-- pair, because Buttons/Requires.lua refuses a condition on a corpse and on
+-- something friendly, and a stub answering "alive and hostile" to everything
+-- would leave both refusals unreachable from a test.
+local deadUnits, friendlyUnits = {}, {}
+_G.WarriorKitDeadUnits = deadUnits
+_G.WarriorKitFriendlyUnits = friendlyUnits
+_G.UnitIsDead = function(unit) return deadUnits[unit] == true end
+_G.UnitCanAttack = function(_, unit) return friendlyUnits[unit] ~= true end
 _G.UnitName = function(unit) return unitName[unit] or "Target Dummy" end
-_G.UnitHealth, _G.UnitHealthMax = constant(4200), constant(9000)
+-- Health by unit token, defaulting to the same 4200 of 9000 a constant pair
+-- gave. Written down per unit because a threshold read off a target is a rung
+-- of the action bar ladder now, and a fixed 46% could drive neither side of a
+-- twenty percent line.
+local health, healthMax = {}, {}
+_G.WarriorKitHealth, _G.WarriorKitHealthMax = health, healthMax
+_G.UnitHealth = function(unit) return health[unit] or 4200 end
+_G.UnitHealthMax = function(unit) return healthMax[unit] or 9000 end
 -- Heal prediction, which both clients register and both back with an event.
 -- Written as a variable rather than a constant because the skin has to be
 -- driven through three states to be worth testing: nothing on the way, a heal
@@ -248,6 +263,12 @@ local SPELL_NAMES = {
 	[11585] = "Overpower",
 	[6572] = "Revenge",
 	[25288] = "Revenge",
+	-- Execute, rank 1 and a later one, for the reason both ranks of the two
+	-- above are here: Buttons/Requires.lua matches a square against the class
+	-- file's rank 1 by name, so a stub naming only one rank would let a file
+	-- that matched on the id pass.
+	[5308] = "Execute",
+	[20662] = "Execute",
 	-- The buff nag's five. Battle Shout and Well Fed are here because the aura
 	-- walk compares this client's own string for an id against the string an
 	-- aura carries, so both sides have to be the real words or the comparison
@@ -280,7 +301,24 @@ _G.GetSpellCooldown = function(id)
 	end
 	return entry[1], entry[2], 1
 end
-_G.IsUsableSpell, _G.IsSpellInRange = constant(true), constant(1)
+_G.IsSpellInRange = constant(1)
+-- Table driven, keyed by whatever the caller named the spell, and usable unless
+-- a section says otherwise. This is the call Buttons/Slot.lua reaches for a
+-- square holding a macro, where IsUsableAction answers about the macro and not
+-- about the spell it would cast, so a stub answering a flat true here would
+-- leave the whole macro half of the ladder unreachable from a test.
+--
+-- Two returns and in the same order as the action-level call: usable, and
+-- whether the block is the power bar rather than anything else.
+local unusableSpells = {}
+_G.WarriorKitUnusableSpells = unusableSpells
+_G.IsUsableSpell = function(spell)
+	local entry = unusableSpells[spell]
+	if not entry then
+		return true, false
+	end
+	return false, entry == "power"
+end
 -- Table driven, and true unless a section says otherwise. What it is here for
 -- is the cooldown row: every entry in a class file is walked with this call, a
 -- talent nobody took has to leave no square behind, and a stub that answered

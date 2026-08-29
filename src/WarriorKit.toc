@@ -169,6 +169,12 @@ Loadouts\Feature.lua
 # is open. Out of the combat log, warrior only, and read by Slot.lua on the
 # bar's ticker, so it loads before it.
 Buttons\Reaction.lua
+
+# The other half of the same idea: what the fight has to have done before a
+# press lands, for the abilities the client has no opinion about. Read off the
+# target rather than out of the log, class data like the windows next door, and
+# read by Slot.lua on the same tick, so it loads before it too.
+Buttons\Requires.lua
 Buttons\Slot.lua
 Buttons\Layout.lua
 Buttons\Ranks.lua

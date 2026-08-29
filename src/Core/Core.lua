@@ -461,6 +461,37 @@ function ns.SpellName(spell)
 	return (_G.GetSpellInfo(spell))
 end
 
+-- The same answer, held after the first time the client gives one.
+--
+-- ns.SpellName goes through C_Spell.GetSpellInfo where that exists, and that
+-- call builds a table to put the string in. The action bars ask what a square
+-- is holding on every square on every tick, so asked directly it is twenty-four
+-- throwaway tables ten times a second, which is the shape check.sh's allocation
+-- gate exists to refuse. Asked through here it allocates once per spell the
+-- bars have ever held and never again.
+--
+-- A spell id names one spell forever, so there is nothing to invalidate. What
+-- it holds is the client's own name in the language the client is running in,
+-- which is what every match in this addon compares against another of the same.
+--
+-- A client that has not answered is not written down. A nil held here before
+-- the spell data arrived would be the answer for the rest of the session, which
+-- is the same bug Buttons/Reaction.lua's own memo guards against and the reason
+-- both guard on nil rather than on false.
+local nameOf = {}
+
+function ns.SpellNameHeld(spell)
+	local held = nameOf[spell]
+	if held then
+		return held
+	end
+	local name = ns.SpellName(spell)
+	if name then
+		nameOf[spell] = name
+	end
+	return name
+end
+
 -- How long the client says that spell takes to cast, in seconds. Zero for an
 -- instant, and zero where the client will not say, because every caller of
 -- this branches the same way on a nil and the branch is worth writing once.
