@@ -124,7 +124,8 @@ local FRAMES = {
 	{ needs = { "hideBlizzBuffs" }, names = { "TemporaryEnchantFrame" } },
 	{ needs = { "hideBlizzDebuffs" }, names = { "DebuffFrame" } },
 	{ needs = { "hideBlizzTargetCast" }, names = { "TargetFrameSpellBar" },
-		keys = { { owner = "TargetFrame", key = "spellbar" } } },
+		keys = { { owner = "TargetFrame", key = "spellbar" } },
+		mute = { "AdjustPosition" } },
 	{ needs = { "hideBlizzPlayerCast" },
 		names = { "CastingBarFrame", "PlayerCastingBarFrame" } },
 	{ needs = { "hideBlizzParty" }, names = { "PartyMemberFrame1",
@@ -224,6 +225,58 @@ local function MoveKey(slot, owner, hiding)
 	end
 end
 
+-- A method the caged frame calls on itself, silenced while it is up here.
+--
+-- Clearing TargetFrame.spellbar stops the three call sites TargetFrame owns. It
+-- does not stop the fourth, which is the bar's own handler. A channel starting
+-- on the target runs the cast bar's OnEvent, that handler calls
+-- `self:AdjustPosition()` with no key in the way, AdjustPosition reads
+-- `auraRows` off the bar's parent, and the parent is now the attic. One error
+-- per cast rather than one per OnUpdate pass, which is why this one outlived
+-- the key.
+--
+-- A no-op rather than an `auraRows` field on the room. The attic would then have
+-- to answer for every field every caged frame's client code reads, guessed from
+-- a FrameXML this addon cannot see, and a wrong guess is a frame laid out
+-- against a number somebody invented. Saying nothing is the honest answer: the
+-- bar is off the screen, where it thinks it sits does not matter until it comes
+-- back, and coming back puts the client's own method back before anything asks.
+--
+-- The original is kept on the frame, the way ns.Strip keeps Show, so the state
+-- can be read off the thing it was done to. False is "this client had no such
+-- method", which unmuting has to hand back as nil rather than as false.
+--
+-- Only ever reached with a frame `act` has already accepted, so the combat check
+-- ns.Strip makes has been made: a protected frame in a lockdown never gets here.
+local function Nothing()
+end
+
+local function Mute(entry, frame, hiding)
+	local names = entry.mute
+	if not names then
+		return
+	end
+	local kept = frame.wkMuted
+	if hiding then
+		if kept then
+			return
+		end
+		kept = {}
+		for index = 1, #names do
+			local name = names[index]
+			kept[name] = frame[name] or false
+			frame[name] = Nothing
+		end
+		frame.wkMuted = kept
+	elseif kept then
+		for index = 1, #names do
+			local name = names[index]
+			frame[name] = kept[name] or nil
+		end
+		frame.wkMuted = nil
+	end
+end
+
 -- Every frame one entry names, whichever way this client names it, handed to
 -- `act`. `act` is ns.Attic.Vanish or ns.Attic.Return, passed by reference rather
 -- than wrapped, because this runs on the second and a closure per pass is
@@ -240,8 +293,12 @@ local function Walk(entry, act, hiding)
 	local names = entry.names
 	for index = 1, #names do
 		local frame = _G[names[index]]
-		if frame and not act(frame) then
-			complete = false
+		if frame then
+			if act(frame) then
+				Mute(entry, frame, hiding)
+			else
+				complete = false
+			end
 		end
 	end
 	local keys = entry.keys
@@ -258,6 +315,7 @@ local function Walk(entry, act, hiding)
 			if type(frame) == "table" then
 				if act(frame) then
 					MoveKey(slot, owner, hiding)
+					Mute(entry, frame, hiding)
 				else
 					complete = false
 				end

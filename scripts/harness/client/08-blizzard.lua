@@ -109,6 +109,24 @@ targetFrame.spellbar = spellBar
 -- addon can replace Show and cannot replace this.
 function _G.Target_Spellbar_OnEvent()
 	spellBar:SetShown(true)
+	spellBar:AdjustPosition()
+end
+
+-- And what that handler goes on to do, which is the reason a caged bar cannot
+-- simply be left running. AdjustPosition reads auraRows off whatever the bar's
+-- parent is, the attic is a plain frame with no such field, and the compare
+-- raises. The client's version lays the bar out under the target's aura rows
+-- and every branch of it is downstream of this one read, so one read is the
+-- whole of what the fixture has to carry.
+targetFrame.auraRows = 0
+
+function spellBar:AdjustPosition()
+	local parentFrame = self:GetParent()
+	if parentFrame.auraRows > 1 then
+		self.offset = parentFrame.auraRows * 22
+	else
+		self.offset = 0
+	end
 end
 
 -- And the client's own cast bar for you, which this addon draws on a bar of

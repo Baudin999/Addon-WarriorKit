@@ -66,6 +66,15 @@ do
 	check(bar:IsVisible() == false,
 		"a cast put the client's cast bar back on the screen with the switch on")
 
+	-- The fourth call site, and the one the key cannot guard. TargetFrame's
+	-- three go through the key; the bar's own handler calls AdjustPosition on
+	-- itself and never asks TargetFrame for anything. The call above would have
+	-- raised on every cast, one error per cast rather than one per OnUpdate,
+	-- which is why this one outlived the key by a fortnight. So the method is
+	-- taken off the bar for as long as the bar is in the attic.
+	check(bar.wkMuted ~= nil,
+		"the caged cast bar is still holding the layout call that reads its parent")
+
 	-- Reached under FrameXML's parent key as well, so a client that renamed the
 	-- global still loses its bar. Same frame both ways, which the pass has to
 	-- take in its stride.
@@ -96,6 +105,11 @@ do
 		"the switch went off and TargetFrame never got its cast bar key back")
 	check(Blizz.Stashed("TargetFrame", "spellbar") == false,
 		"the key was handed back and this file still thinks it is holding it")
+	check(bar.wkMuted == nil, "the cast bar came back with its own layout call still off")
+	check(pcall(_G.Target_Spellbar_OnEvent),
+		"a cast on the cast bar raised after the switch went off")
+	check(bar.offset == 0,
+		"the cast bar is back on the screen and something else is laying it out")
 
 	ns.db.hideBlizzTargetCast = true
 	Blizz.Apply()
