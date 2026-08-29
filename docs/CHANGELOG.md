@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### The party list fills outward from the middle
+
+The frame you drag is the middle of the block now, not its top left corner. A
+fifth person moves every slot half a block away from the anchor instead of
+pushing the bottom of the list further down the screen and leaving the top where
+it was, and a group that breaks up closes back onto the same point.
+
+The header already sizes itself to the block it has just arranged, buttons, gaps
+and column spacing included, so centring it on the anchor is the whole of the
+mechanism. There is no second copy of the header's column arithmetic to keep in
+step.
+
+The offset is rounded rather than written as `CENTER` anchored to `CENTER`. Half
+of the block is not always a whole unit: four blocks with a three pixel gap
+between them is a hundred and forty five, and a list placed on half of that puts
+every edge inside it across two rows of pixels. Rounding gives up half a unit of
+centring and keeps the grid.
+
+`/wk party grow up|down` still picks which end the first slot is at, which is
+what it now says on the page and in the line it prints.
+
+`harness/client/09-group.lua` got two corrections while this was measured against
+it, both from the shipped `SecureGroupHeaders.lua`. The first block of a column
+is placed at the corner where the growth direction and the column direction meet
+rather than at the growth direction alone, which the model had centring across a
+header three columns wide; and a header with nobody to place takes one block's
+width and a tenth of a pixel of height rather than a whole block of it.
+
 ### Hiding Blizzard's own frames, by the parent rather than by the method
 
 `/logout` put the client's chat window back on the screen with `hide chat` on,

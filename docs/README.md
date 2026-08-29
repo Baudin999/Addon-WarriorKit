@@ -3710,6 +3710,25 @@ somebody running twenty five with assignments per group wants; a party is always
 by role, because every group number in a party is 1 and grouping by it is the
 order the client handed the units over.
 
+**The list fills outward from the middle.** The frame you drag is the middle of
+the block, not its top left corner. The header sizes itself to the block it has
+just arranged, gaps and column spacing included, so centring it on the anchor is
+the whole of the effect: a fifth person moves every slot half a block away from
+the anchor rather than pushing the bottom of the list further down the screen and
+leaving the top where it was. `/wk party grow up|down` still picks which end the
+first slot is at.
+
+That centring is written as a rounded offset rather than as `CENTER` anchored to
+`CENTER`. Half of the block is not always a whole unit: four blocks with a three
+pixel gap between them is a hundred and forty five, and a list placed on half of
+that rasterises every edge inside it across two rows of pixels. Rounding gives up
+half a unit of centring and keeps the grid, which is the same trade `OnDragStop`
+makes on the drag itself.
+
+It is recomputed after every layout, which is out of combat and nowhere else,
+because what is being halved is the size the header gave itself while arranging
+the block.
+
 **Four sources answer what role somebody is playing, and the last is a guess.**
 `Unit/Role.lua`, cached per GUID, best answer first: an override you typed, then
 `UnitGroupRolesAssigned` where the client has it and says something other than
@@ -4965,7 +4984,7 @@ and a row with nothing on it costs one comparison.
     /wk party width 168          90 to 360, the gauge's width
     /wk party height 34          18 to 72, the block's height
     /wk party gap 4              0 to 20, between two blocks
-    /wk party grow up|down       which way the list runs from its corner
+    /wk party grow up|down       which end of the middle the first slot is at
     /wk party columns 8          1 to 8, the raid only
     /wk party percolumn 5        1 to 40, the raid only
     /wk party zoom 1             1 to 3

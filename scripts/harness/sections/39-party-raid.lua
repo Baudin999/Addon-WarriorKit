@@ -156,6 +156,82 @@ do
 end
 
 ----------------------------------------------------------------------
+-- Where the block sits
+--
+-- The list fills outward from the middle. The header is centred on the frame
+-- you drag and takes its own size from the buttons it has just arranged, so a
+-- fifth person moves every slot half a block away from the anchor rather than
+-- pushing one end of the list along and leaving the other where it was.
+--
+-- Measured off the buttons rather than off the header, because the header's own
+-- size is the model's arithmetic and the buttons are where that arithmetic
+-- actually put somebody.
+----------------------------------------------------------------------
+
+-- The rectangle the shown blocks fill: its top left corner, then its middle.
+local function block()
+	local left, right = math.huge, -math.huge
+	local top, bottom = -math.huge, math.huge
+	for _, button in ipairs(ns.Group.Members()) do
+		if button:IsShown() then
+			left, right = math.min(left, button:GetLeft()), math.max(right, button:GetRight())
+			top, bottom = math.max(top, button:GetTop()), math.min(bottom, button:GetBottom())
+		end
+	end
+	return left, top, (left + right) / 2, (top + bottom) / 2
+end
+
+local function whole(value)
+	return value == math.floor(value)
+end
+
+do
+	local ax, ay = _G.WarriorKitGroup:GetCenter()
+	local _, top, x, y = block()
+	check(near(x, ax) and near(y, ay),
+		("four blocks sit round %.1f, %.1f and the frame you drag is at %.1f, %.1f")
+			:format(x, y, ax, ay))
+
+	-- The same anchor with one more person in the list. Both halves matter: the
+	-- middle did not move, and the top did, or the first assertion would pass on
+	-- a list that never grew at all.
+	ns.db.partySelf = true
+	ns.Group.Apply()
+	check(ns.Group.Count() == 5, "the fifth block never turned up")
+	local _, grownTop, grownX, grownY = block()
+	check(near(grownX, ax) and near(grownY, ay),
+		("a fifth block moved the middle of the list to %.1f, %.1f from %.1f, %.1f")
+			:format(grownX, grownY, ax, ay))
+	check(grownTop > top,
+		"a fifth block did not lift the top of the list, so nothing filled outward")
+	ns.db.partySelf = false
+	ns.Group.Apply()
+end
+
+-- Half of the block is not always a whole unit. Four blocks with a three unit
+-- gap between them is a hundred and forty five, and a list centred on half of
+-- that puts every edge inside it across two rows of pixels. So the offset that
+-- centres the header is rounded: what is given up is half a unit of centring and
+-- what is kept is the grid.
+do
+	local was = ns.db.partyGap
+	ns.db.partyGap = 3
+	ns.Group.Apply()
+
+	local left, top, x, y = block()
+	check(whole(left) and whole(top),
+		("an odd block puts the corner of the list at %.1f, %.1f, which is off the grid")
+			:format(left, top))
+	local ax, ay = _G.WarriorKitGroup:GetCenter()
+	check(math.abs(x - ax) <= 0.5 + 1e-6 and math.abs(y - ay) <= 0.5 + 1e-6,
+		("an odd block sits %.1f, %.1f off the frame you drag, and rounding costs half a unit at most")
+			:format(x - ax, y - ay))
+
+	ns.db.partyGap = was
+	ns.Group.Apply()
+end
+
+----------------------------------------------------------------------
 -- The order, under three rosters
 ----------------------------------------------------------------------
 

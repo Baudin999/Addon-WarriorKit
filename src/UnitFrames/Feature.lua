@@ -425,7 +425,8 @@ local function PartyWord(option, value)
 	elseif option == "grow" then
 		ns.db.partyGrow = value == "up" and "up" or "down"
 		ns.Group.Apply()
-		ns.Print("the list grows " .. ns.db.partyGrow .. " from where you dragged it.")
+		ns.Print("the list grows " .. ns.db.partyGrow
+			.. ": it is centred on where you dragged it and fills outward from there, so this picks which end the first slot is at.")
 	elseif option == "icons" then
 		ns.db.partyRoleIcon = ns.Command.Toggle(value)
 		ns.Group.Apply()

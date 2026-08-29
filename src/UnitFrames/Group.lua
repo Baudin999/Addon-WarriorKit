@@ -298,10 +298,10 @@ end
 -- Where the block sits
 --------------------------------------------------------------------------
 
--- The anchor is one block's rectangle at the top left of the list, which is
--- exactly where the first slot lands. Unlocked it draws a rim and carries its
--- own name, so a list that is empty because you are not in a group is still
--- something you can find and drag.
+-- The anchor is one block's rectangle at the middle of the list, which is the
+-- point the list grows out of in both directions. Unlocked it draws a rim and
+-- carries its own name, so a list that is empty because you are not in a group
+-- is still something you can find and drag.
 local function Place()
 	local point = ns.db.partyPoint
 	anchor:ClearAllPoints()
@@ -315,6 +315,32 @@ end
 
 local function Whole(value)
 	return math.floor(value + 0.5)
+end
+
+-- The header centred on the anchor, which is the whole of what makes the list
+-- fill outward from the middle.
+--
+-- The header sizes itself to the block it has just arranged, every time it
+-- arranges one, and the size it writes is the exact bounding box: the buttons,
+-- the gap between them and the spacing between columns. So centring it means a
+-- fifth person moves every slot half a block away from the anchor, rather than
+-- the list growing off one end and leaving the other end where it was.
+--
+-- Written as a rounded offset rather than as CENTER anchored to CENTER, because
+-- half of that bounding box is not always a whole unit. Four blocks with a three
+-- unit gap between them is a hundred and forty five, and a list placed on half of
+-- that rasterises every edge inside it across two rows of pixels, which is the
+-- blur OnDragStop already rounds away for the same reason.
+--
+-- Called after Nudge and not before it: what is being halved is the size the
+-- header gave itself while arranging the block, and Nudge is what makes it
+-- arrange one. In combat this is never reached at all, because Rebuild has
+-- already returned by then on a Secure that was refused.
+local function Centre()
+	local across = Whole((anchor:GetWidth() - header:GetWidth()) / 2)
+	local down = Whole((header:GetHeight() - anchor:GetHeight()) / 2)
+	header:ClearAllPoints()
+	header:SetPoint("TOPLEFT", anchor, "TOPLEFT", across, down)
 end
 
 local function Build()
@@ -361,6 +387,8 @@ local function Build()
 		return false
 	end
 	header = made
+	-- Somewhere to be before the first layout. Centre moves it, on this pass and
+	-- on every one after it.
 	header:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, 0)
 	built = true
 	return true
@@ -384,6 +412,7 @@ function Group.Rebuild()
 		pending = true
 	end
 	Nudge()
+	Centre()
 	-- Painted here rather than left to the next tick, for the reason
 	-- Skin.Apply paints at the end of its own pass: up to a fifth of a second
 	-- of a block with no name and a white gauge on it is exactly long enough to

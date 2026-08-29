@@ -192,6 +192,18 @@ end
 
 local OPPOSITE = { TOP = "BOTTOM", BOTTOM = "TOP", LEFT = "RIGHT", RIGHT = "LEFT" }
 
+-- The corner the first block of a column sits in, which is the growth direction
+-- and the column direction said as one word. The client writes it as two anchors
+-- on the same button and this model keeps one per frame, so the pair is folded
+-- into the corner they meet at. It reads the same for one column and it is only
+-- a raid that tells them apart: with a single anchor at TOP a column would be
+-- centred across a header three columns wide instead of starting at its left
+-- edge.
+local CORNER = {
+	TOP = { LEFT = "TOPLEFT", RIGHT = "TOPRIGHT" },
+	BOTTOM = { LEFT = "BOTTOMLEFT", RIGHT = "BOTTOMRIGHT" },
+}
+
 -- The initialConfigFunction, run the way the restricted environment runs it:
 -- once per child, the first time the header makes it, with `self` bound to the
 -- new button. A sandbox is not modelled, because what is being tested is that
@@ -241,7 +253,9 @@ end
 -- edge of the child above, at xOffset and yOffset.
 local function Arrange(header, shown, per, wide, tall)
 	local point = header:GetAttribute("point") or "TOP"
+	local side = header:GetAttribute("columnAnchorPoint") or "LEFT"
 	local spacing = header:GetAttribute("columnSpacing") or 0
+	local corner = CORNER[point][side]
 	local columns = 0
 
 	for index = 1, #shown do
@@ -250,17 +264,31 @@ local function Arrange(header, shown, per, wide, tall)
 		columns = math.max(columns, column + 1)
 		button:ClearAllPoints()
 		if row == 0 then
-			button:SetPoint(point, header, point, column * (wide + spacing), 0)
+			button:SetPoint(corner, header, corner, column * (wide + spacing), 0)
 		else
 			button:SetPoint(point, header.buttons[index - 1], OPPOSITE[point],
 				header:GetAttribute("xOffset") or 0, header:GetAttribute("yOffset") or 0)
 		end
 	end
 
+	-- The header sized to the block it has just arranged, which is the half of
+	-- the contract UnitFrames/Group.lua places the list by: the header is
+	-- centred on the anchor and takes its own size from the buttons, so this
+	-- arithmetic is what decides whether the list fills outward from the middle.
+	--
+	-- Nobody to place is a header the client gives one block's width and no
+	-- height at all, out of minWidth and minHeight falling to the multipliers of
+	-- a column that runs down the screen. Nothing is shown at that size, so what
+	-- it buys is a model that does not quietly answer a whole block where the
+	-- game answers a tenth of a pixel.
 	local rows = math.min(#shown, per)
 	local gap = math.abs(header:GetAttribute("yOffset") or 0)
-	header:SetSize(math.max(columns, 1) * wide + math.max(columns - 1, 0) * spacing,
-		math.max(rows, 1) * tall + math.max(rows - 1, 0) * gap)
+	if rows > 0 then
+		header:SetSize(columns * wide + (columns - 1) * spacing,
+			rows * tall + (rows - 1) * gap)
+	else
+		header:SetSize(wide, 0.1)
+	end
 end
 
 -- What the real header does on every attribute change, and what it refuses to

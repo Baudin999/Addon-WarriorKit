@@ -498,6 +498,7 @@ local function Placing(ui)
 			ns.db.partyGrow = value
 			ns.Group.Apply()
 		end)
+	ui.Hint("The list is centred on where you dragged it and fills outward from there, so this picks which end the first slot is at rather than which way the block runs.")
 
 	local columnsLow, columnsHigh, perLow, perHigh = ns.Group.ColumnRange()
 	ui.Count("columns in a raid", columnsLow, columnsHigh,
