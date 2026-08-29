@@ -58,26 +58,87 @@ _G.SendChatMessage = function(text, kind, language, target)
 	chat.sent[#chat.sent + 1] = { text = text, kind = kind, language = language, target = target }
 end
 
-_G.ChatFrame1EditBox = region("frame")
+----------------------------------------------------------------------
+-- The client's own line
+--
+-- Modelled rather than stubbed, because the window types into it now. There is
+-- no edit box of the addon's any more: Chat/Field.lua borrows the client's, and
+-- every assertion about what is in the line, where the line sits and what the
+-- enter key does reads this frame.
+--
+-- OnEnterPressed is set here and not by the addon, and that is the property
+-- under test. In the game it is set in XML and never touched, which is what
+-- lets a protected command finish; here it is set once by this file, so a
+-- version of the addon that reached for SetScript would overwrite it and every
+-- send in the suite would stop recording.
+----------------------------------------------------------------------
+
+local function EditBox(index)
+	local name = ("ChatFrame%dEditBox"):format(index)
+	local box = region("editbox", nil, name)
+	box.parent = _G["ChatFrame" .. index]
+	box:SetPoint("BOTTOMLEFT", _G.UIParent, "BOTTOMLEFT", 16, 24)
+	box:Hide()
+	-- Blizzard's three border pieces and the focus glow, so the strip in
+	-- Chat/Field.lua has something to take off and the section can read back
+	-- that it did.
+	for _, part in ipairs({ "Left", "Right", "Mid" }) do
+		region("texture", box, name .. part)
+	end
+	box.focusLeft = region("texture", box)
+	box.focusRight = region("texture", box)
+	box.focusMid = region("texture", box)
+	box:SetScript("OnEnterPressed", function(self)
+		_G.ChatEdit_SendText(self, 1)
+		self:SetText("")
+		self:ClearFocus()
+		self:Hide()
+	end)
+	return box
+end
+
+-- Which line the client would send from. The first, because that is the answer
+-- on an install where nobody has ever typed in a second window, and the addon
+-- has to take the client's answer rather than name a frame itself.
+_G.ChatEdit_ChooseBoxForSend = function()
+	return _G.ChatFrame1EditBox
+end
+
+-- Opening the line, in the order FrameXML does it, and the order is the whole
+-- reason this is modelled: the client activates the field, which raises the
+-- focus, and only then writes the text the key asked for. Anything the addon
+-- put in the line while it was activating is blanked by that last write, and
+-- Chat/Field.lua exists to survive it.
+_G.ChatEdit_ActivateChat = function(box)
+	box:Show()
+	box:SetFocus()
+end
+
+_G.ChatEdit_DeactivateChat = function(box)
+	box:ClearFocus()
+	box:Hide()
+end
+
+-- The client's own chat keys, as the two functions the bindings run. The addon
+-- binds neither of them any more, so this is how a section presses enter.
+_G.ChatFrame_OpenChat = function(text)
+	local box = _G.ChatEdit_ChooseBoxForSend()
+	_G.ChatEdit_ActivateChat(box)
+	box:SetText(text or "")
+	return box
+end
+
 _G.ChatEdit_SendText = function(box)
 	chat.slash[#chat.slash + 1] = box:GetText()
 end
 
 -- The client's own answer to whether a slash word ends in a protected call.
--- The real one reads hash_SecureCmdList and uppercases what it is given, so
--- this is keyed the same way and Chat/Compose.lua's caller hands it a slash.
---
--- Deliberately not the same set as Compose's own list. /petattack is on ours
--- and missing here, and /follow is here and missing from ours, so a run proves
--- the union widens rather than replaces: both words have to take the key.
-_G.WarriorKitSecureCmds = {
-	["/LOGOUT"] = true, ["/QUIT"] = true, ["/CAMP"] = true,
-	["/CAST"] = true, ["/USE"] = true, ["/TARGET"] = true,
-	["/FOLLOW"] = true,
-}
+-- Nothing in the addon asks it any more, and it is left here because the
+-- section asserts that: a version that grew a list of special words back would
+-- have something to consult, and the check that nothing does is worth keeping.
 _G.IsSecureCmd = function(command)
 	return type(command) == "string"
-		and _G.WarriorKitSecureCmds[command:upper()] == true
+		and (command:upper() == "/LOGOUT" or command:upper() == "/QUIT")
 end
 
 _G.SetItemRef = function(link) chat.link = link end
@@ -101,6 +162,11 @@ _G.NUM_CHAT_WINDOWS = 2
 for index = 1, _G.NUM_CHAT_WINDOWS do
 	region("frame", nil, "ChatFrame" .. index)
 	region("frame", nil, "ChatFrame" .. index .. "Tab")
+	-- One line per window, made here rather than beside the frame it belongs
+	-- to, because the addon dresses every one of them: which line the client
+	-- opens is its own choice, and a line the addon never dressed would come up
+	-- in Blizzard's art in the middle of our footer.
+	EditBox(index)
 end
 _G.ChatFrameMenuButton = region("frame", nil, "ChatFrameMenuButton")
 _G.DEFAULT_CHAT_FRAME = _G.ChatFrame1

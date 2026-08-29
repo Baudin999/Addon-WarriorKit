@@ -63,19 +63,18 @@ local C, M = UI.Color, UI.Metric
 
 local FRAME_NAME = "WarriorKitChat"
 
--- The buttons the client's two chat keys are bound onto while Blizzard's window
--- is hidden. A name is what SetOverrideBindingClick binds to, which is the whole
--- reason either frame is named at all.
+-- The client's two chat keys are the client's. This window took both of them
+-- onto buttons of its own for a while, so that enter opened the line down here
+-- rather than the invisible one behind it, and that arrangement is gone.
 --
--- Two rather than one, because the client has two keys and they do different
--- things. Enter opens an empty line. Slash opens a line with a slash already in
--- it, which is how every slash command in the game gets typed, and a player who
--- presses it expecting that and gets an empty line has to type the character
--- again.
-local ENTER_NAME = "WarriorKitChatEnterButton"
-local SLASH_NAME = "WarriorKitChatSlashButton"
+-- What it cost was `/logout`. A key bound to a button of ours opens the line
+-- from a script of ours, and a line opened from a script is a line whose enter
+-- key runs down a stack an addon has been in, which is a stack the client will
+-- not finish a protected command on. Now the keys go straight into FrameXML,
+-- FrameXML opens the field this window borrowed, and the press that finishes a
+-- command is Blizzard's from the keyboard down. See Chat/Field.lua.
 
-local window, rail, entry, enterButton, slashButton, voice
+local window, rail, entry, voice
 
 -- Where a log goes and how big it is, written in the layout section below and
 -- named here because the log pool above needs it: a room's log is made the
@@ -90,11 +89,6 @@ local logs, spare, every = {}, {}, {}
 
 local active
 local built = false
-
--- Work the client refused because combat was up, retried at
--- PLAYER_REGEN_ENABLED. Only the enter key can land here: everything else this
--- window does is an ordinary frame and works in a fight.
-local pending = false
 
 --------------------------------------------------------------------------
 -- What the last attempt did
@@ -211,26 +205,17 @@ end
 -- typing. Here it is under the cursor, and the moment there is a character in
 -- the line it gets out of the way, because from then on the line says it.
 --
--- A line waiting on the enter key takes the sentence over, because that is the
--- one thing the field could say that you do not already know. The empty line is
--- where you are looking the moment after you pressed enter, and it is the only
--- place the addon can put a sentence that the player is certain to read: what
--- ns.Print writes goes to Blizzard's window, and this window's whole
--- arrangement is that Blizzard's window is not on the screen.
+-- There is nothing here about pressing enter twice any more. The sentence that
+-- used to take this line over said which command was waiting on a second press,
+-- and no command waits on a second press now.
 local function Paint()
-	local armed = ns.Compose.Armed()
-	if armed then
-		entry.ghost:SetText(("press enter again and %s goes"):format(armed))
-		return
-	end
 	local kind, target = ns.Rooms.Target(active)
 	entry.ghost:SetText(("%s, %s"):format(ns.Rooms.Title(active),
 		ns.Compose.Note(kind, target)))
 end
 
--- Written again after the enter key was loaded or handed back, from
--- Chat/Compose.lua, which is the only thing that changes what the line above
--- has to say without also changing the room.
+-- Written again from outside when something other than the room has changed
+-- what the empty line has to say.
 function ChatWindow.Paint()
 	if not built then
 		return false
@@ -457,8 +442,22 @@ local function Relayout()
 	entry.box:SetHeight(M.field)
 	-- The line you type in is drawn at the size the lines you read are. A field
 	-- that stays at twelve while the log goes to eighteen is the one part of the
-	-- window that did not take the setting.
-	entry.edit:SetFontObject(UI.Font(db.chatFont, UI.FLAT))
+	-- window that did not take the setting. It is the client's frame, so this
+	-- goes through Chat/Field.lua.
+	--
+	-- Adopted again rather than once at build, because the count of chat windows
+	-- is the client's and a whisper can raise it: a tenth window opened this
+	-- evening has a line the first pass never saw.
+	ns.ChatField.Adopt()
+	ns.ChatField.Font(db.chatFont)
+	-- The anchor only while the window is up. A layout runs on a setting moving
+	-- and on the pixel grid moving under it, and both of those happen with the
+	-- window closed, where anchoring the client's line into our footer would be
+	-- a game with no line to type in at all. ChatWindow.Apply is where the
+	-- window being open or shut is decided, and it moves the line either way.
+	if window.frame:IsShown() then
+		ns.ChatField.Anchor(entry.box)
+	end
 
 	window:SetOpacity(db.chatAlpha / 100)
 	local point = db.chatPoint
@@ -514,15 +513,6 @@ local function BuildEntry()
 	-- it.
 	local box = UI.Box(window.footer, C.selected, C.edge)
 	Light(box, false)
-	local edit = CreateFrame("EditBox", nil, box)
-	edit:SetPoint("TOPLEFT", 3, 0)
-	edit:SetPoint("BOTTOMRIGHT", -3, 0)
-	edit:SetFontObject(UI.Font(M.font, UI.FLAT))
-	edit:SetTextColor(C.text[1], C.text[2], C.text[3])
-	edit:SetAutoFocus(false)
-	-- The server's own cap on one line of chat. A longer one is refused whole,
-	-- so it is better to stop the typing than to lose the sentence.
-	edit:SetMaxLetters(255)
 
 	-- What the empty line says: the room you are in and what enter will do in
 	-- it. Drawn behind the text rather than above the log, which is where the
@@ -533,90 +523,43 @@ local function BuildEntry()
 	ghost:SetPoint("RIGHT", -4, 0)
 	UI.Wrap(ghost, false)
 
-	edit:SetScript("OnTextChanged", function(self, userInput)
-		local text = self:GetText() or ""
-		ghost:SetShown(text == "")
-		-- Only what you typed, and the client's own second argument is what
-		-- says so. The field empties itself after a press and fills itself when
-		-- a room is picked, and neither of those is you saying the line no
-		-- longer needs the key.
-		--
-		-- Read as if they were, the empty field after a press handed the key
-		-- straight back and the press had nothing left to land on. The log said
-		-- loaded and then handed back, one line under the other, with no press
-		-- between them. A flag held across the handler was tried first and is
-		-- not enough: it comes down at the end of the handler and the client
-		-- reports the focus going after that.
-		if not userInput then
-			return
-		end
-		-- The line goes on the enter key while you are still typing it, so the
-		-- enter that finishes the line is the press that runs it rather than
-		-- the press that loads it. See Chat/Compose.lua.
-		ns.Compose.Preload(text)
-	end)
+	-- And the line itself is the client's. Chat/Field.lua says why at length;
+	-- the short of it is that a field of ours puts a function of ours in the
+	-- stack the enter key runs down, and the client drops the protected call at
+	-- the end of any stack an addon has been in. So there is no CreateFrame
+	-- here. The rectangle above is ours, the sentence in it is ours, and the
+	-- frame the characters go into is ChatFrame1EditBox with its art taken off.
+	ns.ChatField.Adopt()
 
-	-- The field is not asked to let the key past itself, and that is the whole
-	-- of what was tried and did not work. SetPropagateKeyboardInput looks like
-	-- the answer and is not: a field told to propagate stops handling the key
-	-- itself, a field with the focus blocks the bindings underneath it anyway,
-	-- so the press reached neither and the focus never left to let a second one
-	-- through. A dead enter key is a worse bug than a slow one.
-	--
-	-- So it is still two presses, and Chat/Compose.lua says why: the button runs
-	-- on the down edge, the down edge of a press aimed at a field with the focus
-	-- belongs to the field, and there is no third edge to give the client.
-	--
-	-- What loading the key while you type buys is that the second press is
-	-- certain rather than a race. Arming on the enter meant the binding did not
-	-- exist yet when the key went down, so which press ran the line depended on
-	-- when the client re-read the binding set. Now the key is the client's
-	-- before the first enter is touched, and the press after the focus goes is
-	-- the press that runs it, every time.
-	--
-	-- One press needs a key of its own, with no field in front of it.
-	edit:SetScript("OnEnterPressed", function(self)
-		local text = self:GetText()
-		-- Nothing to send when the key is already carrying this line: it was put
-		-- there while you typed it, and sending would only load it again. A
-		-- reading that comes back wrong costs a redundant load and nothing
-		-- else, which is why it is allowed to be a comparison at all.
-		if ns.Compose.Armed() == nil
-			or ns.Compose.Armed() ~= ns.Compose.Secure(text) then
-			ChatWindow.Send(text)
-		end
-		self:SetText("")
-		self:ClearFocus()
-	end)
-	edit:SetScript("OnEscapePressed", function(self)
-		self:SetText("")
-		self:ClearFocus()
-	end)
-	edit:SetScript("OnEditFocusGained", function()
-		-- A click that lands on the field itself never goes through
-		-- ChatWindow.Focus, and it means the same thing that one does.
-		ns.Compose.Disarm()
-		Light(box, true)
-	end)
-	-- The focus going takes nothing off the key, and that is deliberate rather
-	-- than an omission. Every way out of this field goes through here: the enter
-	-- that finishes the line, the escape that abandons it, a click elsewhere.
-	-- The first of those is the press the key was loaded for, and a handler that
-	-- cannot tell the three apart has to leave the key alone or it takes it back
-	-- from the one that needed it. Coming back to the field above is where a
-	-- change of mind is answered, and it is the only place that needs to be.
-	edit:SetScript("OnEditFocusLost", function()
-		Light(box, false)
-	end)
-	edit:SetScript("OnHide", function(self)
-		self:ClearFocus()
-	end)
+	-- The room's own slash, written into the client's field when it opens
+	-- empty. This is Fill below, handed over rather than called, because the
+	-- moment it has to happen is inside the client's own activation and only
+	-- Chat/Field.lua can see that moment.
+	ns.ChatField.OnFill = function(field)
+		return ChatWindow.Fill(field)
+	end
+	-- The rectangle is drawn only while the cursor is in the line, and the
+	-- sentence behind it only while the line is empty.
+	ns.ChatField.OnLight = function(on)
+		Light(box, on)
+		ghost:SetShown(not on)
+	end
+	ns.ChatField.OnType = function(text)
+		ghost:SetShown(text == "")
+	end
+
 	-- Tab steps to the next room, which rewrites the slash in front of the
 	-- cursor. It is the same key that cycled the channel in the window this
 	-- replaced, and it means the same thing: change where this line is going.
-	edit:SetScript("OnTabPressed", function()
+	--
+	-- Under the client's own tab rather than instead of it. FrameXML cycles the
+	-- field's chat type on this key and we cannot take that away without taking
+	-- the script, so both run and the slash written here is the one that decides
+	-- where the line goes: the client's parser reads the slash on send and sets
+	-- the type from it, whatever the type was a moment before.
+	ns.ChatField.OnTab = function()
 		ChatWindow.Step(IsShiftKeyDown and IsShiftKeyDown() and -1 or 1)
-	end)
+	end
 
 	-- The box is a frame rather than a button, so the click that lands on the
 	-- gap either side of the text has to be caught for the field to feel like a
@@ -626,7 +569,7 @@ local function BuildEntry()
 		ChatWindow.Focus()
 	end)
 
-	return { box = box, edit = edit, ghost = ghost }
+	return { box = box, ghost = ghost }
 end
 
 -- What a room's hover says: its name, what enter would do there, and how much
@@ -718,18 +661,6 @@ local function Build()
 	-- listens to every event that can move the answer, so it says when it moves.
 	ns.Voice.OnChange = Lit
 
-	enterButton = CreateFrame("Button", ENTER_NAME, window.frame)
-	-- On the key going down, which is where the client's own OPENCHAT is and is
-	-- also what keeps this button out of the way of the secure one. A line run
-	-- off Chat/Compose.lua's button hands the enter key back here the instant it
-	-- has run, which is inside the same press; a button waiting on the key
-	-- coming up would take that release and open the chat line on the end of
-	-- every command you typed.
-	enterButton:RegisterForClicks("AnyDown")
-	enterButton:SetScript("OnClick", function() ChatWindow.Focus() end)
-	slashButton = CreateFrame("Button", SLASH_NAME, window.frame)
-	slashButton:SetScript("OnClick", function() ChatWindow.Slash() end)
-
 	built = true
 	active = ns.Rooms.ALL
 	if not LogFor(ns.Rooms.ALL) then
@@ -747,118 +678,14 @@ local function Build()
 end
 
 --------------------------------------------------------------------------
--- The chat keys
---
--- Taken exactly while Blizzard's chat window is hidden, and handed back the
--- moment it is not. That is not a setting of its own on purpose. The client's
--- chat keys open the client's chat line; with that window hidden the line they
--- open is invisible, so the keys have to come here or typing is broken. With
--- that window on screen they still work and there is nothing to fix.
---
--- **Both keys, not one.** This took ENTER and NUMPADENTER and left the slash
--- key alone, and the slash key is the one half the things you type in a chat
--- window start with. Pressing it opened Blizzard's invisible line, which from
--- the outside is a window that swallows every slash command in the game.
---
--- **Asked for rather than assumed.** The keys are read back out of the client's
--- own binding set by the two actions FrameXML names them by, so a player who
--- moved OPENCHAT off enter gets the key they moved it to. A key the player has
--- unbound comes back nil and is left unbound, because taking a key somebody
--- deliberately cleared is the addon deciding it knows better. The literal
--- defaults are the answer only where the client has no GetBindingKey at all,
--- which is a client that cannot be asked rather than one that answered no.
---
--- An override sits on top of whatever the key already carried and is dropped by
--- one call, unlike SetBinding, which the next SaveBindings would make permanent.
--- Both calls are refused in combat, so a fight defers the work to
--- PLAYER_REGEN_ENABLED, which is the shape Buttons/Bars.lua uses for the same
--- reason. One owner frame for every override, so one clear drops all of them.
---------------------------------------------------------------------------
-
-local CHAT_KEYS = {
-	{ action = "OPENCHAT", button = ENTER_NAME, keys = { "ENTER", "NUMPADENTER" } },
-	{ action = "OPENCHATSLASH", button = SLASH_NAME, keys = { "/" } },
-}
-
-local function WantsEnter()
-	return built and ns.db.chat and ns.db.hideBlizzChat and window:IsShown()
-end
-
--- Which keys carry one of the client's chat actions right now.
-local function BoundTo(action, fallback)
-	local get = _G.GetBindingKey
-	if type(get) ~= "function" then
-		return fallback
-	end
-	local held = {}
-	local ok, first, second = pcall(get, action)
-	if ok then
-		held[#held + 1] = first
-		held[#held + 1] = second
-	end
-	return held
-end
-
-function ChatWindow.Keys()
-	if not built then
-		return false
-	end
-	if InCombatLockdown and InCombatLockdown() then
-		pending = true
-		return false
-	end
-	pending = false
-
-	if type(ClearOverrideBindings) == "function" then
-		pcall(ClearOverrideBindings, enterButton)
-	end
-	if not WantsEnter() or type(SetOverrideBindingClick) ~= "function" then
-		return true
-	end
-	for _, chat in ipairs(CHAT_KEYS) do
-		for _, key in ipairs(BoundTo(chat.action, chat.keys)) do
-			pcall(SetOverrideBindingClick, enterButton, true, key, chat.button, "LeftButton")
-		end
-	end
-	return true
-end
-
--- Hand the chat keys back to whatever carried them, so somebody else can take
--- one. Chat/Compose.lua does that with the enter key when a line has to be run
--- by the client rather than by the addon.
---
--- Two owners on one key is the bug this exists to stop. An override binding is
--- a claim by a frame, and which of two claims on the same key wins is the
--- client's business rather than something this addon should be betting a key
--- press on. So the window gives the key up before the other claim goes on, and
--- ChatWindow.Keys takes it back afterwards.
---
--- The second reason is quieter and just as load bearing: GetBindingKey answers
--- with what the key carries now, and while this window's override is on enter
--- the answer to "which key is OPENCHAT" is nothing at all. A caller that wants
--- to read the chat keys has to clear them first, which is what this does.
-function ChatWindow.Yield()
-	if not built then
-		return false
-	end
-	if InCombatLockdown and InCombatLockdown() then
-		return false
-	end
-	if type(ClearOverrideBindings) ~= "function" then
-		return false
-	end
-	pcall(ClearOverrideBindings, enterButton)
-	return true
-end
-
---------------------------------------------------------------------------
 -- The surface everything else uses
 --------------------------------------------------------------------------
 
--- The line you type in, for the harness. Handed out for the reason the
--- microphone below is: what is being checked is whether a texture is drawn, and
--- a boolean this file computed is a boolean this file could compute wrongly and
--- still agree with itself.
+-- The rectangle round the line, for the harness. Ours, unlike the line inside
+-- it, which is ChatWindow.Entry above and the client's. Handed out for the
+-- reason the microphone below is: what is being checked is whether a texture is
+-- drawn, and a boolean this file computed is a boolean this file could compute
+-- wrongly and still agree with itself.
 function ChatWindow.Field()
 	return built and entry.box or nil
 end
@@ -913,7 +740,15 @@ function ChatWindow.Apply()
 	-- no such promise.
 	ns.ChatFeed.Watched(shown)
 	ns.ChatBlizzard.Apply()
-	ChatWindow.Keys()
+	-- The line you type in follows the window, because it is the client's frame
+	-- sitting in our footer: a window that is not on the screen is a footer that
+	-- is not on the screen, and a field anchored inside one is a game with no
+	-- way to type at all.
+	if shown then
+		ns.ChatField.Anchor(entry.box)
+	else
+		ns.ChatField.Release()
+	end
 	return true
 end
 
@@ -935,7 +770,7 @@ function ChatWindow.Hide()
 	window.frame:Hide()
 	ns.ChatFeed.Watched(false)
 	ns.ChatBlizzard.Apply()
-	ChatWindow.Keys()
+	ns.ChatField.Release()
 	return true
 end
 
@@ -1031,52 +866,63 @@ end
 --------------------------------------------------------------------------
 
 -- What the field starts with: the room's own slash, so the line reads /p with
--- the cursor after it the moment you start typing into your party. Only into an
--- empty field, because a half typed sentence you clicked away from is not
--- something to write over.
-function ChatWindow.Fill()
-	if not built or not ns.db.chatPrefix then
+-- the cursor after it the moment you start typing into your party.
+--
+-- Called by Chat/Field.lua from inside the client's own activation, with the
+-- client's own field, which is why it takes one. It is also called on its own
+-- from Focus below, for the paths that open the line without a key press.
+--
+-- Only into an empty field, because a half typed sentence you clicked away from
+-- is not something to write over.
+function ChatWindow.Fill(field)
+	field = field or ns.ChatField.Box()
+	if not built or not field or not ns.db.chatPrefix then
 		return false
 	end
-	local text = entry.edit:GetText() or ""
+	local text = field:GetText() or ""
 	if text ~= "" and text:sub(1, 1) ~= "/" then
 		return false
 	end
 	local prefix = ns.Compose.Prefix(ns.Rooms.Target(active))
-	entry.edit:SetText(prefix)
-	if type(entry.edit.SetCursorPosition) == "function" then
-		entry.edit:SetCursorPosition(#prefix)
+	if prefix == "" then
+		return false
+	end
+	field:SetText(prefix)
+	if type(field.SetCursorPosition) == "function" then
+		field:SetCursorPosition(#prefix)
 	end
 	return true
 end
 
--- Put the cursor in the field, opening the window first if it is shut. This is
--- what the enter key calls and what the key binding calls.
+-- Put the cursor in the field, opening the window first if it is shut.
+--
+-- Not what the enter key calls any more, and that is the change this window was
+-- rebuilt for. The two chat keys are the client's own again, so the press that
+-- opens the line and the press that sends it both run down a stack with nothing
+-- of ours in it, and `/logout` typed here logs you out on the first press.
+--
+-- What still comes through here is every way of opening the line that was never
+-- a key press: a click on the line itself, a click on a name in the log, the
+-- rail picking a room, `/wk chat`. None of those is a command, so none of them
+-- needs the clean stack.
 function ChatWindow.Focus()
 	if not built then
 		return false
 	end
-	-- Going back to the field is a change of mind about a line the client was
-	-- going to run from the enter key, so the key comes back here. The script
-	-- below catches the click that lands on the field directly; this catches
-	-- the same decision made from the window, the slash key or a hover.
-	ns.Compose.Disarm()
 	if not window:IsShown() then
 		ChatWindow.Show()
 	end
+	ns.ChatField.Open()
 	ChatWindow.Fill()
-	entry.edit:SetFocus()
 	return true
 end
 
--- The slash key, which opens the line with a slash already in it. That is what
--- the client's own OPENCHATSLASH does and it is the whole reason the key exists
--- separately from enter: every slash command in the game starts with it.
+-- The slash key's line: one with a slash already in it and no room prefix. The
+-- prefix would turn /dance into a sentence said out loud in party.
 --
--- No room prefix here, unlike Focus. A slash is you addressing the client
--- rather than a room, and Chat/Compose.lua already sends a line it cannot parse
--- as a channel through to the client's own slash handler. Prefixing it with the
--- room would turn /dance into a sentence said out loud in party.
+-- The client's own OPENCHATSLASH does this without us now. What is left here is
+-- the same line opened from somewhere that is not a key, and the harness, which
+-- has no keys at all.
 --
 -- A sentence already half typed is left alone and only focused. The test for
 -- that is Fill's: an empty line or one starting with a slash is a line nobody
@@ -1088,14 +934,18 @@ function ChatWindow.Slash()
 	if not window:IsShown() then
 		ChatWindow.Show()
 	end
-	local text = entry.edit:GetText() or ""
+	ns.ChatField.Open()
+	local field = ns.ChatField.Box()
+	if not field then
+		return false
+	end
+	local text = field:GetText() or ""
 	if text == "" or text:sub(1, 1) == "/" then
-		entry.edit:SetText("/")
-		if type(entry.edit.SetCursorPosition) == "function" then
-			entry.edit:SetCursorPosition(1)
+		field:SetText("/")
+		if type(field.SetCursorPosition) == "function" then
+			field:SetCursorPosition(1)
 		end
 	end
-	entry.edit:SetFocus()
 	return true
 end
 
@@ -1104,75 +954,60 @@ end
 -- of state holding it, which is the whole point of the redesign, so anything
 -- checking that behaviour has to be able to read the text.
 function ChatWindow.Line()
-	if not built then
+	local field = built and ns.ChatField.Box() or nil
+	if not field then
 		return ""
 	end
-	return entry.edit:GetText() or ""
+	return field:GetText() or ""
 end
 
--- Typing, as far as the field is concerned: the text, and the work the field
--- does every time the text moves. That work is what puts a line the client will
--- only run itself onto the enter key before the enter arrives, so a caller that
--- only called SetText would leave the key empty and the press slow.
---
--- Public for the reason Send below is: what a key press does to the field lives
--- inside a script handler, and a path nothing else can reach is a path nothing
--- else can check. The client fires OnTextChanged off SetText on its own, and
--- running it again costs nothing, because the field's handler asks for what is
--- already loaded before it loads anything.
+-- The client's own field, for the harness. Handed out for the reason the
+-- rectangle round it is: what is being checked is which frame the characters go
+-- into, and a boolean this file computed is a boolean this file could compute
+-- wrongly and still agree with itself.
+function ChatWindow.Entry()
+	return built and ns.ChatField.Box() or nil
+end
+
+-- Typing, as far as the field is concerned. Public because what a key press
+-- does to the field lives inside the client's own script handlers, and a path
+-- nothing else can reach is a path nothing else can check.
 function ChatWindow.Type(text)
-	if not built then
+	local field = built and ns.ChatField.Box() or nil
+	if not field then
 		return false
 	end
-	entry.edit:SetText(text or "")
-	local changed = entry.edit:GetScript("OnTextChanged")
-	if changed then
-		-- As typed, which is the argument the field reads. SetText above is the
-		-- other kind and the field is right to ignore it.
-		changed(entry.edit, true)
-	end
+	field:SetText(text or "")
 	return true
 end
 
--- The down edge of the enter key, as far as the field is concerned: the field
--- being told the line is finished. The up edge is the client's and lands on the
--- binding, which is where a line the client will only run itself gets run.
+-- The enter key, as far as the field is concerned.
 --
--- Public for the reason Type above is. The way this went wrong was the field
--- emptying itself and taking the key back out from under the press that was
--- about to run the line. Nothing outside the field could reach that, so nothing
--- outside the field could catch it.
+-- Nothing of ours runs on it in the game: the client dispatches the press
+-- straight into FrameXML's own OnEnterPressed, which is the entire point of
+-- borrowing the field. This calls whatever script is on the frame so that the
+-- harness, which has no keyboard, can reach the same path.
 function ChatWindow.Enter()
-	if not built then
+	local field = built and ns.ChatField.Box() or nil
+	if not field then
 		return false
 	end
-	local pressed = entry.edit:GetScript("OnEnterPressed")
+	local pressed = field:GetScript("OnEnterPressed")
 	if pressed then
-		pressed(entry.edit)
+		pressed(field)
 	end
 	return true
 end
 
 -- The focus going, on its own and after the fact, which is the shape the client
--- reports it in and the shape that broke this.
---
--- The field clears its own focus at the end of a press. A flag held across that
--- handler looks like it covers the focus going, and it does not: the flag comes
--- down when the handler returns and the client says the focus went after that.
--- So the handler ran against a flag that was already false, read the press as
--- someone walking away from a half typed line, and handed the loaded key back
--- with the press still in the air.
---
--- Public because that gap is a full frame wide on the client and zero wide in a
--- stub that fires the script inside ClearFocus. Nothing else can open it.
+-- reports it in. Public for the reason Type above is: the handler is the
+-- client's and nothing else can raise it.
 function ChatWindow.Blur()
-	if not built then
+	local field = built and ns.ChatField.Box() or nil
+	if not field then
 		return false
 	end
-	local lost = entry.edit:GetScript("OnEditFocusLost")
-	if lost then
-		lost(entry.edit)
-	end
+	field:ClearFocus()
 	return true
 end
 
@@ -1395,7 +1230,9 @@ end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
-events:RegisterEvent("PLAYER_REGEN_ENABLED")
+-- No PLAYER_REGEN_ENABLED. Nothing in this window is refused in a fight any
+-- more: the one thing that was is the override binding on the enter key, and
+-- the client owns that key again.
 -- What changes which rooms exist. Two spellings of the roster change, because
 -- the two clients this addon ships for do not use the same one, and registering
 -- an event a client has never heard of raises rather than answering.
@@ -1424,17 +1261,6 @@ events:SetScript("OnEvent", function(_, event)
 	end
 
 	if not built then
-		return
-	end
-	if event == "PLAYER_REGEN_ENABLED" then
-		-- A line loaded onto the enter key is dropped when the fight ends if it
-		-- was not pressed. The client refuses a binding change under lockdown,
-		-- so a key armed before the pull and fired during it could not give
-		-- itself back at the time, and this is when it can.
-		ns.Compose.Disarm()
-		if pending then
-			ChatWindow.Keys()
-		end
 		return
 	end
 	Refresh()

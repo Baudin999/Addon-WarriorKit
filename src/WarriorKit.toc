@@ -490,6 +490,7 @@ Comfort\Feature.lua
 Chat\People.lua
 Chat\Rooms.lua
 Chat\Compose.lua
+Chat\Field.lua
 Chat\Feed.lua
 Chat\Blizzard.lua
 Chat\Voice.lua

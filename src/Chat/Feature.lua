@@ -246,13 +246,6 @@ local function ChatWord(arg, raw)
 		ns.Print("chat " .. ns.ChatFeed.Describe() .. ".")
 		return
 	end
-	if arg == "debug" or arg:match("^debug%s") then
-		ns.db.chatDebug = ns.Command.Toggle((raw:match("^%s*debug%s+(%S+)$")))
-		ns.Print(ns.db.chatDebug
-			and "the log is on. Type a line the client keeps to itself and read what it says."
-			or "the log is off.")
-		return
-	end
 	if arg == "on" or arg == "off" then
 		SetChat(arg == "on")
 		ns.Print("chat window " .. (ns.db.chat and "on" or "off") .. ".")
@@ -462,7 +455,6 @@ ns.Register({
 		"chat on|off, draw it at all",
 		"chat room, list the rooms; chat room <name>, go to one",
 		"chat claim, whether the same lines still draw in Blizzard's window",
-		"chat debug on|off, say where a line the client keeps to itself gets to",
 		"group, list your groups and who is in them",
 		"group new <name>, group <group> add|remove <name>, group <group> party",
 		"voice, what the voice pick is doing",
@@ -473,9 +465,10 @@ ns.Register({
 	},
 
 	status = function()
-		return ("window %s; feed %s; Blizzard's %s; %s; voice %s")
-			:format(ns.ChatWindow.Describe(), ns.ChatFeed.Describe(),
-				ns.ChatBlizzard.Describe(), ns.People.Describe(), ns.Voice.Describe())
+		return ("window %s; line %s; feed %s; Blizzard's %s; %s; voice %s")
+			:format(ns.ChatWindow.Describe(), ns.ChatField.Describe(),
+				ns.ChatFeed.Describe(), ns.ChatBlizzard.Describe(),
+				ns.People.Describe(), ns.Voice.Describe())
 	end,
 
 	lock = function()

@@ -264,11 +264,15 @@ name of none of them.
                              goes and what is unread in each
     Chat/Compose.lua         the slash a room fills the line in with, and the
                              send that reads it back
+    Chat/Field.lua           the client's own chat line, stripped of its art and
+                             anchored into our footer, because a field of ours
+                             is a field `/logout` cannot run from
     Chat/Feed.lua            every chat event turned into one coloured line
     Chat/Blizzard.lua        the client's own chat window off the screen, and
                              everything it would have drawn forwarded here
     Chat/Voice.lua           the voice channel pick, and the join it asks for
-    Chat/Window.lua          the window: the room rail, a log each, the field
+    Chat/Window.lua          the window: the room rail, a log each, and the
+                             rectangle the client's line sits in
     Chat/Feature.lua
 
     Comfort/Loot.lua         empties a corpse on LOOT_READY, before the window draws

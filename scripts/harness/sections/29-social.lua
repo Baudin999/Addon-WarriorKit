@@ -475,11 +475,15 @@ do
 	-- background at the player's own opacity, which is the same surface every
 	-- line of the conversation sits on.
 	--
-	-- The focus is dropped through the edit box itself rather than through a
-	-- method on the window, because the window has no reason to grow one: every
-	-- way out of the field in the game is the client taking the focus away.
+	-- The rectangle is ours and the field inside it is the client's. Both are
+	-- read here, because a rectangle that lights on a frame nobody is typing
+	-- into is a window that looks right and swallows every key.
 	local field = Window.Field()
-	local line = field:GetChildren()
+	local line = Window.Entry()
+	check(line ~= nil, "the window has no line to type in")
+	check(line:GetName() == "ChatFrame1EditBox",
+		("the window types into %q rather than into the client's own line")
+			:format(tostring(line:GetName())))
 	Window.Focus()
 	check(field.bg:IsShown(), "the line is not drawn with the cursor in it")
 	check(field.edges[1]:IsShown(), "the line has no hairline with the cursor in it")
@@ -489,39 +493,66 @@ do
 	check(not field.edges[1]:IsShown(),
 		"the line's hairline is still drawn with the cursor out of it")
 
-	-- The slash key. It is the second of the client's two chat keys and it was
-	-- the one this window did not take, so pressing it opened Blizzard's
-	-- invisible line and every slash command in the game went nowhere.
-	--
-	-- Bound off the client's own binding set rather than off the character "/",
-	-- and read back through GetBindingAction, because a client that takes
-	-- SetOverrideBindingClick and does nothing with it leaves no other trace.
+	-- Blizzard's art off it, which is the whole of the skin: three border
+	-- pieces hidden and the focus glow faded. A field left in the client's own
+	-- frame is a sunken grey bar across the foot of a window drawn without one.
+	check(not _G.ChatFrame1EditBoxLeft:IsShown(),
+		"the client's own border is still drawn round the line")
+	check(_G.ChatFrame1EditBoxMid:GetAlpha() == 0 or not _G.ChatFrame1EditBoxMid:IsShown(),
+		"the middle of the client's own border is still drawn")
+
+	-- And out from under the chat frame it was built on. Chat/Blizzard.lua
+	-- re-parents that frame into an attic that can never be shown, so a line
+	-- left as its child is a game with no way to type in it.
+	check(line:GetParent() == _G.UIParent,
+		"the line is still a child of the chat frame the attic takes away")
+
+	-- Anchored into our footer rather than at the bottom of the screen. The
+	-- first anchor is the one the window wrote, and it names our own rectangle.
+	local point, relative = line:GetPoint(1)
+	check(relative == field,
+		("the line is anchored to %s rather than to the window's own footer")
+			:format(tostring(relative and relative.name or relative)))
+	check(point == "LEFT" or point == "RIGHT",
+		("the line is anchored by %q"):format(tostring(point)))
+
+	-- Neither chat key is the window's any more, and that is the fix rather
+	-- than an omission. A key bound to a button of ours opens the line from a
+	-- script of ours, and the press that finishes a command then runs down a
+	-- stack an addon has been in, which is the stack the client will not
+	-- finish `/logout` on.
 	local hidBlizz = ns.db.hideBlizzChat
 	ns.db.hideBlizzChat = true
-	Window.Keys()
-	check(_G.GetBindingAction("/", true) == "CLICK WarriorKitChatSlashButton:LeftButton",
-		("the slash key runs %q with Blizzard's window hidden")
-			:format(_G.GetBindingAction("/", true)))
-	check(_G.GetBindingAction("ENTER", true) == "CLICK WarriorKitChatEnterButton:LeftButton",
-		("the enter key runs %q with Blizzard's window hidden")
+	Window.Apply()
+	check(_G.GetBindingAction("ENTER", true) == "",
+		("the window took the enter key back and bound it to %q")
 			:format(_G.GetBindingAction("ENTER", true)))
+	check(_G.GetBindingAction("/", true) == "",
+		("the window took the slash key and bound it to %q")
+			:format(_G.GetBindingAction("/", true)))
+	check(_G.WarriorKitChatEnterButton == nil,
+		"the button the enter key used to be bound onto is still being built")
 
-	-- And what it opens is a line with a slash in it and no room prefix. The
-	-- prefix would turn every slash command into a sentence said out loud.
+	-- The client's own enter key. It picks the field, activates it, and only
+	-- then writes what the key asked for, which is nothing: the room's slash
+	-- has to survive that blanking or the line comes up empty.
 	Window.Go("party")
-	Window.Slash()
+	_G.ChatFrame_OpenChat("")
+	check(Window.Line() == "/p ",
+		("the client's own enter key left the line reading %q, expected \"/p \"")
+			:format(Window.Line()))
+
+	-- And the client's own slash key opens a line with a slash in it and no
+	-- room prefix. The prefix would turn /dance into a sentence said out loud.
+	_G.ChatFrame_OpenChat("/")
 	check(Window.Line() == "/",
 		("the slash key opened the line with %q, expected \"/\""):format(Window.Line()))
-
-	-- Both keys handed back the moment Blizzard's window is on screen again,
-	-- because with that window up its own line works and there is nothing to fix.
-	ns.db.hideBlizzChat = false
-	Window.Keys()
-	check(_G.GetBindingAction("/", true) == "",
-		("the slash key is still held as %q with Blizzard's window up")
-			:format(_G.GetBindingAction("/", true)))
+	-- Shut behind us. The client only activates a line that is not already
+	-- active, so a block that leaves one open leaves the next one reading a
+	-- line it never opened.
+	_G.ChatEdit_DeactivateChat(line)
 	ns.db.hideBlizzChat = hidBlizz
-	Window.Keys()
+	Window.Apply()
 
 	-- A slash the player typed beats the room, because the text in the field is
 	-- the only thing deciding where the line goes.

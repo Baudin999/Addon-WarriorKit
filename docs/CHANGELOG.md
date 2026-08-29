@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### The chat line is Blizzard's now, and `/logout` works
+
+Typing `/logout` in this window used to do nothing, or take two presses, or come
+back as a red line naming WarriorKit. The reason was one line of code: the
+window made its own edit box.
+
+`Logout()` is protected and the client refuses it from any call stack an addon
+has been in. A field of ours puts a function of ours in that stack. The client
+dispatches the key press into our OnEnterPressed, our handler calls the client's
+parser, and the protected call at the end of it is dropped. Blizzard's field has
+its OnEnterPressed set in XML, so the same press goes from the keyboard into
+FrameXML with nothing of ours between it and the command.
+
+The answer was to stop building a field. `Chat/Field.lua` borrows
+`ChatFrame1EditBox`, hides the three border textures, fades the focus glow, sets
+the log's own font on it and anchors it into the footer. The rectangle round it
+is still ours and so is the sentence in it. The frame the characters go into is
+the client's, and nothing in this addon ever calls SetScript on it.
+
+Both chat keys went back to the client with it. The window used to bind enter
+and slash onto buttons of its own so the line opened down here rather than
+behind the hidden window, and that was the other half of the bug: a key bound to
+a button of ours opens the line from a script of ours. Now `OPENCHAT` and
+`OPENCHATSLASH` are FrameXML's own again and the room's slash is written into
+the line off the client's activation instead.
+
+What this deleted is most of `Chat/Compose.lua`: a secure button carrying the
+typed line as macrotext, an override binding armed while you typed and handed
+back afterwards, a list of thirty five slash words that might end in a protected
+call, an alias table, a debug log and its slash word, and the combat retry that
+existed because a binding cannot move in a fight. Around four hundred lines,
+none of which did anything except work around the field.
+
+This is Prat's arrangement. It has shipped for fifteen years without a `/logout`
+bug, because it never had one to fix: the only two edit boxes in Prat are for
+copying chat and for search, and the line you send from is always the client's.
+
 ### A quest log you can see all of
 
 The client's log draws six of your quests through a slot. Twenty do not fit, so
