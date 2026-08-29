@@ -314,3 +314,49 @@ end
 
 H.playerFrame, H.targetFrame, H.totFrame = playerFrame, targetFrame, totFrame
 H.BUILT = BUILT
+
+--------------------------------------------------------------------------
+-- The bags
+--
+-- One button per bag slot, made when a section first clicks it, and the global
+-- every bag button in the game routes its clicks through. Both halves are the
+-- point: the slot is the button's own id and the bag is its parent's, which is
+-- where the classic bags keep them and the only thing a click has to go on.
+--
+-- The handler is modelled rather than stubbed away because it is the seam.
+-- Mail/Bags.lua takes this name over while the mail window is open, so a
+-- section clicks by calling the name, exactly as the client's own template
+-- does, and what answers is whichever function is on it at that moment. A stub
+-- that called the addon's handler directly would prove nothing about the
+-- takeover, which is the half that can be wrong.
+--
+-- What the client does with a bare right click is use what is in the slot, and
+-- the whole reason the mail window has to stop it is what using means: at a
+-- merchant it sells, with the send pane flagged as showing it attaches to the
+-- client's own form, and anywhere else it eats or equips the thing.
+--------------------------------------------------------------------------
+
+do
+	local bags, slots = {}, {}
+
+	function H.bagButton(bag, slot)
+		local key = bag .. ":" .. slot
+		if not slots[key] then
+			if not bags[bag] then
+				bags[bag] = region("frame", _G.UIParent, "ContainerFrame" .. (bag + 1))
+				bags[bag]:SetID(bag)
+			end
+			local button = child("button", bags[bag])
+			button:SetID(slot)
+			slots[key] = button
+		end
+		return slots[key]
+	end
+
+	function _G.ContainerFrameItemButton_OnClick(button, which)
+		if which ~= "RightButton" then
+			return
+		end
+		_G.UseContainerItem(button:GetParent():GetID(), button:GetID())
+	end
+end

@@ -26,6 +26,11 @@ local function SetHide(value)
 	ns.MailBlizzard.Apply()
 end
 
+local function SetBags(value)
+	ns.db.mailBags = value
+	ns.MailBags.Apply()
+end
+
 local function SetWarn(value)
 	ns.db.mailWarn = value
 	ns.MailWindow.Paint()
@@ -68,6 +73,9 @@ local function MailWord(arg, rawArg)
 	elseif word == "hide" then
 		SetHide(ns.Command.Toggle(rest))
 		ns.Print("Blizzard's mail window is " .. ns.MailBlizzard.Describe() .. ".")
+	elseif word == "bags" then
+		SetBags(ns.Command.Toggle(rest))
+		ns.Print("a right click in the bags puts a stack " .. ns.MailBags.Describe() .. ".")
 	elseif word == "on" or word == "off" then
 		SetMail(word == "on")
 		ns.Print("the mail window is " .. (ns.db.mail and "on" or "off") .. ".")
@@ -113,6 +121,13 @@ ns.Register({
 		-- turn it off without losing the colour that says which alt.
 		mailWarn = true,
 
+		-- Whether a right click in the bags puts a stack on the letter, which
+		-- is what the client's own mail window does and the only way anybody
+		-- attaches twelve of anything. Mail/Bags.lua carries what it costs: the
+		-- client's own handler is taken over while the window is open, so this
+		-- is the switch that says do not.
+		mailBags = true,
+
 		-- The list itself. Account-wide, because who you mail is a fact about
 		-- you rather than about the character you are standing in, and typing
 		-- the same four names on every alt is exactly the chore this removes.
@@ -127,15 +142,17 @@ ns.Register({
 		"mail, open the window you are standing at a mailbox for",
 		"mail on|off, the addon's mail window instead of the client's",
 		"mail hide on|off, move Blizzard's own window out of the way",
+		"mail bags on|off, right click a stack in your bags to attach it",
 		"mail fav|unfav <name>, the quick list down the left of the window",
 		"mail favs, what is on that list and who each of them is",
 		"mail warn on|off, whether a stranger takes two presses as well as red",
 	},
 
 	status = function()
-		return ("%s; %s; %s; Blizzard's %s"):format(
+		return ("%s; %s; %s; a right click in the bags puts a stack %s; Blizzard's %s"):format(
 			ns.MailWindow.Describe(), ns.MailWho.Describe(),
-			ns.MailInbox.Describe(), ns.MailBlizzard.Describe())
+			ns.MailInbox.Describe(), ns.MailBags.Describe(),
+			ns.MailBlizzard.Describe())
 	end,
 
 	panel = function(ui)
@@ -144,16 +161,21 @@ ns.Register({
 		ui.Check("open the addon's mail window at a mailbox",
 			function() return ns.db.mail end,
 			SetMail)
-		ui.Hint("The name you are sending to is drawn green for a character on your own account, blue for somebody on your friends list or in one of your groups, and red for a name the addon has never seen.")
+		ui.Hint("Green for a character on your own account, blue for a friend or somebody in one of your groups, red for a name the addon has never seen.")
 		ui.Check("move Blizzard's own mail window out of the way",
 			function() return ns.db.mailHideBlizz end,
 			SetHide)
-		ui.Hint("Moved rather than hidden. Hiding that frame is what tells the server you have walked away from the mailbox, so it is parked off the side of the screen at no opacity instead.")
+		ui.Hint("Moved rather than hidden: hiding that frame tells the server you walked away from the mailbox, so it is parked off the screen at no opacity.")
+		ui.Check("right click a stack in your bags to put it on the letter",
+			function() return ns.db.mailBags end,
+			SetBags)
+		ui.Hint("The bag click is taken over while this window is open and given back when it closes. Shift, ctrl and the left button are never taken.")
 		ui.Check("ask twice before value goes to somebody not on the list",
 			function() return ns.db.mailWarn end,
 			SetWarn)
-		ui.Hint("The band along the bottom of the window is red either way. This is whether the send button also has to be pressed a second time.")
+		ui.Hint("The band is red either way. This is whether the send button also has to be pressed a second time.")
 		ui.Reading("favourites", ns.MailWho.Describe)
+		ui.Reading("a right click in the bags", ns.MailBags.Describe)
 		ui.Reading("your mailbox", ns.MailInbox.Describe)
 		ui.Reading("the last send", ns.MailSend.Describe)
 		ui.Reading("Blizzard's window", ns.MailBlizzard.Describe)

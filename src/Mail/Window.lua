@@ -358,7 +358,7 @@ local function SlotTip(button)
 		return {
 			kind = "note",
 			title = "an empty slot",
-			lines = { "Drag something out of your bags onto the block." },
+			lines = { "Right click a stack in your bags, or drag one onto the block." },
 			hint = ("Six to a line and twelve to a mail. Past twelve the addon sends more than one, up to %d.")
 				:format(ns.MailDraft.MAX),
 		}
@@ -1050,6 +1050,7 @@ local function Build()
 	if type(window.frame.HookScript) == "function" then
 		window.frame:HookScript("OnHide", function()
 			ns.MailBlizzard.Apply()
+			ns.MailBags.Apply()
 			if atMailbox and type(_G.CloseMail) == "function" then
 				pcall(_G.CloseMail)
 			end
@@ -1084,6 +1085,7 @@ function Window.Show()
 	window:Show()
 	Disarm()
 	ns.MailBlizzard.Apply()
+	ns.MailBags.Apply()
 	Window.Paint()
 	return true
 end
@@ -1096,6 +1098,19 @@ function Window.Hide()
 		return false
 	end
 	window:Hide()
+	return true
+end
+
+-- The draft changed from somewhere that is not this window. Mail/Bags.lua's
+-- right click is the only caller, and it goes through the same two steps every
+-- field in here goes through: a stack that arrived out of the bags is the same
+-- kind of change as one dropped on the block, and it has to disarm the send for
+-- the same reason.
+function Window.Changed()
+	if not window then
+		return false
+	end
+	Changed()
 	return true
 end
 

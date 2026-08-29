@@ -521,8 +521,9 @@ Chat\Feature.lua
 # is the conversation with the server that walks those mails one at a time, and
 # Inbox.lua is what is waiting and the sweep that takes it. None of the three
 # knows the other two exist; Window.lua draws all of them, and Blizzard.lua
-# moves the client's own window out from under it. Feature.lua last, as
-# everywhere else.
+# moves the client's own window out from under it. Bags.lua takes the client's
+# own bag click over while that window is open, so a right click puts a stack on
+# the letter rather than eating it. Feature.lua last, as everywhere else.
 #
 # After the Chat part, because Feature.lua reads Chat/People.lua's groups at
 # load, and after Feeds, because it reads Feeds/Purse.lua's ledger the same way.
@@ -532,6 +533,7 @@ Mail\Draft.lua
 Mail\Send.lua
 Mail\Inbox.lua
 Mail\Blizzard.lua
+Mail\Bags.lua
 Mail\Window.lua
 Mail\Feature.lua
 

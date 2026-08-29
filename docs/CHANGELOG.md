@@ -158,6 +158,33 @@ posts one mail at a time and waits for the server between each. Coin rides on
 the first mail only, because splitting it three ways is three ways for half of
 it to be sitting in a mailbox after the second one failed.
 
+Right click a stack in your bags and it goes on the letter. That is what the
+client's own window does and it is the only way anybody attaches twelve of
+anything; dragging squares onto a block one at a time was the first version of
+this and nobody would do it twice. The stack you point at is the stack that
+goes, which a drop cannot promise: a cursor says what it is carrying and never
+which slot it came out of, so twenty identical piles of ore mean the drop takes
+the first free one and the click takes the seventh.
+
+The click is taken over while the window is open and given back the moment it
+closes, the same promise the parked window makes. Shift, ctrl and the left
+button are never taken, so the client's stack split and everything else it does
+still work. What the addon claims it never hands back: a stack already on the
+mail says so and stops there, because falling through means the client eats the
+ore. `/wk mail bags off` if you want none of it.
+
+One name is hooked and it is `ContainerFrameItemButton_OnClick`, which every bag
+button in the game reaches, Baganator's included, and which Auctionator hooks on
+this same client to put a bag item on the auction form. It is replaced rather
+than secure-hooked, because a hook runs after the client's own handler and the
+whole job here is to stop it.
+
+This turned up something the send was doing. It raised `SetSendMailShowing` and
+left it up, which was harmless while nothing else clicked a bag slot. With that
+flag up, a bag click the addon does not catch attaches to the client's own form,
+and that form is parked off the side of the screen: the stack leaves your bags
+and lands on a letter nobody can see. The flag goes back down when a run ends.
+
 The subject writes itself. Coin titles the mail `money`, one item titles it
 after that item, several title it after the first and a count, and a split send
 numbers the parts and fits the number inside the client's sixty four characters.

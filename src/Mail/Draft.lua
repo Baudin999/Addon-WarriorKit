@@ -29,6 +29,13 @@ ns.MailDraft = Draft
 -- twice: once when you drop, to say what you dropped, and again at send, by
 -- Mail/Send.lua, against the link this recorded.
 --
+-- There are two ways on and they differ in what they know. A right click in the
+-- bags landed on one square and names it, which is Draft.AttachSlot; a drop
+-- carries an item and no slot at all, so Draft.Attach has to go looking for the
+-- first stack of it that is not already spoken for. The click is the exact one
+-- and the drop is the one that has to guess, which is why the third stack of
+-- ore you point at is the third stack that goes.
+--
 -- **The subject writes itself.** Sending gold titles the mail "money" and
 -- sending one thing titles it after that thing, because that is what you would
 -- have typed and because an inbox of mails called nothing is an inbox you have
@@ -185,6 +192,32 @@ function Draft.Slot(link)
 	return nil
 end
 
+-- One bag slot onto the list, named by where it is rather than by what it is
+-- in. This is the right click's way in and it is the more exact of the two: a
+-- click landed on one square and that square is the stack that should go, where
+-- a cursor carrying an item can only say what it is holding.
+function Draft.AttachSlot(bag, slot)
+	if #attached >= Draft.MAX then
+		return nil, ("%d is as much as one send carries"):format(Draft.MAX)
+	end
+
+	local link = ns.ContainerItemLink(bag, slot)
+	if type(link) ~= "string" then
+		return nil, "there is nothing in that slot"
+	end
+	if Taken(bag, slot) then
+		return nil, "that stack is already on the mail"
+	end
+
+	local name, icon = ns.ItemInfo(link)
+	local count = ns.ContainerItem(bag, slot)
+	attached[#attached + 1] = {
+		link = link, name = name or "?", icon = icon,
+		count = count or 1, bag = bag, slot = slot,
+	}
+	return #attached
+end
+
 function Draft.Attach(link)
 	if type(link) ~= "string" then
 		return nil, "that is not something you can mail"
@@ -204,14 +237,7 @@ function Draft.Attach(link)
 		end
 		return nil, "that is not in your bags"
 	end
-
-	local name, icon = ns.ItemInfo(link)
-	local count = ns.ContainerItem(bag, slot)
-	attached[#attached + 1] = {
-		link = link, name = name or "?", icon = icon,
-		count = count or 1, bag = bag, slot = slot,
-	}
-	return #attached
+	return Draft.AttachSlot(bag, slot)
 end
 
 function Draft.Detach(index)

@@ -96,16 +96,22 @@ local function Loaded()
 	return count
 end
 
--- The flag that decides what UseContainerItem does. Set true and left, which is
--- what Baganator does: turning it off would be claiming to know what state the
--- client's own send pane is in, and this addon parks that window rather than
--- driving it.
-local function Showing()
+-- The flag that decides what UseContainerItem does. Raised before every fill,
+-- which is what Baganator does.
+--
+-- It used to be raised and left, and that was defensible until a right click in
+-- the bags meant something. With the flag up, a bag click the addon did not
+-- catch attaches to the client's own form, and that form is parked off the side
+-- of the screen: the item leaves your bags and lands on an invisible letter
+-- nobody is going to send. So a run that has finished puts it back down. The
+-- claim is only about the runs this file drives, which is the only thing it
+-- knows anything about.
+local function Showing(state)
 	local tell = _G.SetSendMailShowing
 	if type(tell) ~= "function" then
 		return false
 	end
-	return pcall(tell, true)
+	return pcall(tell, state)
 end
 
 --------------------------------------------------------------------------
@@ -169,6 +175,7 @@ end
 local function Stop(why)
 	running, at = false, 0
 	note = why or note
+	Showing(false)
 	return false
 end
 
@@ -179,7 +186,7 @@ local function Post(which)
 		return Stop("this client has no SendMail")
 	end
 
-	Showing()
+	Showing(true)
 	local placed, lost = Fill(which)
 	missing = missing + lost
 

@@ -98,6 +98,14 @@ function Region:GetRegions() return unpack(self.regions) end
 function Region:GetChildren() return unpack(self.children) end
 function Region:GetName() return self.name end
 
+-- The number a frame carries. Data rather than a call for effect, and it has to
+-- be, because a bag button says which slot it is by its own id and which bag it
+-- is in by its parent's. Left to the PascalCase no-op above, both answered nil
+-- and a click on a bag slot would have landed nowhere while every assertion
+-- about it still passed.
+function Region:SetID(id) self.id = id end
+function Region:GetID() return self.id or 0 end
+
 -- The draw layer is data here, not a no-op, because the gauge is drawn as
 -- three textures inside one of Blizzard's bars and which of them is on top is
 -- decided by layer and sublevel alone. That ordering used to be decided by
