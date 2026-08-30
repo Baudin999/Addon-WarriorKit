@@ -166,12 +166,3 @@ function Placeable:Lock(unlocked)
 		self.frame:RegisterForDrag()
 	end
 end
-
--- Whether the frame can be dragged right now. Always true where the lock does
--- not reach. For the parts whose own Lock has more to do than this one does:
--- the experience rails hand the mouse from the bars to the frame and back, the
--- enemy bars show a header only in list mode, and a feed lets go of its status
--- strip so the corner you reach for is draggable.
-function Placeable:Unlocked()
-	return self.unlocked
-end
