@@ -383,6 +383,12 @@ function Region:EnableMouse(value) self.mouse = value and true or false end
 -- Recorded, not swallowed: a frame that was never made movable answers every
 -- drag by doing nothing, and looks exactly like one that was.
 function Region:SetMovable(value) self.movable = value and true or false end
+-- Recorded for the reason above it: a frame that registered no drag button
+-- answers every drag by doing nothing and looks exactly like one that did.
+-- RegisterForDrag with no arguments is how the addon takes a drag away again,
+-- so the empty call has to be recorded as a value rather than ignored.
+function Region:RegisterForDrag(button) self.dragButton = button end
+function Region:IsDraggable() return self.dragButton ~= nil end
 function Region:IsMouseEnabled() return self.mouse end
 
 function Region:SetAttribute(key, value)

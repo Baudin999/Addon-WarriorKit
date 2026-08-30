@@ -744,6 +744,10 @@ local function Build()
 		moved = function(anchor)
 			ns.db.chatPoint = anchor
 		end,
+		-- And the only window /wk lock reaches, for the same reason it saves
+		-- its corner: this one is furniture on the HUD rather than a window you
+		-- opened for a minute, so it locks down with the rest of the furniture.
+		lockable = true,
 	})
 
 	rail = UI.List(window.content, {

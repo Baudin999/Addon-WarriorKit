@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### The lock is a property of a frame now, not a call nobody repeats
+
+`UI.Placeable` takes `lockable`. Eleven frames say nothing and take the default,
+which is that `/wk lock` and the panel's button decide whether they can be
+dragged. Five chrome windows pass `lockable = false` and are always movable,
+because locking a quest log would be locking a window rather than placing a
+piece of the HUD: you opened it on purpose and you will close it in a minute.
+
+They were always movable. The difference is that it used to be a `Lock(true)`
+called once at build and never again, so the only way to know a window ignored
+the lock was to notice that nothing called it a second time. The chat window is
+the one that asks for the lock, with `lockable = true`, because it is up all
+evening in a corner you chose and it is furniture like the rest of the HUD.
+
+A name and a rim are what a chromeless frame wears while you place it, so a
+frame the lock never reaches has no state to wear them in. That combination
+asserts at login rather than drawing a rim over the world all session.
+
+`51-placing` in the harness is the gate. It drives `ns.Each("lock")`, which is
+what the slash word and the panel button both call, and asserts that all eleven
+HUD frames lose the drag and all five windows keep it, then that all eleven get
+it back. Both halves matter: a frame that ignores the lock in both directions
+passes the first on its own without being placeable at all. The client stub
+records `RegisterForDrag` now, for the reason it already recorded `SetMovable`.
+
+`UI.Window` gave up its footer to a `Footer` local beside `TitleBar`. The
+constructor was at the hundred-line gate and `lockable` pushed it over, which is
+the gate doing its job rather than a number to raise.
+
 ### One file owns dragging, and windows are one of its callers
 
 Twelve frames in this addon can be unlocked and moved, and until now every one

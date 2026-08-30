@@ -125,6 +125,21 @@ local function TitleBar(window, px, title)
 	window.close:SetPoint("TOPRIGHT", -4, -4)
 end
 
+-- The strip along the bottom and the hairline above it. Beside TitleBar for the
+-- same reason TitleBar is its own function: it is a piece of chrome whose size
+-- the caller decides, and eight lines of it inside the constructor is eight
+-- lines nobody reading how a window is assembled needs to step through. Every
+-- window has one, bare or not, because the chat window's way out lives in it.
+local function Footer(window, frame)
+	window.footer = CreateFrame("Frame", nil, frame)
+	window.footer:SetPoint("BOTTOMLEFT", M.pad, 0)
+	window.footer:SetPoint("BOTTOMRIGHT", -M.pad, 0)
+	window.footer:SetHeight(window.foot)
+	window.footerRule = UI.Rule(frame, C.hairline)
+	window.footerRule:SetPoint("BOTTOMLEFT", M.pad, window.foot)
+	window.footerRule:SetPoint("BOTTOMRIGHT", -M.pad, window.foot)
+end
+
 function UI.Window(opts)
 	local window = setmetatable({}, Window)
 	local zoom = opts.zoom or UI.WindowZoom()
@@ -140,8 +155,13 @@ function UI.Window(opts)
 	-- the addon that can be moved, windows included. Its header says why that
 	-- is one file and not two. No name, because a window has a bar across its
 	-- top to grab it by and answers the mouse whether or not you are placing it.
-	window.place = UI.Placeable(frame, { moved = opts.moved })
-	window.place:Lock(true)
+	-- /wk lock does not reach a window unless the window asks it to, which the
+	-- chat window is the only one to do. Locking a quest log would be locking a
+	-- window rather than placing the HUD.
+	window.place = UI.Placeable(frame, {
+		moved = opts.moved,
+		lockable = opts.lockable == true,
+	})
 	-- DIALOG unless the caller says otherwise. A settings window is something
 	-- you open over the game and close again, and DIALOG is where that belongs.
 	-- A window that is up while you play, which is what the chat window is, has
@@ -210,13 +230,7 @@ function UI.Window(opts)
 	window.content = CreateFrame("Frame", nil, frame)
 	window.content:SetPoint("TOPLEFT", 0, -window.chrome)
 
-	window.footer = CreateFrame("Frame", nil, frame)
-	window.footer:SetPoint("BOTTOMLEFT", M.pad, 0)
-	window.footer:SetPoint("BOTTOMRIGHT", -M.pad, 0)
-	window.footer:SetHeight(window.foot)
-	window.footerRule = UI.Rule(frame, C.hairline)
-	window.footerRule:SetPoint("BOTTOMLEFT", M.pad, window.foot)
-	window.footerRule:SetPoint("BOTTOMRIGHT", -M.pad, window.foot)
+	Footer(window, frame)
 
 	window:Resize(opts.width or 540, opts.height or 450)
 

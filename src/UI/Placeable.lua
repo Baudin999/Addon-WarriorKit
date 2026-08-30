@@ -74,12 +74,27 @@ local function Marker(place, frame, name, edge)
 	place.title:Hide()
 end
 
+-- Whether the addon's lock reaches this frame at all.
+--
+-- Eleven of the twelve say nothing and take the default, which is that /wk lock
+-- and the panel's button decide whether they can be dragged. The five chrome
+-- windows are the other case: a quest log or a mail window is a thing you open,
+-- move and close again, and locking it would be locking a window rather than
+-- placing a piece of the HUD. They are always movable and always were. Until
+-- now that was a Lock(true) called once at build and never again, which is a
+-- property of the frame written as a call nobody repeats, and the next person
+-- to read it has to work out that nothing calls it a second time.
+--
+-- lockable = false says it instead. Lock is then a no-op the caller may still
+-- call, and Unlocked answers true, because a frame the lock does not reach is
+-- one you can always place.
 function UI.Placeable(frame, opts)
 	local place = setmetatable({}, Placeable)
 	place.frame = frame
 	place.moved = opts.moved
 	place.combat = opts.combat
-	place.unlocked = false
+	place.lockable = opts.lockable ~= false
+	place.unlocked = not place.lockable
 
 	frame:SetMovable(true)
 	frame:SetClampedToScreen(true)
@@ -110,7 +125,20 @@ function UI.Placeable(frame, opts)
 	end)
 
 	if opts.name then
+		-- A name and a rim are what a frame with no chrome wears while it is
+		-- being placed, so a frame the lock never reaches has no state to wear
+		-- them in: it would carry a rim over the world for the whole session.
+		-- The two options mean opposite things about the same frame and the
+		-- combination is a mistake rather than a shape anybody wants, so it
+		-- fails at login where the harness reaches it rather than looking odd
+		-- in somebody's game.
+		assert(place.lockable,
+			"UI.Placeable: a frame that is never locked cannot carry a placing rim: " .. opts.name)
 		Marker(place, frame, opts.name, opts.edge)
+	end
+
+	if not place.lockable then
+		frame:RegisterForDrag("LeftButton")
 	end
 
 	return place
@@ -118,7 +146,14 @@ end
 
 -- Locked is the normal state, and unlocked is the two minutes you spend putting
 -- the frame somewhere.
+--
+-- A no-op rather than a refusal on a frame the lock does not reach, so a part
+-- that holds a mix of both can call this on all of them without asking which
+-- kind each one is.
 function Placeable:Lock(unlocked)
+	if not self.lockable then
+		return
+	end
 	self.unlocked = unlocked and true or false
 	if self.grab then
 		self.frame:EnableMouse(self.unlocked)
@@ -132,11 +167,11 @@ function Placeable:Lock(unlocked)
 	end
 end
 
--- Whether the frame is being placed right now. For the parts whose own Lock
--- has more to do than this one does: the experience rails hand the mouse from
--- the bars to the frame and back, the enemy bars show a header only in list
--- mode, and a feed lets go of its status strip so the corner you reach for is
--- draggable.
+-- Whether the frame can be dragged right now. Always true where the lock does
+-- not reach. For the parts whose own Lock has more to do than this one does:
+-- the experience rails hand the mouse from the bars to the frame and back, the
+-- enemy bars show a header only in list mode, and a feed lets go of its status
+-- strip so the corner you reach for is draggable.
 function Placeable:Unlocked()
 	return self.unlocked
 end
