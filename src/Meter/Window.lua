@@ -360,7 +360,7 @@ function MeterWindow.Toggle()
 end
 
 function MeterWindow.Reset()
-	ns.db.meterPoint = { "CENTER", "UIParent", "CENTER", -320, 120 }
+	ns.db.meterPoint = ns.DefaultCopy("meterPoint")
 	MeterWindow.Apply()
 end
 

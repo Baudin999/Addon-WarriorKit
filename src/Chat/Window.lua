@@ -942,7 +942,7 @@ function ChatWindow.Toggle()
 end
 
 function ChatWindow.Reset()
-	ns.db.chatPoint = { "BOTTOMLEFT", "UIParent", "BOTTOMLEFT", 16, 120 }
+	ns.db.chatPoint = ns.DefaultCopy("chatPoint")
 	return ChatWindow.Apply()
 end
 
@@ -1398,12 +1398,12 @@ local WAS = { width = 520, height = 260, font = 12 }
 local function Shrink()
 	local moved = false
 	if ns.db.chatWidth == WAS.width and ns.db.chatHeight == WAS.height then
-		ns.db.chatWidth = ns.DefaultFor("chatWidth")
-		ns.db.chatHeight = ns.DefaultFor("chatHeight")
+		ns.db.chatWidth = ns.DefaultCopy("chatWidth")
+		ns.db.chatHeight = ns.DefaultCopy("chatHeight")
 		moved = true
 	end
 	if ns.db.chatFont == WAS.font then
-		ns.db.chatFont = ns.DefaultFor("chatFont")
+		ns.db.chatFont = ns.DefaultCopy("chatFont")
 		moved = true
 	end
 	return moved

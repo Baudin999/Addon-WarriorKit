@@ -208,6 +208,11 @@ read_globals = {
 	"RegisterStateDriver", "UnregisterStateDriver",
 	"SetOverrideBindingClick", "ClearOverrideBindings",
 	"UISpecialFrames", "tinsert", "pcall",
+	-- The interface rebuilt from scratch, which is how `/wk defaults` and the
+	-- button beside it apply two dozen parts' worth of settings at once: a
+	-- part reads its own settings when it is built, and there is no hook that
+	-- says "read them again". Nothing else in the addon calls it.
+	"ReloadUI",
 	-- the client's own menu, and the call that takes a frame off its panel
 	-- stack. Core/Menu.lua adds one button to the first and closes it with
 	-- the second, and both are probed before they are touched: neither is

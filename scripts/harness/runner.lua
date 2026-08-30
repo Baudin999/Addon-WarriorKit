@@ -147,6 +147,10 @@ local SECTIONS = {
 	-- section leaves registered is a source that answers only a subject
 	-- carrying its own probe field, and nothing here carries one.
 	"50-experience-rails",
+	-- Last, and it has to be: it puts every setting in the account file back
+	-- to what the addon ships with, twice over, which is the one thing in the
+	-- suite that would pull the scene out from under every section above it.
+	"51-shipped-defaults",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

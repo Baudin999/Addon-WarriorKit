@@ -952,15 +952,180 @@ local function ApplyDefaults(db, from)
 	return db
 end
 
--- The registered default for one setting, so a reset does not repeat a literal
--- that already exists in a feature's defaults table. Anchor tables are the
--- exception: they are handed out by reference and dragging a frame mutates
--- them, so a reset must build a fresh one rather than reuse the default.
+-- The registered default for one setting, so nothing repeats a literal that
+-- already exists in a feature's defaults table.
+--
+-- For reading. Every write back into ns.db goes through DefaultCopy below,
+-- because what this hands back is the registered table itself.
 function ns.DefaultFor(key)
 	if defaults[key] ~= nil then
 		return defaults[key]
 	end
 	return charDefaults[key]
+end
+
+-- The same answer, in a table nobody else is holding.
+--
+-- An anchor is written through on every drag, so a restore that assigned the
+-- registered table would hand the feature the defaults block to drag around,
+-- and the next restore would put back wherever it was left. Eight resets
+-- avoided that by writing the anchor out longhand instead, and every one of
+-- the eight was still holding the position the addon shipped with two releases
+-- ago. Nothing said so, because a literal cannot go stale out loud.
+--
+-- So this is the one way back into ns.db, whatever the default's type. A
+-- scalar comes back untouched, which means no caller has to know which
+-- defaults happen to be tables this month.
+--
+-- One level deep is all it copies, which is exactly as deep as a defaults
+-- table goes: every table in one is a list of numbers or a map of flags.
+function ns.DefaultCopy(key)
+	local value = ns.DefaultFor(key)
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for at, held in pairs(value) do
+		copy[at] = held
+	end
+	return copy
+end
+
+--------------------------------------------------------------------------
+-- Back to what it ships as
+--
+-- One press that puts every setting in the account file back to the value the
+-- addon ships with.
+--
+-- It exists because ApplyDefaults only fills in what is missing. That is the
+-- right rule for a setting that arrives in an update and the wrong one for a
+-- release that moves a default: an account file with a number already written
+-- against every key never sees a new one, so the person who has been playing
+-- the addon longest is the only person who never gets the layout it ships
+-- with. Deleting the saved variables file is the answer that worked before
+-- this, and it takes the gold ledger and your groups with it.
+--------------------------------------------------------------------------
+
+-- What the reset leaves alone, and why.
+--
+-- Every entry is a record rather than a preference. A default is the right
+-- answer to "what should this setting be"; there is no right answer to "how
+-- much gold was that alt carrying" or "what was this key bound to before we
+-- took it", and writing one would be deleting the answer rather than restoring
+-- it. Anything not named here is a setting and goes back.
+--
+-- Checked against the registry at load, below, so a key cannot be kept out of
+-- the reset and then quietly dropped from the addon.
+local KEPT = {
+	-- The ledger: copper against every character you have played. The only
+	-- copy of it, and not a number anybody chose.
+	purse = true,
+
+	-- The people you put in groups, and the counter their room keys come off.
+	-- The counter goes with the list rather than on its own, because resetting
+	-- it alone would hand a new group the key of a deleted one.
+	groups = true,
+	groupSeq = true,
+
+	-- Three lists you curated, each with a word of its own for emptying it:
+	-- `errors clear`, `buffs remove` and `mail unfav`. A button about the
+	-- layout has no business deleting the flask you track or the alt you mail.
+	errorMuted = true,
+	buffExtra = true,
+	mailFavourites = true,
+
+	-- What three nameplate CVars held before the addon first wrote to them.
+	-- Wiping one does not restore a default, it loses the only note of what to
+	-- put back, and the next `bars stack off` hands the client a number it
+	-- never had.
+	platesMotionPrior = true,
+	platesOverlapPrior = true,
+	platesDistancePrior = true,
+
+	-- What the charge key and the switch key were bound to before this addon
+	-- took them, kept for the reason the three above are: the override is
+	-- still ours and this is the only record of what is under it.
+	chargeKeyDisplaced = true,
+	switchKeyDisplaced = true,
+
+	-- The staging area `./bake-ui.sh` reads the Edit Mode layout out of. A
+	-- step in a build rather than a setting anybody sees.
+	uiLayout = true,
+	uiLayoutName = true,
+	uiLayoutStamp = true,
+
+	-- What the last attempt to build the chat window did. Chat/Window.lua's
+	-- Note says why it has to survive a reload: the failure it reports is one
+	-- where the window that would print it is the window that did not build.
+	chatWhy = true,
+}
+
+-- Whether two saved values are the same setting. One level deep, for the
+-- reason DefaultCopy is: a defaults table holds numbers, strings, flags, and
+-- flat tables of those.
+local function Same(held, want)
+	if type(held) ~= "table" or type(want) ~= "table" then
+		return held == want
+	end
+	for at, value in pairs(want) do
+		if held[at] ~= value then
+			return false
+		end
+	end
+	for at in pairs(held) do
+		if want[at] == nil then
+			return false
+		end
+	end
+	return true
+end
+
+-- Every account setting the reset is allowed to write, in no order, because
+-- nothing downstream cares which order they go back in.
+local function Restorable(key)
+	return defaults[key] ~= nil and not KEPT[key]
+end
+
+-- How many settings the reset writes and how many records it steps over. For
+-- the status line and for the harness, which prints the pair so the day one of
+-- them moves without anybody meaning it, the number in the log moves with it.
+function ns.DefaultsShape()
+	local restorable, kept = 0, 0
+	for key in pairs(defaults) do
+		if KEPT[key] then
+			kept = kept + 1
+		else
+			restorable = restorable + 1
+		end
+	end
+	return restorable, kept
+end
+
+-- How many settings are not what the addon ships with. The panel reads it to
+-- say so out loud and to grey the button when the answer is none, which is the
+-- difference between a button that does nothing and a button that says there
+-- is nothing to do.
+function ns.DefaultsMoved()
+	local moved = 0
+	for key in pairs(defaults) do
+		if Restorable(key) and not Same(ns.db[key], defaults[key]) then
+			moved = moved + 1
+		end
+	end
+	return moved
+end
+
+-- Write them all back. Returns how many actually moved, which is what the
+-- caller prints; it does not apply anything, because the caller reloads.
+function ns.RestoreDefaults()
+	local moved = 0
+	for key in pairs(defaults) do
+		if Restorable(key) and not Same(ns.db[key], defaults[key]) then
+			ns.db[key] = ns.DefaultCopy(key)
+			moved = moved + 1
+		end
+	end
+	return moved
 end
 
 -- A character that carried the loadout backup from before the split has it in
@@ -997,5 +1162,14 @@ loader:SetScript("OnEvent", function(self, _, name)
 	Migrate()
 	ns.db = ApplyDefaults(WarriorKitDB, defaults)
 	ns.dbc = ApplyDefaults(WarriorKitCharDB, charDefaults)
+
+	-- Said here rather than beside the list, because every feature has
+	-- registered by now and not one of them had when the list was written. A
+	-- key kept out of the reset and then dropped from the addon is a comment
+	-- explaining why the reset skips something that no longer exists.
+	for key in pairs(KEPT) do
+		assert(defaults[key] ~= nil,
+			("%q is kept out of the reset and no feature registers it"):format(key))
+	end
 	self:UnregisterEvent("ADDON_LOADED")
 end)

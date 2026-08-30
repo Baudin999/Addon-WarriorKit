@@ -174,10 +174,10 @@ ns.Register({
 	end,
 
 	reset = function()
-		ns.db.meterRows = ns.DefaultFor("meterRows")
-		ns.db.meterWidth = ns.DefaultFor("meterWidth")
-		ns.db.meterZoom = ns.DefaultFor("meterZoom")
-		ns.db.meterBarAlpha = ns.DefaultFor("meterBarAlpha")
+		ns.db.meterRows = ns.DefaultCopy("meterRows")
+		ns.db.meterWidth = ns.DefaultCopy("meterWidth")
+		ns.db.meterZoom = ns.DefaultCopy("meterZoom")
+		ns.db.meterBarAlpha = ns.DefaultCopy("meterBarAlpha")
 		MeterWindow.Reset()
 	end,
 

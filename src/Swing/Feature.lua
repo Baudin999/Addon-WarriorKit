@@ -111,9 +111,9 @@ ns.Register({
 	end,
 
 	reset = function()
-		ns.db.swingWidth = ns.DefaultFor("swingWidth")
-		ns.db.swingHeight = ns.DefaultFor("swingHeight")
-		ns.db.swingZoom = ns.DefaultFor("swingZoom")
+		ns.db.swingWidth = ns.DefaultCopy("swingWidth")
+		ns.db.swingHeight = ns.DefaultCopy("swingHeight")
+		ns.db.swingZoom = ns.DefaultCopy("swingZoom")
 		Gauges.Reset()
 	end,
 

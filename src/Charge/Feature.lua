@@ -197,11 +197,10 @@ ns.Register({
 	end,
 
 	reset = function()
-		-- A fresh table, not ns.DefaultFor: dragging mutates the anchor in place.
-		ns.db.point = { "CENTER", "UIParent", "CENTER", 0, -160 }
-		ns.db.size = ns.DefaultFor("size")
-		ns.db.chargeMarkerSize = ns.DefaultFor("chargeMarkerSize")
-		ns.db.chargeMarkerOffset = ns.DefaultFor("chargeMarkerOffset")
+		ns.db.point = ns.DefaultCopy("point")
+		ns.db.size = ns.DefaultCopy("size")
+		ns.db.chargeMarkerSize = ns.DefaultCopy("chargeMarkerSize")
+		ns.db.chargeMarkerOffset = ns.DefaultCopy("chargeMarkerOffset")
 		ns.ChargeIcon.ApplyLayout()
 		ns.ChargeMarker.ApplyLayout()
 	end,

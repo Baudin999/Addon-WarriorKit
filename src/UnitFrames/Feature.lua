@@ -580,11 +580,14 @@ ns.Register({
 		-- how far out a bar can be seen: a bar is drawn on a plate, so nothing
 		-- here can appear before one does. 41 is as far as either of these two
 		-- clients goes; ask for more and it clamps, which is why the panel and
-		-- `/wk status` report the CVar and never this number. 60 is deliberately
-		-- past the ceiling: it asks for everything the client will give on this
-		-- build and goes on asking on one that raises the cap. 0 hands the
-		-- setting back and leaves the client's own alone.
-		barsDistance = 60,
+		-- `/wk status` report the CVar and never this number. Not a yard over
+		-- it either: Plates.ApplyDistance saves the clamped figure back into
+		-- this setting so the panel shows what the client is holding rather
+		-- than what somebody typed at a wall, so a default of 60 would be a
+		-- default that rewrites itself to 41 on the first login and a
+		-- shipped answer no account file ever holds. 0 hands the setting back
+		-- and leaves the client's own alone.
+		barsDistance = 41,
 
 		-- Whether a bar ramps in and out or is simply there and then not.
 		-- On, because a plate is put up and taken down in one frame and
@@ -888,15 +891,14 @@ ns.Register({
 	end,
 
 	reset = function()
-		-- A fresh table, not ns.DefaultFor: dragging mutates the anchor in place.
-		ns.db.barsPoint = { "CENTER", "UIParent", "CENTER", 280, 120 }
-		ns.db.barsWidth = ns.DefaultFor("barsWidth")
-		ns.db.barsOffset = ns.DefaultFor("barsOffset")
-		ns.db.barsCamera = ns.DefaultFor("barsCamera")
-		ns.db.barsZoom = ns.DefaultFor("barsZoom")
-		ns.db.barsStack = ns.DefaultFor("barsStack")
-		ns.db.barsIconSize = ns.DefaultFor("barsIconSize")
-		ns.db.barsCast = ns.DefaultFor("barsCast")
+		ns.db.barsPoint = ns.DefaultCopy("barsPoint")
+		ns.db.barsWidth = ns.DefaultCopy("barsWidth")
+		ns.db.barsOffset = ns.DefaultCopy("barsOffset")
+		ns.db.barsCamera = ns.DefaultCopy("barsCamera")
+		ns.db.barsZoom = ns.DefaultCopy("barsZoom")
+		ns.db.barsStack = ns.DefaultCopy("barsStack")
+		ns.db.barsIconSize = ns.DefaultCopy("barsIconSize")
+		ns.db.barsCast = ns.DefaultCopy("barsCast")
 		-- A fresh table, not ns.DefaultFor: adding and removing a debuff mutates
 		-- the list in place, so by now the registered default is whatever the
 		-- last edit left it as. This relays out on its own and the two calls
@@ -906,40 +908,40 @@ ns.Register({
 		ns.EnemyBars.ResetSpells()
 		ns.EnemyBars.ApplyLayout()
 		ns.EnemyBars.Rebuild()
-		ns.db.skin = ns.DefaultFor("skin")
+		ns.db.skin = ns.DefaultCopy("skin")
 		-- A fresh table, not ns.DefaultFor: the default is handed out by
 		-- reference and every toggle since has been writing into it.
 		ns.db.skinFrames = { player = true, target = true, tot = true }
-		ns.db.skinHeight = ns.DefaultFor("skinHeight")
-		ns.db.skinWidth = ns.DefaultFor("skinWidth")
-		ns.db.skinHeals = ns.DefaultFor("skinHeals")
+		ns.db.skinHeight = ns.DefaultCopy("skinHeight")
+		ns.db.skinWidth = ns.DefaultCopy("skinWidth")
+		ns.db.skinHeals = ns.DefaultCopy("skinHeals")
 		-- The number a drag in Edit Mode writes, back where it started. Reset
 		-- already means put the frames back, and a level that survived one
 		-- would be the only thing on these three frames that did not.
-		ns.db.skinLink = ns.DefaultFor("skinLink")
-		ns.db.skinLevel = ns.DefaultFor("skinLevel")
-		ns.db.skinAuras = ns.DefaultFor("skinAuras")
-		ns.db.skinAuraSize = ns.DefaultFor("skinAuraSize")
-		ns.db.skinAuraDebuffs = ns.DefaultFor("skinAuraDebuffs")
-		ns.db.skinAuraBuffs = ns.DefaultFor("skinAuraBuffs")
+		ns.db.skinLink = ns.DefaultCopy("skinLink")
+		ns.db.skinLevel = ns.DefaultCopy("skinLevel")
+		ns.db.skinAuras = ns.DefaultCopy("skinAuras")
+		ns.db.skinAuraSize = ns.DefaultCopy("skinAuraSize")
+		ns.db.skinAuraDebuffs = ns.DefaultCopy("skinAuraDebuffs")
+		ns.db.skinAuraBuffs = ns.DefaultCopy("skinAuraBuffs")
 		-- Reset means put the frames back, and the client's own copies are
 		-- frames this part took down. Somebody who put one back deliberately
 		-- loses that in a reset, which is the same trade every other setting
 		-- here makes and the reason `/wk reset` prints what it did.
 		for _, switch in ipairs(ns.BlizzHide.Switches()) do
-			ns.db[switch.key] = ns.DefaultFor(switch.key)
+			ns.db[switch.key] = ns.DefaultCopy(switch.key)
 		end
-		ns.db.playerCast = ns.DefaultFor("playerCast")
-		ns.db.playerCastWidth = ns.DefaultFor("playerCastWidth")
-		ns.db.playerCastHeight = ns.DefaultFor("playerCastHeight")
-		ns.db.playerCastZoom = ns.DefaultFor("playerCastZoom")
+		ns.db.playerCast = ns.DefaultCopy("playerCast")
+		ns.db.playerCastWidth = ns.DefaultCopy("playerCastWidth")
+		ns.db.playerCastHeight = ns.DefaultCopy("playerCastHeight")
+		ns.db.playerCastZoom = ns.DefaultCopy("playerCastZoom")
 		-- PlayerCast.Reset puts the point back and lays the bar out again, so
 		-- the four above it land in the same pass.
 		ns.PlayerCast.Reset()
 		for _, key in ipairs({ "party", "partySelf", "partyOrder", "partyRoleIcon",
 			"partyWidth", "partyHeight", "partyGap", "partyGrow", "partyRaidColumns",
 			"partyRaidPerColumn", "partyZoom", "partyRange" }) do
-			ns.db[key] = ns.DefaultFor(key)
+			ns.db[key] = ns.DefaultCopy(key)
 		end
 		-- The roles you typed are deliberately not in that list. A reset means
 		-- put the frames back, and who your friend heals on is not a frame: it

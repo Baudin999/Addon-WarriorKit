@@ -152,7 +152,7 @@ ns.Register({
 	reset = function()
 		for _, key in ipairs({ "progress", "progressFaction", "progressBubbles",
 			"progressWidth", "progressHeight", "progressZoom", "hideBlizzXP" }) do
-			ns.db[key] = ns.DefaultFor(key)
+			ns.db[key] = ns.DefaultCopy(key)
 		end
 		-- Rails.Reset puts the point back and lays both rails out again, so the
 		-- seven above it land in the same pass.

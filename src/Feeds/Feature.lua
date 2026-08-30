@@ -41,7 +41,6 @@ local STREAMS = {
 		stream = LootFeed.Stream(),
 		prefix = "lootFeed",
 		title = "Loot",
-		point = { "BOTTOMRIGHT", "UIParent", "BOTTOMRIGHT", -20, 180 },
 		describe = LootFeed.Describe,
 		collects = "what drops",
 		costs = "no loot message is read at all.",
@@ -53,7 +52,6 @@ local STREAMS = {
 		stream = CombatFeed.Stream(),
 		prefix = "combatFeed",
 		title = "Combat",
-		point = { "BOTTOMLEFT", "UIParent", "BOTTOMLEFT", 20, 180 },
 		describe = CombatFeed.Describe,
 		collects = "what happens to you",
 		costs = "a combat log event is turned away on one table lookup, which in a raid"
@@ -204,8 +202,7 @@ local function Shared(entry, option, value)
 	end
 
 	if option == "reset" then
-		entry.stream:Reset({ entry.point[1], entry.point[2], entry.point[3],
-			entry.point[4], entry.point[5] })
+		entry.stream:Reset(ns.DefaultCopy(entry.prefix .. "Point"))
 		ns.Print(("the %s feed is back where it started."):format(entry.title:lower()))
 		return true
 	end
@@ -415,8 +412,7 @@ local function SharedPage(ui, entry)
 	ui.Hint("On, a hover opens the row's tooltip and the wheel scrolls back. Off, the wheel goes past it to the camera.")
 
 	ui.Action(function() return "put the " .. lower .. " feed back" end, function()
-		entry.stream:Reset({ entry.point[1], entry.point[2], entry.point[3],
-			entry.point[4], entry.point[5] })
+		entry.stream:Reset(ns.DefaultCopy(entry.prefix .. "Point"))
 	end)
 end
 
@@ -557,10 +553,9 @@ ns.Register({
 			-- what the addon records, which is not this button's business.
 			for _, word in ipairs({ "Rows", "Width", "Icon", "Zoom", "Alpha", "Mouse",
 				"Shown", "Header", "Edge", "Filters" }) do
-				ns.db[entry.prefix .. word] = ns.DefaultFor(entry.prefix .. word)
+				ns.db[entry.prefix .. word] = ns.DefaultCopy(entry.prefix .. word)
 			end
-			entry.stream:Reset({ entry.point[1], entry.point[2], entry.point[3],
-				entry.point[4], entry.point[5] })
+			entry.stream:Reset(ns.DefaultCopy(entry.prefix .. "Point"))
 		end
 
 		-- The chips go back with them, for the reason Shown is in the list
@@ -569,7 +564,7 @@ ns.Register({
 		-- unlike the switch beside it, it is not a decision about what the
 		-- addon records.
 		for _, key in ipairs({ "lootFeedShow", "lootFeedQuest", "lootFeedMoney" }) do
-			ns.db[key] = ns.DefaultFor(key)
+			ns.db[key] = ns.DefaultCopy(key)
 		end
 		STREAMS.loot.stream:Feed():Chipped()
 	end,

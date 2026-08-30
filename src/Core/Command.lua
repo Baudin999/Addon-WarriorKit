@@ -16,6 +16,7 @@ local PANEL_WORDS = { panel = true, options = true, config = true }
 
 local RESERVED = {
 	status = true, help = true, lock = true, unlock = true, reset = true,
+	defaults = true,
 }
 for word in pairs(PANEL_WORDS) do
 	RESERVED[word] = true
@@ -49,9 +50,39 @@ local function Status()
 	ns.Print("frames " .. (ns.db.locked and "locked" or "unlocked") .. ".")
 end
 
+-- Every setting back to what the addon ships with. The one word in here that
+-- cannot be undone, so it is the one that asks twice: on its own it reports
+-- what would move, and only `defaults yes` writes.
+--
+-- ns.RestoreDefaults is where the argument for it lives, along with the list of
+-- what it leaves alone and why. This is the typed half of the same thing the
+-- Settings page draws two presses of.
+local function Defaults(arg)
+	local moved = ns.DefaultsMoved()
+	if moved == 0 then
+		ns.Print("every setting is already what the addon ships with.")
+		return
+	end
+
+	local plural = moved == 1 and "" or "s"
+	if arg:match("^(%S*)"):lower() ~= "yes" then
+		ns.Print(("%d setting%s %s not what the addon ships with.")
+			:format(moved, plural, moved == 1 and "is" or "are"))
+		ns.Print("  /wk defaults yes puts them back and reloads the interface.")
+		ns.Print("  Your groups, your mail favourites, your muted errors, the"
+			.. " flasks you track and the gold ledger are records rather than"
+			.. " settings and are left alone.")
+		return
+	end
+
+	ns.Print(("%d setting%s back to the shipped answer. Reloading.")
+		:format(ns.RestoreDefaults(), plural))
+	ReloadUI()
+end
+
 local function Help()
 	ns.Print("/wk on its own opens the panel. Everything in it has a command too:")
-	ns.Print("  status, help, lock, unlock, reset")
+	ns.Print("  status, help, lock, unlock, reset, defaults")
 	for _, feature in ipairs(ns.features) do
 		for _, line in ipairs(feature.help or {}) do
 			ns.Print("  " .. line)
@@ -97,6 +128,8 @@ SlashCmdList.WARRIORKIT = function(input)
 	elseif cmd == "reset" then
 		ns.Each("reset")
 		ns.Print("frames reset.")
+	elseif cmd == "defaults" then
+		Defaults(rawArg)
 	elseif words[cmd] then
 		words[cmd](arg, rawArg)
 	else

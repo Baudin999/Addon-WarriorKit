@@ -33,6 +33,10 @@ local state = {
 	repairsMerchant = true,
 	talentShape = "modern",
 	threatReader = nil,
+	-- How many times the addon has asked for the interface to be rebuilt. A
+	-- count rather than a flag, because the one control that asks is armed and
+	-- the whole point of arming it is that the first press must not.
+	reloads = 0,
 }
 
 -- Read here rather than beside the TOC walk, because the UnitClass stub is

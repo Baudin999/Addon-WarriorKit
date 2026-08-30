@@ -212,6 +212,11 @@ local function advance(seconds)
 end
 _G.GetTime = function() return wall end
 _G.GetQuestGreenRange, _G.InCombatLockdown = constant(8), constant(false)
+-- Counted rather than acted on. In the game this tears the interface down and
+-- builds it again, which is exactly what the addon wants and is not a thing a
+-- test run can do to itself; what is worth asserting is that it was asked for,
+-- and how many times.
+_G.ReloadUI = function() state.reloads = state.reloads + 1 end
 _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 _G.tinsert = table.insert
 -- The machine's clock, frozen for the same reason the realm's one below is. It

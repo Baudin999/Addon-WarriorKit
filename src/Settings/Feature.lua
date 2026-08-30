@@ -47,6 +47,55 @@ local function TipsWord(arg)
 	ns.Print("a hover opens " .. Settings.DescribeDock() .. ".")
 end
 
+--------------------------------------------------------------------------
+-- Back to the shipped answers
+--
+-- The panel's half of ns.RestoreDefaults, which is where the argument for the
+-- whole thing is written down. This end is only the two presses.
+--
+-- Armed rather than confirmed in a popup, the same shape the mail window's
+-- send-anyway button has: the label says what the next press does, and the
+-- press that does it is a press you aimed at a button that was already saying
+-- so. The arm is dropped when the window closes, so it cannot be left standing
+-- for a cursor that comes back an hour later.
+--------------------------------------------------------------------------
+
+local armed = false
+
+local function DefaultsReading()
+	local moved = ns.DefaultsMoved()
+	if moved == 0 then
+		return "nothing, every setting is what it ships as"
+	end
+	return ("%d setting%s"):format(moved, moved == 1 and "" or "s")
+end
+
+local function DefaultsLabel()
+	if ns.DefaultsMoved() == 0 then
+		return "already at the shipped answers"
+	end
+	if armed then
+		return "press again to put them back and reload"
+	end
+	return "back to the shipped answers"
+end
+
+local function DefaultsPress()
+	if ns.DefaultsMoved() == 0 then
+		return
+	end
+	if not armed then
+		armed = true
+		ns.Options.Refresh()
+		return
+	end
+	armed = false
+	local moved = ns.RestoreDefaults()
+	ns.Print(("%d setting%s back to the shipped answer. Reloading.")
+		:format(moved, moved == 1 and "" or "s"))
+	ReloadUI()
+end
+
 ns.Register({
 	name = "settings",
 	order = 19,
@@ -83,6 +132,14 @@ ns.Register({
 		Settings.SetDocked(ns.DefaultFor("tipDock"))
 	end,
 
+	-- A window that has been shut is a button nobody is looking at, and an
+	-- armed one is a press away from throwing every setting out.
+	showing = function(open)
+		if not open then
+			armed = false
+		end
+	end,
+
 	panel = function(ui)
 		ui.Section("UI size", "The screen")
 		ui.Lede("How big this window and the Clutter window are drawn. Nothing on the game screen moves.")
@@ -96,7 +153,9 @@ ns.Register({
 		ui.Reading("now", Settings.Describe)
 		ui.Reading("exact on this screen at", Settings.Grid)
 
-		ui.Action(function() return "back to 1x" end, function()
+		ui.Action(function()
+			return "back to " .. Settings.Label(ns.DefaultFor("uiSize"))
+		end, function()
 			Settings.Set(ns.DefaultFor("uiSize"))
 		end, function()
 			return Settings.Snap(ns.db.uiSize) ~= ns.DefaultFor("uiSize")
@@ -117,5 +176,24 @@ ns.Register({
 		ui.Reading("a hover opens", Settings.DescribeDock)
 		ui.Reading("the client's own text", ns.UI.Scan.Describe)
 		ui.Reading("hooked into a hover", ns.Tip.Describe)
+
+		-- Here rather than beside the lock and the reset in the footer. Those
+		-- two are about the frames on your screen and are one press each; this
+		-- one throws away every number in the account file, and a control that
+		-- destructive belongs on a page you had to open, under a sentence
+		-- saying what it spares.
+		ui.Section("Shipped defaults", "Under the hood")
+		ui.Lede("Every setting back to the answer the addon ships with. It is how a default that moved in an update reaches an account file that already had a number for it.")
+
+		ui.Reading("moved off the shipped answer", DefaultsReading)
+
+		ui.Action(DefaultsLabel, DefaultsPress, function()
+			return ns.DefaultsMoved() > 0
+		end)
+		ui.Hint("Two presses, and the second reloads the interface: a part reads its settings once, when it is built, so the honest way to apply two dozen parts' worth at once is to build them again.")
+
+		ui.Reading("left alone", function()
+			return "your groups, your mail favourites, your muted errors, the flasks you track and the gold ledger"
+		end)
 	end,
 })

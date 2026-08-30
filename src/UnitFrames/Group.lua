@@ -455,7 +455,7 @@ function Group.Lock()
 end
 
 function Group.Reset()
-	ns.db.partyPoint = { "LEFT", "UIParent", "LEFT", 40, 120 }
+	ns.db.partyPoint = ns.DefaultCopy("partyPoint")
 	Group.Apply()
 end
 

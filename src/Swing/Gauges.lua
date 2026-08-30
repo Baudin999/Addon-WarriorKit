@@ -220,7 +220,7 @@ function SwingGauges.Lock()
 end
 
 function SwingGauges.Reset()
-	ns.db.swingPoint = ns.DefaultFor("swingPoint")
+	ns.db.swingPoint = ns.DefaultCopy("swingPoint")
 	SwingGauges.Apply()
 end
 

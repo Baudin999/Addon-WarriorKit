@@ -425,9 +425,13 @@ if window then
 	-- it to 20,733 across sixty-one. 20,900 is that measurement plus a hint's
 	-- worth of room once more. The level up page costs 260 across one check and
 	-- takes it to 20,993 across sixty-two. 21,160 is that measurement plus a
-	-- hint's worth of room again.
-	check(prose < 21160,
-		("the window holds %d characters of prose and the budget is 21,160"):format(prose))
+	-- hint's worth of room again. The shipped defaults section costs 338 across
+	-- one button and two readings and takes it to 21,331 across sixty-three,
+	-- which is the most any one section on the Settings page has cost and is
+	-- the right price for the one control that throws every setting away.
+	-- 21,500 is that measurement plus a hint's worth of room again.
+	check(prose < 21500,
+		("the window holds %d characters of prose and the budget is 21,500"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

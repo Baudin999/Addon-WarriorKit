@@ -556,8 +556,8 @@ function Nag.Lock()
 end
 
 function Nag.Reset()
-	ns.db.buffPoint = { "CENTER", "UIParent", "CENTER", 0, 140 }
-	ns.db.buffZoom = ns.DefaultFor("buffZoom")
+	ns.db.buffPoint = ns.DefaultCopy("buffPoint")
+	ns.db.buffZoom = ns.DefaultCopy("buffZoom")
 	Nag.Apply()
 end
 

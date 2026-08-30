@@ -5023,6 +5023,36 @@ one of the stops that does not keep the grid; the paragraph below is what that
 buys and what it costs, and 1x is one step down for anyone who wants the exact
 one back.
 
+**Back to the shipped answers.** `ApplyDefaults` fills in a setting that is
+missing and leaves one that is present alone. That is the right rule for a
+setting arriving in an update and the wrong one for a release that moves a
+default: an account file with a number already written against every key never
+sees a new one, so the player who has run the addon longest is the only one who
+never gets the layout it ships with. Deleting the saved variables file was the
+answer before this, and it takes the gold ledger and your groups with it.
+
+`/wk defaults` reports how many settings are off the shipped answer and writes
+nothing. `/wk defaults yes` writes them all back and reloads. The Settings page
+draws the same thing as a button that arms on the first press and does it on
+the second, and drops the arm when the window is shut.
+
+It reloads because there is no hook that says "read your settings again". A
+part reads them once, when it is built, so the honest way to apply two dozen
+parts' worth at once is to build them again. Inventing an apply hook per part
+would be two dozen functions with one caller between them, and the eight stale
+anchors that `ns.DefaultCopy` replaced are what that kind of duplication looks
+like a year later.
+
+Fifteen keys are stepped over, named with a reason each in `Core/Core.lua`'s
+`KEPT`. Every one of them is a record rather than a preference: the gold
+ledger, your groups, the three lists you curated, what three nameplate CVars
+held before the addon arrived, what the charge and switch keys displaced, the
+Edit Mode staging area, and the note the chat window leaves when it fails to
+build. There is no right default for "how much gold was that alt carrying", and
+writing one would delete the answer rather than restore it. The list is checked
+against the registry at login, so a key cannot be kept out of the reset and
+then quietly dropped from the addon.
+
 **Quarters, and what they cost.** The stops are 0.5 through 3, eleven of them. A
 stop keeps the pixel grid when the size times the screen's own step comes out
 whole, so on most screens that is 1x, 2x and 3x, and on one tall enough that the
@@ -5214,6 +5244,8 @@ on different realms read as the same person.
     /wk help                     the command list, gathered from the registry
     /wk lock | unlock            both frames
     /wk reset                    positions, size, width, offset
+    /wk defaults                 what is not the answer the addon ships with
+    /wk defaults yes             put all of it back, and reload
     /wk size 52                  charge icon, 16 to 128
     /wk mark on|off              marking, all paths
     /wk markkey skull F5         one key per mark, or none to clear

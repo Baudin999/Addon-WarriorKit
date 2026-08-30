@@ -175,9 +175,9 @@ function Sheet.Lock()
 end
 
 function Sheet.Reset()
-	ns.db.hoverSheetPoint = { "CENTER", "UIParent", "CENTER", 320, 0 }
-	ns.db.hoverSheetZoom = ns.DefaultFor("hoverSheetZoom")
-	ns.db.hoverSheetAlpha = ns.DefaultFor("hoverSheetAlpha")
+	ns.db.hoverSheetPoint = ns.DefaultCopy("hoverSheetPoint")
+	ns.db.hoverSheetZoom = ns.DefaultCopy("hoverSheetZoom")
+	ns.db.hoverSheetAlpha = ns.DefaultCopy("hoverSheetAlpha")
 	Sheet.Apply()
 end
 

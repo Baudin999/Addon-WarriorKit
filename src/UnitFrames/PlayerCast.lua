@@ -447,7 +447,7 @@ function PlayerCast.Lock()
 end
 
 function PlayerCast.Reset()
-	ns.db.playerCastPoint = ns.DefaultFor("playerCastPoint")
+	ns.db.playerCastPoint = ns.DefaultCopy("playerCastPoint")
 	PlayerCast.Apply()
 end
 

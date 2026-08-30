@@ -281,8 +281,8 @@ function Row.Lock()
 end
 
 function Row.Reset()
-	ns.db.cooldownPoint = { "CENTER", "UIParent", "CENTER", 0, 200 }
-	ns.db.cooldownZoom = ns.DefaultFor("cooldownZoom")
+	ns.db.cooldownPoint = ns.DefaultCopy("cooldownPoint")
+	ns.db.cooldownZoom = ns.DefaultCopy("cooldownZoom")
 	Row.Apply()
 end
 

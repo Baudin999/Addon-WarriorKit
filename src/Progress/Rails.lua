@@ -498,7 +498,7 @@ function Rails.Lock()
 end
 
 function Rails.Reset()
-	ns.db.progressPoint = ns.DefaultFor("progressPoint")
+	ns.db.progressPoint = ns.DefaultCopy("progressPoint")
 	Rails.Apply()
 end
 
