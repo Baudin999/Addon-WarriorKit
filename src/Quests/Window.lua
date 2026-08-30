@@ -267,11 +267,33 @@ end
 -- The left column
 --------------------------------------------------------------------------
 
+-- The character in front of a row, and the whole of what says a quest is
+-- finished.
+--
+-- The colour said it first and the colour could not carry it. A quest ready to
+-- hand in is drawn in C.tick, which is a green two shades off the green the
+-- level ladder gives every quest a few levels under you, so a log of grey
+-- quests you have outlevelled is a log where nothing stands out. And the row
+-- you have selected drops its own tint for the heading colour, so the one quest
+-- you were reading was the one quest that could not tell you at all.
+--
+-- The mark is the same "+" the objective ticks use and the same width on every
+-- row, finished or not, so the levels stay in a column.
+local function Mark(quest)
+	if quest.complete then
+		return "+"
+	end
+	if quest.failed then
+		return "!"
+	end
+	return " "
+end
+
 -- One row's words. The level first, because a column grouped by zone is still
 -- read down the level: what you can do now and what you came back for later is
 -- the first cut anybody makes over a quest log.
 local function Label(quest)
-	return ("[%d] %s"):format(quest.level, quest.title)
+	return ("%s [%d] %s"):format(Mark(quest), quest.level, quest.title)
 end
 
 -- The colour a row is drawn in. Green for a quest you can hand in, red for one
@@ -330,6 +352,15 @@ local function Tagline(detail)
 	end
 	if detail.seconds then
 		parts[#parts + 1] = ("%d minutes left"):format(math.ceil(detail.seconds / 60))
+	end
+	-- Said in words as well as in the mark on the row, because a quest with no
+	-- ticked list draws a summary sentence and nothing else, and that sentence
+	-- reads the same whether you have done it or not. The deliveries and the
+	-- talk-to-somebody ones are all of that kind.
+	if quest.complete then
+		parts[#parts + 1] = "ready to hand in"
+	elseif quest.failed then
+		parts[#parts + 1] = "failed"
 	end
 	return table.concat(parts, "  ·  ")
 end

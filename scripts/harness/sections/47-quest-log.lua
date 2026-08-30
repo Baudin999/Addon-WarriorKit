@@ -150,21 +150,28 @@ for _, row in ipairs(drawn) do
 end
 check(headers == 3 and entries == 5,
 	("the column drew %d headers over %d quests"):format(headers, entries))
-check(drawn[1].header == "Elwynn Forest" and drawn[2].label == "[20] The Missing Diplomat",
+check(drawn[1].header == "Elwynn Forest" and drawn[2].label == "  [20] The Missing Diplomat",
 	"a quest is not drawn under the header that precedes it, or without its level")
 
--- The two colours the log is actually read for at a glance. A quest ready to
--- hand in is the tick green whatever its level, and one that failed is the loss
--- red, and neither of them is the XP ladder every other row is on.
+-- The two colours the log is actually read for at a glance, and the mark that
+-- carries the same fact in a character. A quest ready to hand in is the tick
+-- green whatever its level, and one that failed is the loss red, and neither of
+-- them is the XP ladder every other row is on.
+--
+-- The mark is checked as well as the colour, and it is the half that matters.
+-- The tick green and the green the ladder gives a quest you have outlevelled
+-- are two shades apart, and PaintListRow throws the row's own colour away for
+-- the row you have selected, so a log that says "finished" in colour alone says
+-- it least about the quest you are reading.
 local complete, failed
 for _, row in ipairs(drawn) do
-	if row.label == "[11] Wanted: Hogger" then complete = row end
-	if row.label == "[18] Red Silk Bandanas" then failed = row end
+	if row.label == "+ [11] Wanted: Hogger" then complete = row end
+	if row.label == "! [18] Red Silk Bandanas" then failed = row end
 end
 check(complete and complete.color == ns.UI.Color.tick,
-	"a quest ready to hand in is not drawn in the tick colour")
+	"a quest ready to hand in is not drawn in the tick colour, or carries no + in front of it")
 check(failed and failed.color == ns.UI.Color.loss,
-	"a failed quest is not drawn in the loss colour")
+	"a failed quest is not drawn in the loss colour, or carries no ! in front of it")
 check(drawn[2].color ~= ns.UI.Color.tick and drawn[2].color ~= ns.UI.Color.loss,
 	"a quest in progress took one of the two state colours")
 
