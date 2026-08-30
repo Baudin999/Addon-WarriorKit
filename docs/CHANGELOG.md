@@ -2,6 +2,131 @@
 
 ## Unreleased
 
+### The tooltip stays long enough to read, goes where you put it, and stops lecturing
+
+Six changes to the box every hover in the addon opens.
+
+It no longer vanishes on the frame the pointer leaves. Leaving a thing starts a
+countdown of a second, and the box holds until the countdown runs out. Every
+hoverable thing in this addon is small and most of them sit in a column, so the
+cursor crosses two on the way to the one you meant, and a box that opened and
+shut twice on the way was a box you never finished reading. Hovering anything
+else replaces it on the spot, whatever is left of the clock, and a hover with
+nothing to say takes it down rather than leaving it there for another second
+pointing at something it is not about. `/wk tips linger 0` puts it back to the
+client's own behaviour, which is to go the instant you look away, and the slider
+runs to ten seconds for anybody who wants longer.
+
+The blue line at the bottom is gone, everywhere. `hint` was a fourth band in
+`UI/Tip.lua` carrying one quiet sentence about what to press or which switch
+silences the thing, it reached twenty five call sites, and by then it was
+furniture: a footnote under every hover in the addon is not read, it is a line
+of the fight you are covering, and on the world hover it sat over the screen for
+the whole evening. The band is deleted rather than emptied, and `scripts/check.sh`
+fails on a subject that carries one, because a field that is silently ignored is
+a field somebody writes again and cannot tell is doing nothing. The sentences
+that were worth keeping were already in the settings window, which is where the
+settings are.
+
+The box can hang off a marker you place yourself. There were two answers to
+where a hover opens and now there are three: the corner the client keeps its own
+tooltip in, beside the thing you hovered, or `anchor`, which is a marker you drag
+with the frames unlocked the same way you place the swing bars. Which corner of
+the box lands on the marker is read off which quarter of the screen the marker is
+in, so the box always grows away from the nearest edge. The corner is a long way
+from the fight on an ultrawide monitor and beside covers what you are reading;
+this is the answer to both, and it costs one drag. The setting is `tipPlace` and
+it retires `tipDock`.
+
+How big it reads is a number. The body was the addon's body size, twelve pixels,
+and it is a setting between eight and eighteen now, with the title tracking it
+a pixel above so the pair stays a pair at every stop. The window zoom is not the
+answer to this question: it scales the air as well as the text, and a tooltip
+that grew its own padding to buy a readable sentence would cover twice as much
+of the fight.
+
+A creature you point at says what it is carrying that a quest of yours wants.
+`Quests/Drops.lua` reads Questie's own tooltip registry, which is the only thing
+on either client that knows a boar drops the hide, and draws the quest the item
+feeds and the count the client is keeping: three of eight. Under it, where there
+is one worth printing, is a drop chance, and that one is measured rather than
+looked up, because no database on either client carries one. The addon counts
+the corpses of that creature you open the loot window on and how many of them had
+the item, and says nothing at all until there are ten of them: a fraction off two
+kills is arithmetic pretending to be information. `/wk quests drops` says how
+many creatures it has counted.
+
+`UI.Placeable` picked up a twelfth HUD frame and `scripts/check.sh` a rule. The
+marker is invisible and mouse blind while the frames are locked, which is the
+only thing that keeps an empty frame in the middle of the screen from swallowing
+the right button drag that turns the camera, and `51-placing.lua` holds it to
+that with the other eleven.
+
+### The quest log answers for the party, and abandoning asks first
+
+Five changes, four of them in the left column, where a row used to be a mark, a
+level and a name and is now a row you can act on.
+
+A quest ready to hand in is marked with a tick. It was a `+`, which is the mark
+for adding a thing rather than for having finished one, and it was a `+` because
+the glyph face had no tick in it. It has one now, cut onto `V` by
+`scripts/bake-glyphs.sh`, and the objective lines in the middle column take it
+too: they said done with the same plus and saying it two ways would be worse
+than saying it wrongly once. `V` is what a client that refuses the font draws
+instead, which is the same bargain every other mark in the face makes.
+
+The mark is a region of its own rather than two characters on the front of the
+label, and it keeps its colour through the selection. `PaintListRow` throws a
+row's own colour away for the row you are reading, so a log that said "finished"
+in green alone said it least about the quest you had open.
+
+Every quest row carries a share arrow and a cross. The arrow is drawn only on
+the rows the client would hand over, because it refuses a quest nobody else
+could take and an arrow on such a row is a control that fails silently when you
+press it. The cross is on every row, because every quest can be abandoned.
+
+The cross opens a question in the middle of the screen. The footer button used
+to arm itself and abandon on the second press, with a line in the chat window
+between the two, and both halves of that were wrong: the warning was in a window
+you may not have been looking at, and the armed state was a button whose label
+had changed by one word. `UI.Ask` is the replacement, one window shared by
+anything that has to ask before it does something irreversible, and the footer
+button goes through it as well.
+
+A row says how many of the people you are playing with are on the same quest,
+and its hover names them. Two things can answer that and neither always can, so
+`Quests/Party.lua` asks both and merges on the name: the client's own
+`IsUnitOnQuest`, which knows the party member running no addons and does not
+exist on every build, and Questie's comms, which knows anyone running Questie
+whatever their client will say. Nobody having it and nothing being able to say
+both draw no number, because a `0` would be this addon claiming it asked and got
+an answer. `/wk quests party` says which of the two is answering.
+
+Clicking a quest in Questie's tracker opens this window on that quest.
+`QuestieTracker.utils:ShowQuestLog` is the one function the tracker's click and
+its right-click menu both go through, so `Quests/Tracker.lua` replaces it under
+the same switch that takes the L key, keeps the original, and hands it back when
+the switch goes off. A click on a quest you are not on falls through to Questie
+rather than being swallowed.
+
+The list column is thirty pixels wider and the window thirty wider with it, so
+the middle column and the map come out the size they always were. That is what
+the number and the two marks cost.
+
+`UI.List` grew three things to pay for all this and every one of them is
+general: a glyph column, a note at the right that is not an unread count, and a
+strip of marks per entry with a `shown` that decides which rows get which. The
+marks are drawn on every row rather than revealed on hover, because the cursor
+moving from the row onto the mark leaves the row, and a strip that appeared on
+hover would take the button away as you reached for it.
+
+`scripts/check.sh` gained a rule while the two lists were open in front of it.
+`UI.GLYPHS` and the `PICK` table in `scripts/bake-glyphs.sh` are compared as
+text, so a letter added to the addon without rebaking the font, or baked and
+never written down, fails the gate. A glyph string given a letter the face has
+no mark on draws an empty rectangle and says nothing at all, at load, at lint or
+in the harness, and that is exactly the failure this change could have shipped.
+
 ### The lock is a property of a frame now, not a call nobody repeats
 
 `UI.Placeable` takes `lockable`. Eleven frames say nothing and take the default,

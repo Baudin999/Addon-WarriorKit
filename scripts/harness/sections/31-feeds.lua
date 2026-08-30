@@ -220,7 +220,7 @@ do
 	local enter, leave = row:GetScript("OnEnter"), row:GetScript("OnLeave")
 	check(enter and leave, "a feed row has no hover scripts, so it can never say what it is")
 
-	ns.UI.Tooltip.Close()
+	ns.UI.Tooltip.Close(true)
 	enter(row)
 	check(ns.UI.Tooltip.IsShown(), "hovering a feed row said nothing")
 	check(ns.UI.Tooltip.Owner() == row, "the tooltip is not anchored to the row you hovered")
@@ -233,7 +233,7 @@ do
 	check(ns.UI.Tooltip.Lines() > 1, "the tooltip fell back to a name and nothing else")
 
 	leave()
-	check(not ns.UI.Tooltip.IsShown(), "the tooltip stayed up after the mouse left")
+	check(not H.tipSettle(), "the tooltip stayed up after the mouse left")
 end
 
 -- With the mouse off the feed is a picture: no wheel, so the wheel reaches
@@ -618,17 +618,19 @@ do
 		row:GetScript("OnEnter")(row)
 		check(Tip.Text(1) == "Mortal Strike",
 			"the title did not render: " .. tostring(Tip.Text(1)))
-		check(Tip.Lines() == 9,
-			("the fill describes nine lines and %d were drawn"):format(Tip.Lines()))
+		check(Tip.Lines() == 7,
+			("the fill describes seven lines and %d were drawn"):format(Tip.Lines()))
 
 		local label, value = Tip.Text(5)
 		check(label == "Damage" and value == "871",
 			("a pair rendered as %s / %s"):format(tostring(label), tostring(value)))
 		check(Tip.Text(6) == "A critical.",
 			"a plain line did not render: " .. tostring(Tip.Text(6)))
-		check(Tip.Text(8) == "", "the spacer drew text on itself")
-		check((Tip.Text(9) or ""):find("^Scroll") ~= nil,
-			"the hint is not the last line: " .. tostring(Tip.Text(9)))
+		check(Tip.Text(7) ~= "" and Tip.Text(7) ~= nil,
+			"the last line of the fill is blank, so a band left its air behind")
+		check((Tip.Text(7) or ""):find("/wk", 1, true) == nil,
+			"the blue switch line is still on the end of a feed row's box: "
+				.. tostring(Tip.Text(7)))
 
 		-- Two sizes, and both of them the addon's own.
 		--
@@ -638,6 +640,11 @@ do
 		-- panel it was hanging over had it exactly backwards, and the report
 		-- was that the tooltip's font looked bad. It did.
 		--
+		-- The metric is the shipped answer rather than the only one: the body
+		-- size is a setting now, and what is asserted here is the box the addon
+		-- hands somebody who has not touched it. 48-tooltips.lua walks the
+		-- slider itself.
+		--
 		-- Read off the font the client ended up with rather than off the two
 		-- constants, because the point of the fix is that the file no longer
 		-- writes its own numbers. Multiplied by nothing: a size inside an
@@ -646,7 +653,7 @@ do
 		check(Tip.Size(1) == M.heading,
 			("the tooltip title is %s pixels and the addon's heading is %d")
 				:format(tostring(Tip.Size(1)), M.heading))
-		for _, index in ipairs({ 5, 6, 9 }) do
+		for _, index in ipairs({ 5, 6, 7 }) do
 			check(Tip.Size(index) == M.font,
 				("tooltip line %d is %s pixels and the addon's body is %d")
 					:format(index, tostring(Tip.Size(index)), M.font))

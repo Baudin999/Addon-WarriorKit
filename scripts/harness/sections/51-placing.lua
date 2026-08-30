@@ -1,6 +1,6 @@
 -- What the lock reaches, and what it does not
 --
--- Sixteen frames in this addon can be dragged. Eleven of them are the HUD, and
+-- Seventeen frames in this addon can be dragged. Twelve of them are the HUD, and
 -- /wk lock is what stops you shoving the swing bars off the screen with a
 -- misplaced click during a pull. Five are chrome windows, and locking one of
 -- those would be locking a window rather than placing a piece of the HUD: you
@@ -43,6 +43,12 @@ local HUD = {
 	-- The one window that asks for the lock, because it is furniture rather
 	-- than something you opened for a minute.
 	{ "WarriorKitChat", "the chat window" },
+	-- The marker a hover's box hangs off when the placement is the anchor. It
+	-- draws nothing at all while the frames are locked, so the lock is the only
+	-- thing that makes it visible or draggable, and a marker that ignored the
+	-- lock would be an invisible frame swallowing the camera drag in the middle
+	-- of the screen.
+	{ "WarriorKitTooltipAnchor", "the tooltip marker" },
 }
 
 -- Built lazily, each by the thing that opens it, so the ones this run has not
@@ -53,6 +59,7 @@ local WINDOWS = {
 	{ "WarriorKitMail", "the mail window" },
 	{ "WarriorKitBreakdown", "the meter breakdown" },
 	{ "WarriorKitClutter", "the destroy window" },
+	{ "WarriorKitAsk", "the confirmation window" },
 }
 
 local function draggable(name)
@@ -79,7 +86,7 @@ for _, entry in ipairs(HUD) do
 		check(state == false, entry[2] .. " can still be dragged with the frames locked")
 	end
 end
-check(hudSeen >= 10, ("only %d of the 11 HUD frames were built"):format(hudSeen))
+check(hudSeen >= 11, ("only %d of the 12 HUD frames were built"):format(hudSeen))
 
 local free, windowsSeen = 0, 0
 for _, entry in ipairs(WINDOWS) do

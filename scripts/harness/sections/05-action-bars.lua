@@ -609,7 +609,8 @@ do
 	if leave then
 		leave(square)
 	end
-	check(not Tip.IsShown(), "the tooltip stays up after the cursor has left the square")
+	check(Tip.IsShown(), "the box went the instant the pointer left, with nothing to replace it")
+	check(not H.tipSettle(), "the tooltip stays up after the cursor has left the square")
 
 	-- An empty slot fills nothing and would leave the last ability's tooltip on
 	-- screen anchored to a square that has none, which is worse than silence.

@@ -83,14 +83,20 @@ end
 local ticker = CreateFrame("Frame")
 ticker:Hide()
 
-function World.Close()
+-- `now` takes the box down on the spot rather than letting it linger. Two
+-- callers pass it and both are the same case: the mob is not something you
+-- looked away from, it is something that is no longer there at all. A loading
+-- screen puts a zone between you and it, and the setting going off means the
+-- addon is not describing mobs any more. A second of a sentence about either is
+-- a second of a sentence about nothing.
+function World.Close(now)
 	if not open then
 		return false
 	end
 	open, since = false, 0
 	ticker:Hide()
 	ns.UI.Scan.Suppress(false)
-	ns.Tip.Close()
+	ns.Tip.Close(now)
 	return true
 end
 
@@ -142,7 +148,7 @@ end)
 -- room, which is the shape every switch in the addon has.
 function World.Apply()
 	if not World.Wanted() then
-		World.Close()
+		World.Close(true)
 	end
 	return World.Wanted()
 end
@@ -178,6 +184,6 @@ events:SetScript("OnEvent", function(_, event)
 	if event == "UPDATE_MOUSEOVER_UNIT" and UnitExists(UNIT) then
 		World.Open()
 	else
-		World.Close()
+		World.Close(event == "PLAYER_ENTERING_WORLD")
 	end
 end)

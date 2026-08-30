@@ -84,7 +84,11 @@ end
 -- Called at ADDON_LOADED so the panel is built at the right size rather than
 -- built at the design size and resized a moment later.
 function Settings.Apply()
-	UI.Tooltip.SetDocked(Settings.Docked())
+	UI.Tooltip.SetPlace(ns.db.tipPlace)
+	UI.Tooltip.SetLinger(ns.db.tipLinger)
+	UI.Tooltip.SetFont(ns.db.tipFont)
+	Settings.ApplyAnchor()
+	Settings.LockAnchor()
 	return UI.SetSize(Settings.Snap(ns.db.uiSize))
 end
 
@@ -95,44 +99,179 @@ function Settings.Set(scale)
 end
 
 --------------------------------------------------------------------------
--- Where a hover's box opens
+-- What a hover's box does
 --
--- The other setting that belongs to no feature. Every hover in the addon opens
--- the same box, so where that box goes is one answer for the whole addon and
--- not the loot feed's business or the action bar's.
+-- The other settings that belong to no feature. Every hover in the addon opens
+-- the same box, so where it goes, how long it stays and how big it reads are
+-- four answers for the whole addon and not the loot feed's business or the
+-- action bar's.
 --
--- Docked is the corner the client keeps its own tooltip in, and it is the
--- default: a box beside the row under the cursor covers the next row, and
--- everything in this addon you can hover sits over the middle of the screen.
--- Beside is the other answer and it is not a fallback. On a very wide monitor
--- the corner is a long way from what you are reading, and a label on the thing
--- itself is worth the cover it costs.
+-- **Where.** Docked is the corner the client keeps its own tooltip in, and it
+-- is the default: a box beside the row under the cursor covers the next row,
+-- and everything in this addon you can hover sits over the middle of the
+-- screen. Beside is the other shipped answer and it is not a fallback; on a
+-- very wide monitor the corner is a long way from what you are reading. The
+-- third is a marker you drag with the frames unlocked, which is the only one of
+-- the three that can put the box where you actually look.
 --
--- The value is pushed into UI/Tooltip.lua rather than read out of here, the
--- same way the size is: that layer is not allowed to know the name of a
--- setting.
+-- **How long.** A second after the pointer leaves. Every hoverable thing in
+-- this addon is small and most of them sit in a column, so a box that vanished
+-- on the frame you crossed a row is a box you cannot finish reading.
+--
+-- **How big.** Twelve pixels, which is the addon's body size, and a number
+-- rather than a constant because how big a sentence has to be to be read in
+-- half a second is a fact about a monitor and a pair of eyes.
+--
+-- Every one of them is pushed into UI/Tooltip.lua rather than read out of
+-- there, the same way the size is: that layer is not allowed to know the name
+-- of a setting.
 --------------------------------------------------------------------------
 
-function Settings.Docked()
-	return ns.db.tipDock ~= false
+-- The marker the anchor placement hangs off.
+--
+-- Small, because it marks a corner rather than showing a box: which corner of
+-- the tooltip lands on it is decided from which quarter of the screen it is in,
+-- so a rectangle the size of a tooltip would be a promise about a shape that
+-- changes with every hover. It carries a rim and a name while the frames are
+-- unlocked, which is what UI.Placeable draws for a frame with no chrome, and it
+-- is invisible and mouse-blind the rest of the time.
+local MARKER = 40
+local marker, markerPlace
+
+local function Marker()
+	if marker then
+		return marker
+	end
+	marker = CreateFrame("Frame", "WarriorKitTooltipAnchor", UIParent)
+	UI.Adopt(marker, 1)
+	marker:SetSize(MARKER, MARKER / 2)
+	markerPlace = UI.Placeable(marker, {
+		name = "WarriorKit tooltip",
+		moved = function(anchor)
+			ns.db.tipPoint = anchor
+			Settings.ApplyAnchor()
+		end,
+	})
+	return marker
 end
 
-function Settings.SetDocked(on)
-	ns.db.tipDock = on and true or false
-	UI.Tooltip.SetDocked(ns.db.tipDock)
-	return ns.db.tipDock
+-- Where the marker sits, put back on it. Its own function because three callers
+-- want it: the first build, a drag that has just written a new anchor, and the
+-- reset.
+function Settings.ApplyAnchor()
+	local frame = Marker()
+	local point = ns.db.tipPoint
+	frame:ClearAllPoints()
+	frame:SetPoint(point[1], UIParent, point[3], point[4], point[5])
+	UI.Tooltip.SetAnchor(frame)
+	return frame
+end
+
+-- The frames were locked or unlocked. A marker you cannot see is a marker you
+-- cannot drag, which is the whole of what unlocking buys here.
+function Settings.LockAnchor()
+	Marker()
+	markerPlace:Lock(not ns.db.locked)
+end
+
+function Settings.ResetAnchor()
+	ns.db.tipPoint = ns.DefaultCopy("tipPoint")
+	Settings.ApplyAnchor()
+end
+
+-- The marker itself, for scripts/harness.lua. Handed out for the reason every
+-- other placeable frame in the addon hands its own out: "the box opened on the
+-- marker" is a claim about two rectangles and there is no making it from
+-- outside without one of them.
+function Settings.AnchorFrame()
+	return Marker()
+end
+
+--------------------------------------------------------------------------
+
+Settings.PLACES = { UI.Tooltip.DOCK, UI.Tooltip.BESIDE, UI.Tooltip.ANCHOR }
+
+function Settings.Place()
+	return UI.Tooltip.Place()
+end
+
+function Settings.SetPlace(word)
+	ns.db.tipPlace = word
+	UI.Tooltip.SetPlace(word)
+	-- Read back rather than returned, because the box takes a word it does not
+	-- know as the corner and the account file is allowed to hold one.
+	ns.db.tipPlace = UI.Tooltip.Place()
+	return ns.db.tipPlace
 end
 
 -- One sentence saying where the next box will open and what that costs, in the
 -- terms Settings.Describe uses for the grid: a control that hides its own cost
 -- is a control you cannot make a decision with.
-function Settings.DescribeDock()
-	if Settings.Docked() then
-		return "in the bottom right corner, where the client keeps its own,"
-			.. " so nothing you hover is covered and nothing is beside it either"
+function Settings.DescribePlace()
+	local where = Settings.Place()
+	if where == UI.Tooltip.BESIDE then
+		return "beside whatever you hovered, and on the cursor out in the world,"
+			.. " so it is next to the thing it describes and over what is behind it"
 	end
-	return "beside whatever you hovered, and on the cursor out in the world,"
-		.. " so it is next to the thing it describes and over what is behind it"
+	if where == UI.Tooltip.ANCHOR then
+		return "on the marker, wherever you dragged it with the frames unlocked,"
+			.. " so it is where you chose and covers whatever is there"
+	end
+	return "in the bottom right corner, where the client keeps its own,"
+		.. " so nothing you hover is covered and nothing is beside it either"
+end
+
+--------------------------------------------------------------------------
+
+Settings.LINGER_STEP = 0.25
+
+function Settings.Linger()
+	return UI.Tooltip.Linger()
+end
+
+function Settings.SetLinger(seconds)
+	UI.Tooltip.SetLinger(seconds)
+	ns.db.tipLinger = UI.Tooltip.Linger()
+	return ns.db.tipLinger
+end
+
+-- "1s", "0.5s", "off". Written the way Settings.Label is and for the same
+-- reason: a lookup table of stops is a table that has to be kept in step with
+-- the range UI/Tooltip.lua owns.
+function Settings.LingerLabel(seconds)
+	seconds = tonumber(seconds) or 0
+	if seconds <= 0 then
+		return "off"
+	end
+	local text = ("%.2f"):format(seconds)
+	text = (text:gsub("0+$", ""))
+	text = (text:gsub("%.$", ""))
+	return text .. "s"
+end
+
+function Settings.DescribeLinger()
+	local seconds = Settings.Linger()
+	if seconds <= 0 then
+		return "goes the instant you look away, which is what the client's own does"
+	end
+	return ("stays %s after you look away, and any other hover replaces it at once")
+		:format(Settings.LingerLabel(seconds))
+end
+
+--------------------------------------------------------------------------
+
+function Settings.TipFont()
+	return UI.Tooltip.Font()
+end
+
+function Settings.SetTipFont(size)
+	UI.Tooltip.SetFont(size)
+	ns.db.tipFont = UI.Tooltip.Font()
+	return ns.db.tipFont
+end
+
+function Settings.DescribeTipFont()
+	return ("%d px, and the title a pixel over it"):format(Settings.TipFont())
 end
 
 -- The stops that keep the grid on this screen, as a phrase a note can drop into

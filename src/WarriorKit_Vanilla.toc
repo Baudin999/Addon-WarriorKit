@@ -158,6 +158,11 @@ UI\Widgets.lua
 UI\Placeable.lua
 UI\Window.lua
 
+# The question a part puts up before it does something that cannot be undone.
+# One window for all of them, after UI\Window.lua because it is one of those and
+# after UI\Widgets.lua because its two buttons are.
+UI\Ask.lua
+
 Core\Command.lua
 Core\Panel.lua
 
@@ -583,6 +588,10 @@ Mail\Feature.lua
 # open before an index means anything, and the selection cursor those calls read
 # is shared with every other addon and has to be put back where it was found.
 #
+# Party.lua is who else in your group is on a quest, which the client answers on
+# some builds and Questie answers for anyone running it, and it loads before
+# Log.lua because the log reads it for every row.
+#
 # Log.lua turns the client's flat run of rows into zones holding quests, which
 # is the shape the left column draws. Where.lua is the optional half: Questie
 # knows who takes a quest back, how far the nearest thing you still have to kill
@@ -592,16 +601,20 @@ Mail\Feature.lua
 # points and knows nothing about quests, which is why it loads after Where.lua
 # and before the window that puts the two together. Window.lua draws the three
 # columns, Blizzard.lua puts the client's own log in the attic and redirects the
-# L key, and Feature.lua last, as everywhere else.
+# L key, Tracker.lua points Questie's tracker at this window under the same
+# switch, and Feature.lua last, as everywhere else.
 #
 # After Core\Attic.lua, which is where Blizzard's window goes, and after the UI
 # layer, which is what the window is built out of. Both are far above this line.
 Quests\Client.lua
+Quests\Party.lua
 Quests\Log.lua
 Quests\Where.lua
+Quests\Drops.lua
 Quests\Chart.lua
 Quests\Window.lua
 Quests\Blizzard.lua
+Quests\Tracker.lua
 Quests\Feature.lua
 
 # The world hover. A creature under the cursor, described in the addon's own box

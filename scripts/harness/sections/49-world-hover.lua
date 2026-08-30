@@ -105,7 +105,7 @@ do
 
 	guids.mouseover = nil
 	fire("UPDATE_MOUSEOVER_UNIT")
-	check(not Box.IsShown(), "a mouseover event with no unit behind it opened a box anyway")
+	check(not H.tipSettle(), "a mouseover event with no unit behind it opened a box anyway")
 	check(not ns.UI.Scan.Suppressing(),
 		"Blizzard's tooltip is being held down with nothing of ours on screen")
 
@@ -187,8 +187,8 @@ do
 	-- one anchor in the file that no frame can reach.
 	------------------------------------------------------------------
 
-	local wasDocked = Box.Docked()
-	Box.SetDocked(false)
+	local wasPlace = Box.Place()
+	Box.SetPlace(Box.BESIDE)
 
 	-- The stub stands UIParent up with no size at all, so the middle of the
 	-- screen is zero and every tooltip in every section above this one has been
@@ -219,7 +219,7 @@ do
 		"a mob on the right of the screen threw its box further right, into the clamp")
 
 	screen:SetSize(0, 0)
-	Box.SetDocked(wasDocked)
+	Box.SetPlace(wasPlace)
 	cursor.x = 300
 	fire("UPDATE_MOUSEOVER_UNIT")
 
@@ -273,6 +273,95 @@ do
 		"a mob that has never heard of you reads as: " .. tostring(idle))
 
 	------------------------------------------------------------------
+	-- What the mob is carrying that a quest of yours wants
+	--
+	-- The one thing a creature hover can say that the client cannot: this boar
+	-- drops the hide, that hide is for the quest in your log, and you have three
+	-- of the eight. Only Questie knows the first of those, so the whole band is
+	-- read off Questie's own tooltip registry, keyed `m_<npc id>` against the
+	-- objective the creature feeds.
+	--
+	-- The third line is the addon's own and is measured rather than looked up.
+	-- No database on either client carries a drop rate, so what is printed is a
+	-- count of the corpses of that creature you have opened and how many of them
+	-- had the item on them, and it says nothing at all until there are enough of
+	-- them to be worth saying. Both halves are asserted, because a fraction
+	-- printed off two corpses is arithmetic pretending to be information.
+	------------------------------------------------------------------
+
+	local loader = _G.QuestieLoader
+	local tips = loader:ImportModule("QuestieTooltips")
+	local player = loader:ImportModule("QuestiePlayer")
+	local wasLookup, wasLog = tips.lookupByKey, player.currentQuestlog
+
+	-- 102 is "The Missing Diplomat", which client/05-quests.lua puts in the log
+	-- and in Questie's database. The objective is Questie's shape: a type, the
+	-- item id, the description it draws, and the two counts the client filled
+	-- in.
+	local hide = { Index = 1, Type = "item", Id = 3002,
+		Description = "Bristleback Hide", Collected = 3, Needed = 8 }
+	tips.lookupByKey = { ["m_1234"] = { ["102 1"] = { questId = 102, objective = hide } } }
+	player.currentQuestlog = { [102] = {} }
+
+	guids.mouseover = MOB
+	fire("UPDATE_MOUSEOVER_UNIT")
+	said = drawn()
+	local named, counted = false, nil
+	for index = 1, #said do
+		if said[index] == "The Missing Diplomat" then
+			named = true
+		end
+		if said[index] == "Bristleback Hide" then
+			local _, value = Box.Text(index)
+			counted = value
+		end
+	end
+	check(named, "the box does not name the quest the mob feeds: " .. table.concat(said, " / "))
+	check(counted == "3/8",
+		"the box does not say how many you already have: " .. tostring(counted))
+
+	-- Nothing about a drop chance yet, because nothing has been looted.
+	local Drops = ns.QuestDrops
+	check(Drops.Chance(1234, 3002) == nil,
+		"a drop chance was printed before a single corpse had been opened")
+
+	-- Twelve corpses, four of them carrying it. Recorded through the same call
+	-- the loot window drives, so what is asserted is the ledger the game fills
+	-- rather than a number written into it by hand.
+	for at = 1, 12 do
+		Drops.Record(1234, at <= 4 and { [3002] = true } or {})
+	end
+	local rate, corpses = Drops.Chance(1234, 3002)
+	check(rate ~= nil and corpses == 12,
+		("twelve corpses answered %s over %s"):format(tostring(rate), tostring(corpses)))
+
+	fire("UPDATE_MOUSEOVER_UNIT")
+	said = drawn()
+	local chance = nil
+	for index = 1, #said do
+		if said[index] == "dropped by" then
+			local _, value = Box.Text(index)
+			chance = value
+		end
+	end
+	check(chance == "33% of 12 looted",
+		"the measured drop chance did not reach the box: " .. tostring(chance))
+
+	-- A quest you have handed in leaves its key registered in Questie until
+	-- something walks it, so the log is asked as well as the registry. Without
+	-- that the mob goes on offering a quest you finished a zone ago.
+	player.currentQuestlog = {}
+	fire("UPDATE_MOUSEOVER_UNIT")
+	said = drawn()
+	for index = 1, #said do
+		check(said[index] ~= "The Missing Diplomat",
+			"a quest that is no longer in your log is still on the mob's box")
+	end
+
+	tips.lookupByKey, player.currentQuestlog = wasLookup, wasLog
+	ns.db.questDrops = {}
+
+	------------------------------------------------------------------
 	-- Looking away
 	--
 	-- UPDATE_MOUSEOVER_UNIT says when a hover begins and nothing reliable about
@@ -286,7 +375,7 @@ do
 
 	guids.mouseover = nil
 	World.Sweep(1)
-	check(not Box.IsShown(), "the box stayed up after the pointer left the mob")
+	check(not H.tipSettle(), "the box stayed up after the pointer left the mob")
 	check(not ns.UI.Scan.Suppressing(),
 		"the client's tooltip is still held down with nothing of ours on screen")
 	check(H.blizzardTooltip("mouseover") == true,
@@ -384,6 +473,7 @@ do
 
 	print(("world  %s, %s; the client's own held down for a unit and nothing else; %.2f KB per 50 ticks, gate is %.2f")
 		:format(World.Describe(),
-			Box.Docked() and "docked in the corner" or "beside the pointer",
+			Box.Place(),
 			churned, CHURN.world))
+	print(("world  a creature's quest drops: %s"):format(ns.QuestDrops.Describe()))
 end

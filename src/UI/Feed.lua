@@ -1088,6 +1088,10 @@ function Feed:Enter(index)
 	self.hoveredAt = entry and entry.at
 
 	if not entry or not self.onTooltip then
+		-- A row with nothing on it takes the box down at once rather than
+		-- letting the last row's box linger over it. Entering a thing always
+		-- replaces what is on screen, and a blank row replaces it with nothing.
+		ns.Tip.Close(true)
 		return false
 	end
 	return ns.Tip.Open(row, self.onTooltip(entry))

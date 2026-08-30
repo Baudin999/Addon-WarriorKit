@@ -115,8 +115,26 @@ local DOCK_X, DOCK_Y = 0, 70
 -- be a title. It does not carry that on its own: the title is the heading gold
 -- against C.text below it, and it has a hairline under it that no other line
 -- gets.
-local TITLE = M.heading
+--
+-- **And both of them move together.** How big a tooltip reads is a preference
+-- the same way UI.WindowZoom is one, and for the same reason: a box you read in
+-- the half second before you move on is a box whose text you should not be
+-- leaning in for. So the body is a number the player sets and the title is that
+-- number plus the one pixel that separates them, which keeps the pair a pair at
+-- every size. The zoom is not the answer to this question. It scales the whole
+-- box, air and all, and a tooltip that grew its padding to buy a readable
+-- sentence would cover twice as much of the fight.
+local TITLE_LEAD = M.heading - M.font
+
+-- The floor and the ceiling on that number, and the two sizes as they stand.
+--
+-- Eight is where Arial Narrow stops resolving its own counters and eighteen is
+-- where a five line box is a quarter of the screen. Neither end is a size
+-- anybody should want; they are there so a saved variable edited by hand cannot
+-- draw a tooltip nobody can read or one nobody can see past.
+local FONT_LOW, FONT_HIGH = 8, 18
 local BODY = M.font
+local TITLE = M.heading
 
 local Tooltip = {}
 UI.Tooltip = Tooltip
@@ -142,18 +160,73 @@ local widest = 0
 local titled = false
 local zoom = 1
 
--- Whether the box sits in the corner the client keeps its own tooltip in
--- rather than beside the thing you hovered. Held here rather than read out of
--- ns.db for the reason UI.Size is: this layer is not allowed to know the name
--- of a setting, so Settings/Settings.lua reads the saved value and pushes it
--- in.
+-- Where the box opens, which is one of three answers. Held here rather than
+-- read out of ns.db for the reason UI.Size is: this layer is not allowed to
+-- know the name of a setting, so Settings/Settings.lua reads the saved value
+-- and pushes it in.
+--
+--   dock     the corner the client keeps its own tooltip in
+--   beside   next to whatever you hovered, and on the cursor out in the world
+--   anchor   a corner of the screen you put there yourself
 --
 -- Docked to start with, because that is where fifteen years of playing this
 -- game has put the box and because a tooltip that opens under the cursor is a
--- tooltip covering the row you were about to click. Beside is still there, and
--- it is the better answer on a wide screen where the corner is a long way from
--- what you are reading.
-local docked = true
+-- tooltip covering the row you were about to click.
+--
+-- **The third is the one the other two cannot do.** The corner is read off the
+-- client and moves when the bags do, which is right and is also the whole of
+-- what is wrong with it: on an ultrawide monitor it is a foot away from the
+-- fight, and there is no argument that gets it nearer. Beside puts the box
+-- where you are looking and covers what is under it. The anchor is the answer
+-- to both, and it costs a marker you drag once with the frames unlocked.
+Tooltip.DOCK = "dock"
+Tooltip.BESIDE = "beside"
+Tooltip.ANCHOR = "anchor"
+
+local PLACES = { dock = true, beside = true, anchor = true }
+local place = Tooltip.DOCK
+
+-- The frame the anchor mode hangs off, handed over by whoever owns the setting
+-- that says where it is. Nil until then, and the anchor mode falls back to the
+-- corner while it is: a placement with nothing to place against is worse than
+-- the default, not better.
+local marker
+
+-- How long the box stays up after the thing it describes stops being hovered,
+-- and how much of that is left.
+--
+-- **A tooltip that vanishes on the frame you leave the row is a tooltip you
+-- cannot read.** Every hoverable thing in this addon is small and most of them
+-- are in a column, so the pointer crosses two of them on the way to the one you
+-- meant, and a box that opens and closes twice on the way is noise. Worse, the
+-- box itself is not hoverable: a sentence that names a number you wanted to
+-- read twice is gone the moment you move to look at something beside it.
+--
+-- So leaving a thing starts a countdown rather than closing the box, and the
+-- countdown is the player's number. Hovering anything else cancels it outright
+-- and draws the new box on the spot, because the one thing a linger must never
+-- do is make the next hover wait for the last one.
+local LINGER_LOW, LINGER_HIGH = 0, 10
+local ttl = 1
+local linger = 0
+
+-- What the countdown runs on. Hidden is the ordinary state and means nothing is
+-- counting: this frame is shown for at most a second at a time, once per hover
+-- you leave, and never while a box is up under the pointer.
+local ticker = CreateFrame("Frame")
+ticker:Hide()
+
+-- The countdown, cancelled. Every open calls it, which is the whole of "hover a
+-- second thing and the box is replaced at once": a new box is not a box waiting
+-- on the last one's clock.
+local function Stop()
+	if linger <= 0 then
+		return false
+	end
+	linger = 0
+	ticker:Hide()
+	return true
+end
 
 --------------------------------------------------------------------------
 -- The lines
@@ -286,7 +359,6 @@ end
 --   { "a sentence", color = C.dim }  the same, in a colour of its own
 --   { "Label", "value" }             the two pushed to opposite edges
 --   { "Label", "value", tone = X }   the same, with the value in its own colour
---   { hint = "what to type" }        the quiet blue line that names a switch
 --   { blank = true }                 air between two groups
 --
 -- Data rather than a run of calls because a tooltip is a description of one
@@ -303,20 +375,17 @@ end
 -- subject, which is the harness proving what this file draws.
 --------------------------------------------------------------------------
 
--- The line that says what to type, or what a click would do.
+-- One line of the body, as the caller described it.
 --
--- Its own kind rather than a colour a caller passes, because it is the shape
--- Buffs/Nag.lua invented and the reason it invented it generalises: a square
--- that nags you about a sharpening stone has to carry the name of the switch
--- that silences it, or somebody tired of that square reads the whole panel
--- looking for it. Anything in this addon you can hover and be annoyed by owes
--- the hover that sentence.
+-- There used to be a third kind here, a blue line naming the switch that turns
+-- the thing off or the word that prints the rest. It is gone, and the reason is
+-- worth keeping: it was drawn on every box in the addon, it said the same six
+-- things, and a footnote you have read four hundred times is not a footnote any
+-- more. A tooltip says what the thing under the cursor is. Where the settings
+-- are is what the settings window is for.
 local function Line(spec)
 	if spec.blank then
 		return Spacer()
-	end
-	if spec.hint then
-		return Add(BODY, spec.hint, C.hint[1], C.hint[2], C.hint[3])
 	end
 
 	local color = spec.color or (spec[2] and C.dim) or C.text
@@ -486,6 +555,60 @@ local function Dock()
 	frame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -Units(x), Units(y))
 end
 
+-- The corner you put there yourself.
+--
+-- The marker is a point rather than a box, so what it decides is which corner
+-- of the tooltip lands on it and which way the box grows from there. That is
+-- read off where the marker is: a marker in the bottom left of the screen grows
+-- the box up and to the right, one in the top right grows it down and to the
+-- left, and either way the box goes away from the nearest edge rather than into
+-- it. A single fixed corner would have been a marker you cannot use in three
+-- quarters of the screen.
+--
+-- Which quarter is decided against the middle of UIParent as UIParent itself
+-- reports it, rather than against half its width and half its height. The two
+-- are the same number only where the screen's own origin is its bottom left
+-- corner, which is a fact about the client rather than a fact about anchors,
+-- and reading both ends of the screen is the same work either way.
+--
+-- The marker's edges are in the marker's own units and UIParent's are in
+-- UIParent's, so the middle is converted before the comparison. This is the
+-- same trap Dock is written around: this box and everything the addon puts on
+-- the grid sit at a scale of their own, and a comparison that skipped the
+-- conversion would pick the right corner at one UI scale and the wrong one at
+-- the next. The anchor itself needs no conversion at all, because SetPoint
+-- reads an offset of zero the same way at every scale.
+local function Middle()
+	local left = ns.Measure(UIParent, "GetLeft")
+	local right = ns.Measure(UIParent, "GetRight")
+	local top = ns.Measure(UIParent, "GetTop")
+	local bottom = ns.Measure(UIParent, "GetBottom")
+	if not left or not right or not top or not bottom then
+		return nil, nil
+	end
+	return UI.Convert((left + right) / 2, UIParent, frame),
+		UI.Convert((top + bottom) / 2, UIParent, frame)
+end
+
+local function Marked()
+	local left = ns.Measure(marker, "GetLeft")
+	local right = ns.Measure(marker, "GetRight")
+	local top = ns.Measure(marker, "GetTop")
+	local bottom = ns.Measure(marker, "GetBottom")
+	local midX, midY = Middle()
+	if not left or not right or not top or not bottom or not midX then
+		return false
+	end
+
+	local far = UI.Convert((left + right) / 2, marker, frame) > midX
+	local high = UI.Convert((top + bottom) / 2, marker, frame) > midY
+	local corner = (high and "TOP" or "BOTTOM") .. (far and "RIGHT" or "LEFT")
+
+	frame:ClearAllPoints()
+	frame:SetPoint(corner, marker, corner, 0, 0)
+	return true
+end
+
 -- Which side of the owner it opens on, and which corner of itself it hangs
 -- from. Right of the owner normally, and left of it once the owner is past the
 -- middle of the screen, because a tooltip clamped to the screen edge is one
@@ -508,12 +631,16 @@ end
 -- Tooltip.CURSOR, and it is the world hover: a creature is not a frame, so
 -- there is nothing to sit beside and the box follows the arrow instead.
 --
--- **None of which happens while the box is docked.** Every side, every corner
--- and every clearance below is the answer to one question, which is how to put
--- a box next to a thing without covering it, and docking answers that question
--- by not being next to the thing at all.
+-- **None of which happens in the other two placements.** Every side, every
+-- corner and every clearance below is the answer to one question, which is how
+-- to put a box next to a thing without covering it, and both the corner and the
+-- marker answer that question by not being next to the thing at all.
 local function Anchor(owner, above)
-	if docked then
+	if place == Tooltip.ANCHOR and marker and Marked() then
+		return
+	end
+
+	if place ~= Tooltip.BESIDE then
 		Dock()
 		return
 	end
@@ -626,6 +753,10 @@ function Tooltip.Show(owner, data, above)
 		Build()
 	end
 	Reset()
+	-- Before anything is drawn and before the refusals below, so a hover that
+	-- describes nothing takes the lingering box down with it rather than
+	-- leaving the last one on screen for another second pointing at this one.
+	Stop()
 
 	if type(data) ~= "table" then
 		frame:Hide()
@@ -650,36 +781,177 @@ function Tooltip.Show(owner, data, above)
 	return true
 end
 
--- Dock the box in the corner, or put it back beside what it describes.
+-- Where the box opens, as one of the three words above.
 --
 -- Pushed in by Settings/Settings.lua rather than read, and answered as whether
 -- anything moved, which is the shape UI.SetSize has. A box that is up when the
--- switch flips is re-anchored on the spot: the switch is a checkbox in the
--- settings window with a hover of its own, so the box that demonstrates the
--- setting is usually the one on screen while you change it.
-function Tooltip.SetDocked(on)
-	on = on and true or false
-	if on == docked then
+-- setting changes is re-anchored on the spot: the control is in the settings
+-- window and has a hover of its own, so the box that demonstrates the setting
+-- is usually the one on screen while you change it.
+--
+-- A word this file does not know is the corner, rather than an error. The value
+-- comes out of an account file a player may have edited, and a tooltip in the
+-- wrong place is a better answer to that than no tooltip at all.
+function Tooltip.SetPlace(word)
+	if not PLACES[word] then
+		word = Tooltip.DOCK
+	end
+	if word == place then
 		return false
 	end
-	docked = on
+	place = word
 	if frame and frame:IsShown() and opened then
 		Anchor(opened, raised)
 	end
 	return true
 end
 
-function Tooltip.Docked()
-	return docked
+function Tooltip.Place()
+	return place
 end
 
-function Tooltip.Close()
+-- The frame the anchor mode hangs the box off.
+--
+-- Handed over rather than made here, because where it sits is a saved setting
+-- and this layer may not name one. What this file does with it is read its
+-- corners; who drags it, who draws a rim on it and who writes down where it was
+-- let go is the caller's business entirely.
+function Tooltip.SetAnchor(frame_)
+	marker = frame_
+	if frame and frame:IsShown() and opened then
+		Anchor(opened, raised)
+	end
+	return marker ~= nil
+end
+
+function Tooltip.Anchored()
+	return marker
+end
+
+-- How long a box stays up after the pointer leaves what it describes.
+--
+-- Clamped rather than refused, for the reason SetPlace takes a word it does not
+-- know: the number arrives from an account file. Zero is a real answer and
+-- means the box goes the instant you look away, which is what the client's own
+-- tooltip does and is what somebody who finds the linger annoying will set.
+function Tooltip.SetLinger(seconds)
+	seconds = tonumber(seconds) or 0
+	if seconds < LINGER_LOW then
+		seconds = LINGER_LOW
+	elseif seconds > LINGER_HIGH then
+		seconds = LINGER_HIGH
+	end
+	if seconds == ttl then
+		return false
+	end
+	ttl = seconds
+	-- A countdown already running keeps the number it started with. Shortening
+	-- the linger from the panel while the panel's own hover is on screen would
+	-- otherwise take that box down under the cursor that is still over it.
+	return true
+end
+
+function Tooltip.Linger()
+	return ttl
+end
+
+-- How big the box reads.
+--
+-- One number, and the title takes the same number plus the pixel that separates
+-- the two. Clamped rather than refused for the reason the linger is, and
+-- rounded to a whole pixel because SetFont refuses a fraction outright: the
+-- symptom of that is a font object that comes back nil and a box with no text
+-- in it at all, which is a defect this addon has already shipped once.
+--
+-- Nothing is redrawn here. Every line takes its size in Add, the box is built
+-- from nothing on every open, and the next hover is the next open. A box on
+-- screen while the slider moves keeps the size it was drawn at until you hover
+-- something else, which is the same deal the zoom slider offers and for the
+-- same reason.
+function Tooltip.SetFont(size)
+	size = math.floor((tonumber(size) or M.font) + 0.5)
+	if size < FONT_LOW then
+		size = FONT_LOW
+	elseif size > FONT_HIGH then
+		size = FONT_HIGH
+	end
+	if size == BODY then
+		return false
+	end
+	BODY, TITLE = size, size + TITLE_LEAD
+	return true
+end
+
+function Tooltip.Font()
+	return BODY
+end
+
+-- The two ends of that range, so the panel and the slash word draw the same
+-- slider without either of them writing the numbers down a second time.
+function Tooltip.FontRange()
+	return FONT_LOW, FONT_HIGH
+end
+
+-- And the two ends of the linger, for the same reason.
+function Tooltip.LingerRange()
+	return LINGER_LOW, LINGER_HIGH
+end
+
+-- What is left of the current countdown, for scripts/harness.lua. Zero when
+-- nothing is counting, which is both "up and staying up" and "already gone":
+-- the two are told apart by IsShown, and there is no third state to report.
+function Tooltip.Lingering()
+	return linger
+end
+
+-- The pointer left the thing the box describes.
+--
+-- The box does not go with it. It stays for as long as the linger says, and the
+-- owner is dropped at once because the thing it was describing is no longer
+-- under the cursor and nothing may re-anchor to it.
+--
+-- `now` takes the box down on the spot. That is for the caller who knows the
+-- box is describing something that no longer exists at all rather than
+-- something you looked away from: a loading screen, a feature switched off. A
+-- linger there is a sentence about a mob in a zone you have left.
+function Tooltip.Close(now)
 	opened = nil
+	if not frame then
+		return true
+	end
+	if now or ttl <= 0 or not frame:IsShown() then
+		Stop()
+		frame:Hide()
+		return true
+	end
+	linger = ttl
+	ticker:Show()
+	return true
+end
+
+-- The countdown, run down. One question and one write, which is why the ticker
+-- is hidden whenever nothing is counting: an OnUpdate that answers "no" sixty
+-- times a second for a whole evening is the shape of every addon that costs a
+-- frame and cannot say where it went.
+function Tooltip.Sweep(elapsed)
+	if linger <= 0 then
+		return false
+	end
+	linger = linger - (tonumber(elapsed) or 0)
+	if linger > 0 then
+		return false
+	end
+	linger = 0
+	ticker:Hide()
 	if frame then
 		frame:Hide()
 	end
 	return true
 end
+
+ticker:SetScript("OnUpdate", function(_, elapsed)
+	Tooltip.Sweep(elapsed)
+end)
 
 -- What it is currently open on. Handed out because "the tooltip came up beside
 -- the thing you hovered" is a claim scripts/harness.lua has to be able to make,

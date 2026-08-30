@@ -173,7 +173,6 @@ local function Build()
 			kind = "note",
 			title = ns.Charge.Name(key) or key,
 			lines = { at },
-			hint = "Drag to move it.",
 		}
 	end)
 end

@@ -224,7 +224,6 @@ function Place.Handle(entry)
 				{ ns.BarLook.Shape(entry.def) },
 				{ ns.BarLook.Hours(entry.def) },
 			},
-			hint = "Drag to move it. /wk actionbars where prints the plan.",
 		}
 	end)
 end

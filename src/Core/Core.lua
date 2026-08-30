@@ -105,6 +105,13 @@ local RETIRED = {
 	-- thing depending on what the skin was doing. It is four switches now, one
 	-- per thing you can see twice, and each says what it does on its own line.
 	blizzAuras = true,
+
+	-- 1.9: a boolean for whether a hover's box docked in the corner, back when
+	-- the corner and beside were the only two places it could go. There are
+	-- three now and the third is a marker you drag, so the setting is the word
+	-- tipPlace. A boolean left sitting there would be read by nothing and would
+	-- still be what a player who had turned the dock off found in their file.
+	tipDock = true,
 }
 
 -- A key lives in exactly one scope. Checking both tables on every insert is
@@ -1106,6 +1113,12 @@ local KEPT = {
 	-- The ledger: copper against every character you have played. The only
 	-- copy of it, and not a number anybody chose.
 	purse = true,
+
+	-- How many corpses of each creature you have looted and how many of those
+	-- carried a quest item. A count of what happened while you played, not a
+	-- number anybody chose, and the only copy of it: wiping it does not restore
+	-- a default, it throws away every drop chance the addon has measured.
+	questDrops = true,
 
 	-- The people you put in groups, and the counter their room keys come off.
 	-- The counter goes with the list rather than on its own, because resetting

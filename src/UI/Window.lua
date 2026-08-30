@@ -890,6 +890,20 @@ end
 -- label, an accent mark down its left edge when it is the one you are reading,
 -- and a count on the right when it holds something you have not read.
 --
+-- An entry may also carry three things a caller asks the whole column for, and
+-- the quest log is what asked for all three. A glyph in front of the words,
+-- which is a state the row is in rather than anything you can press. A note at
+-- the right, which is a small number about the row that is not a count of
+-- unread lines. And a strip of marks at the far right that you can press, one
+-- per action the caller offers on every entry.
+--
+-- **The marks are drawn on every row rather than on the one under the cursor.**
+-- Revealing them on hover is the tidier column and it is a trap: the cursor
+-- moving from the row onto the mark leaves the row, the row repaints without
+-- its marks, and the button the player was reaching for is gone before the
+-- click lands. So they are always there, drawn quiet, and they brighten under
+-- the cursor. What is quiet is legible and what is missing is not.
+--
 -- Rows are addressed by a string id rather than by position, because the
 -- position of a whisper moves every time somebody else whispers you and the
 -- selection has to survive that.
@@ -903,6 +917,12 @@ List.__index = List
 -- have not read is nearly whole, and a quiet room is half there. A picture has
 -- no colour to lend a state, so brightness is what carries it.
 local FULL, WAITING, QUIET = 1, 0.9, 0.5
+
+-- The column a row's glyph is drawn in, and one mark you can press at the right
+-- of it. The glyph is the width the middle column of the quest window reserves
+-- for the same mark, so the two read as one interface; the button is wider than
+-- the glyph in it because it is a thing you aim at with a mouse.
+local MARK, ACTION = 10, 16
 
 local function PaintCount(button)
 	local waiting = button.unread and button.unread > 0 and not button.selected
@@ -921,6 +941,22 @@ local function PaintCount(button)
 	return true
 end
 
+-- The glyph, the note and the strip of marks, shown on an entry and never on a
+-- header. Split out because both halves of PaintListRow want it and the header
+-- half returns before it reaches the bottom of the function.
+local function PaintExtras(button, entry)
+	if button.glyph then
+		button.glyph:SetShown(entry and button.glyph:GetText() ~= "")
+	end
+	if button.note then
+		button.note:SetShown(entry and button.note:GetText() ~= "")
+	end
+	for index = 1, #(button.actions or {}) do
+		local mark = button.actions[index]
+		mark:SetShown(entry and mark.wanted ~= false)
+	end
+end
+
 local function PaintListRow(button)
 	if button.header then
 		UI.Tint(button.bg, C.rail)
@@ -930,6 +966,7 @@ local function PaintListRow(button)
 		if button.badgeBg then
 			button.badgeBg:Hide()
 		end
+		PaintExtras(button, false)
 		if button.rule then
 			button.rule:SetShown(button.icons and true or false)
 		end
@@ -968,6 +1005,7 @@ local function PaintListRow(button)
 		button.icon:SetAlpha(button.hovered and FULL or light)
 	end
 
+	PaintExtras(button, true)
 	PaintCount(button)
 end
 
@@ -980,10 +1018,24 @@ end
 -- opts.describe is handed a row and answers a tooltip subject, which is the only place
 -- an icon rail can put a name. Without it the rail is a column of pictures
 -- nobody can read.
+--
+-- opts.marks reserves a glyph column in front of the words on every entry, so
+-- that the marks line up down one edge whether or not this row has one.
+--
+-- opts.actions is what a caller offers on every entry: an array of
+-- { glyph, tip, onClick }, drawn as marks at the right edge in the order given
+-- and handed the row's own id when pressed. An entry may carry `shown`, which
+-- is handed the same id and decides whether this row gets that mark at all.
+--
+-- The column reserves the strip's width whether or not the cursor is on the
+-- row, because a strip that appeared on hover would change how much room the
+-- words have as you move down it.
 function UI.List(parent, opts)
 	local list = setmetatable({ pool = {}, rows = {}, onSelect = opts and opts.onSelect }, List)
 	list.icons = opts and opts.icons and true or false
 	list.describe = opts and opts.describe
+	list.marks = opts and opts.marks and true or false
+	list.actions = opts and opts.actions or nil
 	-- Named if the caller asks, for the reason the aura rows and the meter are:
 	-- a column that has laid itself out wrongly has to be measurable from a
 	-- macro and from scripts/harness.lua, and the alternative is the file that
@@ -1054,6 +1106,65 @@ local function IconRow(button)
 	return button
 end
 
+-- One mark at the right of a row: a glyph you can press, with no surface under
+-- it and no edge round it.
+--
+-- Not UI.Button, and the difference is the point. A button is a control with a
+-- filled rectangle and a hairline, which is right in a footer and wrong twenty
+-- times down a column: twenty of them is a wall of small boxes over the words
+-- they belong to. This is a letter that lights up, which is as much furniture
+-- as a row of a list can afford.
+local function RowMark(button, spec, outermost, right)
+	local mark = CreateFrame("Button", nil, button)
+	mark:SetSize(ACTION, ACTION)
+	if outermost then
+		mark:SetPoint("RIGHT", right, "RIGHT", -M.rowGap, 0)
+	else
+		mark:SetPoint("RIGHT", right, "LEFT", 0, 0)
+	end
+
+	mark.text = UI.Glyph(mark, M.glyph, C.quiet, "CENTER")
+	mark.text:SetPoint("CENTER")
+	mark.text:SetText(spec.glyph or "")
+
+	mark:SetScript("OnEnter", function(self)
+		self.text:SetTextColor(C.text[1], C.text[2], C.text[3])
+		if spec.tip then
+			ns.Tip.Open(self, { kind = "note", title = spec.tip }, true)
+		end
+	end)
+	mark:SetScript("OnLeave", function(self)
+		self.text:SetTextColor(C.quiet[1], C.quiet[2], C.quiet[3])
+		if spec.tip then
+			ns.Tip.Close()
+		end
+	end)
+	mark:SetScript("OnClick", function(self)
+		local row = self:GetParent()
+		if row.id ~= nil and spec.onClick then
+			spec.onClick(row.id)
+		end
+	end)
+	return mark
+end
+
+-- The marks, right to left, and whatever the next thing along the row anchors
+-- to. A list that offered none hands its rows straight back.
+local function RowMarks(list, button)
+	if not list.actions then
+		return button, "RIGHT", -M.rowGap
+	end
+	-- Built from the right edge inwards so that the caller's first action is the
+	-- leftmost mark. A list is written the way it is read.
+	button.actions = {}
+	local right = button
+	for at = #list.actions, 1, -1 do
+		right = RowMark(button, list.actions[at], at == #list.actions, right)
+		button.actions[at] = right
+	end
+	return right, "LEFT", 0
+end
+
 local function ListRow(list, index)
 	local button = CreateFrame("Button", nil, list.stack.frame)
 	button.bg = ns.Fill(button, "BACKGROUND", C.rail[1], C.rail[2], C.rail[3], 1)
@@ -1063,12 +1174,34 @@ local function ListRow(list, index)
 	button.mark:SetPoint("BOTTOMLEFT")
 	button.mark:SetWidth(2)
 
+	-- Right to left down one chain: the marks you can press, then the note, then
+	-- the unread count, then whatever room is left is the words. Chained rather
+	-- than each given its own offset, because a region a row does not use is
+	-- empty and an empty string is no pixels wide, so the ones that are there
+	-- close up without anything having to know which.
+	local right, edge, gap = RowMarks(list, button)
+
+	button.note = UI.Label(button, M.small, C.accent, "RIGHT", UI.FLAT)
+	button.note:SetPoint("RIGHT", right, edge, gap, 0)
+	UI.Wrap(button.note, false)
+
 	button.badge = UI.Label(button, M.small, C.accent, "RIGHT", UI.FLAT)
-	button.badge:SetPoint("RIGHT", -M.rowGap, 0)
+	button.badge:SetPoint("RIGHT", button.note, "LEFT", 0, 0)
 	UI.Wrap(button.badge, false)
 
+	-- The glyph column, on a list that asked for one. Reserved on every entry
+	-- whether or not this row has a mark, so the ones that do line up.
+	local left = M.gutter
+	if list.marks then
+		button.glyph = UI.Glyph(button, M.glyph, C.quiet, "LEFT")
+		button.glyph:SetPoint("LEFT", M.rowGap, 0)
+		button.glyph:SetWidth(MARK)
+		UI.Wrap(button.glyph, false)
+		left = M.rowGap + MARK + M.rowGap
+	end
+
 	button.text = UI.Label(button, M.font, C.dim, "LEFT", UI.FLAT)
-	button.text:SetPoint("LEFT", M.gutter, 0)
+	button.text:SetPoint("LEFT", left, 0)
 	button.text:SetPoint("RIGHT", button.badge, "LEFT", -M.rowGap, 0)
 	UI.Wrap(button.text, false)
 
@@ -1129,6 +1262,28 @@ function List:Row(index, row)
 			UI.FLAT))
 	end
 
+	-- The glyph keeps its own colour through everything PaintListRow does to
+	-- the row, selection included. It is there to say what state the row is in,
+	-- and the row it says least about must not be the one you are reading.
+	if button.glyph then
+		local tint = row.markColor or C.quiet
+		button.glyph:SetText(row.mark or "")
+		button.glyph:SetTextColor(tint[1], tint[2], tint[3])
+	end
+	if button.note then
+		button.note:SetText(row.note or "")
+	end
+
+	-- Which of the marks this row gets. A mark that would do nothing on this
+	-- row is not drawn on it: the quest log is what asked, because a client
+	-- refuses to hand a quest to the party that nobody else could take, and a
+	-- share arrow on such a row is a control that fails quietly when pressed.
+	for at = 1, #(button.actions or {}) do
+		local decide = self.actions[at].shown
+		button.actions[at].wanted =
+			decide == nil or (row.id ~= nil and decide(row.id) and true or false)
+	end
+
 	-- A header is a caption rather than a control, so it must not take the
 	-- click meant for the room under it or light up on the way past.
 	button:EnableMouse(not button.header)
@@ -1158,6 +1313,9 @@ end
 --   row.icon    the texture on it, in an icon column
 --   row.unread  how many lines arrived here while you were somewhere else
 --   row.color   the row's own colour, used when it is not the selected one
+--   row.mark    a glyph in front of the words, on a list that asked for marks
+--   row.markColor  what that glyph is drawn in, whatever the row's own colour
+--   row.note    a small number at the right that is not a count of unread lines
 --
 -- The selection is kept by id across a refresh, so a whisper arriving while you
 -- are reading the guild does not move you.
@@ -1252,6 +1410,28 @@ end
 
 function List:Selected()
 	return self.selected
+end
+
+-- Press one of the marks on the row with this id, and answer whether there was
+-- one to press.
+--
+-- Public for the reason UI/Window.lua's own named frames are: a mark that is
+-- drawn and wired to nothing is a control that fails silently, and the
+-- alternative is a test reaching into this widget's pool and calling the
+-- caller's own closure, which asserts the caller and not the column.
+function List:Act(id, at)
+	for index = 1, #self.pool do
+		local button = self.pool[index]
+		if button.id ~= nil and button.id == id and button.actions then
+			local mark = button.actions[at]
+			local press = mark and mark:IsShown() and mark:GetScript("OnClick")
+			if press then
+				press(mark)
+				return true
+			end
+		end
+	end
+	return false
 end
 
 -- One row's count, without rebuilding the column.

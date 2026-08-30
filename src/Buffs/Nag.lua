@@ -323,20 +323,6 @@ end
 -- rather than a second heading nobody sees.
 --------------------------------------------------------------------------
 
--- The line that names the switch, which is the whole reason a tooltip on a nag
--- square knows anything about settings.
-local function Silencer(entry)
-	if entry == racial then
-		return "Silence it with /wk buffs racial off, or from the panel."
-	end
-	if entry.word then
-		return ("Silence it with /wk buffs %s off, or from the panel. That is per"
-			.. " character."):format(entry.word)
-	end
-	return ("Take it off the row with /wk buffs remove %d, or from the panel.")
-		:format(entry.spell or 0)
-end
-
 -- What the caption could not hold.
 local function Detail(entry)
 	if entry == racial then
@@ -364,7 +350,6 @@ local function Subject(entry)
 		kind = "note",
 		title = entry.label,
 		lines = { Detail(entry) },
-		hint = Silencer(entry),
 	}
 	if entry.spell then
 		subject.kind = "spell"

@@ -129,7 +129,6 @@ local function Marker(entry)
 		title = entry.name,
 		color = (entry.mark == "in") and IN or C.dim,
 		lines = lines,
-		hint = "A break in the feed rather than something that happened to you.",
 	}
 end
 
@@ -165,8 +164,6 @@ local function Fill(entry)
 		title = entry.name or "?",
 		color = entry.color,
 		lines = lines,
-		hint = "Scroll the feed for what happened before this."
-			.. " /wk feed combat for the rest.",
 	}
 end
 

@@ -444,9 +444,6 @@ function Purse.Ledger()
 		kind = "note",
 		title = "The purse",
 		lines = lines,
-		hint = "A character is written down as you play it, so one you have not"
-			.. " logged into since the addon arrived is missing from the list"
-			.. " rather than counted as nothing.",
 	}
 end
 

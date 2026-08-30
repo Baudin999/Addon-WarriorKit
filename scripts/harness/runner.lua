@@ -82,6 +82,23 @@ ns.Settings.Set(1)
 fire("PLAYER_LOGIN")
 fire("PLAYER_ENTERING_WORLD")
 
+-- The tooltip's linger, run out.
+--
+-- Leaving a hoverable thing starts a countdown rather than taking the box down,
+-- because a box that vanishes on the frame you cross a row is a box you cannot
+-- read. Every section that used to assert "the tooltip is gone after OnLeave"
+-- has to run that countdown down first, and it goes through one helper rather
+-- than a Sweep call per section so that what a section is saying stays "the
+-- pointer left and the box went" rather than a number of seconds.
+--
+-- The whole of the range, so no section carries a number that has to change
+-- when the shipped linger does.
+function H.tipSettle()
+	local _, longest = ns.UI.Tooltip.LingerRange()
+	ns.UI.Tooltip.Sweep(longest + 1)
+	return ns.UI.Tooltip.IsShown()
+end
+
 local failures = 0
 function H.check(ok, message)
 	if not ok then

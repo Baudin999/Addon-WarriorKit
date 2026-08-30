@@ -230,8 +230,6 @@ local function BuildPane(clickable, percent)
 				kind = "note",
 				title = "WarriorKit meters",
 				lines = { "One row per player, as long as their share of the top row." },
-				hint = "Click for the breakdown of what you do."
-					.. " Right click to swap damage and healing.",
 			}
 		end)
 		pane.button = button

@@ -66,17 +66,29 @@ local Log, Where, Chart = ns.QuestLog, ns.QuestWhere, ns.QuestChart
 -- second, because a quest log open on the screen is not a compass.
 --------------------------------------------------------------------------
 
-local WIDTH, HEIGHT = 780, 520
+local WIDTH, HEIGHT = 810, 520
 
 -- The two fixed columns. The middle takes whatever is left, which is the way
 -- round it has to be: a zone name and an item name have a length the font
 -- decides, and prose does not.
-local LIST, PAY = 220, 200
+--
+-- The list is thirty pixels wider than it was and the window is thirty wider
+-- with it, so the middle column comes out at the width it always had. That is
+-- what the three things on the right of a row cost: the number of party members
+-- on the quest, the share mark and the abandon mark. Taking it out of the
+-- middle instead would have paid for them with the map.
+local LIST, PAY = 250, 200
 
 -- One reward's picture, and the mark down the left of an objective line. Both
 -- are the width their column reserves before the words start, so the ticks line
 -- up down one edge and the icons down the other.
 local SLOT, MARK = 22, 10
+
+-- The tick, in the one place both columns read it from. It is a `V` because
+-- that is the letter Media/Glyphs.ttf cuts the Font Awesome check onto, and a
+-- `V` is what a client that refuses the font draws instead. Nothing here has to
+-- know either of those things beyond this line.
+local TICK = "V"
 
 local window, list
 local page, pay
@@ -99,12 +111,6 @@ local zoneAt = 1
 -- quest on these clients has anything in, and a strip that wrapped onto a third
 -- line would take the map's own height to say where the map could be.
 local ZONES = 6
-
--- Whether the abandon button has been pressed once. Cleared by anything that
--- changes which quest is showing, because the second press has to be about the
--- quest the first press was about. The mail window arms its send the same way
--- and for the same reason.
-local armed = false
 
 -- Whether Paint is the thing that moved the selection.
 --
@@ -137,7 +143,12 @@ local function Cell(column, index)
 	row.icon:SetPoint("TOPLEFT")
 	row.icon:Hide()
 
-	row.mark = UI.Label(row, M.small, C.quiet, "LEFT", UI.FLAT)
+	-- The glyph face rather than Arial Narrow, because the mark against a
+	-- finished objective is a tick and there is no tick in a text font. The
+	-- letters both sides of that pass through unchanged: `-` is a minus in
+	-- either face, and a client that will not take the font file draws a `V`
+	-- where the tick was.
+	row.mark = UI.Glyph(row, M.glyph, C.quiet, "LEFT")
 	row.mark:SetPoint("TOPLEFT")
 	row.mark:SetWidth(MARK)
 	UI.Wrap(row.mark, false)
@@ -277,23 +288,42 @@ end
 -- you have selected drops its own tint for the heading colour, so the one quest
 -- you were reading was the one quest that could not tell you at all.
 --
--- The mark is the same "+" the objective ticks use and the same width on every
--- row, finished or not, so the levels stay in a column.
+-- The mark is the same tick the objective lines use and the same width on every
+-- row, finished or not, so the levels stay in a column. It was a "+" until the
+-- glyph face learned a tick, and a plus is the mark for adding a thing rather
+-- than for having finished one.
 local function Mark(quest)
 	if quest.complete then
-		return "+"
+		return TICK
 	end
 	if quest.failed then
 		return "!"
 	end
-	return " "
+	return ""
+end
+
+-- What that mark is drawn in, whatever colour the words beside it take.
+--
+-- The row's own colour is thrown away for the row you have selected, so a log
+-- that said "finished" in the row colour alone said it least about the quest
+-- you were reading. The mark keeps its colour through the selection, which is
+-- the whole reason it is a region of its own rather than two characters on the
+-- front of the label.
+local function MarkTint(quest)
+	if quest.complete then
+		return C.tick
+	end
+	if quest.failed then
+		return C.loss
+	end
+	return C.quiet
 end
 
 -- One row's words. The level first, because a column grouped by zone is still
 -- read down the level: what you can do now and what you came back for later is
 -- the first cut anybody makes over a quest log.
 local function Label(quest)
-	return ("%s [%d] %s"):format(Mark(quest), quest.level, quest.title)
+	return ("[%d] %s"):format(quest.level, quest.title)
 end
 
 -- The colour a row is drawn in. Green for a quest you can hand in, red for one
@@ -324,15 +354,45 @@ function Window.Rows()
 		if #zone.quests > 0 then
 			rows[#rows + 1] = { header = zone.name }
 			for _, quest in ipairs(zone.quests) do
+				local company = #(quest.party or {})
 				rows[#rows + 1] = {
 					id = quest.key,
 					label = Label(quest),
 					color = Tint(quest),
+					mark = Mark(quest),
+					markColor = MarkTint(quest),
+					-- How many of the people you are playing with are on this
+					-- one. Absent rather than nought, because nobody having it
+					-- and nothing being able to say are drawn the same and only
+					-- one of them is a fact. Quests/Party.lua carries that.
+					note = company > 0 and tostring(company) or nil,
 				}
 			end
 		end
 	end
 	return rows
+end
+
+-- What one row's hover says, or nothing at all.
+--
+-- The number on the row is how many of the people you are playing with are on
+-- this quest, and a number on its own is a fact you cannot act on. The names
+-- are what you act on: you ask that person whether they want to do it now.
+--
+-- Nil where nobody has it, so no box opens rather than one opening empty. That
+-- is also the answer on a client and an install that cannot tell, which is
+-- correct: a hover that said "nobody" would be inventing the reading.
+local function Company(row)
+	local quest = Log.Quest(row.id)
+	local names = quest and quest.party or nil
+	if not names or #names == 0 then
+		return nil
+	end
+	local lines = {}
+	for at = 1, #names do
+		lines[at] = { names[at] }
+	end
+	return { kind = "note", title = quest.title, lines = lines }
 end
 
 --------------------------------------------------------------------------
@@ -376,7 +436,7 @@ local function Ticks(detail)
 			lines[#lines + 1] = {
 				text = line.text,
 				color = line.done and C.dim or C.text,
-				mark = line.done and "+" or "-",
+				mark = line.done and TICK or "-",
 				markColor = line.done and C.tick or C.quiet,
 			}
 		end
@@ -702,7 +762,6 @@ local function Select(key)
 		return
 	end
 	showing = key
-	armed = false
 	-- The zone, but not the tab. Zone three of the last quest is nothing at all
 	-- on this one; the side of the tab you are on is a preference and survives.
 	zoneAt = 1
@@ -814,9 +873,36 @@ function Window.Build()
 		height = HEIGHT,
 	})
 
+	-- The marks on a row are the two things you do to one quest without wanting
+	-- to read it first. Handing it to the party is the whole of why a group
+	-- quest is in your log at all, and throwing one away is the thing you do to
+	-- the four grey ones you will never go back for, neither of which is worth
+	-- selecting the quest and crossing the window to the footer.
+	--
+	-- The share mark is drawn only on the rows the client would take it on. The
+	-- cross is drawn on every row, because every quest can be abandoned and the
+	-- confirmation is what stands between the mark and the loss.
 	list = UI.List(window.content, {
 		name = "WarriorKitQuestList",
 		onSelect = Select,
+		marks = true,
+		describe = Company,
+		actions = {
+			{
+				glyph = "s",
+				tip = "hand this quest to your party",
+				shown = function(key)
+					local quest = Log.Quest(key)
+					return quest ~= nil and quest.shareable
+				end,
+				onClick = function(key) Window.Share(key) end,
+			},
+			{
+				glyph = "x",
+				tip = "abandon this quest",
+				onClick = function(key) Window.Abandon(key) end,
+			},
+		},
 	})
 	list.frame:SetPoint("TOPLEFT", M.pad, -M.pad)
 
@@ -863,8 +949,6 @@ function Window.PaintFooter(detail)
 	window.share:EnableMouse(shareable)
 	window.share:SetAlpha(shareable and 1 or 0.4)
 
-	window.abandon.text:SetText(armed and "abandon it" or "abandon")
-	UI.Tint(window.abandon.bg, armed and C.danger or C.control)
 	window.abandon:EnableMouse(quest ~= nil)
 	window.abandon:SetAlpha(quest and 1 or 0.4)
 end
@@ -886,7 +970,6 @@ function Window.Paint()
 	-- beside a full left one reads as a broken window.
 	if not Log.Quest(showing) then
 		showing = Log.First()
-		armed = false
 	end
 	list:Select(showing)
 
@@ -941,44 +1024,57 @@ function Window.Track()
 	return true
 end
 
-function Window.Share()
-	if not showing then
+-- Both of these take a quest and fall back to the one you are reading, because
+-- there are two ways to ask for either: the mark on the row, which names the
+-- quest it is on, and the button in the footer, which is about whatever is
+-- open in the middle column.
+function Window.Share(key)
+	key = key or showing
+	if not key then
 		return false
 	end
-	local shared = Log.Share(showing)
+	local shared = Log.Share(key)
 	if not shared then
 		ns.Print("this client would not share that quest.")
 	end
 	return shared
 end
 
--- Two presses, and the first one says out loud what the second would do.
+-- Puts the question up, and answers whether there was one to ask rather than
+-- whether the quest went.
 --
--- The name comes from the client's own armed state rather than from the row
--- this window thinks is selected, which is the whole point: if the two ever
--- disagree, the message is what tells you before the quest is gone rather than
--- after.
-function Window.Abandon()
-	if not showing then
-		return false
-	end
-	if not armed then
-		local name = Log.Abandoning(showing)
-		if not name then
-			ns.Print("this client would not offer that quest up.")
-			return false
-		end
-		armed = true
-		ns.Print(("press again to abandon %s."):format(name))
-		Window.PaintFooter(Log.Detail(showing))
+-- The name in the question comes from the client's own armed state rather than
+-- from the row this window thinks is selected, which is the whole point: if the
+-- two ever disagree, the sentence in front of you is what says so before the
+-- quest is gone rather than after.
+--
+-- This used to arm the footer button and abandon on the second press, with a
+-- line in the chat window between the two. UI/Ask.lua's header carries why that
+-- is not enough. The short of it is that the warning was in a window you may
+-- not have been looking at, and the armed state was a button whose label had
+-- changed by one word.
+function Window.Abandon(key)
+	key = key or showing
+	local name = key and Log.Abandoning(key)
+	if not name then
+		ns.Print("this client would not offer that quest up.")
 		return false
 	end
 
-	armed = false
-	local gone = Log.Abandon(showing)
-	showing = nil
-	Window.Paint()
-	return gone
+	UI.Ask({
+		title = "Abandon a quest",
+		question = ("Abandon %s? Everything you have done towards it goes with it.")
+			:format(name),
+		accept = "abandon it",
+		onAccept = function()
+			Log.Abandon(key)
+			if key == showing then
+				showing = nil
+			end
+			Window.Paint()
+		end,
+	})
+	return true
 end
 
 --------------------------------------------------------------------------
@@ -1029,6 +1125,18 @@ function Window.Tab(index)
 		tabs:Select(index)
 	end
 	return facing
+end
+
+-- Press one of the marks on a quest's own row, and answer whether there was one
+-- to press.
+--
+-- Same argument as the tab and the zone below: driving the column by reaching
+-- into the list's own pool is a test asserting the widget library rather than
+-- this window. There is a second reason here. The share mark is drawn only on
+-- the rows the client would take it on, so "is it there" is half of what the
+-- mark is, and a test that called this file's own closure would never ask.
+function Window.Press(key, at)
+	return list ~= nil and list:Act(key, at)
 end
 
 -- Which of the quest's zones the map is on, and a way to step to another. Same
@@ -1109,7 +1217,12 @@ events:SetScript("OnEvent", function(_, event)
 		-- first opens, and that is the difference between this part and the mail
 		-- window. Blizzard's log has to be gone before anything can put it on
 		-- the screen, and L has to open this one before the first press.
+		--
+		-- Questie's tracker goes on here for a third reason: the function it
+		-- swaps belongs to another addon, and at load there is no promise that
+		-- addon has loaded yet.
 		ns.QuestBlizzard.Apply()
+		ns.QuestTracker.Apply()
 		return
 	end
 	Window.Refresh()

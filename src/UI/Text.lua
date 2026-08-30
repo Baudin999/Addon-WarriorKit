@@ -48,6 +48,20 @@ local PATH = "Fonts\\ARIALN.TTF"
 -- letter. Two words, kept apart.
 local GLYPHS = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Glyphs.ttf"
 
+-- Every letter that face has a mark on, in one string.
+--
+-- The cmap of the subset is rewritten to exactly these letters, so a glyph
+-- string given any other letter draws nothing at all: no error, no fallback, an
+-- empty rectangle where a mark should be. That is the failure this exists to
+-- gate. scripts/check.sh reads this string and the PICK table in
+-- scripts/bake-glyphs.sh and fails if they disagree, so a letter added to the
+-- addon without rebaking the font, or baked and never written down here, is
+-- caught before it ships rather than seen in a screenshot.
+--
+-- Sorted, because the two lists are compared as text and an order nobody
+-- maintains is a diff nobody can read.
+UI.GLYPHS = "!$*+->Vmsvx"
+
 -- Three roles, and every string in the addon is exactly one of them. This is
 -- the whole font policy and it is here rather than argued again at each site.
 --

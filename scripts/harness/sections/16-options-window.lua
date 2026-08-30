@@ -429,9 +429,14 @@ if window then
 	-- one button and two readings and takes it to 21,331 across sixty-three,
 	-- which is the most any one section on the Settings page has cost and is
 	-- the right price for the one control that throws every setting away.
-	-- 21,500 is that measurement plus a hint's worth of room again.
-	check(prose < 21500,
-		("the window holds %d characters of prose and the budget is 21,500"):format(prose))
+	-- 21,500 is that measurement plus a hint's worth of room again. The hover
+	-- section grew by two controls, a linger slider and a text size, and their
+	-- two hints take it to 21,617 across sixty-three: no new page, but a section
+	-- that went from one switch to three controls and now has to say what each
+	-- of them costs. 21,800 is that measurement plus a hint's worth of room
+	-- again.
+	check(prose < 21800,
+		("the window holds %d characters of prose and the budget is 21,800"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

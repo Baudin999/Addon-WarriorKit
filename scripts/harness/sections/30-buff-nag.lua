@@ -270,8 +270,15 @@ check(not says("bare weapon"),
 -- What a square says to the mouse
 --
 -- The caption is two words and the tooltip is where the rest goes: what the
--- square is about, and the name of the switch that silences it, so somebody
--- tired of one square can turn it off from the square.
+-- square is about, over the client's own words about the thing it is about.
+--
+-- It used to carry a third line naming the switch that silences the square.
+-- That line is gone from every box in the addon, and this is one of the two
+-- places worth saying why rather than only deleting the check: the sentence was
+-- written for exactly this square, on the argument that somebody tired of a nag
+-- should be able to turn it off from the nag. What made it wrong was that the
+-- argument generalised, twenty five call sites took it, and the result was the
+-- same blue footnote under every hover in the addon.
 ----------------------------------------------------------------------
 
 local hoverText, hoverOwner = hover(1)
@@ -280,8 +287,8 @@ check(hoverText:find("bare off hand", 1, true) ~= nil,
 	"the tooltip does not name the square it is on: " .. hoverText)
 check(hoverText:find("shield", 1, true) ~= nil,
 	"the tooltip does not carry what the caption could not: " .. hoverText)
-check(hoverText:find("/wk buffs offhand off", 1, true) ~= nil,
-	"the tooltip does not name the switch that silences the square: " .. hoverText)
+check(hoverText:find("/wk", 1, true) == nil,
+	"the box still carries the blue line naming a switch: " .. hoverText)
 
 -- The client's own words above them, which is what used to be missing and is
 -- the whole difference between this box and every other one in the addon.
@@ -304,15 +311,16 @@ check(hoverText:find("Sword", 1, true) ~= nil,
 	"the client's lines came back with only the first of them: " .. hoverText)
 check(hoverText:find("shield", 1, true) ~= nil,
 	"the client's words pushed out what this file had to say: " .. hoverText)
-check(hoverText:find("/wk buffs offhand off", 1, true) ~= nil,
-	"the client's words pushed out the switch: " .. hoverText)
+check(hoverText:find("/wk", 1, true) == nil,
+	"the client's words came with the blue switch line behind them: " .. hoverText)
 H.tooltips.inventory[H.tooltipKey("player", ns.Gear.OFFHAND)] = nil
 
 local leave = Nag.Icon(1):GetScript("OnLeave")
 if leave then
 	leave(Nag.Icon(1))
 end
-check(owned == nil, "the tooltip stays up after the cursor has left the square")
+check(H.tipSettle() == false and owned == nil,
+	"the tooltip stays up after the cursor has left the square")
 
 -- Mouse only while the row is locked and drawn. A hidden square that still
 -- took the mouse would be an invisible trap over the middle of the screen,
@@ -416,10 +424,10 @@ check(Nag.Caption() == "press Blood Fury",
 check(not says("bare weapon"),
 	"a missing stone shouted in combat, where you cannot do anything about it")
 
--- The racial square's own tooltip. It says which racial, how long it has
--- been sitting there, and how to switch the half off. The elapsed figure is
--- this row's own record: a spell that is ready reports a duration of zero
--- and no end time, so nothing in the client can answer it.
+-- The racial square's own tooltip. It says which racial and how long it has
+-- been sitting there. The elapsed figure is this row's own record: a spell that
+-- is ready reports a duration of zero and no end time, so nothing in the client
+-- can answer it.
 advance(12)
 local racialText = hover(1)
 check(racialText:find("Blood Fury", 1, true) ~= nil,
@@ -430,7 +438,7 @@ check(racialText:find("Instant", 1, true) == nil,
 -- And with the id asked about, which is the shape a racial and an added flask
 -- both have and the shape there is no aura index for. The head is the client's
 -- description of the spell, the same as an action square's, and the elapsed
--- figure and the switch are still underneath.
+-- figure is still underneath.
 H.tooltips.spell[20572] = {
 	{ "Blood Fury" },
 	{ "Instant", "cast" },
@@ -441,8 +449,8 @@ check(racialText:find("Increases attack power", 1, true) ~= nil,
 	"the racial square never asks the client what the racial does: " .. racialText)
 check(racialText:find("12 seconds", 1, true) ~= nil,
 	"the racial tooltip does not say how long it has been ready: " .. racialText)
-check(racialText:find("/wk buffs racial off", 1, true) ~= nil,
-	"the racial tooltip does not name the switch: " .. racialText)
+check(racialText:find("/wk", 1, true) == nil,
+	"the racial box still carries the blue line naming a switch: " .. racialText)
 H.tooltips.spell[20572] = nil
 
 -- Pressed. The cooldown is the only thing that says so and it is what takes

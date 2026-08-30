@@ -68,9 +68,13 @@ local function Tooltip(w)
 	w:SetScript("OnEnter", function(self)
 		local slot = self:GetAttribute("action")
 		if not slot or not ns.Slot.Texture(slot) then
-			-- Closed rather than left alone. Without this the last square's
-			-- text stays on screen pointing at one with nothing in it.
-			ns.Tip.Close()
+			-- Closed rather than left alone, and closed on the spot rather than
+			-- left to linger. Without the first the last square's text stays on
+			-- screen pointing at one with nothing in it; without the second it
+			-- does the same for a second, which is long enough to read and be
+			-- wrong about. Entering a thing always replaces the box, and a
+			-- thing with nothing to say replaces it with none.
+			ns.Tip.Close(true)
 			return
 		end
 		ns.Tip.Open(self, { kind = "action", slot = slot })

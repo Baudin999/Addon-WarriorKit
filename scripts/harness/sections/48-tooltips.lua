@@ -5,11 +5,19 @@
 -- round and it is why the schema is asserted there rather than here. What none
 -- of them can see is the part itself.
 --
---   The bands. A tooltip is a head, a body, what everything else in the addon
---   has to say, and a hint, always in that order, with air between two bands
---   that both have something in them and nowhere else. Every caller used to
---   decide that for itself and no two agreed, which is a defect visible only
---   with two boxes on screen one after the other and invisible in every file.
+--   The bands. A tooltip is a head, a body and what everything else in the
+--   addon has to say, always in that order, with air between two bands that
+--   both have something in them and nowhere else. Every caller used to decide
+--   that for itself and no two agreed, which is a defect visible only with two
+--   boxes on screen one after the other and invisible in every file.
+--
+--   There is no fourth band and there is a check that says so. `hint` was one
+--   blue line at the bottom of every box naming the switch that silences the
+--   thing, and by twenty five call sites it was furniture. A caller that still
+--   passes one gets nothing drawn for it, which is what the check asserts:
+--   dropping the band without dropping the field would have left a quiet
+--   difference between the call sites that had been cleaned up and the ones
+--   that had not.
 --
 --   The hook. A part registers a source once at load and its line lands on
 --   every tooltip about that kind of thing, wherever in the addon the thing was
@@ -54,9 +62,9 @@ do
 	})
 
 	local said = drawn()
-	check(Box.IsShown(), "a subject with a title, two facts and a hint opened nothing")
+	check(Box.IsShown(), "a subject with a title and two facts opened nothing")
 	check(Box.Owner() == owner, "the tooltip is not anchored to the thing it describes")
-	check(#said == 5, ("five lines were described and %d were drawn"):format(#said))
+	check(#said == 3, ("three lines were described and %d were drawn"):format(#said))
 	check(said[1] == "A title", "the title is not the first line: " .. tostring(said[1]))
 
 	-- The one shape the loot feed and the cooldown row disagreed about. The
@@ -66,17 +74,15 @@ do
 		"there is air between the title and the body, and the hairline is already there: "
 			.. tostring(said[2]))
 	check(said[3] == "Label", "the paired line did not follow the plain one: " .. tostring(said[3]))
-	check(said[4] == "", "the hint is not spaced off the body it follows")
-	check(said[5] == "Press it.", "the hint is not the last line: " .. tostring(said[5]))
 
-	-- A caller with nothing in one band gets no air where that band would be.
-	-- A title and a hint and nothing between them is two lines: the air belongs
-	-- between the bands under the head, and the head has its hairline.
+	-- And the band that is gone. The subject above carried a hint and the box
+	-- drew three lines, so nothing was written for it and no air was left where
+	-- it used to sit.
 	Tip.Open(owner, { kind = "note", title = "Alone", hint = "Type it." })
 	said = drawn()
-	check(#said == 2, ("a title and a hint drew %d lines rather than two"):format(#said))
-	check(said[2] == "Type it.",
-		"a band with nothing in it left its air behind: " .. tostring(said[2]))
+	check(#said == 1, ("a title and a hint drew %d lines rather than one"):format(#said))
+	check(said[1] == "Alone",
+		"the hint band is gone and something was still drawn for it: " .. tostring(said[1]))
 
 	------------------------------------------------------------------
 	-- Nothing to say draws nothing
@@ -121,16 +127,14 @@ do
 		kind = "note",
 		title = "A title",
 		lines = { { "A fact" } },
-		hint = "Press it.",
 		probe = "here",
 	})
 	said = drawn()
-	check(#said == 6, ("the source's line did not land: %d lines"):format(#said))
+	check(#said == 4, ("the source's line did not land: %d lines"):format(#said))
 	check(said[2] == "A fact" and said[4] == "Probe",
 		"a source wrote into the body rather than after it: " .. table.concat(said, " / "))
-	check(said[3] == "" and said[5] == "",
-		"the source's band is not spaced off the two it sits between")
-	check(said[6] == "Press it.", "a source displaced the hint from the end")
+	check(said[3] == "",
+		"the source's band is not spaced off the body above it")
 
 	-- A source that answers nothing costs nothing. The same subject without
 	-- the field the probe reads draws exactly what it drew before the source
@@ -201,7 +205,8 @@ do
 		return ns.Measure(region, method) * region:GetEffectiveScale()
 	end
 
-	check(Box.Docked(), "the box does not dock out of the box, and that is where the game puts one")
+	check(Box.Place() == Box.DOCK,
+		"the box does not dock out of the box, and that is where the game puts one")
 
 	local screen = _G.UIParent
 	screen:SetSize(2560, 1440)
@@ -219,15 +224,17 @@ do
 	-- The owner is at the centre of the screen, so a box beside it is nowhere
 	-- near the corner. Both claims are made about the same hover, because what
 	-- the switch changes is where one box goes and nothing else.
-	check(Box.SetDocked(false), "turning the dock off reported that nothing moved")
+	check(Box.SetPlace(Box.BESIDE), "turning the dock off reported that nothing moved")
 	Tip.Open(owner, { kind = "note", title = "Beside it", lines = { { "A fact" } } })
 	check(pixels(box, "GetLeft") >= pixels(owner, "GetRight"),
 		"undocked, the box did not open beside the thing it describes")
 	check(pixels(screen, "GetRight") - pixels(box, "GetRight") > 13 * scale + 1,
 		"undocked, the box still landed in the corner")
 
-	check(Box.SetDocked(true), "turning the dock back on reported that nothing moved")
-	check(Box.SetDocked(true) == false, "docking a box that is already docked moved it anyway")
+	check(Box.SetPlace(Box.DOCK), "turning the dock back on reported that nothing moved")
+	check(Box.SetPlace(Box.DOCK) == false, "docking a box that is already docked moved it anyway")
+	check(Box.SetPlace("gibberish") == false and Box.Place() == Box.DOCK,
+		"a word the box does not know moved it somewhere rather than leaving it in the corner")
 	check(math.abs((pixels(screen, "GetRight") - pixels(box, "GetRight")) - 13 * scale) < 1,
 		"a box that was up when the switch flipped stayed where it was")
 
@@ -312,8 +319,164 @@ do
 	H.tooltips.spell[20572] = nil
 
 	H.tooltips.item[link] = nil
-	Box.Close()
+	Box.Close(true)
+
+	------------------------------------------------------------------
+	-- How long it stays
+	--
+	-- Leaving a thing starts a countdown; it does not take the box down. Every
+	-- hoverable thing in this addon is small and most of them sit in a column,
+	-- so the pointer crosses two on the way to the one you meant and a box that
+	-- closed on each of them is a box you never finish reading.
+	--
+	-- Three claims and the third is the one that makes the first two safe:
+	-- hovering anything else replaces the box on the spot, whatever is left of
+	-- the clock. A linger that made the next hover wait would be worse than no
+	-- linger at all.
+	------------------------------------------------------------------
+
+	check(Box.Linger() == 1,
+		("the shipped linger is %s seconds and the addon ships one"):format(tostring(Box.Linger())))
+
+	Tip.Open(owner, { kind = "note", title = "Staying", lines = { { "A fact" } } })
+	Tip.Close()
+	check(Box.IsShown(), "the box went the instant the pointer left")
+	check(Box.Text(1) == "Staying", "the lingering box is not the one that was up")
+	check(Box.Owner() == nil,
+		"the box still claims an owner it is no longer anchored to anything by")
+
+	-- Half the clock is not the clock.
+	Box.Sweep(0.5)
+	check(Box.IsShown(), "half a second in, the box had already gone")
+	Box.Sweep(0.6)
+	check(not Box.IsShown(), "the countdown ran out and the box stayed up")
+
+	-- Replaced at once, with most of a second still on the clock.
+	Tip.Open(owner, { kind = "note", title = "First", lines = { { "A fact" } } })
+	Tip.Close()
+	Box.Sweep(0.1)
+	Tip.Open(owner, { kind = "note", title = "Second", lines = { { "A fact" } } })
+	check(Box.Text(1) == "Second",
+		"a second hover did not replace the box that was counting down: "
+			.. tostring(Box.Text(1)))
+	check(Box.Lingering() == 0, "the new box is counting down on the old box's clock")
+	Box.Sweep(2)
+	check(Box.IsShown(), "the box the pointer is still on was taken down by the last clock")
+
+	-- And a hover that describes nothing takes a lingering box with it, rather
+	-- than leaving the last one on screen for another second pointing at
+	-- something it is not about.
+	Tip.Close()
+	check(Box.IsShown(), "the scene is not set: nothing is lingering")
+	check(Tip.Open(owner, nil) == false, "a hover handed nothing still opened")
+	check(not Box.IsShown(), "a hover with nothing to say left the last box lingering")
+
+	-- Zero is a real answer, and it is the client's own behaviour.
+	check(Box.SetLinger(0), "turning the linger off reported that nothing moved")
+	Tip.Open(owner, { kind = "note", title = "Gone", lines = { { "A fact" } } })
+	Tip.Close()
+	check(not Box.IsShown(), "with the linger at zero the box still held")
+
+	-- Clamped rather than refused, because the number arrives from an account
+	-- file somebody may have edited.
+	local lingerLow, lingerHigh = Box.LingerRange()
+	Box.SetLinger(9999)
+	check(Box.Linger() == lingerHigh,
+		("a linger past the ceiling landed on %s"):format(tostring(Box.Linger())))
+	Box.SetLinger(-5)
+	check(Box.Linger() == lingerLow,
+		("a linger under the floor landed on %s"):format(tostring(Box.Linger())))
+	Box.SetLinger(1)
+
+	------------------------------------------------------------------
+	-- How big it reads
+	--
+	-- One number, and the title takes it plus the pixel that separates the two,
+	-- so the pair stays a pair at every setting. Read off the font strings the
+	-- client ended up with rather than off the setting, because a size SetFont
+	-- refused would come back nil and draw an empty box, which is a defect this
+	-- addon has shipped once already.
+	------------------------------------------------------------------
+
+	local M = ns.UI.Metric
+	check(Box.Font() == M.font,
+		("the shipped tooltip body is %s and the addon's body is %d")
+			:format(tostring(Box.Font()), M.font))
+
+	Tip.Open(owner, { kind = "note", title = "Sized", lines = { { "A fact" } } })
+	check(Box.Size(1) == M.heading and Box.Size(2) == M.font,
+		("the shipped box drew %s over %s")
+			:format(tostring(Box.Size(1)), tostring(Box.Size(2))))
+
+	check(Box.SetFont(16), "moving the text size reported that nothing moved")
+	check(Box.SetFont(16) == false, "setting the size it already had moved it anyway")
+	Tip.Open(owner, { kind = "note", title = "Sized", lines = { { "A fact" } } })
+	check(Box.Size(2) == 16,
+		("the body was asked for 16 and drew %s"):format(tostring(Box.Size(2))))
+	check(Box.Size(1) == 16 + (M.heading - M.font),
+		("the title did not move with the body: %s"):format(tostring(Box.Size(1))))
+
+	local fontLow, fontHigh = Box.FontRange()
+	Box.SetFont(999)
+	check(Box.Font() == fontHigh,
+		("a size past the ceiling landed on %s"):format(tostring(Box.Font())))
+	Box.SetFont(1)
+	check(Box.Font() == fontLow,
+		("a size under the floor landed on %s"):format(tostring(Box.Font())))
+	Box.SetFont(M.font)
+
+	------------------------------------------------------------------
+	-- The marker
+	--
+	-- The third placement, and the only one that can put the box where you
+	-- actually look. Which corner of the box lands on the marker is read off
+	-- which quarter of the screen the marker is in, so the box always grows away
+	-- from the nearest edge: a single fixed corner would be a marker you cannot
+	-- use in three quarters of the screen.
+	--
+	-- The screen is given a size for the length of the claim and handed back,
+	-- the same way the dock section above does it.
+	------------------------------------------------------------------
+
+	local anchor = ns.Settings.AnchorFrame()
+	check(anchor ~= nil, "the addon builds no marker for the box to hang off")
+
+	screen:SetSize(2560, 1440)
+	Box.SetPlace(Box.ANCHOR)
+
+	anchor:ClearAllPoints()
+	anchor:SetPoint("BOTTOMLEFT", screen, "BOTTOMLEFT", 100, 100)
+	Tip.Open(owner, { kind = "note", title = "On the marker", lines = { { "A fact" } } })
+	check(math.abs(pixels(box, "GetLeft") - pixels(anchor, "GetLeft")) < 1,
+		"the box did not take the marker's left edge in the bottom left of the screen")
+	check(math.abs(pixels(box, "GetBottom") - pixels(anchor, "GetBottom")) < 1,
+		"the box did not grow up from a marker sitting near the bottom edge")
+
+	anchor:ClearAllPoints()
+	anchor:SetPoint("BOTTOMLEFT", screen, "BOTTOMLEFT", 2400, 1300)
+	Tip.Open(owner, { kind = "note", title = "On the marker", lines = { { "A fact" } } })
+	check(math.abs(pixels(box, "GetRight") - pixels(anchor, "GetRight")) < 1,
+		"the box did not take the marker's right edge in the top right of the screen")
+	check(math.abs(pixels(box, "GetTop") - pixels(anchor, "GetTop")) < 1,
+		"the box did not grow down from a marker sitting near the top edge")
+
+	-- A placement with nothing to place against falls back to the corner rather
+	-- than to nowhere, which is the state a client that refused the frame would
+	-- leave the addon in.
+	Box.SetAnchor(nil)
+	Tip.Open(owner, { kind = "note", title = "No marker", lines = { { "A fact" } } })
+	check(math.abs((pixels(screen, "GetRight") - pixels(box, "GetRight")) - 13 * scale) < 1,
+		"the anchor placement with no marker did not fall back to the corner")
+
+	Box.SetAnchor(anchor)
+	Box.SetPlace(Box.DOCK)
+	ns.Settings.ApplyAnchor()
+	screen:SetSize(0, 0)
+	Box.Close(true)
 
 	print(("tips   %d bands, %d sources hooked in, %s")
 		:format(3, #Tip.Sources(), ns.UI.Scan.Describe()))
+	print(("tips   %s after you look away, body %d px and title %d px, %s")
+		:format(ns.Settings.LingerLabel(Box.Linger()), Box.Font(),
+			Box.Font() + (M.heading - M.font), ns.Settings.DescribePlace()))
 end

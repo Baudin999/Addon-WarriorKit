@@ -341,8 +341,6 @@ local function Fill(entry)
 		count = entry.count,
 		price = entry.price,
 		lines = lines,
-		hint = "Scroll the feed for what dropped before this."
-			.. " /wk feed loot for the rest.",
 	}
 end
 

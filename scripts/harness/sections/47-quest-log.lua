@@ -28,6 +28,7 @@
 
 local H = ...
 local ns, check, quests = H.ns, H.check, H.quests
+local group, fire = H.group, H.fire
 
 local Log, Client, Window = ns.QuestLog, ns.QuestClient, ns.QuestWindow
 
@@ -150,7 +151,7 @@ for _, row in ipairs(drawn) do
 end
 check(headers == 3 and entries == 5,
 	("the column drew %d headers over %d quests"):format(headers, entries))
-check(drawn[1].header == "Elwynn Forest" and drawn[2].label == "  [20] The Missing Diplomat",
+check(drawn[1].header == "Elwynn Forest" and drawn[2].label == "[20] The Missing Diplomat",
 	"a quest is not drawn under the header that precedes it, or without its level")
 
 -- The two colours the log is actually read for at a glance, and the mark that
@@ -162,16 +163,38 @@ check(drawn[1].header == "Elwynn Forest" and drawn[2].label == "  [20] The Missi
 -- The tick green and the green the ladder gives a quest you have outlevelled
 -- are two shades apart, and PaintListRow throws the row's own colour away for
 -- the row you have selected, so a log that says "finished" in colour alone says
--- it least about the quest you are reading.
+-- it least about the quest you are reading. The mark keeps its own colour
+-- through the selection, which is why it carries one of its own.
 local complete, failed
 for _, row in ipairs(drawn) do
-	if row.label == "+ [11] Wanted: Hogger" then complete = row end
-	if row.label == "! [18] Red Silk Bandanas" then failed = row end
+	if row.label == "[11] Wanted: Hogger" then complete = row end
+	if row.label == "[18] Red Silk Bandanas" then failed = row end
 end
-check(complete and complete.color == ns.UI.Color.tick,
-	"a quest ready to hand in is not drawn in the tick colour, or carries no + in front of it")
-check(failed and failed.color == ns.UI.Color.loss,
-	"a failed quest is not drawn in the loss colour, or carries no ! in front of it")
+check(complete and complete.color == ns.UI.Color.tick
+	and complete.markColor == ns.UI.Color.tick,
+	"a quest ready to hand in is not drawn in the tick colour")
+check(failed and failed.color == ns.UI.Color.loss
+	and failed.markColor == ns.UI.Color.loss,
+	"a failed quest is not drawn in the loss colour")
+
+-- The mark itself, and the one thing about it nothing else in the addon can
+-- say: it is a letter the glyph face carries a mark on. The cmap of
+-- Media/Glyphs.ttf is rewritten to a handful of letters and every other one
+-- draws an empty rectangle, silently, so a tick cut onto a letter nobody baked
+-- is a quest log with a blank column down its left edge and no error anywhere.
+--
+-- scripts/check.sh holds the alphabet to what the bake script produces. This is
+-- the other half: that the marks the window actually draws are in it.
+check(complete and complete.mark ~= "" and ns.UI.GLYPHS:find(complete.mark, 1, true),
+	("a finished quest is marked %q, which the glyph face has no mark for")
+		:format(complete and complete.mark or ""))
+check(failed and ns.UI.GLYPHS:find(failed.mark, 1, true),
+	("a failed quest is marked %q, which the glyph face has no mark for")
+		:format(failed and failed.mark or ""))
+check(complete and complete.mark ~= "+",
+	"a quest ready to hand in is still marked with the plus that means add")
+check(drawn[2].mark == "",
+	("a quest in progress carries the mark %q"):format(drawn[2].mark or ""))
 check(drawn[2].color ~= ns.UI.Color.tick and drawn[2].color ~= ns.UI.Color.loss,
 	"a quest in progress took one of the two state colours")
 
@@ -237,6 +260,68 @@ check(quests.Stranded() == 0,
 	("%d readings left the shared cursor somewhere else"):format(quests.Stranded()))
 
 ----------------------------------------------------------------------
+-- Who else in the group is on it
+----------------------------------------------------------------------
+
+-- Two sources answer this and neither can answer it alone, so the one thing
+-- worth asserting is the merge.
+--
+-- The client says party1 and party3 are on quest 102. Questie has heard from
+-- Sneaky, Ironhide and you. Sneaky is party1, so he is in both answers and is
+-- one person; Ironhide is in Questie's alone; Lightwell is party3 and is in the
+-- client's alone; and Tusksfirst is you, who are on every quest in your own log
+-- and must never be counted as company.
+--
+-- Three, therefore, and any of four mistakes gives a different number.
+--
+-- Scoped in a do block for the reason the margin check above is: an indented
+-- local is not a name at chunk level, which is the shape scripts/check.sh asks
+-- every section for.
+do
+	group.Set({
+		{ token = "player", you = true, guid = "Player-Tusksfirst",
+			name = "Tusksfirst", class = "WARRIOR" },
+		{ token = "party1", guid = "Player-Sneaky", name = "Sneaky", class = "ROGUE" },
+		{ token = "party2", guid = "Player-Bramblefoot",
+			name = "Bramblefoot", class = "DRUID" },
+		{ token = "party3", guid = "Player-Lightwell",
+			name = "Lightwell", class = "PRIEST" },
+		{ token = "party4", guid = "Player-Ironhide",
+			name = "Ironhide", class = "WARRIOR" },
+	}, false)
+	fire("GROUP_ROSTER_UPDATE")
+	Window.Paint()
+
+	local names = ns.QuestParty.On(102, Client.IndexOf(102))
+	check(#names == 3,
+		("%d in the group came back for a quest two answers name three people on")
+			:format(#names))
+	check(table.concat(names, ", ") == "Ironhide, Lightwell, Sneaky",
+		("the group came back as %s, which is either the wrong people or an order that moves")
+			:format(table.concat(names, ", ")))
+
+	-- The row, which is where a player reads it. A number and not a count of
+	-- rows: the quest nobody else is on draws nothing at all, because nobody
+	-- having it and nothing being able to say are the same picture and only one
+	-- of them would be a fact.
+	local company, alone
+	for _, row in ipairs(Window.Rows()) do
+		if row.label == "[20] The Missing Diplomat" then company = row end
+		if row.label == "[24] Wolves at the Gate" then alone = row end
+	end
+	check(company and company.note == "3",
+		("the row reads %s where three of the group are on it")
+			:format(tostring(company and company.note)))
+	check(alone and alone.note == nil,
+		("a quest nobody else is on carries the note %s")
+			:format(tostring(alone and alone.note)))
+
+	group.Forget()
+	fire("GROUP_ROSTER_UPDATE")
+	Window.Paint()
+end
+
+----------------------------------------------------------------------
 -- Tracking, sharing and abandoning
 ----------------------------------------------------------------------
 
@@ -265,6 +350,109 @@ check(Log.Quest(doomed.key) == nil,
 	"the abandoned quest is still in the log")
 check(select(1, Log.Tally()) == 4,
 	("%d quests are left after abandoning one of five"):format((Log.Tally())))
+
+----------------------------------------------------------------------
+-- The two marks on a row
+----------------------------------------------------------------------
+
+-- Four things about them that reading the window will not settle.
+--
+-- Is the share mark on the rows that can take it and off the ones that cannot.
+-- The client refuses to hand over a quest nobody else could take, so a mark
+-- drawn on every row is a control that fails silently on most of them, and the
+-- failure is invisible until somebody presses one.
+--
+-- Does pressing it reach the client. The mark is wired through the widget to a
+-- closure in the window, and a mark drawn and connected to nothing looks
+-- exactly like a mark that works.
+--
+-- Does the cross ask before it acts, and does no mean no. That is the whole
+-- reason the confirmation exists, and a window that opened and abandoned anyway
+-- would pass every assertion about the window being on screen.
+--
+-- And does yes name the quest whose mark was pressed. The row's mark and the
+-- footer's button are two ways in and only one of them is about the quest you
+-- have open, so the one that is not is the one that can act on the wrong quest.
+do
+	Window.Show()
+	local shareable = Log.Zones()[2].quests[1]
+	local refused = Log.Zones()[1].quests[1]
+	local pushed = #quests.shared
+
+	check(not Window.Press(refused.key, 1),
+		"a quest the client would not hand over carries a share mark anyway")
+	check(Window.Press(shareable.key, 1),
+		"a quest with a suggested group size carries no share mark")
+	check(#quests.shared == pushed + 1,
+		("pressing the share mark pushed %d quests where one was asked for")
+			:format(#quests.shared - pushed))
+
+	-- The cross, twice: once answered no and once answered yes.
+	local going = Log.Zones()[3].quests[1]
+	check(Window.Press(going.key, 2), "a quest row carries no abandon mark")
+	check(ns.UI.Asking() ~= nil, "the cross abandoned the quest without asking")
+	check(ns.UI.Asking():find(going.title, 1, true),
+		("the question is %q, which does not name the quest the mark was on")
+			:format(tostring(ns.UI.Asking())))
+
+	ns.UI.Answer(false)
+	Log.Read()
+	check(ns.UI.Asking() == nil, "the question stayed up after it was answered")
+	check(Log.Quest(going.key) ~= nil,
+		"answering no to the confirmation abandoned the quest anyway")
+
+	Window.Press(going.key, 2)
+	ns.UI.Answer(true)
+	Log.Read()
+	check(Log.Quest(going.key) == nil,
+		"answering yes to the confirmation left the quest in the log")
+	check(quests.abandoned[#quests.abandoned] == going.title,
+		("the client abandoned %s where the mark was on %s")
+			:format(tostring(quests.abandoned[#quests.abandoned]), going.title))
+	check(quests.Stranded() == 0,
+		("%d readings left the shared cursor somewhere else"):format(quests.Stranded()))
+end
+
+----------------------------------------------------------------------
+-- Questie's tracker
+----------------------------------------------------------------------
+
+-- Clicking a quest in Questie's tracker opens the quest log at that quest, and
+-- the log it opened was Blizzard's, which is in the attic. Every route in
+-- Questie goes through one function, so the two things to prove are that the
+-- swap takes it and that the switch hands it back.
+do
+	local utils = _G.QuestieLoader:ImportModule("QuestieTracker").utils
+	local diplomat = Log.Zones()[1].quests[1]
+	local reached = quests.Tracked()
+
+	Window.Showing(Log.Zones()[2].quests[1].key)
+	utils:ShowQuestLog({ Id = 102 })
+	check(Window.Shown(), "a click in the tracker did not open this window")
+	check(Window.Showing() == diplomat.key,
+		("the tracker opened this window on %s rather than on the quest clicked")
+			:format(tostring(Window.Showing())))
+	check(quests.Tracked() == reached,
+		"the click reached Blizzard's quest log as well as this window")
+
+	-- A quest you are not on. Questie tracks what it likes, and a click it
+	-- cannot be answered for has to fall through rather than be swallowed.
+	utils:ShowQuestLog({ Id = 999 })
+	check(quests.Tracked() == reached + 1,
+		"a click on a quest this window cannot show was swallowed")
+
+	ns.db.questsHideBlizz = false
+	ns.QuestBlizzard.Apply()
+	ns.QuestTracker.Apply()
+	utils:ShowQuestLog({ Id = 102 })
+	check(quests.Tracked() == reached + 2,
+		"unticking the switch did not hand Questie's own function back")
+
+	ns.db.questsHideBlizz = true
+	ns.QuestBlizzard.Apply()
+	ns.QuestTracker.Apply()
+	print("quests " .. ns.QuestTracker.Describe() .. "; " .. ns.QuestParty.Describe())
+end
 
 ----------------------------------------------------------------------
 -- Blizzard's own

@@ -202,6 +202,32 @@ while IFS= read -r asset; do
 	fi
 done < <(find Media -type f 2>/dev/null | sort)
 
+# The glyph face and the addon agree on which letters carry a mark.
+#
+# Media/Glyphs.ttf is a subset of Font Awesome with its cmap rewritten to a
+# handful of letters, so a glyph string given any other letter draws nothing at
+# all: no error, no fallback, an empty rectangle. Both halves of that can drift
+# on their own. A letter added to the Lua without rebaking the font draws
+# nothing, and a letter dropped from the bake script's PICK draws nothing on
+# whatever was already using it. Neither says a word at load, at lint, or in the
+# harness, because the font is not read by any of them.
+#
+# So the two lists are compared as text: UI.GLYPHS in UI/Text.lua against the
+# letters PICK maps to in scripts/bake-glyphs.sh. What this cannot check is that
+# every letter the addon actually draws is in the alphabet, because the letter
+# reaches SetText as a string on a font object chosen elsewhere and no grep can
+# follow that. The harness is where that half is asserted.
+baked=$(sed -n 's/^[[:space:]]*0x[0-9A-Fa-f]*: "\(.\)",.*/\1/p' ../scripts/bake-glyphs.sh \
+	| LC_ALL=C sort | tr -d '\n')
+declared=$(sed -n 's/^UI\.GLYPHS = "\(.*\)"$/\1/p' UI/Text.lua)
+if [ -z "$baked" ] || [ -z "$declared" ]; then
+	echo "the glyph alphabet is not declared in both UI/Text.lua and scripts/bake-glyphs.sh"
+	status=1
+elif [ "$baked" != "$declared" ]; then
+	echo "UI.GLYPHS says '$declared' and scripts/bake-glyphs.sh bakes '$baked'"
+	status=1
+fi
+
 # Every write on a ticker path is guarded against the value already on the
 # frame.
 #
@@ -419,6 +445,7 @@ UnitFrames/Blizzard.lua:Blizz.Apply
 Chat/Blizzard.lua:Blizz.Apply
 UnitFrames/Blizzard.lua:MoveKey
 World/World.lua:World.Sweep
+UI/Tooltip.lua:Tooltip.Sweep
 "
 
 hot_scan='
@@ -507,6 +534,31 @@ while IFS= read -r bad; do
 	status=1
 done < <(grep -rn 'GameTooltip' --include='*.lua' . \
 	| grep -v '^\./UI/Scan\.lua:' || true)
+
+# No tooltip carries a blue line naming a switch.
+#
+# UI/Tip.lua used to build a fourth band called `hint`: one quiet blue sentence
+# at the bottom of a box saying what to press, what to type, or which setting
+# turns the thing off. It reached twenty five call sites, which is what killed
+# it. A footnote under every hover in the addon is not a footnote, it is
+# furniture, and on the world hover it sat over the fight for the whole evening.
+#
+# The band is gone from UI/Tip.lua and UI/Tooltip.lua, so a `hint` on a subject
+# today draws nothing at all. That is the reason for the gate rather than an
+# argument against one: a field that is silently ignored is a field somebody
+# writes again, tests by eye, and cannot tell is doing nothing.
+#
+# UI/Widgets.lua is exempt and is a different thing wearing the same word:
+# `ui.Hint` is the sentence under a control in the settings window, it is drawn
+# in that window and not in a tooltip, and it is the place the deleted lines
+# should have been all along. UnitFrames/Blizzard.lua, Buffs/Upkeep.lua and the
+# class files carry `hint` fields on their own tables that feed one of those or
+# feed a body line, so the rule reads assignments at the indentation a table
+# constructor puts them at rather than any mention of the word.
+while IFS= read -r bad; do
+	echo "the tooltip's blue hint line is gone, and a subject may not carry one: $bad"
+	status=1
+done < <(grep -rnE '^[[:space:]]+hint = ' --include='*.lua' . 	| grep -v '^\./UI/Widgets\.lua:' 	| grep -v '^\./UnitFrames/Blizzard\.lua:' 	| grep -v '^\./Buffs/Upkeep\.lua:' 	| grep -v '^\./Class/' || true)
 
 # The drawing layer does not know the name of a setting.
 #
@@ -797,7 +849,7 @@ HARNESS_LINE_LIMIT=800
 
 # path:ceiling:why it is exempt
 HARNESS_LINE_ALLOWED="
-sections/05-action-bars.lua:1052:one subject, five bars; splits at the keys, the paging and the churn
+sections/05-action-bars.lua:1053:one subject, five bars; splits at the keys, the paging and the churn
 "
 
 harness_names='

@@ -6,13 +6,18 @@
 # crops and UI.Icon hands out. Two different things, two words, and this is the
 # first.
 #
-# Nine glyphs, and each is drawn on a letter the addon can stand to fall back
+# Eleven glyphs, and each is drawn on a letter the addon can stand to fall back
 # to. Five were the panel's and were already the letter it drew: the chevrons on
 # `v` and `>`, the close cross on `x`, and the stepper's own `+` and `-`. Three
 # are the loot feed's filter chips, so the letter was a choice: `*` for the gem
 # that grades an item, `!` for the quest mark, and `$` for coin. The ninth is
 # the chat window's voice button on `m`, which is the first letter of the word
 # the button is about and is what a client with no font face draws instead.
+#
+# The last two are the quest log's. `V` is the tick against a quest you can hand
+# in, and it is a capital because lowercase `v` is already the chevron and one
+# letter cannot be two marks. `s` is the share arrow on a quest row, on the
+# first letter of the word for the reason the microphone is.
 #
 # That choice is the whole trick. Nothing in the Lua carries a codepoint escape
 # and nothing has to know it is looking at an icon. A string given the icon font
@@ -67,6 +72,8 @@ PICK = {
     0xF12A: "!",  # exclamation, the quest chip and the ring it turns on
     0xF51E: "$",  # coins, the coin chip
     0xF130: "m",  # microphone, the voice button at the foot of the chat rail
+    0xF00C: "V",  # check, a quest ready to hand in and a finished objective
+    0xF064: "s",  # share, one quest handed to the party from its own row
 }
 
 font = TTFont(src)
@@ -93,7 +100,7 @@ for table in font["cmap"].tables:
 NAMES = {
     1: "WarriorKit Glyphs",
     2: "Regular",
-    3: "WarriorKit Glyphs: eight glyphs of Font Awesome Free Solid",
+    3: "WarriorKit Glyphs: eleven glyphs of Font Awesome Free Solid",
     4: "WarriorKit Glyphs",
     6: "WarriorKitGlyphs-Regular",
     13: "SIL Open Font License 1.1. See Media/Glyphs-LICENSE.txt.",

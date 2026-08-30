@@ -17,13 +17,22 @@ local UI = ns.UI
 -- some left it gold, four of them raised Blizzard's parchment instead. None of
 -- that was a decision anybody made. It was a decision nobody owned.
 --
--- **Four bands, always in this order.**
+-- **Three bands, always in this order.**
 --
 --   head   the name of the thing. The client's own text where the client has
 --          any, the caller's title where it has none.
 --   body   the facts the caller knows and the client does not.
 --   extra  what everything else in the addon has to say about it.
---   hint   one quiet blue line saying what to press or type.
+--
+-- There was a fourth, and cutting it is the point of the shape rather than a
+-- loss to it. `hint` was one blue line at the bottom of every box in the addon
+-- naming the switch that turns the thing off or the slash word that prints the
+-- rest, and by the time twenty five call sites had one it was furniture. A
+-- sentence you have read four hundred times is not read at all, it is a line of
+-- the fight you are covering, and on a box that follows the pointer round the
+-- world it is on screen the whole evening. What a hover is for is the thing
+-- under the cursor. Where the settings are is what the settings window is for,
+-- and `/wk help` prints every word.
 --
 -- Air goes between two bands that both have something in them, and nowhere
 -- else. That single rule is most of what "consistent" means here, and it is
@@ -83,7 +92,7 @@ local KINDS = {
 -- not on this list on purpose: the name of the thing is the caller's and the
 -- client's, and a source that could retitle a tooltip is a source that can make
 -- one hover disagree with the next.
-local BANDS = { "body", "extra", "hint" }
+local BANDS = { "body", "extra" }
 
 local function IsBand(name)
 	for index = 1, #BANDS do
@@ -105,7 +114,7 @@ local taken = {}
 --
 --   name   what it is, for the assert below and for Describe
 --   kind   the subject kind it answers about, or "*" for every kind
---   band   body, extra or hint
+--   band   body or extra
 --   order  where it sits inside that band, low first
 --   fill   handed the subject, answers an array of line specs or nothing
 --
@@ -158,7 +167,7 @@ local function Pour(band, lines)
 	-- An empty table is a source that had nothing to say and said so with a
 	-- constructor rather than a nil. Poured as a spec it would draw a blank
 	-- line, which is the one thing a source is not allowed to do.
-	if lines[1] == nil and lines.hint == nil and lines.blank == nil then
+	if lines[1] == nil and lines.blank == nil then
 		return band
 	end
 	if type(lines[1]) ~= "table" then
@@ -191,25 +200,6 @@ local function Head(subject)
 	return UI.Scan.Read(subject.kind, subject[read[1]], read[2] and subject[read[2]])
 end
 
--- The hint band, which is at most one line however many things want to write
--- one.
---
--- The caller's own hint wins, because the caller is the thing that knows what
--- clicking it does, and a source's hint stands only where the caller wrote
--- none. Two blue lines at the bottom of a box read as a paragraph rather than
--- as an instruction, which is the opposite of what the band is for.
-local function Hint(subject)
-	if type(subject.hint) == "string" and subject.hint ~= "" then
-		return { { hint = subject.hint } }
-	end
-	local band = FromSources(subject, "hint", {})
-	if #band < 1 then
-		return band
-	end
-	local first = band[1]
-	return { { hint = first.hint or first[1] } }
-end
-
 -- The whole tooltip, as the table UI/Tooltip.lua draws.
 --
 -- Nil for a subject with nothing in any band. That is the honest answer to a
@@ -225,7 +215,6 @@ function Tip.Build(subject)
 	local filled = {
 		body = FromSources(subject, "body", Pour({}, subject.lines)),
 		extra = FromSources(subject, "extra", {}),
-		hint = Hint(subject),
 	}
 
 	-- Air between two bands that both have something in them, and nowhere else.
@@ -274,8 +263,10 @@ function Tip.Open(owner, subject, above)
 	return UI.Tooltip.Show(owner, Tip.Build(subject), above or subject.above)
 end
 
-function Tip.Close()
-	return UI.Tooltip.Close()
+-- The pointer left. The box counts itself down rather than going at once; see
+-- UI/Tooltip.lua for why and for what `now` is.
+function Tip.Close(now)
+	return UI.Tooltip.Close(now)
 end
 
 --------------------------------------------------------------------------

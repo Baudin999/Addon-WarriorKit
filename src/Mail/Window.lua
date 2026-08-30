@@ -270,7 +270,6 @@ local function FavouriteTip(button)
 			kind = "note",
 			title = "add a favourite",
 			lines = { "Puts whoever is in the name field on this list." },
-			hint = "Right click a name on the list to take it off again.",
 		}
 	end
 	return {
@@ -278,7 +277,6 @@ local function FavouriteTip(button)
 		title = name,
 		color = ns.MailWho.Color(ns.MailWho.Of(name)),
 		lines = { ns.MailWho.Say(name) },
-		hint = "Click to send to them. Right click to take them off the list.",
 	}
 end
 
@@ -359,8 +357,6 @@ local function SlotTip(button)
 			kind = "note",
 			title = "an empty slot",
 			lines = { "Right click a stack in your bags, or drag one onto the block." },
-			hint = ("Six to a line and twelve to a mail. Past twelve the addon sends more than one, up to %d.")
-				:format(ns.MailDraft.MAX),
 		}
 	end
 	return {
@@ -372,7 +368,6 @@ local function SlotTip(button)
 			{ "count", tostring(entry.count) },
 			{ "mail", tostring(math.floor((button.at - 1) / ns.MailDraft.PerMail()) + 1) },
 		},
-		hint = "Right click to take it back off.",
 	}
 end
 
@@ -616,19 +611,11 @@ local function LetterTip(button)
 		end
 	end
 
-	local hint = "Nothing on it. The cross deletes it."
-	if not ns.MailInbox.Payable(row) then
-		hint = "Cash on delivery. This window will not pay one for you."
-	elseif ns.MailInbox.Holds(row) then
-		hint = "Click to take what is on it."
-	end
-
 	return {
 		kind = "note",
 		title = row.subject,
 		color = ns.MailWho.Color(ns.MailWho.Of(row.sender)),
 		lines = lines,
-		hint = hint,
 	}
 end
 
@@ -644,7 +631,10 @@ local function LetterAct(at, what)
 	else
 		ns.MailInbox.Take(row.index)
 	end
-	ns.Tip.Close()
+	-- On the spot rather than lingering: the letter the box was describing has
+	-- just been deleted, returned or emptied, and a sentence about it is a
+	-- sentence about a row that is not there any more.
+	ns.Tip.Close(true)
 	Window.Paint()
 end
 

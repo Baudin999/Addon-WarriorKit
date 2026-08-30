@@ -5711,11 +5711,67 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
-- Whether all sixteen placeable frames still drag in the game after
+- Whether `IsUnitOnQuest` exists on these builds and takes its arguments in the
+  order this addon passes them, which is a row of your own quest log and then a
+  unit token. `Quests/Party.lua` treats a missing or raising call as "cannot
+  say" and falls back to what Questie's comms has heard, so the failure is a
+  smaller number rather than an error. What it cannot catch is a call that
+  exists, takes its arguments the other way round and answers false to
+  everything: that reads as nobody in the group being on any quest, which looks
+  exactly like a party with nothing in common. What would settle it: stand in a
+  party on a shared quest, open the log, and check the number on the row against
+  who is actually on it. `/wk quests party` says which of the two sources is
+  answering.
+- Whether the tick and the share arrow drew. Both are new letters in
+  `Media/Glyphs.ttf`, cut onto `V` and `s` by `scripts/bake-glyphs.sh`, and the
+  subset's cmap is rewritten to exactly the letters it bakes. A letter with no
+  mark on it draws an empty rectangle and says nothing at all, at load, at lint
+  or in the harness. `scripts/check.sh` compares the alphabet in `UI.GLYPHS`
+  against the bake script and 47-quest-log checks the marks the window draws are
+  in that alphabet, which is as far as anything short of the client can go. What
+  would settle it: open the log and look at a quest you can hand in.
+- Whether replacing `QuestieTracker.utils:ShowQuestLog` holds on the Questie
+  that is installed. The function was read off Questie 6.3.11 for TBC, where the
+  tracker's click handler and the "Show in Quest Log" line of its right-click
+  menu both call it, so one swap covers both. A Questie that moved or renamed it
+  leaves the swap unmade and every click going where it went before, which is
+  Blizzard's log in the attic. What would settle it: click a quest in the
+  tracker. The Quests section of `/wk` says whether the swap took.
+
+- Whether the tooltip marker picks the right corner on a real screen. The
+  addon reads which quarter of `UIParent` the marker sits in and hangs the box
+  off the matching corner of itself, so it grows away from the nearest edge.
+  The harness stub measures y downward from the top of the screen and the client
+  measures it upward from the bottom, which is why `Marked` compares against
+  `UIParent`'s own centre through `UI.Convert` rather than against half its
+  height: that reading is the same in both conventions, and only the stub has
+  ever run it. If it is wrong, a marker near the bottom of the screen grows the
+  box down off the edge and the clamp drags it back over the marker. What would
+  settle it: `/wk tips anchor`, `/wk unlock`, drag the marker into each of the
+  four corners in turn and hover something.
+- Whether `GetLootSourceInfo` exists on 2.5.6 and 1.15 and answers a creature
+  GUID for a slot. It is the whole of the measured drop chance in
+  `Quests/Drops.lua`: without it no corpse is ever counted, the ledger stays
+  empty and a hover shows the quest and the count with no fraction under them,
+  which is the same box a player with no history gets and is silent. The failure
+  worth watching for is the opposite one, a call that answers a GUID this addon
+  cannot parse, which is also silent and also shows nothing. What would settle
+  it: kill and loot a dozen of something that carries a quest item, then hover
+  another one. `/wk quests drops` says how many creatures have been counted, and
+  zero after a dozen kills is the answer that means the call is not landing.
+- Whether the installed Questie keys its tooltip registry the way this addon
+  reads it. `Quests/Drops.lua` walks `QuestieTooltips.lookupByKey["m_<npc id>"]`
+  and reads `questId`, `objective.Type`, `objective.Id`, `objective.Collected`
+  and `objective.Needed` off the entries, all of it read and none of it written,
+  and the shape was taken off Questie 6.3.11 for TBC. A Questie that renamed any
+  of them draws no drop lines at all rather than wrong ones, because every field
+  is checked before it is used. What would settle it: hover a mob that carries a
+  quest item for a quest in your log.
+- Whether all eighteen placeable frames still drag in the game after
   `UI/Placeable.lua` took the block over from the twelve copies that used to
   write it. The harness proves the property that broke silently before, which is
-  which frames the lock reaches: eleven HUD frames lose the drag with `/wk lock`
-  and get it back, five chrome windows keep it throughout. What no stub can
+  which frames the lock reaches: twelve HUD frames lose the drag with `/wk lock`
+  and get it back, six chrome windows keep it throughout. What no stub can
   prove is that `StartMoving` on a frame the client considers protected still
   behaves, and the party anchor is the one that would show it, because its
   blocks come off a secure group header and it is the only one that refuses to

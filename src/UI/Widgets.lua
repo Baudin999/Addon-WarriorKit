@@ -75,8 +75,18 @@ function UI.Button(parent, opts)
 	local button = CreateFrame("Button", nil, parent)
 	button:SetSize(opts.width or 60, opts.height or M.control)
 
+	-- What the button is painted when the cursor is not on it.
+	--
+	-- On the button rather than read off the palette at the two sites below,
+	-- because a caller that tinted the surface itself used to lose the tint the
+	-- first time the mouse crossed the button: OnLeave painted the control
+	-- colour back over it. The one that wants this is the button that abandons
+	-- a quest, and a danger colour that goes away when you look at it is worse
+	-- than no danger colour at all.
+	button.tone = opts.tone or C.control
 	button.bg = ns.Fill(button, "BACKGROUND", C.control[1], C.control[2], C.control[3], 1)
 	button.bg:SetAllPoints()
+	UI.Tint(button.bg, button.tone)
 	button.edges = ns.Outline(button, C.edge[1], C.edge[2], C.edge[3], 1)
 	ns.EdgeSize(button.edges, ns.Pixel(button))
 
@@ -95,7 +105,7 @@ function UI.Button(parent, opts)
 		UI.Tint(self.bg, C.hover)
 	end)
 	button:SetScript("OnLeave", function(self)
-		UI.Tint(self.bg, C.control)
+		UI.Tint(self.bg, self.tone)
 	end)
 	if opts.onClick then
 		button:SetScript("OnClick", opts.onClick)

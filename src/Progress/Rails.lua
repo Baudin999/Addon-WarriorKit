@@ -220,9 +220,9 @@ local function FactionLines()
 	}
 end
 
-local function Hover(rail, title_, lines, hint)
+local function Hover(rail, title_, lines)
 	ns.Tip.Hang(rail.bar, function()
-		return { kind = "note", title = title_, lines = lines(), hint = hint }
+		return { kind = "note", title = title_, lines = lines() }
 	end)
 end
 
@@ -243,9 +243,8 @@ local function Build()
 	Gauge.Paint(xp.bar, xp.bar.track, XP_FILL)
 	xp.look = XP_FILL
 
-	Hover(xp, "Experience", ExperienceLines, "/wk xp off takes both rails off the screen.")
-	Hover(faction, "Reputation", FactionLines,
-		"/wk xp faction off leaves the experience rail on its own.")
+	Hover(xp, "Experience", ExperienceLines)
+	Hover(faction, "Reputation", FactionLines)
 
 	frame:Hide()
 	built = true

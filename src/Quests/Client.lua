@@ -76,20 +76,29 @@ function Client.Open()
 	return Fire("ExpandQuestHeader", 0)
 end
 
--- Move the cursor, take a reading, put the cursor back.
+-- Take a reading with the cursor, wherever the reader chooses to put it, and
+-- put the cursor back.
 --
 -- The restore is unconditional and that is why this is a function rather than
 -- three lines at each site. A read that raises still has to hand the selection
 -- back, so the reader is pcalled and the restore runs either way.
-function Client.Borrow(index, read)
+--
+-- The reader is handed the client's own select, because the whole point of a
+-- sweep is a reader that moves the cursor more than once: asking twenty quests
+-- one question each is one save and one restore here, and twenty of each
+-- through Borrow below.
+function Client.Sweep(read)
 	local select = _G.SelectQuestLogEntry
-	if type(select) ~= "function" or type(index) ~= "number" then
+	if type(select) ~= "function" then
 		return nil
 	end
 
 	local was = Call("GetQuestLogSelection")
-	pcall(select, index)
-	local ok, answer = pcall(read)
+	local ok, answer = pcall(read, function(index)
+		if type(index) == "number" then
+			pcall(select, index)
+		end
+	end)
 	if type(was) == "number" then
 		pcall(select, was)
 	end
@@ -97,6 +106,17 @@ function Client.Borrow(index, read)
 		return nil
 	end
 	return answer
+end
+
+-- Move the cursor to one row, take a reading, put the cursor back.
+function Client.Borrow(index, read)
+	if type(index) ~= "number" then
+		return nil
+	end
+	return Client.Sweep(function(select)
+		select(index)
+		return read()
+	end)
 end
 
 --------------------------------------------------------------------------
@@ -269,12 +289,40 @@ function Client.Watch(index, on)
 	return Fire(on and "AddQuestWatch" or "RemoveQuestWatch", index)
 end
 
--- Whether this one can be handed to the party, which the client refuses for a
--- quest nobody else could take.
-function Client.Shareable(index)
-	return Client.Borrow(index, function()
-		return Call("GetQuestLogPushable") and true or false
-	end) and true or false
+-- Which of these rows the client would let you hand to the party, keyed by the
+-- index you asked about.
+--
+-- One sweep for the whole log rather than one borrow each, because this is read
+-- for every quest on every rebuild: the left column draws a share mark on the
+-- rows that can take one, and a mark drawn on a row the client would refuse is
+-- a control that fails silently when it is pressed.
+function Client.Pushables(indices)
+	local answer = {}
+	Client.Sweep(function(select)
+		for at = 1, #indices do
+			select(indices[at])
+			answer[indices[at]] = Call("GetQuestLogPushable") and true or false
+		end
+	end)
+	return answer
+end
+
+-- Whether somebody else in your group is on this quest, or nil where the client
+-- will not say.
+--
+-- Nil is a real answer and a different one from false. Neither of the builds
+-- this addon ships for is certain to have the call, and a row that said "nobody
+-- else has this" on a client that cannot tell would be inventing the fact the
+-- number is there to carry.
+function Client.OnQuest(index, unit)
+	if type(_G.IsUnitOnQuest) ~= "function" then
+		return nil
+	end
+	local on = Call("IsUnitOnQuest", index, unit)
+	if on == nil then
+		return nil
+	end
+	return on and on ~= 0 and true or false
 end
 
 function Client.Share(index)

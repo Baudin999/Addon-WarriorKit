@@ -76,6 +76,10 @@ local CROWD = 80
 -- rather than nil, so the module coming back proves nothing at all. Every
 -- caller below checks for the function it is about to make, which is the same
 -- test Comfort/Clutter.lua makes and for the same reason.
+--
+-- Handed out as Where.Module because Quests/Drops.lua wants the same accessor
+-- and the same warning about it, and a third copy of a pcall round ImportModule
+-- is how the first two got here.
 local function Module(name)
 	local loader = _G.QuestieLoader
 	if not loader or type(loader.ImportModule) ~= "function" then
@@ -87,6 +91,8 @@ local function Module(name)
 	end
 	return module
 end
+
+Where.Module = Module
 
 -- The live quest object for one id: the one Questie has filled in from your
 -- log, not the bare database row. GetNearestQuestSpawn reads objectives off it

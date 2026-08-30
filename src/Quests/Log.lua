@@ -35,6 +35,7 @@ ns.QuestLog = Log
 --------------------------------------------------------------------------
 
 local Client = ns.QuestClient
+local Party = ns.QuestParty
 
 -- What the last Read found. A list of zones in the client's own order, each
 -- with a list of quests in the client's own order.
@@ -76,6 +77,32 @@ local UNSORTED = "Elsewhere"
 
 --------------------------------------------------------------------------
 
+-- The two facts about a quest that are not on its own row.
+--
+-- Whether it can be handed to the party comes off the shared cursor, so all of
+-- them are asked in one sweep rather than one borrow each: the left column
+-- draws a share mark on the rows that can take one, and that is a question per
+-- quest on every rebuild.
+--
+-- Who else in the group is on it comes off Quests/Party.lua, which asks the
+-- client and Questie and merges what both say. Both are read here rather than
+-- in Detail, because both belong to the row in the left column and Detail is
+-- only ever asked about the one quest you are reading.
+local function Company(quests)
+	local indices = {}
+	for at = 1, #quests do
+		indices[at] = quests[at].index
+	end
+
+	local pushable = Client.Pushables(indices)
+	for at = 1, #quests do
+		local quest = quests[at]
+		quest.shareable = pushable[quest.index] and true or false
+		quest.party = Party.On(quest.id, quest.index)
+	end
+	return quests
+end
+
 -- Read the whole log.
 --
 -- Every header is opened first, because a collapsed one hides its quests from
@@ -89,6 +116,7 @@ function Log.Read()
 
 	local entries = Client.Count()
 	local zone = nil
+	local carried = {}
 
 	for index = 1, entries do
 		local entry = Client.Entry(index)
@@ -105,6 +133,7 @@ function Log.Read()
 			entry.watched = Client.Watched(index)
 			zone.quests[#zone.quests + 1] = entry
 			byKey[entry.key] = entry
+			carried[#carried + 1] = entry
 			total = total + 1
 			if entry.complete then
 				done = done + 1
@@ -113,6 +142,7 @@ function Log.Read()
 		end
 	end
 
+	Company(carried)
 	return zones
 end
 
@@ -171,7 +201,11 @@ function Log.Detail(key)
 		objectives = Client.Objectives(index) or {},
 		rewards = Client.Rewards(index) or {},
 		seconds = Client.TimeLeft(index),
-		shareable = Client.Shareable(index),
+		-- Read with the rest of the log rather than asked again here. It is a
+		-- fact about the row in the left column before it is a fact about the
+		-- quest you have open, and asking twice is a second borrow of the
+		-- shared cursor for an answer this addon already has.
+		shareable = quest.shareable,
 	}
 end
 

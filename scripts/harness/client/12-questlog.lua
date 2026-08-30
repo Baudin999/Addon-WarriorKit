@@ -346,6 +346,27 @@ _G.AbandonQuest = function()
 end
 
 --------------------------------------------------------------------------
+-- Who else is on it
+--------------------------------------------------------------------------
+
+-- The client's own answer, which exists on some builds and not others. Keyed by
+-- quest and then by unit, because that is what the call takes: a row of your own
+-- log and somebody else's unit token.
+--
+-- Quest 102 is the one two of the party are also on. Nothing else is, so the
+-- column has rows with a number and rows without, which is the difference the
+-- window draws.
+local COMPANY = {
+	[102] = { party1 = true, party3 = true },
+}
+
+_G.IsUnitOnQuest = function(index, unit)
+	local row = Row(index)
+	local on = row and row.id and COMPANY[row.id]
+	return (on and on[unit]) and true or false
+end
+
+--------------------------------------------------------------------------
 -- The window it replaces
 --------------------------------------------------------------------------
 
@@ -479,6 +500,37 @@ knows.QueryItemSingle = function(id, field)
 	return asked(id, field)
 end
 
+-- Questie's comms, which is the other half of who else is on a quest.
+--
+-- It hears from party members running Questie and nobody else, so it knows one
+-- name the client's call does not know here and misses one the client has. The
+-- window must end up with three and not four: Sneaky is in both answers and is
+-- one person.
+--
+-- Tusksfirst is you in the party scripts/harness/sections/39-party-raid.lua
+-- stands up. Questie hands your own name back with everyone else's, and a row
+-- that counted it would say one party member is on every quest in your log.
+local talking = questie:ImportModule("QuestieComms")
+local HEARD = {
+	[102] = { Sneaky = {}, Tusksfirst = {}, Ironhide = {} },
+}
+talking.GetQuest = function(_, questId)
+	return HEARD[questId]
+end
+
+-- Questie's tracker, and the one function every route into the client's quest
+-- log goes through: the click on a tracked quest and the "Show in Quest Log"
+-- line of its right-click menu both land here. Counted rather than acted on, so
+-- a section can prove the addon's window took the click and that the original
+-- is handed back when the switch is off.
+local watching = questie:ImportModule("QuestieTracker")
+local tracked = 0
+watching.utils = {
+	ShowQuestLog = function()
+		tracked = tracked + 1
+	end,
+}
+
 -- The join. Area 606 is deliberately absent.
 local ATLAS = { [12] = 37, [40] = 52 }
 placing.GetUiMapIdByAreaId = function(_, area) return ATLAS[area] end
@@ -556,6 +608,11 @@ H.quests = {
 	Expanded = function() return expanded end,
 	Stranded = function() return stranded end,
 	Opened = function() return opened end,
+	-- How many clicks in Questie's tracker reached Blizzard's log rather than
+	-- this addon's window.
+	Tracked = function() return tracked end,
+	company = COMPANY,
+	heard = HEARD,
 	-- Put the cursor somewhere and record where, so a section can take a
 	-- reading through the window and then prove it came back.
 	Park = function(index)

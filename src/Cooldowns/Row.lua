@@ -80,14 +80,8 @@ local mode, seen, count = nil, -1, 0
 -- nag. A nag square is a sentence about something you did wrong and needs the
 -- words; a cooldown square is a picture of an ability with a number on it and
 -- the picture is the sentence. What the tooltip adds is the part a number
--- cannot carry: which of the three reasons this square is here, and the word
--- that takes it away.
+-- cannot carry: which of the three reasons this square is here.
 --------------------------------------------------------------------------
-
-local function Silencer(entry)
-	return ("Take it off this character's row with /wk cooldowns %s off, or from"
-		.. " the panel. That is per character."):format(entry.key)
-end
 
 local function Detail(w)
 	local entry = w.entry
@@ -121,7 +115,6 @@ local function Hover(w)
 			kind = "note",
 			title = entry.name,
 			lines = { Detail(w) },
-			hint = Silencer(entry),
 		}
 	end)
 end

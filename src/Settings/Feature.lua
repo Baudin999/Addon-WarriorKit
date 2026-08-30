@@ -29,22 +29,56 @@ local function SizeWord(arg)
 	ns.Print("UI size " .. Settings.Describe() .. ".")
 end
 
--- Two words rather than one on/off, because "tips off" would read as turning
--- the tooltips off and there is no such setting. Both answers have a name and
--- typing neither reports where the box goes.
-local function TipsWord(arg)
-	local value = arg:match("^(%S*)"):lower()
+-- Where the box goes, how long it stays and how big it reads, under one word.
+--
+-- Named answers rather than an on/off, because "tips off" would read as turning
+-- the tooltips off and there is no such setting. Typing the word on its own
+-- reports all three, which is the shape every other status line in the addon
+-- has: a player who has forgotten what they set does not have to guess at the
+-- name of the thing they set it to.
+local function TipsReading()
+	ns.Print("a hover opens " .. Settings.DescribePlace() .. ".")
+	ns.Print("it " .. Settings.DescribeLinger() .. ".")
+	ns.Print("it is drawn at " .. Settings.DescribeTipFont() .. ".")
+end
 
-	if value == "docked" then
-		Settings.SetDocked(true)
-	elseif value == "beside" then
-		Settings.SetDocked(false)
-	elseif value ~= "" then
-		ns.Print("tips takes docked or beside.")
+local function TipsWord(arg)
+	local value, rest = arg:match("^(%S*)%s*(.-)$")
+	value = value:lower()
+
+	if value == "" then
+		TipsReading()
 		return
 	end
 
-	ns.Print("a hover opens " .. Settings.DescribeDock() .. ".")
+	if value == "linger" then
+		local low, high = ns.UI.Tooltip.LingerRange()
+		local seconds = ns.Command.Step(rest, low, high, Settings.LINGER_STEP,
+			"tips linger")
+		if not seconds then
+			return
+		end
+		Settings.SetLinger(seconds)
+	elseif value == "font" then
+		local low, high = ns.UI.Tooltip.FontRange()
+		local size = ns.Command.Step(rest, low, high, 1, "tips font")
+		if not size then
+			return
+		end
+		Settings.SetTipFont(size)
+	elseif value == "docked" or value == "dock" then
+		Settings.SetPlace(ns.UI.Tooltip.DOCK)
+	elseif value == "beside" then
+		Settings.SetPlace(ns.UI.Tooltip.BESIDE)
+	elseif value == "anchor" then
+		Settings.SetPlace(ns.UI.Tooltip.ANCHOR)
+		ns.Print("unlock the frames to drag the marker where you want the box.")
+	else
+		ns.Print("tips takes docked, beside, anchor, linger <seconds> or font <pixels>.")
+		return
+	end
+
+	TipsReading()
 end
 
 --------------------------------------------------------------------------
@@ -110,7 +144,24 @@ ns.Register({
 		-- Docked. It is where this game has put a tooltip since the day it
 		-- shipped, and a box beside the row under the cursor covers the row you
 		-- were about to click.
-		tipDock = true,
+		tipPlace = "dock",
+
+		-- Where the marker sits until somebody drags it. Right of centre and a
+		-- little below, which is clear of the middle of the screen where every
+		-- piece of this addon's HUD lives and clear of the bar block along the
+		-- bottom. It is not where anybody's box should end up; it is somewhere
+		-- you can see the rim the first time you unlock the frames.
+		tipPoint = { "CENTER", "UIParent", "CENTER", 220, -140 },
+
+		-- One second. Long enough to finish a sentence you were half way
+		-- through when the pointer moved, short enough that a box you have
+		-- stopped caring about is gone before you notice it. Zero is a real
+		-- answer and is the client's own behaviour.
+		tipLinger = 1,
+
+		-- The addon's body size, which is what every tooltip in it was drawn at
+		-- before this was a number anybody could move.
+		tipFont = ns.UI.Metric.font,
 	},
 
 	words = {
@@ -120,16 +171,24 @@ ns.Register({
 
 	help = {
 		"uisize 0.5 to 3 in quarters, how big the addon's own windows are",
-		"tips docked|beside, where a hover's box opens",
+		"tips docked|beside|anchor, where a hover's box opens",
+		"tips linger <seconds>, font <pixels>, how long it stays and how big it reads",
 	},
 
 	status = function()
 		return Settings.Describe()
 	end,
 
+	lock = function()
+		Settings.LockAnchor()
+	end,
+
 	reset = function()
 		Settings.Set(ns.DefaultFor("uiSize"))
-		Settings.SetDocked(ns.DefaultFor("tipDock"))
+		Settings.SetPlace(ns.DefaultFor("tipPlace"))
+		Settings.SetLinger(ns.DefaultFor("tipLinger"))
+		Settings.SetTipFont(ns.DefaultFor("tipFont"))
+		Settings.ResetAnchor()
 	end,
 
 	-- A window that has been shut is a button nobody is looking at, and an
@@ -141,6 +200,9 @@ ns.Register({
 	end,
 
 	panel = function(ui)
+		local low, high = ns.UI.Tooltip.LingerRange()
+		local fontLow, fontHigh = ns.UI.Tooltip.FontRange()
+
 		ui.Section("UI size", "The screen")
 		ui.Lede("How big this window and the Clutter window are drawn. Nothing on the game screen moves.")
 
@@ -168,12 +230,19 @@ ns.Register({
 		ui.Section("Hovers", "The screen")
 		ui.Lede("Every hover in the addon opens the same box, in this window's palette.")
 
-		ui.Check("dock it where the client keeps its own",
-			Settings.Docked,
-			Settings.SetDocked)
-		ui.Hint("The corner is read off the client rather than guessed, so it moves when the bags do.")
+		ui.Cycle("where it opens", Settings.PLACES,
+			Settings.Place, Settings.SetPlace)
+		ui.Hint("Dock is the corner the client keeps its own in, read off the client rather than guessed, so it moves when the bags do. Anchor is a marker you drag with the frames unlocked.")
 
-		ui.Reading("a hover opens", Settings.DescribeDock)
+		ui.Reading("a hover opens", Settings.DescribePlace)
+
+		ui.Slider("stays for", low, high, Settings.LINGER_STEP,
+			Settings.Linger, Settings.SetLinger, Settings.LingerLabel)
+		ui.Hint("How long the box holds after you look away. Hovering anything else replaces it at once, whatever is left of this.")
+
+		ui.Size("text", fontLow, fontHigh, 1, Settings.TipFont, Settings.SetTipFont)
+		ui.Hint("The body size. The title takes a pixel more, so the two stay a pair at every setting.")
+
 		ui.Reading("the client's own text", ns.UI.Scan.Describe)
 		ui.Reading("hooked into a hover", ns.Tip.Describe)
 
