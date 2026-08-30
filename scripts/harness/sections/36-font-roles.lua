@@ -1,9 +1,9 @@
 -- What is behind every string in the addon
 --
 -- UI/Text.lua names three roles and argues for each. Flat over a surface this
--- addon painted and knows the colour of; shadowed over art it did not paint,
--- which is a spell icon; outlined over the world, where there is no known
--- colour at all and the rim is the only thing that works. scripts/check.sh
+-- addon painted and knows the colour of; shadowed over ground it did not paint
+-- and cannot predict, which is a spell icon and the chat window; outlined over
+-- the world at a size that can carry a rim. scripts/check.sh
 -- fails any call that names no role, and that gate is worth having, but it can
 -- only see that a role was named. Whether it is the right one is a fact about
 -- what is behind the string, and no amount of reading the call answers it.
@@ -30,8 +30,18 @@
 -- looking at, and the two drag captions on the swing bars and the buff row were
 -- the same defect nobody had hovered.
 --
--- A string with nothing behind it is outlined. Flat over the world is not
--- softer, it is gone, and a shadow has nothing to be darker than.
+-- A string with nothing behind it carries a rim or a shadow. Flat over the
+-- world is not softer, it is gone. Which of the two it carries is settled by
+-- the rule above: over the floor a rim, and under it a rim would close the
+-- glyph's own counters, so a shadow is the only thing left. That is the chat
+-- window, whose font is a slider from 9 to 20 and whose background is a slider
+-- to 0, and it is what this rule used to hold three files exempt from. The
+-- exemptions all read the same way - flat is wrong here but an outline is
+-- worse, so it stays flat - and all three were the same mistake, which was
+-- reading the three roles as a choice between flat and outlined with the
+-- shadow spoken for by debuff squares. A shadow spends no pixel of the glyph,
+-- so it works at 9 as well as at 20. The allow-list is empty and the rule is
+-- the whole policy.
 --
 -- Nothing is MONOCHROME. It was tried and it broke Arial Narrow's stems.
 -- UI/Text.lua keeps the gravestone; this keeps the gate.
@@ -55,25 +65,12 @@ local floor = UI.OutlineFloor()
 -- of the three is still held to the other two. Keyed by file rather than by
 -- line because a line number moves and an allow-list that goes stale silently
 -- is worse than no allow-list.
-local ALLOWED = {
-	["UI/Aura.lua"] = { bare =
-		"the timer over an aura square, which sits above the art rather than on "
-		.. "it and so has the world behind it. It keeps the shadow anyway, and "
-		.. "UI/Aura.lua argues it where the trade is made: the string is 8 to 14 "
-		.. "pixels tall and an outline at that size closes the hole in a 6, so "
-		.. "there is no role here that is right, only a least wrong one. The "
-		.. "stack count beside it is on the icon and is not exempt." },
-	["UI/Log.lua"] = { bare =
-		"the chat window's own text, and the one place the three roles do not "
-		.. "settle it: the size is a slider from 9 to 20 and the background is "
-		.. "a slider to 0, so at the bottom of both there is no role that works "
-		.. "- an outline eats a 9 pixel glyph and flat has nothing behind it. "
-		.. "Left flat, which is right for every stop but the last, until one of "
-		.. "the two sliders gets a floor." },
-	["Chat/Window.lua"] = { bare =
-		"the chat window's entry line, on the same two sliders as the log above "
-		.. "it and left flat for the same reason." },
-}
+--
+-- Empty, and it should stay that way. It held three files, every one of them
+-- excused from the bare rule for a reason that turned out to be the rule being
+-- wrong rather than the site. Before adding a fourth, read what the third role
+-- is for.
+local ALLOWED = {}
 
 ------------------------------------------------------------
 -- Is there a surface under this glyph
@@ -193,6 +190,11 @@ local function Sweep(why)
 					local at = r.madeAt or "?"
 					local file = at:gsub(":%d+$", "")
 					local outlined = flags:find("OUTLINE", 1, true) ~= nil
+					-- Not a flag. UI/Text.lua strips UI.SHADOW before SetFont
+					-- and turns it into an offset on the font object, so the
+					-- only way to read the role back off a string is to ask
+					-- what it draws.
+					local shadowed = select(1, r:GetShadowOffset()) ~= 0
 					local function fault(rule, what)
 						local exempt = ALLOWED[file]
 						if exempt and exempt[rule] then
@@ -205,8 +207,8 @@ local function Sweep(why)
 						fault("floor", ("outlined at %d, under the floor of %d")
 							:format(size, floor))
 					end
-					if not outlined and not Surface(r, size) then
-						fault("bare", "not outlined and nothing painted behind it")
+					if not outlined and not shadowed and not Surface(r, size) then
+						fault("bare", "flat with nothing painted behind it")
 					end
 					if flags:find("MONOCHROME", 1, true) then
 						fault("mono",

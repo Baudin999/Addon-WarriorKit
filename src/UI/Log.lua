@@ -248,13 +248,27 @@ end
 
 -- One shared font object per size, out of UI/Text.lua's cache, so a size change
 -- is one write here rather than one per line held.
+--
+-- Shadowed, not flat. Flat is the role for text on a surface this addon painted
+-- and knows the colour of, and the chat window is not one: its background alpha
+-- is a setting and it ships at zero, so every line anybody speaks is drawn
+-- straight onto the world. In the Barrens at midday that is dark orange chat
+-- text on bright orange ground and the log is unreadable. The role for text
+-- over ground the addon did not paint is a shadow, and it is the only one that
+-- fits here: an outline is what UI/Text.lua asks for over the world, but it
+-- costs a pixel on every stroke and this font ships at eleven, well under
+-- UI.OutlineFloor, so a rim would close the counters of every glyph it saved.
+--
+-- The shadow rides on the font object rather than on the frame because a
+-- ScrollingMessageFrame makes its own font strings and they take the frame's
+-- font instance whole, the same route the justification above takes.
 function Log:SetFontSize(size)
 	if self.fontSize == size then
 		return false
 	end
 	self.fontSize = size
 	if type(self.view.SetFontObject) == "function" then
-		self.view:SetFontObject(UI.Font(size, UI.FLAT))
+		self.view:SetFontObject(UI.Font(size, UI.SHADOW))
 	end
 	-- After the object, never before. A font object carries a justification and
 	-- the frame takes the object's, so a SetJustifyH written above this line is

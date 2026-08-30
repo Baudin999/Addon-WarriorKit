@@ -349,8 +349,12 @@ local PAD = 4
 
 local function Style(box, name)
 	Strip(box, name)
-	box:SetFontObject(UI.Font(size, UI.FLAT))
-	-- Flat, and not the channel colour the client writes here.
+	-- Shadowed for the reason UI/Log.lua is: Strip has just taken every piece
+	-- of art off this field, so the line you are typing is drawn straight onto
+	-- the world, and the log above it is too. The role for text over ground the
+	-- addon did not paint is a shadow.
+	box:SetFontObject(UI.Font(size, UI.SHADOW))
+	-- The theme's own colour, and not the channel colour the client writes here.
 	--
 	-- ChatEdit_UpdateHeader paints the text you are typing in the channel's own
 	-- colour, so a whisper is typed in pink and a party line in blue. That is
@@ -368,7 +372,7 @@ local function Style(box, name)
 	local width = 0
 	for _, part in ipairs({ header, suffix }) do
 		if type(part) == "table" and type(part.SetFontObject) == "function" then
-			part:SetFontObject(UI.Font(size, UI.FLAT))
+			part:SetFontObject(UI.Font(size, UI.SHADOW))
 			if part:IsShown() then
 				-- GetStringWidth rather than GetWidth, because the face has
 				-- just changed under it. A font string measures what it draws

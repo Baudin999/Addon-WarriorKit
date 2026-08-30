@@ -85,9 +85,17 @@ local UI, C = ns.UI, ns.UI.Color
 _G.ChatEdit_DeactivateChat(line)
 _G.ChatFrame_OpenChat("")
 
-local ours = UI.Font(ns.db.chatFont, UI.FLAT)
+-- Shadowed, not flat. Strip has taken every piece of art off this field and the
+-- window behind it ships at zero alpha, so the line you type is drawn onto the
+-- world and takes the role UI/Text.lua gives text over ground the addon did not
+-- paint. Asserting the object here is asserting the role.
+local ours = UI.Font(ns.db.chatFont, UI.SHADOW)
 check(line:GetFontObject() == ours,
 	"the line you type in is drawn in the client's own font rather than the addon's")
+local shadowX, shadowY = ours:GetShadowOffset()
+check(shadowX == 1 and shadowY == -1,
+	("the line you type in carries no shadow to hold it off the world: offset %s, %s")
+		:format(tostring(shadowX), tostring(shadowY)))
 
 local r, g, b = line:GetTextColor()
 check(r == C.text[1] and g == C.text[2] and b == C.text[3],

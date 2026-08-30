@@ -29,10 +29,11 @@ local PATH = "Fonts\\ARIALN.TTF"
 
 -- The glyph face.
 --
--- Five marks of Font Awesome Free, subset into Media/Glyphs.ttf by
+-- Marks of Font Awesome Free, subset into Media/Glyphs.ttf by
 -- scripts/bake-glyphs.sh and cut onto the letters they replace: `v` and `>` are
 -- the chevrons on a group that folds, `x` is the close cross, `+` and `-` are
--- the two ends of a stepper. Nothing that draws one knows it is drawing a font
+-- the two ends of a stepper, `V` is the tick against something finished and `s`
+-- is the share arrow. Nothing that draws one knows it is drawing a font
 -- at all. UI.Glyph hands back a string in this face and every caller carries on
 -- writing the same letter it wrote before.
 --
@@ -56,12 +57,17 @@ local GLYPHS = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Glyphs.ttf"
 --             contrast is guaranteed by the palette, so the glyph needs nothing
 --             round it and gets nothing. UI.FLAT.
 --   shadowed  over art the addon did not paint and cannot predict: a spell icon
---             on a debuff square. A one pixel drop shadow, which holds the
---             glyph off a bright icon without spending any of the glyph's own
---             pixels. UI.SHADOW.
---   outlined  over the world. No known colour behind it at all, so a shadow has
---             nothing to be darker than and the rim is the only thing that
---             works. UI.OUTLINE, and UI.OutlineFloor is its minimum size.
+--             on a debuff square, and the chat window, whose background alpha
+--             is a setting that ships at zero. A one pixel drop shadow, which
+--             holds the glyph off a bright icon without spending any of the
+--             glyph's own pixels. UI.SHADOW.
+--   outlined  over the world at a size that can carry a rim. No known colour
+--             behind it at all, so a shadow has nothing to be darker than and
+--             the rim is the only thing that works. UI.OUTLINE, and
+--             UI.OutlineFloor is its minimum size. Under that floor the rim
+--             closes the counters, so text over the world at eleven or twelve
+--             pixels takes the shadow instead: that is the chat window, and it
+--             is why the second role reaches further than one debuff square.
 --
 -- All three are named and every caller passes one. An outline used to be the
 -- unnamed default, which is a policy nobody reads holding a value everybody
