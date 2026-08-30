@@ -735,18 +735,16 @@ local function Build()
 		-- Escape is what clears a target and steps out of a field. It must not
 		-- be what closes the window you have had up all evening.
 		escape = false,
+		-- Where you left it. Every other window in the addon opens in the
+		-- middle of the screen because you opened it on purpose and will close
+		-- it again in a minute; this one is up all evening and belongs in the
+		-- corner you put it in. This used to be a copy of UI.Window's own drag
+		-- scripts written over the top of them, which is what made placing a
+		-- window and placing anything else two different pieces of code.
+		moved = function(anchor)
+			ns.db.chatPoint = anchor
+		end,
 	})
-
-	window.frame:SetScript("OnDragStart", function(self)
-		if not ns.db.locked then
-			self:StartMoving()
-		end
-	end)
-	window.frame:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		local point, _, relativePoint, x, y = self:GetPoint()
-		ns.db.chatPoint = { point, "UIParent", relativePoint, x, y }
-	end)
 
 	rail = UI.List(window.content, {
 		name = "WarriorKitChatRooms",
@@ -1216,7 +1214,7 @@ function ChatWindow.Lock()
 	if not built then
 		return false
 	end
-	window.frame:SetMovable(not ns.db.locked)
+	window.place:Lock(not ns.db.locked)
 	return true
 end
 

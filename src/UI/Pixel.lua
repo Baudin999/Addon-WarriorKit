@@ -168,6 +168,23 @@ function UI.Round(frame, size)
 	return pixels * px
 end
 
+-- The nearest whole unit, negatives included, which inside an adopted frame is
+-- the nearest physical pixel.
+--
+-- Not UI.Round, which is a different question with a similar name and is why
+-- seven files wrote their own rather than reusing it. Round takes a size that
+-- arrived from outside the grid and snaps it to a whole number of pixels,
+-- refusing to return zero because a hairline asked for and not drawn is a
+-- missing line. This takes a coordinate, where zero is the left edge and a
+-- floor at one would be a bug.
+--
+-- Every anchor offset the addon saves goes through it. A drag lands wherever
+-- the cursor was, and a frame whose own origin sits on a fraction rasterises
+-- every edge, icon and glyph inside it across two rows of pixels.
+function UI.Whole(value)
+	return math.floor(value + 0.5)
+end
+
 -- A value measured in one frame's units, expressed in another's. Two frames on
 -- different scales are the normal case now, not the exception: our widget sits
 -- on the grid and the nameplate it is anchored to does not, so a width read off

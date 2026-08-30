@@ -31,15 +31,11 @@ local FRAME_NAME = "WarriorKitHoverSheet"
 -- strip of art.
 local ICON, ROW, PAD, GAP = 14, 16, 5, 6
 
-local frame, grab, title, ground
+local frame, place, ground
 local rows = {}
 local unit = 1
 local count = 0
 local built
-
-local function Whole(value)
-	return math.floor(value + 0.5)
-end
 
 -- One line of the sheet. Built at the ceiling at login and shown only while the
 -- list is that long, for the reason UnitFrames/Panel.lua builds its debuff rows
@@ -161,17 +157,7 @@ function Sheet.Lock()
 	if not built then
 		return
 	end
-	local unlocked = not ns.db.locked
-	frame:EnableMouse(unlocked)
-	if unlocked then
-		frame:RegisterForDrag("LeftButton")
-		grab:Show()
-		title:Show()
-	else
-		frame:RegisterForDrag()
-		grab:Hide()
-		title:Hide()
-	end
+	place:Lock(not ns.db.locked)
 end
 
 function Sheet.Reset()
@@ -200,39 +186,17 @@ events:SetScript("OnEvent", function()
 	frame = CreateFrame("Frame", FRAME_NAME, UIParent)
 	ns.UI.Adopt(frame, ns.db.hoverSheetZoom)
 	unit = ns.UI.Unit(frame)
-	frame:SetMovable(true)
-	frame:SetClampedToScreen(true)
-	frame:SetScript("OnDragStart", function(self)
-		if not ns.db.locked then
-			self:StartMoving()
-		end
-	end)
-	frame:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		local point, _, relativePoint, x, y = self:GetPoint()
-		-- Rounded, because a drag lands wherever the cursor was and this frame
-		-- is on the grid, where a fractional offset rasterises every icon inside
-		-- it across two rows of pixels.
-		ns.db.hoverSheetPoint = { point, "UIParent", relativePoint, Whole(x), Whole(y) }
-		Sheet.Apply()
-	end)
+	place = ns.UI.Placeable(frame, {
+		name = "WarriorKit mouseover keys",
+		moved = function(anchor)
+			ns.db.hoverSheetPoint = anchor
+			Sheet.Apply()
+		end,
+	})
 
 	ground = ns.Fill(frame, "BACKGROUND", ns.UI.Color.window[1],
 		ns.UI.Color.window[2], ns.UI.Color.window[3], 1)
 	ground:SetAllPoints()
-
-	grab = ns.UI.Box(frame, nil, ns.UI.Color.edge)
-	grab:SetPoint("TOPLEFT")
-	grab:SetPoint("BOTTOMRIGHT")
-	grab:Hide()
-
-	-- At the outline floor, because it is drawn over the world while the sheet
-	-- is being placed and cannot drop the rim.
-	title = ns.UI.Label(frame, ns.UI.OutlineFloor(), ns.UI.Color.heading,
-		"LEFT", ns.UI.OUTLINE)
-	title:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 2 * unit)
-	title:SetText("WarriorKit mouseover keys")
-	title:Hide()
 
 	for index = 1, ns.Hover.MAX do
 		BuildRow(index)

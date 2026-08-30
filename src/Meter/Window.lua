@@ -124,7 +124,7 @@ local WHITE = { 0.87, 0.87, 0.91 }
 local WARN = { 0.94, 0.42, 0.35 }
 local GREY = { 0.50, 0.50, 0.50 }
 
-local frame, damage, threat, grab, title
+local frame, damage, threat, place
 local elapsed = 0
 local built = false
 
@@ -313,9 +313,6 @@ function MeterWindow.Apply()
 	end
 
 	frame:SetSize(total * unit, height)
-	grab:ClearAllPoints()
-	grab:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-	grab:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
 
 	MeterWindow.Lock()
 	MeterWindow.Show()
@@ -329,17 +326,7 @@ function MeterWindow.Lock()
 	if not frame then
 		return
 	end
-	local unlocked = not ns.db.locked
-	frame:EnableMouse(unlocked)
-	if unlocked then
-		frame:RegisterForDrag("LeftButton")
-		grab:Show()
-		title:Show()
-	else
-		frame:RegisterForDrag()
-		grab:Hide()
-		title:Hide()
-	end
+	place:Lock(not ns.db.locked)
 end
 
 function MeterWindow.Show()
@@ -614,27 +601,16 @@ events:SetScript("OnEvent", function()
 	frame = CreateFrame("Frame", FRAME_NAME, UIParent)
 	ns.UI.Adopt(frame, ns.db.meterZoom)
 	unit = ns.UI.Unit(frame)
-	frame:SetMovable(true)
-	frame:SetClampedToScreen(true)
-	frame:SetScript("OnDragStart", function(self)
-		if not ns.db.locked then
-			self:StartMoving()
-		end
-	end)
-	frame:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		local point, _, relativePoint, x, y = self:GetPoint()
-		ns.db.meterPoint = { point, "UIParent", relativePoint, x, y }
-	end)
-
-	-- The two things that only exist while it is unlocked, built once and shown
-	-- and hidden rather than made and unmade.
-	grab = ns.UI.Box(frame, nil, ns.UI.Color.edge)
-	grab:Hide()
-	title = ns.UI.Label(frame, HEADER_TEXT, ns.UI.Color.heading, "LEFT", ns.UI.OUTLINE)
-	title:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 2 * unit)
-	title:SetText("WarriorKit meters")
-	title:Hide()
+	-- This was the one of the twelve that did not round the offsets it saved,
+	-- and nothing said so because the other eleven agreed with each other
+	-- rather than with a rule written down anywhere. It rounds now, along with
+	-- all of them.
+	place = ns.UI.Placeable(frame, {
+		name = "WarriorKit meters",
+		moved = function(anchor)
+			ns.db.meterPoint = anchor
+		end,
+	})
 
 	damage = BuildPane(true)
 	damage:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)

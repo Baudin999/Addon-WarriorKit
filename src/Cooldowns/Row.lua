@@ -53,7 +53,7 @@ local REFRESH = 0.1
 
 local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
 
-local frame, grab, title
+local frame, place
 local icons = {}
 local built = false
 local unit = 1
@@ -72,10 +72,6 @@ local elapsed = 0
 -- one step quieter, because a rebuild that swaps one entry for another leaves
 -- the length where it was and the row would go on drawing the old one.
 local mode, seen, count = nil, -1, 0
-
-local function Whole(value)
-	return math.floor(value + 0.5)
-end
 
 --------------------------------------------------------------------------
 -- What one square says to the mouse
@@ -249,10 +245,6 @@ function Row.Apply()
 		ns.UI.Ability.Size(icons[slot], ICON * unit)
 	end
 
-	grab:ClearAllPoints()
-	grab:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-	grab:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-
 	-- Force the next tick to lay the row out again, whatever it decides. A zoom
 	-- change moves every square and the mode has not moved with it.
 	mode, seen = nil, -1
@@ -267,17 +259,7 @@ function Row.Lock()
 	if not built then
 		return
 	end
-	local unlocked = not ns.db.locked
-	frame:EnableMouse(unlocked)
-	if unlocked then
-		frame:RegisterForDrag("LeftButton")
-		grab:Show()
-		title:Show()
-	else
-		frame:RegisterForDrag()
-		grab:Hide()
-		title:Hide()
-	end
+	place:Lock(not ns.db.locked)
 end
 
 function Row.Reset()
@@ -338,32 +320,13 @@ events:SetScript("OnEvent", function(_, event, token)
 		frame = CreateFrame("Frame", FRAME_NAME, UIParent)
 		ns.UI.Adopt(frame, ns.db.cooldownZoom)
 		unit = ns.UI.Unit(frame)
-		frame:SetMovable(true)
-		frame:SetClampedToScreen(true)
-		frame:SetScript("OnDragStart", function(self)
-			if not ns.db.locked then
-				self:StartMoving()
-			end
-		end)
-		frame:SetScript("OnDragStop", function(self)
-			self:StopMovingOrSizing()
-			local point, _, relativePoint, x, y = self:GetPoint()
-			-- Rounded, because a drag lands wherever the cursor was and this
-			-- frame is on the grid, where a fractional offset rasterises every
-			-- icon inside it across two rows of pixels.
-			ns.db.cooldownPoint = { point, "UIParent", relativePoint, Whole(x), Whole(y) }
-			Row.Apply()
-		end)
-
-		grab = ns.UI.Box(frame, nil, ns.UI.Color.edge)
-		grab:Hide()
-		-- At the outline floor, because it is drawn over the world while the row
-		-- is being placed and cannot drop the rim.
-		title = ns.UI.Label(frame, ns.UI.OutlineFloor(), ns.UI.Color.heading,
-			"LEFT", ns.UI.OUTLINE)
-		title:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 2 * unit)
-		title:SetText("WarriorKit cooldowns")
-		title:Hide()
+		place = ns.UI.Placeable(frame, {
+			name = "WarriorKit cooldowns",
+			moved = function(anchor)
+				ns.db.cooldownPoint = anchor
+				Row.Apply()
+			end,
+		})
 
 		-- Built once at the ceiling, because a frame cannot be destroyed on
 		-- these clients and a pool sized to the list would leak a square every

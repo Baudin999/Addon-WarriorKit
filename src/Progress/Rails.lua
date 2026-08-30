@@ -83,7 +83,7 @@ local MARK = { 0, 0, 0, 0.35 }
 local NAME_TEXT = Color.text.name
 local VALUE_TEXT = Color.text.value
 
-local frame, xp, faction, grab, title
+local frame, xp, faction, place
 local built = false
 
 -- One design pixel in this frame's units, which is exactly 1 once ns.UI.Adopt
@@ -97,9 +97,7 @@ local unit = 1
 -- that is a layout rather than a value.
 local shape = { xp = false, faction = false }
 
-local function Whole(value)
-	return math.floor(value + 0.5)
-end
+local Whole = ns.UI.Whole
 
 -- Whether each rail has anything to draw. Unlocked, both are drawn whatever the
 -- client says, because a frame you are dragging has to be a rectangle you can
@@ -232,35 +230,13 @@ local function Build()
 	frame = CreateFrame("Frame", FRAME_NAME, UIParent)
 	ns.UI.Adopt(frame, ns.db.progressZoom)
 	unit = ns.UI.Unit(frame)
-	frame:SetMovable(true)
-	frame:SetClampedToScreen(true)
-	frame:SetScript("OnDragStart", function(self)
-		if not ns.db.locked then
-			self:StartMoving()
-		end
-	end)
-	frame:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		local point, _, relativePoint, x, y = self:GetPoint()
-		-- Rounded, because a drag lands wherever the cursor was and this frame
-		-- is on the grid, where a fractional offset rasterises every edge inside
-		-- it across two rows of pixels.
-		ns.db.progressPoint = { point, "UIParent", relativePoint, Whole(x), Whole(y) }
-		Rails.Apply()
-	end)
-
-	grab = ns.UI.Box(frame, nil, ns.UI.Color.edge)
-	grab:SetAllPoints(frame)
-	grab:Hide()
-
-	-- At the outline floor rather than the panel's body size, the same as the
-	-- swing bars' own label: this sits over the world while the frame is being
-	-- placed, so it has to carry a rim.
-	title = ns.UI.Label(frame, ns.UI.OutlineFloor(), ns.UI.Color.heading,
-		"LEFT", ns.UI.OUTLINE)
-	title:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 2 * unit)
-	title:SetText("WarriorKit experience")
-	title:Hide()
+	place = ns.UI.Placeable(frame, {
+		name = "WarriorKit experience",
+		moved = function(anchor)
+			ns.db.progressPoint = anchor
+			Rails.Apply()
+		end,
+	})
 
 	xp = BuildRail(true)
 	faction = BuildRail(false)
@@ -476,18 +452,13 @@ function Rails.Lock()
 		return
 	end
 	local unlocked = not ns.db.locked
-	frame:EnableMouse(unlocked)
+	place:Lock(unlocked)
+	-- The rails give the mouse up while the frame takes it, because a rail that
+	-- answered the pointer would swallow the drag that is the whole point of
+	-- unlocking. Placeable does the frame's half; which children stand aside
+	-- for it is this file's own business.
 	xp.bar:EnableMouse(not unlocked)
 	faction.bar:EnableMouse(not unlocked)
-	if unlocked then
-		frame:RegisterForDrag("LeftButton")
-		grab:Show()
-		title:Show()
-	else
-		frame:RegisterForDrag()
-		grab:Hide()
-		title:Hide()
-	end
 
 	-- Unlocking changes what is drawn, not only what takes the mouse: a
 	-- character at the cap with no faction watched has no frame at all, and

@@ -99,9 +99,10 @@ UI\Ability.lua
 
 # The widget library, on top of that grid. Theme is the palette and the pixel
 # metrics, Stack lays a column out and asks every row how tall it is, Scroll
-# clips and scrolls, Widgets is the kit a page is built from, and Window is the
-# chrome with its rail and its tab strip. All five load before Core\Panel.lua,
-# which is the first thing that builds a page out of them.
+# clips and scrolls, Widgets is the kit a page is built from, Placeable is the
+# dragging, and Window is the chrome with its rail and its tab strip. All six
+# load before Core\Panel.lua, which is the first thing that builds a page out
+# of them.
 UI\Theme.lua
 UI\Stack.lua
 UI\Scroll.lua
@@ -145,6 +146,14 @@ UI\Tip.lua
 UI\Feed.lua
 
 UI\Widgets.lua
+
+# The frame you can unlock and drag, which is twelve parts of this addon and was
+# twelve copies of the same block. Placing and chrome are two things: this file
+# owns the first, UI\Window.lua owns the second and is a caller of this one.
+# After UI\Theme.lua for the rim it draws while a frame is being placed and
+# after UI\Text.lua for the name above it, and before every part that puts a
+# movable rectangle on the world.
+UI\Placeable.lua
 UI\Window.lua
 
 Core\Command.lua

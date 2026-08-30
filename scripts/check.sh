@@ -380,7 +380,7 @@ Swing/Slam.lua:Slam.Estimate
 Swing/Slam.lua:Slam.Cast
 Swing/Slam.lua:Slam.Known
 Swing/Slam.lua:Slam.Window
-Swing/Gauges.lua:Whole
+UI/Pixel.lua:UI.Whole
 Swing/Gauges.lua:DrawHand
 Swing/Gauges.lua:DrawWindow
 Swing/Gauges.lua:SwingGauges.Update
@@ -501,6 +501,32 @@ while IFS= read -r bad; do
 	status=1
 done < <(grep -rn 'GameTooltip' --include='*.lua' . \
 	| grep -v '^\./UI/Scan\.lua:' || true)
+
+# The drawing layer does not know the name of a setting.
+#
+# UI/Window.lua and UI/Tooltip.lua have both said so in a comment for a while,
+# and both were keeping their word. The rule is written down now because
+# UI/Placeable.lua is the file that had to work for it. A placeable frame is a
+# setting made visible: it saves where you dragged it. The obvious shape was to
+# hand it the key and let it write ns.db itself, and that shape is what put a
+# setting's name in every widget in every other addon anybody has read.
+#
+# So it takes a function that receives the finished anchor, the same way UI.Size
+# takes a number Settings/Settings.lua pushed in rather than reading the slider
+# it came off. What the layer below decides, the layer above names.
+#
+# Written while it is already satisfied, which is the only cheap moment. A rule
+# added after it breaks costs a refactor; this one costs nothing today and stops
+# the next widget being handed a key.
+#
+# Comments count, for the reason the GameTooltip rule reads them: a file
+# explaining what it does with ns.db is a file that thinks it may. The two
+# comments that say the layer must not are exempt by name, and so is this one's
+# own explanation in Placeable.lua's header.
+while IFS= read -r bad; do
+	echo "src/UI/ may not name a setting, and a widget takes a getter rather than a key: $bad"
+	status=1
+done < <(grep -rn 'ns\.db' --include='*.lua' ./UI 	| grep -v '^\./UI/Window\.lua:.*is held here rather than read out of ns\.db' 	| grep -v '^\./UI/Tooltip\.lua:.*ns\.db for the reason UI\.Size is' 	| grep -v '^\./UI/Placeable\.lua:.*so ns\.db stays' || true)
 
 # A ticker in a file HOT says nothing about is a ticker nothing above checked.
 while IFS= read -r f; do

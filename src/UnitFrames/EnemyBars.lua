@@ -227,7 +227,7 @@ local FADE_OUT = 0.22
 -- `next` per frame.
 local fading = {}
 
-local anchor, header
+local anchor, header, place
 -- Assigned in the events section at the foot of the file, because it is the
 -- event frame's business and that frame is made down there. Declared up here
 -- because EnemyBars.Rebuild is what turns the cast events on and off and sits
@@ -2028,6 +2028,7 @@ function EnemyBars.ApplyLock()
 		return
 	end
 	local unlocked = not ns.db.locked
+	place:Lock(unlocked)
 	anchor:EnableMouse(unlocked)
 	header:SetShown(unlocked and EnemyBars.Mode() == "list")
 	for _, widget in pairs(attached) do
@@ -2250,19 +2251,15 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	-- is wherever the mob is standing, which is a moving fraction of a pixel no
 	-- addon can read or round.
 	ns.UI.Adopt(anchor, ns.db.barsZoom)
-	anchor:SetMovable(true)
-	anchor:RegisterForDrag("LeftButton")
-	anchor:SetClampedToScreen(true)
-	anchor:SetScript("OnDragStart", function(self)
-		if not ns.db.locked then
-			self:StartMoving()
-		end
-	end)
-	anchor:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		local point, _, relativePoint, x, y = self:GetPoint()
-		ns.db.barsPoint = { point, "UIParent", relativePoint, x, y }
-	end)
+	-- No name, because the label above an unlocked anchor is only right in list
+	-- mode: in nameplate mode nothing hangs off this frame and a caption over
+	-- an empty rectangle would be pointing at nothing. That conditional is
+	-- ApplyLock's below, and the header it shows is this file's own.
+	place = ns.UI.Placeable(anchor, {
+		moved = function(point)
+			ns.db.barsPoint = point
+		end,
+	})
 
 	header = anchor:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	header:SetPoint("BOTTOMLEFT", anchor, "TOPLEFT", 0, 2)

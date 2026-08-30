@@ -188,7 +188,7 @@ local function Unpin(button)
 	button.wkPinned = nil
 end
 
-local tray, face, countText
+local tray, face, countText, place
 
 local function Take(name, button)
 	if held[name] then
@@ -266,9 +266,9 @@ local function Layout()
 		local row = math.floor((index - 1) / COLUMNS)
 		-- Through the kept method, because the one on the button is the no-op
 		-- that stops it wandering back to the ring.
-		local place = button.wkSetPoint or button.SetPoint
+		local setPoint = button.wkSetPoint or button.SetPoint
 		button:ClearAllPoints()
-		place(button, "TOPLEFT", tray, "TOPLEFT",
+		setPoint(button, "TOPLEFT", tray, "TOPLEFT",
 			GAP + column * (CELL + GAP), -(GAP + row * (CELL + GAP)))
 	end
 end
@@ -399,8 +399,6 @@ local function Build()
 	countText = UI.Label(face, UI.Metric.font, UI.Color.text, "CENTER", UI.FLAT)
 	countText:SetPoint("CENTER")
 
-	face:SetMovable(true)
-	face:SetClampedToScreen(true)
 	face:SetScript("OnClick", Toggle)
 	face:SetScript("OnEnter", function(self)
 		UI.Tint(self.bg, UI.Color.hover)
@@ -408,17 +406,16 @@ local function Build()
 	face:SetScript("OnLeave", function(self)
 		UI.Tint(self.bg, UI.Color.control)
 	end)
-	face:SetScript("OnDragStart", function(self)
-		if not ns.db.locked then
-			self:StartMoving()
-		end
-	end)
-	face:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		local point, _, relativePoint, x, y = self:GetPoint()
-		ns.db.corralPoint = { point, "UIParent", relativePoint, x, y }
-		ns.Options.Refresh()
-	end)
+	-- No name and no rim, for the reason a window passes none: this is a square
+	-- with a number in it that you can see whether it is locked or not, and it
+	-- answers the mouse all the time because clicking it is what opens the
+	-- tray. The other ten placeable frames are chromeless and need both.
+	place = ns.UI.Placeable(face, {
+		moved = function(anchor)
+			ns.db.corralPoint = anchor
+			ns.Options.Refresh()
+		end,
+	})
 
 	tray = CreateFrame("Frame", nil, _G.UIParent)
 	tray.bg = ns.Fill(tray, "BACKGROUND", UI.Color.window[1], UI.Color.window[2],
@@ -481,11 +478,7 @@ function Corral.Lock()
 	if not face then
 		return
 	end
-	if ns.db.locked then
-		face:RegisterForDrag()
-	else
-		face:RegisterForDrag("LeftButton")
-	end
+	place:Lock(not ns.db.locked)
 end
 
 function Corral.Reset()

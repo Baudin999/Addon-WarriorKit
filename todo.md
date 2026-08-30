@@ -29,56 +29,28 @@ in the README's untested list, and the full text of each item is this file at
     `fc6c0e5`
 14. check.sh derives its class shapes from `Class/*.lua` rather than naming
     them. `371d82d`
+15. A placeable HUD frame, named at last, and `UI.Window` made a caller of it
+    rather than a second copy of half of it. Twelve sites, not the seven this
+    file counted. Its text is in this file at `HEAD~1`.
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
 
 ## Open
 
-Items 15 to 22 came out of an architecture review on 2026-08-29. Every one is a
+Items 16 to 22 came out of an architecture review on 2026-08-29. Every one is a
 duplication or a rule the addon already believes in and does not enforce. None
 is a bug: the addon draws the right thing today. They are the shapes that make
 the next change cost more than it should, ordered so the one that drags the most
 out with it goes first.
 
-15. A placeable HUD frame, named at last.
-
-    Eleven parts of this addon put a rectangle on the world that you can unlock
-    and drag, and none of them share a line of it. Seven write the same block by
-    hand: `SetMovable`, `SetClampedToScreen`, an `OnDragStart` that checks
-    `ns.db.locked`, an `OnDragStop` that rounds the point and writes
-    `ns.db.<x>Point`, a `grab` box over the whole frame, a `title` label at
-    `ns.UI.OutlineFloor()`, and a `Lock()` that toggles `RegisterForDrag` and
-    shows or hides both. `src/Buffs/Nag.lua:632`, `src/Cooldowns/Row.lua:340`,
-    `src/Hover/Sheet.lua:202`, `src/Meter/Window.lua:616`,
-    `src/Progress/Rails.lua:234`, `src/Swing/Gauges.lua:390` and
-    `src/UnitFrames/PlayerCast.lua:317`. A clone scan matches them character for
-    character, comments included: `Cooldowns/Row.lua:351` and
-    `Swing/Gauges.lua:401` carry the same note about a drag landing wherever the
-    cursor was, with one noun changed.
-
-    This is the GameTooltip story in `scripts/check.sh:457` happening a second
-    time. Nothing is wrong at any one site, which is exactly why it reached
-    seven.
-
-    `UI.Window` exists for chrome windows. Nothing exists for this. The shape
-    wanted is one call, something like
-    `ns.UI.Placeable(frame, { key = "swingPoint", title = "WarriorKit swing",
-    onMoved = Gauges.Apply })`, returning the lock and reset the feature
-    registers. Three things come out with it. The seven `Lock()` bodies become
-    one. The seven copies of
-    `local function Whole(value) return math.floor(value + 0.5) end`
-    (`UnitFrames/Group.lua:316`, `UnitFrames/PlayerCast.lua:124`,
-    `Buttons/Placing.lua:157`, `Buffs/Nag.lua:160`, `Hover/Sheet.lua:40`,
-    `Cooldowns/Row.lua:76`, `Progress/Rails.lua:100`) become `ns.UI.Whole`
-    beside `ns.UI.Round`, which is a different function and is why nobody
-    reused it. And the five `Reset` bodies that re-type their default
-    coordinate rather than asking for it (`Nag.Reset`, `Row.Reset`,
-    `Sheet.Reset`, `MeterWindow.Reset`, `Group.Reset`) stop being a second copy
-    of a number that already sits in a `defaults` table. All five pairs agree
-    today and nothing checks that they keep agreeing; `SwingGauges.Reset`,
-    `Rails.Reset` and `PlayerCast.Reset` already call `ns.DefaultFor` and are
-    the ones written right.
+Item 15 is done, with two notes for whoever takes the rest. The review counted
+seven copies of the drag block and there were twelve, because it looked for
+frames with no chrome and the axis turned out to be placing rather than chrome:
+the chat window, the minimap corral and the enemy bars anchor were writing the
+same lines behind their own. And the five `Reset` bodies it wanted fixed were
+already fixed by `0312cf3`, which is what an item costs when the list is not
+reread before it is worked.
 
 16. `ns.RegisterUnitEvent` in Core, where the other thirty shims live.
 
@@ -157,6 +129,9 @@ out with it goes first.
     is a one-line grep in `check.sh` and it passes today, which is the best
     possible moment to write it, because a rule added while it is already
     satisfied costs nothing and a rule added after it breaks costs a refactor.
+    `src/UI/Placeable.lua` is a third file written to that rule on purpose, and
+    it is the one that had to work for it: a placeable frame is a setting made
+    visible, and it takes a function to write the anchor rather than the key.
 
     The second is item 16's rule once item 16 has landed: outside
     `src/Core/`, no file probes the client for a call it means to make. Both

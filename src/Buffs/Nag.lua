@@ -125,7 +125,7 @@ local REFRESH = 0.1
 local IsResting = _G.IsResting
 local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
 
-local frame, caption, grab, title
+local frame, caption, place
 local icons = {}
 local shown = {}
 local shownCount = 0
@@ -157,9 +157,8 @@ end
 -- because the client can take a moment to answer for a spell.
 local racial = { label = "" }
 
-local function Whole(value)
-	return math.floor(value + 0.5)
-end
+local Whole = ns.UI.Whole
+
 
 --------------------------------------------------------------------------
 -- What wants to be on screen
@@ -523,9 +522,6 @@ function Nag.Apply()
 	caption:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -(ICON + CAPTION_GAP) * unit)
 	caption:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -(ICON + CAPTION_GAP) * unit)
 
-	grab:ClearAllPoints()
-	grab:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-	grab:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
 
 	-- Force the next tick to lay the row out again, whatever it decides. A zoom
 	-- change moves every square and the mask has not moved with it.
@@ -542,17 +538,7 @@ function Nag.Lock()
 	if not built then
 		return
 	end
-	local unlocked = not ns.db.locked
-	frame:EnableMouse(unlocked)
-	if unlocked then
-		frame:RegisterForDrag("LeftButton")
-		grab:Show()
-		title:Show()
-	else
-		frame:RegisterForDrag()
-		grab:Hide()
-		title:Hide()
-	end
+	place:Lock(not ns.db.locked)
 end
 
 function Nag.Reset()
@@ -630,33 +616,13 @@ events:SetScript("OnEvent", function(_, event, token)
 		frame = CreateFrame("Frame", FRAME_NAME, UIParent)
 		ns.UI.Adopt(frame, ns.db.buffZoom)
 		unit = ns.UI.Unit(frame)
-		frame:SetMovable(true)
-		frame:SetClampedToScreen(true)
-		frame:SetScript("OnDragStart", function(self)
-			if not ns.db.locked then
-				self:StartMoving()
-			end
-		end)
-		frame:SetScript("OnDragStop", function(self)
-			self:StopMovingOrSizing()
-			local point, _, relativePoint, x, y = self:GetPoint()
-			-- Rounded, because a drag lands wherever the cursor was and this
-			-- frame is on the grid, where a fractional offset rasterises every
-			-- icon and every glyph inside it across two rows of pixels.
-			ns.db.buffPoint = { point, "UIParent", relativePoint, Whole(x), Whole(y) }
-			Nag.Apply()
-		end)
-
-		grab = ns.UI.Box(frame, nil, ns.UI.Color.edge)
-		grab:Hide()
-		-- At the outline floor, for the reason the swing bars' title is: it is
-		-- drawn over the world while the row is being placed, so it cannot drop
-		-- the rim, and 12 was too small to carry one.
-		title = ns.UI.Label(frame, ns.UI.OutlineFloor(), ns.UI.Color.heading,
-			"LEFT", ns.UI.OUTLINE)
-		title:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 2 * unit)
-		title:SetText("WarriorKit buffs")
-		title:Hide()
+		place = ns.UI.Placeable(frame, {
+			name = "WarriorKit buffs",
+			moved = function(anchor)
+				ns.db.buffPoint = anchor
+				Nag.Apply()
+			end,
+		})
 
 		-- Outlined, which is what the meters use for the same reason: this
 		-- text sits over the world and a drop shadow disappears against a

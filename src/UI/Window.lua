@@ -135,18 +135,19 @@ function UI.Window(opts)
 	UI.Adopt(frame, zoom)
 
 	frame:SetPoint("CENTER")
-	frame:SetMovable(true)
 	frame:EnableMouse(true)
-	frame:RegisterForDrag("LeftButton")
-	frame:SetClampedToScreen(true)
+	-- Dragged through UI/Placeable.lua, which owns placing for every frame in
+	-- the addon that can be moved, windows included. Its header says why that
+	-- is one file and not two. No name, because a window has a bar across its
+	-- top to grab it by and answers the mouse whether or not you are placing it.
+	window.place = UI.Placeable(frame, { moved = opts.moved })
+	window.place:Lock(true)
 	-- DIALOG unless the caller says otherwise. A settings window is something
 	-- you open over the game and close again, and DIALOG is where that belongs.
 	-- A window that is up while you play, which is what the chat window is, has
 	-- to sit under the tooltip and under anything the client puts over the
 	-- world, so it asks for a lower one.
 	frame:SetFrameStrata(opts.strata or "DIALOG")
-	frame:SetScript("OnDragStart", frame.StartMoving)
-	frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 	-- A listening key field has the keyboard and an open dropdown covers
 	-- whatever is under it, so a click anywhere else in the window has to be a
 	-- way out of both. Each of them eats its own click, so this never cancels the

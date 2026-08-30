@@ -93,7 +93,7 @@ local CONFIG = [[
 	self:SetAttribute("*type2", "togglemenu")
 ]]
 
-local anchor, header, grab, title
+local anchor, header, place
 local built, missing = false, false
 local pending = false
 
@@ -313,9 +313,7 @@ local function Place()
 		ns.db.partyHeight * unit)
 end
 
-local function Whole(value)
-	return math.floor(value + 0.5)
-end
+local Whole = ns.UI.Whole
 
 -- How many columns wide and how many rows deep the list has been arranged, in
 -- blocks. The header's own arithmetic, done here: a party of five at five to a
@@ -377,32 +375,17 @@ end
 local function Build()
 	anchor = CreateFrame("Frame", FRAME_NAME, UIParent)
 	ns.UI.Adopt(anchor, ns.db.partyZoom)
-	anchor:SetMovable(true)
-	anchor:SetClampedToScreen(true)
-	anchor:SetScript("OnDragStart", function(self)
-		if not ns.db.locked and not InCombatLockdown() then
-			self:StartMoving()
-		end
-	end)
-	anchor:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		local point, _, relativePoint, x, y = self:GetPoint()
-		-- Rounded, because a drag lands wherever the cursor was and this frame
-		-- is on the grid, where a fractional offset rasterises every edge
-		-- inside it across two rows of pixels.
-		ns.db.partyPoint = { point, "UIParent", relativePoint, Whole(x), Whole(y) }
-		Group.Apply()
-	end)
-
-	grab = ns.UI.Box(anchor, nil, ns.UI.Color.edge)
-	grab:SetAllPoints(anchor)
-	grab:Hide()
-
-	title = ns.UI.Label(anchor, ns.UI.OutlineFloor(), ns.UI.Color.heading,
-		"LEFT", ns.UI.OUTLINE)
-	title:SetPoint("BOTTOMLEFT", anchor, "TOPLEFT", 0, 2)
-	title:SetText("WarriorKit party")
-	title:Hide()
+	place = ns.UI.Placeable(anchor, {
+		name = "WarriorKit party",
+		-- The one of the twelve that refuses in combat. The blocks hanging off
+		-- this anchor come off a secure group header, and moving the frame they
+		-- are parented to in a lockdown is what the client raises on.
+		combat = false,
+		moved = function(point)
+			ns.db.partyPoint = point
+			Group.Apply()
+		end,
+	})
 
 	-- The one call in the addon that names a Blizzard template. A client that
 	-- does not carry it refuses the frame rather than raising, and everything
@@ -472,17 +455,7 @@ function Group.Lock()
 	if not built then
 		return
 	end
-	local unlocked = not ns.db.locked
-	anchor:EnableMouse(unlocked)
-	if unlocked then
-		anchor:RegisterForDrag("LeftButton")
-		grab:Show()
-		title:Show()
-	else
-		anchor:RegisterForDrag()
-		grab:Hide()
-		title:Hide()
-	end
+	place:Lock(not ns.db.locked)
 end
 
 function Group.Reset()

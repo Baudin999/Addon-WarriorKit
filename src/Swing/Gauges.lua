@@ -81,7 +81,7 @@ local MARK = { 1, 1, 1, 0.85 }
 local EDGE_QUIET = { 0.10, 0.10, 0.12, 1 }
 local EDGE_NOW = { 0.40, 0.94, 0.52, 1 }
 
-local frame, main, off, grab, title
+local frame, main, off, place
 local built = false
 local dual = false
 
@@ -92,12 +92,7 @@ local dual = false
 -- a value read once.
 local unit = 1
 
--- Nearest whole unit, negatives included, which on the grid is the nearest
--- physical pixel. Not ns.UI.Round: that floors at one, which is right for a
--- size and wrong for a coordinate where zero is the left edge.
-local function Whole(value)
-	return math.floor(value + 0.5)
-end
+local Whole = ns.UI.Whole
 
 --------------------------------------------------------------------------
 -- Building
@@ -205,17 +200,7 @@ function SwingGauges.Lock()
 	if not built then
 		return
 	end
-	local unlocked = not ns.db.locked
-	frame:EnableMouse(unlocked)
-	if unlocked then
-		frame:RegisterForDrag("LeftButton")
-		grab:Show()
-		title:Show()
-	else
-		frame:RegisterForDrag()
-		grab:Hide()
-		title:Hide()
-	end
+	place:Lock(not ns.db.locked)
 	SwingGauges.Show()
 end
 
@@ -388,36 +373,13 @@ events:SetScript("OnEvent", function(_, event, token)
 		frame = CreateFrame("Frame", FRAME_NAME, UIParent)
 		ns.UI.Adopt(frame, ns.db.swingZoom)
 		unit = ns.UI.Unit(frame)
-		frame:SetMovable(true)
-		frame:SetClampedToScreen(true)
-		frame:SetScript("OnDragStart", function(self)
-			if not ns.db.locked then
-				self:StartMoving()
-			end
-		end)
-		frame:SetScript("OnDragStop", function(self)
-			self:StopMovingOrSizing()
-			local point, _, relativePoint, x, y = self:GetPoint()
-			-- Rounded, because a drag lands wherever the cursor was and this
-			-- frame is on the grid, where a fractional offset rasterises every
-			-- edge inside it across two rows of pixels. The harness's anchor
-			-- sweep fails on a frame left on a fraction.
-			ns.db.swingPoint = { point, "UIParent", relativePoint, Whole(x), Whole(y) }
-			SwingGauges.Apply()
-		end)
-
-		grab = ns.UI.Box(frame, nil, ns.UI.Color.edge)
-		grab:SetAllPoints(frame)
-		grab:Hide()
-		-- At the outline floor rather than the panel's body size. This sits
-		-- over the world while the bars are being placed, so it has to carry a
-		-- rim, and a rim costs a pixel of every stroke: at 12 it was closing up
-		-- its own counters to buy an edge it could not do without.
-		title = ns.UI.Label(frame, ns.UI.OutlineFloor(), ns.UI.Color.heading,
-			"LEFT", ns.UI.OUTLINE)
-		title:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 2 * unit)
-		title:SetText("WarriorKit swing")
-		title:Hide()
+		place = ns.UI.Placeable(frame, {
+			name = "WarriorKit swing",
+			moved = function(anchor)
+				ns.db.swingPoint = anchor
+				SwingGauges.Apply()
+			end,
+		})
 
 		main = BuildBar(frame, MAIN_FILL, true)
 		main:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)

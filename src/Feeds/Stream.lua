@@ -354,37 +354,23 @@ function Instance:Build()
 	-- Under the tooltip and above the world. A feed is furniture, the same as
 	-- the chat window, and it must not sit over a dialog the client puts up.
 	frame:SetFrameStrata("MEDIUM")
-	frame:SetMovable(true)
-	frame:SetClampedToScreen(true)
-	frame:SetScript("OnDragStart", function(this)
-		if not ns.db.locked then
-			this:StartMoving()
-		end
-	end)
-	frame:SetScript("OnDragStop", function(this)
-		this:StopMovingOrSizing()
-		local point, _, relativePoint, x, y = this:GetPoint()
-		ns.db[self.keys.point] = { point, "UIParent", relativePoint, x, y }
-	end)
+	-- The accent rather than the palette's edge, which is the one thing a feed
+	-- wants differently from the other eleven placeable frames: it already has
+	-- a hairline of its own round it all the time, so the rim that says it is
+	-- being placed has to be a different colour from the one that is always
+	-- there.
+	self.place = UI.Placeable(frame, {
+		name = self.title,
+		edge = C.accent,
+		moved = function(anchor)
+			ns.db[self.keys.point] = anchor
+		end,
+	})
 
 	self.bg = ns.Fill(frame, "BACKGROUND", C.window[1], C.window[2], C.window[3], 1)
 	self.bg:SetAllPoints()
 	self.edges = ns.Outline(frame, C.edge[1], C.edge[2], C.edge[3], C.edge[4])
 	ns.EdgeSize(self.edges, ns.Pixel(frame))
-
-	-- The two things that exist only while the addon is unlocked, built once and
-	-- shown and hidden rather than made and unmade.
-	self.grab = UI.Box(frame, nil, C.accent)
-	self.grab:SetAllPoints()
-	self.grab:Hide()
-	-- The outline floor rather than a 14 written here, which is the same number
-	-- and the same rule as the drag captions on the swing bars and the buff
-	-- row. This one was already tall enough; it just was not saying why.
-	self.caption = UI.Label(frame, UI.OutlineFloor(), C.heading, "LEFT",
-		UI.OUTLINE)
-	self.caption:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 2 * self.unit)
-	self.caption:SetText(self.title)
-	self.caption:Hide()
 
 	self.feed = UI.Feed(frame, {
 		unit = self.unit,
@@ -465,25 +451,15 @@ function Instance:Lock()
 		return false
 	end
 	local unlocked = not ns.db.locked
-	-- The frame itself takes the mouse only while it is being placed. Locked,
-	-- the only things on it that answer the mouse are the rows, and only when
-	-- the player has left that setting on.
-	self.frame:EnableMouse(unlocked)
-	-- And the strip lets go of it while the feed is being placed. It sits along
-	-- the bottom edge, which is where a hand reaches for a window, so a strip
-	-- still taking the mouse is a corner of the frame you cannot drag by.
+	self.place:Lock(unlocked)
+	-- The strip lets go of the mouse while the feed is being placed. It sits
+	-- along the bottom edge, which is where a hand reaches for a window, so a
+	-- strip still taking the mouse is a corner of the frame you cannot drag by.
+	-- Placeable does the frame's half; which children stand aside for it is
+	-- this file's own business.
 	if self.status then
 		self.status:EnableMouse((not unlocked and self.onStatusTooltip
 			and self:Setting("mouse")) and true or false)
-	end
-	if unlocked then
-		self.frame:RegisterForDrag("LeftButton")
-		self.grab:Show()
-		self.caption:Show()
-	else
-		self.frame:RegisterForDrag()
-		self.grab:Hide()
-		self.caption:Hide()
 	end
 	return true
 end

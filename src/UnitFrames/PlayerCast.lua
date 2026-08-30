@@ -94,7 +94,7 @@ local EDGE = Color.frame.idle
 local NAME_TEXT = Color.text.name
 local TIMER_TEXT = Color.text.value
 
-local frame, bar, spellName, timer, grab, title
+local frame, bar, spellName, timer, place
 local built = false
 
 -- One design pixel in this frame's units, which is exactly 1 once ns.UI.Adopt
@@ -120,10 +120,6 @@ local unit = 1
 --            are unlocked
 --   hold     a failed cast is on the screen until this GetTime second
 local drawn = {}
-
-local function Whole(value)
-	return math.floor(value + 0.5)
-end
 
 --------------------------------------------------------------------------
 -- The guarded writes
@@ -315,35 +311,13 @@ local function Build()
 	frame = CreateFrame("Frame", FRAME_NAME, UIParent)
 	ns.UI.Adopt(frame, ns.db.playerCastZoom)
 	unit = ns.UI.Unit(frame)
-	frame:SetMovable(true)
-	frame:SetClampedToScreen(true)
-	frame:SetScript("OnDragStart", function(self)
-		if not ns.db.locked then
-			self:StartMoving()
-		end
-	end)
-	frame:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		local point, _, relativePoint, x, y = self:GetPoint()
-		-- Rounded, because a drag lands wherever the cursor was and this frame
-		-- is on the grid, where a fractional offset rasterises every edge
-		-- inside it across two rows of pixels.
-		ns.db.playerCastPoint = { point, "UIParent", relativePoint, Whole(x), Whole(y) }
-		PlayerCast.Apply()
-	end)
-
-	grab = ns.UI.Box(frame, nil, ns.UI.Color.edge)
-	grab:SetAllPoints(frame)
-	grab:Hide()
-
-	-- At the outline floor rather than the panel's body size, the same as the
-	-- swing bars' own label: this sits over the world while the bar is being
-	-- placed, so it has to carry a rim.
-	title = ns.UI.Label(frame, ns.UI.OutlineFloor(), ns.UI.Color.heading,
-		"LEFT", ns.UI.OUTLINE)
-	title:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 2 * unit)
-	title:SetText("WarriorKit cast")
-	title:Hide()
+	place = ns.UI.Placeable(frame, {
+		name = "WarriorKit cast",
+		moved = function(anchor)
+			ns.db.playerCastPoint = anchor
+			PlayerCast.Apply()
+		end,
+	})
 
 	bar = Gauge.New(frame)
 	-- Pinned to one corner and given a size by the layout rather than stretched
@@ -432,17 +406,7 @@ function PlayerCast.Lock()
 	if not built then
 		return
 	end
-	local unlocked = not ns.db.locked
-	frame:EnableMouse(unlocked)
-	if unlocked then
-		frame:RegisterForDrag("LeftButton")
-		grab:Show()
-		title:Show()
-	else
-		frame:RegisterForDrag()
-		grab:Hide()
-		title:Hide()
-	end
+	place:Lock(not ns.db.locked)
 	PlayerCast.Update(GetTime())
 end
 

@@ -2,6 +2,57 @@
 
 ## Unreleased
 
+### One file owns dragging, and windows are one of its callers
+
+Twelve frames in this addon can be unlocked and moved, and until now every one
+of them wrote its own twenty lines to do it: `SetMovable`, `SetClampedToScreen`,
+a drag that refuses while the frames are locked, a drag stop that reads the
+point back and writes it into a setting, and a `Lock` that toggles
+`RegisterForDrag`. Nine of them also drew a rim over the frame and a name above
+it, because a frame with no chrome and nothing in it is a piece of empty screen
+you have to find from memory. The clone scan found two of the copies matching
+character for character, comments included: `Cooldowns/Row.lua` and
+`Swing/Gauges.lua` carried the same note about a drag landing wherever the
+cursor was, with one noun changed.
+
+`src/UI/Placeable.lua` is the one of them now. A caller hands it a frame, a
+function to take the finished anchor and, if the frame has no chrome, the name
+to draw above it while you are placing it. It knows nothing about which setting
+it writes, because `src/UI/` is not allowed to know the name of a setting, which
+is the rule `UI.Size` and the tooltip's dock were already written to.
+
+The split that let it reach twelve was chrome. `UI.Window` owned the background,
+the hairline, the title bar and the close box, and it owned a broken half of the
+placing too: it made every window movable and then had nowhere to put the
+result. So the one window that has to remember its corner, the chat window,
+overwrote the drag scripts `UI.Window` had just installed with a thirteenth copy
+of them. Chrome was never the axis. Placing is one thing, chrome is another, and
+`UI.Window` is a caller of `UI.Placeable` rather than a rival to it.
+
+Two things came out with it. `ns.UI.Whole` is in `UI/Pixel.lua` beside
+`ns.UI.Round`, where eight files had written their own copy of it, and the
+header now says why the two are different functions with similar names. Round
+takes a size from outside the grid and refuses to return zero, because a
+hairline asked for and not drawn is a missing line. Whole takes a coordinate,
+where zero is the left edge and a floor at one would be a bug. And the meters
+were the one frame of the twelve that saved its offsets unrounded. Nothing said
+so, because the other eleven agreed with each other rather than with a rule
+written down anywhere. They round now, all of them, through the same line.
+
+Three frames were re-anchoring their rim on every `Apply`, once per layout, for
+no effect. The rim is anchored to the frame and follows it already.
+
+Nothing became newly draggable and nothing stopped being draggable. The parts
+whose own `Lock` has more to do than toggle a drag still do it: the experience
+rails hand the mouse from the bars to the frame, the enemy bars show a header
+only in list mode, and a feed lets go of its status strip so the corner you
+reach for is the corner you can drag by.
+
+Two drag sites are deliberately not on this. The charge button and the action
+bar handles are dragged by a child handle that moves its parent, which is a
+different shape from a frame you grab anywhere, and there are two of them rather
+than twelve.
+
 ### You're the best around
 
 Levelling plays five seconds of the Karate Kid chorus over the client's own
