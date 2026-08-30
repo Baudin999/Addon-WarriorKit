@@ -10,7 +10,8 @@ A title and the commit that finished it. Where an item took several commits the
 hash is the last of them. What was wrong and what fixed it is in
 `docs/CHANGELOG.md` and `docs/README.md`, what is still unconfirmed in game is
 in the README's untested list, and the full text of each item is this file at
-`e7ef4ca` for 1 to 6, 8, 11 and 12, and at `ca59a77` for 7, 9 and 13.
+`e7ef4ca` for 1 to 6, 8, 11 and 12, at `ca59a77` for 7, 9 and 13, and at
+`44c79ef` for 15.
 
 1. Weapon swing timer. `8be9a43`
 2. Deep Wounds missing from the enemy bar debuffs. `05e40ec`
@@ -29,9 +30,7 @@ in the README's untested list, and the full text of each item is this file at
     `fc6c0e5`
 14. check.sh derives its class shapes from `Class/*.lua` rather than naming
     them. `371d82d`
-15. A placeable HUD frame, named at last, and `UI.Window` made a caller of it
-    rather than a second copy of half of it. Twelve sites, not the seven this
-    file counted. Its text is in this file at `HEAD~1`.
+15. A placeable HUD frame, named at last. `80528bc`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
@@ -42,15 +41,9 @@ Items 16 to 22 came out of an architecture review on 2026-08-29. Every one is a
 duplication or a rule the addon already believes in and does not enforce. None
 is a bug: the addon draws the right thing today. They are the shapes that make
 the next change cost more than it should, ordered so the one that drags the most
-out with it goes first.
-
-Item 15 is done, with two notes for whoever takes the rest. The review counted
-seven copies of the drag block and there were twelve, because it looked for
-frames with no chrome and the axis turned out to be placing rather than chrome:
-the chat window, the minimap corral and the enemy bars anchor were writing the
-same lines behind their own. And the five `Reset` bodies it wanted fixed were
-already fixed by `0312cf3`, which is what an item costs when the list is not
-reread before it is worked.
+out with it goes first. Item 15 undercounted its own sites by five and asked
+for a fix `0312cf3` had already made, so read an item against the code before
+working it.
 
 16. `ns.RegisterUnitEvent` in Core, where the other thirty shims live.
 
@@ -121,18 +114,14 @@ reread before it is worked.
     moving it. It goes next to `ns.Strip`, `ns.Unstrip` and `ns.Blocked`, which
     are the three calls it exists to feed.
 
-21. One layering rule left, gated rather than commented.
+21. One layering rule, gated rather than commented.
 
-    The first of the two is done. No file under `src/UI/` may name a setting,
-    and `check.sh` says so rather than three file headers saying so. It went in
-    with item 15 because `src/UI/Placeable.lua` is the file that had to work for
-    it: a placeable frame is a setting made visible, and the obvious shape was
-    to hand it the db key. It takes a function that receives the anchor instead.
+    Item 16's rule, once item 16 has landed: outside `src/Core/`, no file probes
+    the client for a call it means to make. It belongs with the GameTooltip rule
+    and with the `src/UI/` rule item 15 wrote, which are the same idea already
+    written down and already enforced.
 
-    What is left is item 16's rule, once item 16 has landed: outside
-    `src/Core/`, no file probes the client for a call it means to make. It
-    belongs with the GameTooltip rule and with the one above, which are the same
-    idea already written down and already enforced.
+    The other rule this item asked for is one of those two now.
 
 22. `Core/Menu.lua` registers a feature from inside Core.
 
