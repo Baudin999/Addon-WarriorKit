@@ -5711,6 +5711,23 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- Whether all sixteen placeable frames still drag in the game after
+  `UI/Placeable.lua` took the block over from the twelve copies that used to
+  write it. The harness proves the property that broke silently before, which is
+  which frames the lock reaches: eleven HUD frames lose the drag with `/wk lock`
+  and get it back, five chrome windows keep it throughout. What no stub can
+  prove is that `StartMoving` on a frame the client considers protected still
+  behaves, and the party anchor is the one that would show it, because its
+  blocks come off a secure group header and it is the only one that refuses to
+  move in combat. What would settle it: `/wk unlock`, drag each frame, `/reload`
+  and check every one came back where you left it, then pull something and try
+  to drag the party blocks mid fight, which should refuse rather than error.
+- Whether rounding the two anchors that were not rounded before moves anything
+  visibly. The meters saved their offsets unrounded and now do not, and the
+  chat window saves through the shared path, so both land on a whole pixel on
+  the first drag after this. A frame that was sitting on a fraction moves by up
+  to half a pixel once, which is the point, and then stays put.
+
 - Whether a secure action button answers a suffixed click delivered by an
   override binding on 2.5.6. This is the whole of mouseover casting.
   `Marking/Keys.lua` proves the binding half on an ordinary button and its click

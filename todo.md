@@ -121,22 +121,18 @@ reread before it is worked.
     moving it. It goes next to `ns.Strip`, `ns.Unstrip` and `ns.Blocked`, which
     are the three calls it exists to feed.
 
-21. Two layering rules, gated rather than commented.
+21. One layering rule left, gated rather than commented.
 
-    `src/UI/Window.lua:62` and `src/UI/Tooltip.lua:147` both say the UI layer is
-    not allowed to know the name of a setting, and both are keeping their word:
-    `ns.db` appears nowhere under `src/UI/` except in those two comments. That
-    is a one-line grep in `check.sh` and it passes today, which is the best
-    possible moment to write it, because a rule added while it is already
-    satisfied costs nothing and a rule added after it breaks costs a refactor.
-    `src/UI/Placeable.lua` is a third file written to that rule on purpose, and
-    it is the one that had to work for it: a placeable frame is a setting made
-    visible, and it takes a function to write the anchor rather than the key.
+    The first of the two is done. No file under `src/UI/` may name a setting,
+    and `check.sh` says so rather than three file headers saying so. It went in
+    with item 15 because `src/UI/Placeable.lua` is the file that had to work for
+    it: a placeable frame is a setting made visible, and the obvious shape was
+    to hand it the db key. It takes a function that receives the anchor instead.
 
-    The second is item 16's rule once item 16 has landed: outside
-    `src/Core/`, no file probes the client for a call it means to make. Both
-    belong with the GameTooltip rule, which is the same idea already written
-    down and already enforced.
+    What is left is item 16's rule, once item 16 has landed: outside
+    `src/Core/`, no file probes the client for a call it means to make. It
+    belongs with the GameTooltip rule and with the one above, which are the same
+    idea already written down and already enforced.
 
 22. `Core/Menu.lua` registers a feature from inside Core.
 
