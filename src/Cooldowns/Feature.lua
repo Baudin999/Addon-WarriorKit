@@ -113,10 +113,12 @@ ns.Register({
 		-- ready. On for anyone who would rather always know where it is.
 		cooldownIdle = false,
 
-		-- Above the buff nag at 140 and clear of the charge icon at -160 and the
-		-- swing bars at -220. Whole numbers, because half of an odd number is
-		-- half a pixel and this frame is on the grid.
-		cooldownPoint = { "CENTER", "UIParent", "CENTER", 0, 200 },
+		-- Below the character rather than above. The buff nag owns the space
+		-- over your head at 157, and this row is the one you glance at between
+		-- swings, so it sits under the charge icon at -190 where the eye
+		-- already is. Whole numbers, because half of an odd number is half a
+		-- pixel and this frame is on the grid.
+		cooldownPoint = { "CENTER", "UIParent", "CENTER", 1, -317 },
 	},
 
 	-- Which entries this character still watches, keyed by the entry's own key

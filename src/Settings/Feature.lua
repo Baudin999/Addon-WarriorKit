@@ -52,11 +52,11 @@ ns.Register({
 	order = 19,
 
 	defaults = {
-		-- 1, which is the size everything in this addon was drawn at. The screen
-		-- height already doubles it on a panel tall enough to need that, so the
-		-- default is a preference of "leave it alone" rather than a number that
-		-- happens to suit one monitor.
-		uiSize = 1,
+		-- 1.25. Everything in this addon was drawn at 1, and 1 is a size you
+		-- lean in to read on the panel most people are playing on. The screen
+		-- height already doubles it where a panel is tall enough to need that,
+		-- so this is a quarter more on top of whatever the screen decided.
+		uiSize = 1.25,
 
 		-- Docked. It is where this game has put a tooltip since the day it
 		-- shipped, and a box beside the row under the cursor covers the row you

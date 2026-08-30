@@ -104,16 +104,18 @@ ns.Register({
 
 		progressBubbles = true,
 
-		-- 480 is twenty four screen pixels a segment, which is the narrowest a
-		-- bubble reads as a division rather than as hatching, times the twenty
-		-- the client has always drawn. 14 is tall enough for the level and the
-		-- count beside it at a size worth reading.
-		progressWidth = 480,
+		-- 460 is twenty three screen pixels a segment, which is a bubble wide
+		-- enough to read as a division rather than as hatching, times the
+		-- twenty the client has always drawn. 14 is tall enough for the level
+		-- and the count beside it at a size worth reading.
+		progressWidth = 460,
 		progressHeight = 14,
 
 		-- A whole number, like every other zoom in the addon, because a
-		-- fractional one puts every edge back on a half pixel.
-		progressZoom = 1,
+		-- fractional one puts every edge back on a half pixel. 2, because this
+		-- rail is read from the bottom edge of the screen while something else
+		-- has your attention.
+		progressZoom = 2,
 
 		-- The bottom edge of the screen, which is where this game has drawn
 		-- these two bars since it shipped and is under every action bar rather

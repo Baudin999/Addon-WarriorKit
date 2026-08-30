@@ -278,6 +278,14 @@ check(not feed:Row(rows + 4):IsMouseEnabled(),
 do
 	local combat = combatStream:Feed()
 
+	-- The feed ships off, because it is the one thing in the addon that runs
+	-- on every combat log event in the zone. Everything below is about what a
+	-- row says once you have turned it on, so it is turned on here and put
+	-- back at the foot of the block.
+	local shippedCollect, shippedShown = ns.db.combatFeed, ns.db.combatFeedShown
+	ns.db.combatFeed, ns.db.combatFeedShown = true, true
+	ns.Stream.Each("Apply")
+
 	-- The sections above this one leave the player with no GUID, which is
 	-- what the client looks like across a loading screen. That is a real
 	-- state and it has its own assertion below; the rest of this block needs
@@ -654,6 +662,11 @@ do
 		check(Tip.Show(row, nil) == false, "a tooltip handed nothing still opened")
 		check(not Tip.IsShown(), "a tooltip handed nothing stayed on screen")
 	end
+
+	-- The combat feed back to shipping off, so the sections after this one see
+	-- the client the addon actually hands a player.
+	ns.db.combatFeed, ns.db.combatFeedShown = shippedCollect, shippedShown
+	ns.Stream.Each("Apply")
 
 	print(("feeds  loot %s, combat %s; %d of %d loot sentences; tooltip %s")
 		:format(lootStream:Describe(), combatStream:Describe(), live, total,

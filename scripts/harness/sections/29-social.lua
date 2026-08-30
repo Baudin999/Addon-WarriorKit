@@ -230,9 +230,13 @@ do
 	fire("CHAT_MSG_WHISPER_INFORM", "on my way", "Aria")
 	check(Window.Count(whisper) == 2, "a whisper you sent did not reach that conversation")
 
-	-- The numbered channels are a setting and it ships off. They have no room of
-	-- their own either way: they are the volume the window exists to get away
-	-- from, and Conversation is where they land when they are wanted at all.
+	-- The numbered channels are a setting and it ships on, because a group is
+	-- found in them on these servers. They have no room of their own either
+	-- way: they are the volume the window exists to get away from, and
+	-- Conversation is where they land when they are wanted at all.
+	local shipped = ns.db.chatChannels
+	ns.db.chatChannels = false
+	Feed.Apply()
 	local j = held()
 	fire("CHAT_MSG_CHANNEL", "wts", "Spammer", nil, "1. General", nil, nil, 1, "General")
 	check(held() == j, "a numbered channel was captured with the setting off")
@@ -241,7 +245,7 @@ do
 	Feed.Apply()
 	fire("CHAT_MSG_CHANNEL", "wts", "Spammer", nil, "1. General", nil, nil, 1, "General")
 	check(held() == j + 1, "a numbered channel was not captured with the setting on")
-	ns.db.chatChannels = false
+	ns.db.chatChannels = shipped
 	Feed.Apply()
 end
 
@@ -408,8 +412,14 @@ do
 
 	check(claimed("CHAT_MSG_PARTY") == 1,
 		("%d filters on party chat, expected exactly one"):format(claimed("CHAT_MSG_PARTY")))
-	check(claimed("CHAT_MSG_CHANNEL") == 0,
-		"the numbered channels are filtered out of Blizzard's window while they are not captured")
+	-- The numbered channels are the one claim that is a setting, so the pair is
+	-- what is stated rather than a number: while they are captured Blizzard's
+	-- window is filtered, and while they are not it is left alone. A filter on
+	-- an event this window does not carry is a line the player loses entirely.
+	check(claimed("CHAT_MSG_CHANNEL") == (ns.db.chatChannels and 1 or 0),
+		("%d filters on the numbered channels while they are %s"):format(
+			claimed("CHAT_MSG_CHANNEL"),
+			ns.db.chatChannels and "captured" or "not captured"))
 	check(chat.filters.CHAT_MSG_PARTY[1]() == true,
 		"the filter let the message through, so both windows would draw it")
 

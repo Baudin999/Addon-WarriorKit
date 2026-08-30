@@ -408,10 +408,12 @@ ns.Register({
 		-- empty field, and one tick gives them one.
 		chatPrefix = true,
 
-		-- The numbered channels are off. General and Trade are most of the
-		-- volume in a city and none of the conversation, and they stay in
-		-- Blizzard's window where scrolling past them costs nothing.
-		chatChannels = false,
+		-- The numbered channels are on. General and Trade are most of the
+		-- volume in a city and none of the conversation, but they are also
+		-- where a group is found on these servers, and a window that cannot
+		-- show them is a window you still have to look away from. One tick
+		-- puts the noise back in Blizzard's frame.
+		chatChannels = true,
 
 		chatStamp = true,
 		chatSound = true,
@@ -428,8 +430,8 @@ ns.Register({
 		-- so the same message and the same number of lines fit in a rectangle
 		-- a third smaller than the one this shipped with. Both steppers are
 		-- still there for anyone who wants the window bigger.
-		chatWidth = 400,
-		chatHeight = 210,
+		chatWidth = 420,
+		chatHeight = 420,
 		-- How big this window is drawn, and its own rather than the addon-wide
 		-- size on the settings page.
 		--
@@ -448,10 +450,14 @@ ns.Register({
 		-- point off it buys another line of what somebody said in the same
 		-- rectangle. The stepper goes to twenty for anyone who wants it back.
 		chatFont = 11,
-		-- Not opaque. A chat window sits in a corner all evening and the world
-		-- behind it is the game.
-		chatAlpha = 80,
-		chatPoint = { "BOTTOMLEFT", "UIParent", "BOTTOMLEFT", 16, 120 },
+		-- No ground at all. A chat window sits in a corner all evening, the
+		-- world behind it is the game, and the text carries its own outline, so
+		-- the panel under it was only ever covering scenery. The stepper goes
+		-- to a hundred for anyone who wants a surface back.
+		chatAlpha = 0,
+		-- Hard into the bottom left corner, which is where this game has put
+		-- the conversation since it shipped and where the eye goes for it.
+		chatPoint = { "BOTTOMLEFT", "UIParent", "BOTTOMLEFT", 0, 12 },
 
 		-- Account-wide, all of them. Who matters to you and which voice channel
 		-- you want to be in are facts about you rather than about one character.
@@ -460,12 +466,15 @@ ns.Register({
 		-- rather than by the group's position, so deleting the first group does
 		-- not hand its unread lines to the second.
 		groupSeq = 0,
-		voiceJoin = "none",
+		-- The channel joined at login. A club ID here is one this account is a
+		-- member of; anyone else's client finds no such club and joins nothing,
+		-- which is the same as "none" with an extra lookup.
+		voiceJoin = "club:154840862:1",
 		-- What the pick was called on the row you clicked. The communities are
 		-- not loaded for the first few seconds of a session, so without this the
 		-- picker and the status line spell your voice channel as the pair of
 		-- numbers behind it until they are.
-		voiceLabel = "",
+		voiceLabel = "C & F: General",
 	},
 
 	words = {

@@ -24,15 +24,16 @@ ns.Register({
 
 	defaults = {
 		marking = true,
-		-- One key per mark, empty meaning unbound. Skull and cross take the two
-		-- ctrl combinations because they are the two you place under pressure.
-		-- Moon takes alt rather than a third ctrl combination, because
-		-- CTRL-ALT-BUTTON1 is a chord and the point of these is that they are
-		-- faster than opening a menu.
+		-- One key per mark, empty meaning unbound. Function keys rather than
+		-- modified clicks: a modified click on a nameplate competes with the
+		-- camera and with click targeting, and the point of these is that they
+		-- are faster than opening a menu. Three function keys nothing else in
+		-- this game is bound to, running down from F5 in the order the marks
+		-- matter: skull, then cross, then moon.
 		markBinds = {
-			skull = "CTRL-BUTTON1",
-			cross = "CTRL-SHIFT-BUTTON1",
-			moon = "ALT-BUTTON1",
+			skull = "F5",
+			cross = "F4",
+			moon = "F3",
 		},
 		targetMark = true, -- the fallback: mark what you target while holding ctrl, when no key is held
 	},

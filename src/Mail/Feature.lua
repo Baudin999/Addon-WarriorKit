@@ -131,7 +131,9 @@ ns.Register({
 		-- The list itself. Account-wide, because who you mail is a fact about
 		-- you rather than about the character you are standing in, and typing
 		-- the same four names on every alt is exactly the chore this removes.
-		mailFavourites = {},
+		-- The bank alt ships in it; a name you do not have is a name the
+		-- colouring never matches and the picker offers once.
+		mailFavourites = { "konew" },
 	},
 
 	words = {

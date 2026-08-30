@@ -355,4 +355,8 @@ fire("CHARACTER_POINTS_CHANGED")
 fire("UNIT_INVENTORY_CHANGED", "player")
 ns.Swing.Stop(ns.Swing.MAIN)
 ns.Swing.Stop(ns.Swing.OFF)
+
+-- The two section 26 pinned to the design scene, back to what the addon ships.
+ns.db.swing = ns.DefaultFor("swing")
+ns.db.swingZoom = ns.DefaultFor("swingZoom")
 ns.SwingGauges.Apply()

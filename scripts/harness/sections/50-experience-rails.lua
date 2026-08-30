@@ -50,6 +50,14 @@ do
 	local xp, faction = Rails.Bar("xp"), Rails.Bar("faction")
 	check(xp ~= nil and faction ~= nil, "the part built fewer than two rails")
 
+	-- At the design size. The rail ships at 2x, because it is read off the
+	-- bottom edge of the screen while something else has your attention, and
+	-- the grid assertion below is a whole pixel by definition only at 1x.
+	-- Section 08 is where a whole-step zoom is walked; this one is about what
+	-- the rail draws.
+	local shippedZoom = ns.db.progressZoom
+	ns.db.progressZoom = 1
+
 	-- The fixture, put back at the end of every scene that moves it, so the
 	-- assertions read in the order they are written rather than against
 	-- whatever the last one left behind.
@@ -130,20 +138,24 @@ do
 
 		-- 12000 of 40000 is three tenths along the rail, and 8000 rested is a
 		-- fifth of it. The pool starts where the fill ends, which is the whole
-		-- of what it is saying.
+		-- of what it is saying. Both worked out from the setting rather than
+		-- written down, because the width is a setting and a literal here would
+		-- be asserting the default rather than the arithmetic.
+		local fill, fifth = width * 3 / 10, width / 5
 		check(pool:IsShown(), "a character with 8000 rested is drawing no pool")
-		check(pool:GetWidth() == 96,
-			("the pool is %.1f px of a %d px rail and a fifth of it is 96")
-				:format(pool:GetWidth(), width))
+		check(pool:GetWidth() == fifth,
+			("the pool is %.1f px of a %d px rail and a fifth of it is %.1f")
+				:format(pool:GetWidth(), width, fifth))
 		local _, _, _, offset = pool:GetPoint()
-		check(offset == 144,
-			("the pool starts at %s and the fill ends at 144"):format(tostring(offset)))
+		check(offset == fill,
+			("the pool starts at %s and the fill ends at %.1f")
+				:format(tostring(offset), fill))
 
 		-- Bigger than the rest of the level, which is what a week away looks
 		-- like. Clamped at the end of the rail, or it hangs off it.
 		progress.rested = 999999
 		fire("UPDATE_EXHAUSTION")
-		check(pool:GetWidth() == width - 144,
+		check(pool:GetWidth() == width - fill,
 			("a pool bigger than the level drew %.1f px on a %d px rail")
 				:format(pool:GetWidth(), width))
 
@@ -358,6 +370,9 @@ do
 			end
 		end
 	end
+
+	ns.db.progressZoom = shippedZoom
+	Rails.Apply()
 
 	print(("xp     %s"):format(Rails.Describe()))
 	print(("xp     %s"):format(Progress.Describe()))

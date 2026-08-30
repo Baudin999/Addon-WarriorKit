@@ -33,6 +33,8 @@ if window then
 	local Settings = ns.Settings
 	local screen = ns.UI.ScreenZoom()
 
+	-- At the design size, which is where the runner put it and where the stop
+	-- walk below has to start: every figure it asserts is one step off 1.
 	check(ns.db.uiSize == 1, ("the size starts at %s, not 1"):format(tostring(ns.db.uiSize)))
 	check(window.zoom == screen,
 		("the panel opened at zoom %s on a screen that asks for %d")

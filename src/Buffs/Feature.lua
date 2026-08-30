@@ -214,10 +214,10 @@ ns.Register({
 		buffZoom = 2,
 
 		-- Above the middle of the screen, over your character's head and clear
-		-- of the charge icon at -160 and the swing bars at -220. Both numbers
+		-- of the charge icon at -190 and the swing bars at -157. Both numbers
 		-- whole, because half of an odd number is half a pixel and this frame
 		-- is on the grid.
-		buffPoint = { "CENTER", "UIParent", "CENTER", 0, 140 },
+		buffPoint = { "CENTER", "UIParent", "CENTER", -1, 157 },
 
 		-- Empty. Which flask and which elixirs you keep up is a fact about your
 		-- spec and your gold, and these clients will not say an aura came from

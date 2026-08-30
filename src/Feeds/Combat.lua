@@ -196,20 +196,28 @@ function CombatFeed.Defaults()
 	-- a combat row is three columns of numbers, and a column of numbers with
 	-- nothing named over it is a column you have to work out.
 	local defaults = ns.Stream.Defaults("combatFeed",
-		{ "BOTTOMLEFT", "UIParent", "BOTTOMLEFT", 20, 180 }, true)
+		{ "LEFT", "UIParent", "LEFT", 423, 56 }, true)
 
-	-- Wider and taller than the loot feed, because a combat row carries three
-	-- columns to loot's two and because a pull produces rows an order of
+	-- Taller than the loot feed, because a pull produces rows an order of
 	-- magnitude faster than a corpse does: at ten rows a fight scrolls off the
-	-- bottom before you have read the top of it.
-	defaults.combatFeedWidth = 320
-	defaults.combatFeedRows = 12
+	-- bottom before you have read the top of it. The same width as the loot
+	-- feed, so the two columns are one instrument rather than two.
+	defaults.combatFeedWidth = 280
+	defaults.combatFeedRows = 13
 
 	-- combatFeed and combatFeedShown both come from Stream.Defaults above and
-	-- both start true. The first is the one this file reads: off means no row is
-	-- ever built and no marker is ever drawn, which is the setting to reach for
-	-- if you want the combat log left alone entirely. The second only takes the
+	-- both start true, and both are turned off here. The first is the one this
+	-- file reads: off means no row is ever built and no marker is ever drawn,
+	-- which is the whole combat log left alone. The second only takes the
 	-- column off the screen.
+	--
+	-- Off because of what it costs rather than what it is worth. This is the
+	-- one feature in the addon that runs on every COMBAT_LOG_EVENT_UNFILTERED
+	-- in the zone, and the meter and the breakdown already answer "how did that
+	-- fight go" from the same log without a row per swing. `/wk feed combat on`
+	-- for the pull you actually want to read back.
+	defaults.combatFeed = false
+	defaults.combatFeedShown = false
 
 	-- What you do, and what is done to you. Both on, because either alone is
 	-- half a conversation, and separate because they answer different questions

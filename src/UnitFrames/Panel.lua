@@ -260,7 +260,7 @@ local function Debuffs(ui)
 		function(value) return value .. "px" end)
 	ui.Hint("The row packs against the right end of the gauge and wraps upwards, so a long list on a narrow bar becomes two rows rather than icons hanging off the left edge.")
 
-	ui.Action(function() return "back to the four it ships with" end, function()
+	ui.Action(function() return "back to the five it ships with" end, function()
 		ns.EnemyBars.ResetSpells()
 		ns.Options.Refresh()
 	end)

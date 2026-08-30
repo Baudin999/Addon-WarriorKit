@@ -1870,10 +1870,10 @@ the icon clears it. `SetRaidTarget` silently does nothing without raid leader
 or assistant, so the addon says so once every five seconds instead.
 
 Three marks, one key each, set in the panel or with `/wk markkey`. The shipped
-keys are `CTRL-BUTTON1` for skull, `CTRL-SHIFT-BUTTON1` for cross and
-`ALT-BUTTON1` for moon: moon takes alt rather than a third ctrl combination
-because `CTRL-ALT-BUTTON1` is a chord, and the point of these is that they beat
-opening a menu. `Marking.MARKS` in `Marking.lua` is the list, read by `Keys.lua`
+keys are `F5` for skull, `F4` for cross and `F3` for moon: function keys rather
+than modified clicks, because a modified click on a nameplate competes with the
+camera and with click targeting, and the point of these is that they beat opening
+a menu. They run downward in the order the marks matter. `Marking.MARKS` in `Marking.lua` is the list, read by `Keys.lua`
 for the bindings and by `Feature.lua` for the key fields, so a fourth mark is one
 entry there and one `Bindings.xml` block.
 
@@ -2460,13 +2460,16 @@ crash until the next `/reload`, which is why applying says so.
 the ones it created, by name, and leaves anything you renamed alone. Applying
 checks for free macro slots before it starts.
 
-**Our own bars.** `/wk actionbars on` reads whichever action bars you have up,
-stands one of ours up for each of them on the same action slots, moves your keys
-onto it with an override binding and hides Blizzard's twelve behind it. Nothing
-in it invents a slot space, a key or a bar: `Buttons/Which.lua` holds the plan of
-the five bars this client can have and answers which of them you want, and the
-shipping answer is read off your own interface options, so turning the feature on
-gives you back the interface you already had.
+**Our own bars.** This is on out of the box. It reads whichever action bars you
+have up, stands one of ours up for each of them on the same action slots, moves
+your keys onto it with an override binding and hides Blizzard's twelve behind it;
+`/wk actionbars off` hands them back without a reload. Nothing in it invents a
+slot space, a key or a bar: `Buttons/Which.lua` holds the plan of the five bars
+this client can have and answers which of them you want, and the shipping answer
+is read off your own interface options, so the feature gives you back the
+interface you already had, in the places the plan puts it. The plan is three
+bars stacked along the bottom of the screen and two single columns of twelve
+against the right edge.
 
 What is negotiable at runtime is what one bar looks like and when it is up. Five
 settings per bar, in `Buttons/Look.lua`, keyed by the plan's bar key, and every
@@ -2555,14 +2558,15 @@ because a driver registered twice on one frame is two answers to the same
 question and the client keeps both. Handing a bar back drops it: left on, the
 client would go on deciding when to show a bar this addon had already given up.
 
-*The bars' own lock.* `ns.db.barsLocked` ships on, and on means a bar moves only
+*The bars' own lock.* `ns.db.barsLocked` ships off. On means a bar moves only
 while `/wk unlock` has every frame in the addon loose. Off means holding shift
 puts a drag handle over each bar for as long as you hold it, watched through
 `MODIFIER_STATE_CHANGED` rather than through a ticker asking `IsShiftKeyDown` ten
 times a second. The cost is stated rather than hidden: a handle is a frame laid
 over the whole bar and it takes every click that lands on it, so while shift is
 down a shift-click on a square goes to the handle instead of to the square. That
-is why it is a setting and why the setting ships off.
+is why it is a setting, and it ships off because a bar is moved where you can
+see what it lands next to rather than after an unlock.
 
 *The panel page.* One tab strip and one set of controls, rather than five bars
 times six controls down a page, which is thirty rows to find one in. The strip
@@ -2898,8 +2902,10 @@ setting and it defaults to `right`.
 
 `bars clickthrough on` is still there and still calls `EnableMouse(false)` on the
 button, which gives the whole plate back to the world. With it on, `bars camera`
-is moot and `CameraState()` says so. Off by default, because marking is a
-headline feature and it is not a fix, it is a trade.
+is moot and `CameraState()` says so. It ships on: the camera turning wherever the
+cursor happens to be is worth more all evening than click targeting on a plate
+is, and marking has the keys in `markBinds` and the target fallback either way.
+It is a trade rather than a fix, which is why it stayed a setting.
 
 `PlateMouse` tracks the mouse state and the pass-through state separately. A
 plate arrives mouse enabled, so the `EnableMouse` call is never made in the
@@ -3078,12 +3084,12 @@ hangs, and a chamber opening there would push that row down and pull it back up
 on every cast, which is the row moving every time the fight gets interesting.
 So this is furniture, placed the way the swing bars and the meters are placed.
 
-It ships at 180 by 16 at `CENTER, 0, -250`, under the swing bars at -220 and
-under the charge icon at -160. The width is the swing bars' width and
-`harness/sections/37-player-cast.lua` asserts that the two defaults still match:
-charge icon, swing bars, cast bar is one column of things you time a press
-against, and two bars of different lengths stacked on each other read as two
-features that happen to be near each other.
+It ships at 180 by 16 at `CENTER, 0, -250`, under the charge icon at -190. The
+width used to be tied to the swing bars, on the argument that two bars of
+different lengths stacked on each other read as two features that happen to be
+near each other. The swing bars ship off now and sit above the character at -157
+when they are on, so there is nothing under this one to match and the number is
+its own.
 
 **Four answers come out of `UnitFrames/Cast.lua` and none of them is written
 twice.** That file already knew whether there is a cast worth drawing
@@ -4541,6 +4547,12 @@ away. Off, the loot feed reads no loot message at all, and the combat feed turns
 an event away on one table lookup, which in a raid is the difference between a
 few hundred lookups a second and a few hundred rows a second.
 
+The loot feed ships on, against the right edge of the screen. The combat feed
+ships off, both switches: it is the one thing in the addon that reads every
+combat log event in the zone, and the meters and the breakdown already answer
+"how did that fight go" off the same log without a row per swing. `feed combat
+on` for the pull you want to read back.
+
 **The loot feed ships bare and filters with chips.** No word over the column and
 no line round the frame: the rows say what they are by the colour of the name on
 them and the chrome was carrying nothing. Both are settings, `feed loot header`
@@ -4695,9 +4707,12 @@ because the ones the addon does not know are handed to the client's parser.
 There is also a key under WarriorKit in the client's own key bindings, for
 somebody who keeps Blizzard's window and wants this one on a key of their own.
 
-The numbered channels are off by default and have no room of their own. General,
-Trade and anything else you have joined are most of the volume in a city and none
-of the conversation. The sound for one of your people speaking is the client's
+The numbered channels are on by default and have no room of their own: they land
+in Conversation with everything else. General, Trade and anything else you have
+joined are most of the volume in a city and none of the conversation, but they
+are also where a group is found on these servers, and a window that cannot show
+them is a window you still have to look away from. One tick puts the noise back
+in Blizzard's frame. The sound for one of your people speaking is the client's
 own whisper sound and only plays while you are not already reading one of your
 groups: a sound for a line you are watching arrive is a sound you turn off, and
 then there is none for the one you miss.
@@ -4716,6 +4731,11 @@ for the one you named again at every login, at every roster change and whenever
 the voice service comes back, and stops asking after five refusals. Nothing here
 leaves a channel, mutes anyone, picks a device or moves a volume. Those are the
 client's own settings and you pressed something to get them where they are.
+
+The pick ships with a club ID in it, which is the author's own guild stream. A
+client that is not a member of that club finds no such channel and joins
+nothing, so on anybody else's account it behaves exactly like "none" with one
+lookup in front of it, and the picker is one row away.
 
 **Minimap.** The mask, the ring, the north tag and the two zoom buttons come
 off, the map is squared and resized, and the mousewheel zooms instead.
@@ -4998,7 +5018,10 @@ the difference is how far your eyes are from the glass.
 So `Settings/` is a preference and not a calculation. One rail entry, one row,
 `uiSize` in the account file. It multiplies the whole step `UI.ScreenZoom`
 already picks, so a 4K screen at 0.5x lands back on the design size with every
-edge exact.
+edge exact. It ships at 1.25, which is a quarter more than the design size and
+one of the stops that does not keep the grid; the paragraph below is what that
+buys and what it costs, and 1x is one step down for anyone who wants the exact
+one back.
 
 **Quarters, and what they cost.** The stops are 0.5 through 3, eleven of them. A
 stop keeps the pixel grid when the size times the screen's own step comes out
@@ -5096,7 +5119,9 @@ relation is what the client and the addon can work out about a name. A favourite
 is a name you put on a list because you mail it. A guild bank alt you mail every
 week is a stranger by relation and belongs on the list; an alt the addon met
 once is green and does not. The warning is measured against the list, because the
-list is the half you curated.
+list is the half you curated. The list ships with the author's bank alt on it,
+which on anybody else's account is one name in the picker that never matches
+anybody and comes off with `/wk mail unfav`.
 
 **More than twelve attachments.** A mail carries twelve and there is no arguing
 with that. What the client then does is make twelve the number you have to think
@@ -5189,9 +5214,9 @@ on different realms read as the same person.
     /wk help                     the command list, gathered from the registry
     /wk lock | unlock            both frames
     /wk reset                    positions, size, width, offset
-    /wk size 44                  charge icon, 16 to 128
+    /wk size 52                  charge icon, 16 to 128
     /wk mark on|off              marking, all paths
-    /wk markkey skull CTRL-BUTTON1   one key per mark, or none to clear
+    /wk markkey skull F5         one key per mark, or none to clear
     /wk markkey cross|moon <key>
     /wk targetmark on|off        the ctrl-targeting fallback
     /wk hover on|off             a key casts on whatever the mouse is over
@@ -5203,8 +5228,8 @@ on different realms read as the same person.
     /wk charge on|off
     /wk charge always|ready      always visible, or only when usable
     /wk charge marker on|off     the icon in the world
-    /wk charge marker size 40    16 to 96
-    /wk charge marker offset 0   nudge it up or down the plate, -60 to 60
+    /wk charge marker size 30    16 to 96
+    /wk charge marker offset 10  nudge it up or down the plate, -60 to 60
     /wk charge soft on|off       action targeting driven off combat, or yours
     /wk charge weapon Bloodspiller   equipped into slot 16, "none" to drop the line
     /wk bind SHIFT-Q             take a key, override binding only
@@ -5236,23 +5261,23 @@ on different realms read as the same person.
     /wk bars marker on|off       ours, or hand the marker back to Blizzard
     /wk bars level on|off        the mob level inside the bar, coloured by XP
     /wk bars max 8               list mode only, 1 to 15
-    /wk bars width 180           a bar on a plate and in the list, 120 to 400
+    /wk bars width 220           a bar on a plate and in the list, 120 to 400
     /wk bars debuff              what the icon row tracks, in order
     /wk bars debuff add 12721    a spell id, up to ten of them
     /wk bars debuff remove 772   by the same id
-    /wk bars debuff reset        back to the four it ships with
-    /wk bars icon 20             one debuff square's edge, 16 to 32, sharp at 29
+    /wk bars debuff reset        back to the five it ships with
+    /wk bars icon 27             one debuff square's edge, 16 to 32, sharp at 29
     /wk meter on|off             the two meters
     /wk meter dps|hps            what the left pane counts
     /wk meter threat on|off      the right pane
     /wk meter rows 6             3 to 10, per pane
-    /wk meter width 150          one pane, 120 to 400
-    /wk meter alpha 15           the background behind the bars, 0 to 100 in fives
+    /wk meter width 260          one pane, 120 to 400
+    /wk meter alpha 100          the background behind the bars, 0 to 100 in fives
     /wk meter zoom 1             1 to 3
-    /wk swing on|off             the main hand and off hand swing bars
-    /wk swing width 180          80 to 400, one bar
-    /wk swing height 10          4 to 32, one bar
-    /wk swing zoom 1             1 to 3
+    /wk swing on|off             the main hand and off hand swing bars, off
+    /wk swing width 330          80 to 400, one bar
+    /wk swing height 14          4 to 32, one bar
+    /wk swing zoom 2             1 to 3
     /wk buffs                    what is missing, and what your racial is doing
     /wk buffs on|off             the row of squares over your character
     /wk buffs weapon on|off      the stone on the weapon you swing
@@ -5268,14 +5293,14 @@ on different realms read as the same person.
     /wk buffs remove 17038       by the same id
     /wk skin on|off              square class-coloured player and target frames
     /wk skin player|target|tot on|off   one frame at a time
-    /wk skin height 34           18 to 72, the block's height
-    /wk skin width 168           90 to 360, the gauge's width
+    /wk skin height 68           18 to 72, the block's height
+    /wk skin width 198           90 to 360, the gauge's width
     /wk skin link on|off         mirror the target block off the player block
     /wk skin level 0             -100 to 100, the target's drop from the player
     /wk skin heals on|off        the incoming heal slice on the health gauge
     /wk skin auras on|off        the target's own buff and debuff rows
-    /wk skin aura 20             12 to 32, the size of one aura square
-    /wk skin debuffs 12          0 to 16, how long the debuff row runs
+    /wk skin aura 28             12 to 32, the size of one aura square
+    /wk skin debuffs 8           0 to 16, how long the debuff row runs
     /wk skin buffs 8             0 to 32, how long the buff row runs
     /wk skin probe               what this client answered for each frame
     /wk party on|off             blocks for the people you are grouped with
@@ -5311,9 +5336,9 @@ on different realms read as the same person.
     /wk xp on|off                the experience and reputation rails
     /wk xp faction on|off        the reputation rail under the experience one
     /wk xp bubbles on|off        the twenty segment marks
-    /wk xp width 480             120 to 900
+    /wk xp width 460             120 to 900
     /wk xp height 14             6 to 32
-    /wk xp zoom 1                1 to 3
+    /wk xp zoom 2                1 to 3
     /wk xp reset                 back along the bottom of the screen
     /wk loot on|off              empty a corpse in one go
     /wk sell on|off              grey items at every merchant, shift to skip one
@@ -5874,11 +5899,12 @@ Everything below was written from the API contract and has never executed:
   rather than reporting a row that is hidden.
 - Whether the four rows are the right shape at the size the blocks actually end
   up. Everything about the wrap, the mirroring and the row heights is asserted
-  in `harness/sections/14-aura-row.lua` against a 202 pixel block, and the
-  arithmetic is exact, but whether twelve debuffs over two lines under a block
-  reads well is a thing you look at rather than measure. The player's pair is
-  the one to look at first: you carry more buffs than a target does, and the
-  buff count ships at 8 for both.
+  in `harness/sections/14-aura-row.lua`, and the arithmetic is exact, but
+  whether a row that has folded onto two lines under a block reads well is a
+  thing you look at rather than measure. Eight and eight is what a 266 pixel
+  block holds in one line at 28 pixels a square, which is why those are the
+  numbers it ships at. The player's pair is the one to look at first: you carry
+  more buffs than a target does.
 - Whether right click to cancel a buff is worth getting back. It goes off the
   screen with `BuffFrame`, because cancelling one is a protected call and a
   square drawn by this addon cannot make it. Getting it back means a secure

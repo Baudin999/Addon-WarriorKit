@@ -92,10 +92,12 @@ ns.Register({
 	defaults = {
 		hover = true,
 
-		-- Enemy first, because the picker offers it first and because a warrior
-		-- binds the enemy key before anything else. It is only the value a new
-		-- binding is made with; every binding keeps its own.
-		hoverWho = "enemy",
+		-- Friend first. An enemy key is a key you press on whatever you are
+		-- already swinging at, which the client targets for you; the key worth
+		-- binding is the one that puts an Intervene or a shout on the person
+		-- under the cursor without dropping your target. It is only the value a
+		-- new binding is made with; every binding keeps its own.
+		hoverWho = "friend",
 
 		-- Off, and printed to the chat frame rather than drawn anywhere. It is
 		-- for the one question a player cannot answer by looking: a key that is

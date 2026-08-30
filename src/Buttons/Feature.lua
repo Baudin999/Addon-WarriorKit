@@ -444,12 +444,12 @@ ns.Register({
 	},
 
 	defaults = {
-		-- Off, and it is the only default in this addon that is off because of
-		-- what turning it on does rather than because of what it is worth. On
-		-- means Blizzard's own buttons are hidden the moment you log in, and a
-		-- feature that rearranges the bars of everyone who happens to update
-		-- has to be asked for.
-		actionBars = false,
+		-- On. It hides Blizzard's own buttons the moment you log in and puts
+		-- the five bars where the plan in Buttons/Which.lua says, which is the
+		-- layout this addon is for; leaving it off shipped an addon that drew
+		-- everything except the part of the screen you actually press.
+		-- `/wk actionbars off` gives the client's bars back without a reload.
+		actionBars = true,
 
 		-- Where a bar has been dragged to, keyed by the plan's bar key. Empty
 		-- is the normal state and means the plan in Buttons/Bars.lua decides,
@@ -467,13 +467,14 @@ ns.Register({
 		-- owns every one of those answers and the defaults behind them.
 		barLook = {},
 
-		-- Whether the cloned bars can be dragged with shift alone. On is the
-		-- shipping answer and means they move only while every frame in the
-		-- addon is unlocked, which is what /wk unlock does. Off means holding
-		-- shift puts a drag handle over each bar for as long as you hold it, and
-		-- a shift-click on a square goes to that handle rather than to the
-		-- square while it is up. That cost is why this is a setting.
-		barsLocked = true,
+		-- Whether the cloned bars can be dragged with shift alone. Off is the
+		-- shipping answer: holding shift puts a drag handle over each bar for
+		-- as long as you hold it, so a bar is moved where you can see what it
+		-- is next to rather than after an unlock. A shift-click on a square
+		-- goes to that handle rather than to the square while it is up, which
+		-- is what it costs and why it is a setting. On means they move only
+		-- while every frame in the addon is unlocked, which is /wk unlock.
+		barsLocked = false,
 
 		-- Which bars are cloned, keyed by the plan's bar key. Empty is the
 		-- normal state and means every bar follows your own: one you have on is

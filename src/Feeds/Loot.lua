@@ -383,7 +383,25 @@ function LootFeed.Defaults()
 	-- that column the word "Loot" adds, and the edge was a window frame round
 	-- something that is not a window.
 	local defaults = ns.Stream.Defaults("lootFeed",
-		{ "BOTTOMRIGHT", "UIParent", "BOTTOMRIGHT", -20, 180 }, false)
+		{ "RIGHT", "UIParent", "RIGHT", -119, 17 }, false)
+
+	-- Thirteen rows in 280 pixels, against the stream's own ten in 260. A drop
+	-- is an item name and a count, so the column is narrow and the value of it
+	-- is depth: the run of greens you picked up on the way here is still on
+	-- screen when you reach the vendor.
+	defaults.lootFeedRows = 13
+	defaults.lootFeedWidth = 280
+
+	-- Almost nothing behind it. This column lives against the right edge of the
+	-- screen over open world, item names carry their own quality colour and
+	-- their own outline, and a panel under them was covering scenery to hold up
+	-- text that did not need holding up.
+	defaults.lootFeedAlpha = 15
+
+	-- 29, which is one step over the stream's 27. A loot row is an icon first
+	-- and a name second, and this is the one feed where the picture is the
+	-- thing you recognise before you have read anything.
+	defaults.lootFeedIcon = 29
 
 	-- Yours only. Everyone else's drops are the thing that makes the client's
 	-- own loot spam unreadable in a raid, and a feed that reproduced it would

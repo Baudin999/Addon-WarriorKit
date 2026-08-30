@@ -174,7 +174,18 @@ check(not _G.TargetFrameDebuff1:IsShown(),
 -- placed once at layout and the tick shows a prefix of them, so filling the row
 -- moves nothing: not the row, not line one, and not the buffs on the far side
 -- of the block.
+--
+-- The row length is raised to twelve for this block rather than left at the
+-- shipped eight. Eight squares fit on one line of the block the addon ships,
+-- which is why that is the number it ships, and a wrap is exactly what this
+-- asserts: the row has to fold rather than run off the end of the block, and
+-- the only way to see it fold is to give it more than one line's worth.
 do
+	local shipped = ns.db.skinAuraDebuffs
+	ns.db.skinAuraDebuffs = 12
+	ns.FrameSkin.Relayout()
+	tick()
+
 	local held = { rowD:GetHeight(), underTop(first), leftOf(first),
 		underTop(squares(rowB)[1]) }
 	local many = {}
@@ -196,7 +207,8 @@ do
 			wrapped = wrapped + 1
 		end
 	end
-	check(wrapped > 0, "twelve debuffs all stayed on one line of a 202 pixel block")
+	check(wrapped > 0, ("twelve debuffs all stayed on one line of a %.0f pixel block")
+		:format(box:GetWidth() / px))
 	-- Downwards, because the row is under the block. The row over it wraps the
 	-- other way and section 02 is where that is asserted against ns.UI.Flow.
 	for _, square in ipairs(squares(rowD)) do
@@ -205,6 +217,10 @@ do
 				"a wrapped debuff line went up over the block instead of down")
 		end
 	end
+
+	ns.db.skinAuraDebuffs = shipped
+	ns.FrameSkin.Relayout()
+	tick()
 end
 
 -- A tick that changes nothing writes nothing. The guard is ns.UI.Aura's and it

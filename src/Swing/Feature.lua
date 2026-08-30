@@ -69,21 +69,28 @@ ns.Register({
 	},
 
 	defaults = {
-		swing = true,
+		-- Off. Every other readout in this addon is something you cannot get
+		-- anywhere else; a swing bar is a rhythm you already feel through the
+		-- animation, and a second pair of bars under the character is the
+		-- first thing to go when the screen gets busy. `/wk swing on` is one
+		-- line for the fury warrior who wants it.
+		swing = false,
 
-		-- 180 is the enemy bars' own default width and the two are read the
-		-- same way, at a glance, from the same distance. 10 is tall enough to
-		-- see a two hundredth of a swing move across it and short enough that
-		-- two of them under the character are a line rather than a block.
-		swingWidth = 180,
-		swingHeight = 10,
-		swingZoom = 1,
+		-- 330 is wide enough to see a two hundredth of a swing move across it
+		-- from the middle of the screen, which is the only distance this bar
+		-- is ever read from. 14 is tall enough to hold that width without
+		-- reading as a wire.
+		swingWidth = 330,
+		swingHeight = 14,
+		swingZoom = 2,
 
-		-- Under the character and above where the charge icon sits at -160, so
-		-- the two do not overlap at any width either of them takes. Both
-		-- numbers are whole, because half of an odd number is half a pixel and
+		-- Under the character and above the charge icon at -190. Close enough
+		-- that two bars and a 52 pixel icon share a few rows of pixels, which
+		-- is the trade for keeping the whole column inside one glance and is
+		-- why the part ships off: turn it on and this is the number to move.
+		-- Both are whole, because half of an odd number is half a pixel and
 		-- this frame is on the grid.
-		swingPoint = { "CENTER", "UIParent", "CENTER", 0, -220 },
+		swingPoint = { "CENTER", "UIParent", "CENTER", 3, -157 },
 	},
 
 	words = {

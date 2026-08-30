@@ -8,8 +8,11 @@ ns.Register({
 	order = 4,
 
 	defaults = {
-		switchKey = "",          -- the key that takes the next enemy and swings at it
-		switchKeyDisplaced = "", -- what that key was bound to, kept so the UI can show it
+		switchKey = "TAB",       -- the key that takes the next enemy and swings at it
+		-- Empty, always. What the key was bound to before this took it is a
+		-- fact about the keybinding set in front of us, not a preference, and
+		-- it is written the first time the bind lands.
+		switchKeyDisplaced = "",
 	},
 
 	words = {

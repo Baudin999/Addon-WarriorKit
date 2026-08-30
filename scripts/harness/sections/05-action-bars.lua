@@ -348,7 +348,7 @@ do
 	check(ns.Bars.ResetPlacing() == 1, "reset dropped no dragged position")
 	check(next(ns.db.barPoints) == nil, "reset left a dragged position behind")
 	local back = ns.Bars.Where()
-	check(back[1]:find("y = 8") and not back[1]:find("dragged"),
+	check(back[1]:find("y = 29") and not back[1]:find("dragged"),
 		"reset did not put bar 1 back on the plan: " .. tostring(back[1]))
 
 	ns.db.locked = shipped
@@ -971,7 +971,7 @@ ns.db.barsWidth = 240
 ns.EnemyBars.ApplyLayout()
 check(BarWidth("nameplate1") == 240 * ns.UI.Pixel(widget),
 	("bars width 240 left the bar on a plate at %.0f px"):format(BarWidth("nameplate1")))
-ns.db.barsWidth = 180
+ns.db.barsWidth = ns.DefaultFor("barsWidth")
 ns.EnemyBars.ApplyLayout()
 
 -- Back down to the two the churn figure below is quoted at. The gate is a

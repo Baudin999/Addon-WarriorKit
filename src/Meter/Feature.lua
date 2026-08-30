@@ -137,19 +137,24 @@ ns.Register({
 		-- is actually used in. A raid needs more and the setting goes to ten.
 		meterRows = 6,
 		-- Wide enough for a 27 pixel icon, a name and a number without the name
-		-- being clipped to three letters. The enemy bars default to 180 for one
-		-- bar; a meter row carries one more column than a bar does.
-		meterWidth = 200,
+		-- being clipped to three letters, with room for a five figure total
+		-- beside a long alt name. The enemy bars default to 220 for one bar; a
+		-- meter row carries one more column than a bar does.
+		meterWidth = 260,
 		meterZoom = 1,
 
-		-- What the note in Meter/Window.lua argues for: a tint you can rank four
-		-- players by, not a wash you read the meter through.
-		meterBarAlpha = 15,
+		-- Solid. The note in Meter/Window.lua argues for a tint you rank four
+		-- players by rather than a wash you read the meter through, and it is
+		-- right about the middle of the screen; parked out on the right edge
+		-- with nothing behind it, the full bar is the thing you rank by from
+		-- across the screen and the stepper goes back down to 15.
+		meterBarAlpha = 100,
 
-		-- Left of centre and above the middle, which on a 16:9 screen is clear
-		-- of the action bars, clear of the unit frames this addon skins, and
-		-- inside the part of the screen you are already looking at.
-		meterPoint = { "CENTER", "UIParent", "CENTER", -320, 120 },
+		-- The right edge, on the floor. It is the one part of a 16:9 screen
+		-- with nothing in it: clear of the action bars, clear of the unit
+		-- frames this addon skins, and left of the two vertical bars against
+		-- the edge itself.
+		meterPoint = { "BOTTOMRIGHT", "UIParent", "BOTTOMRIGHT", -428, 0 },
 	},
 
 	words = {

@@ -84,22 +84,26 @@ ns.Register({
 		charge = true,
 		chargeMode = "always", -- "always" keeps the icon on screen, "ready" only shows it when Charge can be used
 		chargeMarker = true,   -- the icon in the world over the mob the Charge macro would pick
-		chargeMarkerSize = 40,
-		chargeMarkerOffset = 0, -- nudge the marker up or down the nameplate, -60 to 60
+		chargeMarkerSize = 30,
+		chargeMarkerOffset = 10, -- nudge the marker up or down the nameplate, -60 to 60
 		-- Action targeting, driven off combat. Charge is an out of combat
 		-- ability and Pick reads the cursor once combat is up, so the token
 		-- earns its keep on the pull and gets in the way after it.
 		softAuto = true,
-		-- Empty by default. A name here builds an /equipslot line into the
-		-- macro, and a weapon nobody on this account owns builds a line that
-		-- silently does nothing. Set it from the Charge tab's picker, which
-		-- only offers what you are carrying.
-		chargeWeapon = "",
-		chargeKey = "",        -- key the charge button takes over, set in the UI or with /wk bind
+		-- A name here builds an /equipslot line into the macro, and a weapon
+		-- nobody on this account owns builds a line that silently does
+		-- nothing, which is what a fresh character gets and what it costs.
+		-- Set it from the Charge tab's picker, which only offers what you are
+		-- carrying.
+		chargeWeapon = "Whirlwind Axe",
+		chargeKey = "CTRL-2",  -- key the charge button takes over, set in the UI or with /wk bind
 		chargeKeyRelease = false, -- hand the key back during combat instead of casting Intervene
-		chargeKeyDisplaced = "",  -- what that key was bound to, kept so the UI can show it
-		size = 44,
-		point = { "CENTER", "UIParent", "CENTER", 0, -160 },
+		-- Empty, always. This is what the key was bound to before the button
+		-- took it, which is a fact about the keybinding set in front of us and
+		-- not a preference. It is written the first time the bind lands.
+		chargeKeyDisplaced = "",
+		size = 52,
+		point = { "CENTER", "UIParent", "CENTER", 3, -190 },
 	},
 
 	-- SoftTargetEnemy is a character scoped CVar, so what it was before the

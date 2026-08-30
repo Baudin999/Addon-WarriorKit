@@ -48,6 +48,12 @@ local ME = "Player-0-0000000f"
 local SOMEBODY = "Player-0-0000001f"
 local SLAM = 1464
 
+-- The scene is stated rather than inherited. The part ships off, and it ships
+-- at 2x for a bar read out of the corner of the eye; there is nothing at all
+-- to measure with the setting off, and the grid assertion below is a whole
+-- pixel by definition only at the design size. Section 27 puts both back.
+ns.db.swing, ns.db.swingZoom = true, 1
+
 guids.player = ME
 swing.mainhand = itemLink("Arcanite Reaper")
 swing.main, swing.off = 3.4, nil

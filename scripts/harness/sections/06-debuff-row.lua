@@ -22,6 +22,17 @@ local H = ...
 local ns, order, check = H.ns, H.order, H.check
 local wanted, widget = H.carry.wanted, H.carry.widget
 
+-- The scene is stated here rather than inherited. This section is about the
+-- shape the row keeps and not about the numbers it ships at, and every figure
+-- worked out in the comments below is worked out against a 180 pixel bar with
+-- 20 pixel squares on it. Reading the shipped sizes instead would mean every
+-- one of those arithmetic notes going stale the next time a default moves.
+-- The shipped sizes go back at the foot of the file.
+ns.db.barsWidth, ns.db.barsIconSize = 180, 20
+ns.EnemyBars.ApplyLayout()
+ns.EnemyBars.Rebuild()
+widget = ns.EnemyBars.WidgetFor("nameplate1")
+
 -- The offset a frame was pinned at, checked to be pinned the way Flow pins
 -- everything inside a widget.
 local function Corner(frame, bar, what)
@@ -117,26 +128,26 @@ local function CheckPacked(what)
 	return rows
 end
 
-check(#ns.EnemyBars.Spells() == 4, "the bar does not ship tracking four debuffs")
+check(#ns.EnemyBars.Spells() == 5, "the bar does not ship tracking five debuffs")
 CheckPacked("as it ships")
 
 -- One more, and the row is one longer and still ends where it did.
-check((ns.EnemyBars.AddSpell(12721)), "Deep Wound would not go on the list")
-check(#ns.EnemyBars.Spells() == 5, "adding a debuff did not lengthen the list")
-local packed = CheckPacked("with a fifth")
-check(#packed == 1 and #packed[1] == 5,
-	("five 20 px squares on a 180 px bar should be one row of five, got %d row(s)"):format(#packed))
+check((ns.EnemyBars.AddSpell(1715)), "Hamstring would not go on the list")
+check(#ns.EnemyBars.Spells() == 6, "adding a debuff did not lengthen the list")
+local packed = CheckPacked("with a sixth")
+check(#packed == 1 and #packed[1] == 6,
+	("six 20 px squares on a 180 px bar should be one row of six, got %d row(s)"):format(#packed))
 
 -- The same id twice would be two squares lighting up together, and an id this
 -- client cannot name would be a blank square.
-check(not (ns.EnemyBars.AddSpell(12721)), "the same debuff went on the list twice")
+check(not (ns.EnemyBars.AddSpell(1715)), "the same debuff went on the list twice")
 check(not (ns.EnemyBars.AddSpell(900001)), "an id this client cannot name went on the list")
 check(not (ns.EnemyBars.AddSpell("rend")), "a word went on the list as a spell id")
-check(#ns.EnemyBars.Spells() == 5, "a refused add changed the list anyway")
+check(#ns.EnemyBars.Spells() == 6, "a refused add changed the list anyway")
 
 -- Off again, and the row is back where it started.
-check((ns.EnemyBars.RemoveSpell(12721)), "Deep Wound would not come off the list")
-check(#ns.EnemyBars.Spells() == 4, "removing a debuff did not shorten the list")
+check((ns.EnemyBars.RemoveSpell(1715)), "Hamstring would not come off the list")
+check(#ns.EnemyBars.Spells() == 5, "removing a debuff did not shorten the list")
 CheckPacked("after a remove")
 
 -- The size reaches the squares, and a longer list on a wider square wraps
@@ -149,11 +160,11 @@ check(ns.EnemyBars.WidgetFor("nameplate1").icons[1]:GetWidth()
 	"bars icon 32 did not reach the squares")
 CheckPacked("at 32 px")
 
-for _, spellID in ipairs({ 1715, 12323, 355, 694, 1161, 676 }) do
+for _, spellID in ipairs({ 1715, 12323, 355, 694, 1161 }) do
 	check((ns.EnemyBars.AddSpell(spellID)), ("%d would not go on the list"):format(spellID))
 end
 check(#ns.EnemyBars.Spells() == 10, "the list did not reach ten")
-check(not (ns.EnemyBars.AddSpell(5246)), "an eleventh debuff went on a list capped at ten")
+check(not (ns.EnemyBars.AddSpell(676)), "an eleventh debuff went on a list capped at ten")
 local wrapped = CheckPacked("ten at 32 px on a 180 px bar")
 -- 180 holds five 32 px squares with 4 px between them, so ten is two rows.
 check(#wrapped == 2 and #wrapped[1] == 5 and #wrapped[2] == 5,
@@ -181,11 +192,13 @@ do
 end
 
 -- Back to the shipped scene, because the churn figure below is quoted against
--- four debuffs at twenty pixels and a ratchet measured on another list is a
--- ratchet measuring something else.
-ns.db.barsIconSize = 20
+-- the list and the sizes the addon actually ships, and a ratchet measured on
+-- another scene is a ratchet measuring something else.
+ns.db.barsWidth = ns.DefaultFor("barsWidth")
+ns.db.barsIconSize = ns.DefaultFor("barsIconSize")
+ns.EnemyBars.ApplyLayout()
 ns.EnemyBars.ResetSpells()
-check(#ns.EnemyBars.Spells() == 4, "the reset did not put the four back")
+check(#ns.EnemyBars.Spells() == 5, "the reset did not put the five back")
 CheckPacked("after a reset")
 widget = ns.EnemyBars.WidgetFor("nameplate1")
 

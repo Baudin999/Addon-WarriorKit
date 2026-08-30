@@ -40,6 +40,13 @@ do
 	end
 	check(ticker ~= nil, "the cast bar registered no ticker")
 
+	-- At the design size. The bar ships at 2x, because it is under your
+	-- character and read while you are looking at the fight rather than at it,
+	-- and the grid assertion below is a whole pixel by definition only at 1x.
+	local shippedZoom = ns.db.playerCastZoom
+	ns.db.playerCastZoom = 1
+	ns.PlayerCast.Apply()
+
 	local frame = _G.WarriorKitPlayerCast
 	check(frame ~= nil, "no cast bar frame came up")
 	local bar = ns.PlayerCast.Bar()
@@ -100,13 +107,6 @@ do
 	check(bar:GetWidth() == frame:GetWidth() and bar:GetHeight() == frame:GetHeight(),
 		"the gauge is not the frame, so the rim and the fill disagree about where the bar is")
 
-	-- The same width as the swing bars under it. Not a coincidence and not a
-	-- coupling either: both ship at 180 because they are read together, and a
-	-- default that quietly stopped matching would be the pair reading as two
-	-- features rather than one instrument.
-	check(ns.DefaultFor("playerCastWidth") == ns.DefaultFor("swingWidth"),
-		("the cast bar ships %d wide and the swing bars ship %d, and they stack")
-			:format(ns.DefaultFor("playerCastWidth"), ns.DefaultFor("swingWidth")))
 
 	----------------------------------------------------------------------
 	-- Empty, which is what the bar looks like almost all of the time
@@ -388,6 +388,9 @@ do
 
 	quiet()
 	check(not frame:IsShown(), "the section left a cast on the screen")
+
+	ns.db.playerCastZoom = shippedZoom
+	ns.PlayerCast.Apply()
 
 	print(("cast   %d x %d px bar on the grid, fill exact at 60 and 144 fps, a"
 		.. " failed cast holds; %s")

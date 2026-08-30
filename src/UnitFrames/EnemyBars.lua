@@ -12,7 +12,11 @@ ns.EnemyBars = EnemyBars
 -- debuffs matter is a spec question and a fight question. An arms warrior
 -- watches Deep Wounds and Mortal Strike; a protection one watches neither and
 -- wants the room back.
-local DEFAULT_SPELLS = { 7386, 1160, 6343, 772 } -- Sunder Armor, Demoralizing Shout, Thunder Clap, Rend
+-- Demoralizing Shout, Thunder Clap, Rend, Deep Wound, Mortal Strike. Sunder
+-- Armor is not on it: it is the one debuff on this list a warrior can read off
+-- the stack count on his own frame, and the five slots are worth more to the
+-- three bleeds and the strike that decide whether the pull is going well.
+local DEFAULT_SPELLS = { 1160, 6343, 772, 12721, 12294 }
 
 -- The most a bar will track. The aura scan is forty slots against every name on
 -- the list, per mob, five times a second, and the row still has to fit above a

@@ -86,7 +86,14 @@ check(stranger[1] > stranger[2] and stranger[1] > stranger[3], "a stranger is no
 -- The favourites
 ----------------------------------------------------------------------
 
-check(Who.Count() == 0, "the favourites did not ship empty")
+-- Emptied first. The list ships with the bank alt on it, and what is asserted
+-- here is what the list does rather than what it starts as: a name goes on
+-- once, is found however it is cased, and a name that was never on it does not
+-- come off.
+for _, name in ipairs({ unpack(ns.db.mailFavourites) }) do
+	Who.Remove(name)
+end
+check(Who.Count() == 0, "the favourites would not empty")
 check(Who.Add(ALT) == 1, "the first favourite would not go on")
 check(Who.Add(ALT) == nil, "the same name went on the list twice")
 check(Who.Favourite(ALT:lower()), "a favourite is not found by a name in lower case")

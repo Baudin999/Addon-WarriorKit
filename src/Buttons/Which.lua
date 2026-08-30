@@ -61,31 +61,38 @@ ns.WhichBars = Which
 Which.PLAN = {
 	{ key = "bar1", label = "bar 1", tab = "bar 1", pages = true,
 		buttons = "ActionButton%d", command = "ACTIONBUTTON%d",
-		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 8 },
+		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 29 },
 
 	{ key = "bottomleft", label = "bottom left bar", tab = "bottom left",
 		buttons = "MultiBarBottomLeftButton%d", command = "MULTIACTIONBAR1BUTTON%d",
 		frame = "MultiBarBottomLeft",
-		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 44 },
+		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 64 },
 
 	{ key = "bottomright", label = "bottom right bar", tab = "bottom right",
 		buttons = "MultiBarBottomRightButton%d", command = "MULTIACTIONBAR2BUTTON%d",
 		frame = "MultiBarBottomRight",
-		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 80 },
+		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 99 },
 
 	-- MultiBarRight is the client's "right bar" and MultiBarLeft is "right bar
 	-- 2", which sits to its left. The names are the wrong way round and have
 	-- been since 2005; the command numbers are what the binding set actually
 	-- carries and those are right.
+	--
+	-- One column each rather than the client's two, and right bar 2 is the one
+	-- against the screen edge. A single column of twelve reads down like a
+	-- list; two columns of six read as a block you have to search. The right
+	-- edges are 35 pixels apart, which is a 27 pixel square and the padding
+	-- either side of it, so the two columns sit against each other with no
+	-- alley between them.
 	{ key = "right", label = "right bar", tab = "right",
 		buttons = "MultiBarRightButton%d", command = "MULTIACTIONBAR3BUTTON%d",
 		frame = "MultiBarRight",
-		columns = 2, point = "RIGHT", to = "RIGHT", x = -8, y = 0 },
+		columns = 1, point = "RIGHT", to = "RIGHT", x = -50, y = 0 },
 
 	{ key = "right2", label = "right bar 2", tab = "right 2",
 		buttons = "MultiBarLeftButton%d", command = "MULTIACTIONBAR4BUTTON%d",
 		frame = "MultiBarLeft",
-		columns = 2, point = "RIGHT", to = "RIGHT", x = -73, y = 0 },
+		columns = 1, point = "RIGHT", to = "RIGHT", x = -15, y = 0 },
 }
 
 --------------------------------------------------------------------------

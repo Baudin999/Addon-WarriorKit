@@ -24,6 +24,12 @@ for _, spellID in ipairs(ns.EnemyBars.Suggestions()) do
 		"the picker offers 12162, the Deep Wounds talent, which lands on nobody")
 end
 
+-- Off the list first. The bleed ships on the bar, and the question this asks
+-- is what happens when somebody types the talent id at a list that does not
+-- already carry it, which is what a player who dropped it and went looking on
+-- Wowhead does.
+check((ns.EnemyBars.RemoveSpell(12721)), "Deep Wound would not come off the shipped list")
+
 -- Typing the talent's id gets you the bleed, because Wowhead's search for
 -- deep wounds finds the talent first and the panel takes a bare number.
 local ok, named = ns.EnemyBars.AddSpell(12162)
@@ -137,10 +143,10 @@ ns.EnemyBars.Retrack()
 check(ns.EnemyBars.Slot(12162) == nil, "the repair left the dead talent id on the list")
 check(ns.EnemyBars.Slot(12721) ~= nil, "the repair dropped the bleed instead of renaming it")
 
--- Back to the four, because the churn figure below is quoted against them.
-ns.db.barsIconSize = 20
+-- Back to the shipped list, because the churn figure below is quoted against it.
+ns.db.barsIconSize = ns.DefaultFor("barsIconSize")
 ns.EnemyBars.ResetSpells()
-check(#ns.EnemyBars.Spells() == 4, "the reset did not put the four back")
+check(#ns.EnemyBars.Spells() == 5, "the reset did not put the five back")
 CheckPacked("after the debuff scan")
 widget = ns.EnemyBars.WidgetFor("nameplate1")
 

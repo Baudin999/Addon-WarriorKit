@@ -28,7 +28,7 @@ local function DebuffWord(action, value)
 			or ("nothing on the bar has the id " .. value .. "."))
 	elseif action == "reset" then
 		ns.EnemyBars.ResetSpells()
-		ns.Print("debuff list back to the four it ships with: " .. ns.EnemyBars.DescribeSpells() .. ".")
+		ns.Print("debuff list back to the five it ships with: " .. ns.EnemyBars.DescribeSpells() .. ".")
 	elseif action == "list" or action == "" then
 		local spells = ns.EnemyBars.Spells()
 		if #spells == 0 then
@@ -521,7 +521,7 @@ ns.Register({
 		bars = true,
 		barsMode = "auto",     -- "auto" follows the nameplate cvar, or force "plates" / "list"
 		barsStyle = "replace", -- "replace" takes over the nameplate look, "attach" rides above Blizzard's
-		barsOffset = 0,
+		barsOffset = 2,
 		barsMarker = true,
 		barsLevel = true, -- the level, inside the bar, coloured by XP value
 
@@ -531,7 +531,7 @@ ns.Register({
 		-- and nothing else. Off hands the job back to Blizzard's own plate cast
 		-- bar, which `replace` style stops hiding at the same moment.
 		barsCast = true,
-		barsClickThrough = false, -- the camera, at the price of click targeting and marking on a plate
+		barsClickThrough = true, -- the camera, at the price of click targeting and marking on a plate
 		-- Which buttons a plate hands back to the world while keeping the
 		-- rest. "right" is the default because it buys the camera drag and
 		-- costs only right-click-to-interact and ctrl-right-click cross
@@ -544,8 +544,9 @@ ns.Register({
 		-- Pixels, like every other size in the bars, and one figure for both
 		-- modes. A bar on a plate used to take the plate's own width, which
 		-- was a number nobody chose and one that moved every time the driver
-		-- was told how much room a bar wants.
-		barsWidth = 180,
+		-- was told how much room a bar wants. 220 is wide enough to hold a five
+		-- debuff row under a full mob name.
+		barsWidth = 220,
 
 		-- Which debuffs the row above each bar shows, as spell IDs in the order
 		-- they are drawn. A setting rather than a constant, because which
@@ -557,10 +558,10 @@ ns.Register({
 		-- One debuff square's edge, in pixels like every other size in the bars.
 		-- 29 is the one size in the range that draws a stored texel on a pixel,
 		-- because the square's border takes two pixels off and the crop leaves
-		-- 54 texels. See the header of EnemyBars.lua. 20 is where this shipped,
-		-- and it is close to the worst place in the range to stand, but a
-		-- default that moves rewrites a setting the player never touched.
-		barsIconSize = 20,
+		-- 54 texels. See the header of EnemyBars.lua. 27 is two under that and
+		-- is what five squares fit into over a 220 pixel bar, which is the
+		-- trade this default makes: the row stays one row.
+		barsIconSize = 27,
 
 		-- A whole number, because the bars are drawn on a pixel grid and a
 		-- fractional zoom would put every edge back on a half pixel. 1 is the
@@ -579,9 +580,11 @@ ns.Register({
 		-- how far out a bar can be seen: a bar is drawn on a plate, so nothing
 		-- here can appear before one does. 41 is as far as either of these two
 		-- clients goes; ask for more and it clamps, which is why the panel and
-		-- `/wk status` report the CVar and never this number. 0 hands the
+		-- `/wk status` report the CVar and never this number. 60 is deliberately
+		-- past the ceiling: it asks for everything the client will give on this
+		-- build and goes on asking on one that raises the cap. 0 hands the
 		-- setting back and leaves the client's own alone.
-		barsDistance = 41,
+		barsDistance = 60,
 
 		-- Whether a bar ramps in and out or is simply there and then not.
 		-- On, because a plate is put up and taken down in one frame and
@@ -595,7 +598,7 @@ ns.Register({
 		platesMotionPrior = "",
 		platesOverlapPrior = "",
 		platesDistancePrior = "",
-		barsPoint = { "CENTER", "UIParent", "CENTER", 280, 120 },
+		barsPoint = { "CENTER", "UIParent", "CENTER", 378, 184 },
 
 		-- The square skin on the player, target and target of target frames.
 		-- On by default for the reason the bar art strip is: it is the point
@@ -616,8 +619,8 @@ ns.Register({
 		-- Pixels, like every size in the enemy bars, because the block sits on
 		-- the same grid. 34 is 34 pixels on a laptop and 34 on a 4K panel, which
 		-- is the point of the grid and also the whole of what it costs.
-		skinHeight = 34,
-		skinWidth = 168,
+		skinHeight = 68,
+		skinWidth = 198,
 
 		-- The target block hung off the player block, which is the whole
 		-- shape of the change: Edit Mode is left positioning the player
@@ -650,15 +653,16 @@ ns.Register({
 		skinAuras = true,
 
 		-- The square, in pixels, on the same grid as everything else the skin
-		-- draws. 20 is what the enemy bars ship their debuff square at, and the
-		-- two rows wearing one size is the point of them being one file.
-		skinAuraSize = 20,
+		-- draws. 28 against a 198 pixel block is eight squares to a row, which
+		-- is the number below, and it is a square you can read a stack count
+		-- off from where you sit.
+		skinAuraSize = 28,
 
-		-- How many of each the row draws. Debuffs get the longer row because
-		-- this is a warrior's addon and the target's debuffs are what it is
-		-- for. Either at 0 turns that row off on its own; both at 0 is
-		-- `skin auras off` said the long way.
-		skinAuraDebuffs = 12,
+		-- How many of each the row draws. Eight and eight, which is what a 198
+		-- pixel block holds in one row at 28 pixels a square, so neither row
+		-- ever wraps under the frame. Either at 0 turns that row off on its
+		-- own; both at 0 is `skin auras off` said the long way.
+		skinAuraDebuffs = 8,
 		skinAuraBuffs = 8,
 
 		-- Your own cast bar, drawn by this addon rather than by the client.
@@ -667,16 +671,20 @@ ns.Register({
 		-- would ship a screen with no cast bar on it.
 		playerCast = true,
 
-		-- The same width as the swing bars, because it sits under them and two
-		-- bars of different lengths stacked on each other read as two features
-		-- rather than as one instrument. 16 is tall enough to hold a spell name
-		-- and the seconds beside it at a size worth reading.
+		-- 180, which is a spell name and the seconds beside it and nothing
+		-- wider. It used to be tied to the swing bars, on the argument that two
+		-- bars of different lengths stacked on each other read as two features;
+		-- the swing bars ship off now and sit above the character rather than
+		-- under it, so there is nothing for this one to match and the number is
+		-- its own. 16 is tall enough to hold that text at a size worth reading.
 		playerCastWidth = 180,
 		playerCastHeight = 16,
 
 		-- A whole number, like every other zoom in the addon, because a
-		-- fractional one puts every edge back on a half pixel.
-		playerCastZoom = 1,
+		-- fractional one puts every edge back on a half pixel. 2, because this
+		-- bar is under your character and read while you are looking at the
+		-- fight rather than at it.
+		playerCastZoom = 2,
 
 		-- Under the swing bars, which sit at -220 and are ten pixels tall on
 		-- one hand and twenty two on two. Both numbers are whole, because half

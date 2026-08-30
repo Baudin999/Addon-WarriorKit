@@ -63,6 +63,22 @@ load("client/08-blizzard.lua")(H)
 
 _G.WarriorKitDB, _G.WarriorKitCharDB = {}, {}
 fire("ADDON_LOADED", "WarriorKit")
+
+-- The whole run is at the design size, whatever size the addon ships at.
+--
+-- Everything the addon draws in a window is a design number multiplied by the
+-- pixel of the frame it is in, and the sections below assert on those numbers:
+-- a row is a whole number of pixels tall, a hairline is one pixel, an anchor
+-- offset is not half of one. At a quarter stop of the UI size slider none of
+-- that is true, and Settings/Settings.lua is explicit that it is not meant to
+-- be: a window is the one thing in the addon allowed to go soft, that is the
+-- price the slider charges, and Settings.Grid names the stops that pay it.
+--
+-- So the size is set before the first window is built rather than moved
+-- afterwards, because a window carries the pixel it was built at in the anchors
+-- of its own chrome. Section 17 is where the stops themselves are walked.
+ns.Settings.Set(1)
+
 fire("PLAYER_LOGIN")
 fire("PLAYER_ENTERING_WORLD")
 
