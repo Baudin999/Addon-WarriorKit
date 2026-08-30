@@ -663,28 +663,114 @@ end
 
 ns.Thousands = Thousands
 
--- Copper as the shortest true thing.
+-- Which denominations a number is worth writing in, as a flat run of amount and
+-- letter, amount and letter.
 --
--- Gold alone once there is real gold, gold and silver under a hundred where the
--- silver is the part that moves, and the whole three when there is no gold at
--- all, which is the only time copper is worth a glyph. The sign is carried
--- rather than dropped: this formats a rate as well as a purse, and an hour that
--- cost you money has to read as one.
-function ns.Coin(copper)
+-- The rounding is the decision and there are two ways of writing the answer
+-- down, plain for a line of prose and coloured for a purse, so the decision is
+-- made once here and the writing is somebody else's argument. Before this the
+-- two would have been two functions with the same thresholds in both, which is
+-- the drift ns.Coin was moved into Core to stop.
+--
+-- Short is gold alone once there is real gold, gold and silver under a hundred
+-- where the silver is the part that moves, and the whole three when there is no
+-- gold at all, which is the only time copper is worth a glyph.
+--
+-- Exact is all of it, and it is what a hover gets: the width is there, and the
+-- copper is the digit that proves the figure is a real reading rather than a
+-- rounded one. Silver and copper are padded to two digits so a column of them
+-- lines up, which is the whole reason the column is readable at a glance.
+--
+-- Written into a scratch table rather than a fresh one, because the status
+-- strip asks this every time a coin moves.
+local coins = {}
+
+local function Push(amount, letter)
+	coins[#coins + 1] = tostring(amount)
+	coins[#coins + 1] = letter
+end
+
+local function Parts(copper, exact)
+	for index = #coins, 1, -1 do
+		coins[index] = nil
+	end
+
+	local gold = math.floor(copper / GOLD)
+	local silver = math.floor(copper % GOLD / SILVER)
+	if exact then
+		if gold > 0 then
+			Push(Thousands(gold), "g")
+		end
+		Push(("%02d"):format(silver), "s")
+		Push(("%02d"):format(copper % SILVER), "c")
+	elseif gold >= COARSE then
+		Push(Thousands(gold), "g")
+	elseif gold > 0 then
+		Push(gold, "g")
+		Push(silver, "s")
+	else
+		Push(silver, "s")
+		Push(copper % SILVER, "c")
+	end
+	return coins
+end
+
+-- One reading, in whichever hand `paint` writes.
+--
+-- The sign is carried rather than dropped: this formats a rate as well as a
+-- purse, and an hour that cost you money has to read as one. It sits outside
+-- the colour, because a minus in front of a gold figure is a fact about the
+-- whole number and not about the gold.
+local function Spell(copper, exact, paint)
 	copper = math.floor(tonumber(copper) or 0)
 	local sign = ""
 	if copper < 0 then
 		sign, copper = "-", -copper
 	end
 
-	local gold = math.floor(copper / GOLD)
-	if gold >= COARSE then
-		return sign .. Thousands(gold) .. "g"
+	local text = sign
+	local written = Parts(copper, exact)
+	for index = 1, #written, 2 do
+		if index > 1 then
+			text = text .. " "
+		end
+		text = text .. paint(written[index], written[index + 1])
 	end
-	if gold > 0 then
-		return ("%s%dg %ds"):format(sign, gold, math.floor(copper % GOLD / SILVER))
-	end
-	return ("%s%ds %dc"):format(sign, math.floor(copper / SILVER), copper % SILVER)
+	return text
+end
+
+local function Plain(amount, letter)
+	return amount .. letter
+end
+
+-- The three denominations in the coin colours the game itself uses, as escapes
+-- rather than as one of UI/Theme.lua's tables: this is text inside a font
+-- string, and Core sits under the interface layer rather than over it.
+--
+-- Colour is not decoration on a purse. "109g 07s 91c" in one colour has to be
+-- read left to right before you know which part of it is the part you cared
+-- about; in three, the gold is what your eye lands on and the rest is texture
+-- you read only when you want it. Titan Panel has done this for fifteen years
+-- and it is the only reason its purse looks alive next to a row of grey digits.
+local COIN = {
+	g = "|cffffd700",
+	s = "|cffc7c7cf",
+	c = "|cffeda55f",
+}
+
+local function Painted(amount, letter)
+	return COIN[letter] .. amount .. letter .. "|r"
+end
+
+-- Copper as the shortest true thing, in one colour.
+function ns.Coin(copper)
+	return Spell(copper, false, Plain)
+end
+
+-- The same number with each denomination in its own colour, and with all three
+-- of them when `exact` is asked for.
+function ns.Coined(copper, exact)
+	return Spell(copper, exact, Painted)
 end
 
 -- The same number as its three parts, for a window that puts a field under each

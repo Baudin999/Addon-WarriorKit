@@ -116,6 +116,29 @@ check(ns.Coin(12405 * GOLD + 6300) == "12,405g",
 check(ns.Coin(-(3 * GOLD)) == "-3g 0s",
 	"an hour that cost you money reads " .. ns.Coin(-(3 * GOLD)))
 
+-- The coined form is the same rounding in three inks, which is the only claim
+-- worth asserting: the escapes are the client's own and there is nothing to
+-- test about a hex string, but a coloured reading that disagreed with the plain
+-- one would be two formatters again, which is what Core keeps one of.
+local function plain(text)
+	return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+end
+
+check(plain(ns.Coined(12 * GOLD + 3450)) == ns.Coin(12 * GOLD + 3450),
+	"the coined purse reads " .. plain(ns.Coined(12 * GOLD + 3450))
+		.. " where the plain one reads " .. ns.Coin(12 * GOLD + 3450))
+check(ns.Coined(12 * GOLD + 3450) ~= plain(ns.Coined(12 * GOLD + 3450)),
+	"the coined purse carries no colour at all")
+
+-- The exact form is what a hover gets: all three denominations, and the two
+-- small ones padded so a column of them lines up.
+check(plain(ns.Coined(109 * GOLD + 791, true)) == "109g 07s 91c",
+	"the exact purse reads " .. plain(ns.Coined(109 * GOLD + 791, true)))
+check(plain(ns.Coined(288, true)) == "02s 88c",
+	"a purse with no gold in it reads " .. plain(ns.Coined(288, true)))
+check(plain(ns.Coined(-(3 * GOLD), true)) == "-3g 00s 00c",
+	"an hour that cost you money reads " .. plain(ns.Coined(-(3 * GOLD), true)))
+
 ------------------------------------------------------------
 -- When the ledger is written
 ------------------------------------------------------------
@@ -221,14 +244,15 @@ state.purse = 160 * GOLD
 beat()
 check(rate:GetText() == "+1,800g/h",
 	"the rate cell says " .. tostring(rate:GetText()))
-check(held:GetText() == "160g", "the held cell says " .. tostring(held:GetText()))
+check(plain(held:GetText()) == "160g",
+	"the held cell says " .. tostring(held:GetText()))
 -- 205g 50s, and the fifty silver is dropped rather than shown. That is the
 -- coarse form doing its job on the cell that reaches four figures first:
 -- the middle of the strip is the narrowest of the three and the silver on
 -- an account total is the digit nobody has ever wanted.
 check(Purse.Account() == 205 * GOLD + 50 * 100,
 	("the account holds %d"):format(Purse.Account()))
-check(hoard:GetText() == "all 205g",
+check(plain(hoard:GetText()) == "all 205g",
 	"the account cell says " .. tostring(hoard:GetText()))
 
 ------------------------------------------------------------
@@ -241,7 +265,7 @@ check(held:GetText() == nil, "a beat with nothing to say wrote a cell anyway")
 
 state.purse = 161 * GOLD
 beat()
-check(held:GetText() == "161g",
+check(plain(held:GetText()) == "161g",
 	"a beat after a coin left the cell at " .. tostring(held:GetText()))
 
 ------------------------------------------------------------
@@ -280,6 +304,28 @@ for index = 2, Tip.Lines() do
 	end
 end
 check(names == 3, ("the tooltip lists %d of the three characters"):format(names))
+
+-- The session block under the account line. Three rows, and the middle one is
+-- the number the strip has never had room for: what the evening made you,
+-- rather than what you are holding and how fast it is moving.
+local said = {}
+for index = 2, Tip.Lines() do
+	said[Tip.Text(index)] = true
+end
+for _, label in ipairs({ "Account", "Started with", "Earned", "An hour" }) do
+	check(said[label], ("the hover has no %s row"):format(label))
+end
+
+-- And every figure on it is coined, which is the one thing that makes a purse
+-- readable at a glance rather than a wall of digits.
+local coined = false
+for index = 2, Tip.Lines() do
+	local _, value = Tip.Text(index)
+	if (value or ""):find("|cff", 1, true) then
+		coined = true
+	end
+end
+check(coined, "not one figure in the hover is coloured by denomination")
 strip:GetScript("OnLeave")(strip)
 
 print(("purse  %s held, %s on the account across %d characters, %s")

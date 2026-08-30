@@ -325,7 +325,7 @@ function Purse.Line()
 	local held = GetMoney() or 0
 	if held ~= heldAt then
 		heldAt = held
-		heldText = ns.Coin(held)
+		heldText = ns.Coined(held)
 		-- And written down from here, which is what makes the ledger heal
 		-- itself. Every event this file listens to fires once, at a moment
 		-- somebody else decided; this branch fires a second after the loading
@@ -341,7 +341,7 @@ function Purse.Line()
 	local hoard = Purse.Account()
 	if hoard ~= hoardAt then
 		hoardAt = hoard
-		hoardText = "all " .. ns.Coin(hoard)
+		hoardText = "all " .. ns.Coined(hoard)
 	end
 
 	local rate = Purse.Rate()
@@ -376,14 +376,43 @@ local function Sorted(ledger)
 	return order
 end
 
--- What an hour of this is worth and how long "this" has been. A rate with no
--- span beside it is a number you cannot judge.
-local function Session(rate, elapsed)
-	local minutes = math.floor(elapsed / 60)
-	if not rate then
-		return ("%d min so far, which is too short to divide by"):format(minutes)
+-- The session's own block: what you sat down with, what the evening has made
+-- you, and what that is an hour.
+--
+-- Three rows where this used to be one sentence. The sentence carried the rate
+-- and the span and nothing to judge either against, and the number a player
+-- wants at the end of a run is the difference between the two ends of it, which
+-- the sentence never said out loud.
+--
+-- The label is what carries the colour rather than the figure. A coined figure
+-- is already three colours, one per denomination, and a fourth laid over the
+-- top of it would say "this went the wrong way" in the same ink the copper is
+-- written in.
+local function Session(lines)
+	local rate, elapsed = Purse.Rate()
+
+	lines[#lines + 1] = { blank = true }
+	lines[#lines + 1] = { ("This session, %d min"):format(math.floor(elapsed / 60)),
+		color = C.heading }
+
+	if not opening then
+		lines[#lines + 1] = { "Started with", "not counted yet" }
+		return lines
 	end
-	return ("%s an hour, over %d min"):format(ns.Coin(rate), minutes)
+
+	local earned = (GetMoney() or 0) - opening
+	lines[#lines + 1] = { "Started with", ns.Coined(opening, true) }
+	lines[#lines + 1] = { "Earned", ns.Coined(earned, true), color = Tone(earned) }
+
+	-- The same refusal the strip makes, said in words because a hover has room
+	-- for the reason. Under a minute there is no slope, and the honest thing to
+	-- print is why rather than a number nobody should read.
+	if not rate then
+		lines[#lines + 1] = { "An hour", "too short a session to divide by" }
+		return lines
+	end
+	lines[#lines + 1] = { "An hour", ns.Coined(rate, true), color = Tone(rate) }
+	return lines
 end
 
 -- What the status line has no room to say: every character on the account and
@@ -397,16 +426,19 @@ function Purse.Ledger()
 		Sorted(ledger)
 		for index = 1, #order do
 			local who = order[index]
-			lines[#lines + 1] = { who, ns.Coin(ledger[who]),
-				tone = (who == me) and C.text or C.dim }
+			-- Which row is yours is the name's job now. The figure beside it
+			-- is coined, and a colour laid over that is a colour fighting the
+			-- three the denominations already carry.
+			lines[#lines + 1] = { who, ns.Coined(ledger[who], true),
+				color = (who == me) and C.text or C.dim }
 		end
 		lines[#lines + 1] = { blank = true }
 	end
 
-	lines[#lines + 1] = { "Account", ns.Coin(Purse.Account()), tone = C.heading }
+	lines[#lines + 1] = { "Account", ns.Coined(Purse.Account(), true),
+		color = C.heading }
 
-	local rate, elapsed = Purse.Rate()
-	lines[#lines + 1] = { "This session", Session(rate, elapsed) }
+	Session(lines)
 
 	return {
 		kind = "note",

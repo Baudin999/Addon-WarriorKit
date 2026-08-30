@@ -306,6 +306,12 @@ Feeds/Purse.lua:Purse.Line
 Feeds/Purse.lua:Purse.Account
 Feeds/Purse.lua:Purse.Rate
 Core/Core.lua:ns.Coin
+Core/Core.lua:ns.Coined
+Core/Core.lua:Spell
+Core/Core.lua:Parts
+Core/Core.lua:Push
+Core/Core.lua:Plain
+Core/Core.lua:Painted
 Core/Core.lua:Thousands
 Feeds/Purse.lua:Others
 Feeds/Purse.lua:Purse.Mine
