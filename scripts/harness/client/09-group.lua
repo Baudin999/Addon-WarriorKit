@@ -192,17 +192,17 @@ end
 
 local OPPOSITE = { TOP = "BOTTOM", BOTTOM = "TOP", LEFT = "RIGHT", RIGHT = "LEFT" }
 
--- The corner the first block of a column sits in, which is the growth direction
--- and the column direction said as one word. The client writes it as two anchors
--- on the same button and this model keeps one per frame, so the pair is folded
--- into the corner they meet at. It reads the same for one column and it is only
--- a raid that tells them apart: with a single anchor at TOP a column would be
--- centred across a header three columns wide instead of starting at its left
--- edge.
-local CORNER = {
-	TOP = { LEFT = "TOPLEFT", RIGHT = "TOPRIGHT" },
-	BOTTOM = { LEFT = "BOTTOMLEFT", RIGHT = "BOTTOMRIGHT" },
-}
+-- Where the first block of a column goes, which is the one piece of this model
+-- the client and the addon disagreed about for a whole release.
+--
+-- SecureGroupHeaders anchors block one at the header's own growth point, TOP to
+-- TOP, so the first column is centred across the header rather than sitting at
+-- its left edge, and every column after it is hung off the right of the column
+-- before. A raid three columns wide therefore paints a block and a half further
+-- right than the box the header sized itself to, and this file used to model the
+-- tidier arrangement instead: one corner, TOPLEFT to TOPLEFT. That is the shape
+-- of mistake the note at the top of this file warns about. It made a two column
+-- list centred in the model and half a block right of the anchor in the game.
 
 -- The initialConfigFunction, run the way the restricted environment runs it:
 -- once per child, the first time the header makes it, with `self` bound to the
@@ -248,33 +248,39 @@ local function Listed(header, into)
 	return into
 end
 
--- Every child placed, the way SecureGroupHeaders places them: the first of a
--- column against the header itself, and each one after it against the opposite
--- edge of the child above, at xOffset and yOffset.
+-- Every child placed, the way SecureGroupHeaders places them: block one against
+-- the header's growth point, each one under it against the opposite edge of the
+-- block above at xOffset and yOffset, and the block that opens a new column
+-- against the far edge of the block that opened the last one.
 local function Arrange(header, shown, per, wide, tall)
 	local point = header:GetAttribute("point") or "TOP"
 	local side = header:GetAttribute("columnAnchorPoint") or "LEFT"
 	local spacing = header:GetAttribute("columnSpacing") or 0
-	local corner = CORNER[point][side]
 	local columns = 0
+	local start
 
 	for index = 1, #shown do
 		local button = header.buttons[index]
 		local column, row = math.floor((index - 1) / per), (index - 1) % per
 		columns = math.max(columns, column + 1)
 		button:ClearAllPoints()
-		if row == 0 then
-			button:SetPoint(corner, header, corner, column * (wide + spacing), 0)
+		if index == 1 then
+			button:SetPoint(point, header, point, 0, 0)
+			start = button
+		elseif row == 0 then
+			button:SetPoint(side, start, OPPOSITE[side], spacing, 0)
+			start = button
 		else
 			button:SetPoint(point, header.buttons[index - 1], OPPOSITE[point],
 				header:GetAttribute("xOffset") or 0, header:GetAttribute("yOffset") or 0)
 		end
 	end
 
-	-- The header sized to the block it has just arranged, which is the half of
-	-- the contract UnitFrames/Group.lua places the list by: the header is
-	-- centred on the anchor and takes its own size from the buttons, so this
-	-- arithmetic is what decides whether the list fills outward from the middle.
+	-- The header sized to the block it has just arranged. UnitFrames/Group.lua
+	-- reads none of this any more, and that is the point of keeping it right: the
+	-- box the header gives itself is not the box the blocks fill once there is a
+	-- second column, and a model that quietly made the two agree is what hid the
+	-- offset in the first place.
 	--
 	-- Nobody to place is a header the client gives one block's width and no
 	-- height at all, out of minWidth and minHeight falling to the multipliers of

@@ -317,30 +317,61 @@ local function Whole(value)
 	return math.floor(value + 0.5)
 end
 
--- The header centred on the anchor, which is the whole of what makes the list
--- fill outward from the middle.
+-- How many columns wide and how many rows deep the list has been arranged, in
+-- blocks. The header's own arithmetic, done here: a party of five at five to a
+-- column is one column of five, and the same five at one to a column is five
+-- columns of one.
 --
--- The header sizes itself to the block it has just arranged, every time it
--- arranges one, and the size it writes is the exact bounding box: the buttons,
--- the gap between them and the spacing between columns. So centring it means a
--- fifth person moves every slot half a block away from the anchor, rather than
--- the list growing off one end and leaving the other end where it was.
+-- Off the count of blocks on the screen rather than off the roster, because a
+-- raid past the cap is a header that shows the first maxColumns * unitsPerColumn
+-- of it and drops the rest, and the list to centre is the one that was drawn.
+local function Spread()
+	local shown = Group.Count()
+	local per = math.max(ns.db.partyRaidPerColumn, 1)
+	if shown <= per then
+		return 1, shown
+	end
+	return math.min(math.ceil(shown / per), ns.db.partyRaidColumns), per
+end
+
+-- The header placed so the blocks under it fill outward from the anchor, which
+-- is the whole of what makes the list grow from its middle.
 --
--- Written as a rounded offset rather than as CENTER anchored to CENTER, because
--- half of that bounding box is not always a whole unit. Four blocks with a three
--- unit gap between them is a hundred and forty five, and a list placed on half of
--- that rasterises every edge inside it across two rows of pixels, which is the
--- blur OnDragStop already rounds away for the same reason.
+-- Measured out of the settings rather than off the header, and anchored by the
+-- edge the header grows from rather than by a corner. Both of those are the same
+-- fact about SecureGroupHeaders: the first block of the first column is anchored
+-- at the header's own growth point, TOP to TOP, so it is centred across the
+-- header however wide the header says it is, and every further column is hung
+-- off the right of that one. A second column therefore lands outside the box the
+-- header sized itself to, and centring that box put a two column list half a
+-- block right of where it belonged. Anchoring TOP to TOP instead ties the one
+-- thing the client will not move, the top middle of the first block, to a point
+-- this file works out for itself.
 --
--- Called after Nudge and not before it: what is being halved is the size the
--- header gave itself while arranging the block, and Nudge is what makes it
--- arrange one. In combat this is never reached at all, because Rebuild has
--- already returned by then on a Secure that was refused.
+-- Rounded, because half of a block plus a gap is not always a whole unit. Four
+-- blocks with a three unit gap between them is a hundred and forty five, and a
+-- list placed on half of that rasterises every edge inside it across two rows of
+-- pixels, which is the blur OnDragStop already rounds away for the same reason.
+--
+-- Called after Nudge and not before it: what is being counted is the blocks the
+-- header has shown, and Nudge is what makes it arrange them. In combat this is
+-- never reached at all, because Rebuild has already returned by then on a Secure
+-- that was refused.
 local function Centre()
-	local across = Whole((anchor:GetWidth() - header:GetWidth()) / 2)
-	local down = Whole((header:GetHeight() - anchor:GetHeight()) / 2)
+	local columns, rows = Spread()
+	local gap = ns.db.partyGap
+	local block = ns.db.partyHeight + ns.db.partyWidth
+	local wide = columns * block + (columns - 1) * gap
+	local tall = math.max(rows, 1) * ns.db.partyHeight
+		+ (math.max(rows, 1) - 1) * gap
+
+	local down = ns.db.partyGrow ~= "up"
+	local edge = down and "TOP" or "BOTTOM"
+	local across = Whole((anchor:GetWidth() - wide) / 2)
+	local away = Whole((tall - anchor:GetHeight()) / 2)
+
 	header:ClearAllPoints()
-	header:SetPoint("TOPLEFT", anchor, "TOPLEFT", across, down)
+	header:SetPoint(edge, anchor, edge, across, down and away or -away)
 end
 
 local function Build()

@@ -181,8 +181,13 @@ local function block()
 	return left, top, (left + right) / 2, (top + bottom) / 2
 end
 
+-- On the grid, to a millionth. Not an exact integer: the list is anchored by its
+-- growth point now rather than by a corner, so every edge read back out of the
+-- model is the anchor's middle plus half a header minus half a block, and three
+-- fractional scales cancelling in floating point land seven parts in a
+-- quadrillion off. What this is guarding against is a half unit.
 local function whole(value)
-	return value == math.floor(value)
+	return math.abs(value - math.floor(value + 0.5)) < 1e-6
 end
 
 do
@@ -228,6 +233,39 @@ do
 			:format(x - ax, y - ay))
 
 	ns.db.partyGap = was
+	ns.Group.Apply()
+end
+
+-- The same four people run sideways, which is one to a column and a column
+-- each. This is the arrangement the centring was wrong for, and it is wrong in
+-- the one direction a vertical list can never show: the header sizes itself to
+-- every column it drew and then anchors the first column across its own middle,
+-- so the blocks sit half a list to the right of the box. Centring the box put
+-- the whole party right of the frame you drag, which is the list flowing off one
+-- end again with the arithmetic that was supposed to have stopped it.
+do
+	local was = ns.db.partyRaidPerColumn
+	ns.db.partyRaidPerColumn = 1
+	ns.Group.Apply()
+
+	check(ns.Group.Count() == 4, "a party one to a column lost somebody")
+	local left, top, x, y = block()
+	local ax, ay = _G.WarriorKitGroup:GetCenter()
+	check(near(x, ax) and near(y, ay),
+		("four blocks in a row sit round %.1f, %.1f and the frame you drag is at %.1f, %.1f")
+			:format(x, y, ax, ay))
+
+	-- And it is a row, not a column, or the assertion above would pass on a list
+	-- that ignored the setting entirely.
+	local block4 = ns.db.partyHeight + ns.db.partyWidth
+	local wide = 4 * block4 + 3 * ns.db.partyGap
+	check(near(x - left, wide / 2),
+		("four blocks one to a column are %.1f across and belong %d"):format(
+			(x - left) * 2, wide))
+	check(near(top, y + ns.db.partyHeight / 2),
+		"four blocks one to a column are not on one row")
+
+	ns.db.partyRaidPerColumn = was
 	ns.Group.Apply()
 end
 
