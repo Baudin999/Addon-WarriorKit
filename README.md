@@ -14,14 +14,14 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   loadout's pair of weapons in your hands. Three come ready, one per stance, and
   you can add your own, up to ten. Drag a weapon or a shield onto a hand on the
   paperdoll, which is a tab of the character sheet below.
-- **A character sheet that says how often you miss.** Five tabs on one window
-  the C key opens: your gear, what it adds up to, your skills, your standings and
-  your loadouts. No client on either of these versions has ever put your miss
+- **A character sheet that says how often you miss.** Four tabs on one window
+  the C key opens: your gear with what it adds up to in a column beside it, your
+  skills, your standings and your loadouts. No client on either of these versions has ever put your miss
   chance on the character sheet, because the client knows your hit rating and not
   your hit chance, so this works it out: how often a special, a white swing and a
   spell go wide against a boss and against your own level, with the hit off your
-  gear already taken off, and a line saying how much more would take each of them
-  to nothing. The gear page draws all nineteen slots with the durability of each
+  gear already taken off. Each of those numbers is the hit you still want, so
+  there is no second line saying it twice. The gear page draws all nineteen slots with the durability of each
   piece as a line under it, and the four numbers the client's own sheet has never
   had: item level, durability, empty slots and that miss chance. The skills page
   prices what a weapon skill under the cap for your level is costing you. Right

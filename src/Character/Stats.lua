@@ -17,8 +17,9 @@ ns.CharStats = Stats
 -- it on the character sheet, because the client knows your hit rating and not
 -- your hit chance. So the miss chance is computed, against a target of your own
 -- level and against the three above it, for a special, for a white swing and
--- for a spell, and the row underneath says how much more hit would take each of
--- them to nothing.
+-- for a spell. Each of those numbers is also the hit still wanted, which is why
+-- there is no row saying so twice: a special that misses six percent of the time
+-- is a special six percent of hit would land every time.
 --
 -- **The formula is written down and it reproduces the three published
 -- numbers.** A character at the weapon skill their level allows misses 5.5% at
@@ -205,27 +206,28 @@ local function Missing(rows)
 	local dual = DualWielding()
 
 	local special = Left(Stats.MeleeMiss(BOSS), melee)
-	Row(rows, "a special, three levels up", Percent(special),
-		("%s against your own level. Three levels up is what a raid boss is.")
+	Row(rows, "a special", Percent(special),
+		("%s against your own level. It is also the hit you still want: at nothing, a special always lands.")
 			:format(Percent(Left(Stats.MeleeMiss(0), melee))))
 
 	local swing = Left(Stats.MeleeMiss(BOSS) + (dual and DUAL_WIELD or 0), melee)
-	Row(rows, "a white swing, three levels up", Percent(swing),
+	Row(rows, "a white swing", Percent(swing),
 		dual and "Nineteen points of that is the second weapon, and no amount of hit is spent better than the first point of it."
 			or "One weapon, so a swing misses as often as a special does.")
 
 	local cast = Left(Stats.SpellMiss(BOSS), spell)
-	Row(rows, "a spell, three levels up", Percent(math.max(cast, SPELL_FLOOR)),
+	Row(rows, "a spell", Percent(math.max(cast, SPELL_FLOOR)),
 		("A spell never goes below %s, so hit past that point buys nothing.")
 			:format(Percent(SPELL_FLOOR)))
 
 	if melee then
-		Row(rows, "hit off your gear", ("%s melee, %s spell")
+		-- Two numbers and no third word. "spell" on the end of this made it the
+		-- longest value on the page by half again, and the column is sized to
+		-- its longest value, so that one word was paying for white space on
+		-- every other row. The sentence under it says which is which.
+		Row(rows, "hit off your gear", ("%s, %s")
 			:format(Percent(melee), Percent(spell or 0)),
-			"Gear only. The client rates what your gear gave you and has no call at all for the flat percentage a talent grants, so a talent that gives hit is not in this number.")
-		Row(rows, "hit still wanted", ("%s to stop missing specials, %s for swings")
-			:format(Percent(special), Percent(swing)),
-			"What each of the rows above would take to reach nothing.")
+			"Melee first, then spell, and gear only. The client rates what your gear gave you and has no call at all for the flat percentage a talent grants, so a talent that gives hit is not in this number.")
 	else
 		Row(rows, "hit off your gear", "this client does not rate hit",
 			"There are no combat ratings on this version, so nothing can be taken off the rows above. They are the miss chance of a character with no hit at all.")
@@ -290,8 +292,8 @@ local function Melee(rows)
 		Row(rows, "damage a second", ("%.1f"):format((low + high) / 2 / speed))
 	end
 	if minOff and maxOff and offSpeed and offSpeed > 0 then
-		Row(rows, "off hand damage", ("%d to %d, every %.2f seconds")
-			:format(Round(minOff), Round(maxOff), offSpeed))
+		Row(rows, "off hand", ("%d to %d"):format(Round(minOff), Round(maxOff)),
+			("Every %.2f seconds."):format(offSpeed))
 	end
 
 	local base, positive, negative = Ask("UnitAttackPower", "player")
@@ -369,7 +371,8 @@ local function Spell(rows)
 	local base, casting = Ask("GetManaRegen")
 	if base then
 		Row(rows, "mana every five seconds",
-			("%d standing still, %d casting"):format(Round(base * 5), Round((casting or 0) * 5)))
+			("%d, %d casting"):format(Round(base * 5), Round((casting or 0) * 5)),
+			"Standing still first, then what you keep while you are casting.")
 	end
 	return rows
 end
@@ -443,8 +446,12 @@ end
 -- Missing goes first, above the attributes the client's own sheet leads with,
 -- and that is a decision rather than an accident: strength is a number you look
 -- at once when you put a piece on, and hit is the number you came here for.
+--
+-- The three levels are in the heading rather than on all three rows. A column
+-- that says "three levels up" three times running is a column three words wider
+-- than it needs to be, and the rows underneath are read as a set.
 local GROUPS = {
-	{ title = "Hit and miss", fill = Missing },
+	{ title = "Missing a boss, three levels up", fill = Missing },
 	{ title = "Attributes", fill = Attributes },
 	{ title = "Melee", fill = Melee },
 	{ title = "Ranged", fill = Ranged },

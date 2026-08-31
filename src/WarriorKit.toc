@@ -624,12 +624,12 @@ Quests\Feature.lua
 # out what the client will not say, which is how often you miss, Skills.lua and
 # Reputation.lua read the two lists the client's own sheet keeps behind tabs,
 # Readout.lua is the column of headed rows those three are drawn in, Paperdoll.lua
-# is the gear page, Window.lua is the five tabs over one window, Blizzard.lua
-# puts the client's own sheet in the attic and takes the C key, and Feature.lua
-# last, as everywhere else.
+# is the gear page and hosts the stats column down the right of it, Window.lua is
+# the four tabs over one window, Blizzard.lua puts the client's own sheet in the
+# attic and takes the C key, and Feature.lua last, as everywhere else.
 #
 # After UnitFrames\Blizzard.lua, which owns the switch list Blizzard.lua signs
-# into, and after Loadouts\Page.lua, which is the fifth tab. Both are above this
+# into, and after Loadouts\Page.lua, which is the last tab. Both are above this
 # line. Core\Attic.lua, where the client's sheet goes, is far above it.
 Character\Worn.lua
 Character\Stats.lua

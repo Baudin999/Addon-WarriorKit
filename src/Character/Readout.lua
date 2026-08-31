@@ -9,11 +9,12 @@ local C, M = UI.Color, UI.Metric
 --------------------------------------------------------------------------
 -- A column of headed rows, repainted rather than rebuilt
 --
--- Three of the five tabs in the character window are the same picture: a
--- heading, some rows under it, each row a name on the left and a value on the
--- right, some of them with a sentence underneath and some with a bar. Stats,
--- skills and reputation differ in what they put in that shape and in nothing
--- else, so they hand this pane the same table and it draws all three.
+-- Three places in the character window are the same picture: a heading, some
+-- rows under it, each row a name on the left and a value on the right, some of
+-- them with a sentence underneath and some with a bar. The skills tab, the
+-- reputation tab and the stats column down the right of the gear page differ in
+-- what they put in that shape and in nothing else, so they hand this pane the
+-- same table and it draws all three.
 --
 -- **The lines are a pool.** This client cannot destroy a frame, so a pane that
 -- built its rows when it was handed a list would leak a frame for every skill
@@ -32,6 +33,14 @@ local C, M = UI.Color, UI.Metric
 -- A row measures itself the same way a stack cell does, and for the same
 -- reason: the sentence under a weapon skill wraps, and how tall it wraps to is
 -- not known until the pane has been given its width.
+--
+-- **Compact is a mode, and it is what the stats column is drawn in.** A row
+-- there is one line and nothing else: the sentence that would have wrapped
+-- under it goes into the hover, along with the value, so a number clipped by a
+-- narrow column is still readable by pointing at it. Thirty-five rows of prose
+-- is a page you scroll past rather than read, and the stats are a column you
+-- glance at while you swap a ring. The two tabs that are a page in their own
+-- right, skills and reputation, keep their sentences on the page.
 --------------------------------------------------------------------------
 
 -- The bar under a row that has a fraction, and the air around it. Short,
@@ -46,8 +55,37 @@ local BAR = 5
 -- you are reading down the column, so the split favours the name.
 local VALUE = 150
 
+-- The same split in a compact row, and it is measured rather than chosen: the
+-- longest value the stats column ever prints is "3.60 seconds", and this is
+-- that with a few pixels to spare. The value is pinned to the right edge, so
+-- every pixel reserved here beyond what the number uses is white space between
+-- a name and the number it belongs to. Anything that still does not fit is in
+-- the hover, which is the whole bargain compact makes.
+local TIGHT = 96
+
+-- How tall a compact row is. Two over the font it draws, which is one pixel of
+-- leading above the line and one below: the least air that still reads as
+-- separate rows rather than a block. A control row is twenty because you aim a
+-- mouse at it; nothing here is clicked, so none of that height is earned. At
+-- thirty-odd rows the six pixels saved on each are two hundred of scrolling.
+local DENSE = M.font + 2
+
 local Pane = {}
 Pane.__index = Pane
+
+-- What a compact row says when you point at it: its own name, the value the
+-- column may have clipped, and the sentence the column does not draw.
+local function Hint(frame)
+	local row = frame.hint
+	if not row then
+		return nil
+	end
+	local lines = { { row.value or "", color = C.accent } }
+	if row.note then
+		lines[#lines + 1] = { row.note, color = C.dim }
+	end
+	return { kind = "note", title = row.label, lines = lines }
+end
 
 local function Line(pane)
 	local frame = CreateFrame("Frame", nil, pane.view.canvas)
@@ -77,6 +115,15 @@ local function Line(pane)
 	frame.fill:SetPoint("TOPLEFT")
 	frame.fill:SetPoint("BOTTOMLEFT")
 
+	-- Only the compact rows are hoverable, because they are the only ones
+	-- keeping anything back. A row on the skills tab has its sentence under it
+	-- already, and a hover that repeated it would cost the right button drag
+	-- that turns the camera for nothing.
+	if pane.compact then
+		frame:EnableMouse(true)
+		ns.Tip.Hang(frame, Hint)
+	end
+
 	frame:Hide()
 	pane.lines[#pane.lines + 1] = frame
 	return frame
@@ -104,16 +151,21 @@ end
 -- One row, and the height it came out at. The note is given its width before it
 -- is measured, which is the rule every wrapping string in the addon is written
 -- against: a height taken against the last layout's width is the overflow bug.
-local function PaintRow(frame, row, width)
+local function PaintRow(frame, row, width, compact)
 	Blank(frame)
+	-- What the hover reads, and nothing at all on a pane that draws its own
+	-- sentences: a tooltip that repeats the line under the cursor is furniture.
+	frame.hint = compact and row or nil
+
+	local split = compact and TIGHT or VALUE
 	frame.label:SetText(row.label or "")
-	frame.label:SetWidth(math.max(width - VALUE - M.gutter, 1))
+	frame.label:SetWidth(math.max(width - split - M.gutter, 1))
 	frame.label:Show()
 	frame.value:SetText(row.value or "")
-	frame.value:SetWidth(VALUE)
+	frame.value:SetWidth(split)
 	frame.value:Show()
 
-	local height = M.row
+	local height = compact and DENSE or M.row
 
 	if row.fraction then
 		frame.track:ClearAllPoints()
@@ -125,7 +177,7 @@ local function PaintRow(frame, row, width)
 		height = height + BAR + M.rowGap
 	end
 
-	if row.note then
+	if row.note and not compact then
 		frame.note:ClearAllPoints()
 		frame.note:SetPoint("TOPLEFT", 0, -height)
 		frame.note:SetWidth(math.max(width, 1))
@@ -139,8 +191,14 @@ end
 
 --------------------------------------------------------------------------
 
-function Readout.New(parent)
+-- `opts.compact` is the stats column: one line a row, the rest in the hover.
+-- The two gaps come with it rather than being read at every site, because a
+-- dense list is dense in its spacing as well as in its rows.
+function Readout.New(parent, opts)
 	local pane = setmetatable({ lines = {}, groups = {} }, Pane)
+	pane.compact = opts and opts.compact and true or false
+	pane.gap = pane.compact and 0 or M.rowGap
+	pane.pad = pane.compact and M.rowGap or M.gutter
 	pane.frame = CreateFrame("Frame", nil, parent)
 	pane.view = UI.ScrollView(pane.frame)
 	pane.view.frame:SetPoint("TOPLEFT")
@@ -194,11 +252,12 @@ function Pane:Paint()
 			row:SetPoint("TOPLEFT", self.view.canvas, "TOPLEFT", M.indent, -y)
 			row:SetSize(math.max(width - M.indent, 1), M.row)
 			row:Show()
-			local tall = PaintRow(row, group.rows[slot], width - M.indent)
+			local tall = PaintRow(row, group.rows[slot], width - M.indent,
+				self.compact)
 			row:SetHeight(tall)
-			y = y + tall + M.rowGap
+			y = y + tall + self.gap
 		end
-		y = y + M.gutter
+		y = y + self.pad
 	end
 
 	for index = at + 1, #self.lines do

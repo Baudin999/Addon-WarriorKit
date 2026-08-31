@@ -6,8 +6,8 @@
 
 The client's character window is five pages wearing one frame, and the largest
 single area of the first of them is a picture of your back. `Character/` is nine
-files replacing it: your gear, what it adds up to, your skills, your standings
-and your loadouts, on five tabs the C key opens.
+files replacing it: your gear with what it adds up to in a column beside it, your
+skills, your standings and your loadouts, on four tabs the C key opens.
 
 **Hit and miss is the reason it exists.** No client on either of these versions
 has ever put your miss chance on the character sheet, because the client knows
@@ -15,8 +15,8 @@ your hit rating and not your hit chance, and the gap between those two is the
 difference between a set of enchants that was worth buying and one that was not.
 `Character/Stats.lua` computes it: how often a special, a white swing and a spell
 go wide against a target of your own level and against the three above it, with
-the hit off your gear taken off each, and a row underneath saying how much more
-would take each of them to nothing.
+the hit off your gear taken off each. Each of those numbers is the hit you still
+want, so nothing says it a second time.
 
 The formula is four constants and it is checked against the three figures
 everybody quotes. A character at the weapon skill their level allows misses
@@ -58,7 +58,7 @@ opinion, green for somebody who has one. What does not come across is the at-war
 tick and the watched-bar picker, and untick the switch to get either.
 
 **The loadout page moved.** It was a section of the options window, between the
-chat opacity and the minimap shape, and it is the fifth tab here. A loadout is a
+chat opacity and the minimap shape, and it is the last tab here. A loadout is a
 pair of weapons on a key, so it belongs on the page with your weapons on it.
 Nothing about the page changed: `Loadouts/Page.lua` hands the same rows to the
 same widget kit and this window is the host instead of the options window, which

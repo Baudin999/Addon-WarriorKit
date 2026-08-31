@@ -55,8 +55,8 @@ local FRAMES = {
 -- rather than a tab.
 local PAGES = {
 	PaperDollFrame = 1,
-	SkillFrame = 3,
-	ReputationFrame = 4,
+	SkillFrame = 2,
+	ReputationFrame = 3,
 }
 
 local MISSING = {

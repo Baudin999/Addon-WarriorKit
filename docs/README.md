@@ -320,10 +320,13 @@ name of none of them.
                              headers, with the shortfall on a weapon skill priced
     Character/Reputation.lua the faction lines, in three colours rather than eight
     Character/Readout.lua    a column of headed rows, repainted from a pool. The
-                             stats, skills and reputation tabs are all this
-    Character/Paperdoll.lua  the gear page: nineteen squares and the four numbers
-                             the client's own sheet has never drawn
-    Character/Window.lua     five tabs over one window, one painted at a time
+                             skills tab, the reputation tab and the stats column
+                             on the gear page are all this, the last of them
+                             compact: a line a row, the sentence in the hover
+    Character/Paperdoll.lua  the gear page: nineteen squares, the four numbers
+                             the client's own sheet has never drawn, and the
+                             stats down the right of them
+    Character/Window.lua     four tabs over one window, one painted at a time
     Character/Blizzard.lua   the client's own sheet in the attic, and the C key
                              redirected to the matching tab
     Character/Feature.lua
@@ -2365,16 +2368,23 @@ this character keeps its slot and goes orange rather than being dropped by a
 panel that cannot see into your bank.
 
 **Character sheet.** Nine files under `Character/`, replacing the client's own
-window: gear, stats, skills, reputation and loadouts, on five tabs the C key
-opens.
+window: gear with the stats beside it, skills, reputation and loadouts, on four
+tabs the C key opens. The stats had a tab of their own and lost it: what a stat
+answers is what the piece you just put on did, so the readout is a column down
+the right of the squares that move it. It is drawn compact, which is a mode of
+`Character/Readout.lua` rather than a second widget: a row is one line, and the
+sentence that would have wrapped under it is in the hover with the value, so
+thirty-odd numbers fit beside a portrait and the reasoning is a point away.
 
 **Missing is the reason it exists.** Every other number on this page is a
 lookup. How often you miss is not, on either of these clients, because the
 client knows your hit rating and not your hit chance, and no character sheet the
 game has ever shipped has drawn one. `Character/Stats.lua` computes it against a
 target of your own level and against the three above it, for a special, for a
-white swing and for a spell, subtracts the hit your gear rated, and says
-underneath how much more would take each row to nothing.
+white swing and for a spell, and subtracts the hit your gear rated. Each of
+those three is the hit still wanted as well, which is why no row says it twice:
+a special that misses six percent of the time is a special six percent of hit
+would land every time.
 
 Four constants, and they are checked against the three published figures rather
 than against themselves:

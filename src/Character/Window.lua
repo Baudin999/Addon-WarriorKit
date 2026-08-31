@@ -9,18 +9,25 @@ local C, M = UI.Color, UI.Metric
 --------------------------------------------------------------------------
 -- The character window
 --
--- Five tabs over one window: what you are wearing, what it adds up to, what you
--- are skilled at, who likes you, and the weapon sets you have put on keys.
+-- Four tabs over one window: what you are wearing and what it adds up to, what
+-- you are skilled at, who likes you, and the weapon sets you have put on keys.
 --
 -- **It replaces the client's sheet rather than sitting beside it.** The client
--- draws four of these five and draws them as four separate windows wearing one
+-- draws three of these four and draws them as three separate windows wearing one
 -- frame, with a picture of your back taking the largest area of the first one
 -- and the number everybody actually wants, how often you miss, on none of them.
 -- Blizzard.lua puts that frame in the attic and takes the C key, behind the one
 -- switch on the page where every other Blizzard frame this addon replaces is
 -- switched.
 --
--- **The fifth tab is the loadouts.** They were a section of the options window,
+-- **The stats are not a tab.** They were, and a tab was the wrong shape for
+-- them: what a stat answers is what the piece you just put on did, and a number
+-- you have to change page to read is a number you read once a week. So the
+-- readout is a column down the right of the gear page, next to the squares that
+-- move it. Character/Paperdoll.lua hosts it, Character/Readout.lua still draws
+-- it, and this window is one tab narrower and one window wider for it.
+--
+-- **The last tab is the loadouts.** They were a section of the options window,
 -- which is where you go to change how opaque the chat window is. A loadout is a
 -- pair of weapons on a key, so it belongs where your weapons are. The page
 -- itself did not change: Loadouts/Page.lua hands the same rows to the same
@@ -37,20 +44,32 @@ local C, M = UI.Color, UI.Metric
 -- that happens to be up. A window nobody has open is not repainted at all.
 --------------------------------------------------------------------------
 
-local WIDTH, HEIGHT = 580, 480
+-- Wide enough for the gear page to carry the stats beside it: the block of
+-- squares and the portrait want three hundred and forty eight of that, and what
+-- is left is the column they are read against. The other three tabs are a list
+-- in a scroll view and take whatever width they are given.
+--
+-- The stats column takes whatever the gear block leaves over, which makes this
+-- number and nothing else the distance between a stat's name and its number.
+-- So it is not a round number: it is the padding, the gear block, a gutter and
+-- the narrowest column Paperdoll will still draw, added up. Every pixel past
+-- that lands in the middle of every row, and at forty of them strength and a
+-- hundred and forty four stop reading as one line and become two columns you
+-- pair up by eye.
+local WIDTH, HEIGHT = 600, 480
 
--- The five, in the order they are drawn. `fill` is what the tab's pane is
+-- The four, in the order they are drawn. `fill` is what the tab's pane is
 -- handed on a repaint, and the two that have none are the two that are not
--- readouts: the gear page draws itself and the loadout page is a widget kit.
+-- readouts: the gear page draws itself, stats and all, and the loadout page is a
+-- widget kit.
 local TABS = {
 	{ label = "gear" },
-	{ label = "stats", fill = function() return ns.CharStats.Groups() end },
 	{ label = "skills", fill = function() return ns.CharSkills.Groups() end },
 	{ label = "reputation", fill = function() return ns.CharRep.Groups() end },
 	{ label = "loadouts" },
 }
 
-local GEAR, STATS, SKILLS, REPUTATION, LOADOUTS = 1, 2, 3, 4, 5
+local GEAR, SKILLS, REPUTATION, LOADOUTS = 1, 2, 3, 4
 
 local window, tabs, footer
 local panes = {}
@@ -156,7 +175,6 @@ function Window.Build()
 	tabs.frame:SetPoint("TOPLEFT", M.pad, -M.pad)
 
 	panes[GEAR] = ns.Paperdoll.New(window.content)
-	panes[STATS] = ns.CharReadout.New(window.content)
 	panes[SKILLS] = ns.CharReadout.New(window.content)
 	panes[REPUTATION] = ns.CharReadout.New(window.content)
 	panes[LOADOUTS] = Loadouts(window.content)

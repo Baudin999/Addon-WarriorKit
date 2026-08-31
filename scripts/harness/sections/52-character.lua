@@ -1,6 +1,6 @@
 -- The character window
 --
--- Five tabs replacing a window of the client's, and most of this section is
+-- Four tabs replacing a window of the client's, and most of this section is
 -- about the one number on them the client has never drawn.
 --
 -- **The miss maths is asserted against published figures rather than against
@@ -28,10 +28,15 @@ local ns, check, state = H.ns, H.check, H.state
 local sheet, moved = H.sheet, H.moved
 
 local Window, Stats, Worn = ns.CharWindow, ns.CharStats, ns.Worn
--- The two tabs this section drives by number. The stats and reputation pages
--- are read through their own modules rather than through a tab, so neither
--- needs one.
-local GEAR, SKILLS, LOADOUTS = 1, 3, 5
+-- The three tabs this section drives by number. The reputation page is read
+-- through its own module rather than through a tab, so it needs none, and the
+-- stats are not a tab at all any more: they are a column on the gear page.
+local GEAR, SKILLS, LOADOUTS = 1, 2, 4
+
+-- The heading the three miss rows sit under. It carries the three levels so the
+-- rows underneath do not have to, and it is named here because six checks below
+-- read it.
+local MISSING = "Missing a boss, three levels up"
 
 local function whole(value)
 	return math.abs(value - math.floor(value + 0.5)) < 1e-6
@@ -105,7 +110,7 @@ end
 
 do
 	local groups = Stats.Groups()
-	local special = Find(groups, "Hit and miss", "a special, three levels up")
+	local special = Find(groups, MISSING, "a special")
 	check(special ~= nil, "the stats page has no row for missing a special")
 	check(special.value == ("%.2f%%"):format(Stats.MeleeMiss(3) - sheet.hitMelee),
 		("the special row reads %s and the hit off the gear was not taken off it")
@@ -116,18 +121,18 @@ do
 	-- rather than about the target.
 	local was = H.swing.off
 	H.swing.off = 1.8
-	local swing = Find(Stats.Groups(), "Hit and miss", "a white swing, three levels up")
+	local swing = Find(Stats.Groups(), MISSING, "a white swing")
 	check(swing.value == ("%.2f%%"):format(Stats.MeleeMiss(3) + 19 - sheet.hitMelee),
 		("dual wielding, a white swing reads %s"):format(tostring(swing.value)))
 	H.swing.off = was
 
-	local skill = Find(Stats.Groups(), "Hit and miss", "weapon skill")
+	local skill = Find(Stats.Groups(), MISSING, "weapon skill")
 	check(skill ~= nil and skill.note:find("Under the cap", 1, true) ~= nil,
 		"a weapon skill under the cap does not say so on the stats page")
 
 	-- A spell never goes below one percent however much hit is on the gear, so
 	-- the row is floored rather than reaching nothing.
-	local spell = Find(groups, "Hit and miss", "a spell, three levels up")
+	local spell = Find(groups, MISSING, "a spell")
 	check(spell ~= nil and tonumber(spell.value:match("^([%d.]+)")) >= 1,
 		"the spell row went under the floor a spell always has")
 end
@@ -139,10 +144,10 @@ do
 	local melee, spell = _G.CR_HIT_MELEE, _G.CR_HIT_SPELL
 	_G.CR_HIT_MELEE, _G.CR_HIT_SPELL = nil, nil
 
-	local row = Find(Stats.Groups(), "Hit and miss", "hit off your gear")
+	local row = Find(Stats.Groups(), MISSING, "hit off your gear")
 	check(row ~= nil and row.value:find("does not rate hit", 1, true) ~= nil,
 		("with no ratings the hit row reads %s"):format(tostring(row and row.value)))
-	local special = Find(Stats.Groups(), "Hit and miss", "a special, three levels up")
+	local special = Find(Stats.Groups(), MISSING, "a special")
 	check(special.value == ("%.2f%%"):format(Stats.MeleeMiss(3)),
 		"with no ratings something was still taken off the miss chance")
 	check(Stats.Describe():find("no ratings", 1, true) ~= nil,
@@ -273,6 +278,59 @@ do
 	check(level ~= nil and math.abs(level - 60) < 1e-6,
 		("the average item level came to %s"):format(tostring(level)))
 	check(empty > 0, "every slot came back full on a character wearing four pieces")
+
+	-- The stats, which are on this page rather than on a tab. The check is that
+	-- the column was given room and drew into it: a readout with no width paints
+	-- nothing and returns quietly, which is what the move could break without
+	-- anything else on the page noticing.
+	check(pane.stats ~= nil, "the gear page has no stats column")
+	check((pane.stats.width or 0) >= 204,
+		("the stats column came out %s wide"):format(tostring(pane.stats.width)))
+	check(pane.stats:Lines() > 0, "the stats column drew no lines beside the gear")
+
+	-- Compact means one line a row. The sentence that used to wrap underneath is
+	-- in the hover, so a row that grew past a single line is a row still drawing
+	-- prose the column no longer has the height for.
+	local tallest = 0
+	for index = 1, pane.stats:Lines() do
+		local line = pane.stats.lines[index]
+		if line:IsShown() then
+			tallest = math.max(tallest, line:GetHeight())
+		end
+	end
+	check(tallest > 0 and tallest <= ns.UI.Metric.row,
+		("the tallest row in the stats column is %d px and a compact row is one line")
+			:format(tallest))
+	H.carry.statsColumn = pane.stats.view.extent
+
+	-- And what the row keeps back is what a hover hands over: the value the
+	-- column may have clipped, then the sentence. A compact row with no hover is
+	-- the whole bargain broken and nothing else on the page would show it.
+	local row
+	for index = 1, pane.stats:Lines() do
+		local line = pane.stats.lines[index]
+		if line:IsShown() and line.hint and line.hint.note then
+			row = row or line
+		end
+	end
+	check(row ~= nil, "no row in the stats column carries a sentence for its hover")
+	ns.UI.Tooltip.Close(true)
+	row:GetScript("OnEnter")(row)
+	check(ns.UI.Tooltip.IsShown(), "hovering a stat said nothing")
+	check(ns.UI.Tooltip.Lines() >= 3,
+		("a stat's hover drew %d lines and it has a name, a value and a sentence")
+			:format(ns.UI.Tooltip.Lines()))
+	row:GetScript("OnLeave")(row)
+	ns.UI.Tooltip.Close(true)
+
+	-- And it is beside the block rather than over it: the two squares columns,
+	-- the portrait between them and the stats have to add up to no more than the
+	-- page was given. A column that overlapped the gear would still draw, still
+	-- measure and still pass every check above it.
+	local block = (36 + 4 * 2) * 2 + pane.width
+	check(block + pane.stats.frame:GetWidth() <= pane.frame:GetWidth(),
+		("the gear block and the stats column come to %d on a %d wide page")
+			:format(block + pane.stats.frame:GetWidth(), pane.frame:GetWidth()))
 end
 
 ----------------------------------------------------------------------
@@ -562,6 +620,6 @@ end
 
 Window.Hide()
 
-print(("character %d slots, %d skill rows, %s; %s")
+print(("character %d slots, %d skill rows, stats %d px beside the gear; %s; %s")
 	:format(#Window.Pane(GEAR).squares, H.carry.characterRows or 0,
-		Worn.Describe(), Stats.Describe()))
+		H.carry.statsColumn or 0, Worn.Describe(), Stats.Describe()))

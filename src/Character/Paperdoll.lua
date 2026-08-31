@@ -14,6 +14,15 @@ local C, M = UI.Color, UI.Metric
 -- client's own sheet has never drawn: what your gear averages, how worn it is,
 -- how many slots are empty and how often you miss.
 --
+-- **The stats are the right hand column.** They were a tab of their own, which
+-- meant the two halves of one question lived on two pages: the squares say what
+-- you are wearing and the numbers say what wearing it does, and swapping a ring
+-- to see the second one move is a tab press away from the first. So the stats
+-- readout is a column down the right of this page, filled from the same
+-- Character/Stats.lua and drawn by the same Character/Readout.lua that drew the
+-- tab. The block of squares and the portrait keep their own width and sit
+-- against the left edge; the column takes everything the block does not want.
+--
 -- **The model is the middle.** This page used to give that space to the four
 -- numbers and leave the model out, on the argument that a picture of your back
 -- answers nothing the nineteen squares have not already answered. That is a
@@ -84,8 +93,17 @@ local GAP = 4
 -- page spreading. A model is a figure standing up, so a panel much past this is
 -- not a bigger portrait, it is the same figure on a wider stage, and it pushes
 -- the two columns of squares a window apart. Given more room than the block
--- needs, the block is centred and the rest is left as margin.
+-- needs, the block keeps this width and the rest goes to the stats column.
 local PORTRAIT = 260
+
+-- The narrowest the stats column may be and still be worth drawing, and it is
+-- the row added up rather than a taste: a scroll bar, the indent, the widest
+-- name the page prints beside a number, the gutter and the room the value is
+-- pinned into. The window is built to hand the column exactly this, so the two
+-- ends of a row sit as close as a right-aligned number can sit to its name.
+-- Under it the name is what gets clipped, so a window too narrow to carry both
+-- keeps the gear and drops the column rather than drawing half a word.
+local READING = 220
 
 -- The portrait's two bands. The top one is a line of text and is sized like
 -- one; the bottom one is a number over a word, twice, plus the air round them.
@@ -311,7 +329,7 @@ local function Readings()
 
 	read[4] = {
 		value = ("%.2f%%"):format(ns.CharStats.MeleeMiss(3)),
-		note = "Against a boss, before any hit off your gear. The stats tab takes that off and says what is left.",
+		note = "Against a boss, before any hit off your gear. The missing group in the column beside you takes that off and says what is left.",
 	}
 
 	return read
@@ -447,37 +465,56 @@ function Paperdoll.New(parent)
 	end
 
 	pane.panel = Portrait(pane.frame)
+	-- The same readout the stats tab was, hosted here instead and drawn compact:
+	-- a line a row, with the sentence under it moved into the hover. It keeps
+	-- its own scroll view, so a long sheet on a short window scrolls beside a
+	-- portrait that does not move.
+	pane.stats = ns.CharReadout.New(pane.frame, { compact = true })
 	return pane
 end
 
--- Left column down the left, right column down the right, the portrait between
--- them, the three weapons centred under it. Placed rather than stacked, because
--- this is one arrangement of a fixed number of squares and a layout engine
--- would be a layer between the numbers and the picture.
+-- Left column down the left, right column beside the portrait, the portrait
+-- between them, the three weapons centred under it, and the stats down the rest
+-- of the width. Placed rather than stacked, because this is one arrangement of a
+-- fixed number of squares and a layout engine would be a layer between the
+-- numbers and the picture.
 function Pane:Resize(width, height)
 	self.frame:SetSize(width, height)
 
-	-- The portrait takes what the two columns leave, up to its own limit, and
-	-- the three of them are centred together in whatever the page was given.
-	-- The margin is worked out once and used on both sides, so the block cannot
-	-- drift off centre as the window is resized.
+	-- The block asks for what it wants and the stats column gets the remainder,
+	-- so the two columns of squares sit the same distance apart on every window
+	-- this page is ever given. Everything in the block is placed off the left
+	-- edge for the same reason: the right hand edge belongs to the stats now,
+	-- and a square anchored to it would drift with the column's width.
 	local column = SQUARE + GAP * 2
-	self.width = math.max(math.min(width - column * 2, PORTRAIT), 1)
-	local margin = math.max(math.floor((width - self.width - column * 2) / 2), 0)
+	local room = width - (column * 2 + PORTRAIT) - M.gutter
+	local stats = room >= READING and room or 0
+	local gutter = stats > 0 and M.gutter or 0
+	self.width = math.max(math.min(width - stats - gutter - column * 2, PORTRAIT), 1)
+	local right = column * 2 + self.width - SQUARE
 
 	for index = 1, #self.left do
 		self.left[index]:ClearAllPoints()
-		self.left[index]:SetPoint("TOPLEFT", margin, -((index - 1) * (SQUARE + GAP)))
+		self.left[index]:SetPoint("TOPLEFT", 0, -((index - 1) * (SQUARE + GAP)))
 	end
 	for index = 1, #self.right do
 		self.right[index]:ClearAllPoints()
-		self.right[index]:SetPoint("TOPRIGHT", -margin, -((index - 1) * (SQUARE + GAP)))
+		self.right[index]:SetPoint("TOPLEFT", right, -((index - 1) * (SQUARE + GAP)))
 	end
 
 	self.panel:ClearAllPoints()
-	self.panel:SetPoint("TOPLEFT", margin + column, 0)
+	self.panel:SetPoint("TOPLEFT", column, 0)
 	self.panel:SetSize(self.width, math.max(height - SQUARE - GAP, 1))
 	self.inner = self:Cells()
+
+	self.stats.frame:ClearAllPoints()
+	self.stats.frame:SetPoint("TOPRIGHT")
+	if stats > 0 then
+		self.stats.frame:Show()
+		self.stats:Resize(stats, height)
+	else
+		self.stats.frame:Hide()
+	end
 
 	local span = #self.hands * SQUARE + math.max(#self.hands - 1, 0) * GAP
 	for index = 1, #self.hands do
@@ -538,6 +575,13 @@ function Pane:Paint()
 	end
 	if self.inner then
 		self:PaintPortrait()
+	end
+	-- Only while the page is up, and that is a measurement rule rather than a
+	-- saving: a sentence under a row is measured against the width it wraps to,
+	-- and a font string on a page nobody has shown yet is not obliged to answer
+	-- honestly. Character/Readout.lua keeps the other half of the same rule.
+	if self.frame:IsShown() then
+		self.stats:Set(ns.CharStats.Groups())
 	end
 	return true
 end
