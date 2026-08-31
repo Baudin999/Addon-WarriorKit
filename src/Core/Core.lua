@@ -1059,6 +1059,30 @@ function ns.ItemKind(link)
 	return itemId, classId, subClassId
 end
 
+-- Which creature a GUID belongs to, as the id the databases are keyed on.
+--
+-- The client hands GUIDs out everywhere and never hands out the number inside
+-- one. The format is the client's own, six hyphenated fields before the id and
+-- a spawn counter after it, and the leading word is what says whether there is
+-- a creature behind the GUID at all: a player's has none, and a row asked about
+-- one would come back as whatever number happened to be in that position.
+--
+-- Here rather than in a part, because two of them ask. The quest log's drop
+-- ledger reads it off a loot window to say which corpse a hide came out of, and
+-- the dungeon log's reads the same window to learn where a boss stands and what
+-- came off it. Both had their own copy of these nine lines for exactly one
+-- release.
+function ns.CreatureId(guid)
+	if type(guid) ~= "string" then
+		return nil
+	end
+	local kind, id = guid:match("^(%a+)%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
+	if kind ~= "Creature" and kind ~= "Vehicle" and kind ~= "Pet" then
+		return nil
+	end
+	return tonumber(id)
+end
+
 --------------------------------------------------------------------------
 -- Saved variables
 --

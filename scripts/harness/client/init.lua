@@ -216,6 +216,12 @@ for _, part in ipairs({
 	-- in the two registers 05-quests.lua left empty on Questie's map module,
 	-- and makes one frame, so it wants the last word on CreateFrame above it.
 	"15-worldmap",
+	-- Last, and it layers over 15-worldmap.lua the way that file layers over
+	-- 12-questlog.lua: the same C_Map answers the quest log's zones, the world
+	-- map's tree and the dungeon log's dungeons. It also wraps the two item
+	-- lookups 04-hands.lua installed so they answer an id as well as a link,
+	-- which is the one part of the addon that starts from an id.
+	"16-dungeons",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

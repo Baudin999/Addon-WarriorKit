@@ -76,20 +76,12 @@ local ROOM = 400
 -- The npc behind a unit token, as the number Questie's database is keyed by.
 --
 -- A GUID is `Creature-0-3007-0-11-1234-000136DF16` and the sixth field is the
--- npc id. Pets and vehicles carry the same shape under a different first field
--- and are worth reading too: a quest that wants you to kill somebody's minions
--- points at creatures the client calls pets. A player's GUID has none of this
--- and answers nil, which is the ordinary case for hovering somebody in your
--- own group.
+-- npc id. The parse is ns.CreatureId in Core, beside the thirty other questions
+-- the two clients answer differently, because the dungeon log reads the same
+-- number off the same loot window and two copies of one format would drift.
+-- What is left here is the name this file's callers already use.
 function Drops.NpcId(guid)
-	if type(guid) ~= "string" then
-		return nil
-	end
-	local kind, id = guid:match("^(%a+)%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
-	if kind ~= "Creature" and kind ~= "Vehicle" and kind ~= "Pet" then
-		return nil
-	end
-	return tonumber(id)
+	return ns.CreatureId(guid)
 end
 
 -- Every objective Questie has registered against that creature, or nil.

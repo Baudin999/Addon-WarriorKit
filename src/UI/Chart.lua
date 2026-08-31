@@ -5,7 +5,7 @@ local UI = ns.UI
 local Chart = {}
 UI.Chart = Chart
 
-local C = UI.Color
+local C, M = UI.Color, UI.Metric
 
 --------------------------------------------------------------------------
 -- A zone, drawn
@@ -114,6 +114,7 @@ local C = UI.Color
 Chart.TODO = "todo" -- something you still have to go and do
 Chart.BACK = "back" -- who the thing goes back to
 Chart.YOU  = "you"  -- where you are standing, which no database knows
+Chart.MARK = "mark" -- a numbered place, which the dungeon log's bosses are
 
 -- One dot, and the pale square behind it.
 --
@@ -188,6 +189,7 @@ local SEEN = 256
 local INK = {
 	[Chart.TODO] = C.accent,
 	[Chart.BACK] = C.tick,
+	[Chart.MARK] = C.accent,
 }
 
 --------------------------------------------------------------------------
@@ -464,6 +466,17 @@ local function Pin(board, index)
 	-- as well as over water.
 	pin.ring = ns.Outline(pin, 0, 0, 0, 0.7)
 	ns.EdgeSize(pin.ring, ns.Pixel(pin))
+	-- The number on a numbered mark, and nothing at all on the other three
+	-- shapes. A dungeon's bosses are a numbered list down one column and a
+	-- handful of squares on a picture, and the number is the whole of what
+	-- joins the two: without it the map says there are seven places and not
+	-- which of them is the third one. Drawn in the window's own background
+	-- colour rather than in white, because the square under it is the accent
+	-- and a dark figure on it reads at nine pixels where a pale one does not.
+	pin.tag = UI.Label(pin, M.glyph, C.window, "CENTER", UI.FLAT)
+	pin.tag:SetPoint("CENTER")
+	UI.Wrap(pin.tag, false)
+	pin.tag:Hide()
 	-- One line or several. The quest log's dots have one thing to say, the
 	-- coordinate; a world map dot is somebody else's icon and carries the quest
 	-- it belongs to as well as where it is. Both go through the same field so
@@ -786,16 +799,25 @@ end
 
 -- A point drawn as this addon's own mark, and how big it comes out. A coloured
 -- square, a wash of the same colour behind it and a dark hairline round it.
+--
+-- The colour and the size are the caller's where the caller says. Neither was,
+-- and both had to become so for the same second caller: the dungeon log draws
+-- one square per boss with the boss's number on it, which wants a bigger square
+-- than a quest's camp, and it draws the boss you have selected in a different
+-- colour from the other six, which is the whole of how the picture answers the
+-- column. Every caller that says nothing gets exactly what it got before.
 local function Square(pin, point)
-	local ink = INK[point.kind] or C.accent
+	local ink = point.tint or INK[point.kind] or C.accent
+	local size = point.size or PIN
 	pin.dot:SetVertexColor(1, 1, 1, 1)
 	UI.Tint(pin.dot, ink)
 	pin.halo:SetColorTexture(ink[1], ink[2], ink[3], MIST)
+	pin.halo:SetSize(size + (HALO - PIN), size + (HALO - PIN))
 	pin.halo:Show()
 	for index = 1, 4 do
 		pin.ring[index]:Show()
 	end
-	return PIN
+	return size
 end
 
 -- A point drawn as somebody else's icon, and how big it comes out.
@@ -882,6 +904,14 @@ end
 -- grew with the picture would swallow the zone at six times.
 local function Place(board, pin, point, wide, high)
 	local size = Mark(pin, point)
+	-- Set here rather than inside one of the three shapes, because the pins are
+	-- pooled: a mark that carried a number last time has to lose it when the
+	-- frame comes back as somebody else's icon, and Place is the one path every
+	-- shape goes through.
+	pin.tag:SetShown(point.label ~= nil)
+	if point.label then
+		pin.tag:SetText(point.label)
+	end
 	pin:SetSize(size, size)
 	pin:ClearAllPoints()
 	pin:SetPoint("CENTER", board.canvas, "TOPLEFT",

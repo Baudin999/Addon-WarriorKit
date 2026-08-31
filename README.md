@@ -28,6 +28,23 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   click a slot to take a piece off, drag one on to put it on, and neither works
   in a fight because the client will not allow it. Blizzard's own sheet goes off
   the screen, and one tick box puts it back.
+- **A dungeon log, where there has never been one.** Neither of these clients
+  has an adventure guide. Shift-L opens three columns: every boss in the game
+  down the left, grouped by dungeon and in level order, so the column answers
+  "what should I be running now" without a single click. In the middle, the
+  client's own map of the dungeon, cut into its floors, with a numbered mark per
+  boss. On the right, what that boss drops, in the client's own grade colours
+  with the client's own tooltip on every row. Forty dungeons, two hundred and
+  thirty seven bosses, and every item id in the book generated from Questie's
+  databases rather than typed, then checked against the client again when the
+  row is drawn: a drop the client disagrees with is left out instead of shown.
+
+  The marks are yours. No database on either client says where a boss stands
+  inside an instance, so the addon writes down where you were standing the first
+  time you loot each one, and the map fills in as you run the place. Any drop
+  the book did not have goes down beside it, which is how the Outland half of
+  the loot arrives, because the database this was generated from does not carry
+  it.
 - **Threat-coloured enemy bars.** They replace the Blizzard nameplate and carry
   a tag saying what the kill is worth. A mob that pays you nothing, because it
   is far below you or because somebody else tagged it, goes grey by name as well

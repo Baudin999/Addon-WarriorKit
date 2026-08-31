@@ -344,6 +344,23 @@ name of none of them.
                              through, taken, so B opens this one
     Bags/Feature.lua
 
+    Dungeons/Book.lua        the book: which dungeons, which bosses, what each
+                             one drops, and the ledger of what you have seen.
+                             Loads before Baked.lua, which only assigns into it
+    Dungeons/Baked.lua       generated, the dungeons and their drops, written by
+                             bake-dungeons.sh out of Questie's own databases
+    Dungeons/Places.lua      which dungeon maps this client has, walked out of
+                             C_Map's tree, and the floors each is cut into
+    Dungeons/Loot.lua        a baked item id turned into what the client says
+                             about it, and any row the client disagrees with
+                             dropped rather than drawn
+    Dungeons/Seen.lua        where a boss stands and what came off it, learned
+                             off the loot window, because no database on either
+                             client holds a coordinate inside an instance
+    Dungeons/Window.lua      the three columns: bosses, the map, the drops
+    Dungeons/Key.lua         Shift-L, held as an override on a plain button
+    Dungeons/Feature.lua
+
     EditMode/EditMode.lua    probes Edit Mode, captures a layout, imports the baked one
     EditMode/Saved.lua       generated, the baked layout, written by bake-ui.sh
     EditMode/Feature.lua
@@ -356,6 +373,8 @@ name of none of them.
     WarriorKit_Vanilla.toc   the same list for Classic Era
     check.sh             syntax, TOC coverage and lint gate, exits non-zero on any finding
     bake-ui.sh           bakes a captured Edit Mode layout into EditMode/Saved.lua
+    bake-dungeons.sh     bakes the dungeon book out of Questie's databases into
+                         Dungeons/Baked.lua
 
 Neither `UI/` nor `Unit/` is a part. Neither has a `Feature.lua`, neither signs
 into a registry, neither owns a setting and neither knows the name of anything
@@ -5596,6 +5615,14 @@ on different realms read as the same person.
     /wk bags hide on|off         take the client's nine bag calls, so B opens this
     /wk bags columns 10          how many squares across, 6 to 16
     /wk bags count               how many slots you have and how many are free
+    /wk dungeons                 the dungeon log
+    /wk dungeons on|off          the window and the key that opens it
+    /wk dungeons key SHIFT-L     which key opens it, override binding only
+    /wk dungeons key none        hand that key back
+    /wk dungeons book            how many dungeons, bosses and drops it holds
+    /wk dungeons maps            whether this client has a map for each dungeon
+    /wk dungeons seen            what your own runs have added to it
+    /wk dungeons forget          throw the boss positions and learned drops away
     /wk character                the character sheet
     /wk character on|off         the addon's sheet instead of the client's
     /wk character hide on|off    Blizzard's own in the attic, and the C key
@@ -5916,6 +5943,36 @@ Aiming at a mob out of combat with no target selected is the whole test.
 ## Untested against the live client
 
 Everything below was written from the API contract and has never executed:
+
+- **Whether either client has map art for a dungeon.** The whole middle column
+  turns on it. `Dungeons/Places.lua` walks C_Map for nodes of the dungeon kind
+  and binds each to a name in the book, and both halves of that are unproven:
+  the walk may come back empty on a build whose map tree has no dungeon nodes,
+  and a build that has them may name them differently from the book. The two
+  failures look identical on the screen, which is why the reading separates
+  them. What would settle it: `/wk dungeons maps`, which prints how many dungeon
+  maps this client named and how many of the book's forty found one. Nothing
+  raises either way; a dungeon with no map draws its bosses and its drops and a
+  line saying the client has no picture for the place.
+- **Whether `C_Map.GetMapGroupID` and `GetMapGroupMembersInfo` answer on these
+  builds.** They are what cut a dungeon into floors, so the strip under the map
+  is built out of them. Both are probed and pcalled and a client that answers
+  neither gets one floor per dungeon, which for most of the forty is the truth
+  anyway. The symptom of a wrong answer is a Deadmines with no way to reach
+  Ironclad Cove.
+- **Whether the client will say where you are standing inside an instance.**
+  Every mark on a dungeon map is a reading taken off `C_Map.GetPlayerMapPosition`
+  at the moment you open a boss's loot window. Instances are the one place that
+  call has historically answered nothing, and if it answers nothing here the
+  window is a dungeon map with no marks on it for the life of the install. What
+  would settle it: run any dungeon, loot the first boss, and `/wk dungeons seen`.
+  It reports bosses placed and drops learned separately, so a client that
+  records the drops and no position says so in the first number.
+- **Whether `C_Item.RequestLoadItemDataByID` exists on 2.5.6.** It is what warms
+  an item the client has never cached, which on the first open of a dungeon is
+  most of the right hand column. Probed, and a client without it draws every row
+  from the book's own name in the quiet colour and fills them in as the client
+  loads the items for any other reason. Slower, not wrong.
 
 - **Whether `ContainerFrameItemButtonTemplate` takes on these builds and behaves
   once it has.** Every square in the bag window inherits it, which is what makes

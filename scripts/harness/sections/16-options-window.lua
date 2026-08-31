@@ -442,9 +442,15 @@ if window then
 	-- it to 22,603 across sixty-four: a new page, and the longer of its two
 	-- hints is the sentence that says what the piles are made of, which is the
 	-- one thing about the window nobody can work out by looking at it. 22,800 is
-	-- that measurement plus a hint's worth of room again.
-	check(prose < 22800,
-		("the window holds %d characters of prose and the budget is 22,800"):format(prose))
+	-- that measurement plus a hint's worth of room again. The dungeon page costs
+	-- 459 across a check, a key field, a button and six readings and takes it to
+	-- 23,062 across sixty-five: a new page, and the longest of its three hints
+	-- is the sentence saying the marks on the map are where you looted each
+	-- boss, which is the one thing about that window nobody can work out by
+	-- looking at it either. 23,300 is that measurement plus a hint's worth of
+	-- room again.
+	check(prose < 23300,
+		("the window holds %d characters of prose and the budget is 23,300"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

@@ -190,6 +190,11 @@ local SECTIONS = {
 	-- clutter queue count, so the empty bag goes in here and comes out again at
 	-- the foot of the file.
 	"55-bags",
+	-- Last. It walks the map tree again for dungeons, puts you inside one, and
+	-- opens a loot window over a boss corpse, which is the one loot window in
+	-- the suite that says which corpse a slot came out of. It takes that away
+	-- again and puts you back where 54-world-map.lua left you standing.
+	"56-dungeon-log",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

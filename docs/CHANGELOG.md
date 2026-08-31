@@ -2,6 +2,64 @@
 
 ## Unreleased
 
+### A dungeon log, three columns wide
+
+Neither of these clients has an adventure guide, so the two questions everybody
+asks before a run have never had an answer in the game: which dungeon am I for,
+and does anything in it replace what I am wearing. `Dungeons/` is eight files
+answering both. Every boss in the game down the left, grouped by dungeon and in
+level order. The client's own map of the one you picked in the middle, with the
+bosses marked on it. What the one you are reading drops on the right, in the
+client's own grade colours with the client's own tooltip on each row. Shift-L
+opens it.
+
+**The data is generated, not remembered.** `Dungeons/Baked.lua` is forty
+dungeons, two hundred and thirty seven bosses and eight hundred and fifty six
+drops, and not one number in it was typed. `scripts/bake-dungeons.sh` reads
+Questie's own npc and item databases, which Questie generates from the client,
+and resolves a hand-written list of boss names into creature ids, levels and
+drop tables. The hand-written half is the editorial half and nothing else: which
+dungeons there are, and what order their bosses are fought in. A boss name in
+that list Questie cannot place stops the bake and writes no file, so the two
+halves check each other every time it runs.
+
+That split is the whole design. An item id nobody generated is an id somebody
+remembered, and an id remembered wrongly does not draw a blank. It resolves to a
+real sword, with a real icon and a real tooltip, that this boss does not drop.
+
+**So the client checks it again at draw time.** The book carries each drop as an
+id and the name it had when the bake read it, and `Dungeons/Loot.lua` compares
+that name to what the client says the id is. A row the client disagrees with is
+dropped and counted, and the count is a reading in the settings window. A wrong
+book shows fewer items, never the wrong ones.
+
+**Where a boss stands is learned, because nothing on this machine knows it.**
+Questie files every creature inside an instance at the coordinate `{-1, -1}`,
+which is its way of saying it does not know, and no call on either client will
+answer either. So `Dungeons/Seen.lua` writes the position down the first time
+you open that boss's loot window, from where you are standing, which is where
+the corpse is because you walked to it. A dungeon you have never run draws its
+map with no marks and a line underneath saying so. The alternative was a
+coordinate somebody remembered, which is a wrong mark on the one screen you
+opened to find out where something is.
+
+The same event fills in the loot. Questie's Classic database carries every
+creature's whole drop table, which is where the eight hundred Classic drops come
+from; its Burning Crusade database carries only what its own quests need, which
+is why the fifteen Outland dungeons come to about forty. Those fill in from your
+own runs, one loot window at a time.
+
+**The picture is the widget the other two maps are drawn on.** `UI/Chart.lua`
+gained three things and every existing caller is unchanged by all three: a
+square takes the caller's colour, a square takes the caller's size, and a point
+carrying a `label` draws that number on the mark. The number is what joins the
+mark to the row down the left, which is the whole of how the picture answers the
+column.
+
+`ns.CreatureId` moved into `Core/Core.lua`. The quest log's drop ledger and this
+one both read a creature id off the same loot window, and the GUID format is a
+client fact rather than a part's private knowledge.
+
 ### One bag window, with what you carry sorted into piles
 
 Five bags open as five windows, in the order you happen to have them on your
