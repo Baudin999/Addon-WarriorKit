@@ -468,13 +468,23 @@ local function Pin(board, index)
 	-- coordinate; a world map dot is somebody else's icon and carries the quest
 	-- it belongs to as well as where it is. Both go through the same field so
 	-- neither caller has to know which shape the other passes.
+	--
+	-- On the dot, whatever the tooltip setting says, and above it rather than
+	-- beside it. A dot is a place on a picture of a zone: which camp this is is
+	-- a question about the nine pixels under the pointer, and an answer that
+	-- opens in the bottom right corner of the screen leaves you moving the
+	-- cursor off the map to read it and back again to be sure which dot you
+	-- were on. Above because the dot is half the size of the pointer and the
+	-- arrow hangs down and to the right of its own hotspot, so a box beside one
+	-- opens underneath the arrow that opened it.
 	ns.Tip.Hang(pin, function(self)
 		if not self.name then
 			return nil
 		end
 		local note = self.note
 		return { kind = "note", title = self.name,
-			lines = (type(note) == "table") and note or { note } }
+			lines = (type(note) == "table") and note or { note },
+			place = ns.UI.Tooltip.BESIDE, above = true }
 	end)
 	board.pins[index] = pin
 	return pin
@@ -1137,6 +1147,27 @@ function Board:Turned()
 		end
 	end
 	return turned
+end
+
+-- The pointer put on the mark at `index`, as the mouse would put it, and
+-- whether there was a mark there to put it on.
+--
+-- Handed out for the reason Turned is: where a dot's box opens is invisible to
+-- every other reading, and a harness has no cursor to point at one with. It
+-- hands over no pin, because the pins are a pool this file will not give out
+-- and it does not have to: the box that opens carries its own owner, so a
+-- caller reads the rest off the tooltip.
+function Board:Hover(index)
+	local pin = self.pins[index]
+	if not pin or not pin:IsShown() then
+		return false
+	end
+	local enter = pin:GetScript("OnEnter")
+	if type(enter) ~= "function" then
+		return false
+	end
+	enter(pin)
+	return true
 end
 
 function Board:Drawn()

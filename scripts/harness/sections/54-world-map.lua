@@ -133,6 +133,45 @@ check(drawn == 3,
 	("the board is showing %d marks where it has two markers and you"):format(drawn))
 
 ----------------------------------------------------------------------
+-- Where a mark's box opens
+--
+-- On the mark, whatever the tooltip setting says. Which camp a dot is is a
+-- question about nine pixels of a picture of a zone, and an answer in the
+-- bottom right corner of the screen is one you read with the cursor off the
+-- map, having lost the dot you were on. Above the dot rather than beside it,
+-- because a mark is half the size of the pointer and the arrow hangs down and
+-- to the right of its own hotspot.
+--
+-- A board of its own rather than the window's, because the window will not hand
+-- out the chart's pools and should not start. What is asserted is the chart's
+-- pin, which is the same pin either board draws.
+----------------------------------------------------------------------
+
+do
+	local Box = ns.UI.Tooltip
+	local function pixels(region, method)
+		return ns.Measure(region, method) * region:GetEffectiveScale()
+	end
+
+	check(Box.Place() == Box.DOCK,
+		"the setting is not on the corner, so this claim proves nothing")
+
+	local probe = ns.UI.Chart.New(_G.UIParent, "WarriorKitMapHoverProbe")
+	probe:Fit(400, 300)
+	probe:Draw(WESTFALL, points)
+	check(probe:Hover(1), "the board would not put the pointer on its first mark")
+
+	local mark, box = Box.Owner(), Box.Frame()
+	check(mark ~= nil and box ~= nil and box:IsShown(),
+		"hovering a mark on the map opened no box")
+	check(Box.Placed() == Box.BESIDE,
+		("a mark's box went %s rather than onto the mark"):format(tostring(Box.Placed())))
+	check(pixels(box, "GetBottom") >= pixels(mark, "GetTop") - 1,
+		"a mark's box opened over the dot rather than above it, under the pointer")
+	Box.Close(true)
+end
+
+----------------------------------------------------------------------
 -- You, and which way you are pointing
 ----------------------------------------------------------------------
 
