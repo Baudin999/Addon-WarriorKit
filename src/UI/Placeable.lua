@@ -85,6 +85,105 @@ local function Landed(place, frame)
 	place.moved({ point, "UIParent", relativePoint, UI.Whole(x), UI.Whole(y) })
 end
 
+-- The four attributes a secure drag writes, and the snippet that reads them.
+--
+-- The restricted environment does not carry StartMoving. It was written here as
+-- though it did, and every drag on the character sheet ended in "attempt to call
+-- a nil value" out of RestrictedExecution. What it does carry is SetPoint, and
+-- that is enough: a frame the client refuses to let an addon move in combat is
+-- one a snippet may still place, so a secure drag is a point written once a
+-- frame rather than a move the client runs on our behalf.
+--
+-- A snippet cannot read a cursor, a scale or a Lua table, so the insecure half
+-- does that arithmetic and hands the answer over as attributes. That is what
+-- attributes are for: they are the way a value gets from insecure code into the
+-- restricted environment, and the environment decides what may be done with it.
+--
+-- Four of them rather than one string, because this runs once a frame for as
+-- long as the button is down and a string is a fresh object every time. Numbers
+-- are not. The two corner names are written once at the grab, the two offsets
+-- whenever they change, and the count last: it is what the snippet acts on, it
+-- is different every time, and a snippet that hung off the offsets themselves
+-- would sit still through a drag straight up the screen, where y moves and x
+-- never does.
+local MOVE = [[
+	if name ~= "wk-move" then return end
+	local point = self:GetAttribute("wk-point")
+	if not point then return end
+	self:ClearAllPoints()
+	self:SetPoint(point, self:GetFrameRef("screen"), self:GetAttribute("wk-rel"),
+		self:GetAttribute("wk-x"), self:GetAttribute("wk-y"))
+]]
+
+-- Where the frame would sit if it were where the cursor has dragged it to.
+--
+-- Whole units, because that is the number Landed writes into the setting, and a
+-- drag that saved a different number than it drew is a window that jumps on the
+-- next login. The cursor answers in physical pixels, the offsets are in the
+-- frame's own units, and the scale between them is the division here.
+--
+-- Nothing is written unless the point has moved. A cursor spends most of a drag
+-- inside the unit it was in a frame ago, and a point that has not changed is a
+-- snippet run and a re-anchor for nothing.
+local function Push(place, frame)
+	local grab = place.grabbed
+	local cursorX, cursorY = GetCursorPosition()
+	local scale = frame:GetEffectiveScale()
+	local x = UI.Whole(grab.x + cursorX / scale - grab.x0)
+	local y = UI.Whole(grab.y + cursorY / scale - grab.y0)
+	if x ~= grab.lastX or y ~= grab.lastY then
+		grab.lastX, grab.lastY = x, y
+		grab.moves = grab.moves + 1
+		frame:SetAttribute("wk-x", x)
+		frame:SetAttribute("wk-y", y)
+		frame:SetAttribute("wk-move", grab.moves)
+	end
+end
+
+-- What the ticker calls. A named function at the top of the file rather than a
+-- closure inside the drag, so that the whole of what a tick reaches is a name
+-- check.sh can hold to the allocation rule, which is the rule this drag would
+-- break first: it is the only ticker in the addon that runs while a window is
+-- under the cursor rather than while a fight is on.
+local function Follow(frame)
+	Push(frame.placing, frame)
+end
+
+-- The drag itself: where the frame was and where the cursor was when it was
+-- grabbed, and then that pair pushed at the snippet for as long as the button
+-- is down. The Lua half may do all of this in a fight. Reading a cursor and
+-- writing an attribute are not protected acts. Only the SetPoint at the far end
+-- is, and that one happens inside the snippet.
+local function Secure(place, frame)
+	frame.placing = place
+	frame:SetFrameRef("screen", UIParent)
+	frame:SetAttribute("_onattributechanged", MOVE)
+
+	frame:SetScript("OnDragStart", function(self)
+		local point, _, relativePoint, x, y = self:GetPoint()
+		local cursorX, cursorY = GetCursorPosition()
+		local scale = self:GetEffectiveScale()
+		place.grabbed = { x = x, y = y, moves = 0,
+			x0 = cursorX / scale, y0 = cursorY / scale }
+		self:SetAttribute("wk-point", point)
+		self:SetAttribute("wk-rel", relativePoint)
+		self:SetScript("OnUpdate", Follow)
+	end)
+
+	frame:SetScript("OnDragStop", function(self)
+		self:SetScript("OnUpdate", nil)
+		if not place.grabbed then
+			return
+		end
+		-- Once more on the way out, because the last OnUpdate ran a frame before
+		-- the button came up and the window would land a cursor's worth short of
+		-- where it was dropped.
+		Push(place, self)
+		place.grabbed = nil
+		Landed(place, self)
+	end)
+end
+
 -- The half both drags share on the way out: the rim a frame with no chrome
 -- wears while it is being placed, and the drag the client has to be told to
 -- deliver at all.
@@ -137,28 +236,22 @@ function UI.Placeable(frame, opts)
 	frame:SetClampedToScreen(true)
 
 	-- A frame with a protected frame inside it may not be moved by an addon in
-	-- combat, which is the same rule that keeps it from being shown. A snippet
-	-- may, and StartMoving is one of the calls the restricted environment
-	-- carries, so a secure frame is dragged by two snippets on the template its
-	-- caller built it with. UI/Window.lua is the one caller and the character
-	-- sheet is the one window: it has nineteen secure squares on its gear page,
-	-- and a sheet you can open mid pull and not move is half a window.
+	-- combat, which is the same rule that keeps it from being shown: the client
+	-- applies a protected frame's restrictions to its parent and to whatever it
+	-- is anchored to. A snippet may move it, so a secure frame is placed from one
+	-- above rather than dragged by the client. UI/Window.lua is the one caller
+	-- and the character sheet is the one window: it has nineteen secure squares
+	-- on its gear page, and a sheet you can open mid pull and not move is half a
+	-- window.
 	--
 	-- The lock cannot reach one. A snippet has no way to read a Lua flag, so a
 	-- lockable secure frame would be one the lock only half held. Nothing wants
 	-- that combination, and saying so here is cheaper than finding out in a
 	-- fight.
-	--
-	-- The Lua half is hooked rather than set, because the template's own scripts
-	-- are what run the snippets and a script set over them replaces the handler.
 	if place.secure then
 		assert(not place.lockable,
 			"UI.Placeable: a secure frame is dragged from a snippet, which the lock cannot reach")
-		frame:SetAttribute("_ondragstart", [[ self:StartMoving() ]])
-		frame:SetAttribute("_ondragstop", [[ self:StopMovingOrSizing() ]])
-		frame:HookScript("OnDragStop", function(self)
-			Landed(place, self)
-		end)
+		Secure(place, frame)
 		return Finish(place, frame, opts)
 	end
 

@@ -847,14 +847,21 @@ local function Mark(pin, point)
 		return Heading(pin)
 	end
 	pin.art, pin.turn = nil, nil
+	-- Turned back, because the pins are pooled: the dot that is a camp now may
+	-- have been the arrow last zone, and nothing else on the board is ever
+	-- rotated, so nothing else ever turns it back.
+	--
+	-- Above the icon rather than only above the square, which is where it was
+	-- and is the whole of this bug. The arrow points wherever you were facing,
+	-- so the mark that inherited it came out at whatever angle you happened to
+	-- be standing at, and the one people saw was the exclamation mark upside
+	-- down. A coloured square is a diamond when it is turned and reads as a
+	-- choice; somebody else's art is simply wrong.
+	if type(pin.dot.SetRotation) == "function" then
+		pin.dot:SetRotation(0)
+	end
 	if point.icon then
 		return Badge(pin, point)
-	end
-	if type(pin.dot.SetRotation) == "function" then
-		-- Turned back, because the pins are pooled: the dot that is a camp now
-		-- may have been the arrow last zone, and a square left on its side is a
-		-- diamond nobody asked for.
-		pin.dot:SetRotation(0)
 	end
 	return Square(pin, point)
 end
@@ -1112,6 +1119,26 @@ end
 -- How many dots are on the board, and how big it is. Handed out because a map
 -- that drew the wrong number of places is a claim scripts/harness.lua has to be
 -- able to make, and there is no answering it from outside otherwise.
+-- How many marks are drawn on their side, which should never be more than the
+-- one: the arrow is the only thing on this board that is ever rotated.
+--
+-- Handed out for the reason Arrow is. The pins are pooled and the arrow turns
+-- one of them, so a mark that came back as somebody else's icon and kept the
+-- angle is a defect no other reading catches: it is the right art, at the right
+-- place, on the right zone, upside down.
+function Board:Turned()
+	local turned = 0
+	for index = 1, #self.pins do
+		local pin = self.pins[index]
+		local dot = pin.dot
+		if pin:IsShown() and type(dot.GetRotation) == "function"
+			and (dot:GetRotation() or 0) ~= 0 then
+			turned = turned + 1
+		end
+	end
+	return turned
+end
+
 function Board:Drawn()
 	local shown = 0
 	for index = 1, #self.pins do

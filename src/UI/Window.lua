@@ -199,12 +199,16 @@ function UI.Window(opts)
 	-- what is in a slot is protected. Everything an addon does to such a window
 	-- in combat is refused by the client, so a secure window is shown, hidden
 	-- and dragged from snippets instead: the key that opens it is bound to a
-	-- secure button, the close cross is one, and the drag is two attributes on
-	-- the template the frame is built with here.
+	-- secure button, the close cross is one, and the drag is a point handed to a
+	-- snippet through the attribute template the frame is built with here.
 	window.secure = opts.secure == true
 
+	-- The attribute template rather than the drag one, because the drag a secure
+	-- window gets is not a drag the client runs: the restricted environment has
+	-- no StartMoving in it, so UI/Placeable.lua writes the point it wants into an
+	-- attribute and the snippet on this template is what places the frame.
 	local frame = CreateFrame("Frame", opts.name, UIParent,
-		window.secure and "SecureHandlerDragTemplate" or nil)
+		window.secure and "SecureHandlerAttributeTemplate" or nil)
 	window.frame = frame
 	window.zoom = zoom
 	UI.Adopt(frame, zoom)

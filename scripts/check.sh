@@ -450,6 +450,8 @@ UI/Chart.lua:Track
 UI/Chart.lua:Aim
 UI/Chart.lua:Chart.Here
 UI/Chart.lua:Chart.Facing
+UI/Placeable.lua:Follow
+UI/Placeable.lua:Push
 "
 
 hot_scan='

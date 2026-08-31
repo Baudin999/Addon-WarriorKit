@@ -149,6 +149,13 @@ function Region:GetTexCoord()
 end
 function Region:SetTexture(path) self.texture = path end
 function Region:GetTexture() return self.texture end
+-- Which way the texture is turned, in radians. The client has both halves and
+-- the stub had neither, so the one thing on the map that is ever rotated was
+-- drawn by code no run reached: the arrow's angle was kept in the addon's own
+-- field and the write to the texture went nowhere. A mark that came out of the
+-- pool still on its side was invisible to every reading here.
+function Region:SetRotation(radians) self.rotation = radians or 0 end
+function Region:GetRotation() return self.rotation or 0 end
 function Region:SetColorTexture(r, g, b, a)
 	-- A colour texture answers no file path, which is the readback Skin.lua's
 	-- Flatten guards on. Counted rather than recorded, so the tick can be
@@ -252,8 +259,14 @@ function Region:SetPoint(point, relative, relativePoint, x, y)
 	elseif type(relativePoint) == "number" then
 		relativePoint, x, y = point, relativePoint, x
 	end
+	-- The third shape, which is SetPoint("CENTER") and nothing else. The client
+	-- fills the two it was not given, with the parent and with the same corner,
+	-- and answers them from GetPoint. A stub that stored the nils handed back an
+	-- anchor with no relative point in it, which is a frame nothing can be placed
+	-- against and a drag that reads one back cannot re-anchor.
 	self.points = self.points or {}
-	self.points[#self.points + 1] = { point, relative, relativePoint, x or 0, y or 0 }
+	self.points[#self.points + 1] = { point, relative or self.parent,
+		relativePoint or point, x or 0, y or 0 }
 end
 function Region:ClearAllPoints() self.points, self.allPoints = nil, nil end
 function Region:GetNumPoints() return self.points and #self.points or 0 end
