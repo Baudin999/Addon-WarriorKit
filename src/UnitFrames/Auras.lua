@@ -532,18 +532,28 @@ end
 -- addon makes.
 local function Hover(square, unit, filter)
 	square:EnableMouse(true)
+	-- Beside the square whatever the tooltip setting says, on both answers
+	-- below. The box here is the aura's own label: you are pointing at a
+	-- sixteen pixel icon to find out which of eight buffs it is, and an answer
+	-- that opens in the far corner of the screen makes you look back at the row
+	-- and count squares to be sure it was the one under the cursor. The corner
+	-- is for the box about a creature out in the world, which is a thing you
+	-- cannot point at.
+	local BESIDE = ns.UI.Tooltip.BESIDE
+
 	ns.Tip.Hang(square, function(self)
 		-- A weapon enchant answers to the hand it is on rather than to an aura
 		-- index, which is the same question Blizzard's own enchant button asks:
 		-- the item's tooltip carries the enchant line.
 		if self.auraGear then
-			return { kind = "inventory", unit = unit, slot = self.auraGear }
+			return { kind = "inventory", unit = unit, slot = self.auraGear,
+				place = BESIDE }
 		end
 		if not self.auraIndex then
 			return nil
 		end
 		return { kind = filter == "HARMFUL" and "debuff" or "buff",
-			unit = unit, index = self.auraIndex }
+			unit = unit, index = self.auraIndex, place = BESIDE }
 	end)
 end
 

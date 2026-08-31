@@ -405,7 +405,9 @@ local function GridSlot(index)
 	end)
 	button:SetScript("OnEnter", function(this)
 		UI.Tint(square.bg, C.control)
-		ns.Tip.Open(this, SlotTip(this))
+		-- On the slot. An attachment is an item you are pointing at, and the
+		-- corner is a long way from a row of twelve squares.
+		ns.Tip.Open(this, SlotTip(this), nil, ns.UI.Tooltip.BESIDE)
 	end)
 	button:SetScript("OnLeave", function()
 		UI.Tint(square.bg, C.sunken)
@@ -1007,6 +1009,7 @@ local function Build()
 		width = WIDTH,
 		height = HEIGHT,
 	})
+	ns.Remember(window)
 
 	tabs = UI.TabStrip(window.content, { onSelect = function(index)
 		page[1]:SetShown(index == 1)

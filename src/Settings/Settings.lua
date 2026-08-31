@@ -204,6 +204,13 @@ function Settings.SetPlace(word)
 	return ns.db.tipPlace
 end
 
+-- What this setting does not decide, said on the two answers that are not
+-- already it. A hover over an icon standing for an object opens on that object
+-- whatever the setting says, because the box there is the object's own label.
+-- A control that claims to move every tooltip in the addon is a control you
+-- will be arguing with the first time you hover a buff.
+local ICONS = "; an item, an aura or an action square opens on itself regardless"
+
 -- One sentence saying where the next box will open and what that costs, in the
 -- terms Settings.Describe uses for the grid: a control that hides its own cost
 -- is a control you cannot make a decision with.
@@ -215,10 +222,11 @@ function Settings.DescribePlace()
 	end
 	if where == UI.Tooltip.ANCHOR then
 		return "on the marker, wherever you dragged it with the frames unlocked,"
-			.. " so it is where you chose and covers whatever is there"
+			.. " so it is where you chose and covers whatever is there" .. ICONS
 	end
 	return "in the bottom right corner, where the client keeps its own,"
 		.. " so nothing you hover is covered and nothing is beside it either"
+		.. ICONS
 end
 
 --------------------------------------------------------------------------

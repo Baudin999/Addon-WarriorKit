@@ -253,7 +253,10 @@ local function Square(pane, entry)
 	end)
 	button:SetScript("OnEnter", function(self)
 		UI.Tint(box.bg, C.control)
-		ns.Tip.Open(self, Subject(entry))
+		-- On the square rather than in the corner. A worn piece is an object
+		-- you are pointing at, and comparing two of them means reading one box
+		-- against the square beside it.
+		ns.Tip.Open(self, Subject(entry), nil, ns.UI.Tooltip.BESIDE)
 	end)
 	button:SetScript("OnLeave", function()
 		UI.Tint(box.bg, C.sunken)

@@ -154,6 +154,11 @@ Tooltip.CURSOR = {}
 local frame, shadow, rule
 local opened
 local raised = false
+-- The placement the open box asked for, or nil for one that took the setting.
+-- Held for the same reason `raised` is: the setting can change while a box is
+-- up, and re-anchoring it has to put it back where the hover wanted it rather
+-- than where the slider now points.
+local wanted
 local rows = {}
 local count = 0
 local widest = 0
@@ -185,6 +190,26 @@ Tooltip.ANCHOR = "anchor"
 
 local PLACES = { dock = true, beside = true, anchor = true }
 local place = Tooltip.DOCK
+
+-- **And a hover may name its own, which the setting does not overrule.**
+--
+-- The three words above answer one question: where does a box go when there is
+-- nothing on the screen to put it next to. A creature out in the world is not a
+-- frame, a row of text in a feed is one but is the width of the window, and for
+-- both of those the corner is right and is what the setting is for.
+--
+-- It is the wrong answer for a box about an object you are pointing at. An item
+-- in a bag, a pin on the map, a button on the minimap, a worn piece on the
+-- character panel: the box there is that object's own label, and a label that
+-- opens a foot away in the corner of the screen is a label for nothing. You
+-- read it, look back, and have to find the square again to be sure it was the
+-- one you were on.
+--
+-- So an owner that *is* the thing being described says so at the call site and
+-- stops caring what the slider says. That is a placement per hover rather than a
+-- second setting, because it is not a preference: nobody wants their bag
+-- tooltips in the corner, and a player who moves the box for the world hover has
+-- not asked for the squares to move with it.
 
 -- The frame the anchor mode hangs off, handed over by whoever owns the setting
 -- that says where it is. Nil until then, and the anchor mode falls back to the
@@ -635,12 +660,19 @@ end
 -- corner and every clearance below is the answer to one question, which is how
 -- to put a box next to a thing without covering it, and both the corner and the
 -- marker answer that question by not being next to the thing at all.
-local function Anchor(owner, above)
-	if place == Tooltip.ANCHOR and marker and Marked() then
+--
+-- **And where the call site named a placement, that one rather than the
+-- setting.** See the override above. A word this file does not know falls
+-- through to the setting, for the reason SetPlace takes one: the caller is
+-- allowed to be wrong without costing the player a tooltip.
+local function Anchor(owner, above, where)
+	where = PLACES[where] and where or place
+
+	if where == Tooltip.ANCHOR and marker and Marked() then
 		return
 	end
 
-	if place ~= Tooltip.BESIDE then
+	if where ~= Tooltip.BESIDE then
 		Dock()
 		return
 	end
@@ -748,7 +780,11 @@ end
 -- this one.
 -- `above` opens the box over the owner rather than beside it, which is what
 -- anything smaller than the cursor has to ask for. See Anchor.
-function Tooltip.Show(owner, data, above)
+--
+-- `where` is one of the three placement words, for a hover that knows where its
+-- box belongs better than the setting does. That is every hover over an icon
+-- standing for an object. See the override beside PLACES.
+function Tooltip.Show(owner, data, above, where)
 	if not frame then
 		Build()
 	end
@@ -775,8 +811,8 @@ function Tooltip.Show(owner, data, above)
 	-- After Layout, and it has to be. Above hangs the box's bottom edge off the
 	-- owner's top, so where its top lands is its own height, and its height is
 	-- not known until the lines have been measured and wrapped.
-	Anchor(owner, above)
-	opened, raised = owner, above
+	Anchor(owner, above, where)
+	opened, raised, wanted = owner, above, where
 	frame:Show()
 	return true
 end
@@ -801,13 +837,21 @@ function Tooltip.SetPlace(word)
 	end
 	place = word
 	if frame and frame:IsShown() and opened then
-		Anchor(opened, raised)
+		Anchor(opened, raised, wanted)
 	end
 	return true
 end
 
 function Tooltip.Place()
 	return place
+end
+
+-- Where the box that is up actually went, which is the hover's own answer where
+-- it had one and the setting's otherwise. Handed out for the reason Frame and
+-- Owner are: "the bag square's box ignored the corner" is a claim about a box
+-- that is on screen, and there is no answering it from the outside.
+function Tooltip.Placed()
+	return PLACES[wanted] and wanted or place
 end
 
 -- The frame the anchor mode hangs the box off.
@@ -819,7 +863,7 @@ end
 function Tooltip.SetAnchor(frame_)
 	marker = frame_
 	if frame and frame:IsShown() and opened then
-		Anchor(opened, raised)
+		Anchor(opened, raised, wanted)
 	end
 	return marker ~= nil
 end
@@ -915,7 +959,7 @@ end
 -- something you looked away from: a loading screen, a feature switched off. A
 -- linger there is a sentence about a mob in a zone you have left.
 function Tooltip.Close(now)
-	opened = nil
+	opened, wanted = nil, nil
 	if not frame then
 		return true
 	end

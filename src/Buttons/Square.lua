@@ -77,7 +77,11 @@ local function Tooltip(w)
 			ns.Tip.Close(true)
 			return
 		end
-		ns.Tip.Open(self, { kind = "action", slot = slot })
+		-- On the square, whatever the tooltip setting says. What is in this
+		-- slot is a question about the icon under the pointer, and the game has
+		-- answered it beside the button since there were action bars.
+		ns.Tip.Open(self, { kind = "action", slot = slot,
+			place = ns.UI.Tooltip.BESIDE })
 	end)
 	w:SetScript("OnLeave", function()
 		ns.Tip.Close()

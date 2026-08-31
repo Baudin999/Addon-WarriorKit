@@ -256,11 +256,17 @@ end
 -- a field on the subject because a caller with a fixed answer says it once at
 -- the call site, and a caller whose answer depends on what it is describing
 -- says it on the subject.
-function Tip.Open(owner, subject, above)
+--
+-- `place` is where the box goes, for a hover that is not willing to take the
+-- setting's answer. An icon standing for an object is the whole of that list:
+-- the box is that object's label and it belongs on it. Same two ways of saying
+-- it as `above`, and for the same reason.
+function Tip.Open(owner, subject, above, place)
 	if type(subject) ~= "table" then
 		return UI.Tooltip.Show(owner, nil)
 	end
-	return UI.Tooltip.Show(owner, Tip.Build(subject), above or subject.above)
+	return UI.Tooltip.Show(owner, Tip.Build(subject), above or subject.above,
+		place or subject.place)
 end
 
 -- The pointer left. The box counts itself down rather than going at once; see

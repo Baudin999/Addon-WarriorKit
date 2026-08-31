@@ -238,6 +238,47 @@ do
 	check(math.abs((pixels(screen, "GetRight") - pixels(box, "GetRight")) - 13 * scale) < 1,
 		"a box that was up when the switch flipped stayed where it was")
 
+	------------------------------------------------------------------
+	-- The placement a hover names for itself
+	--
+	-- The setting answers one question: where does a box go when there is
+	-- nothing on screen to put it beside. A creature in the world, a row of
+	-- text in a feed. It is the wrong question for a box about an object you
+	-- are pointing at, and every one of those hovers says so at the call site:
+	-- an aura icon, an action square, a worn piece on the character panel, an
+	-- attachment slot in the mail. The box there is that object's label.
+	--
+	-- The setting is on the corner for all three claims below, because what is
+	-- being asserted is that it does not get a vote.
+	------------------------------------------------------------------
+
+	Tip.Open(owner, { kind = "note", title = "On the square", lines = { { "A fact" } } },
+		nil, Box.BESIDE)
+	check(pixels(box, "GetLeft") >= pixels(owner, "GetRight"),
+		"a hover that asked for its box beside it was docked into the corner anyway")
+	check(Box.Placed() == Box.BESIDE,
+		("the box reports it went %s rather than beside the thing it describes")
+			:format(tostring(Box.Placed())))
+
+	-- And the hover after it, which asked for nothing, is back in the corner.
+	-- Without this the override is a fourth way to change the setting: the box
+	-- would keep the last word it was handed and every ordinary hover for the
+	-- rest of the session would follow the last bag square you looked at.
+	Tip.Open(owner, { kind = "note", title = "In the corner", lines = { { "A fact" } } })
+	check(math.abs((pixels(screen, "GetRight") - pixels(box, "GetRight")) - 13 * scale) < 1,
+		"an ordinary hover took the placement the hover before it had asked for")
+	check(Box.Placed() == Box.DOCK,
+		"a hover that named no placement did not fall back to the setting")
+
+	-- A word the box does not know is the setting, not nowhere. Same answer
+	-- SetPlace gives one, and for a nearer reason: this one comes off a call
+	-- site rather than out of an account file, and a typo there should cost a
+	-- tooltip in the wrong corner rather than a tooltip that never opens.
+	Tip.Open(owner, { kind = "note", title = "Gibberish", lines = { { "A fact" } } },
+		nil, "sideways")
+	check(math.abs((pixels(screen, "GetRight") - pixels(box, "GetRight")) - 13 * scale) < 1,
+		"a placement the box does not know put it somewhere rather than where the setting says")
+
 	screen:SetSize(0, 0)
 
 	------------------------------------------------------------------
