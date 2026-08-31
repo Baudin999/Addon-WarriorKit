@@ -675,6 +675,18 @@ do
 	check(ns.CharBlizzard.KeyText() == "ALT-C",
 		("the sheet calls its own key %s"):format(ns.CharBlizzard.KeyText()))
 
+	-- And the drag, which is the same rule one more time: moving a window that
+	-- holds a protected frame is refused in combat exactly as showing it is. It
+	-- is two snippets on the frame's own template, so what is checkable here is
+	-- that the frame carries them and that no Lua script was set over the
+	-- template's, which is the mistake that would leave the drag dead.
+	local frame = Window.Pane(GEAR).frame:GetParent():GetParent()
+	check(type(frame:GetAttribute("_ondragstart")) == "string"
+		and type(frame:GetAttribute("_ondragstop")) == "string",
+		"the sheet carries no drag snippet, so it cannot be moved in a fight")
+	check(frame.scripts == nil or frame.scripts.OnDragStart == nil,
+		"a Lua drag script was set over the template's, which stops the snippet running")
+
 	-- Open before the fight, because that is the state the tabs are tested in.
 	Window.Show(GEAR)
 	check(Window.Shown(), "the window would not open out of combat")

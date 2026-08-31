@@ -108,6 +108,38 @@ Window.__index = Window
 -- function because it is the whole of what a window that is not bare has and
 -- none of what a bare one does, so the alternative is fifteen lines of one
 -- window's chrome sitting inside the constructor both kinds run through.
+-- The ground a window is drawn on, and the hairline round it. Beside TitleBar
+-- for the reason TitleBar is beside the constructor: it is a piece of chrome
+-- whose colour the caller decides, and the argument for the line is a paragraph
+-- nobody reading how a window is assembled has to step through.
+--
+-- Returns the frame's pixel, which the title bar is placed in and which cannot
+-- be asked for before the frame is on the grid.
+local function Surface(window, frame, opts)
+	-- Kept on the window rather than left local, because how opaque a window is
+	-- is a property of that window. The panel wants to be read and takes the
+	-- palette's own alpha; a chat window sits over the world all night and the
+	-- player decides how much of the world comes through it.
+	window.bg = ns.Fill(frame, "BACKGROUND", C.window[1], C.window[2], C.window[3], C.window[4])
+	window.bg:SetAllPoints()
+
+	local px = ns.Pixel(frame)
+	-- A hairline round the outside, unless the caller says no.
+	--
+	-- The line is there to say where a window ends, and that is worth having on
+	-- a settings window: it is opaque, it lands over the game for a minute and
+	-- the edge is what tells the panel from the world behind it. The chat window
+	-- is the opposite case. It is eighty percent transparent and up all evening,
+	-- so the line is not marking a boundary you needed marking, it is a bright
+	-- rectangle drawn round the trees. Take it off and the window is what is
+	-- written in it, which is what a chat window should be.
+	if opts.edge ~= false then
+		window.edges = ns.Outline(frame, C.edge[1], C.edge[2], C.edge[3], 1)
+		ns.EdgeSize(window.edges, px)
+	end
+	return px
+end
+
 local function TitleBar(window, px, title)
 	local frame = window.frame
 	local bar = ns.Fill(frame, "ARTWORK", C.chrome[1], C.chrome[2], C.chrome[3], 1)
@@ -162,16 +194,19 @@ function UI.Window(opts)
 	local window = setmetatable({}, Window)
 	local zoom = opts.zoom or UI.WindowZoom()
 
-	local frame = CreateFrame("Frame", opts.name, UIParent)
-	window.frame = frame
-	window.zoom = zoom
 	-- Whether this window has a protected frame somewhere inside it. One does:
 	-- the character sheet, whose gear squares are secure buttons because using
 	-- what is in a slot is protected. Everything an addon does to such a window
-	-- in combat is refused by the client, so a secure window closes from a
-	-- snippet, is not dragged in a fight, and is opened by a key bound to a
-	-- secure button rather than by the Lua below.
+	-- in combat is refused by the client, so a secure window is shown, hidden
+	-- and dragged from snippets instead: the key that opens it is bound to a
+	-- secure button, the close cross is one, and the drag is two attributes on
+	-- the template the frame is built with here.
 	window.secure = opts.secure == true
+
+	local frame = CreateFrame("Frame", opts.name, UIParent,
+		window.secure and "SecureHandlerDragTemplate" or nil)
+	window.frame = frame
+	window.zoom = zoom
 	UI.Adopt(frame, zoom)
 
 	frame:SetPoint("CENTER")
@@ -183,18 +218,15 @@ function UI.Window(opts)
 	-- /wk lock does not reach a window unless the window asks it to, which the
 	-- chat window is the only one to do. Locking a quest log would be locking a
 	-- window rather than placing the HUD.
-	local placing = {
+	window.place = UI.Placeable(frame, {
 		moved = opts.moved,
 		lockable = opts.lockable == true,
-	}
-	-- Moving a window that holds a protected frame is refused in combat the same
-	-- way showing it is, so a secure window says so here rather than starting a
-	-- move the client will not finish. Written as a branch because false is not
-	-- a value `and or` can carry.
-	if window.secure then
-		placing.combat = false
-	end
-	window.place = UI.Placeable(frame, placing)
+		-- Which of the two drags this window gets. A secure one is dragged from
+		-- a snippet, because moving a window that holds a protected frame is
+		-- refused in combat the same way showing it is, and a sheet you can open
+		-- mid pull and not move is half a window.
+		secure = window.secure,
+	})
 	-- DIALOG unless the caller says otherwise. A settings window is something
 	-- you open over the game and close again, and DIALOG is where that belongs.
 	-- A window that is up while you play, which is what the chat window is, has
@@ -219,26 +251,7 @@ function UI.Window(opts)
 	end)
 	frame:Hide()
 
-	-- Kept on the window rather than left local, because how opaque a window is
-	-- is a property of that window. The panel wants to be read and takes the
-	-- palette's own alpha; a chat window sits over the world all night and the
-	-- player decides how much of the world comes through it.
-	window.bg = ns.Fill(frame, "BACKGROUND", C.window[1], C.window[2], C.window[3], C.window[4])
-	window.bg:SetAllPoints()
-	local px = ns.Pixel(frame)
-	-- A hairline round the outside, unless the caller says no.
-	--
-	-- The line is there to say where a window ends, and that is worth having on
-	-- a settings window: it is opaque, it lands over the game for a minute and
-	-- the edge is what tells the panel from the world behind it. The chat window
-	-- is the opposite case. It is eighty percent transparent and up all evening,
-	-- so the line is not marking a boundary you needed marking, it is a bright
-	-- rectangle drawn round the trees. Take it off and the window is what is
-	-- written in it, which is what a chat window should be.
-	if opts.edge ~= false then
-		window.edges = ns.Outline(frame, C.edge[1], C.edge[2], C.edge[3], 1)
-		ns.EdgeSize(window.edges, px)
-	end
+	local px = Surface(window, frame, opts)
 
 	-- How much of the window is chrome, top and bottom. Both are numbers rather
 	-- than the two constants they used to be, because the chat window wants

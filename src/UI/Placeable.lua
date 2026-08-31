@@ -74,6 +74,41 @@ local function Marker(place, frame, name, edge)
 	place.title:Hide()
 end
 
+-- Where the frame ended up, in whole units, handed to whoever named the
+-- setting. Shared by the two drags below, because a secure drag lands in the
+-- same place an ordinary one does.
+local function Landed(place, frame)
+	if not place.moved then
+		return
+	end
+	local point, _, relativePoint, x, y = frame:GetPoint()
+	place.moved({ point, "UIParent", relativePoint, UI.Whole(x), UI.Whole(y) })
+end
+
+-- The half both drags share on the way out: the rim a frame with no chrome
+-- wears while it is being placed, and the drag the client has to be told to
+-- deliver at all.
+local function Finish(place, frame, opts)
+	if opts.name then
+		-- A name and a rim are what a frame with no chrome wears while it is
+		-- being placed, so a frame the lock never reaches has no state to wear
+		-- them in: it would carry a rim over the world for the whole session.
+		-- The two options mean opposite things about the same frame and the
+		-- combination is a mistake rather than a shape anybody wants, so it
+		-- fails at login where the harness reaches it rather than looking odd
+		-- in somebody's game.
+		assert(place.lockable,
+			"UI.Placeable: a frame that is never locked cannot carry a placing rim: " .. opts.name)
+		Marker(place, frame, opts.name, opts.edge)
+	end
+
+	if not place.lockable then
+		frame:RegisterForDrag("LeftButton")
+	end
+
+	return place
+end
+
 -- Whether the addon's lock reaches this frame at all.
 --
 -- Eleven of the twelve say nothing and take the default, which is that /wk lock
@@ -96,8 +131,37 @@ function UI.Placeable(frame, opts)
 	place.lockable = opts.lockable ~= false
 	place.unlocked = not place.lockable
 
+	place.secure = opts.secure == true
+
 	frame:SetMovable(true)
 	frame:SetClampedToScreen(true)
+
+	-- A frame with a protected frame inside it may not be moved by an addon in
+	-- combat, which is the same rule that keeps it from being shown. A snippet
+	-- may, and StartMoving is one of the calls the restricted environment
+	-- carries, so a secure frame is dragged by two snippets on the template its
+	-- caller built it with. UI/Window.lua is the one caller and the character
+	-- sheet is the one window: it has nineteen secure squares on its gear page,
+	-- and a sheet you can open mid pull and not move is half a window.
+	--
+	-- The lock cannot reach one. A snippet has no way to read a Lua flag, so a
+	-- lockable secure frame would be one the lock only half held. Nothing wants
+	-- that combination, and saying so here is cheaper than finding out in a
+	-- fight.
+	--
+	-- The Lua half is hooked rather than set, because the template's own scripts
+	-- are what run the snippets and a script set over them replaces the handler.
+	if place.secure then
+		assert(not place.lockable,
+			"UI.Placeable: a secure frame is dragged from a snippet, which the lock cannot reach")
+		frame:SetAttribute("_ondragstart", [[ self:StartMoving() ]])
+		frame:SetAttribute("_ondragstop", [[ self:StopMovingOrSizing() ]])
+		frame:HookScript("OnDragStop", function(self)
+			Landed(place, self)
+		end)
+		return Finish(place, frame, opts)
+	end
+
 	frame:SetScript("OnDragStart", function(self)
 		-- RegisterForDrag already refuses this while locked. The flag is read
 		-- again because a frame that starts moving and is never told to stop
@@ -117,33 +181,11 @@ function UI.Placeable(frame, opts)
 	end)
 	frame:SetScript("OnDragStop", function(self)
 		self:StopMovingOrSizing()
-		if not place.moved then
-			return
-		end
-		local point, _, relativePoint, x, y = self:GetPoint()
-		place.moved({ point, "UIParent", relativePoint, UI.Whole(x), UI.Whole(y) })
+		Landed(place, self)
 	end)
 
-	if opts.name then
-		-- A name and a rim are what a frame with no chrome wears while it is
-		-- being placed, so a frame the lock never reaches has no state to wear
-		-- them in: it would carry a rim over the world for the whole session.
-		-- The two options mean opposite things about the same frame and the
-		-- combination is a mistake rather than a shape anybody wants, so it
-		-- fails at login where the harness reaches it rather than looking odd
-		-- in somebody's game.
-		assert(place.lockable,
-			"UI.Placeable: a frame that is never locked cannot carry a placing rim: " .. opts.name)
-		Marker(place, frame, opts.name, opts.edge)
-	end
-
-	if not place.lockable then
-		frame:RegisterForDrag("LeftButton")
-	end
-
-	return place
+	return Finish(place, frame, opts)
 end
-
 -- Locked is the normal state, and unlocked is the two minutes you spend putting
 -- the frame somewhere.
 --
