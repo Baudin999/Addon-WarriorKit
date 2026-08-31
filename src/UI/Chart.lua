@@ -204,26 +204,35 @@ local function Api()
 	return api
 end
 
--- The layout of the art: how big the whole image is and how big one tile of it
--- is. Four numbers, and every one of them divides something below, so a zero
--- from a client that answers the shape and not the values is refused here
+-- The four numbers a layout is. Every one of them divides something below, so a
+-- zero from a client that answers the shape and not the values is refused here
 -- rather than raising four lines later.
+local SIDES = { "layerWidth", "layerHeight", "tileWidth", "tileHeight" }
+
+local function Shaped(layer)
+	if type(layer) ~= "table" then
+		return false
+	end
+	for _, side in ipairs(SIDES) do
+		if type(layer[side]) ~= "number" or layer[side] < 1 then
+			return false
+		end
+	end
+	return true
+end
+
+-- The layout of the art: how big the whole image is and how big one tile of it
+-- is.
 local function Layer(map)
 	local api = Api()
 	if not api or type(api.GetMapArtLayers) ~= "function" then
 		return nil
 	end
 	local ok, layers = pcall(api.GetMapArtLayers, map)
-	if not ok or type(layers) ~= "table" or type(layers[1]) ~= "table" then
+	if not ok or type(layers) ~= "table" or not Shaped(layers[1]) then
 		return nil
 	end
-	local layer = layers[1]
-	for _, side in ipairs({ "layerWidth", "layerHeight", "tileWidth", "tileHeight" }) do
-		if type(layer[side]) ~= "number" or layer[side] < 1 then
-			return nil
-		end
-	end
-	return layer
+	return layers[1]
 end
 
 -- The tiles themselves, in reading order: left to right, then down.
@@ -258,8 +267,36 @@ local function Uncovered(map)
 	return pieces
 end
 
--- Everything needed to draw one zone, or nothing at all.
-local function Art(map)
+-- How many tiles across and down a layout comes to, with the tiles to fill
+-- them. Nothing at all where the two do not agree, which is the check that
+-- stops a picture from being drawn as a grid with holes in it.
+local function Cut(layer, files)
+	local across = math.ceil(layer.layerWidth / layer.tileWidth)
+	local down = math.ceil(layer.layerHeight / layer.tileHeight)
+	if across * down > TILES or across * down > #files then
+		return nil
+	end
+	return { layer = layer, files = files, across = across, down = down }
+end
+
+-- Everything needed to draw one picture, or nothing at all.
+--
+-- Two sources and the caller picks. A zone is asked for: the client is handed
+-- the map id and answers the layout and the tiles. A dungeon is handed over,
+-- because on both of these clients C_Map answers nothing at all about one and
+-- Dungeons/Places.lua carries the argument for why. What arrives is the same
+-- shape either way, so everything below this line draws them the same.
+--
+-- What you have uncovered is only ever asked about a zone. A dungeon has no fog
+-- on either client, and asking about a map id one of them has never heard of is
+-- a question with no answer.
+local function Art(map, sheet)
+	if type(sheet) == "table" then
+		if not Shaped(sheet.layer) or type(sheet.files) ~= "table" then
+			return nil
+		end
+		return Cut(sheet.layer, sheet.files)
+	end
 	if type(map) ~= "number" then
 		return nil
 	end
@@ -268,13 +305,11 @@ local function Art(map)
 	if not files then
 		return nil
 	end
-	local across = math.ceil(layer.layerWidth / layer.tileWidth)
-	local down = math.ceil(layer.layerHeight / layer.tileHeight)
-	if across * down > TILES or across * down > #files then
-		return nil
+	local art = Cut(layer, files)
+	if art then
+		art.seen = Uncovered(map)
 	end
-	return { layer = layer, files = files, across = across, down = down,
-		seen = Uncovered(map) }
+	return art
 end
 
 -- What the client calls a zone. Questie has its own names in its own
@@ -972,17 +1007,22 @@ local function Settle(board)
 	return board.height
 end
 
--- Draw one zone, and answer how tall it came out so the caller can put its own
+-- Draw one place, and answer how tall it came out so the caller can put its own
 -- lines under it. Nothing to draw answers zero, and the frame collapses rather
 -- than leaving the last quest's map standing under the wrong heading.
 --
--- The zoom survives a redraw of the same zone and not a move to another one.
+-- `map` is the client's own id for the place and `sheet` is a picture the
+-- caller brought with it. A zone passes the id alone. A dungeon passes both:
+-- the picture, because neither client will answer one, and the id all the same,
+-- because that is what a mark on it is filed under.
+--
+-- The zoom survives a redraw of the same place and not a move to another one.
 -- Clicking down the left column repaints this on every quest, and a player who
 -- has zoomed into a corner of Westfall to read a road wants it still zoomed
 -- when they come back to the tab; a player who has stepped to another zone is
 -- looking at a different picture and has said nothing about any part of it.
-function Board:Draw(map, points)
-	local art = Art(map)
+function Board:Draw(map, points, sheet)
+	local art = Art(map, sheet)
 	if not art or self.width < 1 then
 		self.art, self.points = nil, nil
 		self.height, self.zoom, self.x, self.y = 0, 1, 0, 0

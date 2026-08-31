@@ -178,20 +178,17 @@ local function Chosen()
 	return dungeon, boss, order
 end
 
--- Every floor of the dungeon being drawn, and which of them the map is on.
+-- Every floor of the dungeon being drawn, each one a map id, a name and a
+-- picture.
 --
--- Nothing at all where the client has no map for the place, which is a real
+-- Nothing at all where nothing has a picture for the place, which is a real
 -- answer rather than a failure: the left and right columns are the whole of
--- what a dungeon log is for and both work without a picture.
+-- what a dungeon log is for and both work without one.
 local function Sheets(dungeon)
 	if not dungeon then
 		return {}
 	end
-	local map = Places.Of(dungeon.name)
-	if not map then
-		return {}
-	end
-	return Places.Floors(map)
+	return Places.Floors(dungeon.name)
 end
 
 -- The marks that go on one floor: one numbered square per boss this addon has
@@ -238,7 +235,7 @@ local function Note(dungeon, sheets, drawn)
 		return "Nothing selected."
 	end
 	if #sheets == 0 then
-		return ("This client has no map for %s, so its bosses are the column on the left.")
+		return ("There is no picture of %s, so its bosses are the column on the left.")
 			:format(Places.Place(dungeon.name))
 	end
 	if drawn == 0 then
@@ -259,7 +256,7 @@ end
 local function Steps(sheets)
 	for index = 1, FLOORS do
 		local sheet = sheets[index]
-		floors:SetLabel(index, sheet and Places.Floor(sheet, index) or "")
+		floors:SetLabel(index, sheet and sheet.name or "")
 		floors:SetShown(index, sheet ~= nil)
 	end
 	floors.frame:SetShown(#sheets > 1)
@@ -282,9 +279,10 @@ function Window.PaintMap()
 	Steps(sheets)
 	painting = was
 
-	local map = sheets[floorAt]
-	local points = (dungeon and map) and Points(dungeon, map, boss and boss.id or -1) or {}
-	local drawn = board:Draw(map, points)
+	local sheet = sheets[floorAt]
+	local points = (dungeon and sheet)
+		and Points(dungeon, sheet.map, boss and boss.id or -1) or {}
+	local drawn = board:Draw(sheet and sheet.map, points, sheet and sheet.sheet)
 	note:SetText(Note(dungeon, sheets, drawn))
 	return true
 end
@@ -439,9 +437,8 @@ local function FloorOf(dungeon, boss)
 	if not map then
 		return 1
 	end
-	local sheets = Sheets(dungeon)
-	for index, sheet in ipairs(sheets) do
-		if sheet == map then
+	for index, sheet in ipairs(Sheets(dungeon)) do
+		if sheet.map == map then
 			return index
 		end
 	end
@@ -762,11 +759,10 @@ events:SetScript("OnEvent", function(_, event)
 		return
 	end
 	if event == "PLAYER_ENTERING_WORLD" then
-		-- The tree walked again on the far side of a loading screen. It is
-		-- built out of a client that answers nothing useful until the world is
-		-- in, and unlike the world map's column nothing here is numbered by it:
-		-- the rows are the book's rows, so a second walk costs a repaint and
-		-- renumbers nothing.
+		-- The floors built again on the far side of a loading screen. They come
+		-- out of a baked table and cannot have changed, so this costs a repaint
+		-- and is kept for the one thing that can: a reload with a different
+		-- table under it.
 		Places.Forget()
 	end
 	Window.Refresh()

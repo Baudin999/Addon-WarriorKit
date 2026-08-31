@@ -32,9 +32,12 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   has an adventure guide. Shift-L opens three columns: every boss in the game
   down the left, grouped by dungeon and in level order, so the column answers
   "what should I be running now" without a single click. In the middle, the
-  client's own map of the dungeon, cut into its floors, with a numbered mark per
-  boss. On the right, what that boss drops, in the client's own grade colours
-  with the client's own tooltip on every row. Forty dungeons, two hundred and
+  dungeon's own map, cut into its floors, with a numbered mark per boss. Neither
+  client will hand that map over: the 1.15 one has no dungeon maps in its map
+  tree at all and the 2.5 one has a hundred and four of them and files art for
+  none, so the picture is drawn from the tiles both of them ship all the same.
+  On the right, what that boss drops, in the client's own grade colours with the
+  client's own tooltip on every row. Forty dungeons, two hundred and
   thirty seven bosses, and every item id in the book generated from Questie's
   databases rather than typed, then checked against the client again when the
   row is drawn: a drop the client disagrees with is left out instead of shown.

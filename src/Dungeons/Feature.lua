@@ -1,8 +1,8 @@
 local ADDON, ns = ...
 
 -- Everything Core and the panel need to know about the dungeon log. Book.lua,
--- Baked.lua, Places.lua, Loot.lua, Seen.lua, Window.lua and Key.lua hold the
--- behaviour, and this is the only file in the folder that names anything
+-- Baked.lua, Sheets.lua, Places.lua, Loot.lua, Seen.lua, Window.lua and Key.lua
+-- hold the behaviour, and this is the only file in the folder that names anything
 -- outside it.
 
 local function SetDungeons(value)
@@ -143,7 +143,7 @@ ns.Register({
 			function() ns.DungeonSeen.Forget() end)
 		ui.Hint("The marks on the map are where you were standing when you looted each boss, because nothing on either client will say where a boss stands. Forget them and they are learned again on your next run.")
 		ui.Reading("the book", ns.DungeonBook.Describe)
-		ui.Reading("this client's dungeon maps", ns.DungeonPlaces.Describe)
+		ui.Reading("the dungeon maps", ns.DungeonPlaces.Describe)
 		ui.Reading("what your own runs have added", ns.DungeonSeen.Describe)
 		ui.Reading("the drops on the boss you are reading", ns.DungeonLoot.Describe)
 		ui.Reading("the key", ns.DungeonKey.Describe)

@@ -691,6 +691,7 @@ World\Feature.lua
 # middle, is far above this line.
 Dungeons\Book.lua
 Dungeons\Baked.lua
+Dungeons\Sheets.lua
 Dungeons\Places.lua
 Dungeons\Loot.lua
 Dungeons\Seen.lua

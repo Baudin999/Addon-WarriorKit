@@ -4,269 +4,164 @@ local Places = {}
 ns.DungeonPlaces = Places
 
 --------------------------------------------------------------------------
--- Which dungeon maps this client has
+-- Which dungeon a picture belongs to, and what it is cut into
 --
--- The book knows a dungeon by an English name. The client knows one by a map
--- id, in whatever language it is running in, and it is the only thing that can
--- say whether it has a picture for the place at all. This file is the join.
+-- The book knows a dungeon by an English name. A picture is a folder of tiles
+-- under Interface\WorldMap. This file is the join, and Dungeons/Sheets.lua is
+-- the table it reads.
 --
--- **The list is walked, not written down.** C_Map holds a tree, the same tree
--- Map/Zones.lua walks for zones, and a dungeon is a node of its own kind
--- hanging under the zone it is in. So every dungeon map the client has comes
--- out of one walk, with its own id and its own name, and no number in this
--- addon is a dungeon map id somebody remembered.
+-- **The list is written down, and it is written down because the client will
+-- not say.** Every other picture in this addon is asked for: Map/Window.lua
+-- hands C_Map a zone and gets back the size of the art and the tiles it is cut
+-- into, and UI/Chart.lua draws whatever comes out. Ask the same question about
+-- a dungeon and the answer is nothing, on both of these clients and for two
+-- different reasons.
 --
--- It is not shared with Map/Zones.lua and that is deliberate twice over. A part
--- may not name a file in another part's folder, which is the rule the whole
--- registry is built on. And it is a different question: that file wants zones
--- and the level range each is for, this one wants dungeons and the floors each
--- is cut into, and the only thing the two share is the climb to the top of the
--- tree, which is nine lines.
+-- The 1.15 client has no dungeon maps in its map tree at all. Its map table is
+-- fifty four rows: a world, six continents, the zones and three battlegrounds.
+-- There is no node to ask about.
 --
--- **A dungeon is several maps.** Blizzard cuts an instance into floors and
--- files them as a group: the Deadmines is the mine and then Ironclad Cove, the
--- monastery is four wings, Blackrock Depths is most of a city. The client will
--- hand over the members of a group, so the window draws one floor at a time
--- with a strip under it, which is the same strip the quest log puts under a
--- quest that spans two zones.
+-- The 2.5 client has a hundred and four of them, named and parented correctly,
+-- and files art for not one. So GetMapArtLayers answers nothing for every
+-- dungeon in the game. It ships no map group table either, which is what
+-- GetMapGroupID reads, so it cannot say that the Deadmines and Ironclad Cove
+-- are two floors of one place.
 --
--- **Every call is probed and pcalled**, the same as UI/Chart.lua and for the
--- same reason: this ships for two clients, C_Map is not the same size on both,
--- and a window that raises because a dungeon has no map is a window that has
--- made the evening worse to save a rectangle. Nothing that fails here draws an
--- error; it draws a dungeon with no picture and a line saying so.
+-- This file used to walk the map tree for all of that, the way Map/Zones.lua
+-- walks it for zones, and the walk was correct and came back empty. Both halves
+-- of that are worth keeping in mind: the answer was not a bug in the walk, and
+-- no walk written any other way would have done better.
+--
+-- **The pictures are there all the same.** Both clients ship the tiles as
+-- ordinary textures, twelve to a floor, and a texture is drawn by path whether
+-- or not anything in the client's own tables still points at it. So the path is
+-- what is baked, by scripts/bake-dungeon-maps.sh, out of Blizzard's own tables
+-- in a build that still has them. Nothing in Dungeons/Sheets.lua was typed by
+-- anybody, which is the same rule Dungeons/Baked.lua is held to and it is here
+-- for the same reason: a path nobody generated is a path somebody remembered,
+-- and a texture path that does not resolve draws nothing at all and says
+-- nothing about it.
+--
+-- **A dungeon is several floors.** Blizzard cuts an instance into floors and
+-- the strip under the picture steps between them, which is the same strip the
+-- quest log puts under a quest that spans two zones. The floors and their names
+-- are baked as well, because the table the client would answer them out of is
+-- one of the tables it does not ship.
 --
 -- **The names are matched on the part before the colon.** The book calls one of
 -- them "Scarlet Monastery: Library", because that is what a player calls it and
 -- because the four wings are four different runs at four different levels. The
--- client calls the whole place "Scarlet Monastery" and cuts it into floors. So
--- the wing is the book's label and the place is what binds.
---------------------------------------------------------------------------
-
--- How far up the tree the climb to the root will go, and the two ids the game
--- has used for the world. Both are Map/Zones.lua's numbers and both are here
--- for the reason that file gives: an id written down is a claim about a client
--- this addon cannot test, so the climb is tried first and the guesses second.
-local CLIMB = 12
-local FALLBACK = { 946, 947 }
-
--- The most floors one dungeon is allowed to be cut into. Blackrock Depths is
--- the deepest in the game at about ten, and the cap is what stops a client
--- this addon has never seen from filling a strip until the window runs out.
-local FLOORS = 16
-
-local tree = nil
-
---------------------------------------------------------------------------
--- What the client will say
---------------------------------------------------------------------------
-
-local function Api()
-	local api = _G.C_Map
-	if type(api) ~= "table" then
-		return nil
-	end
-	return api
-end
-
--- What the client calls the three kinds of node this walks for, read off Enum
--- where the client has it and taken as the numbers it has always used where it
--- does not.
-local function Kinds()
-	local kinds = _G.Enum and _G.Enum.UIMapType
-	if type(kinds) == "table" and type(kinds.Continent) == "number"
-		and type(kinds.Dungeon) == "number" then
-		return kinds.Continent, kinds.Dungeon
-	end
-	return 2, 4
-end
-
-local function Info(map)
-	local api = Api()
-	if not api or type(api.GetMapInfo) ~= "function" or type(map) ~= "number" then
-		return nil
-	end
-	local ok, info = pcall(api.GetMapInfo, map)
-	if not ok or type(info) ~= "table" then
-		return nil
-	end
-	return info
-end
-
-local function Children(map, kind)
-	local api = Api()
-	if not api or type(api.GetMapChildrenInfo) ~= "function" then
-		return {}
-	end
-	local ok, list = pcall(api.GetMapChildrenInfo, map, kind, true)
-	if not ok or type(list) ~= "table" then
-		return {}
-	end
-	return list
-end
-
-local function Climb()
-	local api = Api()
-	if not api or type(api.GetBestMapForUnit) ~= "function" then
-		return nil
-	end
-	local ok, map = pcall(api.GetBestMapForUnit, "player")
-	if not ok or type(map) ~= "number" then
-		return nil
-	end
-	for _ = 1, CLIMB do
-		local info = Info(map)
-		local parent = info and info.parentMapID
-		if type(parent) ~= "number" or parent < 1 or parent == map then
-			return map
-		end
-		map = parent
-	end
-	return map
-end
-
--- Whether a node is worth walking, which is the only honest test: it has
--- continents under it. Map/Zones.lua's header carries the argument for why the
--- climb alone is not enough.
-local function Roots(map, continent)
-	return type(map) == "number" and #Children(map, continent) > 0
-end
-
-local function Root()
-	local continent = (Kinds())
-	local climbed = Climb()
-	if Roots(climbed, continent) then
-		return climbed
-	end
-	for _, guess in ipairs(FALLBACK) do
-		if Roots(guess, continent) then
-			return guess
-		end
-	end
-	return nil
-end
-
---------------------------------------------------------------------------
-
--- Every dungeon map the client has, as a name to an id.
+-- place is one picture in four floors, so the wing is the book's label and the
+-- part before the colon is what binds.
 --
--- Walked once and kept, because the tree does not change while you are logged
--- in. Nil until the first ask, because at load the client has not finished
--- building its own tree and an empty answer kept for the session is worse than
--- an answer taken a second late.
---
--- The first id wins where two dungeons share a name. Nothing in these two
--- clients does, and taking the first is what keeps the walk's answer stable
--- rather than depending on which order pairs happened to run in.
-function Places.Tree()
-	if tree then
-		return tree
-	end
-	tree = {}
-	local _, dungeon = Kinds()
-	for _, node in ipairs(Children(Root(), dungeon)) do
-		if type(node.mapID) == "number" and type(node.name) == "string"
-			and not tree[node.name] then
-			tree[node.name] = node.mapID
-		end
-	end
-	return tree
-end
+-- **The map id is still the client's.** A mark is filed under the id of the
+-- floor it was looted on, so that id is baked beside the picture, out of the
+-- 2.5 client's own map table. On that client it is the id handed back while you
+-- are standing there, which is what puts a looted mark on the right floor. On
+-- the 1.15 client it is an id nothing will ever answer, so that client draws
+-- the picture and never a mark on it, which is what Describe says out loud.
+--------------------------------------------------------------------------
 
--- Thrown away so the next ask walks again. Called once the world is in, for the
--- reason Map/Zones.lua drops its own: this file loads while the client is still
--- building the tree it walks.
-function Places.Forget()
-	tree = nil
-	return true
-end
+local Sheets = ns.DungeonSheets
+
+-- Built once per place and kept, because a picture cannot change while you are
+-- logged in and PaintMap asks for it on every click.
+local held = nil
+
+--------------------------------------------------------------------------
 
 -- The place a book name binds to, which is the part before the colon. The wing
 -- after it is what the player calls the run and what the left column shows, and
--- the client has no node for it.
+-- there is no separate picture for it.
 function Places.Place(name)
 	return (name:match("^([^:]+)")) or name
 end
 
--- Which map the client has for this dungeon, or nothing at all.
-function Places.Of(name)
-	return Places.Tree()[Places.Place(name)]
+-- One floor's picture, in the shape UI/Chart.lua draws: the size of the art and
+-- the tiles it is cut into, in reading order.
+local function Sheet(floor)
+	local files = {}
+	for index = 1, Sheets.TILES do
+		files[index] = floor.art .. index
+	end
+	return { layer = Sheets.LAYER, files = files }
 end
 
--- Every floor of one dungeon, as ids in the client's own order, the first of
--- them being the one asked about.
+-- Every floor of one dungeon, in the order they are walked. Each carries the
+-- map id a mark on it is filed under, what the floor is called, and the picture.
 --
--- A dungeon the client cuts into floors answers a group, and the group's members
--- are the floors. A dungeon it does not, and a client with no group calls at
--- all, answer the one map, which is what a single floor dungeon really is.
-function Places.Floors(map)
-	if type(map) ~= "number" then
-		return {}
-	end
-	local api = Api()
-	local group = api and api.GetMapGroupID
-	local members = api and api.GetMapGroupMembersInfo
-	if type(group) ~= "function" or type(members) ~= "function" then
-		return { map }
-	end
-	local ok, id = pcall(group, map)
-	if not ok or type(id) ~= "number" then
-		return { map }
-	end
-	local read, list = pcall(members, id)
-	if not read or type(list) ~= "table" or #list == 0 then
-		return { map }
+-- Nothing at all for a place with no picture baked, which is a real answer
+-- rather than a failure: the bosses down the left and the drops down the right
+-- are the whole of what a dungeon log is for, and both work without one.
+function Places.Floors(name)
+	local place = Places.Place(name)
+	held = held or {}
+	if held[place] then
+		return held[place]
 	end
 	local out = {}
-	for _, floor in ipairs(list) do
-		if type(floor.mapID) == "number" and #out < FLOORS then
-			out[#out + 1] = floor.mapID
-		end
+	for index, floor in ipairs(Sheets.PLACES[place] or {}) do
+		out[index] = { map = floor.map, name = floor.name, sheet = Sheet(floor) }
 	end
-	if #out == 0 then
-		return { map }
-	end
+	held[place] = out
 	return out
 end
 
--- What one floor is called, which is the client's own name for it. The name of
--- a group's first floor is the dungeon's own name, so the strip is labelled
--- with the level rather than repeating the heading over it.
-function Places.Floor(map, order)
-	local info = Info(map)
-	local name = info and info.name
-	if type(name) ~= "string" or name == "" then
-		return ("floor %d"):format(order or 1)
-	end
-	return name
+-- Thrown away so the next ask builds again. Nothing about the answer changes
+-- while you are logged in, so this is for the harness and for a reload.
+function Places.Forget()
+	held = nil
+	return true
 end
 
 --------------------------------------------------------------------------
 
--- How many dungeon maps the client named, and how many of the book's dungeons
--- found one. The second number is the one that matters: it is what separates a
--- client with no dungeon maps at all from one whose names this addon is failing
--- to match, and the two look identical on the screen.
-function Places.Count()
-	local named = 0
-	for _ in pairs(Places.Tree()) do
-		named = named + 1
+-- Whether this client has a map of its own under that id.
+--
+-- Not needed to draw anything, and asked anyway, because it is the difference
+-- between a dungeon whose marks will land where you looted them and one where
+-- the only marks are the ones you put down by hand. Both draw the same picture,
+-- so nothing on the screen tells them apart.
+local function Known(map)
+	local api = _G.C_Map
+	if type(api) ~= "table" or type(api.GetMapInfo) ~= "function" then
+		return false
 	end
-	local wanted, bound = 0, 0
+	local ok, info = pcall(api.GetMapInfo, map)
+	return ok and type(info) == "table"
+end
+
+-- How many of the book's dungeons have a picture, how many floors that comes
+-- to, and how many of those floors this client knows the map id of.
+function Places.Count()
+	local wanted, drawn, floors, known = 0, 0, 0, 0
 	for _, dungeon in ipairs(ns.DungeonBook.All()) do
 		wanted = wanted + 1
-		if Places.Of(dungeon.name) then
-			bound = bound + 1
+		local sheets = Places.Floors(dungeon.name)
+		if #sheets > 0 then
+			drawn = drawn + 1
 		end
 	end
-	return named, bound, wanted
+	for _, place in pairs(Sheets.PLACES) do
+		for _, floor in ipairs(place) do
+			floors = floors + 1
+			if Known(floor.map) then
+				known = known + 1
+			end
+		end
+	end
+	return drawn, wanted, floors, known
 end
 
 function Places.Describe()
-	local named, bound, wanted = Places.Count()
-	if named == 0 then
-		return "this client names no dungeon maps, so every dungeon draws its bosses and its drops without a picture"
+	local drawn, wanted, floors, known = Places.Count()
+	if drawn == 0 then
+		return "no dungeon in the book has a picture, so every one of them draws its bosses and its drops without a map"
 	end
-	return ("this client names %d dungeon maps, and %d of the book's %d dungeons found one")
-		:format(named, bound, wanted)
+	if known == 0 then
+		return ("%d of the book's %d dungeons have a picture, in %d floors, and this client knows the map id of none of them, so a boss is marked where you put the mark yourself")
+			:format(drawn, wanted, floors)
+	end
+	return ("%d of the book's %d dungeons have a picture, in %d floors, and this client knows the map id of %d of them")
+		:format(drawn, wanted, floors, known)
 end

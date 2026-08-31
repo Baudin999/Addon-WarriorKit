@@ -349,8 +349,12 @@ name of none of them.
                              Loads before Baked.lua, which only assigns into it
     Dungeons/Baked.lua       generated, the dungeons and their drops, written by
                              bake-dungeons.sh out of Questie's own databases
-    Dungeons/Places.lua      which dungeon maps this client has, walked out of
-                             C_Map's tree, and the floors each is cut into
+    Dungeons/Sheets.lua      generated, the picture of every dungeon and the
+                             floors it is cut into, written by
+                             bake-dungeon-maps.sh out of Blizzard's map tables
+    Dungeons/Places.lua      which floors a dungeon has, what each is called and
+                             which tiles draw it. Neither client will answer any
+                             of that, which is why it is baked
     Dungeons/Loot.lua        a baked item id turned into what the client says
                              about it, and any row the client disagrees with
                              dropped rather than drawn
@@ -375,6 +379,8 @@ name of none of them.
     bake-ui.sh           bakes a captured Edit Mode layout into EditMode/Saved.lua
     bake-dungeons.sh     bakes the dungeon book out of Questie's databases into
                          Dungeons/Baked.lua
+    bake-dungeon-maps.sh bakes the dungeon pictures out of Blizzard's own map
+                         tables into Dungeons/Sheets.lua
 
 Neither `UI/` nor `Unit/` is a part. Neither has a `Feature.lua`, neither signs
 into a registry, neither owns a setting and neither knows the name of anything

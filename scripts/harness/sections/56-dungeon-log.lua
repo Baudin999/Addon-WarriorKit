@@ -8,11 +8,12 @@
 -- addon can walk: forty dungeons, two hundred and thirty seven bosses, and a
 -- drop list on nearly all of them.
 --
--- Do the client's dungeon maps reach the window. A dungeon is a node of its own
--- kind in C_Map's tree and the walk is a different walk from the world map's. A
--- walk that asked for the wrong kind comes back empty, which draws a window
--- with every column right and no picture, and looks exactly like a client that
--- has no dungeon maps.
+-- Does every dungeon in the book have a picture, in the shape the board draws.
+-- Dungeons/Sheets.lua is generated too, out of Blizzard's own map tables, and a
+-- place the book names that the bake did not reach draws a window with every
+-- column right and no map in the middle. The tiles are the other half: twelve
+-- of them, one prefix and one to twelve, and a path that came out any other way
+-- draws nothing at all and says nothing about it.
 --
 -- Does a dungeon with floors get a strip and a dungeon without one not. Both
 -- are ordinary and only one of them draws a control, and a strip of one button
@@ -105,30 +106,56 @@ end
 
 do
 	Places.Forget()
-	local tree = Places.Tree()
-	check(tree["The Deadmines"] == DEADMINES,
-		("the walk found the Deadmines at %s"):format(tostring(tree["The Deadmines"])))
-	check(tree["The Stockade"] == STOCKADE,
-		("the walk found the Stockade at %s"):format(tostring(tree["The Stockade"])))
-	check(tree["A Cellar"] == nil,
-		"the walk took a micro map for a dungeon, so it is asking for the wrong kind of node")
 
-	local named, bound, wanted = Places.Count()
-	check(named == 3,
-		("the client named %d dungeon maps where the fixture has three"):format(named))
-	check(bound == 2 and wanted > 30,
-		("%d of the book's %d dungeons bound to a map"):format(bound, wanted))
-
-	-- A wing is the book's word and the client has no node for it, so the
-	-- binding is on the part before the colon.
+	-- A wing is the book's word and there is one picture behind the four of
+	-- them, so the binding is on the part before the colon.
 	check(Places.Place("Scarlet Monastery: Library") == "Scarlet Monastery",
 		"a wing did not fall back to the place it is a wing of")
+	check(#Places.Floors("Scarlet Monastery: Library") == 4,
+		"the four wings of the monastery are not four floors of one picture")
 
-	local floors = Places.Floors(DEADMINES)
-	check(#floors == 2 and floors[1] == DEADMINES and floors[2] == COVE,
+	local floors = Places.Floors("The Deadmines")
+	check(#floors == 2 and floors[1].map == DEADMINES and floors[2].map == COVE,
 		("the Deadmines came back with %d floors"):format(#floors))
-	check(#Places.Floors(STOCKADE) == 1,
-		"a dungeon in no map group came back with more than the one floor it is")
+	check(floors[2].name == "Ironclad Cove",
+		("the second floor of the Deadmines is called %q"):format(tostring(floors[2].name)))
+	check(#Places.Floors("The Stockade") == 1,
+		"a dungeon of one floor came back with more than the one floor it is")
+
+	-- The tiles, which are the whole picture. A prefix and one to twelve, in
+	-- reading order, which is the order UI/Chart.lua lays them out in.
+	local sheet = floors[1].sheet
+	check(#sheet.files == 12 and sheet.layer.layerWidth == 1002
+		and sheet.layer.tileWidth == 256,
+		("the first floor came back with %d tiles"):format(#sheet.files))
+	check(sheet.files[1]:match("thedeadmines1_1$") ~= nil
+		and sheet.files[12]:match("thedeadmines1_12$") ~= nil,
+		("the tiles run %s to %s"):format(sheet.files[1], sheet.files[12]))
+
+	-- Nothing baked that the book does not name. The whole book rather than the
+	-- part this client can reach, because a picture of an Outland dungeon is
+	-- correct on a vanilla client and simply never asked for. The other
+	-- direction is the count below; this one is the entry left behind by a
+	-- dungeon that was renamed or dropped, which nothing on the screen shows.
+	local stray = 0
+	for place in pairs(ns.DungeonSheets.PLACES) do
+		local held = false
+		for _, dungeon in ipairs(Book.DUNGEONS) do
+			held = held or Places.Place(dungeon.name) == place
+		end
+		if not held then
+			stray = stray + 1
+		end
+	end
+	check(stray == 0, ("%d baked pictures are of places the book does not name"):format(stray))
+
+	local drawn, wanted, held, known = Places.Count()
+	check(drawn == wanted and wanted > 30,
+		("%d of the book's %d dungeons have a picture"):format(drawn, wanted))
+	check(held > drawn,
+		("%d dungeons come to %d floors"):format(drawn, held))
+	check(known == 3,
+		("this client knows the map id of %d floors where the fixture has three"):format(known))
 end
 
 ----------------------------------------------------------------------

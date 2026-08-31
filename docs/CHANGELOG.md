@@ -33,6 +33,25 @@ that name to what the client says the id is. A row the client disagrees with is
 dropped and counted, and the count is a reading in the settings window. A wrong
 book shows fewer items, never the wrong ones.
 
+**The map is drawn from tiles the client will not hand over.** Ask `C_Map` about
+a dungeon on either of these clients and it answers nothing, for two different
+reasons. The 1.15 one has no dungeon maps in its map tree: fifty four rows, a
+world, six continents, the zones and three battlegrounds, and not one node of
+the dungeon kind. The 2.5 one has a hundred and four of them, named and parented
+correctly, and files art for not a single one, so `GetMapArtLayers` comes back
+empty on every dungeon in the game. It ships no map group table either, so it
+cannot say that the Deadmines and Ironclad Cove are two floors of one place.
+
+Both of them ship the pictures all the same, twelve tiles to a floor under
+`Interface\WorldMap`, and a texture is drawn by path whether or not anything in
+the client's own tables still points at it. So `Dungeons/Sheets.lua` is the join
+and it is generated like the book: `scripts/bake-dungeon-maps.sh` reads
+Blizzard's own map tables, takes the floors and their names out of one, the
+tiles out of another and the map ids out of the 2.5 client's own, and checks
+every path against the listfile before it writes one. Thirty five places, seventy
+eight floors. A path nobody checked is a blank rectangle waiting to happen: a
+texture that does not resolve draws nothing and says nothing about it.
+
 **Where a boss stands is learned, because nothing on this machine knows it.**
 Questie files every creature inside an instance at the coordinate `{-1, -1}`,
 which is its way of saying it does not know, and no call on either client will
