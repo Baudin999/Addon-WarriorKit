@@ -156,6 +156,13 @@ function Region:GetTexture() return self.texture end
 -- pool still on its side was invisible to every reading here.
 function Region:SetRotation(radians) self.rotation = radians or 0 end
 function Region:GetRotation() return self.rotation or 0 end
+-- Which way the texture is turned, in radians. The client has both halves and
+-- the stub had neither, so the one thing on the map that is ever rotated was
+-- drawn by code no run reached: the arrow's angle was kept in the addon's own
+-- field and the write to the texture went nowhere. A mark that came out of the
+-- pool still on its side was invisible to every reading here.
+function Region:SetRotation(radians) self.rotation = radians or 0 end
+function Region:GetRotation() return self.rotation or 0 end
 function Region:SetColorTexture(r, g, b, a)
 	-- A colour texture answers no file path, which is the readback Skin.lua's
 	-- Flatten guards on. Counted rather than recorded, so the tick can be

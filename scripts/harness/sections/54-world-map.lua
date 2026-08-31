@@ -350,6 +350,40 @@ check(wide == 1002 and tall > 0,
 	("the board came out %d by %d and the picture is 1002 across"):format(wide, tall))
 
 ----------------------------------------------------------------------
+-- A mark that was the arrow
+----------------------------------------------------------------------
+
+-- The pins are pooled and the arrow is the only mark on the board that is ever
+-- turned, so the pin that was the arrow on one zone is one of Questie's icons
+-- on the next. It came back still on its side, and what that looks like in a
+-- game is an exclamation mark upside down over a zone you walked into facing
+-- south.
+--
+-- It could not be caught here until the stub grew SetRotation. The angle the
+-- arrow is drawn at was kept in the addon's own field, which is what
+-- Window.Arrow reads, so the write to the texture was the one thing on this
+-- window no run had ever touched.
+do
+	quests.standing.map = WESTFALL
+	quests.standing.x, quests.standing.y = 48, 52
+	worldmap.Face(math.pi)
+	Window.Select(WESTFALL)
+	check(Window.Turned() == 1,
+		("%d marks are on their side on a zone you are standing in facing south, and only the arrow is ever turned")
+			:format(Window.Turned()))
+
+	-- Elwynn is holding more markers than Westfall has marks, so the pin the
+	-- arrow was is one of Questie's icons now.
+	Window.Select(ELWYNN)
+	check(Window.Turned() == 0,
+		("%d of Elwynn's markers came out of the pool still turned")
+			:format(Window.Turned()))
+
+	worldmap.Face(0)
+	Window.Select(WESTFALL)
+end
+
+----------------------------------------------------------------------
 -- Blizzard's map
 ----------------------------------------------------------------------
 

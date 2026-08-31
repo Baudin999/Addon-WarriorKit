@@ -367,6 +367,16 @@ function Window.Zoom(delta)
 	return board:Level()
 end
 
+-- How many marks are drawn on their side. One is the arrow on a zone you are
+-- standing in; anything more is a mark that came out of the pool still turned.
+--
+-- Handed out for the reason Arrow is, and for a sharper one: the defect it
+-- catches is invisible to every other reading. The art is right, the place is
+-- right, the zone is right, and the exclamation mark is upside down.
+function Window.Turned()
+	return board and board:Turned() or 0
+end
+
 -- A click on the picture, given as two fractions of the zone, and the zone it
 -- moved to. Handed out for the reason Zoom is: where the borders of a zone are
 -- comes out of a table inside the client, so a click that stepped into the
