@@ -1,8 +1,8 @@
 -- What the lock reaches, and what it does not
 --
--- Seventeen frames in this addon can be dragged. Twelve of them are the HUD, and
+-- Eighteen frames in this addon can be dragged. Twelve of them are the HUD, and
 -- /wk lock is what stops you shoving the swing bars off the screen with a
--- misplaced click during a pull. Five are chrome windows, and locking one of
+-- misplaced click during a pull. Six are chrome windows, and locking one of
 -- those would be locking a window rather than placing a piece of the HUD: you
 -- opened the quest log on purpose and you will close it again in a minute.
 --
@@ -58,6 +58,7 @@ local WINDOWS = {
 	{ "WarriorKitQuests", "the quest log" },
 	{ "WarriorKitMail", "the mail window" },
 	{ "WarriorKitBreakdown", "the meter breakdown" },
+	{ "WarriorKitCharacter", "the character sheet" },
 	{ "WarriorKitClutter", "the destroy window" },
 	{ "WarriorKitAsk", "the confirmation window" },
 }

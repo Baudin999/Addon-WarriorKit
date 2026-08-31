@@ -991,6 +991,37 @@ function ns.ItemValue(link)
 	return quality, sellPrice or 0
 end
 
+-- What the item is worth as a number, which is the fourth thing GetItemInfo
+-- answers and the only one of the four the two lookups above do not already
+-- carry between them.
+--
+-- Beside ns.ItemValue rather than folded into it, because the two are asked at
+-- different moments about different things. A sell price is read for every grey
+-- in your bags on a vendor sweep; an item level is read for the eighteen things
+-- you are wearing when a window opens. Adding a return to the other would make
+-- every caller of it carry a value it has no use for.
+--
+-- Nil where the client has not cached the item, which is the same answer
+-- ns.ItemValue gives and has to be treated the same way: an average taken over
+-- a piece the client would not price is an average of the wrong number of
+-- pieces.
+function ns.ItemLevel(link)
+	if type(link) ~= "string" then
+		return nil
+	end
+
+	local lookup = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+	if type(lookup) ~= "function" then
+		return nil
+	end
+
+	local _, _, _, level = lookup(link)
+	if type(level) ~= "number" then
+		return nil
+	end
+	return level
+end
+
 -- The item's id, and the class and subclass the client files it under. Class 12
 -- is a quest item, which is the one the clutter scan turns on, and Baganator
 -- categorises on the same number on this client.

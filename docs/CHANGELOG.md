@@ -2,6 +2,90 @@
 
 ## Unreleased
 
+### A character sheet of the addon's own, with the number the client has never drawn
+
+The client's character window is five pages wearing one frame, and the largest
+single area of the first of them is a picture of your back. `Character/` is nine
+files replacing it: your gear, what it adds up to, your skills, your standings
+and your loadouts, on five tabs the C key opens.
+
+**Hit and miss is the reason it exists.** No client on either of these versions
+has ever put your miss chance on the character sheet, because the client knows
+your hit rating and not your hit chance, and the gap between those two is the
+difference between a set of enchants that was worth buying and one that was not.
+`Character/Stats.lua` computes it: how often a special, a white swing and a spell
+go wide against a target of your own level and against the three above it, with
+the hit off your gear taken off each, and a row underneath saying how much more
+would take each of them to nothing.
+
+The formula is four constants and it is checked against the three figures
+everybody quotes. A character at the weapon skill their level allows misses
+5.5% one level up, 6% two up and 9% three up, those three are not derivable from
+each other, and the only shape that lands on all three is a tenth of a percent
+for each of the first ten points of the target's defence over your weapon skill
+and six tenths for every point after them. Section 52 of the harness closes the
+stub's ten point shortfall, reads all three back, and opens it again, so a
+formula that ignored weapon skill fails one half of that and a formula that got
+the second slope wrong fails the other.
+
+What it cannot see is talent hit, and the row says so rather than being quietly
+low. The client rates hit that came off gear and has no call at all for the flat
+percentage a talent grants.
+
+**The gear page draws nineteen slots and four numbers.** The four are the ones
+the client's own sheet has never had: what your gear averages, how worn it is,
+how many slots are empty, and how often you miss. Every square carries the
+durability of what is in it as a line along its bottom edge, green through amber
+to red, because durability is the one fact about your gear that changes while you
+play and the client keeps it behind a hover. Clicking is the client's own two
+calls, the cursor swap FrameXML's own paperdoll button makes and the one that
+takes a piece off, and both are refused in a fight with the reason printed rather
+than failing silently.
+
+**The skills page is bars rather than a list of numbers.** The client's skill tab
+draws the same length bar for a weapon skill you have capped and a profession you
+started this morning. Every row here carries how far along it is, and a weapon
+skill under the cap for your level carries the sentence saying what the shortfall
+costs you against a boss, which is the same number the hit page is computed from.
+A weapon skill is told from a profession by what it caps at and whether it can be
+abandoned, never by the header it sits under, because every header on that page
+is a localised string.
+
+**Reputation is here because hiding the client's window would otherwise delete
+it.** Standings are drawn in three colours rather than the client's eight-shade
+gradient: red for somebody who would attack you, grey for somebody with no
+opinion, green for somebody who has one. What does not come across is the at-war
+tick and the watched-bar picker, and untick the switch to get either.
+
+**The loadout page moved.** It was a section of the options window, between the
+chat opacity and the minimap shape, and it is the fifth tab here. A loadout is a
+pair of weapons on a key, so it belongs on the page with your weapons on it.
+Nothing about the page changed: `Loadouts/Page.lua` hands the same rows to the
+same widget kit and this window is the host instead of the options window, which
+is the whole of what the kit's host contract was written for. `Loadouts/Feature.lua`
+has no `panel` any more.
+
+**Blizzard's sheet goes in the attic and C opens this one.** The switch is
+`hide Blizzard's character sheet`, on the Blizzard's own frames page with the
+other nine, because there is one place in this addon where a frame of the
+client's is switched off and a tenth switch somewhere else would be a tenth place
+to look. `ToggleCharacter` is swapped for one that opens the matching tab, which
+is the second global function swap in the addon after the quest log's. The two
+pages this window does not draw, your pet's sheet and the honour tab, print a
+line naming the switch rather than opening a tab that is not there.
+
+The key swap cost one bug on the way in and the harness caught it. `TakeKey` built
+its replacement function inside itself, the hide pass runs once a second forever,
+and a closure per pass is three kilobytes per fifty ticks for the collector to
+walk. The function is declared once at load now and the pass compares before it
+writes.
+
+`ns.ItemLevel` joins the item shims in Core. `Character/Readout.lua` is the
+column of headed rows the stats, skills and reputation tabs are all drawn in, and
+it repaints a pool rather than building rows, because this client cannot destroy
+a frame and a page handed a different number of skills every refresh would leak
+one per row per refresh.
+
 ### The tooltip stays long enough to read, goes where you put it, and stops lecturing
 
 Six changes to the box every hover in the addon opens.

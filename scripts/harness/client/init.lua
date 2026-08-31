@@ -200,6 +200,11 @@ for _, part in ipairs({
 	-- file wraps nothing. It asks for one frame through the region helper and
 	-- installs plain functions on _G beside it.
 	"12-questlog",
+	-- Last, and it reads what 03-player and 04-hands left: the item table it
+	-- adds four pieces of gear to, and the worn table 04-hands answers every
+	-- slot that is not a hand out of. One GetInventoryItemLink in this client
+	-- rather than two wrapping each other.
+	"13-character",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

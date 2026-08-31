@@ -389,3 +389,33 @@ do
 		_G.UseContainerItem(button:GetParent():GetID(), button:GetID())
 	end
 end
+
+--------------------------------------------------------------------------
+-- The client's character sheet
+--
+-- One window with five pages hung off it as children, which is the nesting the
+-- cage depends on: Character/Blizzard.lua names all six, and the five going
+-- down with the parent whether or not the client carries them under those
+-- names is the claim the section makes.
+--
+-- ToggleCharacter is the C key. It is a plain global here because it is a plain
+-- global on both of the clients this addon runs on, and the swap that takes it
+-- is the second global function swap in the addon. The stub's own version
+-- records the page it was asked for and shows the window, so a section can tell
+-- the client's key from the addon's by which of the two moved.
+--------------------------------------------------------------------------
+
+do
+	local sheet = region("frame", _G.UIParent, "CharacterFrame")
+	sheet:SetSize(384, 512)
+	for _, page in ipairs({ "PaperDollFrame", "SkillFrame", "ReputationFrame",
+		"PetPaperDollFrame", "HonorFrame" }) do
+		child("frame", sheet, page)
+	end
+
+	H.characterKey = { pages = {} }
+	function _G.ToggleCharacter(page)
+		H.characterKey.pages[#H.characterKey.pages + 1] = page
+		sheet:Show()
+	end
+end

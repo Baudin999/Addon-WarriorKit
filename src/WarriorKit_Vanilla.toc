@@ -1,6 +1,6 @@
 ## Interface: 11509
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, a row counting down the cooldowns that decide fights, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, the addon's own tooltip on a creature you point at in the world with where you stand on it under the name, a mail window that colours a recipient green for one of yours, blue for somebody you know and red for a stranger and splits more than twelve attachments across as many mails as it takes, a quest log three columns wide with every quest you are on down the left grouped by zone, what this one wants in the middle and what it pays on the right, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a whispered thank you to a stranger who buffs you, five seconds of the eighties every time you level, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a character sheet of the addon's own with your gear, your skills, your standings, your weapon loadouts and how often you miss on it, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, a row counting down the cooldowns that decide fights, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, the addon's own tooltip on a creature you point at in the world with where you stand on it under the name, a mail window that colours a recipient green for one of yours, blue for somebody you know and red for a stranger and splits more than twelve attachments across as many mails as it takes, a quest log three columns wide with every quest you are on down the left grouped by zone, what this one wants in the middle and what it pays on the right, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a whispered thank you to a stranger who buffs you, five seconds of the eighties every time you level, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
@@ -212,6 +212,9 @@ Targeting\Switch.lua
 Targeting\Feature.lua
 
 Loadouts\Loadouts.lua
+# The page, which the character window hosts. It draws into the widget kit and
+# knows nothing about which window is holding it.
+Loadouts\Page.lua
 Loadouts\Feature.lua
 
 # Which of the two reactive abilities a slot is holding, and whether its window
@@ -616,6 +619,29 @@ Quests\Window.lua
 Quests\Blizzard.lua
 Quests\Tracker.lua
 Quests\Feature.lua
+
+# The character sheet, and the loadout page that moved onto it.
+#
+# Worn.lua is what you have on and the two calls that change it, Stats.lua works
+# out what the client will not say, which is how often you miss, Skills.lua and
+# Reputation.lua read the two lists the client's own sheet keeps behind tabs,
+# Readout.lua is the column of headed rows those three are drawn in, Paperdoll.lua
+# is the gear page, Window.lua is the five tabs over one window, Blizzard.lua
+# puts the client's own sheet in the attic and takes the C key, and Feature.lua
+# last, as everywhere else.
+#
+# After UnitFrames\Blizzard.lua, which owns the switch list Blizzard.lua signs
+# into, and after Loadouts\Page.lua, which is the fifth tab. Both are above this
+# line. Core\Attic.lua, where the client's sheet goes, is far above it.
+Character\Worn.lua
+Character\Stats.lua
+Character\Skills.lua
+Character\Reputation.lua
+Character\Readout.lua
+Character\Paperdoll.lua
+Character\Window.lua
+Character\Blizzard.lua
+Character\Feature.lua
 
 # The world hover. A creature under the cursor, described in the addon's own box
 # instead of Blizzard's.

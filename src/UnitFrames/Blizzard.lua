@@ -56,7 +56,7 @@ ns.BlizzHide = Blizz
 --   word   what `/wk hide` calls it
 --   label  the panel's line, and the sentence the slash word prints back
 --   hint   the one thing about this switch a label cannot hold, where there is
---          one. Three of the five have a catch and the other two do not, and a
+--          one. Seven of the ten have a catch and the other three do not, and a
 --          line of reassurance under a switch that has nothing to warn about
 --          is how a page teaches you to stop reading the hints
 local SWITCHES = {
@@ -73,7 +73,8 @@ local SWITCHES = {
 		label = "Blizzard's own cast bar",
 		hint = "Read this one with our cast bar switch. Both off is the one combination that leaves you no cast bar at all." },
 	{ key = "hideBlizzParty", word = "party", label = "Blizzard's party frames" },
-	-- The one switch in this list whose frames are not named in FRAMES below.
+	-- One of the two switches in this list whose frames are not named in FRAMES
+	-- below, the character sheet being the other.
 	-- Hiding the client's chat window is twenty five names, a forward of
 	-- everything that window would have drawn so none of it is lost, and a
 	-- coupling to whether ours is open at all, which is a file rather than a
@@ -84,6 +85,13 @@ local SWITCHES = {
 	{ key = "hideBlizzXP", word = "xp",
 		label = "Blizzard's experience and reputation bars",
 		hint = "Progress/Rails.lua draws both instead. Its default is the bottom edge of the screen, which is roughly where these two were." },
+	-- The second switch in this list whose frames are not in FRAMES below, and
+	-- it is a file for the reason the chat window's is: the C key has to come
+	-- with the window, and a key swap is not a row in a table. Character
+	-- /Blizzard.lua registers through Blizz.Also.
+	{ key = "hideBlizzCharacter", word = "character",
+		label = "Blizzard's character sheet",
+		hint = "The C key opens this addon's instead, on the page you asked for. Your pet's sheet and the honour tab are the two pages it does not draw, so untick this if you want either." },
 }
 
 -- What each switch takes down, and what it takes to take it down.
@@ -155,8 +163,10 @@ local FRAMES = {
 -- when a boolean says so, which is every entry above. It does not hold for the
 -- client's chat window, where hiding without forwarding what that window draws
 -- would delete the loot, the experience and every addon's output, so the hide
--- and the forward have to be one mechanism. What stays here is the switch, so
--- there is still one page and one word for all of them.
+-- and the forward have to be one mechanism. It does not hold for the client's
+-- character sheet either, where the C key has to end up opening this addon's
+-- window and a key swap is not a row in a table. What stays here is the switch,
+-- so there is still one page and one word for all of them.
 --
 -- An entry answers the same true or false Blizz.Apply does: false is work combat
 -- refused, and it puts the whole pass on the retry.

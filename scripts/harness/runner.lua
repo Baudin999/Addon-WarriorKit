@@ -167,10 +167,16 @@ local SECTIONS = {
 	-- It moves the addon's lock and puts it back, so it wants everything above
 	-- it built and nothing above it disturbed. Second to last for that reason.
 	"51-placing",
+	-- It takes Blizzard's character sheet out of the attic and puts it back, and
+	-- it moves the weapon skill the whole miss calculation is built on. Both are
+	-- scene changes, so it goes under everything that reads either: the hide
+	-- section three dozen lines above, and the placing walk directly over it,
+	-- which counts this window among the six it holds to the lock.
+	"52-character",
 	-- Last, and it has to be: it puts every setting in the account file back
 	-- to what the addon ships with, twice over, which is the one thing in the
 	-- suite that would pull the scene out from under every section above it.
-	"52-shipped-defaults",
+	"53-shipped-defaults",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

@@ -67,7 +67,7 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is twenty-five parts and a core. Each part is a folder, and Core knows the
+The addon is twenty-six parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
@@ -158,7 +158,10 @@ name of none of them.
 
     Loadouts/Loadouts.lua    ten secure buttons, one per loadout, each carrying
                              that loadout's cast and its pair of /equipslot lines
-    Loadouts/Feature.lua     the paperdoll page and the loadout tab strip
+    Loadouts/Page.lua        the paperdoll page and the loadout tab strip, drawn
+                             into whichever widget kit is handed to it, which is
+                             the character window's
+    Loadouts/Feature.lua     the registration and the slash word, and no panel
 
     Buttons/Reaction.lua     whether the Overpower or Revenge window is open,
                              tracked off the combat log
@@ -308,6 +311,22 @@ name of none of them.
     Mail/Window.lua          the window: the favourites column, the attachment
                              block, the band along the bottom, the inbox list
     Mail/Feature.lua
+
+    Character/Worn.lua       the nineteen slots, what is in each, how worn it is,
+                             and the two calls that put a piece on or take it off
+    Character/Stats.lua      every number the client will answer for, and the one
+                             it will not: how often you miss
+    Character/Skills.lua     the skill lines, folded under the client's own
+                             headers, with the shortfall on a weapon skill priced
+    Character/Reputation.lua the faction lines, in three colours rather than eight
+    Character/Readout.lua    a column of headed rows, repainted from a pool. The
+                             stats, skills and reputation tabs are all this
+    Character/Paperdoll.lua  the gear page: nineteen squares and the four numbers
+                             the client's own sheet has never drawn
+    Character/Window.lua     five tabs over one window, one painted at a time
+    Character/Blizzard.lua   the client's own sheet in the attic, and the C key
+                             redirected to the matching tab
+    Character/Feature.lua
 
     EditMode/EditMode.lua    probes Edit Mode, captures a layout, imports the baked one
     EditMode/Saved.lua       generated, the baked layout, written by bake-ui.sh
@@ -2320,9 +2339,19 @@ model leaves an empty box and the slots underneath still work. `SetUnit` is
 called once and again on show, never on a refresh, because it reloads the model
 and a refresh is every click anywhere in the window.
 
-**Why the loadout strip is not the window's tab strip.** The window's strip is
-chrome: `Core/Panel.lua` builds it once at PLAYER_LOGIN out of the headers each
-feature writes, and it cannot grow. A loadout list is a setting that changes
+**The page is a tab of the character window, not a section of the options
+window.** It was the second, between the chat opacity and the minimap shape, and
+a loadout is a pair of weapons on a key, so it belongs on the page with your
+weapons on it. The page itself did not change when it moved: `Loadouts/Page.lua`
+takes a widget kit and calls the same nine functions every other page in the
+addon calls, and the character window is a host in the sense `UI.Kit` means, so
+the whole of the move is which frame the rows land on. `Loadouts/Feature.lua`
+carries no `panel` any more, which means turning the character sheet off leaves
+loadouts to `/wk loadout`, and the switch says so.
+
+**Why the loadout strip is not the window's tab strip.** The options window's
+strip is chrome: `Core/Panel.lua` builds it once at PLAYER_LOGIN out of the
+headers each feature writes, and it cannot grow. A loadout list is a setting that changes
 while the window is open, so it is a control instead, pooled inside one row.
 That is the whole reason no rebuild path had to be cut into the panel, and the
 reason adding a loadout costs no frames after the first time.
@@ -2334,6 +2363,144 @@ nothing, which is the failure `Core/Gear.lua` exists to make impossible: it
 offers what you are carrying and nothing else, and a saved name that is not on
 this character keeps its slot and goes orange rather than being dropped by a
 panel that cannot see into your bank.
+
+**Character sheet.** Nine files under `Character/`, replacing the client's own
+window: gear, stats, skills, reputation and loadouts, on five tabs the C key
+opens.
+
+**Missing is the reason it exists.** Every other number on this page is a
+lookup. How often you miss is not, on either of these clients, because the
+client knows your hit rating and not your hit chance, and no character sheet the
+game has ever shipped has drawn one. `Character/Stats.lua` computes it against a
+target of your own level and against the three above it, for a special, for a
+white swing and for a spell, subtracts the hit your gear rated, and says
+underneath how much more would take each row to nothing.
+
+Four constants, and they are checked against the three published figures rather
+than against themselves:
+
+    miss = 5% + min(gap, 10) * 0.1% + max(gap - 10, 0) * 0.6%
+    gap  = target defence - your weapon skill
+    a white swing adds 19% while both hands hold a weapon
+
+A character at the weapon skill their level allows misses 5.5% one level up, 6%
+two up and 9% three up. Those three are not derivable from each other and the
+shape above is the only one that lands on all of them. Section 52 of the harness
+closes the stub's ten point shortfall, reads all three back and opens it again,
+so a formula that ignored weapon skill fails one half and a formula with the
+second slope wrong fails the other. Spells are a table rather than a curve, 4, 5,
+6 and 17 percent, because the step from two levels up to three is eleven points
+and no line through the first three goes near it; writing that as a formula
+would be inventing a mechanism to explain a number that was chosen.
+
+**Talent hit is not in it, and the row says so.** `GetCombatRatingBonus` reports
+what your gear rated. There is no call at all for the flat percentage a talent
+grants, so a warrior with points in the one that gives hit is a percent better
+than this page says. Saying that is the difference between a computed number
+that helps and one that costs somebody a set of enchants.
+
+**A row the client will not answer is absent, not "unknown".** Two clients load
+this addon and the older one has no combat ratings, no expertise and no
+resilience. `Whole` and `Percent` both return nil for nil, `Row` drops a nil
+value, and a group whose rows all dropped is not drawn. The two places where the
+absence is itself the answer say so in a sentence: with no ratings the hit row
+reads "this client does not rate hit" and nothing is subtracted from the miss
+rows.
+
+**The spell group hangs on spell power, not on whether its calls answered.** The
+client answers a spell crit chance and a mana regen for a warrior in plate, both
+off intellect nobody chose to have. Rows of nought are how a page teaches you to
+stop reading it.
+
+**The gear page is nineteen squares and four numbers.** The four are item level,
+durability, empty slots and the miss chance, and none of them is on the client's
+own sheet. There is no character model in the middle, which is the largest area
+of the client's version: what you are wearing is already drawn in the two columns
+either side at the size you can read the names of. The loadout tab does draw one,
+and the two differ for a reason: there the model is showing you the pair of
+weapons you just put in its hands, which is the whole subject of that page.
+
+Every square carries the durability of what is in it as a line along its bottom
+edge, green over 50%, amber to 20%, red under it. Three stops rather than a
+gradient, because a continuous blend is a colour nobody can read a number off.
+Durability is the one fact about your gear that changes while you play and the
+client keeps it behind a hover.
+
+**Clicking is the client's own two calls.** Left is `PickupInventoryItem`, which
+swaps whatever is on the cursor into the slot and picks up what was there; it is
+what FrameXML's own paperdoll button calls, so it is the call the client is
+written to accept from a hardware click. Right is `UseInventoryItem`, which takes
+the piece off or fires it where the item has a use, which is what the client does
+on its own sheet. Both are refused in a fight by the client, silently, so
+`Worn.Free` refuses first and the reason is printed. A slot that does nothing
+when you click it is the worst version of this page.
+
+**Skills are bars, and a weapon skill under the cap is priced.** The client's own
+skill tab draws the same length bar for a capped weapon skill and a profession
+started this morning. A weapon skill is told from a profession by what it caps at
+and whether it can be abandoned, never by the header it sits under, because every
+header on that page is a localised string and matching on one is how an addon
+works in English and lists nothing in German. The two tests together are wrong
+only for a character at exactly level fifteen with a profession at its first cap,
+which draws one extra sentence and nothing else.
+
+Reading the skill list expands the client's headers, once, and reading the
+reputation list expands its own. There is no way to enumerate what is under a
+collapsed header. That is a write to the client's state and the only thing that
+reads it back is the frame this part puts in the attic.
+
+**Reputation is here because hiding the client's window would otherwise delete
+it.** Standings are drawn in three of the palette's own colours rather than the
+client's eight-shade gradient: red for somebody who would attack you, grey for
+somebody with no opinion, green for somebody who has one. A gradient between
+orange and blue says something only if you have memorised the order. The at-war
+tick and the watched-bar picker are not carried, because both are writes to a
+live server state off a frame this addon owns and neither is what anybody opens a
+reputation list to find out.
+
+**One pane is painted at a time.** A font string on a hidden frame will not say
+how tall it wraps to on this client, so a tab painted while another was up would
+lay its prose out one line high and keep that height when you opened it.
+Selecting a tab shows it and then paints it, in that order, and `Pane:Paint`
+returns zero while hidden.
+
+**`Character/Readout.lua` repaints a pool.** Stats, skills and reputation are the
+same picture, a heading with rows under it, each row a name, a value, sometimes a
+sentence and sometimes a bar. This client cannot destroy a frame, so a pane that
+built its rows when it was handed a list would leak one per row per refresh, and
+a reputation list is sixty rows. There is one frame per line the pane has ever
+needed and a repaint shows the regions this line uses. It is not `UI/Stack.lua`
+for one reason: a stack's cells are added once, this list is a different length
+every time, and giving the stack a way to forget its cells is a method that
+exists for one caller and would then have to be right for the options window too.
+
+**Blizzard's sheet goes in the attic and C opens this one.** `CharacterFrame` is
+not a live server session the way `MailFrame` is: every call this addon makes
+about your gear, your skills and your standings works with the frame nowhere near
+the screen, so it takes the cage rather than being parked. Its five pages go with
+it because all five are its children.
+
+The switch is `hide Blizzard's character sheet`, and it is on the Blizzard's own
+frames page with the other nine rather than on this part's page. There is one
+place in this addon where a frame of the client's is switched off, and a tenth
+switch somewhere else would be a tenth place to look. `Character/Blizzard.lua`
+registers through `BlizzHide.Also`, which is the second part to do it after the
+chat window, and both had to: the chat window because hiding it without
+forwarding what it draws deletes every addon's output, this one because the C key
+has to open ours once the client's is gone.
+
+`ToggleCharacter` is swapped for one that opens the matching tab, which is the
+second global function swap in the addon after `ToggleQuestLog`. The original is
+kept and handed back exactly, and `GiveKey` only hands back what this file took.
+The two pages this window does not draw, your pet's sheet and the honour tab,
+print a line naming the switch rather than opening a tab that is not there.
+
+**The swap cost one bug and the harness caught it.** `TakeKey` built its
+replacement function inside itself. The hide pass runs once a second forever, so
+that is a closure a second for the collector to walk: 3.12 KB per fifty ticks
+against a gate of 0.05. The function is declared once at load now and the pass
+compares before it writes. This is the third time a per-pass allocation has been
+caught by that gate rather than by review.
 
 **Buttons.** Fills the action bars with a warrior loadout and can put back
 exactly what was there before. Two jobs it deliberately does not do:
@@ -5349,7 +5516,7 @@ on different realms read as the same person.
     /wk party percolumn 5        1 to 40, the raid only
     /wk party zoom 1             1 to 3
     /wk party reset              the list back on its own corner of the screen
-    /wk hide                     the nine switches, and what each is doing
+    /wk hide                     the ten switches, and what each is doing
     /wk hide buffs on|off        Blizzard's buffs, in the corner of the screen
     /wk hide debuffs on|off      Blizzard's debuffs, beside them
     /wk hide target on|off       Blizzard's icons on the target frame
@@ -5359,6 +5526,7 @@ on different realms read as the same person.
     /wk hide party on|off        Blizzard's four party frames
     /wk hide raid on|off         Blizzard's raid container and its manager
     /wk hide xp on|off           Blizzard's experience and reputation bars
+    /wk hide character on|off    Blizzard's character sheet, and the C key with it
     /wk buttons apply            fill the bars with the warrior loadout
     /wk buttons restore          put back exactly what was there before
     /wk buttons                  what it would do, and whether a backup is held
@@ -5400,6 +5568,16 @@ on different realms read as the same person.
     /wk mail unfav Aria          take it off again
     /wk mail favs                the list, and who each of them is
     /wk mail warn on|off         whether value to a name off the list asks twice
+    /wk character                the character sheet
+    /wk character on|off         the addon's sheet instead of the client's
+    /wk character hide on|off    Blizzard's own in the attic, and the C key
+    /wk character gear           what you are wearing and how worn it is
+    /wk character stats          your hit, and what you still miss with it
+    /wk character skills         which weapon skills are behind the cap
+    /wk loadout                  every loadout, its key and the pair it draws
+    /wk loadout 2 SHIFT-2        the key for that loadout, or none to clear
+    /wk loadout add Sword        a new one
+    /wk loadout combat on|off    whether the weapon swap fires mid fight
 
 **The key field takes mouse buttons.** `ui.KeyField` maps left and right onto
 `BUTTON1` and `BUTTON2` so a modified click can be captured, which is the whole
@@ -5711,6 +5889,41 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- **Whether the miss numbers on the character sheet are the game's.** The
+  formula reproduces the three figures everybody quotes, 5.5%, 6% and 9% at one,
+  two and three levels up, and the harness holds it to all three. What the
+  harness cannot answer is whether those three are right for these builds, and
+  whether the client's weapon skill, defence and rating calls feed it what this
+  addon thinks they do. What would settle it: stand at a target dummy three
+  levels up with a known amount of hit rating, swing a few hundred times with the
+  combat log on, and compare the miss count against the row. Nothing about this
+  page is destructive if it is wrong; it is a number that would be quietly out by
+  a percent or two.
+- **Whether `GetCombatRatingBonus` is the whole of your gear hit on 2.5.6.** The
+  page says out loud that talent hit is not in it. What it assumes is that
+  everything else is, and an enchant or a set bonus that granted hit chance
+  rather than hit rating would be missing from the row with nothing saying so.
+- **Whether the nineteen slot numbers and `GetInventorySlotInfo` key names match
+  these builds.** A wrong number draws an empty square in a slot you are wearing
+  something in, and a wrong key name draws a square with no silhouette in it.
+  Both are visible at a glance and neither is destructive. `/wk character gear`
+  prints the item level, the durability and how many slots came back empty, and
+  an empty count that is too high is the symptom.
+- **Whether `PickupInventoryItem` and `UseInventoryItem` behave from this
+  window.** Both are what FrameXML's own paperdoll button calls, both are refused
+  in combat before they are reached, and neither has run from a frame this addon
+  owns. The failure worth watching for is a click that picks an item up and
+  leaves it on the cursor with nowhere obvious to put it back.
+- **Whether `CharacterFrame` and its five pages go into the attic cleanly.** The
+  harness cages a stub. What a live client may do that the stub does not is call
+  a method on a caged page from its own `OnUpdate`, which is exactly what the
+  target's cast bar did and what `mute` exists for. `/wk hide probe` names every
+  frame and says whether it is on screen anyway, and `/wk character hide off`
+  hands the whole thing back.
+- **Whether the pet sheet and the honour tab are reachable any other way.** With
+  the switch on, `ToggleCharacter` sends both to a printed line. If some other
+  path on these clients opens either of them directly, it opens a caged frame and
+  draws nothing at all.
 - Whether `IsUnitOnQuest` exists on these builds and takes its arguments in the
   order this addon passes them, which is a row of your own quest log and then a
   unit token. `Quests/Party.lua` treats a missing or raising call as "cannot
