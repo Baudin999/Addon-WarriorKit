@@ -55,11 +55,23 @@ ns.BagsGrid = Grid
 -- one of the two sizes an icon is drawn at exactly on this client: the stored
 -- texture is sixty four texels, the crop takes it to fifty four, and fifty four
 -- halves to twenty seven. Any other number is a blend of two stored copies.
-local SLOT, GAP = 31, 3
+--
+-- The gap is two rather than three because the square already draws its own
+-- hairline. A rim and a rim with two pixels between them read as separated; the
+-- third pixel is spent on nothing and there are twelve of those gaps down a full
+-- bag.
+local SLOT, GAP = 31, 2
 
 -- The line a pile's name sits on, and the air under the last row of one pile
 -- before the next name.
-local HEADER, BREAK = M.row, M.rowGap * 2
+--
+-- Both are the smallest they can be and still do their job, because a full bag
+-- is sixteen piles and every pixel here is paid sixteen times. The header is the
+-- heading face plus three, which is a line box for a thirteen pixel font and
+-- nothing else; M.row is twenty because it is sized for a control with a tick
+-- box in it, and there is no control here. The break is one row gap rather than
+-- two: what separates two piles is the heading under the air, not the air.
+local HEADER, BREAK = M.heading + 3, M.rowGap
 
 Grid.SLOT, Grid.GAP, Grid.HEADER = SLOT, GAP, HEADER
 

@@ -31,14 +31,24 @@ ns.BagsWindow = Window
 -- early on a hidden window, so a character who never opens their bags pays for
 -- this part exactly once, at the login that registers the events.
 --
--- **The width is the grid's and the height is fixed.** How many columns is a
--- setting, because how wide a bag window should be is a fact about your screen
+-- **The width is the grid's and the height is the piles'.** How many columns is
+-- a setting, because how wide a bag window should be is a fact about your screen
 -- and about how much of it you are willing to give a bag window. The height is
--- not, for the reason every window in this addon is a fixed rectangle: a pile
--- that does not fit scrolls.
+-- not a setting and it is not a constant either: it is whatever the piles came
+-- to this scan, so a full bag is one page and you look at it rather than
+-- scrolling it. That is the whole of what a bag window is for. Every other
+-- window in this addon is a fixed rectangle because what goes in it is a feed
+-- with no end; a bag has a hundred and fifty slots and that is the top of it.
+--
+-- The scroll view stays, and it is the answer to the one case the height cannot
+-- reach: Window:Resize clamps to what the screen holds, so a bag that comes to
+-- more than that gets a clamped window and a bar, rather than a window with its
+-- footer under the taskbar.
 --------------------------------------------------------------------------
 
-local HEIGHT = 420
+-- The shortest the body is allowed to get, so an empty bag is a window rather
+-- than a strip of title bar with a number under it.
+local FLOOR = ns.BagsGrid.HEADER + ns.BagsGrid.SLOT * 2 + ns.BagsGrid.GAP
 
 local window, view, free, purse
 
@@ -48,9 +58,49 @@ local function Width()
 	return M.pad * 2 + ns.BagsGrid.Width(ns.db.bagColumns)
 end
 
-local function Fit()
+-- What the chrome costs: the difference between the window and its body, which
+-- the window knows and this file asks rather than repeats.
+local function Chrome()
+	return window.height - window:Body()
+end
+
+-- The top edge held still across a resize.
+--
+-- A window is anchored wherever it was last dropped and that is usually its
+-- middle, so a window that grows a row when you loot one grows half a row upward
+-- into whatever you were reading. Re-pinning to the top left first makes it grow
+-- downward, which is the direction a list grows.
+--
+-- The corner in the account file is untouched. That setting is written by the
+-- drag and by nothing else, so this changes where the frame hangs this session
+-- and not where it opens tomorrow. The offsets are read and written in the
+-- frame's own units, which after adoption are not UIParent's, so the reading
+-- goes straight back in without a conversion.
+local function PinTop()
+	local frame = window.frame
+	local left, top = frame:GetLeft(), frame:GetTop()
+	if not left or not top then
+		return false
+	end
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+	return true
+end
+
+-- The window at the size this scan's piles came to. `content` is what the grid
+-- said it drew, or nothing before anything has been drawn.
+local function Fit(content)
 	local width = Width()
-	window:Resize(width, HEIGHT)
+	local height = M.pad * 2 + math.max(content or 0, FLOOR) + Chrome()
+	-- Only when the number is about to move. A bag update arrives five times for
+	-- one loot and four of them come to the same height, and re-anchoring a
+	-- window that is not changing size is a thing that can only go wrong.
+	if height ~= window.height then
+		PinTop()
+	end
+	window:Resize(width, height)
+	-- Body again rather than the number just asked for, because Resize clamps
+	-- and the view has to be told the height the window actually got.
 	view:Resize(width - M.pad * 2, window:Body() - M.pad * 2)
 	return width
 end
@@ -60,7 +110,7 @@ local function Build()
 		name = "WarriorKitBags",
 		title = "Bags",
 		width = Width(),
-		height = HEIGHT,
+		height = FLOOR,
 	})
 	ns.Remember(window)
 
@@ -102,7 +152,9 @@ function Window.Refresh()
 		return false
 	end
 	local state = ns.Bags.Read()
-	view:Update(ns.BagsGrid.Paint(state, ns.db.bagColumns))
+	local content = ns.BagsGrid.Paint(state, ns.db.bagColumns)
+	Fit(content)
+	view:Update(content)
 	free:SetText(("%d free of %d"):format(state.free, state.slots))
 	purse:SetText(ns.Coined(GetMoney()))
 	return true
@@ -111,6 +163,10 @@ end
 -- The window at the width the column setting now asks for. Called from the
 -- panel rather than watched for, because a setting this file may not name is a
 -- setting this file may not watch either.
+--
+-- Only the width is set here. Fewer columns is more rows, and how many rows the
+-- new width comes to is a thing only the grid can say, so the height arrives out
+-- of the refresh below like it does on every other pass.
 function Window.Refit()
 	if not window then
 		return false

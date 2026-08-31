@@ -145,6 +145,22 @@ check(window and window.free:GetText() == ("%d free of %d"):format(3, slots),
 check(window and window.purse:GetText() == ns.Coined(_G.GetMoney()),
 	"the footer is not drawing what you are carrying in coin")
 
+-- The height is the piles', not a constant. Every row of every pile, plus the
+-- heading over each one and the air between them, worked out from the same three
+-- numbers the grid lays out with, and the window's body has to come to exactly
+-- that. A window that went back to a fixed rectangle would fail here rather than
+-- silently start scrolling a bag that fits.
+local tall = 0
+for index = 1, read.shown do
+	local lines = math.ceil(#read.groups[index].entries / ns.db.bagColumns)
+	tall = tall + Grid.HEADER + lines * Grid.SLOT + (lines - 1) * Grid.GAP
+end
+tall = tall + (read.shown - 1) * ns.UI.Metric.rowGap
+
+check(window and window:Body() == tall + ns.UI.Metric.pad * 2,
+	("the window's body is %d and the piles come to %d")
+		:format(window and window:Body() or -1, tall + ns.UI.Metric.pad * 2))
+
 local squares = Grid.Squares()
 local headers = Grid.Headers()
 
