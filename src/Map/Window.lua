@@ -93,11 +93,11 @@ end
 -- them. How many of them are markers comes back as well, because you are not
 -- one and the line under the map counts markers.
 --
--- You last, so the gold dot is drawn over the icons rather than under them.
--- There is nowhere on a quest map you are more likely to be standing than on
--- top of the thing you are looking for. Over the cap as well as over the icons:
--- a zone busy enough to fill the pool is exactly the zone where losing yourself
--- would matter.
+-- You last, so the arrow is drawn over the icons rather than under them. There
+-- is nowhere on a quest map you are more likely to be standing than on top of
+-- the thing you are looking for. Over the cap as well as over the icons: a zone
+-- busy enough to fill the pool is exactly the zone where losing yourself would
+-- matter.
 local function Points(map)
 	local points = Pins.Of(map)
 	local markers = #points
@@ -314,6 +314,29 @@ function Window.Zoom(delta)
 	return board:Level()
 end
 
+-- How much of the zone you have uncovered, as the number of pieces drawn over
+-- the tiles, and the arrow: what it is drawn as, how big, and where it points.
+--
+-- Handed out for the reason Zoom is. Both come off the client's own tables
+-- through the chart, and a map that drew a dark zone or a north-facing arrow
+-- all evening looks exactly like one that drew them right.
+function Window.Uncovered()
+	return board and board:Seen() or 0
+end
+
+function Window.Arrow()
+	if not board then
+		return nil
+	end
+	return board:Arrow()
+end
+
+-- The arrow taken again, which the board does on its own tick while it is up
+-- and nothing outside a running client can drive.
+function Window.Locate()
+	return board ~= nil and board:Locate()
+end
+
 -- How many markers are on the board, and how big it came out.
 function Window.Drawn()
 	if not board then
@@ -368,6 +391,17 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("QUEST_LOG_UPDATE")
+-- Walking into somewhere you have not been repaints the map, because what the
+-- client uncovered is drawn from its own tables and it has just changed them.
+-- The border crossing is here for the same reason one layer down: the zone you
+-- are standing in decides whether the arrow is on this picture at all, and the
+-- tick that moves the arrow cannot put one on a board that was drawn without.
+--
+-- Probed rather than assumed, the way every other call into the client in this
+-- part is. An event name this build has never heard of raises out of
+-- RegisterEvent, and the one taken down with it would be the whole window.
+pcall(events.RegisterEvent, events, "MAP_EXPLORATION_UPDATED")
+events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 events:SetScript("OnEvent", function(_, event)
 	if event == "PLAYER_LOGIN" then
 		if ns.db.worldMap then

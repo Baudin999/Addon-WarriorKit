@@ -133,6 +133,47 @@ api.GetMapArtLayerTextures = function(map, layer)
 end
 
 --------------------------------------------------------------------------
+-- What you have uncovered, and which way you are pointing
+--------------------------------------------------------------------------
+
+-- The client's exploration tables, in the shape C_MapExplorationInfo answers
+-- them: one entry per area you have walked into, each with an offset into the
+-- map, a size, and the tiles it is cut into.
+--
+-- Westfall has three and the addon draws two of them. The one it leaves off is
+-- the kind the client only paints while the pointer is over it, which is not
+-- part of the resting picture on Blizzard's own map either.
+--
+-- The second is the reason there is a fixture at all rather than one square.
+-- It is 300 by 100 in tiles of 256, so it is two across and one down, and the
+-- last column is 44 pixels stored in a 64 pixel file rather than padded out to
+-- a whole tile the way the base art is. A reader that cropped it against the
+-- tile would draw those 44 pixels at a fifth of their width, and every edge of
+-- everywhere you had been would pull towards the middle of its own patch.
+local UNCOVERED = {
+	[1436] = {
+		{ textureWidth = 256, textureHeight = 256, offsetX = 0, offsetY = 0,
+			fileDataIDs = { 800001 } },
+		{ textureWidth = 300, textureHeight = 100, offsetX = 256, offsetY = 128,
+			fileDataIDs = { 800002, 800003 } },
+		{ textureWidth = 256, textureHeight = 256, offsetX = 512, offsetY = 0,
+			isShownByMouseOver = true, fileDataIDs = { 800004 } },
+	},
+}
+
+_G.C_MapExplorationInfo = {
+	GetExploredMapTextures = function(map)
+		return UNCOVERED[map]
+	end,
+}
+
+-- Which way you are facing, in radians anticlockwise from north. Half of pi is
+-- west, which is a quarter turn and the one value that cannot be confused with
+-- its own negative.
+local facing = 0
+_G.GetPlayerFacing = function() return facing end
+
+--------------------------------------------------------------------------
 -- Questie's icon frames
 --------------------------------------------------------------------------
 
@@ -213,6 +254,12 @@ end
 
 H.worldmap = {
 	nodes = NODES,
+	uncovered = UNCOVERED,
+	-- Which way you are pointing, so a section can turn you and read the arrow.
+	Face = function(radians)
+		facing = radians
+		return facing
+	end,
 	-- How many times the client's own toggle ran. It must be none once the
 	-- addon has taken the key, and it has to move again when the switch hands
 	-- it back, which is the only way to prove the original was kept rather

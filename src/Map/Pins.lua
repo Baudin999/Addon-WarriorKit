@@ -220,9 +220,9 @@ function Pins.Of(map)
 	return out
 end
 
--- You, as a point the chart draws in its own gold rather than in somebody
--- else's art. Nothing at all on a map you are not standing on, which is every
--- zone but one.
+-- You, as a point the chart draws as the client's own arrow rather than in
+-- somebody else's art. Nothing at all on a map you are not standing on, which
+-- is every zone but one.
 function Pins.You(map)
 	local here, x, y = Chart.Here()
 	if here ~= map or type(x) ~= "number" or type(y) ~= "number" then

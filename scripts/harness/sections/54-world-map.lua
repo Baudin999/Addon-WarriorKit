@@ -128,6 +128,77 @@ check(drawn == 3,
 	("the board is showing %d marks where it has two markers and you"):format(drawn))
 
 ----------------------------------------------------------------------
+-- You, and which way you are pointing
+----------------------------------------------------------------------
+
+-- The client's own arrow rather than a square of this addon's colour, at the
+-- size Blizzard draws its own player pin. A square says where you are standing
+-- and an arrow says that and which way you are facing, and the second half is
+-- what the map was missing.
+--
+-- Scoped, for the reason every other block in harness/sections is: a chunk gets
+-- two hundred names in this Lua and the budget in check.sh is what keeps the
+-- count off that ceiling.
+do
+	local art, size, turn = Window.Arrow()
+	check(art == "Interface\\WorldMap\\WorldMapArrow",
+		("you are drawn as %q rather than as the client's own arrow")
+			:format(tostring(art)))
+	check(size == 16, ("the arrow came out %s pixels and Blizzard's is sixteen")
+		:format(tostring(size)))
+	check(turn == 0, ("the arrow opened turned %s and you are facing north")
+		:format(tostring(turn)))
+
+	-- Turned, and moved, without a repaint. This is the whole reason the board
+	-- keeps a tick of its own: everything else on the picture is a fact about
+	-- the zone and changes when somebody asks, and where you are standing
+	-- changes because you walked.
+	worldmap.Face(math.pi / 2)
+	quests.standing.x, quests.standing.y = 70, 30
+	check(Window.Locate(), "the board would not take the arrow again")
+	local _, _, west = Window.Arrow()
+	check(west == math.pi / 2,
+		("a quarter turn west left the arrow at %s"):format(tostring(west)))
+end
+
+-- Off the board on a zone you are not in, and off it without a repaint, so
+-- crossing a border with the map open takes the arrow with you rather than
+-- leaving it at the crossing.
+quests.standing.map = ELWYNN
+check(Window.Locate(), "the board would not take the arrow again after the border")
+check(Window.Arrow() == nil, "you are still on the map of a zone you have left")
+check(Window.Drawn() == 2,
+	("the board is showing %d marks where you have left the zone")
+		:format(Window.Drawn()))
+
+quests.standing.map = WESTFALL
+quests.standing.x, quests.standing.y = 48, 52
+worldmap.Face(0)
+Window.Paint()
+
+----------------------------------------------------------------------
+-- What you have uncovered
+----------------------------------------------------------------------
+
+-- The zone is drawn twice: the tiles, which are the whole map with nothing
+-- discovered on it, and one piece per area you have walked into painted over
+-- them. Draw only the tiles and the map is the one you had at level one for the
+-- whole game, which is what it was before this.
+check(Window.Uncovered() == 3,
+	("the board painted %d pieces of uncovered ground where Westfall has two areas, one of them two tiles wide")
+		:format(Window.Uncovered()))
+
+-- A zone you have never walked stays dark. The client answers nothing for it
+-- and nothing is exactly what should be drawn: the ask was what has been
+-- discovered, not everything.
+check(Window.Select(DUROTAR), "the column would not move to the other continent")
+check(Window.Uncovered() == 0,
+	("a zone you have never walked painted %d pieces over its tiles")
+		:format(Window.Uncovered()))
+
+Window.Select(WESTFALL)
+
+----------------------------------------------------------------------
 -- The footer
 ----------------------------------------------------------------------
 
@@ -236,3 +307,5 @@ Blizz.Apply()
 print(("map    %d zones over %d continents, %d with a level range")
 	:format(zones, continents, (select(2, Zones.Ranged()))))
 print(("map    %s; %s"):format(Window.Describe(), Pins.Describe()))
+print(("map    %d pieces of Westfall uncovered, you drawn as the client's own arrow")
+	:format(Window.Uncovered()))

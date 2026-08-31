@@ -72,6 +72,25 @@ local C = UI.Color
 -- with no wash and no ring, because the art is already a mark somebody
 -- designed to be found on a map. That is the whole of what the world map
 -- needed to reuse this file.
+--
+-- **The zone is drawn twice: dark, then the parts you have walked.** The tiles
+-- above are the whole zone with nothing discovered on it, which is what the
+-- client stores as the base art and is why a map drawn from tiles alone is the
+-- map you had at level one for the whole game. What you have uncovered is a
+-- second set of textures, one per area you have been into, and the client hands
+-- them over through C_MapExplorationInfo with an offset and a size each. They
+-- go over the tiles in the same layer at the next sublevel, at the same scale,
+-- which is Blizzard's own arrangement on its own map. Nothing here decides what
+-- you have seen; a zone you have not walked draws no pieces and stays dark,
+-- which is the answer the player asked for.
+--
+-- **You are the client's arrow, and it turns.** A point of kind YOU is drawn as
+-- Interface\WorldMap\WorldMapArrow rather than as a coloured square, rotated
+-- to the direction you are facing, and it is the one mark on the board that is
+-- taken again on a timer while the board is up. Everything else on the picture
+-- is a fact about the zone and changes when somebody asks; where you are
+-- standing changes because you walked, and a mark that only moved when the
+-- window was repainted is a mark that is wrong most of the time it is on screen.
 --------------------------------------------------------------------------
 
 -- What a point is for. Three strings, because a caller keys its own data on
@@ -102,6 +121,23 @@ local PIN, HALO = 9, 17
 -- smudge, and Questie draws its own at about this size on the client's map.
 local BADGE = 14
 
+-- Where you are standing, and which way you are pointing.
+--
+-- The texture and the size are the client's own, off its own map: Blizzard's
+-- player pin is Interface\WorldMap\WorldMapArrow drawn at sixteen pixels, and
+-- an arrow is the one mark on a map every player already knows how to read.
+-- A gold square was here before and it said where you were standing without
+-- saying which way you were facing, which is half of what you open a map for.
+local ARROW, HEADING = "Interface\\WorldMap\\WorldMapArrow", 16
+
+-- How often the arrow is taken again while the board is up.
+--
+-- Blizzard's own map pin does this on every frame. A tenth of a second is
+-- under what anybody can see a mark jump at and is a fortieth of the work, and
+-- it moves one texture and turns it: the picture, the tiles and every other
+-- mark are still drawn only when somebody asks for them.
+local FOLLOW = 0.1
+
 -- How much of the wash is there. Enough to lift the dot off the art and not
 -- enough to hide what is under it, because the road beside the camp is half of
 -- why you are looking at a map at all.
@@ -121,15 +157,22 @@ local DEEPEST, NOTCH = 6, 1.3
 -- textures until the frame runs out.
 local TILES = 24
 
+-- The most pieces of uncovered ground one zone is allowed. A piece is one area
+-- you have walked into, cut into tiles the same way the base art is, and the
+-- busiest zone in the game is well under a hundred of them. Same bargain as the
+-- cap above: a map this file has never seen draws part of itself rather than
+-- making textures until the frame runs out.
+local SEEN = 256
+
 -- What each kind of place is drawn in. Blue for what is left to do, because
 -- blue is the colour a control is drawn in and a place on a map is a thing to
 -- go and press. Green for the hand-in, which is the same green a finished quest
--- is in down the left column. Gold for you, which is the colour of a heading
--- and is the one dot on the map that is not a fact about the thing being drawn.
+-- is in down the left column. You are not in the table: you are the client's
+-- own arrow rather than a colour, which is the one mark on the map that is not
+-- a fact about the thing being drawn.
 local INK = {
 	[Chart.TODO] = C.accent,
 	[Chart.BACK] = C.tick,
-	[Chart.YOU] = C.heading,
 }
 
 --------------------------------------------------------------------------
@@ -179,6 +222,25 @@ local function Files(map)
 	return files
 end
 
+-- What you have uncovered, as the client hands it over: one entry per area you
+-- have walked into, each saying where on the map it sits, how big it is, and
+-- the tiles it is cut into.
+--
+-- Nothing at all on a client without the namespace, which draws the zone the
+-- way this file drew it before there was any of this: dark, and the same dark
+-- whether you have crossed it or not.
+local function Uncovered(map)
+	local api = _G.C_MapExplorationInfo
+	if type(api) ~= "table" or type(api.GetExploredMapTextures) ~= "function" then
+		return nil
+	end
+	local ok, pieces = pcall(api.GetExploredMapTextures, map)
+	if not ok or type(pieces) ~= "table" then
+		return nil
+	end
+	return pieces
+end
+
 -- Everything needed to draw one zone, or nothing at all.
 local function Art(map)
 	if type(map) ~= "number" then
@@ -194,7 +256,8 @@ local function Art(map)
 	if across * down > TILES or across * down > #files then
 		return nil
 	end
-	return { layer = layer, files = files, across = across, down = down }
+	return { layer = layer, files = files, across = across, down = down,
+		seen = Uncovered(map) }
 end
 
 -- What the client calls a zone. Questie has its own names in its own
@@ -236,6 +299,24 @@ function Chart.Here()
 		return map
 	end
 	return map, x * 100, y * 100
+end
+
+-- Which way you are pointing, in radians.
+--
+-- The client counts anticlockwise from north and SetRotation turns a texture
+-- anticlockwise, so the number goes straight on with no sign to get wrong. A
+-- client that will not say leaves the arrow pointing north, which is where it
+-- pointed before there was a rotation at all and is the one wrong answer that
+-- still looks like a map.
+function Chart.Facing()
+	if type(_G.GetPlayerFacing) ~= "function" then
+		return 0
+	end
+	local ok, facing = pcall(_G.GetPlayerFacing)
+	if not ok or type(facing) ~= "number" then
+		return 0
+	end
+	return facing
 end
 
 --------------------------------------------------------------------------
@@ -317,10 +398,25 @@ local function Tile(board, index)
 	if tile then
 		return tile
 	end
-	tile = board.canvas:CreateTexture(nil, "ARTWORK")
+	tile = board.canvas:CreateTexture(nil, "ARTWORK", nil, 0)
 	UI.Crisp(tile)
 	board.tiles[index] = tile
 	return tile
+end
+
+-- One piece of uncovered ground. Same layer as the tiles and one sublevel over
+-- them, which is where Blizzard puts its own: the two sets are the same picture
+-- at the same scale and anything that separated them by frame would be a second
+-- thing to keep in step with the zoom.
+local function Seen(board, index)
+	local seen = board.seen[index]
+	if seen then
+		return seen
+	end
+	seen = board.canvas:CreateTexture(nil, "ARTWORK", nil, 1)
+	UI.Crisp(seen)
+	board.seen[index] = seen
+	return seen
 end
 
 -- One dot, with the hover hung once and reading whatever the dot is carrying
@@ -372,6 +468,27 @@ end
 -- The wheel, hung once on the box rather than on the picture. The dots enable
 -- the mouse for their hovers and none of them enables the wheel, so a notch
 -- turned with the pointer over a camp reaches this and not the camp.
+-- The arrow taken again while the board is on screen.
+--
+-- Hung on the board's own frame rather than driven from a window, because a
+-- handler only runs while its frame is shown and the frame is hidden with
+-- whatever page or window it is on. There is nothing to switch off and nothing
+-- to leave running: close the map and the tick stops with it.
+local function Follow(board)
+	if type(board.frame.SetScript) ~= "function" then
+		return false
+	end
+	board.frame:SetScript("OnUpdate", function(_, elapsed)
+		board.since = board.since + (elapsed or 0)
+		if board.since < FOLLOW then
+			return
+		end
+		board.since = 0
+		board:Locate()
+	end)
+	return true
+end
+
 local function Wheel(board)
 	local port = board.port
 	if type(port.EnableMouseWheel) ~= "function" then
@@ -386,8 +503,9 @@ end
 
 function Chart.New(parent, name)
 	local board = setmetatable({
-		tiles = {}, pins = {},
+		tiles = {}, seen = {}, pins = {},
 		width = 0, height = 0, tall = 0,
+		wide = 0, high = 0, since = 0,
 		fitWide = 0, fitTall = 0,
 		zoom = 1, x = 0, y = 0,
 	}, Board)
@@ -413,6 +531,7 @@ function Chart.New(parent, name)
 	board.edges = ns.Outline(board.port, C.hairline[1], C.hairline[2], C.hairline[3], 1, "OVERLAY")
 	ns.EdgeSize(board.edges, ns.Pixel(board.port))
 	Wheel(board)
+	Follow(board)
 	return board
 end
 
@@ -455,6 +574,87 @@ local function LayTiles(board, art, wide)
 	return count
 end
 
+-- The uncovered pieces, laid over the tiles at the same scale.
+--
+-- The arithmetic is Blizzard's own and the part worth writing down is the last
+-- tile of a row or a column. The base art pads a part tile out to a full 256
+-- and is cropped against the tile size; these are stored in the smallest power
+-- of two that will hold them instead, so the crop is against that rounded size.
+-- Crop them against the tile and every edge of everywhere you have been comes
+-- out squashed towards the middle of the piece.
+local function Held(size)
+	local file = 16
+	while file < size do
+		file = file * 2
+	end
+	return file
+end
+
+-- Where the last tile of a run ends: the remainder, and a whole tile where the
+-- run divides exactly. Written this way rather than as a modulo and a zero
+-- check because those are the same sentence twice.
+local function Rest(size, tile)
+	return (size - 1) % tile + 1
+end
+
+-- One area you have walked into, cut into tiles and put on the canvas. Answers
+-- how many textures the pool has spent altogether, so the cap is counted across
+-- every piece rather than inside each one.
+local function LaySeen(board, layer, piece, spent, scale)
+	if type(piece) ~= "table" or piece.isShownByMouseOver
+		or type(piece.textureWidth) ~= "number" or type(piece.textureHeight) ~= "number"
+		or type(piece.fileDataIDs) ~= "table" then
+		return spent
+	end
+	local offX = type(piece.offsetX) == "number" and piece.offsetX or 0
+	local offY = type(piece.offsetY) == "number" and piece.offsetY or 0
+	local across = math.ceil(piece.textureWidth / layer.tileWidth)
+	local down = math.ceil(piece.textureHeight / layer.tileHeight)
+	for row = 1, down do
+		local tall = (row < down) and layer.tileHeight
+			or Rest(piece.textureHeight, layer.tileHeight)
+		local high = (row < down) and layer.tileHeight or Held(tall)
+		for column = 1, across do
+			local file = piece.fileDataIDs[(row - 1) * across + column]
+			if spent >= SEEN then
+				return spent
+			end
+			if file then
+				local wide = (column < across) and layer.tileWidth
+					or Rest(piece.textureWidth, layer.tileWidth)
+				local full = (column < across) and layer.tileWidth or Held(wide)
+				spent = spent + 1
+				local tile = Seen(board, spent)
+				tile:SetTexture(file)
+				tile:SetTexCoord(0, wide / full, 0, tall / high)
+				tile:ClearAllPoints()
+				tile:SetPoint("TOPLEFT", board.canvas, "TOPLEFT",
+					(offX + layer.tileWidth * (column - 1)) * scale,
+					-(offY + layer.tileHeight * (row - 1)) * scale)
+				tile:SetSize(math.max(wide * scale, 1), math.max(tall * scale, 1))
+				tile:Show()
+			end
+		end
+	end
+	return spent
+end
+
+-- Everywhere you have been in this zone. A zone you have never walked draws
+-- nothing here and stays the dark picture the tiles are, which is the whole
+-- point of drawing the two sets separately.
+local function LaySeens(board, art, wide)
+	local scale = wide / art.layer.layerWidth
+	local spent = 0
+	for _, piece in ipairs(art.seen or {}) do
+		spent = LaySeen(board, art.layer, piece, spent, scale)
+	end
+	for index = spent + 1, #board.seen do
+		board.seen[index]:Hide()
+	end
+	board.seens = spent
+	return spent
+end
+
 -- A point drawn as this addon's own mark, and how big it comes out. A coloured
 -- square, a wash of the same colour behind it and a dark hairline round it.
 local function Square(pin, point)
@@ -466,7 +666,7 @@ local function Square(pin, point)
 	for index = 1, 4 do
 		pin.ring[index]:Show()
 	end
-	return (point.kind == Chart.YOU) and PIN + 2 or PIN
+	return PIN
 end
 
 -- A point drawn as somebody else's icon, and how big it comes out.
@@ -489,12 +689,63 @@ local function Badge(pin, point)
 	return point.size or BADGE
 end
 
+-- Which way the arrow is pointing, set on the texture rather than on the frame
+-- because a frame has no rotation and the mark is one texture inside one.
+--
+-- Nothing is written unless you have turned. This is on the tick's path, and
+-- standing still facing one way is the ordinary case for a window somebody has
+-- opened to read.
+local function Aim(pin)
+	local facing = Chart.Facing()
+	if facing ~= pin.turn and type(pin.dot.SetRotation) == "function" then
+		pin.turn = facing
+		pin.dot:SetRotation(facing)
+	end
+end
+
+-- You, drawn as the client's own arrow.
+--
+-- No wash and no ring, for the reason somebody else's icon gets neither: the
+-- arrow is already a shape drawn to be found on a map, and a black square round
+-- it would only say where the texture ends.
+local function Heading(pin)
+	pin.art = ARROW
+	pin.dot:SetTexture(ARROW)
+	pin.dot:SetVertexColor(1, 1, 1, 1)
+	pin.halo:Hide()
+	for index = 1, 4 do
+		pin.ring[index]:Hide()
+	end
+	Aim(pin)
+	return HEADING
+end
+
+-- Which of the three a point is drawn as. You first, because a point of kind
+-- YOU carries no icon and would otherwise fall through to a coloured square,
+-- which is what it was before.
+local function Mark(pin, point)
+	if point.kind == Chart.YOU then
+		return Heading(pin)
+	end
+	pin.art, pin.turn = nil, nil
+	if point.icon then
+		return Badge(pin, point)
+	end
+	if type(pin.dot.SetRotation) == "function" then
+		-- Turned back, because the pins are pooled: the dot that is a camp now
+		-- may have been the arrow last zone, and a square left on its side is a
+		-- diamond nobody asked for.
+		pin.dot:SetRotation(0)
+	end
+	return Square(pin, point)
+end
+
 -- One dot on the canvas, which is the picture at whatever size the wheel has
 -- left it. The dot itself is not scaled: a mark is a thing you look for on a
 -- screen and it wants the same number of pixels at every zoom, and a wash that
 -- grew with the picture would swallow the zone at six times.
 local function Place(board, pin, point, wide, high)
-	local size = point.icon and Badge(pin, point) or Square(pin, point)
+	local size = Mark(pin, point)
 	pin:SetSize(size, size)
 	pin:ClearAllPoints()
 	pin:SetPoint("CENTER", board.canvas, "TOPLEFT",
@@ -545,7 +796,12 @@ local function Settle(board)
 	board.y = math.max(0, math.min(board.y, high - boxHigh))
 	board.Move(UI.Round(board.frame, board.x), UI.Round(board.frame, board.y))
 
+	-- Kept, because the arrow is moved between draws and the two numbers it is
+	-- placed against are the picture's own size at the zoom it is at now.
+	board.wide, board.high = wide, high
+
 	LayTiles(board, art, wide)
+	LaySeens(board, art, wide)
 	LayPins(board, board.points or {}, wide, high)
 	return board.height
 end
@@ -590,6 +846,68 @@ function Board:Draw(map, points)
 	return Settle(self)
 end
 
+-- The arrow moved to where you are standing now, and turned to face the way you
+-- are facing now.
+--
+-- Only the arrow. Everything else on the picture is a fact about the zone, and
+-- a tick that redrew the tiles or walked Questie's registers again ten times a
+-- second would be paying a zone's worth of work for one texture that moved a
+-- pixel.
+--
+-- Nothing is written unless something moved. The tick runs whether you are
+-- walking or reading, and by far the most common answer is that you are in the
+-- same spot facing the same way: an anchor set again costs a measure and a
+-- relayout, and a comparison costs a comparison. Turning is guarded one layer
+-- down, in Aim, because you can turn on the spot without moving.
+--
+-- The caller's own point is updated as well as the pin, because the hover under
+-- the arrow says the coordinate and a coordinate from where you were standing
+-- when the window opened is a wrong answer that reads as a right one.
+--
+-- The arrow goes off the board on a zone you are not in, and it goes without a
+-- repaint: cross the border with Westfall up and the mark leaves with you
+-- rather than staying at the crossing.
+--
+-- A local rather than the method below, because scripts/check.sh names the
+-- functions an OnUpdate can reach and it names them by their declaration. What
+-- is on that list is held to no unguarded widget write and no allocation, which
+-- is the rule this whole function is shaped by.
+local function Track(board)
+	if not board.art or not board.points or board.wide < 1 then
+		return false
+	end
+	local here, x, y = Chart.Here()
+	local standing = (here == board.map) and type(x) == "number" and type(y) == "number"
+	local found = false
+	for index = 1, #board.points do
+		local point = board.points[index]
+		local pin = board.pins[index]
+		if pin and point.kind == Chart.YOU then
+			found = true
+			if not standing then
+				pin:Hide()
+			elseif point.x ~= x or point.y ~= y then
+				point.x, point.y = x, y
+				pin.note = ("%.1f, %.1f"):format(x, y)
+				pin:ClearAllPoints()
+				pin:SetPoint("CENTER", board.canvas, "TOPLEFT",
+					x / 100 * board.wide, -(y / 100 * board.high))
+				Aim(pin)
+				pin:Show()
+			else
+				Aim(pin)
+			end
+		end
+	end
+	return found
+end
+
+-- The arrow taken again, from the tick or from outside. Answers whether there
+-- was an arrow on the board to take.
+function Board:Locate()
+	return Track(self)
+end
+
 -- One notch of the wheel, about the point the pointer is over.
 --
 -- The fractions are where in the box that point is, and the arithmetic keeps
@@ -626,6 +944,33 @@ end
 -- scripts/harness.lua has to be able to make from outside the file.
 function Board:Level()
 	return self.zoom
+end
+
+-- How many pieces of uncovered ground are on the board.
+--
+-- Handed out for the reason Drawn below is, and it is the one number on this
+-- widget that no other number implies: a zone drawn dark and a zone drawn with
+-- everywhere you have been painted on it have the same tiles, the same marks
+-- and the same size, and differ only here.
+function Board:Seen()
+	return self.seens or 0
+end
+
+-- The arrow: what it is drawn as, and which way it is pointing. Nothing at all
+-- where the board has no you on it, which is every zone but the one you are
+-- standing in.
+--
+-- The heading rather than the position, because the position is the caller's
+-- own point and it can read that; which way the arrow was turned is decided
+-- here and is not readable from anywhere else.
+function Board:Arrow()
+	for index = 1, #(self.points or {}) do
+		local pin = self.pins[index]
+		if pin and pin.art and pin:IsShown() then
+			return pin.art, pin:GetWidth(), pin.turn
+		end
+	end
+	return nil
 end
 
 -- How many dots are on the board, and how big it is. Handed out because a map

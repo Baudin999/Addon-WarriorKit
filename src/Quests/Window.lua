@@ -676,7 +676,7 @@ local function DrawMap(quest)
 		end
 	end
 
-	-- You, last, so the gold dot is drawn over the blue ones rather than under
+	-- You, last, so the arrow is drawn over the blue dots rather than under
 	-- them. There is nowhere on a quest map you are more likely to be standing
 	-- than on top of the thing you are looking for.
 	local here, x, y = Chart.Here()
