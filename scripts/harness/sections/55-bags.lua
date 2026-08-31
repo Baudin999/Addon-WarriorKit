@@ -239,6 +239,27 @@ do
 	check(dead == 0, ("%d squares draw nothing when they are pressed"):format(dead))
 end
 
+-- And nothing on a square hands the right button to the camera.
+--
+-- The right click on a bag slot is the whole of eat, equip, open, sell, attach
+-- and put a stone on your axe, and a square that passes the right button
+-- through answers none of them. It is invisible from every other check in this
+-- file: the square is built, dressed, pointed at the right slot, and the click
+-- below goes in through the global rather than the widget, so it lands whatever
+-- the button does with the mouse. This is the only reading that catches it.
+do
+	local passing = 0
+	for index = 1, drawn do
+		local passed = squares[index]:GetPassThroughButtons()
+		if passed and passed["RightButton"] then
+			passing = passing + 1
+		end
+	end
+	check(passing == 0,
+		("%d squares pass the right button through, so a right click on them turns the camera")
+			:format(passing))
+end
+
 ----------------------------------------------------------------------
 -- A click on one
 --
