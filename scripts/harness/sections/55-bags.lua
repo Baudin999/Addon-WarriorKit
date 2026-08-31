@@ -82,18 +82,19 @@ check(trade ~= nil and #trade.entries == 1 and named(trade, "Emerald Pigment"),
 	"a green trade good was not left in its own class")
 check(quest ~= nil and #quest.entries == #CARRIED[2],
 	"the quest items did not all land in the quest pile")
-check(empty ~= nil and #empty.entries == 3,
-	"the empty slots are not a pile of their own")
-
-if empty then
-	local wrong = 0
-	for index = 1, #empty.entries do
-		if empty.entries[index].bag ~= 3 then
-			wrong = wrong + 1
-		end
-	end
-	check(wrong == 0, ("%d empty squares point at a bag that is not the empty one"):format(wrong))
-end
+-- Three free slots, one square. The pile folds so the window draws the number
+-- rather than three identical grey holes, and the count on that one entry is
+-- the size of the pile rather than a stack size.
+check(empty ~= nil and #empty.entries == 1,
+	("the empty pile drew %d squares and it folds to one")
+		:format(empty and #empty.entries or 0))
+check(empty and empty.entries[1].count == 3,
+	("the folded empty square counts %s free and three of them are")
+		:format(tostring(empty and empty.entries[1].count)))
+-- The square that survives is a real slot in the bag that is empty, which is
+-- what lets a drag onto it land somewhere free rather than nowhere.
+check(empty and empty.entries[1].bag == 3 and not empty.entries[1].link,
+	"the folded empty square does not point at a free slot in the empty bag")
 
 -- The piles come out in the shipped order, which is a subsequence of it rather
 -- than the whole list: a pile with nothing in it is not drawn at all.
@@ -169,9 +170,10 @@ check(#headers >= read.shown,
 check(headers[1] and headers[1]:GetText() == read.groups[1].name,
 	"the first header does not name the first pile")
 
--- One square per slot in the bags, and every one of them pointing at the slot
--- the scan put on it. This is the claim Mail/Bags.lua also depends on: a bag
--- button says which slot it is by its own id and which bag by its parent's.
+-- One square per slot you are using, plus the one the empty pile folds into,
+-- and every one of them pointing at the slot the scan put on it. This is the
+-- claim Mail/Bags.lua also depends on: a bag button says which slot it is by
+-- its own id and which bag by its parent's.
 local drawn, wrong = 0, 0
 for index = 1, read.shown do
 	local entries = read.groups[index].entries
@@ -184,7 +186,9 @@ for index = 1, read.shown do
 		end
 	end
 end
-check(drawn == slots, ("%d squares drawn for %d slots"):format(drawn, slots))
+check(drawn == slots - read.free + 1,
+	("%d squares drawn for %d used slots and one folded empty square")
+		:format(drawn, slots - read.free))
 check(wrong == 0, ("%d squares point at a slot that is not theirs"):format(wrong))
 
 -- And nothing the template drew is still on it.

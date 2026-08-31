@@ -201,6 +201,16 @@ local function Dress(button)
 	button.tally:SetPoint("BOTTOMRIGHT", -3, 3)
 	UI.Wrap(button.tally, false)
 
+	-- How many slots you have free, on the one square the empty pile folds
+	-- into. Its own string rather than the tally above it, and in the middle of
+	-- the square rather than the corner, because the two numbers are not the
+	-- same kind of number: the tally is a fact about the item lying on the
+	-- square and this is a fact about the square. A single free slot reads "1"
+	-- in the centre, where the tally would have drawn nothing at all.
+	button.free = UI.Label(button, M.font, C.dim, "CENTER", UI.FLAT)
+	button.free:SetPoint("CENTER")
+	UI.Wrap(button.free, false)
+
 	-- On the way down, in the addon's own black rather than the template's
 	-- quickslot plate. A square that does not move under the mouse reads as a
 	-- square that did not take the click. The widget draws this itself between
@@ -343,10 +353,15 @@ local function Sweep(button, entry)
 end
 
 local function Paint(button, entry)
+	-- The one square the empty pile folded into, which is the only entry in the
+	-- window whose count is a number of slots rather than a number of items.
+	local free = entry.group == ns.Bags.EMPTY
 	button.link, button.name, button.count = entry.link, entry.name, entry.count
 	button.art:SetTexture(entry.icon)
 	button.art:SetShown(entry.link ~= nil)
-	button.tally:SetText((entry.count or 1) > 1 and tostring(entry.count) or "")
+	button.tally:SetText((not free and (entry.count or 1) > 1)
+		and tostring(entry.count) or "")
+	button.free:SetText(free and tostring(entry.count or 1) or "")
 	ns.Recolor(button.edges, Edge(entry))
 	button:SetParent(Holder(entry.bag))
 	button:SetID(entry.slot)

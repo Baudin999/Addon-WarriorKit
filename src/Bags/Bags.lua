@@ -189,6 +189,32 @@ local function Before(a, b)
 	return a.slot < b.slot
 end
 
+-- The empty pile, folded into the one square that says how many there are.
+--
+-- Forty free slots drew forty identical grey squares, which is forty squares
+-- carrying one number between them and a screen of scrolling to reach the pile
+-- under them. What is kept is the first slot of the pile, which after the sort
+-- is the lowest bag and slot you have free, and it carries the count of the
+-- whole pile.
+--
+-- The square that survives is a real slot and not a placard, which is the
+-- reason the first one is kept rather than a made up entry: it has a bag and a
+-- slot, so the client's own handlers still take a drag onto it and the item
+-- lands somewhere free. The count on it is the pile's size rather than a stack
+-- size, and Grid.lua draws it in the middle of the square for that reason.
+--
+-- The free count in the footer is not read from here. Sweep counts it off the
+-- slots themselves, so folding the pile cannot change the number.
+local function Consolidate(held)
+	if #held < 2 then
+		return
+	end
+	held[1].count = #held
+	for index = #held, 2, -1 do
+		held[index] = nil
+	end
+end
+
 --------------------------------------------------------------------------
 -- The scan
 --------------------------------------------------------------------------
@@ -248,6 +274,9 @@ local function Collect()
 		local held = buckets[group.key]
 		if #held > 0 then
 			table.sort(held, Before)
+			if group.key == Bags.EMPTY then
+				Consolidate(held)
+			end
 			shown = shown + 1
 			local row = state.groups[shown]
 			if not row then
