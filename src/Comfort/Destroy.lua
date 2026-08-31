@@ -223,6 +223,7 @@ local function Build()
 		height = M.title + M.pad * 2 + ICON + M.gutter
 			+ (M.font + 2) * REASON_LINES + M.footer,
 	})
+	ns.Remember(window)
 
 	card = {}
 	local body = window.content

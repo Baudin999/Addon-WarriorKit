@@ -571,6 +571,7 @@ local function Build()
 		width = WINDOW_W,
 		height = WINDOW_H,
 	})
+	ns.Remember(window)
 
 	-- The window opening and closing, told to whichever part wants to answer it.
 	--

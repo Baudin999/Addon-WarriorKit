@@ -372,6 +372,7 @@ local function Build()
 		width = WIDTH,
 		height = HEIGHT,
 	})
+	ns.Remember(window)
 
 	local body = window.content
 

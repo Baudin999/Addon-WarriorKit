@@ -58,6 +58,18 @@ ns.features = {}
 
 local defaults = {
 	locked = true,
+
+	-- Where each window was last dropped, by frame name. Empty when the addon
+	-- ships, because a window nobody has moved opens in the middle of the
+	-- screen, and one entry per window you have dragged after that.
+	--
+	-- One setting for all of them rather than one per window. A window is not a
+	-- preference anybody words differently: every one of them wants the same
+	-- five-field anchor written down under a name it already has, and the
+	-- alternative was seven keys named mapPoint, mailPoint, questPoint and so
+	-- on, seven defaults, and a key to add every time the addon grows a window.
+	-- ns.Remember below is the whole of what reads and writes it.
+	windowSpots = {},
 }
 
 local charDefaults = {}
@@ -1113,6 +1125,61 @@ function ns.DefaultCopy(key)
 		copy[at] = held
 	end
 	return copy
+end
+
+--------------------------------------------------------------------------
+-- Where you left a window
+--
+-- Seven windows in the addon are things you open, drag out of the way of
+-- whatever you are reading, and open again tomorrow: the map, the quest log,
+-- the mail, the character sheet, the breakdown, the clutter card and the
+-- settings panel. Every one of them opened in the middle of the screen, every
+-- session, however many times you had moved it. UI/Placeable.lua has always
+-- had the drag; what it had nowhere to put was the answer.
+--
+-- One line per window, at the point the part has the window in its hand:
+--
+--   ns.Remember(window)
+--
+-- and the frame's own name is the key, because a window already has one and a
+-- second identifier is a second thing to keep in step. Nothing about a spot is
+-- a preference anybody words: it is five fields the drag hands over.
+--
+-- Two windows are deliberately not here. The chat window keeps its corner in a
+-- setting of its own, because that one has a reset button pointing at it and a
+-- default that says which corner a conversation belongs in. The question box
+-- has no spot at all: it opens over whatever asked the question, and a modal
+-- that appears wherever you last dragged one is a modal you have to go and
+-- find.
+--------------------------------------------------------------------------
+
+-- Whether a saved anchor is one the client will take. A saved variables file is
+-- edited by hand, carried between machines and written by whatever the addon
+-- was two releases ago, and a bad anchor here is a Lua error at login on the
+-- window that would have shown it.
+local function Sane(spot)
+	return type(spot) == "table"
+		and type(spot[1]) == "string" and type(spot[3]) == "string"
+		and type(spot[4]) == "number" and type(spot[5]) == "number"
+end
+
+-- Put the window back where it was, and write down where it goes next.
+--
+-- A window off the edge of a smaller screen than the one it was dragged on is
+-- pulled back by SetClampedToScreen, which every placeable frame is built with.
+function ns.Remember(window)
+	local name = window.frame:GetName()
+	assert(name, "a window with no name has nowhere to keep where you left it")
+
+	local spot = ns.db.windowSpots[name]
+	if Sane(spot) then
+		window.place:Place(spot)
+	end
+
+	window.place:OnMoved(function(anchor)
+		ns.db.windowSpots[name] = anchor
+	end)
+	return window
 end
 
 --------------------------------------------------------------------------

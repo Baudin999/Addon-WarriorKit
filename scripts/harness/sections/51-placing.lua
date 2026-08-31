@@ -123,3 +123,122 @@ ns.Each("lock")
 
 print(("placing %d of %d HUD frames locked down and all %d back up, %d of %d windows movable throughout")
 	:format(hudHeld, hudSeen, hudFree, free, windowsSeen))
+
+----------------------------------------------------------------------
+-- And where you left it
+--
+-- Seven of those eight windows write down where they were dropped and open
+-- there again next session. All seven opened in the middle of the screen every
+-- session before this, however many times you had moved them, because
+-- UI.Placeable has always had the drag and there was nowhere to put the answer.
+-- ns.Remember is both halves of it now, and this is the gate on it.
+--
+-- The failure is as quiet as the lock's. A window that stops writing its spot
+-- down looks exactly like a window you have not moved yet, and the way you find
+-- out is tomorrow evening, one window at a time.
+--
+-- The drop is fired at the frame rather than acted out with a cursor. What
+-- moves a plain frame is the client, and what the addon does at the end of a
+-- drag is read the point back off it, so a stub that moved the frame itself
+-- would be checking its own arithmetic. The sheet is grabbed first because a
+-- secure drag has no client behind it and its drop reads the grab.
+--
+-- Every frame goes back where it was and every key is wiped afterwards. The
+-- sections below this one open these windows and measure them.
+----------------------------------------------------------------------
+
+local KEEPS = {
+	{ "WarriorKitOptions", "the settings panel" },
+	{ "WarriorKitQuests", "the quest log" },
+	{ "WarriorKitMap", "the world map" },
+	{ "WarriorKitMail", "the mail window" },
+	{ "WarriorKitBreakdown", "the meter breakdown" },
+	{ "WarriorKitCharacter", "the character sheet" },
+	{ "WarriorKitClutter", "the destroy window" },
+}
+
+local function drop(frame, x, y)
+	frame.scripts.OnDragStart(frame)
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT", x, y)
+	frame.scripts.OnDragStop(frame)
+end
+
+local function replace(frame, anchor)
+	frame:ClearAllPoints()
+	frame:SetPoint(anchor[1], anchor[2] or _G.UIParent, anchor[3], anchor[4], anchor[5])
+end
+
+local kept = 0
+for index, entry in ipairs(KEEPS) do
+	local frame = _G[entry[1]]
+	if frame then
+		local home = { frame:GetPoint() }
+		local x, y = 100 + index, -(40 + index)
+		ns.db.windowSpots[entry[1]] = nil
+		drop(frame, x, y)
+		local spot = ns.db.windowSpots[entry[1]]
+		check(spot ~= nil, entry[2] .. " was dropped somewhere and wrote down nothing")
+		if spot then
+			kept = kept + 1
+			check(spot[1] == "TOPLEFT" and spot[4] == x and spot[5] == y,
+				("%s wrote down %s at %s, %s and was dropped at TOPLEFT %d, %d"):format(
+					entry[2], tostring(spot[1]), tostring(spot[4]), tostring(spot[5]), x, y))
+		end
+		replace(frame, home)
+		ns.db.windowSpots[entry[1]] = nil
+	end
+end
+check(kept == #KEEPS,
+	("%d of the %d windows that remember where you left them did"):format(kept, #KEEPS))
+
+-- The two that are deliberately out. The chat window keeps its corner in a
+-- setting of its own, because that one has a reset button pointing at it and a
+-- default that says which corner a conversation belongs in; a window in both
+-- places would be a window whose two answers can disagree. The question box
+-- keeps none at all: it opens over whatever asked the question.
+local chatWas, chat = ns.db.chatPoint, _G.WarriorKitChat
+if chat then
+	drop(chat, 8, -8)
+	check(ns.db.windowSpots.WarriorKitChat == nil,
+		"the chat window wrote its corner into the shared list as well as its own setting")
+	check(ns.db.chatPoint[4] == 8,
+		"the chat window stopped writing its own corner down")
+	ns.db.chatPoint = chatWas
+	replace(chat, chatWas)
+end
+
+local ask = _G.WarriorKitAsk
+if ask then
+	local home = { ask:GetPoint() }
+	drop(ask, 60, -60)
+	check(ns.db.windowSpots.WarriorKitAsk == nil,
+		"the question box remembered where it was dragged, and it opens over what asked")
+	replace(ask, home)
+end
+
+-- The other half of it: a spot in the saved file is where the window opens.
+-- Asserted on a frame of this section's own, because the seven above are put
+-- back where the run found them and a restore is only visible on a frame
+-- nothing else is measuring.
+local spare = _G.CreateFrame("Frame", "WarriorKitSpotProbe", _G.UIParent)
+local probe = { frame = spare, place = ns.UI.Placeable(spare, { lockable = false }) }
+ns.db.windowSpots.WarriorKitSpotProbe = { "TOPRIGHT", "UIParent", "TOPRIGHT", -30, -70 }
+ns.Remember(probe)
+local at = { spare:GetPoint() }
+check(at[1] == "TOPRIGHT" and at[3] == "TOPRIGHT" and at[4] == -30 and at[5] == -70,
+	("a saved spot opened the window at %s %s, %s rather than TOPRIGHT at -30, -70")
+		:format(tostring(at[1]), tostring(at[4]), tostring(at[5])))
+
+-- A saved variables file is edited by hand, carried between machines and
+-- written by whatever the addon was two releases ago. What a corrupt anchor
+-- must be is a window in the middle of the screen, not a Lua error at login on
+-- the window that would have shown it.
+ns.db.windowSpots.WarriorKitSpotProbe = { "TOPLEFT" }
+ns.Remember(probe)
+check(({ spare:GetPoint() })[1] == "TOPRIGHT",
+	"an anchor with nothing in it was handed to SetPoint")
+ns.db.windowSpots.WarriorKitSpotProbe = nil
+
+print(("placing %d windows open where you left them, the chat window on its own"
+	.. " setting and the question box on none"):format(kept))

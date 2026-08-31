@@ -106,6 +106,13 @@ end
 -- is different every time, and a snippet that hung off the offsets themselves
 -- would sit still through a drag straight up the screen, where y moves and x
 -- never does.
+--
+-- The count belongs to the frame and not to the grab that is pushing it. It
+-- used to start again at zero every time you took hold of the window, so a
+-- one-unit nudge wrote 1, and the next drag's first unit wrote 1 again, which
+-- is not a change and ran no snippet: the window sat still until the cursor had
+-- gone a second unit. Place below writes through the same count, and a saved
+-- anchor put back at login has no grab behind it at all.
 local MOVE = [[
 	if name ~= "wk-move" then return end
 	local point = self:GetAttribute("wk-point")
@@ -133,10 +140,10 @@ local function Push(place, frame)
 	local y = UI.Whole(grab.y + cursorY / scale - grab.y0)
 	if x ~= grab.lastX or y ~= grab.lastY then
 		grab.lastX, grab.lastY = x, y
-		grab.moves = grab.moves + 1
+		place.moves = place.moves + 1
 		frame:SetAttribute("wk-x", x)
 		frame:SetAttribute("wk-y", y)
-		frame:SetAttribute("wk-move", grab.moves)
+		frame:SetAttribute("wk-move", place.moves)
 	end
 end
 
@@ -156,6 +163,7 @@ end
 -- is, and that one happens inside the snippet.
 local function Secure(place, frame)
 	frame.placing = place
+	place.moves = 0
 	frame:SetFrameRef("screen", UIParent)
 	frame:SetAttribute("_onattributechanged", MOVE)
 
@@ -163,7 +171,7 @@ local function Secure(place, frame)
 		local point, _, relativePoint, x, y = self:GetPoint()
 		local cursorX, cursorY = GetCursorPosition()
 		local scale = self:GetEffectiveScale()
-		place.grabbed = { x = x, y = y, moves = 0,
+		place.grabbed = { x = x, y = y,
 			x0 = cursorX / scale, y0 = cursorY / scale }
 		self:SetAttribute("wk-point", point)
 		self:SetAttribute("wk-rel", relativePoint)
@@ -300,4 +308,44 @@ function Placeable:Lock(unlocked)
 	else
 		self.frame:RegisterForDrag()
 	end
+end
+
+-- Put the frame back where an anchor says it was.
+--
+-- The other half of moved. A frame that writes down where it was dropped and
+-- has no way to be told again next login is a frame that saved nothing, and
+-- until this existed the one window that remembered its corner did the SetPoint
+-- longhand at the far end of its own Apply.
+--
+-- Which of the two drags this frame has decides how. A plain frame is anchored
+-- outright. A secure one goes through the snippet, because a window with a
+-- protected frame in it may not be re-anchored by an addon in a fight and the
+-- character sheet is opened mid pull: the same four attributes the drag writes,
+-- pushed once instead of once a frame.
+--
+-- The setting is not written back. This is the anchor coming out of it.
+function Placeable:Place(anchor)
+	local frame = self.frame
+	if not self.secure then
+		frame:ClearAllPoints()
+		frame:SetPoint(anchor[1], UIParent, anchor[3], anchor[4], anchor[5])
+		return
+	end
+	self.moves = self.moves + 1
+	frame:SetAttribute("wk-point", anchor[1])
+	frame:SetAttribute("wk-rel", anchor[3])
+	frame:SetAttribute("wk-x", anchor[4])
+	frame:SetAttribute("wk-y", anchor[5])
+	frame:SetAttribute("wk-move", self.moves)
+end
+
+-- Who to tell, when the frame is told after it is built.
+--
+-- opts.moved is the usual way and it stays: eleven frames know which setting
+-- they are for at the moment they are made. A window does not. It is built by
+-- UI.Window out of a name, a size and a title, and the part above it is what
+-- decides that this window is one of the ones that remembers its corner, which
+-- it can only say once it has the window in its hand.
+function Placeable:OnMoved(moved)
+	self.moved = moved
 end

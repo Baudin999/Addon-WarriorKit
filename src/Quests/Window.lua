@@ -872,6 +872,7 @@ function Window.Build()
 		width = WIDTH,
 		height = HEIGHT,
 	})
+	ns.Remember(window)
 
 	-- The marks on a row are the two things you do to one quest without wanting
 	-- to read it first. Handing it to the party is the whole of why a group

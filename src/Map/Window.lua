@@ -287,6 +287,7 @@ function Window.Build()
 		width = WIDTH,
 		height = HEIGHT,
 	})
+	ns.Remember(window)
 
 	rail = UI.Rail(window.content, { onSelect = Chose })
 	-- Named for the reason the quest log's board is: what it draws is twelve

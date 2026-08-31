@@ -212,6 +212,7 @@ function Window.Build()
 		-- holds both halves of that.
 		secure = true,
 	})
+	ns.Remember(window)
 
 	tabs = UI.TabStrip(window.content, { onSelect = Select })
 	tabs.frame:SetPoint("TOPLEFT", M.pad, -M.pad)
