@@ -209,6 +209,13 @@ for _, part in ipairs({
 	-- the counted calls the files above installed: it defines the press that
 	-- reaches all of them, and the client's own half of one.
 	"14-secure",
+	-- Last, and it layers over what 12-questlog.lua installed rather than
+	-- replacing it: the same C_Map answers the quest log's two zones and the
+	-- world map's tree, because both windows draw through UI/Chart.lua and a
+	-- second C_Map would leave one of them reading the wrong one. It also fills
+	-- in the two registers 05-quests.lua left empty on Questie's map module,
+	-- and makes one frame, so it wants the last word on CreateFrame above it.
+	"15-worldmap",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

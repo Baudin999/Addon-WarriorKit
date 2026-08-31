@@ -67,7 +67,7 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is twenty-six parts and a core. Each part is a folder, and Core knows the
+The addon is twenty-seven parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
@@ -5898,6 +5898,41 @@ Aiming at a mob out of combat with no target selected is the whole test.
 ## Untested against the live client
 
 Everything below was written from the API contract and has never executed:
+
+- **Whether `C_Map.GetMapChildrenInfo` walks the whole world on these builds.**
+  The world map's zone column is a walk over the client's own map tree rather
+  than a list written down, climbed from the map you are standing on to whatever
+  has continents under it. Both clients draw their own world map through the
+  modern map canvas, and Questie calls `WorldMapFrame:SetMapID` unguarded on
+  this install, so the tree is there; what is unproven is that asking for every
+  descendant of one kind answers on 2.5.6 the way it does on the build this was
+  written against. What would settle it: `/wk map zones`, which prints how many
+  zones over how many continents. Zero of either is the failure, and it draws an
+  empty column and a line saying so rather than raising.
+- **Whether the level ranges are keyed on the map ids these clients use.**
+  `Map/Zones.lua` carries the one table in the addon the client cannot answer
+  for, because no call on either build has ever said what level a zone is for.
+  The ids are read off Questie's generated `areaIdToUiMapId` rather than typed,
+  and `/wk map zones` prints how many of the zones the client offered have a row
+  in it. Every zone but the battlegrounds and the instances should have one; a
+  count far short of that means the ids are the wrong set, and the symptom is a
+  footer that says no level range is known rather than a wrong number.
+- **Whether Questie's icon frames read the way this addon reads them.** The
+  markers on the map are Questie's own frames, walked out of
+  `QuestieMap.questIdFrames` and `QuestieMap.manualFrames` and filtered on
+  `UiMapID`, `miniMapIcon` and Questie's own `hidden` flag. Every field is read
+  off the installed copy of Questie 11.37.1 and type checked at the call site, so
+  a Questie whose internals moved draws fewer markers rather than raising. What
+  is unproven is the count: `/wk map markers` says how many Questie is holding,
+  and a map with none on it where that number is large is the failure.
+- **Whether caging `WorldMapFrame` costs Questie anything.** Questie hands its
+  icons to HereBeDragons to place on the client's map, and a map that is never
+  shown is a map those pins are never placed on. The frames themselves are made
+  when your log changes and unmade when a quest is done, neither of which has
+  anything to do with a map being on screen, which is why the markers survive
+  the cage. What would settle it: pick a quest up with `map hide` on, open this
+  window, and check the marker is there. `/wk map hide off` puts the client's map
+  back and hands the M key over in one word.
 
 - **Whether the miss numbers on the character sheet are the game's.** The
   formula reproduces the three figures everybody quotes, 5.5%, 6% and 9% at one,

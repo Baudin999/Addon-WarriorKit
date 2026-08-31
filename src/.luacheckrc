@@ -191,6 +191,13 @@ globals = {
 	-- a time.
 	"WarriorKitQuestMap",
 	"WarriorKitQuestChart",
+	-- The world map, and the zone drawn inside it. Both named for the reason the
+	-- quest log and its board are: a window that has wandered off the screen has
+	-- to be findable from a macro, and a picture carrying two hundred and fifty
+	-- of another addon's icons has to be measurable from scripts/harness.lua
+	-- without Map/Window.lua handing out a reference to the chart's own pools.
+	"WarriorKitMap",
+	"WarriorKitMapChart",
 	"BINDING_HEADER_WARRIORKIT",
 	"BINDING_NAME_WARRIORKIT_MARK_SKULL",
 	"BINDING_NAME_WARRIORKIT_MARK_CROSS",

@@ -1,18 +1,26 @@
 local ADDON, ns = ...
 
-local Chart = {}
-ns.QuestChart = Chart
-
 local UI = ns.UI
+
+local Chart = {}
+UI.Chart = Chart
+
 local C = UI.Color
-local Where = ns.QuestWhere
 
 --------------------------------------------------------------------------
--- The zone, drawn
+-- A zone, drawn
 --
--- Quests/Where.lua answers where a quest is as a list of coordinates. This is
--- the half that puts them on a picture, and it is the only file in the addon
--- that reads the client's map art.
+-- The client's map art for one zone, at whatever size the caller gives it,
+-- with a list of points on top and a wheel that zooms at the cursor. It is the
+-- only file in the addon that reads the client's map art.
+--
+-- **It is in the kit because it has two callers.** It was Quests/Chart.lua,
+-- built for the map behind the quest log's middle column, and its own header
+-- said in its first paragraph that nothing in it knows what a quest is. The
+-- world map is the second caller and it is a whole part rather than a page, so
+-- the picture is a widget now: Map/Window.lua draws every zone in the game
+-- with Questie's icons on it, Quests/Window.lua draws one zone with one
+-- quest's places on it, and neither knows anything about the other.
 --
 -- **The picture is the client's own, in tiles.** A zone map is a single image
 -- about a thousand pixels across, and the client does not store it that way: it
@@ -23,23 +31,18 @@ local Where = ns.QuestWhere
 -- the map comes out with two seams of black through it, which is exactly what
 -- it looked like before the crop was there.
 --
--- **Nothing here knows what a quest is.** It takes a map id and a list of
--- points and draws them, which is what makes it the same code for the zone you
--- are standing in and the zone you have never been to. Where.lua decides which
--- points, Window.lua decides which zone.
---
 -- **Every call into the client is probed and pcalled.** C_Map is not an addon's
 -- to assume: this ships for two clients, one of them a build where half the
--- namespace was added later, and a quest log that raises because a map id has
--- no art is a quest log that has made the evening worse to save a rectangle.
--- Every path out of this file that cannot draw returns nothing and the window
--- writes a line instead.
+-- namespace was added later, and a window that raises because a map id has no
+-- art is a window that has made the evening worse to save a rectangle. Every
+-- path out of this file that cannot draw returns nothing and the caller writes
+-- a line instead.
 --
 -- **The dots are pooled and the tiles are pooled.** This client cannot destroy
--- a frame or a texture, and the map is redrawn on every click in the left
--- column, so a map that built its own would leak twelve textures and eighty
--- frames per quest. It is the same argument the two scrolling columns make one
--- file across.
+-- a frame or a texture, and the map is redrawn on every click in either
+-- window's left column, so a map that built its own would leak twelve textures
+-- and eighty frames per click. It is the same argument the quest log's two
+-- scrolling columns make one file across.
 --
 -- **The wheel zooms, and it zooms at the cursor.** A zone drawn at the width of
 -- one column is about three hundred pixels across a place that takes twenty
@@ -56,13 +59,27 @@ local Where = ns.QuestWhere
 -- cursor is a pan and a zoom in one wheel notch and costs no ticker at all.
 --
 -- **The viewport grows with the zoom and the box never outruns the picture.**
--- The column has room under the map for a strip of zone names and a line of
--- text, and at rest the map takes only the height its own shape asks for and
--- leaves the rest empty. Zoom in and the box claims that space, up to the
--- height the caller says is going spare, so the wheel buys height as well as
--- scale. The box is never larger than the canvas inside it on either axis,
--- which is what keeps the picture off a scroll offset no client agrees about.
+-- The caller says how wide the picture may be and how much height there is
+-- going spare under it. At rest the box takes only the height the zone's own
+-- shape asks for and leaves the rest empty; zoom in and it claims that space up
+-- to the spare. So the wheel buys height as well as scale. The box is never
+-- larger than the canvas inside it on either axis, which is what keeps the
+-- picture off a scroll offset no client agrees about.
+--
+-- **A point is a coloured square or somebody else's icon.** The quest log's
+-- three kinds are named below and drawn as a square with a wash behind it. A
+-- point carrying `icon` is drawn as that texture instead, at its own size and
+-- with no wash and no ring, because the art is already a mark somebody
+-- designed to be found on a map. That is the whole of what the world map
+-- needed to reuse this file.
 --------------------------------------------------------------------------
+
+-- What a point is for. Three strings, because a caller keys its own data on
+-- them and Quests/Where.lua takes its three constants from these rather than
+-- writing the words twice.
+Chart.TODO = "todo" -- something you still have to go and do
+Chart.BACK = "back" -- who the thing goes back to
+Chart.YOU  = "you"  -- where you are standing, which no database knows
 
 -- One dot, and the pale square behind it.
 --
@@ -79,6 +96,11 @@ local Where = ns.QuestWhere
 -- puts four dots inside one step the washes run together into one cloud, which
 -- is the honest picture: not four things, one place with things in it.
 local PIN, HALO = 9, 17
+
+-- How big somebody else's icon is drawn. Bigger than the dot because it is a
+-- picture rather than a colour: an exclamation mark at nine pixels is a yellow
+-- smudge, and Questie draws its own at about this size on the client's map.
+local BADGE = 14
 
 -- How much of the wash is there. Enough to lift the dot off the art and not
 -- enough to hide what is under it, because the road beside the camp is half of
@@ -103,11 +125,11 @@ local TILES = 24
 -- blue is the colour a control is drawn in and a place on a map is a thing to
 -- go and press. Green for the hand-in, which is the same green a finished quest
 -- is in down the left column. Gold for you, which is the colour of a heading
--- and is the one dot on the map that is not a fact about the quest.
+-- and is the one dot on the map that is not a fact about the thing being drawn.
 local INK = {
-	[Where.TODO] = C.accent,
-	[Where.BACK] = C.tick,
-	[Where.YOU] = C.heading,
+	[Chart.TODO] = C.accent,
+	[Chart.BACK] = C.tick,
+	[Chart.YOU] = C.heading,
 }
 
 --------------------------------------------------------------------------
@@ -321,17 +343,27 @@ local function Pin(board, index)
 	pin.halo:SetPoint("CENTER")
 	pin.dot = ns.Fill(pin, "OVERLAY", 1, 1, 1, 1)
 	pin.dot:SetAllPoints()
+	-- Crisp for the reason a tile is: where the mark is somebody else's icon
+	-- rather than a colour, it is drawn at fourteen pixels from art stored at
+	-- sixteen or thirty two, and the client's own snapping smears that.
+	UI.Crisp(pin.dot)
 	-- A dark hairline round every dot. The zone art is a painting of hills and
 	-- roads, so a square of any one colour lands on something the same colour
 	-- somewhere in the zone, and the ring is what keeps a dot readable over sand
 	-- as well as over water.
 	pin.ring = ns.Outline(pin, 0, 0, 0, 0.7)
 	ns.EdgeSize(pin.ring, ns.Pixel(pin))
+	-- One line or several. The quest log's dots have one thing to say, the
+	-- coordinate; a world map dot is somebody else's icon and carries the quest
+	-- it belongs to as well as where it is. Both go through the same field so
+	-- neither caller has to know which shape the other passes.
 	ns.Tip.Hang(pin, function(self)
 		if not self.name then
 			return nil
 		end
-		return { kind = "note", title = self.name, lines = { self.note } }
+		local note = self.note
+		return { kind = "note", title = self.name,
+			lines = (type(note) == "table") and note or { note } }
 	end)
 	board.pins[index] = pin
 	return pin
@@ -423,15 +455,46 @@ local function LayTiles(board, art, wide)
 	return count
 end
 
+-- A point drawn as this addon's own mark, and how big it comes out. A coloured
+-- square, a wash of the same colour behind it and a dark hairline round it.
+local function Square(pin, point)
+	local ink = INK[point.kind] or C.accent
+	pin.dot:SetVertexColor(1, 1, 1, 1)
+	UI.Tint(pin.dot, ink)
+	pin.halo:SetColorTexture(ink[1], ink[2], ink[3], MIST)
+	pin.halo:Show()
+	for index = 1, 4 do
+		pin.ring[index]:Show()
+	end
+	return (point.kind == Chart.YOU) and PIN + 2 or PIN
+end
+
+-- A point drawn as somebody else's icon, and how big it comes out.
+--
+-- No wash and no ring. The art is already a mark drawn to be found on a map,
+-- and a black square round each of the forty Questie puts in a zone is forty
+-- rectangles over the picture rather than forty things you can see.
+local function Badge(pin, point)
+	pin.dot:SetTexture(point.icon)
+	local tint = point.tint
+	if tint then
+		pin.dot:SetVertexColor(tint[1], tint[2], tint[3], tint[4] or 1)
+	else
+		pin.dot:SetVertexColor(1, 1, 1, 1)
+	end
+	pin.halo:Hide()
+	for index = 1, 4 do
+		pin.ring[index]:Hide()
+	end
+	return point.size or BADGE
+end
+
 -- One dot on the canvas, which is the picture at whatever size the wheel has
 -- left it. The dot itself is not scaled: a mark is a thing you look for on a
 -- screen and it wants the same number of pixels at every zoom, and a wash that
 -- grew with the picture would swallow the zone at six times.
 local function Place(board, pin, point, wide, high)
-	local ink = INK[point.kind] or C.accent
-	local size = (point.kind == Where.YOU) and PIN + 2 or PIN
-	UI.Tint(pin.dot, ink)
-	pin.halo:SetColorTexture(ink[1], ink[2], ink[3], MIST)
+	local size = point.icon and Badge(pin, point) or Square(pin, point)
 	pin:SetSize(size, size)
 	pin:ClearAllPoints()
 	pin:SetPoint("CENTER", board.canvas, "TOPLEFT",

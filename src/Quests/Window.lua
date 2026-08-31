@@ -5,7 +5,7 @@ ns.QuestWindow = Window
 
 local UI = ns.UI
 local C, M = UI.Color, UI.Metric
-local Log, Where, Chart = ns.QuestLog, ns.QuestWhere, ns.QuestChart
+local Log, Where, Chart = ns.QuestLog, ns.QuestWhere, UI.Chart
 
 --------------------------------------------------------------------------
 -- The quest log

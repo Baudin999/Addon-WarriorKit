@@ -2,6 +2,57 @@
 
 ## Unreleased
 
+### A world map with a list of zones down the side of it
+
+The client's world map navigates by clicking a continent and then the piece of
+coastline you think is the place you meant. That is a fine way to learn a world
+and a bad way to answer "show me Desolace", which is the question anybody who has
+played for a week is actually asking. `Map/` is five files replacing it: every
+zone in the game in a column down the left, the one you picked drawn beside it at
+the size the client draws a zone, Questie's markers on top of it, and a line
+along the bottom saying who that zone is for.
+
+**The column is the point.** One group per continent, one row per zone,
+alphabetical inside each, and the zone you are standing in is the one it opens
+on. Alphabetical rather than by level is a real choice: a list sorted by level is
+a better list to plan an evening with and a worse one to find a name in, and the
+level is on the screen anyway, in the footer, which is the half you cannot get
+any other way.
+
+The zones come out of the client rather than out of a list written down.
+`Map/Zones.lua` climbs `C_Map` from the map you are standing on to whatever has
+continents under it and walks down from there, so the column is in your own
+language and covers whatever the build has. `/wk map zones` says how many it
+found.
+
+**The level range is a table, and that is worth being honest about.** No call on
+either of these clients answers what level a zone is for. The client knows a
+zone's name, its art, its shape and its children, and has never known that
+Westfall is where you go at ten. So the ranges are compiled in, keyed on the map
+ids read off Questie's own generated tables, and a zone with no row draws a
+footer that says so rather than a number somebody guessed. A city says it is a
+city, because an empty line reads as a table that forgot one.
+
+**The markers are Questie's, read off Questie's own frames.** Not off its
+database. Questie has ten thousand lines deciding which quests you can pick up,
+which are the wrong faction, the wrong level, already done, or in a chain you
+have not started, and it spends that decision on a frame per marker. `Map/Pins.lua`
+walks the frames. So the map shows exactly what Questie shows, in the same art
+and the same colours, and a Questie category switched off is switched off here
+too. Both of its registers are read, so the flight masters and the trainers
+arrive with the quests.
+
+**The wheel zooms, at the cursor.** The picture is the widget the quest log's map
+already was. `Quests/Chart.lua` had said in its own first paragraph that nothing
+in it knew what a quest was, so it is `UI/Chart.lua` now, with one thing added:
+a point can be somebody else's icon instead of a coloured square.
+
+Blizzard's map goes in the attic and M opens this one, under a switch that hands
+both back in one tick. The cage is on the once-a-second pass rather than done
+once at login, because `WorldMapFrame` is behind a load-on-demand addon on some
+of these builds and a one-shot apply would leave the client's map on the screen
+for the session.
+
 ### A character sheet of the addon's own, with the number the client has never drawn
 
 The client's character window is five pages wearing one frame, and the largest

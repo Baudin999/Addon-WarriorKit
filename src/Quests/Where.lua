@@ -47,12 +47,13 @@ ns.QuestWhere = Where
 -- distance would put "483,204 yards" under a quest name.
 local ELSEWHERE = 500000
 
--- What a place on the map is for. Three strings rather than three booleans,
--- because Quests/Chart.lua keys its palette on them and a dot with no colour
--- is a dot nobody can read.
-Where.TODO = "todo"   -- something you still have to kill, pick up or click
-Where.BACK = "back"   -- who the quest goes back to
-Where.YOU  = "you"    -- where you are standing, which no database knows
+-- What a place on the map is for. Taken from the widget that draws them rather
+-- than written out again here: UI/Chart.lua keys its palette on these three
+-- strings, and two copies of the same word is one edit away from a dot with no
+-- colour, which is a dot nobody can read.
+Where.TODO = ns.UI.Chart.TODO -- something you still have to kill, pick up or click
+Where.BACK = ns.UI.Chart.BACK -- who the quest goes back to
+Where.YOU  = ns.UI.Chart.YOU  -- where you are standing, which no database knows
 
 -- How near two spawns have to be before they count as one place.
 --

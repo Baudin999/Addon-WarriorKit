@@ -177,6 +177,13 @@ local SECTIONS = {
 	-- to what the addon ships with, twice over, which is the one thing in the
 	-- suite that would pull the scene out from under every section above it.
 	"53-shipped-defaults",
+	-- Under the reset, which is not the exception to the line above it that it
+	-- looks like. What that section pulls out from under everything is the
+	-- settings, and the two this one needs are the two the addon ships with, so
+	-- a scene freshly reset to them is exactly the scene it wants. It reads
+	-- nothing any earlier section left behind and it is the last word on where
+	-- you are standing, which it moves into a zone the map tree holds.
+	"54-world-map",
 }
 
 -- Naming a section runs every section up to and including it, rather than that
