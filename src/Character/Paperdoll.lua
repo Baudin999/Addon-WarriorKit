@@ -76,6 +76,22 @@ local C, M = UI.Color, UI.Metric
 -- a square whose right click is an action cannot also pass the right button
 -- through, and a square that did would draw and hover perfectly while its right
 -- click went to the camera and nowhere else.
+--
+-- **Nineteen secure buttons are what closed this window in a fight, and the key
+-- is what opened it again.** A secure button is a protected frame, showing a
+-- window that has a protected frame inside it is itself protected, and an addon
+-- may not do a protected thing in combat. So the sheet would not come up mid
+-- pull, which is when the durability line is worth most. The answer was not to
+-- give the squares up: Character/Window.lua has the key press run a snippet, a
+-- snippet is allowed to show the window in combat, and the page underneath is
+-- never hidden by a tab change. Nothing on this page changed for it.
+--
+-- **A click asks the slot about the fight, not the fight.** Armour cannot be
+-- changed in combat and a weapon can, which is the client's own rule and the
+-- one Blizzard's sheet plays by, so Character/Worn.lua answers per slot and the
+-- three hands stay live mid pull. A stone is refused by the same rule: using
+-- what is in a slot is protected, the secure half is what runs it, and it does
+-- not run in a fight.
 --------------------------------------------------------------------------
 
 -- The client draws its slots at thirty-six and this draws them at thirty-six,

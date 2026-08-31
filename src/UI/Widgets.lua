@@ -71,8 +71,14 @@ end
 -- built on this layer later will need one before it needs anything else here.
 --------------------------------------------------------------------------
 
+-- opts.template is handed to CreateFrame, and one caller passes one: a window
+-- that has a secure frame inside it cannot be hidden by Lua in combat, so its
+-- close box is built on SecureHandlerClickTemplate and hides the window from a
+-- snippet instead. A button built that way must not be given opts.onClick: the
+-- template's own OnClick is what runs the snippet, and a script set over it
+-- would replace the handler rather than run beside it.
 function UI.Button(parent, opts)
-	local button = CreateFrame("Button", nil, parent)
+	local button = CreateFrame("Button", opts.name, parent, opts.template)
 	button:SetSize(opts.width or 60, opts.height or M.control)
 
 	-- What the button is painted when the cursor is not on it.
@@ -108,6 +114,8 @@ function UI.Button(parent, opts)
 		UI.Tint(self.bg, self.tone)
 	end)
 	if opts.onClick then
+		assert(not opts.template,
+			"a button built on a template hooks its click rather than setting it")
 		button:SetScript("OnClick", opts.onClick)
 	end
 	return button

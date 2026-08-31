@@ -119,9 +119,27 @@ local function TitleBar(window, px, title)
 	window.title:SetPoint("TOPLEFT", M.pad, -math.floor((M.title - M.heading) / 2) - px)
 	window.title:SetText(title or "")
 
-	window.close = UI.Button(frame, { label = "x", glyph = true,
-		width = M.title - 8, height = M.title - 8,
-		onClick = function() window:Hide() end })
+	-- The close box, and on a secure window it is a secure button.
+	--
+	-- A window with a protected frame inside it cannot be hidden by an addon in
+	-- combat, and a cross that does nothing in a fight is worse than no cross.
+	-- A snippet is allowed to do it, so the cross runs one: the frame reference
+	-- is what the snippet is given, because a snippet may only touch what it has
+	-- been handed. Nothing else on the window changes, and every other window in
+	-- the addon takes the ordinary branch.
+	if window.secure then
+		window.close = UI.Button(frame, { label = "x", glyph = true,
+			width = M.title - 8, height = M.title - 8,
+			template = "SecureHandlerClickTemplate" })
+		window.close:SetFrameRef("window", frame)
+		window.close:SetAttribute("_onclick", [[
+			self:GetFrameRef("window"):Hide()
+		]])
+	else
+		window.close = UI.Button(frame, { label = "x", glyph = true,
+			width = M.title - 8, height = M.title - 8,
+			onClick = function() window:Hide() end })
+	end
 	window.close:SetPoint("TOPRIGHT", -4, -4)
 end
 
@@ -147,6 +165,13 @@ function UI.Window(opts)
 	local frame = CreateFrame("Frame", opts.name, UIParent)
 	window.frame = frame
 	window.zoom = zoom
+	-- Whether this window has a protected frame somewhere inside it. One does:
+	-- the character sheet, whose gear squares are secure buttons because using
+	-- what is in a slot is protected. Everything an addon does to such a window
+	-- in combat is refused by the client, so a secure window closes from a
+	-- snippet, is not dragged in a fight, and is opened by a key bound to a
+	-- secure button rather than by the Lua below.
+	window.secure = opts.secure == true
 	UI.Adopt(frame, zoom)
 
 	frame:SetPoint("CENTER")
@@ -158,10 +183,18 @@ function UI.Window(opts)
 	-- /wk lock does not reach a window unless the window asks it to, which the
 	-- chat window is the only one to do. Locking a quest log would be locking a
 	-- window rather than placing the HUD.
-	window.place = UI.Placeable(frame, {
+	local placing = {
 		moved = opts.moved,
 		lockable = opts.lockable == true,
-	})
+	}
+	-- Moving a window that holds a protected frame is refused in combat the same
+	-- way showing it is, so a secure window says so here rather than starting a
+	-- move the client will not finish. Written as a branch because false is not
+	-- a value `and or` can carry.
+	if window.secure then
+		placing.combat = false
+	end
+	window.place = UI.Placeable(frame, placing)
 	-- DIALOG unless the caller says otherwise. A settings window is something
 	-- you open over the game and close again, and DIALOG is where that belongs.
 	-- A window that is up while you play, which is what the chat window is, has

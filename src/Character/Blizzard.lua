@@ -67,6 +67,27 @@ local MISSING = {
 -- What the client's C key called before this addon took it.
 local original = nil
 
+-- Whether the secure button's binding needs looking at. True at login and
+-- whenever the client says the bindings moved, false once they have been taken.
+--
+-- A flag rather than a comparison, and that is not tidiness: the pass that calls
+-- this runs once a second forever, and asking the client for its keys and
+-- joining them into a string on every one of those passes is a string a second
+-- for the collector to walk. The harness's allocation gate caught exactly that.
+local dirty = true
+
+-- The first key this file is currently holding, or nil where it holds none.
+-- Both a flag, for the hand back, and the answer to what the key is called: once
+-- an override is on a key the client stops answering that key for the command
+-- underneath, so asking again after binding would name the wrong letter.
+local bound = nil
+
+-- The client's own binding for its character page. Two names because the two
+-- clients this addon runs on do not agree: the numbered one is what a modern
+-- Bindings.xml carries and the bare one is the fallback, and a client that has
+-- neither leaves the secure button unbound and the global doing the work.
+local BINDINGS = { "TOGGLECHARACTER0", "TOGGLECHARACTER" }
+
 local function Frame(name)
 	local frame = _G[name]
 	if type(frame) ~= "table" or type(frame.GetParent) ~= "function" then
@@ -104,6 +125,83 @@ local function Toggle(page)
 	ns.CharWindow.Toggle(PAGES[page])
 end
 
+-- Every key the client has on its own character page, in the order it answers
+-- them. Called when the bindings have moved and never on the idle pass.
+local function Keys()
+	local keys = {}
+	if type(_G.GetBindingKey) ~= "function" then
+		return keys
+	end
+	for index = 1, #BINDINGS do
+		local first, second = GetBindingKey(BINDINGS[index])
+		if first then
+			keys[#keys + 1] = first
+		end
+		if second then
+			keys[#keys + 1] = second
+		end
+	end
+	return keys
+end
+
+-- The key on the secure button as well as on the global.
+--
+-- The global is what every other caller of ToggleCharacter reaches and it is
+-- ordinary Lua, so it cannot show this window in a fight: the sheet has secure
+-- buttons on its gear page and showing a window with a protected frame in it is
+-- protected. The press itself has to arrive somewhere else, and an override
+-- binding onto a secure button is that somewhere: the client sends the press to
+-- the button, the button's snippet shows the window, and a snippet is allowed to
+-- in combat because a snippet is secure code.
+--
+-- An override binding rather than SetBinding, because this is a key this addon
+-- is borrowing rather than a key the player set: it is not written to their
+-- bindings, and clearing it hands the key straight back to whatever they had.
+--
+-- Refused in lockdown, like every binding call, and the pass that runs once a
+-- second and again when combat drops puts it right.
+local function Bind()
+	if not dirty then
+		return true
+	end
+	if type(_G.SetOverrideBindingClick) ~= "function" then
+		return false
+	end
+	local button = ns.CharWindow.Key()
+	if not button or InCombatLockdown() then
+		return false
+	end
+	ClearOverrideBindings(button)
+	local keys = Keys()
+	for index = 1, #keys do
+		SetOverrideBindingClick(button, true, keys[index], ns.CharWindow.KeyName(), "LeftButton")
+	end
+	dirty, bound = false, keys[1]
+	return bound ~= nil
+end
+
+local function Unbind()
+	if not bound then
+		return false
+	end
+	local button = ns.CharWindow.Key()
+	if not button or InCombatLockdown() then
+		return false
+	end
+	ClearOverrideBindings(button)
+	dirty, bound = true, nil
+	return true
+end
+
+-- The client's own binding set moved, so whatever this file took has to be
+-- taken again off the new one. The pass does the work; this only says that
+-- there is work.
+local watcher = CreateFrame("Frame")
+watcher:RegisterEvent("UPDATE_BINDINGS")
+watcher:SetScript("OnEvent", function()
+	dirty = true
+end)
+
 local function TakeKey()
 	if not Remember() then
 		return false
@@ -111,18 +209,30 @@ local function TakeKey()
 	if _G.ToggleCharacter ~= Toggle then
 		_G.ToggleCharacter = Toggle
 	end
-	return true
+	return Bind()
 end
 
 -- Only ever hands back what this file took. A client where somebody else is
 -- holding the global is a client this file leaves alone, which is the same rule
 -- Remember keeps at the other end.
 local function GiveKey()
+	Unbind()
 	if type(original) ~= "function" or _G.ToggleCharacter ~= Toggle then
 		return false
 	end
 	_G.ToggleCharacter = original
 	return true
+end
+
+-- What to call the key in a sentence. The first one the client answers, or the
+-- letter it ships with where it answers none, because a line telling somebody to
+-- press nothing is worse than a line naming the wrong key.
+function Blizz.KeyText()
+	if bound then
+		return bound
+	end
+	local keys = Keys()
+	return keys[1] or "C"
 end
 
 --------------------------------------------------------------------------
@@ -170,7 +280,7 @@ function Blizz.Describe()
 	if type(original) ~= "function" then
 		return "in the attic, and this client has no ToggleCharacter to redirect"
 	end
-	return "in the attic, and C opens this one"
+	return ("in the attic, and %s opens this one"):format(Blizz.KeyText())
 end
 
 --------------------------------------------------------------------------

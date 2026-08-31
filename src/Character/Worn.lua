@@ -222,12 +222,27 @@ end
 -- the client will take it and whether the click meant something else entirely.
 --------------------------------------------------------------------------
 
+-- The three the client will let you change in a fight. A weapon swap mid pull
+-- is a thing the game allows and a thing warriors do, and it is the whole of
+-- what combat allows: everything else is refused by the server with its own
+-- message, which is the rule Blizzard's own sheet plays by.
+local IN_COMBAT = {
+	[16] = true, -- main hand
+	[17] = true, -- off hand
+	[18] = true, -- ranged
+}
+
 -- Whether a slot can be touched at all right now, and why not where it cannot.
 -- Asked before the call below, so the page can say why rather than offering a
 -- click that quietly does nothing.
-function Worn.Free()
-	if InCombatLockdown and InCombatLockdown() then
-		return false, "gear cannot be changed in a fight."
+--
+-- The fight is asked about the slot rather than about the fight. This used to
+-- refuse all nineteen in combat, which was one rule too broad: it also refused
+-- the hands, and putting a weapon in your hand mid pull is the one gear change
+-- the game is happy about.
+function Worn.Free(slot)
+	if InCombatLockdown and InCombatLockdown() and not IN_COMBAT[slot] then
+		return false, "armour cannot be changed in a fight."
 	end
 	if type(_G.PickupInventoryItem) ~= "function" then
 		return false, "this client has no call for moving an item into a slot."
@@ -243,7 +258,7 @@ end
 -- that state the click is pointing the spell at this piece and the swap would
 -- be both the wrong thing and a forbidden one.
 function Worn.Swap(slot)
-	local free, why = Worn.Free()
+	local free, why = Worn.Free(slot)
 	if not free then
 		return false, why
 	end

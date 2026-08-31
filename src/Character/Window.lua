@@ -39,6 +39,23 @@ local C, M = UI.Color, UI.Metric
 -- was up would lay its prose out one line high and keep that height when you
 -- opened it. Selecting a tab shows it and then paints it, in that order.
 --
+-- **This window opens in a fight, and everything below that says `secure` or
+-- `InCombatLockdown` is there for that one sentence.** The gear page carries
+-- nineteen secure buttons because using what is in a slot is protected, a frame
+-- built from a secure template is protected, and every protected thing an addon
+-- does in combat is refused: showing this window, hiding it, moving it, sizing
+-- it, taking its gear page down to put another tab up. Blizzard's own sheet does
+-- all of that in a fight because Blizzard's code is allowed to.
+--
+-- An addon is allowed to borrow the permission one way, which is to have the
+-- press run a snippet. So there are three answers here and no fourth. The key
+-- is bound to a secure button whose snippet shows and hides the window, and the
+-- cross on the title bar is the same button in the corner. The gear page is
+-- never hidden, and the other three tabs are drawn over it. Everything that
+-- would have to move a protected frame, the layout and the zoom, waits for
+-- PLAYER_REGEN_ENABLED. The Lua way in still exists and still refuses in a
+-- fight, and says which key does work.
+--
 -- **Nothing here is on a ticker.** Your gear changes when the server says it
 -- did, which is six events, and every one of them ends in a repaint of the tab
 -- that happens to be up. A window nobody has open is not repainted at all.
@@ -71,9 +88,10 @@ local TABS = {
 
 local GEAR, SKILLS, REPUTATION, LOADOUTS = 1, 2, 3, 4
 
-local window, tabs, footer
+local window, tabs, footer, key
 local panes = {}
 local showing = GEAR
+local pending = false
 
 --------------------------------------------------------------------------
 -- The loadout tab
@@ -120,14 +138,23 @@ end
 
 --------------------------------------------------------------------------
 
+-- Which page is on top.
+--
+-- The gear pane is never hidden and the other three are drawn over it. That is
+-- not a layout preference, it is what lets a tab be pressed in a fight: the gear
+-- pane holds nineteen secure buttons, hiding a frame with a protected one inside
+-- it is itself a protected act, and an addon may not do one of those in combat.
+-- Three ordinary frames going up and down over it is ordinary Lua and holds in a
+-- fight like anything else here.
+--
+-- The three that cover it are opaque and take the mouse, so nothing shows
+-- through and no click falls past them onto a gear square. Build sets that up
+-- once; this is only the switch.
 local function Select(index)
 	showing = index
 	for slot = 1, #TABS do
-		local pane = panes[slot]
-		if slot == index then
-			pane.frame:Show()
-		else
-			pane.frame:Hide()
+		if slot ~= GEAR then
+			panes[slot].frame:SetShown(slot == index)
 		end
 	end
 	return Window.Paint()
@@ -139,8 +166,18 @@ local function Chrome()
 	footer:SetPoint("LEFT")
 end
 
+-- Refused in a fight, and put right when it drops.
+--
+-- Sizing the gear pane sizes the frame nineteen secure buttons hang off, which
+-- is the same protected act as showing it. Nothing here is urgent: a window
+-- laid out for the old width is a window with a wide margin until the fight
+-- ends, and PLAYER_REGEN_ENABLED below runs the pass again.
 function Window.Fit()
 	if not window then
+		return false
+	end
+	if InCombatLockdown() then
+		pending = true
 		return false
 	end
 	local width = window.width - M.pad * 2
@@ -169,6 +206,11 @@ function Window.Build()
 		title = "Character",
 		width = WIDTH,
 		height = HEIGHT,
+		-- The gear squares are secure buttons, so everything the client refuses
+		-- an addon in combat it refuses this window: the close box runs a snippet
+		-- instead of Lua, and the window is not dragged in a fight. UI/Window.lua
+		-- holds both halves of that.
+		secure = true,
 	})
 
 	tabs = UI.TabStrip(window.content, { onSelect = Select })
@@ -180,10 +222,31 @@ function Window.Build()
 	panes[LOADOUTS] = Loadouts(window.content)
 
 	for index = 1, #TABS do
+		local pane = panes[index].frame
 		tabs:Add(TABS[index].label)
-		panes[index].frame:SetPoint("TOPLEFT", tabs.frame, "BOTTOMLEFT", 0, -M.gutter)
-		panes[index].frame:Hide()
+		pane:SetPoint("TOPLEFT", tabs.frame, "BOTTOMLEFT", 0, -M.gutter)
+		if index == GEAR then
+			pane:Show()
+		else
+			-- Over the gear page, opaque, and it eats the mouse. See Select for
+			-- why the page underneath is never taken down instead. The fill is
+			-- the window's own colour at the window's own alpha, so a covered
+			-- page is the same surface as an empty one.
+			pane:SetFrameLevel(window.content:GetFrameLevel() + 10)
+			pane:EnableMouse(true)
+			local cover = ns.Fill(pane, "BACKGROUND",
+				C.window[1], C.window[2], C.window[3], C.window[4])
+			cover:SetAllPoints()
+			pane:Hide()
+		end
 	end
+
+	-- Painted whenever the window comes up, by whatever route. In a fight the
+	-- route is the snippet on the key, which runs no Lua of ours at all, so this
+	-- is the only place a paint can be hung and still happen.
+	window.frame:SetScript("OnShow", function()
+		Window.Paint()
+	end)
 
 	Chrome()
 	Window.Fit()
@@ -222,12 +285,81 @@ function Window.Shown()
 	return window ~= nil and window:IsShown()
 end
 
+--------------------------------------------------------------------------
+-- The key
+--
+-- Blizzard's own sheet opens in a fight and so must this one. What stopped it
+-- is the gear page: a frame built from a secure template is protected, showing
+-- a window that has a protected frame inside it is itself protected, and an
+-- addon may not do a protected thing in combat. Blizzard's code may. So may a
+-- snippet, and a snippet is the sanctioned way an addon borrows the permission.
+--
+-- So the key does not call any of the Lua below. It is bound to this button,
+-- the button carries the snippet, and the snippet shows or hides the window.
+-- Everything the Lua side still wants, painting the page that came up, hangs
+-- off the window's own OnShow, which fires whoever showed it.
+--
+-- Character/Blizzard.lua binds the key to it, because that file already owns
+-- which key opens this window and hands the key back when the switch is off.
+--------------------------------------------------------------------------
+
+local KEY = "WarriorKitCharacterKey"
+
+-- Built with the window and never before it: the snippet is handed the frame it
+-- acts on, because a snippet may only touch what it has been given a reference
+-- to. Named, because SetOverrideBindingClick takes the name of a button rather
+-- than the button.
+function Window.Key()
+	if key then
+		return key
+	end
+	if not Window.Build() then
+		return nil
+	end
+	key = CreateFrame("Button", KEY, UIParent, "SecureHandlerClickTemplate")
+	-- The down edge, which is the one a key bound with SetOverrideBindingClick
+	-- is dispatched on with no useOnKeyDown attribute set. Hover/Cast.lua's
+	-- header carries the proof off a live client, and every keyed button in this
+	-- addon is registered the same way. Registering both edges here would run
+	-- the snippet twice and the window would open and shut in one press.
+	key:RegisterForClicks("AnyDown")
+	key:SetFrameRef("window", window.frame)
+	key:SetAttribute("_onclick", [[
+		local sheet = self:GetFrameRef("window")
+		if sheet:IsShown() then
+			sheet:Hide()
+		else
+			sheet:Show()
+		end
+	]])
+	return key
+end
+
+function Window.KeyName()
+	return KEY
+end
+
+--------------------------------------------------------------------------
+
 -- Opened on a tab, which is what the C key needs: the client's own key carries
 -- which of its pages it meant, and a key that always landed on the gear tab
 -- would be a worse key than the one it replaced.
+--
+-- In a fight this cannot open the window and says so. The key can, and a tab
+-- change on a window that is already up is ordinary, so that half falls
+-- through: pressing the skills key mid pull on an open sheet still works.
 function Window.Show(tab)
 	Window.Build()
-	window:Show()
+	if InCombatLockdown() and not window:IsShown() then
+		ns.Print(("the character sheet opens on %s in a fight."):format(ns.CharBlizzard.KeyText()))
+		return false
+	end
+	-- Asked before it is called, because in a fight a window that is already up
+	-- is a window this may not call Show on either: the client refuses the call
+	-- rather than noticing it would have changed nothing.
+	if not window:IsShown() then
+		window:Show()
+	end
 	if tab and TABS[tab] then
 		tabs:Select(tab)
 	else
@@ -236,8 +368,15 @@ function Window.Show(tab)
 	return true
 end
 
+-- Refused in a fight for the reason Show is, and it names the two ways out that
+-- do work, both of which are snippets: the key and the cross on the title bar.
 function Window.Hide()
 	if not window then
+		return false
+	end
+	if InCombatLockdown() and window:IsShown() then
+		ns.Print(("the character sheet closes on %s or on its own cross in a fight.")
+			:format(ns.CharBlizzard.KeyText()))
 		return false
 	end
 	window:Hide()
@@ -311,10 +450,21 @@ local WATCHED = {
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
+events:RegisterEvent("PLAYER_REGEN_ENABLED")
 for index = 1, #WATCHED do
 	pcall(events.RegisterEvent, events, WATCHED[index])
 end
 events:SetScript("OnEvent", function(_, event)
+	if event == "PLAYER_REGEN_ENABLED" then
+		-- Whatever the fight refused. One flag rather than a queue, because
+		-- everything deferred here ends in the same two calls.
+		if pending then
+			pending = false
+			Window.Fit()
+		end
+		Window.Refresh()
+		return
+	end
 	if event == "PLAYER_LOGIN" then
 		if ns.db.character then
 			Window.Build()
@@ -336,6 +486,13 @@ end)
 -- own units and those units are what just changed.
 UI.OnRescale(function()
 	if not window then
+		return
+	end
+	-- The grid moving in the middle of a fight is a window that keeps the zoom
+	-- it had until the fight ends: rezooming scales the frame the secure squares
+	-- hang off, which is refused, and Fit below is refused for the same reason.
+	if InCombatLockdown() then
+		pending = true
 		return
 	end
 	UI.Rezoom(window.frame, UI.WindowZoom())

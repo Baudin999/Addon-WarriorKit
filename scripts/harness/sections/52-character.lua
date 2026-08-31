@@ -24,7 +24,7 @@
 -- the ratings are taken away here for a moment rather than assumed.
 
 local H = ...
-local ns, check, state = H.ns, H.check, H.state
+local ns, check, state, fire = H.ns, H.check, H.state, H.fire
 local sheet, moved = H.sheet, H.moved
 
 local Window, Stats, Worn = ns.CharWindow, ns.CharStats, ns.Worn
@@ -467,13 +467,29 @@ do
 	check(#moved.picked == picked + 1 and moved.picked[#moved.picked] == 16,
 		"dragging out of the main hand did not pick the weapon up")
 
-	-- And refused for the same reason a click is, rather than by a second rule
-	-- written next to the first.
+	-- And in a fight it asks the slot rather than the fight, which is the
+	-- client's own rule: a weapon goes in your hand mid pull and armour does
+	-- not. Both halves are checked here, because the whole of the change was
+	-- that one rule became two.
+	local chest
+	for _, box in ipairs(pane.squares) do
+		if box.entry.slot == 5 then
+			chest = box
+		end
+	end
+
 	local real = _G.InCombatLockdown
 	_G.InCombatLockdown = function() return true end
+
 	picked = #moved.picked
 	main.button.scripts.OnDragStart(main.button)
-	check(#moved.picked == picked, "a drag out of a square moved gear in combat")
+	check(#moved.picked == picked + 1 and moved.picked[#moved.picked] == 16,
+		"a weapon could not be pulled out of its square in a fight")
+
+	picked = #moved.picked
+	chest.button.scripts.OnDragStart(chest.button)
+	check(#moved.picked == picked, "a drag out of the chest square moved armour in combat")
+
 	_G.InCombatLockdown = real
 end
 
@@ -616,6 +632,73 @@ do
 	ns.db.hideBlizzCharacter = true
 	ns.BlizzHide.Apply()
 	check(ns.Attic.Held(sheetFrame), "the switch went back on and the sheet stayed out of the attic")
+end
+
+----------------------------------------------------------------------
+-- The window in a fight
+--
+-- The gear page is nineteen secure buttons, and the client refuses an addon
+-- every protected thing while it is in combat: showing this window, hiding it,
+-- and taking the gear page down to put another tab up. That is what shut the
+-- sheet mid pull, which is when the durability line is worth the most.
+--
+-- What answers it is a snippet on a bound button, so what is checked here is
+-- the button, the binding under it, that a tab still moves in a fight without
+-- the gear page going anywhere, and that the two Lua ways in now refuse out
+-- loud rather than calling something the client will drop.
+--
+-- What this cannot prove: that the client runs the snippet. No stub does. The
+-- shape is what is checkable here, and the shape is what has been wrong twice.
+----------------------------------------------------------------------
+
+do
+	-- A key on the client's own character page. This fixture spends C and
+	-- SHIFT-C on the cloned bars, so the page is bound to a key nothing else
+	-- here holds, and the pass is told the binding set moved the way the client
+	-- tells it.
+	_G.WarriorKitBindings.TOGGLECHARACTER0 = { "ALT-C" }
+	fire("UPDATE_BINDINGS")
+	ns.BlizzHide.Apply()
+
+	local key = Window.Key()
+	check(key ~= nil, "there is no secure button behind the character key")
+	check(key:GetRegisteredClicks()["AnyDown"] == true,
+		"the character key button is not registered on the edge a binding fires")
+	check(type(key:GetAttribute("_onclick")) == "string",
+		"the character key button carries no snippet, so a fight is still a shut window")
+	check(key:GetFrameRef("window") ~= nil, "the snippet was handed no window to show")
+	check(GetBindingAction("ALT-C", true) == ("CLICK %s:LeftButton"):format(Window.KeyName()),
+		"the character key never reached the secure button")
+	-- And it can still say which key that was. The client stops answering a key
+	-- for the command underneath once an override is on it, so a line that asked
+	-- again here would tell the player to press the wrong letter.
+	check(ns.CharBlizzard.KeyText() == "ALT-C",
+		("the sheet calls its own key %s"):format(ns.CharBlizzard.KeyText()))
+
+	-- Open before the fight, because that is the state the tabs are tested in.
+	Window.Show(GEAR)
+	check(Window.Shown(), "the window would not open out of combat")
+
+	local real = _G.InCombatLockdown
+	_G.InCombatLockdown = function() return true end
+
+	local gear = Window.Pane(GEAR).frame
+	Window.Show(SKILLS)
+	check(Window.Tab() == SKILLS, "a tab would not move in a fight")
+	check(gear:IsShown(), "switching tab in a fight hid the gear page and its secure buttons")
+
+	check(Window.Hide() == false and Window.Shown(),
+		"Lua closed a window holding a protected frame in a fight")
+
+	_G.InCombatLockdown = real
+	Window.Hide()
+	_G.InCombatLockdown = function() return true end
+	check(Window.Show(GEAR) == false and not Window.Shown(),
+		"Lua opened a window holding a protected frame in a fight")
+	_G.InCombatLockdown = real
+
+	Window.Show(GEAR)
+	check(Window.Shown(), "the window would not open again once the fight was over")
 end
 
 Window.Hide()
