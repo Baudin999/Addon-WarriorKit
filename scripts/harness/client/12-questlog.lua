@@ -523,13 +523,18 @@ end
 -- line of its right-click menu both land here. Counted rather than acted on, so
 -- a section can prove the addon's window took the click and that the original
 -- is handed back when the switch is off.
-local watching = questie:ImportModule("QuestieTracker")
+--
+-- The module name is TrackerUtils and the function is a field on the module
+-- itself. Both halves are read off the installed addon rather than guessed:
+-- Modules/Tracker/TrackerUtils.lua opens with ImportModule("TrackerUtils") and
+-- declares function TrackerUtils:ShowQuestLog(quest). This fixture used to
+-- hang a utils table off QuestieTracker, which no build of Questie has, and a
+-- swap that found nothing in the game passed every check here.
+local watching = questie:ImportModule("TrackerUtils")
 local tracked = 0
-watching.utils = {
-	ShowQuestLog = function()
-		tracked = tracked + 1
-	end,
-}
+watching.ShowQuestLog = function()
+	tracked = tracked + 1
+end
 
 -- The join. Area 606 is deliberately absent.
 local ATLAS = { [12] = 37, [40] = 52 }

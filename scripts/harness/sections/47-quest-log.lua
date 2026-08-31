@@ -422,7 +422,7 @@ end
 -- Questie goes through one function, so the two things to prove are that the
 -- swap takes it and that the switch hands it back.
 do
-	local utils = _G.QuestieLoader:ImportModule("QuestieTracker").utils
+	local utils = _G.QuestieLoader:ImportModule("TrackerUtils")
 	local diplomat = Log.Zones()[1].quests[1]
 	local reached = quests.Tracked()
 

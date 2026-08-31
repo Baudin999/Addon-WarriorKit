@@ -12,9 +12,10 @@ ns.QuestTracker = Tracker
 -- forty times an evening led to a window that is not on the screen any more.
 --
 -- Questie routes every one of those through a single function.
--- QuestieTracker.utils:ShowQuestLog(quest) is called by the tracker's own click
--- handler and by the "Show in Quest Log" line of its right-click menu, so one
--- replacement covers both and there is no second path to keep in step.
+-- TrackerUtils:ShowQuestLog(quest) is called by the tracker's own click handler
+-- in Modules/Tracker/LinePool/TrackerLine.lua and by the "Show in Quest Log"
+-- line of its right-click menu in TrackerMenu.lua, so one replacement covers
+-- both and there is no second path to keep in step.
 --
 -- **It is a function swap, and it is the addon's second.** Quests/Blizzard.lua
 -- makes the same argument about ToggleQuestLog and it is worth reading there:
@@ -39,16 +40,40 @@ ns.QuestTracker = Tracker
 local original = nil
 local taken = false
 
-local function Utils()
+-- The table ShowQuestLog is a field on.
+--
+-- QuestieLoader hands out one table per module name and every Questie file
+-- takes its reference from that, so writing the field on the module is what a
+-- click reads. The name is TrackerUtils, its own module, and this file spent
+-- its first version asking for QuestieTracker and reading a `utils` field off
+-- it. There is no such field on any build that ships, so the swap never
+-- happened and every click went to the log in the attic. Both spellings are
+-- tried, because ImportModule on a name nothing registered hands back a fresh
+-- empty table rather than nil, and the only honest test for "this is the one"
+-- is whether the function is on it.
+local function Module(name)
 	local loader = _G.QuestieLoader
 	if not loader or type(loader.ImportModule) ~= "function" then
 		return nil
 	end
-	local ok, tracker = pcall(loader.ImportModule, loader, "QuestieTracker")
-	if not ok or type(tracker) ~= "table" or type(tracker.utils) ~= "table" then
+	local ok, module = pcall(loader.ImportModule, loader, name)
+	if not ok or type(module) ~= "table" then
 		return nil
 	end
-	return tracker.utils
+	return module
+end
+
+local function Utils()
+	local utils = Module("TrackerUtils")
+	if utils and type(utils.ShowQuestLog) == "function" then
+		return utils
+	end
+	local tracker = Module("QuestieTracker")
+	if tracker and type(tracker.utils) == "table"
+		and type(tracker.utils.ShowQuestLog) == "function" then
+		return tracker.utils
+	end
+	return nil
 end
 
 --------------------------------------------------------------------------
