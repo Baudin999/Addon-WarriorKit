@@ -58,6 +58,21 @@ local C = UI.Color
 -- cursor means an OnUpdate on a window that is open all evening. Zooming at the
 -- cursor is a pan and a zoom in one wheel notch and costs no ticker at all.
 --
+-- **A click on the picture is answered by the client, not by this file.** The
+-- caller hands over a function and gets back the map that was clicked and where
+-- on it, as two fractions, and decides for itself what that means. It is the
+-- only way the edges of a zone can be made to work: the client's zone art runs
+-- over the border into whatever is next to it, and which strip of the picture
+-- belongs to which neighbour is a table inside the client that only C_Map will
+-- read. A caller that passes no function gets a picture the mouse goes
+-- straight through, which is what the quest log's map wants and what it had.
+--
+-- **A drag on the picture still moves the window it is in.** A frame that
+-- answers the mouse stops the frame under it from seeing the drag, and the
+-- window this board sits in is dragged from anywhere on itself rather than
+-- from a bar. So the drag is handed up to whichever frame above this one is
+-- movable, and a drag that moved the window is not also a click.
+--
 -- **The viewport grows with the zoom and the box never outruns the picture.**
 -- The caller says how wide the picture may be and how much height there is
 -- going spare under it. At rest the box takes only the height the zone's own
@@ -501,7 +516,107 @@ local function Wheel(board)
 	return true
 end
 
-function Chart.New(parent, name)
+-- Where the pointer is on the zone, as two fractions of the whole picture.
+--
+-- Not the same numbers Under answers, and the difference is the zoom. Under
+-- says where the pointer is in the box, which is what a zoom at the cursor
+-- needs; a click has to be a point on the map, and at six times the box is
+-- looking at a sixth of one. So the box's own fraction is walked back through
+-- the offset the picture is scrolled to and the size it is drawn at.
+local function Spot(board)
+	local x, y = Under(board)
+	local wide, high = board.wide, board.high
+	local boxWide, boxHigh = board.port:GetWidth(), board.port:GetHeight()
+	if type(boxWide) ~= "number" or type(boxHigh) ~= "number"
+		or wide < 1 or high < 1 then
+		return x, y
+	end
+	return math.max(0, math.min(1, (board.x + x * boxWide) / wide)),
+		math.max(0, math.min(1, (board.y + y * boxHigh) / high))
+end
+
+-- How far up the parent chain the drag is allowed to look for a window. Two
+-- steps is the real depth on the map, the board's frame to the window's content
+-- frame to the window, and the cap is what stops a board parented into a loop
+-- climbing forever.
+local CHAIN = 8
+
+-- The movable frame this board is inside, or nothing at all. Found once at
+-- build rather than on every drag: the window is built before its board is, so
+-- the handlers this hands the drag to are already on it.
+local function Owner(board)
+	local up = board.frame
+	for _ = 1, CHAIN do
+		up = (type(up.GetParent) == "function") and up:GetParent() or nil
+		if not up then
+			return nil
+		end
+		if type(up.IsMovable) == "function" and up:IsMovable()
+			and type(up.GetScript) == "function" and up:GetScript("OnDragStart") then
+			return up
+		end
+	end
+	return nil
+end
+
+-- One of the window's own drag handlers, run on the window. Its own scripts
+-- rather than StartMoving, because the window's are what refuse a drag while
+-- the frame is locked and what write down where it was let go of.
+local function Hand(owner, script)
+	local handler = owner and type(owner.GetScript) == "function"
+		and owner:GetScript(script)
+	if type(handler) ~= "function" then
+		return false
+	end
+	handler(owner)
+	return true
+end
+
+-- The mouse on the box: a click that asks the caller what is under it, and a
+-- drag that goes up to the window.
+--
+-- Hung only where the caller passed a function, because enabling the mouse is
+-- not free of consequence: it is what stops the window under the picture from
+-- seeing the click at all.
+local function Clicks(board)
+	local port = board.port
+	if type(port.EnableMouse) ~= "function" or type(port.SetScript) ~= "function" then
+		return false
+	end
+	port:EnableMouse(true)
+	local owner = Owner(board)
+	if owner and type(port.RegisterForDrag) == "function" then
+		port:RegisterForDrag("LeftButton")
+		port:SetScript("OnDragStart", function()
+			board.dragging = true
+			Hand(owner, "OnDragStart")
+		end)
+		port:SetScript("OnDragStop", function()
+			Hand(owner, "OnDragStop")
+		end)
+	end
+	port:SetScript("OnMouseDown", function()
+		board.dragging = false
+	end)
+	-- On the way up rather than the way down, so a press that turns into a drag
+	-- of the window is not also a step into another zone.
+	port:SetScript("OnMouseUp", function(_, button)
+		local dragged = board.dragging
+		board.dragging = false
+		if dragged or (button and button ~= "LeftButton") then
+			return
+		end
+		board:Tap(Spot(board))
+	end)
+	return true
+end
+
+-- A board, and what a click on it means.
+--
+-- The third argument is called with the map being drawn and where on it the
+-- click landed, as two fractions from the top left. Nothing is passed by the
+-- quest log, whose map is a picture rather than a place you can navigate from.
+function Chart.New(parent, name, onClick)
 	local board = setmetatable({
 		tiles = {}, seen = {}, pins = {},
 		width = 0, height = 0, tall = 0,
@@ -531,6 +646,10 @@ function Chart.New(parent, name)
 	board.edges = ns.Outline(board.port, C.hairline[1], C.hairline[2], C.hairline[3], 1, "OVERLAY")
 	ns.EdgeSize(board.edges, ns.Pixel(board.port))
 	Wheel(board)
+	if type(onClick) == "function" then
+		board.onClick = onClick
+		Clicks(board)
+	end
 	Follow(board)
 	return board
 end
@@ -937,6 +1056,23 @@ function Board:Zoom(delta, atX, atY)
 	self.y = v * self.fitTall * now - atY * math.min(self.tall, self.fitTall * now)
 	Settle(self)
 	return now
+end
+
+-- A click on the picture, given as two fractions of the zone rather than as a
+-- cursor. Answers whatever the caller's own handler answered.
+--
+-- Its own method, and taking the point rather than reading one, for the reason
+-- Zoom takes a point: what a click on a border does is a claim
+-- scripts/harness.lua has to be able to make, and a harness has no cursor to
+-- put anywhere.
+--
+-- Nothing at all where there is no picture, because a fraction of a zone that
+-- is not being drawn is a fraction of nothing.
+function Board:Tap(x, y)
+	if type(self.onClick) ~= "function" or not self.art or not self.map then
+		return nil
+	end
+	return self.onClick(self.map, x, y)
 end
 
 -- How far in the wheel has taken it. Handed out for the reason Drawn below is:

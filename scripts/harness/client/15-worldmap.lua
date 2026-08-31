@@ -114,6 +114,31 @@ api.GetMapChildrenInfo = function(map, kind, all)
 	return children(map, kind)
 end
 
+-- What map is at a point of another map, which is what Blizzard's own map asks
+-- on every click and what makes the edge of a zone a way into the one next
+-- door. The client's answer comes out of a table of border strips it does not
+-- otherwise hand over, so the fixture is one strip per zone rather than a real
+-- border: the left tenth of a zone belongs to its neighbour and the rest of it
+-- belongs to itself.
+--
+-- Durotar's neighbour is the zone with no picture on purpose. A click that
+-- steps somewhere the client cannot draw is still a click that has to move the
+-- column, and it is the one that would otherwise be found in somebody's game.
+local EDGES = {
+	[1436] = 1429, -- the left of Westfall is Elwynn Forest
+	[1429] = 1436, -- and the left of Elwynn Forest is Westfall
+	[1411] = 9001, -- the left of Durotar is Somewhere Else
+	[1453] = 1415, -- and Stormwind's is the continent, which the column has no row for
+}
+
+api.GetMapInfoAtPosition = function(map, x, y)
+	if type(x) ~= "number" or type(y) ~= "number" then
+		return nil
+	end
+	local into = (x < 0.1) and EDGES[map] or nil
+	return api.GetMapInfo(into or map)
+end
+
 api.GetMapArtLayers = function(map)
 	if not ART[map] then
 		return layers(map)

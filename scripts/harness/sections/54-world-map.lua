@@ -1,6 +1,6 @@
 -- The world map
 --
--- Six questions no amount of reading Map/ will answer.
+-- Seven questions no amount of reading Map/ will answer.
 --
 -- Does the column come out of the client's own tree. Every zone in the game is
 -- a walk over C_Map rather than a list written down, so a walk that stopped at
@@ -26,6 +26,11 @@
 -- The picture is the same widget the quest log's map is and this is the second
 -- caller of it, which is the point at which a widget's state stops being
 -- private to one window.
+--
+-- Do the edges of the picture open the zone next door. The client keeps the
+-- borders and this window asks for them on a click, so an edge that stepped
+-- into the wrong zone, or into a map the column cannot show, or nowhere at all,
+-- looks exactly like an edge that worked.
 --
 -- And is Blizzard's map out of the way with the M key pointing here. A hidden
 -- map with the key still bound to the client's own toggle is a map you cannot
@@ -252,6 +257,78 @@ Window.Paint()
 check(Window.Zoom() == deepest, "repainting the same zone threw the zoom away")
 Window.Select(ELWYNN)
 check(Window.Zoom() == 1, "stepping to another zone kept the last one's zoom")
+
+----------------------------------------------------------------------
+-- The edges
+----------------------------------------------------------------------
+
+-- A click on the picture asks the client what is under it and moves the column
+-- there. Four answers, and three of them are the map staying where it is: the
+-- middle of a zone is that zone, a click that lands on something the column has
+-- no row for is not a place this window can show, and a client with nothing to
+-- say leaves the map alone. The one that moves has to move the column as well
+-- as the picture, because a name down the left pointing at another zone is a
+-- window disagreeing with itself.
+--
+-- Every click is taken once and kept. A click has a side effect, and a second
+-- one taken to write the message would step back over the border the first one
+-- crossed, which is a check that moves what it is measuring.
+
+-- Scoped, because every name here is a click's answer kept for one comparison
+-- and a chunk in Lua 5.1 has two hundred locals to spend on the whole file.
+do
+	Window.Select(WESTFALL)
+	local stayed = Window.Tap(0.5, 0.5)
+	check(stayed == nil,
+		("a click in the middle of Westfall stepped to %s"):format(tostring(stayed)))
+	check(Window.Showing() == WESTFALL,
+		("a click in the middle of a zone left the map on %s")
+			:format(tostring(Window.Showing())))
+
+	local stepped = Window.Tap(0.02, 0.5)
+	check(stepped == ELWYNN,
+		("a click on Westfall's border answered %s and the zone next door is Elwynn Forest")
+			:format(tostring(stepped)))
+	-- Showing reads the column rather than the board, so this is the half a
+	-- screenshot of the picture would not settle: the name down the left moved too.
+	check(Window.Showing() == ELWYNN,
+		("the border was clicked and the column is pointing at %s")
+			:format(tostring(Window.Showing())))
+
+	-- Somewhere the client can name and this column cannot show. The stub answers
+	-- the continent on Stormwind's border, which is a real map with no row in a
+	-- column of zones.
+	Window.Select(STORMWIND)
+	local nowhere = Window.Tap(0.02, 0.5)
+	check(nowhere == nil,
+		("a click stepped onto %s, which the column has no row for"):format(tostring(nowhere)))
+	check(Window.Showing() == STORMWIND,
+		("a click onto a continent left the map on %s"):format(tostring(Window.Showing())))
+
+	-- A zone the client has no picture for is still a place, and the click has to
+	-- reach it: the footer is what says the picture is missing, not the column.
+	Window.Select(DUROTAR)
+	local blank = Window.Tap(0.02, 0.5)
+	check(blank == NOWHERE,
+		("a click on Durotar's border answered %s and the zone next door has no picture")
+			:format(tostring(blank)))
+	check(Window.Says() == "Somewhere Else, no level range known for this place",
+		("stepping into the zone with no picture says %q"):format(Window.Says()))
+
+	-- And a client that has never heard of the call leaves a working map behind
+	-- rather than an error under every click.
+	local answering = _G.C_Map.GetMapInfoAtPosition
+	_G.C_Map.GetMapInfoAtPosition = nil
+	Window.Select(WESTFALL)
+	local unasked = Window.Tap(0.02, 0.5)
+	_G.C_Map.GetMapInfoAtPosition = answering
+	check(unasked == nil,
+		("a client with no call to ask stepped to %s"):format(tostring(unasked)))
+	check(Window.Showing() == WESTFALL,
+		("a client with no call to ask left the map on %s"):format(tostring(Window.Showing())))
+end
+
+Window.Select(ELWYNN)
 
 ----------------------------------------------------------------------
 -- More markers than one zone gets

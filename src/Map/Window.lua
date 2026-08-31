@@ -27,6 +27,15 @@ local Chart, Zones, Pins = UI.Chart, ns.MapZones, ns.MapPins
 -- to find a name in, and the level is on the screen anyway, in the footer,
 -- which is the half you cannot get any other way.
 --
+-- **The edges of the picture step to the next zone, the way the client's map
+-- does.** A zone's art does not stop at the border: it runs a little way into
+-- whatever is next to it, and the client keeps a table saying which strip of
+-- the picture belongs to which neighbour. That table is what makes a click on
+-- the top of Elwynn open Westfall on Blizzard's map, and C_Map will answer it
+-- for any point of any map, so it is one call here rather than a list of
+-- borders written down. The column is how you cross the world; the edges are
+-- how you walk next door, which is the move a map is actually for.
+--
 -- **The picture is the same widget the quest log's map is.** UI/Chart.lua draws
 -- a zone out of the client's own tiles and puts points on it, and the wheel
 -- zooms it at the cursor. Nothing about it is new here. What is new is what
@@ -143,6 +152,50 @@ function Window.Paint()
 end
 
 --------------------------------------------------------------------------
+-- The edges
+--------------------------------------------------------------------------
+
+-- What map is at that point of this one, which is the client's own answer.
+--
+-- The same call Blizzard's map makes on a click, and the reason nothing here
+-- writes down which zones touch: a zone answers a neighbour where its art runs
+-- over the border into one, and a continent answers the zone you pointed at.
+-- Probed and pcalled like every other reach into C_Map in this part, because a
+-- client that has never heard of the call has to leave a working map behind
+-- rather than an error under every click.
+local function Beneath(map, x, y)
+	local api = _G.C_Map
+	if type(api) ~= "table" or type(api.GetMapInfoAtPosition) ~= "function"
+		or type(map) ~= "number" then
+		return nil
+	end
+	local ok, info = pcall(api.GetMapInfoAtPosition, map, x, y)
+	if not ok or type(info) ~= "table" or type(info.mapID) ~= "number" then
+		return nil
+	end
+	return info.mapID
+end
+
+-- A click on the picture, and the zone it moved to.
+--
+-- Three answers are nothing happening, and each is deliberate. The middle of a
+-- zone answers the zone itself, which is most of the map and has to stay a
+-- click that does not move you. A dungeon or a micro map has no row in the
+-- column, and a window whose picture and column disagreed would be worse than
+-- one that ignored the click. And a client that will not answer the call leaves
+-- the map exactly as it was.
+--
+-- The move goes through the column rather than straight to the board, so the
+-- name down the left is the zone you are looking at.
+local function Stepped(map, x, y)
+	local into = Beneath(map, x, y)
+	if not into or into == map or not Zones.Find(into) then
+		return nil
+	end
+	return Window.Select(into) and into or nil
+end
+
+--------------------------------------------------------------------------
 -- The column
 --------------------------------------------------------------------------
 
@@ -240,7 +293,7 @@ function Window.Build()
 	-- tiles of the client's own art with somebody else's icons over them, and a
 	-- map with a seam through it or a marker in the wrong place is only findable
 	-- from outside if the tiles and the pins can be walked one at a time.
-	board = Chart.New(window.content, "WarriorKitMapChart")
+	board = Chart.New(window.content, "WarriorKitMapChart", Stepped)
 	Chrome()
 	Window.Fit()
 	return window
@@ -312,6 +365,18 @@ function Window.Zoom(delta)
 		board:Zoom(delta, 0.5, 0.5)
 	end
 	return board:Level()
+end
+
+-- A click on the picture, given as two fractions of the zone, and the zone it
+-- moved to. Handed out for the reason Zoom is: where the borders of a zone are
+-- comes out of a table inside the client, so a click that stepped into the
+-- wrong zone or into none at all looks exactly like one that worked, and a
+-- harness has no cursor to point at an edge with.
+function Window.Tap(x, y)
+	if not board then
+		return nil
+	end
+	return board:Tap(x, y)
 end
 
 -- How much of the zone you have uncovered, as the number of pieces drawn over
