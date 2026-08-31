@@ -638,6 +638,7 @@ Character\Stats.lua
 Character\Skills.lua
 Character\Reputation.lua
 Character\Readout.lua
+Character\Trace.lua
 Character\Paperdoll.lua
 Character\Window.lua
 Character\Blizzard.lua

@@ -32,6 +32,9 @@ local function CharacterWord(arg, rawArg)
 		ns.Print(ns.CharSkills.Describe() .. ".")
 	elseif word == "gear" then
 		ns.Print(ns.Worn.Describe() .. ".")
+	elseif word == "trace" then
+		ns.CharTrace.Set(ns.Command.Toggle(rest))
+		ns.Print("the gear trace is " .. ns.CharTrace.Describe() .. ".")
 	elseif word == "on" or word == "off" then
 		SetCharacter(word == "on")
 		ns.Print("the character sheet is " .. (ns.db.character and "on" or "off") .. ".")
@@ -42,7 +45,7 @@ local function CharacterWord(arg, rawArg)
 		end
 		ns.CharWindow.Toggle()
 	else
-		ns.Print("character takes on, off, hide, gear, stats or skills.")
+		ns.Print("character takes on, off, hide, gear, stats, skills or trace.")
 	end
 	-- rawArg is the untouched line, which this word has no use for: every
 	-- sub-word above takes a switch rather than a name. Named so the signature
@@ -88,6 +91,7 @@ ns.Register({
 		"character gear, what you are wearing and how worn it is",
 		"character stats, your hit and what you still miss with it",
 		"character skills, which weapon skills are behind the cap for your level",
+		"character trace on|off, say in chat what each click on a gear square did",
 	},
 
 	status = function()

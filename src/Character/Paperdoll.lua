@@ -177,9 +177,10 @@ local function Square(pane, entry)
 	-- Before the secure half of the click, because the secure half is what
 	-- consumes the waiting spell: asked afterwards the client says nothing is
 	-- waiting, and the swap below would answer a stone by picking the weapon up.
-	button:SetScript("PreClick", function(self, which)
+	button:SetScript("PreClick", function(self, which, down)
 		UI.CloseDropdown()
 		self.armed = which == "LeftButton" and ns.Worn.Targeting()
+		ns.CharTrace.Press(self, which, down)
 	end)
 
 	-- After it. A left click with nothing waiting is the swap, and the square is
@@ -190,6 +191,7 @@ local function Square(pane, entry)
 			swapped = Act(entry)
 		end
 		self.armed = nil
+		ns.CharTrace.Release(self, which, swapped)
 		if swapped or which == "RightButton" then
 			pane:Paint()
 		end
@@ -197,6 +199,21 @@ local function Square(pane, entry)
 
 	button:SetScript("OnReceiveDrag", function()
 		if Act(entry) then
+			pane:Paint()
+		end
+	end)
+
+	-- The other direction, which a click alone does not cover. A left click on
+	-- a full slot already picks the piece up, but nobody takes a helmet off by
+	-- clicking it: they press on it and pull it into a bag, and that gesture
+	-- never becomes a click at all, so a square without this is a square you
+	-- can drop into and not out of. Same call as the click, so a drag out and a
+	-- click are the same swap and refuse for the same reason.
+	button:RegisterForDrag("LeftButton")
+	button:SetScript("OnDragStart", function(self)
+		local swapped = Act(entry)
+		ns.CharTrace.Drag(self, swapped)
+		if swapped then
 			pane:Paint()
 		end
 	end)
@@ -208,6 +225,11 @@ local function Square(pane, entry)
 		UI.Tint(box.bg, C.sunken)
 		ns.Tip.Close()
 	end)
+
+	-- What the trace needs and cannot ask for: this client has no call that
+	-- answers which edges a button registered, so the file that registered them
+	-- says so here.
+	ns.CharTrace.Watch(button, entry, "LeftButtonUp", "RightButtonUp")
 
 	box.button = button
 	box.entry = entry

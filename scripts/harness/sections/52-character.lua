@@ -384,6 +384,97 @@ do
 end
 
 ----------------------------------------------------------------------
+-- Dragging a piece out of a square
+--
+-- The half of the arrangement that a click test cannot reach. Dropping into a
+-- square has been tested since the page was written and taking something out of
+-- one was never a click, so the page shipped able to accept gear and unable to
+-- give it back.
+----------------------------------------------------------------------
+
+do
+	local pane = Window.Pane(GEAR)
+	local main
+	for _, box in ipairs(pane.squares) do
+		if box.entry.slot == 16 then
+			main = box
+		end
+	end
+
+	check(main.button.dragButton == "LeftButton",
+		"a gear square does not take a left drag, so nothing can be pulled out of it")
+
+	local picked = #moved.picked
+	main.button.scripts.OnDragStart(main.button)
+	check(#moved.picked == picked + 1 and moved.picked[#moved.picked] == 16,
+		"dragging out of the main hand did not pick the weapon up")
+
+	-- And refused for the same reason a click is, rather than by a second rule
+	-- written next to the first.
+	local real = _G.InCombatLockdown
+	_G.InCombatLockdown = function() return true end
+	picked = #moved.picked
+	main.button.scripts.OnDragStart(main.button)
+	check(#moved.picked == picked, "a drag out of a square moved gear in combat")
+	_G.InCombatLockdown = real
+end
+
+----------------------------------------------------------------------
+-- The trace on a square
+--
+-- Turned on and clicked through, because what it costs to be wrong is a Lua
+-- error inside PreClick, which takes the click down with it. The square has
+-- now been broken three times and every symptom was the word nothing, so a
+-- trace that breaks it a fourth is worse than no trace.
+----------------------------------------------------------------------
+
+do
+	local pane = Window.Pane(GEAR)
+	local main
+	for _, box in ipairs(pane.squares) do
+		if box.entry.slot == 16 then
+			main = box
+		end
+	end
+
+	local Trace = ns.CharTrace
+	check(Trace.On() == false and Trace.Describe() == "off",
+		"the gear trace is on before anybody asked for it")
+
+	local said = _G.ChatFrame1.messages or {}
+	local quiet = #said
+	main.button:Click("LeftButton")
+	check(#said == quiet, "the trace said something while it was off")
+
+	Trace.Set(true)
+	local describe = Trace.Describe()
+	check(describe:find("19 squares", 1, true) ~= nil
+		and describe:find("acts on up", 1, true) ~= nil,
+		("the trace describes itself as %q, and it has to name the squares and the edge")
+			:format(describe))
+
+	local before = #said
+	moved.targeting = true
+	main.button:Click("LeftButton")
+	moved.targeting = false
+	local lines = ""
+	for index = before + 1, #said do
+		lines = lines .. said[index].text .. "\n"
+	end
+	check(lines:find("main hand (16)", 1, true) ~= nil,
+		"a traced click did not name the slot it was on")
+	check(lines:find("acts on up", 1, true) ~= nil,
+		"a traced click did not say which edge the square acts on")
+	check(lines:find("SpellCanTargetItem=true", 1, true) ~= nil,
+		"a traced click did not say that a stone was waiting")
+	check(lines:find("after:", 1, true) ~= nil,
+		"a traced click said what it was about to do and never said what happened")
+
+	Trace.Set(false)
+	check(Trace.On() == false, "the trace would not turn off")
+end
+
+----------------------------------------------------------------------
 -- The rows the readout draws
 ----------------------------------------------------------------------
 
