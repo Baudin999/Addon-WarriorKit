@@ -701,6 +701,50 @@ do
 	check(Window.Shown(), "the window would not open again once the fight was over")
 end
 
+----------------------------------------------------------------------
+-- The figure on the page
+--
+-- The squares are repainted on six events and the model was redressed on none
+-- of them, so a weapon swapped with the sheet open changed the square and left
+-- the figure holding the old one. It used to hide itself right by accident,
+-- because switching tab took the page down and put it back; the page does not
+-- go down any more, so the redress is deliberate and is checked here.
+--
+-- The other half is the cost. SetUnit reloads the model, UNIT_INVENTORY_CHANGED
+-- fires on a bag moving as well, and a page that reloaded on every looted grey
+-- would flicker all evening. So both directions are asserted: it reloads when
+-- what you are wearing moved, and it does not when anything else did.
+----------------------------------------------------------------------
+
+do
+	local pane = Window.Pane(GEAR)
+	local model = pane.panel.model
+	local real, dressed = model.SetUnit, 0
+	model.SetUnit = function(self, unit)
+		dressed = dressed + 1
+		if real then
+			return real(self, unit)
+		end
+	end
+
+	pane:Paint()
+	check(dressed == 0, "the model reloaded on a repaint that changed nothing")
+
+	local held = H.swing.mainhand
+	H.swing.mainhand = H.itemLink("Bloodspiller")
+	pane:Paint()
+	check(dressed == 1, "a weapon went into a hand and the figure kept the old one")
+
+	pane:Paint()
+	check(dressed == 1, "the model reloaded again on a repaint after the swap")
+
+	H.swing.mainhand = held
+	pane:Paint()
+	check(dressed == 2, "a weapon came off and the figure kept holding it")
+
+	model.SetUnit = real
+end
+
 Window.Hide()
 
 print(("character %d slots, %d skill rows, stats %d px beside the gear; %s; %s")

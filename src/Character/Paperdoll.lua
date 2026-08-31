@@ -426,10 +426,13 @@ local function Portrait(parent)
 		end
 	end
 	-- Once now and once on the way back up, never on a refresh: SetUnit reloads
-	-- the model and a refresh is every click anywhere in the window.
+	-- the model and a refresh is every click anywhere in the window. Pane:Redress
+	-- is the third caller and it asks first whether anything you are wearing
+	-- actually moved, which is the only question that earns a reload.
 	model:SetScript("OnShow", Dress)
 	Dress()
 	panel.model = model
+	panel.Dress = Dress
 
 	panel.top = Band(panel, level)
 	panel.top:SetPoint("TOPLEFT", INSET, -INSET)
@@ -467,8 +470,8 @@ end
 --------------------------------------------------------------------------
 
 function Paperdoll.New(parent)
-	local pane = setmetatable({ squares = {}, left = {}, right = {}, hands = {} },
-		Pane)
+	local pane = setmetatable({ squares = {}, left = {}, right = {}, hands = {},
+		worn = {} }, Pane)
 	pane.frame = CreateFrame("Frame", nil, parent)
 
 	-- Sorted into the three groups once, because which group a slot is in is a
@@ -585,7 +588,37 @@ function Pane:PaintPortrait()
 	end
 end
 
+-- The figure again, and only where what you are wearing actually moved.
+--
+-- The squares are repainted on six events and the model was redressed on none
+-- of them, so a weapon swapped with the sheet open changed the square and left
+-- the figure holding the old one. Switching tab used to take the page down and
+-- put it back, which redressed it by accident; the page does not go down any
+-- more, because taking it down in a fight is a protected act, so the accident
+-- is gone and this is the deliberate version.
+--
+-- The nineteen links are compared rather than a count or an event trusted:
+-- UNIT_INVENTORY_CHANGED fires on a bag moving as well, and a model that
+-- reloaded on every looted grey would flicker all evening. Comparing costs
+-- nineteen table lookups and allocates nothing.
+function Pane:Redress()
+	local changed = false
+	for index = 1, #self.squares do
+		local slot = self.squares[index].entry.slot
+		local link = ns.Worn.Link(slot)
+		if self.worn[slot] ~= link then
+			self.worn[slot] = link
+			changed = true
+		end
+	end
+	if changed and self.panel and self.panel.Dress then
+		self.panel.Dress()
+	end
+	return changed
+end
+
 function Pane:Paint()
+	self:Redress()
 	for index = 1, #self.squares do
 		PaintSquare(self.squares[index])
 	end
