@@ -187,6 +187,58 @@ end
 check(drawn == slots, ("%d squares drawn for %d slots"):format(drawn, slots))
 check(wrong == 0, ("%d squares point at a slot that is not theirs"):format(wrong))
 
+-- And nothing the template drew is still on it.
+--
+-- Every region of the square is walked rather than the two the widget answers by
+-- getter, because the glow that reached the screen was neither of those. It is
+-- an ordinary texture the template leaves showing, hidden again in the
+-- template's own OnLeave, and the addon takes OnEnter and OnLeave for its
+-- tooltip, so every square in the window wore it at once. A check that asked the
+-- getters passed the whole time it was on screen.
+--
+-- The reading is the file a region points at rather than whether it is shown.
+-- The widget shows and hides its own textures in C, where a Lua Hide is never
+-- read, so a blanked texture draws nothing whatever the widget then does with it
+-- and a hidden one does not.
+--
+-- The press is the one state the square keeps, in the addon's own black, because
+-- a square that does not move under the mouse reads as a square that ate the
+-- click.
+-- Held in a block of its own, because the names in it are the section's and the
+-- section is at its own ceiling for how many of those it may have at the top
+-- level. Three readings that nothing below this point needs are three names
+-- that do not have to be up there.
+do
+	local THEIRS = {
+		["Interface\\Buttons\\ButtonHilight-Square"] = true,
+		["Interface\\Buttons\\UI-Quickslot2"] = true,
+	}
+
+	local wearing, dead = 0, 0
+	for index = 1, drawn do
+		local square = squares[index]
+		local pushed = square:GetPushedTexture()
+		for _, region in ipairs({ square:GetRegions() }) do
+			if region ~= pushed and THEIRS[region:GetTexture() or false] then
+				wearing = wearing + 1
+			end
+		end
+		for _, getter in ipairs({ "GetNormalTexture", "GetHighlightTexture" }) do
+			local texture = square[getter](square)
+			if texture and THEIRS[texture:GetTexture() or false] then
+				wearing = wearing + 1
+			end
+		end
+		-- The press is a colour rather than a file, so it is read as one: a colour
+		-- texture answers no path at all.
+		if not pushed or pushed:GetTexture() or not pushed.a then
+			dead = dead + 1
+		end
+	end
+	check(wearing == 0, ("%d of the client's own textures left on the squares"):format(wearing))
+	check(dead == 0, ("%d squares draw nothing when they are pressed"):format(dead))
+end
+
 ----------------------------------------------------------------------
 -- A click on one
 --

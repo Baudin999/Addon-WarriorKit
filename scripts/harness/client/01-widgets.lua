@@ -173,6 +173,27 @@ function Region:SetPushedTexture(path)
 end
 function Region:GetPushedTexture() return self.pushedTexture end
 
+-- The other two states, for the reason above and one of its own. A button
+-- inheriting one of the client's templates arrives wearing them, the addon's
+-- own squares take both off, and a getter that answers nil says the same thing
+-- for a square that has been stripped and for a square still wearing Blizzard's
+-- blue glow. Those are the two states this fixture exists to tell apart.
+function Region:SetNormalTexture(path)
+	local texture = child("texture", self, nil)
+	texture.layer, texture.sublevel = "ARTWORK", 0
+	texture.texture = path
+	self.normalTexture = texture
+end
+function Region:GetNormalTexture() return self.normalTexture end
+
+function Region:SetHighlightTexture(path)
+	local texture = child("texture", self, nil)
+	texture.layer, texture.sublevel = "HIGHLIGHT", 0
+	texture.texture = path
+	self.highlightTexture = texture
+end
+function Region:GetHighlightTexture() return self.highlightTexture end
+
 -- How a texture is composited. Data, because the active tint on a square is
 -- additive on purpose: laid over the art at ordinary blending it would be a
 -- muddy rectangle rather than a glow, and nothing else could tell.

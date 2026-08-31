@@ -382,6 +382,49 @@ do
 		return slots[key]
 	end
 
+	-- What the client's own bag button template arrives wearing.
+	--
+	-- Dressed here rather than left to the no-op, because taking this off again
+	-- is the whole of what Bags/Grid.lua does to a square before it draws one of
+	-- its own, and a bare frame cannot fail that. The blue is the one you see:
+	-- ButtonHilight-Square is drawn over the whole slot on every mouse crossing,
+	-- and it went unnoticed for as long as the fixture handed the addon a button
+	-- with nothing on it.
+	--
+	-- The icon and the count are fields on the frame; the plate and the widget's
+	-- own glow are not, and it only answers those by getter. Both halves are here
+	-- because the file that strips them has to reach them two different ways.
+	--
+	-- The third half is the one that reached the screen. A template also leaves
+	-- an ordinary texture on the button showing and hides it again in its own
+	-- OnLeave, and the addon takes OnEnter and OnLeave for its tooltip, so
+	-- nothing puts it away and every square in the window wears it. It is
+	-- reachable neither by field nor by getter, only by walking the button's own
+	-- regions, which is the walk a fixture with two named halves could not ask
+	-- for.
+	--
+	-- This is the outermost wrapper of CreateFrame in the harness, because the
+	-- runner loads this file after every file under client/ and before the addon
+	-- has built anything. It delegates rather than replaces, so the secure half
+	-- 09-group and the tooltip half 11-tooltip installed still answer.
+	local ITEM_BUTTON = "ContainerFrameItemButtonTemplate"
+
+	local made = _G.CreateFrame
+	_G.CreateFrame = function(kind, name, parent, template)
+		local frame = made(kind, name, parent, template)
+		if template == ITEM_BUTTON then
+			frame.icon = child("texture", frame, nil)
+			frame.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+			frame.Count = child("fontstring", frame, nil)
+			frame:SetNormalTexture("Interface\\Buttons\\UI-Quickslot2")
+			frame:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+			local glow = child("texture", frame, nil)
+			glow:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+			glow:Show()
+		end
+		return frame
+	end
+
 	function _G.ContainerFrameItemButton_OnClick(button, which)
 		if which ~= "RightButton" then
 			return

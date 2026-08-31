@@ -35,11 +35,12 @@ ns.BagsGrid = Grid
 -- own parent and the layout never has to know which holder it landed in.
 --
 -- **The art is ours and the behaviour is theirs.** The template arrives with a
--- gold border, a parchment stack count and a normal texture, drawn for a window
--- that looks nothing like this one. Every one of those regions is stripped and
--- the square is drawn again in the addon's palette: a sunken ground, a hairline
--- in the item's own grade colour, a crisp icon and a flat count. What is left
--- of the template is the part with no picture in it.
+-- gold border, a parchment stack count, a quickslot plate and a lit blue square
+-- over the whole slot, all drawn for a window that looks nothing like this one.
+-- Every region it brought is swept off and the square is drawn again in the
+-- addon's palette: a sunken ground, a hairline in the item's own grade colour, a
+-- crisp icon and a flat count. What is left of the template is the part with no
+-- picture in it.
 --
 -- The cooldown frame is the one exception and it is exactly the shape of the
 -- rule: it is stripped from nothing because nothing here draws a replacement,
@@ -92,39 +93,82 @@ end
 -- Building one
 --------------------------------------------------------------------------
 
--- A region the template put on the button, or nothing.
+-- One region the template drew, drawing nothing.
 --
--- Probed rather than named, because which of them a build carries is a fact
--- about that build: the quality border and the search overlay arrived in later
--- clients and the quest texture is spelled differently across them. The type
--- test is not decoration either. A frame answers a method for anything asked of
--- it by capitalised name, so a missing region reads as a function rather than
--- as nil, and calling Hide on a function is a login error.
-local function Theirs(button, key)
-	local region = button[key]
+-- Three writes rather than one, because no single one of them holds on every
+-- build. The file is cleared, so a region the client's own bag update shows
+-- again has nothing in it. The alpha goes to zero, so one whose file is written
+-- again draws nothing either. And ns.Strip puts Hide on the Show method, which
+-- is how the rest of the addon answers Blizzard code that turns its regions back
+-- on.
+--
+-- Every call is guarded on its own type. A frame answers a method for anything
+-- asked of it by capitalised name, so a call a build does not have reads as a
+-- function rather than as nil, and a font string has no SetTexture at all.
+local function Erase(region)
 	if type(region) ~= "table" or type(region.Hide) ~= "function" then
-		return nil
+		return
 	end
-	return region
+	if type(region.SetTexture) == "function" then
+		pcall(region.SetTexture, region, nil)
+	end
+	if type(region.SetAtlas) == "function" then
+		pcall(region.SetAtlas, region, nil)
+	end
+	if type(region.SetAlpha) == "function" then
+		pcall(region.SetAlpha, region, 0)
+	end
+	ns.Strip(region)
 end
 
--- Everything the template draws, out of the way. ns.Strip rather than Hide,
--- because the client's own bag update code turns its regions back on and Strip
--- is how the rest of the addon answers that: the Show method becomes Hide, so a
--- region that is told to come back stays down.
-local STRIPPED = { "icon", "Count", "IconBorder", "IconOverlay",
-	"IconQuestTexture", "searchOverlay", "Stock" }
+-- The button's own regions, in a table, behind a pcall. GetRegions answers a
+-- list rather than a value, which is the one shape ns.Measure cannot carry.
+local function Gather(button)
+	return { button:GetRegions() }
+end
 
+-- The two textures a button keeps off its region list on some builds, which is
+-- why the sweep is not the whole of it.
+--
+-- The pressed one is not here and is held back from the sweep as well: Dress
+-- gives the square its own black one, and a stripped texture cannot be given
+-- one.
+local STATES = { "GetNormalTexture", "GetHighlightTexture" }
+
+-- Everything the template arrived wearing, off.
+--
+-- Swept rather than named. The list this file used to keep held the seven
+-- regions a build was expected to spell that way, and the one that reached the
+-- screen was not among them: every square in the window wore a lit blue square
+-- over the whole slot, ButtonHilight-Square at additive blend, which is what a
+-- hover looks like on Blizzard's parchment and nothing like one here.
+--
+-- Blanking the state texture the getter answers did not take it off, and what is
+-- left is an ordinary region of the button: a template puts one there showing
+-- and hides it again in its own OnLeave, and this file takes OnEnter and OnLeave
+-- for the tooltip, so nothing was left to hide it. That is why it was on every
+-- square at once rather than on the one under the cursor, and why the alpha is
+-- written as well as the file: a region nothing here can name still draws
+-- nothing at zero, whatever else turns it back on.
+--
+-- The sweep also ends the guessing. Which regions a build carries and what it
+-- calls them is a fact about that build: the quality border and the search
+-- overlay arrived in later clients and the quest texture is spelled differently
+-- across them. Taking every region the button came with is one answer for all of
+-- them, and it is safe because the addon draws its own afterwards. Nothing on
+-- the button at this point is worth keeping.
 local function Undress(button)
-	for index = 1, #STRIPPED do
-		local region = Theirs(button, STRIPPED[index])
-		if region then
-			ns.Strip(region)
+	local pushed = ns.Measure(button, "GetPushedTexture")
+	local ok, regions = pcall(Gather, button)
+	if ok then
+		for index = 1, #regions do
+			if regions[index] ~= pushed then
+				Erase(regions[index])
+			end
 		end
 	end
-	local normal = ns.Measure(button, "GetNormalTexture")
-	if normal then
-		ns.Strip(normal)
+	for index = 1, #STATES do
+		Erase(ns.Measure(button, STATES[index]))
 	end
 end
 
@@ -142,6 +186,18 @@ local function Dress(button)
 	button.tally = UI.Label(button, M.small, C.text, "RIGHT", UI.FLAT)
 	button.tally:SetPoint("BOTTOMRIGHT", -3, 3)
 	UI.Wrap(button.tally, false)
+
+	-- On the way down, in the addon's own black rather than the template's
+	-- quickslot plate. A square that does not move under the mouse reads as a
+	-- square that did not take the click. The widget draws this itself between
+	-- mouse down and mouse up, so it costs one texture and no script, the same
+	-- way an ability square answers a press.
+	button:SetPushedTexture("Interface\\Buttons\\WHITE8X8")
+	local pushed = ns.Measure(button, "GetPushedTexture")
+	if pushed then
+		pushed:SetColorTexture(0, 0, 0, 0.36)
+		button.pushed = pushed
+	end
 end
 
 -- What the box over a square says. Nothing at all for an empty one: a slot with
