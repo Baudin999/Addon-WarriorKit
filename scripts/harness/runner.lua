@@ -184,6 +184,12 @@ local SECTIONS = {
 	-- nothing any earlier section left behind and it is the last word on where
 	-- you are standing, which it moves into a zone the map tree holds.
 	"54-world-map",
+	-- Last, and it is the only section in the suite that puts a free slot in
+	-- the bags. Every other one is written against a character carrying a full
+	-- set, because a hole in a bag moves the numbers the vendor sweep and the
+	-- clutter queue count, so the empty bag goes in here and comes out again at
+	-- the foot of the file.
+	"55-bags",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

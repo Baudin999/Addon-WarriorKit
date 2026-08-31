@@ -23,6 +23,13 @@ globals = {
 	"WarriorKitMarkButton",
 	"WarriorKitOptions",
 	"WarriorKitClutter",
+	-- The bag window, and one global per square in it, named
+	-- WarriorKitBagSlot<n>. A bag button is one of the frames the client
+	-- and other addons reach for by name, and a square that has landed
+	-- somewhere wrong has to be findable from a macro. The squares are made
+	-- with a computed name and never read back through _G, so only the
+	-- window is listed here.
+	"WarriorKitBags",
 	-- the breakdown table, opened from the meter. Named so Escape closes it
 	-- through UISpecialFrames, which is a list of names.
 	"WarriorKitBreakdown",

@@ -391,6 +391,57 @@ do
 end
 
 --------------------------------------------------------------------------
+-- The nine calls a bag is opened and shut through
+--
+-- The client never shows a container frame except through one of these, which
+-- is why Bags/Blizzard.lua takes all nine rather than the toggle alone. Three
+-- of them are yours to press: B, a bag button on the bar, and the binding for
+-- all of them. The other six are the client calling on your behalf, and
+-- `OpenAllBags` is the one that matters, because it is what a merchant and a
+-- bank do.
+--
+-- Modelled rather than stubbed away because it is the seam. What the addon
+-- swaps in has to be reachable by name at call time, exactly as the client's
+-- own keybinding reaches it, so a section presses B by calling `ToggleBackpack`
+-- and what answers is whichever function is on the name at that moment. A stub
+-- that called the addon's window directly would prove nothing about the
+-- takeover, which is the half that can be wrong.
+--
+-- What the client's own version does is counted rather than drawn. A count
+-- going up while the addon claims to be holding the name is the failure this
+-- exists to catch: the client's bags opening beside the addon's window.
+--------------------------------------------------------------------------
+
+do
+	local opened, closed = 0, 0
+
+	local function theirs(which)
+		return function()
+			if which then
+				opened = opened + 1
+			else
+				closed = closed + 1
+			end
+		end
+	end
+
+	for _, name in ipairs({ "ToggleBackpack", "ToggleAllBags", "ToggleBag",
+		"OpenAllBags", "OpenBackpack", "OpenBag" }) do
+		_G[name] = theirs(true)
+	end
+	for _, name in ipairs({ "CloseAllBags", "CloseBackpack", "CloseBag" }) do
+		_G[name] = theirs(false)
+	end
+
+	-- How many times the client's own bags were asked to open and to shut since
+	-- the last reading. Read by 55-bags.lua, which presses every one of the nine
+	-- and expects both to stay where they were.
+	function H.bagCalls()
+		return opened, closed
+	end
+end
+
+--------------------------------------------------------------------------
 -- The client's character sheet
 --
 -- One window with five pages hung off it as children, which is the nesting the

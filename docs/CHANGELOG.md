@@ -2,6 +2,60 @@
 
 ## Unreleased
 
+### One bag window, with what you carry sorted into piles
+
+Five bags open as five windows, in the order you happen to have them on your
+belt, and finding the potion means reading a hundred squares. `Bags/` is five
+files replacing that: one window, everything you are carrying grouped under a
+heading, and how many slots are free along the bottom next to your gold.
+
+**The piles are the client's own item classes and nothing here decides them.**
+`GetItemInfoInstant` reads the client's item database rather than a cache, so it
+cannot come back nil for something sitting in your own bags, which means the
+piles are right on the first frame after a login and are in whatever language
+the client is in. That is the whole of the categorisation: a table of sixteen
+lines, an order, and no rules anybody has to write or maintain.
+
+Two piles are not a class and both earn the exception. Junk is quality zero
+whatever class it is, because what every grey has in common is that a vendor is
+where it goes. Empty is the absence of an item, drawn as a pile at the bottom so
+the free count is a thing you can point at rather than a number to take on
+trust. An item the client has not graded yet stays in its class pile rather than
+being called junk on a guess, and moves when `GET_ITEM_INFO_RECEIVED` arrives.
+
+**Every square is the client's own bag button.** It inherits
+`ContainerFrameItemButtonTemplate`, which is what Blizzard's bags and every bag
+addon in the game are built on, so the click, the drag, the stack split, the
+shift-link and the merchant sale are the client's code. None of that is worth
+reimplementing: a right click on a bag slot means eat, equip, open, sell or
+attach depending on which window is in front of you, and the rules for which are
+inside the client. It also means Mail/Bags.lua keeps working with no change at
+all, because that file takes over `ContainerFrameItemButton_OnClick` by name and
+a square built on this template arrives there like any other.
+
+The art is not the client's. The template's icon, count, quality border and
+normal texture are stripped and the square is drawn again in the addon's
+palette: a sunken ground, a hairline in the item's own grade colour, a crisp
+twenty seven pixel icon and a flat count. The hover is the addon's own box, for
+the reason every hover in this addon is: two designs on one screen is the defect
+that box exists to stop.
+
+**Nine calls, not one.** B is `ToggleBackpack`, the bag buttons on the bar are
+`ToggleBag`, the binding for all of them is `ToggleAllBags`, and then there are
+the six the client calls on your behalf, of which `OpenAllBags` is the one that
+matters: it is what a merchant and a bank do. Take the toggle alone and the
+first vendor you speak to puts five of Blizzard's bags on the screen beside this
+window. All nine are replaced and all nine are handed back exactly when the
+switch goes off.
+
+This is the one part of the addon that will argue with another bag addon.
+Baganator and Bagnon take the same nine names and whichever loads last holds
+them. That is not a bug to work around, it is what replacing the bags means, and
+the settings page says to run one or the other.
+
+`/wk bags` opens it, `/wk bags columns 10` decides how wide, and
+`/wk bags count` says how many slots you have and how many are free.
+
 ### A world map with a list of zones down the side of it
 
 The client's world map navigates by clicking a continent and then the piece of

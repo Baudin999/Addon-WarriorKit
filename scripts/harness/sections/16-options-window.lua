@@ -437,9 +437,14 @@ if window then
 	-- again. The world map page costs 472 across two checks and four readings
 	-- and takes it to 22,102 across sixty-three: a new page, and the two hints
 	-- on it are the two sentences that say what the client's own map does
-	-- instead. 22,300 is that measurement plus a hint's worth of room again.
-	check(prose < 22300,
-		("the window holds %d characters of prose and the budget is 22,300"):format(prose))
+	-- instead. 22,300 is that measurement plus a hint's worth of room again. The
+	-- bag page costs 501 across two checks, a count and four readings and takes
+	-- it to 22,603 across sixty-four: a new page, and the longer of its two
+	-- hints is the sentence that says what the piles are made of, which is the
+	-- one thing about the window nobody can work out by looking at it. 22,800 is
+	-- that measurement plus a hint's worth of room again.
+	check(prose < 22800,
+		("the window holds %d characters of prose and the budget is 22,800"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

@@ -67,7 +67,7 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is twenty-seven parts and a core. Each part is a folder, and Core knows the
+The addon is twenty-eight parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
@@ -330,6 +330,19 @@ name of none of them.
     Character/Blizzard.lua   the client's own sheet in the attic, and the C key
                              redirected to the matching tab
     Character/Feature.lua
+
+    Bags/Bags.lua            the five bags you carry, walked, and what is in
+                             them sorted into piles on the item class the client
+                             already files each one under. Draws nothing
+    Bags/Grid.lua            the pool of squares. Each one is built on the
+                             client's own bag button, so the click, the drag and
+                             the stack split are the client's code, and each is
+                             parented to a holder frame carrying its bag number,
+                             which is the only thing that handler has to go on
+    Bags/Window.lua          the window, and the free count along the bottom
+    Bags/Blizzard.lua        the nine calls the client opens and shuts a bag
+                             through, taken, so B opens this one
+    Bags/Feature.lua
 
     EditMode/EditMode.lua    probes Edit Mode, captures a layout, imports the baked one
     EditMode/Saved.lua       generated, the baked layout, written by bake-ui.sh
@@ -5578,6 +5591,11 @@ on different realms read as the same person.
     /wk mail unfav Aria          take it off again
     /wk mail favs                the list, and who each of them is
     /wk mail warn on|off         whether value to a name off the list asks twice
+    /wk bags                     the bag window
+    /wk bags on|off              one window with your bags in piles
+    /wk bags hide on|off         take the client's nine bag calls, so B opens this
+    /wk bags columns 10          how many squares across, 6 to 16
+    /wk bags count               how many slots you have and how many are free
     /wk character                the character sheet
     /wk character on|off         the addon's sheet instead of the client's
     /wk character hide on|off    Blizzard's own in the attic, and the C key
@@ -5899,6 +5917,48 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- **Whether `ContainerFrameItemButtonTemplate` takes on these builds and behaves
+  once it has.** Every square in the bag window inherits it, which is what makes
+  the click, the drag, the stack split and the merchant sale the client's own
+  code rather than a reimplementation of five different meanings of a right
+  click. Baganator builds its classic squares on the same template on this
+  install, so it is there; what is unproven is that a button of it works parented
+  to a frame this addon made rather than to a container frame the client built.
+  What would settle it: `/wk bags`, then right click a grey at a merchant. A
+  template this client refuses is caught and reported rather than raised, and
+  `/wk status` says so in the words "this client refused the bag button
+  template". The same is true one layer down of `ContainerFrame_UpdateCooldown`,
+  which is the only call that draws the swirl over a potion you just drank: it is
+  probed and pcalled, and one refusal takes it off for the session, so the
+  failure is a square with no swirl rather than an error per slot per bag
+  update.
+- **Whether stripping the template's own regions leaves the square drawable.**
+  The icon, the count, the quality border, the quest texture and the normal
+  texture are all put down with `ns.Strip` and the square is drawn again in this
+  addon's palette. Which of those five a build carries differs across clients, so
+  each is probed by name and a missing one is skipped. The failure that would not
+  raise is the opposite: a region this file does not know the name of, still
+  drawn, leaving Blizzard's gold border around a flat square. Looking at the
+  window is the whole test.
+- **Whether taking all nine bag calls is enough to keep the client's bags off the
+  screen.** `Bags/Blizzard.lua` replaces `ToggleBackpack`, `ToggleAllBags`,
+  `ToggleBag`, `OpenAllBags`, `OpenBackpack`, `OpenBag`, `CloseAllBags`,
+  `CloseBackpack` and `CloseBag`, on the argument that the client never shows a
+  container frame except through one of them. If a build has a tenth, the symptom
+  is Blizzard's bags appearing beside this window at a merchant or a bank.
+  `/wk bags count` and `/wk status` both report how many of the nine this client
+  carries; nine of nine and a bag still opening is the tenth call.
+- **Whether the once-a-second re-take fights another bag addon.** Baganator and
+  Bagnon take the same nine names. Whichever addon writes them last holds them,
+  and this one writes them every second, so it wins and their hook is dropped
+  from the chain. That is the intended behaviour and it is also the reason the
+  panel says to run one or the other. What is unproven is that nothing worse than
+  that happens with both installed.
+- **Whether `C_Item.GetItemClassInfo` answers on these builds.** The pile headers
+  are the client's own word for each item class where it will say one, so the
+  window reads in the language the client is in. A build with no such call draws
+  the English fallbacks and nothing else changes. `/wk bags count` does not report
+  this; the headers themselves are the test.
 - **Whether `C_Map.GetMapChildrenInfo` walks the whole world on these builds.**
   The world map's zone column is a walk over the client's own map tree rather
   than a list written down, climbed from the map you are standing on to whatever
