@@ -8,3 +8,5 @@ parent: 01M1B7D84Q2BKFK2CHXKRZCH8B
 ---
 
 A Wishlist is a feature where we can select items either from quests or from dungeons to replace our gear. We can "wishlist" them and this will advice us on which content to do.
+
+Depends on Dungeon Journal and Quest Mapper
