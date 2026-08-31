@@ -347,34 +347,21 @@ function Region:RegisterForClicks(...)
 end
 function Region:GetRegisteredClicks() return self.clicks end
 
--- A press on a button, which is the only way to find out whether anything is on
--- the other end of one.
---
--- The edge is the point. A button registered for AnyDown does nothing at all on
--- an up press, and a test that ran the handler regardless would pass on exactly
--- the bug RegisterForClicks above is recorded to catch. The caller says which
--- edge because a key binding press and a mouse release are not the same event
--- and the client does not guess either.
---
--- OnClick then PostClick, in the client's order: a secure button does its work
--- between the two, which is why anything tidying up after a secure press is
--- written into PostClick rather than OnClick.
-function Region:Click(button, down)
-	button = button or "LeftButton"
-	local edge = down and "Down" or "Up"
-	local clicks = self.clicks
-	if clicks and not (clicks["Any" .. edge] or clicks[button .. edge]) then
-		return false
+-- A press on a button lives in 14-secure.lua, beside the half of one that the
+-- addon does not write. Region:Click is defined there because the edge a click
+-- lands on is the client's own question and not this file's.
+
+-- Which buttons a frame hands straight through to whatever is behind it,
+-- recorded for the reason RegisterForClicks above is. A frame that passes the
+-- right button through and registers for it as well draws perfectly, hovers
+-- perfectly, and answers a right click by turning the camera.
+function Region:SetPassThroughButtons(...)
+	self.passed = {}
+	for index = 1, select("#", ...) do
+		self.passed[select(index, ...)] = true
 	end
-	local scripts = self.scripts
-	if scripts and scripts.OnClick then
-		scripts.OnClick(self, button, down and true or false)
-	end
-	if scripts and scripts.PostClick then
-		scripts.PostClick(self, button, down and true or false)
-	end
-	return true
 end
+function Region:GetPassThroughButtons() return self.passed end
 
 -- Whether a frame takes the mouse. Recorded for the same reason: a frame laid
 -- over an icon that answers the mouse is a button you cannot press, and it
@@ -630,9 +617,14 @@ _G.UIParent.ignoreScale = true
 _G.WorldFrame = region("frame")
 _G.GameTooltip = region("frame")
 
-function _G.CreateFrame(kind, name, parent)
+-- The template is kept rather than dropped: a secure action button is the one
+-- frame in this client whose click does something the addon did not write, and
+-- Region:Click cannot model that half without knowing which frames have it.
+function _G.CreateFrame(kind, name, parent, template)
 	local f = child(kind, parent or _G.UIParent, name)
 	f.origin = loading.file
+	f.template = template
+	f.secure = template ~= nil and template:find("SecureActionButton", 1, true) ~= nil
 	frames[#frames + 1] = f
 	return f
 end
@@ -670,9 +662,14 @@ end
 -- range it asked for was given. Nothing else here clamps, because nothing else
 -- this addon writes does.
 local NAMEPLATE_MAX_DISTANCE_CEILING = 41
+--
+-- ActionButtonUseKeyDown is on, where this client starts it. It is the setting
+-- that decides which edge a secure button acts on, so a stub that left it off
+-- would agree with a square registered for the release and hide the one bug
+-- that makes a square dead.
 local cvars = { nameplateShowEnemies = "1", nameplateMotion = "0",
 	nameplateOverlapV = "1.10", SoftTargetEnemy = "0",
-	nameplateMaxDistance = "41" }
+	nameplateMaxDistance = "41", ActionButtonUseKeyDown = "1" }
 function _G.GetCVar(k) return cvars[k] end
 function _G.SetCVar(k, v)
 	if k == "nameplateMaxDistance" then

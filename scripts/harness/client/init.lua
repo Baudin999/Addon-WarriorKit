@@ -205,6 +205,10 @@ for _, part in ipairs({
 	-- slot that is not a hand out of. One GetInventoryItemLink in this client
 	-- rather than two wrapping each other.
 	"13-character",
+	-- Last, and it needs nothing but the Region table 01-widgets exported and
+	-- the counted calls the files above installed: it defines the press that
+	-- reaches all of them, and the client's own half of one.
+	"14-secure",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

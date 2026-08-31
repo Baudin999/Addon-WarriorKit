@@ -277,6 +277,16 @@ end
 
 ----------------------------------------------------------------------
 -- Clicking a slot
+--
+-- Half of what a click on a worn item does is open to an addon and half is not.
+-- The swap is an ordinary call. Using what is in the slot is protected, and so
+-- is finishing a spell the client is holding until it is told which item it is
+-- for, which is what a sharpening stone is: both of those got the dialog saying
+-- the addon has been blocked from an action only available to the Blizzard UI.
+-- So the use is a macro on a secure button, and every check below goes through
+-- Click rather than the handlers, because the half that matters is the client's
+-- own: the square that shipped had every attribute right and acted on an edge it
+-- never registered for, which reads as a square that does nothing.
 ----------------------------------------------------------------------
 
 do
@@ -288,28 +298,89 @@ do
 		end
 	end
 
+	-- Nothing on these squares may hand the right button to the camera: the
+	-- right button is the action.
+	local passed = head.button:GetPassThroughButtons()
+	check(passed == nil or not passed["RightButton"],
+		"the square passes the right button through, so its right click turns the camera")
+
+	-- A right click takes the piece off, and it has to actually run: the line
+	-- is read out of what the client was sent rather than off the attribute,
+	-- because an attribute is what a dead square also has.
+	local macros = #moved.macros
+	head.button:Click("RightButton")
+	check(#moved.macros == macros + 1 and moved.macros[#moved.macros] == "/use 1",
+		("a right click on the helmet sent %s, and it has to send /use 1")
+			:format(tostring(moved.macros[#moved.macros])))
+
+	-- A plain left click is still the swap, and it is the client's own call.
 	local picked, used = #moved.picked, #moved.used
-	head.button.scripts.OnClick(head.button, "LeftButton")
+	macros = #moved.macros
+	head.button:Click("LeftButton")
 	check(#moved.picked == picked + 1 and moved.picked[#moved.picked] == 1,
 		"a left click on the helmet did not reach the client's own swap")
-	head.button.scripts.OnClick(head.button, "RightButton")
-	check(#moved.used == used + 1 and moved.used[#moved.used] == 1,
-		"a right click on the helmet did not reach the client's own take-off")
+	check(#moved.used == used and #moved.macros == macros,
+		"a left click used the helmet instead of swapping it")
 
-	-- And in a fight, where the client refuses both silently. The page has to
-	-- refuse first and say why, because a slot that does nothing when you click
-	-- it is worse than one that will not let you.
+	-- And in a fight, where the client refuses the swap silently. The page has
+	-- to refuse first and say why, because a slot that does nothing when you
+	-- click it is worse than one that will not let you.
 	local real = _G.InCombatLockdown
 	_G.InCombatLockdown = function() return true end
-	picked, used = #moved.picked, #moved.used
-	head.button.scripts.OnClick(head.button, "LeftButton")
-	head.button.scripts.OnClick(head.button, "RightButton")
-	check(#moved.picked == picked and #moved.used == used,
-		"gear was moved in combat")
+	picked = #moved.picked
+	head.button:Click("LeftButton")
+	check(#moved.picked == picked, "gear was moved in combat")
 	local free, why = Worn.Free()
 	check(free == false and why:find("fight", 1, true) ~= nil,
 		("a slot in combat gave the reason %s"):format(tostring(why)))
 	_G.InCombatLockdown = real
+end
+
+----------------------------------------------------------------------
+-- Clicking a slot with a stone waiting
+----------------------------------------------------------------------
+
+do
+	local pane = Window.Pane(GEAR)
+	local main
+	for _, box in ipairs(pane.squares) do
+		if box.entry.slot == 16 then
+			main = box
+		end
+	end
+
+	moved.targeting = true
+	local picked, used = #moved.picked, #moved.used
+
+	-- The whole click, because the thing that was broken sat in the middle of
+	-- one. The stone lands on the slot the square carries, and it lands from
+	-- the client's own secure half rather than from anything this addon calls.
+	main.button:Click("LeftButton")
+	check(#moved.used == used + 1 and moved.used[#moved.used] == 16,
+		"a stone waiting for an item did not land on the main hand")
+	check(#moved.picked == picked,
+		"a stone waiting for an item was answered with the swap, which is the forbidden one")
+
+	-- And in a fight, where a stone is exactly the thing you want and nothing
+	-- has to be written for it to work.
+	local real = _G.InCombatLockdown
+	_G.InCombatLockdown = function() return true end
+	used, picked = #moved.used, #moved.picked
+	main.button:Click("LeftButton")
+	check(#moved.used == used + 1 and #moved.picked == picked,
+		"a stone in a fight did not land on the main hand")
+	_G.InCombatLockdown = real
+
+	moved.targeting = false
+	check(Worn.Targeting() == false,
+		"nothing is waiting for an item and the page still thinks something is")
+
+	-- With nothing waiting the same click is the swap again, which is the half
+	-- of the arrangement that a square holding a macro on the left would lose.
+	picked = #moved.picked
+	main.button:Click("LeftButton")
+	check(#moved.picked == picked + 1 and moved.picked[#moved.picked] == 16,
+		"a left click with nothing waiting stopped being the swap")
 end
 
 ----------------------------------------------------------------------

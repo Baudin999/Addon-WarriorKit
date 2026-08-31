@@ -352,7 +352,10 @@ end
 
 local made = _G.CreateFrame
 _G.CreateFrame = function(kind, name, parent, template)
-	local frame = made(kind, name, parent)
+	-- The template goes through, not just past: the client underneath reads it
+	-- to decide whether a button's click has a secure half, and a wrapper that
+	-- swallowed it turned every secure button in the addon into a plain one.
+	local frame = made(kind, name, parent, template)
 	if template == "SecureGroupHeaderTemplate" then
 		Header(frame)
 	end

@@ -59,13 +59,28 @@ worn[11] = itemLink("Band of the Eternal")
 -- Neither moves anything: what the page is answerable for is whether it refused
 -- in a fight and whether it called at all, and a stub that shuffled items
 -- between bag and slot would be modelling the server.
-local moved = { picked = {}, used = {} }
+local moved = { picked = {}, used = {}, macros = {}, targeting = false }
+
+-- The state the page has to answer differently, and the one that had no stub:
+-- the client is holding a spell that is waiting to be told which item it is
+-- for, which is what a sharpening stone, an oil, a scroll or a poison looks
+-- like from Lua. Off unless a section turns it on.
+_G.SpellCanTargetItem = function()
+	return moved.targeting
+end
 
 _G.PickupInventoryItem = function(slot)
 	moved.picked[#moved.picked + 1] = slot
 end
 _G.UseInventoryItem = function(slot)
 	moved.used[#moved.used + 1] = slot
+end
+
+-- What a secure button sent, counted the same way. The line is the assertion:
+-- an attribute that says "macro" and a macro body that says nothing useful look
+-- identical from outside, and the client runs the body.
+_G.RunMacroText = function(text)
+	moved.macros[#moved.macros + 1] = text
 end
 
 --------------------------------------------------------------------------

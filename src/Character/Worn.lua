@@ -26,10 +26,23 @@ ns.Worn = Worn
 -- is written to accept from a hardware click. It costs nothing to be the same
 -- as the thing being replaced.
 --
--- Both calls are refused in a fight, by the client rather than by this file,
--- and the refusal is silent. So the fight is checked here and the reason is
--- said out loud: a slot that does nothing when you click it is the worst
--- version of this page.
+-- It is refused in a fight, by the client rather than by this file, and the
+-- refusal is silent. So the fight is checked here and the reason is said out
+-- loud: a slot that does nothing when you click it is the worst version of this
+-- page.
+--
+-- **Using what is in a slot is not a call at all, and that is the correction
+-- this file exists in its current shape for.** `UseInventoryItem` is protected.
+-- An addon that calls it from its own click gets the dialog saying WarriorKit
+-- has been blocked from an action only available to the Blizzard UI, and so
+-- does an addon that finishes a spell the client is holding until it is told
+-- which item it is for, which is what a sharpening stone, a weapon oil, an
+-- enchanting scroll and a poison all are. The client's own sheet may make that
+-- call because it is the client's own sheet. This one may not, whatever it
+-- calls, so it does not call: Character/Paperdoll.lua puts `/use <slot>` and a
+-- `target-slot` on a secure button and the client runs both on the path a macro
+-- runs on, which is the same `/use 16` every stone macro in the game already
+-- carries. All this file owes that arrangement is the question below.
 --
 -- **Nothing is cached.** What you are wearing changes on an event the client
 -- fires, the window redraws on that event, and a cache between the two would be
@@ -203,15 +216,15 @@ function Worn.Level()
 end
 
 --------------------------------------------------------------------------
--- Putting something on and taking it off
+-- Putting something on
 --
--- Two calls, one line each, and the whole of this section is the sentence that
--- comes back when the client will not take them.
+-- One call and two questions. The call is the swap; the questions are whether
+-- the client will take it and whether the click meant something else entirely.
 --------------------------------------------------------------------------
 
 -- Whether a slot can be touched at all right now, and why not where it cannot.
--- Asked before either call below, so the page can grey a slot rather than
--- offering a click that quietly does nothing.
+-- Asked before the call below, so the page can say why rather than offering a
+-- click that quietly does nothing.
 function Worn.Free()
 	if InCombatLockdown and InCombatLockdown() then
 		return false, "gear cannot be changed in a fight."
@@ -225,6 +238,10 @@ end
 -- Whatever is on the cursor into this slot, and whatever was in the slot onto
 -- the cursor. With an empty cursor it is the second half alone, which is how a
 -- click takes something off.
+--
+-- Not while a spell is waiting for an item, which the page asks about first: in
+-- that state the click is pointing the spell at this piece and the swap would
+-- be both the wrong thing and a forbidden one.
 function Worn.Swap(slot)
 	local free, why = Worn.Free()
 	if not free then
@@ -236,22 +253,24 @@ function Worn.Swap(slot)
 	return true
 end
 
--- Off, into your bags. The client's own call, which uses the item where the
--- item has a use, so a trinket right clicked here fires rather than coming off.
--- That is the client's behaviour on its own sheet and it is the behaviour
--- anybody clicking a trinket is expecting.
-function Worn.Use(slot)
-	local free, why = Worn.Free()
-	if not free then
-		return false, why
+-- Whether the client is holding a spell that is waiting for an item.
+--
+-- True from the moment a stone, an oil, a scroll or a poison is used until it
+-- lands or is cancelled. In that state a click on a slot means "that one", the
+-- client's own secure template lands it on the slot, and the only thing the
+-- page owes the arrangement is to not run the swap above over the top of it.
+-- Asked before the click rather than after, because the landing is what clears
+-- the state.
+--
+-- Both names, through the same pcall every other client call here goes through,
+-- because the two clients this addon runs on need not agree that either exists.
+-- A client that answers neither is a client where nothing can be waiting, which
+-- is the state the page already draws.
+function Worn.Targeting()
+	if Ask("SpellCanTargetItem") then
+		return true
 	end
-	if type(_G.UseInventoryItem) ~= "function" then
-		return false, "this client has no call for taking a worn item off."
-	end
-	if not pcall(_G.UseInventoryItem, slot) then
-		return false, "the client refused it."
-	end
-	return true
+	return Ask("SpellCanTargetItemID") and true or false
 end
 
 --------------------------------------------------------------------------
