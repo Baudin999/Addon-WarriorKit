@@ -54,6 +54,17 @@ local RACK = {
 local open = false
 local bought = {}
 
+-- The buyback rack. A stack of what has been sold this session, oldest at the
+-- bottom, which is the order the client holds it in: the slot number goes up
+-- as you sell and the newest thing is the highest one.
+--
+-- A slot taken back leaves a hole rather than closing up, and the hole is the
+-- part worth modelling. GetNumBuybackItems answers the top of the range and
+-- not how many things are in it, so a window that trusted the count as a list
+-- length would draw a blank row for every gap. Nothing in the real client says
+-- that out loud either.
+local SOLD = {}
+
 --------------------------------------------------------------------------
 
 local function entry(index)
@@ -134,6 +145,54 @@ end
 
 --------------------------------------------------------------------------
 
+-- What you sold him, and what taking it back costs. Five values in the order
+-- both clients answer them: name, texture, price, quantity, numAvailable, and
+-- whether your class can use it.
+_G.GetNumBuybackItems = function()
+	if not open then
+		return 0
+	end
+	local top = 0
+	for index = 1, #SOLD do
+		if SOLD[index] then
+			top = index
+		end
+	end
+	return top
+end
+
+local function sold(index)
+	return open and SOLD[index] or nil
+end
+
+_G.GetBuybackItemInfo = function(index)
+	local row = sold(index)
+	if not row then
+		return nil
+	end
+	return row.name, ITEMS[row.name].icon, row.price, row.quantity, 1, true
+end
+
+_G.GetBuybackItemLink = function(index)
+	local row = sold(index)
+	return row and itemLink(row.name) or nil
+end
+
+-- Taking one back. The purse pays what he paid you, the slot empties, and the
+-- client says so with the same update a purchase fires, which is the whole of
+-- what the window reads.
+_G.BuybackItem = function(index)
+	local row = sold(index)
+	if not row then
+		return
+	end
+	SOLD[index] = false
+	state.purse = state.purse - row.price
+	H.fire("MERCHANT_UPDATE")
+end
+
+--------------------------------------------------------------------------
+
 -- The frame the addon parks. It is given a size because the park is checked by
 -- reading where its left edge landed, and a frame with no width has no edges.
 _G.MerchantFrame:SetSize(336, 400)
@@ -168,4 +227,18 @@ H.merchant = {
 	end,
 	close = shut,
 	shown = function() return open end,
+	-- Selling him something, from the section rather than from a bag. What a
+	-- sale does to your bags is 04-hands.lua's business and what it does to the
+	-- vendor is this: the purse goes up and a slot appears on the buyback rack.
+	sell = function(name, price, quantity)
+		if not open then
+			return false
+		end
+		SOLD[#SOLD + 1] = { name = name, price = price or 1,
+			quantity = quantity or 1 }
+		state.purse = state.purse + (price or 1)
+		H.fire("MERCHANT_UPDATE")
+		return #SOLD
+	end,
+	sold = SOLD,
 }

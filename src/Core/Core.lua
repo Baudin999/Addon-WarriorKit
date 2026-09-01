@@ -1173,6 +1173,59 @@ function ns.BuyMerchant(index, count)
 	return true
 end
 
+--------------------------------------------------------------------------
+-- The buyback rack
+--
+-- The other half of a merchant session. Everything you have sold this visit is
+-- held for an hour at the price he paid you, and taking one back is the only
+-- undo the game has for a sale. The addon has to draw it because the client's
+-- own tab is behind the frame parked off the side of the screen.
+--
+-- The slots are not a list. GetNumBuybackItems answers the highest slot the
+-- vendor is holding rather than how many things are in it, and a slot you have
+-- already taken something out of answers nothing at all, so a caller walks the
+-- range and skips what has no name.
+--------------------------------------------------------------------------
+
+function ns.BuybackCount()
+	if type(_G.GetNumBuybackItems) ~= "function" then
+		return 0
+	end
+	return _G.GetNumBuybackItems() or 0
+end
+
+-- One slot: name, icon, what it costs to take back, how many are in the stack,
+-- how many the slot holds and whether your class can use it. The price is what
+-- he paid you, which is why nothing here has to work it out.
+function ns.BuybackItem(index)
+	if type(_G.GetBuybackItemInfo) ~= "function" then
+		return nil
+	end
+	return _G.GetBuybackItemInfo(index)
+end
+
+function ns.BuybackItemLink(index)
+	if type(_G.GetBuybackItemLink) ~= "function" then
+		return nil
+	end
+	return _G.GetBuybackItemLink(index)
+end
+
+-- Take one back. False where the client has no such call, so a caller can say
+-- nothing happened rather than believe the item is on its way to a bag.
+--
+-- TakeBack rather than Buyback, which is what the call it wraps is called: the
+-- rack itself is ns.Buyback over in Merchant/Buyback.lua, and two things one
+-- letter apart on the same table is a crash the first time somebody calls the
+-- wrong one.
+function ns.TakeBack(index)
+	if type(_G.BuybackItem) ~= "function" then
+		return false
+	end
+	_G.BuybackItem(index)
+	return true
+end
+
 -- Which creature a GUID belongs to, as the id the databases are keyed on.
 --
 -- The client hands GUIDs out everywhere and never hands out the number inside

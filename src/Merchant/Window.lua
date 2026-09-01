@@ -35,6 +35,14 @@ ns.MerchantWindow = Window
 -- own OnHide, which is where escape and the close box both land, so there is
 -- one place that ends the session rather than one per exit.
 --
+-- **Two racks, one window, one tab across the top.** What he sells and what you
+-- have sold are the two halves of a merchant session, and the second one is the
+-- game's only undo for a sale. The client keeps it behind the second tab of its
+-- own frame, and that frame is parked off the side of the screen for the whole
+-- session, so replacing the merchant window without replacing buyback left an
+-- hour-long safety net nothing could reach. Both racks are drawn by one pool of
+-- rows out of Rows.lua and the tab says which one is under it.
+--
 -- **The title is the vendor's name.** It is the one thing about a merchant
 -- window worth a title bar: you talk to four of them in a row in a capital and
 -- the rack alone does not always say which. A client that will not answer gets
@@ -54,9 +62,18 @@ local WIDTH = 400
 -- number is a size rather than a count so that the window is the same shape
 -- whatever you walk up to: a window that is a different height at every vendor
 -- is a window whose close cross is somewhere new every time.
+--
+-- It is how tall the rack is and not how tall the window is. The tab strip is
+-- added on top of it once the strip has said how tall it came out, so putting
+-- the second rack in cost a row of tabs rather than a row of stock.
 local HEIGHT = 450
 
-local window, view, tally, purse
+-- Which tab is which. The rack first, because that is what you walked up to
+-- him for; buyback is where you go when something went wrong.
+local RACK, BOUGHT = 1, 2
+
+local window, view, tabs, tally, purse
+local page = RACK
 local session = false
 
 local function Build()
@@ -68,13 +85,26 @@ local function Build()
 	})
 	ns.Remember(window)
 
+	tabs = UI.TabStrip(window.content, { onSelect = function(index)
+		page = index
+		Window.Refresh()
+	end })
+	tabs.frame:SetPoint("TOPLEFT", M.pad, 0)
+	tabs.frame:SetPoint("TOPRIGHT", -M.pad, 0)
+	tabs:Add("Rack")
+	tabs:Add("Buyback")
+	local strip = tabs:Resize(WIDTH - M.pad * 2)
+	window:Resize(WIDTH, HEIGHT + strip)
+
 	view = UI.ScrollView(window.content, { overlay = true })
-	view.frame:SetPoint("TOPLEFT", M.pad, -M.pad)
+	view.frame:SetPoint("TOPLEFT", M.pad, -strip - M.pad)
 	ns.MerchantRows.Attach(view.canvas)
 	-- Once, at the size the window is and stays. Body rather than the height
 	-- asked for, because UI.Window clamps a window to what the screen holds and
-	-- the view has to be told the height it actually got.
-	view:Resize(WIDTH - M.pad * 2, window:Body() - M.pad * 2)
+	-- the view has to be told the height it actually got. The strip comes off
+	-- the top of it: a view told it has the whole body draws its last row under
+	-- the footer, where a click reaches the window behind this one.
+	view:Resize(WIDTH - M.pad * 2, window:Body() - strip - M.pad * 2)
 
 	tally = UI.Label(window.footer, M.font, C.text, "LEFT", UI.FLAT)
 	tally:SetPoint("LEFT")
@@ -93,8 +123,11 @@ local function Build()
 
 	-- The two numbers along the bottom, recorded on the window the way the bag
 	-- window records its own. Nothing in the addon reads them; the harness reads
-	-- the strings the footer actually drew.
-	window.tally, window.purse = tally, purse
+	-- the strings the footer actually drew. The strip goes on beside them so the
+	-- harness can press a tab rather than call the thing a press would call.
+	window.tally, window.purse, window.tabs = tally, purse, tabs
+
+	tabs:Select(RACK)
 
 	UI.OnRescale(function()
 		if window then
@@ -114,11 +147,26 @@ function Window.Refresh()
 	if not window or not window:IsShown() then
 		return false
 	end
-	local state = ns.Stock.Read()
-	local content = ns.MerchantRows.Paint(state, WIDTH - M.pad * 2)
+	-- Both racks are read on every pass and only the one on top is drawn. The
+	-- read is a walk of at most sixty entries with no allocation in it, and what
+	-- it buys is that the tally under a tab is right the moment you press it
+	-- rather than one refresh later.
+	local rack = ns.Stock.Read()
+	local sold = ns.Buyback.Read()
+
+	local source = page == BOUGHT and ns.Buyback or ns.Stock
+	local state = page == BOUGHT and sold or rack
+	local content = ns.MerchantRows.Paint(state, WIDTH - M.pad * 2, source)
 	view:Update(content)
+
 	window:SetTitle(ns.Stock.Vendor() or "Merchant")
-	tally:SetText(("%d for sale"):format(state.count))
+	if page == BOUGHT then
+		tally:SetText(sold.count > 0
+			and ("%d to buy back"):format(sold.count)
+			or "nothing sold yet")
+	else
+		tally:SetText(("%d for sale"):format(rack.count))
+	end
 	purse:SetText(ns.Coined(GetMoney()))
 	return true
 end
@@ -129,6 +177,13 @@ function Window.Show()
 	end
 	if not window then
 		Build()
+	end
+	-- Every vendor starts on his rack. Buyback is where the last one went wrong,
+	-- and a window that opens on the tab you left it on would show the next
+	-- vendor's empty one instead of what he sells.
+	if tabs then
+		page = RACK
+		tabs:Select(RACK)
 	end
 	window:Show()
 	Window.Refresh()
@@ -177,6 +232,9 @@ function Window.Describe()
 	if not session then
 		return "shut, no merchant is open"
 	end
+	if page == BOUGHT then
+		return ("open on buyback, %s"):format(ns.Buyback.Describe())
+	end
 	return ("open, %s"):format(ns.Stock.Describe())
 end
 
@@ -191,6 +249,10 @@ end
 -- GET_ITEM_INFO_RECEIVED is the one that is not obvious, and it is the same one
 -- the bag window listens for: an item the client had not cached is graded nil,
 -- so it sits under the wrong heading until the answer arrives.
+--
+-- Those last three are also what a sale looks like from here. Selling something
+-- moves the purse, empties a bag slot and puts a row on the buyback rack, and
+-- the client says so twice; there is no event of its own for the second rack.
 --------------------------------------------------------------------------
 
 local function OnEvent(_, event)

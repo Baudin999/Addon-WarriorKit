@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### Buyback, which went off the screen with the client's window
+
+The merchant window replaced the rack and not the tab beside it. Selling to the
+wrong vendor is recoverable for an hour, and that is the argument three other
+parts of this addon lean on: the grey sweep sells for you, the bag window's row
+sells four things in one press, and `Comfort/Destroy.lua` will not destroy
+anything a vendor would take because the vendor is the safer door. All of that
+is true because a sale can be undone, and the only place in the game it can be
+undone from was behind `MerchantFrame`, which spends the whole session parked
+off the side of the screen so its cross cannot end the conversation by accident.
+Parking it took buyback with it.
+
+So the window has a tab strip across the top now. `Rack` is what he sells,
+unchanged. `Buyback` is the last twelve things you sold, newest at the top, at
+the price you were paid, and a click takes one back. The window grew by the
+height of the strip rather than losing a row of stock: `HEIGHT` was always how
+tall the rack is, and the strip is added on top of it once the strip has said
+how tall it came out.
+
+`Merchant/Buyback.lua` is `Stock.lua`'s shape for the other rack, and the two
+differ in the two places the racks do. It is not in piles. Stock files a shop
+under the bag window's class headings because you are looking for a kind of
+thing; you open buyback for one reason, which is the thing you just sold, so the
+order is the order you sold in and there are at most twelve. And the slots are a
+range rather than a list: `GetNumBuybackItems` answers the highest slot in use
+rather than how many things are in it, and a slot you have already taken
+something out of answers no name at all, so the walk runs the range and skips
+the holes. A window that read the count as a length would draw a blank row for
+every gap, and nothing in the client says so out loud.
+
+One pool of rows draws both. `Merchant/Rows.lua` used to name `ns.Stock` for the
+four questions a row asks about an entry: is it in stock, how many are left, can
+you pay for it, buy it. It takes whichever rack answers them as an argument now,
+and the row records the one that painted it, so a press buys back the thing on
+the line rather than the rack row that was drawn on the same button a moment
+earlier. That last part is what the harness asserts: the rod cost a thousand to
+take back and the rack row under it was the water at twenty five.
+
+`/wk merchant sold` says what is on the rack, and the panel reads it live.
+
 ### The bag window at a merchant
 
 Standing at a vendor with the bag window open, there was no way to sell

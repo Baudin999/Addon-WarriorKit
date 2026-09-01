@@ -279,6 +279,77 @@ merchant.rack[3].available = 2
 Window.Refresh()
 
 ----------------------------------------------------------------------
+-- The buyback rack
+--
+-- The half of the client's merchant window that went off the side of the screen
+-- with the rest of it. Selling to the wrong vendor is recoverable for an hour
+-- and that is the argument every sale in this addon leans on, so the window
+-- that replaced the client's has to carry the tab that makes it true.
+--
+-- Three things are asserted. The order is the order you sold in, newest at the
+-- top, because the row you came here for is the last one you sold. The slots
+-- are a range and not a list, so a hole left by a row already taken back is
+-- skipped rather than drawn blank. And a press on a buyback row buys that row
+-- back rather than buying the rack row that was drawn on the same button a
+-- moment earlier, which is the one way a shared pool of rows could go wrong.
+----------------------------------------------------------------------
+
+local tabs = Window.Frame().tabs
+local foot = Window.Frame().tally
+
+check(tabs ~= nil and #tabs.buttons == 2,
+	"the merchant window has no tab strip, so buyback is nowhere a click can reach")
+
+local purse = state.purse
+check(merchant.sell("Runed Copper Rod", 1000) == 1,
+	"selling something to the vendor did not put it on his buyback rack")
+merchant.sell("Refreshing Spring Water", 5, 5)
+check(state.purse == purse + 1005,
+	"the two sales did not pay what they were sold for")
+
+check(shown() == 5,
+	"selling something changed what the rack tab is drawing")
+
+check(tabs.buttons[2]:Click("LeftButton") == true,
+	"the buyback tab refused a click")
+
+check(shown() == 2,
+	("the buyback tab drew %d rows and two things were sold"):format(shown()))
+check(rows[1].name == "Refreshing Spring Water",
+	"the buyback rack is not newest first, so the row you just sold is not the top one")
+check(rows[2].name == "Runed Copper Rod",
+	"the older of the two sales is not under the newer one")
+check(not Rows.Headers()[1]:IsShown(),
+	"the buyback rack drew a pile heading, which the tab above it already says")
+check(rows[2].price:GetText() == ns.Coined(1000),
+	"a buyback row does not carry the price it costs to take back")
+check(rows[2].note:GetText() == "",
+	"a buyback row drew a count of how many the vendor has left")
+check(foot:GetText() == "2 to buy back",
+	("the footer says %q with two things on the rack"):format(foot:GetText()))
+
+-- The press, and the fact it proves is which of the two racks the row belonged
+-- to. Taking the rod back costs the thousand he paid for it; the rack row drawn
+-- on this same button a moment ago was the water at twenty five.
+purse = state.purse
+check(rows[2]:Click("LeftButton") == true, "a click on a buyback row was refused")
+check(state.purse == purse - 1000,
+	("taking the rod back moved the purse by %d and he paid 1000 for it")
+		:format(purse - state.purse))
+
+check(shown() == 1 and rows[1].name == "Refreshing Spring Water",
+	"a slot taken back is still on the rack, or the hole it left was drawn as a row")
+check(_G.GetNumBuybackItems() == 2,
+	"the client stopped counting the empty slot, which is not what it does")
+
+check(Window.Describe():find("buy back") ~= nil,
+	"the window says nothing about buyback while that is what it is showing")
+
+tabs.buttons[1]:Click("LeftButton")
+check(shown() == 5 and foot:GetText() == "5 for sale",
+	"going back to the rack tab did not put the vendor's stock back on the rows")
+
+----------------------------------------------------------------------
 -- Blizzard's window
 --
 -- Parked, and the two things that proves. It is off the side of the screen at

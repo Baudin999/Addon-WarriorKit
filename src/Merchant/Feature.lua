@@ -30,6 +30,13 @@ local function MerchantWord(arg, rawArg)
 		ns.Print("the client's merchant window is " .. ns.MerchantBlizzard.Describe() .. ".")
 	elseif word == "stock" then
 		ns.Print(ns.Stock.Describe() .. ".")
+	elseif word == "sold" then
+		-- Read before it is described, unlike stock above. The rack is scanned
+		-- every time the window draws and this one is only scanned when it is
+		-- on top, so asking in chat with the rack showing would answer with
+		-- whatever the last vendor was holding.
+		ns.Buyback.Read()
+		ns.Print(ns.Buyback.Describe() .. ".")
 	elseif word == "on" or word == "off" then
 		SetMerchant(word == "on")
 		ns.Options.Refresh()
@@ -37,7 +44,7 @@ local function MerchantWord(arg, rawArg)
 	elseif word == "" then
 		ns.Print(ns.MerchantWindow.Describe() .. ".")
 	else
-		ns.Print("merchant takes on, off, hide or stock.")
+		ns.Print("merchant takes on, off, hide, stock or sold.")
 	end
 	-- rawArg is the untouched line, which this word has no use for: every
 	-- sub-word above takes a switch or nothing. Named so the signature matches
@@ -75,6 +82,7 @@ ns.Register({
 		"merchant on|off, the whole rack in one window instead of ten at a time",
 		"merchant hide on|off, move the client's own merchant window off the screen",
 		"merchant stock, what the vendor in front of you has",
+		"merchant sold, what is on the buyback rack",
 	},
 
 	status = function()
@@ -88,13 +96,14 @@ ns.Register({
 		ui.Check("the addon's merchant window",
 			function() return ns.db.merchant end,
 			SetMerchant)
-		ui.Hint("It opens when you talk to a vendor and closes when you walk away. A click buys one of whatever the vendor sells it in: one flask, or one stack of two hundred arrows.")
+		ui.Hint("It opens at a vendor and closes when you walk away. A click buys one of what he sells it in: one flask, or one stack of two hundred arrows. The tab at the top is the last twelve things you sold.")
 		ui.Check("move the client's merchant window aside",
 			function() return ns.db.merchantHideBlizz end,
 			SetHide)
 		ui.Hint("Moved rather than hidden. Hiding that frame is what ends the conversation with the vendor, so it is parked off the side of the screen and closing this window walks away.")
 		ui.Reading("this window", ns.MerchantWindow.Describe)
 		ui.Reading("the rack", ns.Stock.Describe)
+		ui.Reading("what you sold", ns.Buyback.Describe)
 		ui.Reading("the rows", ns.MerchantRows.Describe)
 		ui.Reading("the client's window", ns.MerchantBlizzard.Describe)
 	end,

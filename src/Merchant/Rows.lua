@@ -28,6 +28,14 @@ ns.MerchantRows = Rows
 -- other and two squares that differ by a pixel of inset or a shade of grey is
 -- worse than either. What is left here is the row around it.
 --
+-- **One pool draws both racks.** The window has two: what the vendor sells and
+-- what you sold him. A row is the same row on either, so which rack is being
+-- drawn arrives as the thing that answers questions about an entry rather than
+-- as a flag. Stock.lua and Buyback.lua both answer InStock, Left, Afford and
+-- Buy, this file calls those four on whichever it was handed, and the tab
+-- swaps it. A second pool would be a second copy of the layout below, kept in
+-- step by hand.
+--
 -- **Nothing here is a secure button and nothing needs to be.** A bag square
 -- inherits the client's own template because a right click on one means eat,
 -- equip, open, sell or attach depending on what is in front of you, and the
@@ -55,6 +63,11 @@ local CHIP, CHIP_GAP = 14, 3
 
 local rows, headers = {}, {}
 local canvas
+
+-- Which rack the rows are drawing. Set by every pass and read by a click, so a
+-- press lands on the rack the row was painted from rather than on whichever one
+-- the window happens to be showing when the mouse comes down.
+local source
 
 --------------------------------------------------------------------------
 -- Building one
@@ -101,7 +114,7 @@ local function Leave(row)
 end
 
 local function Click(row)
-	local going, why = ns.Stock.Buy(row.entry)
+	local going, why = (row.source or ns.Stock).Buy(row.entry)
 	if not going then
 		ns.Print(why .. ".")
 	end
@@ -213,21 +226,21 @@ local function Chips(row, entry)
 	return anchor
 end
 
-local function Paint(row, entry)
+local function Paint(row, entry, rack)
 	-- Dim for the two things that stop a press: none left, and more than you are
 	-- carrying. Both are facts about this minute rather than about the item,
 	-- which is the same statement the bag window makes when it dims what a
 	-- vendor will not take, in the same shade.
-	local refused = not ns.Stock.InStock(entry) or not ns.Stock.Afford(entry)
+	local refused = not rack.InStock(entry) or not rack.Afford(entry)
 
-	row.entry, row.link, row.name = entry, entry.link, entry.name
+	row.entry, row.link, row.name, row.source = entry, entry.link, entry.name, rack
 	UI.SlotPaint(row.square, entry.icon, entry.quantity, entry.quality, refused)
 
 	row.label:SetText(entry.name or "")
 	local ink = Ink(entry)
 	row.label:SetTextColor(ink[1], ink[2], ink[3])
 
-	local left = ns.Stock.Left(entry)
+	local left = rack.Left(entry)
 	row.note:SetText(left and ("%d left"):format(left) or "")
 	row.note:SetShown(left ~= nil)
 
@@ -265,7 +278,13 @@ local function Place(row, top, width)
 	row:SetWidth(width)
 end
 
+-- The heading over a pile, and nought where a pile has no name. The buyback
+-- rack is the one that has not: it is a single pile in the order you sold
+-- things, and a heading over it would say what the tab above it says.
 local function Name(index, text, top)
+	if not text or text == "" then
+		return top
+	end
 	local label = headers[index]
 	if not label then
 		label = UI.Label(canvas, M.heading, C.heading, "LEFT", UI.FLAT)
@@ -301,8 +320,9 @@ end
 -- Every pile laid out, and how tall the result is. The height is handed back
 -- rather than written anywhere, because the thing that has to know is the
 -- scroll view and the scroll view belongs to the window.
-function Rows.Paint(state, width)
+function Rows.Paint(state, width, rack)
 	local at, top = 0, 0
+	source = rack or ns.Stock
 	for index = 1, state.shown do
 		local group = state.groups[index]
 		local entries = group.entries
@@ -310,14 +330,23 @@ function Rows.Paint(state, width)
 		for held = 1, #entries do
 			at = at + 1
 			local row = Row(at)
-			Paint(row, entries[held])
+			Paint(row, entries[held], source)
 			Place(row, top, width)
 			row:Show()
 			top = top + ROW + GAP
 		end
 		top = top - GAP + BREAK
 	end
-	Trim(at, state.shown)
+	-- The headers used, which is not the piles drawn: a nameless pile takes a
+	-- row of rack and no heading, so trimming by state.shown would leave the
+	-- rack's last heading on the screen over the buyback list.
+	local named = 0
+	for index = 1, state.shown do
+		if (state.groups[index].name or "") ~= "" then
+			named = named + 1
+		end
+	end
+	Trim(at, named)
 	return math.max(top - BREAK, 1)
 end
 
