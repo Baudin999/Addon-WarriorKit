@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### The fanfare stopped shipping its own song
+
+`src/Media/BestAround.mp3` is five seconds of a record Joe Esposito made in
+1984, and this repository is public. Length is not a defence and neither is the
+fact that BestAround has been handing the same file out since 2007, so the file
+is gone from git and out of the release zip. Nothing else about the fanfare
+changed. The path, the event, the master channel, the throttle and both slash
+words are as they were.
+
+What is left is a part that names a file it does not carry. Put anything the
+client can read at `Media/BestAround.mp3` and it plays. Install BestAround and
+you already have the one everybody means. With nothing there, `PlaySoundFile`
+refuses and `/wk` reports it, which is what the part already did on a client
+with no sound at all.
+
+Both gates learned the new rule rather than losing the old one. `check.sh`
+exempts exactly one name from "a Lua file names this and it is not there", and
+in exchange fails if that name is ever tracked again, because the machine that
+plays the fanfare is also the machine a wide `git add` runs on. `release.sh`
+puts the pair in `IGNORE` and drops them from the list the zip must contain, so
+the copy that takes all of `src/` cannot carry them by accident. The licence
+file went with the sound: it describes a file no clone has, and a licence for
+nothing is a thing `check.sh` already fails.
+
 ### A dungeon log, three columns wide
 
 Neither of these clients has an adventure guide, so the two questions everybody

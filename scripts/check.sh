@@ -126,8 +126,27 @@ done < <(grep -hE '^## IconTexture:' WarriorKit*.toc | sed 's/^[^:]*: *//' | sor
 # Matched on the folder rather than on the whole path, because UI/Text.lua
 # builds its own out of ADDON and a rule that only saw a literal would stop
 # covering the file it was written for.
+# One name is exempt, and the exemption is a rule of its own rather than a hole.
+#
+# Media/BestAround.mp3 is somebody else's recording. This repository is public,
+# so the file is not in it: a clone gets the line in Comfort/Fanfare.lua that
+# names it and nothing at the end of that line. That is the shipped state and
+# not a fault. The part asks the client, the call comes back refused, and `/wk`
+# says the file is not there.
+#
+# So the file being absent is allowed and the file being tracked is not, which
+# is the half worth gating: a wide `git add` on the machine that has the mp3
+# puts it back in a public repository and nothing says so. Everything else this
+# rule catches is still a path that stopped resolving in a refactor.
+UNSHIPPED="BestAround.mp3"
+if git ls-files --error-unmatch "Media/$UNSHIPPED" >/dev/null 2>&1; then
+	echo "Media/$UNSHIPPED is tracked, and it is not ours to publish"
+	status=1
+fi
+
 while IFS= read -r named; do
 	[ -n "$named" ] || continue
+	[ "$named" = "$UNSHIPPED" ] && continue
 	[ -f "Media/$named" ] \
 		|| { echo "a Lua file names Media\\$named and it is not there"; status=1; }
 done < <(grep -rhoE 'Media\\\\[A-Za-z0-9_.-]+' --include='*.lua' . | sed 's/.*\\//' | sort -u)
@@ -145,12 +164,16 @@ done < <(grep -rhoE 'Media\\\\[A-Za-z0-9_.-]+' --include='*.lua' . | sed 's/.*\\
 # that got left behind in a refactor.
 #
 # A sound is OGG or MP3, because PlaySoundFile reads nothing else, and it
-# carries the font's licence rule for a harder reason. Media/BestAround.mp3 is
-# five seconds of a record somebody else made, and an audio file is the one kind
-# of asset here that can be somebody else's whole work rather than a glyph out
-# of a set. A sound with no <name>-LICENSE.txt beside it is a file nobody can
-# tell the provenance of by looking, which is exactly the state you do not want
-# to find a repository in.
+# carries the font's licence rule for a harder reason. An audio file is the one
+# kind of asset here that can be somebody else's whole work rather than a glyph
+# out of a set. A sound with no <name>-LICENSE.txt beside it is a file nobody
+# can tell the provenance of by looking, which is exactly the state you do not
+# want to find a repository in.
+#
+# This half of the rule now only ever runs on somebody's own disk. The one
+# sound the addon names is not in the repository, for the reason the exemption
+# above gives, so a clone reaches this loop with no sound in Media/ at all.
+# The rule stays because the next sound might be ours.
 #
 # A licence is that file, and it is allowed here only because a font or a sound
 # it belongs to is here too.

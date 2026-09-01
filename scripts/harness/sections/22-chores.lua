@@ -417,15 +417,20 @@ do
 	check(ns.Fanfare.Play(), "the press refused to play with the setting off")
 	check(heard() == before + 1, "the press played nothing")
 
-	-- A muted channel. The client answers nil rather than raising, and a fanfare
-	-- that did not sound has to say so: it is otherwise indistinguishable from a
-	-- setting somebody forgot they turned off.
+	-- A refused call. The client answers nil rather than raising, and a fanfare
+	-- that did not sound has to say so: it is otherwise indistinguishable from
+	-- a setting somebody forgot they turned off.
+	--
+	-- The client gives one answer for two causes. A file that is not in Media
+	-- and a channel that is muted both come back as this, and the addon does
+	-- not ship the file, so absent is the likelier of the two and neither is
+	-- guessed at. The reading names both.
 	sound.willPlay = false
 	advance(60)
 	local played, why = ns.Fanfare.Play()
-	check(not played, "a muted channel reported as played")
-	check(why == "the master volume is down or the channel is muted",
-		("a muted channel reported %q"):format(tostring(why)))
+	check(not played, "a refused call reported as played")
+	check(why == "the file is not in Media, or the master volume is down",
+		("a refused call reported %q"):format(tostring(why)))
 
 	-- And the build that answers nothing at all, which is the one the return
 	-- counting exists for. Read positionally, its silence is a refusal, and every

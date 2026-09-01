@@ -9,12 +9,17 @@ local ADDON, ns = ...
 -- game that is entirely yours, the client marks it with a chime you stopped
 -- hearing at about level twelve, and a horn section does not go unheard.
 --
--- The snippet is the one from BestAround, byte for byte, which is where
--- everybody who has heard this joke heard it: LittleJoey's addon from 2007,
--- fixed for 6.0 by Nephyrin, four files and one of them the song. Media/
--- BestAround-LICENSE.txt says where it came from and what is and is not ours,
--- and it is worth reading before this addon goes anywhere strangers can
--- download it.
+-- The sound is not in this addon and never travels with it. It is five seconds
+-- of a record somebody else made, and this repository is public, so the one
+-- thing here that was not ours to give away is the one thing that does not
+-- ship. What ships is the path, the event and the switch.
+--
+-- So the file is yours to put there. Anything the client can read under that
+-- name plays, and the joke everybody means is BestAround's own copy:
+-- LittleJoey's addon from 2007, fixed for 6.0 by Nephyrin, four files and one
+-- of them the song. Install that addon and the file is already on your disk.
+-- Without it this part is silent and says so in `/wk`, which is the behaviour
+-- it already had for a client that would not play sound at all.
 --
 -- This part owns no frame past the one it listens on and draws nothing, so
 -- nothing here is on a ticker.
@@ -22,10 +27,10 @@ local ADDON, ns = ...
 local Fanfare = {}
 ns.Fanfare = Fanfare
 
--- The file, and the only line in the addon that names it. The client's paths
--- are Interface\AddOns\<folder>\..., with the folder being what the addon is
--- installed as rather than what the TOC calls itself, which is why this is
--- written out rather than built from ADDON.
+-- The file, and the only line in the addon that names it. Nothing is shipped at
+-- this path; see above. The client's paths are Interface\AddOns\<folder>\...,
+-- with the folder being what the addon is installed as rather than what the TOC
+-- calls itself, which is why this is written out rather than built from ADDON.
 local SOUND = "Interface\\AddOns\\WarriorKit\\Media\\BestAround.mp3"
 
 -- Master rather than the SFX channel the call defaults to.
@@ -110,8 +115,12 @@ function Fanfare.Play()
 
 	-- said counts pcall's own true as well, so one return is a client that
 	-- answered nothing and anything more is a client with an opinion.
+	--
+	-- The opinion does not tell a file that is not there apart from a channel
+	-- that is muted, and since the file is the one part of this the addon
+	-- does not ship, absent is the likelier of the two. Both are named.
 	if said > 1 and not willPlay then
-		lastWhy = "the master volume is down or the channel is muted"
+		lastWhy = "the file is not in Media, or the master volume is down"
 		return false, lastWhy
 	end
 

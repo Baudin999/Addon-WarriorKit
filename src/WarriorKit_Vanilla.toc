@@ -530,7 +530,9 @@ Comfort\Thanks.lua
 # that saves you nothing at all. It is here because Comfort owns the settings
 # that belong to no feature, and because a tab is a cheaper home for one tick
 # box than a rail entry. Depends on nothing: one event, one file in Media, and
-# it goes quiet on a client that will not take the call.
+# it goes quiet on a client that will not take the call. The file is the one
+# thing this addon names and does not ship, because the recording is not ours;
+# without it the part is silent and says so.
 Comfort\Fanfare.lua
 
 # The error filter. Not a chore like the four above it, in that nothing runs

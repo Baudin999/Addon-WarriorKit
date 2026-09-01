@@ -25,7 +25,9 @@ API="https://wow.curseforge.com/api"
 # which is the right default because check.sh already fails if a Lua file is
 # missing from either TOC. Each entry needs a reason.
 IGNORE=(
-	".luacheckrc"   # luacheck config, meaningless outside the repo
+	".luacheckrc"                    # luacheck config, meaningless outside the repo
+	"Media/BestAround.mp3"           # somebody else's recording, not ours to distribute
+	"Media/BestAround-LICENSE.txt"   # the licence for it, pointless once it is gone
 )
 
 upload=0
@@ -88,15 +90,14 @@ listing=$(unzip -l "$zip_path")
 # v and says nothing about it, and its licence is here because the OFL says the
 # licence goes wherever the font goes.
 #
-# Media/BestAround.mp3 is here for the first of those reasons and its licence
-# for the second. A sound that did not travel is a level up that plays nothing
-# and says nothing about why, and the file beside it is the only record in the
-# zip of whose recording it is. If this addon is ever put where strangers
-# download it, that pair is the thing to decide about first: the snippet is not
-# ours to relicense, and taking it out is one line here and one file in Media.
+# Media/BestAround.mp3 went the other way and is in IGNORE. It is five seconds
+# of a record somebody else made, this addon is downloaded by strangers, and a
+# snippet that is not ours to relicense is not ours to put in a zip either. It
+# is still in src/ on the machine that built this, because src/ is what the
+# author's client loads, which is exactly why it is on the list rather than
+# left to a deletion somebody has to remember: the copy step takes all of src/.
 for required in WarriorKit/WarriorKit.toc WarriorKit/WarriorKit_Vanilla.toc WarriorKit/Bindings.xml \
-	WarriorKit/Media/Icon.tga WarriorKit/Media/Glyphs.ttf WarriorKit/Media/Glyphs-LICENSE.txt \
-	WarriorKit/Media/BestAround.mp3 WarriorKit/Media/BestAround-LICENSE.txt; do
+	WarriorKit/Media/Icon.tga WarriorKit/Media/Glyphs.ttf WarriorKit/Media/Glyphs-LICENSE.txt; do
 	if ! grep -qF "$required" <<<"$listing"; then
 		echo "the zip is missing $required" >&2
 		exit 1

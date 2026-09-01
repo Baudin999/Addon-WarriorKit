@@ -10,3 +10,13 @@ dist/
 # and get committed by a wide `git add` before anyone notices.
 *.orig
 *.rej
+
+# The level up fanfare, and the only asset the addon names but does not ship.
+# src/Media/BestAround.mp3 is five seconds of a record somebody else made, taken
+# out of the addon of the same name; it is not ours to relicense and this
+# repository is public. It stays on the disk of anybody who puts it there, the
+# part goes quiet without it, and neither the repo nor the release zip carries
+# it. Its licence file is ignored with it because check.sh fails a licence that
+# describes a file that is not there.
+src/Media/BestAround.mp3
+src/Media/BestAround-LICENSE.txt
