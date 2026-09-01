@@ -183,6 +183,7 @@ local TARGET_TEXT = Color.text.target
 -- fact, so the two of them are one channel saying one thing twice.
 local WORTHLESS = Color.xp.none
 local HEALTH_TEXT = Color.text.value
+local QUEST_TEXT = Color.text.quest
 
 -- Which bar is yours, said with the one channel nothing else on the bar is
 -- using. The fill, the track and the number above belong to threat, the level
@@ -849,6 +850,17 @@ local function CreateWidget()
 	widget.marker:SetTexture(RAID_ICON_TEXTURE)
 	widget.marker:Hide()
 
+	-- What this mob is still wanted for, in gold off the box's right edge: the
+	-- raid marker's mirror image. Both sit outside the box on purpose. The box
+	-- is what PlateFootprint hands the nameplate driver as the click target, so
+	-- a badge inside it would either take the room the mob's name is clipped
+	-- into or grow the hit box by the width of a string.
+	--
+	-- Outlined, which is the role a string over the world takes: there is no
+	-- fill behind this one and a shadow has nothing to be darker than.
+	widget.questText = Text(widget, PLATE_TEXT, QUEST_TEXT, "LEFT", ns.UI.OUTLINE)
+	widget.questText:Hide()
+
 	-- Empty. The row is as long as the list and the list is a setting, so
 	-- FitIcons builds it and LayoutWidget calls FitIcons.
 	widget.icons = {}
@@ -914,6 +926,32 @@ local function PlateFootprint(widget, width, unit)
 	ns.Plates.SetFootprint(
 		ns.UI.Convert(width, widget, UIParent),
 		ns.UI.Convert(height, widget, UIParent))
+end
+
+-- The two regions that hang outside the box, one off each edge.
+--
+-- Off the box's left edge, which is now the widget's own: with the tag gone
+-- there is one line down the left of the assembly, and the marker is outside
+-- it. The quest badge is the same three units off the other side, so the two
+-- things that hang outside the bar hang by the same amount.
+--
+-- Both are outside on purpose and it is the same reason twice. The box is what
+-- PlateFootprint hands the nameplate driver as the click target, so anything
+-- placed inside it either takes the room the mob's name is clipped into or
+-- grows the hit box by the width of a string nobody clicks.
+--
+-- Its own function rather than eight lines of LayoutWidget because that one is
+-- the longest in the addon and is allow-listed for it: two regions that share a
+-- reason for where they sit are the cheapest eight lines it has to give up.
+local function PlaceOutside(widget, font, unit, barHeight, pad)
+	widget.marker:ClearAllPoints()
+	widget.marker:SetSize(barHeight + pad, barHeight + pad)
+	widget.marker:SetPoint("RIGHT", widget.box, "LEFT", -3 * unit, 0)
+
+	widget.questText:SetFontObject(font)
+	widget.questText:ClearAllPoints()
+	widget.questText:SetPoint("LEFT", widget.box, "RIGHT", 3 * unit, 0)
+	widget.shownQuest = nil -- the font moved, so the tick remeasures the string
 end
 
 -- Everything stacks upwards from the gauge, which sits on the widget's bottom
@@ -1104,12 +1142,7 @@ local function LayoutWidget(widget, width, onPlate)
 	widget.boxOpen = castHeight > 0 and (boxHeight + px + castHeight) or boxHeight
 	widget.box:SetHeight(widget.boxIdle)
 
-	-- Off the box's left edge, which is now the widget's own: with the tag gone
-	-- there is one line down the left of the assembly, and the marker is outside
-	-- it.
-	widget.marker:ClearAllPoints()
-	widget.marker:SetSize(barHeight + pad, barHeight + pad)
-	widget.marker:SetPoint("RIGHT", widget.box, "LEFT", -3 * unit, 0)
+	PlaceOutside(widget, font, unit, barHeight, pad)
 
 	-- Where the gauge's middle sits below the widget's top edge, which is what
 	-- PlaceOnPlate centres on the mob, and where the box's bottom edge is at
@@ -1209,6 +1242,38 @@ local function PaintMarker(widget, unit)
 		widget.marker:Show()
 	else
 		widget.marker:Hide()
+	end
+end
+
+-- What this mob is still wanted for, in the four characters a bar has room for.
+--
+-- The string itself is Quests/Drops.lua's, because working it out means reading
+-- Questie's registry and this file has no business knowing that Questie exists.
+-- What arrives here is `3/8`, `!`, or nothing.
+--
+-- Guarded on the string, which covers all three of the ways it moves: a plate
+-- pooled onto a different mob, the seventh of eight dying, and the switch going
+-- off. Nil is both halves of off, the way the raid marker's nil is: the setting
+-- is down, or no quest of yours wants this one.
+local function PaintQuest(widget, guid)
+	-- The npc id behind the GUID, parsed only when the widget changes mobs. The
+	-- parse is a string match and a tonumber, which is nothing on its own and is
+	-- fifteen of them five times a second on a pull; the badge under it is one
+	-- table index once the creature has been asked about.
+	if widget.questGuid ~= guid then
+		widget.questGuid = guid
+		widget.questNpc = ns.CreatureId(guid)
+	end
+	local badge = ns.db.barsQuest and ns.QuestDrops.Badge(widget.questNpc) or nil
+	if widget.shownQuest == badge then
+		return
+	end
+	widget.shownQuest = badge
+	if badge then
+		widget.questText:SetText(badge)
+		widget.questText:Show()
+	else
+		widget.questText:Hide()
 	end
 end
 
@@ -1333,6 +1398,7 @@ local function UpdateWidget(widget, unit, guid)
 	end
 
 	PaintMarker(widget, unit)
+	PaintQuest(widget, guid)
 
 	-- Your current target, said twice: brighter than everything else on the
 	-- screen, and warm rather than white on the name. The alpha is what you see

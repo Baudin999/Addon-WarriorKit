@@ -136,6 +136,14 @@ local function EnemyBars(ui)
 			ns.EnemyBars.Rebuild()
 		end)
 
+	ui.Check("say what a mob is still wanted for",
+		function() return ns.db.barsQuest end,
+		function(value)
+			ns.db.barsQuest = value
+			ns.EnemyBars.Rebuild()
+		end)
+	ui.Hint("How many of this one a quest in your log still needs, in gold off the bar's right edge. Questie answers it, so no bar carries one without it. The mob's hover says which quest and what it drops at.")
+
 	ui.Check("let the client space nameplates by the size of our bar",
 		function() return ns.db.barsStack end,
 		function(value)

@@ -255,6 +255,21 @@ Color.text = {
 	duration = { 1.00, 0.82, 0.00 },
 
 	count  = { 1.00, 0.86, 0.45 }, -- a debuff's stack number
+
+	-- The quest badge beside an enemy bar: how many of this one you still need.
+	--
+	-- Gold because gold has meant "quest" in this game since 2004, and a colour
+	-- the player was taught by the game beats a prettier one that has to be
+	-- learned. It is the same three numbers as UI.Color.heading and it is not
+	-- that entry borrowed: heading is the title of a panel section this addon
+	-- painted the background of, this is a string over the world beside a mob,
+	-- and the day either one moves it should move on its own.
+	--
+	-- Deliberately not `duration`, which is two hundredths away from it. That
+	-- one is the client's NORMAL_FONT_COLOR written down for an aura's minutes,
+	-- and a palette that spends one entry on two facts drifts on the first edit
+	-- that meant one of them.
+	quest  = { 1.00, 0.82, 0.20 },
 }
 
 -- Incoming heals, laid over the part of a gauge a heal is about to reach. Half

@@ -273,7 +273,7 @@ do
 		"a mob that has never heard of you reads as: " .. tostring(idle))
 
 	------------------------------------------------------------------
-	-- What the mob is carrying that a quest of yours wants
+	-- What the mob is wanted for
 	--
 	-- The one thing a creature hover can say that the client cannot: this boar
 	-- drops the hide, that hide is for the quest in your log, and you have three
@@ -281,12 +281,13 @@ do
 	-- read off Questie's own tooltip registry, keyed `m_<npc id>` against the
 	-- objective the creature feeds.
 	--
-	-- The third line is the addon's own and is measured rather than looked up.
-	-- No database on either client carries a drop rate, so what is printed is a
-	-- count of the corpses of that creature you have opened and how many of them
-	-- had the item on them, and it says nothing at all until there are enough of
-	-- them to be worth saying. Both halves are asserted, because a fraction
-	-- printed off two corpses is arithmetic pretending to be information.
+	-- The drop rate has two sources and both are asserted, because they answer
+	-- on different creatures and shipping only one of them is what the file did.
+	-- Questie v11's own drop table is printed where it has a row, on the first
+	-- hover and with nothing looted. The ledger under it is the addon's own,
+	-- counted off the corpses you opened, and it says nothing at all until there
+	-- are enough of them to be worth saying -- a fraction printed off two
+	-- corpses is arithmetic pretending to be information.
 	------------------------------------------------------------------
 
 	local loader = _G.QuestieLoader
@@ -320,7 +321,23 @@ do
 	check(counted == "3/8",
 		"the box does not say how many you already have: " .. tostring(counted))
 
-	-- Nothing about a drop chance yet, because nothing has been looted.
+	-- Questie's own rate, on the first hover with nothing looted. This is the
+	-- half that did not exist when the file was written: v6 shipped no drop
+	-- table at all, so the only number the box could ever carry was one the
+	-- player spent ten corpses earning.
+	local listed = nil
+	for index = 1, #said do
+		if said[index] == "dropped by" then
+			local _, value = Box.Text(index)
+			listed = value
+		end
+	end
+	check(listed == "22%",
+		"Questie's own drop rate did not reach the box: " .. tostring(listed))
+
+	-- And the ledger is still silent, because nothing has been looted. The two
+	-- are separate lines and this is what says so: a box carrying the database
+	-- rate must not be a box that has also invented a measured one.
 	local Drops = ns.QuestDrops
 	check(Drops.Chance(1234, 3002) == nil,
 		"a drop chance was printed before a single corpse had been opened")
@@ -339,13 +356,127 @@ do
 	said = drawn()
 	local chance = nil
 	for index = 1, #said do
-		if said[index] == "dropped by" then
+		if said[index] == "your kills" then
 			local _, value = Box.Text(index)
 			chance = value
 		end
 	end
-	check(chance == "33% of 12 looted",
-		"the measured drop chance did not reach the box: " .. tostring(chance))
+	check(chance == "33% of 12",
+		"your own kills did not reach the box beside Questie's rate: " .. tostring(chance))
+
+	-- Both lines, at once. The interesting case for anybody standing over the
+	-- boars is the one where the two disagree -- 22 scraped against 33 of your
+	-- own -- and merging them into an average would throw that away.
+	local both = false
+	for index = 1, #said do
+		if said[index] == "dropped by" then
+			local _, value = Box.Text(index)
+			both = value == "22%"
+		end
+	end
+	check(both, "Questie's rate stopped being printed once the ledger had an answer")
+
+	-- With no row in Questie's drop table, the ledger takes the line back. This
+	-- is every creature on a v6 install and a good few on v11, and it is the
+	-- shape the box had before the database was read at all.
+	--
+	-- Ten more corpses onto the same creature, five of them carrying it: five of
+	-- twenty two, because the twelve above were corpses of this boar too and a
+	-- ledger that started counting again per item would report every drop as if
+	-- it were the only thing the mob ever had on it.
+	local other = { Index = 1, Type = "item", Id = 3005,
+		Description = "Rogue's Note", Collected = 0, Needed = 4 }
+	tips.lookupByKey = { ["m_1234"] = { ["102 1"] = { questId = 102, objective = other } } }
+	for at = 1, 10 do
+		Drops.Record(1234, at <= 5 and { [3005] = true } or {})
+	end
+	fire("UPDATE_MOUSEOVER_UNIT")
+	said = drawn()
+	local measured = nil
+	for index = 1, #said do
+		if said[index] == "dropped by" then
+			local _, value = Box.Text(index)
+			measured = value
+		end
+	end
+	check(measured == "23% of 22 looted",
+		"with no row in Questie's table the ledger did not take the line: " .. tostring(measured))
+
+	------------------------------------------------------------------
+	-- A creature you have to kill, which is the commonest quest there is
+	--
+	-- Questie registers `m_<npc id>` off the spawn list of every objective a
+	-- creature feeds, whatever kind it is, and the file read `item` and dropped
+	-- the other four. So a mob eight of which stood between you and the end of
+	-- the quest said nothing at all, which is the defect this section is here
+	-- for: nothing was broken, one comparison was too narrow, and the symptom
+	-- was a hover that worked on some mobs and not others.
+	------------------------------------------------------------------
+
+	local slay = { Index = 1, Type = "monster", Id = 1234,
+		Description = "Bristleback Quilboar", FullDescription = "Bristleback Quilboar slain",
+		Collected = 3, Needed = 8 }
+	tips.lookupByKey = { ["m_1234"] = { ["102 1"] = { questId = 102, objective = slay } } }
+	Drops.Forget()
+
+	fire("UPDATE_MOUSEOVER_UNIT")
+	said = drawn()
+	local killed = nil
+	for index = 1, #said do
+		if said[index] == "Bristleback Quilboar slain" then
+			local _, value = Box.Text(index)
+			killed = value
+		end
+	end
+	check(killed == "3/8",
+		"a mob you have to kill eight of says nothing: " .. table.concat(said, " / "))
+
+	-- FullDescription over Description, which is Questie's own order and matters
+	-- most here: a kill objective's Description is the creature's name, and the
+	-- name is already the first line of the box.
+	for index = 1, #said do
+		check(said[index] ~= "Bristleback Quilboar",
+			"the box repeats the mob's name instead of what the quest asked for")
+	end
+
+	-- No drop rate under a kill. The creature drops itself every time and a line
+	-- saying so is furniture.
+	for index = 1, #said do
+		check(said[index] ~= "dropped by",
+			"a creature you have to kill was given a drop chance")
+	end
+
+	------------------------------------------------------------------
+	-- The same fact in the four characters a nameplate has room for
+	--
+	-- The badge UnitFrames/EnemyBars.lua draws off the bar's right edge. It is
+	-- cached per creature, because it is asked once per plate five times a
+	-- second and the walk behind it is over another addon's hash table, so what
+	-- is asserted is both the answer and that the cache lets go of it.
+	------------------------------------------------------------------
+
+	check(Drops.Badge(1234) == "3/8",
+		"the plate badge does not carry the count: " .. tostring(Drops.Badge(1234)))
+	check(Drops.Badge(4321) == nil,
+		"a creature no quest wants was given a plate badge")
+
+	-- The count moves and the badge moves with it, but only once the log has
+	-- said so. A cache nothing invalidates is a plate stuck on 3/8 for the rest
+	-- of the evening.
+	slay.Collected = 7
+	check(Drops.Badge(1234) == "3/8",
+		"the badge re-walked Questie's registry without the log having moved")
+	Drops.Forget()
+	check(Drops.Badge(1234) == "7/8",
+		"the badge did not move after the log did: " .. tostring(Drops.Badge(1234)))
+
+	-- An objective with no count of its own is a mark and nothing else, which is
+	-- what an event or a thing you cast on a mob looks like.
+	tips.lookupByKey = { ["m_1234"] = { ["102 1"] = { questId = 102,
+		objective = { Index = 1, Type = "event", Description = "Reach the camp" } } } }
+	Drops.Forget()
+	check(Drops.Badge(1234) == "!",
+		"an objective with no count did not fall back to the mark: " .. tostring(Drops.Badge(1234)))
 
 	-- A quest you have handed in leaves its key registered in Questie until
 	-- something walks it, so the log is asked as well as the registry. Without
@@ -360,6 +491,7 @@ do
 
 	tips.lookupByKey, player.currentQuestlog = wasLookup, wasLog
 	ns.db.questDrops = {}
+	Drops.Forget()
 
 	------------------------------------------------------------------
 	-- Looking away

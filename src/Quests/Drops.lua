@@ -19,28 +19,44 @@ local C = ns.UI.Color
 -- different question:
 --
 --   which quest   the name of the thing in your log this creature feeds
---   how many      what the client's own counter says, as collected of needed
---   how often     what fraction of the corpses you have looted had it on them
+--   what for      the objective's own words, and the client's counter under
+--                 them as collected of needed
+--   how often     what fraction of the kills drop it
 --
--- **The first two are Questie's and the client's, and the third is ours.**
+-- **All of it is Questie's and the client's, and none of it is guessed.**
 --
--- Questie is the only thing on either client that knows a creature drops a
--- quest item at all. There is no API for it: the client will tell you what a
--- quest wants and never what carries it. Questie carries a database row per
--- creature and registers, per objective, the key `m_<npc id>` against every
--- spawn that would tick it. That table is what this file reads, and reads only:
--- nothing here calls Update on one of Questie's objectives or writes a field on
--- it. A part that mutates another addon's state is a part that breaks when the
--- other addon changes and cannot be blamed for it.
+-- Questie is the only thing on either client that knows a creature feeds a
+-- quest at all. There is no API for it: the client will tell you what a quest
+-- wants and never what carries it or where it walks. Questie carries a database
+-- row per creature and registers, per objective, the key `m_<npc id>` against
+-- every spawn that would tick it. That table is what this file reads, and reads
+-- only: nothing here calls Update on one of Questie's objectives or writes a
+-- field on it. A part that mutates another addon's state is a part that breaks
+-- when the other addon changes and cannot be blamed for it.
 --
--- **The drop chance is measured, not looked up.** No database on either client
--- carries one. Questie's item rows have a name, a list of npcs and a list of
--- quests, and no percentage anywhere. What this addon can do instead is count,
--- because it is standing there while you do it: every corpse of that creature
--- you open the loot window on is one sample, and every one that had the item on
--- it is a hit. That is a drop chance in the only sense that matters to somebody
--- killing boars, and it is honest in a way a scraped number is not, because it
--- is your kills, on your server, this week.
+-- **Every kind of objective, not only the ones that drop something.** Questie
+-- files five kinds under that key and this file read one of them for a long
+-- time, `item`, which is why the hover people actually wanted was the hover
+-- that said nothing. A creature you have to kill eight of is a `monster`
+-- objective, it is the commonest quest in the game, and it fell out one line
+-- above the box being built. WANTED below is the list, and the reason it is a
+-- list rather than a comparison is that the next kind Questie adds should show
+-- up as a missing entry rather than as silence.
+--
+-- **The drop chance has two sources and they are not equal.** Questie v11 ships
+-- a drop table -- three databases deep, keyed item then npc, reachable through
+-- QuestieDB.GetItemDroprate -- and that is the number printed wherever it
+-- answers, because it is there on the first hover. The note that used to stand
+-- here said no database on either client carried one, and that was true of the
+-- v6 this file was written against and is false of the v11 in the game.
+--
+-- Under it is the ledger, which is this addon's own and is counted rather than
+-- looked up: every corpse of that creature you open the loot window on is one
+-- sample and every one that had the item on it is a hit. It is what the box
+-- says where Questie's table has no row, and it is printed beside Questie's
+-- where both have an answer, because a rate scraped off a database and a rate
+-- off four hundred of your own kills disagreeing is the single most useful
+-- thing either of them can tell you.
 --
 -- It says nothing until it has enough corpses to be worth saying. A creature
 -- you have looted twice with one drop is not a fifty percent drop rate, it is
@@ -134,6 +150,64 @@ local function Carrying(questId)
 	return player.currentQuestlog[questId] ~= nil
 end
 
+-- Every kind of objective a creature can be registered against, and what each
+-- one means to somebody standing in front of it.
+--
+-- Questie keys `m_<npc id>` off the spawn list of the objective rather than off
+-- its type, so all five arrive here together and the type is only ever a label
+-- on what you are being told. A table rather than a comparison because the
+-- comparison is what shipped: `Type == "item"` read one of the five, and the
+-- four it dropped included the one every quest in the game has.
+local WANTED = {
+	monster = true, -- something you have to kill, and the commonest of the five
+	item    = true, -- something it is carrying
+	object  = true, -- a thing on the ground it stands over
+	event   = true, -- a creature that ticks the objective by being reached
+	spell   = true, -- something you have to cast on it
+}
+
+-- The objective behind one of Questie's registry entries, and the quest it
+-- belongs to, where it is one this hover should say anything about.
+--
+-- Four things disqualify one, and each is a line that would otherwise be wrong
+-- rather than merely uninteresting:
+--
+--   no objective   the entry is a quest this creature *starts*, which Questie
+--                  files under the same key with a name instead. Questie draws
+--                  its own mark for those and the client draws one too.
+--   a kind we do   a type absent from WANTED, so that the day Questie adds a
+--   not know       sixth the symptom is a missing line rather than a raise.
+--   finished       an objective already at its count, which over a mob is a
+--                  line telling you to stop doing what you are doing.
+--   handed in      a quest no longer in your log. Questie leaves the key
+--                  registered until something walks it, so the log has to be
+--                  asked as well as the registry.
+local function Live(entry)
+	local objective = type(entry) == "table" and entry.objective or nil
+	if type(objective) ~= "table" or not WANTED[objective.Type] then
+		return nil
+	end
+	if objective.Completed or not Carrying(entry.questId) then
+		return nil
+	end
+	return objective, entry.questId
+end
+
+-- What the objective is asking for, in Questie's own words.
+--
+-- FullDescription first and Description under it, which is the order Questie's
+-- own tooltip reads them in: a kill objective's Description is the creature's
+-- name and its FullDescription is the sentence the quest gave you, and over a
+-- mob whose name is already at the top of the box the sentence is the half
+-- worth printing.
+local function Wording(objective)
+	local said = objective.FullDescription or objective.Description
+	if type(said) ~= "string" or said == "" then
+		return "the objective"
+	end
+	return (said:gsub("%.$", ""))
+end
+
 --------------------------------------------------------------------------
 -- The ledger
 --
@@ -181,13 +255,37 @@ local function Prune()
 	end
 end
 
+-- Whether that creature is one the ledger has any use for: does an item
+-- objective of a quest you are on hang off it.
+--
+-- The registry alone used to be the test, and it stopped being enough the
+-- moment WANTED above grew past `item`. Every creature in a kill objective is
+-- registered under the same key, there are far more of those than there are
+-- things that drop something, and a row against each would be four hundred
+-- entries of `n` counting corpses nobody will ever ask a fraction about --
+-- which is also four hundred entries pushing the creatures that do drop
+-- something out of ROOM.
+local function Carries(npcId)
+	local registered = Registered(npcId)
+	if not registered then
+		return false
+	end
+	for _, entry in pairs(registered) do
+		local objective = Live(entry)
+		if objective and objective.Type == "item" and objective.Id then
+			return true
+		end
+	end
+	return false
+end
+
 -- One corpse of one creature, and what was on it.
 --
 -- `items` is a set of item ids rather than a list, because a corpse carrying
 -- two stacks of the same thing is still one corpse that had it and counting it
 -- twice would put the fraction over one.
 function Drops.Record(npcId, items)
-	if type(npcId) ~= "number" or not Registered(npcId) then
+	if type(npcId) ~= "number" or not Carries(npcId) then
 		return false
 	end
 	local fresh = Row(npcId) == nil
@@ -293,12 +391,93 @@ events:SetScript("OnEvent", function()
 end)
 
 --------------------------------------------------------------------------
+-- What a drop is worth saying
+--------------------------------------------------------------------------
+
+-- What Questie's own drop table says that item drops at on that creature, as a
+-- percentage, or nil where it has no row for the pair.
+--
+-- **This is new since v6 and it is why the note at the head of the file
+-- changed.** v6 carried item rows with a name, a list of npcs and a list of
+-- quests and no percentage anywhere, which is what made the ledger below the
+-- only answer this addon could give. v11 ships Database/DropTables: a manual
+-- correction layer over a private-server table over a Wowhead table, keyed item
+-- then npc, and QuestieDB.GetItemDroprate walks the three in that order. It
+-- answers a pair, the number and which of the three it came from, and the
+-- number is already a percentage rather than a fraction.
+--
+-- Probed for by name rather than assumed, the way every other call into Questie
+-- in this tree is: a v6 install answers a QuestieDB with no such function on it
+-- and the box falls back to the ledger, which is exactly the behaviour it had
+-- before this existed.
+local function Listed(npcId, itemId)
+	local where = ns.QuestWhere
+	if type(npcId) ~= "number" or type(itemId) ~= "number"
+		or not where or type(where.Module) ~= "function" then
+		return nil
+	end
+	local db = where.Module("QuestieDB")
+	if not db or type(db.GetItemDroprate) ~= "function" then
+		return nil
+	end
+	local ok, found = pcall(db.GetItemDroprate, itemId, npcId)
+	if not ok or type(found) ~= "table" or type(found[1]) ~= "number" then
+		return nil
+	end
+	return found[1]
+end
+
+-- A percentage with as many figures as it is worth reading and no more.
+--
+-- Questie's own rule, and it is the right one: a third of the time is `33%` and
+-- a decimal on it would be arithmetic nobody asked for, while a drop somewhere
+-- under one in a hundred is the difference between a long evening and the wrong
+-- plan, and rounding that to `0%` says the item does not drop at all.
+local function Percent(rate)
+	if rate >= 10 then
+		return ("%d%%"):format(math.floor(rate + 0.5))
+	end
+	if rate >= 1 then
+		return ("%.1f%%"):format(rate)
+	end
+	return ("%.2f%%"):format(rate)
+end
+
+-- The drop lines for one objective: what the database says, what your own kills
+-- say, or both.
+--
+-- Both, where both have an answer, and the second line is labelled as yours
+-- rather than merged into the first. A scraped rate and four hundred of your
+-- own corpses are two different claims about the same creature and the
+-- interesting case is the one where they disagree; averaging them would throw
+-- away the only thing the pair can tell you that neither can alone.
+--
+-- Only the database line where the ledger is under FLOOR, and only the ledger
+-- line where the database has no row, which is every creature on a v6 install
+-- and a good few on v11.
+local function Rates(into, npcId, itemId)
+	local listed = Listed(npcId, itemId)
+	local rate, corpses = Drops.Chance(npcId, itemId)
+	if listed then
+		into[#into + 1] = { "dropped by", Percent(listed) }
+	elseif rate then
+		into[#into + 1] = { "dropped by",
+			("%d%% of %d looted"):format(math.floor(rate * 100 + 0.5), corpses) }
+	end
+	if listed and rate then
+		into[#into + 1] = { "your kills",
+			("%d%% of %d"):format(math.floor(rate * 100 + 0.5), corpses) }
+	end
+	return into
+end
+
+--------------------------------------------------------------------------
 -- What the hover says
 --------------------------------------------------------------------------
 
 -- The lines for one quest, given the objectives of that quest this creature
--- feeds. One name line, then one line per item objective, then the fraction
--- where there is one worth printing.
+-- feeds. One name line, then one line per objective, then the drop rates under
+-- the ones that are about an item.
 local function Quest(into, npcId, questId, objectives)
 	local name = QuestName(questId)
 	if not name then
@@ -309,26 +488,21 @@ local function Quest(into, npcId, questId, objectives)
 	for _, objective in ipairs(objectives) do
 		local held = tonumber(objective.Collected) or 0
 		local want = tonumber(objective.Needed) or 0
-		local what = objective.Description
-		if type(what) ~= "string" or what == "" then
-			what = "the item"
-		end
 		if want > 0 then
-			into[#into + 1] = { what, ("%d/%d"):format(held, want) }
+			into[#into + 1] = { Wording(objective), ("%d/%d"):format(held, want) }
 		else
-			into[#into + 1] = { what }
+			into[#into + 1] = { Wording(objective) }
 		end
-
-		local rate, corpses = Drops.Chance(npcId, objective.Id)
-		if rate then
-			into[#into + 1] = { "dropped by",
-				("%d%% of %d looted"):format(math.floor(rate * 100 + 0.5), corpses) }
+		-- Only an item has a drop rate. A creature you have to kill eight of
+		-- drops itself every time, and a line saying so would be furniture.
+		if objective.Type == "item" then
+			Rates(into, npcId, objective.Id)
 		end
 	end
 	return into
 end
 
--- Every quest item this creature carries, grouped by the quest that wants it.
+-- Everything this creature is wanted for, grouped by the quest that wants it.
 --
 -- Grouped rather than listed flat because two objectives of one quest on one
 -- creature is ordinary, and repeating the quest's name over each of them is how
@@ -342,10 +516,8 @@ function Drops.Lines(unit)
 
 	local order, byQuest = {}, {}
 	for _, entry in pairs(registered) do
-		local objective = entry.objective
-		local questId = entry.questId
-		if type(objective) == "table" and objective.Type == "item"
-			and objective.Id and not objective.Completed and Carrying(questId) then
+		local objective, questId = Live(entry)
+		if objective then
 			if not byQuest[questId] then
 				byQuest[questId] = {}
 				order[#order + 1] = questId
@@ -385,23 +557,124 @@ ns.Tip.Source({
 	end,
 })
 
--- What the player would see, for the panel. Three answers and each is a
--- different thing being absent, because "no lines on a mob" reads as broken and
--- the three reasons for it are not the same problem.
+--------------------------------------------------------------------------
+-- What a nameplate says
+--
+-- The hover has room for the quest's name, the objective's own sentence and two
+-- drop rates. A bar over a mob's head has room for four characters, and the
+-- four worth having are the count: `3/8` is both why you are pulling this one
+-- and whether you still have to. Where the client has no count for the
+-- objective -- an event, a thing you cast on it -- the mark on its own is the
+-- whole answer, and the mark is what UnitFrames/EnemyBars.lua draws in quest
+-- gold beside the bar.
+--
+-- **Cached, and the cache is the reason this is a separate function rather than
+-- Lines with a shorter formatter.** It is asked once per plate five times a
+-- second, and the walk behind it is over another addon's hash table with a
+-- currentQuestlog lookup per entry. One table index per plate per tick is what
+-- the answer costs once the walk has happened, and the walk happens once per
+-- creature per change to your log.
+--
+-- Thrown away whole on QUEST_LOG_UPDATE, which is the one event that covers
+-- every way the answer can move: accepting, abandoning, handing in, and killing
+-- the seventh of eight. It fires often enough that a creature answered before
+-- Questie had compiled its database is re-asked a moment later, which is the
+-- other half of what the wipe is for.
+--------------------------------------------------------------------------
+
+-- False rather than nil for a creature no quest wants, so that "asked and the
+-- answer was no" is a hit and not a miss. A creature with nothing on it is the
+-- overwhelming majority of what a plate is put up for.
+local badges = {}
+
+-- Whether the second of two objectives is the one the plate should carry.
+--
+-- The most left to do wins, because that is the one still deciding whether you
+-- pull. Ties go to the lower quest id and then the lower objective index, which
+-- is arbitrary and is the point: pairs over Questie's table answers in whatever
+-- order its hashing landed on, and a plate whose number swapped between two
+-- ticks of the same mob would read as the count going backwards.
+local function Beats(left, questId, index, bestLeft, bestQuest, bestIndex)
+	if bestLeft == nil or left ~= bestLeft then
+		return bestLeft == nil or left > bestLeft
+	end
+	if questId ~= bestQuest then
+		return questId < bestQuest
+	end
+	return index < bestIndex
+end
+
+-- The mark a plate carries when the objective has no count to show.
+local MARK = "!"
+
+local function Build(npcId)
+	local registered = Registered(npcId)
+	if not registered then
+		return nil
+	end
+	local bestLeft, bestQuest, bestIndex, said = nil, nil, nil, nil
+	for _, entry in pairs(registered) do
+		local objective, questId = Live(entry)
+		local held = objective and (tonumber(objective.Collected) or 0) or 0
+		local want = objective and (tonumber(objective.Needed) or 0) or 0
+		local index = objective and (tonumber(objective.Index) or 0) or 0
+		if objective and Beats(want - held, questId, index, bestLeft, bestQuest, bestIndex) then
+			bestLeft, bestQuest, bestIndex = want - held, questId, index
+			said = want > 0 and ("%d/%d"):format(held, want) or MARK
+		end
+	end
+	return said
+end
+
+-- What that creature's plate should say, or nil.
+function Drops.Badge(npcId)
+	if type(npcId) ~= "number" then
+		return nil
+	end
+	local held = badges[npcId]
+	if held == nil then
+		held = Build(npcId) or false
+		badges[npcId] = held
+	end
+	return held or nil
+end
+
+-- Everything the plates were told, forgotten. Its own function because the
+-- harness drives it directly: a section that had to fire a client event to
+-- clear a cache would be testing the event frame rather than the cache.
+function Drops.Forget()
+	badges = {}
+end
+
+local log = CreateFrame("Frame")
+log:RegisterEvent("QUEST_LOG_UPDATE")
+log:SetScript("OnEvent", function()
+	Drops.Forget()
+end)
+
+-- What the player would see, rather than what this file meant to do. Four
+-- answers and each is a different thing being absent, because "no lines on a
+-- mob" reads as broken and the reasons for it are not the same problem.
+--
+-- The drop table gets an answer of its own because it is the half most likely
+-- to be missing on a working install: Questie answering everything else while
+-- GetItemDroprate is not there at all is exactly what a v6 install looks like,
+-- and the symptom is a percentage that never appears on any creature.
 function Drops.Describe()
 	local where = ns.QuestWhere
 	if not where or not where.Ready() then
-		return "nothing, because only Questie knows what a creature drops and it is not answering"
+		return "nothing, because only Questie knows what a creature is wanted for and it is not answering"
 	end
 	local ledger = ns.db.questDrops
 	local held = 0
 	for _ in pairs(type(ledger) == "table" and ledger or {}) do
 		held = held + 1
 	end
-	if held == 0 then
-		return "which quest and how many, and a drop chance once you have looted"
-			.. (" %d of something"):format(FLOOR)
-	end
-	return ("which quest and how many, with %d creature%s counted for a drop chance")
-		:format(held, held == 1 and "" or "s")
+	local db = where.Module("QuestieDB")
+	local rates = db and type(db.GetItemDroprate) == "function"
+	return ("which quest and how many, %s, and %s"):format(
+		rates and "with Questie's drop rate under an item"
+			or "with no drop rate from Questie, which is a version of it that ships no drop table",
+		held == 0 and ("your own once you have looted %d of something"):format(FLOOR)
+			or ("your own on %d creature%s you have looted"):format(held, held == 1 and "" or "s"))
 end

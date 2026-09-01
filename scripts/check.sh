@@ -323,7 +323,9 @@ UnitFrames/EnemyBars.lua:ThreatState
 UnitFrames/EnemyBars.lua:ScanDebuffs
 UnitFrames/EnemyBars.lua:DrawDebuffs
 UnitFrames/EnemyBars.lua:PaintAlpha
+UnitFrames/EnemyBars.lua:PaintQuest
 UnitFrames/EnemyBars.lua:UpdateWidget
+Quests/Drops.lua:Drops.Badge
 UnitFrames/EnemyBars.lua:StartFade
 UnitFrames/EnemyBars.lua:Fades
 UnitFrames/EnemyBars.lua:UpdateList

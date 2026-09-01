@@ -39,6 +39,18 @@ local QUESTIE_ITEMS = {
 	[3006] = { startQuest = 101 },
 }
 
+-- Questie's drop table, keyed item then npc, in percent.
+--
+-- v11 ships one and v6 did not, which is the whole reason the addon reads it
+-- through a probe rather than a call: Quests/Drops.lua has to draw the same box
+-- on an install where GetItemDroprate does not exist. One pair is modelled and
+-- one deliberately is not, so both branches are reachable -- 3002 off npc 1234
+-- has a looked-up rate, and every other pair falls through to the ledger the
+-- addon counts for itself.
+local DROP_RATES = {
+	[3002] = { [1234] = 22 },
+}
+
 local questieModules = {
 	QuestieDB = {
 		QueryItemSingle = function(itemId, field)
@@ -48,6 +60,14 @@ local questieModules = {
 		QueryQuestSingle = function(questId, field)
 			local row = QUESTS[questId]
 			return row and row[field] or nil
+		end,
+		-- The pair Questie answers: the percentage, and which of its three
+		-- databases the number came from. A bare number here would let a
+		-- reader that indexed it wrong pass.
+		GetItemDroprate = function(itemId, npcId)
+			local row = DROP_RATES[itemId]
+			local rate = row and row[npcId]
+			return rate and { rate, "wowhead" } or nil
 		end,
 	},
 }

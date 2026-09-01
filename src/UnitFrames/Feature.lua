@@ -98,6 +98,16 @@ local function PlateWord(option, value)
 	return true
 end
 
+-- What `bars quest` prints, out of line because BarsWord is a dispatcher at its
+-- branch ceiling and a two-way message inside it costs two more.
+local function QuestBadgeSaid()
+	ns.Print("quest badge on the bars " .. (ns.db.barsQuest and "on" or "off")
+		.. ": how many of this one a quest in your log still wants, in gold off the"
+		.. " bar's right edge. The mob's own hover says which quest and what it"
+		.. " drops at. Both are Questie's to answer.")
+	ns.Print("a creature's hover says " .. ns.QuestDrops.Describe() .. ".")
+end
+
 local function BarsWord(option, value)
 	if PlateWord(option, value) then
 		ns.EnemyBars.Update()
@@ -149,6 +159,10 @@ local function BarsWord(option, value)
 		ns.EnemyBars.Rebuild()
 		ns.Print("raid marker on the bars " .. (ns.db.barsMarker and "on" or "off")
 			.. ", Blizzard's marker takes over when ours is off.")
+	elseif option == "quest" then
+		ns.db.barsQuest = ns.Command.Toggle(value)
+		ns.EnemyBars.Rebuild()
+		QuestBadgeSaid()
 	elseif option == "max" then
 		local count = ns.Command.Number(value, 1, 15, "bars max")
 		if count then
@@ -525,6 +539,13 @@ ns.Register({
 		barsMarker = true,
 		barsLevel = true, -- the level, inside the bar, coloured by XP value
 
+		-- The quest badge off the bar's right edge: how many of this one you
+		-- still owe a quest in your log. On, because it costs a table index per
+		-- plate per tick and it answers at pull range the question the hover
+		-- answers at cursor range. It draws nothing at all without Questie,
+		-- which is the same thing the hover does.
+		barsQuest = true,
+
 		-- The cast row under the gauge. On by default, because it is the one
 		-- thing Blizzard's nameplate said that the bar replacing it did not,
 		-- and because on a mob that never casts it is a strip of empty screen
@@ -829,7 +850,7 @@ ns.Register({
 
 	help = {
 		"bars on|off, bars mode auto|plates|list, bars style replace|attach",
-		"bars offset <-60-60>, bars marker on|off, bars level on|off",
+		"bars offset <-60-60>, bars marker on|off, bars level on|off, bars quest on|off",
 		"bars clickthrough on|off, bars camera right|left|both|off",
 		"bars cast on|off, the cast row under each bar",
 		"bars max <1-15>, bars width <120-400>, bars zoom <1-3>",
