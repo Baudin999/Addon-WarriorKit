@@ -5,7 +5,7 @@ ns.MapWindow = Window
 
 local UI = ns.UI
 local C, M = UI.Color, UI.Metric
-local Chart, Zones, Pins = UI.Chart, ns.MapZones, ns.MapPins
+local Chart, Zones, Pins, Mates = UI.Chart, ns.MapZones, ns.MapPins, ns.MapMates
 
 --------------------------------------------------------------------------
 -- The world map
@@ -47,6 +47,18 @@ local Chart, Zones, Pins = UI.Chart, ns.MapZones, ns.MapPins
 -- asking the database the same question again and getting a different answer.
 -- So the map shows exactly what Questie shows, in the same art, with the same
 -- colours, and a Questie setting turned off turns them off here too.
+--
+-- **The right button steps out to the continent.** The column reaches a zone in
+-- one click and the picture reaches the zone next door on a click at its edge,
+-- and between them there was no way at all to look at Kalimdor. So every
+-- continent has a row of its own at the top of its group, the picture draws it
+-- like any other map, and the right button on any zone goes to the one it is
+-- on. Left goes in, right goes out, which is the client's own gesture.
+--
+-- **Your group is on the picture, in their own class colours.** Map/Mates.lua
+-- carries that in full. The short of it is that the client will say where a
+-- party member is standing on any map you hand it, so the marks cost one call
+-- each and nothing is worked out here.
 --
 -- **The footer says who the zone is for.** It is the one fact the client has
 -- never put on its own map and the one everybody wants from a world map before
@@ -107,34 +119,75 @@ end
 -- the thing you are looking for. Over the cap as well as over the icons: a zone
 -- busy enough to fill the pool is exactly the zone where losing yourself would
 -- matter.
+-- Your group between the two, so a person is drawn over a camp and under you.
+-- Over a camp because a mark for somebody who is moving is the one on the
+-- picture worth not losing under a static one; under you for the reason the
+-- arrow is last.
 local function Points(map)
 	local points = Pins.Of(map)
 	local markers = #points
+	local mates, placed = Mates.On(map)
+	for index = 1, #mates do
+		points[#points + 1] = mates[index]
+	end
 	local here = Pins.You(map)
 	if here then
 		points[#points + 1] = here
 	end
-	return points, markers
+	return points, markers, placed
+end
+
+-- The right hand end of the line: what the picture is actually showing.
+--
+-- A continent gets its own sentence rather than the marker count, because the
+-- count would be nought on every one of them and would read as Questie being
+-- broken. Questie draws a zone at a time and its frames say which zone, so
+-- there is nothing of its to put on a picture of a whole continent.
+local function Counted(zone, markers, drawn)
+	if drawn == 0 then
+		return "this client has no map picture for that zone"
+	end
+	if zone.whole then
+		return "a whole continent, and Questie's markers are drawn a zone at a time"
+	end
+	if markers == 0 then
+		return Pins.Describe()
+	end
+	if markers >= Pins.Crowd() then
+		return ("%d markers, which is as many as one zone gets"):format(markers)
+	end
+	return ("%d markers"):format(markers)
+end
+
+-- And your group on the end of it, where any of them are on this picture.
+--
+-- A count rather than a list. Which of them is where is on the marks
+-- themselves, in the colours they wear everywhere else in the addon, and the
+-- number is the half you want without moving the pointer.
+local function WithYou(said, mates)
+	if mates == 0 then
+		return said
+	end
+	if mates == 1 then
+		return said .. ", and one of your group"
+	end
+	return ("%s, and %d of your group"):format(said, mates)
 end
 
 -- The line along the bottom. The level range on the left, because that is what
 -- the footer is for, and what the map is actually showing on the right.
-local function Footer(zone, markers, drawn)
+local function Footer(zone, markers, mates, drawn)
 	if not zone then
 		level:SetText("no zone")
 		tally:SetText(Zones.Describe())
 		return false
 	end
-	level:SetText(("%s, %s"):format(zone.name, Zones.Says(zone.map)))
-	if drawn == 0 then
-		tally:SetText("this client has no map picture for that zone")
-	elseif markers == 0 then
-		tally:SetText(Pins.Describe())
-	elseif markers >= Pins.Crowd() then
-		tally:SetText(("%d markers, which is as many as one zone gets"):format(markers))
+	if zone.whole then
+		level:SetText(("%s, the whole continent"):format(zone.name))
 	else
-		tally:SetText(("%d markers"):format(markers))
+		level:SetText(("%s, %s"):format(zone.name, Zones.Says(zone.map)))
 	end
+	tally:SetText(WithYou(Counted(zone, markers, drawn), mates))
 	return true
 end
 
@@ -143,11 +196,11 @@ function Window.Paint()
 		return false
 	end
 	local zone = Chosen()
-	local points, markers = {}, 0
+	local points, markers, mates = {}, 0, 0
 	if zone then
-		points, markers = Points(zone.map)
+		points, markers, mates = Points(zone.map)
 	end
-	Footer(zone, markers, board:Draw(zone and zone.map or nil, points))
+	Footer(zone, markers, mates, board:Draw(zone and zone.map or nil, points))
 	return true
 end
 
@@ -193,6 +246,24 @@ local function Stepped(map, x, y)
 		return nil
 	end
 	return Window.Select(into) and into or nil
+end
+
+-- The right button, and the continent it stepped out to.
+--
+-- Nothing on a continent, because the column has no row above one: the tree is
+-- a world of continents of zones and this window draws the bottom two floors of
+-- it. A world map of the whole of Azeroth is a picture with three shapes on it
+-- and no question it answers that the column does not answer better.
+--
+-- Through the column, for the reason a click on an edge goes through it: the
+-- name down the left is what says where you are, and a picture that had moved
+-- without it would be a window disagreeing with itself.
+local function Outward(map)
+	local above = Zones.Above(map)
+	if not above then
+		return nil
+	end
+	return Window.Select(above) and above or nil
 end
 
 --------------------------------------------------------------------------
@@ -294,7 +365,7 @@ function Window.Build()
 	-- tiles of the client's own art with somebody else's icons over them, and a
 	-- map with a seam through it or a marker in the wrong place is only findable
 	-- from outside if the tiles and the pins can be walked one at a time.
-	board = Chart.New(window.content, "WarriorKitMapChart", Stepped)
+	board = Chart.New(window.content, "WarriorKitMapChart", Stepped, Outward)
 	Chrome()
 	Window.Fit()
 	return window
@@ -390,6 +461,16 @@ function Window.Tap(x, y)
 	return board:Tap(x, y)
 end
 
+-- The right button on the picture, and the map it stepped out to. Handed out
+-- for the reason Tap is: what a step out does is a claim scripts/harness.lua
+-- has to be able to make, and a harness has no cursor to press a button with.
+function Window.TapOut()
+	if not board then
+		return nil
+	end
+	return board:Back()
+end
+
 -- How much of the zone you have uncovered, as the number of pieces drawn over
 -- the tiles, and the arrow: what it is drawn as, how big, and where it points.
 --
@@ -467,6 +548,9 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("QUEST_LOG_UPDATE")
+-- Somebody joined or left, which is a mark appearing or going for good. Where
+-- they are while they are with you is the board's own tick and not this.
+events:RegisterEvent("GROUP_ROSTER_UPDATE")
 -- Walking into somewhere you have not been repaints the map, because what the
 -- client uncovered is drawn from its own tables and it has just changed them.
 -- The border crossing is here for the same reason one layer down: the zone you

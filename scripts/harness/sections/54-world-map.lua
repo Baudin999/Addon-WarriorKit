@@ -1,6 +1,6 @@
 -- The world map
 --
--- Seven questions no amount of reading Map/ will answer.
+-- Nine questions no amount of reading Map/ will answer.
 --
 -- Does the column come out of the client's own tree. Every zone in the game is
 -- a walk over C_Map rather than a list written down, so a walk that stopped at
@@ -32,6 +32,17 @@
 -- into the wrong zone, or into a map the column cannot show, or nowhere at all,
 -- looks exactly like an edge that worked.
 --
+-- Does the right button step out to the continent, and is the continent a place
+-- the window can actually draw. Left goes in and right goes out, and the row a
+-- continent gets at the top of its own group is what the right button lands on:
+-- a step out that moved the picture and not the column is a window disagreeing
+-- with itself, and one that moved neither is the gesture doing nothing.
+--
+-- Is your group on the picture. The client places a party member on any map you
+-- hand it, which is one call each and nothing worked out here, and everything
+-- that can go wrong with it is silent: the wrong people, nobody at all, or a
+-- mark that stays where somebody was standing when the map was painted.
+--
 -- And is Blizzard's map out of the way with the M key pointing here. A hidden
 -- map with the key still bound to the client's own toggle is a map you cannot
 -- open, which is worse than either window on its own.
@@ -47,6 +58,7 @@ local Window, Zones, Pins = ns.MapWindow, ns.MapZones, ns.MapPins
 -- because a number in a message is a number nobody can read.
 local WESTFALL, ELWYNN, STORMWIND = 1436, 1429, 1453
 local DUROTAR, NOWHERE = 1411, 9001
+local KINGDOMS, COSMIC = 1415, 946
 
 ----------------------------------------------------------------------
 -- The tree
@@ -64,16 +76,28 @@ local names = {}
 for index, zone in ipairs(first) do
 	names[index] = zone.name
 end
-check(table.concat(names, ", ") == "Elwynn Forest, Stormwind City, Westfall",
-	("the first continent's zones came out as %q"):format(table.concat(names, ", ")))
+check(table.concat(names, ", ")
+	== "Eastern Kingdoms, Elwynn Forest, Stormwind City, Westfall",
+	("the first continent's rows came out as %q"):format(table.concat(names, ", ")))
+
+-- The continent's own row, first, and marked as the thing the others are inside
+-- rather than one of them. Everything that counts zones has to skip it: five is
+-- what the client holds and seven is what the column shows.
+check(first[1] and first[1].whole and first[1].map == KINGDOMS,
+	"the first row of a continent's group is not the continent itself")
 
 -- The client hands them over by id descending, which is none of the three
 -- orders a reader could mistake for alphabetical.
-check(first[1] and first[1].map == ELWYNN,
+check(first[2] and first[2].map == ELWYNN,
 	"the column is in the order the client handed the zones over")
 
+check(Zones.Above(WESTFALL) == KINGDOMS,
+	("Westfall came back as being on %s"):format(tostring(Zones.Above(WESTFALL))))
+check(Zones.Above(KINGDOMS) == nil,
+	"a continent answered something above it, and the column has no row above one")
+
 local group, index = Zones.Find(WESTFALL)
-check(group == 1 and index == 3,
+check(group == 1 and index == 4,
 	("Westfall is at %s, %s in the column"):format(tostring(group), tostring(index)))
 check(Zones.Find(90210) == nil, "a map id nothing holds was found in the column")
 
@@ -335,14 +359,16 @@ do
 			:format(tostring(Window.Showing())))
 
 	-- Somewhere the client can name and this column cannot show. The stub answers
-	-- the continent on Stormwind's border, which is a real map with no row in a
-	-- column of zones.
+	-- the cosmic map on Stormwind's border, which is a real map and is the floor
+	-- above the one this window draws: continents and zones, and nothing over
+	-- them.
 	Window.Select(STORMWIND)
 	local nowhere = Window.Tap(0.02, 0.5)
 	check(nowhere == nil,
 		("a click stepped onto %s, which the column has no row for"):format(tostring(nowhere)))
 	check(Window.Showing() == STORMWIND,
-		("a click onto a continent left the map on %s"):format(tostring(Window.Showing())))
+		("a click onto the cosmic map left the map on %s"):format(tostring(Window.Showing())))
+	check(COSMIC ~= nil, "the cosmic map has no id, so the claim above proves nothing")
 
 	-- A zone the client has no picture for is still a place, and the click has to
 	-- reach it: the footer is what says the picture is missing, not the column.
@@ -365,6 +391,55 @@ do
 		("a client with no call to ask stepped to %s"):format(tostring(unasked)))
 	check(Window.Showing() == WESTFALL,
 		("a client with no call to ask left the map on %s"):format(tostring(Window.Showing())))
+end
+
+----------------------------------------------------------------------
+-- The continent
+----------------------------------------------------------------------
+
+-- Right steps out, left steps in, and the continent in between is a picture
+-- like any other. The gesture is the client's own and it is the half of
+-- navigating a map this window did not have: the column reaches any zone in one
+-- click and could not reach Kalimdor at all.
+do
+	Window.Select(WESTFALL)
+	local out = Window.TapOut()
+	check(out == KINGDOMS,
+		("the right button on Westfall stepped to %s"):format(tostring(out)))
+	-- Showing reads the column, so this is the half a screenshot would not
+	-- settle: the name down the left moved with the picture.
+	check(Window.Showing() == KINGDOMS,
+		("the right button moved the picture and the column says %s")
+			:format(tostring(Window.Showing())))
+
+	local says, count = Window.Says()
+	check(says == "Eastern Kingdoms, the whole continent",
+		("a continent's footer says %q"):format(says))
+	-- Not the marker count, which is nought on every continent there is:
+	-- Questie draws a zone at a time and a line reading "no markers" over a
+	-- picture of Eastern Kingdoms is a bug report about Questie.
+	check(count == "a whole continent, and Questie's markers are drawn a zone at a time",
+		("a continent counts %q"):format(count))
+
+	-- You are on it. The client places a unit against whatever map it is handed,
+	-- so the continent answers for anybody standing anywhere on it, and this is
+	-- the reading that catches a window asking about the zone you are in
+	-- instead: the arrow would be on Westfall and nowhere else.
+	check(Window.Drawn() == 1,
+		("the continent is showing %d marks and you are standing on it")
+			:format(Window.Drawn()))
+
+	-- And the way back in. A click on a continent is a click on a zone.
+	local into = Window.Tap(0.02, 0.5)
+	check(into == WESTFALL,
+		("a click on the continent stepped to %s"):format(tostring(into)))
+
+	-- The right button on a continent does nothing, because there is no row
+	-- above one. A gesture that fell off the top of the column would be a
+	-- picture the column could not name.
+	Window.Select(KINGDOMS)
+	check(Window.TapOut() == nil,
+		"the right button stepped out of a continent, and the column has no row above one")
 end
 
 Window.Select(ELWYNN)
@@ -420,6 +495,91 @@ do
 
 	worldmap.Face(0)
 	Window.Select(WESTFALL)
+end
+
+----------------------------------------------------------------------
+-- Your group
+----------------------------------------------------------------------
+
+-- Two people, one of them here. Every member of the group is handed over and
+-- the ones the client will not place are drawn nowhere, which is what lets the
+-- board put a mark up on its own tick when somebody walks into the zone: a list
+-- of only the people who were here when the map was painted makes leaving work
+-- and arriving wait for a repaint.
+do
+	local Mates = ns.MapMates
+	H.group.Set({
+		{ token = "player", you = true, name = "Tusksfirst", class = "WARRIOR" },
+		{ token = "party1", name = "Sneaky", class = "ROGUE" },
+		{ token = "party2", name = "Lightwell", class = "PRIEST" },
+	}, false)
+	worldmap.Stand("party1", WESTFALL, 20, 30)
+	worldmap.Stand("party2", ELWYNN, 40, 50)
+	H.fire("GROUP_ROSTER_UPDATE")
+
+	local mates, placed = Mates.On(WESTFALL)
+	check(#mates == 2,
+		("%d of the group came back where two of them are with you"):format(#mates))
+	check(placed == 1,
+		("%d of them were placed on Westfall and one is standing in it"):format(placed))
+	check(mates[1] and mates[1].name == "Sneaky" and mates[1].x == 20,
+		"the one standing in the zone is not on the picture where the client put them")
+	check(mates[2] and mates[2].x == nil,
+		"the one standing in another zone was given a place on this one")
+
+	-- You are not one of them. You are already the client's own arrow, and a
+	-- square under it would only say where the arrow is.
+	for _, mate in ipairs(mates) do
+		check(mate.name ~= "Tusksfirst", "you were drawn twice, as the arrow and as a square")
+	end
+
+	-- Their own colours, which is what makes a mark answer "the healer has not
+	-- moved" rather than "somebody is over there".
+	check(mates[1].tint and mates[2].tint and mates[1].tint ~= mates[2].tint,
+		"a rogue and a priest are drawn in the same colour")
+
+	Window.Paint()
+	local _, count = Window.Says()
+	check(count == "2 markers, and one of your group",
+		("the footer counts %q where one of the group is on the zone"):format(count))
+	check(Window.Drawn() == 4,
+		("the board is showing %d marks: two markers, you, and one of the group")
+			:format(Window.Drawn()))
+
+	-- Somebody walks in, and the mark arrives on the tick rather than on a
+	-- repaint. Nothing here paints the window: this is the board taking every
+	-- point that names a unit again, which is the same tick that turns the
+	-- arrow.
+	worldmap.Stand("party2", WESTFALL, 60, 70)
+	check(Window.Locate(), "the board would not take the people on it again")
+	check(Window.Drawn() == 5,
+		("%d marks after somebody walked into the zone with the map open")
+			:format(Window.Drawn()))
+
+	-- And out again, without a repaint either.
+	worldmap.Stand("party1", ELWYNN, 20, 30)
+	Window.Locate()
+	check(Window.Drawn() == 4,
+		("%d marks after somebody walked out of the zone with the map open")
+			:format(Window.Drawn()))
+
+	-- The continent answers for both of them, because it answers for anybody
+	-- standing anywhere on it. This is the one reading that says the party is on
+	-- the continent picture and not only on the zone one.
+	check(select(2, Mates.On(KINGDOMS)) == 2,
+		("%d of the group were placed on the continent and both are on it")
+			:format(select(2, Mates.On(KINGDOMS))))
+
+	check(Mates.Describe() == "2 with you, 1 of them on the zone you are in",
+		("the reading says %q"):format(Mates.Describe()))
+
+	worldmap.Stand("party1", nil)
+	worldmap.Stand("party2", nil)
+	H.group.Forget()
+	H.fire("GROUP_ROSTER_UPDATE")
+	check(Mates.Describe() == "you are on your own, so there is nobody else to draw",
+		("out of a group the reading says %q"):format(Mates.Describe()))
+	Window.Paint()
 end
 
 ----------------------------------------------------------------------

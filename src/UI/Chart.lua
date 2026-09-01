@@ -88,6 +88,14 @@ local C, M = UI.Color, UI.Metric
 -- designed to be found on a map. That is the whole of what the world map
 -- needed to reuse this file.
 --
+-- **A point may carry a unit, and one that does is taken again on the tick.**
+-- Everything else on the picture is a fact about the zone: where a camp is, and
+-- a camp does not walk. A person does, so the arrow and the party move ten
+-- times a second while the board is up and the rest of the picture moves when
+-- somebody asks for it. A point that names a unit the client will not place is
+-- drawn nowhere rather than left off, which is what lets a mark come back on
+-- when somebody walks into the zone with the map already open.
+--
 -- **The zone is drawn twice: dark, then the parts you have walked.** The tiles
 -- above are the whole zone with nothing discovered on it, which is what the
 -- client stores as the base art and is why a map drawn from tiles alone is the
@@ -115,6 +123,7 @@ Chart.TODO = "todo" -- something you still have to go and do
 Chart.BACK = "back" -- who the thing goes back to
 Chart.YOU  = "you"  -- where you are standing, which no database knows
 Chart.MARK = "mark" -- a numbered place, which the dungeon log's bosses are
+Chart.MATE = "mate" -- somebody else in your group, in their own class colour
 
 -- One dot, and the pale square behind it.
 --
@@ -327,9 +336,45 @@ function Chart.Name(map)
 	return info.name
 end
 
--- Which map you are on and where you are standing on it, as the same 0 to 100
--- coordinates Questie's spawns are in. Absent on a client that will not say,
--- which draws a map with everything on it except you.
+-- Where a unit is standing on one map, as the same 0 to 100 coordinates
+-- Questie's spawns are in. Nothing at all where the client will not say.
+--
+-- The map is the caller's and not the unit's, which is the whole reason this
+-- is a call of its own rather than Chart.Here with an argument. The client
+-- answers a position as a fraction of the map it was handed, so a zone answers
+-- for somebody standing in it and a continent answers for somebody standing
+-- anywhere on it. One call therefore puts you on Desolace and on Kalimdor, and
+-- puts the rest of the party on both.
+--
+-- Only you, your party and your raid are ever answered for. That is the
+-- client's rule rather than this file's, and it is the reason a map cannot
+-- draw the friend who is not in your group.
+function Chart.Spot(map, unit)
+	local api = Api()
+	if not api or type(map) ~= "number"
+		or type(api.GetPlayerMapPosition) ~= "function" then
+		return nil
+	end
+	local ok, at = pcall(api.GetPlayerMapPosition, map, unit)
+	if not ok or type(at) ~= "table" or type(at.GetXY) ~= "function" then
+		return nil
+	end
+	local read, x, y = pcall(at.GetXY, at)
+	if not read or type(x) ~= "number" or type(y) ~= "number" then
+		return nil
+	end
+	-- Off the picture is not on it. What comes back is a fraction of the map's
+	-- own rectangle, and somebody outside that rectangle comes back as a
+	-- fraction outside nought to one: a mark drawn off the edge of the board,
+	-- or pinned to a corner nobody is standing in.
+	if x < 0 or x > 1 or y < 0 or y > 1 then
+		return nil
+	end
+	return x * 100, y * 100
+end
+
+-- Which map you are on and where you are standing on it. Absent on a client
+-- that will not say, which draws a map with everything on it except you.
 function Chart.Here()
 	local api = Api()
 	if not api or type(api.GetBestMapForUnit) ~= "function" then
@@ -339,18 +384,8 @@ function Chart.Here()
 	if not ok or type(map) ~= "number" then
 		return nil
 	end
-	if type(api.GetPlayerMapPosition) ~= "function" then
-		return map
-	end
-	local fine, at = pcall(api.GetPlayerMapPosition, map, "player")
-	if not fine or type(at) ~= "table" or type(at.GetXY) ~= "function" then
-		return map
-	end
-	local read, x, y = pcall(at.GetXY, at)
-	if not read or type(x) ~= "number" or type(y) ~= "number" then
-		return map
-	end
-	return map, x * 100, y * 100
+	local x, y = Chart.Spot(map, "player")
+	return map, x, y
 end
 
 -- Which way you are pointing, in radians.
@@ -658,13 +693,25 @@ local function Clicks(board)
 	end)
 	-- On the way up rather than the way down, so a press that turns into a drag
 	-- of the window is not also a step into another zone.
+	--
+	-- Two buttons and they are the two directions. The left one steps into
+	-- whatever is under the pointer, which at the edge of a zone is the zone
+	-- next door and on a continent is the zone you pointed at. The right one
+	-- steps back out to whatever holds this map, which is the move the client's
+	-- own map has always had and the one this window had no gesture for at all:
+	-- the column could reach a zone in one click and could not get back to the
+	-- continent it is on without one.
 	port:SetScript("OnMouseUp", function(_, button)
 		local dragged = board.dragging
 		board.dragging = false
-		if dragged or (button and button ~= "LeftButton") then
+		if dragged then
 			return
 		end
-		board:Tap(Spot(board))
+		if button == "RightButton" then
+			board:Back()
+		elseif not button or button == "LeftButton" then
+			board:Tap(Spot(board))
+		end
 	end)
 	return true
 end
@@ -672,9 +719,11 @@ end
 -- A board, and what a click on it means.
 --
 -- The third argument is called with the map being drawn and where on it the
--- click landed, as two fractions from the top left. Nothing is passed by the
--- quest log, whose map is a picture rather than a place you can navigate from.
-function Chart.New(parent, name, onClick)
+-- click landed, as two fractions from the top left. The fourth is called with
+-- the map alone, because stepping out of a picture is not a question about
+-- where in it the pointer was. Neither is passed by the quest log, whose map is
+-- a picture rather than a place you can navigate from.
+function Chart.New(parent, name, onClick, onOut)
 	local board = setmetatable({
 		tiles = {}, seen = {}, pins = {},
 		width = 0, height = 0, tall = 0,
@@ -704,8 +753,9 @@ function Chart.New(parent, name, onClick)
 	board.edges = ns.Outline(board.port, C.hairline[1], C.hairline[2], C.hairline[3], 1, "OVERLAY")
 	ns.EdgeSize(board.edges, ns.Pixel(board.port))
 	Wheel(board)
-	if type(onClick) == "function" then
-		board.onClick = onClick
+	board.onClick = type(onClick) == "function" and onClick or nil
+	board.onOut = type(onOut) == "function" and onOut or nil
+	if board.onClick or board.onOut then
 		Clicks(board)
 	end
 	Follow(board)
@@ -948,11 +998,22 @@ local function Place(board, pin, point, wide, high)
 		pin.tag:SetText(point.label)
 	end
 	pin:SetSize(size, size)
+	pin.name, pin.note = point.name, point.note
+	pin:EnableMouse(point.name and true or false)
+	-- A point with no place is a mark that is not drawn, rather than one drawn
+	-- in the corner. Only a point that names a unit can be in that state: the
+	-- client answers where somebody is standing and it will not answer for
+	-- somebody in an instance, on another continent, or off this picture. The
+	-- mark is kept, named and turned off, and the tick puts it back the moment
+	-- the client has an answer, which is how a party member walking into the
+	-- zone appears on a map that has not been repainted.
+	if type(point.x) ~= "number" or type(point.y) ~= "number" then
+		pin:Hide()
+		return
+	end
 	pin:ClearAllPoints()
 	pin:SetPoint("CENTER", board.canvas, "TOPLEFT",
 		point.x / 100 * wide, -(point.y / 100 * high))
-	pin.name, pin.note = point.name, point.note
-	pin:EnableMouse(point.name and true or false)
 	pin:Show()
 end
 
@@ -1078,19 +1139,28 @@ end
 -- functions an OnUpdate can reach and it names them by their declaration. What
 -- is on that list is held to no unguarded widget write and no allocation, which
 -- is the rule this whole function is shaped by.
+--
+-- Every point carrying a unit is taken again, not only you. A mark for a person
+-- is the one kind on this board whose place is a fact about right now: the
+-- others are where a camp is, and a camp does not walk. So the arrow and the
+-- party move on the tick and the rest of the picture moves when somebody asks.
+--
+-- One question to the client per person per tick, which in a full raid with
+-- this window open is forty of them a second. That is what Blizzard's own map
+-- spends on the same picture, it is spent only while the window is up, and the
+-- alternative is a party that stands still until something repaints.
 local function Track(board)
 	if not board.art or not board.points or board.wide < 1 then
 		return false
 	end
-	local here, x, y = Chart.Here()
-	local standing = (here == board.map) and type(x) == "number" and type(y) == "number"
 	local found = false
 	for index = 1, #board.points do
 		local point = board.points[index]
 		local pin = board.pins[index]
-		if pin and point.kind == Chart.YOU then
+		if pin and point.unit then
 			found = true
-			if not standing then
+			local x, y = Chart.Spot(board.map, point.unit)
+			if not x then
 				pin:Hide()
 			elseif point.x ~= x or point.y ~= y then
 				point.x, point.y = x, y
@@ -1098,9 +1168,11 @@ local function Track(board)
 				pin:ClearAllPoints()
 				pin:SetPoint("CENTER", board.canvas, "TOPLEFT",
 					x / 100 * board.wide, -(y / 100 * board.high))
-				Aim(pin)
+				if point.kind == Chart.YOU then
+					Aim(pin)
+				end
 				pin:Show()
-			else
+			elseif point.kind == Chart.YOU then
 				Aim(pin)
 			end
 		end
@@ -1160,6 +1232,18 @@ function Board:Tap(x, y)
 		return nil
 	end
 	return self.onClick(self.map, x, y)
+end
+
+-- The step outward, which is what the right button on the picture means.
+--
+-- The map alone, because where in a picture you asked to leave it is not a
+-- question with an answer. What is above this map is the caller's to decide:
+-- this file knows what it is drawing and nothing about what holds it.
+function Board:Back()
+	if type(self.onOut) ~= "function" or not self.art or not self.map then
+		return nil
+	end
+	return self.onOut(self.map)
 end
 
 -- How far in the wheel has taken it. Handed out for the reason Drawn below is:

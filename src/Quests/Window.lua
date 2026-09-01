@@ -681,7 +681,12 @@ local function DrawMap(quest)
 	-- than on top of the thing you are looking for.
 	local here, x, y = Chart.Here()
 	if zone and here == zone.map and x then
-		points[#points + 1] = { x = x, y = y, kind = Where.YOU, name = "you", note = Told({ x = x, y = y }) }
+		-- The unit it is, as well as where it is. The board takes every point
+		-- carrying one again on its own tick, which is how the arrow follows
+		-- you across a zone with the window open, and a point that named no
+		-- unit would be drawn once and then stand still while you walked.
+		points[#points + 1] = { x = x, y = y, kind = Where.YOU, unit = "player",
+			name = "you", note = Told({ x = x, y = y }) }
 	end
 
 	atlas.where:SetText(zone and (Chart.Name(zone.map) or "somewhere") or

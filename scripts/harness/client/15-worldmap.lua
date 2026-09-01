@@ -93,7 +93,13 @@ local tiles = api.GetMapArtLayerTextures
 -- log's two zones: 1002 by 668 in squares of 256. Every zone in the tree has a
 -- picture except Somewhere Else, which is the branch where the board collapses
 -- and the footer says the client has no picture for that zone.
-local ART = { [1436] = true, [1429] = true, [1453] = true, [1411] = true }
+-- The two continents are in here as well as the four zones. A continent is a
+-- map with art like any other and the column has a row for each of them, so a
+-- fixture that gave them no picture would test the row and never the board.
+local ART = {
+	[1436] = true, [1429] = true, [1453] = true, [1411] = true,
+	[1415] = true, [1414] = true,
+}
 local LAYER = {
 	layerWidth = 1002, layerHeight = 668, tileWidth = 256, tileHeight = 256,
 }
@@ -128,7 +134,9 @@ local EDGES = {
 	[1436] = 1429, -- the left of Westfall is Elwynn Forest
 	[1429] = 1436, -- and the left of Elwynn Forest is Westfall
 	[1411] = 9001, -- the left of Durotar is Somewhere Else
-	[1453] = 1415, -- and Stormwind's is the continent, which the column has no row for
+	[1453] = 946,  -- Stormwind's is the cosmic map, which the column has no row for
+	[1415] = 1436, -- and the left of Eastern Kingdoms is Westfall, which is the
+	               -- move a continent picture is for: point at a zone, open it
 }
 
 api.GetMapInfoAtPosition = function(map, x, y)
@@ -155,6 +163,43 @@ api.GetMapArtLayerTextures = function(map, layer)
 		files[index] = 700000 + map * 100 + index
 	end
 	return files
+end
+
+--------------------------------------------------------------------------
+-- Where everybody is standing
+--------------------------------------------------------------------------
+
+-- The client answers a unit's position as a fraction of whatever map it was
+-- handed, and it answers for party and raid members as well as for you. That is
+-- the whole of how Map/Mates.lua puts your group on the picture and how the
+-- arrow reaches the continent one, so the fixture has to hold both halves: who
+-- is where, and which maps will answer for a place.
+--
+-- The player is the quest log's own record rather than a second one here, so
+-- the two files cannot drift apart about where you are standing. Everybody else
+-- is set by a section and cleared by it.
+local placed = {}
+
+-- A zone answers for somebody standing in it; the continent over it answers for
+-- somebody standing anywhere on it. The coordinates are the same either way,
+-- which no real client does, and it does not matter: what is being tested is
+-- which maps answer at all.
+local function answers(at, map)
+	if at.map == map then
+		return true
+	end
+	local node = NODES[at.map]
+	return (node and node.parent) == map
+end
+
+local standing = H.quests.standing
+
+api.GetPlayerMapPosition = function(map, unit)
+	local at = (not unit or unit == "player") and standing or placed[unit]
+	if not at or not answers(at, map) then
+		return nil
+	end
+	return { GetXY = function() return at.x / 100, at.y / 100 end }
 end
 
 --------------------------------------------------------------------------
@@ -290,6 +335,14 @@ H.worldmap = {
 	-- it back, which is the only way to prove the original was kept rather
 	-- than rebuilt.
 	Opened = function() return opened end,
+	-- Where somebody in your group is standing, so a section can put the party
+	-- on a zone, walk one of them out of it and take them all away again. A map
+	-- of nothing forgets them, which is what leaving the group looks like to
+	-- everything that reads a position.
+	Stand = function(unit, map, x, y)
+		placed[unit] = map and { map = map, x = x, y = y } or nil
+		return placed[unit]
+	end,
 	-- More markers than one zone is allowed, so the cap can be measured. Each
 	-- one is a fresh frame in its own register entry, which is the shape a
 	-- zone full of available quests really has.

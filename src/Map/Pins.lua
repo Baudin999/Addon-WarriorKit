@@ -223,13 +223,24 @@ end
 -- You, as a point the chart draws as the client's own arrow rather than in
 -- somebody else's art. Nothing at all on a map you are not standing on, which
 -- is every zone but one.
+--
+-- Asked of the map being drawn rather than of the map you are on, which is what
+-- puts the arrow on the continent picture as well as on the zone one. The
+-- client answers a position against whatever map it is handed, so Kalimdor
+-- answers for anybody standing anywhere on Kalimdor. Comparing the zone you are
+-- in against the map on the board was the reason the continent came out with
+-- everything on it except you.
+--
+-- The unit goes with the point, because the board takes every point carrying
+-- one again on its own tick. That is how the arrow follows you across a zone
+-- with the window open.
 function Pins.You(map)
-	local here, x, y = Chart.Here()
-	if here ~= map or type(x) ~= "number" or type(y) ~= "number" then
+	local x, y = Chart.Spot(map, "player")
+	if not x then
 		return nil
 	end
-	return { x = x, y = y, kind = Chart.YOU, name = "you",
-		note = { ("%.1f, %.1f"):format(x, y) } }
+	return { x = x, y = y, kind = Chart.YOU, unit = "player", name = "you",
+		note = ("%.1f, %.1f"):format(x, y) }
 end
 
 -- How many markers Questie is holding altogether, which is the number that says

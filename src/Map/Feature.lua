@@ -33,6 +33,8 @@ local function MapWord(arg, rawArg)
 		ns.Print(ns.MapZones.Describe() .. ".")
 	elseif word == "markers" then
 		ns.Print(ns.MapPins.Describe() .. ".")
+	elseif word == "group" then
+		ns.Print(ns.MapMates.Describe() .. ".")
 	elseif word == "on" or word == "off" then
 		SetMap(word == "on")
 		ns.Print("the world map is " .. (ns.db.worldMap and "on" or "off") .. ".")
@@ -43,7 +45,7 @@ local function MapWord(arg, rawArg)
 		end
 		ns.MapWindow.Toggle()
 	else
-		ns.Print("map takes on, off, hide, zones or markers.")
+		ns.Print("map takes on, off, hide, zones, markers or group.")
 	end
 	-- rawArg is the untouched line, which this word has no use for: every
 	-- sub-word above takes a switch rather than a name. Named so the signature
@@ -86,6 +88,7 @@ ns.Register({
 		"map hide on|off, put Blizzard's own map in the attic and take the M key",
 		"map zones, how many zones the client will name and how many have a level range",
 		"map markers, whether Questie is answering for the markers on the map",
+		"map group, whether the client will say where the people you are with are",
 	},
 
 	status = function()
@@ -96,17 +99,18 @@ ns.Register({
 
 	panel = function(ui)
 		ui.Section("World map", "Chores")
-		ui.Lede("Every zone in the game down the left, the one you picked drawn beside it with Questie's markers on top, and a line along the bottom saying who that zone is for.")
+		ui.Lede("Every zone in the game down the left, the one you picked beside it with Questie's markers and your group on top, and a line under it saying who it is for.")
 		ui.Check("the addon's world map",
 			function() return ns.db.worldMap end,
 			SetMap)
-		ui.Hint("The client's map navigates by clicking a continent and then the piece of coastline you think is the place you meant. This one has a column of zone names, which answers 'show me Desolace' in one click.")
+		ui.Hint("A column of zone names answers 'show me Desolace' in one click. On the picture, left steps into what is under it and right steps out to the continent, which is a row at the top of its group.")
 		ui.Check("put Blizzard's world map in the attic",
 			function() return ns.db.worldMapHideBlizz end,
 			SetHide)
 		ui.Hint("The M key opens this window while that is ticked. Untick it and both maps work, with the key opening Blizzard's.")
 		ui.Reading("the zone list", ns.MapZones.Describe)
 		ui.Reading("the markers", ns.MapPins.Describe)
+		ui.Reading("your group", ns.MapMates.Describe)
 		ui.Reading("this window", ns.MapWindow.Describe)
 		ui.Reading("Blizzard's window", ns.MapBlizzard.Describe)
 	end,

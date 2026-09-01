@@ -257,6 +257,20 @@ function Zones.Tree()
 		if type(node.mapID) == "number" and type(node.name) == "string" then
 			local held = Continent(node, zone)
 			if #held.zones > 0 then
+				-- The continent itself, first in its own group.
+				--
+				-- A continent is a map with a picture like any other and the
+				-- column had no way to reach one, so the window could show you
+				-- Desolace and could not show you Kalimdor. It is a row rather
+				-- than a click on the group heading because the heading already
+				-- means fold, and a row is what the right button on the picture
+				-- moves to when it steps out of a zone.
+				--
+				-- First rather than sorted in with the zones, because it is not
+				-- one of them: it is the thing they are all inside. Everything
+				-- that counts zones skips it by the flag.
+				table.insert(held.zones, 1,
+					{ name = held.name, map = held.map, whole = true })
 				tree[#tree + 1] = held
 			end
 		end
@@ -280,7 +294,11 @@ function Zones.Count()
 	local continents, zones = 0, 0
 	for _, held in ipairs(Zones.Tree()) do
 		continents = continents + 1
-		zones = zones + #held.zones
+		for _, zone in ipairs(held.zones) do
+			if not zone.whole then
+				zones = zones + 1
+			end
+		end
 	end
 	return continents, zones
 end
@@ -295,6 +313,18 @@ function Zones.Find(map)
 		end
 	end
 	return nil
+end
+
+-- The continent a map is on, which is what the right button on the picture
+-- steps out to. Nothing at all for a continent, because the column has no row
+-- above one, and nothing for a map the tree has never heard of.
+function Zones.Above(map)
+	local at = Zones.Find(map)
+	local held = at and Zones.Tree()[at]
+	if not held or held.map == map then
+		return nil
+	end
+	return held.map
 end
 
 -- What level this zone is for. Two numbers for a zone, nothing at all for a
@@ -346,9 +376,11 @@ function Zones.Ranged()
 	local total, known = 0, 0
 	for _, held in ipairs(Zones.Tree()) do
 		for _, zone in ipairs(held.zones) do
-			total = total + 1
-			if Zones.Known(zone.map) then
-				known = known + 1
+			if not zone.whole then
+				total = total + 1
+				if Zones.Known(zone.map) then
+					known = known + 1
+				end
 			end
 		end
 	end

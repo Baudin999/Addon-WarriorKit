@@ -719,16 +719,19 @@ Dungeons\Feature.lua
 # what level each zone is for. Pins.lua is Questie's markers, read off the
 # frames Questie makes for them rather than off the database, because Questie
 # has already decided which quests you can take and asking again would get a
-# different answer. Window.lua draws the column and the picture, Blizzard.lua
-# puts the client's own map in the attic and takes the M key, and Feature.lua
-# last, as everywhere else.
+# different answer. Mates.lua is everybody else in your group, placed by the
+# client itself rather than by a table of zone rectangles. Window.lua draws the
+# column and the picture, Blizzard.lua puts the client's own map in the attic
+# and takes the M key, and Feature.lua last, as everywhere else.
 #
-# Window.lua reads both of the other two and neither knows the other exists, so
-# they load above it. After Core\Attic.lua, which is where Blizzard's map goes,
-# and after UI\Chart.lua, which is the picture it draws on. Both are far above
-# this line.
+# Window.lua reads the three above it and none of them knows the others exist,
+# so they load first. After Core\Attic.lua, which is where Blizzard's map goes,
+# after UI\Chart.lua, which is the picture it draws on, and after Unit\Color.lua,
+# which is what a person on the map is coloured by. All three are far above this
+# line.
 Map\Zones.lua
 Map\Pins.lua
+Map\Mates.lua
 Map\Window.lua
 Map\Blizzard.lua
 Map\Feature.lua

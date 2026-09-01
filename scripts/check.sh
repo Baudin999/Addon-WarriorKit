@@ -473,6 +473,7 @@ World/World.lua:World.Sweep
 UI/Tooltip.lua:Tooltip.Sweep
 UI/Chart.lua:Track
 UI/Chart.lua:Aim
+UI/Chart.lua:Chart.Spot
 UI/Chart.lua:Chart.Here
 UI/Chart.lua:Chart.Facing
 UI/Placeable.lua:Follow
