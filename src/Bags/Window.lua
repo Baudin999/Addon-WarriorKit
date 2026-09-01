@@ -93,16 +93,34 @@ end
 -- only while a vendor is open and only when it has something on it.
 local bar = 0
 
+-- What the piles came to on the last scan, and whether there has been one.
+--
+-- The height is the piles' and the piles are not known until a scan, so the
+-- window is built at the floor and reaches its real height on the first draw.
+-- That growth is not a resize anybody watched: it is the window arriving at the
+-- size it was always going to be, off the top edge of a two row placeholder.
+-- Pinning that edge and then growing a bag's worth of piles downward off it is
+-- what opened the window half a bag below wherever it had been dragged, every
+-- time, on a corner that was written down correctly and read back correctly.
+--
+-- So the pin is for the second scan onward, and a fit with no scan behind it
+-- keeps the height the last one came to rather than dropping to the floor.
+local piles, scanned = 0, false
+
 -- The window at the size this scan's piles came to. `content` is what the grid
 -- said it drew, or nothing before anything has been drawn.
 local function Fit(content)
+	if content then
+		piles = content
+	end
 	local width = Width()
 	local room = ns.BagsMerchant.Height()
-	local height = M.pad * 2 + room + math.max(content or 0, FLOOR) + Chrome()
-	-- Only when the number is about to move. A bag update arrives five times for
-	-- one loot and four of them come to the same height, and re-anchoring a
-	-- window that is not changing size is a thing that can only go wrong.
-	if height ~= window.height then
+	local height = M.pad * 2 + room + math.max(piles, FLOOR) + Chrome()
+	-- Only when the number is about to move, and only once a scan has said what
+	-- the height is. A bag update arrives five times for one loot and four of
+	-- them come to the same height, and re-anchoring a window that is not
+	-- changing size is a thing that can only go wrong.
+	if height ~= window.height and scanned then
 		PinTop()
 	end
 	window:Resize(width, height)
@@ -117,6 +135,9 @@ local function Fit(content)
 	-- Body again rather than the number just asked for, because Resize clamps
 	-- and the view has to be told the height the window actually got.
 	view:Resize(width - M.pad * 2, window:Body() - M.pad * 2 - room)
+	if content then
+		scanned = true
+	end
 	return width
 end
 

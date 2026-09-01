@@ -134,8 +134,46 @@ end
 -- The window
 ----------------------------------------------------------------------
 
-check(Window.Show(), "the bag window refused to open")
-check(Window.Shown(), "the bag window was opened and is not up")
+-- Where you left it, before the window is built, because the corner is read
+-- once at build and never again.
+--
+-- Not in 51-placing with the other seven. This window is made the first time
+-- you open it, so at that section there is no frame to drop, and the fault this
+-- guards is not the drag: the corner was written down correctly and read back
+-- correctly, and the window still opened half a bag lower every time, because
+-- the first fit pinned the top of a two row placeholder and grew the piles
+-- downward off it. So what is asserted is the anchor surviving the first draw,
+-- which is the pass that used to eat it.
+--
+-- In a block of its own because this chunk is four names off the limit that
+-- keeps a section readable, and none of these three is read below.
+do
+	local DROPPED = { "RIGHT", "UIParent", "RIGHT", -419, -26 }
+	ns.db.windowSpots.WarriorKitBags = DROPPED
+
+	check(Window.Show(), "the bag window refused to open")
+	check(Window.Shown(), "the bag window was opened and is not up")
+
+	local frame = _G.WarriorKitBags
+	local opened = { frame:GetPoint() }
+	check(opened[1] == DROPPED[1] and opened[3] == DROPPED[3]
+			and opened[4] == DROPPED[4] and opened[5] == DROPPED[5],
+		("the bag window was left at %s %s, %s and opened at %s %s, %s"):format(
+			DROPPED[1], DROPPED[4], DROPPED[5],
+			tostring(opened[1]), tostring(opened[4]), tostring(opened[5])))
+
+	-- And the other half: dropped somewhere else, it writes the new corner down.
+	frame.scripts.OnDragStart(frame)
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT", 111, -222)
+	frame.scripts.OnDragStop(frame)
+	local dropped = ns.db.windowSpots.WarriorKitBags
+	check(dropped and dropped[1] == "TOPLEFT" and dropped[4] == 111 and dropped[5] == -222,
+		"the bag window was dragged and wrote down " .. (dropped
+			and ("%s at %s, %s"):format(tostring(dropped[1]), tostring(dropped[4]),
+				tostring(dropped[5])) or "nothing"))
+	ns.db.windowSpots.WarriorKitBags = nil
+end
 
 local window = Window.Frame()
 check(window ~= nil and window.frame:GetName() == "WarriorKitBags",
