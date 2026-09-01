@@ -359,13 +359,32 @@ _G.GetNumSpellTabs = constant(0)
 -- book it came out of. A stub with no book at all would push that question onto
 -- the last of the three readings it tries, which is the guess rather than the
 -- path this client is actually on, and the guess passes.
+--
+-- Two readers now, and the second one is why the ids are here beside the
+-- names. Cooldowns/Panel.lua takes a spell dragged onto the row and has to end
+-- up with an id, because an id is what the row counts by and what a row you
+-- arranged is saved as. GetSpellBookItemName cannot answer that, so the id
+-- comes off GetSpellBookItemInfo, which is where Buttons/Ranks.lua reads its
+-- own from.
+--
+-- The ids are the real ones. Thunder Clap is on the warrior's own rotation
+-- list, which is the case worth having: a spell dragged onto the row that the
+-- row already knows about has to move rather than arrive a second time.
 local BOOK = { "Rend", "Thunder Clap", "Battle Shout" }
+local BOOK_IDS = { 772, 6343, 6673 }
 _G.WarriorKitSpellBook = BOOK
+_G.WarriorKitSpellBookIds = BOOK_IDS
 _G.GetSpellBookItemName = function(index, book)
 	if book ~= "spell" then
 		return nil
 	end
 	return BOOK[index]
+end
+_G.GetSpellBookItemInfo = function(index, book)
+	if book ~= "spell" or not BOOK[index] then
+		return nil
+	end
+	return "SPELL", BOOK_IDS[index]
 end
 -- Three items in the backpack and empty hands. Enough for the gear scan to
 -- have something to offer, and chosen so all three rules it enforces are

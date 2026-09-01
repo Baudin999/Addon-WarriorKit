@@ -128,6 +128,17 @@ local shipped
 -- unknown and the unnameable taken out. Rebuilt on an event, never on a tick.
 local order = {}
 
+-- And what is off the row on purpose: the entries this character could draw and
+-- has switched off. Kept beside `order` and built in the same walk, because the
+-- page draws both and a square you took off the row that is nowhere on the page
+-- is a square you cannot put back.
+--
+-- The unlearned and the unnameable are on neither list. There is nothing to
+-- show and nothing to drag: a trinket slot with a passive item in it and a
+-- talent nobody has spent a point on are facts about the character rather than
+-- squares somebody moved.
+local shelf = {}
+
 -- How many times the list has been rebuilt, so the row can tell that what it
 -- laid out is stale without comparing the list to itself. A count rather than a
 -- length, because a rebuild can leave the list exactly as long as it was and
@@ -318,6 +329,42 @@ function Cooldowns.Entry(index)
 	return order[index]
 end
 
+function Cooldowns.ShelfCount()
+	return #shelf
+end
+
+function Cooldowns.Shelved(index)
+	return shelf[index]
+end
+
+-- How many drawn squares each line carries. Two numbers rather than a list,
+-- because both callers walk the entries themselves and neither wants a table
+-- built per layout. The rotation entries lead the list, which is the property
+-- Sort is built to keep, so this counts until the tag changes and stops.
+function Cooldowns.Split()
+	local fast = 0
+	while fast < #order and order[fast + 1].layer == ROTATION do
+		fast = fast + 1
+	end
+	return fast, #order - fast
+end
+
+-- The at-th drawn square on one line, or nil past the end of it. What the page
+-- reads a square off, and what a drop is measured against: `at` counts squares
+-- you can see, because that is what the mouse landed on.
+function Cooldowns.OnRow(line, at)
+	local seen = 0
+	for index = 1, #order do
+		if order[index].layer == line then
+			seen = seen + 1
+			if seen == at then
+				return order[index]
+			end
+		end
+	end
+	return nil
+end
+
 -- What your spec brought, in two lines, plus the two trinket slots everybody
 -- has.
 --
@@ -376,6 +423,30 @@ function Cooldowns.All()
 	return shipped
 end
 
+-- Which entry on the row already answers for a spell, or nil for one nothing on
+-- it has heard of.
+--
+-- Every id an entry carries, and the name as well. An entry with two ids is one
+-- button under two names, and a spell dragged on by a rank the class file did
+-- not list would otherwise arrive as a second square counting the same cooldown
+-- down beside the first.
+function Cooldowns.Owner(spellID)
+	local name = ns.SpellName(spellID)
+	local list = Cooldowns.All()
+	for index = 1, #list do
+		local entry = list[index]
+		for at = 1, #(entry.spells or NONE) do
+			if entry.spells[at] == spellID then
+				return entry
+			end
+		end
+		if name and entry.name == name then
+			return entry
+		end
+	end
+	return nil
+end
+
 -- Add a spell of your own. Returns true and its name, or false and the
 -- sentence to print, which is the shape EnemyBars.AddSpell hands back and for
 -- the same reason: the panel and the slash word say the same thing about the
@@ -392,14 +463,18 @@ function Cooldowns.Add(spellID)
 		return false, ("this client does not know spell %d."):format(spellID)
 	end
 
-	-- By name as well as by key, because two ids that resolve to one name are
-	-- two squares counting the same cooldown down together.
-	local list = Cooldowns.All()
-	for index = 1, #list do
-		local entry = list[index]
-		if entry.key == MineKey(spellID) or entry.name == name then
+	-- A spell the row already knows about is switched back on rather than added
+	-- again. That is the same act said two ways: dragging Death Wish back onto
+	-- the row and typing its id are both "count this one", and the one that
+	-- refused because a square you had switched off was still on the list was
+	-- refusing to do the thing it was asked for.
+	local owner = Cooldowns.Owner(spellID)
+	if owner then
+		if Cooldowns.Watched(owner.key) then
 			return false, name .. " is already on the row."
 		end
+		Cooldowns.SetWatched(owner.key, true)
+		return true, name
 	end
 
 	local own = Cooldowns.Mine()
@@ -489,50 +564,105 @@ function Cooldowns.SetLine(key, line)
 	Cooldowns.Rebuild()
 end
 
--- Every spell your class lists for any of its specs that is not on your row
--- and that this character has learned, which is what the panel's picker offers.
+--------------------------------------------------------------------------
+-- Where a square was dropped
 --
--- Your class rather than your spec, because the one thing the row cannot answer
--- for itself is the cooldown your spec's list leaves out and you press anyway.
--- A protection warrior who took Death Wish finds it here.
-local function Offer(found, options, list)
-	for index = 1, #(list or NONE) do
-		local entry = list[index]
-		for at = 1, #(entry.spells or NONE) do
-			local id = entry.spells[at]
-			if not found[id] and ns.SpellName(id) and IsSpellKnown(id) then
-				found[id] = true
-				options[#options + 1] = id
+-- Two calls, and between them they are the whole of what the page writes. A
+-- square is dropped onto a line at a place along it, or it is dragged off and
+-- switched off. Everything the page used to carry, a tick box and two step
+-- buttons and a line button and a cross per entry, said one of those two things
+-- in five controls and a paragraph explaining them.
+--
+-- The line and the place are one act here rather than two. Dragging Shield Wall
+-- from the docked line to the third square of the top line is one gesture, and
+-- a pair of calls that moved the line and then walked it into place would draw
+-- the row twice and leave it wrong in between.
+--------------------------------------------------------------------------
+
+-- Where an entry goes in the whole list to land at a place on one line.
+--
+-- Before the square it was dropped on, or after the last entry already on that
+-- line when it was dropped past the end. An empty line takes the top of the
+-- list or the bottom of it, which is the same rule stated for the case with
+-- nothing to sit beside: the rotation entries lead the list and the docked ones
+-- follow, and Row.lua walks that in one pass.
+local function Slot(list, line, anchor)
+	if anchor then
+		for index = 1, #list do
+			if list[index] == anchor then
+				return index
 			end
 		end
 	end
-end
-
-function Cooldowns.Suggestions()
-	local def = ns.Class.Mine()
-	if not def then
-		return NONE
-	end
-
-	-- Every id on the row and not merely the one each entry resolved to. An
-	-- entry with two ids is one button under two names, and offering the other
-	-- name is offering a second square for the same cooldown.
-	local found, options = {}, {}
-	local list = Cooldowns.All()
-	for index = 1, #list do
-		local entry = list[index]
-		for at = 1, #(entry.spells or NONE) do
-			found[entry.spells[at]] = true
+	for index = #list, 1, -1 do
+		if list[index].layer == line then
+			return index + 1
 		end
 	end
+	return line == ROTATION and 1 or (#list + 1)
+end
 
-	Offer(found, options, def.rotation)
-	Offer(found, options, def.cooldowns)
-	for index = 1, #(def.specs or NONE) do
-		Offer(found, options, def.specs[index].rotation)
-		Offer(found, options, def.specs[index].cooldowns)
+-- One square onto a line, at a place along it. Switched back on if it was off,
+-- because a square you dragged onto the row is one you want counted and there
+-- is nothing else the gesture could mean.
+--
+-- `at` counts the drawn squares on that line rather than the entries on the
+-- list, because it comes off the page and the page draws what you can see. A
+-- place past the end of the line is the end of it.
+function Cooldowns.Place(key, line, at)
+	local anchor = Cooldowns.OnRow(line, at)
+	if anchor and anchor.key == key then
+		return false
 	end
-	return options
+
+	local list = Cooldowns.All()
+	local from
+	for index = 1, #list do
+		if list[index].key == key then
+			from = index
+		end
+	end
+	if not from then
+		return false
+	end
+
+	local entry = table.remove(list, from)
+	entry.layer = line
+	ns.dbc.cooldownLine[key] = line
+	ns.dbc.cooldownWatch[key] = nil
+
+	table.insert(list, Slot(list, line, anchor), entry)
+	Remember(list)
+	Cooldowns.Rebuild()
+	return true
+end
+
+-- A spell dropped on the row: off your spellbook, off the other line, or off
+-- the squares under the row that are not on it.
+--
+-- Matched against the whole list before anything is added, because the spell
+-- you are holding is nearly always one the row has already heard of. Adding it
+-- again would be a second square counting the same cooldown down beside the
+-- first, and Owner is what makes dragging one back on the same act as never
+-- having taken it off.
+function Cooldowns.Put(spellID, line, at)
+	spellID = tonumber(spellID)
+	if not spellID then
+		return false, "that is not a spell this row can count."
+	end
+
+	local owner = Cooldowns.Owner(spellID)
+	if owner then
+		Cooldowns.Place(owner.key, line, at)
+		return true, owner.name or ns.SpellName(spellID)
+	end
+
+	local ok, message = Cooldowns.Add(spellID)
+	if not ok then
+		return false, message
+	end
+	Cooldowns.Place(MineKey(spellID), line, at)
+	return true, message
 end
 
 -- Back to the row your class ships: everything you added dropped, every line
@@ -690,6 +820,9 @@ function Cooldowns.Rebuild()
 	for index = #order, 1, -1 do
 		order[index] = nil
 	end
+	for index = #shelf, 1, -1 do
+		shelf[index] = nil
+	end
 	for name in pairs(wanted) do
 		wanted[name] = nil
 	end
@@ -704,6 +837,8 @@ function Cooldowns.Rebuild()
 		if entry.name and Cooldowns.Watched(entry.key) then
 			order[#order + 1] = entry
 			wanted[entry.name] = entry
+		elseif entry.name then
+			shelf[#shelf + 1] = entry
 		end
 	end
 

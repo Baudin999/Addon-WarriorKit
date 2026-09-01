@@ -173,15 +173,14 @@ local function Place()
 	--
 	-- Both counts are needed up front because each line is centred under the
 	-- wider of the two, and a line cannot be centred until the width of the
-	-- other one is known. The rotation entries lead the list, which is the
-	-- property Cooldowns.All is built to keep, so this walks until the tag
-	-- changes and stops rather than testing every slot.
-	local fastCount = 0
-	while fastCount < drawn
-		and ns.Cooldowns.Layer(fastCount + 1) == ns.Cooldowns.ROTATION do
-		fastCount = fastCount + 1
+	-- other one is known.
+	--
+	-- A quiet row draws none of either, whatever the list says, which is why the
+	-- count is taken off `drawn` rather than off the split alone.
+	local fastCount, longCount = ns.Cooldowns.Split()
+	if drawn == 0 then
+		fastCount, longCount = 0, 0
 	end
-	local longCount = drawn - fastCount
 
 	local fastWide = fastCount > 0 and fastCount * (BIG + GAP) - GAP or 0
 	local longWide = longCount > 0 and longCount * (ICON + GAP) - GAP or 0
@@ -360,6 +359,18 @@ function Row.Reset()
 	ns.db.cooldownPoint = ns.DefaultCopy("cooldownPoint")
 	ns.db.cooldownZoom = ns.DefaultCopy("cooldownZoom")
 	Row.Apply()
+end
+
+-- The four numbers the row is drawn out of: the two sizes and the two gaps.
+--
+-- Handed out because the options page draws the row as it will look, and the
+-- one thing that page must not do is pick its own sizes. Two squares that mean
+-- "you are waiting for this right now" and "you are waiting for this fight" are
+-- told apart by nothing but how big they are, so a page that drew them at a
+-- ratio of its own would be teaching the wrong reading of the thing it is there
+-- to arrange.
+function Row.Metrics()
+	return BIG, ICON, GAP, DOCK
 end
 
 -- One square, for scripts/harness.lua, handed out for the reason Buffs\Nag.lua

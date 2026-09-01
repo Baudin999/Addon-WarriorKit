@@ -2,6 +2,57 @@
 
 ## Unreleased
 
+### The cooldown row is arranged by dragging it
+
+The page that decided what was on the row was a list of twenty-three rows with
+five controls each: a tick box for whether the square was drawn, two buttons
+that walked it one place along its line, a third that sent it to the other line,
+and a cross for one you had added yourself. Every one of them described a
+picture instead of being one, and the picture was on the other side of the
+screen. Arranging six squares meant reading the row out as a list, editing the
+list, and then looking up to see what you had done.
+
+So the page draws the row. `Cooldowns/Panel.lua` lays out the two lines at the
+sizes `Row.lua` draws them at, big squares along the top and small ones docked
+under, with the squares that are off the row under a caption saying so. Drag a
+spell out of your spellbook onto either line and it lands where you dropped it,
+in front of the square you dropped it on. Drag one from a line to the other and
+it changes size, which is the whole reading of the two lines. Drag one off and
+it stops being counted and turns up under the row where you can drag it back.
+Right click does the same in one press, for the hurry and for a client with no
+`GetMouseFocus`.
+
+Two calls carry all of it. `Cooldowns.Place` puts one key on one line at one
+place along it and switches it back on, because a line and a place are one
+gesture and a pair of calls that did them separately would draw the row twice
+and leave it wrong in between. `Cooldowns.Put` is the same thing for a spell off
+the cursor, and it looks the id up against every id every entry carries before
+it adds anything: a spell the row already knows about moves rather than arriving
+a second time to count the same cooldown down beside itself. `Cooldowns.Add`
+follows that rule now too, so typing the id of something you had switched off
+switches it back on instead of refusing on the grounds that it is already there.
+
+A drag out goes one of two ways and the page picks between them once, at the
+start, on whether the cursor took what was in the square. A spell rides the
+cursor, which is how every icon in the game moves and is why one dragged off the
+row can be dropped on an action bar. An equipped trinket cannot be picked up
+without unequipping it, so nothing goes on the cursor, the square is remembered,
+and the client is asked where the button came up. The two paths cannot both fire
+for one drag, which is what saves this file from having to know what order the
+client fires them in.
+
+`ns.CarrySpell` is in Core with the other client shims. `PickupSpell` answers to
+a name on one client and an id on the other, and `Buttons/Layout.lua` had the
+only probe that tried both; the options page now asks the same question, and two
+copies of a probe is two answers to it.
+
+The picker that offered what your class knows is gone, because dragging out of
+the spellbook offers all of it and offers it in the place you are looking. The
+field that takes a spell id stays, for a rank you have not trained and for a
+spell an item casts, which are the two things the book will not hand you. The
+page lost 235 characters of prose on the way, and the budget in
+`16-options-window.lua` came down with it.
+
 ### Buyback, which went off the screen with the client's window
 
 The merchant window replaced the rack and not the tab beside it. Selling to the

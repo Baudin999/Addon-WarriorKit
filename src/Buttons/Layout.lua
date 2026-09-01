@@ -264,22 +264,13 @@ end
 -- never reach PlaceAction, or the slot gets whatever was on the cursor last.
 --------------------------------------------------------------------------
 
--- PickupSpell has taken more than one shape across clients. Try the ones this
--- one might have, cheapest first, and report failure rather than guessing.
+-- PickupSpell has taken more than one shape across clients, and ns.CarrySpell
+-- is where the two are tried and the cursor read back. It is a shim rather than
+-- this file's own for the reason every other client call in the addon is one:
+-- the options page drags a cooldown off the row with the same question and two
+-- copies of a probe is two answers to it.
 local function CursorSpell(name)
-	ClearCursor()
-	if pcall(PickupSpell, name) and GetCursorInfo() then
-		return true
-	end
-
-	ClearCursor()
-	local _, _, _, _, _, _, spellID = GetSpellInfo(name)
-	if spellID and pcall(PickupSpell, spellID) and GetCursorInfo() then
-		return true
-	end
-
-	ClearCursor()
-	return false
+	return ns.CarrySpell(name)
 end
 
 local function CursorMacro(name)

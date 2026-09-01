@@ -432,11 +432,13 @@ Buffs\Feature.lua
 # The cooldowns, in two layers. Cooldowns.lua is what is on the row, out of the
 # two lists your spec registered and the two trinket slots; Row.lua draws the
 # rotation ones as big squares along the top and the long ones smaller and
-# docked under them; Feature.lua last as everywhere else. After the buff nag
-# because it is the same question one step out, and it needs UI\Ability.lua,
-# which is far above this line.
+# docked under them; Panel.lua is the same row on the options page, where you
+# drag the squares into the order you want; Feature.lua last as everywhere else.
+# After the buff nag because it is the same question one step out, and it
+# needs UI\Ability.lua, which is far above this line.
 Cooldowns\Cooldowns.lua
 Cooldowns\Row.lua
+Cooldowns\Panel.lua
 Cooldowns\Feature.lua
 
 # The feeds. Two columns of what just happened: what dropped, and what landed on

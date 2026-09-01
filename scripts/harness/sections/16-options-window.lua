@@ -476,9 +476,15 @@ if window then
 	-- became five, and the longest of its hints is the sentence saying a spell id
 	-- is the last part of a Wowhead address, which is the one thing about a field
 	-- that takes a number nobody can work out by looking at it. 25,700 is that
-	-- measurement plus a hint's worth of room again.
-	check(prose < 25700,
-		("the window holds %d characters of prose and the budget is 25,700"):format(prose))
+	-- measurement plus a hint's worth of room again. Dragging the squares around
+	-- instead gives 235 of it back and takes it to 25,301 across the same
+	-- sixty-seven: the five controls per entry are one picture of the row, two
+	-- hints and a reading went with them, and what a square does is on the square
+	-- rather than in a paragraph about it. 25,500 is that measurement plus a
+	-- hint's worth of room again, and it is a smaller number than the line above
+	-- it because prose that came out is prose that has to stay out.
+	check(prose < 25500,
+		("the window holds %d characters of prose and the budget is 25,500"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

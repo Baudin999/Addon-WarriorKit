@@ -469,6 +469,19 @@ end
 -- The highlight asks opts.take rather than watching the cursor, for the same
 -- reason. It was CursorHasItem, which never answers for a spell.
 --
+-- A square can be dragged out of as well as dropped onto, and that is two hooks
+-- because a drag has two ends and only the page knows what happens at either.
+-- opts.drag is the square being emptied, and the page is what decides whether
+-- anything rides the cursor out of it. opts.landed is the button coming up,
+-- wherever it came up, which is the only thing a square whose contents will not
+-- go on the cursor has to go on: an equipped trinket cannot be picked up and
+-- carried to another square without unequipping it, and picking it up is not
+-- what the drag meant.
+--
+-- opts.describe is what the square says to a hover, in ns.Tip's own terms. It
+-- is folded into the highlight rather than hung with ns.Tip.Hang, because both
+-- want OnEnter and the second one to be set wins.
+--
 -- Module scope rather than inside the kit, because a page that lays out its own
 -- row wants the square without the label and the stack cell around it. opts.after
 -- is what the kit passes its own refresh in; a caller outside the kit passes
@@ -546,10 +559,30 @@ function UI.DropSquare(parent, size, get, set, opts)
 	end)
 	button:SetScript("OnEnter", function()
 		UI.Tint(square.bg, Carried() ~= nil and C.selected or C.control)
+		if opts.describe then
+			ns.Tip.Open(button, opts.describe())
+		end
 	end)
 	button:SetScript("OnLeave", function()
 		UI.Tint(square.bg, C.sunken)
+		if opts.describe then
+			ns.Tip.Close()
+		end
 	end)
+
+	if opts.drag then
+		button:RegisterForDrag("LeftButton")
+		button:SetScript("OnDragStart", function()
+			opts.drag()
+			after()
+		end)
+		if opts.landed then
+			button:SetScript("OnDragStop", function()
+				opts.landed()
+				after()
+			end)
+		end
+	end
 
 	square.button = button
 	square.Refresh = function()

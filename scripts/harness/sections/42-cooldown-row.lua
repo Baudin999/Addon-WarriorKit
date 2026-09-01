@@ -331,6 +331,159 @@ do
 end
 
 ----------------------------------------------------------------------
+-- Arranging it by hand
+--
+-- The page draws the row as it will look and you drag the squares around it,
+-- which is four claims and not one of them can be settled by reading the code.
+--
+-- Does a spell dragged out of the spellbook land on the line it was dropped on,
+-- at the place it was dropped at. This client answers a dragged spell with a
+-- spellbook index and the book it came out of, and the row counts by id, so the
+-- id has to come back off the book. A page that read the index as an id would
+-- put some other spell on the row and look exactly like a page that worked.
+--
+-- Does a spell the row already knows about move rather than arrive twice. That
+-- is the whole of the difference between dragging a square and adding one, and
+-- a second square counting the same cooldown down beside the first is the bug
+-- it guards against.
+--
+-- Does a square dragged off the row turn up under it. That is what replaced the
+-- tick box per entry, and a square that went nowhere would be one you could not
+-- put back.
+--
+-- And does one dropped on a square land in front of it rather than at the end
+-- of the line, which is what replaced the two step buttons per entry.
+--
+-- Everything here is put back at the end, because every count below it is the
+-- class file's again.
+----------------------------------------------------------------------
+
+do
+	local Page = ns.CooldownPanel
+	local BOOK = _G.WarriorKitSpellBookIds
+	local baseline = Cooldowns.Count()
+
+	-- Standing on the page, because the window lays out the section you are
+	-- looking at and no other. That is the state a drag happens in and it is not
+	-- an arrangement for the test: a square nobody can see is a square nobody
+	-- can drop anything on.
+	local window = ns.UI.Windows[1]
+	for index = 1, #window.groups do
+		local group = window.groups[index]
+		for section = 1, #group.sections do
+			if group.sections[section].title == "Which cooldowns" then
+				window.rail:Select(index)
+				ns.Options.SelectSection(section)
+			end
+		end
+	end
+	ns.Options.Refresh()
+	check(Page.Square(1) ~= nil, "the page built no squares to drag")
+
+	local function square(index)
+		return Page.Square(index)
+	end
+
+	-- One gesture, in the two halves the client sends: what is on the cursor,
+	-- and the drag landing on a square. The button is what carries the scripts,
+	-- because that is the frame the widget layer enables the mouse on.
+	local function drop(w, book)
+		_G.WarriorKitCarrySpell(book, "spell")
+		w.button.scripts.OnReceiveDrag(w.button)
+	end
+
+	-- Which square on the page is holding one entry. Walked rather than worked
+	-- out, because the pool runs the top line first and then the docked one, and
+	-- a test that recomputed that arithmetic would pass on its own copy of it.
+	local function held(key)
+		for index = 1, Cooldowns.Ceiling() + 2 do
+			local w = Page.Square(index)
+			if w and w.entry and w.entry.key == key then
+				return w
+			end
+		end
+		return nil
+	end
+
+	local function place(key)
+		local fast = Cooldowns.Split()
+		for index = 1, Cooldowns.Count() do
+			if Cooldowns.Entry(index).key == key then
+				return index, index <= fast and Cooldowns.ROTATION or Cooldowns.LONG
+			end
+		end
+		return nil
+	end
+
+	-- A spell off the spellbook, onto the front of the top line.
+	local REND = BOOK[1]
+	drop(square(1), 1)
+	tick()
+	local at, line = place("spell" .. REND)
+	check(at ~= nil, "a spell dragged out of the spellbook is not on the row")
+	check(line == Cooldowns.ROTATION,
+		"a spell dropped on the top line is not on the top line")
+	check(at == 1, ("it landed at place %s rather than at the front")
+		:format(tostring(at)))
+	check(Cooldowns.Count() == baseline + 1,
+		("the drop left %d squares of %d"):format(Cooldowns.Count(), baseline + 1))
+	check(_G.GetCursorInfo() == nil, "the drop left the spell on the cursor")
+
+	-- The same spell again, onto the docked line this time. One square moves;
+	-- nothing is added.
+	local fast = Cooldowns.Split()
+	drop(square(fast + 2), 1)
+	tick()
+	at, line = place("spell" .. REND)
+	check(line == Cooldowns.LONG, "the square did not move to the line it was dropped on")
+	check(Cooldowns.Count() == baseline + 1,
+		("dragging one square to the other line left %d squares of %d")
+			:format(Cooldowns.Count(), baseline + 1))
+
+	-- Dragged off. Nothing on this client will put a spell on the cursor, which
+	-- is the trinket's case as well: the square is remembered instead, the
+	-- button comes up over nothing, and the entry stays off the row.
+	local off = held("spell" .. REND)
+	check(off ~= nil, "the page is not holding the square the row is")
+	off.button.scripts.OnDragStart(off.button)
+	off.button.scripts.OnDragStop(off.button)
+	tick()
+	check(place("spell" .. REND) == nil, "a square dragged off the row is still on it")
+	check(Cooldowns.Count() == baseline,
+		("dragging one off left %d squares of %d"):format(Cooldowns.Count(), baseline))
+
+	local under
+	for index = 1, Cooldowns.ShelfCount() do
+		if Cooldowns.Shelved(index).key == "spell" .. REND then
+			under = index
+		end
+	end
+	check(under ~= nil, "a square dragged off the row is nowhere under it either")
+
+	-- And back, onto the square the button came up over, which is the half of
+	-- the gesture this client can only answer through GetMouseFocus.
+	local focus = _G.GetMouseFocus
+	_G.GetMouseFocus = function() return square(1).button end
+	local w = Page.Shelved(under)
+	w.button.scripts.OnDragStart(w.button)
+	w.button.scripts.OnDragStop(w.button)
+	_G.GetMouseFocus = focus
+	tick()
+	at, line = place("spell" .. REND)
+	check(at == 1 and line == Cooldowns.ROTATION,
+		("dragged back onto the front of the top line it is at %s on the %s line")
+			:format(tostring(at), tostring(line)))
+
+	Cooldowns.ResetRow()
+	Cooldowns.SetWatched("spell" .. REND, true)
+	tick()
+	ns.Options.Refresh()
+	check(Cooldowns.Count() == baseline,
+		("putting the row back after the drags left %d squares of %d")
+			:format(Cooldowns.Count(), baseline))
+end
+
+----------------------------------------------------------------------
 -- What one square is doing
 ----------------------------------------------------------------------
 

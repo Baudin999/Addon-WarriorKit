@@ -582,6 +582,47 @@ function ns.SpellCooldown(spell)
 	return start or 0, duration or 0, enabled ~= 0
 end
 
+-- Put a spell on the cursor, and say whether it went.
+--
+-- PickupSpell has taken more than one shape across clients: it answers to a
+-- name on one and to an id on the other, and nothing installed on this machine
+-- proves which 2.5.6 is. So both are tried, cheapest first, and the cursor is
+-- read back rather than trusted. A pickup that came up empty and was believed
+-- is the bug this shape exists to make impossible: whatever the cursor was
+-- holding before then gets dropped wherever the caller drops it.
+--
+-- Buttons/Layout.lua wraps this in a probe that names which call a client is
+-- missing, because a loadout that cannot be written has to say why. A caller
+-- that only wants the picture under the cursor asks here.
+function ns.CarrySpell(spell)
+	if type(_G.PickupSpell) ~= "function" or type(_G.GetCursorInfo) ~= "function"
+		or type(_G.ClearCursor) ~= "function" then
+		return false
+	end
+
+	ClearCursor()
+	if pcall(PickupSpell, spell) and GetCursorInfo() then
+		return true
+	end
+
+	-- The other spelling of the same spell. An id for a name and a name for an
+	-- id, so a client that takes only one of the two is still answered.
+	local other
+	if type(spell) == "number" then
+		other = ns.SpellName(spell)
+	else
+		other = select(7, _G.GetSpellInfo(spell))
+	end
+
+	ClearCursor()
+	if other and pcall(PickupSpell, other) and GetCursorInfo() then
+		return true
+	end
+
+	ClearCursor()
+	return false
+end
+
 -- Returns usable, and whether the block is rage rather than anything else.
 function ns.SpellUsable(spell)
 	if C_Spell and C_Spell.IsSpellUsable then
