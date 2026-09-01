@@ -391,42 +391,43 @@ local function CastWord(arg)
 	end
 end
 
--- Which of the six numbers a `party` word is setting, and what it is allowed to
--- be. A table would be six entries repeating the same three fields; this is the
--- one place the ranges are read, and every one of them comes off the file that
--- owns it rather than being typed here a second time.
-local function PartyRange(option)
+-- Which number a `party` or `raid` word is setting, and what it is allowed to
+-- be. The key comes off UnitFrames/Group.lua rather than being spelled here a
+-- second time, and so does every range, off the file that owns it.
+local function ListRange(which, option)
 	local wide, wideHigh, tall, tallHigh = ns.Group.SizeRange()
 	local gapLow, gapHigh = ns.Group.GapRange()
 	local columns, columnsHigh, per, perHigh = ns.Group.ColumnRange()
 	if option == "width" then
-		return "partyWidth", wide, wideHigh
+		return ns.Group.Key(which, "width"), wide, wideHigh
 	elseif option == "height" then
-		return "partyHeight", tall, tallHigh
+		return ns.Group.Key(which, "height"), tall, tallHigh
 	elseif option == "gap" then
-		return "partyGap", gapLow, gapHigh
-	elseif option == "columns" then
-		return "partyRaidColumns", columns, columnsHigh
-	elseif option == "percolumn" then
-		return "partyRaidPerColumn", per, perHigh
+		return ns.Group.Key(which, "gap"), gapLow, gapHigh
 	elseif option == "zoom" then
-		return "partyZoom", ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH
+		return ns.Group.Key(which, "zoom"), ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH
+	elseif option == "columns" then
+		return ns.Group.Key(which, "columns"), columns, columnsHigh
+	elseif option == "percolumn" then
+		return ns.Group.Key(which, "per"), per, perHigh
 	end
 	return nil
 end
 
--- True where the word was one of the six, whether or not the number was any
--- good, so the dispatcher below knows it has been dealt with.
-local function PartyNumber(option, value)
-	local key, low, high = PartyRange(option)
+-- True where the word was one of the numbers, whether or not the number was any
+-- good, so the dispatcher below knows it has been dealt with. The two column
+-- words belong to the raid and answer nothing at all for the party, which has
+-- no grid to describe.
+local function ListNumber(which, option, value)
+	local key, low, high = ListRange(which, option)
 	if not key then
 		return false
 	end
-	local size = ns.Command.Number(value, low, high, "party " .. option)
+	local size = ns.Command.Number(value, low, high, which .. " " .. option)
 	if size then
 		ns.db[key] = size
 		ns.Group.Apply()
-		ns.Print(("party %s %d."):format(option, size))
+		ns.Print(("%s %s %d."):format(which, option, size))
 	end
 	return true
 end
@@ -454,45 +455,73 @@ local function PartyRole(arg)
 		or ("%s sits in the %s band until you say otherwise."):format(name, role))
 end
 
-local function PartyWord(option, value)
-	if PartyNumber(option, value) then
+-- Which way a list runs. Four answers for the party, which is a line and can be
+-- a line either way round, and two for the raid, which is a grid whose columns
+-- already run across.
+local function GrowWord(which, value)
+	local across = value == "right" or value == "left"
+	if across and which == "raid" then
+		ns.Print("a raid is a grid, so it grows down or up and its columns run across.")
+		return
+	end
+	if not across and value ~= "up" then
+		value = "down"
+	end
+	ns.db[ns.Group.Key(which, "grow")] = value
+	ns.Group.Apply()
+	ns.Print(("the %s grows %s: it is centred on where you dragged it and fills"
+		.. " outward from there, so this picks which end the first slot is at.")
+		:format(which, value))
+end
+
+-- The words both lists answer to. Everything here reads its own list's setting
+-- through ns.Group.Key, so the party cannot be given the raid's numbers by a
+-- word that forgot which one it was called for.
+local function ListWord(which, option, value)
+	if ListNumber(which, option, value) then
 		return
 	end
 
 	if option == "self" then
-		ns.db.partySelf = ns.Command.Toggle(value)
+		local key = ns.Group.Key(which, "mine")
+		ns.db[key] = ns.Command.Toggle(value)
 		ns.Group.Apply()
-		ns.Print("your own block in the list " .. (ns.db.partySelf and "on" or "off")
-			.. ": the skin already draws you as a block, so it ships off.")
-	elseif option == "order" then
-		ns.db.partyOrder = value == "group" and "group" or "role"
-		ns.Group.Apply()
-		ns.Print("party order " .. ns.db.partyOrder .. ": " .. ns.Group.Describe() .. ".")
+		ns.Print(("your own block in the %s %s."):format(which,
+			ns.db[key] and "on" or "off"))
 	elseif option == "grow" then
-		ns.db.partyGrow = value == "up" and "up" or "down"
-		ns.Group.Apply()
-		ns.Print("the list grows " .. ns.db.partyGrow
-			.. ": it is centred on where you dragged it and fills outward from there, so this picks which end the first slot is at.")
+		GrowWord(which, value)
 	elseif option == "icons" then
-		ns.db.partyRoleIcon = ns.Command.Toggle(value)
+		local key = ns.Group.Key(which, "icons")
+		ns.db[key] = ns.Command.Toggle(value)
 		ns.Group.Apply()
-		ns.Print("role icons " .. (ns.db.partyRoleIcon and "on" or "off")
+		ns.Print("role icons " .. (ns.db[key] and "on" or "off")
 			.. ", drawn in Blizzard's own art on the portrait side of each block.")
 	elseif option == "range" then
-		ns.db.partyRange = ns.Command.Toggle(value)
+		local key = ns.Group.Key(which, "range")
+		ns.db[key] = ns.Command.Toggle(value)
 		ns.Group.Apply()
-		ns.Print("out of range " .. (ns.db.partyRange and "on" or "off")
+		ns.Print("out of range " .. (ns.db[key] and "on" or "off")
 			.. ": a member you cannot reach drains to the track colour and says so.")
-	elseif option == "role" then
+	elseif option == "order" and which == "raid" then
+		ns.db.raidOrder = value == "role" and "role" or "group"
+		ns.Group.Apply()
+		ns.Print("raid order " .. ns.db.raidOrder .. ": " .. ns.Group.Describe("raid") .. ".")
+	elseif option == "headings" and which == "raid" then
+		ns.db.raidHeadings = ns.Command.Toggle(value)
+		ns.Group.Apply()
+		ns.Print("group headings " .. (ns.db.raidHeadings and "on" or "off")
+			.. ", over each column of a raid ordered by group.")
+	elseif option == "role" and which == "party" then
 		PartyRole(value)
 	elseif option == "reset" then
-		ns.Group.Reset()
-		ns.Print("the list is back on its own corner of the screen.")
+		ns.Group.Reset(which)
+		ns.Print(("the %s is back where the addon ships it."):format(which))
 	else
-		ns.db.party = ns.Command.Toggle(option)
+		local key = ns.Group.Key(which, "on")
+		ns.db[key] = ns.Command.Toggle(option)
 		ns.Group.Apply()
-		ns.Print("party and raid frames " .. (ns.db.party and "on" or "off")
-			.. ", " .. ns.Group.Describe() .. ".")
+		ns.Print(("%s frames %s, %s."):format(which, ns.db[key] and "on" or "off",
+			ns.Group.Describe(which)))
 	end
 end
 
@@ -505,7 +534,7 @@ if ns.Perf then
 		return ns.EnemyBars.Count()
 	end)
 	ns.Perf.Gauge("party blocks on screen", function()
-		return ns.Group.Count()
+		return ns.Group.Count("party") + ns.Group.Count("raid")
 	end)
 end
 
@@ -724,10 +753,10 @@ ns.Register({
 		hideBlizzParty = true,
 		hideBlizzRaid = true,
 
-		-- The party and raid blocks, drawn by this addon out of a secure group
-		-- header. On for the reason the skin is: it is the point of the item,
-		-- and the two switches above take Blizzard's copies down, so shipping
-		-- it off would ship a screen with no group frames on it at all.
+		-- The party blocks, drawn by this addon out of a secure group header.
+		-- On for the reason the skin is: it is the point of the item, and the
+		-- two switches above take Blizzard's copies down, so shipping it off
+		-- would ship a screen with no group frames on it at all.
 		party = true,
 
 		-- Your own block in the list. Off, because UnitFrames/Skin.lua already
@@ -735,12 +764,6 @@ ns.Register({
 		-- exact complaint UnitFrames/Blizzard.lua exists to answer. On puts you
 		-- in at your own role's slot rather than at the top.
 		partySelf = false,
-
-		-- "role" is tanks, then healers, then damage, by name inside each band.
-		-- "group" is the raid's own group numbers, which is what somebody
-		-- running twenty five with assignments per group actually wants, and it
-		-- does nothing in a party, where every group number is 1.
-		partyOrder = "role",
 
 		partyRoleIcon = true,
 
@@ -751,13 +774,12 @@ ns.Register({
 		partyWidth = 168,
 		partyHeight = 34,
 		partyGap = 4,
-		partyGrow = "down",
 
-		-- Only these two mean anything in a raid. Forty blocks at the party
-		-- size is not a screen, so the sizes above are settings and a raid is
-		-- expected to run smaller.
-		partyRaidColumns = 8,
-		partyRaidPerColumn = 5,
+		-- Which way the four of them run, and which end the first slot is at.
+		-- Across, because that is the shape that fits under a player block in
+		-- the middle of the screen: five of these down the middle would cover
+		-- the swing bar, the charge icon and your own cast bar.
+		partyGrow = "right",
 
 		-- A whole number, like every other zoom in the addon, because a
 		-- fractional one puts every edge back on a half pixel.
@@ -781,7 +803,59 @@ ns.Register({
 		-- a party list has always gone and is the wrong side of the screen for
 		-- what this one is for. The Charge button casts Intervene at whoever you
 		-- are looking at, and what you are aiming with is in the middle.
-		partyPoint = { "CENTER", "UIParent", "CENTER", 0, -220 },
+		-- The middle of the line, and the name says so: it used to be whatever
+		-- corner a drag left the frame on, and it is the middle now because that
+		-- is the only anchor a list can grow both ways out of. partyPoint is
+		-- retired in Core.lua rather than reused, because the numbers under the
+		-- old name meant a corner and reading them as a middle would put the
+		-- frames somewhere nobody asked for.
+		partyMiddle = { "CENTER", "UIParent", "CENTER", 0, -220 },
+
+		-- The raid, which is its own frame and not the party in a bigger room.
+		-- Its own place on the screen, its own block size, its own order and
+		-- its own switches, because a grid of twenty five over your character
+		-- and a line of four under it are two things you put in two places.
+		raid = true,
+
+		-- You are in the raid grid. The opposite of the party's answer and for
+		-- the opposite reason: a grid of twenty five with exactly one person
+		-- missing out of it is a grid you have to count along to read.
+		raidSelf = true,
+
+		-- Small, because forty of them is a monitor. A cell is the width here
+		-- plus the height again for the role icon's square, so the shipped cell
+		-- is 116 by 26 and a full five by five is 600 by 142.
+		raidWidth = 90,
+		raidHeight = 26,
+		raidGap = 3,
+		raidGrow = "down",
+
+		-- Five groups of five, which is the raid everybody actually runs. Eight
+		-- columns is what a forty man needs and it is one press away.
+		raidColumns = 5,
+		raidPerColumn = 5,
+
+		-- "group" is the raid's own group numbers, a column each, which is what
+		-- somebody with assignments per group wants and what makes the headings
+		-- mean anything. "role" is the party's own bands instead.
+		raidOrder = "group",
+
+		-- The group number over each column. Only ever drawn in group order,
+		-- because in role order a column is not a group.
+		raidHeadings = true,
+
+		-- The role icon is off in a raid and on in a party. At 26 pixels the
+		-- square is a quarter of the cell and it costs the name the room to be
+		-- read in, which is the one thing a raid frame is for.
+		raidRoleIcon = false,
+		raidRange = true,
+		raidZoom = 1,
+
+		-- Over the middle of the screen, clear of the party under it. A raid
+		-- frame goes where you can watch it without looking away from what you
+		-- are fighting, and the top of the screen is where the client's own
+		-- one has always been.
+		raidMiddle = { "CENTER", "UIParent", "CENTER", 0, 290 },
 	},
 
 	charDefaults = {
@@ -822,7 +896,11 @@ ns.Register({
 		cast = CastWord,
 
 		party = function(arg)
-			PartyWord(arg:match("^(%S*)%s*(.-)$"))
+			ListWord("party", arg:match("^(%S*)%s*(.-)$"))
+		end,
+
+		raid = function(arg)
+			ListWord("raid", arg:match("^(%S*)%s*(.-)$"))
 		end,
 
 		-- The client's own copies, one word each. Its own word rather than a
@@ -899,13 +977,18 @@ ns.Register({
 		"cast reset, the bar back where it started",
 		"party on|off, blocks for the people you are grouped with",
 		"party self on|off, whether your own block is in the list",
-		"party order role|group, role bands or raid group numbers",
 		"party role <name> tank|healer|dps|none, an answer you type",
 		"party icons on|off, party range on|off",
-		"party width <90-360>, party height <18-72>, party gap <0-20>",
-		"party grow up|down, party zoom <1-3>",
-		"party columns <1-8>, party percolumn <1-40>, the raid only",
-		"party reset, the list back under the middle of the screen",
+		"party width <60-360>, party height <14-72>, party gap <0-20>",
+		"party grow right|left|down|up, party zoom <1-3>",
+		"party reset, the line back under the middle of the screen",
+		"raid on|off, the grid, which is its own frame in its own place",
+		"raid order group|role, group numbers a column each or role bands",
+		"raid columns <1-8>, raid percolumn <1-40>, the shape of the grid",
+		"raid headings on|off, the group number over each column",
+		"raid self on|off, raid icons on|off, raid range on|off",
+		"raid width <60-360>, raid height <14-72>, raid gap <0-20>",
+		"raid grow down|up, raid zoom <1-3>, raid reset",
 		"hide <switch> on|off, one of the client's own frames this addon replaces",
 		"hide probe, every frame those switches name and what is on screen now",
 		"auras on|off, the client's own buff row in the corner of the screen",
@@ -927,7 +1010,8 @@ ns.Register({
 			.. ("; cast bar %s"):format(ns.Cast.Describe())
 			.. ("; %s"):format(ns.FrameAuras.Describe())
 			.. ("; your cast bar %s"):format(ns.PlayerCast.Describe())
-			.. ("; party %s; %s"):format(ns.Group.Describe(), ns.Unit.Role.Describe())
+			.. ("; party %s; raid %s; %s"):format(ns.Group.Describe("party"),
+				ns.Group.Describe("raid"), ns.Unit.Role.Describe())
 	end,
 
 	lock = function()
@@ -984,9 +1068,11 @@ ns.Register({
 		-- PlayerCast.Reset puts the point back and lays the bar out again, so
 		-- the four above it land in the same pass.
 		ns.PlayerCast.Reset()
-		for _, key in ipairs({ "party", "partySelf", "partyOrder", "partyRoleIcon",
-			"partyWidth", "partyHeight", "partyGap", "partyGrow", "partyRaidColumns",
-			"partyRaidPerColumn", "partyZoom", "partyRange" }) do
+		for _, key in ipairs({ "party", "partySelf", "partyRoleIcon", "partyWidth",
+			"partyHeight", "partyGap", "partyGrow", "partyZoom", "partyRange",
+			"raid", "raidSelf", "raidRoleIcon", "raidWidth", "raidHeight",
+			"raidGap", "raidGrow", "raidZoom", "raidRange", "raidColumns",
+			"raidPerColumn", "raidOrder", "raidHeadings" }) do
 			ns.db[key] = ns.DefaultCopy(key)
 		end
 		-- The roles you typed are deliberately not in that list. A reset means
@@ -994,9 +1080,10 @@ ns.Register({
 		-- is a fact about them that would have to be typed again. `party role
 		-- <name> none` is how one of them comes off.
 		--
-		-- Group.Reset puts the point back and lays the list out again, so the
-		-- twelve above it land in the same pass.
-		ns.Group.Reset()
+		-- Group.Reset puts a point back and lays both lists out again, so the
+		-- numbers above land in the same pass as the second of them.
+		ns.Group.Reset("party")
+		ns.Group.Reset("raid")
 		ns.BlizzHide.Apply()
 		ns.FrameSkin.Apply()
 	end,

@@ -464,9 +464,15 @@ if window then
 	-- sentence saying the list stands a party and then a raid while it is
 	-- unlocked, which is the one thing about a frame that is empty out of a
 	-- group nobody can work out by looking at it. 24,300 is that measurement
-	-- plus a hint's worth of room again.
-	check(prose < 24300,
-		("the window holds %d characters of prose and the budget is 24,300"):format(prose))
+	-- plus a hint's worth of room again. Splitting the raid off the party costs
+	-- 960 across a page of its own and takes it to 25,065 across sixty-seven: a
+	-- new page, six controls, and the longest of its hints is the sentence
+	-- saying the grid shows in a raid and the line shows in a party, which is
+	-- the one thing about two frames that never appear together nobody can work
+	-- out by looking at either of them. 25,300 is that measurement plus a hint's
+	-- worth of room again.
+	check(prose < 25300,
+		("the window holds %d characters of prose and the budget is 25,300"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

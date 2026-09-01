@@ -27,7 +27,8 @@ local H = ...
 local ns, check, fire = H.ns, H.check, H.fire
 local group, advance, CHURN = H.group, H.advance, H.CHURN
 local Color, Role = ns.Unit.Color, ns.Unit.Role
-local header = ns.Group.Header()
+local header = ns.Group.Header("party")
+local raidHeader = ns.Group.Header("raid")
 
 local function near(a, b)
 	return a ~= nil and b ~= nil and math.abs(a - b) < 1e-6
@@ -52,7 +53,7 @@ end
 -- the addon meant to ask for.
 local function slots()
 	local out = {}
-	for _, button in ipairs(ns.Group.Members()) do
+	for _, button in ipairs(ns.Group.Members("party")) do
 		if button:IsShown() then
 			out[#out + 1] = _G.UnitName(button:GetAttribute("unit")) or "?"
 		end
@@ -62,11 +63,30 @@ end
 
 local function reads(what, want)
 	local got = table.concat(slots(), ", ")
-	check(got == want, ("%s: the list reads %q and belongs %q"):format(what, got, want))
+	check(got == want, ("%s: the line reads %q and belongs %q"):format(what, got, want))
+end
+
+-- The same, for the other list. Two functions rather than one with an argument,
+-- because every call in the section names which list it is asking about in the
+-- verb, and a section that had to be read for a flag would be a section that is
+-- read wrong.
+local function rslots()
+	local out = {}
+	for _, button in ipairs(ns.Group.Members("raid")) do
+		if button:IsShown() then
+			out[#out + 1] = _G.UnitName(button:GetAttribute("unit")) or "?"
+		end
+	end
+	return out
+end
+
+local function rreads(what, want)
+	local got = table.concat(rslots(), ", ")
+	check(got == want, ("%s: the grid reads %q and belongs %q"):format(what, got, want))
 end
 
 local function blockOf(name)
-	for _, button in ipairs(ns.Group.Members()) do
+	for _, button in ipairs(ns.Group.Members("party")) do
 		if button:IsShown() and _G.UnitName(button:GetAttribute("unit")) == name then
 			return button.wk, button
 		end
@@ -111,9 +131,9 @@ local function stand(list, raid)
 end
 
 check(header ~= nil, "no secure group header was built")
-check(_G.WarriorKitGroup ~= nil and _G.WarriorKitGroupHeader ~= nil,
+check(_G.WarriorKitParty ~= nil and _G.WarriorKitPartyHeader ~= nil,
 	"the list you drag and the header on it are not both named")
-check(_G.WarriorKitGroup.ignoreScale == true,
+check(_G.WarriorKitParty.ignoreScale == true,
 	"the frame you drag the list by is not on the grid")
 
 stand(PARTY, false)
@@ -127,15 +147,21 @@ do
 		"the header was not told what to make each member out of")
 	check(header:GetAttribute("showSolo") == false,
 		"the header shows a group of one, which is the player block said twice")
-	check(header:GetAttribute("showParty") == true and header:GetAttribute("showRaid") == true,
-		"the header was not told to show a party and a raid")
+	check(header:GetAttribute("showParty") == true and header:GetAttribute("showRaid") == false,
+		"the party header is not for a party alone, so it fights the raid grid for the screen")
 	check(header:GetAttribute("showPlayer") == false,
 		"your own block is in the list and the default says it is not")
 	check(header:GetAttribute("sortMethod") == "NAMELIST",
 		"the order is a role band and a name, which is a name list and nothing else")
-	check(header:GetAttribute("point") == "TOP"
-		and header:GetAttribute("yOffset") == -ns.db.partyGap,
-		"the list does not grow down by the gap it was given")
+	-- A party ships across the screen, which is a header growing off its left
+	-- edge by the gap, and nothing at all on the other axis.
+	check(header:GetAttribute("point") == "LEFT"
+		and header:GetAttribute("xOffset") == ns.db.partyGap
+		and header:GetAttribute("yOffset") == 0,
+		"the party line does not run across the screen by the gap it was given")
+	check(header:GetAttribute("maxColumns") == 1
+		and header:GetAttribute("unitsPerColumn") == 5,
+		"a party was given a grid, which is a party whose slots move when the fifth person joins")
 
 	-- The snippet, read off a button rather than out of the string, because the
 	-- string is what was asked for and the button is what the header did with it.
@@ -172,7 +198,7 @@ end
 local function block()
 	local left, right = math.huge, -math.huge
 	local top, bottom = -math.huge, math.huge
-	for _, button in ipairs(ns.Group.Members()) do
+	for _, button in ipairs(ns.Group.Members("party")) do
 		if button:IsShown() then
 			left, right = math.min(left, button:GetLeft()), math.max(right, button:GetRight())
 			top, bottom = math.max(top, button:GetTop()), math.min(bottom, button:GetBottom())
@@ -191,24 +217,25 @@ local function whole(value)
 end
 
 do
-	local ax, ay = _G.WarriorKitGroup:GetCenter()
+	local ax, ay = _G.WarriorKitParty:GetCenter()
 	local _, top, x, y = block()
 	check(near(x, ax) and near(y, ay),
 		("four blocks sit round %.1f, %.1f and the frame you drag is at %.1f, %.1f")
 			:format(x, y, ax, ay))
 
-	-- The same anchor with one more person in the list. Both halves matter: the
-	-- middle did not move, and the top did, or the first assertion would pass on
+	-- The same anchor with one more person in the line. Both halves matter: the
+	-- middle did not move, and the end did, or the first assertion would pass on
 	-- a list that never grew at all.
+	local wasLeft = select(1, block())
 	ns.db.partySelf = true
 	ns.Group.Apply()
-	check(ns.Group.Count() == 5, "the fifth block never turned up")
-	local _, grownTop, grownX, grownY = block()
+	check(ns.Group.Count("party") == 5, "the fifth block never turned up")
+	local grownLeft, _, grownX, grownY = block()
 	check(near(grownX, ax) and near(grownY, ay),
-		("a fifth block moved the middle of the list to %.1f, %.1f from %.1f, %.1f")
+		("a fifth block moved the middle of the line to %.1f, %.1f from %.1f, %.1f")
 			:format(grownX, grownY, ax, ay))
-	check(grownTop > top,
-		"a fifth block did not lift the top of the list, so nothing filled outward")
+	check(grownLeft < wasLeft,
+		"a fifth block did not push the end of the line out, so nothing filled outward")
 	ns.db.partySelf = false
 	ns.Group.Apply()
 end
@@ -227,7 +254,7 @@ do
 	check(whole(left) and whole(top),
 		("an odd block puts the corner of the list at %.1f, %.1f, which is off the grid")
 			:format(left, top))
-	local ax, ay = _G.WarriorKitGroup:GetCenter()
+	local ax, ay = _G.WarriorKitParty:GetCenter()
 	check(math.abs(x - ax) <= 0.5 + 1e-6 and math.abs(y - ay) <= 0.5 + 1e-6,
 		("an odd block sits %.1f, %.1f off the frame you drag, and rounding costs half a unit at most")
 			:format(x - ax, y - ay))
@@ -248,9 +275,9 @@ do
 	ns.db.partyRaidPerColumn = 1
 	ns.Group.Apply()
 
-	check(ns.Group.Count() == 4, "a party one to a column lost somebody")
+	check(ns.Group.Count("party") == 4, "a party one to a column lost somebody")
 	local left, top, x, y = block()
-	local ax, ay = _G.WarriorKitGroup:GetCenter()
+	local ax, ay = _G.WarriorKitParty:GetCenter()
 	check(near(x, ax) and near(y, ay),
 		("four blocks in a row sit round %.1f, %.1f and the frame you drag is at %.1f, %.1f")
 			:format(x, y, ax, ay))
@@ -470,14 +497,14 @@ do
 	ns.Group.Rebuild()
 	check(table.concat(slots(), ", ") == before,
 		("the list moved in combat: %q was %q"):format(table.concat(slots(), ", "), before))
-	check(ns.Group.Deferred(), "a rebuild combat refused did not say it had been deferred")
-	check(ns.Group.Describe():find("when combat drops") ~= nil,
+	check(ns.Group.Deferred("party"), "a rebuild combat refused did not say it had been deferred")
+	check(ns.Group.Describe("party"):find("when combat drops") ~= nil,
 		"the status line does not say the rest is waiting for combat to drop")
 
 	_G.InCombatLockdown, H.Region.IsProtected = realLockdown, realProtected
 	fire("PLAYER_REGEN_ENABLED")
 	reads("combat dropped and the flag landed", "Bramblefoot, Ironhide, Sneaky, Lightwell")
-	check(not ns.Group.Deferred(), "the deferred rebuild never ran")
+	check(not ns.Group.Deferred("party"), "the deferred rebuild never ran")
 
 	group.members.party1.maintank = nil
 	Role.Forget()
@@ -511,32 +538,55 @@ do
 	-- settled for the session, and only a guess is asked again.
 	stand(RAID, true)
 	check(_G.IsInRaid(), "the raid did not stand up")
-	reads("a raid of six by role",
-		"Bramblefoot, Ironhide, Lightwell, Emberdusk, Sneaky")
 
-	-- And the other ordering, which is the one somebody running twenty five
-	-- with assignments per group actually wants. Group 1 is Ironhide and
-	-- Bramblefoot in the order the client hands them over, then group 2.
-	ns.db.partyOrder = "group"
-	ns.Group.Apply()
-	check(header:GetAttribute("sortMethod") == "INDEX"
-		and header:GetAttribute("groupBy") == "GROUP",
-		"party order group did not put the header on the raid's own groups")
-	check(header:GetAttribute("nameList") == nil,
+	-- The grid is its own frame with its own header, and the party line is not
+	-- drawing at all: one of the two is on the screen and never both.
+	check(ns.Group.Count("party") == 0,
+		"the party line is still standing in a raid, which is both lists at once")
+	check(raidHeader:GetAttribute("showRaid") == true
+		and raidHeader:GetAttribute("showParty") == false,
+		"the raid grid is not for a raid alone")
+
+	-- Group order, which is what the grid ships with and what the headings are
+	-- about. Group 1 is Tusksfirst, Ironhide and Bramblefoot in the order the
+	-- client hands them over, then group 2.
+	check(raidHeader:GetAttribute("sortMethod") == "INDEX"
+		and raidHeader:GetAttribute("groupBy") == "GROUP",
+		"raid order group did not put the header on the raid's own groups")
+	check(raidHeader:GetAttribute("nameList") == nil,
 		"the name list survived a switch to group order, so two orderings are live")
-	check(#ns.Group.Order() == 0,
-		"a role order is still being handed out while the header runs group numbers")
-	reads("a raid of six by group number",
-		"Ironhide, Bramblefoot, Lightwell, Sneaky, Emberdusk")
+	check(#ns.Group.Order("raid") == 0,
+		"a role order is still being handed out while the grid runs group numbers")
+	check(#ns.Group.Order("party") > 0,
+		"the grid emptied the party's own order, which is two lists sharing one table")
+	rreads("a raid of six by group number",
+		"Tusksfirst, Ironhide, Bramblefoot, Lightwell, Sneaky, Emberdusk")
 
-	-- Party is always by role, whatever this setting says, because every group
-	-- number in a party is 1 and grouping by it is the order the client handed
-	-- the units over.
+	-- A column to a group, with the group over it. Five to a column and three
+	-- in the first group is the case the heading has to count rather than
+	-- assume: the second column starts inside group 2 and says so.
+	local labels = select(2, ns.Group.Previewed("raid"))
+	check(labels[1] and labels[1].text == "Group 1" and labels[1].shown,
+		("the first column of the raid reads %q"):format(
+			tostring(labels[1] and labels[1].text)))
+
+	-- And the other ordering, which is the party's own bands run down the
+	-- columns instead.
+	ns.db.raidOrder = "role"
+	ns.Group.Apply()
+	check(raidHeader:GetAttribute("sortMethod") == "NAMELIST",
+		"raid order role did not put the header back on the name list")
+	rreads("a raid of six by role",
+		"Bramblefoot, Ironhide, Lightwell, Emberdusk, Sneaky, Tusksfirst")
+	check(labels[1].shown == false,
+		"a raid ordered by role still has group numbers over its columns")
+	ns.db.raidOrder = "group"
+	ns.Group.Apply()
+
 	stand(PARTY, false)
 	check(header:GetAttribute("sortMethod") == "NAMELIST",
-		"a party in group order is a party in the order it was invited")
-	ns.db.partyOrder = "role"
-	ns.Group.Apply()
+		"a party is not on the name list, so its order is the order it was invited")
+	check(ns.Group.Count("raid") == 0, "the raid grid is still standing in a party")
 end
 
 ----------------------------------------------------------------------
@@ -555,13 +605,13 @@ do
 
 	ns.db.party = false
 	ns.Group.Apply()
-	check(#slots() == 0 and ns.Group.Count() == 0,
+	check(#slots() == 0 and ns.Group.Count("party") == 0,
 		"party off left blocks on the screen")
-	check(ns.Group.Describe():find("^off") ~= nil,
-		"party off does not say so: " .. ns.Group.Describe())
+	check(ns.Group.Describe("party"):find("^off") ~= nil,
+		"party off does not say so: " .. ns.Group.Describe("party"))
 	ns.db.party = true
 	ns.Group.Apply()
-	check(ns.Group.Count() == 4, "party back on did not put the four blocks back")
+	check(ns.Group.Count("party") == 4, "party back on did not put the four blocks back")
 
 	-- The two switches that reach one block rather than the header. Both travel
 	-- to UnitFrames/Member.lua at layout time, because that file reads no
@@ -599,7 +649,7 @@ do
 	check(button:GetWidth() == 142 and button:GetHeight() == 22,
 		("a resized block is %dx%d and belongs 142x22"):format(button:GetWidth(),
 			button:GetHeight()))
-	check(header:GetAttribute("yOffset") == -2,
+	check(header:GetAttribute("xOffset") == 2,
 		"the gap between two blocks did not follow the setting")
 
 	local block = button.wk
@@ -701,9 +751,10 @@ check(burn <= CHURN.party,
 		:format(burn, CHURN.party))
 
 print(("party  %d blocks of %d x %d px, %s; %.2f KB per 50 ticks, gate is %.2f")
-	:format(ns.Group.Count(), ns.db.partyHeight + ns.db.partyWidth, ns.db.partyHeight,
+	:format(ns.Group.Count("party"), ns.db.partyHeight + ns.db.partyWidth, ns.db.partyHeight,
 		table.concat(ns.Group.Order(), ", "), burn, CHURN.party))
-print("party  " .. ns.Group.Describe())
+print("party  " .. ns.Group.Describe("party"))
+print("raid   " .. ns.Group.Describe("raid"))
 print("roles  " .. Role.Describe())
 
 ----------------------------------------------------------------------
@@ -721,7 +772,7 @@ fire("GROUP_ROSTER_UPDATE")
 do
 	ns.db.locked = false
 	ns.Group.Lock()
-	local made = ns.Group.Previewed()
+	local made = ns.Group.Previewed("party")
 
 	local shown, left, right = 0, math.huge, -math.huge
 	local top, bottom = -math.huge, math.huge
@@ -736,7 +787,7 @@ do
 
 	-- Centred on the frame you drag, which is the whole point: where it shows
 	-- them is where the real four go.
-	local ax, ay = _G.WarriorKitGroup:GetCenter()
+	local ax, ay = _G.WarriorKitParty:GetCenter()
 	check(near((left + right) / 2, ax) and near((top + bottom) / 2, ay),
 		("the preview sits round %.1f, %.1f and the frame you drag is at %.1f, %.1f")
 			:format((left + right) / 2, (top + bottom) / 2, ax, ay))
@@ -752,53 +803,39 @@ do
 	check(fills(first.rail, Color.power[1]),
 		"a preview warrior's rail is not the rage colour")
 
-	-- Four seconds on, it is the raid instead: every slot the column settings
-	-- allow, laid out in the same arithmetic, with a heading over each column
-	-- saying which group it is. The blocks are the same blocks, which is what
-	-- puts a power rail on a raid frame.
-	local ticker
-	for _, f in ipairs(H.frames) do
-		if f.scripts.OnUpdate and f.origin:match("UnitFrames/Group") then
-			ticker = f
-		end
+	-- And the raid previews itself at the same time, in its own place, at its
+	-- own size and with a heading over each column. Two frames, so both of them
+	-- have to be on the screen at once or you are placing one of them blind.
+	local raidMade, raidLabels = ns.Group.Previewed("raid")
+	local held = ns.db.raidColumns * ns.db.raidPerColumn
+	local standing = 0
+	for _, frame in ipairs(raidMade) do
+		standing = standing + (frame:IsShown() and 1 or 0)
 	end
-	advance(5)
-	ticker.scripts.OnUpdate(ticker, 5)
-	local _, phase, labels = ns.Group.Previewed()
-	check(phase == "raid", ("the preview is still standing a %s after five seconds"):format(phase))
-
-	shown, left, right = 0, math.huge, -math.huge
-	top, bottom = -math.huge, math.huge
-	for _, frame in ipairs(made) do
-		if frame:IsShown() then
-			shown = shown + 1
-			left, right = math.min(left, frame:GetLeft()), math.max(right, frame:GetRight())
-			top, bottom = math.max(top, frame:GetTop()), math.min(bottom, frame:GetBottom())
-		end
-	end
-	local held = ns.db.partyRaidColumns * ns.db.partyRaidPerColumn
-	check(shown == held, ("%d blocks previewed a raid of %d"):format(shown, held))
-	check(near((left + right) / 2, ax) and near((top + bottom) / 2, ay),
-		"the previewed raid is not centred on the frame you drag")
-	check(fills(made[held].wk.rail, Color.power[3]),
+	check(standing == held, ("%d blocks previewed a raid of %d"):format(standing, held))
+	check(fills(raidMade[held].wk.rail, Color.power[3]),
 		"the last block of a previewed raid has no power rail of its own")
 
+	local rx, ry = _G.WarriorKitRaid:GetCenter()
+	check(not near(rx, ax) or not near(ry, ay),
+		"the raid grid and the party line are previewing in the same place")
+
 	local labelled = 0
-	for _, label in ipairs(labels) do
+	for _, label in ipairs(raidLabels) do
 		labelled = labelled + (label.shown and 1 or 0)
 	end
-	check(labelled == 0, "a raid ordered by role has group headings over its columns")
+	check(labelled == ns.db.raidColumns and raidLabels[3].text == "Group 3",
+		("%d headings over %d columns, the third reads %q"):format(labelled,
+			ns.db.raidColumns, tostring(raidLabels[3] and raidLabels[3].text)))
 
-	ns.db.partyOrder = "group"
+	ns.db.raidHeadings = false
 	ns.Group.Apply()
 	labelled = 0
-	for _, label in ipairs(labels) do
+	for _, label in ipairs(raidLabels) do
 		labelled = labelled + (label.shown and 1 or 0)
 	end
-	check(labelled == ns.db.partyRaidColumns and labels[3].text == "Group 3",
-		("%d headings over %d columns, the third reads %q"):format(labelled,
-			ns.db.partyRaidColumns, tostring(labels[3].text)))
-	ns.db.partyOrder = "role"
+	check(labelled == 0, "the headings switch went off and the group numbers stayed")
+	ns.db.raidHeadings = true
 	ns.Group.Apply()
 
 	-- And in a group there is nothing to preview: the real blocks are it. Off
@@ -811,16 +848,16 @@ do
 	fire("GROUP_ROSTER_UPDATE")
 	check(made[1]:IsShown(), "the preview did not come back when the group left")
 
-	print("party  " .. ns.Group.Describe())
+	print("party  " .. ns.Group.Describe("party"))
 
 	ns.db.locked = true
 	ns.Group.Lock()
-	local labelsOff = 0
-	for _, label in ipairs(labels) do
-		labelsOff = labelsOff + (label.shown and 1 or 0)
+	local standingOff = 0
+	for _, frame in ipairs(raidMade) do
+		standingOff = standingOff + (frame:IsShown() and 1 or 0)
 	end
-	check(made[1]:IsShown() == false and labelsOff == 0,
-		"locking the frames left the preview on the screen")
+	check(made[1]:IsShown() == false and standingOff == 0,
+		"locking the frames left a preview on the screen")
 end
 
 ----------------------------------------------------------------------

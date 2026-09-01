@@ -120,6 +120,19 @@ end
 
 _G.IsInRaid = function() return inRaid end
 
+-- The raid roster row, which is the one place outside a header that answers
+-- what group somebody is in. Three of its eleven return values are filled,
+-- because three is what the addon reads and a fixture that invented the other
+-- eight would be inventing answers nothing checks.
+_G.GetRaidRosterInfo = function(index)
+	local token = inRaid and tokens[index]
+	local entry = token and members[token]
+	if not entry then
+		return nil
+	end
+	return entry.name, entry.rank or 0, entry.subgroup or 1
+end
+
 _G.UnitHealth = function(unit)
 	local entry = members[unit]
 	return entry and (entry.health or 0) or base.health(unit)

@@ -124,6 +124,22 @@ local RETIRED = {
 	-- tipPlace. A boolean left sitting there would be read by nothing and would
 	-- still be what a player who had turned the dock off found in their file.
 	tipDock = true,
+
+	-- 1.9: the party and the raid were one list out of one secure header, so
+	-- one place on the screen, one block size and one set of columns served
+	-- both. They are two frames now, each with its own header and its own
+	-- settings, and these four are what the single one used to read.
+	--
+	-- partyPoint is the one that has to be wiped rather than carried. A list is
+	-- anchored by its middle now, whatever corner a drag ends on, because that
+	-- is the only anchor a list can fill outward from; the numbers under the old
+	-- name were whichever corner the client last left the frame on, and reading
+	-- those as a middle would put the frames somewhere nobody chose. The new
+	-- name is partyMiddle and it says which of the two it is.
+	partyPoint = true,
+	partyOrder = true,
+	partyRaidColumns = true,
+	partyRaidPerColumn = true,
 }
 
 -- A key lives in exactly one scope. Checking both tables on every insert is

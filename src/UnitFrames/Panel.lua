@@ -495,63 +495,72 @@ local function Roles(ui)
 	ui.Hint("Choosing a name walks it round tank, healer, damage and back to the guess. What you type wins over the client and over their talents, and is kept for this character.")
 end
 
-local function Placing(ui)
+-- The sizes, the shape and the place, for whichever of the two lists is being
+-- drawn. One function and not two, because a party and a raid are placed with
+-- the same controls reading different settings, and two copies of this is where
+-- one of them quietly stops matching the other.
+local function Placing(ui, which)
 	local wideLow, wideHigh, tallLow, tallHigh = ns.Group.SizeRange()
+	local key = function(name) return ns.Group.Key(which, name) end
+
 	ui.Size("gauge width", wideLow, wideHigh, 6,
-		function() return ns.db.partyWidth end,
+		function() return ns.db[key("width")] end,
 		function(value)
-			ns.db.partyWidth = value
+			ns.db[key("width")] = value
 			ns.Group.Apply()
 		end)
 	ui.Size("block height", tallLow, tallHigh, 2,
-		function() return ns.db.partyHeight end,
+		function() return ns.db[key("height")] end,
 		function(value)
-			ns.db.partyHeight = value
+			ns.db[key("height")] = value
 			ns.Group.Apply()
 		end)
-	ui.Hint("A block is the height again on the left for the role icon, then the gauge. Both ship at the player block's numbers, because they are the same instrument.")
+	ui.Hint("A block is the height again on the left for the role icon, then the gauge.")
 
 	local gapLow, gapHigh = ns.Group.GapRange()
 	ui.Size("gap between blocks", gapLow, gapHigh, 1,
-		function() return ns.db.partyGap end,
+		function() return ns.db[key("gap")] end,
 		function(value)
-			ns.db.partyGap = value
+			ns.db[key("gap")] = value
 			ns.Group.Apply()
 		end)
-	ui.Cycle("grow", { "down", "up" },
-		function() return ns.db.partyGrow end,
-		function(value)
-			ns.db.partyGrow = value
-			ns.Group.Apply()
-		end)
-	ui.Hint("The list is centred on where you dragged it and fills outward from there, so this picks which end the first slot is at rather than which way the block runs.")
 
-	local columnsLow, columnsHigh, perLow, perHigh = ns.Group.ColumnRange()
-	ui.Count("columns in a raid", columnsLow, columnsHigh,
-		function() return ns.db.partyRaidColumns end,
+	ui.Cycle("grow", which == "raid" and { "down", "up" }
+			or { "right", "left", "down", "up" },
+		function() return ns.db[key("grow")] end,
 		function(value)
-			ns.db.partyRaidColumns = value
+			ns.db[key("grow")] = value
 			ns.Group.Apply()
 		end)
-	ui.Count("blocks in a column", perLow, perHigh,
-		function() return ns.db.partyRaidPerColumn end,
-		function(value)
-			ns.db.partyRaidPerColumn = value
-			ns.Group.Apply()
-		end)
-	ui.Hint("Forty blocks at the party size is not a screen, so a raid runs smaller. Neither of these does anything in a party.")
+	ui.Hint("The list is centred on where you dragged it and fills outward from there, so this picks which end the first slot is at rather than which way it runs off.")
+
+	if which == "raid" then
+		local columnsLow, columnsHigh, perLow, perHigh = ns.Group.ColumnRange()
+		ui.Count("columns", columnsLow, columnsHigh,
+			function() return ns.db.raidColumns end,
+			function(value)
+				ns.db.raidColumns = value
+				ns.Group.Apply()
+			end)
+		ui.Count("blocks in a column", perLow, perHigh,
+			function() return ns.db.raidPerColumn end,
+			function(value)
+				ns.db.raidPerColumn = value
+				ns.Group.Apply()
+			end)
+		ui.Hint("Five by five is twenty five. A raid past what these two multiply out to is a grid that shows the first of it and drops the rest.")
+	end
 
 	ui.Zoom(
-		function() return ns.db.partyZoom end,
+		function() return ns.db[key("zoom")] end,
 		function(value)
-			ns.db.partyZoom = value
+			ns.db[key("zoom")] = value
 			ns.Group.Apply()
 		end)
+	ui.Hint("Unlock the frames and each list stands people who are not there where the real ones go, so you can place it without being in a group.")
 
-	ui.Hint("Unlock the frames out of a group and the list previews itself, four seconds as a party and four as a full raid, both standing where the real ones would.")
-
-	ui.Action(function() return "back under the middle of the screen" end, function()
-		ns.Group.Reset()
+	ui.Action(function() return "back where the addon ships it" end, function()
+		ns.Group.Reset(which)
 	end)
 end
 
@@ -560,10 +569,10 @@ end
 -- a Blizzard frame. These blocks are made by a secure group header, and the
 -- client's own party and raid frames come off in the section below.
 local function Party(ui)
-	ui.Section("Party and raid", "You")
-	ui.Lede("Blocks for the people you are grouped with, in role order, drawn by this addon rather than by the client.")
+	ui.Section("Party", "You")
+	ui.Lede("Blocks for the four people you are grouped with, in role order, drawn by this addon rather than by the client.")
 
-	ui.Check("draw party and raid blocks",
+	ui.Check("draw party blocks",
 		function() return ns.db.party end,
 		function(value)
 			ns.db.party = value
@@ -571,7 +580,7 @@ local function Party(ui)
 		end)
 	ui.Hint("Left click targets, right click opens the unit menu, ctrl click marks. Targeting is the point: the Charge button aims at whoever you are looking at.")
 
-	ui.Check("put your own block in the list",
+	ui.Check("put your own block in the line",
 		function() return ns.db.partySelf end,
 		function(value)
 			ns.db.partySelf = value
@@ -579,20 +588,13 @@ local function Party(ui)
 		end)
 	ui.Hint("Off, because the frames page above already draws you as a block.")
 
-	ui.Cycle("order", { "role", "group" },
-		function() return ns.db.partyOrder end,
-		function(value)
-			ns.db.partyOrder = value
-			ns.Group.Apply()
-		end)
-	ui.Hint("Role is tanks, healers, then damage, by name inside each band, so the same five fill the same five slots in every group. Group is raid groups, a column each under its own heading.")
-
 	ui.Check("role icon on each block",
 		function() return ns.db.partyRoleIcon end,
 		function(value)
 			ns.db.partyRoleIcon = value
 			ns.Group.Apply()
 		end)
+	ui.Hint("Tanks, then healers, then damage, by name inside each band, so the same five people fill the same five slots in every group they are ever in.")
 
 	ui.Check("drain a member you cannot reach",
 		function() return ns.db.partyRange end,
@@ -603,20 +605,79 @@ local function Party(ui)
 	ui.Hint("Out of range, dead, offline and ghost all draw the same way: the fill goes to the track colour and the name says which.")
 
 	Roles(ui)
-	Placing(ui)
+	Placing(ui, "party")
 
-	ui.Reading("the list", ns.Group.Describe)
+	ui.Reading("the line", function() return ns.Group.Describe("party") end)
 	ui.Reading("where a role comes from", ns.Unit.Role.Describe)
 	ui.Reading("the order", function()
-		local order = ns.Group.Order()
+		local order = ns.Group.Order("party")
 		if #order > 0 then
 			return table.concat(order, ", ")
 		end
-		if ns.Group.Count() > 0 then
+		if ns.Group.Count("party") > 0 then
 			return "the header's own, by raid group number"
 		end
 		return "nothing to place, because you are not in a group"
 	end)
+end
+
+-- The raid, which is its own frame in its own place and not the party in a
+-- bigger room. Its own section for the same reason: nothing on this page moves
+-- anything on the one above it.
+local function Raid(ui)
+	ui.Section("Raid", "You")
+	ui.Lede("A grid of the raid, a column to a group with the group number over it, in this addon's own blocks.")
+
+	ui.Check("draw raid blocks",
+		function() return ns.db.raid end,
+		function(value)
+			ns.db.raid = value
+			ns.Group.Apply()
+		end)
+	ui.Hint("The grid shows in a raid and the party line shows in a party, so only one of the two is ever on the screen.")
+
+	ui.Cycle("order", { "group", "role" },
+		function() return ns.db.raidOrder end,
+		function(value)
+			ns.db.raidOrder = value
+			ns.Group.Apply()
+		end)
+	ui.Hint("Group is the raid's own numbers, a column each, which is what assignments per group need. Role is tanks, healers, then damage, straight down the columns.")
+
+	ui.Check("the group number over each column",
+		function() return ns.db.raidHeadings end,
+		function(value)
+			ns.db.raidHeadings = value
+			ns.Group.Apply()
+		end)
+	ui.Hint("Only ever in group order, because in role order a column is five people who followed each other down the list rather than a group.")
+
+	ui.Check("put your own block in the grid",
+		function() return ns.db.raidSelf end,
+		function(value)
+			ns.db.raidSelf = value
+			ns.Group.Apply()
+		end)
+	ui.Hint("On, the opposite of the party's answer: a grid of twenty five with exactly one person missing is one you have to count along.")
+
+	ui.Check("role icon on each block",
+		function() return ns.db.raidRoleIcon end,
+		function(value)
+			ns.db.raidRoleIcon = value
+			ns.Group.Apply()
+		end)
+	ui.Hint("Off, because at raid size the square is a quarter of the cell and it costs the name the room to be read in.")
+
+	ui.Check("drain a member you cannot reach",
+		function() return ns.db.raidRange end,
+		function(value)
+			ns.db.raidRange = value
+			ns.Group.Apply()
+		end)
+
+	Placing(ui, "raid")
+
+	ui.Reading("the grid", function() return ns.Group.Describe("raid") end)
 end
 
 -- One line per thing this addon draws that Blizzard also draws. Nothing here
@@ -647,5 +708,6 @@ function Panel.Draw(ui)
 	Frames(ui)
 	CastBar(ui)
 	Party(ui)
+	Raid(ui)
 	Blizzard(ui)
 end
