@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### One square on the cooldown page was dead to the mouse
+
+Two defects, and both of them read the same way from the chair: one spell you
+cannot drag while every other square works.
+
+`UI.DropSquare` built its button as a child of the page and anchored it over the
+square with `SetAllPoints`. An anchor is not a parent. Hiding the square left
+the button shown, holding the rect the hidden square still had, taking every
+click and every drag that landed on that patch of the page. The cooldown page
+hides squares it is not using, so the first time you dragged one off the row it
+left a live invisible button behind on the row, and whatever square that landed
+on was dead. Nothing on screen could show it. The button is a child of the
+square now, so the mouse follows the picture.
+
+And `Landed` asked `GetMouseFocus` and only that. `Buttons/Trace.lua` had
+already learned the hard way that this client answers "what is the cursor over"
+under one of two names and neither can be assumed; its first live run printed
+every gesture and never once named a frame. That probe is `ns.MouseFocus` in
+Core now, asking both, with Trace and the page reading the one answer. Asked
+under one name on a client that carries the other, a square whose contents will
+not go on the cursor came off the row and landed nowhere, which is exactly what
+a square you cannot drag looks like.
+
+Right clicking a square under the row puts it back on the end of its line now,
+which is the mirror of right clicking one on the row to take it off. That pair
+is the one gesture that works whatever the client answers for the frame under
+the cursor. Forgetting a spell you added yourself is `/wk cooldowns drop <id>`
+and not a click: off the row and gone for good look identical the moment after
+you press, and the one that cannot be undone by dragging does not get the easy
+button.
+
 ### The cooldown row is arranged by dragging it
 
 The page that decided what was on the row was a list of twenty-three rows with

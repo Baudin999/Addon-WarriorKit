@@ -87,27 +87,17 @@ end
 -- The frame the client says the cursor is over, whichever way this client
 -- answers that question.
 --
--- Two names, because the first run of this trace printed nothing at all on the
--- live client and a silent instrument is worse than no instrument. GetMouseFocus
--- is the call every client from vanilla to Dragonflight had; GetMouseFoci
--- replaced it and returns the whole stack under the cursor, topmost first. This
--- client is a hybrid, so it is asked for both and neither is assumed.
+-- The probe moved to ns.MouseFocus when the options page grew a drag that has
+-- to know where the button came up. It is a shim in Core for the reason every
+-- other client call in this addon is one: two copies of a question this client
+-- answers under two different names is two answers to it, and this one had
+-- already cost a silent instrument once.
 --
 -- Returns the frame and the name of the call that answered, so Trace.Set can
 -- say up front which one this client has and a run that prints nothing is a run
 -- that said why.
 function Trace.Focus()
-	if type(GetMouseFocus) == "function" then
-		return GetMouseFocus(), "GetMouseFocus"
-	end
-	if type(GetMouseFoci) == "function" then
-		local stack = GetMouseFoci()
-		if type(stack) == "table" then
-			return stack[1], "GetMouseFoci"
-		end
-		return stack, "GetMouseFoci"
-	end
-	return nil, nil
+	return ns.MouseFocus()
 end
 
 -- Which action slot a frame presses, when it is the kind of frame that presses

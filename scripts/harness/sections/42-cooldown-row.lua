@@ -336,23 +336,21 @@ end
 -- The page draws the row as it will look and you drag the squares around it,
 -- which is four claims and not one of them can be settled by reading the code.
 --
--- Does a spell dragged out of the spellbook land on the line it was dropped on,
--- at the place it was dropped at. This client answers a dragged spell with a
--- spellbook index and the book it came out of, and the row counts by id, so the
--- id has to come back off the book. A page that read the index as an id would
--- put some other spell on the row and look exactly like a page that worked.
+-- Does a spell dragged out of the spellbook land on the line and at the place
+-- it was dropped at. This client answers a dragged spell with a spellbook index
+-- and the book it came out of, and the row counts by id, so the id has to come
+-- back off the book: a page that read the index as an id would put some other
+-- spell on the row and look exactly like a page that worked.
 --
--- Does a spell the row already knows about move rather than arrive twice. That
--- is the whole of the difference between dragging a square and adding one, and
--- a second square counting the same cooldown down beside the first is the bug
--- it guards against.
+-- Does a spell the row already knows about move rather than arrive twice, which
+-- is the whole of the difference between dragging a square and adding one.
 --
--- Does a square dragged off the row turn up under it. That is what replaced the
--- tick box per entry, and a square that went nowhere would be one you could not
--- put back.
+-- Does a square dragged off the row turn up under it, where it can be dragged
+-- back. That is what replaced the tick box per entry.
 --
--- And does one dropped on a square land in front of it rather than at the end
--- of the line, which is what replaced the two step buttons per entry.
+-- And does the mouse follow the picture: a square the page is not using takes
+-- no click, and every gesture works on the client that answers for the frame
+-- under the cursor under the other of its two names.
 --
 -- Everything here is put back at the end, because every count below it is the
 -- class file's again.
@@ -380,13 +378,11 @@ do
 	ns.Options.Refresh()
 	check(Page.Square(1) ~= nil, "the page built no squares to drag")
 
-	local function square(index)
-		return Page.Square(index)
-	end
+	local square = Page.Square
 
 	-- One gesture, in the two halves the client sends: what is on the cursor,
-	-- and the drag landing on a square. The button is what carries the scripts,
-	-- because that is the frame the widget layer enables the mouse on.
+	-- and the drag landing on a square. The button carries the scripts, because
+	-- that is the frame the widget layer enables the mouse on.
 	local function drop(w, book)
 		_G.WarriorKitCarrySpell(book, "spell")
 		w.button.scripts.OnReceiveDrag(w.button)
@@ -420,11 +416,9 @@ do
 	drop(square(1), 1)
 	tick()
 	local at, line = place("spell" .. REND)
-	check(at ~= nil, "a spell dragged out of the spellbook is not on the row")
-	check(line == Cooldowns.ROTATION,
-		"a spell dropped on the top line is not on the top line")
-	check(at == 1, ("it landed at place %s rather than at the front")
-		:format(tostring(at)))
+	check(at == 1 and line == Cooldowns.ROTATION,
+		("a spell dragged out of the spellbook onto the front of the top line is"
+			.. " at %s on the %s line"):format(tostring(at), tostring(line)))
 	check(Cooldowns.Count() == baseline + 1,
 		("the drop left %d squares of %d"):format(Cooldowns.Count(), baseline + 1))
 	check(_G.GetCursorInfo() == nil, "the drop left the spell on the cursor")
@@ -440,9 +434,9 @@ do
 		("dragging one square to the other line left %d squares of %d")
 			:format(Cooldowns.Count(), baseline + 1))
 
-	-- Dragged off. Nothing on this client will put a spell on the cursor, which
-	-- is the trinket's case as well: the square is remembered instead, the
-	-- button comes up over nothing, and the entry stays off the row.
+	-- Dragged off. Nothing on this client puts a spell on the cursor, which is
+	-- the trinket's case too: the square is remembered, the button comes up over
+	-- nothing, and the entry stays off the row.
 	local off = held("spell" .. REND)
 	check(off ~= nil, "the page is not holding the square the row is")
 	off.button.scripts.OnDragStart(off.button)
@@ -454,25 +448,57 @@ do
 
 	local under
 	for index = 1, Cooldowns.ShelfCount() do
-		if Cooldowns.Shelved(index).key == "spell" .. REND then
-			under = index
-		end
+		under = Cooldowns.Shelved(index).key == "spell" .. REND and index or under
 	end
 	check(under ~= nil, "a square dragged off the row is nowhere under it either")
 
+	-- A square the page is not using takes no mouse. The button is anchored over
+	-- the square and used to be parented past it, so hiding one left a live
+	-- invisible button on the page, holding the rect the hidden square still
+	-- had, over whatever square it came to rest on. That reads as one spell you
+	-- cannot drag and the rest working, and nothing on screen can show it.
+	--
+	-- Asserted on the parent because the parent is the mechanism: the stub has
+	-- no hit testing to catch the click that landed on nothing, and IsVisible is
+	-- false for every frame on a page whose window is shut.
+	local spare = Page.Square(Cooldowns.Count() + 3)
+	check(spare ~= nil, "the pool is not built past the two lines and their ends")
+	if spare then
+		check(not spare:IsShown(), "a square past the end of the row is drawn")
+		check(spare.button:GetParent() == spare,
+			"the button on a square is parented past it, so hiding the square"
+				.. " leaves the mouse behind on the page")
+	end
+
 	-- And back, onto the square the button came up over, which is the half of
-	-- the gesture this client can only answer through GetMouseFocus.
-	local focus = _G.GetMouseFocus
-	_G.GetMouseFocus = function() return square(1).button end
+	-- the gesture that can only be answered by the frame under the cursor. Asked
+	-- under GetMouseFoci, the name this client may carry instead: read under one
+	-- name only, a trinket could not be moved between the lines at all.
+	local foci = _G.GetMouseFoci
+	_G.GetMouseFoci = function() return { square(1).button } end
 	local w = Page.Shelved(under)
 	w.button.scripts.OnDragStart(w.button)
 	w.button.scripts.OnDragStop(w.button)
-	_G.GetMouseFocus = focus
+	_G.GetMouseFoci = foci
 	tick()
 	at, line = place("spell" .. REND)
 	check(at == 1 and line == Cooldowns.ROTATION,
 		("dragged back onto the front of the top line it is at %s on the %s line")
 			:format(tostring(at), tostring(line)))
+
+	-- Right click, which is the same two acts in one press and the only pair
+	-- that survives a client answering neither name for the frame under the
+	-- cursor. Off from a square on the row, back on from one under it.
+	local w2 = held("spell" .. REND)
+	w2.button.scripts.OnClick(w2.button, "RightButton")
+	tick()
+	check(place("spell" .. REND) == nil, "right clicking a square left it on the row")
+	local back = Page.Shelved(1)
+	check(back and back.entry ~= nil, "nothing is under the row to put back")
+	back.button.scripts.OnClick(back.button, "RightButton")
+	tick()
+	check(place("spell" .. REND) ~= nil,
+		"right clicking a square under the row did not put it back on")
 
 	Cooldowns.ResetRow()
 	Cooldowns.SetWatched("spell" .. REND, true)

@@ -623,6 +623,36 @@ function ns.CarrySpell(spell)
 	return false
 end
 
+-- The frame the client says the cursor is over, and the name of the call that
+-- answered it.
+--
+-- Two names, because this client is a hybrid and neither can be assumed.
+-- GetMouseFocus is the call every client from vanilla to Dragonflight had;
+-- GetMouseFoci replaced it and answers the whole stack under the cursor,
+-- topmost first. Buttons/Trace.lua found that out the expensive way: its first
+-- live run printed every gesture and never once named a frame, which from the
+-- chat frame looks exactly like a cursor that touched nothing rather than a
+-- client with no such call.
+--
+-- The name comes back as well as the frame, because a part that cannot get an
+-- answer has to be able to say which call it is missing rather than going
+-- quiet. Cooldowns/Panel.lua is the second caller and it is not a diagnostic: a
+-- square whose contents will not go on the cursor is dropped wherever the
+-- button came up, and this is the only thing that says where that was.
+function ns.MouseFocus()
+	if type(_G.GetMouseFocus) == "function" then
+		return GetMouseFocus(), "GetMouseFocus"
+	end
+	if type(_G.GetMouseFoci) == "function" then
+		local stack = GetMouseFoci()
+		if type(stack) == "table" then
+			return stack[1], "GetMouseFoci"
+		end
+		return stack, "GetMouseFoci"
+	end
+	return nil, nil
+end
+
 -- Returns usable, and whether the block is rage rather than anything else.
 function ns.SpellUsable(spell)
 	if C_Spell and C_Spell.IsSpellUsable then

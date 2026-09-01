@@ -184,12 +184,17 @@ end
 local function Landed()
 	local key = pending
 	pending = nil
-	if not key or type(_G.GetMouseFocus) ~= "function" then
+	if not key then
 		return
 	end
 
-	local ok, focus = pcall(_G.GetMouseFocus)
-	local w = ok and focus and owner[focus] or nil
+	-- Both names, through the shim, because this client answers this question
+	-- under one of two and nothing installed here proves which. Asked under one
+	-- name only, a trinket dragged from one line to the other came off the row
+	-- and landed nowhere, which looks exactly like a square that cannot be
+	-- dragged at all.
+	local focus = ns.MouseFocus()
+	local w = focus and owner[focus] or nil
 	if w and w.line then
 		ns.Cooldowns.Place(key, w.line, w.at)
 	end
@@ -197,15 +202,24 @@ end
 
 -- A drop, or a right click, on one square.
 --
--- The right click is the drag said in one press, and it is here for the client
--- that has no GetMouseFocus as much as for the hurry: whatever else is true, a
--- square can always be taken off the row and put back.
+-- The right click is the drag said in one press, and it goes the way the square
+-- is facing: off the row from a square on it, back onto the row from one under
+-- it, at the end of the line that square belongs to. It is here for the hurry
+-- and it is here for the client that answers neither name for the frame under
+-- the cursor, because whatever else is true a square has to be able to come off
+-- the row and go back on.
+--
+-- Forgetting one you added yourself is not this gesture and deliberately not.
+-- Off the row and gone for good look identical the moment after you press, and
+-- the one that cannot be undone by dragging is the one that does not get the
+-- easy button. `/wk cooldowns drop <id>` is where that lives.
 local function Drop(w, spellID)
 	if spellID == nil then
 		if w.line then
 			Off(w.entry)
-		elseif w.entry and ns.Cooldowns.IsMine(w.entry.key) then
-			ns.Cooldowns.Drop(w.entry.spells and w.entry.spells[1])
+		elseif w.entry then
+			ns.Cooldowns.Place(w.entry.key, w.entry.layer,
+				ns.Cooldowns.Count() + 1)
 		end
 		return false
 	end
@@ -238,13 +252,16 @@ local function Says(w)
 			lines = { "Drag a spell here out of your spellbook." } }
 	end
 
-	local line
 	if not w.line then
-		line = "Off the row. Drag it onto a line to have it counted again."
-	elseif w.line == ns.Cooldowns.ROTATION then
+		return { kind = "note", title = entry.name or entry.key,
+			lines = { "Off the row and not counted.",
+				"Drag it onto a line, or right click to put it back." } }
+	end
+
+	local line = "On the docked line, where a square is a press you are waiting"
+		.. " for this fight."
+	if w.line == ns.Cooldowns.ROTATION then
 		line = "On the top line, where a square is a press you are waiting for now."
-	else
-		line = "On the docked line, where a square is a press you are waiting for this fight."
 	end
 
 	return { kind = "note", title = entry.name or entry.key,

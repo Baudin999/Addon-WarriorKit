@@ -543,7 +543,17 @@ function UI.DropSquare(parent, size, get, set, opts)
 		after()
 	end
 
-	local button = CreateFrame("Button", nil, parent)
+	-- Parented to the square rather than beside it under the page.
+	--
+	-- SetAllPoints is an anchor and nothing else: a button anchored to a square
+	-- and parented past it stays shown when the square is hidden, keeps the rect
+	-- the hidden square still has, and goes on taking every click and every drag
+	-- that lands on that patch of the page. A page that hides a square it is not
+	-- using leaves a live invisible button sitting on the one beside it, and the
+	-- square underneath is dead to the mouse for a reason nothing on screen can
+	-- show. Parented here, the mouse follows the picture, which is what everybody
+	-- reading this expected it to do already.
+	local button = CreateFrame("Button", nil, square)
 	button:SetAllPoints(square)
 	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	button:SetScript("OnReceiveDrag", Drop)
