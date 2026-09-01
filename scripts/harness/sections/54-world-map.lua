@@ -665,7 +665,7 @@ check(Pins.Chase(6002, WESTFALL):find("^its turn%-in is on Westfall"),
 check(Pins.Chase(201, WESTFALL) == "nothing on Westfall; Questie has 1 on Elwynn Forest",
 	("a quest whose markers are in another zone reads %q"):format(Pins.Chase(201, WESTFALL)))
 check(Pins.Chase(102, WESTFALL) ==
-	"1 marker(s) on Westfall and none of them a turn-in; Questie has hidden 1 more",
+	"1 marker(s) on Westfall (1 monster) and none of them a turn-in; Questie has hidden 1 more",
 	("a quest with a hidden marker reads %q"):format(Pins.Chase(102, WESTFALL)))
 check(Pins.Chase(9999, WESTFALL) == "Questie holds no marker for it",
 	("a quest Questie never drew reads %q"):format(Pins.Chase(9999, WESTFALL)))

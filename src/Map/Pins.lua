@@ -307,6 +307,23 @@ local function Named(map)
 	return "map " .. tostring(map)
 end
 
+-- The kinds of marker on the map, counted, in name order. Questie's own word
+-- for each: available, complete, monster, object, item, event. Which kinds are
+-- there is the difference between a quest whose turn-in was dropped and a quest
+-- Questie still thinks you have work left on, and those want opposite fixes.
+local function Kinds(counted)
+	local names = {}
+	for kind in pairs(counted) do
+		names[#names + 1] = kind
+	end
+	table.sort(names)
+	local said = {}
+	for index = 1, #names do
+		said[index] = ("%d %s"):format(counted[names[index]], names[index])
+	end
+	return table.concat(said, ", ")
+end
+
 -- Every map this quest's markers are on except the one being asked about, in
 -- id order so two runs of the same command read the same.
 local function Elsewhere(counted)
@@ -347,7 +364,7 @@ function Pins.Chase(questId, map)
 		return "Questie holds no marker for it"
 	end
 	local here, turnin, hidden, mini = 0, 0, 0, 0
-	local away = {}
+	local away, kinds = {}, {}
 	for _, name in pairs(names) do
 		local frame = type(name) == "string" and _G[name] or nil
 		if type(frame) == "table" then
@@ -358,7 +375,9 @@ function Pins.Chase(questId, map)
 				hidden = hidden + 1
 			elseif frame.UiMapID == map then
 				here = here + 1
-				if data.Type == "complete" then
+				local kind = type(data.Type) == "string" and data.Type or "untyped"
+				kinds[kind] = (kinds[kind] or 0) + 1
+				if kind == "complete" then
 					turnin = turnin + 1
 				end
 			elseif type(frame.UiMapID) == "number" then
@@ -375,7 +394,8 @@ function Pins.Chase(questId, map)
 	-- of them: the markers are on another zone, Questie has hidden them, they
 	-- are minimap copies with no map twin, or there are none.
 	local said = here > 0
-		and ("%d marker(s) on %s and none of them a turn-in"):format(here, Named(map))
+		and ("%d marker(s) on %s (%s) and none of them a turn-in")
+			:format(here, Named(map), Kinds(kinds))
 		or ("nothing on %s"):format(Named(map))
 	if next(away) then
 		return ("%s; Questie has %s"):format(said, Elsewhere(away))

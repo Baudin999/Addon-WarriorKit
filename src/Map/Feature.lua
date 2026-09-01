@@ -35,7 +35,18 @@ end
 -- Asked against the zone you are standing in rather than the zone on the board,
 -- because you can read the board and you are typing this about the zone you are
 -- in. Map/Pins.lua does the looking; this walks the log and prints.
-local function TurnIns()
+--
+-- A word after it names one quest instead, matched on any part of its title and
+-- printed whether the client calls it finished or not. That is the half the
+-- ready-to-hand-in sweep cannot reach: a quest the log draws as complete and
+-- the client does not flag is a quest the sweep walks straight past, and "it is
+-- not in the list" is the one answer that tells you nothing.
+--
+-- Client.Open first, for the reason Quests/Log.lua gives. A collapsed header
+-- hides its quests from the client's own row count, so a sweep that does not
+-- open them reports on the zones you happen to have unfolded and calls that
+-- your quest log.
+local function TurnIns(want)
 	local Client = ns.QuestClient
 	if not Client.Ready() then
 		ns.Print("this client will not answer for the quest log.")
@@ -46,17 +57,28 @@ local function TurnIns()
 		ns.Print("this client will not say which map you are on.")
 		return
 	end
+	Client.Open()
+	local needle = want ~= "" and want:lower() or nil
 	local entries = Client.Count()
 	local found = 0
 	for index = 1, entries do
 		local row = Client.Entry(index)
-		if row and not row.header and row.complete and row.id then
-			found = found + 1
-			ns.Print(('"%s": %s.'):format(row.title, ns.MapPins.Chase(row.id, map)))
+		if row and not row.header and row.id then
+			local wanted = needle and row.title:lower():find(needle, 1, true) ~= nil
+				or (not needle and row.complete)
+			if wanted then
+				found = found + 1
+				ns.Print(('"%s" (%d), %s: %s.'):format(row.title, row.id,
+					row.complete and "the client calls it finished"
+						or "the client does not call it finished",
+					ns.MapPins.Chase(row.id, map)))
+			end
 		end
 	end
 	if found == 0 then
-		ns.Print("nothing in your log is ready to hand in.")
+		ns.Print(needle
+			and ("nothing in your quest log is called %q."):format(want)
+			or "nothing in your quest log is ready to hand in.")
 	end
 end
 
@@ -75,7 +97,7 @@ local function MapWord(arg, rawArg)
 	elseif word == "markers" then
 		ns.Print(ns.MapPins.Describe() .. ".")
 	elseif word == "turnins" then
-		TurnIns()
+		TurnIns(rest)
 	elseif word == "group" then
 		ns.Print(ns.MapMates.Describe() .. ".")
 	elseif word == "on" or word == "off" then
@@ -132,6 +154,7 @@ ns.Register({
 		"map zones, how many zones the client will name and how many have a level range",
 		"map markers, whether Questie is answering for the markers on the map",
 		"map turnins, where the question mark went for every quest you have finished",
+		"map turnins <name>, the same for one quest, finished or not",
 		"map group, whether the client will say where the people you are with are",
 	},
 
