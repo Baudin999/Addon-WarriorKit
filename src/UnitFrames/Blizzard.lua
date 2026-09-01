@@ -139,8 +139,18 @@ local FRAMES = {
 		mute = { "AdjustPosition" } },
 	{ needs = { "hideBlizzPlayerCast" },
 		names = { "CastingBarFrame", "PlayerCastingBarFrame" } },
+	-- Six names for the party, and the four everybody knows are the four this
+	-- client may not be drawing. PartyMemberFrame1 through 4 are the old frames,
+	-- one per party index. A client with raid style party frames draws the party
+	-- through a compact container instead and leaves those four hidden on its
+	-- own, so the switch reports every name it knows as down while the party is
+	-- still on the screen, which is the one failure a list of names has and the
+	-- only fix for it is the missing name. CompactPartyFrame is that container
+	-- where the client has it and PartyFrame is what both hang off on the builds
+	-- that carry one, so the party goes down whichever of the two is drawing it.
 	{ needs = { "hideBlizzParty" }, names = { "PartyMemberFrame1",
-		"PartyMemberFrame2", "PartyMemberFrame3", "PartyMemberFrame4" } },
+		"PartyMemberFrame2", "PartyMemberFrame3", "PartyMemberFrame4",
+		"CompactPartyFrame", "PartyFrame" } },
 	{ needs = { "hideBlizzRaid" },
 		names = { "CompactRaidFrameContainer", "CompactRaidFrameManager" } },
 	-- Five names for two bars, and every one of them is a client disagreeing

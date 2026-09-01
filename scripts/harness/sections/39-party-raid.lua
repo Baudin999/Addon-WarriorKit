@@ -628,6 +628,19 @@ do
 		check(_G["PartyMemberFrame" .. index]:IsShown() == false,
 			"PartyMemberFrame" .. index .. " is still on the screen")
 	end
+	check(_G.CompactPartyFrame:IsShown() == false,
+		"the compact party container is still on the screen")
+	check(_G.PartyFrame:IsShown() == false,
+		"the frame the party hangs off is still on the screen")
+
+	-- A client putting its own party back, which is what a build with raid style
+	-- party frames does on every roster change. SetShown for the reason the raid
+	-- manager below uses it: it is resolved in C, it never reads the Lua Show,
+	-- and the attic is the only thing between it and a second party on screen.
+	_G.CompactPartyFrame:SetShown(true)
+	check(_G.CompactPartyFrame:IsVisible() == false,
+		"the client's own layout pass put the party container back on the screen")
+
 	check(_G.CompactRaidFrameContainer:IsShown() == false,
 		"the raid container is still on the screen")
 
@@ -651,6 +664,8 @@ do
 	ns.BlizzHide.Apply()
 	check(_G.PartyMemberFrame1:IsShown(),
 		"turning the party switch off did not give Blizzard's frames back")
+	check(_G.CompactPartyFrame:IsVisible(),
+		"turning the party switch off did not give the party container back")
 	ns.db.hideBlizzParty = true
 	ns.BlizzHide.Apply()
 end

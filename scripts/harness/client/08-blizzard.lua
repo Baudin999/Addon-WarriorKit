@@ -187,6 +187,16 @@ child("button", enchantFrame, "TempEnchant1")
 for index = 1, 4 do
 	child("frame", _G.UIParent, "PartyMemberFrame" .. index)
 end
+
+-- The other two names the party answers to, and on a client with raid style
+-- party frames on they are the ones actually drawing it: the four above are
+-- hidden by the client itself and the switch looks like it worked.
+--
+-- Both are made here as frames of their own rather than as a parent and its
+-- child, because the addon names both and cages both, and a fixture that nested
+-- them would prove nothing except that hiding a parent hides a child.
+child("frame", _G.UIParent, "PartyFrame")
+child("frame", _G.UIParent, "CompactPartyFrame")
 local raidContainer = child("frame", _G.UIParent, "CompactRaidFrameContainer")
 child("frame", _G.UIParent, "CompactRaidFrameManager")
 
