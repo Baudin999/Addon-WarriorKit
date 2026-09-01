@@ -74,6 +74,17 @@ do
 	check(plate.UnitFrame.castBar.wkStripped,
 		"our cast row is on and Blizzard's plate cast bar is still drawn under it")
 
+	-- And it stays down through the call that used to put it back. The plate's
+	-- cast bar is the same CastingBarFrame mixin the target's is, so it shows
+	-- itself with SetShown, which is resolved in C and walks straight past the
+	-- Hide ns.Strip wrote over its Show. One cast anywhere in the zone was two
+	-- cast bars for the rest of the session, and the strip flag above went on
+	-- saying the region was hidden the whole time, which is why this asks what
+	-- is on the screen instead.
+	plate.UnitFrame.castBar:SetShown(true)
+	check(not plate.UnitFrame.castBar:IsVisible(),
+		"the plate cast bar showed itself with SetShown and nothing put it back down")
+
 	----------------------------------------------------------------------
 	-- A cast comes on
 	----------------------------------------------------------------------

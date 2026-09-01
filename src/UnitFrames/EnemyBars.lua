@@ -1384,8 +1384,9 @@ end
 -- what says when to Pummel again.
 --------------------------------------------------------------------------
 
--- ns.Strip and ns.Unstrip in Core do the work, because the artwork part strips
--- Blizzard bar art through the same two calls.
+-- ns.Strip and ns.Unstrip in Core do the work for the art, because the artwork
+-- part strips Blizzard bar art through the same two calls. The cast bar is the
+-- exception and goes through Core/Attic.lua instead: see PlateCage below.
 
 -- `every` is what Restore passes and Strip does not.
 --
@@ -1414,15 +1415,43 @@ local function PlateRegions(plate, every)
 	if every or ns.db.barsMarker then
 		regions[#regions + 1] = unitFrame.RaidTargetFrame or unitFrame.raidIcon or unitFrame.RaidTargetIcon
 	end
-	if every or ns.db.barsCast then
-		-- One name and no fallback list. `castBar` is what the nameplate driver
-		-- calls it on every flavour of this client, and a second guess at a
-		-- PascalCase spelling is how a strip walk ends up handed a method rather
-		-- than a frame: the harness models a plate faithfully enough that it
-		-- answered one the first time this line asked for `CastBar`.
-		regions[#regions + 1] = unitFrame.castBar
-	end
 	return regions
+end
+
+-- The one region on a plate that goes in the attic rather than under ns.Strip.
+--
+-- Blizzard's plate cast bar is the same CastingBarFrame mixin the target's bar
+-- is, and that mixin shows itself with SetShown. SetShown is resolved in C and
+-- never reads the Lua Show that ns.Strip put a Hide in, so the bar came back on
+-- the first cast of the session and stayed back for the rest of it: two cast
+-- bars for one cast, ours on the plate and Blizzard's under it. That is the
+-- same bug UnitFrames/Blizzard.lua's header describes for the target's bar, on
+-- the same mixin, found the same way.
+--
+-- Core/Attic.lua was the answer there and it is the answer here. A frame whose
+-- parent is hidden is not drawn whatever the mixin calls on the frame itself,
+-- and Attic.Sweep re-checks every caged frame once a second.
+--
+-- Only the cast bar. Everything in PlateRegions above is the plate's own art
+-- and its health bar; nothing re-shows those, and the client anchors to them,
+-- so caging them would take them out of the plate's chain to fix a bug they do
+-- not have.
+--
+-- One name and no fallback list. `castBar` is what the nameplate driver calls
+-- it on every flavour of this client, and a second guess at a PascalCase
+-- spelling is how a walk like this ends up handed a method rather than a frame:
+-- the harness models a plate faithfully enough that it answered one the first
+-- time this was asked for as `CastBar`.
+--
+-- `every` is what Restore passes, for the reason PlateRegions takes one: a bar
+-- caged while `bars cast` was on has to be handed back after the setting goes
+-- off, and a list built from the setting would no longer have it to hand.
+local function PlateCage(plate, every)
+	local unitFrame = plate.UnitFrame
+	if not unitFrame or not (every or ns.db.barsCast) then
+		return nil
+	end
+	return unitFrame.castBar
 end
 
 -- A plate is a hole in the camera, and the hole is not ours. Our widget calls
@@ -1542,11 +1571,16 @@ end
 
 local function StripPlate(plate)
 	local complete = PlateMouse(plate, not ns.db.barsClickThrough, CAMERA_BUTTONS[ns.db.barsCamera])
-	local regions = ns.db.barsStyle == "replace" and PlateRegions(plate) or nil
+	local replacing = ns.db.barsStyle == "replace"
+	local regions = replacing and PlateRegions(plate) or nil
 	for _, region in ipairs(regions or {}) do
 		if not ns.Strip(region) then
 			complete = false
 		end
+	end
+	local cage = replacing and PlateCage(plate) or nil
+	if cage and not ns.Attic.Vanish(cage) then
+		complete = false
 	end
 	stripped[plate] = true
 	if not complete then
@@ -1564,6 +1598,10 @@ local function RestorePlate(plate)
 		if not ns.Unstrip(region) then
 			complete = false
 		end
+	end
+	local cage = PlateCage(plate, true)
+	if cage and not ns.Attic.Return(cage) then
+		complete = false
 	end
 	if complete then
 		stripped[plate] = nil
