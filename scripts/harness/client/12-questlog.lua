@@ -414,7 +414,7 @@ end
 local questie = _G.QuestieLoader
 local knows = questie:ImportModule("QuestieDB")
 local carrying = questie:ImportModule("QuestiePlayer")
-local finding = questie:ImportModule("QuestieMap")
+local distancing = questie:ImportModule("DistanceUtils")
 local placing = questie:ImportModule("ZoneDB")
 
 local SPAWNS = {
@@ -436,7 +436,15 @@ local SPAWNS = {
 carrying.currentQuestlog = {
 	[102] = {
 		Id = 102,
-		Finisher = { Type = "monster", Id = 900, Name = "Baros Alexston" },
+		-- The hand-in, in the shape Questie really leaves it: two lists of
+		-- ids, and the name a query away. Read off the installed addon rather
+		-- than remembered, the same way the TrackerUtils fixture below was.
+		-- QuestieDB.lua builds it as { NPC = finishedBy[1], GameObject =
+		-- finishedBy[2] }. This fixture used to carry Type, Id and Name, which
+		-- is what Questie v6 handed out and what nothing has handed out since,
+		-- so the addon read three nil fields in the game and three good ones
+		-- here, and the hand-in went missing everywhere but this file.
+		Finisher = { NPC = { 900 } },
 		Objectives = {
 			{ Needed = 8, Collected = 3, spawnList = { [700] = SPAWNS.miners } },
 			-- Finished, and said so the way Questie says it. The two counts are
@@ -543,11 +551,17 @@ placing.GetUiMapIdByAreaId = function(_, area) return ATLAS[area] end
 -- Questie's own "where next", which decides which zone the map opens on. It
 -- answers Westfall, so a map that opened on the first zone it happened to
 -- collect would open on the wrong one and this fixture would catch it.
-finding.GetNearestQuestSpawn = function(_, quest)
+--
+-- Modules/Libs/DistanceUtils.lua, and the shape matters twice over. It used to
+-- live on QuestieMap as GetNearestQuestSpawn, took a self and answered six
+-- things; it is DistanceUtils.GetNearestSpawnForQuest now, takes no self and
+-- answers four. Both halves of that were wrong here for as long as the fixture
+-- outlived the addon it was copied from.
+distancing.GetNearestSpawnForQuest = function(quest)
 	if type(quest) ~= "table" or quest.Id ~= 102 then
 		return nil
 	end
-	return { 50, 50 }, 40, "Kobold Miner", 700, "monster", 260
+	return { 50, 50 }, 40, "Kobold Miner", 260
 end
 
 -- The client's map art, in the shape C_Map really answers it: one layer saying

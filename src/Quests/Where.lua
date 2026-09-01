@@ -116,17 +116,68 @@ end
 
 --------------------------------------------------------------------------
 
--- Who takes it back, and whether that is a person or a thing on the ground.
-function Where.Finisher(questId)
-	local quest = Quest(questId)
-	if not quest or type(quest.Finisher) ~= "table" then
+-- One question of the compiled database, by the name of the call rather than by
+-- the function, because the function does not exist until the database has
+-- compiled and this file holds no reference across that moment.
+--
+-- Every query is pcalled. It is another addon's database, it is compiled rather
+-- than written out, and an id it has no row for is a miss rather than an error,
+-- but none of that is this addon's to guarantee. Comfort/Clutter.lua asks the
+-- same database the same way.
+local function Ask(call, id, field)
+	local db = Module("QuestieDB")
+	local query = db and db[call]
+	if type(query) ~= "function" or type(id) ~= "number" then
 		return nil
 	end
-	local name = quest.Finisher.Name
+	local ok, value = pcall(query, id, field)
+	if not ok then
+		return nil
+	end
+	return value
+end
+
+-- Which call answers for a kind of thing. Questie keeps creatures and world
+-- objects in two tables and the row is the same shape in both.
+local ASKS = { monster = "QueryNPCSingle", object = "QueryObjectSingle" }
+
+-- Who takes it back, as the kind of thing it is and every id Questie holds for
+-- it.
+--
+-- **Questie stopped resolving this for you.** Up to v6 the quest object carried
+-- a Finisher with the Id, the Name and the Type already worked out, and this
+-- file read the three fields straight off it. From v11 it carries the two id
+-- lists the database row was compiled from and nothing else: NPC, GameObject,
+-- and the name a query away. The old fields do not raise, they answer nil, so
+-- every quest in the log lost its hand-in line and the map lost its dot without
+-- one thing in the game going wrong out loud.
+local function Finishers(quest)
+	local finisher = quest and quest.Finisher
+	if type(finisher) ~= "table" then
+		return nil
+	end
+	if type(finisher.NPC) == "table" and finisher.NPC[1] then
+		return "monster", finisher.NPC
+	end
+	if type(finisher.GameObject) == "table" and finisher.GameObject[1] then
+		return "object", finisher.GameObject
+	end
+	return nil
+end
+
+-- The name of the one you hand it to, and whether that is a person or a thing
+-- on the ground. The first of the list where there are several, because this is
+-- a line of text with room for one answer; the map below draws all of them.
+function Where.Finisher(questId)
+	local kind, ids = Finishers(Quest(questId))
+	if not kind then
+		return nil
+	end
+	local name = Ask(ASKS[kind], ids[1], "name")
 	if type(name) ~= "string" or name == "" then
 		return nil
 	end
-	return name, quest.Finisher.Type
+	return name, kind
 end
 
 -- Questie's own answer to "where next", unpicked: the zone it is in, what it
@@ -139,12 +190,20 @@ end
 -- A quest that is already complete answers with its finisher instead, which is
 -- Questie's behaviour rather than a choice made here: once there is nothing
 -- left to kill, the nearest thing that matters is the person waiting for you.
+--
+-- **It moved out of QuestieMap and shed two returns.** v6 answered this on the
+-- map module as GetNearestQuestSpawn and handed back six things, of which this
+-- wanted the second, third and sixth. v11 keeps it in DistanceUtils, calls it
+-- GetNearestSpawnForQuest, takes no self and returns four: the coordinate pair,
+-- the area, the name and the distance. Read the old way the module answered a
+-- table with no such function in it and every quest reported no destination.
 local function Soonest(quest)
-	local map = Module("QuestieMap")
-	if not map or type(map.GetNearestQuestSpawn) ~= "function" then
+	local distances = Module("DistanceUtils")
+	local nearest = distances and distances.GetNearestSpawnForQuest
+	if type(nearest) ~= "function" then
 		return nil
 	end
-	local ok, _, area, name, _, _, distance = pcall(map.GetNearestQuestSpawn, map, quest)
+	local ok, _, area, name, distance = pcall(nearest, quest)
 	if not ok then
 		return nil
 	end
@@ -209,31 +268,6 @@ local function Mark(zone, x, y, name, kind)
 	return true
 end
 
--- One question of the compiled database, by the name of the call rather than by
--- the function, because the function does not exist until the database has
--- compiled and this file holds no reference across that moment.
---
--- Every query is pcalled. It is another addon's database, it is compiled rather
--- than written out, and an id it has no row for is a miss rather than an error,
--- but none of that is this addon's to guarantee. Comfort/Clutter.lua asks the
--- same database the same way.
-local function Ask(call, id, field)
-	local db = Module("QuestieDB")
-	local query = db and db[call]
-	if type(query) ~= "function" or type(id) ~= "number" then
-		return nil
-	end
-	local ok, value = pcall(query, id, field)
-	if not ok then
-		return nil
-	end
-	return value
-end
-
--- Which call answers for a kind of thing. Questie keeps creatures and world
--- objects in two tables and the row is the same shape in both.
-local ASKS = { monster = "QueryNPCSingle", object = "QueryObjectSingle" }
-
 -- One creature's or object's whole spawn table, which Questie keys by area id.
 local function Scatter(into, spawns, name, kind)
 	for area, places in pairs(spawns) do
@@ -287,16 +321,20 @@ end
 -- room for both, and knowing that the hand-in is on the way back rather than
 -- across the zone is worth having while you are still killing things.
 local function FromFinisher(into, quest)
-	local finisher = quest.Finisher
-	if type(finisher) ~= "table" or type(finisher.Id) ~= "number" then
+	local kind, ids = Finishers(quest)
+	if not kind then
 		return false
 	end
-	local spawns = Ask(ASKS[finisher.Type] or ASKS.monster, finisher.Id, "spawns")
-	if type(spawns) ~= "table" then
-		return false
+	local call = ASKS[kind]
+	local drawn = false
+	for _, id in ipairs(ids) do
+		local spawns = Ask(call, id, "spawns")
+		if type(spawns) == "table" then
+			Scatter(into, spawns, Ask(call, id, "name"), Where.BACK)
+			drawn = true
+		end
 	end
-	Scatter(into, spawns, finisher.Name, Where.BACK)
-	return true
+	return drawn
 end
 
 --------------------------------------------------------------------------
