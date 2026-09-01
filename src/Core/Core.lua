@@ -1198,6 +1198,95 @@ function ns.CreatureId(guid)
 end
 
 --------------------------------------------------------------------------
+-- The binding set moving under us
+--
+-- An override binding sits on top of the binding set rather than inside it,
+-- and the client throws every override away each time it builds that set
+-- again. It does that at Okay and at Cancel in the Key Bindings panel, at a
+-- switch between the account's keys and this character's, and once during
+-- login after PLAYER_LOGIN has already run.
+--
+-- That last one is the whole bug. A key taken at PLAYER_LOGIN was dropped a
+-- moment later by a build nothing here was watching for, so every loadout key
+-- was dead before the player could press it and rebinding it by hand was the
+-- only thing that appeared to work. It appeared to work because a rebind is
+-- the first take the client has not already thrown away.
+--
+-- So a key taken with SetOverrideBindingClick has to be taken again whenever
+-- the set moves, and UPDATE_BINDINGS is what the client fires when it does.
+-- Every file that takes one registers the pass that takes it again.
+--
+-- The pass waits a frame rather than running on the event, because putting a
+-- key back fires UPDATE_BINDINGS itself and Buttons/Bars.lua answers that
+-- event with a pass of its own. Running on the event would put this pass
+-- inside every key that pass claims, a hundredfold for one binding change.
+-- Waiting a frame collapses the whole storm into one run.
+--
+-- Nothing books a second pass from inside the first, because the latch below
+-- turns the event away for as long as one is running. That is what makes every
+-- key a pass puts back free rather than the start of the next pass.
+--
+-- One pass runs every registered take rather than only the one whose key
+-- moved, because the event does not say which key that was and a take is a
+-- handful of calls. A rebind is a function of no arguments that puts this
+-- file's keys back, refuses in combat, and can be called at any time.
+--------------------------------------------------------------------------
+
+local rebinds = {}
+local passing = false
+local waiting = false
+local bindings = CreateFrame("Frame")
+
+function ns.Rebind(apply)
+	assert(type(apply) == "function", "a rebind is a function")
+	rebinds[#rebinds + 1] = apply
+end
+
+local function Run()
+	for index = 1, #rebinds do
+		rebinds[index]()
+	end
+end
+
+local function Pass(self)
+	self:SetScript("OnUpdate", nil)
+
+	-- Held rather than dropped. A binding call is refused under lockdown, and
+	-- not every file that takes a key picks its own work back up when the
+	-- fight ends; going through here means all of them do.
+	if InCombatLockdown() then
+		waiting = true
+		return
+	end
+	waiting = false
+
+	passing = true
+	local ok, why = pcall(Run)
+	passing = false
+	if not ok then
+		ns.Print(("a key could not be put back: %s"):format(tostring(why)))
+	end
+end
+
+bindings:RegisterEvent("UPDATE_BINDINGS")
+bindings:RegisterEvent("PLAYER_REGEN_ENABLED")
+bindings:SetScript("OnEvent", function(self, event)
+	if event == "PLAYER_REGEN_ENABLED" then
+		if waiting then
+			self:SetScript("OnUpdate", Pass)
+		end
+		return
+	end
+	-- Nothing to put back before the saved variables are merged, because every
+	-- pass reads the key it holds out of ns.db or ns.dbc. PLAYER_LOGIN runs
+	-- them all afterwards, so an event this early costs nothing to drop.
+	if passing or not ns.dbc then
+		return
+	end
+	self:SetScript("OnUpdate", Pass)
+end)
+
+--------------------------------------------------------------------------
 -- Saved variables
 --
 -- ADDON_LOADED fires once every file in the TOC has run, so every feature has

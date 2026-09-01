@@ -447,3 +447,7 @@ function Cast.Watch()
 		events:UnregisterEvent("UNIT_SPELLCAST_SENT")
 	end
 end
+
+-- The client rebuilds its binding set and drops every override with it, so the
+-- keys are taken again each time it does. See ns.Rebind in Core/Core.lua.
+ns.Rebind(Cast.Apply)

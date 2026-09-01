@@ -165,5 +165,43 @@ do
 		"the loadout changed in combat never landed after it:\n" .. LoadoutMacro(DEFENSIVE))
 end
 
+-- The key surviving the client building its binding set again.
+--
+-- This is the bug the whole of ns.Rebind exists for. The client throws every
+-- override away when it builds that set, and it builds it once during login
+-- after PLAYER_LOGIN has already taken these keys, so a loadout key was dead
+-- before anyone could press it and setting it again by hand every session was
+-- the only thing that appeared to work.
+--
+-- The pass waits a frame, for the reason Core/Core.lua gives, so the frame is
+-- driven here rather than assumed.
+--
+-- On a key no cloned bar wants. SHIFT-1 is one of the action bar's own, and a
+-- rebuild puts the bars back on the event while this pass is still a frame
+-- away, so the middle assertion below would be reading somebody else's
+-- override rather than an empty key. The loadout still wins that key in the
+-- end, because its pass runs after the bars', and that is the order it should
+-- win in: a key typed into this panel beats a clone standing in for a bar.
+do
+	local KEY = "CTRL-F9"
+	check(ns.Loadouts.Bind(1, KEY) ~= nil, "the client would not take " .. KEY)
+
+	local held = ("CLICK %s:LeftButton"):format(ns.Loadouts.ButtonName(1))
+	check(_G.GetBindingAction(KEY, true) == held,
+		"the first loadout was not holding its key before the rebuild")
+
+	_G.WarriorKitRebuildBindings()
+	check(_G.GetBindingAction(KEY, true) == "",
+		"the client stub kept an override the game would have thrown away")
+
+	for _, f in ipairs(H.frames) do
+		if f.scripts.OnUpdate and f.origin:match("Core/Core") then
+			f.scripts.OnUpdate(f, 0)
+		end
+	end
+	check(_G.GetBindingAction(KEY, true) == held,
+		"the loadout key never came back after the client rebuilt its bindings")
+end
+
 print(("loadout %d of %d rows, %d secure buttons, defensive sends %d characters")
 	:format(ns.Loadouts.Count(), ns.Loadouts.MAX, ns.Loadouts.MAX, #LoadoutMacro(DEFENSIVE)))

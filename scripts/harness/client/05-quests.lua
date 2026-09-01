@@ -496,6 +496,20 @@ _G.GetBindingAction = function(key, checkOverride)
 	local held = checkOverride and overrides[key]
 	return held and held.action or ""
 end
+
+-- The client building its binding set again, which is what happens at Okay and
+-- at Cancel in the Key Bindings panel, at a switch between the account's keys
+-- and this character's, and once during login after PLAYER_LOGIN has run.
+-- Every override goes with it.
+--
+-- Modelled rather than left out, because a stub that keeps an override forever
+-- cannot see the failure this caused: every key the addon took was taken at
+-- login and thrown away a moment later, so it was dead before it could be
+-- pressed and rebinding by hand was the only thing that appeared to work.
+_G.WarriorKitRebuildBindings = function()
+	overrides = {}
+	H.fire("UPDATE_BINDINGS")
+end
 _G.IsControlKeyDown, _G.IsAltKeyDown = constant(false), constant(false)
 
 -- Shift, readable rather than constant, because the cloned bars carry a lock of

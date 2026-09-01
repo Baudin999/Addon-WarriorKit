@@ -141,3 +141,7 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function()
 	Switch.Apply()
 end)
+
+-- And again when the client rebuilds its binding set, which drops every
+-- override the addon holds. See ns.Rebind in Core/Core.lua.
+ns.Rebind(Switch.Apply)

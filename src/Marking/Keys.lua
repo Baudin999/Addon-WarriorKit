@@ -247,3 +247,7 @@ events:SetScript("OnEvent", function(_, event)
 	end
 	Keys.Apply()
 end)
+
+-- And again when the client rebuilds its binding set, which drops every
+-- override the addon holds. See ns.Rebind in Core/Core.lua.
+ns.Rebind(Keys.Apply)

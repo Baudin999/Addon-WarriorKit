@@ -417,3 +417,8 @@ events:SetScript("OnEvent", function(_, event)
 	end
 	ChargeIcon.Update()
 end)
+
+-- The client rebuilds its binding set and drops every override with it, so the
+-- key is taken again each time it does. See ns.Rebind in Core/Core.lua. Silent
+-- on a class with no button, because ApplyBinding refuses without one.
+ns.Rebind(ChargeIcon.ApplyBinding)

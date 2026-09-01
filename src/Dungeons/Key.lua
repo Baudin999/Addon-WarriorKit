@@ -123,3 +123,7 @@ function Key.Describe()
 	end
 	return key
 end
+
+-- The client rebuilds its binding set and drops every override with it, so the
+-- key is taken again each time it does. See ns.Rebind in Core/Core.lua.
+ns.Rebind(Key.Apply)

@@ -423,3 +423,10 @@ events:SetScript("OnEvent", function(_, event)
 	end
 	Loadouts.Apply()
 end)
+
+-- And again every time the client rebuilds its binding set, which throws every
+-- override away, including the one taken at PLAYER_LOGIN a moment earlier. See
+-- ns.Rebind in Core/Core.lua: without this the key is bound once at login,
+-- dropped before it can be pressed, and has to be set again by hand every
+-- session.
+ns.Rebind(Loadouts.Apply)
