@@ -68,7 +68,7 @@ local GCD = 1.5
 -- frame cannot be destroyed on these clients, and a spec that overran one would
 -- lose squares off the end with nothing on screen saying so. Both are one or two
 -- past the longest list any class file writes today.
-local MAX_ROTATION = 6
+local MAX_ROTATION = 7
 local MAX_CLASS = 8
 
 -- How many of your own aura slots the client will answer for. Forty, the same

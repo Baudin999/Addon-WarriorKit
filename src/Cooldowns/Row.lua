@@ -169,11 +169,39 @@ local function Place()
 	seen = ns.Cooldowns.Epoch()
 	local drawn = (mode == "quiet") and 0 or ns.Cooldowns.Count()
 
-	-- Whether there is a top line at all, asked before anything is placed
-	-- because it decides where the docked line sits. One lookup rather than a
-	-- count, because the rotation entries lead the list: if the first square is
-	-- not one of them there are none.
-	local topped = drawn > 0 and ns.Cooldowns.Layer(1) == ns.Cooldowns.ROTATION
+	-- How many squares each line carries, counted before any of them is placed.
+	--
+	-- Both counts are needed up front because each line is centred under the
+	-- wider of the two, and a line cannot be centred until the width of the
+	-- other one is known. The rotation entries lead the list, which is the
+	-- property Cooldowns.All is built to keep, so this walks until the tag
+	-- changes and stops rather than testing every slot.
+	local fastCount = 0
+	while fastCount < drawn
+		and ns.Cooldowns.Layer(fastCount + 1) == ns.Cooldowns.ROTATION do
+		fastCount = fastCount + 1
+	end
+	local longCount = drawn - fastCount
+
+	local fastWide = fastCount > 0 and fastCount * (BIG + GAP) - GAP or 0
+	local longWide = longCount > 0 and longCount * (ICON + GAP) - GAP or 0
+	local wide = math.max(fastWide, longWide)
+
+	-- Where each line starts, so the short one sits under the middle of the long
+	-- one instead of against its left edge. Two big squares over one small one
+	-- was a row that read as a mistake, because nothing else in the addon hangs
+	-- a shorter row off the left.
+	--
+	-- Floored rather than halved. An odd difference halves to x.5, and a square
+	-- drawn on a half pixel is the one thing that takes the icon off the grid,
+	-- which is the whole argument the two sizes above are picked by. Half a
+	-- pixel of asymmetry is invisible; a blurred icon is not.
+	local fastLeft = math.floor((wide - fastWide) / 2)
+	local longLeft = math.floor((wide - longWide) / 2)
+
+	-- Whether there is a top line at all, because it decides where the docked
+	-- line sits.
+	local topped = fastCount > 0
 	local dock = topped and -(BIG + DOCK) or 0
 
 	-- The preview is the row being dragged, so its squares hand the mouse back
@@ -190,9 +218,15 @@ local function Place()
 			w.entry = ns.Cooldowns.Entry(slot)
 			w:EnableMouse(hoverable)
 			ns.UI.Ability.Size(w, edge * unit)
+			local x
+			if big then
+				x = fastLeft + fast * (BIG + GAP)
+			else
+				x = longLeft + long * (ICON + GAP)
+			end
+
 			w:ClearAllPoints()
-			w:SetPoint("TOPLEFT", frame, "TOPLEFT",
-				(big and fast or long) * (edge + GAP) * unit,
+			w:SetPoint("TOPLEFT", frame, "TOPLEFT", x * unit,
 				(big and 0 or dock) * unit)
 			w:Show()
 
@@ -214,12 +248,9 @@ local function Place()
 		return
 	end
 
-	local wide = math.max(
-		fast > 0 and fast * (BIG + GAP) - GAP or 0,
-		long > 0 and long * (ICON + GAP) - GAP or 0)
 	local tall = (topped and BIG or 0)
-		+ ((topped and long > 0) and DOCK or 0)
-		+ (long > 0 and ICON or 0)
+		+ ((topped and longCount > 0) and DOCK or 0)
+		+ (longCount > 0 and ICON or 0)
 
 	frame:SetSize(wide * unit, tall * unit)
 	frame:Show()

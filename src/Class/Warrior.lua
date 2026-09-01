@@ -326,10 +326,18 @@ ns.Class.Register("WARRIOR", {
 				{ key = "shieldwall", spells = { 871 } },
 			},
 
-			-- 12294 Mortal Strike, 7384 Overpower, 12328 Sweeping Strikes, 6343
-			-- Thunder Clap, 18499 Berserker Rage. Rank 1 of each, because every rank
-			-- stays in the spellbook on these clients and every rank of one ability
-			-- shares one cooldown, so the first id answers for the sixth.
+			-- 100 Charge, 12294 Mortal Strike, 7384 Overpower, 12328 Sweeping
+			-- Strikes, 6343 Thunder Clap, 18499 Berserker Rage. Rank 1 of each,
+			-- because every rank stays in the spellbook on these clients and every
+			-- rank of one ability shares one cooldown, so the first id answers for
+			-- the sixth.
+			--
+			-- Charge leads all three lists and is on this layer despite `charge`
+			-- above building a button for it. The button is where you press it and
+			-- the row is how long until you can, which is the same split Overpower
+			-- already sits on either side of. A fifteen second cooldown you open
+			-- every pull with is a rotation cooldown whatever else the addon does
+			-- with it.
 			--
 			-- Overpower is on this layer as well as in `reactive` above, and the two
 			-- say different things: the reaction window is whether the fight has
@@ -337,6 +345,7 @@ ns.Class.Register("WARRIOR", {
 			-- A window that opens on a square still counting down is a press you do
 			-- not get.
 			rotation = {
+				{ key = "charge", spells = { 100 } },
 				{ key = "mortalstrike", spells = { 12294 } },
 				{ key = "overpower", spells = { 7384 } },
 				{ key = "sweeping", spells = { 12328 } },
@@ -366,9 +375,10 @@ ns.Class.Register("WARRIOR", {
 				{ key = "shieldwall", spells = { 871 } },
 			},
 
-			-- 23881 Bloodthirst, 1680 Whirlwind, 18499 Berserker Rage, 6343 Thunder
-			-- Clap.
+			-- 100 Charge, 23881 Bloodthirst, 1680 Whirlwind, 18499 Berserker Rage,
+			-- 6343 Thunder Clap.
 			rotation = {
+				{ key = "charge", spells = { 100 } },
 				{ key = "bloodthirst", spells = { 23881 } },
 				{ key = "whirlwind", spells = { 1680 } },
 				{ key = "berserkerrage", spells = { 18499 } },
@@ -391,13 +401,14 @@ ns.Class.Register("WARRIOR", {
 				{ key = "recklessness", spells = { 1719 } },
 			},
 
-			-- 23922 Shield Slam, 6572 Revenge, 2565 Shield Block, 72 Shield Bash,
-			-- 6343 Thunder Clap.
+			-- 100 Charge, 23922 Shield Slam, 6572 Revenge, 2565 Shield Block, 72
+			-- Shield Bash, 6343 Thunder Clap.
 			--
 			-- Revenge is here for the reason Overpower is on the arms layer: the
 			-- reaction window says the fight opened it and this says the cooldown
 			-- allows it, and they are not the same question.
 			rotation = {
+				{ key = "charge", spells = { 100 } },
 				{ key = "shieldslam", spells = { 23922 } },
 				{ key = "revenge", spells = { 6572 } },
 				{ key = "shieldblock", spells = { 2565 } },
