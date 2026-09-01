@@ -19,7 +19,9 @@ local ADDON, ns = ...
 -- token, and a stranger who buffed you in passing is not your target, is not
 -- your focus and has no token at all a second later.
 --
--- This part owns no frame and draws nothing, so nothing here is on a ticker.
+-- This part draws nothing. The one ticker it owns runs for the second or two a
+-- whisper is waiting on its delay and is taken off again the moment the queue
+-- empties.
 
 local Thanks = {}
 ns.Thanks = Thanks
@@ -42,8 +44,40 @@ local COOLDOWN = 600
 -- things you do not whisper, and none of them is a Player.
 local PLAYER = "Player-"
 
+-- How long after a loading screen the log is ignored, in seconds.
+--
+-- Coming back into the world the client hands you every buff you are already
+-- carrying as a fresh SPELL_AURA_APPLIED, one line per aura, caster named.
+-- Nothing in the line separates that replay from a cast that happened a moment
+-- ago, so a relog in a city thanked the four people who had buffed you before
+-- you logged out, for a kindness they did an hour earlier. The clock is the
+-- only tell there is: the replay arrives in the first seconds after the
+-- loading screen, and a stranger walking past almost never does.
+local SETTLE = 5
+
+-- The wait before a whisper goes out, in seconds, drawn fresh for each one.
+--
+-- Instant is the tell. A reply in the same frame as the cast is a machine
+-- answering, and the person who buffed you reads it that way. A second or two
+-- is somebody seeing the buff land and typing two letters.
+local MIN_WAIT, MAX_WAIT = 1, 3
+
 local frame
 local playerGUID
+
+-- Built here rather than when the first whisper is queued, because a frame that
+-- comes into being at some unpredictable moment mid-session is a frame no test
+-- can hold. It carries no script until there is something to send.
+local sender = CreateFrame("Frame")
+
+-- The clock time before which nothing in the log counts, set at every entry to
+-- the world.
+local settled = 0
+
+-- Whispers waiting out their delay: a name at one index and the clock time it
+-- goes out at on the next. Flat rather than a table per whisper, because there
+-- is rarely more than one in here and never more than a handful.
+local waiting = {}
 
 -- name to when they were last thanked, on the client's own clock. One short
 -- string per stranger who has buffed you since login, which is a handful a
@@ -67,6 +101,40 @@ local function Word()
 	return word ~= "" and word or nil
 end
 
+-- Sends what has come due and stops the ticker when the queue empties, so an
+-- OnUpdate is only running in the second or two after a stranger buffs you.
+local function Tick()
+	local now = GetTime()
+	local index = 1
+	while index < #waiting do
+		if now < waiting[index + 1] then
+			index = index + 2
+		else
+			local who = waiting[index]
+			table.remove(waiting, index + 1)
+			table.remove(waiting, index)
+
+			-- Read again here rather than carried from the log line, so a
+			-- word emptied while this one was waiting means it stays in.
+			local word = Word()
+			if word and type(_G.SendChatMessage) == "function" then
+				sent = sent + 1
+				_G.SendChatMessage(word, "WHISPER", nil, who)
+			end
+		end
+	end
+	if #waiting == 0 then
+		sender:SetScript("OnUpdate", nil)
+	end
+end
+
+local function Queue(who)
+	waiting[#waiting + 1] = who
+	waiting[#waiting + 1] = GetTime() + MIN_WAIT
+		+ math.random() * (MAX_WAIT - MIN_WAIT)
+	sender:SetScript("OnUpdate", Tick)
+end
+
 local function OnLog()
 	local _, subevent, hideCaster, sourceGUID, sourceName, _, _, destGUID,
 		_, _, _, _, _, _, auraType = readLog()
@@ -80,6 +148,9 @@ local function OnLog()
 		return
 	end
 	if auraType ~= "BUFF" or hideCaster then
+		return
+	end
+	if GetTime() < settled then
 		return
 	end
 	if not sourceGUID or sourceGUID == playerGUID
@@ -108,8 +179,7 @@ local function OnLog()
 	end
 
 	thanked[sourceName] = now
-	sent = sent + 1
-	_G.SendChatMessage(word, "WHISPER", nil, sourceName)
+	Queue(sourceName)
 end
 
 -- Registered and unregistered rather than left on with a branch inside, so the
@@ -164,5 +234,15 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:SetScript("OnEvent", function()
 	playerGUID = UnitGUID("player")
+
+	-- Anything still waiting is dropped rather than sent late. The whisper was
+	-- for a buff on the other side of a loading screen, and a chat message
+	-- posted on the way out of the world goes nowhere anyway.
+	for index = #waiting, 1, -1 do
+		waiting[index] = nil
+	end
+	sender:SetScript("OnUpdate", nil)
+	settled = GetTime() + SETTLE
+
 	Thanks.Apply()
 end)

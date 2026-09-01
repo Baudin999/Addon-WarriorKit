@@ -162,6 +162,11 @@ ns.Register({
 		-- The addon's body size, which is what every tooltip in it was drawn at
 		-- before this was a number anybody could move.
 		tipFont = ns.UI.Metric.font,
+
+		-- On. Shift to compare gear is what this game has done since the day it
+		-- shipped, and the addon drawing its own tooltip is the only reason it
+		-- ever stopped. A default of off would be shipping the bug.
+		tipCompare = true,
 	},
 
 	words = {
@@ -188,6 +193,7 @@ ns.Register({
 		Settings.SetPlace(ns.DefaultFor("tipPlace"))
 		Settings.SetLinger(ns.DefaultFor("tipLinger"))
 		Settings.SetTipFont(ns.DefaultFor("tipFont"))
+		Settings.SetCompare(ns.DefaultFor("tipCompare"))
 		Settings.ResetAnchor()
 	end,
 
@@ -242,6 +248,11 @@ ns.Register({
 
 		ui.Size("text", fontLow, fontHigh, 1, Settings.TipFont, Settings.SetTipFont)
 		ui.Hint("The body size. The title takes a pixel more, so the two stay a pair at every setting.")
+
+		ui.Check("compare gear on shift", Settings.Compare, Settings.SetCompare)
+		ui.Hint("Every item hover, not the bags alone: a quest reward, a dungeon drop, a mail attachment and a link pasted in chat all open the same box. The client's own alwaysCompareItems does it without the key.")
+
+		ui.Reading("holding shift over gear", ns.Compare.Describe)
 
 		ui.Reading("the client's own text", ns.UI.Scan.Describe)
 		ui.Reading("hooked into a hover", ns.Tip.Describe)

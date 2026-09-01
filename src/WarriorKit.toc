@@ -649,7 +649,8 @@ Quests\Feature.lua
 
 # The character sheet, and the loadout page that moved onto it.
 #
-# Worn.lua is what you have on and the two calls that change it, Stats.lua works
+# Worn.lua is what you have on and the two calls that change it, Compare.lua is
+# shift held over a piece of gear anywhere in the addon, Stats.lua works
 # out what the client will not say, which is how often you miss, Skills.lua and
 # Reputation.lua read the two lists the client's own sheet keeps behind tabs,
 # Readout.lua is the column of headed rows those three are drawn in, Paperdoll.lua
@@ -661,6 +662,7 @@ Quests\Feature.lua
 # into, and after Loadouts\Page.lua, which is the last tab. Both are above this
 # line. Core\Attic.lua, where the client's sheet goes, is far above it.
 Character\Worn.lua
+Character\Compare.lua
 Character\Stats.lua
 Character\Skills.lua
 Character\Reputation.lua
@@ -706,8 +708,11 @@ World\Feature.lua
 # with, which is the guard against a wrong id drawing a real but wrong sword.
 # Seen.lua is the ledger: nothing on either client says where a boss stands
 # inside an instance, so a mark is written the first time you loot it, and any
-# drop the bake did not have goes in beside it. Window.lua draws the three
-# columns, Key.lua holds the key, and Feature.lua last, as everywhere else.
+# drop the bake did not have goes in beside it. Here.lua is which dungeon you
+# are standing in, off the map id the client hands back, which is what opens the
+# window on the place you are in rather than on the shelf. Window.lua draws the
+# three columns, Key.lua holds the key, and Feature.lua last, as everywhere
+# else.
 #
 # After Quests, whose window this one is deliberately shaped like, and after the
 # UI layer, which is what it is built out of. UI\Chart.lua, the picture in the
@@ -719,6 +724,7 @@ Dungeons\Art.lua
 Dungeons\Places.lua
 Dungeons\Loot.lua
 Dungeons\Seen.lua
+Dungeons\Here.lua
 Dungeons\Shelf.lua
 Dungeons\Window.lua
 Dungeons\Key.lua

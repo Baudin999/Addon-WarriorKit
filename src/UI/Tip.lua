@@ -53,6 +53,14 @@ local UI = ns.UI
 -- suppress another source. The extension point is deliberately narrow: a part
 -- that could rewrite the whole box is a part that can put the addon back where
 -- it was.
+--
+-- **And one thing does not fit in a band at all.** Shift held over a piece of
+-- gear puts what you are wearing beside what you are pointing at, and that is a
+-- second description of a second object rather than a line about this one. So
+-- it is a second hook with a different shape: Tip.SetCompare takes a function
+-- that answers subjects, each of which is built by Tip.Build the same as any
+-- other, and UI/Tooltip.lua draws them in boxes of their own. See Beside below
+-- and Character/Compare.lua, which is the only part that hands one in.
 --------------------------------------------------------------------------
 
 local Tip = {}
@@ -105,6 +113,40 @@ end
 
 local sources = {}
 local taken = {}
+
+-- What the hover that is up was opened with, so a key going down can redraw it.
+-- See Tip.Again.
+local open
+
+-- What a subject is worth putting a second box beside, handed in by the part
+-- that knows.
+--
+-- **This is a hand-in and not a source, and the difference is the whole shape
+-- of the thing.** A source adds a line to the box. This adds a box: shift held
+-- over a helmet in your bags puts the helmet you are wearing next to it, and
+-- over a ring it puts both of the rings you are wearing. Nothing about that
+-- fits in the extra band. It is a second description of a second thing.
+--
+-- It is one function rather than a list for the reason UI/Tooltip.lua takes one
+-- anchor frame rather than a list: there is one answer to "what would this
+-- replace", it belongs to whichever part of the addon knows about worn gear,
+-- and two parts both answering would put two boxes up that disagree.
+--
+-- And it is handed in rather than reached for, which is the rule this whole
+-- folder is held to. What goes beside a tooltip depends on what you can wear,
+-- what you have on and which key is down, and none of those three is something
+-- a drawing layer is allowed to know. Character/Compare.lua knows all three and
+-- pushes the answer in, the same way Settings/Settings.lua pushes in where the
+-- box goes.
+local compare
+
+-- Handed the subject, answers an array of subjects to draw beside it, or
+-- nothing at all. Answered as whether anything is hooked up, which is the shape
+-- UI.Tooltip.SetAnchor has.
+function Tip.SetCompare(fn)
+	compare = type(fn) == "function" and fn or nil
+	return compare ~= nil
+end
 
 --------------------------------------------------------------------------
 -- Registering
@@ -245,6 +287,38 @@ function Tip.Build(subject)
 	return data
 end
 
+-- The finished descriptions of whatever goes beside this subject, or nil.
+--
+-- Each one is built by Tip.Build, so a compare box is the same three bands in
+-- the same order with the same air between them as the box it sits next to, and
+-- every source that had something to say about the hovered item says it about
+-- the worn one too. That is the whole reason the comparison is a subject rather
+-- than a run of lines: a vendor price on the item under the cursor and none on
+-- the item you are wearing would be two boxes that do not read as a pair.
+--
+-- A subject in the list that builds to nothing is dropped rather than passed
+-- on. UI/Tooltip.lua would skip it anyway; dropping it here means the count the
+-- box reports is the count of boxes and not of attempts.
+local function Beside(subject)
+	if not compare then
+		return nil
+	end
+	local wanted = compare(subject)
+	if type(wanted) ~= "table" or #wanted < 1 then
+		return nil
+	end
+
+	local built
+	for index = 1, #wanted do
+		local data = Tip.Build(wanted[index])
+		if data then
+			built = built or {}
+			built[#built + 1] = data
+		end
+	end
+	return built
+end
+
 --------------------------------------------------------------------------
 -- Putting one up
 --------------------------------------------------------------------------
@@ -263,15 +337,39 @@ end
 -- it as `above`, and for the same reason.
 function Tip.Open(owner, subject, above, place)
 	if type(subject) ~= "table" then
+		open = nil
 		return UI.Tooltip.Show(owner, nil)
 	end
+	-- Held so a modifier pressed while the box is already up can redraw it. See
+	-- Tip.Again below, which is the only reader.
+	open = { owner = owner, subject = subject, above = above, place = place }
 	return UI.Tooltip.Show(owner, Tip.Build(subject), above or subject.above,
-		place or subject.place)
+		place or subject.place, Beside(subject))
+end
+
+-- The same hover again, from nothing but a key going down.
+--
+-- **This is what makes shift comparison work at all.** A comparison is not a
+-- fact about the item, it is a fact about what you are holding down, and that
+-- changes while the box is on screen and the pointer has not moved. There is no
+-- second OnEnter coming, so whoever watches the key asks for the box again and
+-- it is rebuilt from the subject the hover named.
+--
+-- False where nothing is up, which is most of the time and is why the watcher
+-- may call this on every press without asking first.
+function Tip.Again()
+	if not open or not UI.Tooltip.IsShown() then
+		return false
+	end
+	local held = open
+	Tip.Open(held.owner, held.subject, held.above, held.place)
+	return true
 end
 
 -- The pointer left. The box counts itself down rather than going at once; see
 -- UI/Tooltip.lua for why and for what `now` is.
 function Tip.Close(now)
+	open = nil
 	return UI.Tooltip.Close(now)
 end
 

@@ -302,6 +302,64 @@ do
 			:format(passing))
 end
 
+-- And the count in the corner is readable on whatever picture is under it.
+--
+-- The report was a 4 on turtle meat: pale digits, flat, on a pale icon, and
+-- gone. Flat is the role for a surface this addon painted and an item's picture
+-- is not one, so the number takes the rim and the size that lets it carry one.
+-- Both halves are read here rather than in scripts/check.sh alone, because the
+-- gate there proves what the source says and this proves what a square built by
+-- the addon actually drew.
+do
+	local floor = ns.UI.OutlineFloor()
+	-- Every pile but the folded empty one. That square's number is how many
+	-- free slots you have rather than how many of a thing you are carrying, so
+	-- it is drawn in the middle of a square this addon painted and takes the
+	-- flat role: reading it here would be reading a different string against a
+	-- rule written for the corner of an icon.
+	local thin, bare, missing = 0, 0, 0
+	local counted = 0
+	for index = 1, read.shown do
+		local group = read.groups[index]
+		local entries = group.entries
+		for held = 1, #entries do
+			counted = counted + 1
+			if group == empty then
+				break
+			end
+			-- The square first, then the string, then the font: an `and` chain
+			-- read straight into three names would hand back one value and
+			-- leave the size and the flags nil on every square, which is a
+			-- check that fails whatever the addon drew.
+			local square = squares[counted]
+			local tally = square and square.tally
+			local drawnAt, flags
+			if tally then
+				_, drawnAt, flags = tally:GetFont()
+			end
+			if not drawnAt or drawnAt < floor then
+				thin = thin + 1
+			end
+			if not (flags or ""):find("OUTLINE", 1, true) then
+				bare = bare + 1
+			end
+			-- A stack of one draws nothing on purpose, so only the stacks are
+			-- asked to show a number.
+			if (entries[held].count or 1) > 1
+				and (tally and tally:GetText() or "") == "" then
+				missing = missing + 1
+			end
+		end
+	end
+	check(thin == 0,
+		("%d counts are drawn under the %d pixel outline floor, where the rim closes their own digits")
+			:format(thin, floor))
+	check(bare == 0,
+		("%d counts stand on an item's picture with no rim"):format(bare))
+	check(missing == 0,
+		("%d stacks of more than one drew no number at all"):format(missing))
+end
+
 ----------------------------------------------------------------------
 -- A click on one
 --

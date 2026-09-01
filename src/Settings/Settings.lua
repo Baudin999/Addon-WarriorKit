@@ -87,6 +87,7 @@ function Settings.Apply()
 	UI.Tooltip.SetPlace(ns.db.tipPlace)
 	UI.Tooltip.SetLinger(ns.db.tipLinger)
 	UI.Tooltip.SetFont(ns.db.tipFont)
+	ns.Compare.SetEnabled(ns.db.tipCompare)
 	Settings.ApplyAnchor()
 	Settings.LockAnchor()
 	return UI.SetSize(Settings.Snap(ns.db.uiSize))
@@ -280,6 +281,26 @@ end
 
 function Settings.DescribeTipFont()
 	return ("%d px, and the title a pixel over it"):format(Settings.TipFont())
+end
+
+--------------------------------------------------------------------------
+
+-- Whether a hover over gear opens what you are wearing beside it.
+--
+-- Here rather than in Character/, beside the other three answers about what a
+-- hover's box does, because that is what it is: every item hover in the addon
+-- gets it and none of them is the character sheet's. Character/Compare.lua is
+-- the part that knows what a ring is; this is the part that knows the setting
+-- is called tipCompare, and the two do not meet.
+
+function Settings.Compare()
+	return ns.Compare.Enabled()
+end
+
+function Settings.SetCompare(on)
+	ns.db.tipCompare = on and true or false
+	ns.Compare.SetEnabled(ns.db.tipCompare)
+	return ns.db.tipCompare
 end
 
 -- The stops that keep the grid on this screen, as a phrase a note can drop into

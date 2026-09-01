@@ -78,7 +78,23 @@ end
 -- rather than a closure made at the swap, because the swap is on a pass that
 -- runs once a second and a fresh closure a second is garbage the collector has
 -- to walk. It is also what makes "are we already holding it" a comparison.
+--
+-- **Inside a dungeon it opens the other window.** There is no world map of a
+-- dungeon on either of these clients: the 1.15 client has no instance in its
+-- map tree at all, and the 2.5 client has the nodes and ships art for not one
+-- of them, which Dungeons/Places.lua carries in full. So M pressed at the
+-- bottom of Blackrock Depths opened a window that could only draw the continent
+-- overhead, which is the one place you already know you are not.
+--
+-- The adventure guide has the picture. It is drawn from the same tiles
+-- Blizzard's own map used to, it knows which floor you are on, and it puts the
+-- bosses and what they drop down either side of it. That is what M is for
+-- underground. Above ground nothing changes.
 local function Ours()
+	if ns.db.dungeons and ns.DungeonHere.Dungeon() then
+		ns.DungeonWindow.Toggle()
+		return
+	end
 	ns.MapWindow.Toggle()
 end
 

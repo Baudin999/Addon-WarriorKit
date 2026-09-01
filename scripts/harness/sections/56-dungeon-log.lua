@@ -1,6 +1,6 @@
 -- The adventure guide
 --
--- Eleven questions no amount of reading Dungeons/ will answer.
+-- Twelve questions no amount of reading Dungeons/ will answer.
 --
 -- Does the book survive the bake. Dungeons/Baked.lua is generated out of
 -- Questie's databases by a script that runs on a laptop and never in a game, so
@@ -49,6 +49,11 @@
 -- Does looting a boss teach the book a drop it did not have. Questie's Outland
 -- database carries almost no dungeon loot, so for fifteen dungeons this is the
 -- only way the right hand column ever fills in.
+--
+-- Does opening it in a dungeon open it on that dungeon. The join runs from the
+-- map id the client hands back, through the floors Dungeons/Sheets.lua baked,
+-- to a row of the book, and not one step of it is a name: a match on a name
+-- would work on an English client and quietly stop working on any other.
 --
 -- And does Shift-L open it. The key is an override on a plain button, which is
 -- the one shape in this addon that is not proved by anything else: the other
@@ -493,6 +498,39 @@ do
 end
 
 ----------------------------------------------------------------------
+-- Where you are standing
+----------------------------------------------------------------------
+
+do
+	-- The window opened while you are in a dungeon opens on that dungeon, on the
+	-- floor you are on. It is answered off the map id the client hands back and
+	-- never off a name, so this is the whole of what proves the join: 292 is the
+	-- id the bake wrote for the Deadmines' second floor, and nothing in the book
+	-- says "The Deadmines" anywhere along the path from that number to this page.
+	Window.Hide()
+	Window.Back()
+	quests.standing.map = COVE
+	Window.Show()
+	check(Window.Page() == "dungeon",
+		"the guide opened on the shelf while you were standing in a dungeon")
+	check(select(2, Window.Showing()) == "The Deadmines",
+		("the guide landed on %s"):format(tostring(select(2, Window.Showing()))))
+	check((Window.Floor()) == 2,
+		("the guide landed on floor %d of the two"):format((Window.Floor())))
+
+	-- And outdoors it lands on nothing, which is the shelf it has always opened
+	-- on. The map id there is a zone, and a zone is in no dungeon's floors.
+	Window.Hide()
+	Window.Back()
+	quests.standing.map = was
+	Window.Show()
+	check(Window.Page() == "shelf",
+		"the guide landed on a dungeon while you were standing outdoors")
+	Window.Hide()
+	quests.standing.map = DEADMINES
+end
+
+----------------------------------------------------------------------
 -- The key
 ----------------------------------------------------------------------
 
@@ -530,6 +568,16 @@ end
 quests.standing.map = was
 Seen.Forget()
 check((Seen.Count()) == 0, "forgetting the ledger left something behind")
+
+-- The size the picture actually came out, which is the one thing on this page
+-- nothing else reports and the whole of what the window was widened for.
+do
+	Window.Select(VANCLEEF)
+	local _, wide, tall = Window.Drawn()
+	print(("dungeon the map is drawn %d by %d, out of art that is 1002 by 668")
+		:format(wide, tall))
+	Window.Hide()
+end
 
 print(("dungeon %d dungeons, %d bosses, %d drops; %s")
 	:format(places, bosses, drops, Places.Describe()))

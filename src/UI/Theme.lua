@@ -152,6 +152,19 @@ UI.Metric = {
 	font     = 12,
 	small    = 11,
 	heading  = 13,
+	-- The count in the corner of an item square, and the only string in the
+	-- addon that gets its own number. It is read at a glance across a bag of
+	-- eighty four squares rather than looked at, it carries no word to guess
+	-- the digits from, and it stands on a picture the addon did not paint.
+	--
+	-- Fourteen because it is UI.OutlineFloor exactly. Under the floor the
+	-- number takes a shadow, which is one dark corner and leaves a pale 4 on a
+	-- pale icon still half gone; at the floor it can take the rim instead, and
+	-- a rim is dark on every side of every stroke. So this is the smallest size
+	-- at which the count is legible on any icon in the game, which is what it
+	-- has to be. It is also the largest that fits: three digits at fourteen is
+	-- twenty pixels across a twenty seven pixel picture.
+	tally    = 14,
 	-- A chevron or a cross in the glyph face. Two under the body size, because a
 	-- Font Awesome mark fills its em box while a letter of Arial Narrow uses
 	-- about two thirds of one, so matching the numbers would draw an arrow half

@@ -352,6 +352,7 @@ Minimap/Clock.lua:Clock.Reading
 Minimap/Clock.lua:Clock.Update
 Comfort/Vendor.lua:Sweep
 Comfort/Vendor.lua:Tick
+Comfort/Thanks.lua:Tick
 Feeds/Stream.lua:Refresh
 Feeds/Purse.lua:Purse.Line
 Feeds/Purse.lua:Purse.Account
@@ -765,6 +766,149 @@ while IFS= read -r f; do
 		continue
 	fi
 	found=$(awk "$font_roles" "$f")
+	if [ -n "$found" ]; then
+		echo "$found"
+		status=1
+	fi
+done < <(find . -name '*.lua' -type f | sort)
+
+# An outlined string is at least as tall as UI.OutlineFloor.
+#
+# The floor is a size, not a switch. An outline costs a pixel on every stroke
+# whatever the glyph is, so under fourteen the rim closes the hole in a 6 and
+# the waist of an 8 and the two digits stop being different shapes: text asking
+# for a rim below the floor comes out less readable than the flat text it
+# replaced, which is the opposite of what the caller wanted and is invisible in
+# a screenshot until somebody misreads a number.
+#
+# Written down here because the count on a bag square now depends on it. That
+# number is fourteen exactly, and it is fourteen so that it can carry a rim
+# over an item's own picture; a later edit trimming it to thirteen to fit a
+# tighter square would leave the rim on and silently take the legibility the
+# size was bought for. Every outlined string in the addon sits at the floor
+# today, so the gate ships with no allow-list.
+#
+# A size the gate cannot resolve fails. There is no third answer: a call whose
+# size is an expression nobody can follow is a call nobody can say is above the
+# floor, and "probably fine" is how the unnamed default got in.
+outline_floor='
+function depth(s,   i, c, d) {
+	d = 0
+	for (i = 1; i <= length(s); i++) {
+		c = substr(s, i, 1)
+		if (c == "(") d++
+		else if (c == ")") d--
+	}
+	return d
+}
+# The nth argument of the first bracket group, split at the commas that are in
+# that group rather than inside something nested in it.
+function arg(s, n,   i, c, d, out, part) {
+	s = substr(s, index(s, "(") + 1)
+	d = 0
+	part = 1
+	for (i = 1; i <= length(s); i++) {
+		c = substr(s, i, 1)
+		if (c == "(" || c == "{") d++
+		else if (c == ")" || c == "}") {
+			if (d == 0) break
+			d--
+		}
+		if (c == "," && d == 0) {
+			part++
+			continue
+		}
+		if (part == n) out = out c
+	}
+	gsub(/^[\t ]+|[\t ]+$/, "", out)
+	return out
+}
+# The size a call passes, in pixels, or -1 for one nothing here can follow.
+function size(text,   name) {
+	# A call built on the floor itself, or a max with it in, is above the floor
+	# by construction and needs no number read out of it.
+	if (text ~ /OutlineFloor[\t ]*\(/) return floor
+	if (text ~ /^[0-9]+$/) return text + 0
+	name = text
+	sub(/^.*[.]/, "", name)
+	if (name in METRIC) return METRIC[name]
+	if (name in CONST) return CONST[name]
+	return -1
+}
+BEGIN {
+	split(metrics, pairs, ";")
+	for (i in pairs) {
+		c = index(pairs[i], "=")
+		if (c) METRIC[substr(pairs[i], 1, c - 1)] = substr(pairs[i], c + 1) + 0
+	}
+}
+# One pass for the file own constants, because a size is named above the call
+# that passes it as often as it is written into it. A name standing on the
+# floor counts as one of them: Buffs/Nag.lua reads the floor into CAPTION at the
+# head of the file and passes the name, which is the same fact as passing the
+# call and has to resolve the same way.
+NR == FNR {
+	if (match($0, /^[\t ]*local [A-Za-z_][A-Za-z0-9_]*[\t ]*=.*OutlineFloor[\t ]*[(]/)) {
+		name = $0
+		sub(/^[\t ]*local[\t ]*/, "", name)
+		sub(/[\t ]*=.*$/, "", name)
+		CONST[name] = floor
+		next
+	}
+	if (match($0, /^[\t ]*local [A-Za-z_][A-Za-z0-9_]*[\t ]*=[\t ]*[0-9]+([\t ]|$|-)/)) {
+		line = $0
+		sub(/^[\t ]*local[\t ]*/, "", line)
+		name = line
+		sub(/[\t ]*=.*$/, "", name)
+		value = line
+		sub(/^[^=]*=[\t ]*/, "", value)
+		sub(/[^0-9].*$/, "", value)
+		CONST[name] = value + 0
+	}
+	next
+}
+FNR == 1 { pending = "" }
+{
+	if (pending == "") {
+		if ($0 !~ /UI[.](Label|Font)[(]/) next
+		start = FNR
+		pending = $0
+	} else {
+		pending = pending " " $0
+	}
+	if (depth(pending) > 0) next
+	if (pending ~ /UI[.]OUTLINE/) {
+		# UI.Label takes the parent first and UI.Font does not.
+		which = (pending ~ /UI[.]Label[(]/) ? 2 : 1
+		sub(/^.*UI[.](Label|Font)/, "", pending)
+		px = size(arg(pending, which))
+		if (px < 0) {
+			printf "%s:%d: outlined text whose size cannot be read: %s\n", FILENAME, start, arg(pending, which)
+		} else if (px < floor) {
+			printf "%s:%d: outlined text at %d, under the %d pixel outline floor\n", FILENAME, start, px, floor
+		}
+	}
+	pending = ""
+}
+'
+
+# The floor and the metrics the gate resolves names against, read out of the
+# two files that own them rather than repeated here.
+floor_px=$(sed -n 's/^local OUTLINE_FLOOR = \([0-9]*\).*/\1/p' UI/Text.lua)
+metric_px=$(sed -n '/^UI.Metric = {/,/^}/s/^\t\([A-Za-z][A-Za-z0-9]*\) *= *\([0-9]*\),.*/\1=\2;/p' \
+	UI/Theme.lua | tr -d '\n')
+if [ -z "$floor_px" ]; then
+	echo "UI/Text.lua: the outline floor is no longer a number this gate can read"
+	status=1
+fi
+
+while IFS= read -r f; do
+	f="${f#./}"
+	# Where the floor and the three roles are defined.
+	if [ "$f" = "UI/Text.lua" ]; then
+		continue
+	fi
+	found=$(awk -v floor="${floor_px:-14}" -v metrics="$metric_px" "$outline_floor" "$f" "$f")
 	if [ -n "$found" ]; then
 		echo "$found"
 		status=1

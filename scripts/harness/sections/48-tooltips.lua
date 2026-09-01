@@ -363,6 +363,183 @@ do
 	Box.Close(true)
 
 	------------------------------------------------------------------
+	-- What you are wearing, beside what you are pointing at
+	--
+	-- Shift held over a piece of gear is how anybody has decided whether a drop
+	-- is an upgrade since the day this game shipped, and it went quiet the
+	-- moment the addon started drawing its own box: the client's comparison
+	-- lives inside GameTooltip, in two more parchments it fills from its own
+	-- OnUpdate, and none of it is reachable from a box somebody else drew.
+	--
+	-- Five claims, and the fifth is the one no hover can make on its own.
+	--
+	--   Off without the key. A comparison is a fact about what you are holding
+	--   down, not about the item, and a box that always carried one would be
+	--   two boxes on every bag square.
+	--   One slot, one box; two slots, two. A ring is either finger and a
+	--   comparison against one of them is the wrong finger half the time.
+	--   A slot with nothing in it draws nothing, because an empty finger is the
+	--   absence of a comparison rather than one worth reading.
+	--   Nothing you can wear gets none at all.
+	--   The key alone redraws the box. The pointer has not moved and no OnEnter
+	--   is coming, so ns.Tip.Again is the whole of the gesture and it is the
+	--   half that cannot be reached by hovering.
+	------------------------------------------------------------------
+
+	-- Two pieces this character is not wearing, because the hovered item and the
+	-- worn one have to be different objects. A link is the whole item down to
+	-- its enchant, so hovering the helmet already on your head is one object
+	-- seen twice and is dropped on purpose; a fixture that reused the worn
+	-- link would be asserting that case while claiming to assert this one.
+	H.ITEMS["Helm of the Second"] = { id = 4101, classId = 4,
+		equip = "INVTYPE_HEAD", icon = "Interface\\Icons\\Helm", quality = 3 }
+	H.ITEMS["Ring of the Second"] = { id = 4102, classId = 4,
+		equip = "INVTYPE_FINGER", icon = "Interface\\Icons\\Ring", quality = 3 }
+	H.ITEMS["Band of the Third"] = { id = 4103, classId = 4,
+		equip = "INVTYPE_FINGER", icon = "Interface\\Icons\\Ring", quality = 3 }
+
+	local helm = _G.WarriorKitItemLink("Helm of the Second")
+	local ring = _G.WarriorKitItemLink("Ring of the Second")
+	local cloth = _G.WarriorKitItemLink("Linen Cloth")
+
+	-- What the client says about the two pieces already on: the compare box is
+	-- built from the same scan every other item hover is, so a worn slot the
+	-- client has nothing to say about draws nothing at all.
+	H.tooltips.inventory[H.tooltipKey("player", 1)] = {
+		{ "Lionheart Helm" }, { "Head, Plate" },
+	}
+	H.tooltips.inventory[H.tooltipKey("player", 11)] = {
+		{ "Band of the Eternal" }, { "Finger" },
+	}
+	H.tooltips.item[helm] = { { "Helm of the Second" }, { "Head, Plate" } }
+	H.tooltips.item[ring] = { { "Ring of the Second" }, { "Finger" } }
+	H.tooltips.item[cloth] = { { "Linen Cloth" } }
+
+	_G.WarriorKitShift(false)
+	Tip.Open(owner, { kind = "item", link = helm })
+	check(Box.Alongside() == 0,
+		("a hover with no key held opened %d boxes beside it")
+			:format(Box.Alongside()))
+	check(Box.Frame(2) == nil, "a box nobody asked for was handed out anyway")
+
+	-- One worn helmet, one box, and it is the worn one rather than the hovered
+	-- one. Both are called something different on purpose: a compare box that
+	-- echoed the item under the cursor would pass an assertion that only read
+	-- the count.
+	_G.WarriorKitShift(true)
+	Tip.Open(owner, { kind = "item", link = helm })
+	check(Box.Alongside() == 1,
+		("shift over a helmet opened %d boxes beside it rather than one")
+			:format(Box.Alongside()))
+	check(Box.Text(1) == "Helm of the Second",
+		"the main box stopped describing the thing under the cursor: "
+			.. tostring(Box.Text(1)))
+	check(Box.Text(1, 2) == "Lionheart Helm",
+		"the box beside it does not name the helmet you are wearing: "
+			.. tostring(Box.Text(1, 2)))
+	check(Box.IsShown(2), "the compare box was drawn and never shown")
+
+	-- Docked, so the main box is in the bottom right corner and there is no room
+	-- on that side. The comparison goes the other way or it goes off the screen.
+	check(Box.Place() == Box.DOCK, "the scene is not set: the box is not docked")
+	check(ns.Measure(Box.Frame(2), "GetRight") <= ns.Measure(Box.Frame(), "GetLeft") + 1,
+		"the compare box did not open clear of the left edge of the box it belongs to")
+
+	-- The second ring is empty, so a ring still opens one box rather than two.
+	-- This is the claim that says the empty slot is skipped rather than drawn.
+	Tip.Open(owner, { kind = "item", link = ring })
+	check(Box.Alongside() == 1,
+		("a ring with one finger filled opened %d boxes"):format(Box.Alongside()))
+
+	-- Fill the other finger and it is two, which is the whole reason
+	-- Gear.Replaces answers a list.
+	H.worn[12] = _G.WarriorKitItemLink("Band of the Third")
+	H.tooltips.inventory[H.tooltipKey("player", 12)] = {
+		{ "Band of the Third" }, { "Finger" },
+	}
+	Tip.Open(owner, { kind = "item", link = ring })
+	check(Box.Alongside() == 2,
+		("a ring with both fingers filled opened %d boxes rather than two")
+			:format(Box.Alongside()))
+	check(Box.Text(1, 3) == "Band of the Third",
+		"the second compare box does not name the second ring: "
+			.. tostring(Box.Text(1, 3)))
+	check(Box.Text(1, 4) == nil, "a third box was handed out for a second ring")
+
+	-- Nothing you can put on gets nothing, whatever is held down.
+	Tip.Open(owner, { kind = "item", link = cloth })
+	check(Box.Alongside() == 0,
+		("shift over a stack of cloth opened %d boxes"):format(Box.Alongside()))
+
+	-- The one hander, which is the only equip location whose answer depends on
+	-- something other than the item. Both hands where the client says you may
+	-- hold two, the main hand alone where it says you may not, and both again
+	-- where it has no such call: that last one is the fallback and it is the
+	-- generous way round on purpose, because a comparison nobody wanted is a
+	-- box you ignore and one that never appears is a feature that looks broken.
+	H.ITEMS["Blade of the Second"] = { id = 4104, classId = 2,
+		equip = "INVTYPE_WEAPON", icon = "Interface\\Icons\\Sword", quality = 3 }
+	local blade = _G.WarriorKitItemLink("Blade of the Second")
+	local dual = _G.CanDualWield
+
+	_G.CanDualWield = function() return true end
+	check(#ns.Gear.Replaces(blade) == 2,
+		("a one hander offered %d hands to a character who dual wields")
+			:format(#ns.Gear.Replaces(blade)))
+
+	_G.CanDualWield = function() return false end
+	local one = ns.Gear.Replaces(blade)
+	check(#one == 1 and one[1] == ns.Gear.MAINHAND,
+		"a one hander was offered an off hand this character cannot fill")
+
+	_G.CanDualWield = nil
+	check(#ns.Gear.Replaces(blade) == 2,
+		"a client with no such call refused the hand rather than offering it")
+	_G.CanDualWield = dual
+
+	local shield = ns.Gear.Replaces(_G.WarriorKitItemLink("Aegis"))
+	check(#shield == 1 and shield[1] == ns.Gear.OFFHAND,
+		"a shield went somewhere other than the off hand alone")
+	check(#ns.Gear.Replaces(_G.WarriorKitItemLink("Arcanite Reaper")) == 1,
+		"a two hander was offered an off hand three expansions early")
+	check(ns.Gear.Replaces(cloth) == nil, "a stack of cloth was given a slot to go in")
+
+	-- And the gesture itself: the box is already up, the pointer has not moved,
+	-- and the key is the only thing that changed.
+	_G.WarriorKitShift(false)
+	Tip.Open(owner, { kind = "item", link = helm })
+	check(Box.Alongside() == 0, "the scene is not set: something is already beside the box")
+	_G.WarriorKitShift(true)
+	H.fire("MODIFIER_STATE_CHANGED", "LSHIFT", 1)
+	check(Box.Alongside() == 1,
+		"pressing shift over an open box did not open the comparison")
+	check(Box.Text(1) == "Helm of the Second",
+		"redrawing the box lost the thing it was about: " .. tostring(Box.Text(1)))
+
+	_G.WarriorKitShift(false)
+	H.fire("MODIFIER_STATE_CHANGED", "LSHIFT", 0)
+	check(Box.Alongside() == 0, "letting shift go left the comparison on screen")
+
+	-- The switch, which is the addon's own and is not the key. Off, the key does
+	-- nothing at all; the client's own alwaysCompareItems is the answer for a
+	-- player who wants it without holding anything.
+	_G.WarriorKitShift(true)
+	check(ns.Settings.SetCompare(false) == false, "turning the comparison off did not take")
+	Tip.Open(owner, { kind = "item", link = helm })
+	check(Box.Alongside() == 0, "the comparison is switched off and still opened a box")
+	ns.Settings.SetCompare(true)
+	Tip.Open(owner, { kind = "item", link = helm })
+	check(Box.Alongside() == 1, "turning the comparison back on did not bring it back")
+	_G.WarriorKitShift(false)
+
+	H.worn[12] = nil
+	H.tooltips.inventory[H.tooltipKey("player", 1)] = nil
+	H.tooltips.inventory[H.tooltipKey("player", 11)] = nil
+	H.tooltips.inventory[H.tooltipKey("player", 12)] = nil
+	H.tooltips.item[helm], H.tooltips.item[ring], H.tooltips.item[cloth] = nil, nil, nil
+	Box.Close(true)
+
+	------------------------------------------------------------------
 	-- How long it stays
 	--
 	-- Leaving a thing starts a countdown; it does not take the box down. Every
@@ -520,4 +697,5 @@ do
 	print(("tips   %s after you look away, body %d px and title %d px, %s")
 		:format(ns.Settings.LingerLabel(Box.Linger()), Box.Font(),
 			Box.Font() + (M.heading - M.font), ns.Settings.DescribePlace()))
+	print("tips   " .. ns.Compare.Describe())
 end

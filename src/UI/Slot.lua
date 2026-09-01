@@ -191,7 +191,16 @@ function UI.Dress(square, size)
 	square.art:SetPoint("TOPLEFT", UI.SLOT_INSET, -UI.SLOT_INSET)
 	square.art:SetPoint("BOTTOMRIGHT", -UI.SLOT_INSET, UI.SLOT_INSET)
 
-	square.tally = UI.Label(square, M.small, C.text, "RIGHT", UI.FLAT)
+	-- Outlined, not flat. The count lands on the item's own picture, which is
+	-- art this addon did not paint and cannot predict: a 4 on turtle meat was
+	-- pale text on a pale icon and it disappeared. This square was reading the
+	-- first of UI/Text.lua's three roles, which is the one for a surface whose
+	-- colour the palette knows.
+	--
+	-- The rim rather than the shadow, and M.tally is sized to buy it: a shadow
+	-- is dark on one corner, and an icon that is bright on that corner takes
+	-- the number back. Blizzard outlines this same number for this same reason.
+	square.tally = UI.Label(square, M.tally, C.text, "RIGHT", UI.OUTLINE)
 	square.tally:SetPoint("BOTTOMRIGHT", -3, 3)
 	UI.Wrap(square.tally, false)
 

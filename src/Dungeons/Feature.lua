@@ -2,8 +2,8 @@ local ADDON, ns = ...
 
 -- Everything Core and the panel need to know about the adventure guide.
 -- Book.lua, Baked.lua, Sheets.lua, Art.lua, Places.lua, Loot.lua, Seen.lua,
--- Shelf.lua, Window.lua and Key.lua hold the behaviour, and this is the only
--- file in the folder that names anything outside it.
+-- Here.lua, Shelf.lua, Window.lua and Key.lua hold the behaviour, and this is
+-- the only file in the folder that names anything outside it.
 
 local function SetDungeons(value)
 	ns.db.dungeons = value
@@ -46,6 +46,8 @@ local function DungeonWord(arg, rawArg)
 		ns.Print(ns.DungeonShelf.Describe() .. ".")
 	elseif word == "seen" then
 		ns.Print(ns.DungeonSeen.Describe() .. ".")
+	elseif word == "here" then
+		ns.Print(ns.DungeonHere.Describe() .. ".")
 	elseif word == "forget" then
 		ns.DungeonSeen.Forget()
 		ns.Print("every boss position and every drop you had seen is gone.")
@@ -59,7 +61,7 @@ local function DungeonWord(arg, rawArg)
 		end
 		ns.DungeonWindow.Toggle()
 	else
-		ns.Print("dungeons takes on, off, key, book, maps, shelf, seen or forget.")
+		ns.Print("dungeons takes on, off, key, book, maps, shelf, seen, here or forget.")
 	end
 	return rawArg
 end
@@ -111,6 +113,7 @@ ns.Register({
 		"dungeons maps, whether this client has a map for each dungeon",
 		"dungeons shelf, whether this client has a picture for each dungeon",
 		"dungeons seen, how much the ledger has learned from your own runs",
+		"dungeons here, which dungeon the window would open on where you stand",
 		"dungeons forget, throw the ledger away",
 	},
 
@@ -141,7 +144,7 @@ ns.Register({
 				end
 			end,
 			function() ns.DungeonKey.Bind("") end)
-		ui.Hint("Shift-L out of the box. It is an override, so whatever you had on the key is still in your bindings file and comes back the moment this is unbound.")
+		ui.Hint("Shift-L out of the box, and an override, so whatever you had on the key comes back the moment this is unbound. The map key opens this window too, on the dungeon you are standing in.")
 		ui.Action(function() return "forget every boss you have placed" end,
 			function() ns.DungeonSeen.Forget() end)
 		ui.Hint("The marks on the map are where you were standing when you looted each boss, because nothing on either client will say where a boss stands. Forget them and they are learned again on your next run.")
@@ -149,6 +152,7 @@ ns.Register({
 		ui.Reading("the dungeon maps", ns.DungeonPlaces.Describe)
 		ui.Reading("the shelf", ns.DungeonShelf.Describe)
 		ui.Reading("what your own runs have added", ns.DungeonSeen.Describe)
+		ui.Reading("where you are standing", ns.DungeonHere.Describe)
 		ui.Reading("the drops on the boss you are reading", ns.DungeonLoot.Describe)
 		ui.Reading("the key", ns.DungeonKey.Describe)
 		ui.Reading("this window", ns.DungeonWindow.Describe)

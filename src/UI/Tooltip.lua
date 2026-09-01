@@ -17,10 +17,16 @@ local C, M = UI.Color, UI.Metric
 -- So this is the addon's own. Same palette, same metrics, same font cache,
 -- same pixel grid. Nothing in it is a template and nothing in it is an asset.
 --
--- **One tooltip, not one per owner.** At most one is on screen at a time, so
--- there is one frame with a pool of lines in it, refilled on every open. A
--- tooltip per hoverable row would be a frame and a dozen font strings per row
--- in a feed that holds four hundred of them.
+-- **One tooltip, not one per owner.** A hover puts up one box, so there is one
+-- frame with a pool of lines in it, refilled on every open. A tooltip per
+-- hoverable row would be a frame and a dozen font strings per row in a feed
+-- that holds four hundred of them.
+--
+-- A gear comparison is the one hover that needs more than one box, and it is
+-- still not one per owner: it is a small pool of the same box, hung off the
+-- side of the first, built by the same code and filled from the same data
+-- shape. That is why a box is a value in this file rather than a set of
+-- locals. See NewBox, and see `alongside` on Tooltip.Show.
 --
 -- **It is one size, and that size is the addon's.** Every box this file draws
 -- comes out at UI.WindowZoom, whatever it was opened on.
@@ -151,7 +157,37 @@ UI.Tooltip = Tooltip
 -- be produced by accident at a call site that meant something else.
 Tooltip.CURSOR = {}
 
-local frame, shadow, rule
+-- One box, as a value.
+--
+-- **The frame and everything measured on it used to be file locals**, because
+-- there was one box and a second one was not a thing that could happen. Gear
+-- comparison is that thing: shift held over an item puts what you are wearing
+-- beside what you are pointing at, and a ring is two boxes rather than one.
+--
+-- So a box is a table now and every function below takes one. Nothing else
+-- changed and that is the point of doing it this way: the box beside the box is
+-- drawn by the same code, in the same chrome, off the same data shape, and
+-- there is no second implementation to keep in step with the first.
+--
+--   frame, shadow, rule   the widgets
+--   rows                  the pooled lines, never freed
+--   count, widest, titled what the last open put in it
+--   zoom                  the size that open drew at, per box because a box
+--                         made after the slider moved has not been through
+--                         Match yet
+local function NewBox()
+	return { rows = {}, count = 0, widest = 0, titled = false, zoom = 1 }
+end
+
+-- The box under the cursor, and the ones alongside it.
+--
+-- `besides` is a pool and `beside` is how many of it are up. Two is the most
+-- the game can ask for, a ring or a trinket against the pair you are wearing,
+-- and the pool is never trimmed for the reason the row pool is not: a frame
+-- that has been built once costs nothing to leave hidden.
+local main
+local besides = {}
+local beside = 0
 local opened
 local raised = false
 -- The placement the open box asked for, or nil for one that took the setting.
@@ -159,11 +195,9 @@ local raised = false
 -- up, and re-anchoring it has to put it back where the hover wanted it rather
 -- than where the slider now points.
 local wanted
-local rows = {}
-local count = 0
-local widest = 0
-local titled = false
-local zoom = 1
+-- Which way the last open grew, so a re-anchor from the settings window puts
+-- the compare boxes back on the side the main box left them room on.
+local away = true
 
 -- Where the box opens, which is one of three answers. Held here rather than
 -- read out of ns.db for the reason UI.Size is: this layer is not allowed to
@@ -262,8 +296,8 @@ end
 -- nothing, and twenty font strings is what one hover of an epic costs.
 --------------------------------------------------------------------------
 
-local function Row(index)
-	local row = rows[index]
+local function Row(box, index)
+	local row = box.rows[index]
 	if row then
 		return row
 	end
@@ -275,11 +309,11 @@ local function Row(index)
 	-- that has been opened at 2x and then at 1x would otherwise be carrying an
 	-- anchor from each.
 	row = {}
-	row.left = UI.Label(frame, BODY, C.text, "LEFT", UI.FLAT)
+	row.left = UI.Label(box.frame, BODY, C.text, "LEFT", UI.FLAT)
 	UI.Wrap(row.left, true)
-	row.right = UI.Label(frame, BODY, C.text, "RIGHT", UI.FLAT)
+	row.right = UI.Label(box.frame, BODY, C.text, "RIGHT", UI.FLAT)
 
-	rows[index] = row
+	box.rows[index] = row
 	return row
 end
 
@@ -287,9 +321,9 @@ end
 -- as three numbers because half of them come out of the scanner that way, and
 -- a table built per line to carry them would be garbage on a path that already
 -- builds a formatted string or two.
-local function Add(size, left, lr, lg, lb, right, rr, rg, rb)
-	count = count + 1
-	local row = Row(count)
+local function Add(box, size, left, lr, lg, lb, right, rr, rg, rb)
+	box.count = box.count + 1
+	local row = Row(box, box.count)
 
 	local font = UI.Font(size, UI.FLAT)
 	row.left:SetFontObject(font)
@@ -318,8 +352,8 @@ local function Add(size, left, lr, lg, lb, right, rr, rg, rb)
 	if right then
 		row.natural = row.natural + COLUMN + (row.right:GetStringWidth() or 0)
 	end
-	if row.natural > widest then
-		widest = row.natural
+	if row.natural > box.widest then
+		box.widest = row.natural
 	end
 	return row
 end
@@ -330,9 +364,9 @@ end
 -- height to say nothing and made the gap between two groups taller than either
 -- group's own line spacing. A spacer carries no text and no width, so it
 -- widens nothing and reads as the pause it is.
-local function Spacer()
-	count = count + 1
-	local row = Row(count)
+local function Spacer(box)
+	box.count = box.count + 1
+	local row = Row(box, box.count)
 	row.left:SetText("")
 	row.left:SetWidth(0)
 	row.left:Hide()
@@ -351,17 +385,17 @@ end
 --
 -- False where there is nothing to draw, so the caller's own title stands
 -- instead of a box with nothing in it.
-local function ScanText(lines)
+local function ScanText(box, lines)
 	if type(lines) ~= "table" or #lines < 1 then
 		return false
 	end
 	for index = 1, #lines do
 		local line = lines[index]
-		Add(index == 1 and TITLE or BODY,
+		Add(box, index == 1 and TITLE or BODY,
 			line[1] or "", line[2] or C.text[1], line[3] or C.text[2], line[4] or C.text[3],
 			line[5], line[6], line[7], line[8])
 		if index == 1 then
-			titled = true
+			box.titled = true
 		end
 	end
 	return true
@@ -408,30 +442,30 @@ end
 -- things, and a footnote you have read four hundred times is not a footnote any
 -- more. A tooltip says what the thing under the cursor is. Where the settings
 -- are is what the settings window is for.
-local function Line(spec)
+local function Line(box, spec)
 	if spec.blank then
-		return Spacer()
+		return Spacer(box)
 	end
 
 	local color = spec.color or (spec[2] and C.dim) or C.text
 	if spec[2] == nil then
-		return Add(BODY, spec[1] or "", color[1], color[2], color[3])
+		return Add(box, BODY, spec[1] or "", color[1], color[2], color[3])
 	end
 
 	local tone = spec.tone or C.text
-	return Add(BODY, spec[1] or "", color[1], color[2], color[3],
+	return Add(box, BODY, spec[1] or "", color[1], color[2], color[3],
 		spec[2], tone[1], tone[2], tone[3])
 end
 
-local function Render(data)
-	if not ScanText(data.scan) and data.title then
+local function Render(box, data)
+	if not ScanText(box, data.scan) and data.title then
 		local color = data.color or C.heading
-		titled = true
-		Add(TITLE, data.title, color[1], color[2], color[3])
+		box.titled = true
+		Add(box, TITLE, data.title, color[1], color[2], color[3])
 	end
 
 	for index = 1, #data do
-		Line(data[index])
+		Line(box, data[index])
 	end
 end
 
@@ -439,42 +473,79 @@ end
 -- Putting it on screen
 --------------------------------------------------------------------------
 
-local function Build()
-	frame = CreateFrame("Frame", FRAME_NAME, UIParent)
+-- The current zoom, asked for rather than remembered, because a box built after
+-- the slider moved has to arrive at the size the boxes beside it are already
+-- drawn at.
+local function Wanted()
+	return (UI.WindowZoom and UI.WindowZoom()) or 1
+end
+
+-- One box built. `name` is nil for every box but the first: a frame's own name
+-- is only load bearing on the hidden scanner in UI/Scan.lua, whose lines are
+-- reachable as globals built from it, and none of these is that. The main box
+-- keeps a name anyway because other addons and a player typing /framestack look
+-- for it.
+local function Build(name)
+	local box = NewBox()
+	box.zoom = Wanted()
+
+	local frame = CreateFrame("Frame", name, UIParent)
 	-- Above everything the addon draws and above the world, which is what a
 	-- tooltip is for. TOOLTIP is the client's own name for that layer and
 	-- Blizzard's own sits on it, so this lands beside it rather than under it.
 	frame:SetFrameStrata("TOOLTIP")
 	frame:SetClampedToScreen(true)
 	frame:Hide()
+	box.frame = frame
 
-	UI.Adopt(frame, zoom)
+	UI.Adopt(frame, box.zoom)
 
 	-- Drawn before the background and one sublevel under it, so what shows is
 	-- the two units of it that stick out past the bottom and the right. A
 	-- tooltip floats over whatever it was opened on top of and needs to look
 	-- like it does; every other surface in the addon sits in a window and does
 	-- not.
-	shadow = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-	shadow:SetColorTexture(C.shadow[1], C.shadow[2], C.shadow[3], C.shadow[4])
-	shadow:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, -2)
-	shadow:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 2, -2)
+	box.shadow = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
+	box.shadow:SetColorTexture(C.shadow[1], C.shadow[2], C.shadow[3], C.shadow[4])
+	box.shadow:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, -2)
+	box.shadow:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 2, -2)
 
 	frame.bg = ns.Fill(frame, "BACKGROUND", C.window[1], C.window[2], C.window[3], 1)
 	frame.bg:SetAllPoints()
 	frame.edges = ns.Outline(frame, C.edge[1], C.edge[2], C.edge[3], C.edge[4])
 	ns.EdgeSize(frame.edges, ns.Pixel(frame))
 
-	rule = UI.Rule(frame, C.hairline)
-	rule:Hide()
+	box.rule = UI.Rule(frame, C.hairline)
+	box.rule:Hide()
+	return box
 end
 
 -- The hairlines, which are the one part of this box measured in physical pixels
 -- rather than in units. One physical pixel is 1/zoom units, so both of them
 -- have to be rewritten whenever the zoom moves under the frame.
-local function Hairlines()
-	ns.EdgeSize(frame.edges, ns.Pixel(frame))
-	rule:SetHeight(ns.Pixel(frame))
+local function Hairlines(box)
+	ns.EdgeSize(box.frame.edges, ns.Pixel(box.frame))
+	box.rule:SetHeight(ns.Pixel(box.frame))
+end
+
+-- Every box that has been built, whether or not it is up. Walked by the two
+-- things that are the frame's business rather than the open's: the rescale and
+-- the close.
+local function Each(fn)
+	if not main then
+		return
+	end
+	fn(main)
+	for index = 1, #besides do
+		fn(besides[index])
+	end
+end
+
+-- Named rather than written as a closure at the two call sites, because one of
+-- them is Tooltip.Sweep and a ticker may not allocate. See the gate in
+-- scripts/check.sh.
+local function Hide(box)
+	box.frame:Hide()
 end
 
 -- Take the addon's own size, which is what every window is drawn at and now
@@ -485,14 +556,14 @@ end
 -- Nothing about the owner reaches it any more, which is the whole change: the
 -- argument is gone rather than accepted and ignored, so a reader cannot come
 -- away thinking the box still measures the thing it is describing.
-local function Match()
-	local want = (UI.WindowZoom and UI.WindowZoom()) or 1
-	if want == zoom then
+local function Match(box)
+	local want = Wanted()
+	if want == box.zoom then
 		return false
 	end
-	zoom = want
-	UI.Rezoom(frame, want)
-	Hairlines()
+	box.zoom = want
+	UI.Rezoom(box.frame, want)
+	Hairlines(box)
 	return true
 end
 
@@ -532,23 +603,24 @@ end
 -- False where the client will not say where the pointer is. The caller then
 -- puts the box in the middle of the screen rather than drawing nothing, because
 -- a box in the wrong place still says what the mob is.
-local function AtCursor()
+local function AtCursor(box)
 	local x, y = CursorPixels()
-	local scale = frame:GetEffectiveScale()
+	local scale = box.frame:GetEffectiveScale()
 	if not x or not scale or scale == 0 then
-		return false
+		return nil
 	end
 
 	local centre = UIParent:GetWidth() * UIParent:GetEffectiveScale() / 2
 	local ox, oy = x / scale, y / scale
+	local far = x > centre
 
-	frame:ClearAllPoints()
-	if x > centre then
-		frame:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", ox - POINTER, oy - POINTER)
+	box.frame:ClearAllPoints()
+	if far then
+		box.frame:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", ox - POINTER, oy - POINTER)
 	else
-		frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", ox + POINTER, oy - POINTER)
+		box.frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", ox + POINTER, oy - POINTER)
 	end
-	return true
+	return far
 end
 
 -- A distance the client measured, in the units this frame's anchors are read
@@ -563,8 +635,8 @@ end
 -- not a whole number of pixels puts the box's own hairline border half on a
 -- pixel and half off. UI.Round is the second conversion, and it costs at most
 -- half a pixel of a clearance that is measured in tens.
-local function Units(value)
-	return UI.Round(frame, UI.Convert(value, UIParent, frame))
+local function Units(box, value)
+	return UI.Round(box.frame, UI.Convert(value, UIParent, box.frame))
 end
 
 -- The corner, which is the one anchor that does not care what was hovered.
@@ -573,11 +645,12 @@ end
 -- the box is a place on the screen you look at rather than a label on the thing
 -- under the cursor. That is the whole of what docking buys, and it is why the
 -- owner is not an argument here.
-local function Dock()
+local function Dock(box)
 	local x = (tonumber(CONTAINER_OFFSET_X) or DOCK_X) + DOCK
 	local y = tonumber(CONTAINER_OFFSET_Y) or DOCK_Y
-	frame:ClearAllPoints()
-	frame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -Units(x), Units(y))
+	box.frame:ClearAllPoints()
+	box.frame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT",
+		-Units(box, x), Units(box, y))
 end
 
 -- The corner you put there yourself.
@@ -603,7 +676,7 @@ end
 -- conversion would pick the right corner at one UI scale and the wrong one at
 -- the next. The anchor itself needs no conversion at all, because SetPoint
 -- reads an offset of zero the same way at every scale.
-local function Middle()
+local function Middle(box)
 	local left = ns.Measure(UIParent, "GetLeft")
 	local right = ns.Measure(UIParent, "GetRight")
 	local top = ns.Measure(UIParent, "GetTop")
@@ -611,27 +684,27 @@ local function Middle()
 	if not left or not right or not top or not bottom then
 		return nil, nil
 	end
-	return UI.Convert((left + right) / 2, UIParent, frame),
-		UI.Convert((top + bottom) / 2, UIParent, frame)
+	return UI.Convert((left + right) / 2, UIParent, box.frame),
+		UI.Convert((top + bottom) / 2, UIParent, box.frame)
 end
 
-local function Marked()
+local function Marked(box)
 	local left = ns.Measure(marker, "GetLeft")
 	local right = ns.Measure(marker, "GetRight")
 	local top = ns.Measure(marker, "GetTop")
 	local bottom = ns.Measure(marker, "GetBottom")
-	local midX, midY = Middle()
+	local midX, midY = Middle(box)
 	if not left or not right or not top or not bottom or not midX then
-		return false
+		return nil
 	end
 
-	local far = UI.Convert((left + right) / 2, marker, frame) > midX
-	local high = UI.Convert((top + bottom) / 2, marker, frame) > midY
+	local far = UI.Convert((left + right) / 2, marker, box.frame) > midX
+	local high = UI.Convert((top + bottom) / 2, marker, box.frame) > midY
 	local corner = (high and "TOP" or "BOTTOM") .. (far and "RIGHT" or "LEFT")
 
-	frame:ClearAllPoints()
-	frame:SetPoint(corner, marker, corner, 0, 0)
-	return true
+	box.frame:ClearAllPoints()
+	box.frame:SetPoint(corner, marker, corner, 0, 0)
+	return far
 end
 
 -- Which side of the owner it opens on, and which corner of itself it hangs
@@ -665,42 +738,73 @@ end
 -- setting.** See the override above. A word this file does not know falls
 -- through to the setting, for the reason SetPlace takes one: the caller is
 -- allowed to be wrong without costing the player a tooltip.
-local function Anchor(owner, above, where)
+-- **And it answers which way the box grew**, which is a side rather than a
+-- placement: true where the box ended up on the right of the screen and threw
+-- itself left, false where it went the other way. That is the one thing a box
+-- alongside this one has to know, and every branch below has already worked it
+-- out for its own reasons. Answering it is cheaper and steadier than measuring
+-- the frame afterwards, which on the open that built it has not been laid out
+-- yet and reads nil.
+local function Anchor(box, owner, above, where)
 	where = PLACES[where] and where or place
 
-	if where == Tooltip.ANCHOR and marker and Marked() then
-		return
+	if where == Tooltip.ANCHOR and marker then
+		local far = Marked(box)
+		if far ~= nil then
+			return far
+		end
 	end
 
 	if where ~= Tooltip.BESIDE then
-		Dock()
-		return
+		Dock(box)
+		-- The corner the client keeps its tooltip in is the bottom right one,
+		-- so there is no room on that side and never a reading to take.
+		return true
 	end
 
 	if owner == Tooltip.CURSOR then
-		if not AtCursor() then
-			frame:ClearAllPoints()
-			frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+		local far = AtCursor(box)
+		if far == nil then
+			box.frame:ClearAllPoints()
+			box.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+			return true
 		end
-		return
+		return far
 	end
 
 	local centre = UIParent:GetWidth() / 2
 	local left = ns.Measure(owner, "GetLeft")
 	local right = ns.Measure(owner, "GetRight")
-	local far = left and right and (left + right) / 2 > centre
+	local far = (left and right and (left + right) / 2 > centre) and true or false
 
-	frame:ClearAllPoints()
+	box.frame:ClearAllPoints()
 	if above then
 		if far then
-			frame:SetPoint("BOTTOMRIGHT", owner, "TOPRIGHT", 0, OFFSET)
+			box.frame:SetPoint("BOTTOMRIGHT", owner, "TOPRIGHT", 0, OFFSET)
 		else
-			frame:SetPoint("BOTTOMLEFT", owner, "TOPLEFT", 0, OFFSET)
+			box.frame:SetPoint("BOTTOMLEFT", owner, "TOPLEFT", 0, OFFSET)
 		end
 	elseif far then
-		frame:SetPoint("TOPRIGHT", owner, "TOPLEFT", -OFFSET, 0)
+		box.frame:SetPoint("TOPRIGHT", owner, "TOPLEFT", -OFFSET, 0)
 	else
-		frame:SetPoint("TOPLEFT", owner, "TOPRIGHT", OFFSET, 0)
+		box.frame:SetPoint("TOPLEFT", owner, "TOPRIGHT", OFFSET, 0)
+	end
+	return far
+end
+
+-- One compare box hung off the one before it, on the side the main box left
+-- room on.
+--
+-- The tops are flush rather than the bottoms. Two item tooltips are rarely the
+-- same height, and what you are reading across is the first few lines of each:
+-- the name, the type, the armour. Aligning the bottoms would put those lines at
+-- different heights and make the pair harder to read than either alone.
+local function Alongside(box, previous, far)
+	box.frame:ClearAllPoints()
+	if far then
+		box.frame:SetPoint("TOPRIGHT", previous.frame, "TOPLEFT", -OFFSET, 0)
+	else
+		box.frame:SetPoint("TOPLEFT", previous.frame, "TOPRIGHT", OFFSET, 0)
 	end
 end
 
@@ -709,16 +813,17 @@ end
 -- Add recorded what its line wants and kept the widest. This decides the box
 -- from that, then gives every line the width it now has and asks how tall it
 -- came out.
-local function Layout()
-	local content = widest
+local function Layout(box)
+	local frame = box.frame
+	local content = box.widest
 	if content > MAX then
 		content = MAX
 	end
 	content = UI.Round(frame, content)
 
 	local y = PAD
-	for index = 1, count do
-		local row = rows[index]
+	for index = 1, box.count do
+		local row = box.rows[index]
 		local height
 		if row.spacer then
 			height = SPACER
@@ -741,13 +846,13 @@ local function Layout()
 		end
 
 		y = y + height
-		if index == 1 and titled and count > 1 then
-			rule:ClearAllPoints()
-			rule:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(y + RULE))
-			rule:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -(y + RULE))
-			rule:Show()
+		if index == 1 and box.titled and box.count > 1 then
+			box.rule:ClearAllPoints()
+			box.rule:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(y + RULE))
+			box.rule:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -(y + RULE))
+			box.rule:Show()
 			y = y + RULE * 2 + ns.Pixel(frame)
-		elseif index < count and not row.spacer then
+		elseif index < box.count and not row.spacer then
 			y = y + GAP
 		end
 	end
@@ -760,15 +865,59 @@ end
 -- that has to be rebuilt costs a frame. They do not keep their anchors: a row
 -- the next tooltip does not use would otherwise sit hidden at a position from a
 -- box that is gone, at whatever zoom that box was drawn at.
-local function Reset()
-	for index = 1, count do
-		rows[index].left:Hide()
-		rows[index].left:ClearAllPoints()
-		rows[index].right:Hide()
-		rows[index].right:ClearAllPoints()
+local function Reset(box)
+	for index = 1, box.count do
+		box.rows[index].left:Hide()
+		box.rows[index].left:ClearAllPoints()
+		box.rows[index].right:Hide()
+		box.rows[index].right:ClearAllPoints()
 	end
-	count, widest, titled = 0, 0, false
-	rule:Hide()
+	box.count, box.widest, box.titled = 0, 0, false
+	box.rule:Hide()
+end
+
+-- One box filled from one description, measured and sized, and whether anything
+-- went in it.
+--
+-- Nothing is anchored here and nothing is shown. Where a box goes depends on
+-- how tall it came out and on where the box before it landed, so the placement
+-- is the caller's second pass rather than this one's last line.
+local function Draw(box, data)
+	Reset(box)
+	if type(data) ~= "table" then
+		return false
+	end
+	Match(box)
+	Render(box, data)
+	if box.count == 0 then
+		return false
+	end
+	Layout(box)
+	return true
+end
+
+-- The box that is up, put back where it belongs.
+--
+-- Called when the setting that decides where boxes go moves under one, which
+-- happens more often than it sounds: the control is in the settings window and
+-- has a hover of its own, so the box demonstrating the setting is usually the
+-- one on screen while you change it.
+--
+-- The compare boxes move with it and have to. They hang off the main box's
+-- side, and which side that is comes out of the same reading the main box's own
+-- anchor does, so a box re-anchored from the corner to a marker on the left of
+-- the screen would otherwise leave its comparisons stacked off the wrong edge.
+local function Reanchor()
+	if not main or not main.frame:IsShown() or not opened then
+		return false
+	end
+	away = Anchor(main, opened, raised, wanted)
+	local previous = main
+	for index = 1, beside do
+		Alongside(besides[index], previous, away)
+		previous = besides[index]
+	end
+	return true
 end
 
 -- Open on an owner, from a table describing what to say.
@@ -784,36 +933,63 @@ end
 -- `where` is one of the three placement words, for a hover that knows where its
 -- box belongs better than the setting does. That is every hover over an icon
 -- standing for an object. See the override beside PLACES.
-function Tooltip.Show(owner, data, above, where)
-	if not frame then
-		Build()
+--
+-- `alongside` is an array of further descriptions, each drawn as its own box off
+-- the side of this one. That is the gear comparison and it is the only caller:
+-- what you have on, beside what you are pointing at. A list rather than one
+-- because a ring is two rings and a trinket is two trinkets.
+--
+-- Nothing about it is decided here. Which hovers get one, what goes in one and
+-- how many there are is UI/Tip.lua's business the same way the lines are; all
+-- this file knows is that some boxes have boxes beside them, and that they are
+-- drawn by the same code as the box they sit next to.
+--
+-- A description in that list that comes out empty is skipped rather than drawn
+-- as a blank, which is what an empty worn slot is: nothing to compare against,
+-- and a box the size of its own padding would say so worse than no box does.
+function Tooltip.Show(owner, data, above, where, alongside)
+	if not main then
+		main = Build(FRAME_NAME)
 	end
-	Reset()
 	-- Before anything is drawn and before the refusals below, so a hover that
 	-- describes nothing takes the lingering box down with it rather than
 	-- leaving the last one on screen for another second pointing at this one.
 	Stop()
 
-	if type(data) ~= "table" then
-		frame:Hide()
+	for index = 1, beside do
+		Reset(besides[index])
+		besides[index].frame:Hide()
+	end
+	beside = 0
+
+	if not Draw(main, data) then
+		main.frame:Hide()
 		return false
 	end
 
-	Match()
-	Render(data)
-
-	if count == 0 then
-		frame:Hide()
-		return false
-	end
-
-	Layout()
 	-- After Layout, and it has to be. Above hangs the box's bottom edge off the
 	-- owner's top, so where its top lands is its own height, and its height is
 	-- not known until the lines have been measured and wrapped.
-	Anchor(owner, above, where)
+	away = Anchor(main, owner, above, where)
 	opened, raised, wanted = owner, above, where
-	frame:Show()
+	main.frame:Show()
+
+	if type(alongside) == "table" then
+		local previous = main
+		for index = 1, #alongside do
+			local box = besides[beside + 1]
+			if not box then
+				box = Build(nil)
+				besides[beside + 1] = box
+			end
+			if Draw(box, alongside[index]) then
+				beside = beside + 1
+				Alongside(box, previous, away)
+				box.frame:Show()
+				previous = box
+			end
+		end
+	end
 	return true
 end
 
@@ -836,9 +1012,7 @@ function Tooltip.SetPlace(word)
 		return false
 	end
 	place = word
-	if frame and frame:IsShown() and opened then
-		Anchor(opened, raised, wanted)
-	end
+	Reanchor()
 	return true
 end
 
@@ -862,9 +1036,7 @@ end
 -- let go is the caller's business entirely.
 function Tooltip.SetAnchor(frame_)
 	marker = frame_
-	if frame and frame:IsShown() and opened then
-		Anchor(opened, raised, wanted)
-	end
+	Reanchor()
 	return marker ~= nil
 end
 
@@ -960,12 +1132,12 @@ end
 -- linger there is a sentence about a mob in a zone you have left.
 function Tooltip.Close(now)
 	opened, wanted = nil, nil
-	if not frame then
+	if not main then
 		return true
 	end
-	if now or ttl <= 0 or not frame:IsShown() then
+	if now or ttl <= 0 or not main.frame:IsShown() then
 		Stop()
-		frame:Hide()
+		Each(Hide)
 		return true
 	end
 	linger = ttl
@@ -987,9 +1159,7 @@ function Tooltip.Sweep(elapsed)
 	end
 	linger = 0
 	ticker:Hide()
-	if frame then
-		frame:Hide()
-	end
+	Each(Hide)
 	return true
 end
 
@@ -1005,36 +1175,79 @@ end)
 -- out for the reason Owner is: "the tooltip sits above the chip rather than
 -- beside it" is a claim about two rectangles, and there is no answering it from
 -- the outside without one of them.
-function Tooltip.Frame()
-	return frame
+-- **Every reader below takes an optional box.** One is the box under the
+-- cursor and two upwards are the ones beside it, in the order they were drawn,
+-- which is the order the caller listed them in. Absent means one, so every call
+-- written before there was a second box still asks about the box it meant.
+--
+-- A number past what is up answers nil rather than the main box, which is the
+-- whole reason the argument is a number and not a boolean: a section asserting
+-- that a hover put up no comparison has to be able to ask for the second box
+-- and be told there isn't one.
+local function Which(index)
+	if index == nil or index == 1 then
+		return main
+	end
+	if type(index) ~= "number" or index < 1 or index > beside + 1 then
+		return nil
+	end
+	return besides[index - 1]
+end
+
+function Tooltip.Frame(which)
+	local box = Which(which)
+	return box and box.frame or nil
 end
 
 function Tooltip.Owner()
 	return opened
 end
 
-function Tooltip.IsShown()
-	return frame ~= nil and frame:IsShown() and true or false
+function Tooltip.IsShown(which)
+	local box = Which(which)
+	return box ~= nil and box.frame:IsShown() and true or false
+end
+
+-- How many boxes are up beside the one under the cursor. Zero for every hover
+-- in the addon that is not an item you could put on, and the number a gear
+-- comparison actually drew for the ones that are: one for a helmet, two for a
+-- ring, and none at all for a slot you have nothing in.
+function Tooltip.Alongside()
+	return beside
 end
 
 -- What zoom the last open drew at. Handed out for the same reason Owner is:
 -- "the tooltip is the size of the thing it is describing" is the whole of the
 -- fix above and it cannot be asserted from the outside any other way.
-function Tooltip.Zoom()
-	return zoom
+function Tooltip.Zoom(which)
+	local box = Which(which)
+	return box and box.zoom or nil
 end
 
 -- How many lines the last open drew, for scripts/harness.lua and for anything
 -- else that has to prove a hover said something without this file handing out
 -- its pool.
-function Tooltip.Lines()
-	return count
+function Tooltip.Lines(which)
+	local box = Which(which)
+	return box and box.count or 0
 end
 
--- One of those lines, as text. Same reason.
-function Tooltip.Text(index)
-	local row = rows[index]
-	if not row or index > count then
+-- One line of one box, as text. Same reason.
+local function At(index, which)
+	local box = Which(which)
+	if not box then
+		return nil, nil
+	end
+	local row = box.rows[index]
+	if not row or index > box.count then
+		return nil, nil
+	end
+	return row, box
+end
+
+function Tooltip.Text(index, which)
+	local row = At(index, which)
+	if not row then
 		return nil
 	end
 	return row.left:GetText(), row.paired and row.right:GetText() or nil
@@ -1046,9 +1259,9 @@ end
 -- a token count you have not got are drawn in the loss colour, that colour is
 -- the whole of what those two lines say beyond the number, and there is no
 -- reading it from outside without this file handing out its pool.
-function Tooltip.Tone(index)
-	local row = rows[index]
-	if not row or index > count or not row.paired then
+function Tooltip.Tone(index, which)
+	local row = At(index, which)
+	if not row or not row.paired then
 		return nil
 	end
 	return { row.right:GetTextColor() }
@@ -1059,9 +1272,9 @@ end
 -- whole of the fix for a box whose text was smaller than the panel under it,
 -- and reading it off the font string from outside would mean this file handing
 -- out its pool.
-function Tooltip.Size(index)
-	local row = rows[index]
-	if not row or index > count then
+function Tooltip.Size(index, which)
+	local row = At(index, which)
+	if not row then
 		return nil
 	end
 	local _, size = row.left:GetFont()
@@ -1075,7 +1288,5 @@ end
 -- no SetIgnoreParentScale a physical pixel is a fraction of a unit that moves
 -- with the UI scale.
 UI.OnRescale(function()
-	if frame then
-		Hairlines()
-	end
+	Each(Hairlines)
 end)

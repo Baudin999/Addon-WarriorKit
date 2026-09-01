@@ -78,7 +78,26 @@ local Shelf = ns.DungeonShelf
 -- quest log's two scrolling columns make one file across.
 --------------------------------------------------------------------------
 
-local WIDTH, HEIGHT = 860, 540
+-- The window, sized for the picture in the middle of it.
+--
+-- It was 860 by 540, and at that size the two fixed columns and the four
+-- margins took 518 of the width and the map got the 342 that were left. A
+-- dungeon's art is 1002 by 668, so the picture was drawn at a third of the size
+-- it was painted at: a room was about forty pixels across and the numbered mark
+-- standing in it was sixteen. The one thing on the page you cannot read the
+-- answer off in words was the smallest thing on it.
+--
+-- These numbers are what it takes for the map to be 662 wide, which is two
+-- thirds of the art and close to twice what it was. The height is set to just
+-- over what that shape asks for so the wheel still has a notch or two of room
+-- to spend, and Window.Fit does that arithmetic rather than this comment: the
+-- board is handed what is left after the heading, the floor strip and the two
+-- lines of the sentence underneath.
+--
+-- Wider than the quest log at 810 and narrower than the world map at 1218,
+-- which is the right place for it: the quest log's middle column is text, and
+-- the world map draws a zone at the full size Blizzard draws one.
+local WIDTH, HEIGHT = 1180, 660
 
 -- The two fixed columns of the second page, the same numbers the quest log
 -- uses. The middle takes whatever is left, which is the way round it has to be:
@@ -499,6 +518,31 @@ function Window.Open(dungeon)
 	return true
 end
 
+-- Open the dungeon you are standing in, on the floor you are standing on.
+--
+-- A window that opens on the shelf while you are in the Deadmines is a window
+-- asking you which dungeon you are in. The world map has landed on the zone you
+-- are in since it was written and this is the same move, one floor further
+-- down; Dungeons/Here.lua is the part that answers where you are, and it
+-- answers nothing at all outdoors and nothing at all on the vanilla client.
+--
+-- The floor is set after the page is drawn rather than before, because opening
+-- a dungeon selects its first boss and the page then steps to the floor that
+-- boss was looted on. Where you are standing is the better answer of the two,
+-- so it is the one that lands last.
+function Window.Land()
+	local dungeon, floor = ns.DungeonHere.Dungeon()
+	if not dungeon then
+		return false
+	end
+	Window.Open(dungeon)
+	if floor then
+		floorAt = floor
+		Window.PaintMap()
+	end
+	return true
+end
+
 -- Back to the shelf. Nothing about the dungeon is kept, which is deliberate:
 -- coming back to a page you left is a nice thing for a window you leave by
 -- accident, and this one is left on purpose, by a gesture that means "show me
@@ -778,9 +822,15 @@ end
 
 --------------------------------------------------------------------------
 
+-- Landing first, and only painting where nothing was landed on, which is the
+-- shape Map/Window.lua opens in: Window.Land draws the page it lands on, and a
+-- second paint over the top of it would be a dungeon's worth of work to arrive
+-- at the picture already on the screen.
 function Window.Show()
 	Window.Build()
-	Window.Paint()
+	if not Window.Land() then
+		Window.Paint()
+	end
 	window:Show()
 	return true
 end
@@ -933,6 +983,13 @@ events:SetScript("OnEvent", function(_, event)
 		-- and is kept for the one thing that can: a reload with a different
 		-- table under it.
 		Places.Forget()
+		-- The loading screen you have just come through may have been the way
+		-- into a dungeon, and a window left open across one is a window on the
+		-- place you were standing before it. So it lands again, for the reason
+		-- it lands when it opens: the page you want is the one you are in.
+		if Window.Shown() and Window.Land() then
+			return
+		end
 	end
 	Window.Refresh()
 end)

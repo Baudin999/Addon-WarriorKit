@@ -10,6 +10,7 @@
 
 local H = ...
 local state = H.state
+local frames = H.frames
 local events, constant, advance = H.events, H.constant, H.advance
 local JUNK, refill, misused = H.JUNK, H.refill, H.misused
 local GUILD, CORPSE, looted = H.GUILD, H.CORPSE, H.looted
@@ -631,6 +632,18 @@ do
 		fire("COMBAT_LOG_EVENT_UNFILTERED")
 	end
 
+	-- Nothing goes out in the frame the buff lands in. The whisper waits one
+	-- to three seconds, so every count below is read after the clock has been
+	-- moved past the longest of those and the part's own ticker has run.
+	local function deliver()
+		advance(4)
+		for _, f in ipairs(frames) do
+			if f.origin:match("Comfort/Thanks") and f.scripts.OnUpdate then
+				f.scripts.OnUpdate(f, 4)
+			end
+		end
+	end
+
 	local function sentCount()
 		return #chat.sent
 	end
@@ -645,7 +658,19 @@ do
 		chat.sent[index] = nil
 	end
 
+	-- The replay first. Coming out of a loading screen the client hands back
+	-- every buff you are already carrying as a fresh application, caster and
+	-- all, and thanking those people thanks them for something they did before
+	-- you logged out.
 	buffLine(MAGE, "Arcanist", ME)
+	deliver()
+	check(sentCount() == 0,
+		("a login replay whispered %d people"):format(sentCount()))
+	advance(5)
+
+	buffLine(MAGE, "Arcanist", ME)
+	check(sentCount() == 0, "the whisper went out in the same frame as the buff")
+	deliver()
 	check(sentCount() == 1, ("a stranger's buff sent %d whispers, one is right"):format(sentCount()))
 	check(last().text == "ty", ("the whisper said %q"):format(tostring(last().text)))
 	check(last().kind == "WHISPER" and last().target == "Arcanist",
@@ -653,11 +678,13 @@ do
 
 	-- A second buff from the same person inside the window. One kindness.
 	buffLine(MAGE, "Arcanist", ME)
+	deliver()
 	check(sentCount() == 1, "the same stranger was thanked twice for one visit")
 
 	-- Somebody else, in the same window. The throttle is per person, and a
 	-- single gate over everybody would swallow this one.
 	buffLine(PRIEST, "Healgood", ME)
+	deliver()
 	check(sentCount() == 2, "the throttle held against a second stranger as well as the first")
 
 	-- Everything the filter is for. None of these is a stranger being kind.
@@ -667,6 +694,7 @@ do
 	buffLine(PRIEST, "Healgood", "Creature-0-00000c06")
 	buffLine(MAGE, "Arcanist", ME, "DEBUFF")
 	buffLine(MAGE, "Arcanist", ME, "BUFF", "SPELL_AURA_REMOVED")
+	deliver()
 	check(sentCount() == 2, ("%d whispers went to something that is not a stranger's buff")
 		:format(sentCount() - 2))
 
@@ -675,6 +703,7 @@ do
 	group.Set({ { name = "Buffbot", class = "PRIEST", token = "party1" } })
 	fire("GROUP_ROSTER_UPDATE")
 	buffLine(guids.party1, "Buffbot", ME)
+	deliver()
 	check(sentCount() == 2, "somebody in the party was whispered a thank you")
 	group.Forget()
 	fire("GROUP_ROSTER_UPDATE")
@@ -683,6 +712,7 @@ do
 	-- the part is silenced without losing the word you had.
 	ns.db.thankWord = "   "
 	buffLine("Player-0-00000c07", "Shaman", ME)
+	deliver()
 	check(sentCount() == 2, "an empty word still sent a whisper")
 	check(ns.db.thankWord == "   ", "the empty word was overwritten rather than kept")
 	ns.db.thankWord = "ty"
@@ -697,6 +727,7 @@ do
 		("thanks off left %d parts on the combat log and %d were on it")
 			:format(#(events["COMBAT_LOG_EVENT_UNFILTERED"] or {}), readers))
 	buffLine("Player-0-00000c08", "Druid", ME)
+	deliver()
 	check(sentCount() == 2, "thanks off still whispered somebody")
 
 	ns.db.thankStrangers = true
@@ -704,6 +735,7 @@ do
 	check(#(events["COMBAT_LOG_EVENT_UNFILTERED"] or {}) == readers,
 		"thanks back on did not put the part back on the combat log")
 	buffLine("Player-0-00000c08", "Druid", ME)
+	deliver()
 	check(sentCount() == 3, "thanks back on sent nothing")
 
 	print(("chores thanks %s, %d whispers over the run"):format(ns.Thanks.Describe(), sentCount()))

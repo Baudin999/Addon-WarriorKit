@@ -59,6 +59,51 @@ local SLOT_NAMES = {
 	[Gear.OFFHAND] = "SECONDARYHANDSLOT",
 }
 
+-- Where the client would put each kind of thing, by the equip location it
+-- answers for the item.
+--
+-- FITS above asks the question the other way round and about two slots: given a
+-- hand, what may go in it. This asks it about every slot: given an item, which
+-- of the eighteen does it land in. Both are here because both are the same fact
+-- and keeping them in one file is what stops the pair drifting.
+--
+-- **A list, because four of these are two slots.** A ring goes in either
+-- finger, a trinket in either trinket, a one hander in either hand. That is the
+-- whole reason this is not a number: a comparison against one of your two rings
+-- is a comparison against the wrong ring half the time.
+--
+-- INVTYPE_AMMO, INVTYPE_BAG and INVTYPE_QUIVER are deliberately absent. A bag
+-- is worn in a bag slot the client numbers past the ones here, and neither it
+-- nor a stack of arrows has anything to compare: they carry no stats, and the
+-- only question you ask of one is how many it holds.
+local FILLS = {
+	INVTYPE_HEAD            = { 1 },
+	INVTYPE_NECK            = { 2 },
+	INVTYPE_SHOULDER        = { 3 },
+	INVTYPE_BODY            = { 4 },
+	INVTYPE_CHEST           = { 5 },
+	INVTYPE_ROBE            = { 5 },
+	INVTYPE_WAIST           = { 6 },
+	INVTYPE_LEGS            = { 7 },
+	INVTYPE_FEET            = { 8 },
+	INVTYPE_WRIST           = { 9 },
+	INVTYPE_HAND            = { 10 },
+	INVTYPE_FINGER          = { 11, 12 },
+	INVTYPE_TRINKET         = { 13, 14 },
+	INVTYPE_CLOAK           = { 15 },
+	INVTYPE_WEAPON          = { Gear.MAINHAND, Gear.OFFHAND },
+	INVTYPE_2HWEAPON        = { Gear.MAINHAND },
+	INVTYPE_WEAPONMAINHAND  = { Gear.MAINHAND },
+	INVTYPE_WEAPONOFFHAND   = { Gear.OFFHAND },
+	INVTYPE_SHIELD          = { Gear.OFFHAND },
+	INVTYPE_HOLDABLE        = { Gear.OFFHAND },
+	INVTYPE_RANGED          = { 18 },
+	INVTYPE_RANGEDRIGHT     = { 18 },
+	INVTYPE_THROWN          = { 18 },
+	INVTYPE_RELIC           = { 18 },
+	INVTYPE_TABARD          = { 19 },
+}
+
 local LAST_BAG = 4 -- backpack is 0, and neither client has a reagent bag
 
 -- Built on demand and thrown away whenever the bags or the worn gear move,
@@ -70,6 +115,51 @@ local art = {}
 function Gear.Fits(slot, equip)
 	local fits = FITS[slot]
 	return (fits and equip and fits[equip]) and true or false
+end
+
+-- Which worn slots an item link would land in, or nil for something you cannot
+-- put on.
+--
+-- The list is the table above's and is copied rather than handed out, because a
+-- caller that filtered it in place would rewrite what every later caller sees:
+-- a one hander that dropped the off hand once would go on being a main hand
+-- only item for the rest of the session.
+--
+-- **A one hander is two slots only where the client says you may hold two.** A
+-- dagger held up against the wand a mage is carrying is a comparison of two
+-- things that were never going to be in the same hand. CanDualWield is probed
+-- rather than trusted: it is the client's own answer, it reads talents as well
+-- as class, and where it is absent the fallback is to offer the hand anyway.
+-- That way round on purpose, because the cost of the two mistakes is not the
+-- same: a comparison nobody wanted is a box you ignore, and a comparison that
+-- never appears is a feature that looks broken.
+local function CanHoldTwo()
+	local ask = _G.CanDualWield
+	if type(ask) ~= "function" then
+		return true
+	end
+	local ok, answer = pcall(ask)
+	if not ok then
+		return true
+	end
+	return answer and true or false
+end
+
+function Gear.Replaces(link)
+	local _, _, equip = ns.ItemInfo(link)
+	local fills = equip and FILLS[equip]
+	if not fills then
+		return nil
+	end
+
+	local slots = {}
+	for index = 1, #fills do
+		local slot = fills[index]
+		if slot ~= Gear.OFFHAND or equip ~= "INVTYPE_WEAPON" or CanHoldTwo() then
+			slots[#slots + 1] = slot
+		end
+	end
+	return slots
 end
 
 local function Add(slot, list, seen, link, equipped)
