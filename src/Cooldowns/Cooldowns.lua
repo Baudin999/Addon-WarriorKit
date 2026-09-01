@@ -71,6 +71,12 @@ local GCD = 1.5
 local MAX_ROTATION = 7
 local MAX_CLASS = 8
 
+-- And how many you may add yourself, on top of whatever your class brought.
+-- Six, and it is room reserved on screen rather than a target: the squares are
+-- built at the ceiling at login whether you use them or not, so this number is
+-- what the row costs to have the feature at all.
+local MAX_MINE = 6
+
 -- How many of your own aura slots the client will answer for. Forty, the same
 -- number every aura scan in the addon stops at.
 local SLOTS = 40
@@ -152,7 +158,13 @@ local function Resolve(entry)
 	for index = 1, #(entry.spells or NONE) do
 		local id = entry.spells[index]
 		local name = ns.SpellName(id)
-		if name and IsSpellKnown(id) then
+		-- IsSpellKnown is not asked of an entry you added yourself. It answers no
+		-- for a rank you have not trained, for anything an item casts and for a
+		-- few spells it simply does not carry, and a square you typed out by id
+		-- disappearing with nothing said is worse than one that reads ready when
+		-- it should not. What your class file listed is still filtered, because
+		-- that list is somebody else's guess about your character.
+		if name and (entry.mine or IsSpellKnown(id)) then
 			entry.id, entry.name = id, name
 			entry.texture = ns.SpellTexture(id)
 			return
@@ -161,11 +173,137 @@ local function Resolve(entry)
 end
 
 --------------------------------------------------------------------------
+-- The ones you added yourself
+--
+-- A class file is somebody's list of what is worth counting for a spec, and
+-- three things it cannot know: the spell you press on this character and on no
+-- other, the one whoever wrote the file left out, and the one you want counted
+-- for a fight next week and not after. So the row takes entries of your own,
+-- the way the debuff row on an enemy bar does, and they are per character for
+-- the reason the switches are.
+--
+-- An id and nothing else is saved. Which line one of yours draws on is held
+-- with every other entry's line below, because moving Shield Wall to the top
+-- line and moving one of yours there are the same act and two places answering
+-- it is two places to keep in step.
+--------------------------------------------------------------------------
+
+local function MineKey(spellID)
+	return "spell" .. spellID
+end
+
+-- One entry table per spell you added, held rather than rebuilt, so that a
+-- rebuild hands the row the same table it was drawing and not a new one with
+-- no aura state on it.
+local mine = {}
+
+local function MineEntry(spellID)
+	local key = MineKey(spellID)
+	local entry = mine[key]
+	if not entry then
+		entry = { key = key, spells = { spellID }, mine = true }
+		mine[key] = entry
+	end
+	return entry
+end
+
+function Cooldowns.Mine()
+	return ns.dbc.cooldownMine
+end
+
+function Cooldowns.IsMine(key)
+	return mine[key] ~= nil
+end
+
+--------------------------------------------------------------------------
+-- Where a square sits
+--
+-- Two facts about an entry, and both are yours rather than the class file's:
+-- which of the two lines it draws on, and how far along that line it is.
+--
+-- `cooldownLine` holds only what you moved, so an entry you never touched
+-- follows its class file and goes on following it when that file changes its
+-- mind. `cooldownOrder` is the whole row written out as a list of keys, saved
+-- every time anything moves, because what changes when you move a square is
+-- the order of the two either side of it as much as the one you dragged.
+--------------------------------------------------------------------------
+
+local function LineOf(entry, shippedLine)
+	local moved = ns.dbc.cooldownLine[entry.key]
+	if moved == ROTATION or moved == LONG then
+		return moved
+	end
+	return shippedLine
+end
+
+-- Where one key sits in the order you arranged, or nil for one you never
+-- touched.
+local function Rank(key)
+	local saved = ns.dbc.cooldownOrder
+	for index = 1, #saved do
+		if saved[index] == key then
+			return index
+		end
+	end
+	return nil
+end
+
+-- The list in the order the row draws it.
+--
+-- The rotation line first, which is not a preference: Row.lua counts along one
+-- line until the tag changes and starts the other, so an entry out of place
+-- there is a long cooldown drawn at rotation size on the top line.
+--
+-- Inside a line, whatever order you put it in, and everything you never moved
+-- after everything you did, in the order its class file wrote it. That is what
+-- keeps a spell you train tomorrow from landing in the middle of a row you
+-- arranged last week.
+local function Sort(list)
+	local rank, tail = {}, #ns.dbc.cooldownOrder
+	for index = 1, #list do
+		rank[list[index].key] = Rank(list[index].key) or (tail + index)
+	end
+	table.sort(list, function(a, b)
+		if (a.layer == ROTATION) ~= (b.layer == ROTATION) then
+			return a.layer == ROTATION
+		end
+		return rank[a.key] < rank[b.key]
+	end)
+end
+
+-- Write the row down as it stands, so the next sort reproduces it.
+local function Remember(list)
+	local saved = ns.dbc.cooldownOrder
+	wipe(saved)
+	for index = 1, #list do
+		saved[index] = list[index].key
+	end
+end
+
+-- One entry onto the list, on the line you moved it to or the one it shipped
+-- on. A trinket is not resolved here: its name comes off the item in the slot
+-- and Refit is what reads that.
+local function Take(entry, line)
+	entry.layer = LineOf(entry, line)
+	shipped[#shipped + 1] = entry
+	if not entry.slot then
+		Resolve(entry)
+	end
+end
+
+-- Everything about this character's row is decided again from scratch. Called
+-- by anything that adds, drops or moves an entry, and by nothing on a tick.
+local function Reshape()
+	shipped = nil
+	Cooldowns.Rebuild()
+end
+
+--------------------------------------------------------------------------
 -- The list
 --------------------------------------------------------------------------
 
 function Cooldowns.Ceiling()
-	return MAX_ROTATION + MAX_CLASS + #TRINKETS
+	return MAX_ROTATION + MAX_CLASS + #TRINKETS + MAX_MINE
 end
 
 function Cooldowns.Count()
@@ -211,28 +349,204 @@ function Cooldowns.All()
 		("%s puts %d entries on the cooldown row and the cap is %d")
 			:format(ns.Class.Spec.Says(), #long, MAX_CLASS))
 
+	-- Resolved as each one is taken rather than only in Rebuild, because the
+	-- options page is built at login off this list and names its rows with the
+	-- client's own name for each spell. A page built a moment before the first
+	-- rebuild would carry the entry's key instead, and a label is a string the
+	-- page keeps rather than a question it asks again.
 	shipped = {}
 	for index = 1, #fast do
-		shipped[index] = fast[index]
-		shipped[index].layer = ROTATION
-		-- Resolved here rather than only in Rebuild, because the options page is
-		-- built at login off this list and labels its switches with the client's
-		-- own name for each spell. A page built a moment before the first
-		-- rebuild would carry the entry's key instead, and a label is a string
-		-- the page keeps rather than a question it asks again.
-		Resolve(shipped[index])
+		Take(fast[index], ROTATION)
 	end
 	for index = 1, #long do
-		local entry = long[index]
-		entry.layer = LONG
-		shipped[#shipped + 1] = entry
-		Resolve(entry)
+		Take(long[index], LONG)
 	end
 	for index = 1, #TRINKETS do
-		TRINKETS[index].layer = LONG
-		shipped[#shipped + 1] = TRINKETS[index]
+		Take(TRINKETS[index], LONG)
 	end
+	-- Yours last, so one you add lands at the end of the docked line and stays
+	-- there until you move it, rather than appearing somewhere in the middle of
+	-- a row you already know the shape of.
+	local own = Cooldowns.Mine()
+	for index = 1, #own do
+		Take(MineEntry(own[index]), LONG)
+	end
+
+	Sort(shipped)
 	return shipped
+end
+
+-- Add a spell of your own. Returns true and its name, or false and the
+-- sentence to print, which is the shape EnemyBars.AddSpell hands back and for
+-- the same reason: the panel and the slash word say the same thing about the
+-- same refusal.
+function Cooldowns.Add(spellID)
+	spellID = tonumber(spellID)
+	if not spellID or spellID <= 0 or spellID ~= math.floor(spellID) then
+		return false, "a spell id is a whole number. It is the last part of the"
+			.. " spell's Wowhead address."
+	end
+
+	local name = ns.SpellName(spellID)
+	if not name then
+		return false, ("this client does not know spell %d."):format(spellID)
+	end
+
+	-- By name as well as by key, because two ids that resolve to one name are
+	-- two squares counting the same cooldown down together.
+	local list = Cooldowns.All()
+	for index = 1, #list do
+		local entry = list[index]
+		if entry.key == MineKey(spellID) or entry.name == name then
+			return false, name .. " is already on the row."
+		end
+	end
+
+	local own = Cooldowns.Mine()
+	if #own >= MAX_MINE then
+		return false, ("the row takes %d of your own at most. Take one off first.")
+			:format(MAX_MINE)
+	end
+
+	own[#own + 1] = spellID
+	-- Watched, whatever the switch said last time this key was here. Adding a
+	-- square back and having it not appear is the one thing nobody would think
+	-- to check the switches for.
+	ns.dbc.cooldownWatch[MineKey(spellID)] = nil
+	Reshape()
+	return true, name
+end
+
+-- Take one of yours off, and take the switch, the line and the place with it. A
+-- key that is gone from the row leaving three settings behind is what makes
+-- adding the same spell back a week later behave differently from adding it the
+-- first time.
+function Cooldowns.Drop(spellID)
+	spellID = tonumber(spellID)
+	local own = Cooldowns.Mine()
+	for index = 1, #own do
+		if own[index] == spellID then
+			local key = MineKey(spellID)
+			table.remove(own, index)
+			mine[key] = nil
+			ns.dbc.cooldownLine[key] = nil
+			ns.dbc.cooldownWatch[key] = nil
+			local saved = ns.dbc.cooldownOrder
+			for at = #saved, 1, -1 do
+				if saved[at] == key then
+					table.remove(saved, at)
+				end
+			end
+			Reshape()
+			return true, ns.SpellName(spellID) or ("spell " .. spellID)
+		end
+	end
+	return false
+end
+
+-- One place along its own line, or false where there is nowhere to go.
+--
+-- Along the whole list rather than along what is drawn, because the panel shows
+-- every entry including the ones you switched off, and a square that jumped two
+-- places because something invisible was in the way is a control that does not
+-- do what it says.
+function Cooldowns.Move(key, step)
+	local list = Cooldowns.All()
+	local at
+	for index = 1, #list do
+		if list[index].key == key then
+			at = index
+		end
+	end
+	if not at then
+		return false
+	end
+
+	local to = at + step
+	if to < 1 or to > #list or list[to].layer ~= list[at].layer then
+		return false
+	end
+
+	list[at], list[to] = list[to], list[at]
+	Remember(list)
+	Cooldowns.Rebuild()
+	return true
+end
+
+-- The other line. The entry keeps the place it held in the order, so it lands
+-- among its new neighbours where it stood among its old ones rather than at an
+-- end you then have to walk it back from.
+function Cooldowns.SetLine(key, line)
+	ns.dbc.cooldownLine[key] = line
+	local list = Cooldowns.All()
+	for index = 1, #list do
+		if list[index].key == key then
+			list[index].layer = line
+		end
+	end
+	Sort(list)
+	Remember(list)
+	Cooldowns.Rebuild()
+end
+
+-- Every spell your class lists for any of its specs that is not on your row
+-- and that this character has learned, which is what the panel's picker offers.
+--
+-- Your class rather than your spec, because the one thing the row cannot answer
+-- for itself is the cooldown your spec's list leaves out and you press anyway.
+-- A protection warrior who took Death Wish finds it here.
+local function Offer(found, options, list)
+	for index = 1, #(list or NONE) do
+		local entry = list[index]
+		for at = 1, #(entry.spells or NONE) do
+			local id = entry.spells[at]
+			if not found[id] and ns.SpellName(id) and IsSpellKnown(id) then
+				found[id] = true
+				options[#options + 1] = id
+			end
+		end
+	end
+end
+
+function Cooldowns.Suggestions()
+	local def = ns.Class.Mine()
+	if not def then
+		return NONE
+	end
+
+	-- Every id on the row and not merely the one each entry resolved to. An
+	-- entry with two ids is one button under two names, and offering the other
+	-- name is offering a second square for the same cooldown.
+	local found, options = {}, {}
+	local list = Cooldowns.All()
+	for index = 1, #list do
+		local entry = list[index]
+		for at = 1, #(entry.spells or NONE) do
+			found[entry.spells[at]] = true
+		end
+	end
+
+	Offer(found, options, def.rotation)
+	Offer(found, options, def.cooldowns)
+	for index = 1, #(def.specs or NONE) do
+		Offer(found, options, def.specs[index].rotation)
+		Offer(found, options, def.specs[index].cooldowns)
+	end
+	return options
+end
+
+-- Back to the row your class ships: everything you added dropped, every line
+-- and every place put back.
+--
+-- The switches are deliberately left alone. Whether Shield Wall is worth a
+-- square and where that square goes are two answers, and a button that throws
+-- both away is a button nobody presses twice.
+function Cooldowns.ResetRow()
+	wipe(ns.dbc.cooldownMine)
+	wipe(ns.dbc.cooldownLine)
+	wipe(ns.dbc.cooldownOrder)
+	wipe(mine)
+	Reshape()
 end
 
 -- Which line one drawn entry belongs on. The row is the only caller and it asks
@@ -295,6 +609,22 @@ function Cooldowns.SetWatched(key, on)
 		ns.dbc.cooldownWatch[key] = false
 	end
 	Cooldowns.Rebuild()
+end
+
+-- What you have added, in one phrase, for the panel to read back. The count
+-- against the ceiling as well as the names, because the refusal when the list
+-- is full is otherwise the first anybody hears of there being a ceiling.
+function Cooldowns.Own()
+	local own = Cooldowns.Mine()
+	if #own == 0 then
+		return "nothing, the row is what your class file lists"
+	end
+	local names = ""
+	for index = 1, #own do
+		names = names .. (index > 1 and ", " or "")
+			.. (ns.SpellName(own[index]) or ("spell " .. own[index]))
+	end
+	return ("%d of %d: %s"):format(#own, MAX_MINE, names)
 end
 
 -- How many are switched off, and their names in one phrase, so a silenced entry

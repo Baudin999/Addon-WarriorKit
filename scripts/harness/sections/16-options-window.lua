@@ -470,9 +470,15 @@ if window then
 	-- saying the grid shows in a raid and the line shows in a party, which is
 	-- the one thing about two frames that never appear together nobody can work
 	-- out by looking at either of them. 25,300 is that measurement plus a hint's
-	-- worth of room again.
-	check(prose < 25300,
-		("the window holds %d characters of prose and the budget is 25,300"):format(prose))
+	-- worth of room again. Setting your own cooldowns costs 471 across a
+	-- rewritten lede, a rewritten hint and two new ones, and takes it to 25,536
+	-- across sixty-seven: no new page, a section whose one control per entry
+	-- became five, and the longest of its hints is the sentence saying a spell id
+	-- is the last part of a Wowhead address, which is the one thing about a field
+	-- that takes a number nobody can work out by looking at it. 25,700 is that
+	-- measurement plus a hint's worth of room again.
+	check(prose < 25700,
+		("the window holds %d characters of prose and the budget is 25,700"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

@@ -122,6 +122,29 @@ function UI.Button(parent, opts)
 end
 
 --------------------------------------------------------------------------
+-- The tick box
+--
+-- The box on its own, without the row and the label that kit.Check wraps round
+-- it. Two callers want the look and only one of them wants the row: the
+-- cooldown row's list draws a tick as the first of five controls on one line,
+-- and a tick drawn by hand in a feature file is a tick that stops matching the
+-- theme the first time the palette moves.
+--
+-- A frame rather than a button, because the one control it belongs to is
+-- whatever contains it. kit.Check puts it inside its own button and the
+-- cooldown list lays a button over it.
+--------------------------------------------------------------------------
+
+function UI.TickBox(parent)
+	local box = UI.Box(parent, C.sunken, C.edge)
+	box:SetSize(M.check, M.check)
+	box.tick = ns.Fill(box, "ARTWORK", C.tick[1], C.tick[2], C.tick[3], 1)
+	box.tick:SetPoint("TOPLEFT", 3, -3)
+	box.tick:SetPoint("BOTTOMRIGHT", -3, 3)
+	return box
+end
+
+--------------------------------------------------------------------------
 -- The dropdown list
 --
 -- One popup shared by every picker, with a pool of rows inside it. The options
@@ -899,15 +922,12 @@ function UI.Kit(host)
 	function kit.Check(label, get, set)
 		local button = CreateFrame("Button", nil, Parent())
 
-		local box = UI.Box(button, C.sunken, C.edge)
-		box:SetSize(M.check, M.check)
+		local box = UI.TickBox(button)
 		-- Dropped by half the difference between a control row and a tick box, so
 		-- a tick sits level with the first line of its own label and stays there
 		-- when the label wraps onto a second.
 		box:SetPoint("TOPLEFT", 0, -math.floor((M.control - M.check) / 2))
-		button.tick = ns.Fill(box, "ARTWORK", C.tick[1], C.tick[2], C.tick[3], 1)
-		button.tick:SetPoint("TOPLEFT", 3, -3)
-		button.tick:SetPoint("BOTTOMRIGHT", -3, 3)
+		button.tick = box.tick
 
 		button.text = UI.Label(button, M.font, C.text, "LEFT", UI.FLAT)
 		UI.Wrap(button.text, true)

@@ -178,6 +178,159 @@ if #LISTED > 0 then
 end
 
 ----------------------------------------------------------------------
+-- The ones you add yourself, and where they sit
+--
+-- Three questions, and none of them is answerable off the class file, which is
+-- what makes this block different from everything above it.
+--
+-- Does a spell you typed the id of get a square, and does it keep it. It is the
+-- one entry on the row that is not filtered by IsSpellKnown, because that call
+-- says no to a rank you have not trained and to anything an item casts, so a
+-- square you asked for by number going away without a word is the failure this
+-- asserts against.
+--
+-- Does moving one move it. Along its own line, never past the end of it, and
+-- never into the other line by accident.
+--
+-- And does the row still lay out. The rotation entries lead the list whatever
+-- you rearrange, because Row.lua counts along one line until the tag changes
+-- and starts the other, so an entry out of place there is a long cooldown drawn
+-- at rotation size on the top line.
+--
+-- Everything here is put back at the end, because this is the middle of the
+-- section and every count below it is the class file's again.
+----------------------------------------------------------------------
+
+do
+	local MINE = 500001
+	local KEY = "spell" .. MINE
+	local baseline = Cooldowns.Count()
+
+	local added, said = Cooldowns.Add(MINE)
+	tick()
+	check(added, ("a spell of your own was refused: %s"):format(tostring(said)))
+	check(Cooldowns.Count() == baseline + 1,
+		("adding one of your own left %d squares of %d")
+			:format(Cooldowns.Count(), baseline + 1))
+
+	-- Where one of yours lands, which is the end of the docked line and stays
+	-- that way until you move it: a square appearing in the middle of a row you
+	-- already know the shape of is one you have to find before you can read it.
+	--
+	-- Measured against the whole list rather than against what is drawn, because
+	-- that is the list the panel shows and the one the move buttons walk. An
+	-- empty trinket slot is on it and is not on the row.
+	local function Place()
+		local list = Cooldowns.All()
+		for index = 1, #list do
+			if list[index].key == KEY then
+				return index
+			end
+		end
+		return nil
+	end
+
+	local whole = Cooldowns.All()
+	check(Place() == #whole,
+		("one of your own landed at place %s of %d rather than at the end")
+			:format(tostring(Place()), #whole))
+	check(whole[#whole].layer == Cooldowns.LONG,
+		"one of your own landed on the rotation line")
+
+	-- The three refusals, each said rather than swallowed.
+	check(not Cooldowns.Add(MINE), "the same spell went on the row twice")
+	check(not Cooldowns.Add(900001),
+		"a spell this client cannot name went on the row")
+	check(not Cooldowns.Add("brambleweed"),
+		"a word that is not a number went on the row")
+
+	-- The same three things through the slash words, because the dispatcher is
+	-- where a word it does not know falls through to the bare on|off toggle,
+	-- switches the whole row off and reports that it did something else.
+	SlashCmdList.WARRIORKIT("cooldowns add 500002")
+	check(Cooldowns.ByWord("spell500002") ~= nil,
+		"/wk cooldowns add put nothing on the row")
+	SlashCmdList.WARRIORKIT("cooldowns line spell500002")
+	check(Cooldowns.ByWord("spell500002").layer == Cooldowns.ROTATION,
+		"/wk cooldowns line left the square on the line it was already on")
+	SlashCmdList.WARRIORKIT("cooldowns drop 500002")
+	check(Cooldowns.ByWord("spell500002") == nil,
+		"/wk cooldowns drop left it on the row")
+	check(ns.db.cooldowns,
+		"one of the new words fell through and switched the whole row off")
+
+	-- Not learned, and kept anyway. The opposite answer from the class file's
+	-- entries, which is asserted above, and the reason is that this one is not a
+	-- guess about your character.
+	own.unknown[MINE] = true
+	rebuild()
+	check(Cooldowns.Count() == baseline + 1,
+		"a spell you added by id lost its square to IsSpellKnown")
+	own.unknown[MINE] = nil
+	rebuild()
+
+	-- Along its own line, and not off the end of it.
+	local at = Place()
+	if at > 1 and whole[at - 1].layer == Cooldowns.LONG then
+		check(Cooldowns.Move(KEY, -1), "a square with a neighbour refused to move")
+		check(Place() == at - 1,
+			("it was moved left and is at place %s"):format(tostring(Place())))
+		check(Cooldowns.Move(KEY, 1), "it refused to move back")
+		check(Place() == at, "moving it back did not put it back")
+	end
+	check(not Cooldowns.Move(KEY, 1),
+		"the last square on a line moved off the end of it")
+
+	-- The other line, which is the same act on one of yours and on a cooldown
+	-- your class listed, and the invariant the row is laid out on.
+	Cooldowns.SetLine(KEY, Cooldowns.ROTATION)
+	tick()
+	local moved
+	for index = 1, Cooldowns.Count() do
+		if Cooldowns.Entry(index).key == KEY then
+			moved = index
+		end
+	end
+	check(moved ~= nil and Cooldowns.Layer(moved) == Cooldowns.ROTATION,
+		"a square sent to the top line is still on the docked one")
+	local broken = 0
+	for index = 2, Cooldowns.Count() do
+		if Cooldowns.Layer(index) == Cooldowns.ROTATION
+			and Cooldowns.Layer(index - 1) == Cooldowns.LONG then
+			broken = broken + 1
+		end
+	end
+	check(broken == 0,
+		("%d rotation squares are drawn after a docked one, and the row lays both"
+			.. " lines out in one walk"):format(broken))
+
+	-- And it is drawn at the size of the line it moved to, which is the whole
+	-- reading of the two lines and the only thing on screen that says which of
+	-- them a square is on. Against a square that stayed on the docked line,
+	-- where this character has one to compare against.
+	local docked
+	for index = 1, Cooldowns.Count() do
+		if Cooldowns.Layer(index) == Cooldowns.LONG then
+			docked = index
+		end
+	end
+	inCombat.player = true
+	tick()
+	if docked then
+		check(Row.Icon(moved):GetWidth() > Row.Icon(docked):GetWidth(),
+			"a square on the top line is drawn no bigger than one on the docked line")
+	end
+	inCombat.player = false
+
+	Cooldowns.ResetRow()
+	tick()
+	check(Cooldowns.Count() == baseline,
+		("putting the row back left %d squares of %d")
+			:format(Cooldowns.Count(), baseline))
+	check(#Cooldowns.Mine() == 0, "putting the row back kept one of your own")
+end
+
+----------------------------------------------------------------------
 -- What one square is doing
 ----------------------------------------------------------------------
 
