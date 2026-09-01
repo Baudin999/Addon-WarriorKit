@@ -17,6 +17,16 @@ local Spell, Macro = ns.Class.Spell, ns.Class.Macro
 -- Blink goes where you are facing and takes no target at all, so putting it
 -- behind that machinery would be a button that ignores everything the machinery
 -- is for.
+--
+-- Three specs, and only one of them carries a bar plan. The plan below is
+-- written off the frost mage somebody here plays; a fire or arcane plan written
+-- from a talent calculator would fill your bars with a guess and take a backup
+-- you then have to put back, which is the argument Class\Priest.lua makes for
+-- refusing a plan altogether. So those two open no loadout page and the refusal
+-- names the spec.
+--
+-- The cooldown lists and the debuff rows are written for all three, because
+-- being wrong there costs an empty square rather than your bars.
 --------------------------------------------------------------------------
 
 --------------------------------------------------------------------------
@@ -97,6 +107,18 @@ local LOADOUT = {
 	},
 }
 
+--------------------------------------------------------------------------
+-- The cooldowns every spec counts
+--
+-- Written once and named by all three, because none of the three is a fact
+-- about a tree. 12051 Evocation, 45438 Ice Block with 27619 for the older
+-- clients that filed it under that number, 66 Invisibility.
+--------------------------------------------------------------------------
+
+local EVOCATION = { key = "evocation", spells = { 12051 } }
+local ICE_BLOCK = { key = "iceblock", spells = { 45438, 27619 } }
+local INVISIBILITY = { key = "invisibility", spells = { 66 } }
+
 ns.Class.Register("MAGE", {
 	label = "mage",
 
@@ -128,37 +150,110 @@ ns.Class.Register("MAGE", {
 	},
 
 	--------------------------------------------------------------------------
-	-- The long cooldowns
+	-- What the picker offers
 	--
-	-- Eight, which is more than any other class file lists, and the row is
-	-- nothing like eight squares long: IsSpellKnown decides which of them a
-	-- character actually has, and no mage owns the arcane, fire and frost lists
-	-- at once. A frost mage sees Evocation, Ice Block, Cold Snap and Icy Veins.
-	-- A fire mage sees Evocation, Ice Block and Combustion. That is the whole
-	-- reason the list is spells rather than a spec.
+	-- Shared by all three specs. 12579 Winter's Chill, 116 Frostbolt, 122 Frost
+	-- Nova, 120 Cone of Cold, 118 Polymorph, 22959 Fire Vulnerability, 133
+	-- Fireball, 11366 Pyroblast, 31589 Slow.
+	--------------------------------------------------------------------------
+	suggested = { 12579, 116, 122, 120, 118, 22959, 133, 11366, 31589 },
+
+	--------------------------------------------------------------------------
+	-- The three specs
+	--
+	-- Tree order, which is the order the client counts them in and the order the
+	-- resolver falls back on: 1 arcane, 2 fire, 3 frost.
+	--
+	-- Eight cooldowns used to sit on one list here and IsSpellKnown sorted them
+	-- out, which worked and said nothing. A frost mage got Evocation, Ice Block,
+	-- Cold Snap and Icy Veins because those are the four a frost mage has, not
+	-- because anything in the addon knew what a frost mage is. Now it does, and
+	-- the row is short by design rather than by accident.
 	--
 	-- The ids, all from Wowhead's Classic and TBC Classic databases: 12051
 	-- Evocation, 45438 Ice Block, 11958 Cold Snap, 12472 Icy Veins, 12042 Arcane
 	-- Power, 12043 Presence of Mind, 11129 Combustion, 66 Invisibility.
 	--
 	-- Ice Block carries two ids for the one entry. 45438 is what both of these
-	-- clients answer for it and 27619 is the older number the same spell has
-	-- been filed under, and the list takes whichever one this client knows.
-	-- Every other entry is a single unranked spell.
+	-- clients answer for it and 27619 is the older number the same spell has been
+	-- filed under, and the list takes whichever one this client knows.
+	-- Invisibility is Burning Crusade only and never resolves on Era, which costs
+	-- one square on one client and nothing else.
 	--
-	-- Invisibility is Burning Crusade only and never resolves on Era, which
-	-- costs one square on one client and nothing else.
+	-- Each signature is a single rank talent nobody in another tree can have.
+	-- Arcane carries two because Presence of Mind sits fifteen points up and
+	-- Arcane Power at thirty, so a levelling arcane mage is named by the first of
+	-- them long before the second.
 	--------------------------------------------------------------------------
-	cooldowns = {
-		{ key = "evocation", spells = { 12051 } },
-		{ key = "iceblock", spells = { 45438, 27619 } },
-		{ key = "coldsnap", spells = { 11958 } },
-		{ key = "icyveins", spells = { 12472 } },
-		{ key = "arcanepower", spells = { 12042 } },
-		{ key = "presence", spells = { 12043 } },
-		{ key = "combustion", spells = { 11129 } },
-		{ key = "invisibility", spells = { 66 } },
-	},
+	specs = {
+		{
+			key = "arcane", label = "arcane", tree = 1,
+			signature = { 12043, 12042 }, -- Presence of Mind, Arcane Power
 
-	loadout = LOADOUT,
+			cooldowns = {
+				{ key = "arcanepower", spells = { 12042 } },
+				{ key = "presence", spells = { 12043 } },
+				EVOCATION, ICE_BLOCK, INVISIBILITY,
+			},
+
+			-- 2139 Counterspell, 2136 Fire Blast, 122 Frost Nova. Arcane Explosion
+			-- and the missiles have no cooldown of their own, so the squares that
+			-- are worth drawing are the three that do.
+			rotation = {
+				{ key = "counterspell", spells = { 2139 } },
+				{ key = "fireblast", spells = { 2136 } },
+				{ key = "frostnova", spells = { 122 } },
+			},
+
+			-- 31589 Slow, 118 Polymorph, 122 Frost Nova.
+			debuffs = { 31589, 118, 122 },
+		},
+
+		{
+			key = "fire", label = "fire", tree = 2,
+			signature = { 11129 }, -- Combustion
+
+			cooldowns = {
+				{ key = "combustion", spells = { 11129 } },
+				EVOCATION, ICE_BLOCK, INVISIBILITY,
+			},
+
+			rotation = {
+				{ key = "fireblast", spells = { 2136 } },
+				{ key = "counterspell", spells = { 2139 } },
+			},
+
+			-- 22959 Fire Vulnerability, which is what Improved Scorch lands and is
+			-- the one debuff a fire mage keeps up on purpose; 133 Fireball for its
+			-- own burn, 11366 Pyroblast, 118 Polymorph.
+			debuffs = { 22959, 133, 11366, 118 },
+		},
+
+		{
+			key = "frost", label = "frost", tree = 3,
+			signature = { 12472 }, -- Icy Veins
+
+			cooldowns = {
+				{ key = "icyveins", spells = { 12472 } },
+				{ key = "coldsnap", spells = { 11958 } },
+				EVOCATION, ICE_BLOCK, INVISIBILITY,
+			},
+
+			-- 122 Frost Nova, 120 Cone of Cold, 2136 Fire Blast, 2139 Counterspell.
+			-- Frostbolt is the whole rotation and has no cooldown, which is exactly
+			-- why these four are the ones worth a clock.
+			rotation = {
+				{ key = "frostnova", spells = { 122 } },
+				{ key = "coneofcold", spells = { 120 } },
+				{ key = "fireblast", spells = { 2136 } },
+				{ key = "counterspell", spells = { 2139 } },
+			},
+
+			-- 12579 Winter's Chill, 116 Frostbolt for its own snare, 122 Frost Nova,
+			-- 120 Cone of Cold, 118 Polymorph.
+			debuffs = { 12579, 116, 122, 120, 118 },
+
+			loadout = LOADOUT,
+		},
+	},
 })

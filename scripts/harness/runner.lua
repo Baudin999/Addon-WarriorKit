@@ -12,7 +12,7 @@
 -- being tested. Everything one section hands to a later one goes through
 -- H.carry and is named at both ends.
 
-local ROOT, PLAYER_CLASS, load, only = ...
+local ROOT, PLAYER_CLASS, load, only, PLAYER_SPEC = ...
 
 local H = load("client/init.lua")(PLAYER_CLASS, load)
 local ns = {}
@@ -64,6 +64,47 @@ load("client/08-blizzard.lua")(H)
 _G.WarriorKitDB, _G.WarriorKitCharDB = {}, {}
 fire("ADDON_LOADED", "WarriorKit")
 
+--------------------------------------------------------------------------
+-- Coming up as one spec
+--
+-- Before login, because the spec decides what is built and Class/Spec.lua
+-- latches the first answer that is not nil. Named on the command line and read
+-- back off the registry rather than written out here, so a class file that adds
+-- a fourth spec is covered the moment check.sh reads the file.
+--
+-- Both readings the resolver uses are driven, because a spec is named by
+-- whichever answers first and the two do not agree on their own. The signature
+-- spells of every other spec are made unknown, so no spec but the wanted one
+-- can be signed for; the wanted spec's tree is given every point, so the
+-- fallback lands on it for the specs that carry no signature at all. A warrior
+-- with Death Wish is fury whatever his trees say, and priest holy has nothing
+-- to be signed for and is answered by its tree alone.
+--
+-- The run is refused rather than allowed to drift. A spec the addon then reads
+-- differently is a broken resolver reported as a hundred wrong measurements.
+--------------------------------------------------------------------------
+if PLAYER_SPEC then
+	local def = ns.Class.All()[PLAYER_CLASS]
+	assert(def and def.specs, PLAYER_CLASS .. " registered no specs")
+
+	local wanted
+	for _, spec in ipairs(def.specs) do
+		if spec.key == PLAYER_SPEC then
+			wanted = spec
+		else
+			for _, id in ipairs(spec.signature or {}) do
+				H.own.unknown[id] = true
+			end
+		end
+	end
+	assert(wanted, ("%s has no spec called %s"):format(PLAYER_CLASS, PLAYER_SPEC))
+
+	for index, tree in ipairs(H.talentTrees.player) do
+		tree.points = (index == wanted.tree) and 41 or 0
+	end
+	ns.Unit.Spec.Forget()
+end
+
 -- The whole run is at the design size, whatever size the addon ships at.
 --
 -- Everything the addon draws in a window is a design number multiplied by the
@@ -81,6 +122,12 @@ ns.Settings.Set(1)
 
 fire("PLAYER_LOGIN")
 fire("PLAYER_ENTERING_WORLD")
+
+if PLAYER_SPEC then
+	assert(ns.Class.Spec.Token() == PLAYER_SPEC,
+		("the run asked for %s and the addon reads %s")
+			:format(PLAYER_SPEC, tostring(ns.Class.Spec.Token())))
+end
 
 -- The tooltip's linger, run out.
 --
@@ -199,6 +246,7 @@ local SECTIONS = {
 	-- the full rack up, and it parks the client's own merchant window and takes
 	-- it back again. It ends with the purse it found and no merchant open.
 	"57-merchant",
+	"58-spec",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

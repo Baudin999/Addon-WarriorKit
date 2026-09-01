@@ -23,15 +23,23 @@
 --
 --     lua5.1 scripts/harness.lua src
 --     lua5.1 scripts/harness.lua src HUNTER
+--     lua5.1 scripts/harness.lua src SHAMAN:enhancement
 --     lua5.1 scripts/harness.lua src WARRIOR 12-debuff-square-size
 --
--- The second argument is the class this run is. It defaults to WARRIOR, which
--- is every run this file has ever done. Two parts of the addon are warrior
--- only, and both decide it once at PLAYER_LOGIN: the charge button and the
--- world marker are not built at all on another class, and the action targeting
--- CVar is never written. A decision taken at login cannot be reached by
--- flipping the class afterwards, so the only way to test it is to come up as
--- something else, and check.sh does both runs.
+-- The second argument is the class this run is, and the spec after a colon.
+-- It defaults to WARRIOR, which is every run this file has ever done. Two parts
+-- of the addon are warrior only, and both decide it once at PLAYER_LOGIN: the
+-- charge button and the world marker are not built at all on another class, and
+-- the action targeting CVar is never written. A decision taken at login cannot
+-- be reached by flipping the class afterwards, so the only way to test it is to
+-- come up as something else, and check.sh does every run.
+--
+-- The spec is decided at login for the same reason and cannot be flipped
+-- afterwards either, and it decides more than the class does: the cooldown row,
+-- the debuff row and the bar plan are all read off it. Named, the stub is set
+-- up so that spec and no other resolves, and the runner refuses the run if the
+-- addon then reads a different one. Left off, whichever the stub happens to
+-- answer stands, which is what every run before specs existed did.
 --
 -- The third argument stops the run after the section it names, by the file name
 -- under harness/sections without its extension. Everything above that section
@@ -62,8 +70,10 @@ local function load(path)
 	return assert(loadfile(here .. "/harness/" .. path))
 end
 
-local failures = load("runner.lua")(arg[1] or "src", arg[2] or "WARRIOR",
-	load, arg[3])
+local class, spec = (arg[2] or "WARRIOR"):match("^([^:]*):?(.*)$")
+
+local failures = load("runner.lua")(arg[1] or "src", class,
+	load, arg[3], spec ~= "" and spec or nil)
 
 if failures > 0 then
 	print(("harness: %d failed"):format(failures))

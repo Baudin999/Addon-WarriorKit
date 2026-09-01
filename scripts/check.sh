@@ -800,31 +800,39 @@ fi
 # arithmetic lands where it should and that a tick does not allocate. It runs
 # before luacheck because a stack trace is a more useful first failure than a
 # style warning.
-# Once per shape a class can be, because what the addon builds is decided at
+# Once per shape a character can be, because what the addon builds is decided at
 # PLAYER_LOGIN off what Class/<yours>.lua registered and there is no way to flip
 # that mid-run.
 #
-# There are four shapes and one class each proves. A warrior fills in all six
-# fields, so that run is the only one where the charge button, the world marker,
-# the reaction windows and the swing band are built at all. A mage and a shaman
-# fill in two, so those runs prove the other four parts are absent rather than
-# merely quiet: a hidden charge button is still a secure frame holding a key
-# override, and the action targeting CVar has to come out with the value it went
-# in with. A priest fills in one, and it is the field that opens no page: the
-# rail entry named after you is dropped, which is a branch neither of the other
-# two files reaches, because both carry a bar plan and a plan opens a page. A
-# hunter has no file, which is a supported class and the one that proves the ten
-# class-agnostic parts still stand up with nothing registered.
+# A shape is a class and a spec now, not a class. A warrior fills in all six of
+# the fields nothing else fills in, so those runs are the only ones where the
+# charge button, the world marker, the reaction windows and the swing band are
+# built at all. A mage and a shaman fill in two, so those runs prove the other
+# four parts are absent rather than merely quiet: a hidden charge button is
+# still a secure frame holding a key override, and the action targeting CVar has
+# to come out with the value it went in with. A priest fills in one, and it is
+# the field that opens no page: the rail entry named after you is dropped, which
+# is a branch neither of the other two files reaches, because both carry a bar
+# plan and a plan opens a page. A hunter has no file, which is a supported class
+# and the one that proves the ten class-agnostic parts still stand up with
+# nothing registered.
+#
+# Per spec rather than per class because a spec decides more than a class does.
+# The cooldown row, the debuff row and the bar plan are all read off it, and a
+# spec that overruns a cap or writes a plan out of shape fails at PLAYER_LOGIN
+# as a Lua error in somebody's game. Two of the twelve are only reachable this
+# way: an elemental shaman and an arcane mage carry no bar plan, so those runs
+# are the ones where a class that has a plan for one spec and none for another
+# has to refuse without falling over.
 #
 # The list is read off the files rather than written out here, because a class
-# file this loop did not name got no run at all and what that hid was a login
-# error rather than a wrong answer. The cap of eight entries on the cooldown row
-# and four on the upkeep row is an assert inside Cooldowns.All and Upkeep.Fixed,
-# and it fires on the client, at PLAYER_LOGIN, as a Lua error. Mage already
-# lists eight cooldowns, so the ninth is the one that does it, and the only
-# thing that reaches it before a game does is a harness run as that class.
-# HUNTER stays written out because having no file is the whole of what it
-# proves.
+# file or a spec this loop did not name got no run at all and what that hid was
+# a login error rather than a wrong answer. The cap of eight entries on the
+# cooldown row, six on the rotation line and four on the upkeep row is an assert
+# inside Cooldowns.All and Upkeep.Fixed, and it fires on the client, at
+# PLAYER_LOGIN, as a Lua error. The only thing that reaches it before a game
+# does is a harness run as that spec. HUNTER stays written out because having no
+# file is the whole of what it proves.
 #
 # Everything else in the addon is asserted again on every run, which is the
 # point: a part that quietly needed a warrior fails here rather than in
@@ -837,9 +845,27 @@ if [ -f ../scripts/harness.lua ]; then
 		echo "no file in Class/ calls ns.Class.Register, so no class shape is covered"
 		status=1
 	fi
-	for class in $classes HUNTER; do
-		if ! lua5.1 ../scripts/harness.lua . "$class"; then
-			echo "harness FAIL as $class"
+
+	# One run per spec, and one run for a class that registered none. A spec
+	# entry is the only line in a class file that carries a key and a label
+	# together, which is what this matches on: a cooldown entry is a key and a
+	# list of spell ids, and neither shape can be mistaken for the other.
+	runs=""
+	for class in $classes; do
+		file=$(grep -lF "ns.Class.Register(\"$class\"" Class/*.lua)
+		specs=$(sed -n 's/^[[:space:]]*key = "\([a-z]*\)", label = .*/\1/p' "$file")
+		if [ -z "$specs" ]; then
+			runs="$runs $class"
+		else
+			for spec in $specs; do
+				runs="$runs $class:$spec"
+			done
+		fi
+	done
+
+	for run in $runs HUNTER; do
+		if ! lua5.1 ../scripts/harness.lua . "$run"; then
+			echo "harness FAIL as $run"
 			status=1
 		fi
 		echo
@@ -873,7 +899,7 @@ HARNESS_NAME_LIMIT=40
 
 # path:ceiling:why it is exempt
 HARNESS_NAME_ALLOWED="
-sections/25-meters.lua:58:one scene held across damage, threat, the clock and both panes
+sections/25-meters.lua:57:one scene held across damage, threat, the clock and both panes
 "
 
 # The same 800 the addon is held to, and the same allow-list shape.
@@ -881,7 +907,7 @@ HARNESS_LINE_LIMIT=800
 
 # path:ceiling:why it is exempt
 HARNESS_LINE_ALLOWED="
-sections/05-action-bars.lua:1053:one subject, five bars; splits at the keys, the paging and the churn
+sections/05-action-bars.lua:1061:one subject, five bars; splits at the keys, the paging and the churn
 "
 
 harness_names='

@@ -6,11 +6,18 @@ ns.CooldownRow = Row
 --------------------------------------------------------------------------
 -- The row
 --
--- One square per long cooldown, in the order the class file wrote them, with
--- your trinkets on the end. Cooldowns.lua decides what is on it and this file
--- decides when it is on the screen and what it looks like.
+-- Two lines. The rotation cooldowns are big squares along the top and the long
+-- ones are smaller squares docked under them, with your trinkets on the end of
+-- the docked line. Cooldowns.lua decides what is on both and this file decides
+-- when they are on the screen and what they look like.
 --
--- Three decisions, and each one is the row rather than a detail of it.
+-- One frame and one walk rather than two of each, because the two lines move
+-- together, are dragged together, hide together and are read in one glance.
+-- Two frames would have been two anchors to save, two settings, two preview
+-- states and two entries in the placing list, for a block a player thinks of as
+-- one thing.
+--
+-- Four decisions, and each one is the row rather than a detail of it.
 --
 -- It is up for the whole fight. That is the opposite of the buff nag, which is
 -- only there when something is wrong, and the two questions are opposites: what
@@ -38,12 +45,31 @@ ns.CooldownRow = Row
 
 local FRAME_NAME = "WarriorKitCooldowns"
 
--- 27, the same number Buffs\Nag.lua and Meter\Window.lua carry: the client
--- stores a spell icon at 64 texels, UI\Draw.lua crops the five texel border off
--- each edge, and the 54 that are left resample exactly onto 54 pixels or onto
--- 27 and nothing in between.
+-- Two sizes, one per line.
+--
+-- 27 is the number Buffs\Nag.lua and Meter\Window.lua carry: the client stores
+-- a spell icon at 64 texels, UI\Draw.lua crops the five texel border off each
+-- edge, and the 54 that are left resample exactly onto 54 pixels or onto 27 and
+-- nothing in between. That is the docked line.
+--
+-- 54 is the other exact size and it is the top line. Doubling rather than
+-- picking a number in between is not a preference: 40 would draw 54 texels over
+-- 38 pixels, which is most of the way between the two copies the client keeps
+-- and is as blended as an icon gets. The two sizes this row may use are the two
+-- the art has, and the same arithmetic is written out at length in the header
+-- of UnitFrames\EnemyBars.lua.
+--
+-- The size difference is the whole reading. A big square is a press you are
+-- waiting for right now and a small one is a press you are waiting for this
+-- fight, and nobody has to be told which is which.
 local ICON = 27
+local BIG = 54
 local GAP = 4
+
+-- Between the two lines. The same gap the squares have between them, so the
+-- block reads as one thing rather than two rows that happen to be near each
+-- other.
+local DOCK = 4
 
 -- What the preview draws at while you are placing the row, under one so it
 -- never looks like the real thing.
@@ -123,21 +149,58 @@ end
 -- Laying it out
 --------------------------------------------------------------------------
 
+-- Both lines, in one walk.
+--
+-- The list arrives with the rotation entries first and each one tagged, so this
+-- counts along one line until the tag changes and then starts the other. That
+-- is why the order in Cooldowns.All is load bearing and says so.
+--
+-- A line with nothing on it takes no room at all, which is what makes one shape
+-- cover four: a spec with both lists draws two lines, a spec with only long
+-- cooldowns draws exactly what this row drew before either layer existed, and a
+-- class nobody has written a file for draws its trinkets on the docked line
+-- with nothing above them.
+--
+-- The size is written per square here rather than for every square in Apply,
+-- because which line a square is on moves when the list is rebuilt and Apply
+-- runs on a settings change. Both are layout rather than tick, so neither is on
+-- the path the allocation gate measures.
 local function Place()
 	seen = ns.Cooldowns.Epoch()
 	local drawn = (mode == "quiet") and 0 or ns.Cooldowns.Count()
 
+	-- Whether there is a top line at all, asked before anything is placed
+	-- because it decides where the docked line sits. One lookup rather than a
+	-- count, because the rotation entries lead the list: if the first square is
+	-- not one of them there are none.
+	local topped = drawn > 0 and ns.Cooldowns.Layer(1) == ns.Cooldowns.ROTATION
+	local dock = topped and -(BIG + DOCK) or 0
+
 	-- The preview is the row being dragged, so its squares hand the mouse back
 	-- and the parent frame gets the button.
 	local hoverable = mode ~= "preview"
+	local fast, long = 0, 0
+
 	for slot = 1, #icons do
 		local w = icons[slot]
 		if slot <= drawn then
+			local big = ns.Cooldowns.Layer(slot) == ns.Cooldowns.ROTATION
+			local edge = big and BIG or ICON
+
 			w.entry = ns.Cooldowns.Entry(slot)
 			w:EnableMouse(hoverable)
+			ns.UI.Ability.Size(w, edge * unit)
 			w:ClearAllPoints()
-			w:SetPoint("TOPLEFT", frame, "TOPLEFT", (slot - 1) * (ICON + GAP) * unit, 0)
+			w:SetPoint("TOPLEFT", frame, "TOPLEFT",
+				(big and fast or long) * (edge + GAP) * unit,
+				(big and 0 or dock) * unit)
 			w:Show()
+
+			if big then
+				fast = fast + 1
+			else
+				long = long + 1
+			end
 		else
 			w.entry = nil
 			w:EnableMouse(false)
@@ -151,7 +214,14 @@ local function Place()
 		return
 	end
 
-	frame:SetSize((drawn * (ICON + GAP) - GAP) * unit, ICON * unit)
+	local wide = math.max(
+		fast > 0 and fast * (BIG + GAP) - GAP or 0,
+		long > 0 and long * (ICON + GAP) - GAP or 0)
+	local tall = (topped and BIG or 0)
+		+ ((topped and long > 0) and DOCK or 0)
+		+ (long > 0 and ICON or 0)
+
+	frame:SetSize(wide * unit, tall * unit)
 	frame:Show()
 end
 
@@ -234,10 +304,10 @@ function Row.Apply()
 	frame:SetPoint(point[1], UIParent, point[3], point[4], point[5])
 	ns.UI.Rezoom(frame, ns.db.cooldownZoom)
 
-	for slot = 1, #icons do
-		ns.UI.Ability.Size(icons[slot], ICON * unit)
-	end
-
+	-- The sizes are not written here. Which line a square is on decides how big
+	-- it is, that moves when the list is rebuilt, and Place writes both together
+	-- on the very next tick because the two lines below force it to.
+	--
 	-- Force the next tick to lay the row out again, whatever it decides. A zoom
 	-- change moves every square and the mode has not moved with it.
 	mode, seen = nil, -1

@@ -3,20 +3,23 @@ local ADDON, ns = ...
 local EnemyBars = {}
 ns.EnemyBars = EnemyBars
 
--- The debuff row, as it ships. Rank 1 IDs, because matching happens on the
--- localised name: every rank counts, another warrior's Sunder shows up, and
--- one entry covers a spell you will re-rank six times.
+-- The debuff row, as it ships, is not here.
 --
--- This is the starting list and not the list. What a bar tracks is
--- ns.db.barsSpells, which the panel and `bars debuff` edit, because which
--- debuffs matter is a spec question and a fight question. An arms warrior
--- watches Deep Wounds and Mortal Strike; a protection one watches neither and
--- wants the room back.
--- Demoralizing Shout, Thunder Clap, Rend, Deep Wound, Mortal Strike. Sunder
--- Armor is not on it: it is the one debuff on this list a warrior can read off
--- the stack count on his own frame, and the five slots are worth more to the
--- three bleeds and the strike that decide whether the pull is going well.
-local DEFAULT_SPELLS = { 1160, 6343, 772, 12721, 12294 }
+-- Which debuffs matter is a spec question, so the list is a fact about your
+-- spec and lives in Class\<yours>.lua under `debuffs`, which is the rule every
+-- other part of the addon follows. Nothing in this file names a spell any more.
+-- An arms warrior watches Rend, Deep Wound and Mortal Strike; a protection one
+-- watches Sunder and wants the room back; an enhancement shaman applies none of
+-- the five and used to be handed all of them anyway, because this list was one
+-- constant and it was saved per account.
+--
+-- Rank 1 IDs in those files, because matching happens on the localised name:
+-- every rank counts, another warrior's Sunder shows up, and one entry covers a
+-- spell you will re-rank six times.
+--
+-- This is still the starting list and not the list. What a bar tracks is
+-- ns.dbc.barsSpells, which the panel and `bars debuff` edit, because which
+-- debuffs matter is a fight question as well as a spec one.
 
 -- The most a bar will track. The aura scan is forty slots against every name on
 -- the list, per mob, five times a second, and the row still has to fit above a
@@ -24,36 +27,24 @@ local DEFAULT_SPELLS = { 1160, 6343, 772, 12721, 12294 }
 -- applies and cheap enough not to be worth arguing about.
 local MAX_SPELLS = 10
 
--- What the panel's picker offers: every debuff a warrior puts on a mob on these
--- two clients. It is a shortlist and not a limit, because the panel also takes
--- a bare spell ID and so does `bars debuff add`. An ID this client cannot name
--- is dropped from the offer rather than shown as a blank row.
+-- What the panel's picker offers is not here either, for the same reason and
+-- with one addition: it is a class fact rather than a spec one, so it sits on
+-- the class table under `suggested` and every spec of that class shares it. The
+-- picker is a shortlist of what you could put on the row, and a fury warrior
+-- who wants to watch Sunder for one fight should not have to type a number to
+-- get at a spell his own class applies.
 --
--- Every ID here is the ID of the aura that lands on the mob, never the ID of
--- the spell or talent that applies it. For a ranked spell those are the same
--- thing and rank 1 covers every rank. For a proc and for a stun bolted onto a
--- charge they are two different spells with two different names, and the one
--- you find first is the wrong one. Deep Wounds is the case that got shipped
--- broken: 12162 is the talent, the picker offered it, and the square never
--- lit up once. See REPLACED below.
-local SUGGESTED = {
-	7386,  -- Sunder Armor
-	1160,  -- Demoralizing Shout
-	6343,  -- Thunder Clap
-	772,   -- Rend
-	12721, -- Deep Wound, the bleed the Deep Wounds talent applies
-	12294, -- Mortal Strike
-	1715,  -- Hamstring
-	12323, -- Piercing Howl
-	355,   -- Taunt
-	694,   -- Mocking Blow
-	1161,  -- Challenging Shout
-	676,   -- Disarm
-	12809, -- Concussion Blow
-	5246,  -- Intimidating Shout
-	7922,  -- Charge Stun, not Charge
-	20253, -- Intercept Stun, not Intercept
-}
+-- It is a shortlist and not a limit either way, because the panel also takes a
+-- bare spell ID and so does `bars debuff add`. An ID this client cannot name is
+-- dropped from the offer rather than shown as a blank row.
+--
+-- Every ID in those lists is the ID of the aura that lands on the mob, never
+-- the ID of the spell or talent that applies it. For a ranked spell those are
+-- the same thing and rank 1 covers every rank. For a proc and for a stun bolted
+-- onto a charge they are two different spells with two different names, and the
+-- one you find first is the wrong one. Deep Wounds is the case that got shipped
+-- broken: 12162 is the talent, the picker offered it, and the square never lit
+-- up once. See REPLACED below.
 
 -- An ID this addon offered that no aura will ever carry, and the ID that works
 -- in its place.
@@ -65,9 +56,9 @@ local SUGGESTED = {
 -- singular. Since the scan matches on the name, one letter was the whole bug.
 --
 -- Two doors have to be shut, not one. A saved list keeps whatever was already
--- in it, because DEFAULT_SPELLS is read once on a fresh account and never
--- again, so anyone who picked Deep Wounds before this fix still carries the
--- dead ID. And a bare number goes on through the panel's text field and
+-- in it, because the spec's own list is read once on a fresh character and
+-- never again, so anyone who picked Deep Wounds before this fix still carries
+-- the dead ID. And a bare number goes on through the panel's text field and
 -- `bars debuff add`, where Wowhead's search for "deep wounds" still lands on
 -- the talent first. So the swap happens at login and again inside AddSpell.
 local REPLACED = {
@@ -75,6 +66,11 @@ local REPLACED = {
 }
 
 local REFRESH = 0.2
+
+-- One empty table handed back wherever the registry answers nothing, so a class
+-- with no file and a client that has not said what you are both walk zero
+-- entries instead of raising.
+local NONE = {}
 
 -- Pixels, not units.
 --
@@ -239,7 +235,7 @@ local pool, attached, listWidgets = {}, {}, {}
 -- events. GetNamePlates builds a fresh table on every call, and both the list
 -- collector and the attach walk wanted one five times a second.
 local plateUnits = {}
--- ns.db.barsSpells, resolved. Names because the aura scan matches on the
+-- ns.dbc.barsSpells, resolved. Names because the aura scan matches on the
 -- localised name, textures because the row draws them, and both indexed by slot
 -- so the tick reads two arrays rather than calling into the spell API. Rebuilt
 -- by Retrack whenever the list changes, which is the only time it can.
@@ -355,20 +351,57 @@ function EnemyBars.DescribeIcon(size, zoom)
 		:format(drawn, nearest)
 end
 
+-- What this spec ships with, as a list of its own that the caller may edit.
+--
+-- Empty for a class nobody has written a file for and for a character whose
+-- class the client has not named yet, which are the same two nils every other
+-- part of the addon gets back from the registry and treats as "do not build".
 function EnemyBars.DefaultSpells()
 	local list = {}
-	for index, spellID in ipairs(DEFAULT_SPELLS) do
+	for index, spellID in ipairs(ns.Class.Of("debuffs") or NONE) do
 		list[index] = spellID
 	end
 	return list
 end
 
+-- The list this character tracks, seeded from the spec the first time it is
+-- asked for.
+--
+-- Seeded here rather than in the defaults table because the class is not
+-- reliably known while the files load, which is the rule Class.lua states and
+-- the reason Loadouts.All seeds its rows the same way. Asked before the client
+-- will say what you are, this hands back the empty list and records nothing, so
+-- a read that early cannot latch a warrior onto no debuffs for the session.
+--
+-- A list that already has something in it counts as seeded whether this put it
+-- there or Core's migration carried it over from the account file, because the
+-- one thing this must never do is overwrite a row you edited.
 function EnemyBars.Spells()
-	return ns.db.barsSpells
+	local list = ns.dbc.barsSpells
+	if ns.dbc.barsSpellsSeeded then
+		return list
+	end
+	if #list > 0 then
+		ns.dbc.barsSpellsSeeded = true
+		return list
+	end
+	if not ns.Class.Token() then
+		return list
+	end
+
+	ns.dbc.barsSpellsSeeded = true
+	for index, spellID in ipairs(ns.Class.Of("debuffs") or NONE) do
+		list[index] = spellID
+	end
+	return list
 end
 
+-- What the panel's picker offers: every debuff your class puts on a mob, off
+-- the class table rather than the spec's, because a shortlist that only offered
+-- what your own tree applies would be a picker you cannot use to add the one
+-- thing you went looking for.
 function EnemyBars.Suggestions()
-	return SUGGESTED
+	return ns.Class.Of("suggested") or NONE
 end
 
 function EnemyBars.MaxSpells()
@@ -378,7 +411,7 @@ end
 -- Which slot a spell is in, or nil. The panel asks so it can leave a debuff you
 -- already track out of the picker.
 function EnemyBars.Slot(spellID)
-	for index, id in ipairs(ns.db.barsSpells) do
+	for index, id in ipairs(EnemyBars.Spells()) do
 		if id == spellID then
 			return index
 		end
@@ -402,7 +435,7 @@ end
 -- keeping both. Two IDs that resolve to one name are two squares lighting up
 -- and going out together, which is exactly what AddSpell refuses to create.
 function EnemyBars.Repair()
-	local list = ns.db.barsSpells
+	local list = EnemyBars.Spells()
 	for index = #list, 1, -1 do
 		local live = REPLACED[list[index]]
 		if live then
@@ -418,7 +451,7 @@ end
 local function Resolve()
 	local count = 0
 	wipe(unresolved)
-	for _, spellID in ipairs(ns.db.barsSpells) do
+	for _, spellID in ipairs(EnemyBars.Spells()) do
 		local name = ns.SpellName(spellID)
 		if name then
 			count = count + 1
@@ -462,7 +495,7 @@ function EnemyBars.AddSpell(spellID)
 		return false, ("this client does not know spell %d."):format(spellID)
 	end
 
-	local list = ns.db.barsSpells
+	local list = EnemyBars.Spells()
 	for _, id in ipairs(list) do
 		if id == spellID or ns.SpellName(id) == name then
 			return false, name .. " is already on the bar."
@@ -480,7 +513,7 @@ end
 -- Returns true and the name it took off, or false when the list never had it.
 function EnemyBars.RemoveSpell(spellID)
 	spellID = tonumber(spellID)
-	local list = ns.db.barsSpells
+	local list = EnemyBars.Spells()
 	for index, id in ipairs(list) do
 		if id == spellID then
 			table.remove(list, index)
@@ -491,8 +524,18 @@ function EnemyBars.RemoveSpell(spellID)
 	return false
 end
 
+-- Back to what this spec ships with. The table is emptied and refilled rather
+-- than replaced, because ns.dbc holds the one the client saves and swapping it
+-- for a fresh table would leave the saved variable pointing at the old one.
 function EnemyBars.ResetSpells()
-	ns.db.barsSpells = EnemyBars.DefaultSpells()
+	local list = ns.dbc.barsSpells
+	for index = #list, 1, -1 do
+		list[index] = nil
+	end
+	ns.dbc.barsSpellsSeeded = true
+	for index, spellID in ipairs(ns.Class.Of("debuffs") or NONE) do
+		list[index] = spellID
+	end
 	EnemyBars.Retrack()
 end
 

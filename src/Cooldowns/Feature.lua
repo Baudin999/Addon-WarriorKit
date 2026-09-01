@@ -45,12 +45,19 @@ local function CooldownWord(arg)
 	if option == "list" then
 		local list = ns.Cooldowns.All()
 		if #list == 0 then
-			ns.Print("nothing is listed for a " .. ns.Class.Label() .. " and no trinket answered.")
+			ns.Print("nothing is listed for a " .. ns.Class.Spec.Says()
+				.. " and no trinket answered.")
 			return
 		end
+		-- The spec is named first, because the list is the spec's and a row that
+		-- looks wrong is nearly always the addon having read you as the other
+		-- tree. Saying which one it read is the difference between a bug you can
+		-- report and a row you distrust.
+		ns.Print(("the addon reads you as a %s."):format(ns.Class.Spec.Says()))
 		for index = 1, #list do
 			local entry = list[index]
-			ns.Print(("  %-14s %s"):format(entry.key, entry.name
+			ns.Print(("  %-14s %-8s %s"):format(entry.key,
+				entry.layer or ns.Cooldowns.LONG, entry.name
 				or (entry.slot and "that slot holds nothing you can press"
 					or "not learned on this character")))
 		end
@@ -156,10 +163,19 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Long cooldowns", "You")
-		ui.Lede("A square per cooldown worth counting, up for the whole fight, with what is left of each one on it.")
+		ui.Section("Cooldowns", "You")
+		ui.Lede("Two lines, up for the whole fight. The big squares on top are the seconds the fight is made of; the small ones docked under them are the minutes.")
 
 		ui.Reading("the row", ns.Cooldowns.Describe)
+
+		-- Which spec the addon read you as, because everything on this row is
+		-- read off it and a row that looks wrong is nearly always the addon
+		-- having decided you are the other tree. It is not a setting: there is
+		-- nothing to correct it with and there should not be, because the answer
+		-- comes off your own spellbook and your own talent trees.
+		ui.Reading("read as", function()
+			return ns.Class.Spec.Says()
+		end)
 
 		ui.Check("keep it up out of combat",
 			function() return ns.db.cooldownIdle end,
@@ -170,7 +186,7 @@ ns.Register({
 		ui.Hint("Off, the row is there in a fight and afterwards while something is still recovering. On, it never leaves.")
 
 		ui.Section("Which cooldowns", "You")
-		ui.Lede("One switch per entry. Switched off is not watched, not drawn, not counted.")
+		ui.Lede("One switch per entry, over both lines. Switched off is not watched, not drawn, not counted.")
 
 		-- Built from the live list rather than from literals here, so an entry
 		-- added to a class file arrives with its switch already on the page. The

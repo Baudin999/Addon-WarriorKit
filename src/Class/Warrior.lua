@@ -6,7 +6,7 @@ local Spell, Macro = ns.Class.Spell, ns.Class.Macro
 -- Warrior
 --
 -- Everything this addon knows about a warrior, and the only file in it that
--- names a warrior spell. Eight fields, each read by exactly one part:
+-- names a warrior spell. Nine fields, each read by exactly one part:
 --
 --   forms      Core\Stance.lua, and through it the charge macro
 --   charge     Charge\Charge.lua
@@ -14,8 +14,14 @@ local Spell, Macro = ns.Class.Spell, ns.Class.Macro
 --   requires   Buttons\Requires.lua
 --   swing      Swing\Slam.lua
 --   upkeep     Buffs\Upkeep.lua, added to the row everybody gets
---   cooldowns  Cooldowns\Cooldowns.lua, the row of long ones
+--   rotation   Cooldowns\Cooldowns.lua, the big squares on the top line
+--   cooldowns  Cooldowns\Cooldowns.lua, the small ones docked under them
+--   debuffs    UnitFrames\EnemyBars.lua, the row above a mob's bar
 --   loadout    Buttons\Layout.lua
+--
+-- Six of them are the same whatever you have spent your points on and are
+-- written here. Three are not and are written inside `specs` at the foot of the
+-- file, which Class\Spec.lua picks between.
 --
 -- No frames, no events, no drawing. A class file is facts.
 --------------------------------------------------------------------------
@@ -245,36 +251,167 @@ ns.Class.Register("WARRIOR", {
 	},
 
 	--------------------------------------------------------------------------
-	-- The long cooldowns
+	-- What the picker offers
 	--
-	-- The four a warrior spends a fight counting in their head, and the reason
-	-- the row exists. Every one of them is minutes long, none of them is on the
-	-- global, and the bar square for each says only "not now" while what you
-	-- want to know is how much longer.
+	-- Every debuff a warrior puts on a mob on these two clients, shared by all
+	-- three specs, because the shortlist is what you may add rather than what
+	-- you are handed. A fury warrior who wants Sunder for one fight finds it
+	-- here instead of typing a number.
 	--
-	-- Rank one of each and every one of them a single rank, because none of the
-	-- four was ever ranked. The list is walked with IsSpellKnown, so a warrior
-	-- who has not spent the talent point sees no square rather than a square
-	-- for something they cannot cast: Death Wish and Last Stand are talents,
-	-- Recklessness and Shield Wall are trained, and a levelling warrior below
-	-- either trainer gets a shorter row that grows on its own.
-	--
-	-- The ids: 12292 Death Wish, 1719 Recklessness, 871 Shield Wall, 12975 Last
-	-- Stand. All four are on Wowhead's TBC Classic database at those ids with
-	-- the cooldowns the row draws, and all four are the same id on Era.
-	--
-	-- What is deliberately not here. Bloodrage and Sweeping Strikes are on the
-	-- bar plan above, they come back inside a minute, and a row of things that
-	-- are nearly always ready is furniture. Retaliation is thirty minutes on
-	-- these clients, which is not a fight cooldown, it is a wing cooldown.
-	-- Berserker Rage sits on bar 1 where you press it as a snare break rather
-	-- than on a timer.
+	-- Every ID is the ID of the aura that lands, never the spell or talent that
+	-- applies it. 7922 is the Charge stun and not Charge; 20253 is the Intercept
+	-- stun and not Intercept; 12721 is the Deep Wound bleed and not the Deep
+	-- Wounds talent, which is the one that shipped wrong and stayed dark.
 	--------------------------------------------------------------------------
-	cooldowns = {
-		{ key = "deathwish", spells = { 12292 } },
-		{ key = "recklessness", spells = { 1719 } },
-		{ key = "shieldwall", spells = { 871 } },
-		{ key = "laststand", spells = { 12975 } },
+	suggested = {
+		7386,  -- Sunder Armor
+		1160,  -- Demoralizing Shout
+		6343,  -- Thunder Clap
+		772,   -- Rend
+		12721, -- Deep Wound, the bleed the Deep Wounds talent applies
+		12294, -- Mortal Strike
+		1715,  -- Hamstring
+		12323, -- Piercing Howl
+		355,   -- Taunt
+		694,   -- Mocking Blow
+		1161,  -- Challenging Shout
+		676,   -- Disarm
+		12809, -- Concussion Blow
+		5246,  -- Intimidating Shout
+		7922,  -- Charge Stun, not Charge
+		20253, -- Intercept Stun, not Intercept
+	},
+
+	--------------------------------------------------------------------------
+	-- The three specs
+	--
+	-- Tree order, which is the order the client counts them in and the order the
+	-- resolver falls back on: 1 arms, 2 fury, 3 protection.
+	--
+	-- What is not written again inside them is the point of the shape. All three
+	-- stand in the same three stances, cast the same three openers, open on the
+	-- same dodge, wait on the same twenty percent, put the same Slam inside the
+	-- same swing and want the same shout on the upkeep row. Those six fields are
+	-- above and stay there. What a warrior spec actually disagrees about is which
+	-- long cooldowns are worth counting, which short ones are worth a clock, and
+	-- which debuffs are worth a square, and that is what each of these three says.
+	--
+	-- The bar plan is above as well, and deliberately. It pages by stance rather
+	-- than by tree, every cell of it is a spell all three own, and it is the plan
+	-- the warrior on this account presses. A per spec plan would be three copies
+	-- of one table differing in two cells.
+	--
+	-- Arms carries no signature and does not need one. Death Wish and Last Stand
+	-- are single rank talents at the foot of the other two trees, so a warrior who
+	-- has neither and has spent points somewhere is named by their tree, and arms
+	-- is what that answers. Mortal Strike would be the obvious signature and has
+	-- six ranks, which is a rank table that goes stale at the next trainer visit.
+	--
+	-- The long ids: 12292 Death Wish, 1719 Recklessness, 871 Shield Wall, 12975
+	-- Last Stand. All four are on Wowhead's TBC Classic database at those ids with
+	-- the cooldowns the row draws, and all four are the same id on Era. None of
+	-- the four was ever ranked.
+	--
+	-- What is deliberately not on any of the three. Retaliation is thirty minutes
+	-- on these clients, which is not a fight cooldown, it is a wing cooldown.
+	-- Bloodrage comes back inside a minute and is on the rotation layer instead,
+	-- which is where a thing that is nearly always ready belongs.
+	--------------------------------------------------------------------------
+	specs = {
+		{
+			key = "arms", label = "arms", tree = 1,
+
+			cooldowns = {
+				{ key = "recklessness", spells = { 1719 } },
+				{ key = "shieldwall", spells = { 871 } },
+			},
+
+			-- 12294 Mortal Strike, 7384 Overpower, 12328 Sweeping Strikes, 6343
+			-- Thunder Clap, 18499 Berserker Rage. Rank 1 of each, because every rank
+			-- stays in the spellbook on these clients and every rank of one ability
+			-- shares one cooldown, so the first id answers for the sixth.
+			--
+			-- Overpower is on this layer as well as in `reactive` above, and the two
+			-- say different things: the reaction window is whether the fight has
+			-- opened it, and this is whether the five second cooldown has run out.
+			-- A window that opens on a square still counting down is a press you do
+			-- not get.
+			rotation = {
+				{ key = "mortalstrike", spells = { 12294 } },
+				{ key = "overpower", spells = { 7384 } },
+				{ key = "sweeping", spells = { 12328 } },
+				{ key = "thunderclap", spells = { 6343 } },
+				{ key = "berserkerrage", spells = { 18499 } },
+			},
+
+			-- 772 Rend, 12721 Deep Wound, 12294 Mortal Strike, 6343 Thunder Clap,
+			-- 1160 Demoralizing Shout. The bleeds and the strike that decide whether
+			-- the pull is going well.
+			--
+			-- 12721 and not 12162. The talent is called Deep Wounds and the aura it
+			-- lands is called Deep Wound, the row matches on the name, and one letter
+			-- was a square that stayed dark through every fight. See REPLACED in
+			-- UnitFrames\EnemyBars.lua, which shuts the same door on a number typed
+			-- in by hand.
+			debuffs = { 772, 12721, 12294, 6343, 1160 },
+		},
+
+		{
+			key = "fury", label = "fury", tree = 2,
+			signature = { 12292 }, -- Death Wish
+
+			cooldowns = {
+				{ key = "deathwish", spells = { 12292 } },
+				{ key = "recklessness", spells = { 1719 } },
+				{ key = "shieldwall", spells = { 871 } },
+			},
+
+			-- 23881 Bloodthirst, 1680 Whirlwind, 18499 Berserker Rage, 6343 Thunder
+			-- Clap.
+			rotation = {
+				{ key = "bloodthirst", spells = { 23881 } },
+				{ key = "whirlwind", spells = { 1680 } },
+				{ key = "berserkerrage", spells = { 18499 } },
+				{ key = "thunderclap", spells = { 6343 } },
+			},
+
+			-- No Rend and no Deep Wound, because a fury warrior applies neither, and
+			-- two squares that never come on are two squares of the row spent saying
+			-- nothing. 1160 Demoralizing Shout, 6343 Thunder Clap, 1715 Hamstring.
+			debuffs = { 1160, 6343, 1715 },
+		},
+
+		{
+			key = "protection", label = "protection", tree = 3,
+			signature = { 12975 }, -- Last Stand
+
+			cooldowns = {
+				{ key = "shieldwall", spells = { 871 } },
+				{ key = "laststand", spells = { 12975 } },
+				{ key = "recklessness", spells = { 1719 } },
+			},
+
+			-- 23922 Shield Slam, 6572 Revenge, 2565 Shield Block, 72 Shield Bash,
+			-- 6343 Thunder Clap.
+			--
+			-- Revenge is here for the reason Overpower is on the arms layer: the
+			-- reaction window says the fight opened it and this says the cooldown
+			-- allows it, and they are not the same question.
+			rotation = {
+				{ key = "shieldslam", spells = { 23922 } },
+				{ key = "revenge", spells = { 6572 } },
+				{ key = "shieldblock", spells = { 2565 } },
+				{ key = "shieldbash", spells = { 72 } },
+				{ key = "thunderclap", spells = { 6343 } },
+			},
+
+			-- 7386 Sunder Armor leads, which is the one debuff the shipped list left
+			-- off on the argument that a warrior reads the stack count off his own
+			-- frame. That argument holds for the warrior applying it and not for the
+			-- one tanking four mobs, which is the whole of what a protection row is
+			-- for. 1160 Demoralizing Shout, 6343 Thunder Clap, 12809 Concussion Blow.
+			debuffs = { 7386, 1160, 6343, 12809 },
+		},
 	},
 
 	loadout = LOADOUT,

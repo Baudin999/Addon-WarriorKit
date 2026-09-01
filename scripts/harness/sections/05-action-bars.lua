@@ -927,8 +927,13 @@ end
 -- Whole pixels where the grid can reach. The health number is the one size
 -- derived from a measurement the client made, so it is the one that can come
 -- back fractional; the tag frame that used to hold that job is gone.
+-- The debuff square is in the walk only where there is one. Which debuffs a bar
+-- tracks is a fact about your spec now, and a class nobody has written a file
+-- for tracks none until you pick some, so on that run there is no square to put
+-- on the grid rather than a square that is off it.
 for _, pair in ipairs({ { "widget", widget }, { "box", widget.box },
-	{ "health number", widget.healthText }, { "icon", widget.icons[1] } }) do
+	{ "health number", widget.healthText },
+	widget.icons[1] and { "icon", widget.icons[1] } or nil }) do
 	for _, axis in ipairs({ "GetWidth", "GetHeight" }) do
 		local size = pair[2][axis](pair[2])
 		check(math.abs(size - math.floor(size + 0.5)) < 1e-9,
@@ -1044,10 +1049,13 @@ check(widget.box.edges[1].height == ns.UI.Pixel(widget),
 	("hairline is %.4f units, expected %.4f"):format(widget.box.edges[1].height, ns.UI.Pixel(widget)))
 
 -- The icon crop lands on texel boundaries and the client's snapping is off.
-local art = widget.icons[1].icon
-check(art.texcoord and math.abs(art.texcoord[1] * 64 - 5) < 1e-9,
+-- Asked only where the bar is tracking something, for the reason the grid walk
+-- above skips the same square, and every class run reaches it.
+local art = widget.icons[1] and widget.icons[1].icon
+check(not art or (art.texcoord and math.abs(art.texcoord[1] * 64 - 5) < 1e-9),
 	"icon crop is not on a texel boundary")
-check(art.snapped == false and art.bias == 0, "icon texture is still being snapped")
+check(not art or (art.snapped == false and art.bias == 0),
+	"icon texture is still being snapped")
 
 -- Left for the sections below.
 H.carry.anchor, H.carry.wanted, H.carry.widget = anchor, wanted, widget

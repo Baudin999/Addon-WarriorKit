@@ -49,8 +49,15 @@ local function tick()
 	ticker.scripts.OnUpdate(ticker, 0.2)
 end
 
--- What this class brought, which is what every count below is measured against.
+-- What this spec brought, which is what every count below is measured against.
+--
+-- Two lists now and one number. The row draws the rotation cooldowns as big
+-- squares along the top and the long ones as smaller squares docked under them,
+-- so a count of squares is a count of both, and the filters below are asserted
+-- against the long list because that is the one every class file fills in.
+local FAST = ns.Class.Of("rotation") or {}
 local LISTED = ns.Class.Of("cooldowns") or {}
+local BOTH = #FAST + #LISTED
 
 local function rebuild()
 	fire("SPELLS_CHANGED")
@@ -68,9 +75,20 @@ inCombat.player = false
 worn[13], worn[14] = nil, nil
 rebuild()
 
-check(Cooldowns.Count() == #LISTED,
-	("a %s was given %d squares and its class file lists %d")
-		:format(PLAYER_CLASS, Cooldowns.Count(), #LISTED))
+check(Cooldowns.Count() == BOTH,
+	("a %s was given %d squares and its class file lists %d over the two layers")
+		:format(PLAYER_CLASS, Cooldowns.Count(), BOTH))
+
+-- The rotation entries lead the list and every one of them is tagged, which is
+-- what the row reads to decide which line a square goes on and how big it is.
+-- Getting the order wrong would draw a long cooldown at rotation size on the
+-- top line, which looks deliberate and is not.
+for index = 1, Cooldowns.Count() do
+	local rotation = Cooldowns.Layer(index) == Cooldowns.ROTATION
+	check(rotation == (index <= #FAST),
+		("square %d is on the %s line and the first %d squares are the rotation")
+			:format(index, rotation and "rotation" or "docked", #FAST))
+end
 
 -- Every drawn entry carries a name this client answered for and an id it
 -- resolved to, because a square with neither is a square with no picture and
@@ -85,7 +103,7 @@ end
 
 -- A class with nothing listed is a supported class and says why rather than
 -- drawing an empty frame.
-if #LISTED == 0 then
+if BOTH == 0 then
 	check(Cooldowns.Refusal() ~= nil,
 		("a %s draws no row and gives no reason"):format(PLAYER_CLASS))
 	check(Cooldowns.Refusal():find(ns.Class.Label(), 1, true) ~= nil,
@@ -108,7 +126,7 @@ if #LISTED > 0 then
 	if #first.spells > 1 then
 		own.unknown[first.spells[1]] = true
 		rebuild()
-		check(Cooldowns.Count() == #LISTED,
+		check(Cooldowns.Count() == BOTH,
 			("%s has %d ids and lost its square to one of them")
 				:format(first.key, #first.spells))
 	end
@@ -119,28 +137,28 @@ if #LISTED > 0 then
 		own.unknown[first.spells[index]] = true
 	end
 	rebuild()
-	check(Cooldowns.Count() == #LISTED - 1,
+	check(Cooldowns.Count() == BOTH - 1,
 		("an unlearned %s left %d squares of %d")
-			:format(first.key, Cooldowns.Count(), #LISTED))
+			:format(first.key, Cooldowns.Count(), BOTH))
 	for index = 1, #first.spells do
 		own.unknown[first.spells[index]] = nil
 	end
 	rebuild()
-	check(Cooldowns.Count() == #LISTED, "learning it back did not put the square back")
+	check(Cooldowns.Count() == BOTH, "learning it back did not put the square back")
 
 	-- Switched off, which is per character and is the only one of the three you
 	-- can reach from the panel.
 	Cooldowns.SetWatched(first.key, false)
 	tick()
-	check(Cooldowns.Count() == #LISTED - 1,
+	check(Cooldowns.Count() == BOTH - 1,
 		("switching %s off left %d squares of %d")
-			:format(first.key, Cooldowns.Count(), #LISTED))
+			:format(first.key, Cooldowns.Count(), BOTH))
 	local silent, names = Cooldowns.Silent()
 	check(silent == 1 and names ~= "",
 		("a switched off entry is not reported anywhere: %d, %q"):format(silent, names))
 	Cooldowns.SetWatched(first.key, true)
 	tick()
-	check(Cooldowns.Count() == #LISTED, "switching it back on did not put the square back")
+	check(Cooldowns.Count() == BOTH, "switching it back on did not put the square back")
 
 	-- A word that belongs to another class is named as such rather than falling
 	-- through to the bare on|off toggle, which would switch the whole row off
@@ -440,6 +458,7 @@ check(churned < CHURN.cooldowns,
 inCombat.player = true
 tick()
 
-print(("cooldowns %d drawn for a %s, %d off the class file and %d trinket, %s; %s; %.2f KB per 50 ticks, gate is %.2f")
-	:format(Row.Shown(), PLAYER_CLASS, #LISTED, Cooldowns.Count() - #LISTED,
-		tostring(Row.Mode()), Cooldowns.Describe(), churned, CHURN.cooldowns))
+print(("cooldowns %d drawn for a %s, %d rotation and %d long off the class file and %d trinket, %s; %s; %.2f KB per 50 ticks, gate is %.2f")
+	:format(Row.Shown(), ns.Class.Spec.Says(), #FAST, #LISTED,
+		Cooldowns.Count() - BOTH, tostring(Row.Mode()), Cooldowns.Describe(),
+		churned, CHURN.cooldowns))

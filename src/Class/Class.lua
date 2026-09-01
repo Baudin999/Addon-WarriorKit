@@ -28,10 +28,18 @@ ns.Class = Class
 -- the addon that never ask, and the parts that do ask find no field and do not
 -- build. That is what makes adding a class additive: one file, no edits
 -- anywhere else.
+--
+-- A class may also register `specs`, and every field above may be written again
+-- inside one of them. Class.Of asks the spec first, per field, so a spec says
+-- only what it disagrees with and a class with no specs behaves as it always
+-- did. Which spec you are playing is Spec.lua's question and nothing outside
+-- Class/ asks it.
 --------------------------------------------------------------------------
 
 -- Every class that has signed in, by token. Written at load and never after.
 local defs = {}
+
+local NONE = {}
 
 --------------------------------------------------------------------------
 -- The two constructors a loadout is built out of
@@ -66,6 +74,12 @@ end
 -- refusals read out. The client's own localised name is Class.Name and is what
 -- the rail is titled with, because a rail entry is a proper noun and a sentence
 -- in the middle of a refusal is not.
+--
+-- `specs` is checked here and read in Spec.lua, and the three fields it insists
+-- on are the three the resolver reads: a key to type at a slash word, a label
+-- to read out, and the tree that answers when no signature spell does. A spec
+-- that filled none of them in would never be picked and nothing on screen would
+-- say why, which is a load error rather than a state to recover from.
 function Class.Register(token, def)
 	assert(type(token) == "string" and token ~= "",
 		"a class registered without a token")
@@ -73,6 +87,22 @@ function Class.Register(token, def)
 		("two class files registered %s"):format(token))
 	assert(type(def) == "table" and type(def.label) == "string",
 		("%s registered no label"):format(token))
+
+	local seen = {}
+	for index = 1, #(def.specs or NONE) do
+		local spec = def.specs[index]
+		assert(type(spec.key) == "string" and spec.key ~= "",
+			("%s registered spec %d without a key"):format(token, index))
+		assert(not seen[spec.key],
+			("%s registered two specs called %s"):format(token, spec.key))
+		assert(type(spec.label) == "string" and spec.label ~= "",
+			("%s registered the %s spec without a label"):format(token, spec.key))
+		assert(type(spec.tree) == "number",
+			("%s registered the %s spec without a talent tree"):format(token, spec.key))
+		seen[spec.key] = true
+		spec.token = token
+	end
+
 	def.token = token
 	defs[token] = def
 end
@@ -139,9 +169,31 @@ function Class.Mine()
 	return mine and defs[mine] or nil
 end
 
+-- Field by field, and the spec is asked first.
+--
+-- Per field rather than per table, because a spec says only what it disagrees
+-- with. An arms warrior and a protection warrior stand in the same three
+-- stances and want the same square on the buff row, so neither file writes
+-- `forms` or `upkeep` again; they disagree about which four cooldowns are worth
+-- counting and which debuffs are worth a square, and those are the two fields
+-- they write.
+--
+-- Nil is still the whole gate, and it now has two doors rather than one. A part
+-- that finds nothing here does not build, whether that is because the class
+-- registered no such fact or because the spec you are playing put nothing in
+-- its place. The second is deliberate: a mage plan written for frost is a wrong
+-- plan on an arcane mage, and no plan at all is the honest answer until
+-- somebody plays one and writes it down.
 function Class.Of(field)
 	local mine = Class.Mine()
-	return mine and mine[field] or nil
+	if not mine then
+		return nil
+	end
+	local spec = Class.Spec.Mine()
+	if spec and spec[field] ~= nil then
+		return spec[field]
+	end
+	return mine[field]
 end
 
 -- The addon's own word for what you are, for a refusal to read out. Falls back

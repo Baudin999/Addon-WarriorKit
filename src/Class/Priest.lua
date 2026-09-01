@@ -28,6 +28,16 @@ local ADDON, ns = ...
 -- swap weapons. The same argument, written down in Class\Shaman.lua.
 --------------------------------------------------------------------------
 
+--------------------------------------------------------------------------
+-- The cooldowns every spec counts
+--
+-- 34433 Shadowfiend and 6346 Fear Ward, written once and named by all three.
+-- Both are Burning Crusade on this account and neither belongs to a tree.
+--------------------------------------------------------------------------
+
+local SHADOWFIEND = { key = "shadowfiend", spells = { 34433 } }
+local FEAR_WARD = { key = "fearward", spells = { 6346 } }
+
 ns.Class.Register("PRIEST", {
 	label = "priest",
 
@@ -72,37 +82,104 @@ ns.Class.Register("PRIEST", {
 	},
 
 	--------------------------------------------------------------------------
-	-- The long cooldowns
+	-- What the picker offers
 	--
-	-- Five, and this is the second field this file has, so the paragraph at the
-	-- top about a class that brings one fact is now a class that brings two.
-	-- The argument for writing these down without a priest to look at is not
-	-- the argument that was refused for the bar plan: a plan decides what every
-	-- key on your bars does and gets it wrong in a way you have to undo, and a
-	-- cooldown entry the client cannot resolve or the character does not know
-	-- draws nothing at all. The cost of being wrong here is an empty square,
-	-- and the cost of being wrong there was your bars.
+	-- Shared by all three specs. 589 Shadow Word: Pain, 34914 Vampiric Touch,
+	-- 15407 Mind Flay, 15286 Vampiric Embrace, 14914 Holy Fire.
+	--------------------------------------------------------------------------
+	suggested = { 589, 34914, 15407, 15286, 14914 },
+
+	--------------------------------------------------------------------------
+	-- The three specs
+	--
+	-- Tree order, which is the order the client counts them in and the order the
+	-- resolver falls back on: 1 discipline, 2 holy, 3 shadow.
+	--
+	-- Still no bar plan anywhere, for the reason at the top of this file, and the
+	-- specs do not change that argument: nobody here has levelled a priest, so
+	-- there is no character to write one off. What the specs do add is the same
+	-- thing they add everywhere else, which is a shorter cooldown row and a debuff
+	-- row that is about this priest rather than about priests.
 	--
 	-- The ids, from Wowhead's Classic and TBC Classic databases: 14751 Inner
 	-- Focus, 10060 Power Infusion, 34433 Shadowfiend, 33206 Pain Suppression,
-	-- 6346 Fear Ward.
+	-- 6346 Fear Ward, 589 Shadow Word: Pain, 15407 Mind Flay, 34914 Vampiric
+	-- Touch, 15286 Vampiric Embrace, 14914 Holy Fire, 8092 Mind Blast.
 	--
-	-- Three of the five are Burning Crusade, and Fear Ward is the odd one:
+	-- Three of the cooldowns are Burning Crusade, and Fear Ward is the odd one:
 	-- on Era it is a dwarf and draenei priest ability rather than a trained one,
 	-- so on that client it is on the row for some priests and not for others,
 	-- which IsSpellKnown answers without this file having to know about races.
 	--
-	-- Desperate Prayer is deliberately absent for the same reason and the
-	-- opposite outcome: it is a racial on Era and a class ability in Burning
-	-- Crusade, its id moved between them, and an id that resolves to the wrong
-	-- spell is worse than an id that resolves to nothing. Whoever plays a priest
-	-- here can add it once they can read it off their own spellbook.
+	-- Desperate Prayer is deliberately absent for the same reason and the opposite
+	-- outcome: it is a racial on Era and a class ability in Burning Crusade, its
+	-- id moved between them, and an id that resolves to the wrong spell is worse
+	-- than an id that resolves to nothing. Whoever plays a priest here can add it
+	-- once they can read it off their own spellbook.
+	--
+	-- Only discipline carries a signature, and it carries two: Power Infusion at
+	-- thirty one points and Pain Suppression at forty one. Both are single rank
+	-- and both are deep enough that nobody holding one is playing anything else.
+	--
+	-- Inner Focus is deliberately not one of them, and it is the case worth
+	-- writing down. It is single rank and it is a discipline talent, so it looks
+	-- like the obvious third; it sits fifteen points up, which is inside the reach
+	-- of a holy priest, and a signature a second spec commonly owns is not a
+	-- signature at all, it is a way to call every holy priest discipline. It is
+	-- on both cooldown lists below for exactly the same reason.
+	--
+	-- Holy and shadow own nothing of that shape, so both are answered by their
+	-- tree, which is what the fallback is for.
 	--------------------------------------------------------------------------
-	cooldowns = {
-		{ key = "innerfocus", spells = { 14751 } },
-		{ key = "infusion", spells = { 10060 } },
-		{ key = "shadowfiend", spells = { 34433 } },
-		{ key = "suppression", spells = { 33206 } },
-		{ key = "fearward", spells = { 6346 } },
+	specs = {
+		{
+			key = "discipline", label = "discipline", tree = 1,
+			signature = { 10060, 33206 }, -- Power Infusion, Pain Suppression
+
+			cooldowns = {
+				{ key = "innerfocus", spells = { 14751 } },
+				{ key = "infusion", spells = { 10060 } },
+				{ key = "suppression", spells = { 33206 } },
+				SHADOWFIEND, FEAR_WARD,
+			},
+
+			rotation = {
+				{ key = "mindblast", spells = { 8092 } },
+			},
+
+			debuffs = { 589, 14914 },
+		},
+
+		{
+			key = "holy", label = "holy", tree = 2,
+
+			cooldowns = {
+				{ key = "innerfocus", spells = { 14751 } },
+				SHADOWFIEND, FEAR_WARD,
+			},
+
+			rotation = {
+				{ key = "mindblast", spells = { 8092 } },
+			},
+
+			debuffs = { 14914, 589 },
+		},
+
+		{
+			key = "shadow", label = "shadow", tree = 3,
+
+			cooldowns = {
+				SHADOWFIEND, FEAR_WARD,
+			},
+
+			rotation = {
+				{ key = "mindblast", spells = { 8092 } },
+			},
+
+			-- The four a shadow priest keeps up and cannot read anywhere else. All
+			-- but Shadow Word: Pain are Burning Crusade, and on Era the row is one
+			-- square long, which is correct rather than short.
+			debuffs = { 589, 34914, 15407, 15286 },
+		},
 	},
 })

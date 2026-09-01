@@ -21,6 +21,19 @@ local Spell, Macro = ns.Class.Spell, ns.Class.Macro
 -- job. A bare main hand is already the first entry on the buff nag, and it says
 -- so in its own hint: a sharpening stone, an oil and a shaman's imbue are the
 -- same fact about the same slot, read out of the same call.
+--
+-- Three specs, and the split between what this file says and what each of them
+-- says is worth stating. The shield square on the buff row is here, because all
+-- three want one and none of them cares which. Everything a spec disagrees
+-- about is written inside it: the four cooldowns worth counting, the debuffs
+-- worth a square above a mob, and the bar plan.
+--
+-- The bar plan lives inside enhancement and nowhere else. That is the same
+-- decision Class\Priest.lua takes for the whole class: the plan below is
+-- written off a character somebody plays, and an elemental plan written from a
+-- talent calculator would fill your bars with a guess and take a backup you
+-- then have to put back. So an elemental shaman opens no loadout page and the
+-- refusal names the spec. Somebody who levels one writes the plan.
 --------------------------------------------------------------------------
 
 --------------------------------------------------------------------------
@@ -104,6 +117,27 @@ local LOADOUT = {
 	},
 }
 
+--------------------------------------------------------------------------
+-- The cooldowns every spec counts
+--
+-- Written once and named by all three, because these three are facts about
+-- being a shaman rather than about which tree you spent your points in.
+--
+-- The ids, from Wowhead's Classic and TBC Classic databases: 2825 Bloodlust,
+-- 32182 Heroism, 2894 Fire Elemental Totem, 2062 Earth Elemental Totem. Three
+-- of the four are Burning Crusade only, so an Era shaman sees the one that was
+-- always there and nothing is wrong: an id this client cannot name draws no
+-- square.
+--
+-- Bloodlust and Heroism are one entry with two ids, because they are the same
+-- button on two factions and a shaman has exactly one of them. The entry takes
+-- whichever this character knows, which is what the two id form is for.
+--------------------------------------------------------------------------
+
+local LUST = { key = "lust", spells = { 2825, 32182 } }
+local FIRE_ELEMENTAL = { key = "fireelemental", spells = { 2894 } }
+local EARTH_ELEMENTAL = { key = "earthelemental", spells = { 2062 } }
+
 ns.Class.Register("SHAMAN", {
 	label = "shaman",
 
@@ -134,34 +168,93 @@ ns.Class.Register("SHAMAN", {
 	},
 
 	--------------------------------------------------------------------------
-	-- The long cooldowns
+	-- What the picker offers
 	--
-	-- Six, and four of them are Burning Crusade only, so an Era shaman sees the
-	-- two that were always there and nothing is wrong. IsSpellKnown decides the
-	-- rest: Elemental Mastery and Nature's Swiftness are talents at the foot of
-	-- two different trees and nobody has both.
-	--
-	-- The ids, from Wowhead's Classic and TBC Classic databases: 2825 Bloodlust,
-	-- 32182 Heroism, 30823 Shamanistic Rage, 16166 Elemental Mastery, 16188
-	-- Nature's Swiftness, 2894 Fire Elemental Totem, 2062 Earth Elemental Totem.
-	--
-	-- Bloodlust and Heroism are one entry with two ids, because they are the
-	-- same button on two factions and a shaman has exactly one of them. The
-	-- entry takes whichever this character knows, which is what the two id form
-	-- is for.
-	--
-	-- Mana Tide Totem is not here. It is a restoration talent, this shaman is
-	-- enhancement, and a row written for a spec nobody plays is a row written
-	-- from a talent calculator. Add it the day somebody heals on one.
+	-- Shared by all three specs, because the shortlist is what you may add
+	-- rather than what you are handed. 17364 Stormstrike, 8050 Flame Shock,
+	-- 8056 Frost Shock, 8042 Earth Shock, 421 Chain Lightning.
 	--------------------------------------------------------------------------
-	cooldowns = {
-		{ key = "lust", spells = { 2825, 32182 } },
-		{ key = "rage", spells = { 30823 } },
-		{ key = "mastery", spells = { 16166 } },
-		{ key = "swiftness", spells = { 16188 } },
-		{ key = "fireelemental", spells = { 2894 } },
-		{ key = "earthelemental", spells = { 2062 } },
-	},
+	suggested = { 17364, 8050, 8056, 8042, 421 },
 
-	loadout = LOADOUT,
+	--------------------------------------------------------------------------
+	-- The three specs
+	--
+	-- Tree order, which is the order the client counts them in and the order the
+	-- resolver falls back on: 1 elemental, 2 enhancement, 3 restoration.
+	--
+	-- Each signature is a talent with one rank at the foot of one tree, so
+	-- IsSpellKnown settles the question outright for anyone who has reached it and
+	-- no rank table has to be kept up to date. All three ids are already on the
+	-- cooldown lists below, which is not a coincidence: a forty one point talent
+	-- is both the thing that names your spec and the thing you count in your head.
+	--
+	-- Bloodlust and the two elementals are shared, so they are written once above
+	-- and named by each spec. Sharing the table is safe because a character has
+	-- one spec and the row resolves the entry it is handed.
+	--------------------------------------------------------------------------
+	specs = {
+		{
+			key = "elemental", label = "elemental", tree = 1,
+			signature = { 16166 }, -- Elemental Mastery
+
+			cooldowns = {
+				{ key = "mastery", spells = { 16166 } },
+				LUST, FIRE_ELEMENTAL, EARTH_ELEMENTAL,
+			},
+
+			-- 421 Chain Lightning, 8042 Earth Shock, 8050 Flame Shock. The three
+			-- shocks share one cooldown between them, so only the two an elemental
+			-- shaman actually presses are here and the third would be a second
+			-- square counting the same clock.
+			rotation = {
+				{ key = "chainlightning", spells = { 421 } },
+				{ key = "earthshock", spells = { 8042 } },
+				{ key = "flameshock", spells = { 8050 } },
+			},
+
+			debuffs = { 8050, 8056, 8042 },
+		},
+
+		{
+			key = "enhancement", label = "enhancement", tree = 2,
+			signature = { 30823 }, -- Shamanistic Rage
+
+			cooldowns = {
+				{ key = "rage", spells = { 30823 } },
+				LUST, FIRE_ELEMENTAL, EARTH_ELEMENTAL,
+			},
+
+			-- 17364 Stormstrike, 8042 Earth Shock, 8050 Flame Shock. Stormstrike is
+			-- the ten seconds the whole rotation is built around and the client says
+			-- nothing about it that a bar square does not already say badly.
+			rotation = {
+				{ key = "stormstrike", spells = { 17364 } },
+				{ key = "earthshock", spells = { 8042 } },
+				{ key = "flameshock", spells = { 8050 } },
+			},
+
+			-- The Stormstrike debuff is the one worth a square: it is what the next
+			-- two nature hits are worth double for, it falls off silently, and
+			-- somebody else's does not count.
+			debuffs = { 17364, 8050, 8056, 8042 },
+
+			loadout = LOADOUT,
+		},
+
+		{
+			key = "restoration", label = "restoration", tree = 3,
+			signature = { 16188 }, -- Nature's Swiftness
+
+			cooldowns = {
+				{ key = "swiftness", spells = { 16188 } },
+				LUST, FIRE_ELEMENTAL, EARTH_ELEMENTAL,
+			},
+
+			rotation = {
+				{ key = "earthshock", spells = { 8042 } },
+			},
+
+			debuffs = { 8042, 8056 },
+		},
+	},
 })

@@ -374,9 +374,24 @@ log("SPELL_HEAL", FROST, nil, nil, 600, 100)
 
 ns.Unit.Spec.Refresh()
 check(ns.Unit.Spec.Known(BAUDIN), "your own spec did not resolve out of your talent trees")
-local icon = ns.Unit.Spec.Icon(BAUDIN, "WARRIOR")
-check(icon:find("SavageBlow", 1, true) ~= nil,
-	("the spec icon is %q, and 31 points are in Arms"):format(icon))
+
+-- The icon is whichever tree the stub has the most points in, read off the stub
+-- rather than written out here. A run that came up as one spec has had its
+-- points moved into that spec's tree before login, so naming Arms would be
+-- naming whichever run happened to be first rather than the rule being
+-- asserted: the icon on the row is the winning tree's own.
+do
+	local winner, most = 1, -1
+	for index, tree in ipairs(talentTrees.player) do
+		if tree.points > most then
+			winner, most = index, tree.points
+		end
+	end
+	local icon = ns.Unit.Spec.Icon(BAUDIN, "WARRIOR")
+	check(icon == talentTrees.player[winner].icon,
+		("the spec icon is %q, and %d points are in %s")
+			:format(icon, most, talentTrees.player[winner].name))
+end
 
 -- The other signature. One build leads with a numeric tab id and one leads
 -- with the tree's name, and the addon tells them apart on the type of the
@@ -389,15 +404,20 @@ state.talentShape = "modern"
 
 -- Nobody has committed to anything yet, so there is no spec to draw and the
 -- class icon stands in.
-local spent = talentTrees.player[2].points
-talentTrees.player[1].points, talentTrees.player[2].points = 2, 1
+local spent = {}
+for index, tree in ipairs(talentTrees.player) do
+	spent[index] = tree.points
+	tree.points = (index == 1) and 2 or 1
+end
 ns.Unit.Spec.Forget()
 ns.Unit.Spec.Refresh()
 check(not ns.Unit.Spec.Known(BAUDIN), "three points in a tree were taken for a spec")
 local sheet, left = ns.Unit.Spec.Icon(BAUDIN, "WARRIOR")
 check(sheet:find("CharacterCreate", 1, true) ~= nil and left == 0,
 	("the fallback drew %q rather than the class sheet"):format(sheet))
-talentTrees.player[1].points, talentTrees.player[2].points = 31, spent
+for index, tree in ipairs(talentTrees.player) do
+	tree.points = spent[index]
+end
 
 -- And somebody else's, which is an inspect and an answer rather than a read.
 ns.Unit.Spec.Forget()

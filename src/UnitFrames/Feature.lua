@@ -569,13 +569,6 @@ ns.Register({
 		-- debuff row under a full mob name.
 		barsWidth = 220,
 
-		-- Which debuffs the row above each bar shows, as spell IDs in the order
-		-- they are drawn. A setting rather than a constant, because which
-		-- debuffs matter is a spec question: an arms warrior watches Deep
-		-- Wounds and Mortal Strike, a protection one watches neither and wants
-		-- the room back. EnemyBars owns the list and every write to it.
-		barsSpells = ns.EnemyBars.DefaultSpells(),
-
 		-- One debuff square's edge, in pixels like every other size in the bars.
 		-- 29 is the one size in the range that draws a stored texel on a pixel,
 		-- because the square's border takes two pixels off and the crop leaves
@@ -785,6 +778,26 @@ ns.Register({
 		-- plays with, and by name rather than by GUID, because a GUID would be
 		-- right and unreadable.
 		partyRoles = {},
+
+		-- Which debuffs the row above each bar shows, as spell IDs in the order
+		-- they are drawn.
+		--
+		-- Per character, and it was per account until an alt made the case. An
+		-- arms warrior watches Rend, Deep Wound and Mortal Strike; a shaman on
+		-- the same account applies none of the three and got all five of the
+		-- warrior's squares, every one of them dark for the life of the
+		-- character. One account cannot hold one answer to a question that is
+		-- about which spells you have.
+		--
+		-- Empty here and seeded on first read, the way Loadouts/Feature.lua
+		-- seeds its rows and for the same reason: what belongs in it is
+		-- ns.Class.Of("debuffs"), the class is not reliably known while the
+		-- files load, and a list written at load would be the wrong one for
+		-- everybody. Core's migration carries an account-wide list over on the
+		-- first login after this moved, and a list that arrives with something
+		-- in it counts as seeded so nothing you edited is overwritten.
+		barsSpells = {},
+		barsSpellsSeeded = false,
 	},
 
 	words = {

@@ -4,7 +4,7 @@ local Cooldowns = {}
 ns.Cooldowns = Cooldowns
 
 --------------------------------------------------------------------------
--- The long cooldowns
+-- The cooldowns, in two layers
 --
 -- What this answers is one question the rest of the addon does not: how long
 -- until the thing you win the fight with is back. The bars already draw a swipe
@@ -13,11 +13,29 @@ ns.Cooldowns = Cooldowns
 -- minutes, Recklessness is thirty, Shield Wall is thirty, and a warrior counts
 -- all three in their head because nothing on the screen counts them.
 --
--- Two sources, and the split is the whole of this file.
+-- Two layers, because there are two of those questions and they are not asked
+-- at the same rate.
 --
--- Your class's list is facts and lives in Class\<yours>.lua, which is the rule
--- every other part follows. Nothing here names a spell, and a class that
--- registers no `cooldowns` field gets a row of trinkets or no row at all.
+--   rotation   the six to twelve seconds the fight is actually made of.
+--              Stormstrike, Mortal Strike, Thunder Clap, Shield Slam. Looked at
+--              constantly, pressed the moment it comes back, and read out of
+--              the corner of the eye, so these are the big squares and they are
+--              the top line.
+--
+--   long       the minutes. Recklessness, Shamanistic Rage, Shield Wall, a
+--              trinket. Looked at twice a fight, so they are smaller and docked
+--              under the line above rather than competing with it for the same
+--              glance.
+--
+-- A row that drew both at one size was the version this replaced, and the
+-- complaint against it is that it made a thirty minute cooldown and a ten second
+-- one look like the same kind of fact.
+--
+-- Three sources, and the split is the whole of this file.
+--
+-- Your spec's two lists are facts and live in Class\<yours>.lua, which is the
+-- rule every other part follows. Nothing here names a spell, and a spec that
+-- registers neither field gets a row of trinkets or no row at all.
 --
 -- The trinkets are not a class fact and are the same two slots for everybody,
 -- so they are here. Which trinket is worth a square is decided by the client:
@@ -45,10 +63,12 @@ ns.Cooldowns = Cooldowns
 -- global you just triggered is not.
 local GCD = 1.5
 
--- How many entries one class may put on the row. Eight, which is one more than
--- any class file uses today and is a ceiling rather than a target: the row is
--- built once at login at the ceiling, because a frame cannot be destroyed on
--- these clients.
+-- How many entries one spec may put on each line of the row. Both are ceilings
+-- rather than targets: the row is built once at login at the ceiling, because a
+-- frame cannot be destroyed on these clients, and a spec that overran one would
+-- lose squares off the end with nothing on screen saying so. Both are one or two
+-- past the longest list any class file writes today.
+local MAX_ROTATION = 6
 local MAX_CLASS = 8
 
 -- How many of your own aura slots the client will answer for. Forty, the same
@@ -56,6 +76,24 @@ local MAX_CLASS = 8
 local SLOTS = 40
 
 local NONE = {}
+
+-- Which line a square is drawn on. Two strings rather than two booleans or a
+-- number, because every place that reads one of them reads it in a comparison
+-- and a misspelling is then a square on the wrong line rather than a nil error.
+local ROTATION, LONG = "rotation", "long"
+Cooldowns.ROTATION, Cooldowns.LONG = ROTATION, LONG
+
+-- Does one list carry this slash word. Named because Cooldowns.Elsewhere asks
+-- it four times over two lists and a class that has specs and a class that does
+-- not are both answered by the same walk.
+local function Claims(list, word)
+	for index = 1, #(list or NONE) do
+		if list[index].key == word then
+			return true
+		end
+	end
+	return false
+end
 
 --------------------------------------------------------------------------
 -- The two trinkets
@@ -127,7 +165,7 @@ end
 --------------------------------------------------------------------------
 
 function Cooldowns.Ceiling()
-	return MAX_CLASS + #TRINKETS
+	return MAX_ROTATION + MAX_CLASS + #TRINKETS
 end
 
 function Cooldowns.Count()
@@ -142,7 +180,16 @@ function Cooldowns.Entry(index)
 	return order[index]
 end
 
--- What your class brought, plus the two trinket slots everybody has.
+-- What your spec brought, in two lines, plus the two trinket slots everybody
+-- has.
+--
+-- One list rather than two, tagged, because everything downstream asks the same
+-- four questions of every entry and only the row cares where a square is drawn.
+-- Splitting the list would have meant a second epoch, a second scan, a second
+-- switch table and two copies of State.
+--
+-- Rotation first, because that is the order the row draws them in and the row
+-- walks this list once.
 --
 -- Nil until the client says what class this is, which is the rule Class.lua
 -- states: an answer taken at file scope would be nil, and a nil written down
@@ -155,14 +202,19 @@ function Cooldowns.All()
 		return NONE
 	end
 
-	local mine = ns.Class.Of("cooldowns") or NONE
-	assert(#mine <= MAX_CLASS,
+	local fast = ns.Class.Of("rotation") or NONE
+	local long = ns.Class.Of("cooldowns") or NONE
+	assert(#fast <= MAX_ROTATION,
+		("%s puts %d entries on the rotation line and the cap is %d")
+			:format(ns.Class.Spec.Says(), #fast, MAX_ROTATION))
+	assert(#long <= MAX_CLASS,
 		("%s puts %d entries on the cooldown row and the cap is %d")
-			:format(ns.Class.Label(), #mine, MAX_CLASS))
+			:format(ns.Class.Spec.Says(), #long, MAX_CLASS))
 
 	shipped = {}
-	for index = 1, #mine do
-		shipped[index] = mine[index]
+	for index = 1, #fast do
+		shipped[index] = fast[index]
+		shipped[index].layer = ROTATION
 		-- Resolved here rather than only in Rebuild, because the options page is
 		-- built at login off this list and labels its switches with the client's
 		-- own name for each spell. A page built a moment before the first
@@ -170,10 +222,24 @@ function Cooldowns.All()
 		-- the page keeps rather than a question it asks again.
 		Resolve(shipped[index])
 	end
+	for index = 1, #long do
+		local entry = long[index]
+		entry.layer = LONG
+		shipped[#shipped + 1] = entry
+		Resolve(entry)
+	end
 	for index = 1, #TRINKETS do
+		TRINKETS[index].layer = LONG
 		shipped[#shipped + 1] = TRINKETS[index]
 	end
 	return shipped
+end
+
+-- Which line one drawn entry belongs on. The row is the only caller and it asks
+-- once per square per layout, never on a tick.
+function Cooldowns.Layer(index)
+	local entry = order[index]
+	return entry and entry.layer or LONG
 end
 
 -- Which class claims a slash word this character has no entry for, or nil for a
@@ -183,10 +249,13 @@ end
 -- and report that it had done something else.
 function Cooldowns.Elsewhere(word)
 	for _, def in pairs(ns.Class.All()) do
-		local list = def.cooldowns or NONE
-		for index = 1, #list do
-			if list[index].key == word then
-				return def.label
+		if Claims(def.rotation, word) or Claims(def.cooldowns, word) then
+			return def.label
+		end
+		for index = 1, #(def.specs or NONE) do
+			local spec = def.specs[index]
+			if Claims(spec.rotation, word) or Claims(spec.cooldowns, word) then
+				return spec.label .. " " .. def.label
 			end
 		end
 	end
@@ -397,9 +466,10 @@ function Cooldowns.Refusal()
 		return nil
 	end
 	local list = Cooldowns.All()
-	if #list <= #TRINKETS and not ns.Class.Of("cooldowns") then
+	if #list <= #TRINKETS
+		and not ns.Class.Of("cooldowns") and not ns.Class.Of("rotation") then
 		return ("nothing is listed for a %s, so the row carries your trinkets and"
-			.. " nothing else"):format(ns.Class.Label())
+			.. " nothing else"):format(ns.Class.Spec.Says())
 	end
 	local silent = Cooldowns.Silent()
 	if silent > 0 then

@@ -301,6 +301,23 @@ function Spec.Forget()
 	pending, pendingAt = nil, nil
 end
 
+-- Your own winning tree and its points, read straight out of the client rather
+-- than out of the table Record keeps.
+--
+-- Two callers want different things from the same three calls, and this is the
+-- one that does not want a GUID. The meter's row wants an icon keyed by GUID,
+-- because it draws one row per person and yours is one of them. Class/Spec.lua
+-- wants the tree index and nothing else, at login, to decide which spec you are
+-- playing: going through the GUID table would make that answer depend on the
+-- client having named your own GUID by then, which is a thing about the roster
+-- rather than about your talents.
+--
+-- Two returns rather than a table, for the reason Spec.Tree hands back two.
+function Spec.Own()
+	local _, index, spent = Resolve(false)
+	return index, spent or 0
+end
+
 -- Your own, read straight out of your talent trees. Free, so it is done at
 -- login and again on every point spent rather than waited for.
 function Spec.Refresh()
