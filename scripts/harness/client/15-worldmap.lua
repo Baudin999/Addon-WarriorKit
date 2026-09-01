@@ -366,9 +366,9 @@ H.worldmap = {
 	-- One turn-in, dropped into a zone the flood has already filled. Named so a
 	-- section can find it in the list the cap handed back, which is the only way
 	-- to ask whether the question mark survived the crowd.
-	TurnIn = function(map, name)
-		register({ quest = 6001, map = map, x = 44, y = 44, type = "complete",
-			name = name, title = "Something Finished" })
+	TurnIn = function(map, name, quest)
+		register({ quest = quest or 6001, map = map, x = 44, y = 44,
+			type = "complete", name = name, title = "Something Finished" })
 		return name
 	end,
 }

@@ -292,6 +292,107 @@ function Pins.You(map)
 		note = ("%.1f, %.1f"):format(x, y) }
 end
 
+--------------------------------------------------------------------------
+-- Where one quest's markers went
+--------------------------------------------------------------------------
+
+-- The name the client gives a map, or the number. A map the client will not
+-- name is still a fact worth printing, because the number is what tells two
+-- zones apart in a sentence about the wrong one.
+local function Named(map)
+	local name = Chart.Name(map)
+	if type(name) == "string" and name ~= "" then
+		return name
+	end
+	return "map " .. tostring(map)
+end
+
+-- Every map this quest's markers are on except the one being asked about, in
+-- id order so two runs of the same command read the same.
+local function Elsewhere(counted)
+	local maps = {}
+	for map in pairs(counted) do
+		maps[#maps + 1] = map
+	end
+	table.sort(maps)
+	local said = {}
+	for index = 1, #maps do
+		said[index] = ("%d on %s"):format(counted[maps[index]], Named(maps[index]))
+	end
+	return table.concat(said, ", ")
+end
+
+-- Where one quest's markers are, said in a line.
+--
+-- This answers the question Pins.Of cannot. Pins.Of hands back the markers that
+-- survived and says nothing about the ones that did not, which is the right
+-- shape for drawing a picture and the wrong shape for working out why a
+-- question mark you were expecting is not on it. There are five answers and
+-- they want different fixes: Questie is not answering at all, Questie never
+-- made a marker for the quest, it made one and hid it under one of its own
+-- settings, it filed one under a different zone, or it is on this map and the
+-- board is drawing it.
+--
+-- Written against the quest rather than the zone because that is the shape of
+-- the complaint. Nobody notices that a zone is four markers short. They notice
+-- that the quest they just finished has nowhere to hand it in.
+function Pins.Chase(questId, map)
+	local questie = Module("QuestieMap")
+	if not questie then
+		return "Questie is not answering"
+	end
+	local register = questie.questIdFrames
+	local names = type(register) == "table" and register[questId] or nil
+	if type(names) ~= "table" then
+		return "Questie holds no marker for it"
+	end
+	local here, turnin, hidden, mini = 0, 0, 0, 0
+	local away = {}
+	for _, name in pairs(names) do
+		local frame = type(name) == "string" and _G[name] or nil
+		if type(frame) == "table" then
+			local data = type(frame.data) == "table" and frame.data or {}
+			if frame.miniMapIcon then
+				mini = mini + 1
+			elseif frame.hidden then
+				hidden = hidden + 1
+			elseif frame.UiMapID == map then
+				here = here + 1
+				if data.Type == "complete" then
+					turnin = turnin + 1
+				end
+			elseif type(frame.UiMapID) == "number" then
+				away[frame.UiMapID] = (away[frame.UiMapID] or 0) + 1
+			end
+		end
+	end
+	if turnin > 0 then
+		return ("its turn-in is on %s, with %d marker(s) there altogether")
+			:format(Named(map), here)
+	end
+	-- What is on this map is the first half of every answer, including the
+	-- answer that nothing is. The second half is the reason, and there are four
+	-- of them: the markers are on another zone, Questie has hidden them, they
+	-- are minimap copies with no map twin, or there are none.
+	local said = here > 0
+		and ("%d marker(s) on %s and none of them a turn-in"):format(here, Named(map))
+		or ("nothing on %s"):format(Named(map))
+	if next(away) then
+		return ("%s; Questie has %s"):format(said, Elsewhere(away))
+	end
+	if hidden > 0 then
+		return ("%s; Questie has hidden %d more"):format(said, hidden)
+	end
+	if here > 0 then
+		return said
+	end
+	if mini > 0 then
+		return ("%s; Questie holds %d minimap marker(s) for it and nothing for a map")
+			:format(said, mini)
+	end
+	return said .. "; Questie holds no marker for it"
+end
+
 -- How many markers Questie is holding altogether, which is the number that says
 -- whether it has finished drawing rather than whether this zone has anything in
 -- it.

@@ -651,6 +651,25 @@ check(worldmap.Opened() == before + 1,
 ns.db.worldMapHideBlizz = true
 Blizz.Apply()
 
+----------------------------------------------------------------------
+-- Where a finished quest's question mark went
+----------------------------------------------------------------------
+
+-- The picture cannot answer this and neither can Pins.Of, which hands back the
+-- markers that survived and says nothing about the ones that did not. Four
+-- quests, and each is one of the four things a missing question mark turns out
+-- to be.
+worldmap.TurnIn(WESTFALL, "Gryan Stoutmantle", 6002)
+check(Pins.Chase(6002, WESTFALL):find("^its turn%-in is on Westfall"),
+	("a turn-in on the zone you are on reads %q"):format(Pins.Chase(6002, WESTFALL)))
+check(Pins.Chase(201, WESTFALL) == "nothing on Westfall; Questie has 1 on Elwynn Forest",
+	("a quest whose markers are in another zone reads %q"):format(Pins.Chase(201, WESTFALL)))
+check(Pins.Chase(102, WESTFALL) ==
+	"1 marker(s) on Westfall and none of them a turn-in; Questie has hidden 1 more",
+	("a quest with a hidden marker reads %q"):format(Pins.Chase(102, WESTFALL)))
+check(Pins.Chase(9999, WESTFALL) == "Questie holds no marker for it",
+	("a quest Questie never drew reads %q"):format(Pins.Chase(9999, WESTFALL)))
+
 print(("map    %d zones over %d continents, %d with a level range")
 	:format(zones, continents, (select(2, Zones.Ranged()))))
 print(("map    %s; %s"):format(Window.Describe(), Pins.Describe()))
