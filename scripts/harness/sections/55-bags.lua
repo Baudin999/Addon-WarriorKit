@@ -313,6 +313,114 @@ check(select(1, Bags.Free()) == 3,
 	"the refill did not put the bags back the way the window found them")
 
 ----------------------------------------------------------------------
+-- The merchant row
+--
+-- The window grows a row while a vendor is open and loses it again when you
+-- walk away, and what is on the row is what the two Chores parts would do if
+-- you asked them: the greys this vendor will take, and the bill for your gear.
+--
+-- The squares change with it. A grey a vendor pays for wears a coin, the one
+-- grey nobody buys does not, and what a merchant will not take at all goes dim
+-- for as long as you are standing there.
+----------------------------------------------------------------------
+
+do
+	local Merchant = ns.BagsMerchant
+	local sell, repair = Merchant.Buttons()
+	local plain = window:Body()
+
+	check(Merchant.Height() == 0, "the merchant row is up with no merchant open")
+
+	_G.MerchantFrame:Show()
+	H.fire("MERCHANT_SHOW")
+
+	check(Merchant.Open(), "a merchant opened and the bag window did not notice")
+	check(Merchant.Height() > 0, "the merchant row is not up at a merchant")
+	check(window:Body() == plain + Merchant.Height(),
+		("the window is %d tall and the row wants %d over the %d it was")
+			:format(window:Body(), Merchant.Height(), plain))
+
+	-- Two of the three greys, because Broken Twig is priced at nothing and is
+	-- the one thing in the junk pile a vendor will not take. That is the whole
+	-- difference between the pile and the sale.
+	check(sell:IsShown() and sell.text:GetText() == "sell 2 greys",
+		("the sell button reads %q and two of the three greys are sellable")
+			:format(tostring(sell:IsShown() and sell.text:GetText())))
+
+	-- The coin is on what the sale will take and on nothing else.
+	local coined, marked = 0, {}
+	for index = 1, drawn do
+		if squares[index].coin:IsShown() then
+			coined = coined + 1
+			marked[squares[index].name or "?"] = true
+		end
+	end
+	check(coined == 2, ("%d squares wear the coin and two greys are sellable")
+		:format(coined))
+	check(marked["Chipped Boar Tusk"] and not marked["Broken Twig"],
+		"the coin is on the grey nobody buys, or missing from one they do")
+
+	-- And what the merchant will not buy is dim. Counted off the bags rather
+	-- than off the window, because the claim is that the window agrees with the
+	-- client: the quest items, and the one grey that is priced at nothing.
+	local unsellable = 0
+	for bag = 0, 4 do
+		local held = CARRIED[bag]
+		for slot = 1, (held and #held or 0) do
+			local name = held[slot]
+			if name and ITEMS[name].price == 0 then
+				unsellable = unsellable + 1
+			end
+		end
+	end
+
+	local dimmed = 0
+	for index = 1, drawn do
+		if squares[index]:GetAlpha() < 1 then
+			dimmed = dimmed + 1
+		end
+	end
+	check(dimmed == unsellable,
+		("%d squares went dim at the merchant and %d things in the bags cannot be sold")
+			:format(dimmed, unsellable))
+
+	-- The repair half. The bill is written after the merchant opened, because
+	-- the automatic repair pays it on the event and there would be nothing left
+	-- for the button to quote.
+	state.repairBill = 400
+	Window.Refresh()
+	check(repair:IsShown() and repair.text:GetText() == "repair " .. ns.Coined(400),
+		("the repair button reads %q with a 400 copper bill standing")
+			:format(tostring(repair:IsShown() and repair.text:GetText())))
+
+	local purse = state.purse
+	repair:Click("LeftButton")
+	check(state.repairBill == 0, "the repair button did not pay the merchant")
+	check(state.purse == purse - 400, "the repair was reported and nothing was paid")
+
+	Window.Refresh()
+	check(not repair:IsShown(), "nothing is damaged and the repair button is still up")
+
+	-- Walking away. The row goes, the dimming goes with it, and the window is
+	-- the height it was before the vendor.
+	H.fire("MERCHANT_CLOSED")
+	_G.MerchantFrame:Hide()
+	check(not Merchant.Open(), "the merchant closed and the window still thinks one is open")
+	check(Merchant.Height() == 0, "the merchant closed and the row is still up")
+	check(window:Body() == plain,
+		("the window stayed %d tall and it was %d before the merchant")
+			:format(window:Body(), plain))
+
+	local left = 0
+	for index = 1, drawn do
+		if squares[index]:GetAlpha() < 1 then
+			left = left + 1
+		end
+	end
+	check(left == 0, ("%d squares are still dim with no merchant open"):format(left))
+end
+
+----------------------------------------------------------------------
 -- The nine calls
 --
 -- Every one of them reaches this window and none of them reaches the client's.

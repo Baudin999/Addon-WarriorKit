@@ -87,11 +87,16 @@ local function PinTop()
 	return true
 end
 
+-- How far down the piles start. Nought unless the merchant row is up, which is
+-- only while a vendor is open and only when it has something on it.
+local bar = 0
+
 -- The window at the size this scan's piles came to. `content` is what the grid
 -- said it drew, or nothing before anything has been drawn.
 local function Fit(content)
 	local width = Width()
-	local height = M.pad * 2 + math.max(content or 0, FLOOR) + Chrome()
+	local room = ns.BagsMerchant.Height()
+	local height = M.pad * 2 + room + math.max(content or 0, FLOOR) + Chrome()
 	-- Only when the number is about to move. A bag update arrives five times for
 	-- one loot and four of them come to the same height, and re-anchoring a
 	-- window that is not changing size is a thing that can only go wrong.
@@ -99,9 +104,17 @@ local function Fit(content)
 		PinTop()
 	end
 	window:Resize(width, height)
+	-- The view moves down and up again as the merchant row arrives and leaves,
+	-- and only then. Re-anchoring a frame that has not moved is the same thing
+	-- the height guard above refuses to do, five times a loot.
+	if room ~= bar then
+		bar = room
+		view.frame:ClearAllPoints()
+		view.frame:SetPoint("TOPLEFT", M.pad, -(M.pad + room))
+	end
 	-- Body again rather than the number just asked for, because Resize clamps
 	-- and the view has to be told the height the window actually got.
-	view:Resize(width - M.pad * 2, window:Body() - M.pad * 2)
+	view:Resize(width - M.pad * 2, window:Body() - M.pad * 2 - room)
 	return width
 end
 
@@ -117,6 +130,12 @@ local function Build()
 	view = UI.ScrollView(window.content, { overlay = true })
 	view.frame:SetPoint("TOPLEFT", M.pad, -M.pad)
 	ns.BagsGrid.Attach(view.canvas)
+
+	-- Over the piles rather than in the footer. The two numbers along the bottom
+	-- are up whatever you are standing in front of and they must not move; a row
+	-- that comes and goes with the merchant belongs at the edge that is already
+	-- the top of a list that changes height every time you loot.
+	ns.BagsMerchant.Attach(window.content)
 
 	free = UI.Label(window.footer, M.font, C.text, "LEFT", UI.FLAT)
 	free:SetPoint("LEFT")
@@ -152,6 +171,10 @@ function Window.Refresh()
 		return false
 	end
 	local state = ns.Bags.Read()
+	-- Before the grid and before the fit. What the row says comes out of this
+	-- scan, and whether it is up decides both how far down the first pile starts
+	-- and how tall the window comes to.
+	ns.BagsMerchant.Paint(state)
 	local content = ns.BagsGrid.Paint(state, ns.db.bagColumns)
 	Fit(content)
 	view:Update(content)

@@ -726,16 +726,19 @@ Map\Feature.lua
 # into piles, on the item class the client already files each one under, and
 # nothing in it draws. Grid.lua is the pool of squares, each one built on the
 # client's own bag button so the click, the drag and the stack split are the
-# client's code rather than ours. Window.lua is the window and the free count
-# along the bottom of it, Blizzard.lua takes the nine calls the client opens and
-# shuts a bag through so B opens this one, and Feature.lua last, as everywhere
-# else.
+# client's code rather than ours. Merchant.lua is the row of buttons that is
+# only there while a vendor is open, and it does neither job itself: the sale is
+# Comfort\Vendor.lua's and the mending is Comfort\Repair.lua's, both of them
+# loaded far above this line. Window.lua is the window and the free count along
+# the bottom of it, Blizzard.lua takes the nine calls the client opens and shuts
+# a bag through so B opens this one, and Feature.lua last, as everywhere else.
 #
 # After UnitFrames\Blizzard.lua, which is where the once-a-second pass
 # Blizzard.lua registers on lives, and after UI\Tip.lua, which is the box a
 # square opens. Both are far above this line.
 Bags\Bags.lua
 Bags\Grid.lua
+Bags\Merchant.lua
 Bags\Window.lua
 Bags\Blizzard.lua
 Bags\Feature.lua

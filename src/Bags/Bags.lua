@@ -159,6 +159,17 @@ function Bags.GroupOf(link)
 	return BY_CLASS[classId] or Bags.OTHER
 end
 
+-- Whether a vendor will take what is on this square.
+--
+-- The client's own sell price and no rule of ours. Nought is the answer for a
+-- quest item, a soulbound token and everything else the game will not buy back,
+-- and nil is an item this client has not cached yet, which reads as no for the
+-- reason the junk pile refuses to grade one: a guess here is a square drawn as
+-- sellable that a merchant then refuses.
+function Bags.Sellable(entry)
+	return entry.link ~= nil and (entry.price or 0) > 0
+end
+
 -- What order two things in the same pile come in.
 --
 -- Grade first and then the name. Grade first because a pile is scanned for the
@@ -232,9 +243,14 @@ local function Fill(index, bag, slot)
 	local link = ns.ContainerItemLink(bag, slot)
 	entry.bag, entry.slot, entry.link = bag, slot, link
 	entry.name, entry.icon, entry.quality, entry.count = nil, nil, nil, 1
+	entry.price = nil
 	if link then
 		entry.name, entry.icon = ns.ItemInfo(link)
-		entry.quality = ns.ItemValue(link)
+		-- Both halves of one call. The grade decides the pile and the price
+		-- decides whether the square wears a coin and whether it goes dim at a
+		-- merchant, and asking for the second one separately would be a second
+		-- cache lookup per slot for a number the first one already handed back.
+		entry.quality, entry.price = ns.ItemValue(link)
 		entry.count = ns.ContainerItem(bag, slot) or 1
 	end
 	entry.group = Bags.GroupOf(link)

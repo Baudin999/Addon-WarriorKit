@@ -84,14 +84,30 @@ end
 -- What it would cost
 --------------------------------------------------------------------------
 
--- The quote, in copper, or nil where this merchant does not repair. Zero is a
--- real answer and means nothing is damaged, which is why it is not folded into
--- the nil.
-function Repair.Cost()
-	if not Open() or not CanMerchantRepair() then
+-- What the merchant in front of you would charge, asked of the client and not
+-- of the session flag. Nil where this merchant does not mend. Zero is a real
+-- answer and means nothing is damaged, which is why it is not folded into the
+-- nil.
+--
+-- Public and ungated because the bag window's merchant row asks it. That row
+-- keeps its own flag off the same two events, and there is no order between two
+-- frames on one event, so a reading that went through the flag below would be
+-- right or a frame late depending on which handler the client happened to run
+-- first.
+function Repair.Quote()
+	if not CanMerchantRepair() then
 		return nil
 	end
 	return GetRepairAllCost() or 0
+end
+
+-- The same quote for a caller with no merchant reading of its own, which is
+-- every caller in this addon but that one.
+function Repair.Cost()
+	if not Open() then
+		return nil
+	end
+	return Repair.Quote()
 end
 
 -- How much of the guild bank this rank may spend today, or nil when there is

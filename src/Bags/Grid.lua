@@ -90,6 +90,19 @@ local HEADER, BREAK = M.heading + 3, M.rowGap
 
 Grid.SLOT, Grid.GAP, Grid.HEADER = SLOT, GAP, HEADER
 
+-- The mark on a square a vendor will take, which is the same coin the loot
+-- feed's money chip draws. Named rather than written at the call site because
+-- scripts/bake-glyphs.sh is what decides which letter carries which mark, and a
+-- literal `$` sitting in the middle of the layout gives nobody reading this file
+-- a way to find that out.
+local COIN = "$"
+
+-- What is left of a square holding something a merchant will not buy. Dim
+-- enough to read as unavailable beside a full-strength square next to it, and
+-- not so dim that you cannot see what the item is: the point is to say which of
+-- the things in front of you the sale is about, not to hide the rest.
+local REFUSED = 0.4
+
 local TEMPLATE = "ContainerFrameItemButtonTemplate"
 
 local squares, headers, holders = {}, {}, {}
@@ -210,6 +223,19 @@ local function Dress(button)
 	button.free = UI.Label(button, M.font, C.dim, "CENTER", UI.FLAT)
 	button.free:SetPoint("CENTER")
 	UI.Wrap(button.free, false)
+
+	-- The coin on a grey a vendor will take, in the corner the tally is not in.
+	--
+	-- It says one thing and it is not "this is junk": the pile heading over the
+	-- square already says that. It says a merchant will pay for this, which the
+	-- pile cannot, because a grey with no sell price on it is filed as junk like
+	-- every other grey and is the one thing in that pile the sale will leave
+	-- behind.
+	button.coin = UI.Glyph(button, M.glyph, C.heading, "LEFT")
+	button.coin:SetPoint("TOPLEFT", 3, -3)
+	UI.Wrap(button.coin, false)
+	button.coin:SetText(COIN)
+	button.coin:Hide()
 
 	-- On the way down, in the addon's own black rather than the template's
 	-- quickslot plate. A square that does not move under the mouse reads as a
@@ -352,16 +378,28 @@ local function Sweep(button, entry)
 	return true
 end
 
-local function Paint(button, entry)
+local function Paint(button, entry, selling)
 	-- The one square the empty pile folded into, which is the only entry in the
 	-- window whose count is a number of slots rather than a number of items.
 	local free = entry.group == ns.Bags.EMPTY
+	local sellable = ns.Bags.Sellable(entry)
 	button.link, button.name, button.count = entry.link, entry.name, entry.count
 	button.art:SetTexture(entry.icon)
 	button.art:SetShown(entry.link ~= nil)
 	button.tally:SetText((not free and (entry.count or 1) > 1)
 		and tostring(entry.count) or "")
 	button.free:SetText(free and tostring(entry.count or 1) or "")
+	button.coin:SetShown(sellable and entry.group == ns.Bags.JUNK)
+
+	-- Dim while a merchant is open, and only then. What a vendor will not buy
+	-- is a fact about this minute rather than about the item: a quest item you
+	-- cannot sell is an ordinary square in a bag you opened to find something,
+	-- and it is the one square in the way when you are standing at a vendor
+	-- deciding what to be rid of. An empty slot is not refused, it is empty.
+	local refused = selling and entry.link ~= nil and not sellable
+	button:SetAlpha(refused and REFUSED or 1)
+	button.art:SetDesaturated(refused and true or false)
+
 	ns.Recolor(button.edges, Edge(entry))
 	button:SetParent(Holder(entry.bag))
 	button:SetID(entry.slot)
@@ -413,6 +451,10 @@ end
 -- has to know is the scroll view and the scroll view belongs to the window.
 function Grid.Paint(state, columns)
 	local at, top = 0, 0
+	-- Asked once for the whole pass rather than per square. It cannot change
+	-- inside one layout, and a hundred and fifty squares asking the same
+	-- question is a hundred and fifty answers that are the same.
+	local selling = ns.BagsMerchant.Open()
 	for index = 1, state.shown do
 		local group = state.groups[index]
 		local entries = group.entries
@@ -420,7 +462,7 @@ function Grid.Paint(state, columns)
 		for held = 1, #entries do
 			at = at + 1
 			local button = Square(at)
-			Paint(button, entries[held])
+			Paint(button, entries[held], selling)
 			Place(button, top, (held - 1) % columns, math.floor((held - 1) / columns))
 			button:Show()
 		end

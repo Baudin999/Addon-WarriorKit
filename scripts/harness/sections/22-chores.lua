@@ -92,16 +92,18 @@ ns.Loot.Apply()
 -- The vendor
 ----------------------------------------------------------------------
 
--- Two parts sit on the merchant, the sweep and the repair, and both hold
--- both edges of the window, so neither can be told from the other by what
--- it listens to and neither is told apart by its place in the list, which
--- is only TOC order and would move the day the TOC does.
+-- Three parts sit on the merchant: the sweep, the repair and the row of
+-- buttons the bag window grows while a vendor is open. All three hold both
+-- edges of the window, so none of them can be told from the others by what
+-- it listens to, and none is told apart by its place in the list, which is
+-- only TOC order and would move the day the TOC does.
 --
--- What tells them apart is the one thing that is still different about
--- them. Selling off takes the sweep off MERCHANT_SHOW; repairing off does
--- not, because the repair keeps watching the window in order to know that
--- one is open. So the setting is flicked once and whichever frame leaves
--- the list is the sweep.
+-- What tells them apart is the one thing that is still different about each.
+-- Selling off takes the sweep off MERCHANT_SHOW; repairing off does not,
+-- because the repair keeps watching the window in order to know that one is
+-- open; and the bag window's row leaves when the window itself is switched
+-- off. So two settings are flicked, one at a time, and whichever frame
+-- leaves the list is the one that setting owns.
 local function listening(frame, event)
 	for _, f in ipairs(events[event] or {}) do
 		if f == frame then
@@ -115,15 +117,17 @@ local before = {}
 for _, f in ipairs(events["MERCHANT_SHOW"] or {}) do
 	before[#before + 1] = f
 end
-check(#before == 2, ("%d parts are on MERCHANT_SHOW, the sweep and the repair make 2")
-	:format(#before))
+check(#before == 3,
+	("%d parts are on MERCHANT_SHOW, the sweep, the repair and the bag row make 3")
+		:format(#before))
 
 ns.db.sellTrash = false
 ns.Vendor.Apply()
-local vendorFrame, repairFrame = nil, nil
+local vendorFrame, repairFrame, bagFrame = nil, nil, nil
+local held = {}
 for _, f in ipairs(before) do
 	if listening(f, "MERCHANT_SHOW") then
-		repairFrame = f
+		held[#held + 1] = f
 	else
 		vendorFrame = f
 	end
@@ -131,8 +135,27 @@ end
 ns.db.sellTrash = true
 ns.Vendor.Apply()
 
+-- The window switched off is what tells the other two apart. Nothing else in
+-- the bags moves here: the setting is written and one applier is called, which
+-- is the one that owns this registration and nothing else.
+ns.db.bags = false
+ns.BagsMerchant.Apply()
+for _, f in ipairs(held) do
+	if listening(f, "MERCHANT_SHOW") then
+		repairFrame = f
+	else
+		bagFrame = f
+	end
+end
+ns.db.bags = true
+ns.BagsMerchant.Apply()
+
 check(vendorFrame ~= nil, "selling off took nothing off MERCHANT_SHOW")
 check(repairFrame ~= nil, "selling off took the repair off MERCHANT_SHOW as well")
+check(bagFrame ~= nil,
+	"switching the bag window off left its merchant row listening for a vendor")
+check(listening(bagFrame, "MERCHANT_SHOW") and listening(bagFrame, "MERCHANT_CLOSED"),
+	"switching the bag window back on did not put its merchant row back on both edges")
 check(listening(vendorFrame, "MERCHANT_CLOSED"),
 	"the sweep is not listening for the window shutting")
 check(listening(repairFrame, "MERCHANT_CLOSED"),

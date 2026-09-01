@@ -2,6 +2,57 @@
 
 ## Unreleased
 
+### The bag window at a merchant
+
+Standing at a vendor with the bag window open, there was no way to sell
+anything but by right-clicking each grey, no way to pay for the mending, and
+nothing on the screen that said which of the things in front of you a merchant
+would even take. The two chores had been in the addon since `Comfort/Vendor.lua`
+and `Comfort/Repair.lua` shipped; the window you look at while you do them knew
+nothing about either.
+
+`Bags/Merchant.lua` is the row that answers all four. While a merchant session
+is open the window grows one control row across the top: `sell 4 greys`, and
+`repair 1g 20s`. Neither button does the work. The sale is `ns.Vendor.Run`, the
+repair is `ns.Repair.Run`, both of them the parts that already own a ticker, the
+refusals and a harness section, and a second sweep written into the bags to
+avoid naming them would be a second set of rules about what a vendor takes.
+
+The squares learned the other half. A grey a vendor will pay for wears a coin in
+its top corner, which is the glyph the loot feed's money chip already draws. A
+square holding something no merchant will buy goes dim and desaturated for as
+long as you are standing there, and quest items are most of what that catches.
+Both readings are the client's own sell price off the scan the window has
+already done: `ns.ItemValue` hands back the grade and the price in one call, so
+`entry.price` costs the scan nothing, and nought means a vendor refuses it while
+nil means this client has not cached the item yet and is read as a refusal too.
+That is the same rule the junk pile follows and for the same reason: a square
+drawn as sellable on a guess is a square a merchant then refuses.
+
+The row is drawn only when there is something on it. A merchant who does not
+mend and a bag with no greys in it get no row at all, which is the rule the
+piles below it already follow. With the automatic sale switched on it is usually
+one button for a moment and then nothing, because the sweep has emptied the pile
+it was counting.
+
+**The session is the bag row's own flag.** `MERCHANT_SHOW` and `MERCHANT_CLOSED`
+are the two edges of a merchant, three parts of the addon now hold both, and
+there is no order between two frames on one event. A row reading
+`Comfort/Repair.lua`'s flag would be right or a frame late depending on which
+handler the client ran first. What it takes from that file instead is
+`Repair.Quote`, which asks `CanMerchantRepair` and `GetRepairAllCost` rather
+than a flag and is the same answer whoever asks it; `Repair.Cost` is that quote
+behind the session gate, for every caller with no merchant reading of its own.
+
+`Vendor.Run` is the sale as a press rather than as an event, and it ignores
+`sellTrash` entirely. That setting decides whether opening a merchant starts a
+sweep; a press is not a merchant opening, and the button is there for the player
+who keeps the automatic sale off or held shift at this vendor.
+
+The harness tells the three merchant parts apart by flicking two settings, one
+at a time: selling off takes the sweep off `MERCHANT_SHOW`, the bag window off
+takes the row off it, and the frame still listening after both is the repair.
+
 ### The fanfare stopped shipping its own song
 
 `src/Media/BestAround.mp3` is five seconds of a record Joe Esposito made in

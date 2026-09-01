@@ -132,6 +132,30 @@ local function Start()
 	frame:SetScript("OnUpdate", Tick)
 end
 
+-- The same sale, because something asked for it.
+--
+-- The setting is not consulted at all. `sellTrash` decides whether a merchant
+-- opening starts a sweep on its own, and a press is not a merchant opening: the
+-- button in the bag window is there so that a player who keeps the automatic
+-- sale off, or who held shift to skip it at this vendor, still has one click
+-- that empties the greys.
+--
+-- False and a reason where there is nothing to sell into, because a press is
+-- something a player is waiting for an answer to.
+function Vendor.Run()
+	-- Only where nothing has built it yet, which is a press that beat the login
+	-- pass. Apply in full would stop a sweep already in flight and start it
+	-- again, and a second press mid-sale is not a request to restart the count.
+	if not frame then
+		Vendor.Apply()
+	end
+	if not Selling() then
+		return false, "no merchant window is open"
+	end
+	Start()
+	return true
+end
+
 -- The two refusals worth listening for. A vendor who does not deal in what you
 -- are selling, and a purse that cannot hold any more gold. Both mean every
 -- remaining sale will fail the same way, so the sweep stops rather than

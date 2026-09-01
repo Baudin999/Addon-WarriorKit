@@ -12,6 +12,7 @@ local function SetBags(value)
 		ns.BagsWindow.Hide()
 	end
 	ns.BagsBlizzard.Apply()
+	ns.BagsMerchant.Apply()
 end
 
 local function SetHide(value)
@@ -121,5 +122,11 @@ ns.Register({
 		ui.Reading("this window", ns.BagsWindow.Describe)
 		ui.Reading("the client's bags", ns.BagsBlizzard.Describe)
 		ui.Reading("the squares", ns.BagsGrid.Describe)
+
+		ui.Section("Bags at a merchant", "Chores")
+		ui.Lede("While a vendor is open the window grows a row that sells your greys and pays for your mending, marks what the sale will take and dims what it will not.")
+		ui.Reading("the row", ns.BagsMerchant.Describe)
+		ui.Reading("selling", ns.Vendor.Describe)
+		ui.Reading("repairing", ns.Repair.Describe)
 	end,
 })
