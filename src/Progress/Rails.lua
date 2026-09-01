@@ -168,9 +168,9 @@ end
 -- What a hover says
 --
 -- Two boxes, one per rail, through the addon's own tooltip. Everything on them
--- is a number the rail itself cannot carry: what is left of this level, what
--- the rested pool is worth, and what the session says the rest of the level
--- will cost you in minutes.
+-- is a number the rail itself cannot carry: how far along the level you are,
+-- what the rested pool is worth, and what the level has been earning an hour
+-- for as long as it has been counted.
 --------------------------------------------------------------------------
 
 -- Each line is a table, which is what UI/Tip.lua reads as one line: a label on
@@ -194,12 +194,13 @@ local function ExperienceLines()
 	end
 	local rate, eta = Progress.Rate(), Progress.Eta()
 	if rate and eta then
-		lines[#lines + 1] = { "This session",
-			("%s an hour, so level %d in %s"):format(ns.Thousands(math.floor(rate)),
+		lines[#lines + 1] = { "This level",
+			("%s an hour over %s, so level %d in %s"):format(
+				ns.Thousands(math.floor(rate)), Progress.Clock(Progress.Elapsed()),
 				level + 1, Progress.Clock(eta)) }
 	else
-		lines[#lines + 1] = { "This session",
-			"not long enough yet to say what you are earning an hour" }
+		lines[#lines + 1] = { "This level",
+			"not counted for long enough yet to say what you are earning an hour" }
 	end
 	return lines
 end
@@ -353,9 +354,23 @@ local function PaintXP()
 
 	xp.bar:SetMinMaxValues(0, max)
 	xp.bar:SetValue(value)
-	xp.left:SetText(("level %d"):format(level))
-	xp.right:SetText(("%s / %s  %d%%"):format(ns.Thousands(value),
+
+	-- What is left rather than what is done, because the fill already says what
+	-- is done and a bar that says it twice says nothing else. The number a
+	-- player is actually working against is the one still to earn.
+	xp.right:SetText(("%s / %s  %d%%"):format(ns.Thousands(max - value),
 		ns.Thousands(max), math.floor(value / max * 100)))
+
+	-- The time to level goes on the left, where a long reading is truncated
+	-- against the count rather than pushing it off the rail. It is not there at
+	-- all until the level has been counted long enough to divide by, which is
+	-- most of the first minute after a level lands.
+	local label = ("level %d"):format(level)
+	local eta = Progress.Eta()
+	if eta then
+		label = ("%s  %s to %d"):format(label, Progress.Clock(eta), level + 1)
+	end
+	xp.left:SetText(label)
 
 	-- The rested pool, from the fill's edge to wherever the bonus runs out,
 	-- clamped at the end of the level. A pool bigger than the level is a real

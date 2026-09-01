@@ -129,6 +129,26 @@ ns.Register({
 		hideBlizzXP = true,
 	},
 
+	charDefaults = {
+		-- The time to level, which is worked out from what this character has
+		-- earned at the level it is on and how long it has been earning it. Per
+		-- character rather than account wide for the reason Breakdown's record
+		-- is: a figure averaged over a level 70 and an alt still in the starting
+		-- zone is a figure about neither of them.
+		--
+		-- Three flat keys rather than one table, because ApplyDefaults copies a
+		-- default one level deep and a table inside a table would be handed to
+		-- every character by reference.
+		--
+		-- The level is here so the tally knows which one it is about. A
+		-- character that dinged, logged out and came back would otherwise divide
+		-- the new level's remainder by the old level's rate, and the old level
+		-- was the cheaper one.
+		progressLevel = 0,
+		progressEarned = 0,
+		progressSeconds = 0,
+	},
+
 	words = {
 		xp = XPWord,
 	},

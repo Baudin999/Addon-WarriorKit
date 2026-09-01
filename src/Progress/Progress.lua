@@ -26,16 +26,17 @@ ns.Progress = Progress
 -- the answer is genuinely either.
 --
 -- **The clock is this file's own arithmetic and not the client's.** Nothing in
--- the game will tell you what you are earning an hour, so the accumulator here
--- watches every experience change since login and divides. It runs whether or
--- not the bars are drawn, because a rate that started counting when you opened
--- the settings window is a rate about the settings window.
+-- the game will tell you what you are earning an hour, so the tally here
+-- watches every experience change and divides. It runs whether or not the bars
+-- are drawn, because a rate that started counting when you opened the settings
+-- window is a rate about the settings window.
 --
--- A level landing between two readings is the one case worth writing down. The
--- number goes down rather than up, and what you actually earned is the rest of
--- the old level plus what carried into the new one. Read as a plain difference
--- that is a large negative, which would show up as an hourly rate that says you
--- are going backwards.
+-- The tally is per level and it is kept in this character's saved variables, so
+-- the estimate is still there after a logout. Those are the same decision made
+-- twice: a level is the span the estimate is about, and an hour of it spent
+-- yesterday is an hour of evidence about the level you are on now. A level up
+-- throws it away, because a rate carried into a level is a rate about the one
+-- before it, which is the level that was cheaper.
 --------------------------------------------------------------------------
 
 -- The eight standings, in this addon's own English, used where the client has
@@ -56,9 +57,9 @@ local BAND = {
 	"friendly", "friendly", "friendly", "friendly",
 }
 
--- How long the session has to have run before an hourly rate means anything.
--- Under a minute the divisor is small enough that one kill reads as a hundred
--- thousand an hour.
+-- How much of the level has to have been counted before an hourly rate means
+-- anything. Under a minute the divisor is small enough that one kill reads as a
+-- hundred thousand an hour.
 local RATE_FLOOR = 60
 
 -- One probed call. Missing and raising both come back nil, which is what every
@@ -215,59 +216,112 @@ end
 --
 -- Everything below is this file's own arithmetic. It is not on a ticker: it
 -- moves when the client says your experience moved and at no other time.
+--
+-- Two numbers and a mark. What this character has earned at the level it is on
+-- and how long it has been earning it are in ns.dbc, which is what makes them
+-- survive a logout; the mark is the last time they were written and is not, and
+-- cannot be, saved. GetTime counts from when the client started, so a mark
+-- carried across a session would be a stretch of time measured against another
+-- machine's stopwatch.
 --------------------------------------------------------------------------
 
-local session = { start = nil, gained = 0, last = nil, cost = nil }
+-- The most one gap between two readings is allowed to add. Nothing fires while
+-- you are parked in a city, so an evening spent there arrives as one enormous
+-- interval, and counted whole it is an hour of nothing earned dividing into a
+-- figure you are reading to decide whether to keep going. Five minutes is
+-- longer than any gap in a session actually spent earning, so the cap is only
+-- ever reached by a break.
+local IDLE_CEILING = 300
 
--- One reading folded into the session's total.
+-- When the totals were last written. Nil until the first reading of a session.
+local mark
+
+-- The last experience reading, so the next one is a difference.
+local last
+
+-- Nil before ADDON_LOADED has merged the saved variables, which is a state the
+-- login order makes reachable: this file registers PLAYER_LOGIN and the merge
+-- is what runs before it.
+local function Held()
+	return ns.dbc
+end
+
+-- The stretch since the last write, added to the level's total and capped.
+local function Fold(now)
+	local db = Held()
+	if db and mark then
+		db.progressSeconds = db.progressSeconds + math.min(now - mark, IDLE_CEILING)
+	end
+	mark = now
+end
+
+-- Back to nothing, for the level you are on now.
+local function Restart(db, level, now)
+	db.progressLevel = level
+	db.progressEarned, db.progressSeconds = 0, 0
+	mark = now
+end
+
+-- One reading folded into the level's tally.
 --
--- The branch is the level up. Experience that went down means the level ended
--- between this reading and the last, so what you earned is the rest of that
--- level plus whatever carried into this one, and the cost of the old level is
--- kept from the previous reading because the client is now answering for the
--- new one.
+-- The branch is the level up, and it is written against both sides of it
+-- because the client answers the two halves in either order: the level the
+-- client reports has moved, or it has not moved yet and the experience went
+-- down instead. Whichever arrives first starts the new level's tally, and the
+-- other one arriving a moment later starts it again over a few seconds nobody
+-- can read.
 local function Sample()
+	local db = Held()
 	local value = Number(Ask("UnitXP", "player"))
-	local max = Number(Ask("UnitXPMax", "player"))
-	if not value then
+	if not db or not value then
 		return
 	end
-	if not session.start then
-		session.start = GetTime()
-	elseif session.last then
-		if value >= session.last then
-			session.gained = session.gained + (value - session.last)
-		else
-			session.gained = session.gained
-				+ math.max(0, (session.cost or session.last) - session.last) + value
+	local level, now = Number(Ask("UnitLevel", "player")) or 0, GetTime()
+	if level ~= db.progressLevel or (last and value < last) then
+		Restart(db, level, now)
+	else
+		Fold(now)
+		if last then
+			db.progressEarned = db.progressEarned + (value - last)
 		end
 	end
-	session.last, session.cost = value, max
+	last = value
 end
 
--- How long the session has run, in seconds.
+-- How long this level has been counted for, in seconds, including the stretch
+-- since the last reading. That stretch is capped the same way Fold caps it, so
+-- an estimate read while you stand still decays for five minutes and then stops
+-- rather than falling forever.
 function Progress.Elapsed()
-	if not session.start then
+	local db = Held()
+	if not db then
 		return 0
 	end
-	return GetTime() - session.start
+	local held = db.progressSeconds
+	if mark then
+		held = held + math.min(GetTime() - mark, IDLE_CEILING)
+	end
+	return held
 end
 
+-- What this level has earned so far.
 function Progress.Gained()
-	return session.gained
+	local db = Held()
+	return db and db.progressEarned or 0
 end
 
--- Experience an hour, or nil where there is not enough session to divide by.
+-- Experience an hour, or nil where there is not enough of the level counted to
+-- divide by.
 function Progress.Rate()
-	local elapsed = Progress.Elapsed()
-	if elapsed < RATE_FLOOR or session.gained <= 0 then
+	local elapsed, gained = Progress.Elapsed(), Progress.Gained()
+	if elapsed < RATE_FLOOR or gained <= 0 then
 		return nil
 	end
-	return session.gained / elapsed * 3600
+	return gained / elapsed * 3600
 end
 
--- Seconds to the next level at what you have been earning, or nil where there
--- is no rate to work it out from.
+-- Seconds to the next level at what you have been earning on this one, or nil
+-- where there is no rate to work it out from.
 function Progress.Eta()
 	local rate = Progress.Rate()
 	if not rate then
@@ -331,7 +385,7 @@ function Progress.Describe()
 		end
 		local eta = Progress.Eta()
 		if eta then
-			parts = parts .. (", %s at this session's rate"):format(Progress.Clock(eta))
+			parts = parts .. (", %s at this level's rate"):format(Progress.Clock(eta))
 		end
 	end
 	local name, standing = Progress.Faction()
@@ -354,7 +408,17 @@ for _, event in ipairs({ "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP", "UPDATE_EXHAUSTI
 	pcall(events.RegisterEvent, events, event)
 end
 
+-- The last write of a session. Without it the stretch between the last kill and
+-- the door is missing from the divisor, and a character logged out mid level
+-- comes back with an estimate built on the minutes it happened to be looking at
+-- when something died.
+events:RegisterEvent("PLAYER_LOGOUT")
+
 events:SetScript("OnEvent", function(_, event)
+	if event == "PLAYER_LOGOUT" then
+		Fold(GetTime())
+		return
+	end
 	Sample()
 	if event ~= "PLAYER_LOGIN" then
 		Announce()

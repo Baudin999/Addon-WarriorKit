@@ -21,10 +21,11 @@
 --   because a week away is a pool bigger than the level and drawn unclamped it
 --   would hang off the end of the rail.
 --
---   The session clock, which is this addon's arithmetic and not the client's.
---   The level up is the case worth writing a test for: experience goes down
---   rather than up, and read as a plain difference it is a large negative that
---   would say you are earning backwards.
+--   The clock, which is this addon's arithmetic and not the client's. It is
+--   kept per level in the character's saved variables, so what is asserted is
+--   the saved numbers themselves rather than an answer a local could give: a
+--   gap longer than the idle cap counts as the cap, a level up throws the tally
+--   away, and the logout writes the last stretch down.
 --
 --   Both shapes of the watched faction. The older clients answer five values
 --   and the newer ones a table with different field names, and this addon ships
@@ -38,7 +39,7 @@
 
 local H = ...
 local ns, check, fire, frames = H.ns, H.check, H.fire, H.frames
-local progress = H.progress
+local progress, advance = H.progress, H.advance
 
 do
 	local Progress, Rails = ns.Progress, ns.ProgressRails
@@ -66,7 +67,14 @@ do
 		progress.disabled, progress.ceiling = false, 70
 		progress.faction = { name = "Thrallmar", standing = 6,
 			low = 6000, high = 12000, value = 8400 }
+		_G.WarriorKitLevels.player = nil
 		fire("UPDATE_FACTION")
+		-- The tally too, and after the reading rather than before it, because the
+		-- reading is what folds the fixture's own jump back to 12000 into it.
+		-- Zeroed, so every string below is read against no rate at all rather
+		-- than against whatever the sections before this one left on the clock.
+		ns.dbc.progressLevel = 62
+		ns.dbc.progressEarned, ns.dbc.progressSeconds = 0, 0
 		Rails.Apply()
 	end
 	scene()
@@ -169,7 +177,10 @@ do
 		-- the rail without hovering anything.
 		check(xp.left:GetText() == "level 62",
 			"the experience rail does not say what level you are: " .. tostring(xp.left:GetText()))
-		check(xp.right:GetText() == "12,000 / 40,000  30%",
+		-- What is left, not what is done. The fill is already the half that is
+		-- done, and 12,000 of 40,000 written beside a bar three tenths along is
+		-- the same claim twice.
+		check(xp.right:GetText() == "28,000 / 40,000  30%",
 			"the count on the experience rail reads " .. tostring(xp.right:GetText()))
 		check(faction.left:GetText() == "Thrallmar",
 			"the reputation rail does not name the faction: " .. tostring(faction.left:GetText()))
@@ -178,32 +189,88 @@ do
 	end
 
 	------------------------------------------------------------------
-	-- The session clock
+	-- The clock, which is kept per level and outlives the session
 	------------------------------------------------------------------
 
 	do
-		local started = Progress.Gained()
+		-- The seconds are a difference between two readings of a clock the
+		-- sections above this one have moved in tenths, so they are compared to
+		-- a tolerance rather than to a literal. The experience is not: those are
+		-- whole numbers the fixture handed over.
+		local function near(held, want)
+			return math.abs(held - want) < 1e-6
+		end
+
+		-- In the character's saved variables rather than in a local, which is
+		-- the whole of what "the estimate is still there tomorrow" means. Read
+		-- off ns.dbc here for that reason: a tally that passed every assertion
+		-- below out of a local would be a tally that vanishes at the door.
+		check(ns.dbc.progressEarned == 0 and ns.dbc.progressSeconds == 0,
+			"the fixture did not start the tally from nothing")
 
 		progress.xp = 14000
+		advance(600)
 		fire("PLAYER_XP_UPDATE")
-		check(Progress.Gained() == started + 2000,
-			("2000 experience read as %s"):format(tostring(Progress.Gained() - started)))
+		check(ns.dbc.progressEarned == 2000,
+			("2000 experience read as %s"):format(tostring(ns.dbc.progressEarned)))
+		-- Ten minutes between two kills counts as five. Nothing fires while you
+		-- are parked in a city, so an evening there arrives as one enormous gap,
+		-- and counted whole it is a rate about the evening rather than about
+		-- playing.
+		check(near(ns.dbc.progressSeconds, 300),
+			("a ten minute gap added %s seconds and the cap is 300")
+				:format(tostring(ns.dbc.progressSeconds)))
 
-		-- The level lands. The client now answers a smaller number against a
-		-- bigger level, and what was earned is the rest of the old level plus
-		-- what carried into the new one: 26000 to finish the level and 500 into
-		-- the next.
+		advance(60)
+		progress.xp = 14900
+		fire("PLAYER_XP_UPDATE")
+		check(near(ns.dbc.progressSeconds, 360) and ns.dbc.progressEarned == 2900,
+			("the tally reads %s experience over %s seconds, expected 2900 over 360")
+				:format(tostring(ns.dbc.progressEarned), tostring(ns.dbc.progressSeconds)))
+
+		-- 2900 in six minutes is 29,000 an hour, and the 25,100 left of the
+		-- level is fifty one minutes and change of that. Deliberately not a
+		-- whole number of minutes: a figure that lands on the boundary is a
+		-- figure a float can land a millisecond under, and the clock floors.
+		check(math.abs(Progress.Rate() - 29000) < 1e-6,
+			("2900 over six minutes read as %s an hour"):format(tostring(Progress.Rate())))
+		check(math.abs(Progress.Eta() - 3115.86) < 0.01,
+			("25100 left at 29000 an hour read as %s seconds"):format(tostring(Progress.Eta())))
+		check(xp.left:GetText() == "level 62  51m to 63",
+			"the rail does not say how long the level has left: "
+				.. tostring(xp.left:GetText()))
+
+		-- The level lands and the tally goes back to nothing, because a rate
+		-- carried into a level is a rate about the one before it, and that one
+		-- was cheaper. The client answers a smaller number against a bigger
+		-- level, which is the shape this is written against.
+		advance(60)
 		progress.xp, progress.max = 500, 45000
+		_G.WarriorKitLevels.player = 63
 		fire("PLAYER_LEVEL_UP")
-		check(Progress.Gained() == started + 2000 + 26500,
-			("a level landing between two readings counted %s rather than 26500")
-				:format(tostring(Progress.Gained() - started - 2000)))
+		check(ns.dbc.progressLevel == 63,
+			("the tally is still about level %s"):format(tostring(ns.dbc.progressLevel)))
+		check(ns.dbc.progressEarned == 0 and ns.dbc.progressSeconds == 0,
+			("a level landing left %s experience over %s seconds on the clock")
+				:format(tostring(ns.dbc.progressEarned), tostring(ns.dbc.progressSeconds)))
+		check(Progress.Rate() == nil, "a level with nothing counted yet answers a rate")
+		check(xp.left:GetText() == "level 63",
+			"a fresh level still draws a time to level: " .. tostring(xp.left:GetText()))
+
+		-- The last stretch of a session, written down at the door. Without it
+		-- the minutes between the last kill and the logout are missing from the
+		-- divisor, and the character comes back claiming a rate it never earned.
+		advance(120)
+		fire("PLAYER_LOGOUT")
+		check(near(ns.dbc.progressSeconds, 120),
+			("logging out folded %s seconds into the tally, expected 120")
+				:format(tostring(ns.dbc.progressSeconds)))
+
 		scene()
 		-- And the reading after the reset does not count the drop back down as
 		-- earnings of its own.
-		local settled = Progress.Gained()
 		fire("PLAYER_XP_UPDATE")
-		check(Progress.Gained() == settled,
+		check(ns.dbc.progressEarned == 0,
 			"putting the fixture back counted as experience earned")
 	end
 
@@ -339,15 +406,15 @@ do
 		-- Every line is a pair, which is what UI/Tip.lua draws when a spec has
 		-- two entries in it, so the label is what comes back off the box and
 		-- the number sits opposite it.
-		local rested, level, session = false, false, false
+		local rested, level, clock = false, false, false
 		for _, line in ipairs(said) do
 			rested = rested or line == "Rested"
 			level = level or line == "Level 62"
-			session = session or line == "This session"
+			clock = clock or line == "This level"
 		end
 		check(level, "the hover does not say what level you are")
 		check(rested, "the hover does not mention the rested pool it is drawing")
-		check(session, "the hover says nothing about what the session is earning")
+		check(clock, "the hover says nothing about what the level is earning")
 		xp.scripts.OnLeave(xp)
 	end
 
