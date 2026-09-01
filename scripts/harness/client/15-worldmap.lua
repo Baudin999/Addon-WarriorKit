@@ -272,7 +272,7 @@ local function icon(spec)
 			r = 1, g = 0.75, b = 0.15, a = 1,
 			GetTexture = function() return spec.art or "Questie/Icons/available" end,
 		},
-		data = { Id = spec.quest, Name = spec.name,
+		data = { Id = spec.quest, Name = spec.name, Type = spec.type,
 			QuestData = spec.title and { name = spec.title } or nil },
 	}
 	return name
@@ -298,13 +298,18 @@ end
 -- The five. Two of them belong on Westfall and three do not, and each of the
 -- three is a different reason: it is the minimap's copy of a marker, Questie
 -- has fake-hidden it, or it is in another zone altogether.
-register({ quest = 102, map = 1436, x = 30, y = 40,
+--
+-- Each carries the Type Questie stamps on its icon data, because that word is
+-- what Map/Pins.lua sorts on when a zone is fuller than the cap: an objective
+-- dot is a "monster", a turn-in is a "complete", and a marker out of the manual
+-- register has no Type at all.
+register({ quest = 102, map = 1436, x = 30, y = 40, type = "monster",
 	name = "Kobold Miner", title = "Kobold Camp" })
-register({ quest = 102, map = 1436, x = 30, y = 40, mini = true,
+register({ quest = 102, map = 1436, x = 30, y = 40, mini = true, type = "monster",
 	name = "Kobold Miner", title = "Kobold Camp" })
-register({ quest = 102, map = 1436, x = 60, y = 20, hidden = true,
+register({ quest = 102, map = 1436, x = 60, y = 20, hidden = true, type = "monster",
 	name = "Hidden Miner", title = "Kobold Camp" })
-register({ quest = 201, map = 1429, x = 50, y = 50,
+register({ quest = 201, map = 1429, x = 50, y = 50, type = "monster",
 	name = "Hogger", title = "Wanted: Hogger" })
 register({ kind = "flightMaster", id = 55, map = 1436, x = 75, y = 25,
 	name = "Thor", art = "Questie/Icons/flight" })
@@ -345,12 +350,25 @@ H.worldmap = {
 	end,
 	-- More markers than one zone is allowed, so the cap can be measured. Each
 	-- one is a fresh frame in its own register entry, which is the shape a
-	-- zone full of available quests really has.
+	-- zone full of objective dots really has.
+	--
+	-- Objective dots rather than turn-ins, because the whole of what the cap has
+	-- to get right is which tier it cuts. A flood of "complete" would be a flood
+	-- the sort has no reason to touch.
 	Flood = function(count, map)
 		for index = 1, count do
 			register({ quest = 5000 + index, map = map, x = 10 + index % 80,
-				y = 10 + index % 70, name = "Flooded " .. index })
+				y = 10 + index % 70, type = "monster",
+				name = "Flooded " .. index })
 		end
 		return count
+	end,
+	-- One turn-in, dropped into a zone the flood has already filled. Named so a
+	-- section can find it in the list the cap handed back, which is the only way
+	-- to ask whether the question mark survived the crowd.
+	TurnIn = function(map, name)
+		register({ quest = 6001, map = map, x = 44, y = 44, type = "complete",
+			name = name, title = "Something Finished" })
+		return name
 	end,
 }

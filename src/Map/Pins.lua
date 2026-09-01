@@ -51,10 +51,31 @@ local Chart = ns.UI.Chart
 --
 -- A frame and six textures each, pooled and reused across every zone you click,
 -- so the cap is what the pool grows to rather than what one draw costs. Two
--- hundred and fifty is past the busiest zone in the game with a full log and
--- every Questie category on; past it the picture is confetti rather than an
--- answer, and the footer says how many were left off.
+-- hundred and fifty is past most zones in the game with a full log, and past it
+-- the picture is confetti rather than an answer.
 local CROWD = 250
+
+-- What a marker is worth when the zone is fuller than that.
+--
+-- Questie's registers are hash tables and pairs walks them in no order, so a cap
+-- applied as it walks keeps whichever markers the hash handed over first. In a
+-- zone past the cap that drops whole quests at random, and the quest it drops is
+-- as likely to be the turn-in you opened the map to find as it is to be the
+-- ninetieth kobold. It also changes on every reload, which is why the marker
+-- that went missing yesterday is back today.
+--
+-- So the markers are sorted before they are cut. Questie types every icon it
+-- draws, and three of those types matter here: `complete` is the question mark
+-- over whoever takes the quest off you, `available` is the exclamation mark over
+-- whoever hands one out, and everything else is the crowd -- the monsters, the
+-- objects, the items, the events, and every flight master and trainer out of the
+-- manual register. The crowd is what fills a zone, so the crowd is what is cut.
+--
+-- The same order does a second job. The board draws front to back, so the tier a
+-- marker is in is also what it is drawn over, and a turn-in standing on the same
+-- NPC as three objective dots lands on top of them rather than under them.
+local CROWD_TIER, AVAILABLE_TIER, TURNIN_TIER = 1, 2, 3
+local TIER = { available = AVAILABLE_TIER, complete = TURNIN_TIER }
 
 -- How big one of Questie's icons is drawn here.
 --
@@ -148,50 +169,78 @@ local function Read(name, map)
 		icon = art, tint = Tint(texture), size = BADGE,
 		name = type(data.Name) == "string" and data.Name or "a Questie marker",
 		note = Told(data, frame.x, frame.y),
-	}
+	}, TIER[data.Type] or CROWD_TIER
 end
 
 --------------------------------------------------------------------------
 -- The two registers
 --------------------------------------------------------------------------
 
--- One bag of frame names into the list. Questie keys the quest register by
+-- One bag of frame names into the tiers. Questie keys the quest register by
 -- name and fills the manual one by position, and pairs walks both.
-local function Take(into, names, map)
+--
+-- Every name is read rather than stopping at the cap, because the cap is now
+-- applied to the sorted list and there is nothing to sort until the walk is
+-- done. The walk is the same length Pins.Held already runs on every redraw.
+local function Take(bag, names, map)
 	if type(names) ~= "table" then
-		return 0
+		return
 	end
-	local took = 0
 	for _, name in pairs(names) do
-		if #into >= CROWD then
-			return took
-		end
-		local point = type(name) == "string" and Read(name, map)
-		if point then
-			into[#into + 1] = point
-			took = took + 1
+		if type(name) == "string" then
+			local point, tier = Read(name, map)
+			if point then
+				local into = bag[tier]
+				into[#into + 1] = point
+			end
 		end
 	end
-	return took
 end
 
-local function FromQuests(into, register, map)
+local function FromQuests(bag, register, map)
 	for _, names in pairs(register) do
-		Take(into, names, map)
+		Take(bag, names, map)
 	end
 end
 
 -- Everything Questie puts on a map that is not one of your quests: the flight
 -- masters, the trainers, the vendors, whatever its menu has switched on. Nested
 -- one deeper than the quest register, kind then id then names.
-local function FromManual(into, register, map)
+local function FromManual(bag, register, map)
 	for _, byId in pairs(register) do
 		if type(byId) == "table" then
 			for _, names in pairs(byId) do
-				Take(into, names, map)
+				Take(bag, names, map)
 			end
 		end
 	end
+end
+
+-- The cut, and the order the survivors are drawn in.
+--
+-- Room is handed out from the top tier down, so a turn-in only ever loses its
+-- place to another turn-in and the crowd gets whatever is left. The list comes
+-- back the other way up, crowd first, because the board draws in order and the
+-- last mark placed is the one on top.
+local function Ranked(bag)
+	local room = CROWD
+	local kept = {}
+	for tier = TURNIN_TIER, CROWD_TIER, -1 do
+		local fits = #bag[tier]
+		if fits > room then
+			fits = room
+		end
+		kept[tier] = fits
+		room = room - fits
+	end
+	local out = {}
+	for tier = CROWD_TIER, TURNIN_TIER do
+		local list = bag[tier]
+		for index = 1, kept[tier] do
+			out[#out + 1] = list[index]
+		end
+	end
+	return out
 end
 
 --------------------------------------------------------------------------
@@ -203,21 +252,21 @@ end
 -- yet, it has drawn nothing for this zone, or its own settings have every
 -- category switched off. Pins.Describe is what tells them apart.
 function Pins.Of(map)
-	local out = {}
 	if type(map) ~= "number" then
-		return out
+		return {}
 	end
 	local questie = Module("QuestieMap")
 	if not questie then
-		return out
+		return {}
 	end
+	local bag = { {}, {}, {} }
 	if type(questie.questIdFrames) == "table" then
-		FromQuests(out, questie.questIdFrames, map)
+		FromQuests(bag, questie.questIdFrames, map)
 	end
 	if type(questie.manualFrames) == "table" then
-		FromManual(out, questie.manualFrames, map)
+		FromManual(bag, questie.manualFrames, map)
 	end
-	return out
+	return Ranked(bag)
 end
 
 -- You, as a point the chart draws as the client's own arrow rather than in

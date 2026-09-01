@@ -463,6 +463,23 @@ local _, wide, tall = Window.Drawn()
 check(wide == 1002 and tall > 0,
 	("the board came out %d by %d and the picture is 1002 across"):format(wide, tall))
 
+-- The turn-in survives the crowd, and it is drawn over the crowd.
+--
+-- A question mark dropped into a zone that is already past the cap. Cutting the
+-- list as the registers are walked keeps whichever markers the hash handed over
+-- first, which loses this one about as often as it keeps it; cutting it by what
+-- the marker is keeps it every time. Last in the list as well as in it, because
+-- the board draws in order and the turn-in shares its coordinate with objective
+-- dots more often than not.
+worldmap.TurnIn(ELWYNN, "The Quartermaster")
+flooded = Pins.Of(ELWYNN)
+check(#flooded == Pins.Crowd(),
+	("a flooded zone with a turn-in in it took %d markers and the cap is %d")
+		:format(#flooded, Pins.Crowd()))
+check(flooded[#flooded] and flooded[#flooded].name == "The Quartermaster",
+	("the last mark on a flooded zone is %q and it should be the turn-in")
+		:format(flooded[#flooded] and flooded[#flooded].name or "nothing"))
+
 ----------------------------------------------------------------------
 -- A mark that was the arrow
 ----------------------------------------------------------------------
@@ -602,6 +619,26 @@ check(Window.Shown(), "the M key did not open this addon's map")
 check(worldmap.Opened() == before, "the M key reached the client's own map as well")
 _G.ToggleWorldMap()
 check(not Window.Shown(), "the M key did not close this addon's map")
+
+-- The same key inside a dungeon opens the other window. Neither of these
+-- clients has a world map of an instance at all, so M underground used to open
+-- a map that could only draw the continent overhead.
+do
+	local guide = ns.DungeonWindow
+	local standing = quests.standing.map
+	Window.Hide()
+	guide.Hide()
+	guide.Back()
+	quests.standing.map = 291
+	_G.ToggleWorldMap()
+	check(not Window.Shown(), "M in a dungeon opened the world map")
+	check(guide.Shown() and guide.Page() == "dungeon",
+		("M in a dungeon left the guide %s"):format(guide.Describe()))
+	_G.ToggleWorldMap()
+	check(not guide.Shown(), "M did not close the guide again")
+	guide.Back()
+	quests.standing.map = standing
+end
 
 ns.db.worldMapHideBlizz = false
 Blizz.Apply()
