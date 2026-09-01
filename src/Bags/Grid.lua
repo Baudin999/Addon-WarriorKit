@@ -103,11 +103,29 @@ local COIN = "$"
 -- the things in front of you the sale is about, not to hide the rest.
 local REFUSED = 0.4
 
+-- The pointer over something this vendor will pay for.
+--
+-- The client's own cursor, by the name its own bag buttons ask for. Blizzard's
+-- ContainerFrameItemButton_OnEnter sets exactly this one over a slot while a
+-- merchant is up, so a square in this window and a square in theirs read the
+-- same at the same moment, and the coin under the pointer is the coin the
+-- player already knows.
+local BUY = "BUY_CURSOR"
+
 local TEMPLATE = "ContainerFrameItemButtonTemplate"
 
 local squares, headers, holders = {}, {}, {}
 local canvas
 local inherited = true
+
+-- The square whose pointer this file changed, or nothing.
+--
+-- Held rather than worked out again on the way off, because the cursor is one
+-- thing on the screen and this file is not the only one that writes it. A
+-- square that reset the pointer on every OnLeave would take back whatever the
+-- cursor was doing for somebody else, and an empty slot in a bag has no
+-- business saying anything about it.
+local paying
 
 -- How wide a grid of this many columns is, which is the number the window sizes
 -- itself off. Public because the window owns its own width and this file owns
@@ -265,8 +283,36 @@ local function Subject(button)
 	}
 end
 
+-- The coin on the pointer, and off it again.
+--
+-- Both are guarded on which square is holding it, so the pointer is written
+-- once on the way in and once on the way out however many times the client
+-- calls the handlers, and a square that never changed it never resets it.
+local function Take(button)
+	if paying == button then
+		return
+	end
+	paying = button
+	SetCursor(BUY)
+end
+
+local function Give()
+	if not paying then
+		return
+	end
+	paying = nil
+	ResetCursor()
+end
+
 local function Enter(button)
 	UI.Tint(button.bg, C.control)
+	-- The pointer says what the click would do, which at a vendor is sell this.
+	-- The window already dims what the merchant refuses, and dimming is a fact
+	-- about the whole grid you read at a glance. This is the answer for the one
+	-- square you are actually pointing at.
+	if button.sells then
+		Take(button)
+	end
 	-- On the square. An item in a bag is a thing you are pointing at, and the
 	-- corner of the screen is a long way from a grid of a hundred of them.
 	ns.Tip.Open(button, Subject(button), nil, UI.Tooltip.BESIDE)
@@ -274,6 +320,9 @@ end
 
 local function Leave(button)
 	UI.Tint(button.bg, C.sunken)
+	if paying == button then
+		Give()
+	end
 	ns.Tip.Close()
 end
 
@@ -397,6 +446,13 @@ local function Paint(button, entry, selling)
 	-- and it is the one square in the way when you are standing at a vendor
 	-- deciding what to be rid of. An empty slot is not refused, it is empty.
 	local refused = selling and entry.link ~= nil and not sellable
+	button.sells = selling and sellable
+	-- The square under the pointer just sold, so what is lying on it now is
+	-- whatever the layout moved up into its place. The pointer follows the
+	-- square rather than the item, and nothing else would take the coin off it.
+	if paying == button and not button.sells then
+		Give()
+	end
 	button:SetAlpha(refused and REFUSED or 1)
 	button.art:SetDesaturated(refused and true or false)
 
@@ -455,6 +511,13 @@ function Grid.Paint(state, columns)
 	-- inside one layout, and a hundred and fifty squares asking the same
 	-- question is a hundred and fifty answers that are the same.
 	local selling = ns.BagsMerchant.Open()
+	-- Walking away from a vendor with the pointer still on a square you could
+	-- have sold. There is no OnLeave for that, because the mouse did not move:
+	-- the merchant closed under it, and the repaint is where this file finds
+	-- out.
+	if not selling then
+		Give()
+	end
 	for index = 1, state.shown do
 		local group = state.groups[index]
 		local entries = group.entries

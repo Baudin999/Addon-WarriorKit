@@ -377,6 +377,14 @@ read_globals = {
 	-- missing one would compare a message against nil and stop a sale that was
 	-- fine.
 	"MerchantFrame", "GetMoney", "GetCoinText",
+	-- The mouse pointer, for the sell cursor over a bag square while a merchant
+	-- is open. Baganator calls both unguarded on this client, ResetCursor on
+	-- every item button's OnLeave and SetCursor on a category header at a
+	-- vendor, and Questie and OPie call SetCursor unguarded as well. Bags/Grid.lua
+	-- asks for BUY_CURSOR by name because that is what Blizzard's own bag button
+	-- asks for; a client that does not know the name leaves the arrow alone and
+	-- breaks nothing.
+	"SetCursor", "ResetCursor",
 	-- The mailbox is deliberately absent, all of it. Every call the Mail part
 	-- makes moves somebody's property, so every one of them is reached through
 	-- _G and probed at its own call site rather than named here: SendMail,

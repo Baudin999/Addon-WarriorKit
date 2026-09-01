@@ -24,6 +24,9 @@ local UI_SCALE = 0.65
 -- first write. They live on one table and both sides name it.
 local state = {
 	SCREEN_H = 1440, -- a height that is not 768, which is the whole point
+	-- What the mouse pointer has been set to, or false for the client's
+	-- ordinary arrow. Written by SetCursor and ResetCursor.
+	cursor = false,
 	incomingHeals = 0,
 	inspecting = nil,
 	lootMethod = "group",

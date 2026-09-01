@@ -384,6 +384,40 @@ do
 		("%d squares went dim at the merchant and %d things in the bags cannot be sold")
 			:format(dimmed, unsellable))
 
+	-- And the pointer says which square you are on. The dimming is the grid at
+	-- a glance and it is on everything the vendor refuses at once. The cursor is
+	-- the answer for the one square under the mouse, which is the square you are
+	-- about to click.
+	local buyable, refused
+	for index = 1, drawn do
+		local square = squares[index]
+		local item = square.name and ITEMS[square.name]
+		if item and item.price > 0 then
+			buyable = buyable or square
+		elseif item then
+			refused = refused or square
+		end
+	end
+	check(buyable ~= nil and refused ~= nil,
+		"the scene has to carry one thing this vendor buys and one it does not")
+
+	local enter = buyable:GetScript("OnEnter")
+	local leave = buyable:GetScript("OnLeave")
+
+	check(state.cursor == false, "something wrote the cursor before a square was hovered")
+
+	enter(buyable)
+	check(state.cursor == "BUY_CURSOR",
+		("the pointer over %s reads %q at a merchant"):format(buyable.name,
+			tostring(state.cursor)))
+	leave(buyable)
+	check(state.cursor == false, "the pointer kept the coin after the mouse left")
+
+	enter(refused)
+	check(state.cursor == false,
+		("the pointer over %s says sell and no merchant will take it"):format(refused.name))
+	leave(refused)
+
 	-- The repair half. The bill is written after the merchant opened, because
 	-- the automatic repair pays it on the event and there would be nothing left
 	-- for the button to quote.
@@ -403,8 +437,17 @@ do
 
 	-- Walking away. The row goes, the dimming goes with it, and the window is
 	-- the height it was before the vendor.
+	--
+	-- The pointer is left on a square you could have sold, because that is the
+	-- one way out of the coin cursor that is not an OnLeave: the mouse has not
+	-- moved, the merchant closed under it, and the repaint is the only thing
+	-- that finds out.
+	enter(buyable)
 	H.fire("MERCHANT_CLOSED")
 	_G.MerchantFrame:Hide()
+	check(state.cursor == false,
+		"the merchant closed and the pointer still says sell")
+	leave(buyable)
 	check(not Merchant.Open(), "the merchant closed and the window still thinks one is open")
 	check(Merchant.Height() == 0, "the merchant closed and the row is still up")
 	check(window:Body() == plain,

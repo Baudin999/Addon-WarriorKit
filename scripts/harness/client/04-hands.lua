@@ -218,6 +218,12 @@ _G.GetCoinText = function(amount) return ("%dc"):format(amount) end
 _G.MerchantFrame = region("frame")
 _G.MerchantFrame:Hide()
 
+-- The pointer. Two calls and one value, because that is all the client gives
+-- you: there is no way to ask what the cursor is, so a section that wants to
+-- know reads what was last written here.
+_G.SetCursor = function(name) state.cursor = name or false end
+_G.ResetCursor = function() state.cursor = false end
+
 -- The repair side of the same window. Modelled as a bill that has to be paid
 -- by somebody: the two repair calls move money out of a named purse and only
 -- then clear the damage, so a repair the addon reports as done and never paid
