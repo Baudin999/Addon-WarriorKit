@@ -14,7 +14,7 @@ local C, M = UI.Color, UI.Metric
 -- **A square is a sunken ground, a hairline in the item's own grade, a crisp
 -- icon and a count in the corner.** That is the whole definition and it is here
 -- so that there is one of it. It was written twice, once in Bags/Grid.lua and
--- once in Merchant/Rows.lua, and the two windows are open beside each other at
+-- once in Merchant/Grid.lua, and the two windows are open beside each other at
 -- a vendor: two squares that differ by a pixel of inset or a shade of grey is
 -- the defect this file exists to make impossible rather than to fix.
 --
@@ -73,6 +73,17 @@ UI.SLOT_DIM = 0.4
 -- tick box in it, and there is no control here. The break is one row gap rather
 -- than two: what separates two piles is the heading under the air, not the air.
 UI.SLOT_HEADER, UI.SLOT_BREAK = M.heading + 3, M.rowGap
+
+-- How wide a line of this many squares is.
+--
+-- Here rather than in either window because both windows ask it and neither
+-- owns the answer: it is the square and the gap, and those are this file's.
+-- The bag window sizes itself off it and the merchant window sizes itself off
+-- the same call with the same column count, which is what makes the two the
+-- same width when they are open beside each other.
+function UI.SlotSpan(columns)
+	return columns * UI.SLOT + (columns - 1) * UI.SLOT_GAP
+end
 
 --------------------------------------------------------------------------
 -- The grade

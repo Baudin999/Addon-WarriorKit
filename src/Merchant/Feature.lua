@@ -1,7 +1,7 @@
 local ADDON, ns = ...
 
 -- Everything Core and the panel need to know about the merchant window.
--- Stock.lua, Rows.lua, Window.lua and Blizzard.lua hold the behaviour, and this
+-- Stock.lua, Grid.lua, Window.lua and Blizzard.lua hold the behaviour, and this
 -- is the only file in the folder that names anything outside it.
 
 local function SetMerchant(value)
@@ -92,11 +92,11 @@ ns.Register({
 
 	panel = function(ui)
 		ui.Section("Merchant", "Chores")
-		ui.Lede("Everything the vendor has in one window, in the same piles as your bags, with the price on every line. The client shows ten at a time behind an arrow.")
+		ui.Lede("Everything the vendor has in one window, in the same piles and the same squares as your bags. The client shows ten at a time behind an arrow.")
 		ui.Check("the addon's merchant window",
 			function() return ns.db.merchant end,
 			SetMerchant)
-		ui.Hint("It opens at a vendor and closes when you walk away. A click buys one of what he sells it in: one flask, or one stack of two hundred arrows. The tab at the top is the last twelve things you sold.")
+		ui.Hint("It opens at a vendor and closes when you walk away. A click buys one of what he sells it in: one flask, or one stack of arrows, and the box on a square is the price. The tab is what you sold.")
 		ui.Check("move the client's merchant window aside",
 			function() return ns.db.merchantHideBlizz end,
 			SetHide)
@@ -104,7 +104,7 @@ ns.Register({
 		ui.Reading("this window", ns.MerchantWindow.Describe)
 		ui.Reading("the rack", ns.Stock.Describe)
 		ui.Reading("what you sold", ns.Buyback.Describe)
-		ui.Reading("the rows", ns.MerchantRows.Describe)
+		ui.Reading("the squares", ns.MerchantGrid.Describe)
 		ui.Reading("the client's window", ns.MerchantBlizzard.Describe)
 	end,
 })

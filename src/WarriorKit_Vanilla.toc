@@ -769,12 +769,13 @@ Bags\Feature.lua
 # bags into, and nothing in it draws. Buyback.lua is the same shape for the
 # other rack, the last twelve things you sold, which the addon has to draw
 # because parking the client's frame parks its buyback tab with it.
-# Rows.lua is the pool of rows, each one the bag window's square with a name and
-# a price run off the side of it, because a vendor is a list of prices and a
-# grid hides the number you are standing there to read; it draws either rack,
-# because a row knows how to lay a thing out and nothing about which of the two
-# it came off. Window.lua is the window, the tab across the top that picks which
-# rack is under it, and the two numbers along the bottom.
+# Grid.lua is the pool of squares, the bag window's square in the bag window's
+# columns, because what you do at a vendor is look for a thing and a picture is
+# how you find one; the price, the tokens and how many he has left are in the
+# box that opens on it. It draws either rack, because a square knows how to lay
+# a thing out and nothing about which of the two it came off. Window.lua is the
+# window, the tab across the top that picks which rack is under it, and the two
+# numbers along the bottom.
 # Blizzard.lua moves the client's own merchant window off the side of the
 # screen, which is the one mechanism of the three that works on it: hiding that
 # frame and caging it both end the conversation with the vendor. Feature.lua
@@ -785,7 +786,7 @@ Bags\Feature.lua
 # once-a-second pass Blizzard.lua registers on lives.
 Merchant\Stock.lua
 Merchant\Buyback.lua
-Merchant\Rows.lua
+Merchant\Grid.lua
 Merchant\Window.lua
 Merchant\Blizzard.lua
 Merchant\Feature.lua

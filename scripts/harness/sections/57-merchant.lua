@@ -7,10 +7,11 @@
 -- that a vendor's stock lands in the same piles in the same order, with the
 -- same tie broken the same way.
 --
--- A row says what the scan put on it and a press on it buys that entry. Every
--- other window in this addon can be wrong about a picture; this one spends
--- money, so the thing checked is that the entry under the words is the entry
--- the purchase was aimed at.
+-- A square shows what the scan put on it, the box that opens on it says what
+-- that costs, and a press on it buys that entry. Every other window in this
+-- addon can be wrong about a picture; this one spends money, so the thing
+-- checked is that the entry the box described is the entry the purchase was
+-- aimed at.
 --
 -- And the client's own merchant window is moved rather than hidden. That is the
 -- one decision in this part that cannot be recovered from: hiding that frame
@@ -26,7 +27,7 @@ local CARRIED = H.CARRIED
 
 local UI = ns.UI
 local C = UI.Color
-local Stock, Rows = ns.Stock, ns.MerchantRows
+local Stock, Grid = ns.Stock, ns.MerchantGrid
 local Window, Blizz = ns.MerchantWindow, ns.MerchantBlizzard
 
 ----------------------------------------------------------------------
@@ -90,80 +91,133 @@ check(ns.Piles.Of(_G.GetMerchantItemLink(1)) == "consumable",
 	"the vendor's water is filed under a different pile than the bag window would file it")
 
 ----------------------------------------------------------------------
--- The rows
+-- The squares
 --
--- Every branch a row can take is on this rack at once, which is why there are
--- five of them and not two: an ordinary price, a stack the vendor sells two
+-- The rack is the bag window's grid, so what is on a square is the picture, the
+-- grade, how many one press buys, and the dim on what you cannot buy. Every
+-- branch a square can take is on this rack at once, which is why there are five
+-- things on it and not two: an ordinary price, a stack the vendor sells two
 -- hundred at a time, a limited supply, something this class cannot use, and one
 -- priced in tokens you have not got.
 ----------------------------------------------------------------------
 
-local rows = Rows.Rows()
+local squares = Grid.Squares()
 
 local function shown()
 	local count = 0
-	for index = 1, #rows do
-		if rows[index]:IsShown() then
+	for index = 1, #squares do
+		if squares[index]:IsShown() then
 			count = count + 1
 		end
 	end
 	return count
 end
 
-local function row(name)
-	for index = 1, #rows do
-		if rows[index]:IsShown() and rows[index].name == name then
-			return rows[index], index
+local function square(name)
+	for index = 1, #squares do
+		if squares[index]:IsShown() and squares[index].name == name then
+			return squares[index], index
 		end
 	end
 	return nil
 end
 
-local function inked(text, color)
-	local r, g, b = text:GetTextColor()
-	return r == color[1] and g == color[2] and b == color[3]
-end
+check(shown() == 5, ("%d squares are drawn and the rack has 5"):format(shown()))
 
-check(shown() == 5, ("%d rows are drawn and the rack has 5"):format(shown()))
+local flask, flaskAt = square("Flask of Petrification")
+local water = square("Refreshing Spring Water")
+local arrow = square("Sharp Arrow")
+local rod = square("Runed Copper Rod")
+local helm = square("Gladiator's Plate Helm")
 
-local flask, flaskAt = row("Flask of Petrification")
-local water = row("Refreshing Spring Water")
-local arrow = row("Sharp Arrow")
-local rod = row("Runed Copper Rod")
-local helm = row("Gladiator's Plate Helm")
-
-check(flaskAt == 1, ("the first row drawn is %s and the blue consumable heads the first pile")
+check(flaskAt == 1, ("the first square drawn is %s and the blue consumable heads the first pile")
 	:format(flaskAt == 1 and "right" or "wrong"))
 
-check(water and water.price:GetText() == ns.Coined(25),
-	"the water's row does not carry the price the vendor is asking")
-check(arrow and arrow.square.tally:GetText() == "200",
+check(arrow and arrow.tally:GetText() == "200",
 	"the arrows do not say on the square that one press buys two hundred")
-check(water and water.square.tally:GetText() == "5",
+check(water and water.tally:GetText() == "5",
 	"a stack of five does not say so on the square")
-check(rod and rod.square.tally:GetText() == "",
+check(rod and rod.tally:GetText() == "",
 	"something sold one at a time drew a count on its square")
 
+----------------------------------------------------------------------
+-- The box on a square
+--
+-- Everything the row used to write out is here now, which is the whole of the
+-- trade the grid made: the price, the tokens, what one press buys, how many the
+-- vendor has left, and the one line about the item rather than about the offer.
+-- A square with none of that is a picture nobody can shop from, so it is read
+-- back off the tooltip the hover actually drew rather than off the table handed
+-- to it.
+----------------------------------------------------------------------
+
+-- The box a hover on this square drew, as a list of what each line said and
+-- what colour the value on it was. The pointer is taken off again, because a
+-- box left open is anchored to a square the next pass may put something else
+-- on.
+local function box(button)
+	local enter, leave = button:GetScript("OnEnter"), button:GetScript("OnLeave")
+	if not enter or not leave then
+		return nil
+	end
+	enter(button)
+	local lines = {}
+	for index = 1, UI.Tooltip.Lines() do
+		local left, right = UI.Tooltip.Text(index)
+		lines[#lines + 1] = { left, right, tone = UI.Tooltip.Tone(index) }
+	end
+	leave(button)
+	return lines
+end
+
+-- What the box said against a label, and nothing where it did not say it. Two
+-- returns, because a line that is there and a line that is missing are opposite
+-- facts and the colour is the second half of what the line says.
+local function said(lines, label)
+	for index = 1, #(lines or {}) do
+		if lines[index][1] == label then
+			return lines[index][2] or true, lines[index].tone
+		end
+	end
+	return nil
+end
+
+local function inked(tone, color)
+	return tone ~= nil and tone[1] == color[1] and tone[2] == color[2]
+		and tone[3] == color[3]
+end
+
+check(box(water) ~= nil and box(water)[1][1] == "Refreshing Spring Water",
+	"the box on a square does not name what is on it")
+check(said(box(water), "Price") == ns.Coined(25),
+	"the box on the water does not carry the price the vendor is asking")
+check(said(box(arrow), "One press buys") == "200",
+	"the box on the arrows does not say that one press buys two hundred")
+check(said(box(rod), "One press buys") == nil,
+	"something sold one at a time said what one press buys, which is one")
+
 -- The one number a limited supply is for, and the one it must not draw. -1 is
--- the client saying it has an endless supply, and a row that read it as a count
+-- the client saying it has an endless supply, and a box that read it as a count
 -- would say the vendor has minus one flask.
-check(flask and flask.note:GetText() == "2 left",
-	"the flask does not say how many the vendor has left")
-check(water and water.note:GetText() == "",
+check(said(box(flask), "Left") == "2",
+	"the box on the flask does not say how many the vendor has left")
+check(said(box(water), "Left") == nil,
 	"an endless supply drew a count of how many are left")
 
-check(rod and inked(rod.label, C.quiet),
-	"something this class cannot use is drawn in the same ink as something it can")
-check(water and not inked(water.label, C.quiet),
-	"something usable is drawn as though it were not")
+check(said(box(rod), "Your class cannot use this") ~= nil,
+	"a rod no warrior can use says nothing about it")
+check(said(box(water), "Your class cannot use this") == nil,
+	"something usable is described as though it were not")
 
 ----------------------------------------------------------------------
 -- What you cannot buy
 --
 -- Two of the five, for two different reasons, and both are dimmed rather than
 -- taken off the rack: what the vendor has is a fact and what you can pay for is
--- a fact about this minute. The token row is the one you cannot work out by
--- looking at your purse, so its number carries the colour instead.
+-- a fact about this minute. The dim is what you read at a glance across the
+-- whole grid; the box on the one square you are pointing at says which of the
+-- two, and in the loss colour, which is the one thing about a token price you
+-- cannot work out by looking at your purse.
 ----------------------------------------------------------------------
 
 check(flask and flask:GetAlpha() < 1,
@@ -171,57 +225,66 @@ check(flask and flask:GetAlpha() < 1,
 check(water and water:GetAlpha() == 1,
 	"something you can afford is dimmed")
 
-check(helm and helm.chips[1]:IsShown() and helm.chips[1].count:GetText() == "40",
-	"the token price is not drawn on the row that is paid in tokens")
-check(helm and inked(helm.chips[1].count, C.loss),
+check(said(box(flask), "Price") == ns.Coined(90000)
+	and inked(select(2, said(box(flask), "Price")), C.loss),
+	"a price the purse cannot meet is drawn in the same ink as one it can")
+check(inked(select(2, said(box(water), "Price")), C.text),
+	"a price you can afford is drawn as though you could not")
+
+check(said(box(helm), "Mark of Honor Hold") == "0 of 40",
+	("the box on the helm says %s of the tokens it costs")
+		:format(tostring(said(box(helm), "Mark of Honor Hold"))))
+check(inked(select(2, said(box(helm), "Mark of Honor Hold")), C.loss),
 	"a token price you cannot meet is drawn in the same ink as one you can")
 check(helm and helm:GetAlpha() < 1,
-	"a row you have not got the tokens for is drawn as though you could buy it")
-check(water and not water.chips[1]:IsShown(),
-	"a row paid for in money drew a token chip")
+	"a square you have not got the tokens for is drawn as though you could buy it")
+check(said(box(water), "Mark of Honor Hold") == nil,
+	"the box on something paid for in money drew a token line")
+
+check(not H.tipSettle(), "the box stayed up after the pointer left the square")
 
 ----------------------------------------------------------------------
 -- A press
 --
--- Through the client's own click rather than through the row's handler, and
+-- Through the client's own click rather than through the square's handler, and
 -- that is the whole point of doing it this way. A frame that hands the right
 -- and middle buttons to the camera has had which buttons it answers written,
--- and the left one has to be asked for again afterwards or the row draws
+-- and the left one has to be asked for again afterwards or the square draws
 -- perfectly, hovers perfectly and does nothing at all when you press it. The
--- harness refuses a click a button is not registered for, so a row that lost
+-- harness refuses a click a button is not registered for, so a square that lost
 -- its registration fails here rather than in Ironforge.
 --
--- What is checked is the entry, not the row: the purse moves by the price of
--- the thing whose name was on the line that was pressed.
+-- What is checked is the entry, not the square: the purse moves by the price of
+-- the thing the box on the pressed square described.
 ----------------------------------------------------------------------
 
 local passing = 0
-for index = 1, #rows do
-	local passed = rows[index]:GetPassThroughButtons()
-	local clicks = rows[index]:GetRegisteredClicks()
+for index = 1, #squares do
+	local passed = squares[index]:GetPassThroughButtons()
+	local clicks = squares[index]:GetRegisteredClicks()
 	if passed and passed["RightButton"] and clicks and clicks["LeftButtonUp"] then
 		passing = passing + 1
 	end
 end
-check(passing == #rows,
-	("%d of %d rows both hand the right button to the camera and still answer the left")
-		:format(passing, #rows))
+check(passing == #squares,
+	("%d of %d squares both hand the right button to the camera and still answer the left")
+		:format(passing, #squares))
 
 local before = state.purse
 check(water:Click("LeftButton") == true,
-	"a left click on a row was refused, so the row is a button that does nothing")
+	"a left click on a square was refused, so the square is a button that does nothing")
 
 check(state.purse == before - 25,
 	("a press on the water moved the purse by %d and the water costs 25")
 		:format(before - state.purse))
 check(merchant.bought[water.entry.index] == 1,
-	"the press bought something other than the thing whose name was on the row")
+	"the press bought something other than the thing the square was showing")
 
--- The row under the pointer is the one that pays, whatever the layout did next.
--- The rack is re-read on the client's own update, so this also says the window
--- answered that update rather than drawing what it had.
+-- The square under the pointer is the one that pays, whatever the layout did
+-- next. The rack is re-read on the client's own update, so this also says the
+-- window answered that update rather than drawing what it had.
 check(Window.Shown() and shown() == 5,
-	"buying something took a row off the rack")
+	"buying something took a square off the rack")
 
 ----------------------------------------------------------------------
 -- Spending tokens
@@ -260,20 +323,22 @@ end
 -- The vendor running out
 --
 -- The one refusal this window makes on its own. Everything else is left to the
--- server, because a window that greys a row out on its own arithmetic is a
+-- server, because a window that greys a square out on its own arithmetic is a
 -- window that can be wrong in the direction that costs you the sale.
 ----------------------------------------------------------------------
 
 merchant.rack[3].available = 0
 Window.Refresh()
 
-local gone = row("Flask of Petrification")
+local gone = square("Flask of Petrification")
 check(gone ~= nil and not Stock.InStock(gone.entry),
 	"the vendor has none left and the window still thinks he has")
 check(select(1, Stock.Buy(gone.entry)) == false,
 	"the window let a press through on something the vendor has none of")
-check(gone and gone.note:GetText() == "0 left",
+check(said(box(gone), "Left") == "0",
 	"a rack that has run out does not say so")
+check(gone:GetAlpha() < 1,
+	"something the vendor has run out of is drawn as though you could buy it")
 
 merchant.rack[3].available = 2
 Window.Refresh()
@@ -286,12 +351,12 @@ Window.Refresh()
 -- and that is the argument every sale in this addon leans on, so the window
 -- that replaced the client's has to carry the tab that makes it true.
 --
--- Three things are asserted. The order is the order you sold in, newest at the
--- top, because the row you came here for is the last one you sold. The slots
--- are a range and not a list, so a hole left by a row already taken back is
--- skipped rather than drawn blank. And a press on a buyback row buys that row
--- back rather than buying the rack row that was drawn on the same button a
--- moment earlier, which is the one way a shared pool of rows could go wrong.
+-- Three things are asserted. The order is the order you sold in, newest first,
+-- because the thing you came here for is the last one you sold. The slots are a
+-- range and not a list, so a hole left by something already taken back is
+-- skipped rather than drawn blank. And a press on a buyback square buys that
+-- entry back rather than buying the rack entry that was drawn on the same
+-- button a moment earlier, which is the one way a shared pool could go wrong.
 ----------------------------------------------------------------------
 
 local tabs = Window.Frame().tabs
@@ -314,31 +379,31 @@ check(tabs.buttons[2]:Click("LeftButton") == true,
 	"the buyback tab refused a click")
 
 check(shown() == 2,
-	("the buyback tab drew %d rows and two things were sold"):format(shown()))
-check(rows[1].name == "Refreshing Spring Water",
-	"the buyback rack is not newest first, so the row you just sold is not the top one")
-check(rows[2].name == "Runed Copper Rod",
-	"the older of the two sales is not under the newer one")
-check(not Rows.Headers()[1]:IsShown(),
+	("the buyback tab drew %d squares and two things were sold"):format(shown()))
+check(squares[1].name == "Refreshing Spring Water",
+	"the buyback rack is not newest first, so the thing you just sold is not the first one")
+check(squares[2].name == "Runed Copper Rod",
+	"the older of the two sales is not after the newer one")
+check(not Grid.Headers()[1]:IsShown(),
 	"the buyback rack drew a pile heading, which the tab above it already says")
-check(rows[2].price:GetText() == ns.Coined(1000),
-	"a buyback row does not carry the price it costs to take back")
-check(rows[2].note:GetText() == "",
-	"a buyback row drew a count of how many the vendor has left")
+check(said(box(squares[2]), "Price") == ns.Coined(1000),
+	"the box on a buyback square does not carry the price it costs to take back")
+check(said(box(squares[2]), "Left") == nil,
+	"a buyback square drew a count of how many the vendor has left")
 check(foot:GetText() == "2 to buy back",
 	("the footer says %q with two things on the rack"):format(foot:GetText()))
 
--- The press, and the fact it proves is which of the two racks the row belonged
--- to. Taking the rod back costs the thousand he paid for it; the rack row drawn
--- on this same button a moment ago was the water at twenty five.
+-- The press, and the fact it proves is which of the two racks the square
+-- belonged to. Taking the rod back costs the thousand he paid for it; the rack
+-- entry drawn on this same button a moment ago was the water at twenty five.
 purse = state.purse
-check(rows[2]:Click("LeftButton") == true, "a click on a buyback row was refused")
+check(squares[2]:Click("LeftButton") == true, "a click on a buyback square was refused")
 check(state.purse == purse - 1000,
 	("taking the rod back moved the purse by %d and he paid 1000 for it")
 		:format(purse - state.purse))
 
-check(shown() == 1 and rows[1].name == "Refreshing Spring Water",
-	"a slot taken back is still on the rack, or the hole it left was drawn as a row")
+check(shown() == 1 and squares[1].name == "Refreshing Spring Water",
+	"a slot taken back is still on the rack, or the hole it left was drawn as a square")
 check(_G.GetNumBuybackItems() == 2,
 	"the client stopped counting the empty slot, which is not what it does")
 
@@ -347,7 +412,7 @@ check(Window.Describe():find("buy back") ~= nil,
 
 tabs.buttons[1]:Click("LeftButton")
 check(shown() == 5 and foot:GetText() == "5 for sale",
-	"going back to the rack tab did not put the vendor's stock back on the rows")
+	"going back to the rack tab did not put the vendor's stock back on the squares")
 
 ----------------------------------------------------------------------
 -- Blizzard's window
@@ -409,5 +474,5 @@ state.purse = held
 CARRIED[3] = nil
 
 print(("vendor %d things over %d piles from %s; %s")
-	:format(read.count, read.shown, Stock.Vendor() or "nobody", Rows.Describe()))
+	:format(read.count, read.shown, Stock.Vendor() or "nobody", Grid.Describe()))
 print(("vendor %s; the client's %s"):format(Window.Describe(), Blizz.Describe()))

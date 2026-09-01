@@ -103,10 +103,11 @@ local inherited = true
 local paying
 
 -- How wide a grid of this many columns is, which is the number the window sizes
--- itself off. Public because the window owns its own width and this file owns
--- what a square costs.
+-- itself off. UI/Slot.lua answers it, because the merchant window asks the same
+-- question of the same squares and two files with the same arithmetic in them
+-- is how the two windows end up a pixel apart.
 function Grid.Width(columns)
-	return columns * SLOT + (columns - 1) * GAP
+	return UI.SlotSpan(columns)
 end
 
 --------------------------------------------------------------------------

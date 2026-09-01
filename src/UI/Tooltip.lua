@@ -1040,6 +1040,20 @@ function Tooltip.Text(index)
 	return row.left:GetText(), row.paired and row.right:GetText() or nil
 end
 
+-- What colour the value on one of those lines was drawn in.
+--
+-- Handed out for the reason the rest of these are. A price you cannot meet and
+-- a token count you have not got are drawn in the loss colour, that colour is
+-- the whole of what those two lines say beyond the number, and there is no
+-- reading it from outside without this file handing out its pool.
+function Tooltip.Tone(index)
+	local row = rows[index]
+	if not row or index > count or not row.paired then
+		return nil
+	end
+	return { row.right:GetTextColor() }
+end
+
 -- And what size it was drawn at. Handed out for the reason the rest of these
 -- are: the tooltip's body has to be the addon's body size, that claim is the
 -- whole of the fix for a box whose text was smaller than the panel under it,

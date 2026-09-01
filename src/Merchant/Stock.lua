@@ -7,7 +7,7 @@ ns.Stock = Stock
 -- What the vendor has, in piles
 --
 -- The scan and no frame anywhere in the file, which is the shape Bags/Bags.lua
--- has and for the same reason: Rows.lua draws what this answers and Window.lua
+-- has and for the same reason: Grid.lua draws what this answers and Window.lua
 -- decides when to ask.
 --
 -- **The piles are the bag window's piles.** Core/Piles.lua files a merchant's

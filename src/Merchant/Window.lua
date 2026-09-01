@@ -10,14 +10,15 @@ ns.MerchantWindow = Window
 -- The merchant window
 --
 -- One window, one scroll view, and the two numbers along the bottom. Stock.lua
--- answers what the vendor has and Rows.lua draws it; this file owns when to ask
+-- answers what the vendor has and Grid.lua draws it; this file owns when to ask
 -- and how big the answer is allowed to be.
 --
 -- **It is the bag window's shape, except for the one thing it must not copy.**
 -- The two are open at the same time and they are the same act: what you have,
 -- and what he has. The piles are the same piles under the same headings, the
--- square is the same square, and your purse is in the same corner of the
--- footer. What is not the same is the height.
+-- square is the same square, the grid is the same number of columns wide, and
+-- your purse is in the same corner of the footer. What is not the same is the
+-- height.
 --
 -- The bag window grows to fit what it is drawing, and it argues for that: a bag
 -- has a hundred and fifty slots and that is the top of it, so you would rather
@@ -27,6 +28,12 @@ ns.MerchantWindow = Window
 -- list hung off the bottom of the screen and the rows down there were nowhere a
 -- click could reach. That is the shape UI/Window.lua's header already rules on:
 -- the window is a fixed rectangle and what does not fit scrolls.
+--
+-- The rectangle is a great deal more rack than it used to be, and that is the
+-- grid rather than a bigger window. Sixty things were sixty lines and are now
+-- eight, so the size below holds a quartermaster's whole stock where it used to
+-- hold a fifth of it. The scroll view stays for the case that overflows anyway,
+-- and it is the case nobody meets.
 --
 -- **Closing the window walks away from the vendor.** The client's own merchant
 -- frame is parked off the side of the screen while this one is up, so its cross
@@ -41,7 +48,7 @@ ns.MerchantWindow = Window
 -- own frame, and that frame is parked off the side of the screen for the whole
 -- session, so replacing the merchant window without replacing buyback left an
 -- hour-long safety net nothing could reach. Both racks are drawn by one pool of
--- rows out of Rows.lua and the tab says which one is under it.
+-- squares out of Grid.lua and the tab says which one is under it.
 --
 -- **The title is the vendor's name.** It is the one thing about a merchant
 -- window worth a title bar: you talk to four of them in a row in a capital and
@@ -49,24 +56,37 @@ ns.MerchantWindow = Window
 -- the plain word.
 --------------------------------------------------------------------------
 
--- How wide the window is. Enough for a square, a name most items fit inside,
--- and a price with gold in it. Fixed rather than a setting, because unlike the
--- bag window's columns there is nothing here a player would want to trade width
--- for: a row is a row.
-local WIDTH = 400
-
--- How tall it is, and it does not move.
+-- How wide the window is: the bag window's column count, in the bag window's
+-- squares.
 --
--- Thirteen rows of rack and the two headings over them, which is more than most
--- vendors have and a comfortable page of a quartermaster who has sixty. The
--- number is a size rather than a count so that the window is the same shape
--- whatever you walk up to: a window that is a different height at every vendor
--- is a window whose close cross is somewhere new every time.
+-- Shared rather than a setting of its own, and it is the setting doing two jobs
+-- rather than one setting missing. The two windows are open beside each other
+-- for the whole of a vendor session and they are drawing the same squares; two
+-- column counts would let a player set them to different widths, which is a
+-- pair of windows that no longer read as one thing. Widening the bags widens
+-- the rack, the next time it draws.
+local function Width()
+	return M.pad * 2 + UI.SlotSpan(ns.db.bagColumns)
+end
+
+-- How tall the rack is, and it does not move.
+--
+-- Ten lines of squares and four pile headings, which holds a quartermaster's
+-- sixty items in one page at the default width and every ordinary vendor twice
+-- over. Written as the pieces rather than as one number so that a square or a
+-- heading changing size moves it, which is what stopped it being a number
+-- somebody has to remember to revisit.
+--
+-- It is a size rather than a count of what this vendor has, so the window is
+-- the same shape whatever you walk up to: a window that is a different height
+-- at every vendor is a window whose close cross is somewhere new every time.
 --
 -- It is how tall the rack is and not how tall the window is. The tab strip is
 -- added on top of it once the strip has said how tall it came out, so putting
 -- the second rack in cost a row of tabs rather than a row of stock.
-local HEIGHT = 450
+local LINES, PILES = 10, 4
+local HEIGHT = LINES * UI.SLOT + (LINES - 1) * UI.SLOT_GAP
+	+ PILES * (UI.SLOT_HEADER + UI.SLOT_BREAK)
 
 -- Which tab is which. The rack first, because that is what you walked up to
 -- him for; buyback is where you go when something went wrong.
@@ -76,11 +96,48 @@ local window, view, tabs, tally, purse
 local page = RACK
 local session = false
 
+-- How tall the tab strip came out, which is a number only the strip can answer
+-- and everything under it has to be told.
+local strip = 0
+
+-- The window at the width the columns now ask for, and everything under the
+-- title bar told about it.
+--
+-- Asked on every draw rather than once at build, because the width belongs to
+-- the bag window's column setting and that can move while this window is shut.
+-- Acted on only when the number changed: re-anchoring a view that has not moved
+-- is the one thing this can do wrong, and a merchant update arrives in bursts.
+--
+-- Body rather than the height asked for, because UI.Window clamps a window to
+-- what the screen holds and the view has to be told the height it actually got.
+-- The strip comes off the top of it: a view told it has the whole body draws its
+-- last line of squares under the footer, where a click reaches the window behind
+-- this one.
+local function Fit()
+	local width = Width()
+	if width == window.width then
+		return width
+	end
+	local lines = tabs:Resize(width - M.pad * 2)
+	window:Resize(width, HEIGHT + lines)
+	-- The strip is one line of tabs at every width the columns can ask for, but
+	-- it is the strip that decides that and not this file. A narrow window that
+	-- wrapped it would draw the first line of squares over the second row of
+	-- tabs, so the view is hung again whenever the answer moves.
+	if lines ~= strip then
+		strip = lines
+		view.frame:ClearAllPoints()
+		view.frame:SetPoint("TOPLEFT", M.pad, -strip - M.pad)
+	end
+	view:Resize(width - M.pad * 2, window:Body() - strip - M.pad * 2)
+	return width
+end
+
 local function Build()
 	window = UI.Window({
 		name = "WarriorKitMerchant",
 		title = "Merchant",
-		width = WIDTH,
+		width = Width(),
 		height = HEIGHT,
 	})
 	ns.Remember(window)
@@ -93,18 +150,18 @@ local function Build()
 	tabs.frame:SetPoint("TOPRIGHT", -M.pad, 0)
 	tabs:Add("Rack")
 	tabs:Add("Buyback")
-	local strip = tabs:Resize(WIDTH - M.pad * 2)
-	window:Resize(WIDTH, HEIGHT + strip)
 
 	view = UI.ScrollView(window.content, { overlay = true })
+	ns.MerchantGrid.Attach(view.canvas)
+
+	-- The strip has no height until it has been resized and the view has nowhere
+	-- to hang until the strip has one, so the first fit is made to happen rather
+	-- than waited for: the window is built at the width Fit would ask for, so
+	-- Fit's own guard would take it as nothing to do.
+	strip = tabs:Resize(window.width - M.pad * 2)
+	window:Resize(window.width, HEIGHT + strip)
 	view.frame:SetPoint("TOPLEFT", M.pad, -strip - M.pad)
-	ns.MerchantRows.Attach(view.canvas)
-	-- Once, at the size the window is and stays. Body rather than the height
-	-- asked for, because UI.Window clamps a window to what the screen holds and
-	-- the view has to be told the height it actually got. The strip comes off
-	-- the top of it: a view told it has the whole body draws its last row under
-	-- the footer, where a click reaches the window behind this one.
-	view:Resize(WIDTH - M.pad * 2, window:Body() - strip - M.pad * 2)
+	view:Resize(window.width - M.pad * 2, window:Body() - strip - M.pad * 2)
 
 	tally = UI.Label(window.footer, M.font, C.text, "LEFT", UI.FLAT)
 	tally:SetPoint("LEFT")
@@ -156,7 +213,8 @@ function Window.Refresh()
 
 	local source = page == BOUGHT and ns.Buyback or ns.Stock
 	local state = page == BOUGHT and sold or rack
-	local content = ns.MerchantRows.Paint(state, WIDTH - M.pad * 2, source)
+	Fit()
+	local content = ns.MerchantGrid.Paint(state, ns.db.bagColumns, source)
 	view:Update(content)
 
 	window:SetTitle(ns.Stock.Vendor() or "Merchant")

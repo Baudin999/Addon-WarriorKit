@@ -24,9 +24,9 @@ ns.Buyback = Buyback
 -- **It is not in piles and it must not be.** Stock.lua files a rack under the
 -- bag window's class headings because a rack is a shop and you are looking for
 -- a kind of thing. You open buyback for one reason: the thing you just sold. So
--- the order is the order you sold them in, newest at the top, and there are at
--- most twelve. A pile of one Consumable over a pile of one Armor would bury the
--- only row anybody came here for.
+-- the order is the order you sold them in, newest first, and there are at most
+-- twelve. A pile of one Consumable over a pile of one Armor would bury the one
+-- square anybody came here for.
 --
 -- **The slots are a range, not a list.** GetNumBuybackItems answers the highest
 -- slot the vendor is holding rather than how many things are in it, and a slot
@@ -41,7 +41,7 @@ ns.Buyback = Buyback
 -- no opinion about either.
 local state = { groups = {}, entries = {}, shown = 0, count = 0 }
 
--- The one pile, made once. Nameless on purpose: Rows.lua draws a heading for a
+-- The one pile, made once. Nameless on purpose: Grid.lua draws a heading for a
 -- group that has a name, and the heading over this one would say what the tab
 -- above it already says.
 local group = { key = "buyback", name = nil, entries = {} }
@@ -80,10 +80,10 @@ end
 --------------------------------------------------------------------------
 -- What a row asks about an entry
 --
--- The four calls Rows.lua makes on whichever rack it is drawing. Stock.lua
+-- The four calls Grid.lua makes on whichever rack it is drawing. Stock.lua
 -- answers them about the vendor's stock and this answers them about your own
--- returns, which is what lets one pool of rows draw both racks: the row knows
--- how to lay a thing out and nothing about which of the two it came off.
+-- returns, which is what lets one pool of squares draw both racks: the square
+-- knows how to lay a thing out and nothing about which of the two it came off.
 --------------------------------------------------------------------------
 
 -- Always. What is on this rack is one of a thing you sold, and the vendor
@@ -92,8 +92,8 @@ function Buyback.InStock()
 	return true
 end
 
--- Nothing, every time. A count under the name means a limited supply, and there
--- is no such thing here: every slot holds exactly what you sold out of it.
+-- Nothing, every time. A count in the box means a limited supply, and there is
+-- no such thing here: every slot holds exactly what you sold out of it.
 function Buyback.Left()
 	return nil
 end
