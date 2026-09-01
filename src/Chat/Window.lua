@@ -357,6 +357,11 @@ local function Sound(important)
 end
 
 local function Draw(rooms, text, r, g, b, important)
+	-- Written down before it is drawn. What survives a reload is two rooms out
+	-- of the thirteen and Chat/History.lua says no to everything else, so this
+	-- is one call and no allocation on nearly every line.
+	ns.ChatHistory.Note(rooms, text, r, g, b)
+
 	local appeared = false
 	for _, id in ipairs(rooms) do
 		local log = LogFor(id)
@@ -379,6 +384,53 @@ local function Draw(rooms, text, r, g, b, important)
 	end
 	Sound(important)
 end
+
+--------------------------------------------------------------------------
+-- What was said before the reload
+--
+-- The lines Chat/History.lua kept, back in the rooms they were said in, at the
+-- moment the window is stood up and before the rail is drawn. A room restored
+-- after the refresh is a row the refresh did not know to draw.
+--------------------------------------------------------------------------
+
+-- Where the last session ended, under what it said.
+--
+-- Every line carries a clock and no line carries a date, so without this the
+-- whisper you answered last night is the whisper at the top of this evening's
+-- log and reads as one that has just arrived. Plain hyphens rather than a rule
+-- character: the client draws this in Arial Narrow and a glyph the face does
+-- not carry is drawn as nothing at all, with nothing written anywhere saying
+-- so.
+local EARLIER = "|cff6b6b73-------- earlier --------|r"
+
+local function Replay(held, touched, order)
+	for _, id in ipairs(held.rooms) do
+		local log = LogFor(id)
+		if log then
+			log:Add(held.line, held.r, held.g, held.b)
+			if not touched[id] then
+				touched[id] = true
+				order[#order + 1] = id
+			end
+		end
+	end
+end
+
+local function Restore()
+	local lines = ns.Rooms.Restore()
+	local touched, order = {}, {}
+	for _, held in ipairs(lines) do
+		Replay(held, touched, order)
+	end
+
+	local color = ns.UI.Color.text
+	for _, id in ipairs(order) do
+		logs[id]:Add(EARLIER, color[1], color[2], color[3])
+	end
+	return #lines
+end
+
+--------------------------------------------------------------------------
 
 -- Drawing a line is the one thing this window does from inside an event handler
 -- for the rest of the session, and an event handler is where the client eats a
@@ -793,6 +845,10 @@ local function Build()
 	end
 
 	Relayout()
+	-- What the last session said, before either of the two below. Conversation
+	-- has to be selected over a rail that already lists the rooms the record
+	-- brought back, and the refresh below is what draws that rail.
+	Restore()
 	-- Conversation first and the refresh after it, in that order.
 	--
 	-- The refresh is what moves the window into the party room when you log in

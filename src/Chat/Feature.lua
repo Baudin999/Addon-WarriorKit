@@ -239,6 +239,26 @@ local function RoomWord(arg)
 	ns.Print("no room called " .. arg .. ". /wk chat room lists them.")
 end
 
+-- The saved conversation, thrown away.
+--
+-- It reports on its own and only writes on `yes`, which is what `/wk defaults`
+-- does and for the same reason: this is the one word in the part that destroys
+-- something nothing else keeps a copy of.
+--
+-- What is on the screen is left alone, because the logs in front of you are
+-- this session's and emptying them would be answering a different question.
+-- They go at the reload, along with everything this has just deleted.
+local function ForgetWord(sure)
+	if sure ~= "yes" then
+		ns.Print("chat: " .. ns.ChatHistory.Describe()
+			.. ". /wk chat forget yes throws it away.")
+		return
+	end
+	ns.ChatHistory.Wipe()
+	ns.Print("chat: the saved conversation is gone. What is on the screen is"
+		.. " this session's and goes at the reload.")
+end
+
 local function ChatWord(arg, raw)
 	if arg == "show" then
 		ns.ChatWindow.Show()
@@ -260,6 +280,10 @@ local function ChatWord(arg, raw)
 	if arg == "on" or arg == "off" then
 		SetChat(arg == "on")
 		ns.Print("chat window " .. (ns.db.chat and "on" or "off") .. ".")
+		return
+	end
+	if arg == "forget" then
+		ForgetWord((raw:match("^%s*forget%s+(%S+)$")))
 		return
 	end
 	ns.ChatWindow.Toggle()
@@ -477,6 +501,24 @@ ns.Register({
 		voiceLabel = "C & F: General",
 	},
 
+	charDefaults = {
+		-- What was said, kept across a logout and thrown away after a day.
+		-- Chat/History.lua owns both lists and says why they are here at all:
+		-- chatLog is the lines in the order they arrived, chatWith is who you
+		-- were talking to in the order the rail draws them.
+		--
+		-- Per character rather than account wide, unlike everything above it.
+		-- A whisper is addressed to a character and the party you were in was
+		-- this one's, so these sit beside the experience tally and the damage
+		-- record rather than beside the groups.
+		--
+		-- Two flat lists rather than one table of both, because ApplyDefaults
+		-- copies a default one level deep and a table inside a table would be
+		-- handed to every character by reference.
+		chatLog = {},
+		chatWith = {},
+	},
+
 	words = {
 		chat = ChatWord,
 		group = GroupWord,
@@ -488,6 +530,7 @@ ns.Register({
 		"chat on|off, draw it at all",
 		"chat room, list the rooms; chat room <name>, go to one",
 		"chat claim, whether the same lines still draw in Blizzard's window",
+		"chat forget, what is kept across a reload; chat forget yes, throw it away",
 		"group, list your groups and who is in them",
 		"group new <name>, group <group> add|remove <name>, group <group> party",
 		"voice, what the voice pick is doing",

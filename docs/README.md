@@ -275,6 +275,8 @@ name of none of them.
                              with the realm and the case taken off
     Chat/Rooms.lua           which conversations exist right now, where a line
                              goes and what is unread in each
+    Chat/History.lua         the whispers and the party chat, kept across a
+                             logout and thrown away after a day
     Chat/Compose.lua         the slash a room fills the line in with, and the
                              send that reads it back
     Chat/Field.lua           the client's own chat line, stripped of its art and

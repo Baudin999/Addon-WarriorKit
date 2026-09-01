@@ -186,6 +186,15 @@ local whispers = {}
 -- last said something in it.
 local speaker = {}
 
+-- Rooms holding lines brought back from the saved transcript.
+--
+-- A fixed room is drawn while one of these is true of it, the same way it is
+-- drawn while it holds something unread. The party you were in last night is
+-- not a party you are in now, and without this the room would come off the
+-- rail at the login that restored it and take the evening's conversation with
+-- it.
+local brought = {}
+
 -- Set by whoever draws, the same way ns.ChatFeed.OnLine is. Called with the id
 -- of a whisper room that has fallen off the end, so the log behind it can be
 -- emptied and handed to the next conversation rather than kept forever.
@@ -260,34 +269,48 @@ function Rooms.WhisperId(name)
 	return key and (WHISPER .. key) or nil
 end
 
--- The room for a conversation with one person, made if this is the first thing
--- either of you has said. Moving it to the front is what keeps the rail in the
--- order you would look for it in, and it is also what decides who is dropped
--- when a ninth person speaks.
-function Rooms.Whisper(name)
-	local key = ns.People.Key(name)
-	if not key then
-		return nil
-	end
-
+-- A conversation you are already having, moved to the front. Which is what
+-- keeps the rail in the order you would look for it in, and is also what
+-- decides who is dropped when a ninth person speaks.
+local function Promote(key, name)
 	for at, entry in ipairs(whispers) do
 		if entry.key == key then
 			entry.name = name
 			table.remove(whispers, at)
 			table.insert(whispers, 1, entry)
-			return WHISPER .. key
+			return true
 		end
 	end
+	return false
+end
 
-	table.insert(whispers, 1, { key = key, name = name })
+-- The least recent conversations, off the end of the rail. Everything anybody
+-- said is still in Conversation.
+local function Sink()
 	while #whispers > WHISPERS do
 		local dropped = table.remove(whispers)
 		local id = WHISPER .. dropped.key
-		unread[id], speaker[id] = nil, nil
+		unread[id], speaker[id], brought[id] = nil, nil, nil
 		if Rooms.OnClose then
 			Rooms.OnClose(id)
 		end
 	end
+end
+
+-- The room for a conversation with one person, made if this is the first thing
+-- either of you has said.
+function Rooms.Whisper(name)
+	local key = ns.People.Key(name)
+	if not key then
+		return nil
+	end
+	if not Promote(key, name) then
+		table.insert(whispers, 1, { key = key, name = name })
+		Sink()
+	end
+	-- The saved record is this list in this order, so it is written where the
+	-- order moves rather than at each of the two things that move it.
+	ns.ChatHistory.Talked(whispers)
 	return WHISPER .. key
 end
 
@@ -377,7 +400,7 @@ end
 local function AddFixed(rows, list)
 	for _, room in ipairs(list) do
 		local id = room.id
-		if room.live() or (unread[id] or 0) > 0 then
+		if room.live() or (unread[id] or 0) > 0 or brought[id] then
 			Add(rows, id, room.label, room.under, room.icon)
 		end
 	end
@@ -399,7 +422,7 @@ end
 function Rooms.Exists(id)
 	local fixed = Fixed(id)
 	if fixed then
-		return fixed.live() or (unread[id] or 0) > 0
+		return fixed.live() or (unread[id] or 0) > 0 or brought[id] == true
 	end
 	return (Grouped(id) or Whispered(id)) ~= nil
 end
@@ -536,6 +559,99 @@ function Rooms.Talking()
 end
 
 --------------------------------------------------------------------------
+-- What survives a reload
+--
+-- Two rooms out of the thirteen, and the two are the whole of the reason this
+-- part has a record on disk at all.
+--
+-- A whisper is a conversation with one person and half of one is not a
+-- conversation, so the answer you gave last night has to still be under the
+-- question you were asked. Party chat is where the summon location, the pull
+-- order and the number somebody linked go, and an addon update in the middle
+-- of an evening used to take all three.
+--
+-- Everything else is left to go. Say is the people standing near you and they
+-- are not standing there any more. Guild and the numbered channels are a room
+-- full of strangers, which is the volume this window exists to get away from.
+-- A raid is forty people over one evening, and forty people would push every
+-- whisper you had off the end of a transcript with a cap on it, which is the
+-- one way this could be made worse rather than better.
+--
+-- A group room is not asked about here and does not need to be. A line in one
+-- arrived on a channel, and it is kept when that channel is kept: a whisper
+-- from your wife carries her group's room with it, and a guild line from her
+-- does not.
+--------------------------------------------------------------------------
+
+function Rooms.Kept(rooms)
+	for _, id in ipairs(rooms) do
+		if id == "party" or Keyed(id, WHISPER) then
+			return true
+		end
+	end
+	return false
+end
+
+-- Whether a room named in the record is a room there is still such a thing as.
+--
+-- The fixed ones always are. A conversation is one the record itself brought
+-- back. A group is one you have not deleted since, and that is the clause that
+-- earns this function: a line filed under a group you dropped last week would
+-- otherwise make a log for a room the rail never draws, and a log is a frame
+-- this client cannot destroy.
+local function Restorable(id)
+	if Fixed(id) then
+		return true
+	end
+	if Keyed(id, WHISPER) then
+		return Whispered(id) ~= nil
+	end
+	if Keyed(id, GROUP) then
+		return Grouped(id) ~= nil
+	end
+	return false
+end
+
+-- Once, and the latch is the point rather than an optimisation. This is called
+-- from the window's build, the window is built again whenever the part is
+-- turned back on, and a second pass would draw yesterday's evening twice.
+local restored = false
+
+-- The conversations put back on the rail, and the lines handed to whoever
+-- draws. Nothing here touches a log or a frame: this file has never known what
+-- one is, and the restore is not the place to start.
+function Rooms.Restore()
+	if restored then
+		return {}
+	end
+	restored = true
+
+	local talked, lines = ns.ChatHistory.Read()
+	for _, name in ipairs(talked) do
+		local key = ns.People.Key(name)
+		if key and #whispers < WHISPERS then
+			whispers[#whispers + 1] = { key = key, name = name }
+		end
+	end
+
+	local out = {}
+	for _, held in ipairs(lines) do
+		local rooms = {}
+		for _, id in ipairs(held.rooms) do
+			if Restorable(id) then
+				rooms[#rooms + 1] = id
+				brought[id] = true
+			end
+		end
+		if #rooms > 0 then
+			out[#out + 1] = { rooms = rooms, line = held.line,
+				r = held.r, g = held.g, b = held.b }
+		end
+	end
+	return out
+end
+
+--------------------------------------------------------------------------
 -- What you have not read
 --------------------------------------------------------------------------
 
@@ -589,5 +705,6 @@ function Rooms.Wipe()
 			Rooms.OnClose(id)
 		end
 	end
-	whispers, unread, speaker = {}, {}, {}
+	whispers, unread, speaker, brought = {}, {}, {}, {}
+	restored = false
 end

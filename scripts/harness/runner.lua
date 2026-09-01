@@ -247,6 +247,7 @@ local SECTIONS = {
 	-- it back again. It ends with the purse it found and no merchant open.
 	"57-merchant",
 	"58-spec",
+	"59-chat-history",
 }
 
 -- Naming a section runs every section up to and including it, rather than that
