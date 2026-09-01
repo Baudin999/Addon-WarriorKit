@@ -225,6 +225,12 @@ for _, part in ipairs({
 	-- lookups 04-hands.lua installed so they answer an id as well as a link,
 	-- which is the one part of the addon that starts from an id.
 	"16-dungeons",
+	-- Last, and it reads what 03-player.lua and 04-hands.lua left: the item
+	-- table it adds a vendor's rack to, the bags it counts a token out of, and
+	-- the merchant frame 04-hands.lua made so the trash sweep would have
+	-- something to check. It gives that frame a size, because the addon parks it
+	-- off the side of the screen and a frame with no width has no edges to read.
+	"17-merchant",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

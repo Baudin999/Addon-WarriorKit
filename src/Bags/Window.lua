@@ -47,8 +47,10 @@ ns.BagsWindow = Window
 --------------------------------------------------------------------------
 
 -- The shortest the body is allowed to get, so an empty bag is a window rather
--- than a strip of title bar with a number under it.
-local FLOOR = ns.BagsGrid.HEADER + ns.BagsGrid.SLOT * 2 + ns.BagsGrid.GAP
+-- than a strip of title bar with a number under it. A heading and two rows of
+-- squares, in UI/Slot.lua's numbers rather than the grid's, because the grid
+-- does not own them either.
+local FLOOR = UI.SLOT_HEADER + UI.SLOT * 2 + UI.SLOT_GAP
 
 local window, view, free, purse
 

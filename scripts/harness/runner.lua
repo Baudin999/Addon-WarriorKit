@@ -195,6 +195,10 @@ local SECTIONS = {
 	-- the suite that says which corpse a slot came out of. It takes that away
 	-- again and puts you back where 54-world-map.lua left you standing.
 	"56-dungeon-log",
+	-- Last. It is the only section that stands you in front of a vendor with
+	-- the full rack up, and it parks the client's own merchant window and takes
+	-- it back again. It ends with the purse it found and no merchant open.
+	"57-merchant",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

@@ -448,9 +448,19 @@ if window then
 	-- is the sentence saying the marks on the map are where you looted each
 	-- boss, which is the one thing about that window nobody can work out by
 	-- looking at it either. 23,300 is that measurement plus a hint's worth of
-	-- room again.
-	check(prose < 23300,
-		("the window holds %d characters of prose and the budget is 23,300"):format(prose))
+	-- room again. The merchant page costs 635 across two checks and four
+	-- readings and takes it to 23,697 across sixty-six: a new page, and the
+	-- longer of its two hints is the sentence saying the client's own merchant
+	-- window is moved rather than hidden, which is the one thing about that
+	-- switch nobody can work out by looking at it. 23,900 is that measurement
+	-- plus a hint's worth of room again. The quest badge on the enemy bars costs
+	-- 196 across one check and takes it to 23,893 across sixty-six: no new page,
+	-- one more control on a section that already had six, and its hint is the
+	-- sentence saying Questie is what answers it, which is the one thing about
+	-- that switch nobody can work out by looking at a bar with no badge on it.
+	-- 24,100 is that measurement plus a hint's worth of room again.
+	check(prose < 24100,
+		("the window holds %d characters of prose and the budget is 24,100"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

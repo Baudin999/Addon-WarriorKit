@@ -92,18 +92,18 @@ ns.Loot.Apply()
 -- The vendor
 ----------------------------------------------------------------------
 
--- Three parts sit on the merchant: the sweep, the repair and the row of
--- buttons the bag window grows while a vendor is open. All three hold both
--- edges of the window, so none of them can be told from the others by what
--- it listens to, and none is told apart by its place in the list, which is
--- only TOC order and would move the day the TOC does.
+-- Four parts sit on the merchant: the sweep, the repair, the row of buttons the
+-- bag window grows while a vendor is open, and the merchant window itself. All
+-- four hold both edges of the session, so none of them can be told from the
+-- others by what it listens to, and none is told apart by its place in the
+-- list, which is only TOC order and would move the day the TOC does.
 --
 -- What tells them apart is the one thing that is still different about each.
--- Selling off takes the sweep off MERCHANT_SHOW; repairing off does not,
--- because the repair keeps watching the window in order to know that one is
--- open; and the bag window's row leaves when the window itself is switched
--- off. So two settings are flicked, one at a time, and whichever frame
--- leaves the list is the one that setting owns.
+-- Three of the four leave the list when their own setting goes off: selling,
+-- the bag window and the merchant window. The repair does not, because it keeps
+-- watching the session in order to know that one is open, so it is the one left
+-- when the other three have been named. Each setting is flicked on its own,
+-- with the one applier that owns that registration called and nothing else.
 local function listening(frame, event)
 	for _, f in ipairs(events[event] or {}) do
 		if f == frame then
@@ -113,53 +113,66 @@ local function listening(frame, event)
 	return false
 end
 
-local before = {}
-for _, f in ipairs(events["MERCHANT_SHOW"] or {}) do
-	before[#before + 1] = f
-end
-check(#before == 3,
-	("%d parts are on MERCHANT_SHOW, the sweep, the repair and the bag row make 3")
-		:format(#before))
+-- Two of the four are read again much further down, so those two are the file's
+-- names and the rest of the walk is done inside a block of its own. A section is
+-- one chunk, Lua caps a chunk at two hundred locals and scripts/check.sh holds
+-- this file to forty, which is the pressure that keeps a section from becoming a
+-- pile of scratch names.
+local vendorFrame, repairFrame
 
-ns.db.sellTrash = false
-ns.Vendor.Apply()
-local vendorFrame, repairFrame, bagFrame = nil, nil, nil
-local held = {}
-for _, f in ipairs(before) do
-	if listening(f, "MERCHANT_SHOW") then
-		held[#held + 1] = f
-	else
-		vendorFrame = f
+do
+	local before = {}
+	for _, f in ipairs(events["MERCHANT_SHOW"] or {}) do
+		before[#before + 1] = f
 	end
-end
-ns.db.sellTrash = true
-ns.Vendor.Apply()
+	check(#before == 4,
+		("%d parts are on MERCHANT_SHOW, the sweep, the repair, the bag row and the merchant window make 4")
+			:format(#before))
 
--- The window switched off is what tells the other two apart. Nothing else in
--- the bags moves here: the setting is written and one applier is called, which
--- is the one that owns this registration and nothing else.
-ns.db.bags = false
-ns.BagsMerchant.Apply()
-for _, f in ipairs(held) do
-	if listening(f, "MERCHANT_SHOW") then
-		repairFrame = f
-	else
-		bagFrame = f
+	-- One setting off, one applier called, and whichever frame left the list is
+	-- the one that setting owns. The setting goes straight back afterwards,
+	-- because every section below this one is written against a scene with all
+	-- four of them on.
+	local function dropped(held, setting, apply)
+		local was = ns.db[setting]
+		ns.db[setting] = false
+		apply()
+		local gone, kept = nil, {}
+		for _, f in ipairs(held) do
+			if listening(f, "MERCHANT_SHOW") then
+				kept[#kept + 1] = f
+			else
+				gone = f
+			end
+		end
+		ns.db[setting] = was
+		apply()
+		return gone, kept
 	end
-end
-ns.db.bags = true
-ns.BagsMerchant.Apply()
 
-check(vendorFrame ~= nil, "selling off took nothing off MERCHANT_SHOW")
-check(repairFrame ~= nil, "selling off took the repair off MERCHANT_SHOW as well")
-check(bagFrame ~= nil,
-	"switching the bag window off left its merchant row listening for a vendor")
-check(listening(bagFrame, "MERCHANT_SHOW") and listening(bagFrame, "MERCHANT_CLOSED"),
-	"switching the bag window back on did not put its merchant row back on both edges")
-check(listening(vendorFrame, "MERCHANT_CLOSED"),
-	"the sweep is not listening for the window shutting")
-check(listening(repairFrame, "MERCHANT_CLOSED"),
-	"the repair is not listening for the window shutting")
+	local bagFrame, merchantFrame, left
+	vendorFrame, left = dropped(before, "sellTrash", ns.Vendor.Apply)
+	bagFrame, left = dropped(left, "bags", ns.BagsMerchant.Apply)
+	merchantFrame, left = dropped(left, "merchant", ns.MerchantWindow.Apply)
+	repairFrame = left[1]
+
+	check(vendorFrame ~= nil, "selling off took nothing off MERCHANT_SHOW")
+	check(bagFrame ~= nil,
+		"switching the bag window off left its merchant row listening for a vendor")
+	check(merchantFrame ~= nil,
+		"switching the merchant window off left it listening for a vendor")
+	check(repairFrame ~= nil and #left == 1,
+		("the other three were named and %d frames were left for the repair"):format(#left))
+	check(listening(bagFrame, "MERCHANT_SHOW") and listening(bagFrame, "MERCHANT_CLOSED"),
+		"switching the bag window back on did not put its merchant row back on both edges")
+	check(listening(merchantFrame, "MERCHANT_SHOW")
+		and listening(merchantFrame, "MERCHANT_CLOSED"),
+		"switching the merchant window back on did not put it back on both edges")
+	check(listening(vendorFrame, "MERCHANT_CLOSED"),
+		"the sweep is not listening for the window shutting")
+	check(listening(repairFrame, "MERCHANT_CLOSED"),
+		"the repair is not listening for the window shutting")
+end
 
 local function sweep()
 	local ticks = 0

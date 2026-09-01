@@ -154,7 +154,7 @@ check(window and window.purse:GetText() == ns.Coined(_G.GetMoney()),
 local tall = 0
 for index = 1, read.shown do
 	local lines = math.ceil(#read.groups[index].entries / ns.db.bagColumns)
-	tall = tall + Grid.HEADER + lines * Grid.SLOT + (lines - 1) * Grid.GAP
+	tall = tall + ns.UI.SLOT_HEADER + lines * ns.UI.SLOT + (lines - 1) * ns.UI.SLOT_GAP
 end
 tall = tall + (read.shown - 1) * ns.UI.Metric.rowGap
 

@@ -1059,6 +1059,120 @@ function ns.ItemKind(link)
 	return itemId, classId, subClassId
 end
 
+--------------------------------------------------------------------------
+-- The merchant
+--
+-- What the vendor in front of you has, asked once. Five calls, and the reason
+-- they are here rather than in the part that draws them is the reason every
+-- other shim in this file is here: a part may not probe the client for a call
+-- it means to make, because the answer is a fact about the build and not about
+-- the feature.
+--
+-- The one real difference between clients is in the returns of
+-- GetMerchantItemInfo. Both clients this addon ships to answer seven values
+-- with isUsable sixth and extendedCost seventh. A client that answers ten put
+-- isPurchasable in at six and pushed the other two down one, so the count is
+-- read rather than assumed and the caller gets the same seven either way.
+--
+-- `available` is handed back exactly as the client gives it, which means -1 for
+-- a vendor with an endless supply. Turning that into a number would be this
+-- file deciding what "how many are left" means, and the two windows that ask
+-- want different things from it.
+--------------------------------------------------------------------------
+
+local function Merchandise(...)
+	local name, icon, price, quantity, available = ...
+	if select("#", ...) >= 10 then
+		return name, icon, price, quantity, available, (select(7, ...)), (select(8, ...))
+	end
+	return name, icon, price, quantity, available, (select(6, ...)), (select(7, ...))
+end
+
+-- How many things this vendor has. Nought where the client has no such call
+-- and nought where you are not standing at one, which read the same and should:
+-- both mean there is nothing to draw.
+function ns.MerchantCount()
+	if type(_G.GetMerchantNumItems) ~= "function" then
+		return 0
+	end
+	return _G.GetMerchantNumItems() or 0
+end
+
+-- One of them: name, icon, what it costs in copper, how many one purchase
+-- gives you, how many are left, whether you can use it, and whether it wants
+-- something other than money.
+function ns.MerchantItem(index)
+	if type(_G.GetMerchantItemInfo) ~= "function" then
+		return nil
+	end
+	return Merchandise(_G.GetMerchantItemInfo(index))
+end
+
+function ns.MerchantItemLink(index)
+	if type(_G.GetMerchantItemLink) ~= "function" then
+		return nil
+	end
+	return _G.GetMerchantItemLink(index)
+end
+
+-- How many items one entry wants in payment, and what each of them is.
+--
+-- This is the badge vendor and the honour vendor: an entry whose extendedCost
+-- flag is set is paid for in tokens rather than in gold, and the tokens are
+-- read one at a time the way the client reads them.
+function ns.MerchantCosts(index)
+	if type(_G.GetMerchantItemCostInfo) ~= "function" then
+		return 0
+	end
+	return _G.GetMerchantItemCostInfo(index) or 0
+end
+
+function ns.MerchantCost(index, which)
+	if type(_G.GetMerchantItemCostItem) ~= "function" then
+		return nil
+	end
+	return _G.GetMerchantItemCostItem(index, which)
+end
+
+-- How many of something you are carrying, counting every stack in every bag.
+--
+-- Here rather than beside the container calls above because there is one
+-- caller and one reason: a badge vendor prices its rack in tokens, and whether
+-- you can pay is a question about how many of the token you are holding. The
+-- bank and the mailbox are counted too, on a client that has an answer for
+-- them, which is the client's own behaviour and not something to correct: what
+-- the number is for is "can I buy this", and the honest failure there is
+-- optimistic rather than a row this window refuses to let you press.
+function ns.ItemCount(link)
+	if type(link) ~= "string" or type(_G.GetItemCount) ~= "function" then
+		return 0
+	end
+	return _G.GetItemCount(link) or 0
+end
+
+-- Walk away from the vendor. The window this addon draws is the only thing on
+-- the screen at that point, so closing it has to end the session as well: the
+-- client's own frame is the one that would have, and it is parked off the side
+-- of the screen where nothing can press its cross.
+function ns.CloseMerchant()
+	if type(_G.CloseMerchant) ~= "function" then
+		return false
+	end
+	_G.CloseMerchant()
+	return true
+end
+
+-- Buy one. False where the client has neither the call nor a merchant open, so
+-- a caller can say nothing happened rather than believe a purchase went
+-- through.
+function ns.BuyMerchant(index, count)
+	if type(_G.BuyMerchantItem) ~= "function" then
+		return false
+	end
+	_G.BuyMerchantItem(index, count or 1)
+	return true
+end
+
 -- Which creature a GUID belongs to, as the id the databases are keyed on.
 --
 -- The client hands GUIDs out everywhere and never hands out the number inside
