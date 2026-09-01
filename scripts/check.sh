@@ -908,6 +908,7 @@ HARNESS_LINE_LIMIT=800
 # path:ceiling:why it is exempt
 HARNESS_LINE_ALLOWED="
 sections/05-action-bars.lua:1061:one subject, five bars; splits at the keys, the paging and the churn
+sections/39-party-raid.lua:833:one subject, two shapes; the party and the raid are one header and one block
 "
 
 harness_names='

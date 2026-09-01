@@ -315,21 +315,51 @@ end
 
 local Whole = ns.UI.Whole
 
--- How many columns wide and how many rows deep the list has been arranged, in
--- blocks. The header's own arithmetic, done here: a party of five at five to a
--- column is one column of five, and the same five at one to a column is five
--- columns of one.
+-- How many blocks the header is about to show.
 --
--- Off the count of blocks on the screen rather than off the roster, because a
--- raid past the cap is a header that shows the first maxColumns * unitsPerColumn
--- of it and drops the rest, and the list to centre is the one that was drawn.
-local function Spread()
-	local shown = Group.Count()
-	local per = math.max(ns.db.partyRaidPerColumn, 1)
-	if shown <= per then
-		return 1, shown
+-- Off the roster rather than off the buttons, and that is the whole of the fix
+-- for a list that sat with its anchor over the first slot instead of its
+-- middle. Group.Count answers what is on the screen at this instant, which is
+-- the wrong question at the moment the layout is decided: the header updates
+-- itself off the same GROUP_ROSTER_UPDATE this file does, so the pass that
+-- centres the list runs before the buttons for the people who are in it exist.
+-- At login, in a party, that count is zero, the list is centred as a list of
+-- nothing, and it stays that way until somebody joins or leaves and a second
+-- pass happens to run late enough to see them.
+--
+-- Capped at the cap the header itself applies, because a raid past
+-- maxColumns * unitsPerColumn is a header that shows the first of it and drops
+-- the rest, and the list to centre is the one that gets drawn.
+local function Expected()
+	if not ns.db.party then
+		return 0
 	end
-	return math.min(math.ceil(shown / per), ns.db.partyRaidColumns), per
+	-- Solo is never shown: showSolo is false, and a roster of one is you.
+	local units = Roster.Units()
+	if #units < 2 then
+		return 0
+	end
+	local shown = ns.db.partySelf and #units or #units - 1
+	return math.min(shown, ns.db.partyRaidColumns * ns.db.partyRaidPerColumn)
+end
+
+-- How many columns wide and how many rows deep a list of that many blocks is
+-- arranged, and how far it reaches in each direction. The header's own
+-- arithmetic, done here: a party of five at five to a column is one column of
+-- five, and the same five at one to a column is five columns of one.
+local function Extent(shown)
+	local per = math.max(ns.db.partyRaidPerColumn, 1)
+	local columns, rows = 1, shown
+	if shown > per then
+		columns, rows = math.min(math.ceil(shown / per), ns.db.partyRaidColumns), per
+	end
+	rows = math.max(rows, 1)
+
+	local gap = ns.db.partyGap
+	local block = ns.db.partyHeight + ns.db.partyWidth
+	return columns, rows,
+		columns * block + (columns - 1) * gap,
+		rows * ns.db.partyHeight + (rows - 1) * gap
 end
 
 -- The header placed so the blocks under it fill outward from the anchor, which
@@ -351,17 +381,10 @@ end
 -- list placed on half of that rasterises every edge inside it across two rows of
 -- pixels, which is the blur OnDragStop already rounds away for the same reason.
 --
--- Called after Nudge and not before it: what is being counted is the blocks the
--- header has shown, and Nudge is what makes it arrange them. In combat this is
--- never reached at all, because Rebuild has already returned by then on a Secure
--- that was refused.
+-- In combat this is never reached at all, because Rebuild has already returned
+-- by then on a Secure that was refused.
 local function Centre()
-	local columns, rows = Spread()
-	local gap = ns.db.partyGap
-	local block = ns.db.partyHeight + ns.db.partyWidth
-	local wide = columns * block + (columns - 1) * gap
-	local tall = math.max(rows, 1) * ns.db.partyHeight
-		+ (math.max(rows, 1) - 1) * gap
+	local _, _, wide, tall = Extent(Expected())
 
 	local down = ns.db.partyGrow ~= "up"
 	local edge = down and "TOP" or "BOTTOM"
@@ -370,6 +393,306 @@ local function Centre()
 
 	header:ClearAllPoints()
 	header:SetPoint(edge, anchor, edge, across, down and away or -away)
+end
+
+--------------------------------------------------------------------------
+-- The group headings
+--
+-- One label over each column, which is the whole difference between a raid you
+-- can find somebody in and forty rectangles. It says which raid group that
+-- column starts with, and it is only drawn where the columns are groups, which
+-- is a raid ordered by group number and nothing else. In role order a column is
+-- five people who happen to have followed each other down the list.
+--
+-- The number is worked out rather than assumed. A header fills a column every
+-- unitsPerColumn members whatever the groups are doing, so a raid with a group
+-- of four in it packs the next group's first member into the column above, and
+-- a label that counted columns instead of people would name the wrong group
+-- from there down. Counting who is actually in each group and asking which one
+-- the first member of the column falls into is right in both cases.
+--------------------------------------------------------------------------
+
+local MAX_GROUPS = 8
+
+-- How far over the top of the list the headings sit.
+local HEADING_GAP = 3
+
+local headings = {}
+
+-- How many people are in each raid group. One pass per layout rather than one
+-- per column, and false where this client has no roster call, which takes the
+-- headings off rather than guessing at them.
+local counts = {}
+
+local function CountGroups()
+	for group = 1, MAX_GROUPS do
+		counts[group] = 0
+	end
+	if type(_G.GetRaidRosterInfo) ~= "function" then
+		return false
+	end
+	for index = 1, (GetNumGroupMembers() or 0) do
+		local _, _, subgroup = _G.GetRaidRosterInfo(index)
+		if subgroup and counts[subgroup] then
+			counts[subgroup] = counts[subgroup] + 1
+		end
+	end
+	return true
+end
+
+-- The raid group the slot-th member of the list belongs to, counting through
+-- the groups in the order the header lays them out.
+local function GroupAt(slot)
+	local seen = 0
+	for group = 1, MAX_GROUPS do
+		seen = seen + counts[group]
+		if slot <= seen then
+			return group
+		end
+	end
+	return nil
+end
+
+local function Heading(index)
+	local label = headings[index]
+	if not label then
+		label = ns.UI.Label(anchor, ns.UI.OutlineFloor(), ns.UI.Color.heading,
+			"CENTER", ns.UI.OUTLINE)
+		headings[index] = label
+	end
+	return label
+end
+
+-- A label over each column, or none at all.
+--
+-- `rows` is how many members fill a column of the real list, which is what
+-- turns a column into the group its first member is in. Nothing there means a
+-- raid the preview made up, and a made up raid is full, so the column is the
+-- group and there is no roster to count.
+local function Headings(columns, wide, tall, rows)
+	local block, gap = ns.db.partyHeight + ns.db.partyWidth, ns.db.partyGap
+	for index = 1, math.max(#headings, columns) do
+		local group = index <= columns
+			and (rows and GroupAt((index - 1) * rows + 1) or index)
+		local label = (group or headings[index]) and Heading(index)
+		if not group then
+			if label then
+				label:Hide()
+			end
+		else
+			label:SetText("Group " .. group)
+			label:ClearAllPoints()
+			label:SetPoint("BOTTOM", anchor, "CENTER",
+				Whole(block / 2 - wide / 2 + (index - 1) * (block + gap)),
+				Whole(tall / 2 + HEADING_GAP))
+			label:Show()
+		end
+	end
+end
+
+-- The headings over the real list, which is the raid ordered by group and
+-- nothing else. Called after Centre, because both are placed off the same
+-- rectangle and Centre is what works out how big it is.
+local function Label()
+	if not ByGroupNumber() or not CountGroups() then
+		Headings(0, 0, 0)
+		return
+	end
+	local columns, rows, wide, tall = Extent(Expected())
+	Headings(columns, wide, tall, rows)
+end
+
+--------------------------------------------------------------------------
+-- The preview
+--
+-- A list with nobody in it is what you are placing every time you place it: the
+-- party is empty out of a group and the raid is empty except on the two nights
+-- a week it is not. So unlocked and out of a group, the frames stand people who
+-- are not there in the slots real ones would take, four seconds as a party and
+-- four as a full raid, and then round again.
+--
+-- Two shapes rather than one because they are two different rectangles. A party
+-- is one column at the size you read health off, a raid is that column repeated
+-- across the screen, and the answer to "will this fit here" is different for
+-- each. UnitFrames/PlayerCast.lua previews a cast and then a channel for the
+-- same reason and on the same clock.
+--
+-- Ordinary frames rather than anything the header made. A secure header shows
+-- one button per member and there is no member, so a preview built out of its
+-- buttons is a preview of nothing. They are built the first time somebody
+-- unlocks and kept after that, because unlocking is not a thing done on a tick
+-- and a player who unlocks once will do it again.
+--------------------------------------------------------------------------
+
+-- Five people who are not there: a tank, a healer and three damage, in the
+-- order the bands put them. So the preview shows the slot rule as well as the
+-- size and the place, and a raid is these five over and over, because forty
+-- names invented here is forty names to read past.
+local PREVIEW = {
+	{ name = "Ironhide", class = "WARRIOR", role = Role.TANK,
+		health = 96, power = 45, powerType = 1 },
+	{ name = "Lightwell", class = "PRIEST", role = Role.HEALER,
+		health = 100, power = 72, powerType = 0 },
+	{ name = "Bramblefoot", class = "DRUID", role = Role.DPS,
+		health = 61, power = 38, powerType = 0 },
+	{ name = "Emberkin", class = "MAGE", role = Role.DPS,
+		health = 78, power = 54, powerType = 0 },
+	{ name = "Sneaky", class = "ROGUE", role = Role.DPS,
+		health = 100, power = 90, powerType = 3 },
+}
+
+-- The most a raid holds, whatever the column settings multiply out to.
+local RAID = 40
+
+-- How long each of the two shapes holds, and how far under the list its caption
+-- sits.
+local HOLD = 4
+local CAPTION_GAP = 3
+
+-- What a preview block is drawn from. The same table Member.Place reads for a
+-- real member, with the two fields that say there is no unit behind this one.
+local ghost = { width = 0, height = 0, role = nil, icons = true, range = true,
+	preview = true, rails = true }
+
+local frames, caption = {}, nil
+local phase, phaseAt = "party", 0
+
+-- Where slot `index` of an arrangement `rows` deep sits, as an offset from the
+-- middle of the anchor.
+--
+-- The plain way round, which Centre cannot use and this can. The whole
+-- arrangement is centred on the anchor, and Centre reaches that through the one
+-- point on a secure header the client will not move; nothing here is secure, so
+-- the list is `wide` by `tall` about the anchor's middle, a column fills before
+-- the next one starts, and `grow` says which end of a column slot one is at.
+local function Sit(frame, index, rows, wide, tall)
+	local block = ns.db.partyHeight + ns.db.partyWidth
+	local height, gap = ns.db.partyHeight, ns.db.partyGap
+	local column, row = math.floor((index - 1) / rows), (index - 1) % rows
+
+	local x = block / 2 - wide / 2 + column * (block + gap)
+	local y = tall / 2 - height / 2 - row * (height + gap)
+	frame:ClearAllPoints()
+	frame:SetPoint("CENTER", anchor, "CENTER", Whole(x),
+		Whole(ns.db.partyGrow == "up" and -y or y))
+end
+
+-- Under the anchor's own level rather than over it, all of it. What is on the
+-- anchor is the rim you drag by and the name above it, and a preview block that
+-- covered either would be a preview of the frame with the handle taken off.
+local function Under(steps)
+	return math.max(anchor:GetFrameLevel() - steps, 0)
+end
+
+-- One more block than there were, built the first time a shape needs it. Forty
+-- of them is a raid at the cap and it is built once in a session, by somebody
+-- who has unlocked the frames and is looking at them.
+local function Made(wanted)
+	if not caption then
+		caption = ns.UI.Label(anchor, ns.UI.OutlineFloor(), ns.UI.Color.quiet,
+			"CENTER", ns.UI.OUTLINE)
+	end
+	for index = #frames + 1, wanted do
+		local frame = CreateFrame("Frame", nil, anchor)
+		frame:EnableMouse(false)
+		frame:SetFrameLevel(Under(1))
+		Member.Build(frame)
+		frames[index] = frame
+	end
+end
+
+-- How many blocks this shape stands, and what its caption says.
+local function Shape()
+	if phase == "raid" then
+		local held = math.min(ns.db.partyRaidColumns * ns.db.partyRaidPerColumn, RAID)
+		local columns, rows = Extent(held)
+		return held, ("a raid of %d, %d by %d"):format(held, columns, rows)
+	end
+	-- As many as a real party would show, which is four unless your own block
+	-- is in the list.
+	local held = ns.db.partySelf and #PREVIEW or #PREVIEW - 1
+	return held, ("a party of %d"):format(held)
+end
+
+local function Show()
+	local shown, said = Shape()
+	local columns, rows, wide, tall = Extent(shown)
+	Made(shown)
+
+	ghost.width, ghost.height = ns.db.partyWidth, ns.db.partyHeight
+	ghost.icons, ghost.range = ns.db.partyRoleIcon, ns.db.partyRange
+
+	for index = 1, #frames do
+		local frame = frames[index]
+		if index > shown then
+			frame:Hide()
+		else
+			-- The five over and over, so the fortieth block is drawn from a
+			-- class and a power type like the first one.
+			local member = PREVIEW[(index - 1) % #PREVIEW + 1]
+			ghost.role = member.role
+			Member.Place(frame, ghost)
+			Member.Preview(frame, member)
+			Sit(frame, index, rows, wide, tall)
+			frame:Show()
+		end
+	end
+
+	-- A made up raid is a full one, so its columns are its groups. Only in
+	-- group order, for the reason the real headings are: in role order a column
+	-- is not a group.
+	if phase == "raid" and ns.db.partyOrder == "group" then
+		Headings(columns, wide, tall)
+	else
+		Headings(0, 0, 0)
+	end
+
+	caption:SetText(said)
+	caption:ClearAllPoints()
+	caption:SetPoint("TOP", anchor, "CENTER", 0, Whole(-tall / 2 - CAPTION_GAP))
+	caption:Show()
+end
+
+-- Whether the preview is what is on the screen. Unlocked, drawing at all, and
+-- nobody to draw: in a group the real blocks are the preview, and two lists of
+-- five on one anchor is the complaint the whole part exists to answer.
+local function Previewing()
+	return not ns.db.locked and ns.db.party and Expected() == 0
+end
+
+local function Preview()
+	if Previewing() then
+		if phaseAt == 0 then
+			phaseAt = GetTime()
+		end
+		Show()
+		return
+	end
+	-- Whatever the headings were saying, they are the real list's now.
+	Label()
+	if not caption then
+		return -- never unlocked out of a group, so there is nothing built to hide
+	end
+	for index = 1, #frames do
+		frames[index]:Hide()
+	end
+	caption:Hide()
+	phase, phaseAt = "party", 0
+end
+
+-- The two shapes, four seconds each. Off the ticker that is already running,
+-- and it does nothing at all while the frames are locked, which is every moment
+-- but the one this is for.
+local function Turn(now)
+	if not Previewing() then
+		return
+	end
+	if now - phaseAt < HOLD then
+		return
+	end
+	phaseAt = now
+	phase = phase == "party" and "raid" or "party"
+	Show()
 end
 
 local function Build()
@@ -427,6 +750,12 @@ function Group.Rebuild()
 	end
 	Nudge()
 	Centre()
+	-- The roster is half of what decides whether there is a preview at all, and
+	-- all of what the headings count, so both are done again here and not only
+	-- when the lock moves. A group forming while the frames are unlocked is
+	-- otherwise five made up members standing in front of the five real ones who
+	-- just turned up.
+	Preview()
 	-- Painted here rather than left to the next tick, for the reason
 	-- Skin.Apply paints at the end of its own pass: up to a fifth of a second
 	-- of a block with no name and a white gauge on it is exactly long enough to
@@ -447,15 +776,16 @@ function Group.Apply()
 	Group.Lock()
 end
 
--- Locked is the normal state. Unlocked the anchor takes the mouse and draws its
--- rim, the same as your cast bar, and for the same reason: a list that is empty
--- out of a group is a piece of screen you would otherwise have to find from
--- memory.
+-- Locked is the normal state. Unlocked the anchor takes the mouse, draws its
+-- rim and, out of a group, fills itself with a party that is not there and the
+-- rectangle a raid would take, the same as your cast bar and for the same
+-- reason: what you are placing is empty almost every time you place it.
 function Group.Lock()
 	if not built then
 		return
 	end
 	place:Lock(not ns.db.locked)
+	Preview()
 end
 
 function Group.Reset()
@@ -510,6 +840,13 @@ function Group.Members()
 	return members
 end
 
+-- The made up blocks the preview stands in the slots, which shape it is
+-- standing, and the headings over the columns. Empty until the frames have been
+-- unlocked out of a group once, which is the whole condition it exists under.
+function Group.Previewed()
+	return frames, phase, headings
+end
+
 function Group.Count()
 	local shown = 0
 	for index = 1, #members do
@@ -551,6 +888,14 @@ function Group.Describe()
 	if not ns.db.party then
 		return "off, and Blizzard's own party and raid frames are where the hide switches leave them"
 	end
+	if Previewing() then
+		return ("on, %d by %d pixels, and previewing itself because the frames are"
+			.. " unlocked: a party of %d, then a raid of %d, %d seconds each, both"
+			.. " where the real ones go"):format(
+			ns.db.partyHeight + ns.db.partyWidth, ns.db.partyHeight,
+			ns.db.partySelf and #PREVIEW or #PREVIEW - 1,
+			math.min(ns.db.partyRaidColumns * ns.db.partyRaidPerColumn, RAID), HOLD)
+	end
 	local order = ByGroupNumber() and "by raid group"
 		or "tanks, then healers, then damage, by name inside each band"
 	local line = ("on, %d by %d pixels, %d in the list, %s"):format(
@@ -582,6 +927,12 @@ local function OnUpdate(_, delta)
 		ns.Perf.Start("party")
 		Group.Update()
 		ns.Perf.Stop("party")
+		-- Outside the perf bracket and outside Group.Update, which is the
+		-- function the allocation gate measures. This one is two comparisons
+		-- while the frames are locked, which is every moment but the one
+		-- somebody is placing them, and it lays a list out on the fifth pass
+		-- through the second it is not.
+		Turn(GetTime())
 	end
 end
 

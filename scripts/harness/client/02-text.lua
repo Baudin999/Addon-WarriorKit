@@ -642,6 +642,11 @@ _G.GameTooltip = region("frame")
 -- Region:Click cannot model that half without knowing which frames have it.
 function _G.CreateFrame(kind, name, parent, template)
 	local f = child(kind, parent or _G.UIParent, name)
+	-- One over whoever it hangs off, which is what the client gives a frame
+	-- nobody has set a level on. It used to be nothing at all, and a caller
+	-- doing arithmetic on the answer, which is what a widget that has to sit
+	-- under its own parent's chrome must do, got nil instead of a number.
+	f.frameLevel = ((parent or _G.UIParent).frameLevel or 0) + 1
 	f.origin = loading.file
 	f.template = template
 	f.secure = template ~= nil and template:find("SecureActionButton", 1, true) ~= nil

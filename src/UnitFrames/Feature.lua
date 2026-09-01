@@ -769,7 +769,19 @@ ns.Register({
 		-- nothing about range is a block you aim at and miss.
 		partyRange = true,
 
-		partyPoint = { "LEFT", "UIParent", "LEFT", 40, 120 },
+		-- Two hundred and twenty pixels under the middle of the screen, which is
+		-- under the player block and over the action bars.
+		--
+		-- The point is the middle of the list and not a corner of it, because
+		-- the list fills outward from here in both directions: two people and
+		-- five people are centred on the same pixel, and nobody joining moves
+		-- anybody who was already on the screen.
+		--
+		-- This shipped on the left edge of the screen until now, which is where
+		-- a party list has always gone and is the wrong side of the screen for
+		-- what this one is for. The Charge button casts Intervene at whoever you
+		-- are looking at, and what you are aiming with is in the middle.
+		partyPoint = { "CENTER", "UIParent", "CENTER", 0, -220 },
 	},
 
 	charDefaults = {
@@ -893,7 +905,7 @@ ns.Register({
 		"party width <90-360>, party height <18-72>, party gap <0-20>",
 		"party grow up|down, party zoom <1-3>",
 		"party columns <1-8>, party percolumn <1-40>, the raid only",
-		"party reset, the list back on its own corner of the screen",
+		"party reset, the list back under the middle of the screen",
 		"hide <switch> on|off, one of the client's own frames this addon replaces",
 		"hide probe, every frame those switches name and what is on screen now",
 		"auras on|off, the client's own buff row in the corner of the screen",

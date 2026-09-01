@@ -548,7 +548,9 @@ local function Placing(ui)
 			ns.Group.Apply()
 		end)
 
-	ui.Action(function() return "back on its own corner of the screen" end, function()
+	ui.Hint("Unlock the frames out of a group and the list previews itself, four seconds as a party and four as a full raid, both standing where the real ones would.")
+
+	ui.Action(function() return "back under the middle of the screen" end, function()
 		ns.Group.Reset()
 	end)
 end
@@ -583,7 +585,7 @@ local function Party(ui)
 			ns.db.partyOrder = value
 			ns.Group.Apply()
 		end)
-	ui.Hint("Role is tanks, healers, then damage, by name inside each band, so the same five people fill the same five slots in every group. Group is raid group numbers and does nothing in a party.")
+	ui.Hint("Role is tanks, healers, then damage, by name inside each band, so the same five fill the same five slots in every group. Group is raid groups, a column each under its own heading.")
 
 	ui.Check("role icon on each block",
 		function() return ns.db.partyRoleIcon end,

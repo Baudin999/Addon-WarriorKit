@@ -458,9 +458,15 @@ if window then
 	-- one more control on a section that already had six, and its hint is the
 	-- sentence saying Questie is what answers it, which is the one thing about
 	-- that switch nobody can work out by looking at a bar with no badge on it.
-	-- 24,100 is that measurement plus a hint's worth of room again.
-	check(prose < 24100,
-		("the window holds %d characters of prose and the budget is 24,100"):format(prose))
+	-- 24,100 is that measurement plus a hint's worth of room again. The party
+	-- preview costs 212 across one hint and one rewritten one and takes it to
+	-- 24,105 across sixty-six: no new page, no new control, and the hint is the
+	-- sentence saying the list stands a party and then a raid while it is
+	-- unlocked, which is the one thing about a frame that is empty out of a
+	-- group nobody can work out by looking at it. 24,300 is that measurement
+	-- plus a hint's worth of room again.
+	check(prose < 24300,
+		("the window holds %d characters of prose and the budget is 24,300"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

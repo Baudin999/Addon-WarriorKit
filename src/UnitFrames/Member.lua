@@ -200,6 +200,8 @@ end
 --   role    what Unit/Role.lua says this member is playing
 --   icons   whether the role icon is drawn at all
 --   range   whether a member you cannot reach drains
+--   preview there is nobody behind this block, so ask the client nothing
+--   rails   whether a preview block carries a power rail
 --
 -- One table rather than five arguments, and one table reused by the caller
 -- rather than one per member: this runs over forty blocks on a raid relayout
@@ -217,8 +219,10 @@ function Member.Place(button, look)
 	-- slider moved is still the size it was born.
 	button:SetSize((tall + wide) * px, tall * px)
 
-	block.unit = button:GetAttribute("unit")
-	local rails = false
+	-- A preview block has nobody behind it, so it says for itself whether it
+	-- carries a rail and never asks the client about a unit it does not have.
+	block.unit = not look.preview and button:GetAttribute("unit") or nil
+	local rails = look.preview and look.rails ~= false or false
 	if block.unit and UnitExists(block.unit) then
 		rails = select(2, Unit.Power(block.unit)) > 0
 	end
@@ -406,6 +410,43 @@ function Member.Update(button)
 end
 
 --------------------------------------------------------------------------
+
+-- One block filled in for somebody who is not there, which is what
+-- UnitFrames/Group.lua stands in the slots while the frames are unlocked and
+-- you are not in a group.
+--
+-- Every write the tick would have made, made once from a table instead of from
+-- a unit. It goes through the same Paint and the same widgets, so what you are
+-- placing is the block you will get and not a drawing of one, and it writes the
+-- guards as well as the values so a block that later takes a real member repaints
+-- rather than keeping a made up name.
+--
+-- Not on the HOT list and not on a tick: this runs when you unlock the frames
+-- and when a setting moves under them.
+function Member.Preview(button, member)
+	local block = button.wk
+	if not block then
+		return
+	end
+
+	local tint = Color.Class(member.class)
+	block.tint, block.shade = tint, nil
+	Member.Paint(block, tint, nil)
+
+	block.label = member.name
+	block.nameText:SetText(member.name)
+	block.percent = member.health
+	block.health:SetValue(member.health / 100)
+	block.healthText:SetText(member.health .. "%")
+
+	if not block.rails then
+		return
+	end
+	block.power = member.power
+	block.rail:SetValue(member.power / 100)
+	block.hue = Color.power[member.powerType] or IDLE
+	Gauge.Paint(block.rail, block.rail.track, block.hue)
+end
 
 -- Whether this member's block still wants the rails it was laid out with. A
 -- druid leaving cat form gains a mana bar, and growing one is a relayout rather

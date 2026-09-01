@@ -707,6 +707,123 @@ print("party  " .. ns.Group.Describe())
 print("roles  " .. Role.Describe())
 
 ----------------------------------------------------------------------
+-- The preview
+--
+-- The list is empty every moment you are not in a group, which is every moment
+-- you are placing it. Unlocked and out of one it stands people who are not
+-- there in the slots real ones would take, by the arithmetic the header is
+-- placed with, or what you dragged is not what you get.
+----------------------------------------------------------------------
+
+group.Forget()
+fire("GROUP_ROSTER_UPDATE")
+
+do
+	ns.db.locked = false
+	ns.Group.Lock()
+	local made = ns.Group.Previewed()
+
+	local shown, left, right = 0, math.huge, -math.huge
+	local top, bottom = -math.huge, math.huge
+	for _, frame in ipairs(made) do
+		if frame:IsShown() then
+			shown = shown + 1
+			left, right = math.min(left, frame:GetLeft()), math.max(right, frame:GetRight())
+			top, bottom = math.max(top, frame:GetTop()), math.min(bottom, frame:GetBottom())
+		end
+	end
+	check(shown == 4, ("%d blocks stood in for a party of four"):format(shown))
+
+	-- Centred on the frame you drag, which is the whole point: where it shows
+	-- them is where the real four go.
+	local ax, ay = _G.WarriorKitGroup:GetCenter()
+	check(near((left + right) / 2, ax) and near((top + bottom) / 2, ay),
+		("the preview sits round %.1f, %.1f and the frame you drag is at %.1f, %.1f")
+			:format((left + right) / 2, (top + bottom) / 2, ax, ay))
+
+	-- Through the same block a real member is drawn through, or it is a picture
+	-- of the frames rather than the frames.
+	local first = made[1].wk
+	check(first.nameText.text == "Ironhide" and first.healthText.text == "96%",
+		("the first preview block reads %q at %q"):format(tostring(first.nameText.text),
+			tostring(first.healthText.text)))
+	check(fills(first.health, Color.Class("WARRIOR")),
+		"a preview block's health fill is not its made up member's class colour")
+	check(fills(first.rail, Color.power[1]),
+		"a preview warrior's rail is not the rage colour")
+
+	-- Four seconds on, it is the raid instead: every slot the column settings
+	-- allow, laid out in the same arithmetic, with a heading over each column
+	-- saying which group it is. The blocks are the same blocks, which is what
+	-- puts a power rail on a raid frame.
+	local ticker
+	for _, f in ipairs(H.frames) do
+		if f.scripts.OnUpdate and f.origin:match("UnitFrames/Group") then
+			ticker = f
+		end
+	end
+	advance(5)
+	ticker.scripts.OnUpdate(ticker, 5)
+	local _, phase, labels = ns.Group.Previewed()
+	check(phase == "raid", ("the preview is still standing a %s after five seconds"):format(phase))
+
+	shown, left, right = 0, math.huge, -math.huge
+	top, bottom = -math.huge, math.huge
+	for _, frame in ipairs(made) do
+		if frame:IsShown() then
+			shown = shown + 1
+			left, right = math.min(left, frame:GetLeft()), math.max(right, frame:GetRight())
+			top, bottom = math.max(top, frame:GetTop()), math.min(bottom, frame:GetBottom())
+		end
+	end
+	local held = ns.db.partyRaidColumns * ns.db.partyRaidPerColumn
+	check(shown == held, ("%d blocks previewed a raid of %d"):format(shown, held))
+	check(near((left + right) / 2, ax) and near((top + bottom) / 2, ay),
+		"the previewed raid is not centred on the frame you drag")
+	check(fills(made[held].wk.rail, Color.power[3]),
+		"the last block of a previewed raid has no power rail of its own")
+
+	local labelled = 0
+	for _, label in ipairs(labels) do
+		labelled = labelled + (label.shown and 1 or 0)
+	end
+	check(labelled == 0, "a raid ordered by role has group headings over its columns")
+
+	ns.db.partyOrder = "group"
+	ns.Group.Apply()
+	labelled = 0
+	for _, label in ipairs(labels) do
+		labelled = labelled + (label.shown and 1 or 0)
+	end
+	check(labelled == ns.db.partyRaidColumns and labels[3].text == "Group 3",
+		("%d headings over %d columns, the third reads %q"):format(labelled,
+			ns.db.partyRaidColumns, tostring(labels[3].text)))
+	ns.db.partyOrder = "role"
+	ns.Group.Apply()
+
+	-- And in a group there is nothing to preview: the real blocks are it. Off
+	-- the roster event alone, with no lock moving, because a group forming
+	-- while you are placing the frames is exactly when this has to happen.
+	stand(PARTY, false)
+	check(made[1]:IsShown() == false,
+		"a party turned up and the made up one is still standing in front of it")
+	group.Forget()
+	fire("GROUP_ROSTER_UPDATE")
+	check(made[1]:IsShown(), "the preview did not come back when the group left")
+
+	print("party  " .. ns.Group.Describe())
+
+	ns.db.locked = true
+	ns.Group.Lock()
+	local labelsOff = 0
+	for _, label in ipairs(labels) do
+		labelsOff = labelsOff + (label.shown and 1 or 0)
+	end
+	check(made[1]:IsShown() == false and labelsOff == 0,
+		"locking the frames left the preview on the screen")
+end
+
+----------------------------------------------------------------------
 -- Put the client back the way a section after this one would expect it.
 ----------------------------------------------------------------------
 
