@@ -1,6 +1,6 @@
--- The dungeon log
+-- The adventure guide
 --
--- Eight questions no amount of reading Dungeons/ will answer.
+-- Eleven questions no amount of reading Dungeons/ will answer.
 --
 -- Does the book survive the bake. Dungeons/Baked.lua is generated out of
 -- Questie's databases by a script that runs on a laptop and never in a game, so
@@ -14,6 +14,20 @@
 -- column right and no map in the middle. The tiles are the other half: twelve
 -- of them, one prefix and one to twelve, and a path that came out any other way
 -- draws nothing at all and says nothing about it.
+--
+-- Does every dungeon in the book have a card, and does every card have a
+-- painting on it. Dungeons/Art.lua is generated too, out of the 2.5 client's
+-- own instance tables, and a place the bake did not reach is a card that is a
+-- dark rectangle with a name on it, which looks like a bug rather than a gap.
+--
+-- Does the window open on the shelf, and does clicking a card become that
+-- dungeon and only that dungeon. The left column used to hold every boss in the
+-- game and now holds one dungeon's, so the count down that column is the whole
+-- of what says which page is up and which dungeon is on it.
+--
+-- Do all three ways back work. Right click on the boss list, right click on the
+-- map, and the button that says where it goes: three paths through two files,
+-- and the two gestures are the ones nothing on the screen mentions.
 --
 -- Does a dungeon with floors get a strip and a dungeon without one not. Both
 -- are ordinary and only one of them draws a control, and a strip of one button
@@ -48,8 +62,9 @@ local H = ...
 local ns, check = H.ns, H.check
 local quests, dungeons = H.quests, H.dungeons
 
-local Window, Book, Places, Loot, Seen =
-	ns.DungeonWindow, ns.DungeonBook, ns.DungeonPlaces, ns.DungeonLoot, ns.DungeonSeen
+local Window, Book, Places, Loot, Seen, Shelf =
+	ns.DungeonWindow, ns.DungeonBook, ns.DungeonPlaces, ns.DungeonLoot,
+	ns.DungeonSeen, ns.DungeonShelf
 
 -- The ids the fixture is built on, named here rather than written into every
 -- assertion because a number in a message is a number nobody can read.
@@ -159,18 +174,92 @@ do
 end
 
 ----------------------------------------------------------------------
--- The window
+-- The shelf
 ----------------------------------------------------------------------
 
 do
-	check(Window.Built(), "the dungeon log was not built at login")
+	local held, drawn = Shelf.Count()
+	check(drawn == places, ("the shelf drew %d cards for %d dungeons"):format(drawn, places))
+	check(held == drawn,
+		("%d of the shelf's %d cards have no picture on them"):format(drawn - held, drawn))
+	check(Shelf.Describe():find("loading screen") ~= nil,
+		("the reading for the shelf reads %q"):format(Shelf.Describe()))
+
+	-- The four monastery wings are four cards and one painting, the same way
+	-- they are four runs and one map. It is the one place a card and a picture
+	-- are not one to one, and it is the case a bake keyed on the wrong half of
+	-- the name would get wrong in both directions.
+	local monastery = ns.DungeonArt.PLACES["Scarlet Monastery"]
+	check(monastery ~= nil and monastery:find("Monastery") ~= nil,
+		("the monastery's painting is %q"):format(tostring(monastery)))
+	check(ns.DungeonArt.PLACES["Scarlet Monastery: Library"] == nil,
+		"a wing was baked its own painting, which is the place baked four times")
+
+	-- Nothing baked that the book does not name, which is the entry left behind
+	-- by a dungeon that was renamed or dropped. The whole book rather than the
+	-- part this client can reach, for the reason the map bake's own count is.
+	local stray = 0
+	for name in pairs(ns.DungeonArt.PLACES) do
+		local wanted = false
+		for _, dungeon in ipairs(Book.DUNGEONS) do
+			wanted = wanted or Places.Place(dungeon.name) == name
+		end
+		if not wanted then
+			stray = stray + 1
+		end
+	end
+	check(stray == 0, ("%d baked paintings are of places the book does not name"):format(stray))
+end
+
+----------------------------------------------------------------------
+-- The window, and moving between its two pages
+----------------------------------------------------------------------
+
+do
+	check(Window.Built(), "the adventure guide was not built at login")
 	Window.Show()
-	check(Window.Shown(), "the dungeon log did not open")
+	check(Window.Shown(), "the adventure guide did not open")
+
+	-- It opens on the shelf, which is the whole point of there being one: a
+	-- window that opened on the last dungeon you read would be the old window
+	-- with a page nobody sees.
+	check(Window.Page() == "shelf",
+		("the window opened on the %s page"):format(Window.Page()))
+	check(#Window.Rows() == 0,
+		("%d boss rows are drawn while the shelf is the page"):format(#Window.Rows()))
+	check(Window.Showing() == nil, "a boss is selected while no dungeon is open")
+	check(Window.Describe():find("shelf") ~= nil,
+		("the reading for the window reads %q"):format(Window.Describe()))
+
+	-- Every card carries the dungeon a press on it opens, which is the one
+	-- claim about the shelf that cannot be made from outside it.
+	local cards, carried = Shelf.Cards(), 0
+	for _, card in ipairs(cards) do
+		if card.dungeon and card.name:GetText() == card.dungeon.name then
+			carried = carried + 1
+		end
+	end
+	check(carried == places,
+		("%d of %d cards show the dungeon they open"):format(carried, places))
+
+	-- Pressing one becomes that dungeon and only that dungeon. Eight rows for
+	-- the Deadmines' eight bosses, where the old column drew all two hundred
+	-- and thirty seven at once.
+	local card = nil
+	for _, one in ipairs(cards) do
+		if one.dungeon == deadmines then
+			card = one
+		end
+	end
+	check(card ~= nil, "the shelf has no Deadmines card on it")
+	check(card:Click("LeftButton"), "the Deadmines card refused a press")
+	check(Window.Page() == "dungeon",
+		("clicking a card left the window on the %s page"):format(Window.Page()))
 
 	local rows = Window.Rows()
-	check(#rows == places + bosses,
-		("the column drew %d rows for %d dungeons and %d bosses")
-			:format(#rows, places, bosses))
+	check(#rows == #deadmines.bosses,
+		("the column drew %d rows for a dungeon of %d bosses")
+			:format(#rows, #deadmines.bosses))
 
 	local headers, marked = 0, 0
 	for _, row in ipairs(rows) do
@@ -181,12 +270,19 @@ do
 			marked = marked + 1
 		end
 	end
-	check(headers == places, ("%d headers for %d dungeons"):format(headers, places))
+	check(headers == 0, ("%d headers on a page that is one dungeon"):format(headers))
 	check(marked == 0,
 		("%d bosses are ticked before anything has been looted"):format(marked))
 
-	check(Window.Select(VANCLEEF), "the window would not select a boss by its creature id")
+	-- A card lands on the first boss rather than on nothing, because a page
+	-- whose middle and right columns both say "nothing selected" looks like a
+	-- page that failed to load.
 	local shown, where, at = Window.Showing()
+	check(at == 1 and where == "The Deadmines",
+		("a card opened on %s of %s"):format(tostring(at), tostring(where)))
+
+	check(Window.Select(VANCLEEF), "the window would not select a boss by its creature id")
+	shown, where, at = Window.Showing()
 	check(shown == VANCLEEF and where == "The Deadmines" and at == 7,
 		("the window is showing %s of %s"):format(tostring(at), tostring(where)))
 
@@ -200,6 +296,63 @@ do
 		("the line under an unwalked map reads %q"):format(note))
 	check((Window.Drawn()) == 0,
 		("%d marks are on a map nothing has been looted in"):format((Window.Drawn())))
+end
+
+----------------------------------------------------------------------
+-- The three ways back
+----------------------------------------------------------------------
+
+do
+	-- The first descendant of a frame that answers a question, which is how the
+	-- two gestures below reach the parts that carry them: a boss row and the
+	-- box the map is drawn in are both pooled and neither has a name.
+	local function Under(frame, wanted)
+		if wanted(frame) then
+			return frame
+		end
+		for _, child in ipairs(frame.children or {}) do
+			local held = Under(child, wanted)
+			if held then
+				return held
+			end
+		end
+		return nil
+	end
+
+	-- The right click on the column. A row is a button, a button eats a press it
+	-- has not registered, and nothing behind it is ever told, so Click is asked
+	-- rather than the script called: it refuses an edge the button never
+	-- registered for, which is the whole failure this is here to catch.
+	Window.Select(VANCLEEF)
+	check(Window.Page() == "dungeon", "the window would not open a dungeon's page")
+	local row = Under(_G.WarriorKitDungeonList, function(one)
+		return one.kind == "button" and one.id ~= nil
+	end)
+	check(row ~= nil, "the boss column drew no rows to right click")
+	check(row:Click("RightButton"),
+		"a boss row refused a right click, which is a row that never registered for one")
+	check(Window.Page() == "shelf",
+		("a right click on a boss row left the window on the %s page"):format(Window.Page()))
+
+	-- The right click on the map, which is the world map's own step-out gesture
+	-- and the reason UI/Chart.lua takes a fourth argument at all.
+	Window.Select(VANCLEEF)
+	local port = Under(_G.WarriorKitDungeonChart, function(one)
+		return one.scripts.OnMouseUp ~= nil
+	end)
+	check(port ~= nil, "the map has nothing on it that answers the mouse")
+	port.scripts.OnMouseUp(port, "RightButton")
+	check(Window.Page() == "shelf",
+		("a right click on the map left the window on the %s page"):format(Window.Page()))
+
+	-- And the button, which is the one of the three that says what it does.
+	Window.Select(VANCLEEF)
+	check(_G.WarriorKitDungeonBack ~= nil, "the page has no button back to the shelf")
+	check(_G.WarriorKitDungeonBack:Click("LeftButton"), "the button refused a press")
+	check(Window.Page() == "shelf",
+		("the button left the window on the %s page"):format(Window.Page()))
+	check((select(3, Window.Says())):find("Pick a dungeon") ~= nil,
+		("the footer on the shelf reads %q"):format((select(3, Window.Says()))))
 end
 
 ----------------------------------------------------------------------
@@ -253,6 +406,10 @@ local was = quests.standing.map
 quests.standing.map = DEADMINES
 
 do
+	-- Back on the Deadmines page, because the block above left the window on the
+	-- shelf and what this one reads is the boss column and the map.
+	Window.Select(VANCLEEF)
+
 	dungeons.Loot({
 		guid = ("Creature-0-3007-0-11-%d-000136DF16"):format(VANCLEEF),
 		slots = {
@@ -297,6 +454,26 @@ do
 	H.fire("LOOT_OPENED")
 	dungeons.Unloot()
 	check(select(2, Seen.Count()) == 1, "looting the same boss twice wrote the drop down twice")
+end
+
+----------------------------------------------------------------------
+-- What the shelf says once you have run something
+----------------------------------------------------------------------
+
+do
+	-- The one thing on the front page that changes while you play. A shelf that
+	-- looked the same after a run as before it would be a page you open once.
+	Window.Back()
+	Window.Paint()
+	local said = nil
+	for _, card in ipairs(Shelf.Cards()) do
+		if card.dungeon == deadmines then
+			said = card.caption:GetText()
+		end
+	end
+	check(said ~= nil and said:find("1 of 8 looted") ~= nil,
+		("the Deadmines card reads %q after one boss was looted"):format(tostring(said)))
+	Window.Select(VANCLEEF)
 end
 
 ----------------------------------------------------------------------
@@ -356,3 +533,5 @@ check((Seen.Count()) == 0, "forgetting the ledger left something behind")
 
 print(("dungeon %d dungeons, %d bosses, %d drops; %s")
 	:format(places, bosses, drops, Places.Describe()))
+print(("dungeon %s; the shelf is the front page and right click is the way back")
+	:format(Shelf.Describe()))

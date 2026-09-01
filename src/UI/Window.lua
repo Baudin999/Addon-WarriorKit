@@ -1086,6 +1086,11 @@ function UI.List(parent, opts)
 	list.describe = opts and opts.describe
 	list.marks = opts and opts.marks and true or false
 	list.actions = opts and opts.actions or nil
+	-- opts.onBack is the way out of whatever this column is part of, called on a
+	-- right click on any row. The dungeon log is what asked: its column is one
+	-- dungeon's bosses and the gesture that leaves it for the shelf has to work
+	-- over the column as much as over the map beside it.
+	list.onBack = opts and opts.onBack or nil
 	-- Named if the caller asks, for the reason the aura rows and the meter are:
 	-- a column that has laid itself out wrongly has to be measurable from a
 	-- macro and from scripts/harness.lua, and the alternative is the file that
@@ -1255,7 +1260,20 @@ local function ListRow(list, index)
 	button.text:SetPoint("RIGHT", button.badge, "LEFT", -M.rowGap, 0)
 	UI.Wrap(button.text, false)
 
-	button:SetScript("OnClick", function(this)
+	-- Both buttons where the caller offered a way back, because a gesture that
+	-- works on the window and not on the column under the cursor is a gesture
+	-- that works nowhere: a row is a button, a button with no right click
+	-- registered eats the press, and nothing behind it is ever told.
+	if list.onBack then
+		button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	end
+	button:SetScript("OnClick", function(this, which)
+		if which == "RightButton" then
+			if list.onBack then
+				list.onBack()
+			end
+			return
+		end
 		if this.id then
 			list:Select(this.id)
 		end

@@ -564,13 +564,16 @@ Comfort\Feature.lua
 # The social part. Who you play with, what they said and how you talk to them.
 # People.lua holds the groups and Rooms.lua reads them to work out which
 # conversation a line belongs to, so it loads before Feed.lua, which routes
-# through it. Compose.lua is the line you type and knows only about channels.
+# through it. History.lua is what survives a logout, and it is after Rooms.lua
+# because which lines those are is Rooms.lua's answer rather than its own.
+# Compose.lua is the line you type and knows only about channels.
 # Blizzard.lua takes the client's own chat window off the screen and hands what
 # it would have drawn to the feed. Voice.lua shares nothing with any of them: it
 # is one setting and a channel to join. Window.lua draws what the other five
 # produce, and Feature.lua is last, as everywhere else.
 Chat\People.lua
 Chat\Rooms.lua
+Chat\History.lua
 Chat\Compose.lua
 Chat\Field.lua
 Chat\Feed.lua
@@ -712,9 +715,11 @@ World\Feature.lua
 Dungeons\Book.lua
 Dungeons\Baked.lua
 Dungeons\Sheets.lua
+Dungeons\Art.lua
 Dungeons\Places.lua
 Dungeons\Loot.lua
 Dungeons\Seen.lua
+Dungeons\Shelf.lua
 Dungeons\Window.lua
 Dungeons\Key.lua
 Dungeons\Feature.lua

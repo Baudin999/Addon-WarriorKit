@@ -1,9 +1,9 @@
 local ADDON, ns = ...
 
--- Everything Core and the panel need to know about the dungeon log. Book.lua,
--- Baked.lua, Sheets.lua, Places.lua, Loot.lua, Seen.lua, Window.lua and Key.lua
--- hold the behaviour, and this is the only file in the folder that names anything
--- outside it.
+-- Everything Core and the panel need to know about the adventure guide.
+-- Book.lua, Baked.lua, Sheets.lua, Art.lua, Places.lua, Loot.lua, Seen.lua,
+-- Shelf.lua, Window.lua and Key.lua hold the behaviour, and this is the only
+-- file in the folder that names anything outside it.
 
 local function SetDungeons(value)
 	ns.db.dungeons = value
@@ -42,6 +42,8 @@ local function DungeonWord(arg, rawArg)
 		ns.Print(ns.DungeonBook.Describe() .. ".")
 	elseif word == "maps" then
 		ns.Print(ns.DungeonPlaces.Describe() .. ".")
+	elseif word == "shelf" then
+		ns.Print(ns.DungeonShelf.Describe() .. ".")
 	elseif word == "seen" then
 		ns.Print(ns.DungeonSeen.Describe() .. ".")
 	elseif word == "forget" then
@@ -57,7 +59,7 @@ local function DungeonWord(arg, rawArg)
 		end
 		ns.DungeonWindow.Toggle()
 	else
-		ns.Print("dungeons takes on, off, key, book, maps, seen or forget.")
+		ns.Print("dungeons takes on, off, key, book, maps, shelf, seen or forget.")
 	end
 	return rawArg
 end
@@ -107,6 +109,7 @@ ns.Register({
 		"dungeons key <key|none>, which key opens it",
 		"dungeons book, how many dungeons, bosses and drops the book has",
 		"dungeons maps, whether this client has a map for each dungeon",
+		"dungeons shelf, whether this client has a picture for each dungeon",
 		"dungeons seen, how much the ledger has learned from your own runs",
 		"dungeons forget, throw the ledger away",
 	},
@@ -119,11 +122,11 @@ ns.Register({
 
 	panel = function(ui)
 		ui.Section("Dungeons", "Chores")
-		ui.Lede("Every boss in the game down the left, in level order. The dungeon's own map in the middle with them marked, and what this one drops on the right.")
+		ui.Lede("A shelf of dungeons, each wearing its own loading screen. Click one for its bosses, its map with them marked, and what they drop. Right click to come back.")
 		ui.Check("the dungeon log",
 			function() return ns.db.dungeons end,
 			SetDungeons)
-		ui.Hint("Neither of these clients has an adventure guide, so nothing is being replaced and no key is being taken off the client.")
+		ui.Hint("Neither of these clients ships an adventure guide, so nothing is being replaced and no key is being taken off the client.")
 		ui.KeyField("key",
 			function()
 				if (ns.db.dungeonKey or "") ~= "" then
@@ -144,6 +147,7 @@ ns.Register({
 		ui.Hint("The marks on the map are where you were standing when you looted each boss, because nothing on either client will say where a boss stands. Forget them and they are learned again on your next run.")
 		ui.Reading("the book", ns.DungeonBook.Describe)
 		ui.Reading("the dungeon maps", ns.DungeonPlaces.Describe)
+		ui.Reading("the shelf", ns.DungeonShelf.Describe)
 		ui.Reading("what your own runs have added", ns.DungeonSeen.Describe)
 		ui.Reading("the drops on the boss you are reading", ns.DungeonLoot.Describe)
 		ui.Reading("the key", ns.DungeonKey.Describe)
