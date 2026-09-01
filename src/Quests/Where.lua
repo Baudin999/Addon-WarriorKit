@@ -197,7 +197,33 @@ end
 -- GetNearestSpawnForQuest, takes no self and returns four: the coordinate pair,
 -- the area, the name and the distance. Read the old way the module answered a
 -- table with no such function in it and every quest reported no destination.
+--
+-- **Asked at most once a second, and that is not a nicety.** The walk behind
+-- it reads every spawn of every objective still open, through a zone to world
+-- coordinate transform per pair, which on an ordinary kill objective is
+-- hundreds of them. Both callers below are in the quest window's paint, so a
+-- paint used to cost two of these walks, and a paint is what QUEST_LOG_UPDATE
+-- ends in. That event is not the log changing: it is the client saying it
+-- looked, and it says so several times a second while you are killing things.
+-- The whole cost arrived the day the name above was corrected, because the
+-- wrong name cost nothing, and it landed as a stutter in the world rather than
+-- as anything wrong in the window.
+--
+-- One slot, because the window draws one quest at a time and clicking a
+-- different one is a different quest table, which is a miss and is answered
+-- fresh. Nothing is held across the second, so a quest handed in or abandoned
+-- cannot be answered for: Quest above reads the live log and returns nil first.
+--
+-- A second of staleness on a yardage is nothing. Standing still it is the same
+-- number, and running flat out it is seven yards off a figure that is already
+-- only as exact as a spawn table's idea of where a mob stands.
+local FRESH = 1.0
+local memoQuest, memoAt, memoArea, memoName, memoDistance
+
 local function Soonest(quest)
+	if memoQuest == quest and memoAt and (GetTime() - memoAt) < FRESH then
+		return memoArea, memoName, memoDistance
+	end
 	local distances = Module("DistanceUtils")
 	local nearest = distances and distances.GetNearestSpawnForQuest
 	if type(nearest) ~= "function" then
@@ -207,7 +233,16 @@ local function Soonest(quest)
 	if not ok then
 		return nil
 	end
+	memoQuest, memoAt = quest, GetTime()
+	memoArea, memoName, memoDistance = area, name, distance
 	return area, name, distance
+end
+
+-- The slot dropped, for the harness and for anything that has to see the walk
+-- happen. Nothing in the addon calls it: the second expires on its own.
+function Where.Forget()
+	memoQuest, memoAt = nil, nil
+	memoArea, memoName, memoDistance = nil, nil, nil
 end
 
 -- The nearest thing that would tick something off, and how many yards away it
