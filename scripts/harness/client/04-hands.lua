@@ -166,14 +166,16 @@ local function itemInfo(link)
 		nil, nil, item.stack or 1, item.equip, item.icon, item.price
 end
 -- The fourth and fifth returns are the two ns.ItemInfo reads, the equip
--- location and the icon.
+-- location and the icon. The sixth and seventh are the class and the subclass,
+-- which is what tells a mining pick from a green somebody outgrew: both are a
+-- level four white one hander and only the subclass separates them.
 local function itemInfoInstant(link)
 	local name = type(link) == "string" and link:match("%\[(.-)%\]")
 	local item = name and ITEMS[name]
 	if not item then
 		return nil
 	end
-	return item.id, name, nil, item.equip, item.icon, item.classId
+	return item.id, name, nil, item.equip, item.icon, item.classId, item.subClassId
 end
 
 -- Both homes for the same two lookups, because both are real. The 2.5.6 client

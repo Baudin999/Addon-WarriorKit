@@ -46,7 +46,10 @@ end
 
 refill()
 refillQuests()
-CARRIED[3] = { "Ragged Leather Vest", "Guild Tabard", "Aged Chain Vest" }
+CARRIED[3] = {
+	"Ragged Leather Vest", "Guild Tabard", "Aged Chain Vest",
+	"Mining Pick", "Battered Fishing Pole", "Sturdy Quest Belt",
+}
 
 local all = ns.Clutter.Scan()
 local every = byName(all)
@@ -71,6 +74,24 @@ check(every["Ragged Leather Vest"] and every["Ragged Leather Vest"].verdict == "
 	"a white vest rated fourteen was not offered to a level 62 character")
 check(every["Guild Tabard"] == nil, "a tabard was offered for being low level")
 check(every["Aged Chain Vest"] == nil, "a blue was offered for being low level")
+
+-- A profession tool is a level four white one hander and reads exactly like a
+-- quest green somebody kept too long. Only the subclass separates them, and the
+-- rule offered both before it read one.
+check(every["Mining Pick"] == nil, "a mining pick was offered for being low level")
+check(every["Battered Fishing Pole"] == nil, "a fishing pole was offered for being low level")
+
+-- And nothing is offered that a vendor would pay more for than the grey in the
+-- next square that is being kept. One floor, every rule.
+check(every["Sturdy Quest Belt"] == nil,
+	"a green worth twenty two silver was offered while a grey over the floor was kept")
+local dearest = 0
+for index = 1, #all do
+	dearest = math.max(dearest, all[index].worth)
+end
+check(dearest < ns.db.clutterWorth * 100,
+	("the dearest card offered is worth %d copper and the floor is %d"):format(
+		dearest, ns.db.clutterWorth * 100))
 
 -- Certain is the four the window has no second reading of, and the two
 -- judgements are not among them.
@@ -107,6 +128,13 @@ ns.db.clutterLevel = 60
 check(byName(ns.Clutter.Scan())["Ragged Leather Vest"] == nil,
 	"a gap of sixty levels still offered an item thirteen behind you")
 ns.db.clutterLevel = gap
+
+-- Raising the floor over the belt's price brings it back, which is the proof
+-- that it was the money and not the level that kept it out.
+ns.db.clutterWorth = 30
+check(byName(ns.Clutter.Scan())["Sturdy Quest Belt"] ~= nil,
+	"a floor of thirty silver still refused a green worth twenty two")
+ns.db.clutterWorth = worth
 
 -- The whole stack, not one of them. A slot is what you are short of and a slot
 -- holds the stack, so fifty cloth at twelve copper is six silver and is over

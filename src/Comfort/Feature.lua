@@ -445,11 +445,11 @@ ns.Register({
 		ui.Count("silver a bag slot is worth", LOW_WORTH, HIGH_WORTH,
 			function() return ns.db.clutterWorth end,
 			SetWorth)
-		ui.Hint("A grey whose whole stack sells for less than this is offered. Nought asks only about the greys a vendor will not take at all.")
+		ui.Hint("Nothing a vendor would pay more than this for is ever offered, by any rule. Nought asks only about the greys a vendor will not take at all.")
 		ui.Count("levels behind you", LOW_GAP, HIGH_GAP,
 			function() return ns.db.clutterLevel end,
 			SetGap)
-		ui.Hint("White and green gear rated this far under your own level is offered. Blue and better is never offered, whatever the level says.")
+		ui.Hint("White and green gear rated this far under your own level is offered, and only under the floor above. Blue and better, tabards, and profession tools never are.")
 		ui.Reading("Questie", function()
 			return ns.Clutter.Ready() and "answering"
 				or "not answering, so the quest items are left out"

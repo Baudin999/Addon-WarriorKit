@@ -443,6 +443,22 @@ local ITEMS = {
 	["Aged Chain Vest"]   = { id = 5003, classId = 4, quality = 3, price = 2600,
 		equip = "INVTYPE_CHEST", icon = "Interface\\Icons\\Chain",
 		rating = 14, needs = 9 },
+	-- The two the level rule offered and must not. A profession tool is a level
+	-- four white one hander and reads exactly like a quest green somebody kept
+	-- too long; the subclass is the only thing that tells them apart, and 14 and
+	-- 20 are the numbers Wowhead carries for Mining Pick and Fishing Pole on
+	-- this client. The heirloom-priced green is the other half of the same bug:
+	-- a green worth twenty two silver was offered out of a bag that was keeping
+	-- a grey worth six.
+	["Mining Pick"]       = { id = 5004, classId = 2, subClassId = 14, quality = 1,
+		price = 250, equip = "INVTYPE_WEAPON", icon = "Interface\\Icons\\Pick",
+		rating = 4, needs = 0 },
+	["Battered Fishing Pole"] = { id = 5005, classId = 2, subClassId = 20, quality = 1,
+		price = 30, equip = "INVTYPE_2HWEAPON", icon = "Interface\\Icons\\Pole",
+		rating = 1, needs = 0 },
+	["Sturdy Quest Belt"] = { id = 5006, classId = 4, quality = 2, price = 2200,
+		equip = "INVTYPE_WAIST", icon = "Interface\\Icons\\Belt",
+		rating = 14, needs = 9 },
 	-- Two trinkets, in no bag, worn by 42-cooldown-row.lua. `use` is what
 	-- GetItemSpell answers and it is the whole difference between them: one is
 	-- a thing you press and takes a square on the cooldown row, and one is a

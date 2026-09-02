@@ -108,20 +108,40 @@ local function fromLink(link)
 	return id, (link:match("%[(.-)%]")) or ""
 end
 
+-- What this file answers for a link it has no row for: the id read back out of
+-- the link, and a weapon, which is enough for a drop off a boss to be counted.
+local function unknown(subject)
+	local id, name = fromLink(subject)
+	if not id then
+		return nil
+	end
+	return id, name, nil, "INVTYPE_WEAPON", "Interface\\Icons\\INV_Misc_QuestionMark", 2
+end
+
+-- The older stub's answer, forwarded whole, or this file's own where it had
+-- none.
+--
+-- A round trip through a table and unpack is not the same thing and this is the
+-- second time that has cost a morning. GetItemInfoInstant answers nil in the
+-- middle of its returns, twice: the item type at three and the subclass at
+-- seven for anything that has none. `#` on a table with a hole in it is not the
+-- number of values that went into it, so `{ instant(subject) }` came back two
+-- long the day a seventh return was added, and every item in the suite lost the
+-- class that decides which pile it is in and whether the clutter window may
+-- look at it. The varargs are never put in a table now.
+local function forward(subject, first, ...)
+	if first == nil then
+		return unknown(subject)
+	end
+	return first, ...
+end
+
 local function itemInfoInstant(subject)
 	local item = byId(subject)
-	if not item then
-		local held = { instant(subject) }
-		if held[1] then
-			return unpack(held)
-		end
-		local id, name = fromLink(subject)
-		if not id then
-			return nil
-		end
-		return id, name, nil, "INVTYPE_WEAPON", "Interface\\Icons\\INV_Misc_QuestionMark", 2
+	if item then
+		return subject, item.name, nil, item.equip, item.icon, 2
 	end
-	return subject, item.name, nil, item.equip, item.icon, 2
+	return forward(subject, instant(subject))
 end
 
 -- Both homes, for the reason 04-hands.lua gives: the older client carries the

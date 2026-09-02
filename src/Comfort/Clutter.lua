@@ -49,12 +49,30 @@ local PLAIN_QUALITY = 2
 -- is the one way this list loses trust in a single card.
 local KEPT = { INVTYPE_TABARD = true, INVTYPE_BODY = true }
 
+-- The weapons that are not weapons, by the client's own subclass number.
+--
+-- A mining pick is a level four white one hander and a skinning knife is a
+-- level four white one hander, and against the level rule they read exactly
+-- like the quest green you picked up at four and should have thrown away at
+-- twenty. They are not that. They are the tool your profession does not work
+-- without, they never get replaced, and the rule offered both of them.
+--
+-- 14 is Miscellaneous and 20 is Fishing Poles, read off Wowhead's own item data
+-- for this client rather than typed from memory: Mining Pick (2901), Skinning
+-- Knife (7005) and Blacksmith Hammer (5956) are all class 2 subclass 14, and
+-- Fishing Pole (6256) is class 2 subclass 20. The other tools need no entry
+-- because they are not weapons at all: an enchanting rod and an engineering
+-- spanner are both Trade Goods, which the level rule never looks at.
+local WEAPON_CLASS = 2
+local TOOLS = { [14] = true, [20] = true }
+
 -- Five verdicts, and everything else is left alone.
 --
 --   "worthless" a vendor will not take it and it does nothing
 --   "spent"     every quest this item belongs to is behind you
 --   "cheap"     the whole stack is worth less than you said a slot is worth
---   "outgrown"  you can wear it, it is plain, and you passed its level long ago
+--   "outgrown"  you can wear it, it is plain, it is under the floor, and you
+--               passed its level long ago
 --   "open"      a quest it belongs to is still out there to be picked up
 --
 -- Anything the database has never heard of, anything tied to a quest in your
@@ -246,7 +264,13 @@ end
 -- behind you a piece of gear has to be before you will never wear it again is
 -- the same kind of question. What is fixed is which items the rules are allowed
 -- to look at at all, and that is above: grey for money, and plain gear you can
--- wear for the level.
+-- wear that is not a tool for the level.
+--
+-- **The floor is one floor and both rules read it.** Nothing is ever offered
+-- that a vendor would pay more than the floor for. That is not a tidiness: the
+-- level rule without it offered a green worth twenty two silver out of a bag
+-- that was keeping a grey worth six, which is the window destroying the more
+-- valuable of two things it looked at in the same pass.
 --------------------------------------------------------------------------
 
 -- What a bag slot has to be worth to keep, in copper. Nought switches the money
@@ -264,12 +288,11 @@ end
 
 -- A grey, against the vendor and then against your floor.
 --
--- The whole stack rather than one of them, because a slot is what you are
--- short of and a slot holds the stack. Twenty Tattered Cloth worth eight copper
--- each is a slot worth one silver sixty, and that is the number you set the
--- floor against.
-local function Worth(price, count)
-	local worth = (price or 0) * (count or 1)
+-- The number handed in is the whole stack rather than one of them, because a
+-- slot is what you are short of and a slot holds the stack. Twenty Tattered
+-- Cloth worth eight copper each is a slot worth one silver sixty, and that is
+-- the number you set the floor against.
+local function Worth(worth)
 	if worth <= 0 then
 		return WORTHLESS, "A vendor will not take it, and it does nothing else."
 	end
@@ -279,17 +302,33 @@ local function Worth(price, count)
 	return nil
 end
 
--- Plain gear you passed a long time ago.
+-- Plain gear you passed a long time ago, and worth less than the slot it is in.
 --
--- The higher of the two numbers the client carries. An item's own level and the
--- level it asks of you are different numbers and either can be the honest one:
--- a green rated forty that anybody may wear reads as level nought off the
--- requirement alone, and a piece with a requirement and no rating reads as
--- nought the other way. Taking the higher keeps the newer of the two readings,
--- which is the cautious direction: it makes an item look more current than
--- either number alone, so the gap has to be real before anything is offered.
-local function Outgrown(link, quality, classId)
+-- **The floor is read here too, and that is the whole of the second rule.** The
+-- level rule on its own offered a green worth twenty two silver while a grey
+-- worth six sat in the next square untouched, which is the window contradicting
+-- itself inside one bagful: it destroyed the more valuable of the two and kept
+-- the other. There is one floor and everything the window offers is under it,
+-- whichever rule found it. Gear over the floor is not clutter, it is a thing to
+-- sell, and a bag window that has just told you a vendor will pay for it is the
+-- wrong place to be offering a delete.
+--
+-- The level itself is the higher of the two numbers the client carries. An
+-- item's own level and the level it asks of you are different numbers and
+-- either can be the honest one: a green rated forty that anybody may wear reads
+-- as level nought off the requirement alone, and a piece with a requirement and
+-- no rating reads as nought the other way. Taking the higher keeps the newer of
+-- the two readings, which is the cautious direction: it makes an item look more
+-- current than either number alone, so the gap has to be real before anything
+-- is offered.
+local function Outgrown(link, quality, classId, subClassId, worth)
 	if not WORN[classId] or quality > PLAIN_QUALITY then
+		return nil
+	end
+	if classId == WEAPON_CLASS and TOOLS[subClassId] then
+		return nil
+	end
+	if worth >= Floor() then
 		return nil
 	end
 	local needs, rating = ns.ItemNeeds(link), ns.ItemLevel(link)
@@ -316,28 +355,36 @@ end
 -- and every other class is the client's, so an item is only ever put to one of
 -- the three rules and a session with no Questie in it still gets the other two.
 local function Consider(db, link, count)
-	local itemId, classId = ns.ItemKind(link)
+	local itemId, classId, subClassId = ns.ItemKind(link)
 	if not itemId then
-		return nil
-	end
-	if classId == QUEST_CLASS then
-		if not db then
-			return nil
-		end
-		return Judge(db, itemId)
+		return nil, nil, 0
 	end
 	-- Nil is an item the client has not cached, which is not a grade of nought
-	-- and not a price of nought. Both rules below would read it as clutter, so
-	-- neither is asked: the window is opened again a moment later and by then
-	-- the client has answered.
+	-- and not a price of nought. Every rule below would read it as clutter, so
+	-- none of them is asked: the window is opened again a moment later and by
+	-- then the client has answered.
 	local quality, price = ns.ItemValue(link)
 	if quality == nil then
-		return nil
+		return nil, nil, 0
+	end
+	-- The whole stack rather than one of them, because a slot is what you are
+	-- short of and a slot holds the stack. Worked out once, here, because both
+	-- the money rule and the level rule now read it and the order the cards come
+	-- in is built on it.
+	local worth = (price or 0) * (count or 1)
+	if classId == QUEST_CLASS then
+		if not db then
+			return nil, nil, worth
+		end
+		local verdict, reason = Judge(db, itemId)
+		return verdict, reason, worth
 	end
 	if quality == JUNK_QUALITY then
-		return Worth(price, count)
+		local verdict, reason = Worth(worth)
+		return verdict, reason, worth
 	end
-	return Outgrown(link, quality, classId)
+	local verdict, reason = Outgrown(link, quality, classId, subClassId, worth)
+	return verdict, reason, worth
 end
 
 -- One slot, onto the end of the list if it has a verdict.
@@ -347,19 +394,18 @@ local function Offer(found, db, bag, slot)
 		return false
 	end
 	local count = ns.ContainerItem(bag, slot) or 1
-	local verdict, reason = Consider(db, link, count)
+	local verdict, reason, worth = Consider(db, link, count)
 	if not verdict then
 		return false
 	end
 	local name, icon, _, color = ns.ItemInfo(link)
-	local _, price = ns.ItemValue(link)
 	found[#found + 1] = {
 		bag = bag, slot = slot, link = link, id = ns.ItemKind(link),
 		name = name or link, icon = icon, color = color,
 		verdict = verdict, reason = reason,
 		-- What saying yes to this card costs, which is what the order below is
 		-- built on and is nought for everything the quest rules offered.
-		worth = (price or 0) * count,
+		worth = worth,
 	}
 	return true
 end

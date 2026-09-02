@@ -22,6 +22,20 @@ And last, the one it is least sure of, a quest item wanted by a quest still out
 there. Inside each kind the cheapest card comes first, because you press clear
 when you are full and the first yes should be the one that costs least.
 
+There is one floor and everything the window offers is under it, whichever rule
+found it. The level rule without that offered a green worth twenty two silver
+out of a bag that was keeping a grey worth six, which is the window destroying
+the more valuable of two things it looked at in the same pass. Gear over the
+floor is not clutter, it is a thing to sell.
+
+A profession tool is never offered. A mining pick is a level four white one
+hander and so is a skinning knife, which against a level rule reads exactly like
+the quest green you should have thrown away at twenty. The client's own subclass
+is the only thing that separates them: 14 for the miscellaneous weapons and 20
+for fishing poles, read off Wowhead's item data for this client rather than
+typed from memory. An enchanting rod and an engineering spanner need no rule at
+all, because both are trade goods and the level rule never looks at those.
+
 Both thresholds are on the Clutter tab and both ship at a number rather than a
 rule. Five silver a slot and ten levels, which are level sixty two figures for
 the character this was written on. A blue is never measured against the level,
