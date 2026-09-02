@@ -146,9 +146,59 @@ check(math.abs(gap / px - math.floor(gap / px + 0.5)) < 0.001,
 check(offset("Arcanite Reaper") == 0,
 	("the bound weapon is %s pixels in and the left lane starts at nought")
 		:format(tostring(offset("Arcanite Reaper"))))
+-- Snapped once more as a whole, because the left lane's own columns are not
+-- on whole pixels either: a column pitch of thirty-three units is a fraction at
+-- this zoom, and five of them is half a pixel. The grid puts every origin on the
+-- pixel it is nearest, and the lane start is one such origin.
+lane = ns.UI.Round(squares[1]:GetParent(), lane)
 check(offset("Bloodspiller") == lane,
-	("the unbound weapon is %s pixels in and the right lane starts at %d")
+	("the unbound weapon is %s units in and the right lane starts at %.3f")
 		:format(tostring(offset("Bloodspiller")), lane))
+
+----------------------------------------------------------------------
+-- Every square on the pixel grid
+--
+-- The fraction is not only the lanes' problem. A row of squares starts under a
+-- heading that is sixteen units tall, and sixteen units at this window's zoom
+-- is not a whole number of pixels, so every square in the row had its top on
+-- one fraction and its bottom on another, and a one pixel hairline asked for
+-- on the wrong fraction is drawn on neither of the two pixels it sits between.
+-- The window lost the bottom edge of every square in one pile and the top edge
+-- of every square in the next. So every drawn square is asked where it landed
+-- and how big it is, and both answers have to be whole pixels.
+----------------------------------------------------------------------
+
+local function whole(units)
+	local pixels = units / px
+	return math.abs(pixels - math.floor(pixels + 0.5)) < 0.001
+end
+
+local drawn, off, sized = 0, 0, 0
+for index = 1, #squares do
+	local square = squares[index]
+	if square:IsShown() then
+		drawn = drawn + 1
+		local _, _, _, x, y = square:GetPoint(1)
+		if not whole(x) or not whole(y) then
+			off = off + 1
+		end
+		if not whole(square:GetWidth()) or not whole(square:GetHeight()) then
+			sized = sized + 1
+		end
+	end
+end
+check(drawn > 0, "no square was drawn to measure")
+check(off == 0,
+	("%d of %d squares have an origin that is not a whole number of pixels")
+		:format(off, drawn))
+check(sized == 0,
+	("%d of %d squares have a side that is not a whole number of pixels")
+		:format(sized, drawn))
+-- The claim is only worth making where a unit is not a pixel: at a whole zoom
+-- every integer is on the grid and the check above could not fail.
+check(not whole(ns.UI.SLOT),
+	("a square's %d units is a whole number of pixels here, so this section is not testing the rounding")
+		:format(ns.UI.SLOT))
 
 ----------------------------------------------------------------------
 -- And the width that pays for it

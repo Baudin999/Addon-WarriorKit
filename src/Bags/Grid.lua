@@ -116,26 +116,37 @@ local inherited = true
 -- business saying anything about it.
 local paying
 
+-- A distance in this window's units, snapped to a whole number of pixels.
+--
+-- The window is drawn at a zoom, and a zoom of one and three tenths puts one
+-- unit on one and three tenths of a pixel. A square whose top lands on a
+-- fraction of a pixel has a one pixel hairline along that edge asking to be
+-- drawn between two pixels, and the client draws it on one of them or on
+-- neither depending on which fraction it got. What that looked like was every
+-- bottom edge missing from one row of squares and every top edge missing from
+-- the row below it, with the left and right edges of the same squares correct:
+-- the columns happened to fall on a fraction the client draws and the rows on
+-- one it does not.
+--
+-- So nothing in this grid is placed or sized in units. Every origin and the
+-- side of every square goes through here, which puts every hairline on a pixel
+-- of its own however the zoom divides. Rounded at layout rather than baked into
+-- the constants because the answer is a fact about the frame: the same
+-- thirty-one units is a different number of pixels at every zoom, and only the
+-- canvas can say which. Asked of the canvas rather than of a square because the
+-- squares inherit its scale and there is no square yet when the window first
+-- asks how wide it should be.
+local function Snap(distance)
+	return UI.Round(canvas, distance)
+end
+
 -- The air between the two lanes, in whole pixels.
 --
--- UI.SLOT_LANE is half a square and half a square is half a pixel on a window
--- whose zoom is not a whole number. Every other distance in this grid is a
--- whole number of square pitches, so every square in a row falls on the same
--- fraction of a pixel and the client rasterises them all the same way. An
--- offset that is not a whole number of pixels puts the second lane on a
--- different fraction from the first, and a one pixel hairline landing between
--- two pixels is drawn on neither of them. What that looked like was the right
--- edge missing from the last square of the left lane and the left edge missing
--- from the first square of the right, with every other edge in the window
--- correct.
---
--- Rounded here rather than baked into the constant because the answer is a fact
--- about the frame: the same fifteen units is a different number of pixels at
--- every window zoom, and only the canvas can say which. Asked of the canvas
--- rather than of a square because the squares inherit its scale and there is no
--- square yet when the window first asks how wide it should be.
+-- Named rather than snapped at the two call sites because the window's width is
+-- built from it as well as the layout, and a window one pixel narrower than the
+-- squares it holds is a window that clips its own right edge.
 local function Gap()
-	return UI.Round(canvas, LANE)
+	return Snap(LANE)
 end
 
 -- How wide a grid of this many columns is, which is the number the window sizes
@@ -406,14 +417,26 @@ local function Paint(button, entry, selling)
 	Sweep(button, entry)
 end
 
--- One square, at a column and a line inside a lane that starts `shift` pixels
--- in. The shift is a pixel count rather than a column number because the second
+-- One square, at a column and a line inside a lane that starts `shift` units
+-- in. The shift is a distance rather than a column number because the second
 -- lane does not begin on a column boundary: half a square of air stands between
 -- the two, and that is the whole point of the split.
-local function Place(button, top, column, line, shift)
+--
+-- The origin and the side both land on whole pixels, for the reason Snap gives.
+-- The side is set here rather than once when the square is built because it is
+-- a different number of units at every zoom, and a zoom change reaches this
+-- file as a repaint. The hairline is measured again on the same condition: it
+-- was one pixel at the zoom the square was built at, and a zoom that changes
+-- the side has changed what one pixel is.
+local function Place(button, top, column, line, shift, side)
+	if button.side ~= side then
+		button.side = side
+		button:SetSize(side, side)
+		ns.EdgeSize(button.edges, ns.Pixel(button))
+	end
 	button:ClearAllPoints()
 	button:SetPoint("TOPLEFT", button:GetParent(), "TOPLEFT",
-		shift + column * (SLOT + GAP), -(top + line * (SLOT + GAP)))
+		Snap(shift + column * (SLOT + GAP)), -Snap(top + line * (SLOT + GAP)))
 end
 
 -- Everything the pool made and this pass did not use.
@@ -451,6 +474,9 @@ function Grid.Paint(state, columns)
 	if not selling then
 		Give()
 	end
+	-- Once a pass, like the merchant check above and for the same reason: the
+	-- zoom cannot change inside one layout.
+	local side = Snap(SLOT)
 	for index = 1, state.shown do
 		local group = state.groups[index]
 		local entries = group.entries
@@ -471,10 +497,10 @@ function Grid.Paint(state, columns)
 			local button = Square(at)
 			Paint(button, entry, selling)
 			if split and not entry.bound then
-				Place(button, top, right % rest, math.floor(right / rest), shift)
+				Place(button, top, right % rest, math.floor(right / rest), shift, side)
 				right = right + 1
 			else
-				Place(button, top, left % lane, math.floor(left / lane), 0)
+				Place(button, top, left % lane, math.floor(left / lane), 0, side)
 				left = left + 1
 			end
 			button:Show()
