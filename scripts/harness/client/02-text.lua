@@ -131,6 +131,11 @@ function Region:SetParent(p) self.parent = p end
 function Region:GetParent() return self.parent end
 function Region:SetFrameLevel(l) self.frameLevel = l end
 function Region:GetFrameLevel() return self.frameLevel end
+-- Recorded, not modelled. The harness has no sibling order to lift a frame
+-- above; a section that cares asks whether the window was raised at all.
+function Region:SetToplevel(on) self.toplevel = on end
+function Region:IsToplevel() return self.toplevel == true end
+function Region:Raise() self.raised = (self.raised or 0) + 1 end
 -- Recorded rather than constant, because a strata is what the bar 1 drop bug
 -- turned out to be: MainActionBar sits mouse enabled in TOOLTIP, the top strata
 -- there is, and no frame level a cloned bar can be given wins that argument.

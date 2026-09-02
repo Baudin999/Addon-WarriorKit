@@ -1127,6 +1127,7 @@ HARNESS_LINE_LIMIT=800
 # path:ceiling:why it is exempt
 HARNESS_LINE_ALLOWED="
 sections/05-action-bars.lua:1061:one subject, five bars; splits at the keys, the paging and the churn
+client/02-text.lua:804:one class, the Region stub; every line is a method of the client's own frame, and a frame API split across two files is two halves of one object
 sections/39-party-raid.lua:971:one subject, two lists, two directions each; the party line and the raid grid share a tile, a roster fixture and a header model, and splitting them copies all three
 "
 

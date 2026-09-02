@@ -217,6 +217,28 @@ local function Dismissals(frame)
 	frame:SetScript("OnHide", Clear)
 end
 
+-- Where the window sits among everything else on screen.
+--
+-- DIALOG unless the caller says otherwise. A settings window is something you
+-- open over the game and close again, and DIALOG is where that belongs. A
+-- window that is up while you play, which is what the chat window is, has to
+-- sit under the tooltip and under anything the client puts over the world, so
+-- it asks for a lower one.
+--
+-- One strata is one pile. Every window in the addon is in the same one, and
+-- two frames at the same level in the same pile are sorted by their children:
+-- the second window's title bar draws over the first window's body and under
+-- the first window's buttons. Toplevel is the client's answer. A toplevel
+-- frame is lifted above every sibling in its strata when it is clicked,
+-- children and all, so a window is over or under another window entirely and
+-- never threaded through it. Window:Show does the same lift, because the
+-- window you just opened is the one you want on top and a click is not what
+-- opened it.
+local function Pile(frame, opts)
+	frame:SetFrameStrata(opts.strata or "DIALOG")
+	frame:SetToplevel(true)
+end
+
 -- opts.zoom is a number or a getter returning one, and a getter is what every
 -- window in the addon passes. This layer is still not allowed to know the name
 -- of a setting, so the window is handed a way to ask rather than a key to read,
@@ -307,12 +329,7 @@ function UI.Window(opts)
 		-- mid pull and not move is half a window.
 		secure = window.secure,
 	})
-	-- DIALOG unless the caller says otherwise. A settings window is something
-	-- you open over the game and close again, and DIALOG is where that belongs.
-	-- A window that is up while you play, which is what the chat window is, has
-	-- to sit under the tooltip and under anything the client puts over the
-	-- world, so it asks for a lower one.
-	frame:SetFrameStrata(opts.strata or "DIALOG")
+	Pile(frame, opts)
 	Dismissals(frame)
 	frame:Hide()
 
@@ -490,7 +507,13 @@ function Window:SetOpacity(fraction)
 	self.bg:SetColorTexture(C.window[1], C.window[2], C.window[3], alpha)
 end
 
+-- Raised as well as shown, for the reason Pile gives. Not in combat for a
+-- secure window: a raise is a frame level write, and the client refuses those
+-- on a protected frame mid fight the same way it refuses the Show.
 function Window:Show()
+	if not (self.secure and InCombatLockdown()) then
+		self.frame:Raise()
+	end
 	self.frame:Show()
 end
 

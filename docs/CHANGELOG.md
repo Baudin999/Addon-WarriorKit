@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### One window over another
+
+Every window the addon opens sits in the DIALOG strata at the same frame
+level, and a strata is one pile sorted by level alone. Open the quest log
+over the settings window and the two thread through each other: the log's
+title bar draws over the settings body and under the settings buttons,
+because the buttons are one level up from their window and so is the bar.
+
+A window frame is toplevel now, which is the client's own answer to this. A
+click on a toplevel frame lifts it above every sibling in its strata, children
+and all, so a window is over or under the next one entirely. Showing a window
+lifts it the same way, because the window you just opened is the one you want
+on top and a click is not what opened it. The character sheet, whose gear
+squares are protected, is left where it is in combat, since a lift is a frame
+level write the client refuses there the same way it refuses the show.
+
 ### The key lands after the drop
 
 The mouseover page is built around one gesture, drop a spell on the empty row
