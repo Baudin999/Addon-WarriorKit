@@ -3747,6 +3747,34 @@ was written against a target frame 100 units tall, so the moment that frame is
 parked three pixels under the target block, on the edge the two share, and it
 goes back to Blizzard's anchor the moment either frame is unskinned.
 
+**Whether target of target is on the screen is the skin's answer too.** It is
+the one of the three that goes up and down on its own, and for a long time it
+was the one thing about that frame the addon left with the client: the block was
+built, measured, anchored and painted on a frame nobody could see. Blizzard
+decides it behind the `showTargetOfTarget` console variable and three tests on
+your target, inside a mixin method whose result no addon can read. A frame the
+skin has taken over that far cannot have its visibility owned somewhere else, so
+`Block.Reveal` asks it on the same pass that paints the block.
+
+The test is Blizzard's own with the console variable dropped, and its four terms
+are the whole of when a target's target means anything: your target exists, your
+target has a target, your target is not you, and your target is alive. None of
+them asks what the unit is, which is why it holds the same for a mob, an NPC and
+a player of either faction. It reads the frame's own flag and writes only on a
+disagreement, which is the rule the hide switch states for the frames it takes
+down: verify every pass, do not remember.
+
+Nothing in it fights the client. Blizzard's driver compares that frame's shown
+flag against `UnitExists` on the same unit and acts only when those two
+disagree, so a frame this puts up is one it leaves alone, and a frame it takes
+down on its own is one this agrees with. Showing a secure unit button is
+protected, so a change combat refuses waits for `PLAYER_REGEN_ENABLED` like
+every other write here; the client's own show and hide are secure and go on
+working through a pull, which is what covers a frame that first has to go up
+mid fight. Nothing puts the flag back at `/wk skin off`, and that is deliberate:
+the client's driver reads the frame's own flag, so its first pass after the skin
+comes off finds whatever state it was left in and corrects it.
+
 **The three frames are one chain, and Edit Mode is left one job.** The player
 block is wherever Edit Mode put it. The target block hangs off the player block
 and target of target hangs off the target block, so what you place is one HUD

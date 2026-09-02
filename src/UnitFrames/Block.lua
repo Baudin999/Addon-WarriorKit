@@ -856,6 +856,54 @@ function Block.Perch(entry, host)
 	return true
 end
 
+-- Whether that frame is on the screen at all.
+--
+-- Its size, its anchor, its artwork, its colours and its four numbers are all
+-- this addon's. Whether it appears was the one thing left with the client, and
+-- the client decides it inside a mixin method, behind a CVar and three tests on
+-- the host unit, none of which this addon can see or reach. A frame the skin
+-- has taken over that far cannot have its visibility owned somewhere else, so
+-- this is the rule UnitFrames/Blizzard.lua states for the frames it takes down,
+-- applied to the one frame here that goes up and down on its own: read what is
+-- actually on the screen every pass and put back what moved.
+--
+-- The test is Blizzard's own with the CVar dropped, and its four terms are the
+-- whole of when a target's target means anything: the host has a unit, that
+-- unit has a target, the host is not you, and the host is alive. Not one of
+-- them asks what the unit is, which is why it holds the same for a mob, an NPC
+-- and a player of either faction.
+--
+-- Nothing here fights the client. Blizzard's own driver compares that frame's
+-- shown flag against UnitExists on the same unit and only acts on a
+-- disagreement, so a frame this put up is a frame it leaves alone.
+--
+-- Showing a secure unit button is a protected action, so a change combat
+-- refuses is carried to PLAYER_REGEN_ENABLED like every other one in this file.
+-- The client's own show and hide are secure and go on working through a fight,
+-- which is what covers the frame that first needs to go up mid pull.
+--
+-- Nothing puts this back at Unstyle, and that is deliberate rather than a gap:
+-- the client's driver reads the frame's own flag, so the first pass after the
+-- skin comes off finds whatever state it was left in and corrects it.
+function Block.Reveal(entry, host)
+	if not host or not entry.styled or not host.styled then
+		return true
+	end
+	local theirs = host.spec.unit
+	local want = (UnitExists(theirs) and UnitExists(entry.spec.unit)
+		and not UnitIsUnit("player", theirs)
+		and (UnitHealth(theirs) or 0) > 0) and true or false
+	local frame = entry.frame
+	if (frame:IsShown() and true or false) == want then
+		return true
+	end
+	if ns.Blocked(frame) then
+		return false
+	end
+	frame:SetShown(want)
+	return true
+end
+
 --------------------------------------------------------------------------
 -- Public
 --------------------------------------------------------------------------
@@ -913,9 +961,16 @@ function Block.Probe(entry)
 	-- caught so far is part of the same line.
 	local row = ns.FrameAuras.Probe(entry)
 	row = row and (", " .. row) or ""
-	return ("%sedit mode selection %s%s%s%s"):format(was,
+	-- Whether the client is drawing that frame at all, which is the line to
+	-- read when the block is measured, placed and painted and still nobody can
+	-- see it. Only said for the frame whose visibility this file owns; the
+	-- other two go down with the unit and there is nothing to report.
+	local drawn = entry.spec.under and
+		(entry.frame:IsShown() and ", on screen" or ", not drawn") or ""
+	return ("%sedit mode selection %s%s%s%s%s"):format(was,
 		type(entry.frame.Selection) == "table" and "pinned to the block"
 			or "not on this client",
 		entry.perched and (", parked under the " .. entry.spec.under) or "",
-		entry.linked and (", hung off the " .. entry.spec.beside .. " block") or "", row)
+		entry.linked and (", hung off the " .. entry.spec.beside .. " block") or "",
+		drawn, row)
 end

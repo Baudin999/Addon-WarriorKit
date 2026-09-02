@@ -62,7 +62,9 @@ local TOT_SCALE = 0.62
 -- mirror  the gauge sits left of the portrait rather than right of it
 -- under   the key of the frame this one is parked beneath once both are
 --         fitted, because its own anchor was written against the size the
---         frame no longer is
+--         frame no longer is. It is also what says this frame goes up and
+--         down with its host's unit rather than with the player's own, which
+--         is Block.Reveal's question
 -- beside  the key of the frame this one hangs off sideways, gauge edge to
 --         gauge edge, once both are fitted. Edit Mode positions the block
 --         named here and this file positions everything against it
@@ -303,7 +305,11 @@ function Skin.Apply()
 		if not Block.Link(entry, EntryFor(entry.spec.beside)) then
 			pending = true
 		end
-		if not Block.Perch(entry, EntryFor(entry.spec.under)) then
+		local host = EntryFor(entry.spec.under)
+		if not Block.Perch(entry, host) then
+			pending = true
+		end
+		if not Block.Reveal(entry, host) then
 			pending = true
 		end
 	end
@@ -335,7 +341,11 @@ function Skin.Relayout()
 				if not Block.Link(entry, EntryFor(entry.spec.beside)) then
 					pending = true
 				end
-				if not Block.Perch(entry, EntryFor(entry.spec.under)) then
+				local host = EntryFor(entry.spec.under)
+				if not Block.Perch(entry, host) then
+					pending = true
+				end
+				if not Block.Reveal(entry, host) then
 					pending = true
 				end
 			end
@@ -488,6 +498,18 @@ local function Tick(_, delta)
 	elapsed = 0
 	ns.Perf.Start("skin")
 	for _, entry in ipairs(entries) do
+		-- Before the paint, because a frame that has just been put up wants
+		-- its numbers on this pass rather than a fifth of a second later, for
+		-- the reason Apply paints in line rather than leaving it to the tick.
+		--
+		-- On the ticker rather than on UNIT_TARGET, which is the event that
+		-- carries it: this file reads health, power and auras off a ticker
+		-- already, and the head of it says why. A target that picks up a
+		-- target is the same kind of change and gets the same treatment. A
+		-- refusal is left to the next pass, which is a fifth of a second away,
+		-- rather than setting the deferred flag: the answer changes with the
+		-- units and the flag is for work that stays undone.
+		Block.Reveal(entry, EntryFor(entry.spec.under))
 		Paint.Refresh(entry)
 	end
 	ns.Perf.Stop("skin")

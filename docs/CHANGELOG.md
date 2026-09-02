@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### Target of target is on the screen again
+
+The skin took that frame over completely. It sizes it, anchors it under the
+target block, hides the client's artwork on it, draws its own square over it and
+paints the unit's colour and four numbers onto it five times a second. The one
+thing it never did was put it up. Whether that frame appears was left with the
+client, which decides it behind a console variable and three tests on your
+target, inside a method no addon can see the result of. A frame the addon has
+taken over that far cannot have its visibility owned somewhere else, and the
+symptom was the block being built, measured and painted where nobody could see
+it.
+
+`Block.Reveal` answers it now, on the same pass that paints the block. The test
+is the client's own with the console variable dropped: your target exists, your
+target has a target, your target is not you, and your target is alive. Not one
+of those four asks what the unit is, so it holds the same for a mob, a quest
+giver and a player of either faction. Showing a secure unit button is protected,
+so a change combat refuses waits for the pull to end like every other one the
+skin makes, and the client's own show goes on working through a fight.
+
+Nothing here fights the client. Its driver compares that frame's shown flag
+against whether the unit exists and only acts when the two disagree, so a frame
+this puts up is a frame it leaves alone. `/wk skin probe` says `on screen` or
+`not drawn` against target of target, and the harness now stands that frame up
+hidden the way the client's own template declares it, so a skin that never puts
+it up fails instead of passing every assertion about the block drawn on it.
+
 ### Every screen carries its own zoom, in tenths
 
 One number sized every window in the addon. Shrinking the map so it sat beside

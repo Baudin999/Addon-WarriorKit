@@ -71,6 +71,12 @@ targetFrame:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT", 250, -50)
 child("fontstring", targetFrame, "TargetLevelText")
 child("fontstring", targetFrame, "TargetFrameHitIndicator")
 local totFrame = unitFrame("TargetFrameToT", 120, 50, targetFrame, {})
+-- Hidden, the way the client's own template declares it. This is the one unit
+-- frame that goes up and down on its own, and a fixture that handed it over
+-- already shown would let a skin that never puts it up pass every assertion
+-- about it: the block would be built, measured and painted on a frame nobody
+-- can see, which is exactly the bug.
+totFrame:Hide()
 -- Anchored the way the client anchors it: against a target frame 100 units
 -- tall. That offset is the whole reason the skin has to place this frame
 -- itself once the target frame is the height of the block instead.

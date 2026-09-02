@@ -30,6 +30,34 @@ local blocks = {
 	{ "tot", _G.WarriorKitSkinToT, _G.TargetFrameToT },
 }
 
+-- Target of target is on the screen, which is the one thing about that frame
+-- the addon used to leave with the client. Everything below measures a block
+-- drawn on it, and every one of those assertions passes just as well on a
+-- frame nobody can see, so this is asserted first and separately.
+--
+-- Both directions, because the interesting half is the one the client already
+-- did: a frame that is shown whatever the units say is not a fix, it is a
+-- frame welded up. The unit is put back afterwards, since the sections below
+-- read the block that hangs off it.
+check(_G.TargetFrameToT:IsShown(),
+	"the target has a target and target of target is not on the screen")
+guids.targettarget = nil
+ns.FrameSkin.Apply()
+check(not _G.TargetFrameToT:IsShown(),
+	"the target has nothing targeted and target of target is still on the screen")
+-- Yourself, which is the one unit the client refuses to draw this frame for,
+-- and the addon holds to that rather than answering a question nobody asked.
+-- Said through the alias table rather than by pointing two guids at one value,
+-- because that is what UnitIsUnit reads.
+guids.targettarget = "Player-1"
+H.unitAlias.player = { target = true }
+ns.FrameSkin.Apply()
+check(not _G.TargetFrameToT:IsShown(),
+	"you are your own target and target of target is drawing you a second time")
+H.unitAlias.player = nil
+guids.targettarget = "Creature-8"
+ns.FrameSkin.Apply()
+
 -- The palette, restated rather than reached for. Skin.lua keeps these local and
 -- that is right; a gate that imported the number it is checking would pass on
 -- the day somebody changed it by accident. UnitIsPlayer above is true for the
