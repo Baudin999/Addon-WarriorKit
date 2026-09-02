@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### A console under the hood
+
+The experience rail went missing on a level 62 character and stayed missing,
+and the only way to find out why was to read six client calls back. That is a
+macro, and on this machine the clipboard does not reach the game window, so a
+macro is typed by hand, six calls with their names beside them.
+
+So there is a console page now, under Under the hood. A box takes a few lines
+of Lua, a button runs them, and what they printed is drawn underneath. One
+button per probe beside it, and a probe is a named question written into
+`Console/Console.lua` rather than typed: the first is `xp`, every reading the
+rail takes before it decides whether to draw, next to the two the client's own
+bar asks instead. `/wk console xp` prints the same lines to chat and `/wk
+console run <lua>` takes one line raw.
+
+The chunk runs as the client's own globals, the way a macro does. `print` is
+borrowed for the length of the chunk and put back whether it ran, raised or
+never parsed, and the harness checks the raise hardest, because a borrow that
+stayed borrowed would swallow every print in the client after it.
+
 ### The window you can find things in
 
 The options window had grown to ten groups and seventy one sections since it

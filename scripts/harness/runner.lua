@@ -281,6 +281,7 @@ local SECTIONS = {
 	-- something rather than reading what Questie drew, and it puts every
 	-- place it switched back the way it found it.
 	"63-map-places",
+	"64-console",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

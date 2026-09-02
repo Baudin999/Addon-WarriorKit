@@ -222,6 +222,11 @@ Core\Menu.lua
 Perf\Perf.lua
 Perf\Feature.lua
 
+# The console next: a box that runs a line of Lua and shows what it printed.
+# No ticker, and it reads no other part, so it is up whatever else is not.
+Console\Console.lua
+Console\Feature.lua
+
 Marking\Marking.lua
 Marking\Keys.lua
 Marking\Feature.lua

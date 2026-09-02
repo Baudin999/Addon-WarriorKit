@@ -5567,6 +5567,22 @@ called `Hide` on a string. The harness now builds the row a second time with
 `CreateFrame` refusing `Slider` and clicks both buttons, because a branch
 nothing ever runs is a branch that is wrong.
 
+**Console.** A box on the Under the hood page that runs a few lines of Lua
+inside the game and shows what they printed, and one button per probe. A probe
+is a question written into `Console/Console.lua` under a name: the calls, each
+printed with its name beside it, so the answer reads as a table rather than a
+row of numbers. The first is `xp`, every reading `Progress/Progress.lua` takes
+before it decides whether there is an experience bar to draw, next to the two
+the client's own bar asks instead on the builds that have them.
+
+It exists because a macro is typed. On a machine where the clipboard does not
+reach the game window, six calls with their names beside them are six chances
+to mistype one, and the answer to "what does this client say here" is worth
+having exact. `/wk console xp` prints the same lines to chat, and `/wk console
+run <lua>` takes one line raw. The chunk runs as the client's own globals, the
+way a macro does, and `print` is borrowed for the length of the chunk and put
+back whether it ran, raised or never parsed.
+
 **Performance.** What the addon costs, measured rather than claimed: how much
 Lua it is holding, how fast that is growing, and how long each ticker takes.
 
@@ -5908,6 +5924,9 @@ on different realms read as the same person.
     /wk loadout 2 SHIFT-2        the key for that loadout, or none to clear
     /wk loadout add Sword        a new one
     /wk loadout combat on|off    whether the weapon swap fires mid fight
+    /wk console                  the console page, under Under the hood
+    /wk console xp               a probe: the experience readings, in chat
+    /wk console run <lua>        one line of Lua, and what it printed, in chat
 
 **The key field takes mouse buttons.** `ui.KeyField` maps left and right onto
 `BUTTON1` and `BUTTON2` so a modified click can be captured, which is the whole
