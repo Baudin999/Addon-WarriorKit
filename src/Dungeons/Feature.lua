@@ -75,6 +75,7 @@ ns.Register({
 	switch = {
 		key = "dungeons",
 		label = "the dungeon log",
+		says = "Neither of these clients ships an adventure guide, so nothing is being replaced and no key is being taken off the client.",
 		apply = function(value) SetDungeons(value) end,
 	},
 
@@ -136,12 +137,8 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Dungeons", "Chores")
+		ui.Section("Dungeons", "Windows")
 		ui.Lede("A shelf of dungeons, each wearing its own loading screen. Click one for its bosses, its map with them marked, and what they drop. Right click to come back.")
-		ui.Check("the dungeon log",
-			function() return ns.db.dungeons end,
-			SetDungeons)
-		ui.Hint("Neither of these clients ships an adventure guide, so nothing is being replaced and no key is being taken off the client.")
 		ui.KeyField("key",
 			function()
 				if (ns.db.dungeonKey or "") ~= "" then

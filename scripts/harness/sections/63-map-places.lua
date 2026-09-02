@@ -143,8 +143,8 @@ for _, entry in ipairs(ns.Options.Indexed()) do
 	end
 end
 check(page ~= nil, "the panel has no Places page")
-check(page and page.group.name == "Chores",
-	("the Places page is under %s rather than Chores"):format(page and page.group.name or "nothing"))
+check(page and page.group.name == "Windows",
+	("the Places page is under %s rather than Windows"):format(page and page.group.name or "nothing"))
 check(boxes["Flight Master"] and boxes["Food"],
 	"the page is missing one of the two tick boxes looked for")
 check(ns.Options.Find("Innkeeper") >= 1, "the finder cannot reach a place by Questie's label")

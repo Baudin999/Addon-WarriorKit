@@ -62,6 +62,7 @@ ns.Register({
 	switch = {
 		key = "character",
 		label = "the character sheet",
+		says = "Loadouts are a tab on it, so turning this off leaves them to /wk loadout. Whether Blizzard's own sheet is hidden is on the Blizzard's own frames page with the other nine.",
 		apply = function(value) SetCharacter(value) end,
 	},
 
@@ -112,12 +113,8 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Character", "You")
+		ui.Section("Character", "Windows")
 		ui.Lede("Your gear, what it adds up to, your skills, your standings and your loadouts, on one window the C key opens.")
-		ui.Check("the addon's character sheet",
-			function() return ns.db.character end,
-			SetCharacter)
-		ui.Hint("Loadouts are a tab on it, so turning this off leaves them to /wk loadout. Whether Blizzard's own sheet is hidden is on the Blizzard's own frames page with the other nine.")
 		ui.Reading("what you are wearing", ns.Worn.Describe)
 		ui.Reading("hit and miss", ns.CharStats.Describe)
 		ui.Reading("weapon skills", ns.CharSkills.Describe)

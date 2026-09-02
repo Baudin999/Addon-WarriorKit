@@ -104,7 +104,7 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Swing timer", "You")
+		ui.Section("Swing timer", "Fighting")
 		ui.Lede("One bar per hand under your character, filling towards the next white swing.")
 
 		ui.Size("width", LOW_WIDTH, HIGH_WIDTH, 10,

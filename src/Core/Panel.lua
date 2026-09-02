@@ -6,15 +6,15 @@ ns.Options = Options
 local UI = ns.UI
 local M = UI.Metric
 
--- The options window. It builds one page of its own, Start here, and gets the
+-- The options window. It builds one page of its own, On and off, and gets the
 -- rest at PLAYER_LOGIN by walking the registry, handing each feature the widget
 -- kit from UI/Widgets.lua and letting it draw its own rows.
 --
 -- One piece of navigation, and it is not the registry.
 --
--- The rail down the left is eight groups, declared below and owned by no
--- feature. A group is what somebody was thinking about when they opened the
--- window. It folds: the group you are in stands open with its sections listed
+-- The rail down the left is nine groups, declared below and owned by no
+-- feature. A group is a thing you can see on the screen or a job you came to
+-- do. It folds: the group you are in stands open with its sections listed
 -- under it, and every `ui.Section(title, group)` a feature writes is one of
 -- those lines.
 --
@@ -23,15 +23,16 @@ local M = UI.Metric
 -- them behind eight rail entries meant the window showed an eighth of itself at
 -- a time, and Fighting's eleven wrapped onto three lines of stubs that took a
 -- fifth of the page's height. A column says the same thing in a column, and it
--- says it about the group you are in while the other seven stay one line each.
+-- says it about the group you are in while the others stay one line each.
 --
 -- That is the whole of the change from one rail entry per part. A part is a
 -- folder of code, and eighteen folder names down the left asked a new player to
 -- guess that the camera distance was under Comfort and that the window's own
 -- size was under Settings. It also forced a part's sections to live together
--- whether or not they belonged together: UnitFrames has three, and two of them
--- are about your own frames while the third is about enemy nameplates. Those
--- three now sit in You and in Them without a line of code moving between files.
+-- whether or not they belonged together: Chat opens a window and Comfort sells
+-- your greys, and each of those files also has a section that is about the
+-- screen. A section says where it goes, so a file can spread over two groups
+-- without a line of code moving between files.
 --
 -- A part's `order` no longer decides where it sits in the rail, because the
 -- rail is not made of parts. It decides where a part's sections sit inside
@@ -42,8 +43,8 @@ local M = UI.Metric
 -- each wrote their own check box for "does this draw anything", no two of them
 -- worded the same way, and none of them visible without opening the page it was
 -- on. Declared under `switch` in the registry, it is drawn at the top of the
--- part's first page, it fills Start here, and the rail marks any group holding
--- a part that is on.
+-- page the part names for it, it fills On and off, and the rail marks any
+-- group holding a part that is on.
 --
 -- Everything else this file used to own lives a layer down. UI/Theme.lua has
 -- the palette and the measurements, UI/Stack.lua lays a column out and lets each
@@ -61,23 +62,26 @@ local BODY_PAD = 8
 -- where you are looking while you change a number.
 local HEADER_H = 22
 
--- The rail. Eight fixed entries in this order, and one more that is named after
+-- The rail. Nine fixed entries in this order, and one more that is named after
 -- you and sits third.
 --
--- Eight rather than the six this started as, because Chores and Under the hood
--- were the two that would otherwise have been folded into The screen. Selling
--- grey items is not a screen setting and neither is what a ticker costs, and
--- either fold would have rebuilt the junk drawer the groups exist to take
--- apart. Nothing here holds more than eleven sections, and all eight fit the
--- rail folded shut with room over, which the eighteen never did.
+-- Every name is a thing you can point at on the screen or a job you came to
+-- do. The first cut of this list had You, Them and Readouts in it, and Chores
+-- holding every window the addon draws, because a bag window is a chore in the
+-- sense that sorting is. Nobody looking for the bag window thinks that. They
+-- think "windows", so that is the group, and the frames are under Frames, the
+-- bars under Action bars, and the switches under a name that says switches.
+-- All nine fit the rail folded shut with room over, which the eighteen never
+-- did.
 local GROUPS = {
-	"Start here",
+	"On and off",
 	"Fighting",
-	"You",
-	"Them",
-	"Readouts",
-	"The screen",
+	"Action bars",
+	"Frames",
+	"Windows",
+	"Feeds and meters",
 	"Chores",
+	"The screen",
 	"Under the hood",
 }
 
@@ -90,8 +94,10 @@ local START_SECTION = "Turn things on"
 --
 -- Every other group is what somebody was thinking about when they opened the
 -- window. This one is what they are: it holds the pages that exist because of
--- your class and would say nothing on any other, which is the charge button on
--- a warrior and the bar loadout on anyone a plan has been written for.
+-- your class and would say nothing on any other, which is the charge button
+-- and the Slam window on a warrior. The bar loadout is gated on a class too
+-- and sits under Action bars all the same, because filling the bars is what it
+-- does and that is where somebody looks for it.
 --
 -- A feature names it with Options.CLASS rather than with a string, because the
 -- string is the client's own word for your class and no feature may know it. A
@@ -401,14 +407,23 @@ local function AddSection(host, title, group)
 	host.stack = section.stack
 	host.section = section
 
-	-- The switch goes on the part's first page, before whatever the feature
+	-- The switch goes at the top of one page, before whatever the feature
 	-- writes next, which is why it is drawn from here rather than after the
-	-- builder has run.
+	-- builder has run. Which page is the part's to say, under `switch.page`,
+	-- and the first it opens when it says nothing. The first was the only rule
+	-- for a while, and it put the enemy bars switch at the top of the player
+	-- frames page because that happened to be the section the file wrote
+	-- first: a switch is the one row a person opens the window for, and it has
+	-- to be on the page whose title they clicked to find it.
 	if not host.opened then
 		host.opened = section
-		if host.feature.switch then
-			Options.Switch(host.kit, host.feature)
-		end
+	end
+	local switch = host.feature.switch
+	if switch and not host.switched
+		and (switch.page == nil or switch.page == title) then
+		host.switched = section
+		section.switched = true
+		Options.Switch(host.kit, host.feature)
 	end
 	return section.stack
 end
@@ -421,8 +436,8 @@ local function BuildFeature(feature)
 		return AddSection(host, title, group)
 	end
 	-- A lede belongs to the section it opened rather than to the row that drew
-	-- it, because Start here quotes the lede of a part's first page under that
-	-- part's switch and has nowhere else to read it from.
+	-- it, because On and off quotes the lede of the page a part's switch is on
+	-- under that switch and has nowhere else to read it from.
 	--
 	-- One per section, and a second is a login error rather than the first one
 	-- quietly overwritten. A page that wants two ledes wants two sections, which
@@ -446,11 +461,17 @@ local function BuildFeature(feature)
 	kits[#kits + 1] = host.kit
 	feature.panel(host.kit)
 	-- A part that is not built on this character opens nothing, and that is the
-	-- whole of how a page disappears: no rail line, no switch on Start here, and
+	-- whole of how a page disappears: no rail line, no switch on On and off, and
 	-- no tick box writing a setting nothing here reads. Anything else opening
 	-- nothing is a panel that lost its sections and is still a login error.
 	assert(host.opened or not Options.SwitchAvailable(feature),
 		("%s has a panel and opened no section"):format(feature.name))
+	-- A page named for the switch that the part never opened is a switch drawn
+	-- nowhere, which is a part you cannot turn off from the window that exists
+	-- to turn things off.
+	assert(host.switched or not feature.switch or not host.opened,
+		("%s named the page %q for its switch and opened no section by that title")
+			:format(feature.name, tostring(feature.switch and feature.switch.page)))
 end
 
 -- Whether a group has anything on. Read by the rail, which marks the groups
@@ -466,25 +487,27 @@ local function GroupIsOn(group)
 	return false
 end
 
--- Start here.
+-- On and off.
 --
 -- One column of every part's switch, each under the lede of the page it belongs
 -- to, and nothing else: no numbers, no ranges. Turn things on, look at your
 -- screen, come back. It is what the button in the Escape menu opens onto the
 -- first time, and it is the answer to "easier for new players" that a rail of
--- module names could not be.
+-- module names could not be. It was called Start here, which said where to
+-- begin and not what was on it, and the one thing people asked for was a place
+-- to turn features on and off. This was that place all along. Now it says so.
 local function BuildStart()
-	local host = { feature = { name = "start here" } }
+	local host = { feature = { name = "on and off" } }
 	host.Refresh = function() Options.Refresh() end
 	host.Popup = function() return window.frame end
 	host.Section = function(title, group)
 		return AddSection(host, title, group)
 	end
-	-- Start here is the one page in the window that carries a lede per row rather
+	-- On and off is the one page in the window that carries a lede per row rather
 	-- than one at the top, so it takes no section lede at all: the sentences on
 	-- it belong to the parts they were read off, not to this page.
 	host.Lede = function() end
-	-- Start here is not indexed. Every switch on it is the same switch as the
+	-- On and off is not indexed. Every switch on it is the same switch as the
 	-- one at the top of that part's own page, and a search that answered twice
 	-- with the same control would be teaching you the wrong place to find it.
 	host.kit = UI.Kit(host)
@@ -492,7 +515,7 @@ local function BuildStart()
 
 	local ui = host.kit
 	ui.Section(START_SECTION, START)
-	ui.Lede("Every part of the addon, on or off. Everything with a number in it is in the groups below.")
+	ui.Lede("Every part of the addon, on or off. The same switch sits at the top of that part's own page, with its numbers under it.")
 
 	-- The one page in the window that carries a lede per row rather than one at
 	-- the top. That is what this page is: a switch and the sentence saying what
@@ -720,16 +743,24 @@ function Options.Switch(ui, feature)
 			end
 		end)
 	row.IsAvailable = function() return Options.SwitchAvailable(feature) end
+	-- The one sentence the switch needs, hung on it the way a hint hangs on
+	-- any other row. Seven parts used to draw a second check box on the same
+	-- key for no reason but to have a row to put this sentence on. It is
+	-- `says` rather than `hint` because check.sh reads a `hint` field on any
+	-- table as the tooltip band that no longer exists.
+	if switch.says then
+		ui.Hint(switch.says)
+	end
 	return row
 end
 
--- The lede of the first page a part opened, which is the sentence Start here
--- puts under that part's switch. Read off the section rather than out of the
+-- The lede of the page a part's switch is on, which is the sentence On and off
+-- puts under that switch. Read off the section rather than out of the
 -- registry, so there is one place a sentence about a page is written.
 function Options.LedeOf(feature)
 	for _, group in ipairs(groups) do
 		for _, section in ipairs(group.sections) do
-			if section.feature == feature then
+			if section.feature == feature and section.switched then
 				return section.lede
 			end
 		end

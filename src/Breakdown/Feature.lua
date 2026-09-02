@@ -103,7 +103,7 @@ end
 local armed = false
 
 local function Panel(ui)
-	ui.Section("Breakdown", "Readouts")
+	ui.Section("Breakdown", "Feeds and meters")
 	ui.Lede("What this character actually does, counted out of the combat log and kept between sessions.")
 
 	ui.Cycle("targets", BAND_LIST, BandWord,

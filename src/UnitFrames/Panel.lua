@@ -77,7 +77,7 @@ end
 -- names its own group, the enemy bars and your own frames are not the same
 -- subject and there is no reason for them to share a body.
 local function EnemyBars(ui)
-	ui.Section("Enemy bars", "Them")
+	ui.Section("Enemy bars", "Frames")
 	ui.Lede("Our own health bar on every hostile nameplate, or a list of them beside the screen.")
 
 	ui.Cycle("mode", { "auto", "plates", "list" },
@@ -209,7 +209,7 @@ local function EnemyBars(ui)
 end
 
 local function Debuffs(ui)
-	ui.Section("Debuffs on the bar", "Them")
+	ui.Section("Debuffs on the bar", "Frames")
 	ui.Lede("A row of icons over each bar: bright is yours, grey is somebody else's, faint is nobody's.")
 
 	for slot = 1, ns.EnemyBars.MaxSpells() do
@@ -287,7 +287,7 @@ local function Debuffs(ui)
 end
 
 local function Frames(ui)
-	ui.Section("Player and target frames", "You")
+	ui.Section("Player and target frames", "Frames")
 	ui.Lede("Squares Blizzard's own player, target and target of target frames in your class colour.")
 
 	ui.Check("square frames in your class colour",
@@ -379,7 +379,7 @@ end
 -- of ours that sits where you drag it, which is the swing timer's shape and not
 -- the skin's.
 local function CastBar(ui)
-	ui.Section("Your cast bar", "You")
+	ui.Section("Your cast bar", "Frames")
 	ui.Lede("Your own casts, on a bar under the swing timer rather than on Blizzard's.")
 
 	ui.Check("draw your own cast bar",
@@ -558,7 +558,7 @@ end
 -- a Blizzard frame. These blocks are made by a secure group header, and the
 -- client's own party and raid frames come off in the section below.
 local function Party(ui)
-	ui.Section("Party", "You")
+	ui.Section("Party", "Frames")
 	ui.Lede("A tile for each of the four people you are grouped with, in role order, drawn by this addon rather than by the client.")
 
 	ui.Check("draw party tiles",
@@ -614,7 +614,7 @@ end
 -- bigger room. Its own section for the same reason: nothing on this page moves
 -- anything on the one above it.
 local function Raid(ui)
-	ui.Section("Raid", "You")
+	ui.Section("Raid", "Frames")
 	ui.Lede("A grid of the raid, a run of five to a group with the group number on it, in this addon's own tiles.")
 
 	ui.Check("draw raid tiles",
@@ -673,7 +673,7 @@ end
 -- reads another setting, so every line does what it says whatever else is
 -- switched on.
 local function Blizzard(ui)
-	ui.Section("Blizzard's own frames", "You")
+	ui.Section("Blizzard's own frames", "Frames")
 	ui.Lede("This addon draws these itself. Untick one to put Blizzard's copy back.")
 
 	for _, switch in ipairs(ns.BlizzHide.Switches()) do

@@ -116,7 +116,7 @@ end
 -- login after that the rows are there. On the first they are not, and the
 -- page says so instead of drawing an empty checklist that looks like a bug.
 local function PlacesPage(ui)
-	ui.Section("Places", "Chores")
+	ui.Section("Places", "Windows")
 	ui.Lede("The flight masters, innkeepers, mailboxes, trainers and vendors Questie can draw, ticked on here rather than in the dropdown behind its minimap button.")
 	local rows = ns.MapPlaces.List()
 	local group
@@ -217,6 +217,7 @@ ns.Register({
 	switch = {
 		key = "worldMap",
 		label = "the world map",
+		says = "A column of zone names answers 'show me Desolace' in one click. On the picture, left steps into what is under it and right steps out to the continent, which is a row at the top of its group.",
 		apply = function(value) SetMap(value) end,
 	},
 
@@ -268,12 +269,8 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("World map", "Chores")
+		ui.Section("World map", "Windows")
 		ui.Lede("Every zone in the game down the left, the one you picked beside it with Questie's markers and your group on top, and a line under it saying who it is for.")
-		ui.Check("the addon's world map",
-			function() return ns.db.worldMap end,
-			SetMap)
-		ui.Hint("A column of zone names answers 'show me Desolace' in one click. On the picture, left steps into what is under it and right steps out to the continent, which is a row at the top of its group.")
 		ui.Check("put Blizzard's world map in the attic",
 			function() return ns.db.worldMapHideBlizz end,
 			SetHide)

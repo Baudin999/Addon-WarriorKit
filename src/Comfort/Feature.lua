@@ -437,7 +437,7 @@ ns.Register({
 		end)
 		ui.Reading("the fanfare", ns.Fanfare.Describe)
 
-		ui.Section("Clutter", "The screen")
+		ui.Section("Clutter", "Chores")
 		ui.Lede("A window for the three things that fill a bag: quest items you are finished with, greys that are not worth the slot, and gear you outgrew.")
 		ui.Action(function() return "review them one at a time" end,
 			function() ns.Destroy.Show() end)

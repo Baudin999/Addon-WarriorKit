@@ -170,7 +170,7 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Meters", "Readouts")
+		ui.Section("Meters", "Feeds and meters")
 		ui.Lede("Two columns with no window round them: who is doing damage, and who is about to take the mob.")
 
 		ui.Cycle("left pane counts", MODES,

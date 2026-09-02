@@ -1340,7 +1340,7 @@ old panel: a row measured against the previous pass's width is a row drawn on
 top of whatever follows it.
 
 **A page has two levels and the kit names both.** `ui.Section(title, group)`
-says which of the window's eight groups the rows after it belong in, and the
+says which of the window's nine groups the rows after it belong in, and the
 title becomes one line under that group when the rail folds it open. The kit asks its host where sections
 go; a host that answers nothing gets a heading rule in the same column instead,
 which is what this call was before the window had a rail.
@@ -2955,11 +2955,15 @@ down a shift-click on a square goes to the handle instead of to the square. That
 is why it is a setting, and it ships off because a bar is moved where you can
 see what it lands next to rather than after an unlock.
 
-*The panel page.* One tab strip and one set of controls, rather than five bars
-times six controls down a page, which is thirty rows to find one in. The strip
-picks a bar and every control answers for whichever is in front, which is the
-shape the loadouts page and the people page already have. Which tab is in front
-is not a saved setting, the same as `ns.People.Shown`.
+*The panel page.* One page, Bars under Action bars, with the switch for the
+whole clone at its top and one tab strip and one set of controls under that,
+rather than five bars times seven controls down a page, which is thirty five
+rows to find one in. The strip picks a bar and every control answers for
+whichever is in front, the tick that clones it included, which is the shape the
+loadouts page and the people page already have. Which tab is in front is not a
+saved setting, the same as `ns.People.Shown`. It was two pages in two groups for
+a while, one holding a tick per bar and the other holding everything else about
+a bar, and the second was the one you wanted every time you opened the first.
 
 *And the bar it names wears a rim while the window is open.* A strip that says
 "bottom left bar" names a bar you then have to find by counting, and the two on
@@ -2980,10 +2984,20 @@ nothing on the screen to say why.
 **Options panel.** `/wk` with nothing after it opens it, Escape closes it, and
 every row has a slash command behind it so nothing is only reachable by mouse.
 
-Eight groups down the left, declared in `Core/Panel.lua` and owned by no
-feature, and a tab strip inside each. A feature calls `ui.Section(title, group)`
-and its rows land on that tab. Naming a group that does not exist is a login
-error rather than a section quietly landing in a default.
+Nine groups down the left, declared in `Core/Panel.lua` and owned by no
+feature, each folding open to one line per section: On and off, Fighting,
+Action bars, Frames, Windows, Feeds and meters, Chores, The screen, Under the
+hood, and one more named after your class under Fighting. A feature calls
+`ui.Section(title, group)` and its rows land on that line. Naming a group that
+does not exist is a login error rather than a section quietly landing in a
+default.
+
+Every name is a thing on the screen or a job you came to do. The first cut had
+You, Them and Readouts, and Chores holding the bag window, the mail window, the
+quest log and the merchant, because sorting a bag is a chore. Nobody looking for
+the bag window thinks that; they think "windows", so that is the group. The
+frames are under Frames, the bars under Action bars, and the page of switches
+is called what it is for.
 
 It was one rail entry per registered part before that: eighteen module names,
 three of them below the fold of a 390 pixel view with nothing on screen saying
@@ -2995,9 +3009,8 @@ thinking about when they opened the window, and those are not the same axis.
 Eight entries come to 184 pixels, so the rail fits for the first time.
 
 Letting a section choose its own group also lets one part's sections sit apart.
-`UnitFrames/Panel.lua` has three and two of them are about your own frames while
-the third is about enemy nameplates; they are in **You** and in **Them** now
-without a line of code moving between files.
+`Comfort/Feature.lua` sells your greys and pulls the camera back, and those are
+under **Chores** and **The screen** without a line of code moving between files.
 
 `order` on a part no longer decides where it sits in the rail, because the rail
 is not made of parts. It decides where that part's tabs sit inside whichever
@@ -3013,17 +3026,34 @@ that carries prose measures itself, the stack sets its width before it asks, and
 the answer is what the row is set to.
 
 **One switch per part, drawn by the panel.** A part declares
-`switch = { key, label, apply }` and the panel draws the check box, in the same
-place on every part's first page. Eleven features each wrote their own for the
+`switch = { key, label, apply, page, says }` and the panel draws the check box
+at the top of the page named under `page`, or of the first page the part opens
+when it names none. `says` is the one sentence the switch needs and it hangs on
+the row the way any hint does. Eleven features each wrote their own for the
 same idea and no two worded it the same way: `show the row`, `show the icon`,
 `Show the meters`, `Show the swing bars`, `show enemy bars` and `draw the
 WarriorKit chat window`. The wording stops being each author's choice, which is
 most of why those six were six different shapes.
 
+`page` exists because "the first page a part opens" put the enemy bars switch at
+the top of the player frames page, which was the section the file happened to
+write first. A switch is the row somebody opens the window for, and it has to be
+on the page whose title they clicked to find it. `says` exists because seven
+window parts drew a second check box on the same key as their switch, under
+different words, for no reason but to have a row to hang a sentence on. The
+harness refuses a page carrying two controls with one label and a switch on a
+page other than the one its part named.
+
+A part that turns a row on and a page that says where the row sits are the same
+page. The bars, the missing-buff row and the cooldown row each had two, and a
+person turning a bar off and a person moving it are the same person on the same
+evening.
+
 The rail marks any group holding a part that is on. That is the one question the
 window could never answer without opening forty five tabs, and it is what
-**Start here** is a whole page of: every switch in one column, each under the
-lede of the page it belongs to, and no numbers at all.
+**On and off** is a whole page of: every switch in one column, each under the
+lede of the page it belongs to, and no numbers at all. It was called Start here,
+which said where to begin and not what was on it.
 
 Seven parts declare no switch and the harness holds the list of them with a
 reason each. Targeting's only setting is a key binding and a key nobody bound is

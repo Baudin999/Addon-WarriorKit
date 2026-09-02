@@ -523,6 +523,7 @@ ns.Register({
 	switch = {
 		key = "bars",
 		label = "enemy bars",
+		page = "Enemy bars",
 		apply = function() ns.EnemyBars.Rebuild() end,
 	},
 

@@ -311,6 +311,40 @@ once the rail is folded shut.
 level of anything: the chat window's channels and the list of loadouts inside
 one page of the panel.
 
+### 9. The groups name what is on the screen, and a switch names its page
+
+Written after the window had grown from 45 sections to 71, and it amends
+points 1, 3 and 6. Three things had gone wrong with use.
+
+The group names stopped predicting their contents. Chores held thirteen
+sections and eight of them were windows: bags, mail, the quest log, the world
+map, the merchant, the dungeon log. You held seventeen, from the party frames to
+the character sheet. A name that is a mood rather than a thing on the screen
+takes whatever arrives next, and that is the junk drawer again with a friendlier
+label. The rail is nine now: On and off, Fighting, Action bars, Frames, Windows,
+Feeds and meters, Chores, The screen, Under the hood. Every one is a thing you
+can point at or a job you came to do, and nothing holds more than twelve.
+
+The switch landed on the wrong page. Point 3 put it on the first section a part
+opened, and the first section is an accident of file order: the enemy bars
+switch sat at the top of the player frames page, and the action bars switch sat
+on the loadout page under the class group. `switch.page` names the section it
+goes on. Seven window parts had also drawn a second check box on the same key
+under different words, because the switch row had nowhere to hang a hint;
+`switch.says` is that sentence and the second box is gone. The harness refuses
+a page with two controls under one label.
+
+On and off is what Start here was. The one thing people asked for was a place to
+turn features on and off, and that page was it all along under a name that said
+where to begin rather than what it held.
+
+And a page that turns a row on and a page that says where it sits are the same
+page. The bars had one for a tick per bar and one for everything else, in two
+groups; the missing-buff row and the cooldown row each had a Placing page of two
+rows. Merged. The bars are one page under Action bars with the switch at the
+top, the strip picking a bar, and the tick that clones it beside the rows that
+shape it.
+
 ## What gets deleted
 
 The zoom stepper on Buffs, Feeds and Meters. Three controls. Those three widgets

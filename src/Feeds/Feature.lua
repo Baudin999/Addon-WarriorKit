@@ -411,7 +411,7 @@ local function SharedPage(ui, entry)
 end
 
 local function Panel(ui)
-	ui.Section("Loot feed", "Readouts")
+	ui.Section("Loot feed", "Feeds and meters")
 	ui.Lede("What dropped, newest at the top, in the item's own quality colour, filtered by the chips over it.")
 
 	SharedPage(ui, STREAMS.loot)
@@ -470,7 +470,7 @@ local function Panel(ui)
 	end)
 	ui.Reading("what an item goes for", ns.Auction.Describe)
 
-	ui.Section("Combat feed", "Readouts")
+	ui.Section("Combat feed", "Feeds and meters")
 	ui.Lede("The same column fed by the combat log: one row per thing that landed on you or on something.")
 
 	SharedPage(ui, STREAMS.combat)

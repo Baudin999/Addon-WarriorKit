@@ -231,13 +231,27 @@ if classGroup then
 	-- find on the character they were looking for it on.
 	for _, section in ipairs(classGroup.sections) do
 		local part = section.feature and section.feature.name
-		check(part == "charge" or part == "buttons" or part == "swing",
+		check(part == "charge" or part == "swing",
 			("%s put %q under the class group and is not gated on a class")
 				:format(tostring(part), section.title))
 	end
 else
-	check(not CHARGE and ns.Layout.Plan() == nil and not ns.Slam.Available(),
+	check(not CHARGE and not ns.Slam.Available(),
 		("a %s opened a class page and got no rail entry for it"):format(PLAYER_CLASS))
+end
+
+-- The loadout page is gated on a class having a plan and it is not under the
+-- class group all the same: what it does is fill the bars, and Action bars is
+-- where somebody looks for that. It sat under the class group for a while and
+-- a mage looking for it had to know it was a class fact first.
+for _, group in ipairs(window.groups) do
+	for _, section in ipairs(group.sections) do
+		if section.feature and section.feature.name == "buttons" then
+			check(group.name == "Action bars",
+				("the bars part put %q under %s rather than Action bars")
+					:format(section.title, group.name))
+		end
+	end
 end
 
 -- No group is named after a class this character is not.
@@ -249,7 +263,7 @@ for _, group in ipairs(window.groups) do
 	end
 end
 
--- A part that is not built here takes no row on Start here either. A switch
+-- A part that is not built here takes no row on On and off either. A switch
 -- pointing at a page that does not exist is worse than no switch.
 for _, feature in ipairs(ns.features) do
 	if feature.name == "charge" then

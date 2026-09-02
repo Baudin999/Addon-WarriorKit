@@ -131,6 +131,7 @@ ns.Register({
 	switch = {
 		key = "bags",
 		label = "the bag window",
+		says = "The piles are the client's own item classes, so they are right on the first frame after a login and in your own language. Junk is the exception: a grey goes to the bottom whatever class it is.",
 		apply = function(value) SetBags(value) end,
 	},
 
@@ -193,12 +194,8 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Bags", "Chores")
+		ui.Section("Bags", "Windows")
 		ui.Lede("One window instead of five, with what you carry sorted into the piles the client already files it under and the free slots counted along the bottom.")
-		ui.Check("the addon's bag window",
-			function() return ns.db.bags end,
-			SetBags)
-		ui.Hint("The piles are the client's own item classes, so they are right on the first frame after a login and in your own language. Junk is the exception: a grey goes to the bottom whatever class it is.")
 		ui.Check("take the client's bag calls",
 			function() return ns.db.bagsHideBlizz end,
 			SetHide)
@@ -221,7 +218,7 @@ ns.Register({
 		ui.Reading("the client's bags", ns.BagsBlizzard.Describe)
 		ui.Reading("the squares", ns.BagsGrid.Describe)
 
-		ui.Section("Bags at a merchant", "Chores")
+		ui.Section("Bags at a merchant", "Windows")
 		ui.Lede("While a vendor is open the window grows a row that sells your greys and pays for your mending, marks what the sale will take and dims what it will not.")
 		ui.Reading("the row", ns.BagsMerchant.Describe)
 		ui.Reading("selling", ns.Vendor.Describe)

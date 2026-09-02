@@ -196,7 +196,7 @@ local function GroupActions(ui)
 end
 
 local function GroupsPage(ui)
-	ui.Section("Groups", "Readouts")
+	ui.Section("Groups", "Windows")
 	ui.Lede("A room in the chat window per group, holding every line anybody in it says and every whisper you send them.")
 
 	GroupTabs(ui)
@@ -560,7 +560,7 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Chat", "Readouts")
+		ui.Section("Chat", "Windows")
 		ui.Lede("A window of the addon's own: a room per conversation, and that room's own slash already in the line.")
 		ui.Check("take those lines out of Blizzard's window",
 			function() return ns.db.chatClaim end,
@@ -625,7 +625,7 @@ ns.Register({
 
 		GroupsPage(ui)
 
-		ui.Section("Voice", "Readouts")
+		ui.Section("Voice", "Windows")
 		ui.Lede("Joins one of the client's own voice channels for you at every login.")
 		ui.Picker("join at login",
 			function() return ns.db.voiceJoin end,

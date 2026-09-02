@@ -238,7 +238,7 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Cooldowns", "You")
+		ui.Section("Cooldowns", "Fighting")
 		ui.Lede("Two lines, up for the whole fight. The big squares on top are the seconds the fight is made of; the small ones docked under them are the minutes.")
 
 		ui.Reading("the row", ns.Cooldowns.Describe)
@@ -260,7 +260,18 @@ ns.Register({
 			end)
 		ui.Hint("Off, the row is there in a fight and afterwards while something is still recovering. On, it never leaves.")
 
-		ui.Section("Which cooldowns", "You")
+		ui.Zoom(function() return ns.db.cooldownZoom end,
+			function(value)
+				ns.db.cooldownZoom = value
+				ns.CooldownRow.Apply()
+			end)
+
+		ui.Action(function() return "put the row back" end, function()
+			ns.CooldownRow.Reset()
+		end)
+		ui.Hint("Unlock the frames to drag the row somewhere else. This puts it back where the addon ships it.")
+
+		ui.Section("Which cooldowns", "Fighting")
 		ui.Lede("The row as it will look. Drag a spell off your spellbook onto either line, drag a square from one line to the other, drag one off to stop counting it.")
 
 		-- The row itself, and the squares that are off it. Both are drawn in
@@ -289,7 +300,7 @@ ns.Register({
 
 		ui.Reading("your own", ns.Cooldowns.Own)
 
-		ui.Section("Trinkets", "You")
+		ui.Section("Trinkets", "Fighting")
 		ui.Lede("Both trinket slots are on the row, and only while what is in them is something you press.")
 
 		ui.Reading("trinket 1", function()
@@ -299,19 +310,6 @@ ns.Register({
 			return ns.Cooldowns.Worn(ns.Gear.TRINKET2)
 		end)
 		ui.Hint("A trinket with no use effect is worn rather than pressed, so it takes no square. The client is what decides that, not a list in the addon.")
-
-		ui.Section("Where the row sits", "You")
-		ui.Lede("Where the row sits and how big it is drawn. Unlock the frames to drag it.")
-
-		ui.Zoom(function() return ns.db.cooldownZoom end,
-			function(value)
-				ns.db.cooldownZoom = value
-				ns.CooldownRow.Apply()
-			end)
-
-		ui.Action(function() return "put the row back" end, function()
-			ns.CooldownRow.Reset()
-		end)
 	end,
 })
 

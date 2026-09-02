@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### The window you can find things in
+
+The options window had grown to ten groups and seventy one sections since it
+was regrouped, and the names had stopped saying what was under them. Chores
+held the bag window, the mail window, the quest log, the world map, the
+merchant and the dungeon log, because sorting a bag is a chore. You held
+seventeen pages from the party frames to the character sheet. The switch that
+turns a part on sat on whichever section its file happened to write first, so
+the enemy bars switch was at the top of the player frames page and the action
+bars switch was on the loadout page under Warrior. Seven windows drew a second
+tick box on the same setting as their switch, under different words, and the
+dungeon log drew it under the same words, so the page opened on two ticks that
+were one thing.
+
+The rail is nine groups now and every name is a thing on the screen or a job:
+On and off, Fighting, Action bars, Frames, Windows, Feeds and meters, Chores,
+The screen, Under the hood. On and off is what Start here was, which was the
+page of switches all along under a name that did not say so. A part names the
+page its switch goes on with `switch.page` and hangs its one sentence on it with
+`switch.says`; the seven second boxes are gone. The harness refuses a page with
+two controls under one label and a switch on a page other than the one its part
+asked for.
+
+The bars are one page. There were two, one with a tick per bar under Fighting
+and one with everything else about a bar under a different name, and a person
+turning a bar off and a person moving it are the same person. Bars, under Action
+bars, has the switch at the top, the strip picking a bar, the tick that clones
+it and the rows that shape and place it. The missing-buff row and the cooldown
+row lose their two-row Placing pages the same way. Sixty seven sections, and
+two thousand characters less to read.
+
 ### The ninth buff
 
 The aura rows on the player and target blocks were capped by a count setting

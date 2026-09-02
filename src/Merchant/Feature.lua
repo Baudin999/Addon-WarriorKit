@@ -61,6 +61,7 @@ ns.Register({
 	switch = {
 		key = "merchant",
 		label = "the merchant window",
+		says = "It opens at a vendor and closes when you walk away. A click buys one of what he sells it in: one flask, or one stack of arrows. Shift-click a stack to pick how many. The tab is what you sold.",
 		apply = function(value) SetMerchant(value) end,
 	},
 
@@ -103,12 +104,8 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Merchant", "Chores")
+		ui.Section("Merchant", "Windows")
 		ui.Lede("Everything the vendor has in one window, in the same piles and the same squares as your bags. The client shows ten at a time behind an arrow.")
-		ui.Check("the addon's merchant window",
-			function() return ns.db.merchant end,
-			SetMerchant)
-		ui.Hint("It opens at a vendor and closes when you walk away. A click buys one of what he sells it in: one flask, or one stack of arrows. Shift-click a stack to pick how many. The tab is what you sold.")
 		ui.Check("move the client's merchant window aside",
 			function() return ns.db.merchantHideBlizz end,
 			SetHide)

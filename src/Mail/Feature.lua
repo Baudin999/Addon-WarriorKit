@@ -100,6 +100,7 @@ ns.Register({
 	switch = {
 		key = "mail",
 		label = "the mail window",
+		says = "Opens at a mailbox. Green for a character on your own account, blue for a friend or somebody in one of your groups, red for a name the addon has never seen.",
 		apply = function(value) SetMail(value) end,
 	},
 
@@ -170,12 +171,8 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Mail", "Chores")
+		ui.Section("Mail", "Windows")
 		ui.Lede("A mail window of the addon's own: a quick list of who you mail, a colour saying who they are before you press send, and more than twelve attachments.")
-		ui.Check("open the addon's mail window at a mailbox",
-			function() return ns.db.mail end,
-			SetMail)
-		ui.Hint("Green for a character on your own account, blue for a friend or somebody in one of your groups, red for a name the addon has never seen.")
 		ui.Check("move Blizzard's own mail window out of the way",
 			function() return ns.db.mailHideBlizz end,
 			SetHide)

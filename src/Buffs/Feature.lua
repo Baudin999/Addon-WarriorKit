@@ -269,8 +269,19 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Missing buffs", "You")
-		ui.Lede("A row of squares over your character, and only while something you keep up is missing.")
+		ui.Section("Missing buffs", "Fighting")
+		ui.Lede("A row of squares over your character, and only while something you keep up is missing. Unlock the frames to drag it.")
+
+		ui.Check("nag in inns and cities too",
+			function() return ns.db.buffResting end,
+			function(value)
+				ns.db.buffResting = value
+				ns.BuffNag.Apply()
+			end)
+
+		ui.Action(function() return "put the row back" end, function()
+			ns.BuffNag.Reset()
+		end)
 
 		ui.Reading("your main hand", function()
 			if not ns.Upkeep.EnchantShape() then
@@ -287,7 +298,7 @@ ns.Register({
 		end)
 		ui.Reading("the row", ns.BuffNag.Describe)
 
-		ui.Section("What it watches", "You")
+		ui.Section("What it watches", "Fighting")
 		ui.Lede("One switch per thing the row watches. Switched off is not watched, not drawn, not counted.")
 
 		-- Built from Upkeep's own list rather than from literals here, so an entry
@@ -312,7 +323,7 @@ ns.Register({
 			return silent == 0 and "nothing, the row is watching all of it" or names
 		end)
 
-		ui.Section("Racials", "You")
+		ui.Section("Racials", "Fighting")
 		ui.Lede("A square while your racial is off cooldown, in combat, because that is damage you are not doing.")
 
 		ui.Check("nag me about my racial",
@@ -330,7 +341,7 @@ ns.Register({
 
 		ui.Reading("yours", ns.Racials.Describe)
 
-		ui.Section("Your own buffs", "You")
+		ui.Section("Your own buffs", "Fighting")
 		ui.Lede("Up to six more auras of your own on the row, added by spell id.")
 
 		-- No switch on these, and that is a decision rather than an omission.
@@ -358,20 +369,6 @@ ns.Register({
 
 		ui.Reading("slots used", function()
 			return ("%d of %d"):format(#ns.Upkeep.Extra(), ns.Upkeep.MaxExtra())
-		end)
-
-		ui.Section("Placing", "You")
-		ui.Lede("Where the row sits and how big it is drawn. Unlock the frames to drag it.")
-
-		ui.Check("nag in inns and cities too",
-			function() return ns.db.buffResting end,
-			function(value)
-				ns.db.buffResting = value
-				ns.BuffNag.Apply()
-			end)
-
-		ui.Action(function() return "put the row back" end, function()
-			ns.BuffNag.Reset()
 		end)
 	end,
 })

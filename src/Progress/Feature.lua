@@ -170,7 +170,7 @@ ns.Register({
 	panel = function(ui)
 		local wideLow, wideHigh, tallLow, tallHigh = Rails.SizeRange()
 
-		ui.Section("Experience and reputation", "Readouts")
+		ui.Section("Experience and reputation", "Feeds and meters")
 		ui.Lede("Two rails along the bottom of the screen: how far into the level you"
 			.. " are, and the faction you are watching under it.")
 

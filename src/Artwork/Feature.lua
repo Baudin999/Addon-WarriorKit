@@ -51,7 +51,7 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Bar art", "The screen")
+		ui.Section("Bar art", "Action bars")
 		ui.Lede("The gryphons, the metal strip behind bar 1 and the page arrows, on or off.")
 		ui.Check("show Blizzard bar art",
 			function() return ns.db.blizzArt end,

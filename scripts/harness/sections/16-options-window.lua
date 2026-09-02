@@ -77,6 +77,16 @@ if window then
 	local rows, tabs, wrapped, tallest, shortest = 0, 0, 0, 0, math.huge
 	local titles, ledes, hints, readings, labels = {}, 0, 0, 0, {}
 	local prose = 0
+	-- Each sentence once. A switch's hint is drawn on the part's own page and
+	-- again under the same switch on On and off, and that is one sentence to
+	-- read wherever you happen to read it.
+	local counted = {}
+	local function Prose(said)
+		if not counted[said] then
+			counted[said] = true
+			prose = prose + #said
+		end
+	end
 
 	for index = 1, #window.groups do
 		local group = window.groups[index]
@@ -145,7 +155,7 @@ if window then
 
 			if page.lede then
 				ledes = ledes + 1
-				prose = prose + #page.lede
+				Prose(page.lede)
 				check(#page.lede <= 160,
 					("%s: its lede is %d characters"):format(where, #page.lede))
 			end
@@ -173,7 +183,7 @@ if window then
 						check(type(said) == "string" and said ~= "",
 							("%s: a hint answered %s"):format(where, tostring(said)))
 						if type(said) == "string" then
-							prose = prose + #said
+							Prose(said)
 							check(#said <= 200,
 								("%s: a hint is %d characters: %s"):format(where, #said, said))
 						end
@@ -335,7 +345,14 @@ if window then
 	-- it. `"collect " .. entry.collects` is the one that made this necessary:
 	-- the string in the file ends in a space and only reads correctly once the
 	-- feed's name is glued on.
+	--
+	-- And no page carries two controls with one label. The dungeon page did:
+	-- the panel drew the part's switch and the part drew its own check box on
+	-- the same key under the same words, so the page opened on two ticks that
+	-- were one setting. Seven pages had the pair under two wordings, which is
+	-- worse, because nothing on the page said they were the same.
 	local controls = 0
+	local seen = {}
 	for _, entry in ipairs(window.indexed) do
 		local label = plain(type(entry.label) == "function" and entry.label() or entry.label)
 		controls = controls + 1
@@ -344,6 +361,30 @@ if window then
 		check(label == label:gsub("%s+$", ""),
 			("the label %q ends in whitespace"):format(label))
 		labels[#labels + 1] = label
+		seen[entry.section] = seen[entry.section] or {}
+		check(not seen[entry.section][label],
+			("%s / %s carries two controls called %q")
+				:format(entry.section.group.name, entry.section.title, label))
+		seen[entry.section][label] = true
+	end
+
+	-- Every switch is on the page its part named for it, or on the first page
+	-- the part opened when it named none, and On and off quotes that page's
+	-- lede under it. The enemy bars switch sat at the top of the player frames
+	-- page for a while, because that was the section the file wrote first.
+	for _, group in ipairs(window.groups) do
+		for _, section in ipairs(group.sections) do
+			local switch = section.feature and section.feature.switch
+			if section.switched then
+				check(switch ~= nil, ("%s / %s carries a switch and its part declares none")
+					:format(group.name, section.title))
+				check(switch == nil or switch.page == nil or switch.page == section.title,
+					("%s / %s carries the switch its part asked to have on %q")
+						:format(group.name, section.title, tostring(switch and switch.page)))
+				check(section.lede ~= nil, ("%s / %s carries a switch and has no lede for On and off to quote")
+					:format(group.name, section.title))
+			end
+		end
 	end
 
 	-- Every part with a boolean in its defaults declares a switch, or is on the
@@ -409,7 +450,7 @@ if window then
 	-- section title and a part's slash word. The last one is the reason search
 	-- exists in the shape it does, because `skin` is what somebody who already
 	-- knows the addon types and it is not the label on any control.
-	check(ns.Options.Find("Readouts") > 0, "no row matched the group name Readouts")
+	check(ns.Options.Find("Windows") > 0, "no row matched the group name Windows")
 	check(ns.Options.Find("Swing timer") > 0, "no row matched the section title Swing timer")
 	check(ns.Options.Find("skin") > 0, "no row matched the slash word skin")
 	ns.Options.Find("")
@@ -541,8 +582,21 @@ if window then
 	-- row of tick boxes: that a tick here is a tick in Questie's menu, and not a
 	-- second setting that could disagree with it. 28,300 is that measurement
 	-- plus a hint's worth of room again.
-	check(prose < 28300,
-		("the window holds %d characters of prose and the budget is 28,300"):format(prose))
+	--
+	-- Regrouping the window gave 2,085 back and takes it to 25,999 across
+	-- sixty-seven: seven pages lost the second check box they drew on their own
+	-- switch's key, and the hint each had hung on it moved onto the switch. The
+	-- two pages that held nothing but where a row sits folded into the page
+	-- that turns the row on, and the two bar pages became one. Three hints
+	-- arrived with the merges, saying what clone, match and put back do now
+	-- that they share a page with the rows they act on. The counter also
+	-- stopped counting a sentence twice when the switch that carries it is
+	-- drawn on On and off as well as on its own page. 26,200 is that
+	-- measurement plus a hint's worth of room again, and it is the smallest
+	-- number on this list since the forty-two section window, because prose
+	-- that came out is prose that has to stay out.
+	check(prose < 26200,
+		("the window holds %d characters of prose and the budget is 26,200"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

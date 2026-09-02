@@ -187,19 +187,26 @@ local function Trace()
 	end
 end
 
--- The page for one bar at a time
+-- The bars page
 --
--- Five bars times six controls is thirty rows, and thirty rows is a page you
--- search rather than read. So the strip picks a bar and one set of controls
--- answers for whichever is in front, which is the shape the loadouts page and
--- the people page already have.
+-- One page for the bars, and the switch for the whole clone sits at the top of
+-- it because this is the section a part opens first. Under that the strip
+-- picks a bar and one set of controls answers for whichever is in front: on or
+-- off, how the twelve fold, what they stand on, when it is up, and where it is.
+-- Five bars times seven controls is thirty five rows, and thirty five rows is a
+-- page you search rather than read, which is why the strip.
 --
--- Its own function rather than forty more lines inside `panel`, along the seam
--- the file already has: everything in here is about one bar and nothing in here
--- is about the loadout, the clone as a whole or the spell ranks.
-local function EachBarPage(ui)
-	ui.Section("Each bar", "Fighting")
-	ui.Lede("What one bar looks like: how the twelve fold, what they stand on, and when it is on the screen.")
+-- This used to be two pages, one holding a check box per bar and the other
+-- holding everything else about a bar, and the two sat in different groups. A
+-- person turning a bar off and a person moving it are the same person on the
+-- same evening, so it is one page.
+--
+-- Its own function rather than sixty more lines inside `panel`, along the seam
+-- the file already has: everything in here is about the bars and nothing in
+-- here is about the loadout or the spell ranks.
+local function BarsPage(ui)
+	ui.Section("Bars", "Action bars")
+	ui.Lede("One of our bars for each of yours, same slots and same keys, with Blizzard's hidden behind. Pick a bar in the strip to set it.")
 
 	ui.Tabs(
 		function()
@@ -219,6 +226,7 @@ local function EachBarPage(ui)
 	ui.Check("clone this bar",
 		function() return ns.WhichBars.Wanted(Chosen()) end,
 		function(value) SetBar(Chosen(), value) end)
+	ui.Hint("Left alone, a bar follows your own interface options, so turning it on there clones it too. Ticking it here is a decision that outlasts those options.")
 
 	ui.Count("rows", ns.BarLook.ROWS[1], ns.BarLook.ROWS[#ns.BarLook.ROWS],
 		function() return ns.BarLook.Rows(Chosen()) end,
@@ -302,13 +310,27 @@ local function EachBarPage(ui)
 		end)
 	ui.Hint("Locked, a bar moves only while /wk unlock has every frame loose. Unlocked, hold shift to drag one, and a shift-click over a bar belongs to the bar while you hold it.")
 
-	ui.Action(
+	ui.ActionPair(
+		function() return "match my current bars" end,
+		Match,
+		function() return ns.WhichBars.Decided() > 0 end,
 		function() return "back to the plain bars" end,
 		Plain,
 		function() return ns.BarLook.Decided() > 0 end)
+	ui.Hint("Match puts every bar back to following your interface options. Plain drops every look you set and draws the shape the plan ships.")
 
 	ui.Reading("this bar", function() return ns.BarLook.Shape(Chosen()) end)
 	ui.Reading("on screen", function() return ns.BarLook.Hours(Chosen()) end)
+	ui.Reading("cloning", function()
+		if not ns.db.actionBars then
+			return "off, your bars are Blizzard's"
+		end
+		return ns.Bars.Describe()
+	end)
+	ui.Reading("set by hand", function()
+		local decided = ns.WhichBars.Decided()
+		return decided == 0 and "none" or (decided .. " of the bars")
+	end)
 end
 
 -- The words that set one bar's look
@@ -406,9 +428,11 @@ end
 -- The loadout page, which is the one page of this part that only exists on a
 -- class somebody has written a plan for. Lifted out of the panel builder so the
 -- gate on it reads as one line there rather than as a fold around half the
--- function.
+-- function. It sits under Action bars with the other two rather than under the
+-- group named after your class, because what it does is fill the bars and that
+-- is where somebody looks for it.
 local function LoadoutPage(ui)
-	ui.Section("Buttons", ns.Options.CLASS)
+	ui.Section("Buttons", "Action bars")
 	ui.Lede("Fills bar 1 with a role per key on every page it has, and the shift layer above it.")
 	ui.ActionPair(
 		function() return ns.Layout.HasBackup() and "re-fill the bars" or "fill the bars" end,
@@ -616,44 +640,15 @@ ns.Register({
 	-- the switch that says so.
 
 	panel = function(ui)
-		-- The loadout is the one page of this part that belongs to a class, so it
-		-- sits under the rail entry named after you and is not built at all where
-		-- nobody has written a plan. The two pages under it are the same job on
-		-- every character and stay where they are.
+		-- The bars first, because the first page a part opens is the one that
+		-- carries its switch. The loadout is not built at all where nobody has
+		-- written a plan for the class.
+		BarsPage(ui)
 		if ns.Layout.Plan() then
 			LoadoutPage(ui)
 		end
 
-		ui.Section("Our own bars", "Fighting")
-		ui.Lede("Stands up one of our bars for each of yours: same slots, same keys, Blizzard's hidden behind.")
-
-		-- One row per bar the client can have, so a bar that misbehaves can be
-		-- handed back on its own without turning the whole feature off and
-		-- losing the others. Untouched, each row shows what you have on.
-		for _, def in ipairs(ns.WhichBars.PLAN) do
-			ui.Check(def.label,
-				function() return ns.WhichBars.Wanted(def) end,
-				function(value) SetBar(def, value) end)
-		end
-		ui.Action(
-			function() return "match my current bars" end,
-			Match,
-			function() return ns.WhichBars.Decided() > 0 end)
-		ui.Hint("A row left alone follows your own interface options, so turning a bar on there clones it too. Match puts every row back to following.")
-		ui.Reading("cloning", function()
-			if not ns.db.actionBars then
-				return "off, your bars are Blizzard's"
-			end
-			return ns.Bars.Describe()
-		end)
-		ui.Reading("set by hand", function()
-			local decided = ns.WhichBars.Decided()
-			return decided == 0 and "none" or (decided .. " of the rows above")
-		end)
-
-		EachBarPage(ui)
-
-		ui.Section("Spell ranks", "Fighting")
+		ui.Section("Spell ranks", "Action bars")
 		ui.Lede("Moves any spell on a bar that is holding an old rank up to the best one you know.")
 		ui.Action(
 			function()

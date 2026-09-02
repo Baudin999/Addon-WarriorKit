@@ -66,6 +66,7 @@ ns.Register({
 	switch = {
 		key = "quests",
 		label = "the quest log",
+		says = "The client's own log draws six of your quests through a slot and pushes the list off the window to show you one of them. This one draws the whole log at once and never moves it.",
 		apply = function(value) SetQuests(value) end,
 	},
 
@@ -122,12 +123,8 @@ ns.Register({
 	end,
 
 	panel = function(ui)
-		ui.Section("Quests", "Chores")
+		ui.Section("Quests", "Windows")
 		ui.Lede("Every quest you are on down the left, grouped by zone. In the middle, what this one wants, or a map of where it wants it. On the right, what it pays.")
-		ui.Check("the addon's quest log",
-			function() return ns.db.quests end,
-			SetQuests)
-		ui.Hint("The client's own log draws six of your quests through a slot and pushes the list off the window to show you one of them. This one draws the whole log at once and never moves it.")
 		ui.Check("put Blizzard's quest log in the attic",
 			function() return ns.db.questsHideBlizz end,
 			SetHide)
