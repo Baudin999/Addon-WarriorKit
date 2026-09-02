@@ -233,6 +233,20 @@ Session.Clear()
 check(pile("session") == nil, "the pile is still drawn after a clear")
 check(Session.Name() == nil, "the session still has a name after a clear")
 
+-- The press behind the forget button in the title bar, which is the only way
+-- to the clear from the window itself. Driven rather than assumed, because the
+-- button beside it says clear and opens the destroy window, and the two being
+-- wired to each other's work is exactly the mistake the different word is
+-- there to stop.
+Session.Start()
+put(7, "Emerald Pigment", 2)
+check(select(1, Session.Held()) > 0, "nothing was recorded to forget")
+Session.Forget()
+check(select(1, Session.Held()) == 0, "forget left something in the ledger")
+check(Session.Running() == false, "forget left the session recording")
+put(7, nil, 1)
+CARRIED[1][7] = nil
+
 ----------------------------------------------------------------------
 -- A second dungeon
 --

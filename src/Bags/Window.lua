@@ -66,7 +66,11 @@ local RECORD_WIDTH = 54
 -- The clear button beside it, and it says one word forever.
 local CLEAR_WIDTH = 44
 
-local window, view, free, purse, stack, record, clear
+-- The forget button, wide enough for its word. It sits left of clear and is
+-- only up while a session is holding something.
+local FORGET_WIDTH = 48
+
+local window, view, free, purse, stack, record, clear, forget
 
 -- The clutter window, opened from here.
 --
@@ -224,6 +228,24 @@ local function Build()
 		height = M.title - 8, size = M.small, onClick = Clear })
 	clear:SetPoint("TOPRIGHT", record, "TOPLEFT", -M.rowGap, 0)
 
+	-- Left of clear, and only up while there is a session to be rid of.
+	--
+	-- It says forget rather than clear because the button beside it already
+	-- says clear and means something else: that one opens the destroy window to
+	-- make room, and this one throws away a record of an hour. Two buttons a
+	-- pixel apart wearing one word, meaning two different things, is worse than
+	-- either word being slightly wrong on its own.
+	--
+	-- Hidden while there is nothing recorded, because stop and forget are two
+	-- presses on purpose. Stop leaves the pile there to work through at a
+	-- vendor; this is the press for the evening you want it gone early, and the
+	-- next session clears it for you anyway. A character who has never recorded
+	-- a run never sees it.
+	forget = UI.Button(window.frame, { label = "forget", width = FORGET_WIDTH,
+		height = M.title - 8, size = M.small, onClick = ns.BagsSession.Forget })
+	forget:SetPoint("TOPRIGHT", clear, "TOPLEFT", -M.rowGap, 0)
+	forget:Hide()
+
 	Fit()
 
 	-- The two numbers along the bottom and the button between them, recorded on
@@ -232,7 +254,7 @@ local function Build()
 	-- and presses the button rather than going through a hook cut into this file
 	-- for its benefit.
 	window.free, window.purse, window.stack = free, purse, stack
-	window.record, window.clear = record, clear
+	window.record, window.clear, window.forget = record, clear, forget
 
 	return window
 end
@@ -262,6 +284,7 @@ function Window.Refresh()
 	record.text:SetText(ns.BagsSession.Label())
 	record.tone = ns.BagsSession.Running() and C.tick or C.control
 	UI.Tint(record.bg, record.tone)
+	forget:SetShown(ns.BagsSession.Held() > 0)
 	return true
 end
 

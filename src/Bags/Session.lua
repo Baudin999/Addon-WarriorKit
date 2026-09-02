@@ -330,6 +330,23 @@ function Session.Press()
 	return true
 end
 
+-- The press that empties the pile, wherever it came from. Its own wrapper for
+-- the reason Press has one: a press is something somebody is waiting for an
+-- answer to, and the sentence it prints is written once.
+function Session.Forget()
+	local kinds, total = Session.Held()
+	local name = Session.Name() or UNNAMED
+	Session.Clear()
+	if kinds == 0 then
+		ns.Print("there was nothing recorded to forget.")
+	else
+		ns.Print(("forgot %s: %d item%s, %d in all.")
+			:format(name, kinds, kinds == 1 and "" or "s", total))
+	end
+	ns.BagsWindow.Refresh()
+	return true
+end
+
 function Session.Describe()
 	local kinds, total = Session.Held()
 	if Session.Running() then
