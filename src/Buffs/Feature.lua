@@ -17,47 +17,39 @@ local function SetBuffs(value)
 	ns.BuffNag.Apply()
 end
 
-local function BuffWord(arg)
-	local option, value = arg:match("^(%S*)%s*(.-)$")
+-- The words the nag answers to, and the two lists an unknown word is looked up
+-- in before it is read as the on|off value. The lookups are in `otherwise`
+-- rather than as entries because neither is a word this file knows: one is
+-- whatever your class put on the row, and the other is whatever somebody
+-- else's class did.
+local BuffWord = ns.Command.Word({
+	name = "buff",
+	apply = function() ns.BuffNag.Apply() end,
+	show = function()
+		return "buff nag " .. ns.BuffNag.Describe() .. "."
+	end,
 
-	if option == "" or option == "show" then
-		ns.Print("buff nag " .. ns.BuffNag.Describe() .. ".")
-		return
-	end
+	{ "racial", toggle = true, key = "buffRacial",
+	  say = function(on)
+		return "racial nag " .. (on and "on" or "off")
+			.. ", " .. ns.Racials.Describe() .. "."
+	  end },
 
-	if option == "racial" then
-		ns.db.buffRacial = ns.Command.Toggle(value)
-		ns.BuffNag.Apply()
-		ns.Print("racial nag " .. (ns.db.buffRacial and "on" or "off")
-			.. ", " .. ns.Racials.Describe() .. ".")
-		return
-	end
+	-- No apply: nothing is laid out again for a square that pulses or does not.
+	{ "pulse", toggle = true, key = "buffPulse", apply = false,
+	  say = function(on)
+		return "the racial square " .. (on and "pulses" or "sits still") .. "."
+	  end },
 
-	if option == "pulse" then
-		ns.db.buffPulse = ns.Command.Toggle(value)
-		ns.Print("the racial square " .. (ns.db.buffPulse and "pulses" or "sits still") .. ".")
-		return
-	end
+	{ "resting", toggle = true, key = "buffResting",
+	  say = function(on)
+		return on and "the row nags in inns and cities too."
+			or "the row is quiet while you are resting."
+	  end },
 
-	if option == "resting" then
-		ns.db.buffResting = ns.Command.Toggle(value)
-		ns.BuffNag.Apply()
-		ns.Print(ns.db.buffResting and "the row nags in inns and cities too."
-			or "the row is quiet while you are resting.")
-		return
-	end
+	ns.Command.Zoom("buffZoom", "the buff row draws at %dx."),
 
-	if option == "zoom" then
-		local zoom = ns.Command.Number(value, ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH, "buff zoom")
-		if zoom then
-			ns.db.buffZoom = zoom
-			ns.BuffNag.Apply()
-			ns.Print(("the buff row draws at %dx."):format(zoom))
-		end
-		return
-	end
-
-	if option == "list" then
+	{ "list", run = function()
 		local extra = ns.Upkeep.Extra()
 		if #extra == 0 then
 			ns.Print("nothing of your own on the row. buffs add <spell id>, or use the panel.")
@@ -67,53 +59,50 @@ local function BuffWord(arg)
 			local id = extra[index]
 			ns.Print(("  %d  %s"):format(id, ns.SpellName(id) or "this client cannot name it"))
 		end
-		return
-	end
+	  end },
 
-	if option == "add" then
+	{ "add", run = function(value)
 		local ok, message = ns.Upkeep.Add(value)
 		ns.Print(ok and (message .. " is on the row.") or message)
 		ns.BuffNag.Apply()
-		return
-	end
+	  end },
 
-	if option == "remove" then
+	{ "remove", run = function(value)
 		if ns.Upkeep.Remove(value) then
 			ns.Print("off the row.")
 			ns.BuffNag.Apply()
 		else
 			ns.Print("nothing on the row has that id. buffs list shows them.")
 		end
-		return
-	end
+	  end },
 
-	-- One switch per watched entry, driven off the list itself so the four words
-	-- and the four tick boxes on the panel cannot drift apart. Last of the named
-	-- words and ahead of the bare on|off, because an unknown word has to reach
-	-- the toggle the way it always did.
-	local entry = ns.Upkeep.ByWord(option)
-	if entry then
-		ns.Upkeep.SetWatched(entry.key, ns.Command.Toggle(value))
-		ns.BuffNag.Apply()
-		ns.Print(entry.fixed .. (ns.Upkeep.Watched(entry.key)
-			and " is watched again on this character."
-			or " is switched off on this character."))
-		return
-	end
+	otherwise = function(option, value)
+		-- One switch per watched entry, driven off the list itself so the four
+		-- words and the four tick boxes on the panel cannot drift apart.
+		local entry = ns.Upkeep.ByWord(option)
+		if entry then
+			ns.Upkeep.SetWatched(entry.key, ns.Command.Toggle(value))
+			ns.BuffNag.Apply()
+			ns.Print(entry.fixed .. (ns.Upkeep.Watched(entry.key)
+				and " is watched again on this character."
+				or " is switched off on this character."))
+			return
+		end
 
-	-- A word another class puts on the row, said as such. Without this it would
-	-- fall through to the toggle below, switch the whole nag off and report that
-	-- it had done something else entirely.
-	local elsewhere = ns.Upkeep.Elsewhere(option)
-	if elsewhere then
-		ns.Print(option .. " is on the row for a " .. elsewhere .. " and nowhere"
-			.. " else, so there is nothing here to switch off.")
-		return
-	end
+		-- A word another class puts on the row, said as such. Without this it
+		-- would fall through to the toggle below, switch the whole nag off and
+		-- report that it had done something else entirely.
+		local elsewhere = ns.Upkeep.Elsewhere(option)
+		if elsewhere then
+			ns.Print(option .. " is on the row for a " .. elsewhere .. " and nowhere"
+				.. " else, so there is nothing here to switch off.")
+			return
+		end
 
-	SetBuffs(ns.Command.Toggle(option))
-	ns.Print("buff nag " .. (ns.db.buffs and "on" or "off") .. ".")
-end
+		SetBuffs(ns.Command.Toggle(option))
+		ns.Print("buff nag " .. (ns.db.buffs and "on" or "off") .. ".")
+	end,
+})
 
 -- One row of the list you keep: the spell's own icon, its name, and the button
 -- that takes it off. Built once at login at the cap and shown only while the

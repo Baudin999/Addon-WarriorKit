@@ -480,6 +480,59 @@ it. `BuildWords` also runs at `PLAYER_LOGIN` rather than on the first slash
 command, so all three assertions really are load-time rather than waiting for
 someone to type something.
 
+## The word table
+
+`words` takes `function(arg, raw)`, and for a part with one word that does one
+thing that is what it gets. A part with a dozen words wrote a chain of ifs, and
+a chain of ifs over settings is the same four steps repeated: parse the value,
+write `ns.db.<key>`, call the module's `Apply`, print a sentence.
+`ns.Command.Word` walks a table of those instead and hands back the handler.
+
+    local SwingWord = ns.Command.Word({
+        name = "swing",
+        apply = function() Gauges.Apply() end,
+        show = function()
+            return "swing timer " .. Gauges.Describe() .. "."
+        end,
+
+        { "width", number = { 80, 400 }, key = "swingWidth",
+          say = function(width)
+            return ("the swing bars are %d pixels wide."):format(width)
+          end },
+
+        ns.Command.Zoom("swingZoom", "the swing bars draw at %dx."),
+
+        otherwise = { toggle = true, key = "swing",
+          say = function(on)
+            return "swing timer " .. (on and "on" or "off") .. "."
+          end },
+    })
+
+An entry names the word first and then one of four kinds. `number` and `step`
+take the range, `toggle` reads "off" as off, and `choice` takes the words it
+will accept and refuses anything else by naming the set. The range may be a
+function returning it, which is how a word whose ends the owning file computes
+avoids carrying a second copy of them: `skin aura` asks
+`FrameAuras.SizeRange()` at the command.
+
+`say` receives what was written and returns the sentence, or up to three of
+them. `key` is where it goes, `set` is for the write that is not a plain
+`ns.db[key]`, and `apply` overrides the table's own, with `apply = false` for a
+word that redraws nothing. The refusal message reads `name .. " " .. word`, so
+`swing width` names itself the way it was typed.
+
+A word that is not a setting carries `run` and stays a function. `buffs add`
+takes a spell id, `cast reset` moves a frame, `bars debuff` dispatches again:
+none of them is four steps and none of them gains anything from pretending.
+`otherwise` is the bare on|off every one of these ends in, or a function where
+the part has more lists to look an unknown word up in first, which is what the
+cooldown row and the buff nag do with a word their class put on the row.
+
+The gate this replaced was a real one. Two functions sat on the allow-list in
+`scripts/shape.lua` as "a slash dispatcher, one branch per word", and three more
+had been split in half by their own comment's admission that the branch count
+was the only reason. That kind is gone from the list now.
+
 ## Conventions
 
 Every file starts `local ADDON, ns = ...` and hangs its module table off `ns`.
@@ -774,6 +827,11 @@ goes through `Feature.lua` or through the shared surface below:
     ns.DefaultFor(key)           the registered default for a setting, for reset
     ns.Command.Toggle(arg)       "off" is off, anything else is on
     ns.Command.Number(v, lo, hi, what)  parse and range-check, or complain and return nil
+    ns.Command.Step(v, lo, hi, step, what)  the same on a coarser ruler
+    ns.Command.Word(table)       a word table, walked; returns the handler that
+                                 `words` registers
+    ns.Command.Zoom(key, said)   the zoom entry, whose range is ns.UI's and whose
+                                 only argument is the sentence
     ns.Slot.State(slot)          what one action slot is doing: a status out of
                                  UI/Ability.lua's ten, plus the cooldown times
     ns.Slot.Texture / Count / CanRead / Describe

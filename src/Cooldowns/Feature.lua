@@ -71,33 +71,27 @@ local function ListWord(option, value)
 	return false
 end
 
-local function CooldownWord(arg)
-	local option, value = arg:match("^(%S*)%s*(.-)$")
+-- The words the row answers to, and the two lists an unknown word is looked up
+-- in before it is read as the on|off value. The lookups are in `otherwise`
+-- rather than as entries because neither is a word this file knows: one is
+-- whatever your class put on the row, and the other is whatever somebody
+-- else's class did.
+local CooldownWord = ns.Command.Word({
+	name = "cooldown",
+	apply = function() ns.CooldownRow.Apply() end,
+	show = function()
+		return "cooldown row " .. ns.Cooldowns.Describe() .. "."
+	end,
 
-	if option == "" or option == "show" then
-		ns.Print("cooldown row " .. ns.Cooldowns.Describe() .. ".")
-		return
-	end
+	{ "idle", toggle = true, key = "cooldownIdle",
+	  say = function(idle)
+		return idle and "the row stays up out of combat."
+			or "out of combat the row is up only while something is recovering."
+	  end },
 
-	if option == "idle" then
-		ns.db.cooldownIdle = ns.Command.Toggle(value)
-		ns.CooldownRow.Apply()
-		ns.Print(ns.db.cooldownIdle and "the row stays up out of combat."
-			or "out of combat the row is up only while something is recovering.")
-		return
-	end
+	ns.Command.Zoom("cooldownZoom", "the cooldown row draws at %dx."),
 
-	if option == "zoom" then
-		local zoom = ns.Command.Number(value, ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH, "cooldown zoom")
-		if zoom then
-			ns.db.cooldownZoom = zoom
-			ns.CooldownRow.Apply()
-			ns.Print(("the cooldown row draws at %dx."):format(zoom))
-		end
-		return
-	end
-
-	if option == "list" then
+	{ "list", run = function()
 		local list = ns.Cooldowns.All()
 		if #list == 0 then
 			ns.Print("nothing is listed for a " .. ns.Class.Spec.Says()
@@ -116,40 +110,39 @@ local function CooldownWord(arg)
 				or (entry.slot and "that slot holds nothing you can press"
 					or "not learned on this character")))
 		end
-		return
-	end
+	  end },
 
-	if ListWord(option, value) then
-		return
-	end
+	otherwise = function(option, value)
+		if ListWord(option, value) then
+			return
+		end
 
-	-- One switch per entry, driven off the list itself so the words and the tick
-	-- boxes cannot drift apart. Last of the named words and ahead of the bare
-	-- on|off, because an unknown word has to reach the toggle the way it always
-	-- did.
-	local entry = ns.Cooldowns.ByWord(option)
-	if entry then
-		ns.Cooldowns.SetWatched(entry.key, ns.Command.Toggle(value))
-		ns.CooldownRow.Apply()
-		ns.Print((entry.name or entry.key) .. (ns.Cooldowns.Watched(entry.key)
-			and " is watched again on this character."
-			or " is switched off on this character."))
-		return
-	end
+		-- One switch per entry, driven off the list itself so the words and the
+		-- tick boxes cannot drift apart.
+		local entry = ns.Cooldowns.ByWord(option)
+		if entry then
+			ns.Cooldowns.SetWatched(entry.key, ns.Command.Toggle(value))
+			ns.CooldownRow.Apply()
+			ns.Print((entry.name or entry.key) .. (ns.Cooldowns.Watched(entry.key)
+				and " is watched again on this character."
+				or " is switched off on this character."))
+			return
+		end
 
-	-- A word another class puts on the row, said as such. Without this it would
-	-- fall through to the toggle below, switch the whole row off and report that
-	-- it had done something else entirely.
-	local elsewhere = ns.Cooldowns.Elsewhere(option)
-	if elsewhere then
-		ns.Print(option .. " is on the row for a " .. elsewhere .. " and nowhere"
-			.. " else, so there is nothing here to switch off.")
-		return
-	end
+		-- A word another class puts on the row, said as such. Without this it
+		-- would fall through to the toggle below, switch the whole row off and
+		-- report that it had done something else entirely.
+		local elsewhere = ns.Cooldowns.Elsewhere(option)
+		if elsewhere then
+			ns.Print(option .. " is on the row for a " .. elsewhere .. " and nowhere"
+				.. " else, so there is nothing here to switch off.")
+			return
+		end
 
-	SetRow(ns.Command.Toggle(option))
-	ns.Print("cooldown row " .. (ns.db.cooldowns and "on" or "off") .. ".")
-end
+		SetRow(ns.Command.Toggle(option))
+		ns.Print("cooldown row " .. (ns.db.cooldowns and "on" or "off") .. ".")
+	end,
+})
 
 ns.Register({
 	name = "cooldowns",

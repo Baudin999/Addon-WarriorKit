@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+### The slash words come off a table
+
+`Command.Number` parsed a value and stopped there. Its callers then wrote the
+same four steps by hand: write `ns.db.<key>`, call the module's `Apply`,
+`ns.Print` a sentence, `return`. Three of them were the same zoom handler with a
+different key, a different apply and one noun changed.
+
+`ns.Command.Word` takes a table and returns the handler. An entry names its
+word, where the setting lives, one of four kinds, and what to say:
+
+    { "width", number = { 80, 400 }, key = "swingWidth",
+      say = function(width)
+        return ("the swing bars are %d pixels wide."):format(width)
+      end },
+
+The four kinds are `number`, `step`, `toggle` and `choice`. A range the owning
+file already computes is written as a function returning it, so `skin aura` asks
+`FrameAuras.SizeRange()` at the command rather than carrying a copy of both
+ends. A word that is not a setting carries `run` instead and stays a function,
+which is what `buffs add`, `cast reset` and `bars debuff` are.
+
+Eleven dispatchers moved: the enemy bars, the frame skin, your cast bar, the
+party and the raid, the swing timer, the cooldown row, the buff nag, the
+experience rails, the meters, the charge button and the two feeds. Two of them
+came off the allow-list in `scripts/shape.lua` with the change, because
+`SkinWord` at 119 lines and 37 branches and `BarsWord` at 101 and 38 stopped
+being functions at all. That retires the whole "slash dispatcher, one branch per
+word" kind from that list, which is what the list is for.
+
+Three splits that existed only to duck a ceiling went with them. `PlateWord`
+said it was separate because `BarsWord` was "a dispatcher already near the
+branch gate". `QuestBadgeSaid` said a two-way message inside `BarsWord` "costs
+two more". `Chrome` in `Feeds/Feature.lua` said outright that its only reason
+was `Shared` measuring 102 lines and 33 branches with those words in it. A table
+has no branch count to split on, so all three are one table now.
+
+`harness/sections/60-slash-words.lua` drives one word of each kind and reads the
+setting back. The assertion worth having is the refusal: `swing width 9000`
+prints the range and leaves `swingWidth` where it was. A dispatcher that prints
+the range and writes the number anyway looks correct from the outside, and that
+is the failure a hundred hand-written branches were each free to have on their
+own.
+
 ### A ceiling only moves down
 
 Every threshold in `scripts/shape.lua` and every one in `scripts/check.sh` is

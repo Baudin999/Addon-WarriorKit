@@ -87,209 +87,219 @@ local function Apply(entry)
 	entry.stream:Apply()
 end
 
+-- On screen or hidden, which is not the same switch as collecting: a hidden
+-- feed still records, and the sentence says so both ways round.
+local function Shown(entry, on)
+	ns.db[entry.prefix .. "Shown"] = on
+	entry.stream:Show()
+	ns.Print(("the %s feed is %s. It %s collecting."):format(entry.title:lower(),
+		on and "on screen" or "hidden",
+		ns.db[entry.prefix] and "is still" or "is not"))
+end
+
+-- The loot feed's chips redrawn, which is what every word about what gets a row
+-- has to do and none of them has to apply.
+local function Chipped()
+	STREAMS.loot.stream:Feed():Chipped()
+end
+
 -- What a feed is dressed in: how large the picture on a row is, whether there
--- is a word over the column, a line round the frame, a strip of chips.
---
--- Split out of Shared rather than written in it, and the reason is worth
--- stating because it is the only reason: Shared was a hundred and two lines and
--- thirty three branches with these in it, and scripts/shape.lua puts the
--- ceilings at a hundred and thirty. The four words below are one subject and
--- the seven above are the other, which is where a function of eleven if
--- statements was always going to come apart.
-local function Chrome(entry, option, value)
-	local db, prefix = ns.db, entry.prefix
-
-	if option == "icon" then
-		local icon = ns.Command.Number(value, ns.UI.FEED_ICON_LOW, ns.UI.FEED_ICON_HIGH,
-			entry.title .. " icon")
-		if icon then
-			db[prefix .. "Icon"] = icon
-			Apply(entry)
-			local drawn, sharp = ns.UI.FeedIcons(icon, db[prefix .. "Zoom"])
-			ns.Print(("the %s feed draws a %d pixel icon on a %d pixel row%s."):format(
-				entry.title:lower(), drawn, drawn + 2,
-				sharp and "" or ", which the client has to resample"))
-		end
-		return true
-	end
-
-	if option == "header" or option == "edge" or option == "filters" then
-		local key = prefix .. option:sub(1, 1):upper() .. option:sub(2)
-		db[key] = ns.Command.Toggle(value)
-		Apply(entry)
-		ns.Print(("the %s feed %s %s."):format(entry.title:lower(),
-			db[key] and "has" or "has no",
-			(option == "header") and "a word over it"
-				or (option == "edge") and "a line round it"
-				or "filter chips, and draws everything it holds"))
-		return true
-	end
-
-	return false
+-- is a word over the column, a line round the frame, a strip of chips. The
+-- three switches are one entry each off the same line, because the key, the
+-- word and the clause that says what it did are the only things that differ.
+local function ChromeEntry(entry, word, said)
+	local key = entry.prefix .. word:sub(1, 1):upper() .. word:sub(2)
+	return { word, toggle = true, key = key,
+		say = function(on)
+			return ("the %s feed %s %s."):format(entry.title:lower(),
+				on and "has" or "has no", said)
+		end }
 end
 
--- The options every stream answers to. Returns true when it dealt with the
--- word, so the caller can fall through to the ones that are specific to it.
-local function Shared(entry, option, value)
-	local db, prefix = ns.db, entry.prefix
+-- The half of a feed that is the same for both, as a table rather than as a
+-- chain of ifs. It was two functions until it was one table: Shared had been
+-- split from Chrome for no reason but its own branch count, and a table has no
+-- branch count to split on.
+local function SharedWords(entry)
+	local prefix, lower = entry.prefix, entry.title:lower()
 
-	if option == "rows" then
-		local rows = ns.Command.Number(value, LOW_ROWS, HIGH_ROWS, entry.title .. " rows")
-		if rows then
-			db[prefix .. "Rows"] = rows
-			Apply(entry)
-			ns.Print(("the %s feed shows %d rows."):format(entry.title:lower(), rows))
-		end
-		return true
-	end
+	return {
+		{ "rows", number = { LOW_ROWS, HIGH_ROWS }, key = prefix .. "Rows",
+		  say = function(rows)
+			return ("the %s feed shows %d rows."):format(lower, rows)
+		  end },
 
-	if option == "width" then
-		local width = ns.Command.Number(value, LOW_WIDTH, HIGH_WIDTH, entry.title .. " width")
-		if width then
-			db[prefix .. "Width"] = width
-			Apply(entry)
-			ns.Print(("the %s feed is %d pixels wide."):format(entry.title:lower(), width))
-		end
-		return true
-	end
+		{ "width", number = { LOW_WIDTH, HIGH_WIDTH }, key = prefix .. "Width",
+		  say = function(width)
+			return ("the %s feed is %d pixels wide."):format(lower, width)
+		  end },
 
-	if Chrome(entry, option, value) then
-		return true
-	end
+		{ "icon", key = prefix .. "Icon",
+		  number = function()
+			return ns.UI.FEED_ICON_LOW, ns.UI.FEED_ICON_HIGH
+		  end,
+		  say = function(icon)
+			local drawn, sharp = ns.UI.FeedIcons(icon, ns.db[prefix .. "Zoom"])
+			return ("the %s feed draws a %d pixel icon on a %d pixel row%s."):format(
+				lower, drawn, drawn + 2,
+				sharp and "" or ", which the client has to resample")
+		  end },
 
-	if option == "zoom" then
-		local zoom = ns.Command.Number(value, ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH, entry.title .. " zoom")
-		if zoom then
-			db[prefix .. "Zoom"] = zoom
-			Apply(entry)
-			ns.Print(("the %s feed at %dx."):format(entry.title:lower(), zoom))
-		end
-		return true
-	end
+		ChromeEntry(entry, "header", "a word over it"),
+		ChromeEntry(entry, "edge", "a line round it"),
+		ChromeEntry(entry, "filters",
+			"filter chips, and draws everything it holds"),
 
-	if option == "alpha" then
-		local alpha = ns.Command.Step(value, ns.UI.ALPHA_LOW, ns.UI.ALPHA_HIGH, ns.UI.ALPHA_STEP,
-			entry.title .. " background")
-		if alpha then
-			db[prefix .. "Alpha"] = alpha
-			Apply(entry)
-			ns.Print(("the %s feed background at %d%%."):format(entry.title:lower(), alpha))
-		end
-		return true
-	end
+		{ "zoom", key = prefix .. "Zoom",
+		  number = function() return ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH end,
+		  say = function(zoom)
+			return ("the %s feed at %dx."):format(lower, zoom)
+		  end },
 
-	if option == "show" or option == "hide" then
-		db[prefix .. "Shown"] = (option == "show")
-		entry.stream:Show()
-		ns.Print(("the %s feed is %s. It %s collecting."):format(entry.title:lower(),
-			(option == "show") and "on screen" or "hidden",
-			db[prefix] and "is still" or "is not"))
-		return true
-	end
+		{ "alpha", key = prefix .. "Alpha", what = entry.title .. " background",
+		  step = function()
+			return ns.UI.ALPHA_LOW, ns.UI.ALPHA_HIGH, ns.UI.ALPHA_STEP
+		  end,
+		  say = function(alpha)
+			return ("the %s feed background at %d%%."):format(lower, alpha)
+		  end },
 
-	if option == "mouse" then
-		db[prefix .. "Mouse"] = ns.Command.Toggle(value)
-		Apply(entry)
-		ns.Print(("the %s feed %s the mouse."):format(entry.title:lower(),
-			db[prefix .. "Mouse"] and "takes" or "ignores"))
-		return true
-	end
+		-- Not a switch taking a value: `show` puts a hidden feed back on the
+		-- screen and `hide` takes it off, which is two words because that is
+		-- what the help says and what a macro says.
+		{ "show", run = function() Shown(entry, true) end },
+		{ "hide", run = function() Shown(entry, false) end },
 
-	if option == "clear" then
-		entry.stream:Feed():Clear()
-		ns.Print(("the %s feed is empty."):format(entry.title:lower()))
-		return true
-	end
+		{ "mouse", toggle = true, key = prefix .. "Mouse",
+		  say = function(on)
+			return ("the %s feed %s the mouse."):format(lower,
+				on and "takes" or "ignores")
+		  end },
 
-	if option == "reset" then
-		entry.stream:Reset(ns.DefaultCopy(entry.prefix .. "Point"))
-		ns.Print(("the %s feed is back where it started."):format(entry.title:lower()))
-		return true
-	end
+		{ "clear", run = function()
+			entry.stream:Feed():Clear()
+			ns.Print(("the %s feed is empty."):format(lower))
+		  end },
 
-	return false
+		{ "reset", run = function()
+			entry.stream:Reset(ns.DefaultCopy(prefix .. "Point"))
+			ns.Print(("the %s feed is back where it started."):format(lower))
+		  end },
+	}
 end
 
-local function LootOption(_, option, value)
-	if option == "group" then
-		ns.db.lootFeedGroup = ns.Command.Toggle(value)
-		ns.Print("the loot feed " .. (ns.db.lootFeedGroup
-			and "shows what the group picks up too." or "shows your own drops only."))
-		return true
-	end
+-- The words only the loot feed answers to: who it counts, and which of the six
+-- kinds of row it draws. The five quality chips are one entry each off the same
+-- list the chips themselves are drawn from.
+local function LootWords()
+	local words = {
+		{ "group", toggle = true, key = "lootFeedGroup", apply = false,
+		  say = function(on)
+			return "the loot feed " .. (on
+				and "shows what the group picks up too."
+				or "shows your own drops only.")
+		  end },
+
+		{ "quest", toggle = true, key = "lootFeedQuest", apply = Chipped,
+		  say = function(on)
+			return "quest items are " .. (on
+				and "drawn whatever their own quality chip says."
+				or "graded by their own quality like anything else.")
+		  end },
+
+		{ "money", toggle = true, key = "lootFeedMoney", apply = Chipped,
+		  say = function(on)
+			return "coin " .. (on
+				and "gets a row in the column."
+				or "stays out of the column and in the purse under it.")
+		  end },
+
+		{ "purse", toggle = true, key = "lootFeedPurse",
+		  apply = function() STREAMS.loot.stream:Apply() end,
+		  say = function(on)
+			return "the purse " .. (on
+				and "sits along the bottom of the feed."
+				or "is off and the feed has the height back.")
+		  end },
+	}
 
 	for level = LOW_QUALITY, HIGH_QUALITY do
-		if option == FILTERS[level + 1] then
+		words[#words + 1] = { FILTERS[level + 1], run = function(value)
 			ns.LootFeed.Light(level, ns.Command.Toggle(value))
-			STREAMS.loot.stream:Feed():Chipped()
+			Chipped()
 			ns.Print(("%s items are %s the column. The feed records them either"
 				.. " way."):format(QualityWord(level),
 				ns.LootFeed.Lit(level) and "on" or "off"))
-			return true
+		  end }
+	end
+
+	return words
+end
+
+-- The words only the combat feed answers to. None of them applies anything: the
+-- frame has not moved and nothing on it has changed size, and the next event
+-- through is filtered by what these wrote.
+local function CombatWords()
+	local function Direction(word, key, whose)
+		return { word, toggle = true, key = key, apply = false,
+			say = function(on)
+				return ("%s is %s."):format(whose,
+					on and "in the feed" or "out of the feed")
+			end }
+	end
+
+	return {
+		Direction("out", "combatFeedOut", "what you do"),
+		Direction("in", "combatFeedIn", "what hits you"),
+
+		{ "misses", toggle = true, key = "combatFeedMisses", apply = false,
+		  say = function(on)
+			return "misses and dodges " .. (on and "get a row." or "are ignored.")
+		  end },
+
+		{ "floor", number = { LOW_FLOOR, HIGH_FLOOR }, key = "combatFeedFloor",
+		  what = "combat floor", apply = false,
+		  say = function(floor)
+			return floor > 0 and ("nothing under %d gets a row."):format(floor)
+				or "every hit gets a row."
+		  end },
+	}
+end
+
+local EXTRA = { loot = LootWords, combat = CombatWords }
+
+-- One table per stream, built once: the shared words, then that stream's own,
+-- then the bare on|off. Built here rather than at each command, because the
+-- words a feed answers to cannot change after the streams exist.
+local function StreamWords(which, entry)
+	local spec = {
+		name = entry.title,
+		apply = function() Apply(entry) end,
+
+		-- Anything left is the on/off switch, which is what a bare word means
+		-- everywhere else in this addon. On this feature it is the collecting
+		-- switch rather than the visibility one: off records nothing, and
+		-- `hide` above is the word for taking a working feed off the screen.
+		otherwise = { toggle = true, key = entry.prefix,
+		  say = function(on)
+			return ("the %s feed is %s."):format(which,
+				on and "collecting" or "off, and recording nothing")
+		  end },
+	}
+
+	for _, list in ipairs({ SharedWords(entry), EXTRA[which]() }) do
+		for _, word in ipairs(list) do
+			spec[#spec + 1] = word
 		end
 	end
 
-	if option == "quest" then
-		ns.db.lootFeedQuest = ns.Command.Toggle(value)
-		STREAMS.loot.stream:Feed():Chipped()
-		ns.Print("quest items are " .. (ns.db.lootFeedQuest
-			and "drawn whatever their own quality chip says."
-			or "graded by their own quality like anything else."))
-		return true
-	end
-
-	if option == "money" then
-		ns.db.lootFeedMoney = ns.Command.Toggle(value)
-		STREAMS.loot.stream:Feed():Chipped()
-		ns.Print("coin " .. (ns.db.lootFeedMoney
-			and "gets a row in the column."
-			or "stays out of the column and in the purse under it."))
-		return true
-	end
-
-	if option == "purse" then
-		ns.db.lootFeedPurse = ns.Command.Toggle(value)
-		STREAMS.loot.stream:Apply()
-		ns.Print("the purse " .. (ns.db.lootFeedPurse
-			and "sits along the bottom of the feed."
-			or "is off and the feed has the height back."))
-		return true
-	end
-
-	return false
+	return ns.Command.Word(spec)
 end
 
-local function CombatOption(_, option, value)
-	if option == "out" or option == "in" then
-		local key = (option == "out") and "combatFeedOut" or "combatFeedIn"
-		ns.db[key] = ns.Command.Toggle(value)
-		ns.Print(("%s is %s."):format(
-			(option == "out") and "what you do" or "what hits you",
-			ns.db[key] and "in the feed" or "out of the feed"))
-		return true
-	end
-
-	if option == "misses" then
-		ns.db.combatFeedMisses = ns.Command.Toggle(value)
-		ns.Print("misses and dodges " .. (ns.db.combatFeedMisses and "get a row." or "are ignored."))
-		return true
-	end
-
-	if option == "floor" then
-		local floor = ns.Command.Number(value, LOW_FLOOR, HIGH_FLOOR, "combat floor")
-		if floor then
-			ns.db.combatFeedFloor = floor
-			ns.Print((floor > 0)
-				and ("nothing under %d gets a row."):format(floor)
-				or "every hit gets a row.")
-		end
-		return true
-	end
-
-	return false
+local WORDS = {}
+for which, entry in pairs(STREAMS) do
+	WORDS[which] = StreamWords(which, entry)
 end
-
-local EXTRA = { loot = LootOption, combat = CombatOption }
 
 local function FeedWord(arg)
 	local which, rest = arg:match("^(%S*)%s*(.-)$")
@@ -305,31 +315,15 @@ local function FeedWord(arg)
 		return
 	end
 
-	local option, value = rest:match("^(%S*)%s*(.-)$")
-
 	-- A bare `/wk feed combat` and nothing else. `show` is not a synonym for it
 	-- any more: it is the word that puts a hidden feed back on the screen, and
 	-- one word cannot be both a question and an instruction.
-	if option == "" then
+	if rest:match("^(%S*)") == "" then
 		ns.Print(("the %s feed is %s."):format(which, entry.describe()))
 		return
 	end
 
-	if Shared(entry, option, value) then
-		return
-	end
-	if EXTRA[which](entry, option, value) then
-		return
-	end
-
-	-- Anything left is the on/off switch, which is what a bare word means
-	-- everywhere else in this addon. On this feature it is the collecting
-	-- switch rather than the visibility one: off records nothing, and `hide`
-	-- above is the word for taking a working feed off the screen.
-	ns.db[entry.prefix] = ns.Command.Toggle(option)
-	Apply(entry)
-	ns.Print(("the %s feed is %s."):format(which,
-		ns.db[entry.prefix] and "collecting" or "off, and recording nothing"))
+	WORDS[which](rest)
 end
 
 --------------------------------------------------------------------------

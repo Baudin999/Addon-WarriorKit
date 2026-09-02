@@ -9,78 +9,61 @@ local Rails = ns.ProgressRails
 
 --------------------------------------------------------------------------
 
--- One of the two numbers a `xp` word is setting, and what it is allowed to be.
--- Read off the file that owns the rails rather than typed here a second time.
-local function SizeWord(option, value)
-	local wideLow, wideHigh, tallLow, tallHigh = Rails.SizeRange()
-	local low, high = wideLow, wideHigh
-	if option == "height" then
-		low, high = tallLow, tallHigh
-	end
-	local size = ns.Command.Number(value, low, high, "xp " .. option)
-	if not size then
-		return
-	end
-	ns.db[option == "width" and "progressWidth" or "progressHeight"] = size
-	Rails.Apply()
-	ns.Print(("the rails are %d pixels %s."):format(size,
-		option == "width" and "wide" or "tall"))
-end
+-- The words the rails answer to. Both sizes read their range off the file that
+-- owns the rails rather than having it typed here a second time.
+local XPWord = ns.Command.Word({
+	name = "xp",
+	apply = function() Rails.Apply() end,
+	show = function()
+		return "the experience rails are " .. Rails.Describe() .. ".",
+			"  " .. Progress.Describe() .. "."
+	end,
 
-local function XPWord(arg)
-	local option, value = arg:match("^(%S*)%s*(.-)$")
+	{ "width", key = "progressWidth",
+	  number = function()
+		local low, high = Rails.SizeRange()
+		return low, high
+	  end,
+	  say = function(size)
+		return ("the rails are %d pixels wide."):format(size)
+	  end },
 
-	if option == "" or option == "show" then
-		ns.Print("the experience rails are " .. Rails.Describe() .. ".")
-		ns.Print("  " .. Progress.Describe() .. ".")
-		return
-	end
+	{ "height", key = "progressHeight",
+	  number = function()
+		local _, _, low, high = Rails.SizeRange()
+		return low, high
+	  end,
+	  say = function(size)
+		return ("the rails are %d pixels tall."):format(size)
+	  end },
 
-	if option == "width" or option == "height" then
-		SizeWord(option, value)
-		return
-	end
+	ns.Command.Zoom("progressZoom", "the rails draw at %dx."),
 
-	if option == "zoom" then
-		local zoom = ns.Command.Number(value, ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH, "xp zoom")
-		if zoom then
-			ns.db.progressZoom = zoom
-			Rails.Apply()
-			ns.Print(("the rails draw at %dx."):format(zoom))
-		end
-		return
-	end
+	{ "faction", toggle = true, key = "progressFaction",
+	  say = function(on)
+		return "the reputation rail " .. (on and "on" or "off")
+			.. ": " .. Rails.Describe() .. "."
+	  end },
 
-	if option == "faction" then
-		ns.db.progressFaction = ns.Command.Toggle(value)
-		Rails.Apply()
-		ns.Print("the reputation rail " .. (ns.db.progressFaction and "on" or "off")
-			.. ": " .. Rails.Describe() .. ".")
-		return
-	end
+	{ "bubbles", toggle = true, key = "progressBubbles",
+	  say = function(on)
+		return "the twenty segment marks " .. (on and "on" or "off") .. "."
+	  end },
 
-	if option == "bubbles" then
-		ns.db.progressBubbles = ns.Command.Toggle(value)
-		Rails.Apply()
-		ns.Print("the twenty segment marks " .. (ns.db.progressBubbles and "on" or "off") .. ".")
-		return
-	end
-
-	if option == "reset" then
+	{ "reset", run = function()
 		Rails.Reset()
 		ns.Print("the rails back along the bottom of the screen.")
-		return
-	end
+	  end },
 
-	ns.db.progress = ns.Command.Toggle(option)
-	Rails.Apply()
-	ns.Print("the experience and reputation rails "
-		.. (ns.db.progress and "on" or "off") .. ": " .. Rails.Describe() .. ".")
-	if not ns.db.progress and ns.db.hideBlizzXP then
-		ns.Print("Blizzard's own are hidden by `/wk hide xp`, so nothing is drawing"
-			.. " your experience at all.")
-	end
-end
+	otherwise = { toggle = true, key = "progress",
+	  say = function(on)
+		return "the experience and reputation rails " .. (on and "on" or "off")
+				.. ": " .. Rails.Describe() .. ".",
+			(not on and ns.db.hideBlizzXP) and "Blizzard's own are hidden by"
+				.. " `/wk hide xp`, so nothing is drawing your experience at all."
+				or nil
+	  end },
+})
 
 --------------------------------------------------------------------------
 

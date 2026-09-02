@@ -13,48 +13,30 @@ local LOW_HEIGHT, HIGH_HEIGHT = 4, 32
 
 --------------------------------------------------------------------------
 
-local function SwingWord(arg)
-	local option, value = arg:match("^(%S*)%s*(.-)$")
+local SwingWord = ns.Command.Word({
+	name = "swing",
+	apply = function() Gauges.Apply() end,
+	show = function()
+		return "swing timer " .. Gauges.Describe() .. "."
+	end,
 
-	if option == "" or option == "show" then
-		ns.Print("swing timer " .. Gauges.Describe() .. ".")
-		return
-	end
+	{ "width", number = { LOW_WIDTH, HIGH_WIDTH }, key = "swingWidth",
+	  say = function(width)
+		return ("the swing bars are %d pixels wide."):format(width)
+	  end },
 
-	if option == "width" then
-		local width = ns.Command.Number(value, LOW_WIDTH, HIGH_WIDTH, "swing width")
-		if width then
-			ns.db.swingWidth = width
-			Gauges.Apply()
-			ns.Print(("the swing bars are %d pixels wide."):format(width))
-		end
-		return
-	end
+	{ "height", number = { LOW_HEIGHT, HIGH_HEIGHT }, key = "swingHeight",
+	  say = function(height)
+		return ("each swing bar is %d pixels tall."):format(height)
+	  end },
 
-	if option == "height" then
-		local height = ns.Command.Number(value, LOW_HEIGHT, HIGH_HEIGHT, "swing height")
-		if height then
-			ns.db.swingHeight = height
-			Gauges.Apply()
-			ns.Print(("each swing bar is %d pixels tall."):format(height))
-		end
-		return
-	end
+	ns.Command.Zoom("swingZoom", "the swing bars draw at %dx."),
 
-	if option == "zoom" then
-		local zoom = ns.Command.Number(value, ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH, "swing zoom")
-		if zoom then
-			ns.db.swingZoom = zoom
-			Gauges.Apply()
-			ns.Print(("the swing bars draw at %dx."):format(zoom))
-		end
-		return
-	end
-
-	ns.db.swing = ns.Command.Toggle(option)
-	Gauges.Apply()
-	ns.Print("swing timer " .. (ns.db.swing and "on" or "off") .. ".")
-end
+	otherwise = { toggle = true, key = "swing",
+	  say = function(on)
+		return "swing timer " .. (on and "on" or "off") .. "."
+	  end },
+})
 
 --------------------------------------------------------------------------
 

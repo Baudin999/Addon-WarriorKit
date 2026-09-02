@@ -183,3 +183,168 @@ function Command.Step(value, low, high, step, what)
 		:format(what, tostring(low), tostring(high), tostring(step)))
 	return nil
 end
+
+--------------------------------------------------------------------------
+-- A word table, and the runner that walks it.
+--
+-- Thirty-odd branches in this addon were the same four steps: parse the value,
+-- write `ns.db.<key>`, call the module's Apply, print a sentence. Written by
+-- hand they read as a chain of ifs one word long each, and two of them sat on
+-- the shape allow-list as "a slash dispatcher, one branch per word". Written as
+-- a table they are data: the four steps live here once, and what a word decides
+-- for itself is the closure it carries rather than another branch in a hundred
+-- line function.
+--
+-- An entry is `{ "<word>", <kind>, key = "<db key>", say = function(new) end }`
+-- and the kind is one of four:
+--
+--   number = { low, high }        a whole number in range, refused outside it
+--   step   = { low, high, step }  the same on a coarser ruler
+--   toggle = true                 on unless the value is "off"
+--   choice = { "one", "two" }     one of a named set, refused with the set
+--
+-- A range the owning file already computes is written as a function returning
+-- those same numbers, so no range is typed here that is written down there.
+--
+-- Anything none of the four describes carries `run` instead and stays a
+-- function taking the value. That is the escape hatch and it is meant to be
+-- used: a word that adds a spell to a list is not a setting, and dressing it as
+-- one buys nothing.
+--
+-- `say` receives what was written and returns the sentence, or up to three of
+-- them. Returning nothing says nothing.
+--
+-- The table itself carries `name`, which the range message reads with; `apply`,
+-- which every entry that does not name its own uses, and which `apply = false`
+-- on an entry says is not wanted for that word; `show`, what the bare word
+-- prints; `otherwise`, the on|off toggle every one of these dispatchers ends
+-- in; and `finally`, for the one that redraws after each word whichever it was.
+--
+-- `otherwise` is an entry when the unknown word is simply the on|off value, and
+-- a function taking the word and the rest of the line when the part has more
+-- lists to look the word up in first.
+
+local function What(spec, entry)
+	return entry.what or (spec.name .. " " .. entry[1])
+end
+
+local function Range(entry, which)
+	local range = entry[which]
+	if type(range) == "function" then
+		return range()
+	end
+	return range[1], range[2], range[3]
+end
+
+-- "auto, plates or list", so the refusal names the set rather than the word
+-- that was not in it.
+local function Listed(set)
+	if #set == 1 then
+		return set[1]
+	end
+	return table.concat(set, ", ", 1, #set - 1) .. " or " .. set[#set]
+end
+
+local function Chosen(spec, entry, value)
+	for _, word in ipairs(entry.choice) do
+		if value == word then
+			return value
+		end
+	end
+	ns.Print(("%s takes %s."):format(What(spec, entry), Listed(entry.choice)))
+	return nil
+end
+
+local function Said(say, new)
+	if not say then
+		return
+	end
+	local first, second, third = say(new)
+	if first then ns.Print(first) end
+	if second then ns.Print(second) end
+	if third then ns.Print(third) end
+end
+
+local function Parse(spec, entry, value)
+	if entry.toggle then
+		return Command.Toggle(value)
+	end
+	if entry.choice then
+		return Chosen(spec, entry, value)
+	end
+	if entry.step then
+		local low, high, step = Range(entry, "step")
+		return Command.Step(value, low, high, step, What(spec, entry))
+	end
+	local low, high = Range(entry, "number")
+	return Command.Number(value, low, high, What(spec, entry))
+end
+
+-- Nothing is written when the value was refused, which is the half of a
+-- dispatcher that is easy to get wrong by hand: printing the range and setting
+-- the number anyway.
+local function Take(spec, entry, value, rawValue)
+	if entry.run then
+		entry.run(value, rawValue)
+		return
+	end
+
+	local new = Parse(spec, entry, value)
+	if new == nil then
+		return
+	end
+
+	if entry.key then
+		ns.db[entry.key] = new
+	end
+	if entry.set then
+		entry.set(new)
+	end
+
+	local apply = entry.apply
+	if apply == nil then
+		apply = spec.apply
+	end
+	if apply then
+		apply(new)
+	end
+	Said(entry.say, new)
+end
+
+-- The zoom word, which seven parts have and all seven wrote out: the same
+-- range off `ns.UI`, the same refusal message with their own word in front of
+-- it, and one sentence with the number in it. The sentence is what differs, so
+-- the sentence is the argument.
+function Command.Zoom(key, sentence)
+	return { "zoom", key = key,
+		number = function() return ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH end,
+		say = function(zoom) return sentence:format(zoom) end }
+end
+
+function Command.Word(spec)
+	local by = {}
+	for _, entry in ipairs(spec) do
+		assert(by[entry[1]] == nil,
+			("%s claims the word %q twice"):format(spec.name, entry[1]))
+		by[entry[1]] = entry
+	end
+
+	return function(arg, rawArg)
+		local option, value = arg:match("^(%S*)%s*(.-)$")
+		local _, rawValue = (rawArg or arg):match("^(%S*)%s*(.-)$")
+
+		if spec.show and (option == "" or option == "show") then
+			Said(spec.show)
+		elseif by[option] then
+			Take(spec, by[option], value, rawValue)
+		elseif type(spec.otherwise) == "function" then
+			spec.otherwise(option, value, rawValue)
+		elseif spec.otherwise then
+			Take(spec, spec.otherwise, option, option)
+		end
+
+		if spec.finally then
+			spec.finally()
+		end
+	end
+end

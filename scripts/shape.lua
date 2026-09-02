@@ -52,11 +52,16 @@ local BRANCHES = 30
 -- This file cannot catch that one: an entry raised to exactly what the code now
 -- measures is an entry this scan agrees with.
 --
--- The reasons fall into four kinds and it is worth seeing them as kinds: a
--- dispatcher with one branch per word, a layout that places every region of
--- one widget, a tick that writes every region of one widget, and a walk over
--- something the client indexes in two dimensions. Only the first two are
--- shapes anybody would defend, which is what makes this list a work list.
+-- The reasons fall into three kinds and it is worth seeing them as kinds: a
+-- builder that places every region of one widget in one pass, a combat log
+-- dispatch with one branch per event, and a walk over something the client
+-- indexes in two dimensions. Only the first is a shape anybody would defend,
+-- which is what makes this list a work list.
+--
+-- There was a fourth, the slash dispatcher with one branch per word, and it is
+-- gone. Two entries carried it, and both retired when the words became a table
+-- walked by ns.Command.Word rather than a chain of ifs. That is what this list
+-- is for: an entry comes off it because the shape it excused stopped existing.
 local ALLOWED = {
 	{ path = "./UnitFrames/EnemyBars.lua", fn = "LayoutWidget", own = 168,
 	  why = "places every region of one nameplate widget in one pass" },
@@ -66,10 +71,6 @@ local ALLOWED = {
 	  why = "the kit's own body, one closure per control, returned as a table" },
 	{ path = "./UI/Ability.lua", fn = "Ability.New", own = 123,
 	  why = "builds one ability square and every region on it" },
-	{ path = "./UnitFrames/Feature.lua", fn = "SkinWord", own = 119,
-	  branches = 37, why = "a slash dispatcher, one branch per word" },
-	{ path = "./UnitFrames/Feature.lua", fn = "BarsWord", own = 101,
-	  branches = 38, why = "a slash dispatcher, one branch per word" },
 	{ path = "./Breakdown/Breakdown.lua", fn = "Breakdown.OnLog", branches = 38,
 	  why = "combat log dispatch, one branch per event the record counts" },
 	{ path = "./Feeds/Combat.lua", fn = "CombatFeed.OnLog", branches = 33,

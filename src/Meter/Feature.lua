@@ -43,73 +43,57 @@ local function Describe()
 	return line
 end
 
-local function MeterWord(arg)
-	local option, value = arg:match("^(%S*)%s*(.-)$")
-
-	if option == "" or option == "show" then
-		ns.Print("meters " .. Describe() .. ".")
-		return
-	end
-
-	if option == "dps" or option == "hps" then
-		ns.db.meterMode = option
+-- Which of the two numbers a pane is showing is a word each rather than one
+-- word taking a value, because `/wk meters dps` is what anybody types.
+local function ModeEntry(mode)
+	return { mode, run = function()
+		ns.db.meterMode = mode
 		MeterWindow.Update()
-		ns.Print("meters showing " .. option:upper() .. ".")
-		return
-	end
-
-	if option == "threat" then
-		ns.db.meterThreat = ns.Command.Toggle(value)
-		MeterWindow.Apply()
-		ns.Print("threat pane " .. (ns.db.meterThreat and "on" or "off") .. ".")
-		return
-	end
-
-	if option == "rows" then
-		local rows = ns.Command.Number(value, LOW_ROWS, HIGH_ROWS, "meter rows")
-		if rows then
-			ns.db.meterRows = rows
-			MeterWindow.Apply()
-			ns.Print(("meters showing %d rows."):format(rows))
-		end
-		return
-	end
-
-	if option == "width" then
-		local width = ns.Command.Number(value, LOW_WIDTH, HIGH_WIDTH, "meter width")
-		if width then
-			ns.db.meterWidth = width
-			MeterWindow.Apply()
-			ns.Print(("each meter is %d pixels wide."):format(width))
-		end
-		return
-	end
-
-	if option == "alpha" then
-		local alpha = ns.Command.Step(value, ns.UI.ALPHA_LOW, ns.UI.ALPHA_HIGH, ns.UI.ALPHA_STEP,
-			"meter bar opacity")
-		if alpha then
-			ns.db.meterBarAlpha = alpha
-			MeterWindow.Apply()
-			ns.Print(("meter bars at %d%% opacity."):format(alpha))
-		end
-		return
-	end
-
-	if option == "zoom" then
-		local zoom = ns.Command.Number(value, ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH, "meter zoom")
-		if zoom then
-			ns.db.meterZoom = zoom
-			MeterWindow.Apply()
-			ns.Print(("meters at %dx."):format(zoom))
-		end
-		return
-	end
-
-	ns.db.meter = ns.Command.Toggle(option)
-	MeterWindow.Show()
-	ns.Print("meters " .. (ns.db.meter and "on" or "off") .. ".")
+		ns.Print("meters showing " .. mode:upper() .. ".")
+	end }
 end
+
+local MeterWord = ns.Command.Word({
+	name = "meter",
+	apply = function() MeterWindow.Apply() end,
+	show = function()
+		return "meters " .. Describe() .. "."
+	end,
+
+	ModeEntry(MODES[1]),
+	ModeEntry(MODES[2]),
+
+	{ "threat", toggle = true, key = "meterThreat",
+	  say = function(on)
+		return "threat pane " .. (on and "on" or "off") .. "."
+	  end },
+
+	{ "rows", number = { LOW_ROWS, HIGH_ROWS }, key = "meterRows",
+	  say = function(rows)
+		return ("meters showing %d rows."):format(rows)
+	  end },
+
+	{ "width", number = { LOW_WIDTH, HIGH_WIDTH }, key = "meterWidth",
+	  say = function(width)
+		return ("each meter is %d pixels wide."):format(width)
+	  end },
+
+	{ "alpha", key = "meterBarAlpha", what = "meter bar opacity",
+	  step = function()
+		return ns.UI.ALPHA_LOW, ns.UI.ALPHA_HIGH, ns.UI.ALPHA_STEP
+	  end,
+	  say = function(alpha)
+		return ("meter bars at %d%% opacity."):format(alpha)
+	  end },
+
+	ns.Command.Zoom("meterZoom", "meters at %dx."),
+
+	otherwise = { toggle = true, key = "meter",
+	  apply = function() MeterWindow.Show() end,
+	  say = function(on)
+		return "meters " .. (on and "on" or "off") .. "."
+	  end },
+})
 
 --------------------------------------------------------------------------
 

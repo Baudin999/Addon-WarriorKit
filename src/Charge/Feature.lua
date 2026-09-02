@@ -41,26 +41,59 @@ local function SoftWord(sub)
 	end
 end
 
-local function MarkerWord(sub, number)
-	if sub == "size" then
-		local size = ns.Command.Number(number, 16, 96, "charge marker size")
-		if size then
-			ns.db.chargeMarkerSize = size
-			ns.ChargeMarker.ApplyLayout()
-			ns.Print("charge marker size " .. size .. ".")
-		end
-	elseif sub == "offset" then
-		local offset = ns.Command.Number(number, -60, 60, "charge marker offset")
-		if offset then
-			ns.db.chargeMarkerOffset = offset
-			ns.ChargeMarker.ApplyLayout()
-			ns.Print("charge marker offset " .. offset .. ".")
-		end
-	else
-		ns.db.chargeMarker = ns.Command.Toggle(sub)
-		ns.Print("charge marker " .. (ns.db.chargeMarker and "on" or "off") .. ".")
-	end
-end
+local MarkerWord = ns.Command.Word({
+	name = "charge marker",
+	apply = function() ns.ChargeMarker.ApplyLayout() end,
+
+	{ "size", number = { 16, 96 }, key = "chargeMarkerSize",
+	  say = function(size)
+		return "charge marker size " .. size .. "."
+	  end },
+
+	{ "offset", number = { -60, 60 }, key = "chargeMarkerOffset",
+	  say = function(offset)
+		return "charge marker offset " .. offset .. "."
+	  end },
+
+	-- No layout: the marker is drawn or not, and its geometry has not moved.
+	otherwise = { toggle = true, key = "chargeMarker", apply = false,
+	  say = function(on)
+		return "charge marker " .. (on and "on" or "off") .. "."
+	  end },
+})
+
+local ChargeWord = ns.Command.Word({
+	name = "charge",
+	finally = function() ApplyChargeChange() end,
+
+	{ "always", run = function()
+		ns.db.chargeMode = "always"
+		ns.Print("charge icon and marker show at all times.")
+	  end },
+
+	{ "ready", run = function()
+		ns.db.chargeMode = "ready"
+		ns.Print("charge icon and marker show only when usable.")
+	  end },
+
+	-- Off the raw line rather than the lowered one, because a weapon is named
+	-- the way it is engraved and the client matches it that way.
+	{ "weapon", run = function(_, rawValue)
+		local weapon = rawValue or ""
+		ns.db.chargeWeapon = (weapon == "" or weapon:lower() == "none") and "" or weapon
+		ns.Print(ns.db.chargeWeapon == "" and "the charge button no longer swaps weapons."
+			or ("the charge button equips " .. ns.db.chargeWeapon .. " into slot 16."))
+	  end },
+
+	{ "marker", run = function(value) MarkerWord(value) end },
+
+	{ "soft", run = function(value) SoftWord((value:match("^(%S*)"))) end },
+
+	otherwise = { toggle = true, key = "charge",
+	  say = function(on)
+		return "charge icon " .. (on and "on" or "off") .. "."
+	  end },
+})
 
 ns.Register({
 	name = "charge",
@@ -117,25 +150,7 @@ ns.Register({
 			if Refuse() then
 				return
 			end
-			local option, value = arg:match("^(%S*)%s*(.-)$")
-			if option == "always" or option == "ready" then
-				ns.db.chargeMode = option
-				ns.Print("charge icon and marker show "
-					.. (option == "ready" and "only when usable" or "at all times") .. ".")
-			elseif option == "weapon" then
-				local weapon = rawArg:match("^%S*%s*(.-)%s*$") or ""
-				ns.db.chargeWeapon = (weapon == "" or weapon:lower() == "none") and "" or weapon
-				ns.Print(ns.db.chargeWeapon == "" and "the charge button no longer swaps weapons."
-					or ("the charge button equips " .. ns.db.chargeWeapon .. " into slot 16."))
-			elseif option == "marker" then
-				MarkerWord(value:match("^(%S*)%s*(.-)$"))
-			elseif option == "soft" then
-				SoftWord((value:match("^(%S*)")))
-			else
-				ns.db.charge = ns.Command.Toggle(option)
-				ns.Print("charge icon " .. (ns.db.charge and "on" or "off") .. ".")
-			end
-			ApplyChargeChange()
+			ChargeWord(arg, rawArg)
 		end,
 
 		size = function(arg)

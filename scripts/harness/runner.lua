@@ -258,6 +258,11 @@ local SECTIONS = {
 	"57-merchant",
 	"58-spec",
 	"59-chat-history",
+
+	-- Last, and not about a feature. It drives one word of each kind the
+	-- slash runner parses and reads the setting back, which is a question
+	-- about ns.Command.Word rather than about any of the parts above.
+	"60-slash-words",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

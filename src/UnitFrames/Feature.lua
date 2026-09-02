@@ -45,173 +45,172 @@ local function DebuffWord(action, value)
 	end
 end
 
--- The words that are about the plate under the bar rather than about the bar:
--- which buttons it hands back, whether it takes the mouse at all, how the
--- driver spaces two of them and how far out it puts one up. Answers true when
--- it took the word, so BarsWord below stays a dispatcher for what we draw.
+-- What the whole word redraws, which is not one call: a setting that changes
+-- what a bar says needs the widget laid out again as well as rebuilt, and two
+-- of them need neither.
+local function BarsRebuild()
+	ns.EnemyBars.Rebuild()
+end
+
+local function BarsRelayout()
+	ns.EnemyBars.ApplyLayout()
+	ns.EnemyBars.Rebuild()
+end
+
+-- The words the enemy bars answer to.
 --
--- They are together because they are one subject and they read as one: every
--- line in here ends in a Plates call or a sentence about the client's own
--- nameplate driver, and none of them touches the widget.
-local function PlateWord(option, value)
-	if option == "camera" then
-		if value ~= "right" and value ~= "left" and value ~= "both" and value ~= "off" then
-			ns.Print("bars camera takes right, left, both or off.")
-			return true
-		end
-		ns.db.barsCamera = value
-		ns.EnemyBars.Rebuild()
-		if value == "off" then
-			ns.Print("plates keep every button. The camera will not turn over a bar.")
-		else
-			ns.Print(("plates hand the %s button back to the world, so the camera turns over a bar. %s")
+-- The first four are about the plate under the bar rather than about the bar:
+-- which buttons it hands back, whether it takes the mouse at all, how the
+-- driver spaces two of them and how far out it puts one up. They are first and
+-- they are together because they are one subject: every one of them ends in a
+-- Plates call or a sentence about the client's own nameplate driver, and none
+-- of them touches the widget.
+local BarsWord = ns.Command.Word({
+	name = "bars",
+	finally = function() ns.EnemyBars.Update() end,
+
+	{ "camera", choice = { "right", "left", "both", "off" }, key = "barsCamera",
+	  apply = BarsRebuild,
+	  say = function(value)
+		return value == "off"
+			and "plates keep every button. The camera will not turn over a bar."
+			or ("plates hand the %s button back to the world, so the camera turns over a bar. %s")
 				:format(value == "both" and "left and right" or value,
 					value == "right"
 						and "Click targeting and ctrl-click marking still work."
-						or "Click targeting on a plate is gone with it."))
-		end
-		ns.Print("camera pass-through: " .. ns.EnemyBars.CameraState() .. ".")
-	elseif option == "clickthrough" then
-		ns.db.barsClickThrough = ns.Command.Toggle(value)
-		ns.EnemyBars.Rebuild()
-		ns.Print(ns.db.barsClickThrough
+						or "Click targeting on a plate is gone with it."),
+			"camera pass-through: " .. ns.EnemyBars.CameraState() .. "."
+	  end },
+
+	{ "clickthrough", toggle = true, key = "barsClickThrough", apply = BarsRebuild,
+	  say = function(on)
+		return on
 			and "plates pass the mouse through. The camera turns over a bar again, and clicking a plate no longer targets or marks."
-			or "plates take the mouse. Click targeting and ctrl-click marking work, and the camera will not turn over a bar.")
-	elseif option == "stack" then
-		ns.db.barsStack = ns.Command.Toggle(value)
-		ns.Plates.Apply()
-		ns.Print(ns.db.barsStack
+			or "plates take the mouse. Click targeting and ctrl-click marking work, and the camera will not turn over a bar."
+	  end },
+
+	{ "stack", toggle = true, key = "barsStack",
+	  apply = function() ns.Plates.Apply() end,
+	  say = function(on)
+		return on
 			and "asking the client to stack nameplates, so two mobs standing together get two bars that do not cover each other."
-			or "nameplate motion handed back to the client. A plate is still sized to the bar on it, because that is what a click on the bar lands on.")
-		ns.Print("plates: " .. ns.Plates.Describe() .. ".")
-	elseif option == "distance" then
+			or "nameplate motion handed back to the client. A plate is still sized to the bar on it, because that is what a click on the bar lands on.",
+			"plates: " .. ns.Plates.Describe() .. "."
+	  end },
+
+	-- Not a plain number, because `off` is a fifth answer that means no limit
+	-- rather than a distance of nothing.
+	{ "distance", run = function(value)
 		local low, high = ns.Plates.DistanceRange()
-		local yards = value == "off" and 0 or ns.Command.Number(value, low, high, "bars distance")
+		local yards = value == "off" and 0
+			or ns.Command.Number(value, low, high, "bars distance")
 		if yards then
 			ns.db.barsDistance = yards
 			ns.Plates.Apply()
 			ns.Print(ns.Plates.DescribeDistance() .. ".")
 		end
-	else
-		return false
-	end
-	return true
-end
+	  end },
 
--- What `bars quest` prints, out of line because BarsWord is a dispatcher at its
--- branch ceiling and a two-way message inside it costs two more.
-local function QuestBadgeSaid()
-	ns.Print("quest badge on the bars " .. (ns.db.barsQuest and "on" or "off")
-		.. ": how many of this one a quest in your log still wants, in gold off the"
-		.. " bar's right edge. The mob's own hover says which quest and what it"
-		.. " drops at. Both are Questie's to answer.")
-	ns.Print("a creature's hover says " .. ns.QuestDrops.Describe() .. ".")
-end
+	{ "mode", choice = { "auto", "plates", "list" }, key = "barsMode",
+	  apply = BarsRebuild,
+	  say = function(value)
+		return "bars mode " .. value .. ", running as " .. ns.EnemyBars.Mode() .. "."
+	  end },
 
-local function BarsWord(option, value)
-	if PlateWord(option, value) then
-		ns.EnemyBars.Update()
-		return
-	end
-	if option == "mode" then
-		if value == "auto" or value == "plates" or value == "list" then
-			ns.db.barsMode = value
-			ns.EnemyBars.Rebuild()
-			ns.Print("bars mode " .. value .. ", running as " .. ns.EnemyBars.Mode() .. ".")
-		else
-			ns.Print("bars mode takes auto, plates or list.")
-		end
-	elseif option == "style" then
-		if value == "replace" or value == "attach" then
-			ns.db.barsStyle = value
-			ns.EnemyBars.Rebuild()
-			ns.Print(value == "replace" and "our bars replace the Blizzard nameplate."
-				or "our bars ride above the Blizzard nameplate.")
-		else
-			ns.Print("bars style takes replace or attach.")
-		end
-	elseif option == "offset" then
-		local offset = ns.Command.Number(value, -60, 60, "bars offset")
-		if offset then
-			ns.db.barsOffset = offset
-			ns.EnemyBars.Rebuild()
-			ns.Print("plate offset " .. offset .. ".")
-		end
-	elseif option == "level" then
-		ns.db.barsLevel = ns.Command.Toggle(value)
-		ns.EnemyBars.ApplyLayout()
-		ns.EnemyBars.Rebuild()
-		ns.Print("mob level " .. (ns.db.barsLevel and "on" or "off")
+	{ "style", choice = { "replace", "attach" }, key = "barsStyle",
+	  apply = BarsRebuild,
+	  say = function(value)
+		return value == "replace" and "our bars replace the Blizzard nameplate."
+			or "our bars ride above the Blizzard nameplate."
+	  end },
+
+	{ "offset", number = { -60, 60 }, key = "barsOffset", apply = BarsRebuild,
+	  say = function(offset)
+		return "plate offset " .. offset .. "."
+	  end },
+
+	{ "level", toggle = true, key = "barsLevel", apply = BarsRelayout,
+	  say = function(on)
+		return "mob level " .. (on and "on" or "off")
 			.. ": drawn inside the bar, left of the name, coloured by what the kill is worth."
 			.. " Grey pays no XP and red is five levels up. Whether a mob is neutral is the"
-			.. " bar's own frame, and that stays either way.")
-	elseif option == "cast" then
-		ns.db.barsCast = ns.Command.Toggle(value)
-		ns.EnemyBars.ApplyLayout()
-		ns.EnemyBars.Rebuild()
-		ns.Print("enemy cast bar " .. (ns.db.barsCast and "on" or "off")
-			.. ": " .. ns.Cast.Describe() .. ".")
-		if not ns.db.barsCast then
-			ns.Print("Blizzard's own plate cast bar is back, so a cast still shows.")
-		end
-	elseif option == "marker" then
-		ns.db.barsMarker = ns.Command.Toggle(value)
-		ns.EnemyBars.Rebuild()
-		ns.Print("raid marker on the bars " .. (ns.db.barsMarker and "on" or "off")
-			.. ", Blizzard's marker takes over when ours is off.")
-	elseif option == "quest" then
-		ns.db.barsQuest = ns.Command.Toggle(value)
-		ns.EnemyBars.Rebuild()
-		QuestBadgeSaid()
-	elseif option == "max" then
-		local count = ns.Command.Number(value, 1, 15, "bars max")
-		if count then
-			ns.db.barsMax = count
-			ns.Print("showing up to " .. count .. " bars in list mode.")
-		end
-	elseif option == "width" then
-		local width = ns.Command.Number(value, 120, 400, "bars width")
-		if width then
-			ns.db.barsWidth = width
-			ns.EnemyBars.ApplyLayout()
-			ns.Print("bar width " .. width .. " pixels, on a plate and in the list.")
-		end
-	elseif option == "zoom" then
-		local zoom = ns.Command.Number(value, 1, 3, "bars zoom")
-		if zoom then
-			ns.db.barsZoom = zoom
-			ns.EnemyBars.ApplyLayout()
-			ns.EnemyBars.Rebuild()
-			ns.Print("bars zoom " .. zoom .. ", so one pixel of the design is "
-				.. zoom .. " on screen. " .. ns.UI.Describe() .. ".")
-		end
-	elseif option == "debuff" then
-		DebuffWord(value:match("^(%S*)%s*(.-)$"))
-	elseif option == "icon" then
-		local low, high = ns.EnemyBars.IconRange()
-		local size = ns.Command.Number(value, low, high, "bars icon")
-		if size then
-			ns.db.barsIconSize = size
-			ns.EnemyBars.ApplyLayout()
-			ns.EnemyBars.Rebuild()
-			ns.Print(("debuff icons %d pixels square, %s.")
-				:format(size, ns.EnemyBars.DescribeIcon(size)))
-		end
-	elseif option == "fade" then
-		ns.db.barsFade = ns.Command.Toggle(value)
-		ns.Print(ns.db.barsFade
-			and "bars ramp in as a mob comes into range and out again behind it."
-			or "bars appear and disappear with the plate under them.")
-	else
-		ns.db.bars = ns.Command.Toggle(option)
-		ns.EnemyBars.Rebuild()
-		ns.Print("enemy bars " .. (ns.db.bars and "on" or "off") .. ".")
-	end
-	ns.EnemyBars.Update()
-end
+			.. " bar's own frame, and that stays either way."
+	  end },
 
-local FRAME_WORDS = { player = "player frame", target = "target frame",
-	tot = "target of target" }
+	{ "cast", toggle = true, key = "barsCast", apply = BarsRelayout,
+	  say = function(on)
+		return "enemy cast bar " .. (on and "on" or "off")
+				.. ": " .. ns.Cast.Describe() .. ".",
+			not on and "Blizzard's own plate cast bar is back, so a cast still shows." or nil
+	  end },
+
+	{ "marker", toggle = true, key = "barsMarker", apply = BarsRebuild,
+	  say = function(on)
+		return "raid marker on the bars " .. (on and "on" or "off")
+			.. ", Blizzard's marker takes over when ours is off."
+	  end },
+
+	{ "quest", toggle = true, key = "barsQuest", apply = BarsRebuild,
+	  say = function(on)
+		return "quest badge on the bars " .. (on and "on" or "off")
+				.. ": how many of this one a quest in your log still wants, in gold off the"
+				.. " bar's right edge. The mob's own hover says which quest and what it"
+				.. " drops at. Both are Questie's to answer.",
+			"a creature's hover says " .. ns.QuestDrops.Describe() .. "."
+	  end },
+
+	{ "max", number = { 1, 15 }, key = "barsMax",
+	  say = function(count)
+		return "showing up to " .. count .. " bars in list mode."
+	  end },
+
+	{ "width", number = { 120, 400 }, key = "barsWidth",
+	  apply = function() ns.EnemyBars.ApplyLayout() end,
+	  say = function(width)
+		return "bar width " .. width .. " pixels, on a plate and in the list."
+	  end },
+
+	{ "zoom", number = { 1, 3 }, key = "barsZoom", apply = BarsRelayout,
+	  say = function(zoom)
+		return "bars zoom " .. zoom .. ", so one pixel of the design is "
+			.. zoom .. " on screen. " .. ns.UI.Describe() .. "."
+	  end },
+
+	{ "debuff", run = function(value)
+		DebuffWord(value:match("^(%S*)%s*(.-)$"))
+	  end },
+
+	{ "icon", key = "barsIconSize", apply = BarsRelayout,
+	  number = function() return ns.EnemyBars.IconRange() end,
+	  say = function(size)
+		return ("debuff icons %d pixels square, %s.")
+			:format(size, ns.EnemyBars.DescribeIcon(size))
+	  end },
+
+	{ "fade", toggle = true, key = "barsFade",
+	  say = function(on)
+		return on
+			and "bars ramp in as a mob comes into range and out again behind it."
+			or "bars appear and disappear with the plate under them."
+	  end },
+
+	otherwise = { toggle = true, key = "bars", apply = BarsRebuild,
+	  say = function(on)
+		return "enemy bars " .. (on and "on" or "off") .. "."
+	  end },
+})
+
+-- One entry per frame the skin can be told about on its own. The word and the
+-- label it is said by come in together, so a fourth frame is one line here and
+-- nothing else anywhere.
+local function FrameEntry(word, label)
+	return { word, toggle = true,
+		apply = function() ns.FrameSkin.Apply() end,
+		set = function(on) ns.db.skinFrames[word] = on end,
+		say = function(on)
+			return label .. " skin " .. (on and "on" or "off") .. "."
+		end }
+end
 
 -- The words `/wk hide` answers to, off the same list the panel draws from so
 -- the two cannot drift.
@@ -223,214 +222,152 @@ local function Words()
 	return table.concat(words, ", ")
 end
 
-local function SkinWord(arg)
-	local option, value = arg:match("^(%S*)%s*(.-)$")
+local function SkinRelayout()
+	ns.FrameSkin.Relayout()
+end
 
-	if option == "probe" then
+local function SkinApply()
+	ns.FrameSkin.Apply()
+end
+
+local SkinWord = ns.Command.Word({
+	name = "skin",
+
+	{ "probe", run = function()
 		ns.FrameSkin.Probe()
-		return
-	end
+	  end },
 
-	if option == "height" or option == "width" then
-		-- Pixels, not units, since the block went on the grid. The old ceiling
-		-- was written when the numbers were UI units, which on a screen taller
-		-- than 768 buy more than one pixel each, so the same setting draws a
-		-- smaller square now and the range has to reach further to put it back.
-		local low, high = 18, 72
-		if option == "width" then
-			low, high = 90, 360
-		end
-		local size = ns.Command.Number(value, low, high, "skin " .. option)
-		if size then
-			ns.db[option == "height" and "skinHeight" or "skinWidth"] = size
-			ns.FrameSkin.Relayout()
-			ns.Print("skin " .. option .. " " .. size .. ".")
-		end
-		return
-	end
+	-- Pixels, not units, since the block went on the grid. The old ceiling was
+	-- written when the numbers were UI units, which on a screen taller than 768
+	-- buy more than one pixel each, so the same setting draws a smaller square
+	-- now and the range has to reach further to put it back.
+	{ "width", number = { 90, 360 }, key = "skinWidth", apply = SkinRelayout,
+	  say = function(size)
+		return "skin width " .. size .. "."
+	  end },
 
-	if option == "link" then
-		ns.db.skinLink = ns.Command.Toggle(value)
-		ns.FrameSkin.Apply()
-		ns.Print("frame link " .. (ns.db.skinLink and "on" or "off")
-			.. ": " .. ns.FrameSkin.DescribeLink() .. ".")
-		if ns.db.skinLink then
-			ns.Print("Edit Mode positions the player block and this addon positions"
+	{ "height", number = { 18, 72 }, key = "skinHeight", apply = SkinRelayout,
+	  say = function(size)
+		return "skin height " .. size .. "."
+	  end },
+
+	{ "link", toggle = true, key = "skinLink", apply = SkinApply,
+	  say = function(on)
+		return "frame link " .. (on and "on" or "off")
+				.. ": " .. ns.FrameSkin.DescribeLink() .. ".",
+			on and "Edit Mode positions the player block and this addon positions"
 				.. " everything against it. The target is the player mirrored in the"
 				.. " middle of the screen, so drag the player to set the corridor;"
-				.. " dragging the target sets the level.")
-		end
-		return
-	end
+				.. " dragging the target sets the level." or nil
+	  end },
 
-	if option == "level" then
-		local low, high = ns.FrameSkin.LinkRange()
-		local size = ns.Command.Number(value, low, high, "skin level")
-		if size then
-			ns.db.skinLevel = size
-			ns.FrameSkin.Relayout()
-			ns.Print("skin level " .. size .. ": "
-				.. ns.FrameSkin.DescribeLink() .. ".")
-		end
-		return
-	end
+	{ "level", key = "skinLevel", apply = SkinRelayout,
+	  number = function() return ns.FrameSkin.LinkRange() end,
+	  say = function(size)
+		return "skin level " .. size .. ": " .. ns.FrameSkin.DescribeLink() .. "."
+	  end },
 
-	if option == "heals" then
-		ns.db.skinHeals = ns.Command.Toggle(value)
-		ns.FrameSkin.Apply()
-		ns.Print("incoming heals " .. (ns.db.skinHeals and "on" or "off")
-			.. ": the green slice on the gauge is what is already in the air"
-			.. " for that unit, clamped to what it is actually missing.")
-		if ns.db.skinHeals and not ns.HasHealPrediction() then
-			ns.Print("this client answers no UnitGetIncomingHeals, so nothing will draw.")
-		end
-		return
-	end
+	{ "heals", toggle = true, key = "skinHeals", apply = SkinApply,
+	  say = function(on)
+		return "incoming heals " .. (on and "on" or "off")
+				.. ": the green slice on the gauge is what is already in the air"
+				.. " for that unit, clamped to what it is actually missing.",
+			(on and not ns.HasHealPrediction())
+				and "this client answers no UnitGetIncomingHeals, so nothing will draw."
+				or nil
+	  end },
 
-	if option == "auras" then
-		ns.db.skinAuras = ns.Command.Toggle(value)
-		ns.FrameSkin.Relayout()
-		ns.Print("aura rows " .. (ns.db.skinAuras and "on" or "off")
-			.. " under the player and target blocks.")
-		if ns.db.skinAuras then
-			ns.Print("what is on you and on the target, drawn here rather than by"
+	{ "auras", toggle = true, key = "skinAuras", apply = SkinRelayout,
+	  say = function(on)
+		return "aura rows " .. (on and "on" or "off")
+				.. " under the player and target blocks.",
+			on and "what is on you and on the target, drawn here rather than by"
 				.. " the client: yours in colour, everyone else's drained, and"
-				.. " yours first so a raid cannot push your Rend off the end.")
-		else
-			ns.Print("neither frame now carries an aura row at all. Each is the size"
+				.. " yours first so a raid cannot push your Rend off the end."
+			or "neither frame now carries an aura row at all. Each is the size"
 				.. " of its block, so the client's own rows would hang inside the"
 				.. " gauges; /wk skin off gives both frames back their size and"
-				.. " their rows with it.")
-		end
-		return
-	end
+				.. " their rows with it."
+	  end },
 
-	if option == "aura" then
-		local low, high = ns.FrameAuras.SizeRange()
-		local size = ns.Command.Number(value, low, high, "skin aura")
-		if size then
-			ns.db.skinAuraSize = size
-			ns.FrameSkin.Relayout()
-			ns.Print("aura square " .. size .. " pixels on both blocks.")
-		end
-		return
-	end
+	{ "aura", key = "skinAuraSize", apply = SkinRelayout,
+	  number = function() return ns.FrameAuras.SizeRange() end,
+	  say = function(size)
+		return "aura square " .. size .. " pixels on both blocks."
+	  end },
 
-	if option == "debuffs" or option == "buffs" then
-		local key = option == "debuffs" and "skinAuraDebuffs" or "skinAuraBuffs"
-		local high = ns.FrameAuras.CountCeiling(option)
-		local many = ns.Command.Number(value, 0, high, "skin " .. option)
-		if many then
-			ns.db[key] = many
-			ns.FrameSkin.Relayout()
-			ns.Print(("up to %d %s under each block%s.")
-				:format(many, option, many == 0 and ", so that row is off" or ""))
-		end
-		return
-	end
+	{ "debuffs", key = "skinAuraDebuffs", apply = SkinRelayout,
+	  number = function() return 0, ns.FrameAuras.CountCeiling("debuffs") end,
+	  say = function(many)
+		return ("up to %d debuffs under each block%s.")
+			:format(many, many == 0 and ", so that row is off" or "")
+	  end },
 
-	if FRAME_WORDS[option] then
-		ns.db.skinFrames[option] = ns.Command.Toggle(value)
-		ns.FrameSkin.Apply()
-		ns.Print(FRAME_WORDS[option] .. " skin "
-			.. (ns.db.skinFrames[option] and "on" or "off") .. ".")
-		return
-	end
+	{ "buffs", key = "skinAuraBuffs", apply = SkinRelayout,
+	  number = function() return 0, ns.FrameAuras.CountCeiling("buffs") end,
+	  say = function(many)
+		return ("up to %d buffs under each block%s.")
+			:format(many, many == 0 and ", so that row is off" or "")
+	  end },
 
-	ns.db.skin = ns.Command.Toggle(option)
-	ns.FrameSkin.Apply()
-	ns.Print("unit frame skin " .. (ns.db.skin and "on" or "off")
-		.. ", " .. ns.FrameSkin.Describe() .. ".")
-end
+	FrameEntry("player", "player frame"),
+	FrameEntry("target", "target frame"),
+	FrameEntry("tot", "target of target"),
+
+	otherwise = { toggle = true, key = "skin", apply = SkinApply,
+	  say = function(on)
+		return "unit frame skin " .. (on and "on" or "off")
+			.. ", " .. ns.FrameSkin.Describe() .. "."
+	  end },
+})
 
 -- Your own cast bar, which is its own word rather than a corner of `skin` or of
 -- `bars`. It is neither: it draws nothing on a Blizzard frame and nothing on a
 -- nameplate, and it is a bar of its own that you drag where you want it.
-local function CastWord(arg)
-	local option, value = arg:match("^(%S*)%s*(.-)$")
+local CastWord = ns.Command.Word({
+	name = "cast",
+	apply = function() ns.PlayerCast.Apply() end,
 
-	if option == "width" or option == "height" then
-		local wideLow, wideHigh, tallLow, tallHigh = ns.PlayerCast.SizeRange()
-		local low, high = wideLow, wideHigh
-		if option == "height" then
-			low, high = tallLow, tallHigh
-		end
-		local size = ns.Command.Number(value, low, high, "cast " .. option)
-		if size then
-			ns.db[option == "width" and "playerCastWidth" or "playerCastHeight"] = size
-			ns.PlayerCast.Apply()
-			ns.Print("cast " .. option .. " " .. size .. " pixels.")
-		end
-		return
-	end
+	{ "width", key = "playerCastWidth",
+	  number = function()
+		local low, high = ns.PlayerCast.SizeRange()
+		return low, high
+	  end,
+	  say = function(size)
+		return "cast width " .. size .. " pixels."
+	  end },
 
-	if option == "zoom" then
-		local zoom = ns.Command.Number(value, ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH, "cast zoom")
-		if zoom then
-			ns.db.playerCastZoom = zoom
-			ns.PlayerCast.Apply()
-			ns.Print("cast zoom " .. zoom .. ", so one pixel of the design is "
-				.. zoom .. " on screen.")
-		end
-		return
-	end
+	{ "height", key = "playerCastHeight",
+	  number = function()
+		local _, _, low, high = ns.PlayerCast.SizeRange()
+		return low, high
+	  end,
+	  say = function(size)
+		return "cast height " .. size .. " pixels."
+	  end },
 
-	if option == "reset" then
+	{ "zoom", key = "playerCastZoom",
+	  number = function() return ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH end,
+	  say = function(zoom)
+		return "cast zoom " .. zoom .. ", so one pixel of the design is "
+			.. zoom .. " on screen."
+	  end },
+
+	{ "reset", run = function()
 		ns.PlayerCast.Reset()
 		ns.Print("cast bar back under the swing timer.")
-		return
-	end
+	  end },
 
-	ns.db.playerCast = ns.Command.Toggle(option)
-	ns.PlayerCast.Apply()
-	ns.Print("your cast bar " .. (ns.db.playerCast and "on" or "off")
-		.. ": " .. ns.PlayerCast.Describe() .. ".")
-	if not ns.db.playerCast and ns.db.hideBlizzPlayerCast then
-		ns.Print("Blizzard's own is hidden by `/wk hide playercast`, so nothing"
-			.. " is drawing your casts at all.")
-	end
-end
-
--- Which number a `party` or `raid` word is setting, and what it is allowed to
--- be. The key comes off UnitFrames/Group.lua rather than being spelled here a
--- second time, and so does every range, off the file that owns it.
-local function ListRange(which, option)
-	local wide, wideHigh, tall, tallHigh = ns.Group.SizeRange()
-	local gapLow, gapHigh = ns.Group.GapRange()
-	local columns, columnsHigh, per, perHigh = ns.Group.ColumnRange()
-	if option == "width" then
-		return ns.Group.Key(which, "width"), wide, wideHigh
-	elseif option == "height" then
-		return ns.Group.Key(which, "height"), tall, tallHigh
-	elseif option == "gap" then
-		return ns.Group.Key(which, "gap"), gapLow, gapHigh
-	elseif option == "zoom" then
-		return ns.Group.Key(which, "zoom"), ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH
-	elseif option == "columns" then
-		return ns.Group.Key(which, "columns"), columns, columnsHigh
-	elseif option == "percolumn" then
-		return ns.Group.Key(which, "per"), per, perHigh
-	end
-	return nil
-end
-
--- True where the word was one of the numbers, whether or not the number was any
--- good, so the dispatcher below knows it has been dealt with. The two column
--- words belong to the raid and answer nothing at all for the party, which has
--- no grid to describe.
-local function ListNumber(which, option, value)
-	local key, low, high = ListRange(which, option)
-	if not key then
-		return false
-	end
-	local size = ns.Command.Number(value, low, high, which .. " " .. option)
-	if size then
-		ns.db[key] = size
-		ns.Group.Apply()
-		ns.Print(("%s %s %d."):format(which, option, size))
-	end
-	return true
-end
+	otherwise = { toggle = true, key = "playerCast",
+	  say = function(on)
+		return "your cast bar " .. (on and "on" or "off")
+				.. ": " .. ns.PlayerCast.Describe() .. ".",
+			(not on and ns.db.hideBlizzPlayerCast)
+				and "Blizzard's own is hidden by `/wk hide playercast`, so nothing"
+					.. " is drawing your casts at all."
+				or nil
+	  end },
+})
 
 local ROLE_WORDS = { tank = true, healer = true, dps = true, none = true }
 
@@ -455,6 +392,21 @@ local function PartyRole(arg)
 		or ("%s sits in the %s band until you say otherwise."):format(name, role))
 end
 
+-- One of the numbers a `party` or `raid` word is setting. The key comes off
+-- UnitFrames/Group.lua rather than being spelled here a second time, and so
+-- does every range, off the file that owns it.
+local function ListNumber(which, word, name, range)
+	return { word, key = ns.Group.Key(which, name), number = range,
+		say = function(size)
+			return ("%s %s %d."):format(which, word, size)
+		end }
+end
+
+-- One of the switches, said with its own sentence about what the switch does.
+local function ListSwitch(which, word, name, said)
+	return { word, toggle = true, key = ns.Group.Key(which, name), say = said }
+end
+
 -- Which way one group's members run. Four answers for both lists now: a party
 -- is a line and reads either way round, and a raid is a grid that can be five
 -- to a row with a row per group or five down a column with a column per group.
@@ -470,56 +422,88 @@ local function GrowWord(which, value)
 		:format(which, value))
 end
 
--- The words both lists answer to. Everything here reads its own list's setting
--- through ns.Group.Key, so the party cannot be given the raid's numbers by a
--- word that forgot which one it was called for.
-local function ListWord(which, option, value)
-	if ListNumber(which, option, value) then
-		return
+-- The words one list answers to, built for that list. Everything in here reads
+-- its own list's setting through ns.Group.Key, so the party cannot be given the
+-- raid's numbers by a word that forgot which one it was called for, and the two
+-- grid words are in the table only where the list has a grid: the party has no
+-- columns and no key to write one to.
+local function ListWords(which)
+	local spec = {
+		name = which,
+		apply = function() ns.Group.Apply() end,
+
+		ListNumber(which, "width", "width", function()
+			local low, high = ns.Group.SizeRange()
+			return low, high
+		end),
+
+		ListNumber(which, "height", "height", function()
+			local _, _, low, high = ns.Group.SizeRange()
+			return low, high
+		end),
+
+		ListNumber(which, "gap", "gap", function() return ns.Group.GapRange() end),
+
+		ListNumber(which, "zoom", "zoom",
+			function() return ns.UI.ZOOM_LOW, ns.UI.ZOOM_HIGH end),
+
+		ListSwitch(which, "self", "mine", function(on)
+			return ("your own block in the %s %s."):format(which, on and "on" or "off")
+		end),
+
+		ListSwitch(which, "icons", "icons", function(on)
+			return "role icons " .. (on and "on" or "off")
+				.. ", drawn in Blizzard's own art on the portrait side of each block."
+		end),
+
+		ListSwitch(which, "range", "range", function(on)
+			return "out of range " .. (on and "on" or "off")
+				.. ": a member you cannot reach drains to the track colour and says so."
+		end),
+
+		{ "grow", run = function(value) GrowWord(which, value) end },
+
+		{ "reset", run = function()
+			ns.Group.Reset(which)
+			ns.Print(("the %s is back where the addon ships it."):format(which))
+		  end },
+
+		otherwise = { toggle = true, key = ns.Group.Key(which, "on"),
+		  say = function(on)
+			return ("%s frames %s, %s."):format(which, on and "on" or "off",
+				ns.Group.Describe(which))
+		  end },
+	}
+
+	if ns.Group.Key(which, "columns") then
+		spec[#spec + 1] = ListNumber(which, "columns", "columns", function()
+			local low, high = ns.Group.ColumnRange()
+			return low, high
+		end)
+		spec[#spec + 1] = ListNumber(which, "percolumn", "per", function()
+			local _, _, low, high = ns.Group.ColumnRange()
+			return low, high
+		end)
+		spec[#spec + 1] = { "order", run = function(value)
+			local key = ns.Group.Key(which, "order")
+			ns.db[key] = value == "role" and "role" or "group"
+			ns.Group.Apply()
+			ns.Print("raid order " .. ns.db[key] .. ": "
+				.. ns.Group.Describe(which) .. ".")
+		  end }
+		spec[#spec + 1] = ListSwitch(which, "headings", "headings", function(on)
+			return "group headings " .. (on and "on" or "off")
+				.. ", on each run of five in a raid ordered by group."
+		end)
+	else
+		spec[#spec + 1] = { "role", run = function(value) PartyRole(value) end }
 	end
 
-	if option == "self" then
-		local key = ns.Group.Key(which, "mine")
-		ns.db[key] = ns.Command.Toggle(value)
-		ns.Group.Apply()
-		ns.Print(("your own block in the %s %s."):format(which,
-			ns.db[key] and "on" or "off"))
-	elseif option == "grow" then
-		GrowWord(which, value)
-	elseif option == "icons" then
-		local key = ns.Group.Key(which, "icons")
-		ns.db[key] = ns.Command.Toggle(value)
-		ns.Group.Apply()
-		ns.Print("role icons " .. (ns.db[key] and "on" or "off")
-			.. ", drawn in Blizzard's own art on the portrait side of each block.")
-	elseif option == "range" then
-		local key = ns.Group.Key(which, "range")
-		ns.db[key] = ns.Command.Toggle(value)
-		ns.Group.Apply()
-		ns.Print("out of range " .. (ns.db[key] and "on" or "off")
-			.. ": a member you cannot reach drains to the track colour and says so.")
-	elseif option == "order" and which == "raid" then
-		ns.db.raidOrder = value == "role" and "role" or "group"
-		ns.Group.Apply()
-		ns.Print("raid order " .. ns.db.raidOrder .. ": " .. ns.Group.Describe("raid") .. ".")
-	elseif option == "headings" and which == "raid" then
-		ns.db.raidHeadings = ns.Command.Toggle(value)
-		ns.Group.Apply()
-		ns.Print("group headings " .. (ns.db.raidHeadings and "on" or "off")
-			.. ", on each run of five in a raid ordered by group.")
-	elseif option == "role" and which == "party" then
-		PartyRole(value)
-	elseif option == "reset" then
-		ns.Group.Reset(which)
-		ns.Print(("the %s is back where the addon ships it."):format(which))
-	else
-		local key = ns.Group.Key(which, "on")
-		ns.db[key] = ns.Command.Toggle(option)
-		ns.Group.Apply()
-		ns.Print(("%s frames %s, %s."):format(which, ns.db[key] and "on" or "off",
-			ns.Group.Describe(which)))
-	end
+	return ns.Command.Word(spec)
 end
+
+local PartyWord = ListWords("party")
+local RaidWord = ListWords("raid")
 
 -- What the bars cost is one number and what they cost per mob is another, and
 -- the performance tab cannot tell them apart without being told how many are
@@ -905,21 +889,15 @@ ns.Register({
 	},
 
 	words = {
-		bars = function(arg)
-			BarsWord(arg:match("^(%S*)%s*(.-)$"))
-		end,
+		bars = BarsWord,
 
 		skin = SkinWord,
 
 		cast = CastWord,
 
-		party = function(arg)
-			ListWord("party", arg:match("^(%S*)%s*(.-)$"))
-		end,
+		party = PartyWord,
 
-		raid = function(arg)
-			ListWord("raid", arg:match("^(%S*)%s*(.-)$"))
-		end,
+		raid = RaidWord,
 
 		-- The client's own copies, one word each. Its own word rather than a
 		-- corner of `skin`, because none of these four is part of the skin:
