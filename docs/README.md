@@ -5926,6 +5926,7 @@ on different realms read as the same person.
     /wk loadout combat on|off    whether the weapon swap fires mid fight
     /wk console                  the console page, under Under the hood
     /wk console xp               a probe: the experience readings, in chat
+    /wk console rail             a probe: the experience rail's frame, and what is over it
     /wk console run <lua>        one line of Lua, and what it printed, in chat
 
 **The key field takes mouse buttons.** `ui.KeyField` maps left and right onto

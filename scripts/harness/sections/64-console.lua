@@ -54,6 +54,14 @@ for index = 1, #lines do
 end
 check(ok and level and cap, "the xp probe names the level and the cap the client answers")
 
+-- Every probe runs on the stub without raising. A probe is written against the
+-- client and read back on it, and this is the one place a typo in one is seen
+-- before somebody presses the button.
+for index = 1, #Console.PROBES do
+	local each, ran = Console.Run(Console.PROBES[index].code)
+	check(ran, ("the probe %s raised: %s"):format(Console.PROBES[index].name, each[#each]))
+end
+
 local chat = _G.DEFAULT_CHAT_FRAME.AddMessage
 local heard = {}
 _G.DEFAULT_CHAT_FRAME.AddMessage = function(_, text)

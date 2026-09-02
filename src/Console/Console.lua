@@ -36,6 +36,62 @@ print("MAX_PLAYER_LEVEL", MAX_PLAYER_LEVEL)
 print("IsXPUserDisabled", IsXPUserDisabled and IsXPUserDisabled())
 print("IsPlayerAtEffectiveMaxLevel", IsPlayerAtEffectiveMaxLevel and IsPlayerAtEffectiveMaxLevel())
 print("GetMaxLevelForPlayerExpansion", GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion())]] },
+
+	-- rail: the experience rail's own frame, WarriorKitProgress, as the client
+	-- holds it. Whether it and each bar inside it are shown and visible, where
+	-- they are on the screen, the fill's colour and value, and then every
+	-- visible frame that sits over the rail's centre at its level or above,
+	-- which is the list that says what is drawn on top of it.
+	{ name = "rail", label = "the experience rail's frame", code = [[
+local f = WarriorKitProgress
+if not f then print("no frame called WarriorKitProgress") return end
+local function rect(r)
+	local l, b, w, h = r:GetRect()
+	if not l then return "no rect" end
+	return ("%.0f,%.0f %.0fx%.0f"):format(l, b, w, h)
+end
+print("frame shown", f:IsShown(), "visible", f:IsVisible(), "alpha", f:GetAlpha(),
+	"scale", ("%.3f"):format(f:GetEffectiveScale() or 0))
+print("frame", rect(f), f:GetFrameStrata(), "level", f:GetFrameLevel(),
+	"parent", f:GetParent() and f:GetParent():GetName())
+for i, child in ipairs({ f:GetChildren() }) do
+	local kind = child:GetObjectType()
+	local line = ("child %d %s shown %s visible %s %s level %s"):format(i, tostring(kind),
+		tostring(child:IsShown()), tostring(child:IsVisible()), rect(child), tostring(child:GetFrameLevel()))
+	if kind == "StatusBar" then
+		local lo, hi = child:GetMinMaxValues()
+		local r, g, b, a = child:GetStatusBarColor()
+		line = line .. (" value %s of %s..%s colour %s %s %s %s"):format(tostring(child:GetValue()),
+			tostring(lo), tostring(hi), tostring(r), tostring(g), tostring(b), tostring(a))
+		local tex = child:GetStatusBarTexture()
+		if tex then
+			line = line .. " fill " .. rect(tex) .. " alpha " .. tostring(tex:GetAlpha())
+		end
+	end
+	print(line)
+end
+if not EnumerateFrames then return end
+local l, b, w, h = f:GetRect()
+if not l then return end
+local scale = f:GetEffectiveScale()
+local cx, cy = (l + w / 2) * scale, (b + h / 2) * scale
+local mine = f:GetFrameLevel()
+local over, frame = 0, EnumerateFrames()
+while frame and over < 12 do
+	if frame ~= f and not frame:IsForbidden() and frame:IsVisible() then
+		local fl, fb, fw, fh = frame:GetRect()
+		local s = frame:GetEffectiveScale()
+		if fl and fw > 0 and fh > 0 and fl * s <= cx and (fl + fw) * s >= cx
+				and fb * s <= cy and (fb + fh) * s >= cy and frame:GetFrameLevel() >= mine then
+			over = over + 1
+			local parent = frame:GetParent()
+			print("over", frame:GetName() or "(unnamed)", frame:GetFrameStrata(), "level", frame:GetFrameLevel(),
+				"under", parent and (parent:GetName() or "(unnamed)") or "nothing")
+		end
+	end
+	frame = EnumerateFrames(frame)
+end
+print("frames over the rail's centre", over)]] },
 }
 
 function Console.Probe(name)
