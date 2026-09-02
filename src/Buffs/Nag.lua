@@ -26,9 +26,10 @@ ns.BuffNag = Nag
 -- line: what is missing that you put on before a pull, no stone, no shout, no
 -- food. In combat it is the in line: the racial you own and have not pressed,
 -- and whatever you dragged there because it lapses mid fight, a shaman's shield
--- being the one the feature was asked for. They cannot both be on screen, so
--- the row is never longer than the shorter question, and each line means one
--- thing. Upkeep.lua holds both lists and says which entry stands on which.
+-- being the one the feature was asked for. An entry can stand on both, and a
+-- shield does. They cannot both be on screen, so the row is never longer than
+-- the shorter question, and each line means one thing. Upkeep.lua holds the
+-- lines and says which entry stands on which.
 --
 -- A square is a button as well as a picture. Clicking one opens the options
 -- window on the page the row is set up on, because the square is the one thing
@@ -210,7 +211,7 @@ end
 function Nag.MissingMask(line)
 	local bits = 0
 	for index = 1, ns.Upkeep.Count() do
-		if ns.Upkeep.Entry(index).layer == line and ns.Upkeep.Missing(index) then
+		if ns.Upkeep.On(ns.Upkeep.Entry(index), line) and ns.Upkeep.Missing(index) then
 			bits = bits + BIT[index]
 		end
 	end
@@ -238,7 +239,7 @@ local function Collect()
 	local line = LINE_OF[mode]
 	for index = 1, ns.Upkeep.Count() do
 		local entry = ns.Upkeep.Entry(index)
-		if not line or (entry.layer == line and ns.Upkeep.Missing(index)) then
+		if not line or (ns.Upkeep.On(entry, line) and ns.Upkeep.Missing(index)) then
 			shownCount = shownCount + 1
 			shown[shownCount] = entry
 		end

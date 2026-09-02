@@ -720,14 +720,17 @@ goes through `Feature.lua` or through the shared surface below:
                                  the points in it, whether this character has
                                  Slam, and whether the cast outruns the swing
     ns.Slam.Open()               whether pressing Slam right now is the press
-    ns.Upkeep.OUT / IN           the two lines, checked between fights and
-                                 during one
+    ns.Upkeep.OUT / IN / BOTH    the two lines, checked between fights and
+                                 during one, and the saved word for an entry
+                                 that stands on both
     ns.Upkeep.Count() / Entry(i) / Missing(i) / Ceiling()   how many buffs are
                                  watched, one of them, whether it is missing
                                  right now, and how many squares the row must
                                  be built to hold
-    ns.Upkeep.LineOf(entry) / Split() / OnLine(line, at)   which line an entry
-                                 stands on, how many stand on each, and the
+    ns.Upkeep.Lines(entry) / On(entry, line)   which lines an entry stands on,
+                                 as the saved word, and whether it stands on
+                                 one of them, off the flags Rebuild wrote
+    ns.Upkeep.Split() / OnLine(line, at)   how many stand on each line, and the
                                  at-th one on a line
     ns.Upkeep.ShelfCount() / Shelved(i)   what is switched off and drawn under
                                  the row on the page so it can be put back
@@ -743,10 +746,12 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Upkeep.Fixed() / ByWord(w)   the entries that ship, the racial among
                                  them, plus your class's, read only, and the
                                  one a slash word names
-    ns.Upkeep.Owner(id) / Place(key, line) / Put(id, line)   which entry answers
-                                 for a spell, one entry onto one line, and a
-                                 spell dropped on a line whether or not the row
-                                 has heard of it
+    ns.Upkeep.Owner(id) / Place(key, line, only) / Leave(key, line) / Put(id, line)
+                                 which entry answers for a spell; one entry onto
+                                 one line, leaving the other as it was unless
+                                 `only`; off one line, and off the row from its
+                                 last; and a spell dropped on a line whether or
+                                 not the row has heard of it
     ns.Upkeep.Watched(key) / SetWatched(key, on)   whether this character still
                                  watches that entry, and switching it
     ns.Upkeep.Silent()           how many entries you switched off, and their

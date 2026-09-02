@@ -218,7 +218,7 @@ local counted, allMissing = 0, 0
 for index = 1, Upkeep.Count() do
 	if Upkeep.Missing(index) then
 		allMissing = allMissing + 1
-		if Upkeep.Entry(index).layer == Upkeep.OUT then
+		if Upkeep.On(Upkeep.Entry(index), Upkeep.OUT) then
 			counted = counted + 1
 		end
 	end
@@ -501,24 +501,31 @@ tick()
 check(Nag.Mode() == "combat", "switching the racial back on did not put it back")
 
 ----------------------------------------------------------------------
--- A square moved to the in line
+-- A square put on the in line as well
 --
 -- The request this feature exists for: a shaman's shield lapses mid fight and
--- the shaman wants telling then. Food stands in for it here because every class
--- ships it, and the assertion is the same: dragged to the in line it goes quiet
--- between fights and comes up beside the racial in one.
+-- the shaman wants telling then, and before the pull too. Food stands in for
+-- it here because every class ships it, and the assertions are the set's: put
+-- on the in line it stays on the out line, comes up beside the racial in a
+-- fight and on its own between them; taken off the out line it goes quiet
+-- between fights; taken off its last line it is under the row.
 ----------------------------------------------------------------------
 
 do
 	local moved, why = Upkeep.Place("food", Upkeep.IN)
-	check(moved, "food could not be moved to the in line: " .. tostring(why))
+	check(moved, "food could not be put on the in line: " .. tostring(why))
 	Nag.Apply()
 	tick()
 	check(Nag.Mode() == "combat" and says("food") and says("press Blood Fury"),
 		"food on the in line did not draw beside the racial in a fight: " .. Nag.Caption())
 	check(Nag.Shown() == 2, ("the in line drew %d squares of 2"):format(Nag.Shown()))
-	check(_G.WarriorKitCharDB.buffLine.food == "in",
-		"the line an entry was moved to never reached the character's saved variables")
+	check(_G.WarriorKitCharDB.buffLine.food == "both",
+		"an entry on both lines is saved as " .. tostring(_G.WarriorKitCharDB.buffLine.food))
+	inCombat.player = nil
+	tick()
+	check(says("food"), "putting food on the in line took it off the out line")
+	inCombat.player = true
+	tick()
 
 	-- Only the racial breathes. Food is a fact and sits still beside it.
 	advance(0.8)
@@ -535,22 +542,34 @@ end
 	check(still == 1, ("an aura square on the in line pulsed, alpha %s"):format(tostring(still)))
 	check(breathing ~= nil and breathing < 1, "the racial square stopped pulsing beside another square")
 
+	-- Off the out line, it is an in-line entry and quiet between fights.
+	check(Upkeep.Leave("food", Upkeep.OUT), "food could not be taken off the out line")
+	check(_G.WarriorKitCharDB.buffLine.food == "in",
+		"off the out line it is saved as " .. tostring(_G.WarriorKitCharDB.buffLine.food))
 	inCombat.player = nil
 	tick()
-	check(not says("food"), "food on the in line was nagged about between fights")
+	check(not says("food"), "food on the in line alone was nagged about between fights")
 	inCombat.player = true
 
-	-- And back, which clears the saved line rather than writing the shipped one
-	-- into it, so a class file that changes its mind is followed.
-	Upkeep.Place("food", Upkeep.OUT)
+	-- Off its last line it is switched off and under the row, with no saved
+	-- word left behind, so putting it back from the shelf puts it back where
+	-- it shipped.
+	Upkeep.Leave("food", Upkeep.IN)
+	check(not Upkeep.Watched("food"), "off its last line an entry is still watched")
 	check(_G.WarriorKitCharDB.buffLine.food == nil,
-		"moving an entry back to its own line left the line in the saved variables")
+		"off its last line an entry keeps a saved word for the line it is not on")
+	Upkeep.Place("food", nil)
+	check(Upkeep.Watched("food") and Upkeep.Lines(Upkeep.ByWord("food")) == Upkeep.OUT,
+		"put back with no line named, food is not where it shipped")
+	check(_G.WarriorKitCharDB.buffLine.food == nil,
+		"putting an entry back where it shipped wrote the shipped line into the saved variables")
 
 	-- The racial cannot go to the out line, because a cooldown that is ready
 	-- between fights is ready all afternoon.
 	local allowed = Upkeep.Place("racial", Upkeep.OUT)
 	check(allowed == false, "the racial was allowed onto the out line")
-	check(Upkeep.LineOf(Upkeep.ByWord("racial")) == Upkeep.IN, "the refusal moved it anyway")
+	check(Upkeep.Place("racial", Upkeep.BOTH) == false, "the racial was allowed onto both lines")
+	check(Upkeep.Lines(Upkeep.ByWord("racial")) == Upkeep.IN, "the refusal moved it anyway")
 	Nag.Apply()
 	tick()
 end

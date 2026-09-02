@@ -1,11 +1,11 @@
 -- The buff nag's page
 --
 -- Where the drag is. The row is drawn again on the options page, as the two
--- lines it will draw, and what you do to it is what Cooldowns/Panel.lua's
--- section already checks on the cooldown row: a spell off the spellbook lands
--- on the line it was dropped on, a square dragged off turns up under the row,
--- a right click under the row puts it back, and a bare hand, which cannot ride
--- the cursor, still lands on the square the button came up over.
+-- lines it will draw, and the lines are sets: a spell off the spellbook lands
+-- on the line it was dropped on and stays on any other it was on, a square
+-- dragged onto the other line is on both, a square dragged off comes off that
+-- line alone, and off its last line it turns up under the row where a right
+-- click puts it back.
 --
 -- And the click. A nag square is the one thing on screen you are certain to be
 -- looking at when you decide a nag is wrong, so it opens the window on the
@@ -35,6 +35,14 @@ end
 
 ----------------------------------------------------------------------
 -- The drag
+--
+-- Five claims. A spell off the spellbook dropped on a line lands on that line.
+-- The same spell dropped on the other line is on both, not moved. A square
+-- dragged from one line onto the other is on both too, because nothing rides
+-- the cursor out of a square here and the button coming up over a line is
+-- what a drag means. Dragged off, it comes off the line it was lifted from and
+-- no other, and off its last line it is under the row. Right clicked under the
+-- row it goes back where it shipped.
 ----------------------------------------------------------------------
 
 do
@@ -46,7 +54,7 @@ do
 	for index = 1, #window.groups do
 		local group = window.groups[index]
 		for section = 1, #group.sections do
-			if group.sections[section].title == "What it watches" then
+			if group.sections[section].title == "Missing buffs" then
 				window.rail:Select(index)
 				ns.Options.SelectSection(section)
 			end
@@ -60,74 +68,108 @@ do
 		w.button.scripts.OnReceiveDrag(w.button)
 	end
 
-	local function held(key)
+	-- The square holding one entry on one line.
+	local function held(key, line)
 		for index = 1, Upkeep.Ceiling() + 2 do
 			local w = Page.Square(index)
-			if w and w.entry and w.entry.key == key then
+			if w and w.entry and w.entry.key == key and w.line == line then
 				return w
 			end
 		end
 		return nil
 	end
 
-	-- Rend, which no class puts on the row, onto the empty square at the end of
-	-- the in line. The out line takes the first `out` squares and one empty one,
-	-- so the in line's empty square is one past its own entries after that.
+	-- A drag from one square to wherever the button comes up, answered under
+	-- GetMouseFoci, the name this client may carry instead of GetMouseFocus.
+	local function drag(w, onto)
+		local foci = _G.GetMouseFoci
+		_G.GetMouseFoci = function() return { onto and onto.button or nil } end
+		w.button.scripts.OnDragStart(w.button)
+		w.button.scripts.OnDragStop(w.button)
+		_G.GetMouseFoci = foci
+	end
+
+	-- The empty square at the end of a line, which is one past that line's own.
+	local function tail(line)
+		local out, fight = Upkeep.Split()
+		if line == Upkeep.OUT then
+			return Page.Square(out + 1)
+		end
+		return Page.Square(out + 1 + fight + 1)
+	end
+
+	-- Rend, which no class puts on the row, onto the end of the in line.
 	local REND = BOOK[1]
-	local out, fight = Upkeep.Split()
-	drop(Page.Square(out + 1 + fight + 1), 1)
+	drop(tail(Upkeep.IN), 1)
 	tick()
 	local rend = Upkeep.Owner(REND)
-	check(rend ~= nil and Upkeep.LineOf(rend) == Upkeep.IN,
-		"a spell dragged out of the spellbook onto the in line is not on it")
+	check(rend ~= nil and Upkeep.Lines(rend) == Upkeep.IN,
+		"a spell dragged out of the spellbook onto the in line is not on it alone")
 	check(Upkeep.Count() == baseline + 1,
 		("the drop left %d entries of %d"):format(Upkeep.Count(), baseline + 1))
 	check(#Upkeep.Extra() == 1, "the drop did not put the spell on the list you keep")
 	check(_G.GetCursorInfo() == nil, "the drop left the spell on the cursor")
 
-	-- The same spell onto the out line: it moves, nothing is added.
-	drop(Page.Square(1), 1)
+	-- The same spell onto the out line: on both now, and still one entry.
+	drop(tail(Upkeep.OUT), 1)
 	tick()
-	check(Upkeep.LineOf(rend) == Upkeep.OUT, "the square did not move to the line it was dropped on")
+	check(Upkeep.Lines(rend) == Upkeep.BOTH,
+		"a spell dropped on the second line came off the first: " .. tostring(Upkeep.Lines(rend)))
 	check(Upkeep.Count() == baseline + 1 and #Upkeep.Extra() == 1,
-		"dragging a square between the lines added it a second time")
+		"dragging a spell onto the second line added it a second time")
+	check(held(rend.key, Upkeep.OUT) ~= nil and held(rend.key, Upkeep.IN) ~= nil,
+		"an entry on both lines is not drawn on both")
 
-	-- Dragged off. Nothing on this client puts a spell on the cursor, so the
-	-- square is remembered, the button comes up over nothing, and the entry
-	-- stays off the row and under it.
-	local off = held(rend.key)
-	check(off ~= nil, "the page is not holding the square the row is")
-	off.button.scripts.OnDragStart(off.button)
-	off.button.scripts.OnDragStop(off.button)
+	-- Dragged off the out line, onto nothing. Off that line and on the other.
+	drag(held(rend.key, Upkeep.OUT), nil)
 	tick()
-	check(Upkeep.Count() == baseline, "a square dragged off the row is still on it")
+	check(Upkeep.Lines(rend) == Upkeep.IN and Upkeep.Watched(rend.key),
+		"dragging a square off one line took it off the other too")
+
+	-- Dragged from the in line onto the out line: on both again, because a drag
+	-- onto a line puts the square there and takes nothing away.
+	drag(held(rend.key, Upkeep.IN), tail(Upkeep.OUT))
+	tick()
+	check(Upkeep.Lines(rend) == Upkeep.BOTH,
+		"dragging a square onto the other line did not put it there as well")
+
+	-- Right click takes it off that line only.
+	local w = held(rend.key, Upkeep.IN)
+	w.button.scripts.OnClick(w.button, "RightButton")
+	tick()
+	check(Upkeep.Lines(rend) == Upkeep.OUT, "right clicking a square took it off both lines")
+
+	-- Off its last line, into the tray.
+	drag(held(rend.key, Upkeep.OUT), Page.Shelved(1))
+	tick()
+	check(not Upkeep.Watched(rend.key), "a square dragged off its last line is still on the row")
 	local under
 	for index = 1, Upkeep.ShelfCount() do
 		under = Upkeep.Shelved(index).key == rend.key and index or under
 	end
-	check(under ~= nil, "a square dragged off the row is nowhere under it either")
+	check(under ~= nil, "a square dragged off its last line is nowhere under the row")
 
-	-- Right clicked under the row, it goes back to the line it was on.
+	-- Right clicked under the row, it goes back where it shipped: yours ship on
+	-- the out line.
 	local back = Page.Shelved(under)
 	back.button.scripts.OnClick(back.button, "RightButton")
 	tick()
-	check(Upkeep.Count() == baseline + 1 and Upkeep.LineOf(rend) == Upkeep.OUT,
-		"right clicking a square under the row did not put it back on its line")
+	check(Upkeep.Watched(rend.key) and Upkeep.Lines(rend) == Upkeep.OUT,
+		"right clicking a square under the row did not put it back where it shipped")
 
-	-- And a bare hand, which cannot ride the cursor at all, dragged onto the
-	-- square under the mouse on the in line. Answered under GetMouseFoci, the
-	-- name this client may carry instead of GetMouseFocus.
-	local hand = held("mainhand")
-	check(hand ~= nil, "the main hand is not on the page")
-	local foci = _G.GetMouseFoci
-	_G.GetMouseFoci = function() return { held("racial").button } end
-	hand.button.scripts.OnDragStart(hand.button)
-	hand.button.scripts.OnDragStop(hand.button)
-	_G.GetMouseFoci = foci
+	-- A square the page is not using takes no mouse. The button is parented to
+	-- the square, so hiding one hides the mouse with it.
+	local spare = Page.Square(Upkeep.Ceiling() + 2)
+	check(spare ~= nil and not spare:IsShown() and spare.button:GetParent() == spare,
+		"a square past the end of the row is drawn, or its button is parented past it")
+
+	-- And a bare hand, which cannot ride the cursor at all, from the out line
+	-- onto the racial's square on the in line: on both.
+	drag(held("mainhand", Upkeep.OUT), held("racial", Upkeep.IN))
 	tick()
-	check(Upkeep.LineOf(Upkeep.ByWord("weapon")) == Upkeep.IN,
+	check(Upkeep.Lines(Upkeep.ByWord("weapon")) == Upkeep.BOTH,
 		"a hand dragged onto the in line did not land on it")
-	Upkeep.Place("mainhand", Upkeep.OUT)
+	Upkeep.Place("mainhand", nil)
 
 	Upkeep.Remove(REND)
 	Nag.Apply()

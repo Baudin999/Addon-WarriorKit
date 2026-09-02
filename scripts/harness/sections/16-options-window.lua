@@ -595,8 +595,13 @@ if window then
 	-- measurement plus a hint's worth of room again, and it is the smallest
 	-- number on this list since the forty-two section window, because prose
 	-- that came out is prose that has to stay out.
-	check(prose < 26200,
-		("the window holds %d characters of prose and the budget is 26,200"):format(prose))
+	--
+	-- The missing-buff row's four sections became one and it is 25,727 across
+	-- sixty-five: two ledes and three hints went, the row is drawn instead of
+	-- listed, and the racial's page folded into the row's. 25,900 is that plus
+	-- the same room again.
+	check(prose < 25900,
+		("the window holds %d characters of prose and the budget is 25,900"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

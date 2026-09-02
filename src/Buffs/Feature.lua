@@ -18,9 +18,12 @@ local function SetBuffs(value)
 	ns.BuffNag.Apply()
 end
 
--- Which line an entry is on, in the words the page uses.
-local function LineSaid(line)
-	return line == ns.Upkeep.IN and "in a fight" or "out of a fight"
+-- Which lines an entry is on, in the words the page uses.
+local function LineSaid(word)
+	if word == ns.Upkeep.BOTH then
+		return "in and out of a fight"
+	end
+	return word == ns.Upkeep.IN and "in a fight" or "out of a fight"
 end
 
 -- The words the nag answers to, and the two lists an unknown word is looked up
@@ -62,7 +65,7 @@ local BuffWord = ns.Command.Word({
 			local entry = ns.Upkeep.Owner(id)
 			ns.Print(("  %d  %-24s %s"):format(id,
 				ns.SpellName(id) or "this client cannot name it",
-				entry and LineSaid(ns.Upkeep.LineOf(entry)) or ""))
+				entry and LineSaid(ns.Upkeep.Lines(entry)) or ""))
 		end
 	  end },
 
@@ -81,17 +84,24 @@ local BuffWord = ns.Command.Word({
 		end
 	  end },
 
-	-- The drag, typed. `buffs line shield` sends the shield square to the other
-	-- line, which is the only move there is with two of them.
+	-- The drag, typed. `buffs line shield both` puts the shield square on both
+	-- lines; `in` and `out` put it on that line alone.
 	{ "line", run = function(value)
-		local entry = ns.Upkeep.ByWord(value) or ns.Upkeep.Owner(tonumber(value) or 0)
+		local word, where = value:match("^(%S+)%s*(%S*)$")
+		local entry = word and (ns.Upkeep.ByWord(word) or ns.Upkeep.Owner(tonumber(word) or 0))
 		if not entry then
-			ns.Print("nothing on the row answers to " .. tostring(value) .. ".")
+			ns.Print("nothing on the row answers to " .. tostring(word) .. ".")
 			return
 		end
-		local other = ns.Upkeep.LineOf(entry) == ns.Upkeep.IN and ns.Upkeep.OUT or ns.Upkeep.IN
-		local ok, why = ns.Upkeep.Place(entry.key, other)
-		ns.Print(ok and ((entry.label or entry.key) .. " is checked " .. LineSaid(other) .. ".")
+		if where ~= ns.Upkeep.IN and where ~= ns.Upkeep.OUT and where ~= ns.Upkeep.BOTH then
+			ns.Print("buffs line <name> in|out|both. " .. (entry.label or entry.key)
+				.. " is checked " .. LineSaid(ns.Upkeep.Lines(entry)) .. ".")
+			return
+		end
+		-- Said as a whole rather than added to, because the word names where
+		-- the square ends up and not a line to put it on as well.
+		local ok, why = ns.Upkeep.Place(entry.key, where, true)
+		ns.Print(ok and ((entry.label or entry.key) .. " is checked " .. LineSaid(where) .. ".")
 			or why)
 		ns.BuffNag.Apply()
 	  end },
@@ -127,15 +137,17 @@ local BuffWord = ns.Command.Word({
 --------------------------------------------------------------------------
 -- The pages
 --
--- Three sections, one function each, because the one function they were
--- was at the shape gate's ceiling before the row was drawn on it.
+-- One section in three functions, because the one function it was sat at the
+-- shape gate's ceiling before the row was drawn on it.
 --------------------------------------------------------------------------
 
--- The switch, the numbers and the placing. One page, which is the rule every
--- part follows now.
+-- The switch, the numbers and the placing, and under them what the row
+-- watches, drawn as its two lines. One page, which is the rule every part
+-- follows now: the row and what is on it were two sections for a day and the
+-- split put the tick boxes a page away from the switch.
 local function RowPage(ui)
 	ui.Section("Missing buffs", "Fighting")
-	ui.Lede("A row of squares over your character, and only while something you keep up is missing. Click a square to come back here. Unlock the frames to drag it.")
+	ui.Lede("A row of squares over your character, only while something you keep up is missing: what you put on before a pull, and in a fight what lapses mid swing.")
 
 	ui.Check("nag in inns and cities too",
 		function() return ns.db.buffResting end,
@@ -154,28 +166,26 @@ local function RowPage(ui)
 		ns.BuffNag.Reset()
 	end)
 
-	ui.Reading("your main hand", function()
-		if not ns.Upkeep.EnchantShape() then
-			return "this client has no GetWeaponEnchantInfo"
-		end
-		if not GetInventoryItemLink("player", ns.Gear.MAINHAND) then
-			return "empty, so there is nothing to put a stone on"
-		end
-		local hand = ns.Upkeep.Left(ns.Gear.MAINHAND)
-		if hand == nil then
-			return "bare"
-		end
-		return ("enchanted, %d minutes left"):format(math.floor(hand / 60))
-	end)
-	ui.Reading("the row", ns.BuffNag.Describe)
+	ui.Hint("Unlock the frames to drag the row. Click a square on it to come back here.")
+end
+
+-- The racial's own two rows, on the same page, because it is one entry on
+-- the row and a page of its own said otherwise.
+local function RacialRows(ui)
+	ui.Check("make the racial square pulse",
+		function() return ns.db.buffPulse end,
+		function(value) ns.db.buffPulse = value end)
+	ui.Hint("The square breathes over about a second and a half. There is no sound: a chime competes with the sounds you are listening for.")
+
+	-- The reading says which racial and whether it is one worth a square; a
+	-- situational one says so in its own words, which is the hint that used to
+	-- hang here.
+	ui.Reading("your racial", ns.Racials.Describe)
 end
 
 -- What the row watches, drawn as the two lines it will draw and then said as a
--- list of switches.
+-- list of switches. The same section as the row, continued.
 local function WatchPage(ui)
-	ui.Section("What it watches", "Fighting")
-	ui.Lede("The row as it will look. Out of a fight is what you put on before the pull; in a fight is what lapses mid swing. Drag a spell onto either line, or a square off.")
-
 	ns.BuffPanel.Rows(ui)
 	ns.BuffPanel.Tray(ui)
 
@@ -190,7 +200,9 @@ local function WatchPage(ui)
 			ns.BuffNag.Apply()
 			ns.Options.Refresh()
 		end)
-	ui.Hint("For the ones you cannot drag: a flask, an elixir, anything an item leaves on you. The id is the aura that lands on you, not the item, and is the last part of its Wowhead address.")
+	-- One hint for the two rows above it as well, because a custom row takes
+	-- none and the sentence about the drag has to hang somewhere.
+	ui.Hint("Drag a spell off your spellbook onto either line or both, and a square off a line to stop. The id is for what you cannot drag: the aura a flask leaves on you.")
 
 	ui.Reading("your own", function()
 		return ("%d of %d"):format(#ns.Upkeep.Extra(), ns.Upkeep.MaxExtra())
@@ -222,19 +234,22 @@ local function WatchPage(ui)
 		local silent, names = ns.Upkeep.Silent()
 		return silent == 0 and "nothing, the row is watching all of it" or names
 	end)
-end
+	RacialRows(ui)
 
-local function RacialPage(ui)
-	ui.Section("Racials", "Fighting")
-	ui.Lede("Your racial is a square on the in line while it is off cooldown in a fight, because that is damage you are not doing. Its switch is with the others above.")
-
-	ui.Check("make it pulse",
-		function() return ns.db.buffPulse end,
-		function(value) ns.db.buffPulse = value end)
-	ui.Hint("The square breathes over about a second and a half. There is no sound and will not be: a chime competes with the sounds you are listening for.")
-
-	ui.Reading("yours", ns.Racials.Describe)
-	ui.Hint("Only the racials that are damage are nagged about, which is Blood Fury and Berserking. The rest are cooldowns you spend when something happens.")
+	ui.Reading("your main hand", function()
+		if not ns.Upkeep.EnchantShape() then
+			return "this client has no GetWeaponEnchantInfo"
+		end
+		if not GetInventoryItemLink("player", ns.Gear.MAINHAND) then
+			return "empty, so there is nothing to put a stone on"
+		end
+		local hand = ns.Upkeep.Left(ns.Gear.MAINHAND)
+		if hand == nil then
+			return "bare"
+		end
+		return ("enchanted, %d minutes left"):format(math.floor(hand / 60))
+	end)
+	ui.Reading("the row", ns.BuffNag.Describe)
 end
 
 ns.Register({
@@ -331,7 +346,7 @@ ns.Register({
 	help = {
 		"buffs on|off, the row of what is missing",
 		"buffs weapon|offhand|shout|food|racial on|off, one entry at a time",
-		"buffs line <name or id>, send its square to the other line",
+		"buffs line <name or id> in|out|both, which line its square is on",
 		"buffs pulse on|off, resting on|off, zoom 1 to 3",
 		"buffs list, buffs add|remove <spell id>, your own flask and elixirs",
 	},
@@ -351,7 +366,6 @@ ns.Register({
 	panel = function(ui)
 		RowPage(ui)
 		WatchPage(ui)
-		RacialPage(ui)
 	end,
 })
 

@@ -102,9 +102,11 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   racial you own and have not pressed, Blood Fury on an orc and Berserking on
   a troll pulsing in the middle of your screen until you spend them, and
   whatever you dragged there because it lapses mid swing, a shaman's shield
-  being the case it was built for. The page draws both lines, and you drag a
-  spell out of your spellbook onto either, drag a square between them, or drag
-  one off. Every entry has its own tick box too, per character, because a bank
+  being the case it was built for. An entry can stand on both lines, and a
+  shield does. The page draws both lines, and you drag a spell out of your
+  spellbook onto either, drag a square onto the other line to check it there
+  as well, or drag one off a line. Every entry has its own tick box too, per
+  character, because a bank
   alt that will never own a sharpening stone does not need to be told about one
   forever, and a low level character has no buff food yet. Add a flask by spell
   id where there is nothing to drag, because these clients will not say that an

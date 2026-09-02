@@ -9,9 +9,17 @@ ns.BuffPanel = Panel
 -- The row as it will look, twice: the line that is checked out of a fight and
 -- the line that is checked in one, with the squares that are off both
 -- underneath. What you do to it is what Cooldowns/Panel.lua already lets you do
--- to the cooldown row and for the same reason: drag a spell out of your
--- spellbook onto a line, drag a square from one line to the other, drag one
--- off to stop watching it.
+-- to the cooldown row: drag a spell out of your spellbook onto a line, drag a
+-- square from one line to the other, drag one off to stop watching it.
+--
+-- One difference from that page, and it is the whole of what the lines mean.
+-- There a square is on one line or the other and a drag between them moves it.
+-- Here the lines are disjoint sets: a shield belongs on both, so a drag from
+-- one line onto the other puts the square there as well, and a drag off a line
+-- takes it off that line only. Off its last line it goes under the row. So
+-- nothing rides the cursor out of a square on this page: a drag is answered
+-- entirely by where the button comes up, which is the one reading that can
+-- tell "onto the other line" from "off this one".
 --
 -- The lines are captioned and the cooldown row's are not, because there the
 -- size of a square says which line it is on and here both lines draw at one
@@ -45,10 +53,10 @@ local squares, shelved = {}, {}
 -- Which square a button belongs to, for the one drag the cursor cannot carry.
 local owner = {}
 
--- The square being dragged, set only for one whose contents would not go on the
--- cursor: a bare hand is not a spell. Set when the drag starts and read when
--- the button comes up.
-local pending
+-- The square being dragged: which entry, and which line it was lifted off.
+-- Set when the drag starts and read when the button comes up, which is inside
+-- one gesture and never outside one.
+local pendingKey, pendingLine
 
 --------------------------------------------------------------------------
 -- What the cursor is holding
@@ -87,52 +95,58 @@ end
 -- The two ends of a drag
 --------------------------------------------------------------------------
 
-local function Off(entry)
-	if entry then
+-- Off one line, or off the row from under it.
+local function Off(entry, line)
+	if entry and line then
+		ns.Upkeep.Leave(entry.key, line)
+	elseif entry then
 		ns.Upkeep.SetWatched(entry.key, false)
 	end
 end
 
 local function Lift(w)
-	local entry = w.entry
-	pending = nil
-	if not entry then
-		return
+	pendingKey, pendingLine = nil, nil
+	if w.entry then
+		pendingKey, pendingLine = w.entry.key, w.line
 	end
-
-	Off(entry)
-	if entry.spell and ns.CarrySpell(entry.spell) then
-		return
-	end
-	pending = entry.key
 end
 
+-- Where the button came up. On the other line, the square goes there too. On
+-- the line it came from, nothing happened. Anywhere else, the tray included,
+-- it comes off the line it was lifted from.
 local function Landed()
-	local key = pending
-	pending = nil
+	local key, from = pendingKey, pendingLine
+	pendingKey, pendingLine = nil, nil
 	if not key then
 		return
 	end
 
 	local focus = ns.MouseFocus()
 	local w = focus and owner[focus] or nil
+	if w and w.line == from then
+		return
+	end
 	if w and w.line then
 		local ok, why = ns.Upkeep.Place(key, w.line)
 		if not ok and why then
 			ns.Print(why)
 		end
+		return
+	end
+	if from then
+		ns.Upkeep.Leave(key, from)
 	end
 end
 
 -- A drop, or a right click, on one square. The right click is the drag said in
--- one press: off the row from a square on it, back onto its own line from one
--- under it.
+-- one press: off this line from a square on it, back onto the lines it shipped
+-- on from one under the row.
 local function Drop(w, spellID)
 	if spellID == nil then
 		if w.line then
-			Off(w.entry)
+			Off(w.entry, w.line)
 		elseif w.entry then
-			ns.Upkeep.Place(w.entry.key, ns.Upkeep.LineOf(w.entry))
+			ns.Upkeep.Place(w.entry.key, nil)
 		end
 		return false
 	end
@@ -173,13 +187,16 @@ local function Says(w)
 	if w.line == ns.Upkeep.IN then
 		line = "On the in line, checked during a fight, which is when it lapses."
 	end
+	local move = "Drag it onto the other line to check it there as well."
+		.. " Drag it off, or right click, to take it off this line."
 	if entry.racial then
-		line = line .. " Your racial stays on this line: a cooldown that is"
-			.. " ready between fights is ready all afternoon."
+		move = "Your racial stays on this line: a cooldown that is ready between"
+			.. " fights is ready all afternoon. Right click takes it off the row."
+	elseif ns.Upkeep.Lines(entry) == ns.Upkeep.BOTH then
+		line = line .. " It is on the other line too."
 	end
 
-	return { kind = "note", title = title,
-		lines = { line, "Drag it where you want it. Right click takes it off the row." } }
+	return { kind = "note", title = title, lines = { line, move } }
 end
 
 local function Square(frame)

@@ -76,25 +76,27 @@ local NONE = {}
 --------------------------------------------------------------------------
 -- The two lines
 --
--- Every entry stands on one of two lines, and the line is the whole of when it
--- is asked about. The out line is checked between fights, because a stone and a
--- plate of food are things you put on before the pull and cannot put on during
--- it. The in line is checked during a fight, because a shield that spent its
--- last charge on the third mob and a racial sitting off cooldown are things you
--- fix mid swing or not at all.
+-- Every entry stands on one line or on both, and the lines are the whole of
+-- when it is asked about. The out line is checked between fights, because a
+-- stone and a plate of food are things you put on before the pull and cannot
+-- put on during it. The in line is checked during a fight, because a shield
+-- that spent its last charge on the third mob and a racial sitting off
+-- cooldown are things you fix mid swing or not at all. A shield is both: it
+-- should be up before the pull and it is the one that goes down during it.
 --
--- One line each, not a set. A shield you want nagged about in both states is a
--- real want and the answer today is to pick the line it lapses on, which is the
--- fight; a square on both lines would be a third state for every drag on the
--- page to know about.
+-- So the lines are disjoint sets and an entry is a member of each on its own.
+-- Dropping a square on a line puts it there and leaves the other line alone;
+-- dragging it off a line takes it off that line only, and off the last line
+-- it is switched off, which is where the shelf under the row comes from. The
+-- saved word is `out`, `in` or `both`, and absent means what shipped.
 --
--- Two strings rather than a boolean, for the reason Cooldowns.lua gives for its
--- own pair: every reader compares one of them, and a misspelling is then a
--- square on the wrong line rather than a nil error.
+-- Strings rather than booleans, for the reason Cooldowns.lua gives for its own
+-- pair: every reader compares one of them, and a misspelling is then a square
+-- on the wrong line rather than a nil error.
 --------------------------------------------------------------------------
 
-local OUT, IN = "out", "in"
-Upkeep.OUT, Upkeep.IN = OUT, IN
+local OUT, IN, BOTH = "out", "in", "both"
+Upkeep.OUT, Upkeep.IN, Upkeep.BOTH = OUT, IN, BOTH
 
 --------------------------------------------------------------------------
 -- The three that ship, and whatever your class adds
@@ -274,29 +276,36 @@ function Upkeep.Shelved(index)
 	return shelf[index]
 end
 
--- Which line an entry stands on: the one you moved it to, or the one it
--- shipped on. The racial answers the in line whatever was saved, because a
--- saved line for it can only be a file edited by hand.
-function Upkeep.LineOf(entry)
+-- Which lines an entry stands on, as the saved word: the ones you put it on,
+-- or the one it shipped on. The racial answers the in line whatever was saved,
+-- because a saved word for it can only be a file edited by hand.
+function Upkeep.Lines(entry)
 	if entry.racial then
 		return IN
 	end
 	local moved = ns.dbc.buffLine[entry.key]
-	if moved == OUT or moved == IN then
+	if moved == OUT or moved == IN or moved == BOTH then
 		return moved
 	end
 	return entry.line or OUT
 end
 
--- How many drawn entries each line carries.
+-- Whether a drawn entry stands on one line. On the tick, off the two flags
+-- Rebuild wrote onto it.
+function Upkeep.On(entry, line)
+	return entry.lines[line] == true
+end
+
+-- How many drawn entries each line carries. An entry on both counts twice,
+-- because the page draws it twice.
 function Upkeep.Split()
-	local out = 0
+	local out, fight = 0, 0
 	for index = 1, #order do
-		if order[index].layer == OUT then
-			out = out + 1
-		end
+		local lines = order[index].lines
+		out = out + (lines[OUT] and 1 or 0)
+		fight = fight + (lines[IN] and 1 or 0)
 	end
-	return out, #order - out
+	return out, fight
 end
 
 -- The at-th drawn entry on one line, or nil past the end of it. What the page
@@ -304,7 +313,7 @@ end
 function Upkeep.OnLine(line, at)
 	local seen = 0
 	for index = 1, #order do
-		if order[index].layer == line then
+		if order[index].lines[line] then
 			seen = seen + 1
 			if seen == at then
 				return order[index]
@@ -662,8 +671,14 @@ function Upkeep.Rebuild()
 	for index = 1, count do
 		local entry = all[index]
 		local watched = Upkeep.Watched(entry.key)
+		local word = Upkeep.Lines(entry)
 		entry.present = false
-		entry.layer = Upkeep.LineOf(entry)
+		-- One table per entry, made the first time and written after that, so
+		-- a rebuild hands the row the same entry it was drawing and the tick
+		-- reads two flags off it.
+		entry.lines = entry.lines or {}
+		entry.lines[OUT] = word == OUT or word == BOTH
+		entry.lines[IN] = word == IN or word == BOTH
 		Track(entry, watched)
 		-- A shipped entry says what it is in the caption's own words; one you
 		-- added says whatever this client calls it, because "flask" is not a
@@ -757,14 +772,35 @@ function Upkeep.Remove(spell)
 end
 
 --------------------------------------------------------------------------
--- Moving a square between the lines
+-- Putting a square on a line, and taking it off one
 --
 -- What the page does when you drag one, and what `buffs line <word>` does
 -- with the same fact typed. Every entry the row could draw is a candidate,
--- whichever line it is on and whether it is switched off, because dragging a
+-- whichever lines it is on and whether it is switched off, because dragging a
 -- square onto a line means "watch this, here" and there is nothing else the
 -- gesture could mean.
 --------------------------------------------------------------------------
+
+-- The entry one key names, on the shipped list or among your own.
+local function ByKey(key)
+	local list = Upkeep.Fixed()
+	for index = 1, #list do
+		if list[index].key == key then
+			return list[index]
+		end
+	end
+	return extras[key]
+end
+
+-- The saved word for a pair of flags, and nil where the pair is what shipped.
+local function Save(entry, out, fight)
+	local word = (out and fight and BOTH) or (fight and IN) or OUT
+	if word == (entry.line or OUT) then
+		ns.dbc.buffLine[entry.key] = nil
+	else
+		ns.dbc.buffLine[entry.key] = word
+	end
+end
 
 -- Which entry already answers for a spell, or nil for one nothing on the row
 -- has heard of. Every id an entry carries and the name as well, so a shield
@@ -787,36 +823,59 @@ function Upkeep.Owner(spellID)
 	return extras[MineKey(spellID)]
 end
 
--- One entry onto one line, switched back on if it was off. Returns whether
--- anything moved, and the sentence to print where it refused.
-function Upkeep.Place(key, line)
-	if line ~= OUT and line ~= IN then
-		return false, "a square goes on the in line or the out line."
-	end
-	local entry
-	local list = Upkeep.Fixed()
-	for index = 1, #list do
-		if list[index].key == key then
-			entry = list[index]
-		end
-	end
-	entry = entry or extras[key]
+-- One entry onto one line, or onto both, or with no line named back onto the
+-- lines it shipped on. The other line is left as it was, because a drop on a
+-- line says nothing about the other one, unless `only` says the word names
+-- where the square ends up rather than a line to add: that is what `buffs line
+-- shield in` means, and what a spell just added off the spellbook means, which
+-- has a shipped line it was never on. An entry that was switched off comes
+-- back on the line it was dropped on and that line alone, which is what
+-- dragging it up out of the shelf means.
+--
+-- Returns whether anything moved, and the sentence to print where it refused.
+function Upkeep.Place(key, line, only)
+	local entry = ByKey(key)
 	if not entry then
 		return false, "nothing on the row answers to " .. tostring(key) .. "."
 	end
-	if entry.racial and line == OUT then
+	if line ~= nil and line ~= OUT and line ~= IN and line ~= BOTH then
+		return false, "a square goes on the in line, the out line or both."
+	end
+	if entry.racial and (line == OUT or line == BOTH) then
 		return false, "your racial is a cooldown, and a cooldown that is ready"
 			.. " between fights is ready all afternoon. It stays on the in line."
 	end
 
-	-- Saved only where it differs from what shipped, so an entry you put back
-	-- where it came from follows its class file again.
-	if line == (entry.line or OUT) then
+	if line == nil then
 		ns.dbc.buffLine[key] = nil
 	else
-		ns.dbc.buffLine[key] = line
+		local was = (Upkeep.Watched(key) and not only) and Upkeep.Lines(entry) or nil
+		local out = line == OUT or line == BOTH or was == OUT or was == BOTH
+		local fight = line == IN or line == BOTH or was == IN or was == BOTH
+		Save(entry, out, fight)
 	end
 	ns.dbc.buffWatch[key] = nil
+	Upkeep.Rebuild()
+	return true
+end
+
+-- One entry off one line. Off its last line it is switched off, and the saved
+-- word is dropped with it so that putting it back from the shelf puts it back
+-- where it shipped.
+function Upkeep.Leave(key, line)
+	local entry = ByKey(key)
+	if not entry or not Upkeep.Watched(key) then
+		return false
+	end
+	local was = Upkeep.Lines(entry)
+	local out = (was == OUT or was == BOTH) and line ~= OUT
+	local fight = (was == IN or was == BOTH) and line ~= IN
+	if not out and not fight then
+		ns.dbc.buffLine[key] = nil
+		Upkeep.SetWatched(key, false)
+		return true
+	end
+	Save(entry, out, fight)
 	Upkeep.Rebuild()
 	return true
 end
@@ -838,7 +897,7 @@ function Upkeep.Put(spellID, line)
 	if not ok then
 		return false, message
 	end
-	return Upkeep.Place(MineKey(spellID), line)
+	return Upkeep.Place(MineKey(spellID), line, true)
 end
 
 -- One line for the status and the panel. Names what is missing right now, which

@@ -14,12 +14,23 @@ mid fight, when it was gone.
 The halves are lines now, and both are yours. The out line is checked between
 fights and is what you put on before the pull. The in line is checked during
 one and is what lapses mid swing: the racial, and whatever you drag there. The
-page draws both lines the way the cooldown page draws its two, and you drag a
-spell out of your spellbook onto either, drag a square from one line to the
-other, drag one off to stop watching it, and drag it back from under the row.
-`/wk buffs line shield` is the same move typed. The tick boxes stay, one per
-shipped entry, because a low level character has no buff food and no stones
-and a tick is the shortest way to say so.
+lines are sets, not sides: a shield belongs on both, before the pull and
+during it, so a drop on a line puts a square there and leaves the other line
+alone, and a drag off a line takes it off that line only. Off its last line it
+goes under the row, where a right click puts it back. The page draws both
+lines the way the cooldown page draws its two, and you drag a spell out of
+your spellbook onto either, drag a square onto the other line to check it
+there as well, or drag one off. `/wk buffs line shield both` is the same
+thing typed. Nothing rides the cursor out of a square on that page, because
+where the button comes up is the one reading that tells "onto the other line"
+from "off this one". The tick boxes stay, one per shipped entry, because a
+low level character has no buff food and no stones and a tick is the shortest
+way to say so.
+
+It is one page. The row, its two lines, the switches and the racial's pulse
+were four sections for a day, and the split put the tick boxes a page away
+from the switch that turns the row on. Sixty five sections, and the prose
+budget comes down to 25,900.
 
 The racial is an entry on the row rather than a half of it. It ships on the
 in line, it has the same per-character switch the food has, it can be dragged
