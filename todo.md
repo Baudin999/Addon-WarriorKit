@@ -10,8 +10,9 @@ A title and the commit that finished it. Where an item took several commits the
 hash is the last of them. What was wrong and what fixed it is in
 `docs/CHANGELOG.md` and `docs/README.md`, what is still unconfirmed in game is
 in the README's untested list, and the full text of each item is this file at
-`e7ef4ca` for 1 to 6, 8, 11 and 12, at `ca59a77` for 7, 9 and 13, and at
-`44c79ef` for 15.
+`e7ef4ca` for 1 to 6, 8, 11 and 12, at `ca59a77` for 7, 9 and 13, at
+`44c79ef` for 15 and at `a7772af` for 16. Items 14, 19 and 23 were never
+written longer than they are here.
 
 1. Weapon swing timer. `8be9a43`
 2. Deep Wounds missing from the enemy bar debuffs. `05e40ec`
@@ -47,6 +48,7 @@ in the README's untested list, and the full text of each item is this file at
     three of them are declared through `ns.Register` and drawn off `ns.Zooms()`.
     Item 17's argument applies to this list too: a registry entry retires a
     hand-written page, and the page was never the thing worth writing.
+    `da4a01a`
 
 23. A ceiling only moves down, in `scripts/ratchet.lua`. It reads the committed
     copy of `shape.lua` and of `check.sh` against the copies on disk and fails
