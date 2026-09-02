@@ -285,6 +285,7 @@ local SECTIONS = {
 	-- place it switched back the way it found it.
 	"63-map-places",
 	"64-console",
+	"65-bag-piles",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

@@ -93,9 +93,9 @@ local function held(name)
 	return nil
 end
 
-check(held("Arcanite Reaper") ~= nil and held("Arcanite Reaper").bound == true,
+check(held("Arcanite Reaper") ~= nil and held("Arcanite Reaper").yours == true,
 	"the weapon the client called Soulbound was not read as bound")
-check(held("Bloodspiller") ~= nil and held("Bloodspiller").bound == false,
+check(held("Bloodspiller") ~= nil and held("Bloodspiller").yours == false,
 	"the weapon with no binding line on it was read as bound anyway")
 
 ----------------------------------------------------------------------

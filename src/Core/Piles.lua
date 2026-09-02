@@ -74,17 +74,17 @@ local ORDER = {
 	{ key = "session",     name = "Session" },
 	{ key = "hearthstone", name = "Hearthstone" },
 	{ key = "consumable",  name = "Consumable",   classId = 0 },
-	{ key = "weapon",      name = "Weapon",       classId = 2, split = true },
-	{ key = "armor",       name = "Armor",        classId = 4, split = true },
+	{ key = "weapon",      name = "Weapon",       classId = 2, split = "bound" },
+	{ key = "armor",       name = "Armor",        classId = 4, split = "bound" },
 	{ key = "container",   name = "Container",    classId = 1 },
 	{ key = "quiver",      name = "Quiver",       classId = 11 },
 	{ key = "projectile",  name = "Projectile",   classId = 6 },
-	{ key = "trade",       name = "Trade Goods",  classId = 7 },
+	{ key = "trade",       name = "Trade Goods",  classId = 7, nested = true },
 	{ key = "reagent",     name = "Reagent",      classId = 5 },
 	{ key = "recipe",      name = "Recipe",       classId = 9 },
-	{ key = "quest",       name = "Quest",        classId = 12 },
+	{ key = "quest",       name = "Quest",        classId = 12, split = "quest" },
 	{ key = "key",         name = "Key",          classId = 13 },
-	{ key = "misc",        name = "Miscellaneous", classId = 15 },
+	{ key = "misc",        name = "Miscellaneous", classId = 15, nested = true },
 	{ key = "other",       name = "Other" },
 	{ key = "junk",        name = "Junk" },
 	{ key = "empty",       name = "Empty" },
@@ -93,14 +93,19 @@ local ORDER = {
 Piles.EMPTY, Piles.JUNK, Piles.OTHER = "empty", "junk", "other"
 Piles.SESSION = "session"
 
--- The two piles that are drawn in two lanes, and why the flag is here.
+-- The three piles that are drawn in two lanes, and why the flag is here.
 --
 -- Weapons and armour are the only things you carry that bind, so they are the
 -- only piles where "already yours" and "still worth something to somebody else"
--- is a division you can make at all. It is on the pile rather than in the
--- window because it falls out of the class: an item class either has a binding
--- or it does not, and that is the same fact for every window that ever draws
--- this list.
+-- is a division you can make at all. The quest pile divides on a different
+-- fact and draws the same way: what a quest in your log still wants on the
+-- left, and what nothing in your log wants on the right, where it is one
+-- click from gone. The flag says which fact, "bound" or "quest", because the
+-- two are read off different things, a tooltip for one and Questie's item rows
+-- for the other, and only the window that walks a bag can read either. It is
+-- on the pile rather than in the window because it falls out of the class: an
+-- item class either binds or it does not, either is a quest item or is not,
+-- and that is the same fact for every window that ever draws this list.
 --
 -- What a lane means and how wide it is are not here. Bags/Grid.lua decides
 -- both, because they are drawing, and a vendor's rack reads the same flag and
@@ -113,12 +118,48 @@ Piles.SESSION = "session"
 local SPLIT = {}
 for index = 1, #ORDER do
 	if ORDER[index].split then
-		SPLIT[ORDER[index].key] = true
+		SPLIT[ORDER[index].key] = ORDER[index].split
 	end
 end
 
+-- Which fact a pile divides on, or nil for a pile drawn in one lane.
 function Piles.Splits(key)
-	return SPLIT[key] == true
+	return SPLIT[key]
+end
+
+-- The two piles that are cut into sub-piles, and why.
+--
+-- Trade goods and miscellany are the two classes the client files everything
+-- under that it has a word for and no better word for. A full bag holds forty
+-- squares of cloth, ore, herbs, leather and pigment under one heading, and
+-- the four totems a shaman carries are in among the pets and the holiday
+-- trinkets. Both classes carry a subclass the client will name, Cloth or
+-- Metal & Stone or Reagent, and that is the cut: one sub-pile per subclass,
+-- each under the client's own word for it, and the items in one sorted by
+-- their level so linen sits before wool before silk.
+--
+-- The subclass is the second thing Piles.Of answers and it is answered only
+-- for these piles, so an entry's `sub` means "which sub-pile" and nothing
+-- else. A pile whose entries all share one subclass is drawn as one pile
+-- under its own heading: a sub-heading over everything says nothing.
+--
+-- Keyed the way SPLIT is and for the same reason.
+local NESTED = {}
+for index = 1, #ORDER do
+	if ORDER[index].nested then
+		NESTED[ORDER[index].key] = true
+	end
+end
+
+function Piles.Nests(key)
+	return NESTED[key] == true
+end
+
+-- Pile key to pile, for the sort below, which has to know what kind of pile
+-- two entries are in and is handed only their key.
+local BY_KEY = {}
+for index = 1, #ORDER do
+	BY_KEY[ORDER[index].key] = ORDER[index]
 end
 
 -- Class number to pile, built off the list above so the two cannot drift.
@@ -173,6 +214,21 @@ local function ClassWord(classId)
 	return nil
 end
 
+-- The client's own word for a subclass, or nothing where it will not say.
+-- Resolved the way ClassWord is: Baganator reads C_Item.GetItemSubClassInfo
+-- on this client and the loose global is what the older one carries.
+local function SubClassWord(classId, subClassId)
+	local lookup = (_G.C_Item and _G.C_Item.GetItemSubClassInfo) or _G.GetItemSubClassInfo
+	if type(lookup) ~= "function" then
+		return nil
+	end
+	local ok, word = pcall(lookup, classId, subClassId)
+	if ok and type(word) == "string" and word ~= "" then
+		return word
+	end
+	return nil
+end
+
 -- What a pile is called, resolved once and kept on the pile.
 --
 -- Once rather than per scan because it cannot change inside a session, and on
@@ -187,6 +243,25 @@ local function Word(group)
 end
 
 Piles.Word = Word
+
+-- What a sub-pile is called, resolved once per subclass and kept on the pile.
+--
+-- A client with no word for the number gets the pile's word and the number
+-- after it, which is a heading nobody should see and one that still tells two
+-- sub-piles apart. An entry with no subclass at all is headed with the pile's
+-- own word: it is the sub-pile of things the client did not file further.
+local function SubWord(group, sub)
+	if sub == nil then
+		return Word(group)
+	end
+	group.subs = group.subs or {}
+	local word = group.subs[sub]
+	if word == nil then
+		word = SubClassWord(group.classId, sub) or ("%s %d"):format(Word(group), sub)
+		group.subs[sub] = word
+	end
+	return word
+end
 
 -- The heading on a pile, said by the part that owns it.
 --
@@ -209,22 +284,31 @@ end
 -- The grouping
 --------------------------------------------------------------------------
 
--- Which pile an item belongs in. The whole of the categorisation.
+-- Which pile an item belongs in, and which sub-pile of it. The whole of the
+-- categorisation.
+--
+-- The sub-pile is the client's subclass number and it is answered only for a
+-- pile that is cut into them, so a caller can write both answers onto an
+-- entry and read `sub` as "which sub-pile" without asking again.
 function Piles.Of(link)
 	if type(link) ~= "string" then
-		return Piles.EMPTY
+		return Piles.EMPTY, nil
 	end
-	local itemId, classId = ns.ItemKind(link)
+	local itemId, classId, subClassId = ns.ItemKind(link)
 	if itemId == HEARTHSTONE then
-		return "hearthstone"
+		return "hearthstone", nil
 	end
 	-- Quality, and only where the client will grade it. Nil is "not cached
 	-- yet" and has to stay out of the junk pile: an item wrongly called junk
 	-- is an item sitting under the heading that means sell me.
 	if ns.ItemValue(link) == 0 then
-		return Piles.JUNK
+		return Piles.JUNK, nil
 	end
-	return BY_CLASS[classId] or Piles.OTHER
+	local key = BY_CLASS[classId] or Piles.OTHER
+	if NESTED[key] then
+		return key, subClassId
+	end
+	return key, nil
 end
 
 -- What order two things in the same pile come in.
@@ -237,11 +321,49 @@ end
 -- slot for a bag window and the merchant's own index for a vendor, and either
 -- way it is where the client put the thing.
 --
+-- Two kinds of pile put something in front of the grade. A pile cut into
+-- sub-piles sorts by subclass first, which is what makes the cut possible
+-- from one sorted list, and by the item's own level inside a subclass, so
+-- the cloth runs linen to netherweave the way the game hands it out. The
+-- quest pile sorts by rank, which is the row of the log the item belongs to,
+-- with the ranked ahead of the unranked: what you are on, in the order you
+-- are on it, and then the leftovers. Both fall through to the grade and the
+-- name after that, so two things at one level hold still the same way.
+--
 -- Empty slots sort by where they are instead, because they have neither of the
 -- other two and because a bag emptying should not renumber the squares.
+local function Ahead(a, b)
+	local group = BY_KEY[a.group]
+	if not group then
+		return nil
+	end
+	if group.nested then
+		local left, right = a.sub or math.huge, b.sub or math.huge
+		if left ~= right then
+			return left < right
+		end
+		left, right = a.level or 0, b.level or 0
+		if left ~= right then
+			return left < right
+		end
+	elseif group.split == "quest" then
+		if (a.rank == nil) ~= (b.rank == nil) then
+			return a.rank ~= nil
+		end
+		if a.rank ~= b.rank then
+			return a.rank < b.rank
+		end
+	end
+	return nil
+end
+
 local function Before(a, b)
 	if a.group == Piles.EMPTY then
 		return (a.at or 0) < (b.at or 0)
+	end
+	local ahead = Ahead(a, b)
+	if ahead ~= nil then
+		return ahead
 	end
 	local left, right = a.quality or -1, b.quality or -1
 	if left ~= right then
@@ -275,6 +397,77 @@ function Piles.Fill(owner, entries, used)
 	return buckets
 end
 
+-- One row of the caller's state: a pile, or one sub-pile of a pile, under the
+-- heading it is drawn with.
+--
+-- `under` is the sub-pile flag and the window reads it as a smaller heading.
+-- A pile that is cut writes one row with nothing in it for its own heading
+-- and then a row per sub-pile, so a reader walking the rows draws a heading,
+-- a sub-heading, some squares, a sub-heading, some squares. The empty row is
+-- the one shape a reader has to expect that it did not before: a heading with
+-- no squares under it and no air after it.
+local function Row(state, shown, group, held, name, under, sub)
+	shown = shown + 1
+	local row = state.groups[shown]
+	if not row then
+		row = {}
+		state.groups[shown] = row
+	end
+	row.key, row.name, row.entries = group.key, name, held
+	row.split = group.split ~= nil
+	row.under, row.sub = under, sub
+	return shown
+end
+
+-- The heading row of a cut pile has nothing under it, and this is that
+-- nothing: one table, never written to, so no reader can mistake it for a
+-- pile that emptied.
+local NONE = {}
+
+-- The sub-pile tables, one pool per caller and refilled from then on, for the
+-- reason the buckets are. `used` is how many this pass has handed out.
+local slices = {}
+
+local function Slice(owner)
+	local pool = slices[owner]
+	if not pool then
+		pool = { used = 0 }
+		slices[owner] = pool
+	end
+	pool.used = pool.used + 1
+	local slice = pool[pool.used]
+	if not slice then
+		slice = {}
+		pool[pool.used] = slice
+	end
+	wipe(slice)
+	return slice
+end
+
+-- One sorted pile, cut at every change of subclass into a heading row and a
+-- row per sub-pile. A pile whose entries all share one subclass is one row
+-- under its own heading, which is the only case where the first and the last
+-- entry of a list sorted by subclass agree.
+local function Nest(owner, state, shown, group, held)
+	if held[1].sub == held[#held].sub then
+		return Row(state, shown, group, held, Word(group), false, nil)
+	end
+	shown = Row(state, shown, group, NONE, Word(group), false, nil)
+	local start = 1
+	for index = 2, #held + 1 do
+		if index > #held or held[index].sub ~= held[start].sub then
+			local slice = Slice(owner)
+			for at = start, index - 1 do
+				slice[#slice + 1] = held[at]
+			end
+			local sub = held[start].sub
+			shown = Row(state, shown, group, slice, SubWord(group, sub), true, sub)
+			start = index
+		end
+	end
+	return shown
+end
+
 -- The piles that have anything in them, sorted, in drawing order, written into
 -- the caller's own state table.
 --
@@ -282,12 +475,19 @@ end
 -- caller passes one: the bag window folds its empty pile into the single square
 -- that says how many free slots there are. Nothing else has an equivalent, and
 -- a hook is cheaper than the alternative, which is this loop written twice.
+--
+-- A cut pile comes out as more than one row; see Nest. A caller whose entries
+-- carry no `sub`, which is the merchant's rack, gets every pile in one row the
+-- way it always did.
 function Piles.Collect(owner, state, fold)
 	local buckets = sets[owner]
 	local shown = 0
 	if not buckets then
 		state.shown = 0
 		return 0
+	end
+	if slices[owner] then
+		slices[owner].used = 0
 	end
 	for index = 1, #ORDER do
 		local group = ORDER[index]
@@ -297,14 +497,11 @@ function Piles.Collect(owner, state, fold)
 			if fold then
 				fold(group.key, held)
 			end
-			shown = shown + 1
-			local row = state.groups[shown]
-			if not row then
-				row = {}
-				state.groups[shown] = row
+			if group.nested then
+				shown = Nest(owner, state, shown, group, held)
+			else
+				shown = Row(state, shown, group, held, Word(group), false, nil)
 			end
-			row.key, row.name, row.entries = group.key, Word(group), held
-			row.split = group.split == true
 		end
 	end
 	state.shown = shown

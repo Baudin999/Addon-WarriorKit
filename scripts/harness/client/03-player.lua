@@ -479,6 +479,30 @@ local ITEMS = {
 		use = "Increased Strength" },
 	["Mark of Tyranny"]   = { id = 4002, classId = 4, quality = 3, price = 0,
 		equip = "INVTYPE_TRINKET", icon = "Interface\\Icons\\Mark" },
+	-- What 65-bag-piles.lua stands a fifth bag up with, and in no bag otherwise.
+	-- The subclass is what cuts a pile into sub-piles and the rating is the
+	-- item level that orders one, so each pair here differs on exactly the
+	-- number a claim is made about. The numbers are the client's, read off
+	-- Questie's tbcItemDB.lua rather than typed: cloth is class 7 subclass 5,
+	-- ore is 7 and 7, and a shaman's totems are class 15 subclass 1 at item
+	-- levels 4, 10, 20 and 30, which is why they are Miscellaneous and not
+	-- Reagent and why they were in among the pets. The basket is subclass 2,
+	-- a pet, and exists so the miscellany has two subclasses to cut on.
+	["Wool Cloth"]        = { id = 2006, classId = 7, subClassId = 5, quality = 1,
+		price = 25, stack = 20, rating = 15, needs = 0 },
+	["Silk Cloth"]        = { id = 2007, classId = 7, subClassId = 5, quality = 1,
+		price = 50, stack = 20, rating = 25, needs = 0 },
+	["Tin Ore"]           = { id = 2008, classId = 7, subClassId = 7, quality = 1,
+		price = 30, stack = 20, rating = 20, needs = 0 },
+	["Earth Totem"]       = { id = 6001, classId = 15, subClassId = 1, quality = 1,
+		price = 1, rating = 4, needs = 0 },
+	["Air Totem"]         = { id = 6002, classId = 15, subClassId = 1, quality = 1,
+		price = 1, rating = 30, needs = 0 },
+	["Snake Basket"]      = { id = 6003, classId = 15, subClassId = 2, quality = 1,
+		price = 1, rating = 20, needs = 0 },
+	-- A quest item wanted by a quest further down the log than the diplomat's,
+	-- so the quest lane has two ranked items to put in log order.
+	["Trapper's Rope"]    = { id = 3008, classId = 12, quality = 1, price = 0 },
 }
 
 local BAG = { "Bloodspiller", "Aegis", "Arcanite Reaper" }

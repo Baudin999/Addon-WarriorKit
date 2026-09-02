@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### The cloth in one place, and the quest items you can throw away
+
+The bag window filed everything under the class the client files it under,
+and two classes are where the client stops trying. Trade Goods held forty
+squares of cloth, ore, herb, leather and pigment under one heading, sorted
+by grade and then by name, so the linen sat between the ore and the silk.
+Miscellaneous was the same with a shaman's four totems in among the pets.
+
+Both piles are cut now. One sub-pile per subclass, under the client's own
+word for it, and the things in one run by their item level: Trade Goods, then
+Cloth over linen, wool, silk, mageweave, then Metal & Stone over copper, tin,
+iron. The totems are four squares in a row under Reagent, earth to air. The
+subclass was the third thing GetItemInfoInstant answered all along and
+`Core/Piles.lua` threw it away; it keeps it now, for those two piles only, and
+sorts on it. A pile whose contents are one subclass wide draws as it did.
+
+The quest pile is drawn in two lanes the way weapons and armour are, on a
+different fact. What a quest in your log still wants is on the left, in the
+order the log lists the quests, and what nothing in your log wants is on the
+right, where it is one click from gone. `Core/QuestItems.lua` reads Questie's
+item rows the way the clutter list does and asks the client which row of the
+log each related quest sits on. An item that starts a quest you have not done
+is kept and sorts under the last quest you are on. An item Questie has no row
+for is kept: the right lane is a suggestion to throw something away, and it
+is never made on a guess. With no Questie loaded the pile is one lane.
+
+The harness stands a fifth bag up with two cloths, an ore, two totems, a pet
+and a second wanted quest item, and reads the rows back: four trade rows,
+three miscellany rows, the cloth by level, the quest lane in log order, the
+window's body the sum of the new line heights, and the whole pile in the left
+lane once the Questie loader is taken away.
+
 ### The nag in a fight
 
 The missing-buff row had two halves that took turns and only one of them was
@@ -95,7 +127,7 @@ On and off, Fighting, Action bars, Frames, Windows, Feeds and meters, Chores,
 The screen, Under the hood. On and off is what Start here was, which was the
 page of switches all along under a name that did not say so. A part names the
 page its switch goes on with `switch.page` and hangs its one sentence on it with
-`switch.says`; the seven second boxes are gone. The harness refuses a page with
+`switch.hint`; the seven second boxes are gone. The harness refuses a page with
 two controls under one label and a switch on a page other than the one its part
 asked for.
 
@@ -106,6 +138,28 @@ bars, has the switch at the top, the strip picking a bar, the tick that clones
 it and the rows that shape and place it. The missing-buff row and the cooldown
 row lose their two-row Placing pages the same way. Sixty seven sections, and
 two thousand characters less to read.
+
+### The places on the map
+
+The world map carried you, your corpse, every quest marker and every turn-in,
+all read off Questie's own frames, and it could not carry a flight master.
+Switching one on lives in a dropdown behind Questie's minimap button, and the
+corral puts that button away. So the map showed whatever Questie happened to
+have on when you installed it and nothing you could change from here.
+
+There is a Places page under Chores now, one tick box per kind of place
+Questie offers this character: the townsfolk, then the vendors, then the
+profession trainers, in Questie's order and under Questie's labels. A tick is
+a click in Questie's menu. `Map/Places.lua` reads the three lists that
+dropdown is built from and calls the entry's own flip, so the state is
+Questie's profile, the faction and class filtering is Questie's, and both
+maps draw the same places. `/wk map places` lists the kinds and switches one.
+
+The map repaints on the tick. Questie spawns a kind of NPC over a few ticks,
+so a map that is already open shows the mailboxes at once and the flight
+masters on its next repaint, which is the next quest log event or the next
+open. A repaint booked half a second out was tried and taken out again: it
+put the whole chart on a tick path, which `scripts/hot.lua` refused.
 
 ### The ninth buff
 

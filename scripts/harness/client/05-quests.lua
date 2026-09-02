@@ -31,13 +31,22 @@ local QUEST_LOG = { 102 }
 --   3005 a quest neither taken nor completed       clutter, uncertain
 --   3006 starts a quest you have completed         clutter, certain
 --   3007 absent from the database entirely         kept
+--   3008 a quest further down your log             kept, and ranked after 3002
+--
+-- Every row carries its name, because a row is a row: Core/QuestItems.lua
+-- asks for the name to tell an item Questie has never heard of from one it
+-- ties to no quest, and a fixture row with no name would read as absent.
 local QUESTIE_ITEMS = {
-	[3001] = { relatedQuests = { 101 } },
-	[3002] = { relatedQuests = { 102 } },
-	[3003] = { startQuest = 103 },
-	[3004] = { relatedQuests = { 104, 101 } },
-	[3005] = { relatedQuests = { 103 } },
-	[3006] = { startQuest = 101 },
+	[3001] = { name = "Hogger's Claw", relatedQuests = { 101 } },
+	[3002] = { name = "Diplomat's Ring", relatedQuests = { 102 } },
+	[3003] = { name = "Sealed Letter", startQuest = 103 },
+	[3004] = { name = "Zul'Mamwe Fetish", relatedQuests = { 104, 101 } },
+	[3005] = { name = "Rogue's Token", relatedQuests = { 103 } },
+	[3006] = { name = "Old Cipher", startQuest = 101 },
+	-- 202 rather than a quest lower down, because 47-quest-log.lua abandons
+	-- one and 52-character.lua another, and the brotherhood is the lowest
+	-- row still in the log by the time the bag sections run.
+	[3008] = { name = "Trapper's Rope", relatedQuests = { 202 } },
 }
 
 -- Questie's drop table, keyed item then npc, in percent.

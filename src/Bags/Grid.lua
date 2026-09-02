@@ -42,13 +42,23 @@ ns.BagsGrid = Grid
 -- holders are all the size of the canvas, so a square is anchored inside its
 -- own parent and the layout never has to know which holder it landed in.
 --
--- **Two piles are drawn in two lanes.** Weapons and armour are the only things
--- you carry that bind, so they are the only piles where "already mine" and
--- "still worth something to somebody else" is a division you can make. Bound on
--- the left, unbound on the right, half a square of air between them, and each
--- lane wraps inside its own half of the width. Which piles split is
--- Core/Piles.lua's; how wide a lane is and where the second one starts are here,
--- because they are drawing.
+-- **Three piles are drawn in two lanes.** Weapons and armour are the only
+-- things you carry that bind, so they are the only piles where "already mine"
+-- and "still worth something to somebody else" is a division you can make.
+-- The quest pile divides the same way on a different fact: what a quest in
+-- your log still wants, and what nothing in it wants. Yours on the left,
+-- not on the right, half a square of air between them, and each lane wraps
+-- inside its own half of the width. Which piles split, and on what, is
+-- Core/Piles.lua's; which lane a square is in is Bags/Bags.lua's, written on
+-- the entry as `yours`; how wide a lane is and where the second one starts
+-- are here, because they are drawing.
+--
+-- **Two piles are cut into sub-piles.** Trade goods and miscellany arrive as
+-- a heading row with nothing under it and then a row per subclass, each with
+-- its own smaller caption: Trade Goods, then Cloth over the cloth, then
+-- Metal & Stone over the ore. Which piles cut and where is Core/Piles.lua's
+-- too; what a sub-caption looks like is UI/Slot.lua's; that a heading with
+-- nothing under it takes its own line and no air after it is here.
 --
 -- Every other pile is one lane of the full width and spends the same half square
 -- as air at its right edge. That is deliberate and it is what Grid.Width adds:
@@ -440,11 +450,44 @@ local function Place(button, top, column, line, shift, side)
 end
 
 -- Everything the pool made and this pass did not use.
-local function Trim(squaresUsed, headersUsed)
+local function Trim(squaresUsed, headersUsed, subsUsed)
 	for index = squaresUsed + 1, #squares do
 		squares[index]:Hide()
 	end
-	headings:Trim(headersUsed)
+	headings:Trim(headersUsed, subsUsed)
+end
+
+-- One pile's squares, in one lane or two, from `top` down, and how many lines
+-- they took. The entries arrive sorted, and dispatching them one at a time
+-- keeps each lane in the order the sort put them.
+--
+-- The two lanes are counted rather than collected. A split pile could be
+-- partitioned into two lists and walked twice, and that is two tables per
+-- pile per bag update for an answer a running count already has.
+local function Lay(group, columns, at, top, side, selling)
+	local entries = group.entries
+	local left, right = 0, 0
+	local split = Splits(group, columns)
+	local lane = split and Lane(columns) or columns
+	local rest = split and (columns - lane) or columns
+	local shift = lane * (SLOT + GAP) + Gap()
+	for held = 1, #entries do
+		at = at + 1
+		local entry = entries[held]
+		local button = Square(at)
+		Paint(button, entry, selling)
+		if split and not entry.yours then
+			Place(button, top, right % rest, math.floor(right / rest), shift, side)
+			right = right + 1
+		else
+			Place(button, top, left % lane, math.floor(left / lane), 0, side)
+			left = left + 1
+		end
+		button:Show()
+	end
+	-- As tall as the taller lane. On an unsplit pile the right one is empty
+	-- and this is the count it always was.
+	return at, math.max(math.ceil(left / lane), math.ceil(right / rest))
 end
 
 --------------------------------------------------------------------------
@@ -462,7 +505,7 @@ end
 -- The height is handed back rather than written anywhere, because the thing that
 -- has to know is the scroll view and the scroll view belongs to the window.
 function Grid.Paint(state, columns)
-	local at, top = 0, 0
+	local at, top, named, subs = 0, 0, 0, 0
 	-- Asked once for the whole pass rather than per square. It cannot change
 	-- inside one layout, and a hundred and fifty squares asking the same
 	-- question is a hundred and fifty answers that are the same.
@@ -479,38 +522,25 @@ function Grid.Paint(state, columns)
 	local side = Snap(SLOT)
 	for index = 1, state.shown do
 		local group = state.groups[index]
-		local entries = group.entries
-		top = headings:Name(index, group.name, top)
-		-- The two lanes are counted rather than collected. A split pile could be
-		-- partitioned into two lists and walked twice, and that is two tables per
-		-- pile per bag update for an answer a running count already has. The
-		-- entries arrive sorted, and dispatching them one at a time keeps each
-		-- lane in the order the sort put them.
-		local left, right = 0, 0
-		local split = Splits(group, columns)
-		local lane = split and Lane(columns) or columns
-		local rest = split and (columns - lane) or columns
-		local shift = lane * (SLOT + GAP) + Gap()
-		for held = 1, #entries do
-			at = at + 1
-			local entry = entries[held]
-			local button = Square(at)
-			Paint(button, entry, selling)
-			if split and not entry.bound then
-				Place(button, top, right % rest, math.floor(right / rest), shift, side)
-				right = right + 1
-			else
-				Place(button, top, left % lane, math.floor(left / lane), 0, side)
-				left = left + 1
-			end
-			button:Show()
+		-- A sub-pile's caption is the smaller one, and both pools are counted
+		-- separately because they are two pools.
+		if group.under then
+			subs = subs + 1
+			top = headings:Sub(subs, group.name, top)
+		else
+			named = named + 1
+			top = headings:Name(named, group.name, top)
 		end
-		-- As tall as the taller lane. On an unsplit pile the right one is empty
-		-- and this is the count it always was.
-		local lines = math.max(math.ceil(left / lane), math.ceil(right / rest))
-		top = top + lines * SLOT + (lines - 1) * GAP + BREAK
+		-- A cut pile's own heading has nothing under it, and it takes its line
+		-- and no air: the sub-caption under it is the next line, and the air
+		-- between two piles is spent after the last sub-pile's squares.
+		if #group.entries > 0 then
+			local lines
+			at, lines = Lay(group, columns, at, top, side, selling)
+			top = top + lines * SLOT + (lines - 1) * GAP + BREAK
+		end
 	end
-	Trim(at, state.shown)
+	Trim(at, named, subs)
 	return math.max(top - BREAK, 1)
 end
 
@@ -523,6 +553,11 @@ end
 
 function Grid.Headers()
 	return headings:All()
+end
+
+-- The sub-captions, for the harness, for the same reason.
+function Grid.Subs()
+	return headings:Subs()
 end
 
 function Grid.Describe()

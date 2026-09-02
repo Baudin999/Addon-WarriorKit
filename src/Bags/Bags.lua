@@ -15,7 +15,7 @@ ns.Bags = Bags
 -- an item has already bound to you is written nowhere an API will hand over, and
 -- the only way to it is the client's own tooltip pointed at the slot. UI/Scan.lua
 -- owns that frame and is the one file allowed to, so what this file does is ask
--- it a question and get a yes or a no back. See Bind below.
+-- it a question and get a yes or a no back. See Lane below.
 --
 -- **The piles themselves are Core/Piles.lua's.** Which class an item is filed
 -- under, what that class is called in your language, and what order the piles
@@ -100,16 +100,21 @@ end
 -- The scan
 --------------------------------------------------------------------------
 
--- Whether what is lying in this slot has already bound to you.
+-- Which lane a square in a split pile goes in, which is whether the thing on
+-- it is yours: bound to you, or wanted by a quest you are on.
 --
--- Read off the client's own tooltip and there is no other way to it. The link
--- carries no history: a sword you have been swinging for three months and the
--- same sword on a vendor's shelf are character for character the same string,
--- and GetItemInfo answers "binds when equipped" about both. Only the slot knows,
--- which is why this takes a bag and a slot and why UI/Scan.lua's `bag` kind
--- exists. See Head in UI/Tip.lua, which is the other caller that had to know.
+-- Core/Piles.lua says which fact a pile divides on and this is where each is
+-- read, because each is read off something only a bag scan can reach.
 --
--- **Asked every scan and cached nowhere.** The obvious cache is the pooled entry
+-- **Binding is read off the client's own tooltip and there is no other way to
+-- it.** The link carries no history: a sword you have been swinging for three
+-- months and the same sword on a vendor's shelf are character for character
+-- the same string, and GetItemInfo answers "binds when equipped" about both.
+-- Only the slot knows, which is why this takes a bag and a slot and why
+-- UI/Scan.lua's `bag` kind exists. See Head in UI/Tip.lua, which is the other
+-- caller that had to know.
+--
+-- Asked every scan and cached nowhere. The obvious cache is the pooled entry
 -- itself, keyed on the link and the slot, and it is wrong in both directions.
 -- An item the client has not graded yet answers a tooltip that says so, and a
 -- cached "not bound" from the first scan after a login never gets asked again
@@ -118,21 +123,35 @@ end
 -- Scan.Has allocates nothing, so what a cache would buy here is a handful of C
 -- calls, and what it costs is a lane that is quietly wrong for the session.
 --
--- Asked only of a pile that is drawn in two lanes, which is nine or ten squares
--- in a full bag rather than a hundred and fifty. Everything else is filed the
--- same whatever its binding, so the scan would be paid for nothing.
---
 -- Nil from the probe is a client that will not take the question, and it reads
 -- as unbound: one lane holding everything is a pile that looks like every other
 -- pile in the window, and the alternative is a lane of soulbound greens that are
 -- nothing of the sort.
-local function Bind(entry, bag, slot, link)
-	if not link or not ns.Piles.Splits(entry.group) then
-		entry.bound = false
+--
+-- **A quest item is read off Questie's item rows and the quest log.**
+-- Core/QuestItems.lua answers two things: where in the log the quest that
+-- wants it sits, which is the item's rank and what the pile sorts on, and
+-- whether anything wants it at all, which is the lane. Its "cannot say" is the
+-- left lane, for the reason that file gives, so a session with no Questie in
+-- it draws the quest pile in one lane like every other pile and never offers
+-- anything up.
+--
+-- Asked only of a pile that is drawn in two lanes, which is twenty squares in
+-- a full bag rather than a hundred and fifty. Everything else is filed the
+-- same whatever its binding, so either read would be paid for nothing.
+local function Lane(entry, bag, slot, link)
+	local kind = link and ns.Piles.Splits(entry.group)
+	entry.rank = nil
+	if not kind then
+		entry.yours = false
 		return false
 	end
-	entry.bound = UI.Scan.Has("bag", SOULBOUND, bag, slot) == true
-	return entry.bound
+	if kind == "quest" then
+		entry.rank, entry.yours = ns.QuestItems.Place(link)
+		return entry.yours
+	end
+	entry.yours = UI.Scan.Has("bag", SOULBOUND, bag, slot) == true
+	return entry.yours
 end
 
 -- One slot, into the pooled entry that belongs to it. Every field is written
@@ -152,7 +171,7 @@ local function Fill(index, bag, slot)
 	local link = ns.ContainerItemLink(bag, slot)
 	entry.at, entry.bag, entry.slot, entry.link = index, bag, slot, link
 	entry.name, entry.icon, entry.quality, entry.count = nil, nil, nil, 1
-	entry.price = nil
+	entry.price, entry.level = nil, nil
 	if link then
 		entry.name, entry.icon = ns.ItemInfo(link)
 		-- Both halves of one call. The grade decides the pile and the price
@@ -160,9 +179,16 @@ local function Fill(index, bag, slot)
 		-- merchant, and asking for the second one separately would be a second
 		-- cache lookup per slot for a number the first one already handed back.
 		entry.quality, entry.price = ns.ItemValue(link)
+		-- The item's own level, which is what orders a sub-pile: linen before
+		-- wool before silk. Read for every slot rather than only the two piles
+		-- that sort on it, because the pile is not known until the line after
+		-- this and a cache lookup per slot is what every other field costs.
+		entry.level = ns.ItemLevel(link)
 		entry.count = ns.ContainerItem(bag, slot) or 1
 	end
-	entry.group = ns.Piles.Of(link)
+	-- The pile, and for a pile that is cut into sub-piles, which one. Both from
+	-- the one call, so `sub` is never a subclass the pile does not cut on.
+	entry.group, entry.sub = ns.Piles.Of(link)
 	-- The session pile overrules the class, and it is the only thing that does.
 	-- What you picked up in the last hour is not a fact about the item, so it
 	-- cannot be a rule in Core/Piles.lua and it must not reach the merchant
@@ -178,7 +204,7 @@ local function Fill(index, bag, slot)
 	else
 		entry.gained = nil
 	end
-	Bind(entry, bag, slot, link)
+	Lane(entry, bag, slot, link)
 	return entry
 end
 

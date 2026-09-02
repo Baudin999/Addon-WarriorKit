@@ -203,7 +203,7 @@ do
 		if group.split == true and columns >= 2 then
 			local lane, bound = math.ceil(columns / 2), 0
 			for held = 1, #group.entries do
-				if group.entries[held].bound then
+				if group.entries[held].yours then
 					bound = bound + 1
 				end
 			end

@@ -99,6 +99,11 @@ UI.SLOT_DIM = 0.4
 -- tick box in it, and there is no control here. The break is one row gap rather
 -- than two: what separates two piles is the heading under the air, not the air.
 UI.SLOT_HEADER, UI.SLOT_BREAK = M.heading + 3, M.rowGap
+-- The line a sub-pile's caption sits on: Cloth under Trade Goods. The small
+-- face plus the same three, for the same reason, and dim rather than the
+-- heading colour so the pile's own heading is still the thing the eye lands
+-- on.
+UI.SLOT_SUBHEADER = M.small + 3
 
 -- How wide a line of this many squares is.
 --
@@ -287,7 +292,7 @@ Headings.__index = Headings
 -- are: a bag update arrives five times for one loot and this client cannot
 -- destroy a frame, so a caption made per pass is a caption leaked per pass.
 function UI.Headings(canvas)
-	return setmetatable({ canvas = canvas, labels = {} }, Headings)
+	return setmetatable({ canvas = canvas, labels = {}, subs = {} }, Headings)
 end
 
 -- One caption at `top`, and where the first thing under it starts. Returning
@@ -307,10 +312,32 @@ function Headings:Name(index, text, top)
 	return top + UI.SLOT_HEADER
 end
 
--- Everything the pool made and this pass did not use.
-function Headings:Trim(used)
+-- One sub-caption at `top`, and where the first thing under it starts. Its
+-- own pool rather than a restyled caption, because a string's face and colour
+-- are set when it is made, and two pools are cheaper than resetting both on
+-- every caption every pass.
+function Headings:Sub(index, text, top)
+	local label = self.subs[index]
+	if not label then
+		label = UI.Label(self.canvas, M.small, C.dim, "LEFT", UI.FLAT)
+		UI.Wrap(label, false)
+		self.subs[index] = label
+	end
+	label:ClearAllPoints()
+	label:SetPoint("TOPLEFT", self.canvas, "TOPLEFT", 0, -top)
+	label:SetText(text)
+	label:Show()
+	return top + UI.SLOT_SUBHEADER
+end
+
+-- Everything the pool made and this pass did not use. A caller that draws no
+-- sub-captions passes nothing for them and every one it ever drew goes away.
+function Headings:Trim(used, subsUsed)
 	for index = used + 1, #self.labels do
 		self.labels[index]:Hide()
+	end
+	for index = (subsUsed or 0) + 1, #self.subs do
+		self.subs[index]:Hide()
 	end
 	return #self.labels
 end
@@ -319,4 +346,8 @@ end
 -- found are the piles that were drawn.
 function Headings:All()
 	return self.labels
+end
+
+function Headings:Subs()
+	return self.subs
 end

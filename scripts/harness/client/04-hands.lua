@@ -187,6 +187,23 @@ end
 -- C_Item that reached them through _G would go down with them.
 _G.GetItemInfo, _G.GetItemInfoInstant = itemInfo, itemInfoInstant
 _G.C_Item = { GetItemInfo = itemInfo, GetItemInfoInstant = itemInfoInstant }
+
+-- The client's own word for a subclass, which is what a sub-pile is headed
+-- with. Four are carried, the four the fixtures above use, and every other
+-- pair answers nil, which is a client with no word for the number and is the
+-- branch Core/Piles.lua heads with the pile's word and the number. On both
+-- homes for the reason the two lookups above are: Baganator reads it off
+-- C_Item on this client and the loose global is the older one's.
+local SUBCLASSES = {
+	[7] = { [5] = "Cloth", [7] = "Metal & Stone" },
+	[15] = { [1] = "Reagent", [2] = "Pet" },
+}
+local function itemSubClassInfo(classId, subClassId)
+	local row = SUBCLASSES[classId]
+	return row and row[subClassId] or nil
+end
+_G.GetItemSubClassInfo = itemSubClassInfo
+_G.C_Item.GetItemSubClassInfo = itemSubClassInfo
 _G.GetContainerNumSlots = function(bag) return CARRIED[bag] and #CARRIED[bag] or 0 end
 _G.GetContainerItemLink = function(bag, slot)
 	local held = carrying(bag, slot)
