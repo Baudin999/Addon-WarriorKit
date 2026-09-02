@@ -57,6 +57,14 @@
 --   lua5.1 ../scripts/hot.lua <dir>
 --
 -- Prints one `File.lua:Function` per line, sorted, for check.sh to scan.
+--
+--   lua5.1 ../scripts/hot.lua --markers <dir>
+--
+-- Prints one `kind File.lua Function` per marker instead, sorted. check.sh
+-- holds an allow-list against that, one entry per marked function, and the two
+-- have to agree; reading them out of here rather than grepping for the comment
+-- again means there is one implementation of what a marker is and where it
+-- sits.
 
 local function Slurp(path)
 	local handle = io.open(path, "r")
@@ -150,7 +158,18 @@ local function Functions(clean)
 	return found
 end
 
-local dir = arg[1] or "."
+-- `--markers` prints the markers instead of the closure, one
+-- `kind file Function` per line, for check.sh to hold its two marker
+-- allow-lists against. It is the same Markers() the walk reads, so the list in
+-- check.sh and the walk can never disagree about what a marker says or which
+-- function it sits on: there is one reader of that syntax and this is it.
+local markersOnly = false
+local args = {}
+for _, value in ipairs(arg) do
+	if value == "--markers" then markersOnly = true else args[#args + 1] = value end
+end
+
+local dir = args[1] or "."
 
 -- Every .lua under the directory, path relative to it, as check.sh names them.
 local files = {}
@@ -248,6 +267,17 @@ for _, rel in ipairs(files) do
 			end
 		end
 	end
+end
+
+if markersOnly then
+	local lines = {}
+	for key, mark in pairs(marks) do
+		local rel, name = key:match("^(.-):(.*)$")
+		lines[#lines + 1] = ("%s %s %s"):format(mark.kind, rel, name)
+	end
+	table.sort(lines)
+	for _, line in ipairs(lines) do print(line) end
+	os.exit(bad and 1 or 0)
 end
 
 -- One function's own statements, with every closure defined inside it blanked.

@@ -23,10 +23,12 @@
 -- Prints one line per number that went up and exits 1 if there were any.
 --
 -- Three moves stay legal. Lowering a number is the point. Deleting an entry is
--- an exemption given back. Adding one is a function that did not exist before,
--- and shape.lua already refuses an entry with no reason written on it, which is
--- the check that belongs to a new entry. The move this refuses is the one that
--- reads as progress and is not: the same key, higher.
+-- an exemption given back. Adding one is a function or a file that did not
+-- exist on the list before, and the check that belongs to a new entry belongs to
+-- the file that holds it: shape.lua refuses an entry with no reason written on
+-- it, and check.sh refuses one that names no file, carries no reason or claims a
+-- marker the code does not have. The move this refuses is the one that reads as
+-- progress and is not: the same key, higher.
 --
 -- Deleting an entry and re-adding it higher is the obvious way around, and it
 -- does not work. The commit that deletes it leaves a function over the gate
@@ -53,8 +55,21 @@ end
 -- which is the two syntaxes each of the two files writes, and all four are run
 -- over both files: a pattern that matches nothing costs nothing, and a file
 -- that grows the other one's shape is covered the day it does.
+--
+-- An allow-list entry is keyed by its list as well as its path. Nothing needed
+-- that while there were two lists and they named different trees; there are six
+-- now, three of them over src/, and the same file appearing on two of them is
+-- ordinary rather than exotic.
 local function Ceilings(text)
 	local found = {}
+
+	-- Which allow-list the entry below belongs to, so two lists naming the same
+	-- file are two ceilings rather than one. They are keyed on the path alone
+	-- otherwise, and check.sh now holds six such lists: the two harness budgets,
+	-- the two markers and the two line exemptions. A path on two of them would
+	-- leave whichever came second watching the first one's number, which is a
+	-- ratchet that reads as green while the ceiling under it moves.
+	local scope = nil
 
 	-- Walked a line at a time rather than swept with a newline on each end
 	-- of the pattern. Three of these declarations sit on consecutive lines,
@@ -70,11 +85,18 @@ local function Ceilings(text)
 			name, value = line:match("^([A-Z_]+)=(%d+)$")
 		end
 		if not name then
-			-- check.sh's two allow-lists, one exemption per line as a
-			-- path, a ceiling and a reason. Matched on the path ending
-			-- in .lua so a sentence in a comment cannot look like an
-			-- entry.
+			-- check.sh's allow-lists, one exemption per line as a path,
+			-- a ceiling and a reason. Matched on the path ending in
+			-- .lua so a sentence in a comment cannot look like an entry,
+			-- and qualified by the list it was found in.
+			local open = line:match('^([A-Z_]+)="$')
+			if open then
+				scope = open
+			elseif line == '"' then
+				scope = nil
+			end
 			name, value = line:match("^([%w%-%_/%.]+%.lua):(%d+):")
+			if name and scope then name = scope .. " " .. name end
 		end
 		if name then
 			found[name] = tonumber(value)

@@ -296,31 +296,206 @@ HOT=$(lua5.1 ../scripts/hot.lua .) || {
 	status=1
 }
 
-# The two markers, counted, because both are places the walk was told something
-# it could not work out and both are the shape an allow-list has. hot.lua
-# already refuses either without a reason; this refuses either quietly growing.
+# The four exemptions this scan honours, each one allow-listed by name.
 #
-# Exact rather than at most, in both directions, for the reason every ceiling in
-# this file and in shape.lua is: a marker retired has to come off the number in
-# the same commit, or the room it gave back is spent on the next one without
-# anybody deciding to spend it. scripts/ratchet.lua reads these two out of the
-# committed copy and refuses the edit that raises one.
+# Two of them are the markers above a definition, `-- hot:` and `-- cold:`, and
+# two are the per-line `-- unguarded:` and `-- allocates:`. All four are the same
+# thing: a place the walk or the scan was told something it could not work out.
+# All four are the shape an allow-list has, and none of them was one.
 #
-# `cold:` is the larger of the two and it is a work list, not a settled shape.
+# The markers were a pair of counts, HOT_MARKERS and COLD_MARKERS, held exactly
+# equal to what src/ carried. That is a ceiling and scripts/ratchet.lua refuses
+# to see it raised, so a ninth `cold:` had no legal path in any number of
+# commits: raising the number fails the ratchet, lowering it first fails the
+# equality, and deleting a marker to buy room fails the equality too. A gate
+# with no legal door is not strict, it is a gate people go round.
+#
+# And the door they go round it by was standing open. The two line exemptions
+# were not counted at all. Fifteen of them, uncapped, honoured by the same awk
+# below, growing without anyone deciding. The gate blocked the measured door and
+# left the unmeasured one wide, which is exactly the pressure that puts the next
+# exemption on a line instead of a function.
+#
+# So all four are lists now, in the path-keyed shape the harness budgets below
+# already use and scripts/ratchet.lua already reads:
+#
+#   path:how many that file carries:what is exempt and why
+#
+# A file that did not appear before is a new key, and a new key is legal: this
+# refuses a raise, not an addition. Raising a file that is already on the list
+# still fails, which is the move that reads as progress and is not. The count is
+# exact in both directions, so an exemption retired comes off the list in the
+# same commit rather than leaving room the next one spends unremarked.
+#
+# The marker lists name the function too, and the marker sets are read out of
+# scripts/hot.lua rather than grepped for a second time here. One reader of that
+# syntax means the list and the code cannot drift into disagreeing about what a
+# marker says or which definition it sits above: a marker renamed, moved to
+# another function or deleted fails here by name.
+#
+# `cold:` is the largest of the four and it is a work list, not a settled shape.
 # Seven of the eight are a builder or a layout pass, which is one repeated idea:
 # a function whose writes belong to a widget appearing rather than to the tick
 # that found it. If UI/ ever grows a construction seam those seven go through,
-# this number goes to one.
-HOT_MARKERS=2
-COLD_MARKERS=8
-for mark in "hot $HOT_MARKERS HOT_MARKERS" "cold $COLD_MARKERS COLD_MARKERS"; do
-	set -- $mark
-	count=$(grep -rhE "^-- *$1:" --include='*.lua' . | wc -l)
-	if [ "$count" -ne "$2" ]; then
-		echo "check.sh says $3 is $2 and src/ carries $count: a marker added needs the number raised and defending, one retired needs it lowered in the same commit"
+# this list is one entry.
+
+# path:cold markers in that file:function, and why the walk stops there
+COLD_ALLOWED="
+Buffs/Nag.lua:1:Place is layout, run on a settings change and a rescale
+Charge/Icon.lua:1:MacroText runs behind SyncMacro comparing target, weapon and spell
+Cooldowns/Row.lua:1:Place is layout rather than tick
+UI/Ability.lua:1:Ability.Size is a settings change and a rescale, never a tick
+UI/Aura.lua:1:Aura.Size is a settings change and a rescale, never a tick
+UnitFrames/EnemyBars.lua:3:CreateWidget builds one nameplate widget, on the tick a plate first appears
+UnitFrames/EnemyBars.lua:3:LayoutWidget places every region of one widget, on a rescale or a settings change
+UnitFrames/EnemyBars.lua:3:Release takes a widget off a plate, on the tick that plate goes
+"
+
+# path:hot markers in that file:function, and why the walk cannot reach it
+HOT_ALLOWED="
+Feeds/Purse.lua:1:Purse.Line is handed to a stream as onStatus and called back through the field
+Perf/Feature.lua:1:Paint is assigned to ns.Perf.OnSample and called back through the field
+"
+
+# path:unguarded writes in that file:why the tick may write there every time
+UNGUARDED_ALLOWED="
+Charge/Marker.lua:1:the two returns above leave only a marker that is already up
+Core/Core.lua:1:a one-shot ticker handing its own handler back
+Swing/Gauges.lua:1:the moving edge of a swing bar, and a frame it skips is a frame it does not move on
+UI/Draw.lua:1:the return above compares all four channels
+UnitFrames/Block.lua:1:the return above compares shown against want
+UnitFrames/Cast.lua:1:the moving edge of a cast bar
+UnitFrames/PlayerCast.lua:2:the moving edge of the player's cast and of the channel it replaces
+"
+
+# path:allocations in that file:why the tick does not reach them every time
+ALLOCATES_ALLOWED="
+Charge/Charge.lua:1:a fallback path the live client's GetNamePlateForUnit never reaches
+Unit/Color.lua:3:one tint and one fill per class, filled once behind a lookup the scan cannot see
+Unit/Level.lua:2:one table per classification and one string per level, both behind a lookup
+Unit/Unit.lua:1:one token per unit ever seen, behind a lookup the scan cannot see
+"
+
+markers=$(lua5.1 ../scripts/hot.lua --markers .) || {
+	echo "scripts/hot.lua could not read the markers"
+	status=1
+}
+
+# One entry, split into its path, its count and the rest. The reason is whatever
+# follows the count, and an entry with none is the invisible debt the list
+# exists to stop.
+entry_path="" entry_count="" entry_why=""
+marker_entry() {
+	local list="$1" entry="$2" rest
+	entry_path=${entry%%:*}
+	rest=${entry#*:}
+	entry_count=${rest%%:*}
+	entry_why=${rest#*:}
+
+	case "$entry_count" in
+		*[!0-9]* | "")
+			echo "$list carries an entry with no count: $entry"
+			status=1
+			return 1
+			;;
+	esac
+	[ -f "$entry_path" ] || {
+		echo "$list names $entry_path, which is not a file in src/"
 		status=1
-	fi
-done
+		return 1
+	}
+	return 0
+}
+
+# One marker kind against one allow-list, both directions. The derived side is
+# hot.lua's, so a marker this does not recognise is a marker that moved.
+marker_list() {
+	local kind="$1" list="$2" allowed="$3"
+	local derived listed counted entry fn reason held
+
+	derived=$(printf '%s\n' "$markers" | awk -v k="$kind" '$1 == k { print $2 " " $3 }' | sort)
+	listed=""
+	# A file with three markers has three entries and one count. Reported once.
+	counted=""
+
+	while IFS= read -r entry; do
+		[ -n "$entry" ] || continue
+		marker_entry "$list" "$entry" || continue
+
+		fn=${entry_why%% *}
+		reason=${entry_why#"$fn"}
+		[ -n "${reason# }" ] || {
+			echo "$list allow-lists $entry_path:$fn with no reason given"
+			status=1
+		}
+
+		if ! grep -qxF "$entry_path $fn" <<< "$derived"; then
+			echo "$list names $entry_path:$fn and there is no $kind: marker on it: a marker renamed or moved comes off the list in the same commit"
+			status=1
+			continue
+		fi
+
+		held=$(awk -v p="$entry_path" '$1 == p' <<< "$derived" | wc -l)
+		if [ "$held" -ne "$entry_count" ] && ! grep -qxF "$entry_path" <<< "$counted"; then
+			counted="$counted$entry_path"$'\n'
+			echo "$list says $entry_path carries $entry_count $kind: markers and it carries $held: one added needs the count raised and defending, one retired needs it lowered in the same commit"
+			status=1
+		fi
+
+		listed="$listed$entry_path $fn"$'\n'
+	done <<< "$allowed"
+
+	while IFS= read -r entry; do
+		[ -n "$entry" ] || continue
+		grep -qxF "$entry" <<< "$listed" || {
+			echo "src/${entry% *} carries a $kind: marker on ${entry#* } that $list does not hold: add an entry with its reason"
+			status=1
+		}
+	done <<< "$derived"
+}
+
+# One line exemption against one allow-list, both directions. Per file rather
+# than per line, because the reason a line is exempt is already written on the
+# line and hot_scan below refuses it without one. What was missing was the
+# ceiling: how many a file is allowed, and why it has any.
+exemption_list() {
+	local tag="$1" list="$2" allowed="$3"
+	local derived listed entry held
+
+	derived=$(grep -rl -e "-- $tag:" --include='*.lua' . | sed 's|^\./||' | sort)
+	listed=""
+
+	while IFS= read -r entry; do
+		[ -n "$entry" ] || continue
+		marker_entry "$list" "$entry" || continue
+
+		[ -n "${entry_why# }" ] || {
+			echo "$list allow-lists $entry_path with no reason given"
+			status=1
+		}
+
+		held=$(grep -c -e "-- $tag:" "$entry_path")
+		if [ "$held" -ne "$entry_count" ]; then
+			echo "$list says $entry_path carries $entry_count lines marked $tag: and it carries $held: one added needs the count raised and defending, one retired needs it lowered in the same commit"
+			status=1
+		fi
+
+		listed="$listed$entry_path"$'\n'
+	done <<< "$allowed"
+
+	while IFS= read -r entry; do
+		[ -n "$entry" ] || continue
+		grep -qxF "$entry" <<< "$listed" || {
+			echo "src/$entry carries a line marked $tag: that $list does not hold: add an entry with its count and its reason"
+			status=1
+		}
+	done <<< "$derived"
+}
+
+marker_list cold COLD_ALLOWED "$COLD_ALLOWED"
+marker_list hot HOT_ALLOWED "$HOT_ALLOWED"
+exemption_list unguarded UNGUARDED_ALLOWED "$UNGUARDED_ALLOWED"
+exemption_list allocates ALLOCATES_ALLOWED "$ALLOCATES_ALLOWED"
 
 hot_scan='
 BEGIN { inside = 0 }

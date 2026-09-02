@@ -12,7 +12,7 @@ hash is the last of them. What was wrong and what fixed it is in
 in the README's untested list, and the full text of each item is this file at
 `e7ef4ca` for 1 to 6, 8, 11 and 12, at `ca59a77` for 7, 9 and 13, at
 `44c79ef` for 15, at `a7772af` for 16, at `c37c149` for 19, at `b5d2277` for
-17, at `30a42cb` for 28 and at `2210d8f` for 18. Items 14 and 23 were never
+17, at `30a42cb` for 28 and at `2210d8f` for 18. Items 14, 23 and 31 were never
 written longer than they are here.
 
 1. Weapon swing timer. `8be9a43`
@@ -41,13 +41,24 @@ written longer than they are here.
 23. A ceiling only moves down, in `scripts/ratchet.lua`. `271f8e6`
 28. One Questie probe, in Core, and a gate that keeps it one. `07c4401`
 18. One ticker, and a HOT list walked rather than typed. `903350d`
+31. The four tick-path exemptions, all four allow-listed by name.
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
 
-Item 23 was never in the Open list. It came out of reading this file against the
-code on 2026-09-02, and its number is where it was worked rather than where a
-review found it.
+Items 23 and 31 were never in the Open list. Both came out of reading this file
+against the code on 2026-09-02, and their numbers are where they were worked
+rather than where a review found them.
+
+Item 31 is item 18's gate read back. Item 18 counted its two markers exactly and
+let scripts/ratchet.lua refuse a raise, which left no legal way to add a ninth
+`cold:` in any number of commits: the raise fails the ratchet, and lowering the
+number first fails the equality. Meanwhile the per-line `-- unguarded:` and
+`-- allocates:` exemptions the same scan honours were uncounted, fifteen of them.
+The strict door was shut and the unmeasured one was open, which is where the
+next exemption would have gone. All four are path-keyed allow-lists now, one
+entry per marked function, counted per file and cross-checked against what src/
+carries, so an addition is a new key and reviewable and a raise still fails.
 
 ## Open
 
