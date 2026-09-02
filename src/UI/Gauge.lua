@@ -156,3 +156,23 @@ function Gauge.Paint(bar, track, color)
 		track:SetColorTexture(r * TRACK, g * TRACK, b * TRACK, TRACK_ALPHA)
 	end
 end
+
+-- The ground behind a fill, in a colour the caller mixed rather than one
+-- derived from the fill.
+--
+-- Gauge.Paint's track is the fill dimmed, which is right for every bar drawn on
+-- a dark surface and wrong for one thing. A party or raid tile is the surface:
+-- UnitFrames/Member.lua bleaches what somebody has lost toward white instead,
+-- because a dimmed end there reads as a second fill in a duller colour and the
+-- eye has to hunt for the join, where a bleached one is plainly an absence.
+-- That colour is not a function of the fill and cannot be, so it arrives mixed.
+--
+-- No guard on the write, for Gauge.Paint's reason and under the same contract:
+-- the caller compares the colour table it drew last and the same comparison
+-- decides three other writes beside this one. The nil check is Gauge.Paint's
+-- as well, and for the same case, a caller painting a bar it did not build.
+function Gauge.Ground(track, color)
+	if track then
+		track:SetColorTexture(color[1], color[2], color[3], 1)
+	end
+end

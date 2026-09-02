@@ -171,6 +171,18 @@ function Region:SetColorTexture(r, g, b, a)
 	self.r, self.g, self.b, self.a = r, g, b, a
 	self.colorWrites = self.colorWrites + 1
 end
+-- A texture's tint, which is not the same write as SetColorTexture: this one
+-- leaves the file path alone and multiplies whatever it draws. The weave under
+-- a party tile is one white file at one alpha over every class colour there is,
+-- so the tint is the whole of what says how strong the hatch comes out and the
+-- fixture had nothing to read it back with.
+function Region:SetVertexColor(r, g, b, a)
+	self.vertexR, self.vertexG, self.vertexB, self.vertexA = r, g, b, a or 1
+end
+function Region:GetVertexColor()
+	return self.vertexR or 1, self.vertexG or 1, self.vertexB or 1, self.vertexA or 1
+end
+
 function Region:SetStatusBarTexture(t)
 	if type(t) == "table" then
 		self.fill = t

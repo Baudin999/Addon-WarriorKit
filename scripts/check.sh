@@ -315,6 +315,7 @@ Charge/Marker.lua:AttachTo
 Charge/Marker.lua:ChargeMarker.Update
 UI/Gauge.lua:Gauge.Flatten
 UI/Gauge.lua:Gauge.Paint
+UI/Gauge.lua:Gauge.Ground
 UI/Aura.lua:Aura.Draw
 UnitFrames/EnemyBars.lua:BuildTargeters
 UnitFrames/EnemyBars.lua:Member
@@ -391,7 +392,6 @@ UnitFrames/Member.lua:Member.Update
 UnitFrames/Member.lua:Member.Clear
 UnitFrames/Member.lua:Member.Shade
 UnitFrames/Member.lua:Member.Paint
-UnitFrames/Member.lua:Member.Divider
 UnitFrames/Member.lua:Member.Numbers
 UnitFrames/Member.lua:Member.Label
 Unit/Unit.lua:Unit.Health
@@ -1052,7 +1052,7 @@ HARNESS_LINE_LIMIT=800
 # path:ceiling:why it is exempt
 HARNESS_LINE_ALLOWED="
 sections/05-action-bars.lua:1061:one subject, five bars; splits at the keys, the paging and the churn
-sections/39-party-raid.lua:870:one subject, two lists; the party line and the raid grid share a block and a fixture
+sections/39-party-raid.lua:971:one subject, two lists, two directions each; the party line and the raid grid share a tile, a roster fixture and a header model, and splitting them copies all three
 "
 
 harness_names='

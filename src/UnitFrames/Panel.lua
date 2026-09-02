@@ -503,52 +503,53 @@ local function Placing(ui, which)
 	local wideLow, wideHigh, tallLow, tallHigh = ns.Group.SizeRange()
 	local key = function(name) return ns.Group.Key(which, name) end
 
-	ui.Size("gauge width", wideLow, wideHigh, 6,
+	ui.Size("tile width", wideLow, wideHigh, 6,
 		function() return ns.db[key("width")] end,
 		function(value)
 			ns.db[key("width")] = value
 			ns.Group.Apply()
 		end)
-	ui.Size("block height", tallLow, tallHigh, 2,
+	ui.Size("tile height", tallLow, tallHigh, 2,
 		function() return ns.db[key("height")] end,
 		function(value)
 			ns.db[key("height")] = value
 			ns.Group.Apply()
 		end)
-	ui.Hint("A block is the height again on the left for the role icon, then the gauge.")
+	ui.Hint("A tile about twice as wide as it is tall reads best: the name fits across the top and the health is a shape rather than a length.")
 
 	local gapLow, gapHigh = ns.Group.GapRange()
-	ui.Size("gap between blocks", gapLow, gapHigh, 1,
+	ui.Size("gap between tiles", gapLow, gapHigh, 1,
 		function() return ns.db[key("gap")] end,
 		function(value)
 			ns.db[key("gap")] = value
 			ns.Group.Apply()
 		end)
 
-	ui.Cycle("grow", which == "raid" and { "down", "up" }
-			or { "right", "left", "down", "up" },
+	ui.Cycle("grow", { "right", "left", "down", "up" },
 		function() return ns.db[key("grow")] end,
 		function(value)
 			ns.db[key("grow")] = value
 			ns.Group.Apply()
 		end)
-	ui.Hint("The list is centred on where you dragged it and fills outward from there, so this picks which end the first slot is at rather than which way it runs off.")
+	ui.Hint(which == "raid"
+		and "Right or left is five to a row with a row per group, which is the shape the roster has. Down or up is the transpose, a column per group, for a grid against a screen edge."
+		or "The line is centred on where you dragged it and fills outward from there, so this picks which end the first slot is at rather than which way it runs off.")
 
 	if which == "raid" then
 		local columnsLow, columnsHigh, perLow, perHigh = ns.Group.ColumnRange()
-		ui.Count("columns", columnsLow, columnsHigh,
+		ui.Count("groups", columnsLow, columnsHigh,
 			function() return ns.db.raidColumns end,
 			function(value)
 				ns.db.raidColumns = value
 				ns.Group.Apply()
 			end)
-		ui.Count("blocks in a column", perLow, perHigh,
+		ui.Count("tiles in a group", perLow, perHigh,
 			function() return ns.db.raidPerColumn end,
 			function(value)
 				ns.db.raidPerColumn = value
 				ns.Group.Apply()
 			end)
-		ui.Hint("Five by five is twenty five. A raid past what these two multiply out to is a grid that shows the first of it and drops the rest.")
+		ui.Hint("Eight groups of five is a full forty man. A raid past what these two multiply out to is a grid that shows the first of it and drops the rest.")
 	end
 
 	ui.Zoom(
@@ -570,9 +571,9 @@ end
 -- client's own party and raid frames come off in the section below.
 local function Party(ui)
 	ui.Section("Party", "You")
-	ui.Lede("Blocks for the four people you are grouped with, in role order, drawn by this addon rather than by the client.")
+	ui.Lede("A tile for each of the four people you are grouped with, in role order, drawn by this addon rather than by the client.")
 
-	ui.Check("draw party blocks",
+	ui.Check("draw party tiles",
 		function() return ns.db.party end,
 		function(value)
 			ns.db.party = value
@@ -580,7 +581,7 @@ local function Party(ui)
 		end)
 	ui.Hint("Left click targets, right click opens the unit menu, ctrl click marks. Targeting is the point: the Charge button aims at whoever you are looking at.")
 
-	ui.Check("put your own block in the line",
+	ui.Check("put your own tile in the line",
 		function() return ns.db.partySelf end,
 		function(value)
 			ns.db.partySelf = value
@@ -588,7 +589,7 @@ local function Party(ui)
 		end)
 	ui.Hint("Off, because the frames page above already draws you as a block.")
 
-	ui.Check("role icon on each block",
+	ui.Check("role square in each tile's corner",
 		function() return ns.db.partyRoleIcon end,
 		function(value)
 			ns.db.partyRoleIcon = value
@@ -602,7 +603,7 @@ local function Party(ui)
 			ns.db.partyRange = value
 			ns.Group.Apply()
 		end)
-	ui.Hint("Out of range, dead, offline and ghost all draw the same way: the fill goes to the track colour and the name says which.")
+	ui.Hint("Out of range, dead, offline and ghost all draw the same way: the whole tile goes to the track colour and the name says which.")
 
 	Roles(ui)
 	Placing(ui, "party")
@@ -626,9 +627,9 @@ end
 -- anything on the one above it.
 local function Raid(ui)
 	ui.Section("Raid", "You")
-	ui.Lede("A grid of the raid, a column to a group with the group number over it, in this addon's own blocks.")
+	ui.Lede("A grid of the raid, a run of five to a group with the group number on it, in this addon's own tiles.")
 
-	ui.Check("draw raid blocks",
+	ui.Check("draw raid tiles",
 		function() return ns.db.raid end,
 		function(value)
 			ns.db.raid = value
@@ -642,17 +643,17 @@ local function Raid(ui)
 			ns.db.raidOrder = value
 			ns.Group.Apply()
 		end)
-	ui.Hint("Group is the raid's own numbers, a column each, which is what assignments per group need. Role is tanks, healers, then damage, straight down the columns.")
+	ui.Hint("Group is the raid's own numbers, a run of five each, which is what assignments per group need. Role is tanks, healers, then damage, straight through the runs.")
 
-	ui.Check("the group number over each column",
+	ui.Check("the group number on each run",
 		function() return ns.db.raidHeadings end,
 		function(value)
 			ns.db.raidHeadings = value
 			ns.Group.Apply()
 		end)
-	ui.Hint("Only ever in group order, because in role order a column is five people who followed each other down the list rather than a group.")
+	ui.Hint("Only ever in group order, because in role order a run is five people who followed each other down the list rather than a group.")
 
-	ui.Check("put your own block in the grid",
+	ui.Check("put your own tile in the grid",
 		function() return ns.db.raidSelf end,
 		function(value)
 			ns.db.raidSelf = value
@@ -660,13 +661,13 @@ local function Raid(ui)
 		end)
 	ui.Hint("On, the opposite of the party's answer: a grid of twenty five with exactly one person missing is one you have to count along.")
 
-	ui.Check("role icon on each block",
+	ui.Check("role square in each tile's corner",
 		function() return ns.db.raidRoleIcon end,
 		function(value)
 			ns.db.raidRoleIcon = value
 			ns.Group.Apply()
 		end)
-	ui.Hint("Off, because at raid size the square is a quarter of the cell and it costs the name the room to be read in.")
+	ui.Hint("Off, because at raid size the square is a third of the tile's height and it costs the name the room to be read in.")
 
 	ui.Check("drain a member you cannot reach",
 		function() return ns.db.raidRange end,

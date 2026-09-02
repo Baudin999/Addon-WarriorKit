@@ -455,15 +455,11 @@ local function PartyRole(arg)
 		or ("%s sits in the %s band until you say otherwise."):format(name, role))
 end
 
--- Which way a list runs. Four answers for the party, which is a line and can be
--- a line either way round, and two for the raid, which is a grid whose columns
--- already run across.
+-- Which way one group's members run. Four answers for both lists now: a party
+-- is a line and reads either way round, and a raid is a grid that can be five
+-- to a row with a row per group or five down a column with a column per group.
 local function GrowWord(which, value)
 	local across = value == "right" or value == "left"
-	if across and which == "raid" then
-		ns.Print("a raid is a grid, so it grows down or up and its columns run across.")
-		return
-	end
 	if not across and value ~= "up" then
 		value = "down"
 	end
@@ -510,7 +506,7 @@ local function ListWord(which, option, value)
 		ns.db.raidHeadings = ns.Command.Toggle(value)
 		ns.Group.Apply()
 		ns.Print("group headings " .. (ns.db.raidHeadings and "on" or "off")
-			.. ", over each column of a raid ordered by group.")
+			.. ", on each run of five in a raid ordered by group.")
 	elseif option == "role" and which == "party" then
 		PartyRole(value)
 	elseif option == "reset" then
@@ -774,12 +770,17 @@ ns.Register({
 
 		partyRoleIcon = true,
 
-		-- The same two numbers as the skin, because a party block and the
-		-- player block are the same instrument and a party frame that does not
-		-- match the player frame reads as a second addon. Width is the gauge;
-		-- the block is that plus the height again for the role icon's square.
-		partyWidth = 168,
-		partyHeight = 34,
+		-- A tile about twice as wide as it is tall, which is the shape a name
+		-- fits across and a health fill is still read as an area rather than as
+		-- a length. Five of them across is 620 pixels, which is a strip under
+		-- the player block and not a second screen.
+		--
+		-- These deliberately no longer match the skin's block. That match was
+		-- the old party row's whole argument and it was the wrong one: the
+		-- player frame is a gauge you take a reading off, and a group frame is
+		-- five or forty shapes you scan. Two jobs, two instruments.
+		partyWidth = 120,
+		partyHeight = 56,
 		partyGap = 4,
 
 		-- Which way the four of them run, and which end the first slot is at.
@@ -829,31 +830,41 @@ ns.Register({
 		-- missing out of it is a grid you have to count along to read.
 		raidSelf = true,
 
-		-- Small, because forty of them is a monitor. A cell is the width here
-		-- plus the height again for the role icon's square, so the shipped cell
-		-- is 116 by 26 and a full five by five is 600 by 142.
-		raidWidth = 90,
-		raidHeight = 26,
+		-- The same tile at two thirds the size, because forty of them is a
+		-- monitor. Five to a row is 412 across and eight rows is 325 down, which
+		-- is a forty man raid in a rectangle you can put over your character
+		-- and still see past.
+		raidWidth = 80,
+		raidHeight = 38,
 		raidGap = 3,
-		raidGrow = "down",
 
-		-- Five groups of five, which is the raid everybody actually runs. Eight
-		-- columns is what a forty man needs and it is one press away.
-		raidColumns = 5,
+		-- Across, so a group is a row of five and the groups stack downward.
+		-- This is the shape Classic's raid actually has: the roster is parties
+		-- of five whatever the raid size is, and a grid whose rows are those
+		-- parties is a grid you find somebody in by reading the row you were
+		-- told to heal. It shipped as the transpose and the transpose is still
+		-- one press away, for a grid that has to live against a screen edge.
+		raidGrow = "right",
+
+		-- Eight groups of five, which is a full forty man. A raid that runs
+		-- smaller shows the groups it has and reserves nothing for the rest,
+		-- because the rectangle is measured off who is in the list.
+		raidColumns = 8,
 		raidPerColumn = 5,
 
-		-- "group" is the raid's own group numbers, a column each, which is what
+		-- "group" is the raid's own group numbers, one run each, which is what
 		-- somebody with assignments per group wants and what makes the headings
 		-- mean anything. "role" is the party's own bands instead.
 		raidOrder = "group",
 
-		-- The group number over each column. Only ever drawn in group order,
-		-- because in role order a column is not a group.
+		-- The group number on each run: over a column, or beside a row. Only
+		-- ever drawn in group order, because in role order a run is not a group.
 		raidHeadings = true,
 
-		-- The role icon is off in a raid and on in a party. At 26 pixels the
-		-- square is a quarter of the cell and it costs the name the room to be
-		-- read in, which is the one thing a raid frame is for.
+		-- The role square is off in a raid and on in a party. At raid size it is
+		-- a third of the tile's height in the corner the name starts from, and
+		-- what it costs is the room the name is read in, which is the one thing
+		-- a raid frame is for.
 		raidRoleIcon = false,
 		raidRange = true,
 		raidZoom = 1,
@@ -986,16 +997,16 @@ ns.Register({
 		"party self on|off, whether your own block is in the list",
 		"party role <name> tank|healer|dps|none, an answer you type",
 		"party icons on|off, party range on|off",
-		"party width <60-360>, party height <14-72>, party gap <0-20>",
+		"party width <60-360>, party height <26-72>, party gap <0-20>",
 		"party grow right|left|down|up, party zoom <1-3>",
 		"party reset, the line back under the middle of the screen",
 		"raid on|off, the grid, which is its own frame in its own place",
-		"raid order group|role, group numbers a column each or role bands",
-		"raid columns <1-8>, raid percolumn <1-40>, the shape of the grid",
-		"raid headings on|off, the group number over each column",
+		"raid order group|role, a run of five per group or role bands",
+		"raid columns <1-8> groups, raid percolumn <1-40> in a group",
+		"raid headings on|off, the group number on each run of five",
 		"raid self on|off, raid icons on|off, raid range on|off",
-		"raid width <60-360>, raid height <14-72>, raid gap <0-20>",
-		"raid grow down|up, raid zoom <1-3>, raid reset",
+		"raid width <60-360>, raid height <26-72>, raid gap <0-20>",
+		"raid grow right|left|down|up, raid zoom <1-3>, raid reset",
 		"hide <switch> on|off, one of the client's own frames this addon replaces",
 		"hide probe, every frame those switches name and what is on screen now",
 		"auras on|off, the client's own buff row in the corner of the screen",

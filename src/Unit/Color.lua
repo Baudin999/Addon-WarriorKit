@@ -613,3 +613,21 @@ function Color.Dim(color, factor)
 	SCRATCH[1], SCRATCH[2], SCRATCH[3] = color[1] * factor, color[2] * factor, color[3] * factor
 	return SCRATCH
 end
+
+-- And a colour a fraction of the way to white, which is the other end of the
+-- same instrument. Dim is what a bar keeps behind its fill on a dark surface;
+-- this is what the party and raid tiles draw the health somebody has lost in,
+-- and the two have to be different directions or a tile's spent end reads as a
+-- second, duller fill rather than as an absence.
+--
+-- Its own scratch, not Dim's. UnitFrames/Member.lua asks for both in one pass
+-- and one table between them would hand the second call's answer back for the
+-- first.
+local WASHED = { 0, 0, 0 }
+
+function Color.Wash(color, amount)
+	for index = 1, 3 do
+		WASHED[index] = color[index] + (1 - color[index]) * amount
+	end
+	return WASHED
+end

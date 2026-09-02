@@ -205,6 +205,15 @@ end
 
 local OPPOSITE = { TOP = "BOTTOM", BOTTOM = "TOP", LEFT = "RIGHT", RIGHT = "LEFT" }
 
+-- Which way columnSpacing pushes the block that opens a new column, which is
+-- the direction columnAnchorPoint names. The client works these out of
+-- getRelativePointAnchor and applies them to both axes; the fixture had them
+-- written into the x argument, which is right for a grid whose columns run
+-- across and silently wrong for one whose rows stack down.
+local COLUMN_STEP = {
+	LEFT = { 1, 0 }, RIGHT = { -1, 0 }, TOP = { 0, -1 }, BOTTOM = { 0, 1 },
+}
+
 -- Where the first block of a column goes, which is the one piece of this model
 -- the client and the addon disagreed about for a whole release.
 --
@@ -281,7 +290,9 @@ local function Arrange(header, shown, per, wide, tall)
 			button:SetPoint(point, header, point, 0, 0)
 			start = button
 		elseif row == 0 then
-			button:SetPoint(side, start, OPPOSITE[side], spacing, 0)
+			local step = COLUMN_STEP[side] or COLUMN_STEP.LEFT
+			button:SetPoint(side, start, OPPOSITE[side],
+				spacing * step[1], spacing * step[2])
 			start = button
 		else
 			button:SetPoint(point, header.buttons[index - 1], OPPOSITE[point],
@@ -300,11 +311,19 @@ local function Arrange(header, shown, per, wide, tall)
 	-- a column that runs down the screen. Nothing is shown at that size, so what
 	-- it buys is a model that does not quietly answer a whole block where the
 	-- game answers a tenth of a pixel.
-	local rows = math.min(#shown, per)
-	local gap = math.abs(header:GetAttribute("yOffset") or 0)
-	if rows > 0 then
-		header:SetSize(columns * wide + (columns - 1) * spacing,
-			rows * tall + (rows - 1) * gap)
+	-- The header's own box, along the axis the members run and the axis the
+	-- columns stack, which are not always x and y: a header whose point is LEFT
+	-- runs its members across and stacks its columns down, and a fixture that
+	-- wrote the run into the width would answer a rectangle the client never
+	-- gives.
+	local run = math.min(#shown, per)
+	local down = (point == "TOP" or point == "BOTTOM")
+	local gap = math.abs((down and header:GetAttribute("yOffset")
+		or header:GetAttribute("xOffset")) or 0)
+	if run > 0 then
+		local along = run * (down and tall or wide) + (run - 1) * gap
+		local stack = columns * (down and wide or tall) + (columns - 1) * spacing
+		header:SetSize(down and stack or along, down and along or stack)
 	else
 		header:SetSize(wide, 0.1)
 	end

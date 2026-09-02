@@ -33,12 +33,23 @@ ns.Group = Group
 -- two of them in different places because there was only ever one of them.
 --
 -- So everything below takes a list as its first argument, and there are two:
--- the party, four or five blocks in a line, and the raid, a grid of columns
--- with the group number over each one. Each has its own header, its own place
+-- the party, four or five tiles in a line, and the raid, a grid of one group
+-- per run with the group number on each. Each has its own header, its own place
 -- on the screen, its own sizes and its own preview. The header attributes are
 -- what keep them out of each other's way: the party shows in a party and never
 -- in a raid, the raid shows in a raid and never in a party, so at most one of
 -- them is ever drawing.
+--
+-- A run and a stack, not a row and a column
+--
+-- Both lists are laid out in one vocabulary: a run is the members of one group
+-- in a line, and the stack is how those runs sit against each other. Which of
+-- the two is horizontal is one setting, `grow`, and everything that has to know
+-- asks Across. A raid running across is five to a row and a row per group,
+-- which is the shape Classic's raid actually has and what the grid ships as;
+-- running down it is the transpose, a column per group, for a grid against a
+-- screen edge. The party is one run of everybody and the same switch turns it
+-- from a line across the screen into a line down it.
 --
 -- Three things follow from the header being secure, and they are most of this
 -- file:
@@ -79,11 +90,17 @@ local Roster = ns.Unit.Roster
 -- The rate every readout in this addon runs at.
 local POLL = 0.2
 
--- What a block is allowed to be, shared with the panel and the slash words so
--- all three clamp to the same numbers. The floor is under the skin's, because a
--- raid cell is not a player block: forty of those is a monitor.
+-- What a tile is allowed to be, shared with the panel and the slash words so
+-- all three clamp to the same numbers. The width floor is under the skin's,
+-- because a raid cell is not a player block: forty of those is a monitor.
+--
+-- The height floor is not a taste. UnitFrames/Member.lua writes the name in an
+-- outlined face, because there is no one colour behind it to read against, and
+-- ns.UI.OutlineFloor is where a rim starts helping rather than closing the hole
+-- in a 6. Twenty six is that floor plus the tile's own outline and the power
+-- rail, which is the shortest tile a name still fits in.
 local WIDTH_LOW, WIDTH_HIGH = 60, 360
-local HEIGHT_LOW, HEIGHT_HIGH = 14, 72
+local HEIGHT_LOW, HEIGHT_HIGH = 26, 72
 local GAP_LOW, GAP_HIGH = 0, 20
 local COLUMNS_LOW, COLUMNS_HIGH = 1, 8
 local PER_COLUMN_LOW, PER_COLUMN_HIGH = 1, 40
@@ -259,12 +276,17 @@ local function ByGroupNumber(list)
 	return list.raid and S(list, "order") == "group" and true or false
 end
 
--- Whether the list runs across the screen rather than down it. A party is four
--- or five blocks and reads either way round; a raid is a grid, and its columns
--- are already the way across.
+-- Whether one group's members run across the screen rather than down it.
+--
+-- The party is a line of four or five and reads either way round. The raid is a
+-- grid, and this is the axis one group of five runs along: across is five to a
+-- row and a row per group, which is the shape Classic's raid actually has, so
+-- the grid you read down is the roster you were handed. Down is the transpose,
+-- a column per group, which is what a tall thin grid against a screen edge
+-- wants.
 local function Across(list)
 	local grow = S(list, "grow")
-	return not list.raid and (grow == "right" or grow == "left")
+	return grow == "right" or grow == "left"
 end
 
 local function Sorting(list)
@@ -299,6 +321,14 @@ local function Edge(list)
 	return grow == "up" and "BOTTOM" or "TOP"
 end
 
+-- And which edge the header stacks one group off the last, which is always the
+-- axis the members are not running along. Not a setting: `grow` says which end
+-- of a group the first slot is at, and a second switch for which end of the
+-- grid the first group is at is a knob nobody turns twice.
+local function Stack(list)
+	return Across(list) and "TOP" or "LEFT"
+end
+
 -- Every attribute that decides the shape of one list, written in one pass.
 -- False where combat refused, which the retry at PLAYER_REGEN_ENABLED picks up.
 local function Secure(list)
@@ -312,7 +342,7 @@ local function Secure(list)
 	local across, grow = Across(list), S(list, "grow")
 
 	header:SetAttribute("template", "SecureUnitButtonTemplate")
-	header:SetAttribute("initialConfigFunction", CONFIG:format(tall + wide, tall))
+	header:SetAttribute("initialConfigFunction", CONFIG:format(wide, tall))
 
 	-- The whole of what keeps two lists off one screen. Solo is never on: a
 	-- list of one is the player block the skin already draws.
@@ -324,7 +354,7 @@ local function Secure(list)
 	header:SetAttribute("point", Edge(list))
 	header:SetAttribute("xOffset", across and (grow == "left" and -gap or gap) or 0)
 	header:SetAttribute("yOffset", across and 0 or (grow == "up" and gap or -gap))
-	header:SetAttribute("columnAnchorPoint", "LEFT")
+	header:SetAttribute("columnAnchorPoint", Stack(list))
 	header:SetAttribute("columnSpacing", gap)
 	-- A party's columns are not a setting: five people cannot fill a grid, and a
 	-- party that wrapped would be a party whose slots moved when the fifth
@@ -441,27 +471,35 @@ local function Full(list)
 	return S(list, "mine") and PARTY_SLOTS or PARTY_SLOTS - 1
 end
 
+-- How many blocks one group's run holds, and how many runs there are. The
+-- header's own arithmetic, done here and in the terms the header uses, which
+-- are a run and a stack rather than a row and a column: which of those two a
+-- run is drawn as is Across's answer and nothing this has to know.
+--
+-- A party is one run of everybody. A raid is as many runs as its two numbers
+-- multiply out to, capped where the header caps itself.
+local function Grid(list, shown)
+	if not list.raid then
+		return shown, 1
+	end
+	local per = math.max(S(list, "per"), 1)
+	return math.min(shown, per),
+		math.min(math.ceil(shown / per), math.max(S(list, "columns"), 1))
+end
+
 -- How many columns wide and how many rows deep a list of that many blocks is
--- arranged, and how far it reaches each way. The header's own arithmetic, done
--- here: a party across the screen is one block deep and as long as it is, a
--- party down it is the other way about, and a raid is the grid its two numbers
--- describe.
+-- arranged, and how far it reaches each way.
 local function Extent(list, shown)
 	shown = math.max(shown, 1)
-	local columns, rows = 1, shown
+	local run, runs = Grid(list, shown)
+	local columns, rows = runs, run
 	if Across(list) then
-		columns, rows = shown, 1
-	elseif list.raid then
-		local per = math.max(S(list, "per"), 1)
-		if shown > per then
-			columns, rows = math.min(math.ceil(shown / per), S(list, "columns")), per
-		end
+		columns, rows = run, runs
 	end
 
 	local gap = S(list, "gap")
-	local block = S(list, "height") + S(list, "width")
 	return columns, rows,
-		columns * block + (columns - 1) * gap,
+		columns * S(list, "width") + (columns - 1) * gap,
 		rows * S(list, "height") + (rows - 1) * gap
 end
 
@@ -528,17 +566,32 @@ local function Heading(list, index)
 	return label
 end
 
--- A label over each column, or none at all.
+-- Where the label for the index-th group goes: over its column, or beside its
+-- row. Two anchors and not one, because a group that is a row has nothing above
+-- it but the row before it, and a heading in that gap is a heading inside
+-- somebody else's group.
+local function Seat(list, label, index)
+	local wide, tall, gap = S(list, "width"), S(list, "height"), S(list, "gap")
+	label:ClearAllPoints()
+	if Across(list) then
+		label:SetPoint("RIGHT", list.anchor, "TOPLEFT", -HEADING_GAP,
+			Whole(-tall / 2 - (index - 1) * (tall + gap)))
+	else
+		label:SetPoint("BOTTOM", list.anchor, "TOPLEFT",
+			Whole(wide / 2 + (index - 1) * (wide + gap)), HEADING_GAP)
+	end
+end
+
+-- A label on each group's run, or none at all.
 --
--- `rows` is how many members fill a column of the real list, which is what
--- turns a column into the group its first member is in. Nothing there means a
--- raid the preview made up, and a made up raid is full, so the column is the
+-- `run` is how many members fill one group of the real list, which is what
+-- turns the nth run into the group its first member is in. Nothing there means
+-- a raid the preview made up, and a made up raid is full, so the run is the
 -- group and there is no roster to count.
-local function Headings(list, columns, rows)
-	local block, gap = S(list, "height") + S(list, "width"), S(list, "gap")
-	for index = 1, math.max(#list.headings, columns) do
-		local group = index <= columns
-			and (rows and GroupAt((index - 1) * rows + 1) or index)
+local function Headings(list, runs, run)
+	for index = 1, math.max(#list.headings, runs) do
+		local group = index <= runs
+			and (run and GroupAt((index - 1) * run + 1) or index)
 		local label = (group or list.headings[index]) and Heading(list, index)
 		if not group then
 			if label then
@@ -546,9 +599,7 @@ local function Headings(list, columns, rows)
 			end
 		else
 			label:SetText("Group " .. group)
-			label:ClearAllPoints()
-			label:SetPoint("BOTTOM", list.anchor, "TOPLEFT",
-				Whole(block / 2 + (index - 1) * (block + gap)), HEADING_GAP)
+			Seat(list, label, index)
 			label:Show()
 		end
 	end
@@ -563,8 +614,8 @@ local function Label(list)
 		Headings(list, 0)
 		return
 	end
-	local columns, rows = Extent(list, shown)
-	Headings(list, columns, rows)
+	local run, runs = Grid(list, shown)
+	Headings(list, runs, run)
 end
 
 --------------------------------------------------------------------------
@@ -585,16 +636,22 @@ end
 -- The header hung off the list's own growth edge.
 --
 -- The one offset here is the header's own quirk: the first block of the first
--- column is anchored at the header's growth point, so a list of several columns
--- has to be pushed left by half of everything past the first column, or the
--- grid hangs off the right of the rectangle it was measured for. A list that
--- runs across the screen is one column laid sideways and needs none of it.
-local function Hang(list, wide)
+-- group is anchored across the middle of the header on the axis the groups
+-- stack along, so a list of several groups has to be pushed back by half of
+-- everything past the first one, or the grid hangs off the far end of the
+-- rectangle it was measured for. Which axis that is follows which way the
+-- members run, and a list of one group needs none of it, because half of
+-- nothing is nothing and both branches say so on their own.
+local function Hang(list, wide, tall)
 	local edge = Edge(list)
-	local block = S(list, "height") + S(list, "width")
 	list.header:ClearAllPoints()
-	list.header:SetPoint(edge, list.anchor, edge,
-		Across(list) and 0 or Whole((block - wide) / 2), 0)
+	if Across(list) then
+		list.header:SetPoint(edge, list.anchor, edge, 0,
+			Whole((tall - S(list, "height")) / 2))
+	else
+		list.header:SetPoint(edge, list.anchor, edge,
+			Whole((S(list, "width") - wide) / 2), 0)
+	end
 end
 
 -- Whether the preview is what this list is showing. Unlocked, drawing at all,
@@ -623,7 +680,7 @@ local function Lay(list)
 		Whole(point[4] - wide / 2), Whole(point[5] + tall / 2))
 	ns.UI.Rezoom(list.anchor, S(list, "zoom"))
 	list.anchor:SetSize(wide, tall)
-	Hang(list, wide)
+	Hang(list, wide, tall)
 end
 
 -- Where the list's middle is, in the units the setting is written in. Measured
@@ -684,17 +741,21 @@ local ghost = { width = 0, height = 0, role = nil, icons = true, range = true,
 -- Where slot `index` sits inside the rectangle, which is the list's own frame.
 -- Off its top left corner rather than its middle, because the rectangle is the
 -- list exactly and the first slot is its first corner.
-local function Sit(list, frame, index, down)
-	local block = S(list, "height") + S(list, "width")
-	local height, gap = S(list, "height"), S(list, "gap")
-	local column, row = math.floor((index - 1) / down), (index - 1) % down
+--
+-- `run` is how many slots one group holds, which is the only thing that says
+-- where a slot falls: how far along its own group it is, and how many groups
+-- are in front of it. Which of those two is the across is Across's answer.
+local function Sit(list, frame, index, run)
+	local wide, tall, gap = S(list, "width"), S(list, "height"), S(list, "gap")
+	local along, stacked = (index - 1) % run, math.floor((index - 1) / run)
+	local column, row = stacked, along
 	if Across(list) then
-		column, row = row, column
+		column, row = along, stacked
 	end
 
 	frame:ClearAllPoints()
 	frame:SetPoint("TOPLEFT", list.anchor, "TOPLEFT",
-		Whole(column * (block + gap)), Whole(-row * (height + gap)))
+		Whole(column * (wide + gap)), Whole(-row * (tall + gap)))
 end
 
 -- Under the anchor's own level rather than over it, all of it. What is on the
@@ -719,7 +780,7 @@ end
 
 local function Show(list)
 	local shown = Full(list)
-	local columns, rows = Extent(list, shown)
+	local run, runs = Grid(list, shown)
 	Made(list, shown)
 
 	ghost.width, ghost.height = S(list, "width"), S(list, "height")
@@ -736,14 +797,14 @@ local function Show(list)
 			ghost.role = member.role
 			Member.Place(frame, ghost)
 			Member.Preview(frame, member)
-			Sit(list, frame, index, Across(list) and columns or rows)
+			Sit(list, frame, index, run)
 			frame:Show()
 		end
 	end
 
-	-- A made up raid is a full one, so its columns are its groups and there is
-	-- no roster to count them off.
-	Headings(list, ByGroupNumber(list) and S(list, "headings") and columns or 0)
+	-- A made up raid is a full one, so each of its runs is a whole group and
+	-- there is no roster to count them off.
+	Headings(list, ByGroupNumber(list) and S(list, "headings") and runs or 0)
 end
 
 local function Preview(list)
@@ -861,12 +922,28 @@ end
 -- Everything a setting can move. Called at login, whenever a number in the
 -- panel changes and whenever the grid moves under the frames. Never from the
 -- tick.
+-- A saved size dragged back inside the range the tile is allowed to be.
+--
+-- The panel and the slash words already clamp, so this only ever fires on a
+-- number that was legal when it was saved and is not any more: the row this
+-- replaced could be fourteen pixels tall, and the tile cannot, because the name
+-- across the top of it is outlined and ns.UI.OutlineFloor is where an outline
+-- starts helping. Written back rather than clamped on read, because a setting
+-- the panel would refuse to set is one the panel should not be showing either.
+local function Fit(list)
+	local width = ns.db[list.keys.width]
+	local height = ns.db[list.keys.height]
+	ns.db[list.keys.width] = math.min(math.max(width, WIDTH_LOW), WIDTH_HIGH)
+	ns.db[list.keys.height] = math.min(math.max(height, HEIGHT_LOW), HEIGHT_HIGH)
+end
+
 function Group.Apply()
 	if not ns.db then
 		return
 	end
 	for index = 1, #lists do
 		lists[index].pending = false
+		Fit(lists[index])
 	end
 	Group.Rebuild()
 	Group.Lock()
@@ -1008,14 +1085,14 @@ function Group.Describe(which)
 		return "off, and Blizzard's own frames are where the hide switches leave them"
 	end
 
-	local size = ("%d by %d pixels"):format(S(list, "height") + S(list, "width"),
-		S(list, "height"))
+	local size = ("%d by %d pixels"):format(S(list, "width"), S(list, "height"))
 	if Previewing(list) then
 		return ("on, %s, and previewing itself because the frames are unlocked:"
-			.. " %d blocks where the real ones go"):format(size, Full(list))
+			.. " %d tiles where the real ones go"):format(size, Full(list))
 	end
 
-	local order = ByGroupNumber(list) and "by raid group, a column each"
+	local order = ByGroupNumber(list)
+		and ("by raid group, a %s each"):format(Across(list) and "row" or "column")
 		or "tanks, then healers, then damage, by name inside each band"
 	local line = ("on, %s, %d in the list, %s"):format(size, Group.Count(which), order)
 	if not S(list, "mine") then

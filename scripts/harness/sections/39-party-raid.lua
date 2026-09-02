@@ -46,6 +46,29 @@ local function tracks(bar, color)
 		and near(track.g, color[2] * Color.track) and near(track.a, 0.9)
 end
 
+-- How far a tile's missing end is washed toward white, restated here rather
+-- than read out of UnitFrames/Member.lua, because a gate that imported the
+-- number it is checking would pass on the day somebody changed it by accident.
+local GROUND_WASH = 0.55
+
+-- The ground behind a tile's fill: the class colour bleached, opaque, and not
+-- the dimmed track every other gauge in the addon draws. That direction is the
+-- whole look. Dimmed, a spent end reads as a second fill in a duller colour;
+-- bleached, it reads as an absence.
+local function washes(bar, color)
+	local track = bar.track
+	if not track then
+		return false
+	end
+	for index, channel in ipairs({ "r", "g", "b" }) do
+		local want = color[index] + (1 - color[index]) * GROUND_WASH
+		if not near(track[channel], want) then
+			return false
+		end
+	end
+	return near(track.a, 1)
+end
+
 -- The list as it stands, read back off the buttons rather than off
 -- Group.Order, so what is checked is where the header put somebody and not what
 -- the addon meant to ask for.
@@ -168,10 +191,10 @@ do
 	local _, button = blockOf("Ironhide")
 	check(button ~= nil, "nobody in the party got a block at all")
 	if button then
-		check(button:GetWidth() == ns.db.partyHeight + ns.db.partyWidth
+		check(button:GetWidth() == ns.db.partyWidth
 			and button:GetHeight() == ns.db.partyHeight,
-			("a block is %dx%d and the settings say %dx%d"):format(button:GetWidth(),
-				button:GetHeight(), ns.db.partyHeight + ns.db.partyWidth, ns.db.partyHeight))
+			("a tile is %dx%d and the settings say %dx%d"):format(button:GetWidth(),
+				button:GetHeight(), ns.db.partyWidth, ns.db.partyHeight))
 		check(button:GetAttribute("*type1") == "target"
 			and button:GetAttribute("*type2") == "togglemenu",
 			"a block does not target on the left button and open the menu on the right")
@@ -263,36 +286,49 @@ do
 	ns.Group.Apply()
 end
 
--- The same four people run sideways, which is one to a column and a column
--- each. This is the arrangement the centring was wrong for, and it is wrong in
--- the one direction a vertical list can never show: the header sizes itself to
--- every column it drew and then anchors the first column across its own middle,
--- so the blocks sit half a list to the right of the box. Centring the box put
--- the whole party right of the frame you drag, which is the list flowing off one
--- end again with the arithmetic that was supposed to have stopped it.
+-- The same four people, each way round.
+--
+-- Across is what the party ships as and is the arrangement the centring was
+-- wrong for once, in the one direction a vertical list can never show: the
+-- header sizes itself to every column it drew and then anchors the first column
+-- across its own middle, so the tiles sat half a list to the right of the box.
+-- Down is the switch the panel offers beside it, and it is here because a
+-- direction with only one of its two answers checked is a direction that works
+-- until somebody presses it.
+--
+-- Two halves to each: they are centred on the frame you drag, and they are the
+-- shape the setting asked for. Without the second, the first passes on a list
+-- that ignored the setting entirely.
 do
-	local was = ns.db.partyRaidPerColumn
-	ns.db.partyRaidPerColumn = 1
-	ns.Group.Apply()
+	local was = ns.db.partyGrow
 
-	check(ns.Group.Count("party") == 4, "a party one to a column lost somebody")
 	local left, top, x, y = block()
 	local ax, ay = _G.WarriorKitParty:GetCenter()
 	check(near(x, ax) and near(y, ay),
-		("four blocks in a row sit round %.1f, %.1f and the frame you drag is at %.1f, %.1f")
+		("four tiles across sit round %.1f, %.1f and the frame you drag is at %.1f, %.1f")
 			:format(x, y, ax, ay))
-
-	-- And it is a row, not a column, or the assertion above would pass on a list
-	-- that ignored the setting entirely.
-	local block4 = ns.db.partyHeight + ns.db.partyWidth
-	local wide = 4 * block4 + 3 * ns.db.partyGap
+	local wide = 4 * ns.db.partyWidth + 3 * ns.db.partyGap
 	check(near(x - left, wide / 2),
-		("four blocks one to a column are %.1f across and belong %d"):format(
-			(x - left) * 2, wide))
+		("four tiles across are %.1f wide and belong %d"):format((x - left) * 2, wide))
 	check(near(top, y + ns.db.partyHeight / 2),
-		"four blocks one to a column are not on one row")
+		"four tiles across are not on one row")
 
-	ns.db.partyRaidPerColumn = was
+	ns.db.partyGrow = "down"
+	ns.Group.Apply()
+
+	check(ns.Group.Count("party") == 4, "a party running down the screen lost somebody")
+	left, top, x, y = block()
+	ax, ay = _G.WarriorKitParty:GetCenter()
+	check(near(x, ax) and near(y, ay),
+		("four tiles down sit round %.1f, %.1f and the frame you drag is at %.1f, %.1f")
+			:format(x, y, ax, ay))
+	local tall = 4 * ns.db.partyHeight + 3 * ns.db.partyGap
+	check(near(top - y, tall / 2),
+		("four tiles down are %.1f deep and belong %d"):format((top - y) * 2, tall))
+	check(near(left, x - ns.db.partyWidth / 2),
+		"four tiles down are not in one column")
+
+	ns.db.partyGrow = was
 	ns.Group.Apply()
 end
 
@@ -376,8 +412,22 @@ do
 		"the rogue's health fill is not the rogue class colour")
 	check(fills(priest.health, Color.Class("PRIEST")),
 		"the priest's health fill is not the priest class colour")
-	check(tracks(rogue.health, Color.Class("ROGUE")),
-		"the spent part of the rogue's gauge is not their colour at ns.Unit.Color.track")
+	check(washes(rogue.health, Color.Class("ROGUE")),
+		"the missing end of the rogue's tile is not their colour bleached toward white")
+
+	-- And the weave over it, which is what makes that end read as an absence
+	-- rather than as a paler fill. One white file at one alpha over every class
+	-- there is, repeated at its own size rather than stretched: the texture
+	-- coordinates are the bar's own pixels divided by the tile's side, so the
+	-- stripe is the same width on a raid cell as on a party tile.
+	local weave = rogue.weave
+	check(weave and weave.texture and weave.texture:find("Hatch") ~= nil,
+		"the missing end of a tile is drawn through no weave at all")
+	check(select(4, weave:GetVertexColor()) < 1,
+		"the weave is drawn at full strength, which is a hatch that hides the colour under it")
+	check(weave.texcoord and weave.texcoord[2] > 1 and weave.texcoord[4] > 0,
+		("the weave is stretched to the tile rather than repeated across it: %s")
+			:format(table.concat(weave.texcoord or { "none" }, ", ")))
 
 	-- Power by the number UnitPowerType answers, which is the half of that API
 	-- that has never been renamed between these two clients.
@@ -401,13 +451,17 @@ do
 			:format(druid.health:GetHeight(),
 				rogue.health:GetHeight() + rogue.rail:GetHeight() + 1))
 
-	-- The percent, floored to the integer that gets drawn, which is what the
-	-- tick guards on: 2000 of 4000 is 50 and 4500 of 5000 is 90.
-	check(priest.healthText.text == "50%" and druid.healthText.text == "90%",
-		("the readings came out %q and %q"):format(tostring(priest.healthText.text),
-			tostring(druid.healthText.text)))
+	-- The fill, at the whole percent the tick guards on: 2000 of 4000 is 50 and
+	-- 4500 of 5000 is 90. There is no number written anywhere on a tile, which
+	-- is the point of it, so the fraction on the bar is the only reading there
+	-- is and it has to be exact.
+	check(near(priest.health.value, 0.5) and near(druid.health.value, 0.9),
+		("the fills came out %s and %s"):format(tostring(priest.health.value),
+			tostring(druid.health.value)))
 	check(rogue.nameText.text == "Sneaky",
-		("a block's name reads %q"):format(tostring(rogue.nameText.text)))
+		("a tile's name reads %q"):format(tostring(rogue.nameText.text)))
+	check(rogue.nameText.justify == "CENTER",
+		"a tile's name is not centred across the top of it")
 end
 
 ----------------------------------------------------------------------
@@ -562,12 +616,44 @@ do
 	rreads("a raid of six by group number",
 		"Tusksfirst, Ironhide, Bramblefoot, Lightwell, Sneaky, Emberdusk")
 
-	-- A column to a group, with the group over it. Five to a column and three
+	-- Five to a row and the sixth on the row under it, which is a party per row
+	-- and the shape Classic's roster actually has. Read off where the header
+	-- put the buttons rather than off the setting that asked for it.
+	local tiles = ns.Group.Members("raid")
+	check(tiles[1] and tiles[5] and tiles[6], "a raid of six did not get six tiles")
+	if tiles[1] and tiles[5] and tiles[6] then
+		check(near(tiles[5]:GetTop(), tiles[1]:GetTop()),
+			"the first five of a raid are not on one row")
+		check(near(tiles[5]:GetLeft() - tiles[1]:GetLeft(),
+			4 * (ns.db.raidWidth + ns.db.raidGap)),
+			"five to a row are not spaced by the tile and the gap")
+		check(near(tiles[6]:GetLeft(), tiles[1]:GetLeft())
+			and near(tiles[6]:GetTop(), tiles[1]:GetTop() - ns.db.raidHeight - ns.db.raidGap),
+			"the sixth of a raid did not start a second row under the first")
+
+		-- And the transpose, which is the same grid stood on its end: five down
+		-- a column, a column to a group. A direction with only one of its two
+		-- answers checked is a direction that works until somebody presses it.
+		local wasGrow = ns.db.raidGrow
+		ns.db.raidGrow = "down"
+		ns.Group.Apply()
+		check(near(tiles[5]:GetLeft(), tiles[1]:GetLeft())
+			and near(tiles[5]:GetTop(),
+				tiles[1]:GetTop() - 4 * (ns.db.raidHeight + ns.db.raidGap)),
+			"a raid grown down did not put five in a column")
+		check(near(tiles[6]:GetTop(), tiles[1]:GetTop())
+			and near(tiles[6]:GetLeft(), tiles[1]:GetLeft() + ns.db.raidWidth + ns.db.raidGap),
+			"the sixth of a raid grown down did not start a second column")
+		ns.db.raidGrow = wasGrow
+		ns.Group.Apply()
+	end
+
+	-- A label on each group's run, with the group on it. Five to a run and three
 	-- in the first group is the case the heading has to count rather than
-	-- assume: the second column starts inside group 2 and says so.
+	-- assume: the second run starts inside group 2 and says so.
 	local labels = select(2, ns.Group.Previewed("raid"))
 	check(labels[1] and labels[1].text == "Group 1" and labels[1].shown,
-		("the first column of the raid reads %q"):format(
+		("the first run of the raid reads %q"):format(
 			tostring(labels[1] and labels[1].text)))
 
 	-- And the other ordering, which is the party's own bands run down the
@@ -579,7 +665,7 @@ do
 	rreads("a raid of six by role",
 		"Bramblefoot, Ironhide, Lightwell, Emberdusk, Sneaky, Tusksfirst")
 	check(labels[1].shown == false,
-		"a raid ordered by role still has group numbers over its columns")
+		"a raid ordered by role still has group numbers on its runs")
 	ns.db.raidOrder = "group"
 	ns.Group.Apply()
 
@@ -643,27 +729,42 @@ end
 ----------------------------------------------------------------------
 
 do
-	ns.db.partyHeight, ns.db.partyWidth, ns.db.partyGap = 22, 120, 2
+	ns.db.partyHeight, ns.db.partyWidth, ns.db.partyGap = 28, 120, 2
 	ns.Group.Apply()
 	local _, button = blockOf("Ironhide")
-	check(button:GetWidth() == 142 and button:GetHeight() == 22,
-		("a resized block is %dx%d and belongs 142x22"):format(button:GetWidth(),
+	check(button:GetWidth() == 120 and button:GetHeight() == 28,
+		("a resized tile is %dx%d and belongs 120x28"):format(button:GetWidth(),
 			button:GetHeight()))
 	check(header:GetAttribute("xOffset") == 2,
-		"the gap between two blocks did not follow the setting")
+		"the gap between two tiles did not follow the setting")
 
 	local block = button.wk
-	check(block.box:GetWidth() == 142 and block.box:GetHeight() == 22,
-		"the block inside the button did not follow it")
-	check(block.slot:GetWidth() == 22 and block.slot:GetHeight() == 22,
-		"the role icon's square is not the block's height squared")
+	check(block.box:GetWidth() == 120 and block.box:GetHeight() == 28,
+		"the tile inside the button did not follow it")
+
+	-- The role square is taken off the tile's height rather than fixed, so a
+	-- raid cell gets a smaller one instead of being eaten by one.
+	check(block.roleIcon:GetWidth() == block.roleIcon:GetHeight()
+		and block.roleIcon:GetWidth() < 28,
+		("the role square is %.1f by %.1f inside a 28 pixel tile"):format(
+			block.roleIcon:GetWidth(), block.roleIcon:GetHeight()))
+
+	-- The two bars fill the tile between them, less its own outline top and
+	-- bottom and the one pixel seam that separates them, and each is the tile's
+	-- width less the outline down each side. No gap anywhere else: a tile is a
+	-- solid block of colour and a stripe of backdrop through it is a fault.
+	check(block.health:GetHeight() + block.rail:GetHeight() == 28 - 2 - 1,
+		("the two bars come to %d inside a 28 pixel tile"):format(
+			block.health:GetHeight() + block.rail:GetHeight()))
 	for _, part in ipairs({ block.health, block.rail }) do
 		local tall = part:GetHeight()
 		check(tall >= 1 and math.abs(tall - math.floor(tall + 0.5)) < 1e-9,
 			("a gauge is %.4f pixels tall, not a whole one"):format(tall))
+		check(part:GetWidth() == 120 - 2,
+			("a gauge is %.1f wide inside a 120 pixel tile"):format(part:GetWidth()))
 	end
 
-	ns.db.partyHeight, ns.db.partyWidth, ns.db.partyGap = 34, 168, 4
+	ns.db.partyHeight, ns.db.partyWidth, ns.db.partyGap = 56, 120, 4
 	ns.Group.Apply()
 end
 
@@ -750,8 +851,8 @@ check(burn <= CHURN.party,
 	("the party tick allocates %.2f KB per 50 ticks, the gate is %.2f")
 		:format(burn, CHURN.party))
 
-print(("party  %d blocks of %d x %d px, %s; %.2f KB per 50 ticks, gate is %.2f")
-	:format(ns.Group.Count("party"), ns.db.partyHeight + ns.db.partyWidth, ns.db.partyHeight,
+print(("party  %d tiles of %d x %d px, %s; %.2f KB per 50 ticks, gate is %.2f")
+	:format(ns.Group.Count("party"), ns.db.partyWidth, ns.db.partyHeight,
 		table.concat(ns.Group.Order(), ", "), burn, CHURN.party))
 print("party  " .. ns.Group.Describe("party"))
 print("raid   " .. ns.Group.Describe("raid"))
@@ -795,16 +896,16 @@ do
 	-- Through the same block a real member is drawn through, or it is a picture
 	-- of the frames rather than the frames.
 	local first = made[1].wk
-	check(first.nameText.text == "Ironhide" and first.healthText.text == "96%",
-		("the first preview block reads %q at %q"):format(tostring(first.nameText.text),
-			tostring(first.healthText.text)))
+	check(first.nameText.text == "Ironhide" and near(first.health.value, 0.96),
+		("the first preview tile reads %q at %s"):format(tostring(first.nameText.text),
+			tostring(first.health.value)))
 	check(fills(first.health, Color.Class("WARRIOR")),
-		"a preview block's health fill is not its made up member's class colour")
+		"a preview tile's health fill is not its made up member's class colour")
 	check(fills(first.rail, Color.power[1]),
 		"a preview warrior's rail is not the rage colour")
 
 	-- And the raid previews itself at the same time, in its own place, at its
-	-- own size and with a heading over each column. Two frames, so both of them
+	-- own size and with a heading on each group's run. Two frames, so both of them
 	-- have to be on the screen at once or you are placing one of them blind.
 	local raidMade, raidLabels = ns.Group.Previewed("raid")
 	local held = ns.db.raidColumns * ns.db.raidPerColumn
