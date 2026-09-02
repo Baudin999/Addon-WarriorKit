@@ -125,5 +125,64 @@ ns.db.barsFade = true
 print(("ramp   four frames in is %.2f, out is off the plate and holding its place, off is full on the frame")
 	:format(arriving))
 
+--------------------------------------------------------------------------
+-- The other faction
+--
+-- Attackable is the client's word and it is nearly the whole rule for which
+-- plate gets a bar. The exception is a player of the other faction, who is
+-- attackable and unflagged in their own zone on a PvP realm and gets a bar
+-- only once the flag is up. Driven on nameplate2 rather than a plate of its
+-- own, because the stub's plates persist and a third would be in every scene
+-- after this one.
+--------------------------------------------------------------------------
+
+local realPlayers, unitFaction = H.realPlayers, H.unitFaction
+local pvpUnits, ffaUnits = H.pvpUnits, H.ffaUnits
+
+fire("NAME_PLATE_UNIT_REMOVED", "nameplate2")
+realPlayers.nameplate2, unitFaction.nameplate2 = true, "Horde"
+fire("NAME_PLATE_UNIT_ADDED", "nameplate2")
+check(ns.EnemyBars.WidgetFor("nameplate2") == nil,
+	"an unflagged player of the other faction got a bar")
+
+-- Flagging in front of you is the faction event on a plate that has no bar
+-- for the tick to look at, so the event is the only way the bar arrives.
+pvpUnits.nameplate2 = true
+fire("UNIT_FACTION", "nameplate2")
+check(ns.EnemyBars.WidgetFor("nameplate2") ~= nil,
+	"a player of the other faction flagged and got no bar")
+
+-- The flag dropping is the tick's business as much as the event's: a bar on
+-- somebody who is no longer flagged goes on the next reading either way.
+pvpUnits.nameplate2 = nil
+Tick()
+check(ns.EnemyBars.WidgetFor("nameplate2") == nil,
+	"a player whose flag dropped kept the bar")
+
+-- Gurubashi: no PvP flag, free-for-all instead, and still a bar.
+ffaUnits.nameplate2 = true
+fire("UNIT_FACTION", "nameplate2")
+check(ns.EnemyBars.WidgetFor("nameplate2") ~= nil,
+	"a free-for-all player of the other faction got no bar")
+ffaUnits.nameplate2 = nil
+Tick()
+
+-- Your own faction is left to the client. A duel flags nobody and the bar on
+-- your duel partner is the point of the duel.
+unitFaction.nameplate2 = "Alliance"
+fire("UNIT_FACTION", "nameplate2")
+check(ns.EnemyBars.WidgetFor("nameplate2") ~= nil,
+	"an attackable player of your own faction got no bar without a flag")
+
+print("faction the other side gets a bar flagged or free-for-all, and none otherwise; your own side is the client's call")
+
+-- Back to a mob, so every section after this one sees the plate it always has.
+fire("NAME_PLATE_UNIT_REMOVED", "nameplate2")
+realPlayers.nameplate2, unitFaction.nameplate2 = nil, nil
+fire("NAME_PLATE_UNIT_ADDED", "nameplate2")
+check(ns.EnemyBars.WidgetFor("nameplate2") ~= nil, "nameplate2 did not come back as a mob")
+Tick()
+Tick()
+
 _G.UnitIsUnit = realIsUnit
 guids.target = nil

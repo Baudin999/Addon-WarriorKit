@@ -139,6 +139,17 @@ end
 -- of Tint run, and the per class cache gets filled once and read after that.
 local realPlayers = { player = true }
 _G.UnitIsPlayer = function(unit) return realPlayers[unit] == true end
+-- Faction and the PvP flag, which together are the one rule the enemy bars
+-- add on top of UnitCanAttack: a player of the other faction gets a bar only
+-- while flagged. Table driven, and a real player with no entry is Alliance
+-- like you, so every scene written before the flag existed reads exactly as
+-- it did. Nothing else here is a player, and a mob has no faction group.
+local unitFaction, pvpUnits, ffaUnits = { player = "Alliance" }, {}, {}
+_G.UnitFactionGroup = function(unit)
+	return unitFaction[unit] or (realPlayers[unit] and "Alliance") or nil
+end
+_G.UnitIsPVP = function(unit) return pvpUnits[unit] == true end
+_G.UnitIsPVPFreeForAll = function(unit) return ffaUnits[unit] == true end
 -- Who is swinging. Table driven because the meters open a segment on the first
 -- damage anyone in the group does, and the whole point of that rule is the pull
 -- somebody else made while you are still walking in.
@@ -647,6 +658,7 @@ end
 
 H.sound = sound
 H.own, H.realPlayers, H.inCombat = own, realPlayers, inCombat
+H.unitFaction, H.pvpUnits, H.ffaUnits = unitFaction, pvpUnits, ffaUnits
 H.debuffs, H.buffs, H.advance, H.ITEMS = debuffs, buffs, advance, ITEMS
 H.JUNK, H.QUESTBAG, H.CARRIED = JUNK, QUESTBAG, CARRIED
 H.refill, H.refillQuests, H.carrying = refill, refillQuests, carrying

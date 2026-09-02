@@ -348,6 +348,14 @@ read_globals = {
 	-- probed by name anyway and falls back to UnitIsFriend, because nothing in
 	-- this install calls it unguarded and the two disagree only on a duel.
 	"UnitCanAssist", "UnitIsFriend",
+	-- The PvP flag, for the one exception to "attackable gets a bar": a player
+	-- of the other faction is attackable in their own zone on a PvP realm and
+	-- gets no bar until they are flagged. Free-for-all is the Gurubashi flag
+	-- and counts. Nothing in this install calls the two flag readers unguarded
+	-- and OPie calls UnitFactionGroup, so all three are probed by name in
+	-- UnitFrames/EnemyBars.lua and a client missing one treats every player as
+	-- unflagged, which is a missing bar rather than an error on the ticker.
+	"UnitIsPVP", "UnitIsPVPFreeForAll", "UnitFactionGroup",
 	-- The client's own macro conditional parser, for the mouseover debug log. It
 	-- is the only thing that can tell a clause this build does not understand
 	-- from a clause that understood and did not match, and both of those cast

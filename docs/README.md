@@ -3178,6 +3178,17 @@ over 4 does not fight you at all and cannot reach a bar, since both halves of
 the collector require `UnitCanAttack`, so friendly draws the quiet frame rather
 than a colour no caller can reach.
 
+**A player of the other faction needs the flag as well.** Attackable is the
+client's word and it is nearly the whole rule for which plate gets a bar. The
+exception is the other faction: on a PvP realm a Horde player standing in
+Durotar is attackable and unflagged, and a bar on them is a bar on somebody who
+has not started anything. So a player of the other faction gets a bar while
+`UnitIsPVP` or `UnitIsPVPFreeForAll` says so and not otherwise, and
+`UNIT_FACTION` puts the bar up the moment they flag, because a plate that
+arrived unflagged has no bar for the tick to look at. A player of your own
+faction is left to `UnitCanAttack`: a duel flags nobody, and the bar on your
+duel partner is the point of the duel.
+
 That is the second thing the revamp moved and the reasoning is worth keeping.
 Reaction used to be a five pixel stripe closing a level chip on its far left,
 which put a permanent five pixels at the outermost edge of the widget, in the

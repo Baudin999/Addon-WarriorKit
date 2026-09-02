@@ -235,6 +235,42 @@ local pool, attached, listWidgets = {}, {}, {}
 -- events. GetNamePlates builds a fresh table on every call, and both the list
 -- collector and the attach walk wanted one five times a second.
 local plateUnits = {}
+
+-- Probed rather than called, the way Unit/Role.lua reads its optional APIs: a
+-- client without one of these treats every player as unflagged, which is a
+-- missing bar rather than an error five times a second.
+local UnitIsPVP, UnitIsPVPFreeForAll = _G.UnitIsPVP, _G.UnitIsPVPFreeForAll
+local UnitFactionGroup = _G.UnitFactionGroup
+
+-- Whether a unit gets a bar at all. One function because it is one rule asked
+-- from three places: the plate arriving, the tick deciding whether a bar
+-- stays, and the list collector.
+--
+-- Attackable is the client's answer and it is most of the rule. A player of
+-- the other faction is the exception, and the flag is the rest of it. On a PvP
+-- realm a Horde player standing in Durotar is attackable and unflagged, and a
+-- bar on them is a bar on somebody who has not started anything; the moment
+-- either of you does, the flag goes up and the bar with it. A player of your
+-- own faction is left to the client, because a duel does not flag anybody and
+-- a bar on your duel partner is the point of the duel.
+--
+-- Free-for-all counts as flagged. Gurubashi is the one place a player of the
+-- other faction is attackable under a flag that is not the PvP one.
+local function Wanted(unit)
+	if not UnitCanAttack("player", unit) then
+		return false
+	end
+	if not UnitIsPlayer(unit) then
+		return true
+	end
+	if type(UnitFactionGroup) == "function" and UnitFactionGroup(unit) == UnitFactionGroup("player") then
+		return true
+	end
+	if type(UnitIsPVP) == "function" and UnitIsPVP(unit) then
+		return true
+	end
+	return type(UnitIsPVPFreeForAll) == "function" and UnitIsPVPFreeForAll(unit) == true
+end
 -- ns.dbc.barsSpells, resolved. Names because the aura scan matches on the
 -- localised name, textures because the row draws them, and both indexed by slot
 -- so the tick reads two arrays rather than calling into the spell API. Rebuilt
@@ -1871,7 +1907,7 @@ local function Attach(unit)
 	if not ns.db.bars or EnemyBars.Mode() ~= "plates" then
 		return
 	end
-	if attached[unit] or not UnitCanAttack("player", unit) then
+	if attached[unit] or not Wanted(unit) then
 		return
 	end
 	local plate = C_NamePlate.GetNamePlateForUnit(unit)
@@ -2028,7 +2064,7 @@ local function ByFirstSeen(a, b)
 end
 
 local function Collect(unit)
-	if not UnitExists(unit) or UnitIsDead(unit) or not UnitCanAttack("player", unit) then
+	if not UnitExists(unit) or UnitIsDead(unit) or not Wanted(unit) then
 		return
 	end
 	local guid = UnitGUID(unit)
@@ -2276,7 +2312,7 @@ function EnemyBars.Update()
 		end
 		BuildTargeters()
 		for unit, widget in pairs(attached) do
-			if UnitExists(unit) and UnitCanAttack("player", unit) then
+			if UnitExists(unit) and Wanted(unit) then
 				UpdateWidget(widget, unit, UnitGUID(unit))
 			else
 				Release(unit)
@@ -2356,6 +2392,11 @@ events:RegisterEvent("CVAR_UPDATE")
 if C_NamePlate then
 	events:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 	events:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+	-- The PvP flag going up or down on a unit with a plate. The tick would
+	-- catch a bar that has to go, a fifth of a second later; what it cannot
+	-- catch is a plate that arrived unflagged and has no bar for the tick to
+	-- look at, which is every enemy player who flags in front of you.
+	events:RegisterEvent("UNIT_FACTION")
 end
 
 events:SetScript("OnEvent", function(_, event, arg1)
@@ -2378,6 +2419,15 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	elseif event == "NAME_PLATE_UNIT_REMOVED" then
 		plateUnits[arg1] = nil
 		Release(arg1)
+		return
+	elseif event == "UNIT_FACTION" then
+		if plateUnits[arg1] then
+			if not attached[arg1] then
+				Attach(arg1)
+			elseif not Wanted(arg1) then
+				Release(arg1)
+			end
+		end
 		return
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		FlushPending()
