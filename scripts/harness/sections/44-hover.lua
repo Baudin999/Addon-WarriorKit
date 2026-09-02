@@ -386,4 +386,85 @@ check(bound("SHIFT-BUTTON3") == "CLICK WarriorKitHoverButton:wk1",
 check(Hover.Clear() == 3, "clearing did not report the number it took off")
 check(sheet:IsShown() == false, "the list is up with nothing bound")
 
+--------------------------------------------------------------------------
+-- The page
+--
+-- The gesture the page is built around is drop, then press, and this is the
+-- one part of it the model cannot see. A key is taken by the box only while
+-- the box is listening, and the box used to start listening on a click that
+-- nothing on the page asked for: the moment the slot was full the row read
+-- "press a key", the key was pressed, and it went to whatever it was already
+-- bound to. Every binding after the first was made that way in the game and
+-- none of them landed.
+--
+-- So the drop arms the box, a key pressed with no click in between is the
+-- binding, and a click on the box that is already listening keeps it
+-- listening rather than cancelling, because that click is the one a player
+-- who learned the old way still makes.
+--------------------------------------------------------------------------
+
+local UI = ns.UI
+ns.Options.Open("Mouseover casting")
+
+local draft
+for _, entry in ipairs(ns.Options.Indexed()) do
+	if entry.label == "a new key" then
+		draft = entry.widget
+	end
+end
+check(draft ~= nil and draft.square ~= nil and draft.key ~= nil,
+	"the page has no row to make a new key on")
+
+-- A press, the way the client delivers one: the modifier arrives as a key of
+-- its own first, then the key with the modifier held.
+local function press(box, key)
+	box.scripts.OnKeyDown(box, "LSHIFT")
+	_G.WarriorKitShift(true)
+	box.scripts.OnKeyDown(box, key)
+	_G.WarriorKitShift(false)
+end
+
+local function drop(index)
+	_G.WarriorKitCarrySpell(index, "spell")
+	draft.square.button:Click("LeftButton")
+end
+
+if draft then
+	drop(1)
+	check(Hover.Held() ~= nil and Hover.Held().name == "Rend",
+		"a spell dropped on the empty row did not fill its slot")
+	check(UI.Capturing() == draft.key,
+		"the slot is full and the box beside it is not listening for the key")
+	press(draft.key, "F")
+	check(#Hover.List() == 1 and Hover.List()[1].key == "SHIFT-F",
+		"a key pressed straight after the drop was not taken")
+	check(Hover.Held() == nil and UI.Capturing() == nil,
+		"the slot or the box is still armed after the key was taken")
+
+	-- The second one, which is the one that never landed in the game. A click
+	-- on the listening box in between, because that is the click the first
+	-- binding taught.
+	drop(2)
+	check(UI.Capturing() == draft.key, "the second drop did not arm the box")
+	draft.key:Click("LeftButton")
+	check(UI.Capturing() == draft.key,
+		"a click on the box that was already listening cancelled it")
+	press(draft.key, "G")
+	check(#Hover.List() == 2 and Hover.List()[2].key == "SHIFT-G",
+		("the second key did not land: %d bound"):format(#Hover.List()))
+	check(Cast.Holding(1) and Cast.Holding(2),
+		"two keys are in the list and the binding layer does not hold both")
+
+	-- Cancelling is still there for a drop made by mistake: a right click, and
+	-- the row then says a click is needed rather than promising a key.
+	drop(3)
+	draft.key:Click("RightButton")
+	check(UI.Capturing() == nil, "a plain right click did not cancel the capture")
+	check(draft.key.text:GetText():find("click") ~= nil,
+		("with the capture cancelled the box reads %q"):format(tostring(draft.key.text:GetText())))
+	Hover.Hold(nil)
+	Hover.Clear()
+	ns.Options.Refresh()
+end
+
 print(("hover  %s"):format(Hover.Describe()))

@@ -88,7 +88,20 @@ local function Row(ui, hooks)
 	ui.Custom(function(frame)
 		row = frame
 
-		square = ns.UI.DropSquare(frame, SQUARE, hooks.slot, hooks.drop,
+		-- A drop on the row that arms itself starts the key box listening, so
+		-- the second half of the gesture is the key and nothing else. It was a
+		-- click on the box in between, and nothing on the page said so: the box
+		-- read "press a key" the moment the slot was full, the key was pressed,
+		-- and it went to whatever it was already bound to.
+		local function Drop(pick)
+			local ok = hooks.drop(pick)
+			if ok and hooks.arm then
+				key.Listen()
+			end
+			return ok
+		end
+
+		square = ns.UI.DropSquare(frame, SQUARE, hooks.slot, Drop,
 			{ take = Take, after = ns.Options.Refresh })
 		square:SetPoint("TOPLEFT")
 
@@ -113,6 +126,9 @@ local function Row(ui, hooks)
 		ns.UI.Wrap(name, false)
 		name:SetPoint("LEFT", square, "RIGHT", M.gutter, 0)
 		name:SetPoint("RIGHT", key, "LEFT", -M.gutter, 0)
+
+		-- On the row, so the harness can press the same things a player does.
+		frame.square, frame.key, frame.who = square, key, who
 
 		-- An empty slot on the list is not a short row, it is no row: zero
 		-- height and no gap under it, or twelve unused slots would leave a
@@ -156,12 +172,16 @@ local function Draft()
 			ns.Hover.Hold(pick)
 			return true
 		end,
+		-- Read only while the box is not listening, which with a full slot
+		-- means the capture was cancelled, so it says what to do about that
+		-- rather than promising a key it is not waiting for.
 		key = function()
-			return ns.Hover.Held() and "|cffffd100press a key|r" or "|cff808080a key|r"
+			return ns.Hover.Held() and "|cffffd100click, then a key|r" or "|cff808080a key|r"
 		end,
 		bind = function(combo)
 			Said(ns.Hover.Bind(combo))
 		end,
+		arm = true,
 		who = function() return ns.db.hoverWho end,
 		cycle = function()
 			ns.db.hoverWho = ns.Hover.NextWho(ns.db.hoverWho)

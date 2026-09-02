@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### The key lands after the drop
+
+The mouseover page is built around one gesture, drop a spell on the empty row
+and press the key, and the second half of it was not there. The box beside
+the slot took a key only while it was listening, and it started listening on a
+click nobody was told to make. So the row read "press a key" the moment the
+slot was full, the key was pressed, and it went to whatever it was already
+bound to. The first binding got made by clicking the box before the key, and
+every one after it went the other way and did not land.
+
+The drop arms the box now, so the key is the next thing pressed and nothing
+sits between. A left click on a box that is already listening keeps it
+listening, because that is the click the first binding taught. A right click,
+Escape, and a click anywhere else still cancel, and a cancelled row with a
+full slot reads "click, then a key" rather than promising one it is not
+waiting for. The page rows carry their square and their box, and 44-hover
+presses them the way a player does: drop, key, drop, click, key.
+
 ### The three trees on one screen
 
 The client's talent frame shows one tree at a time behind three tabs, in a

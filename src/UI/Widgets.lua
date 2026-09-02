@@ -434,21 +434,37 @@ function UI.KeyBox(parent, opts)
 		after()
 	end
 
+	-- For a page that arms the box itself, the way the mouseover page does
+	-- when a spell lands in its slot: the gesture there is drop, then press,
+	-- and a box that waits to be clicked in between is a box that reads
+	-- "press a key" while it is not listening.
+	field.Listen = function()
+		Listen(field)
+	end
+
 	field:RegisterForClicks("AnyUp")
 	field:SetScript("OnClick", function(self, button)
 		if capturing ~= self then
 			Listen(self)
 			return
 		end
-		-- An unmodified left or right click while listening means cancel.
-		-- Combo returns the bare name when no modifier is down, which is the
-		-- same test the binding itself has to pass.
+		-- A modified mouse button while listening is the key. Combo returns the
+		-- bare name when no modifier is down, which is the same test the
+		-- binding itself has to pass.
 		local mapped = MOUSE_KEYS[button]
 		if mapped and not BARE_MOUSE[Combo(mapped) or ""] then
 			Take(mapped)
-		else
-			UI.StopCapture()
+			return
 		end
+		-- A plain left click on a box that is already listening is the box
+		-- being chosen, not cancelled. It was a cancel, and on a page that arms
+		-- the box on a drop that made the click a player learned to make the
+		-- one that stopped the key from landing. A plain right click, Escape,
+		-- and a click anywhere else still cancel.
+		if button == "LeftButton" then
+			return
+		end
+		UI.StopCapture()
 	end)
 
 	field:SetScript("OnKeyDown", function(self, key)

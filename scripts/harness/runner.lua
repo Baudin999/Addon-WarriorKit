@@ -213,7 +213,6 @@ local SECTIONS = {
 	"42-cooldown-row",
 	"43-blizzard-hide",
 	"44-hover",
-	"99-scratch",
 	"45-chat-keys",
 	"46-mail",
 	"47-quest-log",
