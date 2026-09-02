@@ -308,6 +308,12 @@ ns.Register({
 							ns.UI.Notify()
 						end,
 						zoom.label)
+					-- Under the `?` in the row's corner rather than on a line of
+					-- its own. It is a live sentence: which stop this screen is
+					-- on and what that stop costs, which is the one thing worth
+					-- saying about a zoom and was a whole row per screen until
+					-- the mark existed to hang it on.
+					ui.Hint(function() return Settings.DescribeStop(zoom.key) end)
 				end
 			end
 			ui.Reading("exact on this screen at", Settings.Grid)
@@ -341,9 +347,9 @@ ns.Register({
 		-- file, which is the list that goes stale the first time somebody adds
 		-- a window.
 		Rows(true, "Zoom: windows",
-			"Every window this addon opens, each on its own number. Shrink the map without shrinking the quest log beside it.")
+			"Every window this addon opens, on its own number. Shrink the map without shrinking the quest log beside it.")
 		Rows(false, "Zoom: on screen",
-			"Everything the addon draws over the world, each on its own number. A stop off the exact list draws a hairline soft, which is a price you are allowed to choose.")
+			"Everything the addon draws over the world, on its own number.")
 
 		-- Here rather than on the feeds page, where the first of these two used
 		-- to live. It was a per-feed reading of an addon-wide fact, printed

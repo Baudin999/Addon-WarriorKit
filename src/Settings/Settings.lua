@@ -332,6 +332,30 @@ function Settings.Pixels()
 	return window.width * zoom, window.height * zoom
 end
 
+-- The short form, for the `?` in a zoom row's corner. Which stop this screen is
+-- on and what that stop costs, and nothing else: the screen's own contribution
+-- and the panel's measured size are facts about the window and the monitor, not
+-- about this row, and the reading at the foot of the list says both once.
+--
+-- Its own function rather than a flag on Describe, because a hover box is read
+-- in the half second before you move on and the two sentences are written for
+-- different amounts of attention.
+function Settings.DescribeStop(key)
+	local chosen = Settings.Snap(ns.db[key])
+	local zoom = UI.ScreenZoom() * chosen
+
+	if not UI.Supported() then
+		return ("%s, and this client has no SetIgnoreParentScale, so the size"
+			.. " lands on whatever the UI scale leaves"):format(Settings.Label(chosen))
+	end
+	if UI.Exact(zoom) then
+		return ("%s, and one unit is a whole number of pixels, so every edge is exact")
+			:format(Settings.Label(chosen))
+	end
+	return ("%s, and one unit is %.2f pixels, so a hairline draws soft")
+		:format(Settings.Label(chosen), zoom)
+end
+
 -- One sentence saying what one screen's size is doing, and it does not flatter
 -- the setting. A stop that costs the grid says so, in the same terms UI.Describe
 -- uses for the grid itself, because a control that hides its own cost is a

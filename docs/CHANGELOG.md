@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### A row with a hint says so, with a `?` in the corner
+
+Hints have been drawn in the addon's own tooltip on hover for a long time, which
+costs the page no vertical space and is the right shape. Nothing said one was
+there. A page full of hints looked like a page with none, and the only way to
+find one was to sweep the cursor down the column.
+
+There is a `?` in the right corner of any row that carries a hint now, dim until
+you hover the row and in the accent colour while you do. The controls on that
+row slide left to make room; a row with no hint reserves nothing. The sentence
+still opens on hovering the row rather than on hitting a twelve pixel target,
+because the row is what you were reading.
+
+A hint can be a function now, for a sentence that is different every time it is
+read. The zoom rows are the first: each one says which stop that screen is on
+and whether the stop keeps a hairline sharp. That was a reading under every row,
+which is twenty three rows of prose on a page whose whole point was to be
+compact, and it is a hover on the row it belongs to instead. Both zoom lists
+lost about a third of their height.
+
+The panel's prose budget went from 25,500 to 27,000 to pay for the twenty three
+sentences, which is the largest raise on that list. It is worth saying what the
+budget does not measure: those sentences replaced twenty three readings that
+were on the page permanently, so the prose you see went down while the number
+counted went up. A hint is read one at a time, on the row you hovered. Telling
+those apart is a change to what the budget means and it is not being made in the
+commit that would benefit from it.
+
 ### Target of target is on the screen again
 
 The skin took that frame over completely. It sizes it, anchors it under the

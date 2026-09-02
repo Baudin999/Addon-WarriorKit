@@ -2888,6 +2888,22 @@ and the sentence is one hover away. `ui.Reading(label, fn)` is a live number or
 a short state in the accent colour on the right of its own row; it is not capped
 by character count, but it never wraps and the harness measures that.
 
+**A row with a hint carries a `?` in its right corner.** Costing no vertical
+space was the half that worked; the half that did not was that nothing said a
+hint was there, so a page full of them looked like a page with none and the only
+way to find one was to sweep the cursor down the column. The mark is twelve
+pixels, dim until the row is hovered, and the controls on that row slide left to
+make room for it: `Paired` hands every builder a `right` frame to anchor to
+rather than the row itself, and a row with no hint reserves nothing. The
+sentence still opens on hovering the row rather than on hitting the mark,
+because the row is what you were reading.
+
+`text` may be a function returning the sentence, for one that is different every
+time it is read. The zoom rows are why: each says which stop that screen is on
+and whether the stop keeps a hairline sharp, which was a reading under every row
+until the mark existed to hang it on. A live hint is capped where it is read,
+since there is nothing to measure at the call site.
+
 44 ledes, 75 hints and 81 readings come to 14,375 characters against 40,268, and
 the harness fails past 16,000. What the caps pushed out is in this file, under
 the part it belongs to.

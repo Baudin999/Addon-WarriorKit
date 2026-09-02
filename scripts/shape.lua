@@ -58,7 +58,7 @@ local ALLOWED = {
 	  why = "places every region of one nameplate widget in one pass" },
 	{ path = "./UnitFrames/Block.lua", fn = "Block.Place", own = 195,
 	  why = "places every region of one block in one pass" },
-	{ path = "./UI/Widgets.lua", fn = "UI.Kit", own = 123,
+	{ path = "./UI/Widgets.lua", fn = "UI.Kit", own = 119,
 	  why = "the kit's own body, one closure per control, returned as a table" },
 	{ path = "./UI/Ability.lua", fn = "Ability.New", own = 123,
 	  why = "builds one ability square and every region on it" },

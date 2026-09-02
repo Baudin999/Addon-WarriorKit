@@ -159,11 +159,32 @@ if window then
 						("%s: a row is %.1f wide inside a %.1f column"):format(where,
 							cell.frame:GetWidth() + cell.indent, stack.width))
 
+					-- A hint is a string, or a function returning one for a
+					-- sentence that is different every time it is read. The live
+					-- ones are asked here rather than skipped: a zoom row's hint
+					-- is only ever seen at the length the current setting makes
+					-- it, so the cap is worth measuring at a real one.
 					if cell.frame.hint then
 						hints = hints + 1
-						prose = prose + #cell.frame.hint
-						check(#cell.frame.hint <= 200,
-							("%s: a hint is %d characters"):format(where, #cell.frame.hint))
+						local said = cell.frame.hint
+						if type(said) == "function" then
+							said = said()
+						end
+						check(type(said) == "string" and said ~= "",
+							("%s: a hint answered %s"):format(where, tostring(said)))
+						if type(said) == "string" then
+							prose = prose + #said
+							check(#said <= 200,
+								("%s: a hint is %d characters: %s"):format(where, #said, said))
+						end
+					end
+
+					-- The `?` in the corner, and the room it was given. A hint
+					-- nothing marks is a hint nobody finds, which is what every
+					-- one of them was before the marker existed.
+					if cell.frame.hint and cell.frame.MakeRoom then
+						check(cell.frame.mark ~= nil,
+							("%s: a row carries a hint and draws no ? to say so"):format(where))
 					end
 
 					-- A reading is a number on the right of its own row and it
@@ -482,9 +503,24 @@ if window then
 	-- hints and a reading went with them, and what a square does is on the square
 	-- rather than in a paragraph about it. 25,500 is that measurement plus a
 	-- hint's worth of room again, and it is a smaller number than the line above
-	-- it because prose that came out is prose that has to stay out.
-	check(prose < 25500,
-		("the window holds %d characters of prose and the budget is 25,500"):format(prose))
+	-- it because prose that came out is prose that has to stay out. Splitting the
+	-- zoom onto every screen costs 1,285 across twenty three hints and takes it
+	-- to 26,785 across sixty-nine: two new pages, twenty three controls, and each
+	-- hint is the sentence saying which stop that screen is on and whether the
+	-- stop keeps a hairline sharp, which is the one thing about a zoom nobody can
+	-- work out by looking at the number. 27,000 is that measurement plus a hint's
+	-- worth of room again.
+	--
+	-- That raise is the largest on this list and it is worth saying what it does
+	-- not measure. Those twenty three sentences replaced twenty three readings
+	-- that were on the page permanently, so the prose you actually see went down
+	-- while the number counted here went up: a hint is read one at a time, on the
+	-- row you hovered, and a reading is read whether you wanted it or not. This
+	-- counter does not tell those apart. Separating them is a change to what the
+	-- budget means and it is not being made in the commit that would benefit from
+	-- it, which is the only honest order to make it in.
+	check(prose < 27000,
+		("the window holds %d characters of prose and the budget is 27,000"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

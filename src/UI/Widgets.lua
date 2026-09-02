@@ -729,6 +729,11 @@ end
 
 local LEDE_MAX, HINT_MAX = 160, 200
 
+-- The width of the `?` in the corner of a row that carries a hint. Narrower
+-- than a control, because it is a mark saying there is something to read and
+-- not a thing you set.
+local MARK = 12
+
 local function Capped(kind, text, limit)
 	assert(type(text) == "string" and text ~= "",
 		("a %s was given no text"):format(kind))
@@ -778,15 +783,44 @@ local function InstallProse(kit, ctx)
 	-- row the caller wrote last, so a hint reads at the call site exactly where a
 	-- note used to and costs the page no vertical space at all.
 	--
+	-- Costing no space was the half that worked. The other half was that nothing
+	-- said a hint was there, so a page full of them looked like a page with none
+	-- and the only way to find one was to sweep the cursor down the column. A
+	-- row with a hint carries a `?` in its right corner now, and the controls on
+	-- it slide left to make room. That is the whole of the marker's job: the
+	-- sentence still opens on hovering the row, not on hitting a twelve pixel
+	-- target, because the row is what you were reading.
+	--
+	-- `text` is a string, or a function returning one for a sentence that is
+	-- different every time it is read. A zoom row says which stop it is on and
+	-- whether that stop keeps a hairline sharp, which is a live answer and was a
+	-- reading of its own under every row until it became this.
+	--
 	-- Two hundred characters, and most controls do not need one. A control that
 	-- cannot be explained in two hundred characters is a control whose label is
-	-- wrong.
+	-- wrong. A live one is capped where it is read rather than here, because
+	-- there is nothing to measure yet at the call site.
 	function kit.Hint(text)
-		text = Capped("hint", text, HINT_MAX)
+		local live = type(text) == "function"
+		if not live then
+			text = Capped("hint", text, HINT_MAX)
+		end
 		local owner = kit.widgets[#kit.widgets]
 		assert(owner, "a hint was written before the control it belongs to")
-		assert(not owner.hint, ("two hints on one control: %s"):format(text))
+		assert(not owner.hint, "two hints on one control")
 		owner.hint = text
+
+		-- The mark, and the room for it. Only a row built by Paired can carry
+		-- one: an action button and a reading are full width and have no corner
+		-- to give up, so they keep the hint and go without the `?`.
+		if owner.MakeRoom then
+			local mark = UI.Label(owner, M.font, C.dim, "CENTER", UI.FLAT)
+			mark:SetPoint("TOPRIGHT", 0, -math.floor((M.control - M.font) / 2))
+			mark:SetWidth(MARK)
+			mark:SetText("?")
+			owner.mark = mark
+			owner.MakeRoom()
+		end
 
 		-- Hung over whatever the widget already does on the way in and out,
 		-- because a check box repaints its own label there and a picker its own
@@ -796,11 +830,21 @@ local function InstallProse(kit, ctx)
 			if enter then
 				enter(self, ...)
 			end
-			ns.Tip.Open(self, { kind = "note", lines = { self.hint } })
+			if self.mark then
+				self.mark:SetTextColor(C.accent[1], C.accent[2], C.accent[3])
+			end
+			local said = self.hint
+			if type(said) == "function" then
+				said = Capped("hint", said(), HINT_MAX)
+			end
+			ns.Tip.Open(self, { kind = "note", lines = { said } })
 		end)
 		owner:SetScript("OnLeave", function(self, ...)
 			if leave then
 				leave(self, ...)
+			end
+			if self.mark then
+				self.mark:SetTextColor(C.dim[1], C.dim[2], C.dim[3])
 			end
 			ns.Tip.Close()
 		end)
@@ -861,6 +905,52 @@ end
 -- they are installed rather than written inside the kit for the same reason the
 -- prose is.
 --------------------------------------------------------------------------
+
+-- A row of a label and a control
+--
+-- Out here rather than inside UI.Kit, because it belongs to no one kit and
+-- because the argument for the third return below is a paragraph the kit's own
+-- body should not have to carry. It takes ctx for the same three calls every
+-- installer out here takes it for.
+-- Shared by every row that is a label on the left and a control on the right.
+-- The label wraps and the row is as tall as the taller of the two, so a long
+-- label pushes the row down rather than running under its own control.
+--
+-- Three things come back and the third is the one to read carefully. `right`
+-- is what a control anchors its TOPRIGHT to, not the row: a row that gains a
+-- hint puts a `?` in the corner and pulls `right` in by that much, so every
+-- control on it slides left without any of the six builders below knowing a
+-- marker exists. A row with no hint reserves nothing, which is the whole
+-- point of hanging the column off the hint rather than off the row.
+local function Paired(ctx, reserved, controlHeight)
+	local stack = ctx.Stack()
+	local row = CreateFrame("Frame", nil, ctx.Parent())
+	local text = UI.Label(row, M.font, C.text, "LEFT", UI.FLAT)
+	UI.Wrap(text, true)
+	text:SetSpacing(2)
+	text:SetPoint("TOPLEFT", 0, -math.floor((controlHeight - M.font) / 2))
+
+	local right = CreateFrame("Frame", nil, row)
+	right:SetPoint("TOPLEFT")
+	right:SetPoint("BOTTOMRIGHT")
+
+	-- Called once, by kit.Hint, on the row it was written under.
+	row.MakeRoom = function()
+		right:SetPoint("BOTTOMRIGHT", -(MARK + M.rowGap), 0)
+		reserved = reserved + MARK + M.rowGap
+		stack:Reflow()
+	end
+
+	stack:Add(row, {
+		indent = M.indent,
+		measure = function(this)
+			text:SetWidth(ctx.TextWidth(stack, this, reserved + M.gutter))
+			return math.max(controlHeight, UI.TextHeight(text, controlHeight))
+		end,
+	})
+	return row, text, right
+end
+
 
 local function InstallKnobs(kit)
 	-- Tenths, half size to triple. The label is the caller's only when it has
@@ -1045,34 +1135,13 @@ function UI.Kit(host)
 		end)
 	end
 
-	-- Shared by every row that is a label on the left and a control on the right.
-	-- The label wraps and the row is as tall as the taller of the two, so a long
-	-- label pushes the row down rather than running under its own control.
-	local function Paired(reserved, controlHeight)
-		local stack = Stack()
-		local row = CreateFrame("Frame", nil, Parent())
-		local text = UI.Label(row, M.font, C.text, "LEFT", UI.FLAT)
-		UI.Wrap(text, true)
-		text:SetSpacing(2)
-		text:SetPoint("TOPLEFT", 0, -math.floor((controlHeight - M.font) / 2))
-
-		stack:Add(row, {
-			indent = M.indent,
-			measure = function(this)
-				text:SetWidth(TextWidth(stack, this, reserved + M.gutter))
-				return math.max(controlHeight, UI.TextHeight(text, controlHeight))
-			end,
-		})
-		return row, text
-	end
-
 	-- format turns the value into what the readout says, the same as the
 	-- slider's, so a caller can put a unit after the number without this file
 	-- learning what the unit means. Left out, the number speaks for itself.
 	function kit.Stepper(label, low, high, step, get, set, format)
 		local valueWidth = 34
 		local reserved = M.control * 2 + valueWidth + M.rowGap * 2
-		local row, text = Paired(reserved, M.control)
+		local row, text, right = Paired(ctx, reserved, M.control)
 		text:SetText(label)
 
 		local function Nudge(delta)
@@ -1088,10 +1157,10 @@ function UI.Kit(host)
 
 		local minus = UI.Button(row, { label = "-", glyph = true, width = M.control,
 			onClick = function() Nudge(-1) end })
-		minus:SetPoint("TOPRIGHT", row, "TOPRIGHT", -(M.control + valueWidth + M.rowGap * 2), 0)
+		minus:SetPoint("TOPRIGHT", right, "TOPRIGHT", -(M.control + valueWidth + M.rowGap * 2), 0)
 		local plus = UI.Button(row, { label = "+", glyph = true, width = M.control,
 			onClick = function() Nudge(1) end })
-		plus:SetPoint("TOPRIGHT")
+		plus:SetPoint("TOPRIGHT", right, "TOPRIGHT")
 
 		local value = UI.Label(row, M.font, C.heading, "CENTER", UI.FLAT)
 		value:SetPoint("TOP", 0, -math.floor((M.control - M.font) / 2))
@@ -1130,11 +1199,11 @@ function UI.Kit(host)
 	function kit.Slider(label, low, high, step, get, set, format)
 		local trackWidth, valueWidth = 116, 40
 		local reserved = trackWidth + valueWidth + M.gutter
-		local row, text = Paired(reserved, M.control)
+		local row, text, right = Paired(ctx, reserved, M.control)
 		text:SetText(label)
 
 		local value = UI.Label(row, M.font, C.heading, "RIGHT", UI.FLAT)
-		value:SetPoint("TOPRIGHT", 0, -math.floor((M.control - M.font) / 2))
+		value:SetPoint("TOPRIGHT", right, "TOPRIGHT", 0, -math.floor((M.control - M.font) / 2))
 		value:SetWidth(valueWidth)
 
 		local function Show(current)
@@ -1267,7 +1336,7 @@ function UI.Kit(host)
 
 	function kit.Cycle(label, values, get, set)
 		local width = 104
-		local row, text = Paired(width, M.control)
+		local row, text, right = Paired(ctx, width, M.control)
 		text:SetText(label)
 
 		local button = UI.Button(row, { width = width, onClick = function()
@@ -1282,7 +1351,7 @@ function UI.Kit(host)
 			set(values[1])
 			Changed()
 		end })
-		button:SetPoint("TOPRIGHT")
+		button:SetPoint("TOPRIGHT", right, "TOPRIGHT")
 
 		Index(row, label)
 		return Remember(row, function()
@@ -1298,12 +1367,12 @@ function UI.Kit(host)
 	-- in the list itself and say on the row what is odd about it.
 	function kit.Picker(label, get, set, getOptions)
 		local width = 168
-		local row, text = Paired(width, M.control)
+		local row, text, right = Paired(ctx, width, M.control)
 		text:SetText(label)
 
 		local button = CreateFrame("Button", nil, row)
 		button:SetSize(width, M.control)
-		button:SetPoint("TOPRIGHT")
+		button:SetPoint("TOPRIGHT", right, "TOPRIGHT")
 		button.bg = ns.Fill(button, "BACKGROUND", C.sunken[1], C.sunken[2], C.sunken[3], 1)
 		button.bg:SetAllPoints()
 		button.edges = ns.Outline(button, C.edge[1], C.edge[2], C.edge[3], 1)
@@ -1405,7 +1474,7 @@ function UI.Kit(host)
 	function kit.KeyField(label, getText, onKey, onClear)
 		local fieldWidth, clearWidth = 120, 44
 		local reserved = fieldWidth + clearWidth + M.rowGap
-		local row, text = Paired(reserved, M.control)
+		local row, text, right = Paired(ctx, reserved, M.control)
 		text:SetText(label)
 
 		local clear = UI.Button(row, { label = "clear", width = clearWidth, onClick = function()
@@ -1413,7 +1482,7 @@ function UI.Kit(host)
 			onClear()
 			Changed()
 		end })
-		clear:SetPoint("TOPRIGHT")
+		clear:SetPoint("TOPRIGHT", right, "TOPRIGHT")
 
 		local field = UI.KeyBox(row, { width = fieldWidth, getText = getText,
 			onKey = onKey, after = Changed })
@@ -1622,12 +1691,12 @@ function UI.Kit(host)
 	-- not one.
 	function kit.TextField(label, get, set)
 		local fieldWidth = 168
-		local row, text = Paired(fieldWidth, M.control)
+		local row, text, right = Paired(ctx, fieldWidth, M.control)
 		text:SetText(label)
 
 		local box = UI.Box(row, C.sunken, C.edge)
 		box:SetSize(fieldWidth, M.control)
-		box:SetPoint("TOPRIGHT")
+		box:SetPoint("TOPRIGHT", right, "TOPRIGHT")
 
 		local edit = CreateFrame("EditBox", nil, box)
 		edit:SetPoint("TOPLEFT", 4, 0)
