@@ -415,13 +415,52 @@ end
 check(draft ~= nil and draft.square ~= nil and draft.key ~= nil,
 	"the page has no row to make a new key on")
 
--- A press, the way the client delivers one: the modifier arrives as a key of
--- its own first, then the key with the modifier held.
-local function press(box, key)
-	box.scripts.OnKeyDown(box, "LSHIFT")
+-- Every row on the page, the empty one and the twelve saved ones under it.
+-- Walked off the frame tree rather than read off the index, because a saved
+-- row carries no label and the index lists labelled controls only.
+local rows = {}
+local function collect(frame)
+	if frame.key and frame.square and frame.who then
+		rows[#rows + 1] = frame
+	end
+	for _, kid in ipairs(frame.children or {}) do
+		collect(kid)
+	end
+end
+if draft then
+	local top = draft
+	while top.parent do
+		top = top.parent
+	end
+	collect(top)
+end
+check(#rows == ns.Hover.MAX + 1,
+	("the page has %d rows and should have %d"):format(#rows, ns.Hover.MAX + 1))
+
+-- A press, the way the client delivers one: to every shown box that has the
+-- keyboard, the last one made first, stopping at the first whose handler did
+-- not pass it on. The modifier arrives as a key of its own first, then the key
+-- with the modifier held. Handing the key to the listening box directly is how
+-- this section passed while every key after the first died in the game: the
+-- saved row it had just made was asked first and ate it.
+local function deliver(key)
+	for index = #rows, 1, -1 do
+		local box = rows[index].key
+		if box:IsVisible() and box:IsKeyboardEnabled() then
+			box.scripts.OnKeyDown(box, key)
+			if not box:GetPropagateKeyboardInput() then
+				return box
+			end
+		end
+	end
+	return nil
+end
+local function press(_, key)
+	deliver("LSHIFT")
 	_G.WarriorKitShift(true)
-	box.scripts.OnKeyDown(box, key)
+	local took = deliver(key)
 	_G.WarriorKitShift(false)
+	return took
 end
 
 local function drop(index)
@@ -435,9 +474,12 @@ if draft then
 		"a spell dropped on the empty row did not fill its slot")
 	check(UI.Capturing() == draft.key,
 		"the slot is full and the box beside it is not listening for the key")
-	press(draft.key, "F")
+	check(press(draft.key, "F") == draft.key,
+		"the first key did not stop at the empty row's box")
 	check(#Hover.List() == 1 and Hover.List()[1].key == "SHIFT-F",
 		"a key pressed straight after the drop was not taken")
+	check(rows[2]:IsVisible() and rows[2].key:IsKeyboardEnabled() == false,
+		"the saved row is up and its box is on the keyboard")
 	check(Hover.Held() == nil and UI.Capturing() == nil,
 		"the slot or the box is still armed after the key was taken")
 
@@ -449,7 +491,8 @@ if draft then
 	draft.key:Click("LeftButton")
 	check(UI.Capturing() == draft.key,
 		"a click on the box that was already listening cancelled it")
-	press(draft.key, "G")
+	check(press(draft.key, "G") == draft.key,
+		"the second key stopped at a box that was not listening")
 	check(#Hover.List() == 2 and Hover.List()[2].key == "SHIFT-G",
 		("the second key did not land: %d bound"):format(#Hover.List()))
 	check(Cast.Holding(1) and Cast.Holding(2),

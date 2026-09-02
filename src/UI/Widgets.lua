@@ -408,6 +408,21 @@ function UI.KeyBox(parent, opts)
 	field.text:SetPoint("CENTER")
 	field.afterCapture = after
 
+	-- Off the keyboard until it is listening, said out loud rather than left
+	-- to the client's default, because that default is on. A shown frame with
+	-- an OnKeyDown script is handed every key, topmost first, and a handler
+	-- that returns without SetPropagateKeyboardInput(true) has eaten it. The
+	-- mouseover page keeps twelve of these, one per saved row, each made after
+	-- the empty row's box and so asked before it. The first key bound on that
+	-- page landed and no key after it did: the saved row it had just made was
+	-- answering the keyboard first and saying nothing.
+	--
+	-- AceGUIWidget-Keybinding.lua disables the keyboard on its button the
+	-- moment it is built, and Auctionator's KeyBinding.lua never enables it at
+	-- all and decides propagation per key inside the handler. Both are on this
+	-- client and both work.
+	field:EnableKeyboard(false)
+
 	local function Take(key)
 		local combo = Combo(key)
 		if not combo then
@@ -469,13 +484,25 @@ function UI.KeyBox(parent, opts)
 
 	field:SetScript("OnKeyDown", function(self, key)
 		if capturing ~= self then
+			-- Not this box's key. The flag is read after the handler returns,
+			-- so it is said here, per press, and the key walks on to whichever
+			-- box is listening.
+			if self.SetPropagateKeyboardInput then
+				self:SetPropagateKeyboardInput(true)
+			end
 			return
 		end
 		if key == "ESCAPE" then
 			UI.StopCapture()
-			return
+		else
+			Take(key)
 		end
-		Take(key)
+		-- The key stops here. StopCapture has just set the flag to pass keys
+		-- on, and left there the key you bound walks on to the binding it has
+		-- just made and fires it.
+		if self.SetPropagateKeyboardInput then
+			self:SetPropagateKeyboardInput(false)
+		end
 	end)
 
 	field:SetScript("OnHide", function(self)

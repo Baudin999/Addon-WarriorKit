@@ -222,6 +222,21 @@ end
 function Region:SetScript(name, fn) self.scripts[name] = fn end
 function Region:GetScript(name) return self.scripts[name] end
 
+-- Whether a frame takes the keyboard, and whether a key it took walks on.
+-- Recorded rather than swallowed, and with the client's own defaults: the
+-- keyboard is on until a frame turns it off, and a key stops at the first
+-- frame whose handler did not say to pass it. Auctionator's KeyBinding.lua
+-- runs on this client without ever calling EnableKeyboard and its OnKeyDown
+-- fires, which is the first default; AceConfigDialog's popup has to say
+-- SetPropagateKeyboardInput(true) for every key but Escape, which is the
+-- second. 44-hover.lua delivers a press the way the client does, topmost
+-- box first, and a box left on the keyboard while another was listening is
+-- the box that ate every mouseover key after the first.
+function Region:EnableKeyboard(on) self.keyboard = on and true or false end
+function Region:IsKeyboardEnabled() return self.keyboard ~= false end
+function Region:SetPropagateKeyboardInput(on) self.propagate = on and true or false end
+function Region:GetPropagateKeyboardInput() return self.propagate == true end
+
 -- A hook on a script, chained under whatever was there, the way the client
 -- chains one.
 --
