@@ -1,15 +1,16 @@
 -- The session pile
 --
--- One claim, and everything here is in service of it: the pile holds what
--- arrived while the session was running and nothing else.
+-- One claim, and everything here is in service of it: the pile holds what the
+-- server said you looted while the session was running, and nothing else.
 --
 -- That is the only thing about this part that can be wrong. Where the pile is
 -- drawn and what its squares look like are 55-bags.lua's, the heading is one
 -- string pushed into Core/Piles.lua, and the press is a button. What no reading
--- of the code settles is the diff: an item you were already carrying must stay
--- in its class pile, an item that arrives must move, an item that arrives twice
--- must count twice, and an item that arrives after the stop must not count at
--- all. So the bags are changed under a running session and read back.
+-- of the code settles is the record: an item you were already carrying must
+-- stay in its class pile, an item you loot must move, an item looted twice must
+-- count twice, somebody else's loot must not count at all, and nothing looted
+-- after the stop may join it. So loot sentences are put through it and the
+-- piles are read back.
 --
 -- The two numbers on a session square are asserted together, because they are
 -- the honest half of a thing this client cannot do. There is no per-item
@@ -17,6 +18,11 @@
 -- looted and eight you carried in is one stack and stays one stack. The square
 -- says twenty in the corner and twelve at the top, and the test is that those
 -- two numbers are allowed to differ.
+--
+-- The sentences are the client's own enUS strings out of 03-player.lua rather
+-- than anything typed here, for the reason that file gives: the addon builds
+-- its patterns off the format strings the client hands it, and a test that
+-- typed the sentence would be testing a different thing than the one that runs.
 
 local H = ...
 local ns, check = H.ns, H.check
@@ -59,9 +65,25 @@ local function named(group, name)
 	return nil
 end
 
--- A slot in the trash bag, holding this many, with the bag update the client
--- would have sent. One helper because every step below is the same three lines
--- and the interesting part is which of the numbers moved.
+-- The server saying you looted some of something, in the client's own words.
+local function loot(name, count)
+	if count then
+		fire("CHAT_MSG_LOOT",
+			(_G.LOOT_ITEM_SELF_MULTIPLE):format(H.itemLink(name), count))
+	else
+		fire("CHAT_MSG_LOOT", (_G.LOOT_ITEM_SELF):format(H.itemLink(name)))
+	end
+end
+
+-- The same sentence about somebody else, which must never reach the pile.
+local function theirs(who, name, count)
+	fire("CHAT_MSG_LOOT",
+		(_G.LOOT_ITEM_MULTIPLE):format(who, H.itemLink(name), count))
+end
+
+-- A slot in the trash bag, holding this many. The record is off the messages
+-- now and never off the bags, so this exists only so the square the pile draws
+-- has something real underneath it.
 local function put(slot, name, count)
 	CARRIED[1][slot] = name or false
 	counted(1, slot, count or 1)
@@ -80,11 +102,15 @@ check(Session.Running() == false,
 -- The pile a vendor's rack sorts into goes through the same file, and this is
 -- the guard that keeps it out of there: Piles.Of decides on the item class and
 -- has no way to answer this key, whatever is in the ledger.
-check(Piles.Of(_G.WarriorKitItemLink("Chipped Boar Tusk")) ~= Piles.SESSION,
+check(Piles.Of(H.itemLink("Chipped Boar Tusk")) ~= Piles.SESSION,
 	"Piles.Of answered the session pile, which would put one in the merchant window")
 
+-- A sentence arriving with nothing recording must not start anything.
+loot("Linen Cloth", 5)
+check(pile("session") == nil, "loot with no session running was recorded anyway")
+
 ----------------------------------------------------------------------
--- What arrives while it is running
+-- What the server says you looted
 ----------------------------------------------------------------------
 
 Session.Start()
@@ -94,16 +120,17 @@ check(Session.Name() == zone,
 	("the session is called %s and the zone is %s")
 		:format(tostring(Session.Name()), zone))
 
--- Twelve cloth into an empty slot, which is the whole of what a loot is here.
+-- Twelve cloth, and the stack in the bag it put there.
 put(5, "Linen Cloth", 12)
+loot("Linen Cloth", 12)
 
 local session = pile("session")
-check(session ~= nil, "twelve cloth arrived during a session and no pile was drawn")
+check(session ~= nil, "twelve cloth were looted and no session pile was drawn")
 
 local cloth = session and named(session, "Linen Cloth")
-check(cloth ~= nil, "the cloth that arrived is not in the session pile")
+check(cloth ~= nil, "the cloth that was looted is not in the session pile")
 check(cloth and cloth.gained == 12,
-	("the session recorded %s cloth and twelve arrived"):format(tostring(cloth and cloth.gained)))
+	("the session recorded %s cloth and twelve were looted"):format(tostring(cloth and cloth.gained)))
 
 -- The heading is the zone rather than the fallback, which is the one string
 -- Core/Piles.lua cannot work out for itself.
@@ -115,60 +142,74 @@ check(session and session.name == zone,
 local _, at = pile("session")
 check(at == 1, ("the session pile is drawn %s and it belongs at the top"):format(tostring(at)))
 
--- The four greys were in the bag before the session started, so they are still
--- graded on their quality and drawn under Junk. This is the half of the diff
--- that cannot be seen by looking at what moved.
+-- The four greys were in the bag before the session started and nothing said a
+-- word about them, so they are still graded on quality and drawn under Junk.
 local junk = pile("junk")
 check(junk ~= nil and named(junk, "Chipped Boar Tusk") ~= nil,
-	"a grey that was already in the bag was swept into the session pile")
+	"a grey that was already in the bag reached the session pile")
 
 ----------------------------------------------------------------------
--- The same item arriving twice
---
--- Eight more into the same slot. The stack is twenty and the session recorded
--- twenty, because all of it arrived while it was running.
+-- The same item looted twice
 ----------------------------------------------------------------------
 
 put(5, "Linen Cloth", 20)
+loot("Linen Cloth", 8)
 
 cloth = named(pile("session"), "Linen Cloth")
 check(cloth and cloth.gained == 20,
-	("the session recorded %s after twelve and then eight more"):format(tostring(cloth and cloth.gained)))
+	("the session recorded %s after twelve and then eight"):format(tostring(cloth and cloth.gained)))
 check(cloth and cloth.count == 20,
 	("the square is holding %s"):format(tostring(cloth and cloth.count)))
 
 ----------------------------------------------------------------------
+-- Somebody else's loot
+--
+-- The same sentence with a name in front of it. The loot feed draws those,
+-- because watching what the group is picking up is what a feed is for. A pile
+-- in your own bags cannot hold the sword somebody else won.
+----------------------------------------------------------------------
+
+theirs("Grimble", "Linen Cloth", 5)
+
+cloth = named(pile("session"), "Linen Cloth")
+check(cloth and cloth.gained == 20,
+	("a party member looted five and the pile went to %s"):format(tostring(cloth and cloth.gained)))
+
+----------------------------------------------------------------------
 -- The two numbers, and why they differ
 --
--- A second session, started with the twenty already in the bag, and eight more
--- arriving into it. The stack is twenty eight and the session recorded eight,
--- which is the case this client cannot draw any other way: the eight and the
--- twenty are one stack and no call will split them.
+-- A fresh session over a bag that already holds twenty, and eight looted into
+-- it. The square says twenty at the bottom and eight at the top. There is no
+-- per-item identity in a container on this client, so the eight and the twelve
+-- under them are one stack and no call will ever split them; what the top
+-- number is worth is that it is exact rather than inferred.
 ----------------------------------------------------------------------
 
 Session.Start()
-put(5, "Linen Cloth", 28)
+loot("Linen Cloth", 8)
 
 cloth = named(pile("session"), "Linen Cloth")
 check(cloth and cloth.gained == 8,
-	("a fresh session recorded %s of a stack that grew by eight"):format(tostring(cloth and cloth.gained)))
-check(cloth and cloth.count == 28,
+	("a fresh session recorded %s after eight were looted"):format(tostring(cloth and cloth.gained)))
+check(cloth and cloth.count == 20,
 	("the same square is holding %s"):format(tostring(cloth and cloth.count)))
 
 ----------------------------------------------------------------------
--- A scan that could not see the bags
+-- Nothing about your bags is a source
 --
--- The bug this section was written after, and the reason the baseline is
--- written over rather than replaced. Walking into Uldaman with a session
--- running, the bags read short for a frame. The baseline was emptied and
--- refilled from that reading, forty ids fell out of it, and the next scan
--- counted everything the character had walked in carrying as loot.
+-- This is the whole of what changed when the record stopped being a diff, and
+-- it is worth one section on its own. The pile filled with everything a
+-- character had walked into Uldaman carrying, because the bags read short for
+-- a frame on the loading screen and the reconstruction that followed invented
+-- thirty two items.
 --
--- Modelled by taking the bag away and putting it back with nothing changed in
--- it, which is what a loading screen looks like from in here.
+-- Both shapes of that are driven here: a bag that vanishes and comes back, and
+-- a stack that grows with nothing said about it. Neither may move the ledger by
+-- one, and now neither can, because no reading of a bag reaches the record at
+-- all.
 ----------------------------------------------------------------------
 
-local before = select(2, Session.Held())
+local _, before = Session.Held()
 
 local stashed = CARRIED[1]
 CARRIED[1] = {}
@@ -181,26 +222,12 @@ check(restored == before,
 	("a bag that read short for one scan added %d to the ledger")
 		:format(restored - before))
 
-----------------------------------------------------------------------
--- A stack on the cursor
---
--- The same failure wearing a different hat. Twelve out of a stack of twenty
--- leaves eight in the bag, which is a true reading of a real removal, so the
--- baseline follows it down and putting them back reads as twelve arriving. No
--- scan is taken at all while the cursor is holding something.
-----------------------------------------------------------------------
-
-local cursor = _G.GetCursorInfo
-_G.GetCursorInfo = function() return "item", 2005, H.itemLink("Linen Cloth") end
-
-put(5, "Linen Cloth", 16)
-_G.GetCursorInfo = cursor
-put(5, "Linen Cloth", 28)
-
-local _, dragged = Session.Held()
-check(dragged == before,
-	("twelve lifted out of a stack and dropped back added %d to the ledger")
-		:format(dragged - before))
+put(5, "Linen Cloth", 40)
+local _, grown = Session.Held()
+check(grown == before,
+	("a stack that grew with nothing said about it added %d to the ledger")
+		:format(grown - before))
+put(5, "Linen Cloth", 20)
 
 ----------------------------------------------------------------------
 -- After the stop
@@ -213,96 +240,44 @@ check(Session.Running() == false, "stop was pressed and it is still recording")
 -- press: it is what you work through at a vendor on the way home.
 check(pile("session") ~= nil, "stopping emptied the pile")
 
--- A green into the bag after the stop. Nothing about it may reach the ledger.
-put(6, "Emerald Pigment", 1)
+put(6, "Emerald Pigment", 2)
+loot("Emerald Pigment", 1)
 
 check(named(pile("session"), "Emerald Pigment") == nil,
-	"something picked up after the stop landed in the session pile")
+	"something looted after the stop landed in the session pile")
 
 local kinds, total = Session.Held()
 check(kinds == 1 and total == 8,
-	("the ledger holds %d kind%s and %d in all, and eight cloth is all that arrived")
+	("the ledger holds %d kind%s and %d in all, and eight cloth is all that was looted")
 		:format(kinds, kinds == 1 and "" or "s", total))
 
 ----------------------------------------------------------------------
--- Clearing it
+-- Forgetting it
 ----------------------------------------------------------------------
 
-Session.Clear()
-
-check(pile("session") == nil, "the pile is still drawn after a clear")
-check(Session.Name() == nil, "the session still has a name after a clear")
-
--- The press behind the forget button in the title bar, which is the only way
--- to the clear from the window itself. Driven rather than assumed, because the
--- button beside it says clear and opens the destroy window, and the two being
--- wired to each other's work is exactly the mistake the different word is
--- there to stop.
-Session.Start()
-put(7, "Emerald Pigment", 2)
-check(select(1, Session.Held()) > 0, "nothing was recorded to forget")
 Session.Forget()
+
+check(pile("session") == nil, "the pile is still drawn after a forget")
+check(Session.Name() == nil, "the session still has a name after a forget")
 check(select(1, Session.Held()) == 0, "forget left something in the ledger")
 check(Session.Running() == false, "forget left the session recording")
-put(7, nil, 1)
-CARRIED[1][7] = nil
-
-----------------------------------------------------------------------
--- A second dungeon
---
--- The heading is a string written onto Core/Piles.lua's own pile, and that file
--- caches a pile's word the first time it is asked for. So the run that proves
--- the cache is not a one-way door is the second one, under a different name.
---
--- The item is one that was already in the bag. Three more Tattered Cloth on top
--- of the one you were carrying is a gain of three, which is the reading the
--- whole diff turns on: the pile counts the rise and not the stack.
-----------------------------------------------------------------------
-
-zone = "Dire Maul"
-Session.Start()
-put(2, "Tattered Cloth", 4)
-
-local second = pile("session")
-check(second ~= nil and second.name == zone,
-	("the second session is headed %s and the zone is %s")
-		:format(tostring(second and second.name), zone))
-
-local cloth2 = second and named(second, "Tattered Cloth")
-check(cloth2 and cloth2.gained == 3,
-	("three arrived on top of the one you were carrying and the pile says %s")
-		:format(tostring(cloth2 and cloth2.gained)))
 
 ----------------------------------------------------------------------
 -- A session that came back from a reload
 --
--- The record is a per-character saved variable, so a /reload is meant to change
--- nothing about it. Two things would break that quietly and neither shows up in
--- any other check here.
+-- The record is a per-character saved variable, so a reload is meant to change
+-- nothing about it, and the ledger is now the only thing that has to survive:
+-- the diff this replaced also had to bring a baseline back intact, and that
+-- baseline was the thing that got corrupted.
 --
--- The heading is the first. It is a string written onto Core/Piles.lua's pile
--- at the press, and Core/Piles.lua starts every session over, so a login that
--- did not push it back would draw last night's dungeon under the word Session.
---
--- The baseline is the second and it is the one that would go wrong silently. A
--- session counts the rise since the last scan, so if the counts it was holding
--- did not survive the reload, the first bag update afterwards would read your
--- whole bag as freshly gained and file everything you own under the dungeon.
---
--- Both are driven the way the client would: the saved table put back as it was
--- written, PLAYER_LOGIN fired over it, then a bag update with nothing new in it.
+-- What is still worth driving is the heading. It is a string written onto
+-- Core/Piles.lua's own pile at the press, and that file comes up every load
+-- with the fallback word on it, so a login that did not push the name back
+-- would draw last night's dungeon under the word Session.
 ----------------------------------------------------------------------
 
--- The bags as they were when you reloaded, and a session recording over them.
--- Session.Start is what takes the baseline, and taking it that way rather than
--- writing one by hand is the point: the saved file holds a count for every item
--- you were carrying, and a hand-written one that missed a bag would prove the
--- opposite of what this is for.
-put(5, "Linen Cloth", 12)
-
 zone = "Stratholme"
-Session.Start()
-ns.dbc.bagSession.items = { [2005] = 12 }
+ns.dbc.bagSession = { name = zone, running = true, items = { [2005] = 12 } }
 
 -- Core/Piles.lua, as a fresh load leaves it: a pile with no heading on it.
 Piles.Rename(Piles.SESSION, nil)
@@ -313,27 +288,40 @@ check(back ~= nil and back.name == zone,
 	("a session that survived a reload is headed %s and the zone was %s")
 		:format(tostring(back and back.name), zone))
 check(Session.Running(), "a session that was recording stopped across the reload")
+check(select(2, Session.Held()) == 12,
+	("the ledger came back holding %d"):format(select(2, Session.Held())))
 
--- A bag update with nothing new in it. This is the one that would go wrong
--- quietly: with no baseline in the saved file, it reads the whole bag as gained.
-put(5, "Linen Cloth", 12)
-local kinds2, total2 = Session.Held()
-check(kinds2 == 1 and total2 == 12,
-	("the first scan after the reload left the ledger holding %d kind(s), %d in all")
-		:format(kinds2, total2))
+-- And it is still recording, so the next sentence still lands.
+loot("Linen Cloth", 8)
+check(select(2, Session.Held()) == 20,
+	("eight more were looted after the reload and the ledger says %d")
+		:format(select(2, Session.Held())))
 
--- And it is still recording, so eight more still land.
-put(5, "Linen Cloth", 20)
-local _, grown = Session.Held()
-check(grown == 20,
-	("eight more arrived after the reload and the ledger says %d"):format(grown))
+----------------------------------------------------------------------
+-- A second dungeon
+--
+-- Core/Piles.lua caches a pile's word the first time it is asked for, so the
+-- run that proves the cache is not a one-way door is the second one, under a
+-- different name.
+----------------------------------------------------------------------
+
+Session.Clear()
+zone = "Dire Maul"
+Session.Start()
+loot("Tattered Cloth", 3)
+
+local second = pile("session")
+check(second ~= nil and second.name == zone,
+	("the second session is headed %s and the zone is %s")
+		:format(tostring(second and second.name), zone))
+check(second and named(second, "Tattered Cloth") ~= nil,
+	"the second session did not pick up what was looted into it")
 
 ----------------------------------------------------------------------
 -- The scene, put back
 ----------------------------------------------------------------------
 
 Session.Clear()
-put(2, "Tattered Cloth", 1)
 put(5, nil, 1)
 put(6, nil, 1)
 CARRIED[1][5], CARRIED[1][6] = nil, nil

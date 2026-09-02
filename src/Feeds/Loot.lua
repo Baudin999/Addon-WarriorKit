@@ -91,110 +91,6 @@ local COIN = "Interface\\Icons\\INV_Misc_Coin_01"
 -- question mark is the client's own way of saying it does not know yet.
 local UNKNOWN = "Interface\\Icons\\INV_Misc_QuestionMark"
 
---------------------------------------------------------------------------
--- Turning a format string into a pattern
---
--- The client's loot messages are `%s` and `%d` in a localised sentence. Every
--- magic character is escaped first, which turns each `%s` into `%%s`, and then
--- the two placeholders are put back as captures.
---
--- Nil for a format string this client does not carry, which is how the table
--- below can name messages that exist on one flavour and not the other without
--- either of them raising.
---------------------------------------------------------------------------
-
-local function Pattern(format)
-	if type(format) ~= "string" then
-		return nil
-	end
-	local body = format:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
-	body = body:gsub("%%%%s", "(.+)")
-	body = body:gsub("%%%%d", "(%%d+)")
-	return "^" .. body .. "$"
-end
-
--- The loot sentences, most specific first.
---
--- Order is the whole correctness of this table. "You receive loot: %s." matches
--- the multiple form too, because the link is followed by "x4" and `(.+)` will
--- happily swallow it, so every counted sentence has to be tried before its
--- uncounted twin. Getting that the wrong way round gives a feed where every
--- stack of eight silk cloth is one item called "Silk Clothx8".
---
---   mine     the sentence is about you, so there is no name in front of it
---   counted  it carries a stack size after the link
-local RULES = {
-	{ format = "LOOT_ITEM_SELF_MULTIPLE", mine = true, counted = true },
-	{ format = "LOOT_ITEM_PUSHED_SELF_MULTIPLE", mine = true, counted = true },
-	{ format = "LOOT_ITEM_CREATED_SELF_MULTIPLE", mine = true, counted = true },
-	{ format = "LOOT_ITEM_SELF", mine = true },
-	{ format = "LOOT_ITEM_PUSHED_SELF", mine = true },
-	{ format = "LOOT_ITEM_CREATED_SELF", mine = true },
-	{ format = "LOOT_ITEM_MULTIPLE", counted = true },
-	{ format = "LOOT_ITEM_PUSHED_MULTIPLE", counted = true },
-	{ format = "LOOT_ITEM_CREATED_MULTIPLE", counted = true },
-	{ format = "LOOT_ITEM" },
-	{ format = "LOOT_ITEM_PUSHED" },
-	{ format = "LOOT_ITEM_CREATED" },
-}
-
--- The two ways the server tells you about coin. Everyone else's coin is not
--- reported at all in a sentence this can read, which is the client's decision
--- rather than this file's.
-local MONEY = { "YOU_LOOT_MONEY", "LOOT_MONEY_SPLIT" }
-
-local built = false
-
-local function Build()
-	if built then
-		return
-	end
-	built = true
-	for _, rule in ipairs(RULES) do
-		rule.pattern = Pattern(_G[rule.format])
-	end
-	for index, name in ipairs(MONEY) do
-		MONEY[index] = { format = name, pattern = Pattern(_G[name]) }
-	end
-end
-
---------------------------------------------------------------------------
--- Reading one message
---------------------------------------------------------------------------
-
--- The item link out of whatever the sentence captured. The capture is already
--- the whole link in every rule above, so this is a check rather than a search:
--- a chunk with no item hyperlink in it is a sentence that matched by accident
--- and must not become a row.
-local function Link(chunk)
-	if type(chunk) ~= "string" or not chunk:find("|Hitem:", 1, true) then
-		return nil
-	end
-	return (chunk:gsub("^%s+", ""):gsub("%s+$", ""))
-end
-
--- Who, what and how many, or nil for a line that is not loot.
-local function Read(text)
-	for _, rule in ipairs(RULES) do
-		if rule.pattern then
-			local a, b, c = text:match(rule.pattern)
-			if a then
-				if rule.mine then
-					local link = Link(a)
-					if link then
-						return nil, link, tonumber(rule.counted and b or 1) or 1
-					end
-				else
-					local link = Link(b)
-					if link then
-						return a, link, tonumber(rule.counted and c or 1) or 1
-					end
-				end
-			end
-		end
-	end
-	return nil, nil, nil
-end
 
 
 --------------------------------------------------------------------------
@@ -470,28 +366,23 @@ local function AddItem(who, link, count)
 end
 
 local function AddMoney(text)
-	for _, rule in ipairs(MONEY) do
-		if rule.pattern then
-			local phrase = text:match(rule.pattern)
-			if phrase then
-				local entry = stream:Feed():Entry()
-				entry.icon = COIN
-				-- The phrase is the client's own coin text, which already reads
-				-- "12 Silver, 39 Copper" in whatever language this client is.
-				-- It goes in the name rather than the number because it is
-				-- three words and the number column is one.
-				entry.name = phrase
-				entry.amount = ""
-				entry.color = C.heading
-				entry.stripe = C.heading
-				entry.money = true
-				stream:Feed():Push()
-				seen = seen + 1
-				return true
-			end
-		end
+	local phrase = ns.LootLine.Money(text)
+	if not phrase then
+		return false
 	end
-	return false
+	local entry = stream:Feed():Entry()
+	entry.icon = COIN
+	-- The phrase is the client's own coin text, which already reads "12 Silver,
+	-- 39 Copper" in whatever language this client is. It goes in the name rather
+	-- than the number because it is three words and the number column is one.
+	entry.name = phrase
+	entry.amount = ""
+	entry.color = C.heading
+	entry.stripe = C.heading
+	entry.money = true
+	stream:Feed():Push()
+	seen = seen + 1
+	return true
 end
 
 function LootFeed.OnLoot(text)
@@ -499,7 +390,7 @@ function LootFeed.OnLoot(text)
 		return false
 	end
 
-	local who, link, count = Read(text)
+	local who, link, count = ns.LootLine.Read(text)
 	if not link then
 		return false
 	end
@@ -527,14 +418,11 @@ end
 -- one of them differently, or a flavour that does not have the crafted form at
 -- all, is a feed that quietly misses a third of what drops. A number here is
 -- the difference between finding that in a second and never finding it.
+-- How many of the client's loot sentences this build actually carries. Core's,
+-- because the table is Core's now; kept on this feed because this is the part
+-- that reports it and a caller should not have to know where it moved to.
 function LootFeed.Rules()
-	local live = 0
-	for _, rule in ipairs(RULES) do
-		if rule.pattern then
-			live = live + 1
-		end
-	end
-	return live, #RULES
+	return ns.LootLine.Rules()
 end
 
 function LootFeed.Describe()
@@ -568,9 +456,11 @@ events:RegisterEvent("CHAT_MSG_MONEY")
 events:SetScript("OnEvent", function(_, event, text)
 	if event == "PLAYER_LOGIN" then
 		-- The format strings are FrameXML's and are not all in place while the
-		-- addon's own files are still loading, so the patterns are built at
-		-- login rather than at the top of this file.
-		Build()
+		-- addon's own files are still loading, so the patterns are built after
+		-- it rather than at the top of any file. Core/Loot.lua builds them on
+		-- the first line anybody reads, which is later still and cannot be got
+		-- wrong by a second reader; this is the nudge, not the guarantee.
+		ns.LootLine.Build()
 		return
 	end
 	if event == "CHAT_MSG_LOOT" then

@@ -81,8 +81,6 @@ local ALLOWED = {
 	  why = "walks every spell tab and every spell on it" },
 	{ path = "./Comfort/Errors.lua", fn = "Names", depth = 5,
 	  why = "walks the global table for the client's error constants" },
-	{ path = "./Feeds/Loot.lua", fn = "Read", depth = 5,
-	  why = "walks every rule and every capture in the one that matched" },
 }
 
 local EXEMPT = {}

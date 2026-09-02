@@ -18,23 +18,40 @@ ns.BagsSession = Session
 -- dungeon feature, which is the better half of the trade: press record before a
 -- Thorium circuit in Un'Goro and the same pile answers the same question.
 --
--- **It counts what entered your bags, not what a corpse held.** Every scan is
--- compared against the last one and an item whose total went up is an item you
--- gained. That is deliberately wider than loot: a green the person you were
--- boosting traded you, a quest reward, something you crafted on the spot and
--- anything you took out of a mailbox all count, because all of them are things
--- you came out of the hour holding and did not go in with. A vendor purchase
--- counts too, which is the one reading that is arguably wrong and is not worth
--- a rule: buying a stack of arrows mid-run and having it show up in the list of
--- what you collected is a smaller surprise than a green that silently did not.
+-- **The server says what you got, and that is the whole of the record.** Every
+-- item here came out of a CHAT_MSG_LOOT sentence, which is append only: a
+-- message says twelve Runecloth reached you and twelve goes in the table.
+--
+-- It was a diff of your bags first, and that is worth writing down because it
+-- is the mistake anybody would make again. Two photographs of your bags, one
+-- subtracted from the other, is a reconstruction rather than a reading, and the
+-- reconstruction is only as good as the worse photograph. Walking into Uldaman
+-- the bags read short for a frame, forty ids fell out of the baseline, and the
+-- pile filled with everything the character had walked in carrying. Two guards
+-- went on it and it stayed a shape where a third hole was possible.
+--
+-- A message cannot do that. There is nothing to compare against and no state to
+-- corrupt, so the worst a bad evening costs is one message missed rather than
+-- thirty two invented. The count it carries is exact rather than inferred.
+--
+-- **What that gives up.** Loot, quest rewards and anything you craft all still
+-- count, because the server sends a sentence for each and Core/Loot.lua reads
+-- all three. Something traded to you, pulled out of a mailbox or bought from a
+-- vendor does not, because no sentence is sent. That is the right way round for
+-- what this is for: on a boost you are the one looting.
+--
+-- The other thing it gives up is the few seconds of a reload, where nothing is
+-- listening. The diff had no blind window because it compared against stored
+-- counts. You are not looting during your own reload, and a rare item missed is
+-- the cheaper side of that trade by a wide margin.
 --
 -- **This client will not tell two stacks apart, and the pile does not pretend
 -- otherwise.** There is no per-item identity in a container on 2.5: the only
 -- thing a bag slot can be asked is which item it holds. So eight Runecloth you
 -- carried in and twelve you looted are one stack of twenty that no call can
--- split, and the square is drawn once in the session pile with the total the
--- session actually recorded written under it. That number is the honest half.
--- Which physical stack it is cannot be answered by anything, here or elsewhere.
+-- split, and the square is drawn once in the session pile with the twelve the
+-- server said written in its top corner. That number is exact. Which physical
+-- stack it belongs to cannot be answered by anything, here or elsewhere.
 --
 -- **Stop and clear are two presses.** Stop means stop adding, and the pile
 -- stays exactly as it is while you ride to town and work through it. Clear
@@ -45,29 +62,23 @@ ns.BagsSession = Session
 -- Scholomance is not a preference and it is not the other one's business.
 --------------------------------------------------------------------------
 
--- The backpack and the four on the belt, which is Bags/Bags.lua's five and the
--- same reason: this counts what you are carrying, and the bank is not that.
-local FIRST_BAG, LAST_BAG = 0, 4
-
 -- What the pile is called when you did not say and the client would not either.
 local UNNAMED = "Session"
 
--- One table, refilled on every scan.
---
--- A bag update arrives five times for one loot and each of them recounts the
--- five bags whether or not the window is open, which is the price of a record
--- that is right when you finally do open it. Wiped and refilled rather than
--- rebuilt, so a session running all evening allocates this once.
-local counts = {}
-
 --------------------------------------------------------------------------
 
--- The record, with the two maps under it made on first use.
+-- The record, with the ledger under it made on first use.
 --
 -- Lazily rather than out of a defaults table, for the reason Core/Core.lua
 -- gives at ns.DefaultCopy: a default is copied one level deep, so a nested
 -- table registered there would be handed out shared and every character would
 -- be writing into the same one.
+--
+-- `held` is dropped where an older record still carries it. It was the bag
+-- counts the diff compared against, nothing reads it now, and a saved variable
+-- is written back whole at every logout, so a key left behind sits in the file
+-- forever looking like state. Core/Core.lua retires a whole setting the same
+-- way and says why at its own list.
 local function Record()
 	local held = ns.dbc and ns.dbc.bagSession
 	if type(held) ~= "table" then
@@ -76,96 +87,39 @@ local function Record()
 	if type(held.items) ~= "table" then
 		held.items = {}
 	end
-	if type(held.held) ~= "table" then
-		held.held = {}
-	end
+	held.held = nil
 	return held
-end
-
--- Every item in the five bags and how many of it there are, by item id.
---
--- ns.ItemKind rather than a link comparison, because an id is what two stacks
--- of one item have in common and a link is not: a link carries the suffix and
--- the enchant, so two of the same green would count as two different things.
-local function Count()
-	wipe(counts)
-	for bag = FIRST_BAG, LAST_BAG do
-		for slot = 1, ns.ContainerSlots(bag) do
-			local link = ns.ContainerItemLink(bag, slot)
-			local id = link and ns.ItemKind(link)
-			if id then
-				counts[id] = (counts[id] or 0) + (ns.ContainerItem(bag, slot) or 1)
-			end
-		end
-	end
-	return counts
-end
-
--- The counts this scan found, over the top of the ones the last scan left.
---
--- Over the top rather than in place of, which is the whole correctness of this
--- file and is the second thing it did. Emptying the baseline and refilling it
--- from the scan is right on a bag the client will answer for and catastrophic
--- on one it will not: an item missing from a single scan comes back on the next
--- one looking like a hundred and sixty one arrows you have just picked up.
---
--- The loading screen into a dungeon is exactly that. Press record at the
--- meeting stone, walk in, and for a frame the bags read short; forty ids fall
--- out of the baseline, and the pile fills with everything you walked in
--- carrying. That is what this shipped doing, on the first real run.
---
--- So an id this scan did not see keeps whatever it had. An id it did see is
--- written down at what it reads now, in both directions, because a stack that
--- is genuinely smaller than it was has genuinely been sold or eaten.
-local function Keep(held, now)
-	for id, count in pairs(now) do
-		held[id] = count
-	end
 end
 
 --------------------------------------------------------------------------
 -- The record
 --------------------------------------------------------------------------
 
--- One scan, and everything that went up since the last one added to the pile.
+-- One loot sentence, and what it says added to the pile.
 --
--- Only a rise counts. Selling, eating, mailing and equipping all take the count
--- down and none of them is a thing you collected, and the baseline follows a
--- present item down so that re-looting something you sold in there is recorded
--- the second time as well as the first.
+-- Only your own. `who` is nil when the server was talking about you, and a
+-- pile in your bags cannot hold the sword somebody else in the group won.
 --
--- The count added is the whole of the rise rather than the stack's size, so
--- twelve cloth arriving in three separate stacks over an hour reads twelve.
---
--- The cost of the rule above Keep is one honest under-count: an item you sold
--- or drank every last one of and then looted again is not recorded the second
--- time, because nothing here distinguishes that from a stack the client could
--- not read. Missing a potion is a smaller wrong answer than filing the whole
--- bag under Uldaman.
---
--- **A stack on the cursor is the same failure wearing a different hat.** Pick
--- twelve out of a stack of twenty and the bags hold eight, which is a true
--- reading of a real removal, so the baseline follows it down and putting them
--- back reads as twelve arriving. Nothing here can tell that from a sale, so no
--- scan is taken at all while the cursor is holding something. Bags/Stack.lua
--- refuses to start for the same reason and says so at its own guard.
-function Session.Take()
+-- Added rather than written, because an item drops more than once in an hour:
+-- twelve cloth arriving in three separate stacks reads twelve.
+function Session.Heard(text)
 	local record = Record()
 	if not record or not record.running then
 		return false
 	end
-	if GetCursorInfo() then
+	local who, link, count = ns.LootLine.Read(text)
+	if who or not link then
 		return false
 	end
-	local now = Count()
-	local items, held = record.items, record.held
-	for id, count in pairs(now) do
-		local was = held[id] or 0
-		if count > was then
-			items[id] = (items[id] or 0) + (count - was)
-		end
+	local id = ns.ItemKind(link)
+	if not id then
+		return false
 	end
-	Keep(held, now)
+	record.items[id] = (record.items[id] or 0) + count
+	-- The window, because the square that just changed pile is the one you are
+	-- looking at. It returns early on a window nobody has open, so a character
+	-- who never opens their bags pays nothing for this line.
+	ns.BagsWindow.Refresh()
 	return true
 end
 
@@ -203,17 +157,6 @@ function Session.Start(name)
 	wipe(record.items)
 	record.name = (type(name) == "string" and name ~= "") and name or Where() or UNNAMED
 	record.running = true
-	-- The baseline first and the flag second would be the same thing here, but
-	-- the order matters if anything ever scans between them: a session that is
-	-- running with no baseline behind it counts your whole bag as a gain.
-	--
-	-- Emptied and refilled, which is the one place that is safe to do it. This
-	-- is a press somebody made while standing still with their bags in front of
-	-- them, not a scan off an event that may have caught the client mid-stride,
-	-- and it has to forget the last session's counts rather than sit on top of
-	-- them. Every other write to the baseline goes through Keep.
-	wipe(record.held)
-	Keep(record.held, Count())
 	Label(record)
 	return true
 end
@@ -223,10 +166,10 @@ function Session.Stop()
 	if not record or not record.running then
 		return false, "no session is running"
 	end
-	-- One last scan, so whatever arrived between the final bag update and the
-	-- press is in the pile. The press is usually the thing you do straight
-	-- after the last pull, and that pull is exactly what would be missing.
-	Session.Take()
+	-- Nothing to catch up on. A sentence is recorded the moment it arrives, so
+	-- the pile is already whatever the last pull put in it. The diff this
+	-- replaced took one final scan here, because a bag update it had not
+	-- answered yet was a real thing to miss.
 	record.running = false
 	return true
 end
@@ -242,7 +185,6 @@ function Session.Clear()
 	record.running = false
 	record.name = nil
 	wipe(record.items)
-	wipe(record.held)
 	Label(record)
 	return true
 end
@@ -363,27 +305,24 @@ end
 --------------------------------------------------------------------------
 -- What makes it count
 --
--- BAG_UPDATE is the one event that fires for every way an item can reach you,
--- which is the whole reason the record is a bag diff rather than a reading of
--- the loot messages: a trade, a mailbox and a crafting window all move
--- something into a bag and only one of the three says anything in chat. It
--- fires while the window is shut, which is the case that matters, because
--- nobody has their bags open walking through a dungeon.
+-- CHAT_MSG_LOOT is the server telling you what you got, and it is the only
+-- source here. It arrives whether or not the bag window is open, which is the
+-- case that matters, because nobody walks a dungeon with their bags up.
 --
 -- PLAYER_LOGIN is the heading. A session survives a logout, and the pile it
 -- draws into is Core/Piles.lua's, which starts every session called Session
 -- until somebody tells it what last night's was called.
 --------------------------------------------------------------------------
 
-local function Wake(_, event)
+local function Wake(_, event, text)
 	if event == "PLAYER_LOGIN" then
 		Label(Record())
 		return
 	end
-	Session.Take()
+	Session.Heard(text)
 end
 
 local events = CreateFrame("Frame")
-events:RegisterEvent("BAG_UPDATE")
+events:RegisterEvent("CHAT_MSG_LOOT")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", Wake)

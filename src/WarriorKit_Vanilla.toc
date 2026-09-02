@@ -42,18 +42,22 @@ Class\Mage.lua
 Class\Shaman.lua
 Class\Priest.lua
 
-# Three shared files that wrap a client API and own no setting, the same shape
+# Four shared files that wrap a client API and own no setting, the same shape
 # ns.ItemInfo has. Gear is what the client will let into each hand and which
 # number that hand is; Stance reads your class's own form list off the registry
 # above and hands back their localised names and which one you are standing in.
 # Piles is which class the client files an item under, what that class is called
 # in your language and what order the piles are drawn in, which is what the bag
-# window and the merchant window both sort by. Every one of them was a part's
-# private knowledge until a second part needed the same answer, and all three
-# load before anything that asks.
+# window and the merchant window both sort by. Loot turns the server's own loot
+# sentences into who got what and how many, off the format strings the client
+# used to write them, so a German client is read by German rules; the loot feed
+# draws every line and the bag session records your own. Every one of them was a
+# part's private knowledge until a second part needed the same answer, and all
+# four load before anything that asks.
 Core\Gear.lua
 Core\Stance.lua
 Core\Piles.lua
+Core\Loot.lua
 
 # The shared unit layer. What a mob or a group member is, asked once: the
 # palette, the level tag, who is in the group, what they have spent their points
