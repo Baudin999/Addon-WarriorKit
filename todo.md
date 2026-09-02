@@ -11,8 +11,9 @@ hash is the last of them. What was wrong and what fixed it is in
 `docs/CHANGELOG.md` and `docs/README.md`, what is still unconfirmed in game is
 in the README's untested list, and the full text of each item is this file at
 `e7ef4ca` for 1 to 6, 8, 11 and 12, at `ca59a77` for 7, 9 and 13, at
-`44c79ef` for 15, at `a7772af` for 16, at `c37c149` for 19 and at `b5d2277` for
-17. Items 14 and 23 were never written longer than they are here.
+`44c79ef` for 15, at `a7772af` for 16, at `c37c149` for 19, at `b5d2277` for
+17 and at `30a42cb` for 28. Items 14 and 23 were never written longer than they
+are here.
 
 1. Weapon swing timer. `8be9a43`
 2. Deep Wounds missing from the enemy bar debuffs. `05e40ec`
@@ -38,6 +39,7 @@ in the README's untested list, and the full text of each item is this file at
 19. `UI.Window` re-zooms its own frame, and every screen sizes on its own.
     `da4a01a`
 23. A ceiling only moves down, in `scripts/ratchet.lua`. `271f8e6`
+28. One Questie probe, in Core, and a gate that keeps it one. `07c4401`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
@@ -89,6 +91,15 @@ goes first. Item 15 undercounted its own sites by five and asked for a fix
     belongs with the GameTooltip rule and with the `src/UI/` rule item 15
     wrote, which are the same idea already written down and already enforced.
 
+    Item 28 gated the Questie half on 2026-09-02: `QuestieLoader` and
+    `ImportModule` outside `Core/Core.lua` fail `check.sh`. The client half is
+    the work that is left, and it is not one grep. `_G.` reads 286 times outside
+    `src/Core/` and most of them are a frame looked up by name rather than a
+    call probed for, so the rule has to name the shape it refuses, which is
+    `type(_G.Something) == "function"` on a call the file then makes. Count
+    those first: a gate with 286 violations is a warning wearing a gate's
+    clothes.
+
     The other rule this item asked for is one of those two now.
 
 22. `Core/Menu.lua` registers a feature from inside Core.
@@ -104,13 +115,13 @@ goes first. Item 15 undercounted its own sites by five and asked for a fix
 Items 24 to 30 came out of a second architecture review on 2026-09-02, run
 against three measurements rather than a reading: LCOM over shared module state,
 a token clone detector across every pair of files, and fan-in and fan-out on
-`ns`. Two of the three came back quiet and that is worth writing down. `ns.db`
-is not the god object it looks like: 215 keys read, and only four read from
-outside the folder whose `defaults` declares them, of which `locked` is Core's
-and meant to be. File-level LCOM4 is 1 almost everywhere, so the folders hold
-together. What the measurements did find is one file that is three modules and
-five mechanisms each written out between two and nine times, and they are below
-in that order.
+`ns`. Item 28 landed the same day and is above. Two of the three came back quiet
+and that is worth writing down. `ns.db` is not the god object it looks like: 215
+keys read, and only four read from outside the folder whose `defaults` declares
+them, of which `locked` is Core's and meant to be. File-level LCOM4 is 1 almost
+everywhere, so the folders hold together. What the measurements did find is one
+file that is three modules and five mechanisms each written out between two and
+nine times, and they are below in that order.
 
 24. `UnitFrames/EnemyBars.lua` is three modules in one file.
 
@@ -202,19 +213,6 @@ in that order.
 
     The fix is on the object, not in Core: `Toggle`, a `Shown` that is the one
     spelling, and an optional `onShow` for the parts that paint on the way up.
-
-28. The Questie probe, four times, after somebody already extracted it.
-
-    `src/Quests/Where.lua:96` hands out `Where.Module`, and the comment above it
-    at `:81` says a third copy of a pcall round `ImportModule` is how the first
-    two got there. Nothing outside that file reads it. There are four identical
-    copies now, at `src/Quests/Where.lua:84`, `src/Quests/Tracker.lua:54`,
-    `src/Quests/Party.lua:46` and `src/Map/Pins.lua:93`, plus a fifth variant at
-    `src/Comfort/Clutter.lua:45`.
-
-    This is item 21's rule with a name on it. The probe belongs in Core, the
-    export in `Where.lua` comes out, and the rule item 21 writes is what stops
-    the fifth copy.
 
 29. The spell row on the options page, twice.
 
