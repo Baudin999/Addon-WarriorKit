@@ -276,54 +276,74 @@ ns.Register({
 		local low, high = ns.UI.Tooltip.LingerRange()
 		local fontLow, fontHigh = ns.UI.Tooltip.FontRange()
 
-		ui.Section("Zoom", "The screen")
-		ui.Lede("Every screen this addon draws, each on its own number. Shrink the map and grow the hover box; nothing here moves anything else.")
-
-		-- One row per registered screen, in feature order, and not one of them
-		-- named here. A part that draws something sizeable says so in its own
-		-- ns.Register call and turns up on this page; a part that stops drawing
-		-- it takes its row with it. The alternative was a list of every screen
-		-- in the addon written out in this file, which is the list that goes
-		-- stale the first time somebody adds a window.
-		for _, zoom in ipairs(ns.Zooms()) do
-			ui.Zoom(
-				function() return Settings.Snap(ns.db[zoom.key]) end,
-				function(value)
-					ns.db[zoom.key] = Settings.Snap(value)
-					if zoom.apply then
-						zoom.apply()
+		-- Two lists, and the split is what makes the page usable rather than
+		-- complete. Twenty three rows with a sentence under each came to forty
+		-- nine cells and a thousand units of stack in a view that holds three
+		-- hundred and fifty, so the row you opened the page for was three
+		-- screens down. The windows and the things drawn over the world are the
+		-- two halves anybody thinks in, and each fits without scrolling.
+		--
+		-- The sentence under every row is gone with it. It said which stop that
+		-- screen was on and whether the stop kept a hairline sharp, twenty three
+		-- times, and the reading at the foot of each list answers that for every
+		-- row at once: the stops that stay exact are a fact about the monitor,
+		-- not about the screen being sized.
+		local function Rows(want, title, lede)
+			ui.Section(title, "The screen")
+			ui.Lede(lede)
+			for _, zoom in ipairs(ns.Zooms()) do
+				if (zoom.window == true) == want then
+					ui.Zoom(
+						function() return Settings.Snap(ns.db[zoom.key]) end,
+						function(value)
+							ns.db[zoom.key] = Settings.Snap(value)
+							if zoom.apply then
+								zoom.apply()
+							end
+							-- Every window keeps itself on the grid off this,
+							-- including the one you are reading the row in. A
+							-- part with an apply of its own has already run it;
+							-- this is what reaches the ones whose whole answer
+							-- is the rezoom.
+							ns.UI.Notify()
+						end,
+						zoom.label)
+				end
+			end
+			ui.Reading("exact on this screen at", Settings.Grid)
+			ui.Action(function()
+				return "this list back to its defaults"
+			end, function()
+				for _, zoom in ipairs(ns.Zooms()) do
+					if (zoom.window == true) == want then
+						ns.db[zoom.key] = ns.DefaultFor(zoom.key)
+						if zoom.apply then
+							zoom.apply()
+						end
 					end
-					-- Every window keeps itself on the grid off this, including
-					-- the one you are reading the row in. A part with an apply of
-					-- its own has already run it; this is what reaches the ones
-					-- whose whole answer is the rezoom.
-					ns.UI.Notify()
-				end,
-				zoom.label)
-			ui.Reading("", function() return Settings.Describe(zoom.key) end)
+				end
+				ns.UI.Notify()
+			end, function()
+				for _, zoom in ipairs(ns.Zooms()) do
+					if (zoom.window == true) == want
+						and Settings.Snap(ns.db[zoom.key]) ~= ns.DefaultFor(zoom.key) then
+						return true
+					end
+				end
+				return false
+			end)
 		end
 
-		ui.Reading("exact on this screen at", Settings.Grid)
-		ui.Hint("A stop off that list draws a hairline soft, which is a price you are allowed to choose. It was not offered before: windows moved in quarters and anything you read mid fight in whole numbers.")
-
-		ui.Action(function()
-			return "every screen back to its own default"
-		end, function()
-			for _, zoom in ipairs(ns.Zooms()) do
-				ns.db[zoom.key] = ns.DefaultFor(zoom.key)
-				if zoom.apply then
-					zoom.apply()
-				end
-			end
-			ns.UI.Notify()
-		end, function()
-			for _, zoom in ipairs(ns.Zooms()) do
-				if Settings.Snap(ns.db[zoom.key]) ~= ns.DefaultFor(zoom.key) then
-					return true
-				end
-			end
-			return false
-		end)
+		-- The rows themselves are not named here. A part that draws something
+		-- sizeable says so in its own ns.Register call and turns up on the list
+		-- its flag puts it on; a part that stops drawing it takes its row away.
+		-- The alternative was every screen in the addon written out in this
+		-- file, which is the list that goes stale the first time somebody adds
+		-- a window.
+		Rows(true, "Zoom: windows",
+			"Every window this addon opens, each on its own number. Shrink the map without shrinking the quest log beside it.")
+		Rows(false, "Zoom: on screen",
+			"Everything the addon draws over the world, each on its own number. A stop off the exact list draws a hairline soft, which is a price you are allowed to choose.")
 
 		-- Here rather than on the feeds page, where the first of these two used
 		-- to live. It was a per-feed reading of an addon-wide fact, printed

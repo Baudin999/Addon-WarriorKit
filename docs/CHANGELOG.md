@@ -8,12 +8,22 @@ One number sized every window in the addon. Shrinking the map so it sat beside
 the quest log shrank the quest log with it, which is not a compromise anybody
 would have chosen if the two had ever been separable.
 
-They are now. There is a Zoom page under The screen with a row per screen: the
-map, the quest log, the bags, the mail, the merchant, the character sheet, the
-adventure guide, the breakdown, the clutter window, the chat window, the options
-panel, the tooltips, the confirm box, and every part of the HUD that was
-already sized on its own. Twenty three rows. Scale the map down and the hover
-box up in the same sitting and neither moves the other.
+They are now. There are two pages under The screen, Zoom: windows and Zoom: on
+screen, twenty three rows between them: the map, the quest log, the bags, the
+mail, the merchant, the character sheet, the adventure guide, the breakdown, the
+clutter window, the chat window, the options panel, the confirm box, the
+tooltips, and every part of the HUD that was already sized on its own. Scale the
+map down and the tooltips up in the same sitting and neither moves the other.
+
+It is two pages rather than one because one did not fit. Twenty three rows with
+a sentence under each ran to a thousand units of stack in a view that holds
+three hundred and fifty, so the row you opened the page for was three screens
+down, and a control you cannot reach is a control you do not have. The windows
+and the things drawn over the world are the two halves anybody thinks in, each
+fits without scrolling, and the harness asserts the height rather than trusting
+it. The sentence under every row went with the split: it said whether that stop
+kept a hairline sharp, twenty three times, and the reading at the foot of each
+list answers that for every row at once.
 
 The step is a tenth, from 0.5x to 3x. It was a quarter for windows and a whole
 number for anything you read mid fight, and the argument for the whole number

@@ -6,10 +6,17 @@
 --
 -- Four questions, and none of them is answerable by reading the source.
 --
--- Is the page the registry. A row per registered screen, no more and no fewer,
--- so a part that registers a screen turns up here and a part that stops drawing
--- one takes its row away. A page with a list of screens typed into it is a page
--- that goes stale the first time somebody adds a window.
+-- Is the page the registry. A row per registered screen across the two lists,
+-- no more and no fewer, so a part that registers a screen turns up here and a
+-- part that stops drawing one takes its row away. A page with a list of screens
+-- typed into it is a page that goes stale the first time somebody adds a window.
+--
+-- Does either list fit. The rows are split into windows and things drawn over
+-- the world because twenty three of them with a sentence under each ran to a
+-- thousand units of stack in a view that holds three hundred and fifty, and the
+-- row you opened the page for was three screens down. A list taller than the
+-- view is a control the page technically has, which is the same as not having
+-- it, so the height is asserted rather than eyeballed.
 --
 -- Are they actually independent. Sizing one screen must move that screen and
 -- nothing else, which is the whole of what was asked for and the one thing a
@@ -85,7 +92,7 @@ if window then
 		if entry.widget.slider then
 			sliders = sliders + 1
 		end
-		if entry.section.title == "Zoom" and entry.widget.children then
+		if entry.section.title:find("^Zoom") and entry.widget.children then
 			local down, up = Nudges(entry.widget)
 			if down and up then
 				nudged = nudged + 1
@@ -116,6 +123,22 @@ if window then
 	----------------------------------------------------------------
 	-- Every stop on the panel's own row
 	----------------------------------------------------------------
+
+	----------------------------------------------------------------
+	-- Both lists fit without scrolling
+	----------------------------------------------------------------
+
+	for _, group in ipairs(window.groups) do
+		for _, section in ipairs(group.sections) do
+			if section.title:find("^Zoom") then
+				local tall = section.stack.frame:GetHeight() or 0
+				local holds = window.view.frame:GetHeight() or 0
+				check(tall <= holds,
+					("%s is %.0f units of rows in a view that holds %.0f")
+						:format(section.title, tall, holds))
+			end
+		end
+	end
 
 	local panel = rows["Options panel"]
 	check(panel ~= nil, "no row for the options panel, so the walk below is skipped")
