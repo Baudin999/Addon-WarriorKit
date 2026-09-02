@@ -1127,8 +1127,14 @@ local function Mark(pin, point)
 	-- the branch rather than inside the three that do not crop, so a shape added
 	-- later cannot inherit a corner of POIIcons and be wrong in a way that reads
 	-- as art.
+	--
+	-- Left, right, top, bottom, in that order, which is the order the client
+	-- takes them in and not the order the four corners of a rectangle come to
+	-- mind in. Written as 0, 0, 1, 1 this said a texture nought pixels wide and
+	-- every mark on the map went out at once: placed correctly, coloured
+	-- correctly and invisible. Board:Cropped is that failure made readable.
 	if type(pin.dot.SetTexCoord) == "function" then
-		pin.dot:SetTexCoord(0, 0, 1, 1)
+		pin.dot:SetTexCoord(0, 1, 0, 1)
 	end
 	if point.kind == Chart.YOU then
 		return Heading(pin)
@@ -1530,6 +1536,30 @@ function Board:Grave()
 		end
 	end
 	return nil
+end
+
+-- How many marks are cropped to nothing.
+--
+-- Handed out for the reason Turned is, and it catches the same kind of defect
+-- from the other side. The pins are pooled and one shape on this board draws a
+-- single cell of a sheet, so a crop is something a mark can inherit or be given
+-- backwards, and four numbers in the wrong order is a texture with no width. A
+-- mark like that is at the right place on the right zone in the right colour
+-- and is not on the screen, which is invisible to every other reading here:
+-- Drawn counts it, Grave names its art, and nothing says it has no width.
+function Board:Cropped()
+	local cropped = 0
+	for index = 1, #self.pins do
+		local pin = self.pins[index]
+		local dot = pin.dot
+		if pin:IsShown() and type(dot.GetTexCoord) == "function" then
+			local left, top, _, bottom, right = dot:GetTexCoord()
+			if left and (right - left == 0 or bottom - top == 0) then
+				cropped = cropped + 1
+			end
+		end
+	end
+	return cropped
 end
 
 -- How many dots are on the board, and how big it is. Handed out because a map

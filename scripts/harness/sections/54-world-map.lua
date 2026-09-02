@@ -293,6 +293,12 @@ do
 	check(left == 0.875,
 		("the skull is cropped from %s and it is the last eighth of the sheet")
 			:format(tostring(left)))
+	-- Every other mark whole, with the cropped one on the board beside them. The
+	-- crop is written on a pooled pin, and left, right, top, bottom in any other
+	-- order is a texture with no width: the map goes out entirely and every
+	-- reading above still passes.
+	check(Window.Cropped() == 0,
+		("%d marks came out cropped to nothing"):format(Window.Cropped()))
 
 	-- And gone on the way back up, without the corpse having moved: what ends it
 	-- is being alive again, which is a different event from a position changing.

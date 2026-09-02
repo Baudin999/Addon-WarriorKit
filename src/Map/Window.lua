@@ -486,6 +486,13 @@ function Window.Where()
 	return board:Where()
 end
 
+-- How many marks came out cropped to nothing, which should never be any.
+-- Handed out for the reason Turned is: a mark with no width is drawn in the
+-- right place in the right colour and is not on the screen.
+function Window.Cropped()
+	return board and board:Cropped() or 0
+end
+
 -- Your corpse: what it is drawn as, how big, and which cell of the sheet it
 -- took. Handed out for the reason Arrow is.
 function Window.Grave()

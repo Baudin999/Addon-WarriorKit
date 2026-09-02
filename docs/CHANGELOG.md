@@ -36,7 +36,16 @@ whatever the clamp took. A pan writes the two offsets and moves the canvas and
 does nothing else: the tiles, the fog and the marks are anchored to the canvas,
 so `Settle` is not on the drag's path at all.
 
-`Board:Drag`, `Board:Where` and `Board:Grave` are the readings, and
+The crop reset shipped backwards once and took every mark on the map with it.
+`SetTexCoord` takes left, right, top, bottom, and written as `0, 0, 1, 1` it
+says a texture nought pixels wide: Questie's icons, your group and the arrow
+were all still placed, still coloured and not on the screen. Nothing caught it,
+because every reading the harness had asks where a mark is and what art it
+carries. `Board:Cropped` is the one that would have: it counts the marks on the
+board whose crop has no width or no height, and the world map section holds it
+at nought with the corpse, the markers and the arrow all up.
+
+`Board:Drag`, `Board:Where`, `Board:Grave` and `Board:Cropped` are the readings, and
 `scripts/harness/sections/54-world-map.lua` makes the claims a screenshot cannot:
 which of the two things a drag did, that the picture stops at its own corners
 rather than going through them, and that the skull is Blizzard's cell of
