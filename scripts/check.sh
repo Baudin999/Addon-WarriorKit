@@ -939,6 +939,35 @@ else
 	status=1
 fi
 
+# And which way the numbers in those gates are allowed to move.
+#
+# Every ceiling in shape.lua and every one further down this file is a ratchet,
+# and both files enforced one direction of that. A function measuring under its
+# own entry fails until the entry comes down. A function that grew past its
+# entry could have the entry raised instead, and nothing said a word: the same
+# failure the paragraph above describes as the reason the file ceiling was
+# replaced, on the gate that replaced it.
+#
+# A raise is only visible against history, so this is the one rule here that
+# reads git. The committed copy of each watched file against the one on disk.
+# A tree with no commit yet has nothing to compare and is skipped, which is the
+# only hole and it closes on the first commit.
+if [ -f ../scripts/ratchet.lua ]; then
+	if git rev-parse --verify HEAD >/dev/null 2>&1; then
+		for watched in scripts/shape.lua scripts/check.sh; do
+			committed=$(mktemp)
+			if git show "HEAD:$watched" > "$committed" 2>/dev/null; then
+				lua5.1 ../scripts/ratchet.lua "$watched" "$committed" "../$watched" \
+					|| status=1
+			fi
+			rm -f "$committed"
+		done
+	fi
+else
+	echo "scripts/ratchet.lua is missing and a ceiling can be raised by the change it blocks"
+	status=1
+fi
+
 # The addon, loaded and driven under a stub of the client. Syntax and lint say
 # the files parse and read cleanly; this is the only layer that says the pixel
 # arithmetic lands where it should and that a tick does not allocate. It runs
@@ -1038,7 +1067,9 @@ harness_status=0
 # Names declared at the top of a chunk, against Lua's ceiling of 200. Both of
 # these are ratchets: the general limit and every entry beside it sit at what
 # is measured today, so an improvement lowers the number in the same commit and
-# growth fails here instead of passing unremarked.
+# growth fails here instead of passing unremarked. Growth of the number itself
+# fails further up, in scripts/ratchet.lua, which is the half of that sentence
+# neither this file nor shape.lua could enforce on its own.
 HARNESS_NAME_LIMIT=40
 
 # path:ceiling:why it is exempt

@@ -44,9 +44,13 @@ local BRANCHES = 30
 -- An entry names one function, not a file. Cutting the file in half moves
 -- nothing here, which is the whole point of measuring functions.
 --
--- An entry ratchets. A function that measures under its own number fails until
--- the number comes down, so an improvement cannot be spent quietly on room to
--- grow again.
+-- An entry ratchets, in both directions and by two files. A function that
+-- measures under its own number fails here, so an improvement cannot be spent
+-- quietly on room to grow again. A number that goes up fails in
+-- scripts/ratchet.lua, which reads the committed copy of this file and refuses
+-- the edit that raises a ceiling to meet the function that just cleared it.
+-- This file cannot catch that one: an entry raised to exactly what the code now
+-- measures is an entry this scan agrees with.
 --
 -- The reasons fall into four kinds and it is worth seeing them as kinds: a
 -- dispatcher with one branch per word, a layout that places every region of

@@ -48,8 +48,18 @@ in the README's untested list, and the full text of each item is this file at
     Item 17's argument applies to this list too: a registry entry retires a
     hand-written page, and the page was never the thing worth writing.
 
+23. A ceiling only moves down, in `scripts/ratchet.lua`. It reads the committed
+    copy of `shape.lua` and of `check.sh` against the copies on disk and fails
+    on any of the twenty three ceilings that went up.
+
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
+
+Item 23 was never in the Open list. It came out of reading the list against the
+code on 2026-09-02: every item here is a rule the addon believes in and does not
+enforce, and the allow-lists that hold those rules could be edited upward by the
+change they blocked. `59b36ce` had already done it once. The list numbers it 23
+because it is the twenty-third thing worked, not because a review found it.
 
 ## Open
 

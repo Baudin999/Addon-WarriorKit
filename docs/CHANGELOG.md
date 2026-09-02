@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+### A ceiling only moves down
+
+Every threshold in `scripts/shape.lua` and every one in `scripts/check.sh` is
+written as a ratchet, and both files say so in their own comments. Both enforced
+one direction of it. A function that measures under its own allow-list entry
+fails until the entry comes down, so an improvement cannot be banked as room to
+grow again. Nothing enforced the other direction. A function that grew past its
+entry could have the entry edited up to meet it, and every scan went green,
+because an entry that agrees with the code is an entry the scan agrees with.
+
+`shape.lua` opens by explaining that the per-file line ceiling was replaced
+because "one change hit the ceiling and raised the number". `59b36ce` then
+raised `BarsWord` from 97 lines and 37 branches to 101 and 38, in that file,
+under that paragraph. A ceiling that can be raised by the change it blocks is
+a formality.
+
+`scripts/ratchet.lua` reads the committed copy of both files and the copy on
+disk, and fails on any number that went up. It watches twenty three of them: the
+three global limits in `shape.lua` and the fifteen numbers across its thirteen
+allow-list entries, plus the two harness limits in `check.sh` and the three
+ceilings on its allow-lists. Each dimension is its own key, so a function whose
+length comes down while its branch count goes up still reads as a raise.
+
+Three moves stay legal. Lowering a number is the point. Deleting an entry gives
+an exemption back. Adding one is a function that did not exist before, and
+`shape.lua` already refuses an entry with no reason written on it. Deleting an
+entry and re-adding it higher does not work: the commit that deletes it leaves a
+function over the gate with no exemption, and `shape.lua` fails on that first.
+
+The prose budget in `harness/sections/16-options-window.lua` is deliberately not
+watched. It argues in place that it is a budget rather than a ratchet, because a
+page that did not exist last week is entitled to a lede and a hint per control,
+and that argument holds.
+
 ### One filtered event registration, in Core with the other shims
 
 `Core/Core.lua` opens by saying it is the client shim layer: about thirty
