@@ -172,6 +172,27 @@ local function Fit(content)
 	return width
 end
 
+-- An item let go of over the window and not over a square.
+--
+-- A square is the client's own bag button and a drop on one is the client's
+-- code, which puts the item in that slot. Everything else in the window, the
+-- air between squares, a heading, the title bar, is this frame, and a frame
+-- with no answer for the drop leaves the item on the cursor, so the player
+-- who pulled a helmet off the character sheet and let go of it over their
+-- bags is still holding it. Dropped anywhere on the window it goes in the
+-- first bag with room, which is what dropping it on the bag buttons along the
+-- bar would have done, and is the only thing "into my bag" can mean.
+--
+-- Two scripts rather than one, for the reason UI/Widgets.lua gives its drop
+-- square: an item picked up with a click arrives as a mouse up and one dragged
+-- off a slot arrives as a received drag, and a window that listened for one
+-- would take a helmet and refuse a sword. Nothing is drawn here: the client
+-- fires the bag update the move causes and the window redraws on that, the
+-- same as for anything else that lands in a bag.
+local function Drop()
+	ns.Stow()
+end
+
 local function Build()
 	window = UI.Window({
 		name = "WarriorKitBags",
@@ -181,6 +202,10 @@ local function Build()
 		zoom = function() return ns.Zoom("bagsZoom") end,
 	})
 	ns.Remember(window)
+	-- Hooked rather than set, because the frame is placeable and its drag
+	-- handlers are UI/Placeable.lua's.
+	window.frame:HookScript("OnReceiveDrag", Drop)
+	window.frame:HookScript("OnMouseUp", Drop)
 
 	view = UI.ScrollView(window.content, { overlay = true })
 	view.frame:SetPoint("TOPLEFT", M.pad, -M.pad)

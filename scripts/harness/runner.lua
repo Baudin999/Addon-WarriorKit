@@ -287,6 +287,7 @@ local SECTIONS = {
 	"63-map-places",
 	"64-console",
 	"65-bag-piles",
+	"66-bag-drop",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

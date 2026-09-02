@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Let go of it anywhere on the bag window
+
+A piece pulled off the character sheet could only be dropped on a square,
+and a square is one slot. Let go of over the air between the squares, over a
+heading or over the title bar, the window had no answer and the item stayed
+in hand. The window takes the drop now, whether the item was dragged there or
+picked up with a click and clicked down, and puts it in the first bag with
+room through the same two calls the bag buttons along the client's own bar
+make, so the client still decides which bag will take what. With no room
+anywhere it stays in hand, which is what the client does.
+
+### The result you can copy
+
+The console's readout was a label, and a label is text you can read and not
+text you can take. It is a field now, drawn the same, and a button under it
+puts the keyboard in the field with the whole of it selected, so Ctrl-C is the
+one press left to you. That is as far as an addon can go: the client has no
+clipboard call, and a selection in a field that holds the keyboard is the one
+way text leaves the game. Anything typed over the readout is put back, so it
+always shows what the last run printed.
+
 ### The bars come back
 
 The square that needs something to hit emptied every bar on the live client.

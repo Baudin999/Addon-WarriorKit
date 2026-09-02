@@ -184,6 +184,39 @@ _G.PickupContainerItem = function(bag, slot)
 	cursor = { id = ITEMS[held].id, link = itemLink(held), bag = bag, slot = slot }
 end
 
+-- The drop on a bag rather than on a slot, which is what the two bag buttons
+-- along the client's bar do with whatever the cursor holds.
+--
+-- Modelled as the client does it: the item goes to the first free slot of that
+-- one bag, and a bag with no room leaves it on the cursor and says nothing,
+-- which is what makes the addon's walk from bag to bag reachable. The answer
+-- is whether the cursor had an item at all, because that is what the client's
+-- own backpack button reads to decide between a drop and a toggle. Only a slot
+-- picked out of a bag can be on this cursor, so that is all that can land.
+local function stow(bag)
+	if not cursor or not cursor.bag then
+		return false
+	end
+	local held = CARRIED[bag]
+	for slot = 1, held and #held or 0 do
+		if held[slot] == false then
+			held[slot] = CARRIED[cursor.bag][cursor.slot]
+			counted(bag, slot, counted(cursor.bag, cursor.slot))
+			counted(cursor.bag, cursor.slot, 1)
+			CARRIED[cursor.bag][cursor.slot] = false
+			cursor = nil
+			return true
+		end
+	end
+	return true
+end
+_G.PutItemInBackpack = function() return stow(0) end
+-- The client's own arithmetic: bag one is the inventory slot after the
+-- nineteen worn ones. The addon never reads the number, it hands it straight
+-- back, so what is checked is that the two calls agree with each other.
+_G.ContainerIDToInventoryID = function(bag) return 19 + bag end
+_G.PutItemInBag = function(id) return stow(id - 19) end
+
 -- The end of the line, and the only call in the addon with no way back. It
 -- takes whatever the cursor is holding, which is exactly why the window checks
 -- what that is first.

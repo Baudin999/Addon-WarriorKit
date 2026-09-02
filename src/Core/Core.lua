@@ -1183,6 +1183,53 @@ function ns.PickupContainerItem(bag, slot)
 	return false
 end
 
+-- Whatever is on the cursor into the first bag with room for it. True once it
+-- has landed, false while it is still on the cursor.
+--
+-- The client's own mechanism, not a search for a free slot. Dropping an item on
+-- the backpack button on the bar is `PutItemInBackpack`, and on one of the four
+-- bag buttons beside it is `PutItemInBag` with the bag's inventory id, which is
+-- what the client's BackpackButton_OnClick and BagSlotButton_OnClick call and
+-- therefore the call it is written to accept from a hardware click. Both leave
+-- the item on the cursor when the bag has no room or will not take it, an
+-- ammo pouch offered a sword, so each is followed by a look at the cursor and
+-- the next bag is tried while it is still full. A free slot found by hand and
+-- filled with PickupContainerItem would have to know the bag families itself.
+--
+-- Only ever an item. Money, a spell or a macro on the cursor is nothing a bag
+-- takes, and the window's drop asks this before anything else so a click on
+-- it with a spell in hand is a click on the window.
+--
+-- Every call is probed and pcalled, like every other loose global this file
+-- reaches for: nothing installed here proves either exists on 2.5.6, and a bag
+-- window with no way to swallow a drop is still a bag window.
+function ns.Stow()
+	if type(_G.GetCursorInfo) ~= "function" or _G.GetCursorInfo() ~= "item" then
+		return false
+	end
+	if type(_G.PutItemInBackpack) == "function" then
+		pcall(_G.PutItemInBackpack)
+	end
+	if not _G.GetCursorInfo() then
+		return true
+	end
+	local numbered = C_Container and C_Container.ContainerIDToInventoryID
+		or _G.ContainerIDToInventoryID
+	if type(_G.PutItemInBag) ~= "function" or type(numbered) ~= "function" then
+		return false
+	end
+	for bag = 1, _G.NUM_BAG_SLOTS or 4 do
+		local ok, id = pcall(numbered, bag)
+		if ok and id then
+			pcall(_G.PutItemInBag, id)
+		end
+		if not _G.GetCursorInfo() then
+			return true
+		end
+	end
+	return false
+end
+
 -- Name, icon, equip location and the link's own colour code, for an item link.
 --
 -- The name and the colour are read out of the link rather than asked for,
