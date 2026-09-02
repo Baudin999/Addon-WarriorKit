@@ -43,11 +43,8 @@ ns.HoverCast = Cast
 --
 -- So the click is called `wk<index>` and the attribute is `*type-wk<index>`.
 --
--- Attributes rather than macro text, and the filter said as a second name rather
--- than as a conditional. Both of those are argued out where they are written,
--- below and in Hover.lua. The short of it is that macro text set by insecure code
--- and run off a keypress is the one thing the secure system exists to refuse, and
--- that `harmbutton` says what `[harm]` says without asking for a script.
+-- What sits under that name is macro text, and the argument for text rather
+-- than attributes is under "What one binding writes on the button" below.
 --
 -- Nothing here runs on a ticker and nothing here is rewritten in a fight. Apply
 -- is called at login, when a binding changes, and when combat drops on a change
@@ -106,13 +103,6 @@ local function Tail(name)
 	return "-" .. name
 end
 
--- The second name the filter sends the click to, or nil where it takes anyone.
--- `harmbutton` and `helpbutton` carry it and the action lives only under it, so
--- a press on the wrong sort of unit arrives on a name holding nothing.
-local function Remap(index, who)
-	return who.remap and (who.id .. Name(index)) or nil
-end
-
 --------------------------------------------------------------------------
 -- The debug log
 --
@@ -162,7 +152,9 @@ local function Trace(_, click, down)
 		Log("  no binding at %s, so the button carries nothing for it", tostring(click))
 		return
 	end
-	Log("  %s", Cast.Macro(index) or "|cffff5555the button carries nothing under that name|r")
+	for line in (Cast.Macro(index) or "|cffff5555the button carries nothing under that name|r"):gmatch("[^\n]+") do
+		Log("  %s", line)
+	end
 	Log("  %s", ns.Hover.Sight())
 	Log("  %s", ns.Hover.Would(bind))
 
@@ -215,90 +207,59 @@ end
 --------------------------------------------------------------------------
 -- What one binding writes on the button
 --
--- Attributes naming a spell, not macro text, and this is the third thing that
--- shipped wrong. It is the one that was invisible the longest, because every
--- reading an addon can take of it comes back correct.
+-- Macro text, under `*type-wk<index>` and `*macrotext-wk<index>`, and the text
+-- is Hover.Macro's: the spell on the mouseover when the filter passes, and
+-- otherwise a `/click` on whatever the key was pressing before this binding was
+-- put on top of it. That second line is what lets a heal sit on a bar and on
+-- this list under one key, and cast on yourself when nothing is under the
+-- cursor.
 --
--- The button carried `type` = macro and `macrotext` = the whole conditional. The
--- click arrived, the attributes read back exactly as written, the client's own
--- parser agreed the conditional matched the thing under the cursor, and no spell
--- was ever sent. Macro text set by insecure code and run off a keypress is the
--- automation the secure system exists to refuse, so the handler read it, declined
--- it, and said nothing. There is no error for this and no readback that shows it.
+-- This file shipped the other way round once, as `type` = spell with a `unit`
+-- and the filter said as `helpbutton`, on the belief that macro text set by
+-- insecure code and run off a keypress is what the secure system refuses. It is
+-- not, and Charge/Icon.lua is the proof: its button has carried `type` = macro
+-- and a `macrotext` written from Lua since the addon began, and its key has
+-- always cast. What was refusing the press here was the PreClick script the
+-- debug log below no longer installs, tainting the click before the secure
+-- handler saw it. The attributes cast once the script was gone, and text would
+-- have cast the same day.
 --
--- Clique never sets macrotext from outside a secure snippet. What it writes for a
--- key that casts on the mouseover is three attributes:
+-- Attributes cannot do what this needs, and the client's own SecureTemplates
+-- says why in one line: a button whose `unit` does not exist drops the press
+-- before it looks at what the click carries. `unit` = mouseover with nothing
+-- under the cursor is that, so no key with a unit on it can fall through to the
+-- bar, and `helpbutton` could only send a press on the wrong sort of unit to a
+-- name holding nothing. A conditional says both halves: cast on this, or press
+-- that. `nodead` comes back with it, which attributes had lost.
 --
---     unit  = "mouseover"
---     type  = "spell"
---     spell = the name
---
--- and that is what is written here. All three are things insecure code is allowed
--- to say, because none of them is a script: they name a spell and a unit and let
--- the client decide the rest.
---
--- The filter is the part with no obvious shape in attributes, and the answer is
--- not a conditional, it is a second name. `helpbutton` says: when the unit under
--- the cursor can be helped, deliver this click as `friend1` instead of `1`. The
--- action lives only under `friend1`. A press on an enemy arrives as `1`, finds no
--- type at all, and does nothing, which is the same silence a conditional would
--- have produced and is reached without one.
---
--- `nodead` is gone with the conditional and cannot be got back this way. A key
--- pressed on a corpse now casts and the client refuses it out loud, which is a
--- worse manner than the old silence and a better one than not casting at all.
+-- What the key was pressing is Buttons/Bars.lua's to say, because it is the
+-- part that reads the binding set for a square and knows which square, and it
+-- is asked on every apply rather than remembered, because a bar that comes up
+-- after login changes the answer.
 --------------------------------------------------------------------------
 
--- The attribute that carries the thing being cast, which is named after it.
-local function Verb(bind)
-	return bind.kind == "item" and "item" or "spell"
-end
-
 -- Every name any binding has ever been given, cleared before the live ones go
--- back on. A binding taken off the list leaves its attributes behind otherwise,
--- and the key it was on is free again while the action sits there waiting for a
--- click that will never come, which is the kind of leftover that only shows up
--- when a later binding lands on the same index.
---
--- Both names for every filter, because a binding that was on `a friend` and is
--- now on `anything` left `*type-friendwk1` behind, and that name still answers
--- the moment the unit under the cursor can be helped.
+-- back on. A binding taken off the list leaves its text behind otherwise, and
+-- the key it was on is free again while the macro sits there waiting for a click
+-- that will never come, which is the kind of leftover that only shows up when a
+-- later binding lands on the same index.
 local function Wipe()
 	for index = 1, ns.Hover.MAX do
-		local names = { Name(index) }
-		for _, who in ipairs(ns.Hover.WHO) do
-			if who.remap then
-				names[#names + 1] = who.id .. Name(index)
-				button:SetAttribute("*" .. who.remap .. Tail(Name(index)), nil)
-			end
-		end
-		for _, name in ipairs(names) do
-			local tail = Tail(name)
-			button:SetAttribute("*type" .. tail, nil)
-			button:SetAttribute("*unit" .. tail, nil)
-			button:SetAttribute("*spell" .. tail, nil)
-			button:SetAttribute("*item" .. tail, nil)
-			-- The shape this used to be. A button that kept it would still be
-			-- carrying the macro that never cast anything.
-			button:SetAttribute("*macrotext" .. tail, nil)
-		end
+		local tail = Tail(Name(index))
+		button:SetAttribute("*type" .. tail, nil)
+		button:SetAttribute("*macrotext" .. tail, nil)
 	end
 end
 
 local function Write(index, bind)
-	local who = ns.Hover.Who(bind.who)
-	local name = Name(index)
-	local under = Remap(index, who) or name
-
-	-- On the name the click arrives under, because the filter is a question about
-	-- a unit and this is the attribute that says which unit to ask about.
-	button:SetAttribute("*unit" .. Tail(name), "mouseover")
-	if who.remap then
-		button:SetAttribute("*" .. who.remap .. Tail(name), under)
-		button:SetAttribute("*unit" .. Tail(under), "mouseover")
+	local beneath
+	local name, mouse, down = ns.Bars.Beneath(bind.key)
+	if name then
+		beneath = { name = name, button = mouse, down = down }
 	end
-	button:SetAttribute("*type" .. Tail(under), Verb(bind))
-	button:SetAttribute("*" .. Verb(bind) .. Tail(under), bind.name)
+	local tail = Tail(Name(index))
+	button:SetAttribute("*type" .. tail, "macro")
+	button:SetAttribute("*macrotext" .. tail, ns.Hover.Macro(bind, beneath))
 end
 
 -- Returns false when combat deferred the work, so the caller can say so.
@@ -332,10 +293,12 @@ function Cast.Apply()
 				if reads ~= nil then
 					proven = reads
 				end
-				Log("%s is index %d, %s, %s", key, index,
+				Log("%s is index %d, %s", key, index,
 					reads == nil and "the readback could not be asked"
-						or (reads and "the binding layer agrees" or "|cffff5555the binding layer does not have it|r"),
-					ns.Hover.Macro(bind))
+						or (reads and "the binding layer agrees" or "|cffff5555the binding layer does not have it|r"))
+				for line in Cast.Macro(index):gmatch("[^\n]+") do
+					Log("  %s", line)
+				end
 			else
 				Log("|cffff5555%s was refused by the client|r", key)
 				if not warned then
@@ -381,25 +344,10 @@ end
 
 -- What one binding is carrying, read back off the button rather than built again.
 -- `/wk hover show` prints these, and a line that came from the same place the
--- press comes from is the only line worth printing.
---
--- Read under the name the action actually lives on, which is the name the filter
--- chose, so a row whose remap was never written comes back nil and prints as the
--- key that carries nothing.
+-- press comes from is the only line worth printing. Nil where the button holds
+-- nothing under that name.
 function Cast.Macro(index)
-	local bind = ns.Hover.List()[index]
-	if not bind then
-		return nil
-	end
-	local who = ns.Hover.Who(bind.who)
-	local tail = Tail(Remap(index, who) or Name(index))
-	local what = button:GetAttribute("*" .. Verb(bind) .. tail)
-	if not what then
-		return nil
-	end
-	return ("%s %s on %s"):format(
-		button:GetAttribute("*type" .. tail) or "?", what,
-		button:GetAttribute("*unit" .. tail) or "?")
+	return button:GetAttribute("*macrotext" .. Tail(Name(index)))
 end
 
 --------------------------------------------------------------------------

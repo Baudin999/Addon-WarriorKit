@@ -5,9 +5,11 @@ addon with the most ways to fail silently, so this file is the chain a press
 travels and the evidence for each link. It was written after the feature bound
 its keys correctly for weeks and cast nothing.
 
-Nothing here is read out of the client's own Lua. That source is not on this
-machine. Every claim below is inferred from working code that runs on this
-client, and each one names where.
+Almost nothing here is read out of the client's own Lua. That source is not on
+this machine, and every claim below is inferred from working code that runs on
+this client, each one naming where. The one exception is marked, and it came
+from the classic_anniversary branch of Gethe/wow-ui-source, which is the 2.5.6
+FrameXML.
 
 ## The chain
 
@@ -17,7 +19,8 @@ You press `SHIFT-BUTTON3`. Five things have to line up.
 2. The click has to be dispatched to the button rather than dropped.
 3. The button has to act on the edge the click arrives on.
 4. The client has to compute an attribute name the button actually carries.
-5. The attribute has to name a spell and a unit, not run a script.
+5. The macro has to say both halves: the spell on the mouseover, and the
+   square the key was on for when the mouseover is not the right sort.
 
 Only the first is visible from inside the addon. `GetBindingAction` reads the
 layer back, and `Cast.Apply` believes the readback rather than its own call. The
@@ -78,31 +81,37 @@ writes the bare name. That works for it and would not work here, and the honest
 answer is that I cannot tell you why from the code on disk. The wildcard covers
 both cases, so this file uses it and does not depend on the answer.
 
-## The filter is a second name
+## The filter is a conditional, and the bar is the second line
 
-There is no attribute meaning "only when it is an enemy". A macro conditional
-says it, `[@mouseover,harm]`, but a conditional needs macro text, and macro text
-set by insecure code and run off a keypress is the one thing the secure system
-exists to refuse. It reads it, declines it, and says nothing. That is how this
-shipped once.
+The filter is a macro conditional, `[@mouseover,harm,nodead]`, and the button
+carries the macro as text under `*macrotext-wk1`. This file shipped once
+believing that macro text set by insecure code and run off a keypress is what
+the secure system refuses, and rebuilt the filter as `harmbutton` with a `unit`
+attribute to get round it. The belief was wrong. `Charge/Icon.lua` has written
+`macrotext` from Lua since the addon began and its key has always cast. What
+refused the press here was the PreClick in the section below.
 
-`harmbutton` and `helpbutton` say the same thing in a name. `*harmbutton-wk1`
-holding `enemywk1` tells the client to deliver the click as `enemywk1` instead
-of `wk1` when the unit under the cursor can be attacked. The action lives only
-under `enemywk1`. A press on a friend arrives as `wk1`, finds no type, and does
-nothing, which is the same silence a conditional gives and costs no script.
+Attributes could not have carried the second line anyway, and this is the one
+claim read out of the client's own Lua. `SecureTemplates.lua`, in
+`GetConvertedButtonUnitAndActionType`, drops the press when the button's unit
+does not exist, before it reads the type. A `unit` of `mouseover` with nothing
+under the cursor is that press, so no key with a unit on it can fall through to
+anything.
 
-`*unit-wk1` has to be `mouseover` for this to work at all, because the remap is
-a question about a unit and that attribute is what says which unit to ask about.
+The second line is what the key did before the binding was put on top of it.
+`Buttons/Bars.lua` reads the binding set under the override, which is
+`GetBindingAction(key)` with no override asked for, and names the square, or
+Blizzard's own button when the clone is off. The line is `/click <name>
+LeftButton` under the filter's negation, `[@mouseover,noharm][@mouseover,dead]`,
+with `true` on the end for a button that fires on the down press. A heal on a
+square and the same key here is one key that heals whoever is under the cursor,
+or you. The bar stops binding a key this list holds, because two overrides on
+one key is whichever was set last, and keeps drawing it, because the key still
+presses the square.
 
-The one thing lost with the conditional is `nodead`. A key pressed on a corpse
-now casts and the client refuses it out loud. That is worse manners than the old
-silence and better than not casting.
-
-The conditional is still written, in `Hover.Macro`. Nothing presses it. It is
-the line `/wk hover show` prints, because a player can read a macro, and it is
-what the debug log hands to `SecureCmdOptionParse` when it wants the client's own
-opinion of the same filter.
+`nodead` is back with the conditional, and the conditional is also what the
+debug log hands to `SecureCmdOptionParse` for the client's own opinion of the
+filter.
 
 ## Which edge
 

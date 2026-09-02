@@ -15,9 +15,13 @@ local function ListWord()
 		return
 	end
 	for index, bind in ipairs(list) do
-		ns.Print(("  %-12s %s"):format(
-			ns.HoverCast.Holding(index) and bind.key or (bind.key .. " *"),
-			ns.HoverCast.Macro(index) or ns.Hover.Macro(bind)))
+		local key = ns.HoverCast.Holding(index) and bind.key or (bind.key .. " *")
+		-- The macro is two lines where the key is also on a bar, and the
+		-- second one goes under the first rather than after the key again.
+		for line in (ns.HoverCast.Macro(index) or ns.Hover.Macro(bind)):gmatch("[^\n]+") do
+			ns.Print(("  %-12s %s"):format(key, line))
+			key = ""
+		end
 	end
 	ns.Print("* is a key this client did not take.")
 end

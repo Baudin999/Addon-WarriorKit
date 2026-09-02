@@ -461,7 +461,7 @@ do
 	check(not found.bottomleft.frame:IsShown(), "an unticked bar is still on screen")
 	check(_G.MultiBarBottomLeftButton1:IsShown(),
 		"an unticked bar did not give Blizzard's buttons back")
-	check(_G.GetBindingAction("SHIFT-E", true) == "",
+	check(_G.GetBindingAction("SHIFT-E", true) == "MULTIACTIONBAR1BUTTON1",
 		"an unticked bar is still holding the key that presses it")
 	check(Bars.Count() == (standing - 1) * 12,
 		("%d squares are still on the tick with one bar unticked"):format(Bars.Count()))
@@ -860,7 +860,7 @@ do
 		"the off switch left frames silenced with no way to find them")
 	check(Bars.Hidden() == 0, "the off switch left buttons hidden with no way to find them")
 	check(not found.bar1.frame:IsShown(), "a cloned bar is still on screen with the clone off")
-	check(_G.GetBindingAction("E", true) == "",
+	check(_G.GetBindingAction("E", true) == "ACTIONBUTTON1",
 		"an override binding outlived the feature that set it")
 	check(Bars.Count() == 0, "the tick is still drawing squares nobody can see")
 

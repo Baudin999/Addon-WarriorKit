@@ -176,11 +176,11 @@ _G.ChatEdit_DeactivateChat(line)
 -- reads correctly.
 ----------------------------------------------------------------------
 
-check(_G.GetBindingAction("ENTER", true) == "",
+check(_G.GetBindingAction("ENTER", true) == "OPENCHAT",
 	("the enter key is bound to %q"):format(_G.GetBindingAction("ENTER", true)))
-check(_G.GetBindingAction("NUMPADENTER", true) == "",
+check(_G.GetBindingAction("NUMPADENTER", true) == "OPENCHAT",
 	("the numpad enter key is bound to %q"):format(_G.GetBindingAction("NUMPADENTER", true)))
-check(_G.GetBindingAction("/", true) == "",
+check(_G.GetBindingAction("/", true) == "OPENCHATSLASH",
 	("the slash key is bound to %q"):format(_G.GetBindingAction("/", true)))
 check(_G.WarriorKitChatSecureButton == nil,
 	"the secure button the line used to be run off is still being built")
@@ -316,7 +316,7 @@ check(Window.Line() == "",
 -- And nothing is left holding it afterwards. The version before this loaded the
 -- command onto the enter key and needed a second press; a key still carrying
 -- something here would be that version coming back.
-check(_G.GetBindingAction("ENTER", true) == "",
+check(_G.GetBindingAction("ENTER", true) == "OPENCHAT",
 	("the press left the enter key carrying %q")
 		:format(_G.GetBindingAction("ENTER", true)))
 

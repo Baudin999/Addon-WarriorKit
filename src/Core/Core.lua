@@ -1766,6 +1766,18 @@ bindings:SetScript("OnEvent", function(self, event)
 	self:SetScript("OnUpdate", Pass)
 end)
 
+-- The same pass, asked for by a part rather than by the client. Buttons/Bars.lua
+-- calls it when its squares go up or down, because what a key presses
+-- underneath is an answer another take wrote down. Turned away inside a pass
+-- for the reason the event is, and dropped before the saved variables exist
+-- for the same reason.
+function ns.Retake()
+	if passing or not ns.dbc then
+		return
+	end
+	bindings:SetScript("OnUpdate", Pass)
+end
+
 --------------------------------------------------------------------------
 -- Saved variables
 --

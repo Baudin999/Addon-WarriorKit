@@ -13,6 +13,13 @@
 -- conditionals and nothing else, so the assertion is on the string the button
 -- is actually carrying rather than on a flag beside it.
 --
+-- Does a key that is also on a bar keep the bar. A heal on a square and the
+-- same key on this list is one key that heals the party member under the
+-- cursor and heals you with nothing there, and that is two lines of macro on
+-- the hover button and a bar that stops binding the key while still drawing
+-- it. The stub holds SHIFT-BUTTON3 as bar 1's second key on its first square,
+-- so the first binding below is that case without arranging anything.
+--
 -- Does a key land on the binding layer. Every part of this addon that takes a
 -- key reads GetBindingAction back rather than believing its own call, and the
 -- suffix is what tells one binding from another, so the readback has to name
@@ -20,10 +27,10 @@
 --
 -- Is the macro written under the name the client looks it up by. This is the
 -- one that shipped wrong. The attributes were `type-1` and `macrotext-1`, a
--- secure button reads `<modifiers>type1`, and every key bound, read back
+-- secure button reads `<modifiers>type<click>`, and every key bound, read back
 -- correctly and cast nothing. The wildcard prefix is the half that matters
 -- most: a mouseover key carries a modifier, the modifier is read off the
--- keyboard at the moment of the press, and `*type1` is the only name that
+-- keyboard at the moment of the press, and `*type-wk1` is the only name that
 -- answers whatever is held down.
 --
 -- Can a binding be changed rather than only made and deleted. The page draws a
@@ -48,6 +55,17 @@ local ns, check = H.ns, H.check
 
 local Hover, Cast, Sheet = ns.Hover, ns.HoverCast, ns.HoverSheet
 local button = _G.WarriorKitHoverButton
+
+-- The bar's side of the key this section binds first. The square SHIFT-BUTTON3
+-- presses, which is bar 1's first; what the binding layer says when the bar
+-- holds the key itself; and how many keys the bars hold before this section
+-- takes one, because a loadout key from an earlier section already holds one
+-- of the stub's 37.
+local bar = {
+	square = ns.Bars.All()[1].buttons[1]:GetName(),
+	keys = ns.Bars.Keys(),
+}
+bar.holds = ("CLICK %s:LeftButton"):format(bar.square)
 
 local function macro(index)
 	return Cast.Macro(index)
@@ -129,38 +147,69 @@ check(ok, ("binding Rend was refused: %s"):format(tostring(said)))
 check(#Hover.List() == 1, "the binding did not reach the list")
 check(Hover.Held() == nil, "the slot still holds the spell after the key was pressed")
 
-check(macro(1) == "spell Rend on mouseover",
+-- Two lines, because the key is on a bar. The first is the filter and the
+-- spell, the second is the square the key was pressing, under the filter's
+-- negation, so a press with nothing under the cursor or the wrong thing there
+-- does what the key did before it was bound here.
+check(macro(1) == "/cast [@mouseover,harm,nodead] Rend\n"
+		.. ("/click [@mouseover,noharm][@mouseover,dead] %s LeftButton"):format(bar.square),
 	("the enemy binding carries %q"):format(tostring(macro(1))))
 check(bound("SHIFT-BUTTON3") == "CLICK WarriorKitHoverButton:wk1",
 	("SHIFT-BUTTON3 reads back as %q"):format(bound("SHIFT-BUTTON3")))
 check(Cast.Holding(1), "the binding layer took the key and the part says it did not")
 
+-- The bar's side of the same key. It gave the key up, because two overrides on
+-- one key is whichever was set last, and it still draws it, because the key
+-- still presses the square through the macro's second line.
+check(ns.Bars.Keys() == bar.keys - 1,
+	("the bars hold %d keys with one lent to the hover list, and held %d"):format(ns.Bars.Keys(), bar.keys))
+check(ns.Bars.All()[1].buttons[1].key:GetText() == "E",
+	("the square with a lent second key draws %q"):format(tostring(ns.Bars.All()[1].buttons[1].key:GetText())))
+
+-- The name and the edge the second line presses with, off the square rather
+-- than assumed. A square fires on the release, so the line names no edge; a
+-- button with no attribute takes the player's setting, which the stub starts
+-- on, so the line says `true`.
+do
+	local name, mouse, down = ns.Bars.Beneath("SHIFT-BUTTON3")
+	check(name == bar.square and mouse == "LeftButton" and down == false,
+		("SHIFT-BUTTON3 presses %s %s down %s"):format(tostring(name), tostring(mouse), tostring(down)))
+	check(ns.Bars.Beneath("ALT-BUTTON3") == nil, "a key on nothing presses something")
+
+	-- With the clone off the key presses Blizzard's own button, which fires on
+	-- whichever edge the player's setting names, and the stub starts that on.
+	-- The macro follows: in the game the bars ask Core for every take to run
+	-- again a frame later, and that frame is Core's own, so the take is run
+	-- here by hand.
+	ns.db.actionBars = false
+	ns.Bars.Apply()
+	name, mouse, down = ns.Bars.Beneath("SHIFT-BUTTON3")
+	check(name == "ActionButton1" and down == true,
+		("with the clone off SHIFT-BUTTON3 presses %s down %s"):format(tostring(name), tostring(down)))
+	Cast.Apply()
+	check(macro(1) == "/cast [@mouseover,harm,nodead] Rend\n"
+			.. "/click [@mouseover,noharm][@mouseover,dead] ActionButton1 LeftButton true",
+		("with the clone off the enemy binding carries %q"):format(tostring(macro(1))))
+	ns.db.actionBars = true
+	ns.Bars.Apply()
+	Cast.Apply()
+	check(macro(1):find(bar.square, 1, true) ~= nil,
+		("with the clone back the enemy binding carries %q"):format(tostring(macro(1))))
+end
+
 -- The names, not only the values, and this is the assertion the whole feature
 -- turns on. A press arrives carrying whatever modifiers are held, so the client
--- asks for `shift-type1` first and falls back to `*type1`; an action under any
--- other name reads back perfectly from every angle and casts nothing.
+-- asks for `shift-type-wk1` first and falls back to `*type-wk1`; an action under
+-- any other name reads back perfectly from every angle and casts nothing.
 --
--- The filter is a second name rather than a conditional. `harmbutton1` says the
--- click becomes `enemy1` when the thing under the cursor can be attacked, and the
--- action lives only there. A press on a friend arrives as `1`, finds no type, and
--- does nothing. So the assertion is that suffix 1 is empty and suffix enemy1 is
--- not: an action left on the plain name would fire on anything at all.
-check(attr("harmbutton", "wk1") == "enemywk1",
-	("the enemy filter remaps to %q"):format(tostring(attr("harmbutton", "wk1"))))
-check(attr("type", "enemywk1") == "spell" and attr("spell", "enemywk1") == "Rend",
-	("the action under enemywk1 is %q %q")
-		:format(tostring(attr("type", "enemywk1")), tostring(attr("spell", "enemywk1"))))
-check(attr("unit", "wk1") == "mouseover" and attr("unit", "enemywk1") == "mouseover",
-	"the filter has no unit to ask about, so it can never remap")
-check(attr("type", "wk1") == nil,
-	"an action on the unfiltered name fires on whatever is under the cursor")
-
--- Never macro text. It is set here by insecure code, and macro text set by
--- insecure code and run off a keypress is what the secure system exists to
--- refuse: the handler reads it, declines it and says nothing. That is how this
--- shipped, and every reading an addon can take of it came back correct.
-check(attr("macrotext", "wk1") == nil and attr("macrotext", "enemywk1") == nil,
-	"the button carries macro text, which the client will not run from here")
+-- Macro text, the way Charge/Icon.lua has always carried its own. No `unit`,
+-- because a secure button whose unit does not exist drops the press before it
+-- reads anything else, and a unit of mouseover with nothing under the cursor
+-- is exactly the press that has to reach the second line.
+check(attr("type", "wk1") == "macro" and attr("macrotext", "wk1") == macro(1),
+	("the action under wk1 is %q"):format(tostring(attr("type", "wk1"))))
+check(attr("unit", "wk1") == nil and attr("spell", "wk1") == nil,
+	"the button carries a unit or a spell beside the macro, and a unit would eat the press")
 -- The two names nothing ever asks for, and the second of them is what this
 -- shipped as. `*type1` is the click called LeftButton, which is not the click
 -- this button is ever sent; `type-wk1` answers only with no modifier held, and
@@ -170,7 +219,7 @@ check(button:GetAttribute("*type1") == nil and button:GetAttribute("type-wk1") =
 
 -- The other half of the press. A click that matches no registration is dropped
 -- before any script runs, and which edge a key bound with SetOverrideBindingClick
--- is dispatched on is the useOnKeyDown attribute. Buttons/Bars.lua found out what
+-- is dispatched on is the useOnKeyDown attribute. Buttons/ns.Bars.lua found out what
 -- it costs to let those two disagree: forty eight squares that drew, lit and
 -- counted down, and cast nothing under the key.
 --
@@ -194,31 +243,24 @@ check(not ok and said:find("Rend") ~= nil,
 
 check(bind(2, "spell", "friend", "ALT-BUTTON3"),
 	"binding a friendly key was refused")
-check(macro(2) == "spell Thunder Clap on mouseover",
+-- One line, because ALT-BUTTON3 is on no bar: a key that pressed nothing
+-- before still presses nothing with nothing under the cursor, rather than
+-- landing on your target.
+check(macro(2) == "/cast [@mouseover,help,nodead] Thunder Clap",
 	("the friendly binding carries %q"):format(tostring(macro(2))))
-check(attr("helpbutton", "wk2") == "friendwk2" and attr("spell", "friendwk2") == "Thunder Clap",
-	"the friendly filter does not remap to a name of its own")
 
 check(bind(3, "spell", "any", "CTRL-BUTTON4"),
 	"binding a key that lands on anything was refused")
-check(macro(3) == "spell Battle Shout on mouseover",
+check(macro(3) == "/cast [@mouseover,exists,nodead] Battle Shout",
 	("the anything binding carries %q"):format(tostring(macro(3))))
--- No remap, because there is nothing to filter. The action sits on the plain
--- name, which is the one case where that is right.
-check(attr("type", "wk3") == "spell" and attr("spell", "wk3") == "Battle Shout",
-	"a key that lands on anything must carry its action on the unfiltered name")
-check(attr("helpbutton", "wk3") == nil and attr("harmbutton", "wk3") == nil,
-	"a key that lands on anything remapped itself out of reach")
 
 -- An item is /use and never /cast, because the client has two verbs and one of
 -- them does nothing at all with an item's name.
 Hover.Hold(Hover.Carry("item", 1001, H.itemLink("Bloodspiller")))
 ns.db.hoverWho = "enemy"
 check(Hover.Bind("CTRL-BUTTON5"), "binding an item was refused")
-check(macro(4) == "item Bloodspiller on mouseover",
+check(macro(4) == "/use [@mouseover,harm,nodead] Bloodspiller",
 	("the item binding carries %q"):format(tostring(macro(4))))
-check(attr("type", "enemywk4") == "item" and attr("item", "enemywk4") == "Bloodspiller",
-	"an item is carried under its own verb, and a spell name would do nothing")
 
 --------------------------------------------------------------------------
 -- Changing one that is already there
@@ -230,17 +272,16 @@ check(attr("type", "enemywk4") == "item" and attr("item", "enemywk4") == "Bloods
 --------------------------------------------------------------------------
 
 check(Hover.Retarget(1, "friend"), "the filter on a bound key would not change")
-check(attr("helpbutton", "wk1") == "friendwk1" and attr("spell", "friendwk1") == "Rend",
-	"after retargeting the key does not carry its action under the new filter")
--- The old filter's names, which is the half a rewrite leaves behind. A key that
--- moved from enemy to friend and kept `typeenemy1` casts on both.
-check(attr("harmbutton", "wk1") == nil and attr("type", "enemywk1") == nil,
-	"the filter it was on is still on the button and the key now fires on either")
+-- Both lines move with the filter, because the second is the first's negation
+-- and a fallback that fired on a friend would heal the party member twice.
+check(macro(1) == "/cast [@mouseover,help,nodead] Rend\n"
+		.. ("/click [@mouseover,nohelp][@mouseover,dead] %s LeftButton"):format(bar.square),
+	("after retargeting the key carries %q"):format(tostring(macro(1))))
 check(Hover.Retarget(1, "enemy"), "putting the filter back was refused")
 
 check(Hover.Respell(1, Hover.Carry("spell", 2, "spell")),
 	"the spell on a bound key would not change")
-check(macro(1) == "spell Thunder Clap on mouseover",
+check(macro(1):find("^/cast %[@mouseover,harm,nodead%] Thunder Clap\n") ~= nil,
 	("after the spell changed, the first binding carries %q"):format(tostring(macro(1))))
 check(Hover.Respell(1, Hover.Carry("spell", 1, "spell")), "putting the spell back was refused")
 
@@ -249,19 +290,27 @@ check(Hover.Respell(1, Hover.Carry("spell", 1, "spell")), "putting the spell bac
 -- accident and the one that must do nothing rather than complain.
 check(Hover.Rebind(1, "SHIFT-BUTTON3"), "a row would not be rebound to the key it already has")
 
-local moved, refused_why = Hover.Rebind(1, "ALT-BUTTON3")
-check(not moved and refused_why:find("Thunder Clap") ~= nil,
-	("a row took a key its neighbour holds: %s"):format(tostring(refused_why)))
+ok, said = Hover.Rebind(1, "ALT-BUTTON3")
+check(not ok and said:find("Thunder Clap") ~= nil,
+	("a row took a key its neighbour holds: %s"):format(tostring(said)))
 
 check(Hover.Rebind(1, "CTRL-BUTTON1"), "a modified left click was refused as a new key")
 check(bound("CTRL-BUTTON1") == "CLICK WarriorKitHoverButton:wk1",
 	("the rebound key reads back as %q"):format(bound("CTRL-BUTTON1")))
-check(bound("SHIFT-BUTTON3") == "", "the key the row moved off is still on the binding layer")
+check(macro(1) == "/cast [@mouseover,harm,nodead] Rend",
+	("off the bar's key the row carries %q"):format(tostring(macro(1))))
+-- The key the row moved off goes back to the bar, and the bar is told rather
+-- than left to find out.
+check(bound("SHIFT-BUTTON3") == bar.holds,
+	("the key the row moved off reads back as %q"):format(bound("SHIFT-BUTTON3")))
+check(ns.Bars.Keys() == bar.keys, ("with the key given back the bars hold %d"):format(ns.Bars.Keys()))
 check(Hover.Rebind(1, "SHIFT-BUTTON3"), "moving the row back was refused")
+check(bound("SHIFT-BUTTON3") == "CLICK WarriorKitHoverButton:wk1",
+	"the row moved back and the bar kept the key")
 
-moved, refused_why = Hover.Rebind(1, "BUTTON1")
-check(not moved and refused_why:find("modifier") ~= nil,
-	("a bound row took plain left click: %s"):format(tostring(refused_why)))
+ok, said = Hover.Rebind(1, "BUTTON1")
+check(not ok and said:find("modifier") ~= nil,
+	("a bound row took plain left click: %s"):format(tostring(said)))
 
 --------------------------------------------------------------------------
 -- The list on screen
@@ -308,9 +357,9 @@ check(Hover.Remove(2) == "Thunder Clap", "removing the friendly key named the wr
 check(#Hover.List() == 3, "the list is the wrong length after a removal")
 check(bound("ALT-BUTTON3") == "", "the removed key is still on the binding layer")
 check(macro(4) == nil, "a suffix left over from before the removal still carries an action")
-check(attr("type", "enemywk4") == nil and attr("item", "enemywk4") == nil,
+check(attr("type", "wk4") == nil and attr("macrotext", "wk4") == nil,
 	"the removed row's attributes are still on the button under its old name")
-check(macro(2) == "spell Battle Shout on mouseover",
+check(macro(2) == "/cast [@mouseover,exists,nodead] Battle Shout",
 	("after the removal suffix 2 carries %q"):format(tostring(macro(2))))
 check(Sheet.Shown() == 3, "the list on screen did not shrink with the binding")
 
@@ -375,8 +424,8 @@ check(button:GetScript("PostClick") == nil,
 
 ns.db.hover = false
 Hover.Changed()
-check(bound("SHIFT-BUTTON3") == "",
-	"the part was switched off and the keys stayed on the binding layer")
+check(bound("SHIFT-BUTTON3") == bar.holds,
+	("the part was switched off and SHIFT-BUTTON3 reads %q"):format(bound("SHIFT-BUTTON3")))
 check(sheet:IsShown() == false, "the part was switched off and the list stayed up")
 ns.db.hover = true
 Hover.Changed()
@@ -385,6 +434,8 @@ check(bound("SHIFT-BUTTON3") == "CLICK WarriorKitHoverButton:wk1",
 
 check(Hover.Clear() == 3, "clearing did not report the number it took off")
 check(sheet:IsShown() == false, "the list is up with nothing bound")
+check(bound("SHIFT-BUTTON3") == bar.holds and ns.Bars.Keys() == bar.keys,
+	"the list was cleared and the bar did not get its key back")
 
 --------------------------------------------------------------------------
 -- The page

@@ -23,12 +23,10 @@ ns.Hover = Hover
 -- owns the button and the keys, Sheet.lua draws the list on screen, and neither
 -- of them decides anything.
 --
--- The filter is a second button name rather than a macro conditional, and the
--- whole of why is beside WHO below. A conditional needs macro text, macro text
--- set by insecure code and run off a keypress is what the secure system exists
--- to refuse, and `harmbutton` says the same thing in a name. The conditional is
--- still written here, for `/wk hover show` and for the debug log to ask the
--- client's own parser about, and nothing presses it.
+-- The filter is a macro conditional and the whole macro is built here, because
+-- it is the whole of what a binding means. Cast.lua puts it on the button as
+-- macro text, the way Charge/Icon.lua has always put its own, and the argument
+-- for that being text and not attributes is in Cast.lua's header.
 --------------------------------------------------------------------------
 
 -- Twelve, which is a full action bar's worth of keys and more than anybody
@@ -49,20 +47,16 @@ Hover.MAX = MAX
 -- sorts by, so enemy first: this addon's own class is a warrior and the enemy
 -- binding is the one that gets made first.
 --
--- `remap` is how the filter is said to a secure button, and it is not a
--- conditional. There is no attribute that means "only when it is an enemy". What
--- there is instead is a name: `harmbutton` tells the client to send the click to
--- a different button name when the unit under the cursor can be attacked, and the
--- action is written under that second name only. A press on a friend never finds
--- an action at all, because the name it arrives under carries nothing.
---
--- `clause` is the same filter written as a macro conditional. Nothing presses it
--- any more; it is what the debug log asks the client's own parser about, so a
--- press that casts nothing can say whether the thing under the cursor passed.
+-- `clause` is the filter as the conditional the press is made under, and
+-- `unless` is its negation, one clause per term, which is what sends the press
+-- through to whatever the key did before when the thing under the cursor is
+-- not `label`. Written out rather than derived, because the negation of two
+-- terms is two clauses and deriving that from a string is a parser for three
+-- rows.
 Hover.WHO = {
-	{ id = "enemy",  label = "an enemy",   clause = "harm,nodead",   tone = "loss", remap = "harmbutton" },
-	{ id = "friend", label = "a friend",   clause = "help,nodead",   tone = "tick", remap = "helpbutton" },
-	{ id = "any",    label = "anything",   clause = "exists,nodead", tone = "dim" },
+	{ id = "enemy",  label = "an enemy",   clause = "harm,nodead",   unless = { "noharm", "dead" },   tone = "loss" },
+	{ id = "friend", label = "a friend",   clause = "help,nodead",   unless = { "nohelp", "dead" },   tone = "tick" },
+	{ id = "any",    label = "anything",   clause = "exists,nodead", unless = { "noexists", "dead" }, tone = "dim" },
 }
 
 -- The two the binding system must never lose, refused here for the reason
@@ -208,7 +202,23 @@ end
 -- applied is a key that does nothing until the next login.
 function Hover.Changed()
 	ns.HoverCast.Apply()
+	-- A key this list gives back is the bar's again, and a key it takes is one
+	-- the bar has to stop binding and keep drawing. The bars read the binding
+	-- set for both, so they are told rather than left to UPDATE_BINDINGS,
+	-- because nothing installed here proves that dropping an override fires it.
+	ns.Bars.ApplyBindings()
 	ns.HoverSheet.Rebuild()
+end
+
+-- Whether a press of this key is this part's, which is what Buttons/Bars.lua
+-- asks before it binds one. A key held here still presses the square it was on,
+-- through the second line of the macro, so the bar draws it and does not bind
+-- it: two overrides on one key is whichever was set last.
+function Hover.Holds(key)
+	if not (ns.db and ns.db.hover) or type(key) ~= "string" or BARE[key] then
+		return false
+	end
+	return Hover.Owner(key) ~= nil
 end
 
 -- Why a key cannot be written, or nil where it can. `mine` is the row already
@@ -347,31 +357,43 @@ end
 -- What one binding casts
 --
 -- Built here rather than in Cast.lua, because it is the whole of what a binding
--- means and none of it is about a button or a key.
+-- means and none of it is about a button or a key. Cast.lua puts the text on
+-- the button and `/wk hover show` reads it back off.
 --
--- The fallback clause is the same conditional with the `@mouseover` taken off,
--- which tests the target you already have. Off by default: a key that quietly
+-- Two lines. The spell on the thing under the cursor when the filter passes,
+-- and when it does not, a click on whatever the key was pressing before this
+-- binding was put on top of it: the square on the bar, for the key a heal is
+-- already on. That is what makes one key a heal on the party member under the
+-- cursor and a heal on yourself with nothing there, and it is the whole of what
+-- a key on both a bar and this list means.
+--
+-- `beneath` is that button, or nil for a key that pressed nothing, in which
+-- case the press with nothing under the cursor does nothing. A key that quietly
 -- hits your target when you meant to hover something is worse than a key that
 -- does nothing, and the sheet has no way to draw the difference.
+--
+-- `@mouseover` once. Charge/Icon.lua has run that spelling on this client since
+-- it shipped, so the `target=mouseover` this used to be doubled with was a
+-- hedge against a build this addon does not run on.
 --------------------------------------------------------------------------
 
--- Nothing presses this. It is the binding said in the one line a player already
--- knows how to read, for `/wk hover show`, and it is what the debug log's
--- conditional probe is built out of. What the button actually carries is a set of
--- attributes and Cast.lua is where they are named.
-function Hover.Macro(bind)
+function Hover.Macro(bind, beneath)
 	local who = Hover.Who(bind.who)
 	local verb = bind.kind == "item" and "/use" or "/cast"
-	-- The mouseover said twice, shorthand then long form. They mean the same
-	-- thing and a client carries one or both; a clause built on a token this
-	-- build does not have never matches and never says so, and the second clause
-	-- costs nothing on a client where the first one already matched.
-	--
-	-- `nodead` stays on both. Dropping it would make a key heal a corpse on the
-	-- clients that do carry it, which is a worse trade than a key that needs one
-	-- more clause.
-	local clause = ("[@mouseover,%s][target=mouseover,%s]"):format(who.clause, who.clause)
-	return ("%s %s %s"):format(verb, clause, bind.name)
+	local cast = ("%s [@mouseover,%s] %s"):format(verb, who.clause, bind.name)
+	if not beneath then
+		return cast
+	end
+	local clauses = {}
+	for index, term in ipairs(who.unless) do
+		clauses[index] = ("[@mouseover,%s]"):format(term)
+	end
+	-- `true` on the end is the edge. A click delivered on the edge a button does
+	-- not fire on is a click the button throws away, and which edge that is is
+	-- the button's to say; Buttons/Bars.lua read it off the button.
+	local click = ("/click %s %s %s%s"):format(table.concat(clauses), beneath.name,
+		beneath.button or "LeftButton", beneath.down and " true" or "")
+	return cast .. "\n" .. click
 end
 
 --------------------------------------------------------------------------
@@ -421,10 +443,10 @@ local function Matches(who, seen)
 end
 
 -- The filter's two spellings, one per line, for the debug log to ask the client
--- about separately. Hover.Macro joins them into the single line a player reads;
--- the log wants them apart, because a build that carries `@mouseover` and not
--- `target=mouseover` answers yes to one and no to the other, and one line each
--- is what shows which of the two this client is on.
+-- about separately. Hover.Macro presses the first; the log asks both, because a
+-- build that carries `@mouseover` and not `target=mouseover` answers yes to one
+-- and no to the other, and one line each is what shows which of the two this
+-- client is on.
 function Hover.Forms(bind)
 	local who = Hover.Who(bind.who)
 	return {

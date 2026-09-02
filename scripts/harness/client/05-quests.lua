@@ -584,9 +584,23 @@ _G.SetOverrideBindingClick = function(owner, _, key, name, suffix)
 	overrides[key] = { owner = owner, action = ("CLICK %s:%s"):format(name, suffix) }
 	return true
 end
+-- Asked with checkOverride the layer answers first; asked without it, the set
+-- underneath answers whatever override is on the key. That second reading is
+-- how a part that has taken a key finds out what the key was pressing, and
+-- a stub that answered "" there would make every such key press nothing.
 _G.GetBindingAction = function(key, checkOverride)
 	local held = checkOverride and overrides[key]
-	return held and held.action or ""
+	if held then
+		return held.action
+	end
+	for command, keys in pairs(bindings) do
+		for _, bound in ipairs(keys) do
+			if bound == key then
+				return command
+			end
+		end
+	end
+	return ""
 end
 
 -- The client building its binding set again, which is what happens at Okay and

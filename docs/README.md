@@ -2176,15 +2176,18 @@ one, because casting is protected and marking is not. A secure button looks its
 action up under `<modifiers>type<click>`, so twelve bindings share one button and
 the click name is the whole of what tells them apart.
 
-The attributes are written as `*type1` and `*macrotext1`, and the `*` is the part
-this shipped without. The modifier prefix is read off the keyboard at the moment
-of the press, so a key on ALT-BUTTON3 arrives asking for `alt-type1`, and every
-key worth putting a mouseover spell on carries a modifier. `*` is the wildcard
-the client falls back to when the modified name holds nothing. Written as
-`type-1` the attributes were under a name nothing ever asks for, the override
+The attributes are written as `*type-wk1` and `*macrotext-wk1`, and both halves
+of the name shipped wrong once. The `*` is the modifier prefix. It is read off
+the keyboard at the moment of the press, so a key on ALT-BUTTON3 arrives asking
+for `alt-type...`, every key worth putting a mouseover spell on carries a
+modifier, and `*` is the wildcard the client falls back to when the modified name
+holds nothing. The dash is the click name: the client answers only the five real
+mouse buttons with a bare number, and every other click name gets a dash in
+front, so a click called `wk1` looks for `-wk1`. Written as `type-1` and then as
+`*type1` the attributes were under a name nothing ever asks for, the override
 bound, `GetBindingAction` read it back correctly, `/wk hover show` printed the
 right macro, and not one key cast anything. `UnitFrames/Group.lua` writes its
-click actions the same way and always did.
+click actions with the wildcard and always did.
 
 The filter is a macro conditional and not a unit attribute, because there is no
 attribute that means "only when it is an enemy". An enemy key carries
@@ -2220,10 +2223,19 @@ the key on the left, the spell's own icon and name beside it, red for an enemy
 key, green for a friend key and grey for either. It is drawn on a change and
 never on a ticker, because what is bound changes when you bind something.
 
-`hover target on` adds the same conditional with the `@mouseover` taken off, so a
-key with nothing under the cursor hits your target instead. It ships off: a key
-that quietly hits your target when you meant to hover something is worse than a
-key that does nothing, and the list on screen has no way to draw the difference.
+A key that is also on a bar keeps the bar. The macro's second line is a
+`/click` on the square the key was pressing, under the filter's negation, so a
+heal on a square and the same key on this list is one key that heals the party
+member under the cursor and heals you with nothing there. `Buttons/Bars.lua`
+answers which square from the binding set under the override, stops binding a
+key this list holds and keeps drawing it, and Blizzard's own button answers when
+the clone is off. That second line is why the button carries macro text and not
+`unit = "mouseover"` with a spell attribute: a secure button whose unit does not
+exist drops the press before it reads anything else, so no key with a unit on it
+can fall through to anything. A key on no bar gets one line, and a press with
+nothing under the cursor does nothing: a key that quietly hits your target when
+you meant to hover something is worse than a key that does nothing, and the list
+on screen has no way to draw the difference.
 
 **Charge.** Three abilities, one button. Charge.lua holds the state,
 ChargeIcon.lua draws the HUD icon and is the button that casts, ChargeMarker.lua

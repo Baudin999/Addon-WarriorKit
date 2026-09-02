@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### One key on the bar and under the cursor
+
+A heal on a square and the same key on the mouseover list was a key that
+healed the party member under the cursor and did nothing with nothing there,
+because the hover binding sat on top of the bar's and the bar never got the
+press. The hover button now carries the bar as its second line: the spell on
+the mouseover when the filter passes, and a click on the square the key was
+pressing when it does not, so the key heals the person under the cursor or
+heals you. The bar stops binding a key the list holds, keeps drawing it, and
+gets it back the moment the binding comes off. Blizzard's own button answers
+when the clone is off, and a key on no bar still does nothing with nothing
+under the cursor.
+
+The button carries macro text again rather than a spell and a unit. A secure
+button whose unit does not exist drops the press before it reads anything
+else, so no key with `unit = mouseover` on it could ever fall through to the
+bar, and the belief that text set from Lua is refused was wrong: the charge
+key has always been text and has always cast. What would not cast was the
+debug log's PreClick, which is gone.
+
 ### One row per spell, the ranks behind a button
 
 The client's spell book lists every rank of every spell as its own entry,

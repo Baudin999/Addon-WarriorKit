@@ -243,7 +243,7 @@ local function Binding(ui)
 	ui.Lede("A key casts on whatever is under the cursor, filtered by whether it is a friend or an enemy.")
 
 	Row(ui, Draft())
-	ui.Hint("Drag a spell onto the square, press the key you want it on, and click the button to say who it lands on. An item works too.")
+	ui.Hint("Drag a spell onto the square, press the key you want it on, and click the button to say who it lands on. A key that is also on a bar still presses the bar when nothing under the cursor fits.")
 
 	for index = 1, ns.Hover.MAX do
 		Row(ui, Saved(index))

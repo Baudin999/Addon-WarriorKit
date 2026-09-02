@@ -159,15 +159,93 @@ end
 -- Both keys the binding set holds for one command. Two, because the client
 -- allows a primary and a secondary and losing the secondary is losing a key the
 -- player set on purpose.
-local function KeysFor(command, index)
+local function KeysFor(command)
 	if type(GetBindingKey) ~= "function" then
 		return nil
 	end
-	local ok, first, second = pcall(GetBindingKey, command:format(index))
+	local ok, first, second = pcall(GetBindingKey, command)
 	if not ok then
 		return nil
 	end
 	return first, second
+end
+
+-- What the binding set holds for a key, under every override on it. Read this
+-- way round rather than GetBindingKey walked for the key, because a key with
+-- an override on it stops answering to its command from that side, and every
+-- key this is asked about has one.
+local function Under(key)
+	if type(GetBindingAction) ~= "function" or type(key) ~= "string" or key == "" then
+		return nil
+	end
+	local ok, action = pcall(GetBindingAction, key)
+	if ok and type(action) == "string" and action ~= "" then
+		return action
+	end
+	return nil
+end
+
+-- The key the mouseover part holds over this command, or nil. Two things follow
+-- from one being there. The bar does not bind it, because two overrides on one
+-- key is whichever was set last, and that part's button presses the square
+-- itself when nothing under the cursor fits. And the square still draws it,
+-- because the key still presses the square.
+local function Lent(command)
+	for _, bind in ipairs(ns.Hover.List()) do
+		if ns.Hover.Holds(bind.key) and Under(bind.key) == command then
+			return bind.key
+		end
+	end
+	return nil
+end
+
+-- Which edge a button fires on, in the shape `/click` takes it. The attribute
+-- where the button has one, the player's setting where it does not, which is
+-- the client's own order of asking.
+local function Edge(frame)
+	local set = frame and frame.GetAttribute and frame:GetAttribute("useOnKeyDown")
+	if set == nil then
+		set = type(GetCVarBool) == "function" and GetCVarBool("ActionButtonUseKeyDown")
+	end
+	return set and true or false
+end
+
+-- What a key presses under every override, for the mouseover part to put on
+-- the second line of its macro: the button's name, the mouse button to press
+-- it with, and whether it fires on the down edge. Nil for a key that presses
+-- nothing.
+--
+-- A standing square first, because that is what the key was pressing before
+-- the part took it and the square carries the slot's paging. Then the client's
+-- own button for the command, for a bar this file has not cloned or for the
+-- clone being off, read off the plan so the two names are written down once.
+function Bars.Beneath(key)
+	local action = Under(key)
+	if not action then
+		return nil
+	end
+	for index = 1, live and #order or 0 do
+		local entry = order[index]
+		for slot = 1, PER_BAR do
+			if entry.def.command:format(slot) == action then
+				local w = entry.buttons[slot]
+				return w:GetName(), "LeftButton", Edge(w)
+			end
+		end
+	end
+	for index = 1, #Which.PLAN do
+		local def = Which.PLAN[index]
+		local slot = action:match("^" .. def.command:gsub("%%d", "(%%d+)") .. "$")
+		if slot then
+			local name = def.buttons:format(tonumber(slot))
+			return name, "LeftButton", Edge(_G[name])
+		end
+	end
+	local name, mouse = action:match("^CLICK ([^:]+):(.+)$")
+	if name then
+		return name, mouse, Edge(_G[name])
+	end
+	return nil
 end
 
 --------------------------------------------------------------------------
@@ -426,16 +504,20 @@ function Bars.ApplyBindings()
 		local entry = order[index]
 		for slot = 1, PER_BAR do
 			local w = entry.buttons[slot]
-			local first, second = KeysFor(entry.def.command, slot)
-			if ClaimKey(entry.header, first, w:GetName()) then
+			local command = entry.def.command:format(slot)
+			local first, second = KeysFor(command)
+			local lent = Lent(command)
+			if first ~= lent and ClaimKey(entry.header, first, w:GetName()) then
 				claimed = claimed + 1
 			end
-			if ClaimKey(entry.header, second, w:GetName()) then
+			if second ~= lent and ClaimKey(entry.header, second, w:GetName()) then
 				claimed = claimed + 1
 			end
 			-- The primary key is the one drawn, because two strings in a seven
-			-- pixel corner is one string nobody can read.
-			Ability.Bind(w, Bars.Short(first))
+			-- pixel corner is one string nobody can read. A key lent to the
+			-- mouseover part is drawn when it is the only one, because it
+			-- still presses this square.
+			Ability.Bind(w, Bars.Short(first or lent))
 		end
 	end
 
@@ -675,6 +757,11 @@ function Bars.Apply()
 		complete = false
 	end
 	Bars.Update()
+	-- What a key presses underneath has just changed, from a square to
+	-- Blizzard's button or back, and Hover/Cast.lua wrote the old answer into
+	-- its macro. Every part that takes a key is run again rather than that one
+	-- named, because the question is Core's and so is the list of who asks it.
+	ns.Retake()
 	return complete
 end
 

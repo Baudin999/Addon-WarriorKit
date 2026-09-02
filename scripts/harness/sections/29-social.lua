@@ -600,10 +600,10 @@ do
 	local hidBlizz = ns.db.hideBlizzChat
 	ns.db.hideBlizzChat = true
 	Window.Apply()
-	check(_G.GetBindingAction("ENTER", true) == "",
+	check(_G.GetBindingAction("ENTER", true) == "OPENCHAT",
 		("the window took the enter key back and bound it to %q")
 			:format(_G.GetBindingAction("ENTER", true)))
-	check(_G.GetBindingAction("/", true) == "",
+	check(_G.GetBindingAction("/", true) == "OPENCHATSLASH",
 		("the window took the slash key and bound it to %q")
 			:format(_G.GetBindingAction("/", true)))
 	check(_G.WarriorKitChatEnterButton == nil,

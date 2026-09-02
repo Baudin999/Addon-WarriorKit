@@ -323,7 +323,7 @@ do
 	check(_G.SpellBookFrame:GetParent() ~= _G.WarriorKitAttic, "unticking the switch left the frame in the attic")
 	_G.ToggleSpellBook("spell")
 	check(#H.spellbookKey.books == presses + 1, "with the switch off the P key did not reach Blizzard's toggle")
-	check(GetBindingAction("P", true) == "", "with the switch off the P key is still on the secure button")
+	check(GetBindingAction("P", true) == "TOGGLESPELLBOOK", "with the switch off the P key is still on the secure button")
 	_G.SpellBookFrame:Hide()
 	ns.db.hideBlizzSpellbook = true
 	ns.BlizzHide.Apply()
