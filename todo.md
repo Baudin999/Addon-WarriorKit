@@ -40,7 +40,7 @@ written longer than they are here.
     `da4a01a`
 23. A ceiling only moves down, in `scripts/ratchet.lua`. `271f8e6`
 28. One Questie probe, in Core, and a gate that keeps it one. `07c4401`
-18. One ticker, and a HOT list derived from it rather than typed. PENDING
+18. One ticker, and a HOT list walked rather than typed. `903350d`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
