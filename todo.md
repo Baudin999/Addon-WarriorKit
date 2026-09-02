@@ -50,7 +50,7 @@ in the README's untested list, and the full text of each item is this file at
 
 23. A ceiling only moves down, in `scripts/ratchet.lua`. It reads the committed
     copy of `shape.lua` and of `check.sh` against the copies on disk and fails
-    on any of the twenty three ceilings that went up.
+    on any of the twenty three ceilings that went up. `271f8e6`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
