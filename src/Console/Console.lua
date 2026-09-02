@@ -43,6 +43,9 @@ print("GetMaxLevelForPlayerExpansion", GetMaxLevelForPlayerExpansion and GetMaxL
 	-- visible frame that sits over the rail's centre at its level or above,
 	-- which is the list that says what is drawn on top of it.
 	{ name = "rail", label = "the experience rail's frame", code = [[
+local pw, ph = GetPhysicalScreenSize and GetPhysicalScreenSize()
+print("screen", ("%.0f x %.0f"):format(GetScreenWidth(), GetScreenHeight()), "physical", pw, ph,
+	"UIParent scale", ("%.4f"):format(UIParent:GetEffectiveScale()), "bottom", UIParent:GetBottom(), "top", UIParent:GetTop())
 local f = WarriorKitProgress
 if not f then print("no frame called WarriorKitProgress") return end
 local function rect(r)

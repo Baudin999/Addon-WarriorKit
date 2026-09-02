@@ -674,6 +674,10 @@ _G.GameFontNormalSmall, _G.GameFontHighlightSmall = _G.GameFontNormal, _G.GameFo
 _G.DEFAULT_CHAT_FRAME = { AddMessage = function() end }
 
 function _G.GetPhysicalScreenSize() return 3440, state.SCREEN_H end
+-- The same screen in interface units: 768 tall whatever the panel is, which is
+-- the client's own convention, and as wide as the panel's shape makes it.
+function _G.GetScreenHeight() return 768 end
+function _G.GetScreenWidth() return 3440 * 768 / state.SCREEN_H end
 
 -- A clock that advances a fixed amount per read, so a bracketed tick measures
 -- the same figure every run and an assertion on it means something. The real
