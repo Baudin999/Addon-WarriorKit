@@ -11,8 +11,8 @@ hash is the last of them. What was wrong and what fixed it is in
 `docs/CHANGELOG.md` and `docs/README.md`, what is still unconfirmed in game is
 in the README's untested list, and the full text of each item is this file at
 `e7ef4ca` for 1 to 6, 8, 11 and 12, at `ca59a77` for 7, 9 and 13, at
-`44c79ef` for 15 and at `a7772af` for 16. Items 14, 19 and 23 were never
-written longer than they are here.
+`44c79ef` for 15, at `a7772af` for 16 and at `c37c149` for 19. Items 14 and 23
+were never written longer than they are here.
 
 1. Weapon swing timer. `8be9a43`
 2. Deep Wounds missing from the enemy bar debuffs. `05e40ec`
@@ -32,41 +32,23 @@ written longer than they are here.
 14. check.sh derives its class shapes from `Class/*.lua` rather than naming
     them. `371d82d`
 15. A placeable HUD frame, named at last. `80528bc`
-16. `ns.RegisterUnitEvent` in Core, where the other thirty shims live. Six
-    files deleted their own two-branch registration. `3df1df1`
+16. `ns.RegisterUnitEvent` in Core, where the other thirty shims live.
+    `3df1df1`
 19. `UI.Window` re-zooms its own frame, and every screen sizes on its own.
-
-    The item asked for two lines to move out of four windows and into
-    `UI.Window`. By the time it was worked it was ten windows, because six new
-    ones landed while it sat open and every one of them copied the pair, which
-    is the item predicting its own cost and being right.
-
-    It came out larger than the item asked because the shape underneath was
-    wrong rather than repeated. One number sized every window, so the duplicated
-    lines were four windows agreeing about a fact none of them owned.
-    `UI.Window` takes a getter, each screen carries its own key, and the twenty
-    three of them are declared through `ns.Register` and drawn off `ns.Zooms()`.
-    Item 17's argument applies to this list too: a registry entry retires a
-    hand-written page, and the page was never the thing worth writing.
     `da4a01a`
-
-23. A ceiling only moves down, in `scripts/ratchet.lua`. It reads the committed
-    copy of `shape.lua` and of `check.sh` against the copies on disk and fails
-    on any of the twenty three ceilings that went up. `271f8e6`
+23. A ceiling only moves down, in `scripts/ratchet.lua`. `271f8e6`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
 
-Item 23 was never in the Open list. It came out of reading the list against the
-code on 2026-09-02: every item here is a rule the addon believes in and does not
-enforce, and the allow-lists that hold those rules could be edited upward by the
-change they blocked. `59b36ce` had already done it once. The list numbers it 23
-because it is the twenty-third thing worked, not because a review found it.
+Item 23 was never in the Open list. It came out of reading this file against the
+code on 2026-09-02, and its number is where it was worked rather than where a
+review found it.
 
 ## Open
 
-Items 16 to 22 came out of an architecture review on 2026-08-29. Items 19 and
-16 landed on 2026-09-02 and are above. Every one is a duplication or a rule the
+Items 16 to 22 came out of an architecture review on 2026-08-29. Items 16 and
+19 landed on 2026-09-02 and are above, with 23. Every one is a duplication or a rule the
 addon already believes in and does not enforce. None is a bug: the addon draws
 the right thing today. They are the shapes that make the next change cost more
 than it should, ordered so the one that drags the most out with it goes first.
