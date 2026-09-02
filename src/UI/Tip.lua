@@ -234,7 +234,31 @@ local function FromSources(subject, want, band)
 end
 
 -- The client's own lines for the subject, or nil where there are none.
+--
+-- An item subject that also names the bag and slot it is lying in is read from
+-- there rather than from its link, and it is the same item either way. The
+-- difference is what the client can see: handed a link it knows only what the
+-- item does to whoever picks it up, so a soulbound sword in your own bag comes
+-- back saying "Binds when picked up" forever. Handed the slot it is in, it says
+-- "Soulbound", because from there the binding is a fact it can check.
+--
+-- The kind stays `item`, which is the point of doing it here and not with a
+-- kind of its own. Every source registered for items -- the vendor price, the
+-- auction value -- says the same thing about a stack in your bags as it does
+-- about the same stack on a loot row, and a `bag` kind would have quietly cost
+-- the bags all of them.
+--
+-- The link is the fallback and not a lesser answer. A square whose bag and slot
+-- have gone stale between the hover and the read, and a client with no
+-- SetBagItem on it, both land there and get the text every other item hover in
+-- the addon gets.
 local function Head(subject)
+	if subject.kind == "item" and subject.bag and subject.slot then
+		local lines = UI.Scan.Read("bag", subject.bag, subject.slot)
+		if lines then
+			return lines
+		end
+	end
 	local read = READS[subject.kind]
 	if not read then
 		return nil

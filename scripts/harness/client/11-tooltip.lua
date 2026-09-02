@@ -41,8 +41,8 @@ local child = H.child
 -- One entry is an array of lines and one line is `{ left, right, color }`,
 -- where color is three numbers and is left out on every line whose colour does
 -- not carry information.
-local tooltips = { item = {}, action = {}, spell = {}, buff = {}, debuff = {},
-	inventory = {}, unit = {} }
+local tooltips = { item = {}, bag = {}, action = {}, spell = {}, buff = {},
+	debuff = {}, inventory = {}, unit = {} }
 H.tooltips = tooltips
 
 local function Pair(unit, at)
@@ -107,6 +107,12 @@ local function Dress(frame)
 		return Fill(self, tooltips.item[link])
 	end
 
+	-- Keyed by bag and slot. The same item as the link setter above answers
+	-- about, asked from where it is lying, which is the only way the client
+	-- will say "Soulbound" rather than "Binds when picked up". A section seeds
+	-- the two entries separately on purpose: the whole claim is that the bags
+	-- get the second text and a loot row gets the first.
+	frame.SetBagItem = Setter("bag", Pair)
 	frame.SetAction = Setter("action")
 	-- Keyed by the spell id. The setter Wrath added and the older client has
 	-- not, which is why the nag row asks with it and takes nil where it is

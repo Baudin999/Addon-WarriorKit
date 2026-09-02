@@ -148,11 +148,17 @@ local function Subject(button)
 	if not button.link then
 		return nil
 	end
+	-- The bag and the slot travel with the link, and they are what makes the
+	-- binding line true. A link on its own says "Binds when picked up" about
+	-- something you picked up months ago; the slot it is lying in says
+	-- "Soulbound". See Head in UI/Tip.lua.
 	return {
 		kind = "item",
 		link = button.link,
 		title = button.name,
 		count = button.count,
+		bag = button.bag,
+		slot = button.slot,
 	}
 end
 
@@ -300,6 +306,7 @@ local function Paint(button, entry, selling)
 	local refused = selling and entry.link ~= nil and not sellable
 
 	button.link, button.name, button.count = entry.link, entry.name, entry.count
+	button.bag, button.slot = entry.bag, entry.slot
 	UI.SlotPaint(button, entry.icon, not free and entry.count or nil,
 		entry.quality, refused)
 	button.free:SetText(free and tostring(entry.count or 1) or "")

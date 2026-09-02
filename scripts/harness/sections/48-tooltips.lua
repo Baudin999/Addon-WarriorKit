@@ -318,6 +318,45 @@ do
 	end
 	check(worth, "an item hovered outside the loot feed says nothing about what it is worth")
 
+	-- The same item asked about from the slot it is lying in.
+	--
+	-- A link says what the item does to whoever picks it up, so it warns about
+	-- a binding that already happened and calls a sword you have carried for
+	-- months "Binds when picked up". The bags know the slot, and from there the
+	-- client says "Soulbound". Both texts are seeded so the check is that the
+	-- right one won rather than that only one existed.
+	H.tooltips.bag[H.tooltipKey(0, 3)] = {
+		{ "Aegis", nil, { 0, 1, 0 } },
+		{ "Soulbound" },
+		{ "Requires level 60", "Shield" },
+	}
+	Tip.Open(owner, { kind = "item", link = link, bag = 0, slot = 3 })
+	said = drawn()
+	check(said[2] == "Soulbound",
+		"an item read from its bag slot still warns about picking it up: " .. tostring(said[2]))
+
+	-- The vendor line is still on it. The kind stayed `item`, so every source
+	-- registered for items says about a stack in your bags what it says about
+	-- the same stack on a loot row.
+	Tip.Open(owner, { kind = "item", link = link, bag = 0, slot = 3, price = 4500, count = 3 })
+	said = drawn()
+	worth = false
+	for index = 1, #said do
+		if said[index] == "Vendor" then
+			worth = true
+		end
+	end
+	check(worth, "an item hovered in the bags lost the sources every other item hover gets")
+
+	-- A slot the client has nothing for falls back to the link rather than to
+	-- the caller's title, which is what a square whose contents moved between
+	-- the hover and the read lands on.
+	Tip.Open(owner, { kind = "item", link = link, bag = 0, slot = 4, title = "not this" })
+	check(Box.Text(1) == "Aegis",
+		"a stale bag slot did not fall back to the link: " .. tostring(Box.Text(1)))
+
+	H.tooltips.bag[H.tooltipKey(0, 3)] = nil
+
 	-- A link somebody typed by hand. The client raises on one rather than
 	-- coming back empty, which is why every setter in UI/Scan.lua is pcalled,
 	-- and the caller's own title has to stand where that happens.

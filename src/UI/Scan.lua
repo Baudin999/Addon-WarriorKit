@@ -52,6 +52,17 @@ local NAME = "WarriorKitTooltipScan"
 -- enchant square on the buff row, because a temporary enchant answers to the
 -- hand it is on rather than to an aura index.
 --
+-- `bag` is a bag number and a slot, and it is the same item as `item` asked
+-- about from where it is lying rather than by name. A link carries no history:
+-- the client reading one has no way to know whose bag it came out of, so it
+-- says what the item does to whoever picks it up and writes "Binds when picked
+-- up" over a sword that bound to you in a raid three months ago. Asked about
+-- the slot it is in, the same client writes "Soulbound", because now it can see
+-- that the binding already happened. Only a caller that knows the slot can ask
+-- this way, which is the bags and nothing else: a loot row, a merchant shelf
+-- and a link in chat are all items nobody has picked up yet, and on those the
+-- warning is the truth.
+--
 -- `unit` is a token: player, target, mouseover, nameplate3. It is the only kind
 -- here whose subject is not something this addon drew, and the one where the
 -- client's text is the whole answer rather than a supplement to it. What the
@@ -70,6 +81,7 @@ local NAME = "WarriorKitTooltipScan"
 -- knew on its own.
 local KINDS = {
 	item      = { method = "SetHyperlink",     args = 1 },
+	bag       = { method = "SetBagItem",       args = 2 },
 	action    = { method = "SetAction",        args = 1 },
 	spell     = { method = "SetSpellByID",     args = 1 },
 	buff      = { method = "SetUnitBuff",      args = 2 },
