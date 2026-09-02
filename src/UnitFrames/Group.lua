@@ -1113,17 +1113,7 @@ end
 -- Charge/Icon.lua and Swing/Gauges.lua both carry a note about.
 --------------------------------------------------------------------------
 
-local elapsed = 0
 
-local function OnUpdate(_, delta)
-	elapsed = elapsed + delta
-	if elapsed >= POLL then
-		elapsed = 0
-		ns.Perf.Start("party")
-		Group.Update()
-		ns.Perf.Stop("party")
-	end
-end
 
 local function Deferring()
 	for index = 1, #lists do
@@ -1154,7 +1144,7 @@ events:SetScript("OnEvent", function(_, event)
 		end
 		if any then
 			Group.Apply()
-			events:SetScript("OnUpdate", OnUpdate)
+			ns.UI.Ticker(events, POLL, "party", Group.Update)
 		end
 		return
 	end

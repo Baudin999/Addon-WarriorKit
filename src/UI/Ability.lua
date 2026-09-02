@@ -385,6 +385,7 @@ end
 -- UI.Pixel and UI.Unit, stated in UI/Pixel.lua.
 --
 -- Called on a settings change and on a rescale, never on a tick.
+-- cold: a settings change and a rescale, never a tick. See above.
 function Ability.Size(w, side)
 	local edge = UI.Pixel(w)
 

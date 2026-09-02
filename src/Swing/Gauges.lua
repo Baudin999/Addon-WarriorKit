@@ -346,11 +346,6 @@ local events = CreateFrame("Frame")
 -- No accumulator, because there is no rate to keep. See the header: this is the
 -- one thing in the addon that draws motion, and motion is drawn on the frame
 -- the screen is drawn on or it is drawn in steps.
-local function OnUpdate()
-	ns.Perf.Start("swing")
-	SwingGauges.Update()
-	ns.Perf.Stop("swing")
-end
 
 events:RegisterEvent("PLAYER_LOGIN")
 -- A weapon swap changes how many bars there are and how long each of them is,
@@ -392,7 +387,7 @@ events:SetScript("OnEvent", function(_, event, token)
 		-- it would stop the moment the bars hid and never come back, which is
 		-- the trap Charge/Icon.lua already carries a note about. Update's first
 		-- line is what makes a hidden pair of bars free anyway.
-		events:SetScript("OnUpdate", OnUpdate)
+		ns.UI.Ticker(events, 0, "swing", SwingGauges.Update)
 		return
 	end
 

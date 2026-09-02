@@ -69,6 +69,7 @@ local playerGUID
 -- comes into being at some unpredictable moment mid-session is a frame no test
 -- can hold. It carries no script until there is something to send.
 local sender = CreateFrame("Frame")
+local ticker -- the queue's own tick, kept so an empty queue can stop it
 
 -- The clock time before which nothing in the log counts, set at every entry to
 -- the world.
@@ -124,7 +125,7 @@ local function Tick()
 		end
 	end
 	if #waiting == 0 then
-		sender:SetScript("OnUpdate", nil)
+		ticker:Stop()
 	end
 end
 
@@ -132,7 +133,11 @@ local function Queue(who)
 	waiting[#waiting + 1] = who
 	waiting[#waiting + 1] = GetTime() + MIN_WAIT
 		+ math.random() * (MAX_WAIT - MIN_WAIT)
-	sender:SetScript("OnUpdate", Tick)
+	if ticker then
+		ticker:Start()
+	else
+		ticker = ns.UI.Ticker(sender, 0, "thanks", Tick)
+	end
 end
 
 local function OnLog()
@@ -241,7 +246,9 @@ events:SetScript("OnEvent", function()
 	for index = #waiting, 1, -1 do
 		waiting[index] = nil
 	end
-	sender:SetScript("OnUpdate", nil)
+	if ticker then
+		ticker:Stop()
+	end
 	settled = GetTime() + SETTLE
 
 	Thanks.Apply()

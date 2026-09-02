@@ -35,7 +35,7 @@ local function Detach()
 	end
 	frame:Hide()
 	frame:ClearAllPoints()
-	frame:SetParent(UIParent)
+	frame:SetParent(UIParent) -- unguarded: the two returns above leave only a marker that is up
 	attachedPlate, attachedAnchor = nil, nil
 end
 
@@ -175,7 +175,6 @@ function ChargeMarker.ApplyLock()
 end
 
 local events = CreateFrame("Frame")
-local elapsed = 0
 
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -198,13 +197,5 @@ events:SetScript("OnEvent", function(_, event)
 	ChargeMarker.Update()
 	-- The ticker hangs off this frame, which is never hidden. On the marker
 	-- itself it would stop the moment the marker hid and never come back.
-	events:SetScript("OnUpdate", function(_, delta)
-		elapsed = elapsed + delta
-		if elapsed >= UPDATE_INTERVAL then
-			elapsed = 0
-			ns.Perf.Start("marker")
-			ChargeMarker.Update()
-			ns.Perf.Stop("marker")
-		end
-	end)
+	ns.UI.Ticker(events, UPDATE_INTERVAL, "marker", ChargeMarker.Update)
 end)

@@ -241,6 +241,7 @@ end
 -- back into their layout node. A caller that kept passing `side` for the
 -- height would lay the rows one number closer together than they are drawn and
 -- the strip over each square would land on the row above it.
+-- cold: a settings change and a rescale, never a tick, as Ability.Size is.
 function Aura.Size(w, side, px, timerCeiling, countCeiling)
 	local timerSize = math.max(TIMER_FLOOR,
 		math.min(timerCeiling, math.floor(side * TIMER_SHARE)))

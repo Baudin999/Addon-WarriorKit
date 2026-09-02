@@ -37,7 +37,8 @@ local MAX_PASSES = 25
 
 local frame
 local running = false
-local elapsed, passes, sold, opening = 0, 0, 0, 0
+local passes, sold, opening = 0, 0, 0
+local ticker -- the sweep's own tick, kept so a finished sale can stop it
 
 -- Whether the merchant window is still up. Asked before anything is sold,
 -- because with it closed the same call uses the item instead.
@@ -80,12 +81,7 @@ local function Sweep()
 	return found, unknown
 end
 
-local function Tick(_, delta)
-	elapsed = elapsed + delta
-	if elapsed < INTERVAL then
-		return
-	end
-	elapsed = 0
+local function Tick()
 	passes = passes + 1
 
 	local found, unknown = Sweep()
@@ -111,7 +107,9 @@ function Vendor.Stop()
 		return
 	end
 	running = false
-	frame:SetScript("OnUpdate", nil)
+	if ticker then
+		ticker:Stop()
+	end
 	frame:UnregisterEvent("UI_ERROR_MESSAGE")
 
 	local made = Earned()
@@ -126,10 +124,14 @@ local function Start()
 		return
 	end
 	running = true
-	elapsed, passes, sold = 0, 0, 0
+	passes, sold = 0, 0
 	opening = GetMoney()
 	frame:RegisterEvent("UI_ERROR_MESSAGE")
-	frame:SetScript("OnUpdate", Tick)
+	if ticker then
+		ticker:Start()
+	else
+		ticker = ns.UI.Ticker(frame, INTERVAL, "vendor", Tick)
+	end
 end
 
 -- The same sale, because something asked for it.

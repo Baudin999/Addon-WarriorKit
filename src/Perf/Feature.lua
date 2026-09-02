@@ -44,6 +44,8 @@ end
 -- Written straight onto the string, guarded on what is already there, which is
 -- the same rule every ticker in this addon follows. A settings page redrawing
 -- itself once a second is still a ticker.
+-- hot: assigned to ns.Perf.OnSample below and called back through that field by
+-- the sampler's tick, which is an edge scripts/hot.lua cannot see.
 local function Paint()
 	for index = 1, #lines do
 		local row = lines[index]

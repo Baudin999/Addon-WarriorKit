@@ -226,17 +226,12 @@ end
 
 local events = CreateFrame("Frame")
 
-local elapsed = 0
-local function OnUpdate(_, delta)
-	elapsed = elapsed + delta
-	if elapsed >= INTERVAL then
-		elapsed = 0
-		-- Off with the square. The tab is parented to the bezel, so it is
-		-- already off the screen; this is so that a hidden clock is not also a
-		-- string comparison five thousand times an evening.
-		if ns.db and ns.db.minimapSquare then
-			Clock.Update()
-		end
+-- Off with the square. The tab is parented to the bezel, so it is already off
+-- the screen; this is so that a hidden clock is not also a string comparison
+-- five thousand times an evening.
+local function Tick()
+	if ns.db and ns.db.minimapSquare then
+		Clock.Update()
 	end
 end
 
@@ -247,7 +242,7 @@ events:SetScript("OnEvent", function(_, event)
 		Clock.Apply()
 		-- The ticker lives on this frame, which is never hidden. On the tab it
 		-- would stop the moment the square went off and never start again.
-		events:SetScript("OnUpdate", OnUpdate)
+		ns.UI.Ticker(events, INTERVAL, "clock", Tick)
 	elseif frame and Format() ~= military then
 		-- CVAR_UPDATE carries every CVar the client writes. The one this file
 		-- has a stake in is the twelve hour toggle, and it changes both what the

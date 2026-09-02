@@ -839,6 +839,7 @@ local function IconRow(widget, iconSize, iconGap, width, px, timerCeiling, count
 	return icons, height
 end
 
+-- cold: builds one nameplate widget, on the tick a plate first appears.
 local function CreateWidget()
 	local widget = CreateFrame("Frame", nil, UIParent)
 	widget:EnableMouse(false) -- never steal a click from the nameplate underneath
@@ -1033,6 +1034,7 @@ end
 -- the design. On the grid that is a divide by the zoom, the frame's scale
 -- multiplies it straight back, and the bar measured 180 by 62 screen pixels at
 -- zoom 1, 2 and 3 alike. The setting had never done anything.
+-- cold: places every region of one widget, on a rescale or a settings change.
 local function LayoutWidget(widget, width, onPlate)
 	-- Measured here rather than baked into a constant, because the same widget
 	-- is laid out on a nameplate and in the list and a reparent can move the
@@ -1921,6 +1923,7 @@ end
 -- `now` means take it off the screen this frame, which is what a settings
 -- change and a mode switch want: a ghost of the old shape fading out over a
 -- rebuild is a bar drawn to a design that no longer exists.
+-- cold: takes a widget off a plate, on the tick that plate goes.
 local function Release(unit, now)
 	local widget = attached[unit]
 	if not widget then
@@ -2275,9 +2278,14 @@ end
 
 --------------------------------------------------------------------------
 
-local elapsed = 0
 local lastMode
 local events = CreateFrame("Frame")
+
+-- What moves every frame, in one named function because a ticker takes one.
+local function Moving(delta)
+	EnemyBars.Sweep()
+	Fades(delta)
+end
 
 -- The cast events, and what they are and are not for.
 --
@@ -2416,29 +2424,12 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	EnemyBars.ApplyLayout()
 	EnemyBars.Rebuild()
 
-	events:SetScript("OnUpdate", function(_, delta)
-		-- The cast fills and the arrival ramps, both unthrottled and both timed
-		-- under the same gauge: they are one answer to one question, which is
-		-- what on a bar moves faster than a fifth of a second. See
-		-- EnemyBars.Sweep.
-		ns.Perf.Start("cast")
-		EnemyBars.Sweep()
-		Fades(delta)
-		ns.Perf.Stop("cast")
-
-		elapsed = elapsed + delta
-		if elapsed >= REFRESH then
-			-- The remainder, not zero. Zeroing an accumulator throws away
-			-- however far past the interval the frame landed, which turns a
-			-- 5 Hz tick into one that fires every fourth 60 Hz frame and every
-			-- twelfth 144 Hz one, at rates of 4.6 and 4.8. That is the first
-			-- half of what made the swing bar step, and this is the same line.
-			elapsed = elapsed % REFRESH
-			ns.Perf.Start("bars")
-			EnemyBars.Update()
-			ns.Perf.Stop("bars")
-		end
-	end)
+	-- Two tickers off one frame, at two rates and under two gauges. The cast
+	-- fills and the arrival ramps run every frame, which is one answer to one
+	-- question: what on a bar moves faster than a fifth of a second. See
+	-- EnemyBars.Sweep. The list behind them is the fifth of a second.
+	ns.UI.Ticker(events, 0, "cast", Moving)
+	ns.UI.Ticker(events, REFRESH, "bars", EnemyBars.Update)
 end)
 
 -- A resolution change moves every size in this file at once, and a UI scale

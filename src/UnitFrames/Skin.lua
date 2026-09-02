@@ -489,14 +489,7 @@ end
 
 -- When a pass over the three blocks happens. What one pass does is
 -- UnitFrames/Paint.lua's; this is the clock and nothing else.
-local elapsed = 0
-local function Tick(_, delta)
-	elapsed = elapsed + delta
-	if elapsed < REFRESH then
-		return
-	end
-	elapsed = 0
-	ns.Perf.Start("skin")
+local function Tick()
 	for _, entry in ipairs(entries) do
 		-- Before the paint, because a frame that has just been put up wants
 		-- its numbers on this pass rather than a fifth of a second later, for
@@ -512,7 +505,6 @@ local function Tick(_, delta)
 		Block.Reveal(entry, EntryFor(entry.spec.under))
 		Paint.Refresh(entry)
 	end
-	ns.Perf.Stop("skin")
 end
 
 local events = CreateFrame("Frame")
@@ -541,7 +533,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		end
 		Skin.Apply()
 
-		events:SetScript("OnUpdate", Tick)
+		ns.UI.Ticker(events, REFRESH, "skin", Tick)
 		return
 	end
 

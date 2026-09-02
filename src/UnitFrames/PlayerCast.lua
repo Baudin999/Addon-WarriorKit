@@ -460,20 +460,20 @@ end
 -- first line is what makes a bar that is down free anyway.
 --------------------------------------------------------------------------
 
-local elapsed = 0
-
-local function OnUpdate(_, delta)
-	if not built then
-		return
-	end
-	ns.Perf.Start("playercast")
-	elapsed = elapsed + delta
-	if elapsed >= POLL then
-		elapsed = 0
+-- Two tickers off one frame. The poll asks the client what you are casting and
+-- is worth a fifth of a second; the sweep moves the fill that is already on
+-- screen and is worth every frame. They were one handler with a throttle inside
+-- it, which is the same two rates written by hand and timed as one number.
+local function Poll()
+	if built then
 		PlayerCast.Update(GetTime())
 	end
-	PlayerCast.Sweep(GetTime())
-	ns.Perf.Stop("playercast")
+end
+
+local function Sweep()
+	if built then
+		PlayerCast.Sweep(GetTime())
+	end
 end
 
 -- What the client says about your own casting, and what each one means here.
@@ -525,7 +525,8 @@ events:SetScript("OnEvent", function(_, event, token)
 	if event == "PLAYER_LOGIN" then
 		Build()
 		PlayerCast.Apply()
-		events:SetScript("OnUpdate", OnUpdate)
+		ns.UI.Ticker(events, POLL, "playercast", Poll)
+		ns.UI.Ticker(events, 0, "castsweep", Sweep)
 		return
 	end
 	if event == "PLAYER_ENTERING_WORLD" then

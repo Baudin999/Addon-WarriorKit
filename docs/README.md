@@ -1441,8 +1441,8 @@ caller knows before the layout runs. The two strings inside an enemy bar's gauge
 are sized by whatever the mob happens to be called, so they stay pinned to each
 other with plain anchors. A layout that had to re-run when a name changed would
 be a layout running on the tick, and `check.sh` is what keeps that boundary: no
-function in `UI/Flow.lua` is named in `HOT`, so it may allocate and the files
-that call it may not.
+function in `UI/Flow.lua` is reached by `scripts/hot.lua`'s walk, so it may
+allocate and the files that call it may not.
 
 `scripts/harness.lua` gates the engine on its own, before anything built out of
 it: nine shapes, each read back off the offsets Flow wrote. A layout bug inside
@@ -1507,23 +1507,57 @@ become new ratchets.
 
 ### Ticker discipline
 
-Eleven `OnUpdate` tickers run at once and none of them ever stops. A twelfth
-runs only while you are looking at it.
+Every tick in the addon is one call, `ns.UI.Ticker(frame, interval, name, fn)`
+in `UI/Ticker.lua`. Before it, twelve files wrote out the same accumulator by
+hand and one of the twelve got it wrong. It is one line each now, and the list
+below is the whole of what runs.
 
-    Swing/Gauges.lua      every frame   two gauges and the Slam band
+    Swing/Gauges.lua         every frame  two gauges and the Slam band
     UnitFrames/EnemyBars.lua every frame  the cast fill on every bar on screen
-    UnitFrames/PlayerCast.lua every frame  your own cast fill and its seconds
-    Charge/Marker.lua        20 Hz      it tracks the camera
-    Charge/Icon.lua          10 Hz      the HUD icon and the macro
-    Buttons/Bars.lua         10 Hz      every square on every cloned bar
-    Buffs/Nag.lua            10 Hz      the missing buff row, and its pulse
-    Cooldowns/Row.lua        10 Hz      the long-cooldown row and its countdowns
-    UnitFrames/EnemyBars.lua  5 Hz      everything else on every bar on screen
-    UnitFrames/Paint.lua      5 Hz      the three Blizzard unit frames
-    UnitFrames/Group.lua      5 Hz      every party or raid block on screen
-    Meter/Window.lua          5 Hz      the two panes of numbers
-    UnitFrames/Blizzard.lua   1 Hz      every Blizzard frame the switches hide
-    Perf/Perf.lua             1 Hz      only while the performance tab is on screen
+    UnitFrames/PlayerCast.lua every frame your own cast fill, moving
+    UI/Tooltip.lua           every frame  the linger before a box goes
+    Comfort/Thanks.lua       every frame  only while a whisper is waiting
+    Charge/Marker.lua           20 Hz     it tracks the camera
+    Charge/Icon.lua             10 Hz     the HUD icon and the macro
+    Buttons/Bars.lua            10 Hz     every square on every cloned bar
+    Buffs/Nag.lua               10 Hz     the missing buff row, and its pulse
+    Cooldowns/Row.lua           10 Hz     the long-cooldown row and its countdowns
+    UI/Chart.lua                10 Hz     the arrow on an open map
+    World/World.lua             10 Hz     whether you are still looking at it
+    UnitFrames/EnemyBars.lua     5 Hz     everything else on every bar on screen
+    UnitFrames/PlayerCast.lua    5 Hz     what you are casting, asked again
+    UnitFrames/Skin.lua          5 Hz     the three Blizzard unit frames
+    UnitFrames/Group.lua         5 Hz     every party or raid block on screen
+    Meter/Window.lua             5 Hz     the two panes of numbers
+    Buttons/Trace.lua            5 Hz     only while /wk bars trace is on
+    Comfort/Vendor.lua           5 Hz     only during a sale, and it stops itself
+    Feeds/Stream.lua             1 Hz     the strip under a feed
+    Minimap/Clock.lua            1 Hz     the reading on the minimap square
+    UnitFrames/Blizzard.lua      1 Hz     every Blizzard frame the switches hide
+    Perf/Perf.lua                1 Hz     only while the performance tab is on screen
+
+Three of those hold their ticker and stop it: the sale when it runs out of
+trash, the whisper queue when it empties, and the sampler when you leave the
+performance tab. Four more hang off a frame that hides, so they stop with the
+window they are drawn in. A frame whose tickers have all stopped gives its
+`OnUpdate` back, so a part nobody is looking at costs the client nothing rather
+than a call and a comparison every frame forever.
+
+The enemy bars and your own cast bar each carry two, at two rates and under two
+`Perf` slots. Both were one handler with a throttle written inside it, which
+meant a fifth-of-a-second poll and a per-frame fill were reported as one
+number.
+
+The accumulator subtracts the interval rather than zeroing it. Zeroing throws
+away however far past the interval the frame landed and turns 5 Hz into every
+fourth frame at 60 and every twelfth at 144, which are 4.6 and 4.8. That was the
+first of the two bugs behind the stepping swing bar, and nine of the twelve
+hand-written copies had it. A frame longer than the whole interval drops the
+debt instead of catching up, so a stall does not run the body twice.
+
+Two handlers are still a raw `SetScript`, and neither is a tick. `UI/Placeable`
+follows a dragged frame while the button is down, and Core hands a rebind one
+frame to run in. Both name a function, which is all the scan below needs.
 
 The buff row is ten rather than five for one reason and it is not the readout.
 What it says changes when an aura lands, which is an event, and the row would be
@@ -1552,13 +1586,11 @@ moving edge is an animation. An animation is drawn on the frame the screen is
 drawn on or it is drawn in steps.
 
 The enemy bars are on that list twice, and that is the arrangement rather than a
-duplicate. One `OnUpdate` runs two bodies: `EnemyBars.Sweep` on every frame,
-which advances the cast fills and nothing else, and `EnemyBars.Update` behind a
-fifth of a second accumulator, which is everything a bar says that is not
-moving. The accumulator subtracts the interval rather than zeroing, because
-zeroing throws away however far past it the frame landed and turns 5 Hz into
-every fourth frame at 60 and every twelfth at 144, which are 4.6 and 4.8. That
-was the first of the two throttles on the swing bar and it was the same line.
+duplicate. Two tickers hang off one frame: `EnemyBars.Sweep` every frame, which
+advances the cast fills and nothing else, and `EnemyBars.Update` at a fifth of a
+second, which is everything a bar says that is not moving. They were one handler
+with a hand-written accumulator inside it, and the accumulator is now `UI.Ticker`
+for every part of the addon at once.
 
 The report back was that the timer "jumps chunks", and it took two repairs
 because there were two throttles on that one edge. The first was the 20 Hz
@@ -1612,24 +1644,42 @@ fifty ticks, that was 51.76 KB before and 4.10 KB after. The plate path was
 already clean and measures 0.17 KB. An allocation behind an `if` is a cache
 being filled once and is fine; one the tick reaches every time is not.
 
-`check.sh` enforces this. `HOT` in that file lists every function that runs on
-every tick, and a `:SetSomething(` call or a table constructor inside one fails
-the build unless an `if`, `elseif` or `else` stands between it and the top of
-the function. A
-function only ever reached from behind a guard, `PlaceOnPlate` for one, is not
-on the list: it already runs on a change rather than on a tick, and its job is
-to do the writing. A `for` loop
-is not a guard: it repeats the write, it does not decide it. Adding an
-`OnUpdate` to a file that names no function in `HOT` also fails, so a new ticker
-cannot arrive unchecked.
+`check.sh` enforces this. `HOT` is every function a frame handler can reach, and
+a `:SetSomething(` call or a table constructor inside one fails the build unless
+an `if`, `elseif` or `else` stands between it and the top of the function. A
+`for` loop is not a guard: it repeats the write, it does not decide it.
+
+`HOT` used to be two hundred lines typed at the top of `check.sh`, and a typed
+transitive closure fails one way and says nothing while it does: a hot function
+grows a new callee, nobody adds it, and the scan quietly comes off that code.
+`scripts/hot.lua` computes the list now, walking out from every ticker and every
+`OnUpdate`. It resolves a module call by matching `Local.Fn` to its definition,
+reads `ns.Alias = Local` out of each file first because the two spellings rarely
+agree, and takes a bare name as a same-file local, which is what Lua scoping says
+it can be. Calls are read at the function's own depth: a builder that defines
+twenty click handlers inside itself is not putting all twenty on a tick path.
+The list comes back at 335 functions where the typed one had 200.
+
+Two edges the text cannot carry are declared where they are, with a reason the
+script requires. `-- hot:` above a definition seeds it as a root, for a function
+called back through a table field. `-- cold:` stops the walk, for a function a
+tick reaches that does not run every time: a builder, a layout pass, or a body
+whose caller compares first. `check.sh` counts both against ceilings of 2 and 8,
+and `scripts/ratchet.lua` refuses the commit that raises either.
+
+A closure written in place at a `SetScript("OnUpdate", ...)` or as a ticker body
+fails, which is what makes all of the above possible. A handler with no name is a
+root the walk cannot name and a body the scan cannot find, so the tick would run
+with nothing above it and nothing would say so.
 
 To exempt one line, put `-- unguarded: <reason>` on a write or
 `-- allocates: <reason>` on an allocation. The reason is required and the gate
-checks that it is there. Seven exemptions stand today. Six are `allocates:` and
-all six are the same shape, a memoisation guarded by an early return the scan
-cannot see. The seventh is the addon's only `unguarded:`, and it is the swing
-fill: the one write here that is meant to run on every frame whatever it is
-about to draw.
+checks that it is there. Fifteen exemptions stand today. Seven are `allocates:`
+and all seven are the same shape, a memoisation guarded by an early return the
+scan cannot see. Four `unguarded:` are the moving edges, the writes here that are
+meant to run on every frame whatever they are about to draw. The last four are
+the early-return shape again on the write side, where the line above compares the
+value and returns when it already matches.
 
 What is deliberately not guarded: `Paint.lua` re-applies `Flatten` and the
 portrait crop on every tick because Blizzard's own code puts the texture and the
@@ -3591,7 +3641,7 @@ client that will not say.
 
 Nothing here runs on a ticker. Experience moves when you kill something and
 reputation moves when the client says it did, so the part draws on five events
-and on nothing else, and no function in it is in `check.sh`'s `HOT` list. That is
+and on nothing else, and no function in it is on `check.sh`'s tick paths. That is
 also why the writes are unguarded: a guard buys one comparison against a write
 that happens on every frame, and these happen a few times a minute.
 
@@ -6109,6 +6159,22 @@ Aiming at a mob out of combat with no target selected is the whole test.
 ## Untested against the live client
 
 Everything below was written from the API contract and has never executed:
+
+- **Whether every ticker still runs at the rate it asks for.** `ns.UI.Ticker`
+  replaced twelve hand-written accumulators, and nine of the twelve zeroed
+  theirs where the shared one subtracts the interval. Those nine were running
+  slightly slow and now run at the rate they name, which is a change to the
+  buff row, the cooldown row, the party blocks, the skinned frames, the meter,
+  the action squares, the charge icon, the charge marker and the Blizzard
+  hider. Nothing on screen should look different; what would show a mistake is
+  a row that has stopped moving, or the performance tab reporting a tick count
+  well off the interval beside it. What would settle it: `/wk perf` with a
+  target up, and read the ticks per second against each rate.
+- **Whether splitting your own cast bar into two tickers still draws it.**
+  `UnitFrames/PlayerCast.lua` ran one handler that polled the client at 5 Hz and
+  moved the fill on every frame. It is two tickers now, timed separately as
+  `playercast` and `castsweep`. A mistake here looks like a cast bar that
+  appears and then does not move, or one that moves and never appears.
 
 - **Whether either client has map art for a dungeon.** The whole middle column
   turns on it. `Dungeons/Places.lua` walks C_Map for nodes of the dungeon kind

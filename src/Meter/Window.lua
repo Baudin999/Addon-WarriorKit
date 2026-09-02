@@ -125,7 +125,6 @@ local WARN = { 0.94, 0.42, 0.35 }
 local GREY = { 0.50, 0.50, 0.50 }
 
 local frame, damage, threat, place
-local elapsed = 0
 local built = false
 
 -- One pixel of the design, in the units the frame is drawn in. Exactly 1 once
@@ -618,15 +617,7 @@ events:SetScript("OnEvent", function()
 	built = true
 	MeterWindow.Apply()
 
-	events:SetScript("OnUpdate", function(_, delta)
-		elapsed = elapsed + delta
-		if elapsed >= REFRESH then
-			elapsed = 0
-			ns.Perf.Start("meter")
-			MeterWindow.Update()
-			ns.Perf.Stop("meter")
-		end
-	end)
+	ns.UI.Ticker(events, REFRESH, "meter", MeterWindow.Update)
 end)
 
 -- A resolution change moves every size in this file at once, the same way it

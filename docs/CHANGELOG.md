@@ -2,6 +2,58 @@
 
 ## Unreleased
 
+### One ticker, and the hot list derived from it
+
+Twelve files wrote the same five lines: accumulate the frame's delta, compare it
+to an interval, put the accumulator back, call the work, and in most of them
+bracket the call in `ns.Perf.Start` and `ns.Perf.Stop`. `ns.UI.Ticker` in the
+new `UI/Ticker.lua` takes a frame, an interval, a `ns.Perf` slot key and a named
+function, and hands back something with `Start` and `Stop` on it. Twenty-three
+registrations go through it. A frame may carry more than one, which is what the
+enemy bars and your own cast bar wanted: they ran two rates through one handler
+and timed both as one number.
+
+One of the twelve copies was wrong, and it was wrong in the way the swing bar
+was. Zeroing the accumulator throws away however far past the interval the frame
+landed, so a fifth of a second fires every fourth frame at 60 Hz and every
+twelfth at 144, which is 4.6 and 4.8 times a second rather than 5. Three files
+carried a comment saying so and subtracted the interval instead. Nine zeroed it.
+The ticker subtracts, and drops the debt when a frame ran longer than the whole
+interval, so a stall does not run the body twice on the frame after it.
+
+`Perf` gains one slot. `playercast` was a poll of what you are casting and a
+per-frame move of the fill that is already on screen, timed together, which
+reported a fifth-of-a-second poll as something happening sixty times a second.
+They are two tickers now and the sweep is `castsweep`.
+
+The larger half is `scripts/hot.lua`. `HOT` was two hundred lines at the top of
+`check.sh`, naming every function a frame handler can reach so the scan below
+can refuse an unguarded widget write or an allocation on one. A hand-written
+transitive closure fails one way and it is silent: a hot function grows a new
+callee, nobody adds it, and the scan comes off that code with nothing to report.
+The list is computed now, by walking out from the handlers. It comes back at 335
+functions against those 200, and among the 135 it found is a `SetShown` in
+`UnitFrames/Block.lua` that runs on every skin tick and that nothing had ever
+scanned.
+
+What made the walk possible is that a handler now names a function. `check.sh`
+fails on a closure written in place at a `SetScript("OnUpdate", ...)` or as a
+ticker body, because a closure with no name is a root `hot.lua` cannot name and
+a body the scan cannot find. There were eight of those.
+
+Two things the walk cannot work out are declared in the code rather than guessed
+at, both with a reason `hot.lua` requires. `-- hot:` seeds a function reached
+through a stored function value, which is `Purse.Line` handed to a stream as
+`onStatus` and `Perf/Feature.lua`'s `Paint` assigned to `ns.Perf.OnSample`.
+`-- cold:` stops the walk at a function a tick reaches but does not run every
+time: seven builders and layout passes, plus `MacroText`, whose caller compares
+the target, the weapon and the spell names first. `check.sh` holds both counts
+as ratchets, at 2 and 8, so a marker cannot be added without raising a number
+that `scripts/ratchet.lua` refuses to see raised.
+
+Four writes picked up `-- unguarded:` for the same reason: an early return
+compares the value first and the scan only reads nesting.
+
 ### One Questie probe, in Core
 
 `QuestieLoader:ImportModule` hands back a fresh empty table for a module it has

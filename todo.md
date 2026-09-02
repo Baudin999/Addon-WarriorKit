@@ -12,8 +12,8 @@ hash is the last of them. What was wrong and what fixed it is in
 in the README's untested list, and the full text of each item is this file at
 `e7ef4ca` for 1 to 6, 8, 11 and 12, at `ca59a77` for 7, 9 and 13, at
 `44c79ef` for 15, at `a7772af` for 16, at `c37c149` for 19, at `b5d2277` for
-17 and at `30a42cb` for 28. Items 14 and 23 were never written longer than they
-are here.
+17, at `30a42cb` for 28 and at `2210d8f` for 18. Items 14 and 23 were never
+written longer than they are here.
 
 1. Weapon swing timer. `8be9a43`
 2. Deep Wounds missing from the enemy bar debuffs. `05e40ec`
@@ -40,6 +40,7 @@ are here.
     `da4a01a`
 23. A ceiling only moves down, in `scripts/ratchet.lua`. `271f8e6`
 28. One Questie probe, in Core, and a gate that keeps it one. `07c4401`
+18. One ticker, and a HOT list derived from it rather than typed. PENDING
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
@@ -50,30 +51,16 @@ review found it.
 
 ## Open
 
-Items 16 to 22 came out of an architecture review on 2026-08-29. Items 16, 17
-and 19 landed on 2026-09-02 and are above, with 23. Every one is a duplication
+Items 16 to 22 came out of an architecture review on 2026-08-29. Items 16, 17,
+18 and 19 landed on 2026-09-02 and are above, with 23. Item 18 had undercounted
+the hand-written closure: it said about ninety-five function names and there
+were two hundred by the time it was worked, which is the same lesson item 15
+taught in the other direction. Read an item against the code before working it. Every one is a duplication
 or a rule the addon already believes in and does not enforce. None is a bug: the
 addon draws the right thing today. They are the shapes that make the next change
 cost more than it should, ordered so the one that drags the most out with it
 goes first. Item 15 undercounted its own sites by five and asked for a fix
-`0312cf3` had already made, so read an item against the code before working it.
-
-18. One ticker, and a HOT list derived from it.
-
-    Twelve files write the same throttle: accumulate the delta, compare it to an
-    interval, zero it, call, and in four of them wrap the call in `Perf.Start`
-    and `Perf.Stop`. `src/Charge/Marker.lua:201`, `src/Meter/Window.lua:647`,
-    `src/Perf/Perf.lua:247`, `src/Feeds/Stream.lua:290`, and the rest behind
-    named `OnUpdate` locals.
-
-    A `ns.UI.Ticker(interval, name, fn)` collapses them, and that is the smaller
-    half. The larger half is `HOT` in `scripts/check.sh:208`: about ninety-five
-    function names, written out by hand, which is a transitive closure a person
-    is maintaining. `check.sh:481` checks that a file with an `OnUpdate` names
-    something in HOT, which is a good first cut and does not catch the failure
-    that matters. A hot function that grows a new callee nobody added to the
-    list takes the guard scan quietly off that code. Registering every ticker
-    through one call is what makes the closure derivable instead of typed.
+`0312cf3` had already made.
 
 20. `EachTexture` into Core, beside `ns.Strip`.
 
@@ -101,6 +88,12 @@ goes first. Item 15 undercounted its own sites by five and asked for a fix
     clothes.
 
     The other rule this item asked for is one of those two now.
+
+    Item 18 added a third of the same kind on 2026-09-02: a frame handler names
+    a function and never opens a closure in place. It is the same shape as the
+    two above, a rule the addon already believed in, and it is worth reading
+    before this one is written because it shows what the client half costs. That
+    gate was one grep and it worked because the shape it refuses is exact.
 
 22. `Core/Menu.lua` registers a feature from inside Core.
 

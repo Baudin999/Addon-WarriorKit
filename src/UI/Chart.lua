@@ -582,18 +582,18 @@ end
 -- handler only runs while its frame is shown and the frame is hidden with
 -- whatever page or window it is on. There is nothing to switch off and nothing
 -- to leave running: close the map and the tick stops with it.
+-- The board is found on its own frame rather than closed over, because a ticker
+-- takes a named function and there is one board per map.
+local function Aimed(_, frame)
+	frame.board:Locate()
+end
+
 local function Follow(board)
 	if type(board.frame.SetScript) ~= "function" then
 		return false
 	end
-	board.frame:SetScript("OnUpdate", function(_, elapsed)
-		board.since = board.since + (elapsed or 0)
-		if board.since < FOLLOW then
-			return
-		end
-		board.since = 0
-		board:Locate()
-	end)
+	board.frame.board = board
+	UI.Ticker(board.frame, FOLLOW, "chart", Aimed)
 	return true
 end
 

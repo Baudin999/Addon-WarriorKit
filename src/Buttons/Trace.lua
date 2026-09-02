@@ -43,7 +43,6 @@ ns.BarTrace = Trace
 local INTERVAL = 0.2
 
 local running = false
-local since = 0
 local last
 
 local STRATA_UNKNOWN = "?"
@@ -137,19 +136,14 @@ end
 
 local watcher = CreateFrame("Frame")
 
--- Named and listed in check.sh's HOT, which bans an unguarded write and an
--- allocation on any path an OnUpdate reaches. Both guards here are the same
--- one: nothing past the change test runs while the cursor sits still, and the
--- string the line is built from is behind it.
-function Trace.Sample(_, elapsed)
+-- Named, so scripts/hot.lua can walk out from it. check.sh bans an unguarded
+-- write and an allocation on any path a ticker reaches, and both guards here
+-- are the same one: nothing past the change test runs while the cursor sits
+-- still, and the string the line is built from is behind it.
+function Trace.Sample()
 	if not running then
 		return
 	end
-	since = since + (elapsed or 0)
-	if since < INTERVAL then
-		return
-	end
-	since = 0
 
 	local focus = Trace.Focus()
 	if focus == last then
@@ -161,7 +155,7 @@ function Trace.Sample(_, elapsed)
 		Trace.Name(focus), slot and (", action " .. slot) or "", Trace.Cursor()))
 end
 
-watcher:SetScript("OnUpdate", Trace.Sample)
+ns.UI.Ticker(watcher, INTERVAL, "trace", Trace.Sample)
 
 -- On or off, and it says which so the switch cannot be pressed twice by
 -- mistake. The sample state is dropped on the way in rather than on the way
@@ -169,7 +163,6 @@ watcher:SetScript("OnUpdate", Trace.Sample)
 -- instead of staying quiet because that frame was the last one seen.
 function Trace.Set(on)
 	running = on and true or false
-	since = INTERVAL
 	last = nil
 	if running then
 		-- Said on the way in rather than discovered by its absence. The first

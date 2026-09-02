@@ -83,7 +83,6 @@ local frame, place
 local icons = {}
 local built = false
 local unit = 1
-local elapsed = 0
 
 -- What Place last laid out, so a tick that changes nothing does no work.
 --
@@ -165,6 +164,7 @@ end
 -- because which line a square is on moves when the list is rebuilt and Apply
 -- runs on a settings change. Both are layout rather than tick, so neither is on
 -- the path the allocation gate measures.
+-- cold: layout rather than tick, which is what the paragraph above says.
 local function Place()
 	seen = ns.Cooldowns.Epoch()
 	local drawn = (mode == "quiet") and 0 or ns.Cooldowns.Count()
@@ -392,18 +392,6 @@ end
 
 local events = CreateFrame("Frame")
 
-local function OnUpdate(_, delta)
-	elapsed = elapsed + delta
-	if elapsed < REFRESH then
-		return
-	end
-	-- Subtracted rather than zeroed, so a slow frame does not turn a tenth of a
-	-- second into a whole frame more than that.
-	elapsed = elapsed - REFRESH
-	ns.Perf.Start("cooldowns")
-	Row.Update()
-	ns.Perf.Stop("cooldowns")
-end
 
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -446,7 +434,7 @@ events:SetScript("OnEvent", function(_, event, token)
 		-- The ticker lives on this frame, which is never hidden. On the row
 		-- itself it would stop the moment the row hid and never come back, and
 		-- the row is hidden between every fight.
-		events:SetScript("OnUpdate", OnUpdate)
+		ns.UI.Ticker(events, REFRESH, "cooldowns", Row.Update)
 		return
 	end
 

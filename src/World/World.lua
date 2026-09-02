@@ -47,7 +47,6 @@ local UNIT = "mouseover"
 local STEP = 0.1
 
 local open = false
-local since = 0
 
 -- Whether the last arm of the suppression actually took, for Describe. Nil
 -- until the first hover, because "not tried yet" and "this client refused" are
@@ -93,7 +92,7 @@ function World.Close(now)
 	if not open then
 		return false
 	end
-	open, since = false, 0
+	open = false
 	ticker:Hide()
 	ns.UI.Scan.Suppress(false)
 	ns.Tip.Close(now)
@@ -117,26 +116,19 @@ function World.Open()
 		return false
 	end
 
-	open, since = true, 0
+	open = true
 	suppressed = ns.UI.Scan.Suppress(true)
 	ticker:Show()
 	return true
 end
 
-function World.Sweep(elapsed)
-	since = since + elapsed
-	if since < STEP then
-		return
-	end
-	since = 0
+function World.Sweep()
 	if not UnitExists(UNIT) then
 		World.Close()
 	end
 end
 
-ticker:SetScript("OnUpdate", function(_, elapsed)
-	World.Sweep(elapsed)
-end)
+ns.UI.Ticker(ticker, STEP, "world", World.Sweep)
 
 -- The setting, acted on. Closing on the way off is the whole reason this exists
 -- rather than a write: a box already on screen when the setting goes off would

@@ -131,7 +131,6 @@ local shown = {}
 local shownCount = 0
 local built = false
 local unit = 1
-local elapsed = 0
 
 -- What Place last decided, so a tick that changes nothing does no work at all.
 -- `mode` is which half is on screen and `mask` is which entries within it, as
@@ -376,6 +375,7 @@ local function Hover(w)
 	end)
 end
 
+-- cold: layout, run on a settings change and a rescale rather than on a tick.
 local function Place()
 	Collect()
 
@@ -566,20 +566,6 @@ end
 
 local events = CreateFrame("Frame")
 
-local function OnUpdate(_, delta)
-	elapsed = elapsed + delta
-	if elapsed < REFRESH then
-		return
-	end
-	-- Subtracted rather than zeroed. Zeroing throws away whatever was left over
-	-- and turns a tenth of a second into a whole frame more than that on a slow
-	-- frame, which is the bug that made the swing timer run at a third of the
-	-- rate it said it did.
-	elapsed = elapsed - REFRESH
-	ns.Perf.Start("buffs")
-	Nag.Update()
-	ns.Perf.Stop("buffs")
-end
 
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -628,7 +614,7 @@ events:SetScript("OnEvent", function(_, event, token)
 		-- itself it would stop the moment the row hid and never come back, and
 		-- the row is hidden almost all the time, which is the trap
 		-- Charge/Icon.lua already carries a note about.
-		events:SetScript("OnUpdate", OnUpdate)
+		ns.UI.Ticker(events, REFRESH, "buffs", Nag.Update)
 		return
 	end
 

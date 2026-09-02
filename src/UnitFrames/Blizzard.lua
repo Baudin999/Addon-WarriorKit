@@ -414,18 +414,7 @@ end
 --------------------------------------------------------------------------
 
 local INTERVAL = 1.0
-local elapsed = 0
 
-local function Tick(_, delta)
-	elapsed = elapsed + delta
-	if elapsed < INTERVAL then
-		return
-	end
-	elapsed = 0
-	ns.Perf.Start("hide")
-	Blizz.Apply()
-	ns.Perf.Stop("hide")
-end
 
 -- The switches, for the panel and the slash word, so neither writes the list
 -- out again and the two cannot drift.
@@ -539,6 +528,6 @@ events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:SetScript("OnEvent", function(_, event)
 	Blizz.Apply()
 	if event == "PLAYER_LOGIN" then
-		events:SetScript("OnUpdate", Tick)
+		ns.UI.Ticker(events, INTERVAL, "hide", Blizz.Apply)
 	end
 end)

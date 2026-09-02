@@ -317,6 +317,8 @@ local rateAt, rateText = nil, ""
 -- only the branch that took builds a string. The rate is compared in whole gold
 -- rather than in copper: the copper figure moves every frame the clock does and
 -- the text it renders to changes about once a minute.
+-- hot: Feeds/Loot.lua hands this to a stream as onStatus and the stream's tick
+-- calls it back through that field, which is an edge scripts/hot.lua cannot see.
 function Purse.Line()
 	if not ns.db or not ns.db.lootFeedPurse then
 		return nil

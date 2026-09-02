@@ -1195,9 +1195,7 @@ function Tooltip.Sweep(elapsed)
 	return true
 end
 
-ticker:SetScript("OnUpdate", function(_, elapsed)
-	Tooltip.Sweep(elapsed)
-end)
+UI.Ticker(ticker, 0, "tip", Tooltip.Sweep)
 
 -- What it is currently open on. Handed out because "the tooltip came up beside
 -- the thing you hovered" is a claim scripts/harness.lua has to be able to make,

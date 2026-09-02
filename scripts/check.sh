@@ -277,209 +277,50 @@ fi
 #
 # To exempt one line, put `-- unguarded: <reason>` or `-- allocates: <reason>`
 # on it. A reason is required, because an exemption without one is the same
-# invisible debt as a warning.
-HOT="
-Core/Core.lua:ns.OutOfRange
-UI/Ability.lua:Ability.Look
-UI/Ability.lua:Ability.Draw
-UI/Ability.lua:Countdown
-UI/Ability.lua:Quantum
-Buttons/Bars.lua:Bars.Update
-Buttons/Trace.lua:Trace.Sample
-Buttons/Reaction.lua:Reaction.Of
-Buttons/Reaction.lua:Reaction.OfSpell
-Buttons/Reaction.lua:Reaction.Open
-Buttons/Reaction.lua:Reaction.Name
-Buttons/Reaction.lua:KeyForSpell
-Buttons/Requires.lua:Requires.State
-Buttons/Requires.lua:EntryFor
-Buttons/Requires.lua:NameOf
-Buttons/Requires.lua:Unmet
-Core/Core.lua:ns.SpellNameHeld
-Buttons/Slot.lua:Slot.Spell
-Buttons/Slot.lua:Beyond
-Buttons/Slot.lua:Refused
-Buttons/Slot.lua:Slot.CanName
-Buttons/Slot.lua:Slot.CanRead
-Buttons/Slot.lua:Slot.State
-Buttons/Slot.lua:Slot.Active
-Buttons/Slot.lua:Slot.Equipped
-Buttons/Slot.lua:Slot.Texture
-Buttons/Slot.lua:Slot.Count
-Charge/Charge.lua:Charge.Pick
-Charge/Charge.lua:Charge.State
-Charge/Charge.lua:Charge.PlateFor
-Charge/Icon.lua:ChargeIcon.SyncMacro
-Charge/Icon.lua:ChargeIcon.Update
-Charge/Marker.lua:AttachTo
-Charge/Marker.lua:ChargeMarker.Update
-UI/Gauge.lua:Gauge.Flatten
-UI/Gauge.lua:Gauge.Paint
-UI/Gauge.lua:Gauge.Ground
-UI/Aura.lua:Aura.Draw
-UnitFrames/EnemyBars.lua:BuildTargeters
-UnitFrames/EnemyBars.lua:Member
-UnitFrames/EnemyBars.lua:Record
-UnitFrames/EnemyBars.lua:ThreatState
-UnitFrames/EnemyBars.lua:ScanDebuffs
-UnitFrames/EnemyBars.lua:DrawDebuffs
-UnitFrames/EnemyBars.lua:PaintAlpha
-UnitFrames/EnemyBars.lua:PaintQuest
-UnitFrames/EnemyBars.lua:UpdateWidget
-Quests/Drops.lua:Drops.Badge
-UnitFrames/EnemyBars.lua:StartFade
-UnitFrames/EnemyBars.lua:Fades
-UnitFrames/EnemyBars.lua:UpdateList
-UnitFrames/EnemyBars.lua:EnemyBars.Sweep
-UnitFrames/Cast.lua:Cast.Seconds
-UnitFrames/Cast.lua:Cast.Preview
-UnitFrames/Cast.lua:Cast.Live
-UnitFrames/Cast.lua:Cast.Fraction
-UnitFrames/Cast.lua:Show
-UnitFrames/Cast.lua:Chamber
-UnitFrames/Cast.lua:Cast.Update
-UnitFrames/Cast.lua:Cast.Sweep
-UnitFrames/PlayerCast.lua:Look
-UnitFrames/PlayerCast.lua:Spell
-UnitFrames/PlayerCast.lua:Note
-UnitFrames/PlayerCast.lua:Draw
-UnitFrames/PlayerCast.lua:PlayerCast.Clear
-UnitFrames/PlayerCast.lua:PlayerCast.Update
-UnitFrames/PlayerCast.lua:PlayerCast.Sweep
-UnitFrames/EnemyBars.lua:Collect
-UnitFrames/EnemyBars.lua:CollectUnits
-UnitFrames/EnemyBars.lua:EnemyBars.Update
-Minimap/Clock.lua:Clock.Reading
-Minimap/Clock.lua:Clock.Update
-Comfort/Vendor.lua:Sweep
-Comfort/Vendor.lua:Tick
-Comfort/Thanks.lua:Tick
-Feeds/Stream.lua:Refresh
-Feeds/Purse.lua:Purse.Line
-Feeds/Purse.lua:Purse.Account
-Feeds/Purse.lua:Purse.Rate
-Core/Core.lua:ns.Coin
-Core/Core.lua:ns.Coined
-Core/Core.lua:Spell
-Core/Core.lua:Parts
-Core/Core.lua:Push
-Core/Core.lua:Plain
-Core/Core.lua:Painted
-Core/Core.lua:Thousands
-Feeds/Purse.lua:Others
-Feeds/Purse.lua:Purse.Mine
-Feeds/Purse.lua:Who
-Feeds/Purse.lua:Purse.Note
-Feeds/Purse.lua:Purse.Start
-Feeds/Purse.lua:Money
-Feeds/Purse.lua:RateText
-Feeds/Purse.lua:Tone
-Perf/Perf.lua:Perf.Start
-Perf/Perf.lua:Perf.Stop
-Perf/Perf.lua:Perf.Sample
-Perf/Feature.lua:Paint
-UnitFrames/Auras.lua:AuraAt
-UnitFrames/Auras.lua:Scan
-UnitFrames/Auras.lua:Sweep
-UnitFrames/Auras.lua:Hang
-UnitFrames/Auras.lua:Fill
-UnitFrames/Auras.lua:Auras.Update
-UnitFrames/Paint.lua:Paint.Refresh
-UnitFrames/Paint.lua:HealSlice
-UnitFrames/Skin.lua:Tick
-UnitFrames/Group.lua:Group.Update
-UnitFrames/Member.lua:Member.Update
-UnitFrames/Member.lua:Member.Clear
-UnitFrames/Member.lua:Member.Shade
-UnitFrames/Member.lua:Member.Paint
-UnitFrames/Member.lua:Member.Numbers
-UnitFrames/Member.lua:Member.Label
-Unit/Unit.lua:Unit.Health
-Unit/Unit.lua:Unit.Power
-Unit/Unit.lua:Unit.TargetToken
-Unit/Color.lua:Color.Class
-Unit/Color.lua:Color.ClassHex
-Unit/Color.lua:Color.Reaction
-Unit/Color.lua:Color.Frame
-Unit/Color.lua:Color.OfUnit
-Unit/Color.lua:Color.Dim
-Unit/Level.lua:Level.Tag
-Unit/Level.lua:Level.WorthOf
-Unit/Level.lua:Level.Worth
-Unit/Level.lua:Level.Of
-Unit/Roster.lua:Roster.Units
-Unit/Threat.lua:Threat.On
-Unit/Threat.lua:Threat.Top
-Unit/Threat.lua:Threat.Shade
-Unit/Threat.lua:Threat.State
-Unit/Threat.lua:Threat.Swinging
-Meter/Meter.lua:Meter.Rank
-Meter/Meter.lua:Meter.Total
-Unit/Spec.lua:Spec.Request
-Meter/Threat.lua:Sample
-Meter/Threat.lua:ThreatMeter.Update
-Meter/Threat.lua:ThreatMeter.Rank
-Meter/Threat.lua:ThreatMeter.Soonest
-Meter/Window.lua:Short
-Meter/Window.lua:Blank
-Meter/Window.lua:PaintRow
-Meter/Window.lua:PaintBar
-Meter/Window.lua:SetLeft
-Meter/Window.lua:SetRight
-Meter/Window.lua:PaintDamage
-Meter/Window.lua:PaintThreat
-Meter/Window.lua:MeterWindow.Update
-Swing/Swing.lua:Swing.Speed
-Swing/Swing.lua:Swing.Duration
-Swing/Swing.lua:Swing.Armed
-Swing/Swing.lua:Swing.Fraction
-Swing/Slam.lua:Slam.Name
-Swing/Slam.lua:Slam.Estimate
-Swing/Slam.lua:Slam.Cast
-Swing/Slam.lua:Slam.Known
-Swing/Slam.lua:Slam.Window
-UI/Pixel.lua:UI.Whole
-Swing/Gauges.lua:DrawHand
-Swing/Gauges.lua:DrawWindow
-Swing/Gauges.lua:SwingGauges.Update
-Buffs/Upkeep.lua:Upkeep.EnchantShape
-Buffs/Upkeep.lua:Upkeep.Enchants
-Buffs/Upkeep.lua:Upkeep.Bare
-Buffs/Upkeep.lua:Upkeep.Missing
-Buffs/Racials.lua:Racials.Mine
-Buffs/Racials.lua:Racials.Spell
-Buffs/Racials.lua:Racials.Name
-Buffs/Racials.lua:Racials.Worth
-Buffs/Racials.lua:Racials.Ready
-Buffs/Racials.lua:Racials.Idle
-Buffs/Nag.lua:Nag.Resting
-Buffs/Nag.lua:Nag.Dead
-Buffs/Nag.lua:Nag.MissingMask
-Buffs/Nag.lua:Pulse
-Buffs/Nag.lua:Paint
-Buffs/Nag.lua:Nag.Update
-Cooldowns/Cooldowns.lua:Cooldowns.State
-Cooldowns/Cooldowns.lua:Cooldowns.Busy
-Cooldowns/Row.lua:Row.Wanted
-Cooldowns/Row.lua:Paint
-Cooldowns/Row.lua:Row.Update
-Core/Attic.lua:Attic.Take
-Core/Attic.lua:Attic.Vanish
-Core/Attic.lua:Attic.Sweep
-UnitFrames/Blizzard.lua:Walk
-UnitFrames/Blizzard.lua:Blizz.Apply
-Chat/Blizzard.lua:Blizz.Apply
-UnitFrames/Blizzard.lua:MoveKey
-World/World.lua:World.Sweep
-UI/Tooltip.lua:Tooltip.Sweep
-UI/Chart.lua:Track
-UI/Chart.lua:Aim
-UI/Chart.lua:Chart.Spot
-UI/Chart.lua:Chart.Here
-UI/Chart.lua:Chart.Facing
-UI/Placeable.lua:Follow
-UI/Placeable.lua:Push
-"
+# invisible debt as a warning. A whole function that a tick reaches but does not
+# run every tick says so with `-- cold: <reason>` above its definition, which
+# stops scripts/hot.lua's walk there.
+#
+# The list is derived rather than typed. scripts/hot.lua walks out from every
+# ticker and every OnUpdate and prints one `File.lua:Function` per line, and its
+# own header says how it resolves a call and what it deliberately cannot follow.
+#
+# It used to be two hundred lines here, written by hand. A hand-written
+# transitive closure has one failure mode and it is silent: a hot function grows
+# a new callee, nobody adds it, and the scan below comes off that code with
+# nothing to report. The derived closure is 335 functions against those 200, and
+# the 135 it found include a per-tick SetShown in UnitFrames/Block.lua that
+# nothing had ever scanned.
+HOT=$(lua5.1 ../scripts/hot.lua .) || {
+	echo "scripts/hot.lua could not derive the tick paths"
+	status=1
+}
+
+# The two markers, counted, because both are places the walk was told something
+# it could not work out and both are the shape an allow-list has. hot.lua
+# already refuses either without a reason; this refuses either quietly growing.
+#
+# Exact rather than at most, in both directions, for the reason every ceiling in
+# this file and in shape.lua is: a marker retired has to come off the number in
+# the same commit, or the room it gave back is spent on the next one without
+# anybody deciding to spend it. scripts/ratchet.lua reads these two out of the
+# committed copy and refuses the edit that raises one.
+#
+# `cold:` is the larger of the two and it is a work list, not a settled shape.
+# Seven of the eight are a builder or a layout pass, which is one repeated idea:
+# a function whose writes belong to a widget appearing rather than to the tick
+# that found it. If UI/ ever grows a construction seam those seven go through,
+# this number goes to one.
+HOT_MARKERS=2
+COLD_MARKERS=8
+for mark in "hot $HOT_MARKERS HOT_MARKERS" "cold $COLD_MARKERS COLD_MARKERS"; do
+	set -- $mark
+	count=$(grep -rhE "^-- *$1:" --include='*.lua' . | wc -l)
+	if [ "$count" -ne "$2" ]; then
+		echo "check.sh says $3 is $2 and src/ carries $count: a marker added needs the number raised and defending, one retired needs it lowered in the same commit"
+		status=1
+	fi
+done
 
 hot_scan='
 BEGIN { inside = 0 }
@@ -525,16 +366,12 @@ BEGIN { inside = 0 }
 }
 '
 
-hot_files=""
+# Nothing checks that the list names a file that exists or a function that is
+# there, the way it did while a person typed it. hot.lua only ever prints a
+# definition it found, so both of those are answered by where the list comes
+# from rather than by a check after the fact.
 while IFS=: read -r file fn; do
 	[ -n "$file" ] || continue
-	[ -f "$file" ] || { echo "HOT names a missing file: $file"; status=1; continue; }
-	if ! grep -qE "^(local )?function ${fn//./\\.} *\(" "$file"; then
-		echo "HOT names a missing function: $file:$fn"
-		status=1
-		continue
-	fi
-	case "$hot_files" in *"|$file|"*) ;; *) hot_files="$hot_files|$file|" ;; esac
 	found=$(awk -v target="$(printf '%s' "$fn" | sed 's/\./[.]/g')" "$hot_scan" "$file")
 	if [ -n "$found" ]; then
 		echo "$found"
@@ -644,14 +481,21 @@ while IFS= read -r bad; do
 	status=1
 done < <(grep -rn 'ns\.db' --include='*.lua' ./UI 	| grep -v '^\./UI/Window\.lua:.*is held here rather than read out of ns\.db' 	| grep -v '^\./UI/Tooltip\.lua:.*ns\.db for the reason UI\.Size is' 	| grep -v '^\./UI/Placeable\.lua:.*so ns\.db stays' || true)
 
-# A ticker in a file HOT says nothing about is a ticker nothing above checked.
-while IFS= read -r f; do
-	f="${f#./}"
-	case "$hot_files" in
-		*"|$f|"*) ;;
-		*) echo "$f registers an OnUpdate and names no function in HOT"; status=1 ;;
-	esac
-done < <(grep -lE 'SetScript\("OnUpdate"' --include='*.lua' -r . | sort)
+# A frame handler names a function, and never opens a closure.
+#
+# This is what makes the list above derivable. scripts/hot.lua walks out from
+# whatever the handler is set to, and a closure written in place is a root it
+# cannot name and a body the scan cannot find: the tick would run with nothing
+# above checking it, and nothing would say so. There were eight of these.
+#
+# Both forms are covered because both set a handler. ns.UI.Ticker is the one
+# nearly every part uses; a raw SetScript is left for the two handlers that are
+# not ticks, the drag follow in UI/Placeable.lua and the one-shot in Core.
+while IFS= read -r bad; do
+	echo "a frame handler takes a named function, not a closure written in place: $bad"
+	status=1
+done < <(grep -rnE 'SetScript\("OnUpdate", *function|UI\.Ticker\([^)]*, *function' \
+	--include='*.lua' . | grep -v '^\./UI/Ticker\.lua:.*function UI\.Ticker' || true)
 
 # The options window's own rules, in the half a grep can settle.
 #

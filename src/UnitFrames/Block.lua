@@ -900,7 +900,7 @@ function Block.Reveal(entry, host)
 	if ns.Blocked(frame) then
 		return false
 	end
-	frame:SetShown(want)
+	frame:SetShown(want) -- unguarded: the return above compares shown against want
 	return true
 end
 

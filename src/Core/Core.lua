@@ -1514,7 +1514,7 @@ local function Run()
 end
 
 local function Pass(self)
-	self:SetScript("OnUpdate", nil)
+	self:SetScript("OnUpdate", nil) -- unguarded: the one-shot hands its own handler back
 
 	-- Held rather than dropped. A binding call is refused under lockdown, and
 	-- not every file that takes a key picks its own work back up when the

@@ -86,7 +86,7 @@ function ns.Recolor(edges, color)
 	end
 	edges.r, edges.g, edges.b, edges.a = r, g, b, a
 	for i = 1, 4 do
-		edges[i]:SetColorTexture(r, g, b, a)
+		edges[i]:SetColorTexture(r, g, b, a) -- unguarded: the return above compares all four
 	end
 	return true
 end

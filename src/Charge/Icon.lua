@@ -31,6 +31,8 @@ local lastUnit, lastWeapon, lastEpoch
 -- carries `nocombat` because the unit token in it goes stale the moment combat
 -- starts. Without that guard a stale token would rip your target off the mob
 -- you are tanking.
+-- cold: ChargeIcon.SyncMacro compares the target, the weapon and the spell
+-- names first and returns when none of them moved, so this runs on a change.
 local function MacroText(unit)
 	local lines = { "#showtooltip" }
 
@@ -372,16 +374,9 @@ end
 
 local events = CreateFrame("Frame")
 
-local elapsed = 0
-local function OnUpdate(_, delta)
-	elapsed = elapsed + delta
-	if elapsed >= UPDATE_INTERVAL then
-		elapsed = 0
-		ns.Perf.Start("icon")
-		ChargeIcon.SyncMacro()
-		ChargeIcon.Update()
-		ns.Perf.Stop("icon")
-	end
+local function Refresh()
+	ChargeIcon.SyncMacro()
+	ChargeIcon.Update()
 end
 
 events:RegisterEvent("PLAYER_LOGIN")
@@ -408,7 +403,7 @@ events:SetScript("OnEvent", function(_, event)
 		frame:Show() -- the only Show there is, before any combat can block it
 		-- The ticker lives on this frame, which is never hidden. On the button
 		-- it would stop the moment the button hid and never come back.
-		events:SetScript("OnUpdate", OnUpdate)
+		ns.UI.Ticker(events, UPDATE_INTERVAL, "icon", Refresh)
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		if securePending then
 			ChargeIcon.ApplySecure()

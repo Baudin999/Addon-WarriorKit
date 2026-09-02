@@ -776,16 +776,6 @@ end
 
 local events = CreateFrame("Frame")
 
-local elapsed = 0
-local function OnUpdate(_, delta)
-	elapsed = elapsed + delta
-	if elapsed >= UPDATE_INTERVAL then
-		elapsed = 0
-		ns.Perf.Start("action")
-		Bars.Update()
-		ns.Perf.Stop("action")
-	end
-end
 
 -- A rescale moves the grid under every adopted frame. On this client that
 -- changes the scale and not the numbers, because a square's size is written in
@@ -823,7 +813,7 @@ events:SetScript("OnEvent", function(_, event)
 		ns.TheirBars.Recheck()
 		-- The ticker lives on this frame, which is never hidden. On a bar it
 		-- would stop the moment the bar hid and never come back.
-		events:SetScript("OnUpdate", OnUpdate)
+		ns.UI.Ticker(events, UPDATE_INTERVAL, "action", Bars.Update)
 		return
 	end
 

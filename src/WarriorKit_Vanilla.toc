@@ -77,6 +77,13 @@ Unit\Threat.lua
 # The drawing layer, between Core and everything that draws. It owns the pixel
 # grid, so it loads before the panel and before any part that puts a frame up.
 UI\Pixel.lua
+
+# One OnUpdate, registered rather than written out. Every throttled tick in the
+# addon comes through here, which is what lets scripts/hot.lua derive the set of
+# functions a frame handler reaches instead of check.sh carrying that closure by
+# hand. Loads with the pixel grid because it is the same layer and because a
+# part that draws may want a tick before anything else it uses exists.
+UI\Ticker.lua
 UI\Draw.lua
 
 # The gauge, between the drawing primitives and anything that puts a bar up. A

@@ -253,6 +253,12 @@ local function Refresh(stream)
 	return true
 end
 
+-- The instance is found on the strip rather than closed over, because a ticker
+-- takes a named function and there is one strip per stream.
+local function Beat(_, strip)
+	Refresh(strip.stream)
+end
+
 -- The strip itself, built once. Three font strings and a hairline, and the one
 -- ticker in this part.
 function Instance:BuildStatus()
@@ -263,7 +269,7 @@ function Instance:BuildStatus()
 	strip:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
 	strip:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
 	strip:SetHeight(STATUS * unit)
-	strip.since = 0
+	strip.stream = self
 
 	self.statusRule = ns.Fill(frame, "ARTWORK", C.hairline[1], C.hairline[2],
 		C.hairline[3], 1)
@@ -287,14 +293,7 @@ function Instance:BuildStatus()
 	self.rate = UI.Label(strip, STATUS_TEXT, C.quiet, "RIGHT", UI.OUTLINE)
 	self.rate:SetPoint("RIGHT", strip, "RIGHT", -STATUS_INSET * unit, 0)
 
-	strip:SetScript("OnUpdate", function(this, elapsed)
-		this.since = this.since + elapsed
-		if this.since < BEAT then
-			return
-		end
-		this.since = 0
-		Refresh(self)
-	end)
+	UI.Ticker(strip, BEAT, "stream", Beat)
 
 	if self.onStatusTooltip then
 		strip:SetScript("OnEnter", function()

@@ -43,13 +43,17 @@ local SAMPLE_RATE = 1.0
 -- performance tab and was missing from this list, so the row for it read as
 -- unavailable for the whole life of the enemy cast row: Perf.Start finds no
 -- slot for a key that is not here and returns without doing anything.
+-- "castsweep" is the other half of "playercast". The two were one handler timed
+-- as one number, and splitting the poll from the per-frame fill split the
+-- measurement with it rather than reporting a fifth-of-a-second poll as
+-- something that happens sixty times a second.
 local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast",
-	"skin", "party", "meter", "buffs", "cooldowns", "hide" }
+	"castsweep", "skin", "party", "meter", "buffs", "cooldowns", "hide" }
 local slots = {}
 local gauges, gaugeOrder = {}, {}
 
 local watching = false   -- the tab is on screen
-local elapsed = 0
+local ticker             -- the sampler's own tick, kept so the tab can stop it
 local lastMemory, memoryRate, memoryNow = nil, 0, 0
 local selfCost = 0       -- what the bracketing itself costs, in ms per second
 local clock                -- debugprofilestop, or nil where the client has none
@@ -240,19 +244,18 @@ function Perf.Watch(on)
 		return false
 	end
 	watching = on
-	elapsed = 0
 	if on then
 		lastMemory = nil
 		Perf.Sample()
-		sampler:SetScript("OnUpdate", function(_, delta)
-			elapsed = elapsed + delta
-			if elapsed >= SAMPLE_RATE then
-				elapsed = 0
-				Perf.Sample()
-			end
-		end)
-	else
-		sampler:SetScript("OnUpdate", nil)
+		if ticker then
+			ticker:Start()
+		else
+			-- Not timed under a slot of its own: a sampler that measured
+			-- itself would be reporting the cost of the measurement.
+			ticker = ns.UI.Ticker(sampler, SAMPLE_RATE, "sampler", Perf.Sample)
+		end
+	elseif ticker then
+		ticker:Stop()
 	end
 	return true
 end
