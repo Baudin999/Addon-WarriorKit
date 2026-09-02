@@ -801,6 +801,15 @@ local function Build(list)
 	-- Somewhere to be before the first layout. Hang moves it, on this pass and
 	-- on every one after it.
 	list.header:SetPoint("TOPLEFT", list.anchor, "TOPLEFT", 0, 0)
+	-- The template is declared hidden in FrameXML, and a header that is not
+	-- visible does nothing at all: SecureGroupHeader_Update is reached from an
+	-- attribute write, from the roster event and from OnShow, and the first two
+	-- ask IsVisible before they run. So every attribute Secure writes lands on a
+	-- header that never makes a button, and the party draws nothing however
+	-- right the rest of the pass is. Shown once, here, and never hidden again:
+	-- which list has anybody in it is showParty and showRaid's answer, and a
+	-- header with nobody to show has no children to draw.
+	list.header:Show()
 	list.built = true
 	return true
 end

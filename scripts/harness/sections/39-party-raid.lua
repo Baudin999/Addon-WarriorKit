@@ -17,11 +17,9 @@
 -- What it costs. A tick over four blocks that allocates nothing, which is what
 -- the HOT list holds Member.lua to and what this measures.
 --
--- What this cannot prove is the header. SecureGroupHeaderTemplate is
--- FrameXML's, harness/client/09-group.lua is a model of it written from the
--- contract, and a model that is wrong is a test that passes and a client that
--- does not. What is asserted about it is the half the addon owns: the
--- attributes it wrote, and the order it put in the name list.
+-- What this cannot prove is the header. It is FrameXML's and 09-group.lua is a
+-- model of it, and a model that is wrong is a test that passes over a client
+-- that does not. It was wrong once, at the gate that ignores a hidden header.
 
 local H = ...
 local ns, check, fire = H.ns, H.check, H.fire
@@ -135,6 +133,8 @@ check(_G.WarriorKitParty ~= nil and _G.WarriorKitPartyHeader ~= nil,
 	"the list you drag and the header on it are not both named")
 check(_G.WarriorKitParty.ignoreScale == true,
 	"the frame you drag the list by is not on the grid")
+check(header:IsVisible() and raidHeader:IsVisible(),
+	"a header was left hidden, and hidden it makes no block whatever it is told")
 
 stand(PARTY, false)
 

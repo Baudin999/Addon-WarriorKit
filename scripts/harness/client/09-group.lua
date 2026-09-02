@@ -352,13 +352,25 @@ local function Update(header)
 	header.shownUnits = shown
 end
 
+-- The template as FrameXML declares it: hidden, and deaf while it is.
+--
+-- SecureGroupHeaderTemplate carries hidden="true", and both of the doors into
+-- SecureGroupHeader_Update that an addon reaches, the attribute write and the
+-- roster event, ask IsVisible first. OnShow is the third and is the one that
+-- opens the other two. A fixture that updated a hidden header let the party
+-- pass every assertion here and draw nothing in the game, which is exactly the
+-- bug it was meant to catch, so the flag and the gate are both modelled.
 local function Header(header)
 	header.buttons = {}
 	header.shownUnits = {}
+	header.shown = false
+	header.scripts.OnShow = Update
 	local write = header.SetAttribute
 	header.SetAttribute = function(self, name, value)
 		write(self, name, value)
-		Update(self)
+		if self:IsVisible() then
+			Update(self)
+		end
 	end
 	header.wkUpdate = Update
 end
