@@ -48,12 +48,13 @@ review found it.
 ## Open
 
 Items 16 to 22 came out of an architecture review on 2026-08-29. Items 16 and
-19 landed on 2026-09-02 and are above, with 23. Every one is a duplication or a rule the
-addon already believes in and does not enforce. None is a bug: the addon draws
-the right thing today. They are the shapes that make the next change cost more
-than it should, ordered so the one that drags the most out with it goes first.
-Item 15 undercounted its own sites by five and asked for a fix `0312cf3` had
-already made, so read an item against the code before working it.
+19 landed on 2026-09-02 and are above, with 23. Every one is a duplication or a
+rule the addon already believes in and does not enforce. None is a bug: the
+addon draws the right thing today. They are the shapes that make the next
+change cost more than it should, ordered so the one that drags the most out
+with it goes first. Item 15 undercounted its own sites by five and asked for a
+fix `0312cf3` had already made, so read an item against the code before working
+it.
 
 17. The slash dispatchers, off a table rather than a chain of ifs.
 
