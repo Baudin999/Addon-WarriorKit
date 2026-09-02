@@ -11,8 +11,8 @@ hash is the last of them. What was wrong and what fixed it is in
 `docs/CHANGELOG.md` and `docs/README.md`, what is still unconfirmed in game is
 in the README's untested list, and the full text of each item is this file at
 `e7ef4ca` for 1 to 6, 8, 11 and 12, at `ca59a77` for 7, 9 and 13, at
-`44c79ef` for 15, at `a7772af` for 16 and at `c37c149` for 19. Items 14 and 23
-were never written longer than they are here.
+`44c79ef` for 15, at `a7772af` for 16, at `c37c149` for 19 and at `b5d2277` for
+17. Items 14 and 23 were never written longer than they are here.
 
 1. Weapon swing timer. `8be9a43`
 2. Deep Wounds missing from the enemy bar debuffs. `05e40ec`
@@ -34,6 +34,7 @@ were never written longer than they are here.
 15. A placeable HUD frame, named at last. `80528bc`
 16. `ns.RegisterUnitEvent` in Core, where the other thirty shims live.
     `3df1df1`
+17. The slash dispatchers, off a table rather than a chain of ifs. `abddb67`
 19. `UI.Window` re-zooms its own frame, and every screen sizes on its own.
     `da4a01a`
 23. A ceiling only moves down, in `scripts/ratchet.lua`. `271f8e6`
@@ -47,31 +48,13 @@ review found it.
 
 ## Open
 
-Items 16 to 22 came out of an architecture review on 2026-08-29. Items 16 and
-19 landed on 2026-09-02 and are above, with 23. Every one is a duplication or a
-rule the addon already believes in and does not enforce. None is a bug: the
-addon draws the right thing today. They are the shapes that make the next
-change cost more than it should, ordered so the one that drags the most out
-with it goes first. Item 15 undercounted its own sites by five and asked for a
-fix `0312cf3` had already made, so read an item against the code before working
-it.
-
-17. The slash dispatchers, off a table rather than a chain of ifs.
-
-    `Command.Number` abstracts the parsing and stops there. Its 34 callers then
-    each hand-write the same four steps: write `ns.db.<key>`, call the module's
-    `Apply`, `ns.Print` a sentence, `return`. `src/Swing/Feature.lua:44`,
-    `src/Cooldowns/Feature.lua:35` and `src/Progress/Feature.lua:44` are three
-    identical zoom handlers differing in the db key, the apply call and one
-    noun.
-
-    What it costs is on the shape report. `SkinWord` is 119 lines and 37
-    branches, `BarsWord` 97 and 37, `BuffWord` 97, and two of them hold entries
-    in the `scripts/shape.lua` allow-list reading "a slash dispatcher, one
-    branch per word". A declarative table of
-    `{ word, key, low, high, apply, say }` handed to a shared runner retires
-    both entries instead of raising a number, which is the direction that list
-    is meant to move.
+Items 16 to 22 came out of an architecture review on 2026-08-29. Items 16, 17
+and 19 landed on 2026-09-02 and are above, with 23. Every one is a duplication
+or a rule the addon already believes in and does not enforce. None is a bug: the
+addon draws the right thing today. They are the shapes that make the next change
+cost more than it should, ordered so the one that drags the most out with it
+goes first. Item 15 undercounted its own sites by five and asked for a fix
+`0312cf3` had already made, so read an item against the code before working it.
 
 18. One ticker, and a HOT list derived from it.
 
@@ -115,7 +98,7 @@ it.
     that promise by registering from `<Folder>/Feature.lua`. `Core/Menu.lua:275`
     is the one that does not. It is a small file and a real feature, with a
     slash word and a status line, and it wants a folder like everything else.
-    Worth doing last, when the four items above have already proved the
+    Worth doing last, when the three items above have already proved the
     registry does not need Core's help.
 
 ## Deliberately not on this list
