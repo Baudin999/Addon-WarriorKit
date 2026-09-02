@@ -32,7 +32,7 @@ in the README's untested list, and the full text of each item is this file at
     them. `371d82d`
 15. A placeable HUD frame, named at last. `80528bc`
 16. `ns.RegisterUnitEvent` in Core, where the other thirty shims live. Six
-    files deleted their own two-branch registration. `2e94f56`
+    files deleted their own two-branch registration. `3df1df1`
 19. `UI.Window` re-zooms its own frame, and every screen sizes on its own.
 
     The item asked for two lines to move out of four windows and into
