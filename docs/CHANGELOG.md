@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### Your corpse on the map, and a drag that moves the map
+
+Two things the world map did not do, both of them things the client's own map
+has always done.
+
+The corpse was simply absent. `C_DeathInfo.GetCorpseMapPosition` is what
+Blizzard's own map asks on this build, it answers against whatever map it is
+handed the way a unit's position does, and `Chart.Corpse` asks it the same way
+`Chart.Spot` asks for a unit: probed, pcalled, and refused where the answer
+falls outside the map's own rectangle. The zeroed corner is refused too, because
+a client that answers 0, 0 for "no corpse" would put a skull in the top left of
+every zone for the life of the install. The mark is the client's own art, one
+cell of `Interface\Minimap\POIIcons` at nineteen pixels, which is Blizzard's
+own template down to the crop. It is drawn over Questie's markers and your group
+and under the arrow, and it goes when you are back on your feet: the map
+repaints on `CORPSE_POSITION_UPDATE`, `PLAYER_ALIVE` and `PLAYER_UNGHOST`.
+
+The drag moved the window. That was deliberate once and the header of
+`UI/Chart.lua` argued for it: zooming at the cursor is a pan and a zoom in one
+notch, and dragging means an OnUpdate on a window that is open all evening. It
+is not enough at six times, where the box is looking at a sixth of a zone and
+following a road means zooming out to find the next piece of it and back in
+again. So a drag now pushes the picture under the box whenever the zoom has left
+the picture bigger than the box, and is handed up to the window when it has not.
+No modifier decides it; the picture does.
+
+The tick lives for the length of the drag and is stopped on the button coming
+up, which is the bargain `UI/Placeable.lua` already makes for the other drag in
+the addon. Each frame is measured from the grab rather than from the frame
+before it, so a push into an edge and back out does not come back short by
+whatever the clamp took. A pan writes the two offsets and moves the canvas and
+does nothing else: the tiles, the fog and the marks are anchored to the canvas,
+so `Settle` is not on the drag's path at all.
+
+`Board:Drag`, `Board:Where` and `Board:Grave` are the readings, and
+`scripts/harness/sections/54-world-map.lua` makes the claims a screenshot cannot:
+which of the two things a drag did, that the picture stops at its own corners
+rather than going through them, and that the skull is Blizzard's cell of
+Blizzard's sheet rather than the sheet.
+
 ### One ticker, and the hot list derived from it
 
 Twelve files wrote the same five lines: accumulate the frame's delta, compare it

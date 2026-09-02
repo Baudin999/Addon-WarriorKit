@@ -52,11 +52,22 @@ local C, M = UI.Color, UI.Metric
 -- far end, which is where one of the client's 256 pixel tiles is drawn at twice
 -- its own size and the art gives out.
 --
--- The point under the cursor stays where it is. That is the whole of the
--- navigation and it is deliberate: a map that zoomed to its own centre would
--- need dragging as well, dragging means following the cursor, and following the
--- cursor means an OnUpdate on a window that is open all evening. Zooming at the
--- cursor is a pan and a zoom in one wheel notch and costs no ticker at all.
+-- The point under the cursor stays where it is, so one notch is a pan and a
+-- zoom together. That was the whole of the navigation for a while, on the
+-- argument that dragging means following the cursor and following the cursor
+-- means an OnUpdate on a window that is open all evening. It is not enough. A
+-- wheel notch pans towards whatever the pointer is already on, and at six times
+-- the box is looking at a sixth of the zone: reading the road you have zoomed
+-- in on means zooming out to find the next bit and back in again, which is the
+-- gesture Blizzard's own map has never asked anybody for.
+--
+-- **So a drag on a zoomed picture pushes it under the box.** The tick that
+-- follows the cursor lives for the length of the drag and is stopped on the
+-- button coming up, which is the bargain UI/Placeable.lua already makes for the
+-- other drag in the addon: an OnUpdate while a button is held is not a ticker
+-- the addon has to defend, it is the gesture itself. Nothing is written unless
+-- the offsets moved, and only the offsets move: the tiles, the fog and the
+-- marks are placed on the canvas and the canvas is what slides.
 --
 -- **A click on the picture is answered by the client, not by this file.** The
 -- caller hands over a function and gets back the map that was clicked and where
@@ -67,11 +78,14 @@ local C, M = UI.Color, UI.Metric
 -- read. A caller that passes no function gets a picture the mouse goes
 -- straight through, which is what the quest log's map wants and what it had.
 --
--- **A drag on the picture still moves the window it is in.** A frame that
+-- **A drag with nothing to push moves the window it is in.** A frame that
 -- answers the mouse stops the frame under it from seeing the drag, and the
 -- window this board sits in is dragged from anywhere on itself rather than
--- from a bar. So the drag is handed up to whichever frame above this one is
--- movable, and a drag that moved the window is not also a click.
+-- from a bar. So a drag the picture has no room for is handed up to whichever
+-- frame above this one is movable, and a drag that moved either one is not
+-- also a click. Which of the two happens is decided by the picture rather than
+-- by a modifier: a zone that fits its box has nowhere to go and the window
+-- moves, and a zoomed one is what you meant to drag.
 --
 -- **The viewport grows with the zoom and the box never outruns the picture.**
 -- The caller says how wide the picture may be and how much height there is
@@ -124,6 +138,7 @@ Chart.BACK = "back" -- who the thing goes back to
 Chart.YOU  = "you"  -- where you are standing, which no database knows
 Chart.MARK = "mark" -- a numbered place, which the dungeon log's bosses are
 Chart.MATE = "mate" -- somebody else in your group, in their own class colour
+Chart.DEAD = "dead" -- your corpse, which only the client knows the way back to
 
 -- One dot, and the pale square behind it.
 --
@@ -154,6 +169,17 @@ local BADGE = 14
 -- A gold square was here before and it said where you were standing without
 -- saying which way you were facing, which is half of what you open a map for.
 local ARROW, HEADING = "Interface\\WorldMap\\WorldMapArrow", 16
+
+-- Where your corpse is, drawn as the client's own skull.
+--
+-- Blizzard's parity again, and this time it is a cell rather than a file: its
+-- own map draws the corpse out of Interface\Minimap\POIIcons, the last eighth
+-- of the top row of the sheet, at twenty four pixels scaled to eight tenths.
+-- Same sheet, same cell, same nineteen pixels here. A skull is the mark every
+-- player has run towards since the first client and nothing this addon could
+-- draw instead would be read faster.
+local BONES, BONING = "Interface\\Minimap\\POIIcons", 19
+local CELL = { 0.875, 1, 0, 0.125 }
 
 -- How often the arrow is taken again while the board is up.
 --
@@ -349,13 +375,7 @@ end
 -- Only you, your party and your raid are ever answered for. That is the
 -- client's rule rather than this file's, and it is the reason a map cannot
 -- draw the friend who is not in your group.
-function Chart.Spot(map, unit)
-	local api = Api()
-	if not api or type(map) ~= "number"
-		or type(api.GetPlayerMapPosition) ~= "function" then
-		return nil
-	end
-	local ok, at = pcall(api.GetPlayerMapPosition, map, unit)
+local function Placed(ok, at)
 	if not ok or type(at) ~= "table" or type(at.GetXY) ~= "function" then
 		return nil
 	end
@@ -364,13 +384,49 @@ function Chart.Spot(map, unit)
 		return nil
 	end
 	-- Off the picture is not on it. What comes back is a fraction of the map's
-	-- own rectangle, and somebody outside that rectangle comes back as a
+	-- own rectangle, and anything outside that rectangle comes back as a
 	-- fraction outside nought to one: a mark drawn off the edge of the board,
 	-- or pinned to a corner nobody is standing in.
 	if x < 0 or x > 1 or y < 0 or y > 1 then
 		return nil
 	end
 	return x * 100, y * 100
+end
+
+function Chart.Spot(map, unit)
+	local api = Api()
+	if not api or type(map) ~= "number"
+		or type(api.GetPlayerMapPosition) ~= "function" then
+		return nil
+	end
+	return Placed(pcall(api.GetPlayerMapPosition, map, unit))
+end
+
+-- Where your corpse is on one map, in the same coordinates a unit is answered
+-- in. Nothing at all while you are alive, and nothing on a map it is not on.
+--
+-- Its own namespace rather than C_Map, and asked the same way: C_DeathInfo
+-- answers a position against whatever map it is handed, so the corpse lands on
+-- the continent picture as well as on the zone one. This is the call Blizzard's
+-- own map makes for its own corpse pin, on this client, in
+-- Blizzard_SharedMapDataProviders.
+--
+-- The corner is refused as well as the numbers outside the rectangle. A client
+-- with no corpse is meant to answer nothing, and one that answers a zeroed
+-- vector instead would put a skull in the top left of every zone you opened,
+-- forever. What that costs is a corpse in the first pixel of a map, which is
+-- off the walkable part of every zone in the game.
+function Chart.Corpse(map)
+	local api = _G.C_DeathInfo
+	if type(map) ~= "number" or type(api) ~= "table"
+		or type(api.GetCorpseMapPosition) ~= "function" then
+		return nil
+	end
+	local x, y = Placed(pcall(api.GetCorpseMapPosition, map))
+	if not x or (x == 0 and y == 0) then
+		return nil
+	end
+	return x, y
 end
 
 -- Which map you are on and where you are standing on it. Absent on a client
@@ -478,6 +534,27 @@ local function Under(board)
 	end
 	return math.max(0, math.min(1, (x / scale - left) / wide)),
 		math.max(0, math.min(1, (top - y / scale) / tall))
+end
+
+-- Where the pointer is on the screen, in the board's own units.
+--
+-- Not Under, and the difference is what each one is for. Under answers a
+-- fraction of the box, which is what a zoom at the cursor needs and what makes
+-- a cursor at the edge of the box mean the edge of the picture. A drag is a
+-- distance rather than a place: what it needs is the same number twice, a
+-- frame apart, and a fraction of a box that is itself growing under the wheel
+-- is not that number.
+--
+-- Nothing at all where the client will not say, which stops the drag rather
+-- than pushing the picture to a place nobody pointed at.
+local function Cursor(board)
+	local scale = board.frame:GetEffectiveScale()
+	local ok, x, y = pcall(_G.GetCursorPosition)
+	if not ok or type(x) ~= "number" or type(y) ~= "number"
+		or type(scale) ~= "number" or scale <= 0 then
+		return nil
+	end
+	return x / scale, y / scale
 end
 
 local function Tile(board, index)
@@ -665,8 +742,61 @@ local function Hand(owner, script)
 	return true
 end
 
+-- Whether the picture is bigger than the box it is in, which is the whole of
+-- what decides between pushing the map and moving the window.
+--
+-- Half a unit of slack on each axis, because both numbers are the products of
+-- a zoom and a fit and neither lands on a whole one. A zone at rest that
+-- measured a thousandth over its box would take the drag and move by that
+-- thousandth, which is a window that has stopped being draggable from its own
+-- map for no reason anybody could see.
+local function Room(board)
+	return board.wide > board.width + 0.5 or board.high > board.tall + 0.5
+end
+
+-- Take hold of the picture: where the offsets were and where the cursor was,
+-- kept so every frame of the drag is measured from the grab rather than from
+-- the frame before it. Answers whether there was anything to take hold of.
+--
+-- Measuring from the grab is not a nicety. A drag summed frame by frame keeps
+-- whatever the clamp took off at an edge, so a push into the edge of a zone and
+-- back out again comes back short by however far it was pushed, and the picture
+-- crawls away from the cursor over the length of one drag.
+local function Grab(board)
+	if not board.art or not board.pan or not Room(board) then
+		return false
+	end
+	local x, y = Cursor(board)
+	if not x then
+		return false
+	end
+	board.grab.x, board.grab.y = board.x, board.y
+	board.grab.atX, board.grab.atY = x, y
+	board.pan:Start()
+	return true
+end
+
+-- The button up. Answers whether it was the picture being dragged, because the
+-- window's own handler has to be told the drag is over and only where it was
+-- the one that started it.
+local function Loose(board)
+	if not board.pan or not board.pan:Running() then
+		return false
+	end
+	board.pan:Stop()
+	return true
+end
+
+-- What the drag ticks on. A named function at the top level for the reason
+-- UI/Placeable.lua's is: scripts/hot.lua walks out from whatever a handler is
+-- set to, and the board is found on the frame the tick hangs off rather than
+-- closed over.
+local function Drift(_, frame)
+	frame.board:Pan()
+end
+
 -- The mouse on the box: a click that asks the caller what is under it, and a
--- drag that goes up to the window.
+-- drag that pushes the picture or, where it has nowhere to go, the window.
 --
 -- Hung only where the caller passed a function, because enabling the mouse is
 -- not free of consequence: it is what stops the window under the picture from
@@ -678,13 +808,27 @@ local function Clicks(board)
 	end
 	port:EnableMouse(true)
 	local owner = Owner(board)
-	if owner and type(port.RegisterForDrag) == "function" then
+	if type(port.RegisterForDrag) == "function" then
+		board.frame.board = board
+		board.grab = {}
+		-- Every frame while the button is held, and stopped on the way out. The
+		-- interval is zero because a picture that followed the cursor five times
+		-- a second would be a picture that lagged behind it, and a tick that is
+		-- only ever running inside a drag is one nothing has to switch off.
+		board.pan = UI.Ticker(board.frame, 0, "chart", Drift)
+		board.pan:Stop()
 		port:RegisterForDrag("LeftButton")
 		port:SetScript("OnDragStart", function()
 			board.dragging = true
+			if Grab(board) then
+				return
+			end
 			Hand(owner, "OnDragStart")
 		end)
 		port:SetScript("OnDragStop", function()
+			if Loose(board) then
+				return
+			end
 			Hand(owner, "OnDragStop")
 		end)
 	end
@@ -956,10 +1100,36 @@ local function Heading(pin)
 	return HEADING
 end
 
--- Which of the three a point is drawn as. You first, because a point of kind
+-- Your corpse, drawn as the client's own skull.
+--
+-- No wash and no ring, for the reason the arrow gets neither. The crop is the
+-- whole of the difference from any other icon on this board: what is being
+-- drawn is one cell of a sheet of sixty four, and a skull with no crop is the
+-- entire sheet squeezed into nineteen pixels, which is a grey smudge that
+-- looks like a mark somebody chose.
+local function Grave(pin)
+	pin.dot:SetTexture(BONES)
+	pin.dot:SetTexCoord(CELL[1], CELL[2], CELL[3], CELL[4])
+	pin.dot:SetVertexColor(1, 1, 1, 1)
+	pin.halo:Hide()
+	for index = 1, 4 do
+		pin.ring[index]:Hide()
+	end
+	return BONING
+end
+
+-- Which of the four a point is drawn as. You first, because a point of kind
 -- YOU carries no icon and would otherwise fall through to a coloured square,
 -- which is what it was before.
 local function Mark(pin, point)
+	-- The whole of whatever texture comes next, because the pins are pooled and
+	-- one of the shapes below draws a single cell out of a sheet. Written before
+	-- the branch rather than inside the three that do not crop, so a shape added
+	-- later cannot inherit a corner of POIIcons and be wrong in a way that reads
+	-- as art.
+	if type(pin.dot.SetTexCoord) == "function" then
+		pin.dot:SetTexCoord(0, 0, 1, 1)
+	end
 	if point.kind == Chart.YOU then
 		return Heading(pin)
 	end
@@ -976,6 +1146,9 @@ local function Mark(pin, point)
 	-- choice; somebody else's art is simply wrong.
 	if type(pin.dot.SetRotation) == "function" then
 		pin.dot:SetRotation(0)
+	end
+	if point.kind == Chart.DEAD then
+		return Grave(pin)
 	end
 	if point.icon then
 		return Badge(pin, point)
@@ -1217,6 +1390,66 @@ function Board:Zoom(delta, atX, atY)
 	return now
 end
 
+-- The picture pushed to an offset, without the rest of Settle.
+--
+-- Only the two offsets and the one call that moves the canvas. Everything
+-- Settle does besides that is a size or a placement, and a pan changes neither:
+-- the tiles, the fog and the marks are anchored to the canvas and the canvas is
+-- what slides under the box. This is what makes a drag affordable at sixty
+-- frames a second where a Settle would not be.
+--
+-- Clamped the same way Settle clamps, so a push past either edge slides to it
+-- and stops rather than showing the colour behind the map. Answers whether
+-- anything moved, which is what stops a frame in which the cursor sat still
+-- from writing a point the picture is already at.
+function Board:Push(x, y)
+	local boxWide = math.min(self.width, self.wide)
+	local boxHigh = math.min(self.tall, self.high)
+	x = math.max(0, math.min(x, self.wide - boxWide))
+	y = math.max(0, math.min(y, self.high - boxHigh))
+	if x == self.x and y == self.y then
+		return false
+	end
+	self.x, self.y = x, y
+	self.Move(UI.Round(self.frame, x), UI.Round(self.frame, y))
+	return true
+end
+
+-- One frame of a drag: wherever the cursor has gone since the grab, the picture
+-- goes with it.
+--
+-- The signs are the difference between dragging a map and scrolling one. The
+-- offsets say how far into the picture the box is looking, so a picture pulled
+-- to the right is a box looking further left and x comes down. The client
+-- counts the cursor upward and the offsets downward, which is why one of them
+-- is a subtraction and the other is not.
+function Board:Pan()
+	local grab = self.grab
+	local x, y = Cursor(self)
+	if not grab or not x then
+		return false
+	end
+	return self:Push(grab.x - (x - grab.atX), grab.y + (y - grab.atY))
+end
+
+-- The gesture without a cursor: the picture dragged by so many units right and
+-- so many up, as the mouse would drag it.
+--
+-- Its own method for the reason Zoom takes a point rather than reading one:
+-- what a drag does at the edge of a zoomed zone is a claim scripts/harness.lua
+-- has to be able to make, and a harness has no cursor to hold down a button
+-- with.
+function Board:Drag(across, up)
+	return self:Push(self.x - (across or 0), self.y + (up or 0))
+end
+
+-- How far into the picture the box is looking, and whether there is anywhere
+-- for it to look. Handed out for the reason Level is: a drag that did nothing
+-- and a drag at the far edge are the same picture from outside.
+function Board:Where()
+	return self.x, self.y, Room(self)
+end
+
 -- A click on the picture, given as two fractions of the zone rather than as a
 -- cursor. Answers whatever the caller's own handler answered.
 --
@@ -1275,6 +1508,25 @@ function Board:Arrow()
 		local pin = self.pins[index]
 		if pin and pin.art and pin:IsShown() then
 			return pin.art, pin:GetWidth(), pin.turn
+		end
+	end
+	return nil
+end
+
+-- Your corpse: what it is drawn as, how big, and which cell of the sheet.
+--
+-- Handed out for the reason Arrow is, and the third number is the one that
+-- matters. The art is one cell of a sheet of sixty four icons, so a mark that
+-- lost its crop is the right texture at the right place on the right zone and
+-- is a grey smudge, which is the failure no other reading here can see.
+function Board:Grave()
+	local points = self.points or {}
+	for index = 1, #points do
+		local pin = self.pins[index]
+		if points[index].kind == Chart.DEAD and pin and pin:IsShown() then
+			local left = type(pin.dot.GetTexCoord) == "function"
+				and pin.dot:GetTexCoord() or nil
+			return pin.dot:GetTexture(), pin:GetWidth(), left
 		end
 	end
 	return nil

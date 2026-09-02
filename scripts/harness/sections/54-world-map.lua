@@ -1,6 +1,6 @@
 -- The world map
 --
--- Nine questions no amount of reading Map/ will answer.
+-- Eleven questions no amount of reading Map/ will answer.
 --
 -- Does the column come out of the client's own tree. Every zone in the game is
 -- a walk over C_Map rather than a list written down, so a walk that stopped at
@@ -21,6 +21,16 @@
 -- that does not come from the client, so it is the one line that can be wrong
 -- without anything else being wrong, and all three of its answers matter: a
 -- range, a city, and a place the table has never heard of.
+--
+-- Is your corpse on it. It is the one mark on the picture you are actually
+-- walking towards, it comes out of a namespace of its own rather than out of
+-- C_Map, and it is drawn as one cell of a sheet of sixty four icons: a mark
+-- that lost its crop is the right art in the right place and is a grey smudge.
+--
+-- Does a drag on a zoomed picture push the picture. The same gesture moves the
+-- window when the zone fits its box, so what is being asked is which of the two
+-- happened, and both failures look identical in a screenshot: a map that will
+-- not be dragged, and a window that walks off the screen when you try.
 --
 -- Does the wheel zoom, and does stepping to another zone throw the zoom away.
 -- The picture is the same widget the quest log's map is and this is the second
@@ -245,6 +255,56 @@ worldmap.Face(0)
 Window.Paint()
 
 ----------------------------------------------------------------------
+-- Your corpse
+----------------------------------------------------------------------
+
+-- The run back is the one walk in the game you make with no idea where you are
+-- going, and this map drew every kobold camp in the zone and not the thing you
+-- were walking towards. Four halves to it: nothing at all while you are alive,
+-- the client's own skull rather than a dot of this addon's, the one cell of the
+-- sheet that skull is, and gone again the moment you have your body back.
+--
+-- Scoped, for the reason every other block here is: a chunk gets two hundred
+-- names in this Lua and the budget in check.sh is what keeps the count off it.
+do
+	check(Pins.Corpse(WESTFALL) == nil, "a corpse was on the map while you are alive")
+
+	worldmap.Died(WESTFALL, 62, 18)
+	Window.Paint()
+	local dead = Pins.Corpse(WESTFALL)
+	check(dead ~= nil and dead.x == 62 and dead.y == 18,
+		("your corpse came back at %s, %s and it is at 62, 18")
+			:format(tostring(dead and dead.x), tostring(dead and dead.y)))
+	check(Pins.Corpse(ELWYNN) == nil,
+		"your corpse was drawn on a zone it is not in")
+	check(Window.Drawn() == 4,
+		("the board is showing %d marks where it has two markers, you and your corpse")
+			:format(Window.Drawn()))
+
+	-- Blizzard's own art at Blizzard's own size, which is what makes the mark
+	-- readable without anybody being taught what it is.
+	local art, size, left = Window.Grave()
+	check(art == "Interface\\Minimap\\POIIcons",
+		("your corpse is drawn as %q rather than as the client's own skull")
+			:format(tostring(art)))
+	check(size == 19,
+		("the skull came out %s pixels and Blizzard draws its own at nineteen")
+			:format(tostring(size)))
+	check(left == 0.875,
+		("the skull is cropped from %s and it is the last eighth of the sheet")
+			:format(tostring(left)))
+
+	-- And gone on the way back up, without the corpse having moved: what ends it
+	-- is being alive again, which is a different event from a position changing.
+	worldmap.Died(nil)
+	Window.Paint()
+	check(Window.Grave() == nil,
+		"your corpse is still on the map with you standing on your feet")
+	check(Window.Drawn() == 3,
+		("the board is showing %d marks with the corpse gone"):format(Window.Drawn()))
+end
+
+----------------------------------------------------------------------
 -- What you have uncovered
 ----------------------------------------------------------------------
 
@@ -320,6 +380,58 @@ Window.Paint()
 check(Window.Zoom() == deepest, "repainting the same zone threw the zoom away")
 Window.Select(ELWYNN)
 check(Window.Zoom() == 1, "stepping to another zone kept the last one's zoom")
+
+----------------------------------------------------------------------
+-- Dragging the picture
+----------------------------------------------------------------------
+
+-- One gesture, two meanings, and the picture decides which. A zone drawn at
+-- rest fills its box exactly, so there is nothing to push and the drag belongs
+-- to the window this board is sitting in; a zoomed one is bigger than its box
+-- and the drag is what reads the rest of it. Zooming at the cursor was the whole
+-- of the navigation before this, and at six times it means zooming out to find
+-- the next piece of road and back in again.
+do
+	Window.Select(WESTFALL)
+	local _, _, loose = Window.Where()
+	check(loose == false,
+		"a zone drawn at rest says it has somewhere to be dragged, and it fills its box")
+	check(Window.Drag(-40, 0) == false,
+		"a map that fits its box was dragged off it, and that drag is the window's")
+
+	for _ = 1, 20 do
+		Window.Zoom(1)
+	end
+	local was, down, room = Window.Where()
+	check(room, "a map at six times says there is nothing to drag")
+
+	-- Pulled left, so the box looks further right. The signs are the difference
+	-- between dragging a map and scrolling one, and a map that scrolls is a map
+	-- that goes the wrong way under the hand every single time.
+	check(Window.Drag(-40, 0), "a zoomed map would not drag")
+	check(Window.Where() == was + 40,
+		("dragging 40 left moved the picture from %s to %s")
+			:format(tostring(was), tostring(Window.Where())))
+	Window.Drag(0, 25)
+	local _, lower = Window.Where()
+	check(lower == down + 25,
+		("dragging 25 up moved the picture from %s to %s"):format(tostring(down), tostring(lower)))
+
+	-- The far edge is a stop rather than a wall the picture goes through. A drag
+	-- that kept going would show the colour behind the map, and one that kept
+	-- counting would come back short by however far it was pushed.
+	check(Window.Drag(-9000, 9000),
+		"the map would not drag as far as its own bottom right corner")
+	check(Window.Drag(-9000, 9000) == false, "the map dragged past its own corner")
+	Window.Drag(9000, -9000)
+	local home, top = Window.Where()
+	check(home == 0 and top == 0,
+		("dragged back the other way the picture stopped at %s, %s rather than at its top left")
+			:format(tostring(home), tostring(top)))
+
+	-- The zoom goes with the zone, so the blocks below open on a picture at rest.
+	Window.Select(ELWYNN)
+end
 
 ----------------------------------------------------------------------
 -- The edges

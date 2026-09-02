@@ -283,6 +283,28 @@ function Pins.You(map)
 		note = ("%.1f, %.1f"):format(x, y) }
 end
 
+-- Your corpse, as a point the chart draws as the client's own skull.
+--
+-- Nothing at all on a map it is not on, and nothing at all while you are alive,
+-- both of which are the client's answer rather than a rule written here.
+--
+-- It is on this window for the same reason it is on Blizzard's: the run back is
+-- the one journey in the game you make with no idea where you are going, and a
+-- map with every kobold camp on it and not the thing you are actually walking
+-- towards is a map you close and swap for the client's own.
+--
+-- No unit on it, so the board's tick leaves it alone. A corpse does not walk.
+-- What moves it is dying somewhere else, and Map/Window.lua repaints on the
+-- client's own event for that.
+function Pins.Corpse(map)
+	local x, y = Chart.Corpse(map)
+	if not x then
+		return nil
+	end
+	return { x = x, y = y, kind = Chart.DEAD, name = "your corpse",
+		note = ("%.1f, %.1f"):format(x, y) }
+end
+
 --------------------------------------------------------------------------
 -- Where one quest's markers went
 --------------------------------------------------------------------------

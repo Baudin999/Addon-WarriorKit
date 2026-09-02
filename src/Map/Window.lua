@@ -120,6 +120,9 @@ end
 -- busy enough to fill the pool is exactly the zone where losing yourself would
 -- matter.
 -- Your group between the two, so a person is drawn over a camp and under you.
+-- Your corpse over all three but under the arrow, because it is the one mark on
+-- the picture you are walking towards and losing it under a kobold is losing
+-- the only thing the map is being read for.
 -- Over a camp because a mark for somebody who is moving is the one on the
 -- picture worth not losing under a static one; under you for the reason the
 -- arrow is last.
@@ -129,6 +132,10 @@ local function Points(map)
 	local mates, placed = Mates.On(map)
 	for index = 1, #mates do
 		points[#points + 1] = mates[index]
+	end
+	local dead = Pins.Corpse(map)
+	if dead then
+		points[#points + 1] = dead
 	end
 	local here = Pins.You(map)
 	if here then
@@ -458,6 +465,36 @@ function Window.Turned()
 	return board and board:Turned() or 0
 end
 
+-- The picture dragged by so many units right and so many up, and how far into
+-- it the box is looking afterwards.
+--
+-- Handed out for the reason Zoom is. What a drag does is invisible from
+-- anywhere else: the picture is one canvas inside one box and both of them are
+-- the chart's own frames, so a drag that moved nothing, moved the wrong way, or
+-- pushed the zone off the edge of its own box all look alike from here.
+function Window.Drag(across, up)
+	if not board then
+		return false
+	end
+	return board:Drag(across, up)
+end
+
+function Window.Where()
+	if not board then
+		return 0, 0, false
+	end
+	return board:Where()
+end
+
+-- Your corpse: what it is drawn as, how big, and which cell of the sheet it
+-- took. Handed out for the reason Arrow is.
+function Window.Grave()
+	if not board then
+		return nil
+	end
+	return board:Grave()
+end
+
 -- A click on the picture, given as two fractions of the zone, and the zone it
 -- moved to. Handed out for the reason Zoom is: where the borders of a zone are
 -- comes out of a table inside the client, so a click that stepped into the
@@ -571,6 +608,13 @@ events:RegisterEvent("GROUP_ROSTER_UPDATE")
 -- RegisterEvent, and the one taken down with it would be the whole window.
 pcall(events.RegisterEvent, events, "MAP_EXPLORATION_UPDATED")
 events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+-- Your corpse appearing, moving and going again. The first is the client's own
+-- event for it, which is what Blizzard's map registers for its own corpse pin
+-- on this build; the other two are release and resurrection, which are the two
+-- moments the mark has to go without any position having changed.
+events:RegisterEvent("CORPSE_POSITION_UPDATE")
+events:RegisterEvent("PLAYER_ALIVE")
+events:RegisterEvent("PLAYER_UNGHOST")
 events:SetScript("OnEvent", function(_, event)
 	if event == "PLAYER_LOGIN" then
 		if ns.db.worldMap then

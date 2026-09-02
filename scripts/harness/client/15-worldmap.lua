@@ -203,6 +203,25 @@ api.GetPlayerMapPosition = function(map, unit)
 end
 
 --------------------------------------------------------------------------
+-- Where your corpse is
+--------------------------------------------------------------------------
+
+-- C_DeathInfo answers the corpse against whatever map it is handed, exactly the
+-- way a unit's position is answered, and answers nothing at all while you are
+-- alive. Both halves are the fixture: a section has to be able to die in one
+-- zone and read the other zone's map, and it has to be able to come back.
+local dead = nil
+
+_G.C_DeathInfo = {
+	GetCorpseMapPosition = function(map)
+		if not dead or not answers(dead, map) then
+			return nil
+		end
+		return { GetXY = function() return dead.x / 100, dead.y / 100 end }
+	end,
+}
+
+--------------------------------------------------------------------------
 -- What you have uncovered, and which way you are pointing
 --------------------------------------------------------------------------
 
@@ -347,6 +366,13 @@ H.worldmap = {
 	Stand = function(unit, map, x, y)
 		placed[unit] = map and { map = map, x = x, y = y } or nil
 		return placed[unit]
+	end,
+	-- Where you left your corpse, so a section can die in a zone, read the map
+	-- and be resurrected. Nothing at all is being alive, which is the state
+	-- every other claim in the section is made in.
+	Died = function(map, x, y)
+		dead = map and { map = map, x = x, y = y } or nil
+		return dead
 	end,
 	-- More markers than one zone is allowed, so the cap can be measured. Each
 	-- one is a fresh frame in its own register entry, which is the shape a

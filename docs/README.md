@@ -6274,6 +6274,30 @@ Everything below was written from the API contract and has never executed:
   a Questie whose internals moved draws fewer markers rather than raising. What
   is unproven is the count: `/wk map markers` says how many Questie is holding,
   and a map with none on it where that number is large is the failure.
+- **Whether `C_DeathInfo.GetCorpseMapPosition` answers on these builds.** Your
+  corpse is on the map because that call says where it is, asked against the map
+  being drawn so the skull lands on the continent picture as well as on the zone
+  one. It is the call Blizzard's own corpse pin makes on this client, in
+  `Blizzard_SharedMapDataProviders`, and it is probed and pcalled here like every
+  other reach into the client. Two failures, and they look alike from the sofa: a
+  build that answers nothing draws no skull, and one that answers a zeroed vector
+  where it means "no corpse" would draw one in the top left corner of every zone,
+  which is why the corner is refused. What would settle it: die, release, open
+  the map.
+- **Whether the skull comes out of `Interface\Minimap\POIIcons` at that cell.**
+  The art and the crop are read off Blizzard's own `CorpsePinTemplate` for this
+  client, which draws the last eighth of the sheet's top row at twenty four
+  pixels scaled to eight tenths. A wrong cell is a different icon at nineteen
+  pixels and a lost crop is the whole sheet squeezed into a grey smudge, so both
+  failures are a mark in the right place that does not read as a skull.
+- **Whether the drag pans the picture rather than the window.** A drag on the
+  board pushes the map under its box while the zoom has left the picture bigger
+  than the box, and is handed up to the window otherwise, so which of the two
+  happens is decided by the zoom and nothing else. The tick that follows the
+  cursor runs only while the button is down. What would settle it: open the map,
+  zoom in, drag. The failures are a window that walks off the screen when you try
+  to read the far side of a zone, and a map at rest that has stopped being a
+  place you can drag the window from.
 - **Whether caging `WorldMapFrame` costs Questie anything.** Questie hands its
   icons to HereBeDragons to place on the client's map, and a map that is never
   shown is a map those pins are never placed on. The frames themselves are made
