@@ -98,6 +98,12 @@ local SWITCHES = {
 	{ key = "hideBlizzTalents", word = "talents",
 		label = "Blizzard's talent window",
 		hint = "N opens this addon's instead, and Blizzard's is never loaded while this is ticked." },
+	-- The fourth whose frames are not in FRAMES below, and a file for the
+	-- reason the character sheet's is: the P key comes with the window.
+	-- Spellbook/Blizzard.lua registers through Blizz.Also.
+	{ key = "hideBlizzSpellbook", word = "spellbook",
+		label = "Blizzard's spell book",
+		hint = "P opens this addon's instead. Your pet's book is a page of the same frame and this addon does not draw one, so untick this if you want it." },
 }
 
 -- What each switch takes down, and what it takes to take it down.

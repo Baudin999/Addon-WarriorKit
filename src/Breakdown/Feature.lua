@@ -153,7 +153,7 @@ ns.Register({
 	},
 
 	zooms = {
-		{ key = "breakdownZoom", label = "Breakdown", window = true },
+		{ key = "breakdownZoom", label = "Breakdown", window = true, own = true },
 	},
 
 	defaults = {

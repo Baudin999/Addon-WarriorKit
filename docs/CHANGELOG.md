@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### One row per spell, the ranks behind a button
+
+The client's spell book lists every rank of every spell as its own entry,
+twelve to a page. A warrior at sixty pages past Rend six times and Battle
+Shout seven to find Sunder Armor, and the one time you want a lower rank you
+page back to find it.
+
+`Spellbook/` is the addon's own window in its place: a spell is one row, the
+square, the name, and the rank the square is holding on the right. Where you
+know more than one rank there is a fold-out button beside it, and the rank you
+pick there is what the square casts on a click and what a drag off it puts on
+a bar. The pick is written down per character, so a Frostbolt set to rank
+three is rank three tomorrow. The top rank is the default and is not written
+down at all. A tab is laid out in two columns and the window is sized to the
+tallest tab, so nothing scrolls, and a passive is drawn with its word under it
+and no fold-out.
+
+Every square is a secure button, which is what lets a click cast. The cost is
+the character sheet's: in a fight the window opens and closes on P and its
+own cross, both snippets, and a rank picked mid-fight lands on the square when
+the fight ends, which the foot says while it waits. Blizzard's own frame goes
+in the attic and P opens this one, behind the switch on the Blizzard page with
+the others; the pet's book is a page of that frame and this addon does not
+draw one, which the switch's hint says. `/wk spellbook` opens it, `spellbook
+on|off`, `spellbook hide on|off` and `spellbook ranks`, a line on On and off,
+and a section of the panel under Windows.
+
 ### One window over another
 
 Every window the addon opens sits in the DIALOG strata at the same frame

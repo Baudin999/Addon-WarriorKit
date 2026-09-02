@@ -80,7 +80,7 @@ ns.Register({
 	},
 
 	zooms = {
-		{ key = "dungeonsZoom", label = "Adventure guide", window = true },
+		{ key = "dungeonsZoom", label = "Adventure guide", window = true, own = true },
 	},
 
 	defaults = {

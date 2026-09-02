@@ -289,6 +289,7 @@ local SECTIONS = {
 	"65-bag-piles",
 	"66-bag-drop",
 	"67-talents",
+	"68-spellbook",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

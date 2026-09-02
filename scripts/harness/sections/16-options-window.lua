@@ -605,8 +605,14 @@ if window then
 	-- sentence, a lede, four readings and one line on the Blizzard page, and
 	-- nothing else, because the window itself is where the talents are
 	-- explained. 26,100 is that plus the same room again.
-	check(prose < 26100,
-		("the window holds %d characters of prose and the budget is 26,100"):format(prose))
+	--
+	-- The spell book arrived and it is 26,525 across sixty-eight: a switch
+	-- sentence, a lede, two readings and a line with a hint on the Blizzard
+	-- page, plus a lede for the zoom page's third list, which is the windows
+	-- list split in two because a thirteenth window no longer fit the view.
+	-- 26,700 is that plus the same room again.
+	check(prose < 26700,
+		("the window holds %d characters of prose and the budget is 26,700"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

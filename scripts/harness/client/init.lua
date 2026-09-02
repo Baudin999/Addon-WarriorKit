@@ -236,6 +236,13 @@ for _, part in ipairs({
 	-- the same run the talent window paints. It takes GetNumTalents over from
 	-- 04-hands.lua and leaves that file's GetTalentInfo for the Slam window.
 	"18-talents",
+	-- Last, and it takes the four book calls over from 03-player.lua: that
+	-- file answers three indices and no tabs, which is all the drag readers
+	-- asked, and the spell book window walks the tabs. The first three
+	-- indices stay what 03-player.lua said, with the same ids, so the three
+	-- sections that drag off them by index see no change. It also makes one
+	-- frame, so it wants the last word on CreateFrame above it.
+	"19-spellbook",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

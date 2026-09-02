@@ -370,9 +370,10 @@ end
 _G.GetNumSpellTabs = constant(0)
 -- The spellbook, as much of it as one reader needs.
 --
--- GetNumSpellTabs stays at zero, because Buttons/Ranks.lua walks the tabs and
--- has always been tested against a book it cannot read: GetSpellTabInfo is
--- still absent, so its probe refuses at the same rung it always did.
+-- GetNumSpellTabs is zero here and GetSpellTabInfo absent, which is the book
+-- Buttons/Ranks.lua was written against. 19-spellbook.lua takes both over,
+-- with tabs and ranks, for the window that walks them; these three indices
+-- and their ids are what that file starts from, unchanged.
 --
 -- What is here is the other reader. Hover/Hover.lua asks what a spell dropped
 -- on its slot is, and this client answers that with the spellbook index and the

@@ -155,7 +155,7 @@ ns.Register({
 	order = 18,
 
 	zooms = {
-		{ key = "clutterZoom", label = "Clutter", window = true },
+		{ key = "clutterZoom", label = "Clutter", window = true, own = true },
 	},
 
 	defaults = {

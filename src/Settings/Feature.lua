@@ -185,10 +185,13 @@ ns.Register({
 	-- and a confirm box is asked by whoever is about to do something you cannot
 	-- undo, so neither has a part to be owned by.
 	zooms = {
-		{ key = "panelZoom", label = "Options panel", window = true },
+		-- `own` puts a window on the zoom page's second list, with the other
+		-- windows the client has no copy of; Where() on the panel below is
+		-- the whole of what reads it.
+		{ key = "panelZoom", label = "Options panel", window = true, own = true },
 		{ key = "tipZoom", label = "Tooltips",
 		  apply = function() Settings.SetTipZoom(ns.db.tipZoom) end },
-		{ key = "dialogZoom", label = "Confirm box", window = true,
+		{ key = "dialogZoom", label = "Confirm box", window = true, own = true,
 		  apply = function() Settings.Set(ns.db.dialogZoom) end },
 	},
 
@@ -276,23 +279,39 @@ ns.Register({
 		local low, high = ns.UI.Tooltip.LingerRange()
 		local fontLow, fontHigh = ns.UI.Tooltip.FontRange()
 
-		-- Two lists, and the split is what makes the page usable rather than
+		-- Three lists, and the split is what makes the page usable rather than
 		-- complete. Twenty three rows with a sentence under each came to forty
 		-- nine cells and a thousand units of stack in a view that holds three
 		-- hundred and fifty, so the row you opened the page for was three
-		-- screens down. The windows and the things drawn over the world are the
-		-- two halves anybody thinks in, and each fits without scrolling.
+		-- screens down. The windows and the things drawn over the world were
+		-- the two halves anybody thinks in, and each fit without scrolling
+		-- until the thirteenth window: a list is fifteen cells at most with
+		-- its reading and its button under it, and the spell book was the
+		-- sixteenth. So the windows are two lists now, split the way the
+		-- Blizzard page already splits them: the ones that stand in for a
+		-- window of the client's, and the ones the client has no copy of.
 		--
 		-- The sentence under every row is gone with it. It said which stop that
 		-- screen was on and whether the stop kept a hairline sharp, twenty three
 		-- times, and the reading at the foot of each list answers that for every
 		-- row at once: the stops that stay exact are a fact about the monitor,
 		-- not about the screen being sized.
+		--
+		-- Which list a screen is on is read off two flags on its registration:
+		-- `window` says it is a window at all, and `own` that the client has
+		-- no copy of it. A screen with neither is drawn over the world.
+		local function Where(zoom)
+			if zoom.window ~= true then
+				return "screen"
+			end
+			return zoom.own and "own" or "client"
+		end
+
 		local function Rows(want, title, lede)
 			ui.Section(title, "The screen")
 			ui.Lede(lede)
 			for _, zoom in ipairs(ns.Zooms()) do
-				if (zoom.window == true) == want then
+				if Where(zoom) == want then
 					ui.Zoom(
 						function() return Settings.Snap(ns.db[zoom.key]) end,
 						function(value)
@@ -321,7 +340,7 @@ ns.Register({
 				return "this list back to its defaults"
 			end, function()
 				for _, zoom in ipairs(ns.Zooms()) do
-					if (zoom.window == true) == want then
+					if Where(zoom) == want then
 						ns.db[zoom.key] = ns.DefaultFor(zoom.key)
 						if zoom.apply then
 							zoom.apply()
@@ -331,7 +350,7 @@ ns.Register({
 				ns.UI.Notify()
 			end, function()
 				for _, zoom in ipairs(ns.Zooms()) do
-					if (zoom.window == true) == want
+					if Where(zoom) == want
 						and Settings.Snap(ns.db[zoom.key]) ~= ns.DefaultFor(zoom.key) then
 						return true
 					end
@@ -346,9 +365,11 @@ ns.Register({
 		-- The alternative was every screen in the addon written out in this
 		-- file, which is the list that goes stale the first time somebody adds
 		-- a window.
-		Rows(true, "Zoom: windows",
-			"Every window this addon opens, on its own number. Shrink the map without shrinking the quest log beside it.")
-		Rows(false, "Zoom: on screen",
+		Rows("client", "Zoom: client windows",
+			"Every window this addon opens in place of one of the client's, on its own number. Shrink the map without shrinking the quest log beside it.")
+		Rows("own", "Zoom: own windows",
+			"The windows the client has no copy of, each on its own number.")
+		Rows("screen", "Zoom: on screen",
 			"Everything the addon draws over the world, on its own number.")
 
 		-- Here rather than on the feeds page, where the first of these two used

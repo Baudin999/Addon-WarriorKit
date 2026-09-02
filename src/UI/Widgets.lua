@@ -245,6 +245,21 @@ function UI.CloseDropdown()
 	end
 end
 
+-- The list while it is open, or nil. Its `owner` is the control it hangs
+-- under and its `rows` the pool of lines in it. A button that folds a list
+-- out has to know whether the click it just took is the one that closes it,
+-- and the list can be closed under it by a click anywhere else, so
+-- remembering its own last press is not an answer. Handed out whole rather
+-- than as an owner and a row count, for the reason UI.Windows is: the
+-- harness drives a fold-out through this rather than through a hook cut
+-- into a window for its benefit.
+function UI.Dropdown()
+	if dropdown and dropdown:IsShown() then
+		return dropdown
+	end
+	return nil
+end
+
 function UI.OpenDropdown(parent, owner, options, onPick, after)
 	local list = DropdownFrame(parent)
 	local width = math.max(owner:GetWidth() or 0, 160)
