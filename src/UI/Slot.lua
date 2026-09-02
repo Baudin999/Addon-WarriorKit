@@ -56,6 +56,19 @@ local C, M = UI.Color, UI.Metric
 -- full bag.
 UI.SLOT, UI.SLOT_GAP, UI.SLOT_INSET = 31, 2, 2
 
+-- The air between the two lanes of a pile that is drawn in two.
+--
+-- Half a square, which is the smallest gap that reads as a division rather than
+-- a wider gap between two squares. The bag window's equipment piles are split
+-- down the middle -- what is already bound to you on the left, what is still
+-- free to sell or give away on the right -- and the two halves have to be
+-- tellable apart at a glance without a rule drawn between them.
+--
+-- Every other pile in that window is one lane of the full width, and the window
+-- carries this much air at its right edge instead, so the two kinds of pile end
+-- at the same place.
+UI.SLOT_LANE = math.floor(UI.SLOT / 2)
+
 -- What is left of a square you cannot act on: something a vendor will not take,
 -- something he has run out of, something you cannot pay for. Dim enough to read
 -- as unavailable beside a square next to it that is not, and not so dim that

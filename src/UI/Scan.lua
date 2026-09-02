@@ -212,6 +212,56 @@ function Scan.Read(kind, a, b)
 	return lines
 end
 
+-- Whether the client wrote this exact line on the left of its tooltip.
+--
+-- The same conversation Scan.Read has and none of the table building. A caller
+-- that wants one sentence out of a tooltip does not want an array of fifteen
+-- lines with eight fields each, and the bag window asks this of every weapon
+-- and every piece of armour you are carrying on every bag update. Read on
+-- twenty squares five times a loot is fifteen hundred tables the collector then
+-- has to walk; this allocates nothing at all.
+--
+-- Matched whole rather than by pattern, because what is being looked for is a
+-- global the client already holds the localised text of. A substring match
+-- would answer yes for "Binds when picked up" asked about "Soulbound" on a
+-- language where one contains the other, and there is no way to tell from here
+-- that it had.
+--
+-- Nil, false and true are three answers and the caller wants all three: nil is
+-- a client that will not take the question, false is a tooltip with no such
+-- line, and only true is the line being there.
+function Scan.Has(kind, text, a, b)
+	local entry = KINDS[kind]
+	if not entry or type(text) ~= "string" then
+		return nil
+	end
+	local frame = Frame()
+	if not frame or type(frame[entry.method]) ~= "function" then
+		return nil
+	end
+	if a == nil or (entry.args == 2 and b == nil) then
+		return nil
+	end
+	if not Ask(frame, entry, a, b) then
+		return nil
+	end
+
+	local total = frame:NumLines() or 0
+	if total < 1 then
+		answered = false
+		return false
+	end
+	answered = true
+
+	for index = 1, total do
+		local string = _G[NAME .. "TextLeft" .. index]
+		if string and type(string.GetText) == "function" and string:GetText() == text then
+			return true
+		end
+	end
+	return false
+end
+
 --------------------------------------------------------------------------
 -- Holding the client's own tooltip down
 --

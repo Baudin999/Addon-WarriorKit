@@ -42,6 +42,19 @@ ns.BagsGrid = Grid
 -- holders are all the size of the canvas, so a square is anchored inside its
 -- own parent and the layout never has to know which holder it landed in.
 --
+-- **Two piles are drawn in two lanes.** Weapons and armour are the only things
+-- you carry that bind, so they are the only piles where "already mine" and
+-- "still worth something to somebody else" is a division you can make. Bound on
+-- the left, unbound on the right, half a square of air between them, and each
+-- lane wraps inside its own half of the width. Which piles split is
+-- Core/Piles.lua's; how wide a lane is and where the second one starts are here,
+-- because they are drawing.
+--
+-- Every other pile is one lane of the full width and spends the same half square
+-- as air at its right edge. That is deliberate and it is what Grid.Width adds:
+-- a window as wide as the widest pile in it is a window that changes width when
+-- you pick up a sword.
+--
 -- **The art is ours and the behaviour is theirs.** The template arrives dressed
 -- for a window that looks nothing like this one, so UI.Undress sweeps every
 -- region it brought and UI.Dress draws the square again in the addon's palette.
@@ -70,6 +83,7 @@ ns.BagsGrid = Grid
 --------------------------------------------------------------------------
 
 local SLOT, GAP, BREAK = UI.SLOT, UI.SLOT_GAP, UI.SLOT_BREAK
+local LANE = UI.SLOT_LANE
 
 -- The mark on a square a vendor will take, which is the same coin the loot
 -- feed's money chip draws. Named rather than written at the call site because
@@ -103,11 +117,36 @@ local inherited = true
 local paying
 
 -- How wide a grid of this many columns is, which is the number the window sizes
--- itself off. UI/Slot.lua answers it, because the merchant window asks the same
--- question of the same squares and two files with the same arithmetic in them
--- is how the two windows end up a pixel apart.
+-- itself off. UI/Slot.lua answers the squares and the gaps between them, because
+-- the merchant window asks the same question of the same squares and two files
+-- with the same arithmetic in them is how the two windows end up a pixel apart.
+--
+-- The lane gap is added on top and is paid by every pile whether or not it is
+-- split. A pile drawn in two lanes spends it in the middle; every other pile
+-- spends it as air at the right edge. That is what makes the two kinds of pile
+-- end in the same place, and the alternative -- a window as wide as the widest
+-- pile in it -- is a window that changes width when you pick up a sword.
 function Grid.Width(columns)
-	return UI.SlotSpan(columns)
+	return UI.SlotSpan(columns) + LANE
+end
+
+-- How wide the left lane of a split pile is, in squares.
+--
+-- Half the columns, rounded up, so an odd setting puts the spare square on the
+-- left. Which side gets it is arbitrary and being decided in one place is not:
+-- the layout below and the height it reports have to agree, and they agree by
+-- both asking this.
+local function Lane(columns)
+	return math.ceil(columns / 2)
+end
+
+-- Whether this pile is drawn in two lanes at this width.
+--
+-- Two columns is the narrowest a split can be, one square a side. Below that
+-- there is no division to draw, so a player who has wound the column setting
+-- down to one gets an ordinary pile rather than a lane of nothing.
+local function Splits(group, columns)
+	return group.split == true and columns >= 2
 end
 
 --------------------------------------------------------------------------
@@ -345,10 +384,14 @@ local function Paint(button, entry, selling)
 	Sweep(button, entry)
 end
 
-local function Place(button, top, column, line)
+-- One square, at a column and a line inside a lane that starts `shift` pixels
+-- in. The shift is a pixel count rather than a column number because the second
+-- lane does not begin on a column boundary: half a square of air stands between
+-- the two, and that is the whole point of the split.
+local function Place(button, top, column, line, shift)
 	button:ClearAllPoints()
 	button:SetPoint("TOPLEFT", button:GetParent(), "TOPLEFT",
-		column * (SLOT + GAP), -(top + line * (SLOT + GAP)))
+		shift + column * (SLOT + GAP), -(top + line * (SLOT + GAP)))
 end
 
 -- Everything the pool made and this pass did not use.
@@ -390,14 +433,33 @@ function Grid.Paint(state, columns)
 		local group = state.groups[index]
 		local entries = group.entries
 		top = headings:Name(index, group.name, top)
+		-- The two lanes are counted rather than collected. A split pile could be
+		-- partitioned into two lists and walked twice, and that is two tables per
+		-- pile per bag update for an answer a running count already has. The
+		-- entries arrive sorted, and dispatching them one at a time keeps each
+		-- lane in the order the sort put them.
+		local left, right = 0, 0
+		local split = Splits(group, columns)
+		local lane = split and Lane(columns) or columns
+		local rest = split and (columns - lane) or columns
+		local shift = lane * (SLOT + GAP) + LANE
 		for held = 1, #entries do
 			at = at + 1
+			local entry = entries[held]
 			local button = Square(at)
-			Paint(button, entries[held], selling)
-			Place(button, top, (held - 1) % columns, math.floor((held - 1) / columns))
+			Paint(button, entry, selling)
+			if split and not entry.bound then
+				Place(button, top, right % rest, math.floor(right / rest), shift)
+				right = right + 1
+			else
+				Place(button, top, left % lane, math.floor(left / lane), 0)
+				left = left + 1
+			end
 			button:Show()
 		end
-		local lines = math.ceil(#entries / columns)
+		-- As tall as the taller lane. On an unsplit pile the right one is empty
+		-- and this is the count it always was.
+		local lines = math.max(math.ceil(left / lane), math.ceil(right / rest))
 		top = top + lines * SLOT + (lines - 1) * GAP + BREAK
 	end
 	Trim(at, state.shown)

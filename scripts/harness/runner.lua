@@ -269,6 +269,12 @@ local SECTIONS = {
 	-- session and puts it back. It also stands up GetZoneText, which no client
 	-- stub provides, and takes it down again.
 	"61-bag-session",
+
+	-- Last, and after 55-bags.lua and 61-bag-session.lua both, because it puts
+	-- that scene back to draw the bag window one more time. It is the only
+	-- section that seeds the client's binding line, and it leaves the seed
+	-- behind: nothing after it reads a tooltip off a bag slot.
+	"62-bag-lanes",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

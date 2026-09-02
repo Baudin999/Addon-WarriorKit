@@ -554,6 +554,18 @@ _G.LOOT_ITEM_PUSHED_MULTIPLE = "%s receives item: %sx%d."
 _G.YOU_LOOT_MONEY = "You loot %s"
 _G.LOOT_MONEY_SPLIT = "You receive %s as your split."
 
+-- The line the client writes on an item that has already bound to you, and the
+-- one it writes on an item that has not yet.
+--
+-- Globals rather than English literals in the addon, because a German client
+-- holds "Seelengebunden" in the first of these and the bag window compares its
+-- tooltip reading against whatever is in it. Here so that comparison has
+-- something to be against: without the global the addon falls back to its own
+-- English, the stub seeds an empty line, and the whole split reads as unbound
+-- while looking like it was tested.
+_G.ITEM_SOULBOUND = "Soulbound"
+_G.ITEM_BIND_ON_EQUIP = "Binds when equipped"
+
 -- The wall clock, which a loot row's tooltip turns GetTime into so it can say
 -- what time something dropped. Beside `date` above it in every sense but the
 -- line it is written on.

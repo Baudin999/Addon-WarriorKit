@@ -74,8 +74,8 @@ local ORDER = {
 	{ key = "session",     name = "Session" },
 	{ key = "hearthstone", name = "Hearthstone" },
 	{ key = "consumable",  name = "Consumable",   classId = 0 },
-	{ key = "weapon",      name = "Weapon",       classId = 2 },
-	{ key = "armor",       name = "Armor",        classId = 4 },
+	{ key = "weapon",      name = "Weapon",       classId = 2, split = true },
+	{ key = "armor",       name = "Armor",        classId = 4, split = true },
 	{ key = "container",   name = "Container",    classId = 1 },
 	{ key = "quiver",      name = "Quiver",       classId = 11 },
 	{ key = "projectile",  name = "Projectile",   classId = 6 },
@@ -92,6 +92,34 @@ local ORDER = {
 
 Piles.EMPTY, Piles.JUNK, Piles.OTHER = "empty", "junk", "other"
 Piles.SESSION = "session"
+
+-- The two piles that are drawn in two lanes, and why the flag is here.
+--
+-- Weapons and armour are the only things you carry that bind, so they are the
+-- only piles where "already yours" and "still worth something to somebody else"
+-- is a division you can make at all. It is on the pile rather than in the
+-- window because it falls out of the class: an item class either has a binding
+-- or it does not, and that is the same fact for every window that ever draws
+-- this list.
+--
+-- What a lane means and how wide it is are not here. Bags/Grid.lua decides
+-- both, because they are drawing, and a vendor's rack reads the same flag and
+-- ignores it: nothing on a shelf is bound to anybody yet.
+--
+-- A lookup rather than a walk, built off the list above so the two cannot
+-- drift, the same way BY_CLASS below is. It is asked once per bag slot on every
+-- bag update, and a linear scan of seventeen piles a hundred and fifty times
+-- for an answer that never changes is the shape this file exists to avoid.
+local SPLIT = {}
+for index = 1, #ORDER do
+	if ORDER[index].split then
+		SPLIT[ORDER[index].key] = true
+	end
+end
+
+function Piles.Splits(key)
+	return SPLIT[key] == true
+end
 
 -- Class number to pile, built off the list above so the two cannot drift.
 local BY_CLASS = {}
@@ -276,6 +304,7 @@ function Piles.Collect(owner, state, fold)
 				state.groups[shown] = row
 			end
 			row.key, row.name, row.entries = group.key, Word(group), held
+			row.split = group.split == true
 		end
 	end
 	state.shown = shown

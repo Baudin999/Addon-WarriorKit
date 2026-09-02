@@ -189,10 +189,29 @@ check(window and window.purse:GetText() == ns.Coined(_G.GetMoney()),
 -- numbers the grid lays out with, and the window's body has to come to exactly
 -- that. A window that went back to a fixed rectangle would fail here rather than
 -- silently start scrolling a bag that fits.
+--
+-- A pile drawn in two lanes is as tall as its taller lane, which is the one
+-- place this is not a division. In a do block because the counting wants three
+-- names and this chunk has none to spare; what the lanes are for is
+-- 62-bag-lanes.lua's.
 local tall = 0
-for index = 1, read.shown do
-	local lines = math.ceil(#read.groups[index].entries / ns.db.bagColumns)
-	tall = tall + ns.UI.SLOT_HEADER + lines * ns.UI.SLOT + (lines - 1) * ns.UI.SLOT_GAP
+do
+	local columns = ns.db.bagColumns
+	for index = 1, read.shown do
+		local group = read.groups[index]
+		local lines = math.ceil(#group.entries / columns)
+		if group.split == true and columns >= 2 then
+			local lane, bound = math.ceil(columns / 2), 0
+			for held = 1, #group.entries do
+				if group.entries[held].bound then
+					bound = bound + 1
+				end
+			end
+			lines = math.max(math.ceil(bound / lane),
+				math.ceil((#group.entries - bound) / (columns - lane)))
+		end
+		tall = tall + ns.UI.SLOT_HEADER + lines * ns.UI.SLOT + (lines - 1) * ns.UI.SLOT_GAP
+	end
 end
 tall = tall + (read.shown - 1) * ns.UI.Metric.rowGap
 

@@ -1,5 +1,7 @@
 local ADDON, ns = ...
 
+local UI = ns.UI
+
 local Bags = {}
 ns.Bags = Bags
 
@@ -8,6 +10,12 @@ ns.Bags = Bags
 --
 -- The scan, and no frame anywhere in the file. Grid.lua draws what this answers
 -- and Window.lua decides when to ask.
+--
+-- **One question here goes through a frame and it is not this file's.** Whether
+-- an item has already bound to you is written nowhere an API will hand over, and
+-- the only way to it is the client's own tooltip pointed at the slot. UI/Scan.lua
+-- owns that frame and is the one file allowed to, so what this file does is ask
+-- it a question and get a yes or a no back. See Bind below.
 --
 -- **The piles themselves are Core/Piles.lua's.** Which class an item is filed
 -- under, what that class is called in your language, and what order the piles
@@ -30,6 +38,14 @@ local FIRST_BAG, LAST_BAG = 0, 4
 -- Grid.lua and Merchant.lua ask a question about a bag square and a bag square
 -- is this file's subject.
 Bags.EMPTY, Bags.JUNK = ns.Piles.EMPTY, ns.Piles.JUNK
+
+-- The client's own word for an item that has already bound to you.
+--
+-- The global rather than the English, because this is compared against text the
+-- client wrote and on a German client it wrote "Seelengebunden". The fallback
+-- is there so a build that has renamed the global still reads right on an
+-- English client rather than filing every sword as unbound.
+local SOULBOUND = _G.ITEM_SOULBOUND or "Soulbound"
 
 -- One table, refilled on every scan rather than rebuilt.
 --
@@ -84,6 +100,41 @@ end
 -- The scan
 --------------------------------------------------------------------------
 
+-- Whether what is lying in this slot has already bound to you.
+--
+-- Read off the client's own tooltip and there is no other way to it. The link
+-- carries no history: a sword you have been swinging for three months and the
+-- same sword on a vendor's shelf are character for character the same string,
+-- and GetItemInfo answers "binds when equipped" about both. Only the slot knows,
+-- which is why this takes a bag and a slot and why UI/Scan.lua's `bag` kind
+-- exists. See Head in UI/Tip.lua, which is the other caller that had to know.
+--
+-- **Asked every scan and cached nowhere.** The obvious cache is the pooled entry
+-- itself, keyed on the link and the slot, and it is wrong in both directions.
+-- An item the client has not graded yet answers a tooltip that says so, and a
+-- cached "not bound" from the first scan after a login never gets asked again
+-- however many times GET_ITEM_INFO_RECEIVED repaints the window. A bind on use
+-- item bound in place is the other half: same link, same slot, different answer.
+-- Scan.Has allocates nothing, so what a cache would buy here is a handful of C
+-- calls, and what it costs is a lane that is quietly wrong for the session.
+--
+-- Asked only of a pile that is drawn in two lanes, which is nine or ten squares
+-- in a full bag rather than a hundred and fifty. Everything else is filed the
+-- same whatever its binding, so the scan would be paid for nothing.
+--
+-- Nil from the probe is a client that will not take the question, and it reads
+-- as unbound: one lane holding everything is a pile that looks like every other
+-- pile in the window, and the alternative is a lane of soulbound greens that are
+-- nothing of the sort.
+local function Bind(entry, bag, slot, link)
+	if not link or not ns.Piles.Splits(entry.group) then
+		entry.bound = false
+		return false
+	end
+	entry.bound = UI.Scan.Has("bag", SOULBOUND, bag, slot) == true
+	return entry.bound
+end
+
 -- One slot, into the pooled entry that belongs to it. Every field is written
 -- whether or not there is anything in the slot, because an entry the pool hands
 -- back is the entry some other slot used on the last pass.
@@ -127,6 +178,7 @@ local function Fill(index, bag, slot)
 	else
 		entry.gained = nil
 	end
+	Bind(entry, bag, slot, link)
 	return entry
 end
 
