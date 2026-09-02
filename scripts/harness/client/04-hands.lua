@@ -150,14 +150,20 @@ end
 -- order ns.ItemValue reads them in. Answering nil for a name this stub does not
 -- carry is the client's "not cached yet", and the vendor sweep has to treat
 -- that as a reason to leave the item alone.
+--
+-- The fourth and fifth are the item's own level and the level it asks of you,
+-- and they default to sixty because that is what every fixture written before
+-- the clutter window measured a level said. An item that carries its own pair
+-- is one written to be behind or in front of the player, and nothing else in
+-- the suite moves when they are the same number.
 local function itemInfo(link)
 	local name = type(link) == "string" and link:match("%\[(.-)%\]")
 	local item = name and ITEMS[name]
 	if not item then
 		return nil
 	end
-	return name, link, item.quality, 60, 60, nil, nil, item.stack or 1,
-		item.equip, item.icon, item.price
+	return name, link, item.quality, item.rating or 60, item.needs or 60,
+		nil, nil, item.stack or 1, item.equip, item.icon, item.price
 end
 -- The fourth and fifth returns are the two ns.ItemInfo reads, the equip
 -- location and the icon.

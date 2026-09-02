@@ -63,7 +63,23 @@ local STACK_WIDTH = 60
 -- you press it is a button that moves out from under the pointer.
 local RECORD_WIDTH = 54
 
-local window, view, free, purse, stack, record
+-- The clear button beside it, and it says one word forever.
+local CLEAR_WIDTH = 44
+
+local window, view, free, purse, stack, record, clear
+
+-- The clutter window, opened from here.
+--
+-- This is the one name in this file that is not the bag window's own, and it is
+-- deliberate rather than convenient. Comfort/Destroy.lua is the only file in
+-- the addon that destroys anything and Comfort/Clutter.lua is the only one that
+-- decides what may go; a clear button that did the work here would be a second
+-- set of rules about what is finished with, and the first time the two
+-- disagreed the bag window would be the one destroying an item the other would
+-- have kept.
+local function Clear()
+	ns.Destroy.Show()
+end
 
 --------------------------------------------------------------------------
 
@@ -200,6 +216,14 @@ local function Build()
 		onClick = ns.BagsSession.Press })
 	record:SetPoint("TOPRIGHT", window.close, "TOPLEFT", -M.rowGap, 0)
 
+	-- Beside record and for the same reason it is up there: it is a control
+	-- over the whole window rather than over any one square. It is the button
+	-- you press when the footer says nought free, which is why it is on the bag
+	-- window at all rather than only on the settings page.
+	clear = UI.Button(window.frame, { label = "clear", width = CLEAR_WIDTH,
+		height = M.title - 8, size = M.small, onClick = Clear })
+	clear:SetPoint("TOPRIGHT", record, "TOPLEFT", -M.rowGap, 0)
+
 	Fit()
 
 	-- The two numbers along the bottom and the button between them, recorded on
@@ -208,7 +232,7 @@ local function Build()
 	-- and presses the button rather than going through a hook cut into this file
 	-- for its benefit.
 	window.free, window.purse, window.stack = free, purse, stack
-	window.record = record
+	window.record, window.clear = record, clear
 
 	return window
 end

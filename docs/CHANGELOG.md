@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Clear, for the bag that is full right now
+
+The clutter window knew about one kind of clutter. It read Questie, found the
+quest items belonging to quests you had finished, and offered them one at a
+time. That is a real answer to a small part of the question, and it is not the
+part that fills a bag: what fills a bag is greys you never carried to a vendor
+and gear you outgrew twenty levels ago.
+
+It reads three rules now, and the window is one press from the bags. `clear` sits
+in the bag window's title bar beside `record`. It offers one card at a time with
+the reason written on it, a skip and a destroy, which is what it always did.
+
+The rules, in the order it asks them. A grey a vendor will not take at all,
+which is the only item in the game with no second reading. A quest item whose
+quests are all behind you. A grey whose whole stack sells for less than you said
+a bag slot is worth. White or green gear rated further behind you than you said.
+And last, the one it is least sure of, a quest item wanted by a quest still out
+there. Inside each kind the cheapest card comes first, because you press clear
+when you are full and the first yes should be the one that costs least.
+
+Both thresholds are on the Clutter tab and both ship at a number rather than a
+rule. Five silver a slot and ten levels, which are level sixty two figures for
+the character this was written on. A blue is never measured against the level,
+whatever it is rated; a tabard and a shirt are never measured at all, because a
+guild tabard is a white item anybody may wear and is exactly the shape that rule
+catches.
+
+Questie stopped being the price of entry. It carries the only map from an item to
+its quest, so without it the quest items are left out, and the money and the
+level rules go on answering. The card that says the list is empty says so.
+
 ### The vendor's rack says what a thing is and what it costs
 
 A rack of small pictures is not a shop. The merchant window was a grid of bag

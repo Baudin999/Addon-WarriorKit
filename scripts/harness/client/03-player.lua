@@ -427,6 +427,22 @@ local ITEMS = {
 	["Rogue's Token"]     = { id = 3005, classId = 12, quality = 1, price = 0 },
 	["Old Cipher"]        = { id = 3006, classId = 12, quality = 1, price = 0 },
 	["Unknown Trinket"]   = { id = 3007, classId = 12, quality = 1, price = 0 },
+	-- The gear the clear rules are measured against, in no bag until
+	-- 24-clutter-window.lua stands a fourth bag up and takes it down again.
+	-- Every one of them is behind the level 62 player by the same distance, so
+	-- the only thing that separates them is the rule that is supposed to
+	-- separate them: the vest is offered, the tabard is the shape the rule
+	-- catches and must never be offered, and the chain vest is a blue and blues
+	-- are not measured at all.
+	["Ragged Leather Vest"] = { id = 5001, classId = 4, quality = 1, price = 90,
+		equip = "INVTYPE_CHEST", icon = "Interface\\Icons\\Vest",
+		rating = 14, needs = 9 },
+	["Guild Tabard"]      = { id = 5002, classId = 4, quality = 1, price = 0,
+		equip = "INVTYPE_TABARD", icon = "Interface\\Icons\\Tabard",
+		rating = 1, needs = 0 },
+	["Aged Chain Vest"]   = { id = 5003, classId = 4, quality = 3, price = 2600,
+		equip = "INVTYPE_CHEST", icon = "Interface\\Icons\\Chain",
+		rating = 14, needs = 9 },
 	-- Two trinkets, in no bag, worn by 42-cooldown-row.lua. `use` is what
 	-- GetItemSpell answers and it is the whole difference between them: one is
 	-- a thing you press and takes a square on the cooldown row, and one is a

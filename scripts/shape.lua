@@ -75,8 +75,6 @@ local ALLOWED = {
 	  why = "combat log dispatch, one branch per event the record counts" },
 	{ path = "./Feeds/Combat.lua", fn = "CombatFeed.OnLog", branches = 33,
 	  why = "combat log dispatch, one branch per event the feed draws" },
-	{ path = "./Comfort/Clutter.lua", fn = "Clutter.Scan", depth = 5,
-	  why = "walks every bag and every slot in it" },
 	{ path = "./Comfort/Vendor.lua", fn = "Sweep", depth = 5,
 	  why = "walks every bag and every slot in it" },
 	{ path = "./Buttons/Ranks.lua", fn = "HighestRanks", depth = 5,

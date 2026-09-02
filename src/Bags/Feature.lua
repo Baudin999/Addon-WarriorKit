@@ -2,8 +2,9 @@ local ADDON, ns = ...
 
 -- Everything Core and the panel need to know about the bag window. Bags.lua,
 -- Stack.lua, Session.lua, Grid.lua, Merchant.lua, Window.lua and Blizzard.lua
--- hold the behaviour, and this is the only file in the folder that names
--- anything outside it.
+-- hold the behaviour, and this and Window.lua are the only two files in the
+-- folder that name anything outside it. Window.lua's one reach is the clutter
+-- window, which its clear button opens and which it says why at.
 
 local LOW_COLUMNS, HIGH_COLUMNS = 6, 16
 
@@ -78,6 +79,11 @@ local function BagsWord(arg, rawArg)
 		ns.Print(ns.Bags.Describe() .. ".")
 	elseif word == "stack" then
 		ns.BagsStack.Press()
+	elseif word == "clear" then
+		-- The same window the clear button in the title bar opens. Comfort's
+		-- own `destroy` word opens it too, and both are kept: you type the one
+		-- for the window you are thinking about, and this is the bag window.
+		ns.Destroy.Show()
 	elseif word == "session" then
 		-- The rest of the line is a name, untouched, because a session called
 		-- "second BRD run" is three words and every other sub-word in this
@@ -108,7 +114,7 @@ local function BagsWord(arg, rawArg)
 		end
 		ns.BagsWindow.Toggle()
 	else
-		ns.Print("bags takes on, off, hide, columns, count, stack or session.")
+		ns.Print("bags takes on, off, hide, columns, count, stack, clear or session.")
 	end
 	-- rawArg is the untouched line, which this word has no use for: every
 	-- sub-word above takes a switch or a number rather than a name. Named so the
@@ -176,6 +182,7 @@ ns.Register({
 		"bags columns <6-16>, how many squares across",
 		"bags count, how many slots you have and how many are free",
 		"bags stack, put your half stacks together and free the slots under them",
+		"bags clear, review what your bags are finished with, one at a time",
 		"bags session [name], start or stop recording what reaches your bags",
 		"bags session clear, forget what the last session recorded",
 	},
@@ -201,6 +208,9 @@ ns.Register({
 			SetColumns)
 		ui.Action(StackLabel, ns.BagsStack.Press)
 		ui.Hint("Twelve cloth in one slot and eighteen in another come out twenty and ten, and the slot under them is yours again. Nothing else moves. The same press is on the window's own footer.")
+		ui.Action(function() return "clear what you are finished with" end,
+			function() ns.Destroy.Show() end)
+		ui.Hint("The clear button in the title bar. One card at a time, skip or destroy: spent quest items, then greys not worth the slot, then gear you outgrew. The two thresholds are on the Clutter tab.")
 		ui.Action(SessionLabel, ns.BagsSession.Press)
 		ui.Hint("Everything reaching your bags until you press it again goes in one pile at the top of the window, headed with where you were. Stopping leaves it there to sell later.")
 		ui.Action(ForgetLabel, ns.BagsSession.Clear)

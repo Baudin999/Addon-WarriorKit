@@ -524,8 +524,17 @@ if window then
 	-- counter does not tell those apart. Separating them is a change to what the
 	-- budget means and it is not being made in the commit that would benefit from
 	-- it, which is the only honest order to make it in.
-	check(prose < 27300,
-		("the window holds %d characters of prose and the budget is 27,300"):format(prose))
+	--
+	-- Clearing your bags costs 508 across a rewritten lede, three hints and a
+	-- press, and takes it to 27,808 across the same sixty-nine: no new page, two
+	-- new controls on a section that had one, and the three hints are the three
+	-- sentences nobody can work out by pressing the button. Two of them are the
+	-- thresholds: what a bag slot has to be worth before a grey is offered, and
+	-- how far behind you a piece of gear has to be. A stepper reading 5 says
+	-- neither of those on its own, and both of them decide whether an item is
+	-- destroyed. 28,000 is that measurement plus a hint's worth of room again.
+	check(prose < 28000,
+		("the window holds %d characters of prose and the budget is 28,000"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

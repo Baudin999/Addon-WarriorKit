@@ -11,15 +11,33 @@ local ADDON, ns = ...
 -- has a second level: an ui.Header opens a tab, so the part is one entry in the
 -- rail with a tab per chore.
 --
--- Clutter is the odd one and has no setting at all. It is a window you open, it
--- runs nothing in the background, and the tab exists to explain it and to open
--- it. A thing that destroys items does not get to happen while you are not
--- looking.
+-- Clutter is the odd one and has no switch. It is a window you open, it runs
+-- nothing in the background, and the tab exists to explain it and to open it. A
+-- thing that destroys items does not get to happen while you are not looking.
+-- The two numbers it does carry are not a switch either: they are where the
+-- money and the level rules get their thresholds, and both are a judgement
+-- about the character you are on rather than a rule Clutter.lua could write
+-- down for everybody.
 --
 -- No reset. The registry's reset means "put this part's frames back where they
 -- started" and this part has no frames, so registering one would make /wk reset,
 -- which is what you type when a window has wandered off screen, quietly turn
 -- selling back on for someone who had deliberately turned it off.
+
+-- The two numbers the clutter rules read. Both are steppers rather than a rule
+-- written down in Clutter.lua, because both are a judgement about the character
+-- you are on: a grey worth eleven copper is clutter at seventy and is a meal at
+-- twelve.
+local LOW_WORTH, HIGH_WORTH = 0, 50
+local LOW_GAP, HIGH_GAP = 5, 50
+
+local function SetWorth(value)
+	ns.db.clutterWorth = value
+end
+
+local function SetGap(value)
+	ns.db.clutterLevel = value
+end
 
 local function SetLoot(value)
 	ns.db.fastLoot = value
@@ -148,6 +166,21 @@ ns.Register({
 		-- panel most people are playing on, and the screen height already
 		-- doubles this where a panel is tall enough to need it.
 		clutterZoom = 1.3,
+
+		-- Five silver a slot, which is the number the money rule measures a
+		-- grey against. It is a level sixty two figure and it is deliberately
+		-- one: a grey worth four silver is a slot you would rather have back on
+		-- the character this addon was written for, and a character who
+		-- disagrees moves the number rather than living with a rule that was
+		-- picked for somebody else. Nought switches the rule off and leaves the
+		-- vendor's own refusal behind it, which still catches a Broken Twig.
+		clutterWorth = 5,
+
+		-- Ten levels. Far enough that nothing you are still wearing or about to
+		-- wear can be offered, and near enough that a bag full of quest greens
+		-- from the last zone is caught. Only white and green gear is measured
+		-- against it at all, so a blue you outgrew is never offered.
+		clutterLevel = 10,
 
 		-- All four on. Every one of them is a thing you would otherwise do by
 		-- hand every few minutes, so off is not a state anyone would choose to
@@ -312,7 +345,7 @@ ns.Register({
 		"errors on|off, filter the red text through your muted list",
 		"errors list|clear, what is muted and what has come past, or empty it",
 		"errors charge, mute what a missed charge shouts at you",
-		"destroy, review quest items you are finished with, one at a time",
+		"destroy, review what your bags are finished with, one at a time",
 	},
 
 	status = function()
@@ -405,14 +438,23 @@ ns.Register({
 		ui.Reading("the fanfare", ns.Fanfare.Describe)
 
 		ui.Section("Clutter", "The screen")
-		ui.Lede("A window for the finished quest items that sit in your bags and cannot be sold.")
+		ui.Lede("A window for the three things that fill a bag: quest items you are finished with, greys that are not worth the slot, and gear you outgrew.")
 		ui.Action(function() return "review them one at a time" end,
-			function() ns.Destroy.Show() end,
-			function() return ns.Clutter.Ready() end)
-		ui.Hint("One card at a time, the quest written on it, a destroy and a skip. Read the card first: a repeatable quest never flags as completed, so its turn-in reads as finished with.")
+			function() ns.Destroy.Show() end)
+		ui.Hint("One card at a time, the reason on it, a destroy and a skip. It is the bag window's clear button. Read the card: a repeatable quest never flags as completed, so its turn-in reads as spent.")
+		ui.Count("silver a bag slot is worth", LOW_WORTH, HIGH_WORTH,
+			function() return ns.db.clutterWorth end,
+			SetWorth)
+		ui.Hint("A grey whose whole stack sells for less than this is offered. Nought asks only about the greys a vendor will not take at all.")
+		ui.Count("levels behind you", LOW_GAP, HIGH_GAP,
+			function() return ns.db.clutterLevel end,
+			SetGap)
+		ui.Hint("White and green gear rated this far under your own level is offered. Blue and better is never offered, whatever the level says.")
 		ui.Reading("Questie", function()
-			return ns.Clutter.Ready() and "answering" or "not answering, so the window stays empty"
+			return ns.Clutter.Ready() and "answering"
+				or "not answering, so the quest items are left out"
 		end)
+		ui.Reading("what clear would find", ns.Destroy.Describe)
 
 		ui.Section("Camera", "The screen")
 		ui.Lede("Pulls the camera further back than the client's own options slider will go.")

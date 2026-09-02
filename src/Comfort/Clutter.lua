@@ -1,12 +1,20 @@
 local ADDON, ns = ...
 
--- Which quest items in your bags are finished with.
+-- What in your bags is finished with.
 --
--- The client will tell you an item is a quest item and will not tell you which
--- quest. There is no API for it, which is why no addon does this without a
--- quest database behind it. Questie carries one and is loaded on both of these
--- clients, so this file asks Questie and degrades to saying it cannot answer
--- when Questie is not there.
+-- Three questions, one list. A quest item whose quests are all behind you, a
+-- grey that is not worth the slot it is sitting in, and a piece of gear you
+-- outgrew twenty levels ago are the three things that fill a bag, and none of
+-- them is answered by the client's own interface: it will tell you an item is a
+-- quest item and not which quest, it will tell you a price and never compare it
+-- to the slot, and it will tell you a level requirement and never mention that
+-- you passed it.
+--
+-- The quest half needs a database. The client carries no map from an item to
+-- its quest, which is why no addon does that part without one; Questie carries
+-- one and is loaded on both of these clients. The other two halves need nothing
+-- but the client, so a session with no Questie in it still answers: the quest
+-- items are left out and the list says why.
 --
 -- Nothing here destroys anything. It produces a list with a reason against
 -- every line, and Destroy.lua is the only file that acts on it.
@@ -20,15 +28,51 @@ local BAGS = 4
 -- same number on this client, which is what proves it.
 local QUEST_CLASS = 12
 
--- Two verdicts, and everything else is left alone.
+-- The two classes you wear, which are the only two the level rule looks at. A
+-- container is not one of them and neither is a reagent, so neither can be
+-- offered up for being old.
+local WORN = { [2] = true, [4] = true }
+
+-- Grey. The one quality the money rule reads, because a grey is the only thing
+-- in the game whose entire reason to exist is the coins a vendor pays for it:
+-- everything else is worth something you cannot put a price on.
+local JUNK_QUALITY = 0
+
+-- Green, and the rule reads everything at or below it. A blue you outgrew is
+-- still worth carrying to a bank or an auction house, and this window is not
+-- the place that decision gets made for you.
+local PLAIN_QUALITY = 2
+
+-- The two things you wear that have no level on them and never will. A guild
+-- tabard is a white class four item that anybody can put on, which is exactly
+-- the shape the level rule catches, and offering to destroy somebody's tabard
+-- is the one way this list loses trust in a single card.
+local KEPT = { INVTYPE_TABARD = true, INVTYPE_BODY = true }
+
+-- Five verdicts, and everything else is left alone.
 --
---   "spent"  every quest this item belongs to is behind you
---   "open"   a quest it belongs to is still out there to be picked up
+--   "worthless" a vendor will not take it and it does nothing
+--   "spent"     every quest this item belongs to is behind you
+--   "cheap"     the whole stack is worth less than you said a slot is worth
+--   "outgrown"  you can wear it, it is plain, and you passed its level long ago
+--   "open"      a quest it belongs to is still out there to be picked up
 --
 -- Anything the database has never heard of, anything tied to a quest in your
--- log, and anything that starts a quest you have not done gets no verdict at
--- all and never reaches the window.
+-- log, anything that starts a quest you have not done, and anything the client
+-- will not price or grade gets no verdict at all and never reaches the window.
 local SPENT, OPEN = "spent", "open"
+local WORTHLESS, CHEAP, OUTGROWN = "worthless", "cheap", "outgrown"
+
+-- Which of them you are asked first, and which of them the window calls
+-- certain. Certain is not "safe": it is "there is no second reading of this".
+-- A vendor refusing an item is a fact, a completed quest is a fact, and a price
+-- under a floor you set yourself is arithmetic on your own number. A level
+-- gap and a quest still out there are both judgements, and the button says so.
+local RANK = {
+	[WORTHLESS] = 1, [SPENT] = 2, [CHEAP] = 3, [OUTGROWN] = 4, [OPEN] = 5,
+}
+
+local CERTAIN = { [WORTHLESS] = true, [SPENT] = true, [CHEAP] = true }
 
 --------------------------------------------------------------------------
 -- Questie
@@ -192,62 +236,189 @@ local function Judge(db, itemId)
 	return nil
 end
 
+
+--------------------------------------------------------------------------
+-- The two rules the client can answer on its own
+--
+-- Both read a number off the settings page rather than one written down here,
+-- because both are a judgement about the character you are on. A grey worth
+-- eleven copper is clutter at seventy and is a meal at twelve, and how far
+-- behind you a piece of gear has to be before you will never wear it again is
+-- the same kind of question. What is fixed is which items the rules are allowed
+-- to look at at all, and that is above: grey for money, and plain gear you can
+-- wear for the level.
+--------------------------------------------------------------------------
+
+-- What a bag slot has to be worth to keep, in copper. Nought switches the money
+-- rule off and leaves the vendor's own refusal behind it, which still catches a
+-- Broken Twig.
+local function Floor()
+	return math.max(0, (ns.db.clutterWorth or 0)) * 100
+end
+
+-- How far behind you an item has to be rated. Read the same way and for the
+-- same reason.
+local function Gap()
+	return math.max(1, ns.db.clutterLevel or 10)
+end
+
+-- A grey, against the vendor and then against your floor.
+--
+-- The whole stack rather than one of them, because a slot is what you are
+-- short of and a slot holds the stack. Twenty Tattered Cloth worth eight copper
+-- each is a slot worth one silver sixty, and that is the number you set the
+-- floor against.
+local function Worth(price, count)
+	local worth = (price or 0) * (count or 1)
+	if worth <= 0 then
+		return WORTHLESS, "A vendor will not take it, and it does nothing else."
+	end
+	if worth < Floor() then
+		return CHEAP, ("The whole stack is worth %s at a vendor."):format(ns.Coin(worth))
+	end
+	return nil
+end
+
+-- Plain gear you passed a long time ago.
+--
+-- The higher of the two numbers the client carries. An item's own level and the
+-- level it asks of you are different numbers and either can be the honest one:
+-- a green rated forty that anybody may wear reads as level nought off the
+-- requirement alone, and a piece with a requirement and no rating reads as
+-- nought the other way. Taking the higher keeps the newer of the two readings,
+-- which is the cautious direction: it makes an item look more current than
+-- either number alone, so the gap has to be real before anything is offered.
+local function Outgrown(link, quality, classId)
+	if not WORN[classId] or quality > PLAIN_QUALITY then
+		return nil
+	end
+	local needs, rating = ns.ItemNeeds(link), ns.ItemLevel(link)
+	if needs == nil or rating == nil then
+		return nil
+	end
+	local _, _, equip = ns.ItemInfo(link)
+	if KEPT[equip] then
+		return nil
+	end
+	local rated = math.max(needs, rating)
+	local yours = UnitLevel("player") or 0
+	if yours - rated < Gap() then
+		return nil
+	end
+	return OUTGROWN, ("Rated for level %d, and you are %d."):format(rated, yours)
+end
+
 --------------------------------------------------------------------------
 -- The scan
 --------------------------------------------------------------------------
 
--- Spent before open, so the certain ones come first and the window is not
--- asking a hard question on its first card.
-local function Rank(entry)
-	return entry.verdict == SPENT and 1 or 2
+-- One slot's verdict, or nothing. The quest class is the database's question
+-- and every other class is the client's, so an item is only ever put to one of
+-- the three rules and a session with no Questie in it still gets the other two.
+local function Consider(db, link, count)
+	local itemId, classId = ns.ItemKind(link)
+	if not itemId then
+		return nil
+	end
+	if classId == QUEST_CLASS then
+		if not db then
+			return nil
+		end
+		return Judge(db, itemId)
+	end
+	-- Nil is an item the client has not cached, which is not a grade of nought
+	-- and not a price of nought. Both rules below would read it as clutter, so
+	-- neither is asked: the window is opened again a moment later and by then
+	-- the client has answered.
+	local quality, price = ns.ItemValue(link)
+	if quality == nil then
+		return nil
+	end
+	if quality == JUNK_QUALITY then
+		return Worth(price, count)
+	end
+	return Outgrown(link, quality, classId)
 end
 
--- Returns the list, and a word saying why it is empty when the reason is not
--- "your bags are clean". Nothing is cached: the bags move, the quest log moves,
--- and this runs when a window opens rather than on a ticker.
-function Clutter.Scan()
-	local found = {}
+-- One slot, onto the end of the list if it has a verdict.
+local function Offer(found, db, bag, slot)
+	local link = ns.ContainerItemLink(bag, slot)
+	if not link then
+		return false
+	end
+	local count = ns.ContainerItem(bag, slot) or 1
+	local verdict, reason = Consider(db, link, count)
+	if not verdict then
+		return false
+	end
+	local name, icon, _, color = ns.ItemInfo(link)
+	local _, price = ns.ItemValue(link)
+	found[#found + 1] = {
+		bag = bag, slot = slot, link = link, id = ns.ItemKind(link),
+		name = name or link, icon = icon, color = color,
+		verdict = verdict, reason = reason,
+		-- What saying yes to this card costs, which is what the order below is
+		-- built on and is nought for everything the quest rules offered.
+		worth = (price or 0) * count,
+	}
+	return true
+end
 
-	local db = Database()
+-- Certain first, so the window is not asking a hard question on its first card,
+-- and the least valuable first inside each kind. That second half is the whole
+-- reason the list is ordered rather than walked in bag order: you press clear
+-- because you are full, and the first card should be the one that costs least
+-- to say yes to.
+local function Before(a, b)
+	local left, right = RANK[a.verdict] or 9, RANK[b.verdict] or 9
+	if left ~= right then
+		return left < right
+	end
+	if a.worth ~= b.worth then
+		return a.worth < b.worth
+	end
+	return (a.name or "") < (b.name or "")
+end
+
+-- Why the quest half of the list is missing, or nothing.
+--
+-- It is no longer a reason to answer nothing at all. The money and the level
+-- rules need neither Questie nor the quest log, so a client that cannot
+-- enumerate one and a session that never loaded the other both still get a
+-- list; what they get told is that the quest items in it were left out.
+local function Missing(db)
 	if not db then
-		return found, "questie"
+		return "questie"
 	end
 	if not RefreshLog() then
-		return found, "questlog"
+		return "questlog"
+	end
+	return nil
+end
+
+-- Returns the list, and a word saying what is missing from it. Nothing is
+-- cached: the bags move, the quest log moves, and this runs when a window opens
+-- rather than on a ticker.
+function Clutter.Scan()
+	local found = {}
+	local db = Database()
+	local problem = Missing(db)
+	if problem then
+		db = nil
 	end
 
 	for bag = 0, BAGS do
 		for slot = 1, ns.ContainerSlots(bag) do
-			local link = ns.ContainerItemLink(bag, slot)
-			if link then
-				local itemId, classId = ns.ItemKind(link)
-				if itemId and classId == QUEST_CLASS then
-					local verdict, reason = Judge(db, itemId)
-					if verdict then
-						local name, icon, _, color = ns.ItemInfo(link)
-						found[#found + 1] = {
-							bag = bag, slot = slot, link = link, id = itemId,
-							name = name or link, icon = icon, color = color,
-							verdict = verdict, reason = reason,
-						}
-					end
-				end
-			end
+			Offer(found, db, bag, slot)
 		end
 	end
 
-	table.sort(found, function(a, b)
-		if Rank(a) ~= Rank(b) then
-			return Rank(a) < Rank(b)
-		end
-		return (a.name or "") < (b.name or "")
-	end)
-
-	return found
+	table.sort(found, Before)
+	return found, problem
 end
 
 function Clutter.Certain(entry)
-	return entry ~= nil and entry.verdict == SPENT
+	return entry ~= nil and CERTAIN[entry.verdict] == true
 end
 
 -- Whether the database is answering at all, which is the one thing the panel
@@ -260,5 +431,6 @@ function Clutter.Describe()
 	if not Clutter.Ready() then
 		return "Questie is not answering, so no quest item can be traced to its quest"
 	end
-	return "reading Questie's quest database"
+	return ("reading Questie, and clearing a grey under %s or gear %d levels behind you")
+		:format(ns.Coin(Floor()), Gap())
 end

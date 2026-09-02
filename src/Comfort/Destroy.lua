@@ -7,6 +7,11 @@ local ADDON, ns = ...
 -- line below that looks like caution is caution: an item that goes is not
 -- coming back, and there is no vendor buyback tab behind a delete.
 --
+-- Three kinds of thing reach the card and the card does not sort them: a spent
+-- quest item, a grey that is not worth its slot, and gear you outgrew. What
+-- they have in common is the only thing this file cares about, which is that
+-- the answer is yes or no and the queue moves either way.
+--
 -- The queue is never advanced. It is rebuilt on every press, because the bags
 -- move under an open window: something loots, the vendor sweep sells, a stack
 -- splits and every slot after it shifts by one. A window holding index 4 of a
@@ -116,15 +121,15 @@ end
 
 local function Prose(problem)
 	if problem == "questie" then
-		return "Questie is not answering. It carries the only map from an item to the quest it belongs to, so without it nothing here can be traced and nothing is offered."
+		return "Nothing else, and the quest items were not looked at: Questie is not answering, and it carries the only map from an item to the quest it belongs to."
 	end
 	if problem == "questlog" then
-		return "This client will not enumerate the quest log, so there is no way to tell a finished quest from one you are on."
+		return "Nothing else, and the quest items were not looked at: this client will not enumerate the quest log, so a finished quest cannot be told from one you are on."
 	end
 	if answered > 0 then
 		return "Nothing else in your bags is finished with."
 	end
-	return "No quest item in your bags belongs to a quest you have finished."
+	return "Nothing in your bags is finished with. No quest you have completed left anything behind, no grey is under your floor, and nothing you can wear is far enough behind you."
 end
 
 local function Paint(problem)
@@ -304,11 +309,9 @@ end
 -- path calls it.
 function Destroy.Describe()
 	local found, problem = ns.Clutter.Scan()
-	if problem then
-		return ns.Clutter.Describe()
-	end
 	if #found == 0 then
-		return "nothing finished with in your bags"
+		return problem and ("nothing to clear, and " .. ns.Clutter.Describe())
+			or "nothing finished with in your bags"
 	end
 
 	local certain = 0

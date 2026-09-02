@@ -6,10 +6,18 @@
 -- cursor holding the wrong thing, a client with no delete call, a second click
 -- landing on the card that replaced the one you meant. Each of those is a way
 -- to destroy the wrong item, and each one has to end with nothing destroyed.
+--
+-- Three rules fill the list and each one is asserted on both sides. A rule that
+-- offers what it should is half the claim; the half that matters is the thing
+-- beside it that it left alone, because every one of those is an item somebody
+-- would have destroyed. So the green trade good sitting next to two greys, the
+-- guild tabard sitting next to a vest of the same age, and the blue of the same
+-- level as the green are all in the fixture on purpose.
 
 local H = ...
 local advance, QUESTBAG, refillQuests = H.advance, H.QUESTBAG, H.refillQuests
 local destroyed, pickups, ns = H.destroyed, H.pickups, H.ns
+local CARRIED, refill, counted = H.CARRIED, H.refill, H.counted
 local check = H.check
 
 local function byName(list)
@@ -20,9 +28,108 @@ local function byName(list)
 	return out
 end
 
+local function verdicts(list)
+	local out = {}
+	for index = 1, #list do
+		out[index] = list[index].verdict
+	end
+	return table.concat(out, " ")
+end
+
+----------------------------------------------------------------------
+-- The three rules, on one bagful
+--
+-- A fourth bag stood up for the gear rule and taken down again at the end of
+-- this block, because nothing after this section expects the player to be
+-- carrying it.
+----------------------------------------------------------------------
+
+refill()
+refillQuests()
+CARRIED[3] = { "Ragged Leather Vest", "Guild Tabard", "Aged Chain Vest" }
+
+local all = ns.Clutter.Scan()
+local every = byName(all)
+
+check(#all == 8, ("clear offered %d of the 8 things in the bags that are finished with")
+	:format(#all))
+
+-- Money. A vendor that will not take it at all, a stack under the floor, and a
+-- green worth nineteen silver that is nobody's clutter.
+check(every["Broken Twig"] and every["Broken Twig"].verdict == "worthless",
+	"a grey no vendor will take was not offered as worthless")
+check(every["Tattered Cloth"] and every["Tattered Cloth"].verdict == "cheap",
+	"a grey worth twelve copper was not offered as cheap")
+check(every["Chipped Boar Tusk"] and every["Chipped Boar Tusk"].verdict == "cheap",
+	"a grey worth forty seven copper was not offered as cheap")
+check(every["Emerald Pigment"] == nil, "a green worth nineteen silver was offered")
+
+-- Level. A white vest thirteen levels behind you, and the two beside it that
+-- the rule must not reach: a tabard has no level and never will, and a blue is
+-- not measured whatever its level says.
+check(every["Ragged Leather Vest"] and every["Ragged Leather Vest"].verdict == "outgrown",
+	"a white vest rated fourteen was not offered to a level 62 character")
+check(every["Guild Tabard"] == nil, "a tabard was offered for being low level")
+check(every["Aged Chain Vest"] == nil, "a blue was offered for being low level")
+
+-- Certain is the four the window has no second reading of, and the two
+-- judgements are not among them.
+check(ns.Clutter.Certain(every["Broken Twig"]), "a vendor's refusal was called a judgement")
+check(ns.Clutter.Certain(every["Tattered Cloth"]), "a price under your own floor was called a judgement")
+check(not ns.Clutter.Certain(every["Ragged Leather Vest"]), "a level gap was called certain")
+
+-- The order the cards come in. Certain first so the window never opens on a
+-- hard question, and least valuable first inside a kind so the first yes is the
+-- cheapest one.
+check(verdicts(all) == "worthless spent spent spent cheap cheap outgrown open",
+	("the cards came in the order %q"):format(verdicts(all)))
+local cloth, tusk
+for index = 1, #all do
+	if all[index].name == "Tattered Cloth" then cloth = index end
+	if all[index].name == "Chipped Boar Tusk" then tusk = index end
+end
+check(cloth < tusk, "the more valuable grey was offered before the cheaper one")
+
+----------------------------------------------------------------------
+-- Both numbers are the player's own
+----------------------------------------------------------------------
+
+local worth = ns.db.clutterWorth
+ns.db.clutterWorth = 0
+local none = byName(ns.Clutter.Scan())
+check(none["Broken Twig"] ~= nil, "a floor of nought stopped the vendor's own refusal")
+check(none["Tattered Cloth"] == nil and none["Chipped Boar Tusk"] == nil,
+	"a floor of nought still offered a grey a vendor would pay for")
+ns.db.clutterWorth = worth
+
+local gap = ns.db.clutterLevel
+ns.db.clutterLevel = 60
+check(byName(ns.Clutter.Scan())["Ragged Leather Vest"] == nil,
+	"a gap of sixty levels still offered an item thirteen behind you")
+ns.db.clutterLevel = gap
+
+-- The whole stack, not one of them. A slot is what you are short of and a slot
+-- holds the stack, so fifty cloth at twelve copper is six silver and is over
+-- the floor that one of them is under.
+counted(1, 2, 50)
+check(byName(ns.Clutter.Scan())["Tattered Cloth"] == nil,
+	"the money rule priced one of a stack rather than the slot")
+counted(1, 2, 1)
+
+CARRIED[3] = nil
+
 ----------------------------------------------------------------------
 -- The verdict
+--
+-- The quest half on its own, with the greys taken out of the bags, because
+-- everything below drives the two buttons and the queue has to be the four
+-- quest items the fixtures were written for.
 ----------------------------------------------------------------------
+
+local stowed = {}
+for slot = 1, #CARRIED[1] do
+	stowed[slot], CARRIED[1][slot] = CARRIED[1][slot], false
+end
 
 refillQuests()
 local found = ns.Clutter.Scan()
@@ -141,10 +248,21 @@ _G.DeleteCursorItem = realDelete
 -- Without Questie
 ----------------------------------------------------------------------
 
+-- The greys go back in first, because the claim here is that the other two
+-- rules go on answering when the database is gone.
+for slot = 1, #stowed do
+	CARRIED[1][slot] = stowed[slot]
+end
+
 local realLoader = _G.QuestieLoader
 _G.QuestieLoader = nil
-local none, why = ns.Clutter.Scan()
-check(#none == 0 and why == "questie", "a missing Questie did not stop the scan")
+local without, why = ns.Clutter.Scan()
+local left = byName(without)
+check(why == "questie", "a missing Questie was not reported")
+check(left["Hogger's Claw"] == nil and left["Rogue's Token"] == nil,
+	"a quest item was judged with no database behind it")
+check(left["Broken Twig"] ~= nil and left["Tattered Cloth"] ~= nil,
+	"a missing Questie took the greys out of the list as well")
 check(not ns.Clutter.Ready(), "a missing Questie still reported a working database")
 
 -- The trap. ImportModule answers a fresh empty table for a module it does
@@ -154,7 +272,9 @@ check(not ns.Clutter.Ready(), "an empty Questie module was taken for a working d
 _G.QuestieLoader = realLoader
 
 ns.Destroy.Hide()
+refill()
 refillQuests()
 
-print(("clutter %d of %d quest items finished with, %d destroyed and %d refusals held")
-	:format(#found, #QUESTBAG, #destroyed, 3))
+print(("clutter %d of %d things in the bags finished with, %d of them quest items,"
+	.. " %d destroyed and %d refusals held")
+	:format(#all, #QUESTBAG + #CARRIED[1] + 3, #found, #destroyed, 3))

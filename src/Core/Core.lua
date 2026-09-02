@@ -1249,6 +1249,39 @@ function ns.ItemLevel(link)
 	return level
 end
 
+-- What level you have to be to put the thing on.
+--
+-- The fifth thing GetItemInfo answers, and the one number that says an item is
+-- behind you rather than merely cheap. A level twenty green in the bags of a
+-- level sixty two character is not going to be worn again, and no other value
+-- the client hands back says so: the item level is close to it but is not the
+-- same number, and quality says nothing at all.
+--
+-- Zero is a real answer and it is not nil: plenty of low items carry no
+-- requirement. The caller has to read it beside the item level rather than on
+-- its own, because a requirement of nought on something the client rates at
+-- eighty is a thing you keep.
+--
+-- Nil is an item the client has not cached, which every caller in this addon
+-- treats the same way ns.ItemValue's nil is treated: leave the item alone and
+-- ask again on the next pass.
+function ns.ItemNeeds(link)
+	if type(link) ~= "string" then
+		return nil
+	end
+
+	local lookup = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+	if type(lookup) ~= "function" then
+		return nil
+	end
+
+	local needs = select(5, lookup(link))
+	if type(needs) ~= "number" then
+		return nil
+	end
+	return needs
+end
+
 -- How many of an item one bag slot will hold.
 --
 -- The eighth thing GetItemInfo answers, and the number the stacking sweep is
