@@ -46,16 +46,27 @@ ns.BagsBlizzard = Blizz
 -- Every one of them ignores its arguments. `ToggleBag` and `OpenBag` are handed
 -- a bag number and there is one window for all five, so which bag the client
 -- meant is not a question this window has an answer to.
+--
+-- **And none of them answers anything, because none of Blizzard's nine does.**
+-- One of the nine is read. `CloseAllWindows` opens with
+-- `local bagsVisible = CloseAllBags()` and hands that back as "something was
+-- closed"; `ToggleGameMenu` runs a chain of elseifs and the branch under
+-- `securecall("CloseAllWindows")` is the one that puts the system menu on the
+-- screen. So a `CloseAllBags` that says yes on a press with no bags open is
+-- escape that closes windows, cancels a cursor, and never once opens the menu,
+-- with nothing on the screen to say why. The bag window's own Show, Hide and
+-- Toggle answer whether they did anything, which every other caller wants and
+-- this one must not see.
 local function Toggle()
-	return ns.BagsWindow.Toggle()
+	ns.BagsWindow.Toggle()
 end
 
 local function Open()
-	return ns.BagsWindow.Show()
+	ns.BagsWindow.Show()
 end
 
 local function Close()
-	return ns.BagsWindow.Hide()
+	ns.BagsWindow.Hide()
 end
 
 -- Every name the client opens or shuts a bag through, and what this window does

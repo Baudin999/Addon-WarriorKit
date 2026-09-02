@@ -604,6 +604,36 @@ check(found == of, ("%d of %d bag calls found on this client"):format(found, of)
 check(ns.BagsBlizzard.Held(), "the addon is drawing the bags and not holding the keys")
 
 ----------------------------------------------------------------------
+-- And none of them answers
+--
+-- The nine are read as well as called. `CloseAllWindows` opens with
+-- `local bagsVisible = CloseAllBags()` and hands that back as "something was
+-- closed", and `ToggleGameMenu` shows the system menu in the branch under
+-- `securecall("CloseAllWindows")`. Blizzard's own nine answer nothing at all,
+-- so a window that answers "yes, I shut" to a call the client makes on every
+-- press of escape is escape that never opens the menu again, with nothing on
+-- the screen and nothing in the log to say why.
+--
+-- The whole block is scoped, because this file is at the chunk-level name
+-- budget check.sh holds the harness to and a local out here would be the
+-- forty-first.
+----------------------------------------------------------------------
+
+do
+	local answered = {}
+	for _, name in ipairs({ "ToggleBackpack", "ToggleAllBags", "ToggleBag",
+		"OpenAllBags", "OpenBackpack", "OpenBag",
+		"CloseAllBags", "CloseBackpack", "CloseBag" }) do
+		if _G[name]() ~= nil then
+			answered[#answered + 1] = name
+		end
+	end
+	check(#answered == 0,
+		("%s answers something, and the client's own answers nothing")
+			:format(table.concat(answered, ", ")))
+end
+
+----------------------------------------------------------------------
 -- Off again
 --
 -- The nine go back, and they go back to the functions that were on them rather
