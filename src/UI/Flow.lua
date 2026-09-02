@@ -71,6 +71,13 @@ UI.Flow = Flow
 --   wrap        break a row onto more lines when it runs out of width
 --   lineOrder   with wrap: "down" (default) or "up", which edge line one is on
 --   reverse     run the main axis backwards, which is what mirroring is
+--   flow        which way the content runs, said once. One word for the main
+--               axis, "right" or "left" on a row and "down" or "up" on a
+--               column, and on a wrapping row a second word, "down" or "up",
+--               for which way its lines stack. "left up" is a row that fills
+--               from the right edge and grows upward. It writes reverse,
+--               justify and lineOrder, and it owns them: a caller that sets
+--               flow does not set those three
 --   skip        this node is not drawn and takes no room
 --
 -- A node is a plain table written at the call site. Nothing is kept between
@@ -90,6 +97,49 @@ local function Pad(node)
 end
 
 local Measure
+
+-- Turn a node's flow into the three fields the passes below read.
+--
+-- The three have to agree and nothing checked that they did. A row that runs
+-- left is `reverse`, and reverse on its own puts a part filled line against
+-- the wrong edge: the run still starts at x=0 and walks the children backwards
+-- from there, so the short last line of a mirrored row hugged the far side
+-- while the full lines hugged the near one. `justify = "end"` is what fixes
+-- that, and it is the field the caller who wrote `reverse = true` forgot. Then
+-- `lineOrder` says which edge line one is on, which is a third field about the
+-- same question. A caller says the direction once and this writes all three.
+--
+-- Once per node. Measure is the first pass and every node goes through it, so
+-- this runs before anything reads the fields it writes.
+local function Direct(node)
+	local flow = node.flow
+	if not flow or node.directed then
+		return
+	end
+	node.directed = true
+
+	local row = node.direction == "row"
+	assert(row or node.direction == "column",
+		"only a row or a column can be given a flow: " .. flow)
+	local main, lines = flow:match("^(%a+)%s*(%a*)$")
+	local back = row and "left" or "up"
+	local fore = row and "right" or "down"
+	assert(main == back or main == fore,
+		("a %s cannot flow %s"):format(node.direction, flow))
+
+	node.reverse = main == back
+	-- A part filled run packs against the edge the run starts from, which is
+	-- the near edge on a forward flow and the far edge on a backward one.
+	node.justify = node.reverse and "end" or "start"
+
+	if lines and lines ~= "" then
+		assert(row and node.wrap,
+			"only a wrapping row can say which way its lines stack: " .. flow)
+		assert(lines == "up" or lines == "down",
+			"lines stack up or down, not " .. lines)
+		node.lineOrder = lines
+	end
+end
 
 -- Break a wrapping row into lines, and remember them on the node so Arrange
 -- does not have to work them out a second time and risk disagreeing.
@@ -131,6 +181,7 @@ function Measure(node)
 	if node.mw then
 		return node.mw, node.mh
 	end
+	Direct(node)
 
 	local l, t, r, b = Pad(node)
 

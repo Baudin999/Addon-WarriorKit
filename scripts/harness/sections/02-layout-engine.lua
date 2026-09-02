@@ -130,6 +130,49 @@ do
 	near(At(squares[4]) + 20 + 4 + 20, 70, "and is packed right too")
 end
 
+-- The same shape said as one direction rather than three fields. "left up" is
+-- reverse, justify end and lineOrder up: the first square sits at the right
+-- edge, the line runs leftward from it, and the tail hangs above, starting
+-- from the right edge too. That last part is the half reverse on its own got
+-- wrong, and it is the player's buff row. "right down" is the target's.
+do
+	local function build(flow)
+		local squares = {}
+		local icons = { direction = "row", wrap = true, flow = flow,
+			gap = 4 * px, width = 70 * px }
+		for index = 1, 5 do
+			squares[index] = Cell()
+			icons[index] = { frame = squares[index], width = 20 * px, height = 20 * px }
+		end
+		Flow.Arrange(root, icons)
+		return squares, icons
+	end
+
+	local squares, icons = build("left up")
+	check(icons.reverse == true and icons.justify == "end" and icons.lineOrder == "up",
+		"flow: left up did not write the three fields it stands for")
+	near(select(2, At(squares[1])), 24, "flow left up: the first square is on the bottom line")
+	near(At(squares[1]) + 20, 70, "flow left up: the first square starts at the right edge")
+	near(At(squares[3]), 2, "flow left up: the third square ends the line on the left")
+	near(select(2, At(squares[4])), 0, "flow left up: the tail is above")
+	near(At(squares[4]) + 20, 70, "flow left up: the tail starts at the right edge too")
+	near(At(squares[5]), 26, "flow left up: the tail's second square follows leftward")
+
+	squares = build("right down")
+	near(select(2, At(squares[1])), 0, "flow right down: the first square is on the top line")
+	near(At(squares[1]), 0, "flow right down: the full line starts at the left edge")
+	near(At(squares[3]), 48, "flow right down: the third square follows")
+	near(select(2, At(squares[4])), 24, "flow right down: the tail is below")
+	near(At(squares[4]), 0, "flow right down: the tail is packed left")
+
+	-- A word the axis cannot take is a mistake at the call site, and it is
+	-- said there rather than drawn as a row that runs the default way.
+	check(not pcall(Flow.Arrange, root, { direction = "column", flow = "left" }),
+		"flow: a column was allowed to flow left")
+	check(not pcall(Flow.Arrange, root, { direction = "row", flow = "left up" }),
+		"flow: a row that does not wrap was allowed to say which way its lines stack")
+end
+
 -- A node that is not drawn takes no room, which is what every setting that
 -- hides one row of a widget relies on.
 do
@@ -144,4 +187,4 @@ do
 	near(select(2, At(c)), 12, "the row after it moved up")
 end
 
-print("flow   column, row, grow, justify, reverse, align, wrap up, stack, skip")
+print("flow   column, row, grow, justify, reverse, align, wrap up, flow, stack, skip")

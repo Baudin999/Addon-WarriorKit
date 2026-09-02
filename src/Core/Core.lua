@@ -128,6 +128,16 @@ local RETIRED = {
 	-- per thing you can see twice, and each says what it does on its own line.
 	blizzAuras = true,
 
+	-- 1.9: how many squares each aura row drew, shipped at eight. Eight is one
+	-- line of the block the addon ships, so a raid's worth of buffs stopped at
+	-- the end of the line and the ninth was not on the screen. A row draws
+	-- every aura the client reports now and wraps away from the block, which
+	-- is what the row could always do and the cap never let it. Retired rather
+	-- than left, because a saved eight would cap the row again on the next
+	-- login for anyone who had ever reloaded with it.
+	skinAuraDebuffs = true,
+	skinAuraBuffs = true,
+
 	-- 1.9: a boolean for whether a hover's box docked in the corner, back when
 	-- the corner and beside were the only two places it could go. There are
 	-- three now and the third is a marker you drag, so the setting is the word

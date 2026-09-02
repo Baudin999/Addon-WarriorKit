@@ -296,20 +296,6 @@ local SkinWord = ns.Command.Word({
 		return "aura square " .. size .. " pixels on both blocks."
 	  end },
 
-	{ "debuffs", key = "skinAuraDebuffs", apply = SkinRelayout,
-	  number = function() return 0, ns.FrameAuras.CountCeiling("debuffs") end,
-	  say = function(many)
-		return ("up to %d debuffs under each block%s.")
-			:format(many, many == 0 and ", so that row is off" or "")
-	  end },
-
-	{ "buffs", key = "skinAuraBuffs", apply = SkinRelayout,
-	  number = function() return 0, ns.FrameAuras.CountCeiling("buffs") end,
-	  say = function(many)
-		return ("up to %d buffs under each block%s.")
-			:format(many, many == 0 and ", so that row is off" or "")
-	  end },
-
 	FrameEntry("player", "player frame"),
 	FrameEntry("target", "target frame"),
 	FrameEntry("tot", "target of target"),
@@ -695,8 +681,6 @@ ns.Register({
 		-- pixel block holds in one row at 28 pixels a square, so neither row
 		-- ever wraps under the frame. Either at 0 turns that row off on its
 		-- own; both at 0 is `skin auras off` said the long way.
-		skinAuraDebuffs = 8,
-		skinAuraBuffs = 8,
 
 		-- Your own cast bar, drawn by this addon rather than by the client.
 		-- On by default for the reason the skin is: it is a thing the addon
@@ -1048,8 +1032,6 @@ ns.Register({
 		ns.db.skinLevel = ns.DefaultCopy("skinLevel")
 		ns.db.skinAuras = ns.DefaultCopy("skinAuras")
 		ns.db.skinAuraSize = ns.DefaultCopy("skinAuraSize")
-		ns.db.skinAuraDebuffs = ns.DefaultCopy("skinAuraDebuffs")
-		ns.db.skinAuraBuffs = ns.DefaultCopy("skinAuraBuffs")
 		-- Reset means put the frames back, and the client's own copies are
 		-- frames this part took down. Somebody who put one back deliberately
 		-- loses that in a reset, which is the same trade every other setting

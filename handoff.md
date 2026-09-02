@@ -70,9 +70,11 @@ it. That re-hangs on the ticker rather than at layout, because the client shows
 and hides that frame with the unit. If target of target moves into the corridor,
 the rows come back up against the block on their own.
 
-Settings: `/wk skin auras on|off`, `skin aura <12-32>`, `skin debuffs <0-16>`,
-`skin buffs <0-32>`. Off leaves the target with no row at all, because the frame
-is the block and the client's own row would land in the gauge. `/wk skin off`
+Settings: `/wk skin auras on|off` and `skin aura <12-32>`. There is no count:
+each row draws every aura the client reports up to the client's own ceiling,
+16 debuffs and 32 buffs, and wraps away from the block when a line fills. Off
+leaves the target with no row at all, because the frame is the block and the
+client's own row would land in the gauge. `/wk skin off`
 gives it back, because that is what gives the frame its size back.
 
 ## The cast bar, as it landed

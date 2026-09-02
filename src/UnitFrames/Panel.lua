@@ -353,7 +353,7 @@ local function Frames(ui)
 			ns.db.skinAuras = value
 			ns.FrameSkin.Relayout()
 		end)
-	ui.Hint("Debuffs under each block and buffs over it. Yours are placed first, so a raid's worth of other people's bleeds cannot push your Rend off the end.")
+	ui.Hint("Debuffs under each block and buffs over it, every one the client reports, wrapping away from the block. Yours are placed first, so a raid's worth of bleeds cannot push your Rend off the end.")
 
 	do
 		local low, high = ns.FrameAuras.SizeRange()
@@ -364,18 +364,6 @@ local function Frames(ui)
 				ns.FrameSkin.Relayout()
 			end)
 	end
-	ui.Count("debuffs on each row", 0, ns.FrameAuras.CountCeiling("debuffs"),
-		function() return ns.db.skinAuraDebuffs end,
-		function(value)
-			ns.db.skinAuraDebuffs = value
-			ns.FrameSkin.Relayout()
-		end)
-	ui.Count("buffs on each row", 0, ns.FrameAuras.CountCeiling("buffs"),
-		function() return ns.db.skinAuraBuffs end,
-		function(value)
-			ns.db.skinAuraBuffs = value
-			ns.FrameSkin.Relayout()
-		end)
 
 	ui.Reading("the frames", ns.FrameSkin.Describe)
 	ui.Reading("the corridor", ns.FrameSkin.DescribeLink)

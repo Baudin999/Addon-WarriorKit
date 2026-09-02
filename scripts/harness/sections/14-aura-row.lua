@@ -175,17 +175,12 @@ check(not _G.TargetFrameDebuff1:IsShown(),
 -- moves nothing: not the row, not line one, and not the buffs on the far side
 -- of the block.
 --
--- The row length is raised to twelve for this block rather than left at the
--- shipped eight. Eight squares fit on one line of the block the addon ships,
--- which is why that is the number it ships, and a wrap is exactly what this
--- asserts: the row has to fold rather than run off the end of the block, and
--- the only way to see it fold is to give it more than one line's worth.
+-- Twelve, on a row the client caps at sixteen. There used to be a count
+-- setting here, shipped at eight, and eight squares fit on one line of the
+-- block the addon ships: the row could wrap and never had to, and the ninth
+-- buff on you was not on the screen at all. The row runs to the client's own
+-- ceiling now and there is no number to raise.
 do
-	local shipped = ns.db.skinAuraDebuffs
-	ns.db.skinAuraDebuffs = 12
-	ns.FrameSkin.Relayout()
-	tick()
-
 	local held = { rowD:GetHeight(), underTop(first), leftOf(first),
 		underTop(squares(rowB)[1]) }
 	local many = {}
@@ -218,8 +213,41 @@ do
 		end
 	end
 
-	ns.db.skinAuraDebuffs = shipped
-	ns.FrameSkin.Relayout()
+end
+
+-- The row over the block wraps the other way. Line one stays against the
+-- block and the tail hangs above it, so a target picking up a tenth buff
+-- grows the row upward and moves nothing you were already reading. The
+-- squares on the tail are packed to the gauge end like the full line under
+-- them, which is the half a mirrored row gets wrong when the direction is
+-- three fields that have to agree rather than one.
+do
+	local many = {}
+	for index = 1, 10 do
+		many[index] = { name = "Blessing" .. index, icon = "bless",
+			expires = now + 100 + index, source = "party1" }
+	end
+	buffs.target = many
+	tick()
+
+	local up = squares(rowB)
+	local top, perLine = underTop(up[1]), 0
+	for index = 1, 10 do
+		check(up[index]:IsShown(),
+			("buff %d of ten on the target is not drawn"):format(index))
+		if underTop(up[index]) == top then
+			perLine = perLine + 1
+		end
+	end
+	check(perLine < 10, ("ten buffs all stayed on one line of a %.0f pixel block")
+		:format(box:GetWidth() / px))
+	local tail = up[perLine + 1]
+	check(underTop(tail) < top,
+		"a wrapped buff line went down into the block instead of up over it")
+	check(math.abs(leftOf(tail)) < 1e-6,
+		("the wrapped buff line starts %.1f in from the block's gauge end")
+			:format(leftOf(tail)))
+	buffs.target = { many[1] }
 	tick()
 end
 
@@ -341,6 +369,37 @@ do
 		"your own Battle Shout is not drawn as yours on your own buff row")
 	check(mine[2].shownState == "theirs",
 		"a buff somebody else put on you is not drained")
+
+	-- A raid's worth of buffs on you, which is the report that started this:
+	-- the row stopped at the end of the line and the rest were nowhere. Every
+	-- one is drawn, the tail wraps upward, and it runs from the gauge end the
+	-- way the full line does, which on your block is the right edge.
+	for index = 3, 10 do
+		own.auras[index] = { name = "Blessing" .. index, icon = "bless",
+			expires = now + 100 + index, source = "party1" }
+	end
+	tick()
+	local top, perLine = underTop(mine[1]), 0
+	for index = 1, 10 do
+		check(mine[index]:IsShown(),
+			("buff %d of ten on you is not drawn"):format(index))
+		if underTop(mine[index]) == top then
+			perLine = perLine + 1
+		end
+	end
+	check(perLine < 10, "ten buffs on you all stayed on one line")
+	local tail = mine[perLine + 1]
+	check(underTop(tail) < top,
+		"your wrapped buff line went down into the block instead of up over it")
+	check(math.abs((leftOf(tail) + side) - yourB:GetWidth()) < 1e-6,
+		("your wrapped buff line ends at %.1f and the row is %.1f wide, so the"
+			.. " tail is packed to the wrong edge")
+			:format(leftOf(tail) + side, yourB:GetWidth()))
+	own.auras[3], own.auras[4], own.auras[5] = nil, nil, nil
+	for index = 6, 10 do
+		own.auras[index] = nil
+	end
+	tick()
 
 	-- The client's own two, hidden by the same sweep and by name, because
 	-- BuffButton1 is built on demand exactly the way TargetFrameDebuff1 is.

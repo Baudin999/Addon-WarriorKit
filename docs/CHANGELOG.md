@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### The ninth buff
+
+The aura rows on the player and target blocks were capped by a count setting
+that shipped at eight, and eight squares is exactly one line of the block the
+addon ships. The row could wrap and never had to. In a raid you carry more
+than eight buffs, and the ninth was not on the screen: not cut, not squeezed,
+simply absent, with the sharpening stone taking two of the eight before a
+single spell was counted.
+
+The count is gone. `skinAuraDebuffs` and `skinAuraBuffs` are retired, along
+with `/wk skin debuffs`, `/wk skin buffs` and the two panel steppers. A row
+draws every aura the client reports, up to the client's own ceiling of 16
+debuffs and 32 buffs, and wraps away from the block when a line fills: debuffs
+stack downward under the block, buffs stack upward over it, and line one never
+moves. Your rows fill from the right edge and the target's from the left, so
+the four of them still read outward from the corridor between the blocks.
+
+`ns.UI.Flow` takes a `flow` field now, one direction said once: `"left up"`,
+`"right down"` and so on. It writes `reverse`, `justify` and `lineOrder`,
+which are three fields about the same question that had to agree by hand, and
+a caller that set two of them and forgot the third put the short last line of
+a mirrored row against the wrong edge. Section 02 asserts both spellings land
+every square in the same place, and section 14 fills both buff rows past one
+line and measures the tail on the block it belongs to.
+
 ### Clear, for the bag that is full right now
 
 The clutter window knew about one kind of clutter. It read Questie, found the

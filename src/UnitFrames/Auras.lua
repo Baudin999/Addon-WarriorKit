@@ -118,6 +118,14 @@ local TIMER_CEILING, COUNT_CEILING = 14, 11
 -- the four of them read outward from the corridor in the middle of the screen
 -- the way the two blocks already do.
 --
+-- How long a row runs is not in this table either, and it is not a setting any
+-- more. A row draws every aura the client reports, up to the client's own
+-- ceiling, and wraps away from the block when a line fills. It was a count,
+-- shipped at eight, and eight is exactly one line of the block the addon
+-- ships: a raid's worth of buffs stopped at the end of the line and the ninth
+-- was simply not on the screen. A cap on a row that wraps buys nothing, and
+-- the switch that takes the rows off is `/wk skin auras`.
+--
 --   filter    what the client calls this half of the aura list
 --   head      the client's own button names, which are what gets hidden
 --   max       what the client calls its own ceiling, asked of the client
@@ -131,7 +139,6 @@ local TIMER_CEILING, COUNT_CEILING = 14, 11
 --             hides the client's own enchant buttons, and that is one flag
 --             rather than two on purpose: drawing them here is the whole of
 --             the reason we are allowed to take the client's copy down
---   setting   how many of ours to draw
 --   hides     the switch that takes the client's copy of this row off the
 --             screen. Three of them across the four rows, because the target's
 --             buffs and debuffs are one row of icons over one frame and nobody
@@ -144,19 +151,18 @@ local ROWS = {
 	player = {
 		{ key = "debuffs", filter = "HARMFUL", head = "DebuffButton", below = true,
 			max = "DEBUFF_MAX_DISPLAY", ceiling = 16, hides = "hideBlizzDebuffs",
-			setting = "skinAuraDebuffs", global = "WarriorKitPlayerDebuffs" },
+			global = "WarriorKitPlayerDebuffs" },
 		{ key = "buffs", filter = "HELPFUL", head = "BuffButton", below = false,
 			max = "BUFF_MAX_DISPLAY", ceiling = 32, enchants = true,
-			hides = "hideBlizzBuffs",
-			setting = "skinAuraBuffs", global = "WarriorKitPlayerBuffs" },
+			hides = "hideBlizzBuffs", global = "WarriorKitPlayerBuffs" },
 	},
 	target = {
 		{ key = "debuffs", filter = "HARMFUL", head = "TargetFrameDebuff", below = true,
 			max = "MAX_TARGET_DEBUFFS", ceiling = 16, hides = "hideBlizzTargetAuras",
-			setting = "skinAuraDebuffs", global = "WarriorKitTargetDebuffs" },
+			global = "WarriorKitTargetDebuffs" },
 		{ key = "buffs", filter = "HELPFUL", head = "TargetFrameBuff", below = false,
 			max = "MAX_TARGET_BUFFS", ceiling = 32, hides = "hideBlizzTargetAuras",
-			setting = "skinAuraBuffs", global = "WarriorKitTargetBuffs" },
+			global = "WarriorKitTargetBuffs" },
 	},
 }
 
@@ -558,8 +564,9 @@ local function Hover(square, unit, filter)
 end
 
 -- One frame per row, parented to the unit frame so it hides with it. Nothing
--- is anchored or sized here: where a row goes is Auras.Place's, and how many
--- squares it holds is a setting that moves while the addon is up.
+-- is anchored or sized here: where a row goes is Auras.Place's, and the
+-- squares are built there too, because their size is a setting that moves
+-- while the addon is up.
 --
 -- On the grid, like the three frames UnitFrames/Block.lua builds beside it, so
 -- every number in Place is a whole count of physical pixels.
@@ -589,8 +596,7 @@ function Auras.Build(entry)
 		end
 
 		list[index] = {
-			key = spec.key, filter = spec.filter, setting = spec.setting,
-			below = spec.below, enchants = spec.enchants, hides = spec.hides,
+			key = spec.key, filter = spec.filter, below = spec.below, enchants = spec.enchants, hides = spec.hides,
 			frame = frame, squares = {}, found = {},
 			runs = runs, ceiling = ceiling, stripped = {},
 			wanted = 0, perLine = 1,
@@ -637,23 +643,23 @@ function Auras.Place(entry, px, width, mirror)
 	for index = 1, #list do
 		local row = list[index]
 		local unit = ns.UI.Unit(row.frame)
-		row.wanted = on and math.max(math.min(ns.db[row.setting] or 0, row.ceiling), 0) or 0
+		row.wanted = on and row.ceiling or 0
 		row.edge = (row.below and "TOP" or "BOTTOM") .. hand
 		row.corner = (row.below and "BOTTOM" or "TOP") .. hand
 
 		-- Wrapped, packed to the gauge end, and growing away from the block.
 		--
-		-- `reverse` runs the row backwards and `justify` puts a part filled
-		-- line against the same edge the full ones start from, which between
-		-- them are the whole of the mirroring: with neither, a short line on
-		-- the target would hug one side and the full lines would hug the other.
-		-- `lineOrder` is what keeps line one against the block whichever side
-		-- of it the row is on, so a row that grows grows outward and the line
-		-- you read first never moves.
+		-- The direction is one word each way. Across: away from the gauge
+		-- end, which is leftward on your block and rightward on the mirrored
+		-- target. Down the lines: away from the block, so a row under it
+		-- stacks downward and a row over it stacks upward, and line one stays
+		-- against the block whichever side it is on. Flow turns the pair into
+		-- the reverse, justify and lineOrder it needs, and it owns them: the
+		-- earlier version set two of the three by hand and a short line on
+		-- the target hugged the wrong edge until somebody set the third.
 		local node = {
 			direction = "row", wrap = true, width = width, gap = gap,
-			reverse = not mirror, justify = mirror and "start" or "end",
-			lineOrder = row.below and "down" or "up",
+			flow = (mirror and "right" or "left") .. (row.below and " down" or " up"),
 			pad = row.below and { 0, gap, 0, 0 } or { 0, 0, 0, gap },
 		}
 		for slot = 1, row.wanted do
@@ -816,30 +822,13 @@ function Auras.Describe()
 		return "no aura rows on the player or the target: each frame is its"
 			.. " block, so a row would land inside the gauge"
 	end
-	return ("aura rows under both blocks at %dpx, %d debuffs and %d buffs")
-		:format(ns.db.skinAuraSize, ns.db.skinAuraDebuffs, ns.db.skinAuraBuffs)
+	return ("aura rows on both blocks at %dpx, every debuff and buff the client"
+		.. " reports, wrapping away from the block"):format(ns.db.skinAuraSize)
 end
 
--- What the two settings may be set to, so the slash word and the panel offer
--- the same range and neither has to repeat the numbers.
+-- What the size may be set to, so the slash word and the panel offer the same
+-- range and neither has to repeat the numbers.
 function Auras.SizeRange()
 	local block = ns.db.skinHeight or SIZE_CEILING
 	return SIZE_MIN, math.max(math.min(block, SIZE_CEILING), SIZE_MIN)
-end
-
--- The most of one kind of aura any frame will draw, which is what the slash
--- word and the panel stepper clamp to. Read across every frame rather than off
--- the target's, so a row given a longer ceiling than the others cannot end up
--- with a setting that refuses to reach it.
-function Auras.CountCeiling(key)
-	local most = 0
-	for _, plan in pairs(ROWS) do
-		for index = 1, #plan do
-			local spec = plan[index]
-			if spec.key == key and spec.ceiling > most then
-				most = spec.ceiling
-			end
-		end
-	end
-	return most
 end
