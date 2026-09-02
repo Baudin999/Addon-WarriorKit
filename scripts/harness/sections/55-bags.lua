@@ -184,48 +184,54 @@ check(window and window.free:GetText() == ("%d free of %d"):format(3, slots),
 check(window and window.purse:GetText() == ns.Coined(_G.GetMoney()),
 	"the footer is not drawing what you are carrying in coin")
 
--- The height is the piles', not a constant. Every row of every pile, plus the
--- heading over each one and the air between them, worked out from the same three
--- numbers the grid lays out with, and the window's body has to come to exactly
--- that. A window that went back to a fixed rectangle would fail here rather than
--- silently start scrolling a bag that fits.
---
--- A pile drawn in two lanes is as tall as its taller lane, which is the one
--- place this is not a division. In a do block because the counting wants three
--- names and this chunk has none to spare; what the lanes are for is
--- 62-bag-lanes.lua's.
-local tall = 0
+-- The height is the piles', not a constant: the body is the lowest edge of
+-- anything drawn plus the padding, within the unit the pixel snap moves a
+-- square by. Read off what was drawn, because the piles flow across the window
+-- before they go down it and a model of the flow is the layout written twice.
+-- And under what the piles stacked would come to, which is why they flow. Kept
+-- on H.carry for 65-bag-piles.lua.
+local squares, headers = Grid.Squares(), Grid.Headers()
 do
-	local columns = ns.db.bagColumns
+	local columns, tall = ns.db.bagColumns, 0
 	for index = 1, read.shown do
 		local group = read.groups[index]
 		local lines = math.ceil(#group.entries / columns)
 		if group.split == true and columns >= 2 then
 			local lane, bound = math.ceil(columns / 2), 0
 			for held = 1, #group.entries do
-				if group.entries[held].yours then
-					bound = bound + 1
-				end
+				bound = bound + (group.entries[held].yours and 1 or 0)
 			end
 			lines = math.max(math.ceil(bound / lane),
 				math.ceil((#group.entries - bound) / (columns - lane)))
 		end
 		tall = tall + ns.UI.SLOT_HEADER + lines * ns.UI.SLOT + (lines - 1) * ns.UI.SLOT_GAP
 	end
+	tall = tall + (read.shown - 1) * ns.UI.Metric.rowGap
+
+	H.carry.bagBottom = function()
+		local bottom = 0
+		local function lowest(pool, height)
+			for index = 1, #pool do
+				if pool[index]:IsShown() then
+					local _, _, _, _, y = pool[index]:GetPoint(1)
+					bottom = math.max(bottom, -y + (height or pool[index]:GetHeight()))
+				end
+			end
+		end
+		lowest(squares)
+		lowest(headers, ns.UI.SLOT_HEADER)
+		lowest(Grid.Subs(), ns.UI.SLOT_SUBHEADER)
+		return bottom
+	end
+
+	local drawn = H.carry.bagBottom() + ns.UI.Metric.pad * 2
+	check(window and math.abs(window:Body() - drawn) < 1,
+		("the window's body is %d and what it draws comes to %.2f")
+			:format(window and window:Body() or -1, drawn))
+	check(window and window:Body() < tall + ns.UI.Metric.pad * 2,
+		("the window's body is %d and the piles stacked would come to %d, so nothing flowed")
+			:format(window and window:Body() or -1, tall + ns.UI.Metric.pad * 2))
 end
-tall = tall + (read.shown - 1) * ns.UI.Metric.rowGap
-
-check(window and window:Body() == tall + ns.UI.Metric.pad * 2,
-	("the window's body is %d and the piles come to %d")
-		:format(window and window:Body() or -1, tall + ns.UI.Metric.pad * 2))
-
-local squares = Grid.Squares()
-local headers = Grid.Headers()
-
-check(#headers >= read.shown,
-	("%d headers for %d piles"):format(#headers, read.shown))
-check(headers[1] and headers[1]:GetText() == read.groups[1].name,
-	"the first header does not name the first pile")
 
 -- One square per slot you are using, plus the one the empty pile folds into,
 -- and every one of them pointing at the slot the scan put on it. This is the

@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+### The piles flow
+
+Cutting the trade goods and the miscellany into sub-piles made the bag window
+a column. Seventeen piles came to twenty-odd captions, most of them over one
+square, and a heading over one square on a line of its own is a heading's
+worth of height for a square's worth of bag: the window scrolled, with your
+bag beside it, which is the one thing it exists not to do.
+
+A pile is a block now, as wide as its squares or as wide as its name, and the
+blocks flow left to right along a line with half a square of air between
+them, wrapping to the next line only when the next block will not fit. A
+block that would fit narrower is narrowed, down to half of what it wanted,
+and its squares wrap inside it, so the consumables share a line with the
+hearthstone rather than starting under a square of nothing. A split pile
+takes a whole line, because its two lanes are the width. A cut pile's heading
+is a block with no squares, and its sub-piles flow after it on the same line
+with their captions dropped to the same height, so "Trade Goods" reads once
+at the left and the cloth, the leather and the meat sit in one row beside it.
+
+The harness reads the window's height off the lowest thing drawn rather than
+off a model of the stacking, and holds it under what the stacking would have
+come to.
+
+### The square that needs something to hit
+
+A Flame Shock in an inn drew as pressable. So did every attack on the bar:
+the client's own usable call knows your mana, your stance and your gear and
+nothing about the target, and Blizzard's own button colours off that call
+alone, so this one copied a bar that lights an attack with nothing selected.
+The range rung could not catch it, because with nothing targeted there is no
+distance to be out of, and the condition rung only spoke for Execute.
+
+`Buttons/Slot.lua` now asks one more thing the client does know, whether the
+slot is aimed at an enemy, and greys an attack with nothing live and
+attackable selected. A heal, a shield or a totem with nothing selected still
+does something when pressed, so those stay lit. A macro is asked about the
+spell it would cast, the way the usable rung already asks it. Nothing to hit
+sits above the reaction and condition rungs and below a real cooldown, and
+`Buttons/Requires.lua` reads the same "nothing to aim at" as the bar rather
+than keeping its own copy. The mouseover macros are read against the target,
+as range is, so hovering a mob with nothing targeted reads grey rather than
+lit.
+
 ### The cloth in one place, and the quest items you can throw away
 
 The bag window filed everything under the class the client files it under,

@@ -295,36 +295,52 @@ function UI.Headings(canvas)
 	return setmetatable({ canvas = canvas, labels = {}, subs = {} }, Headings)
 end
 
--- One caption at `top`, and where the first thing under it starts. Returning
--- the next offset rather than the caption is what lets a caller write its
--- layout as one running number.
-function Headings:Name(index, text, top)
-	local label = self.labels[index]
+local function Caption(self, sub, index)
+	local pool = sub and self.subs or self.labels
+	local label = pool[index]
 	if not label then
-		label = UI.Label(self.canvas, M.heading, C.heading, "LEFT", UI.FLAT)
+		if sub then
+			label = UI.Label(self.canvas, M.small, C.dim, "LEFT", UI.FLAT)
+		else
+			label = UI.Label(self.canvas, M.heading, C.heading, "LEFT", UI.FLAT)
+		end
 		UI.Wrap(label, false)
-		self.labels[index] = label
+		pool[index] = label
 	end
+	return label
+end
+
+-- How wide a caption's words are, in the canvas's units, with the words put
+-- on the pooled string first so the answer is for this text and not the last
+-- pass's. Asked before a caption is placed, because a pile that flows beside
+-- another pile is as wide as its squares or as wide as its name, whichever is
+-- more, and only the string can say what its name comes to.
+function Headings:Width(index, text, sub)
+	local label = Caption(self, sub, index)
+	label:SetText(text)
+	return label:GetStringWidth()
+end
+
+-- One caption at `left`, `top`, and where the first thing under it starts.
+-- Returning the next offset rather than the caption is what lets a caller
+-- write its layout as one running number.
+function Headings:Name(index, text, top, left)
+	local label = Caption(self, false, index)
 	label:ClearAllPoints()
-	label:SetPoint("TOPLEFT", self.canvas, "TOPLEFT", 0, -top)
+	label:SetPoint("TOPLEFT", self.canvas, "TOPLEFT", left or 0, -top)
 	label:SetText(text)
 	label:Show()
 	return top + UI.SLOT_HEADER
 end
 
--- One sub-caption at `top`, and where the first thing under it starts. Its
--- own pool rather than a restyled caption, because a string's face and colour
--- are set when it is made, and two pools are cheaper than resetting both on
--- every caption every pass.
-function Headings:Sub(index, text, top)
-	local label = self.subs[index]
-	if not label then
-		label = UI.Label(self.canvas, M.small, C.dim, "LEFT", UI.FLAT)
-		UI.Wrap(label, false)
-		self.subs[index] = label
-	end
+-- One sub-caption at `left`, `top`, and where the first thing under it starts.
+-- Its own pool rather than a restyled caption, because a string's face and
+-- colour are set when it is made, and two pools are cheaper than resetting
+-- both on every caption every pass.
+function Headings:Sub(index, text, top, left)
+	local label = Caption(self, true, index)
 	label:ClearAllPoints()
-	label:SetPoint("TOPLEFT", self.canvas, "TOPLEFT", 0, -top)
+	label:SetPoint("TOPLEFT", self.canvas, "TOPLEFT", left or 0, -top)
 	label:SetText(text)
 	label:Show()
 	return top + UI.SLOT_SUBHEADER

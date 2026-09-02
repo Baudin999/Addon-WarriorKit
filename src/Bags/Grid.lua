@@ -65,6 +65,23 @@ ns.BagsGrid = Grid
 -- a window as wide as the widest pile in it is a window that changes width when
 -- you pick up a sword.
 --
+-- **Piles flow across the window before they go down it.** Seventeen piles cut
+-- into sub-piles came to twenty-odd captions, most of them over one square, and
+-- one square under a heading on a line of its own is a heading's worth of
+-- height for a square's worth of bag: the window was a column you scrolled
+-- with your bag beside it, which is the thing this window exists not to be.
+-- So a pile is a block, as wide as its squares or as wide as its name, and the
+-- blocks are laid left to right along a line with half a square of air between
+-- them, wrapping to the next line only when the next block will not fit. A
+-- block that would fit if it were narrower is narrowed and its squares wrap
+-- inside it, down to half of what it wanted, so a big pile beside a small one
+-- shares the line rather than starting a new one under a square of nothing.
+-- A split pile takes a whole line, because its two lanes are the width. A cut
+-- pile's heading is a block with no squares, and its sub-piles flow after it
+-- on the same line with their captions dropped to the same height, so "Trade
+-- Goods" reads once at the left and the cloth, the leather and the meat sit in
+-- one row beside it.
+--
 -- **The art is ours and the behaviour is theirs.** The template arrives dressed
 -- for a window that looks nothing like this one, so UI.Undress sweeps every
 -- region it brought and UI.Dress draws the square again in the addon's palette.
@@ -457,37 +474,91 @@ local function Trim(squaresUsed, headersUsed, subsUsed)
 	headings:Trim(headersUsed, subsUsed)
 end
 
--- One pile's squares, in one lane or two, from `top` down, and how many lines
--- they took. The entries arrive sorted, and dispatching them one at a time
--- keeps each lane in the order the sort put them.
+-- One pile's squares, in one lane or two, from `left`, `top` down inside a
+-- block `width` squares across, and how many lines they took. The entries
+-- arrive sorted, and dispatching them one at a time keeps each lane in the
+-- order the sort put them.
 --
 -- The two lanes are counted rather than collected. A split pile could be
 -- partitioned into two lists and walked twice, and that is two tables per
 -- pile per bag update for an answer a running count already has.
-local function Lay(group, columns, at, top, side, selling)
+local function Lay(group, width, at, left, top, side, selling)
 	local entries = group.entries
-	local left, right = 0, 0
-	local split = Splits(group, columns)
-	local lane = split and Lane(columns) or columns
-	local rest = split and (columns - lane) or columns
-	local shift = lane * (SLOT + GAP) + Gap()
+	local mine, theirs = 0, 0
+	local split = Splits(group, width)
+	local lane = split and Lane(width) or width
+	local rest = split and (width - lane) or width
+	local shift = left + lane * (SLOT + GAP) + Gap()
 	for held = 1, #entries do
 		at = at + 1
 		local entry = entries[held]
 		local button = Square(at)
 		Paint(button, entry, selling)
 		if split and not entry.yours then
-			Place(button, top, right % rest, math.floor(right / rest), shift, side)
-			right = right + 1
+			Place(button, top, theirs % rest, math.floor(theirs / rest), shift, side)
+			theirs = theirs + 1
 		else
-			Place(button, top, left % lane, math.floor(left / lane), 0, side)
-			left = left + 1
+			Place(button, top, mine % lane, math.floor(mine / lane), left, side)
+			mine = mine + 1
 		end
 		button:Show()
 	end
 	-- As tall as the taller lane. On an unsplit pile the right one is empty
 	-- and this is the count it always was.
-	return at, math.max(math.ceil(left / lane), math.ceil(right / rest))
+	return at, math.max(math.ceil(mine / lane), math.ceil(theirs / rest))
+end
+
+--------------------------------------------------------------------------
+-- The flow
+--
+-- Three numbers per block: how many squares it wants, how few it will take,
+-- and how many the line has left. A block is placed where the line is if it
+-- fits, narrowed to what is left if that is at least half of what it wanted
+-- and at least its name, and otherwise starts the next line.
+--------------------------------------------------------------------------
+
+-- How many squares a caption's words cover, rounded up.
+local function Named(width)
+	return math.max(1, math.ceil((width + GAP) / (SLOT + GAP)))
+end
+
+-- How many squares a block wants, and the fewest it will take. A split pile
+-- wants the whole width and takes nothing less, because the width is what its
+-- two lanes divide. A cut pile's heading has no squares and is as wide as its
+-- words. Everything else wants one square per entry up to the width, and will
+-- take half of that, or its name, whichever is more.
+local function Wants(group, columns, words)
+	if Splits(group, columns) then
+		return columns, columns
+	end
+	local name = Named(words)
+	local count = #group.entries
+	if count == 0 then
+		return name, name
+	end
+	local want = math.max(name, math.min(count, columns))
+	return want, math.max(name, math.ceil(want / 2))
+end
+
+-- How many squares fit between `left` and the right edge of the grid. The
+-- grid is SlotSpan(columns) plus the half square every line spends as air at
+-- its end, and a block that ends inside that is a block on the grid.
+local function Room(columns, left)
+	return math.floor((Grid.Width(columns) - left + GAP) / (SLOT + GAP))
+end
+
+-- Where one block goes: on this line at `left`, `width` squares across, or at
+-- the start of the next. Nothing is placed here; the running numbers are what
+-- Grid.Paint carries from block to block, and this is the one decision in it.
+local function Fit(want, least, columns, left)
+	local room = Room(columns, left)
+	if left == 0 or want <= room then
+		return left, math.min(want, room)
+	end
+	if least <= room then
+		return left, room
+	end
+	return nil, math.min(want, columns)
 end
 
 --------------------------------------------------------------------------
@@ -504,8 +575,16 @@ end
 --
 -- The height is handed back rather than written anywhere, because the thing that
 -- has to know is the scroll view and the scroll view belongs to the window.
+--
+-- One line at a time. `line` is where the line being filled starts, `left` is
+-- where the next block on it goes, and `tall` is the tallest block on it so
+-- far, which is what the next line starts under. A block's caption sits at
+-- the top of the line whatever kind it is, with a sub-caption dropped so its
+-- squares start where every other block's do, and its squares hang under
+-- that inside its own width.
 function Grid.Paint(state, columns)
-	local at, top, named, subs = 0, 0, 0, 0
+	local at, named, subs = 0, 0, 0
+	local line, left, tall = 0, 0, 0
 	-- Asked once for the whole pass rather than per square. It cannot change
 	-- inside one layout, and a hundred and fifty squares asking the same
 	-- question is a hundred and fifty answers that are the same.
@@ -524,24 +603,35 @@ function Grid.Paint(state, columns)
 		local group = state.groups[index]
 		-- A sub-pile's caption is the smaller one, and both pools are counted
 		-- separately because they are two pools.
-		if group.under then
+		local sub = group.under == true
+		local slot = sub and (subs + 1) or (named + 1)
+		local want, least = Wants(group, columns, headings:Width(slot, group.name, sub))
+		local here, width = Fit(want, least, columns, left)
+		if not here then
+			line = line + tall + BREAK
+			tall, here = 0, 0
+		end
+
+		local top = line + UI.SLOT_HEADER
+		if sub then
 			subs = subs + 1
-			top = headings:Sub(subs, group.name, top)
+			headings:Sub(subs, group.name, top - UI.SLOT_SUBHEADER, Snap(here))
 		else
 			named = named + 1
-			top = headings:Name(named, group.name, top)
+			headings:Name(named, group.name, line, Snap(here))
 		end
-		-- A cut pile's own heading has nothing under it, and it takes its line
-		-- and no air: the sub-caption under it is the next line, and the air
-		-- between two piles is spent after the last sub-pile's squares.
+
+		local high = UI.SLOT_HEADER
 		if #group.entries > 0 then
 			local lines
-			at, lines = Lay(group, columns, at, top, side, selling)
-			top = top + lines * SLOT + (lines - 1) * GAP + BREAK
+			at, lines = Lay(group, width, at, here, top, side, selling)
+			high = high + lines * SLOT + (lines - 1) * GAP
 		end
+		tall = math.max(tall, high)
+		left = here + UI.SlotSpan(width) + Gap()
 	end
 	Trim(at, named, subs)
-	return math.max(top - BREAK, 1)
+	return math.max(line + tall, 1)
 end
 
 -- The pool, for the harness. It reads the squares to say that a click on one

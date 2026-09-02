@@ -230,61 +230,44 @@ check(caption(subs, "Reagent") ~= nil and caption(subs, "Pet") ~= nil,
 check(caption(headers, "Cloth") == nil,
 	"a sub-caption was drawn in the heading pool")
 
--- The sub-caption sits on the line under the heading, and the first cloth
--- square on the line under that. Both are the two line heights this window
--- is built from, and nothing else.
+-- The sub-caption sits on the same line as the heading, to its right, and
+-- dropped so that its squares start where every other block's do: one
+-- heading line under the top of the line. The cloth is beside the words
+-- "Trade Goods" rather than under them, because a heading with nothing under
+-- it on a line of its own was the column this window used to be.
 do
 	local heading, cloth = caption(headers, "Trade Goods"), caption(subs, "Cloth")
-	local _, _, _, _, hy = heading:GetPoint(1)
-	local _, _, _, _, cy = cloth:GetPoint(1)
-	check(hy - cy == ns.UI.SLOT_HEADER,
-		("the cloth caption is %.2f under the trade heading and a heading line is %d")
-			:format(hy - cy, ns.UI.SLOT_HEADER))
+	local _, _, _, hx, hy = heading:GetPoint(1)
+	local _, _, _, cx, cy = cloth:GetPoint(1)
+	check(cx > hx, ("the cloth caption is at %.2f and the trade heading at %.2f, so it is not beside it")
+		:format(cx, hx))
+	check(math.abs((hy - cy) - (ns.UI.SLOT_HEADER - ns.UI.SLOT_SUBHEADER)) < 0.001,
+		("the cloth caption is %.2f under the trade heading and the drop is %d")
+			:format(hy - cy, ns.UI.SLOT_HEADER - ns.UI.SLOT_SUBHEADER))
 	-- Snapped as a whole rather than as a distance, because the grid snaps
 	-- every origin to the pixel it is nearest and the heading is not on one.
-	local _, wy = offset(trade[2], "Wool Cloth")
-	local under = ns.UI.Round(canvas, -hy + ns.UI.SLOT_HEADER + ns.UI.SLOT_SUBHEADER)
+	local wx, wy = offset(trade[2], "Wool Cloth")
+	local under = ns.UI.Round(canvas, -hy + ns.UI.SLOT_HEADER)
 	check(-wy == under,
-		("the first cloth square is %.2f down and the two lines under the heading end at %.2f")
+		("the first cloth square is %.2f down and the heading line ends at %.2f")
 			:format(-wy, under))
+	check(wx == cx, ("the first cloth square is %.2f in and its caption %.2f"):format(wx, cx))
 end
 
 ----------------------------------------------------------------------
 -- The height
 --
--- 55-bags.lua's formula with the two new shapes in it: a sub-caption is a
--- shorter line, and a heading row with nothing under it takes its line and
--- no air. Every row with squares under it spends one gap after them, so the
--- gaps are one fewer than those rows.
+-- 55-bags.lua's reading, with the sub-captions in it: the body is the lowest
+-- edge of anything drawn plus the padding, within the unit the pixel snap
+-- moves a square by.
 ----------------------------------------------------------------------
 
 do
-	local columns = ns.db.bagColumns
-	local tall, filled = 0, 0
-	for index = 1, read.shown do
-		local group = read.groups[index]
-		tall = tall + (group.under and ns.UI.SLOT_SUBHEADER or ns.UI.SLOT_HEADER)
-		if #group.entries > 0 then
-			filled = filled + 1
-			local lines = math.ceil(#group.entries / columns)
-			if group.split == true and columns >= 2 then
-				local half, yours = math.ceil(columns / 2), 0
-				for held = 1, #group.entries do
-					if group.entries[held].yours then
-						yours = yours + 1
-					end
-				end
-				lines = math.max(math.ceil(yours / half),
-					math.ceil((#group.entries - yours) / (columns - half)))
-			end
-			tall = tall + lines * ns.UI.SLOT + (lines - 1) * ns.UI.SLOT_GAP
-		end
-	end
-	tall = tall + (filled - 1) * ns.UI.Metric.rowGap
 	local window = Window.Frame()
-	check(window and window:Body() == tall + ns.UI.Metric.pad * 2,
-		("the window's body is %d and the rows come to %d")
-			:format(window and window:Body() or -1, tall + ns.UI.Metric.pad * 2))
+	local bottom = H.carry.bagBottom()
+	check(window and math.abs(window:Body() - (bottom + ns.UI.Metric.pad * 2)) < 1,
+		("the window's body is %d and what it draws comes to %.2f")
+			:format(window and window:Body() or -1, bottom + ns.UI.Metric.pad * 2))
 end
 
 ----------------------------------------------------------------------
