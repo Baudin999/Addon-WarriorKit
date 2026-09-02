@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### The nag in a fight
+
+The missing-buff row had two halves that took turns and only one of them was
+yours to fill. Out of a fight it drew the stone, the shout and the food, and
+you could switch any of them off. In a fight it drew your racial, and that was
+all it could draw: a shaman whose shield spent its last charge on the third
+mob got told between pulls, when the shield was already back up, and never
+mid fight, when it was gone.
+
+The halves are lines now, and both are yours. The out line is checked between
+fights and is what you put on before the pull. The in line is checked during
+one and is what lapses mid swing: the racial, and whatever you drag there. The
+page draws both lines the way the cooldown page draws its two, and you drag a
+spell out of your spellbook onto either, drag a square from one line to the
+other, drag one off to stop watching it, and drag it back from under the row.
+`/wk buffs line shield` is the same move typed. The tick boxes stay, one per
+shipped entry, because a low level character has no buff food and no stones
+and a tick is the shortest way to say so.
+
+The racial is an entry on the row rather than a half of it. It ships on the
+in line, it has the same per-character switch the food has, it can be dragged
+off and dragged back, and it cannot be dragged to the out line, because a
+cooldown that is ready between fights is ready all afternoon. `buffRacial` is
+retired and `buffs racial off` goes the way `buffs food off` does.
+
+Clicking a square opens the options window on the row's own page. The square
+is the one thing on screen you are certain to be looking at when you decide
+a nag is wrong, and the page it is switched off on was nine groups away.
+`ns.Options.Open(title)` is the call, and it raises on a title nothing opened
+rather than letting the window fall back to its front page.
+
+The spells you add are the character's now, with the lines beside them. A
+shield one shaman dragged onto the in line would otherwise have nagged the
+same account's warrior in every fight for the rest of its life. Core moves the
+list once at load, so it is the first character's to log in.
+
+The reading of a dragged spell off the cursor is `ns.SpellIdOnCursor` in Core,
+because the cooldown page and the buff page both take one and a third copy of
+three guarded readings is a probe on its way to being everywhere.
+
 ### A console under the hood
 
 The experience rail went missing on a level 62 character and stayed missing,

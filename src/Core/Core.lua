@@ -90,6 +90,13 @@ local charDefaults = {}
 -- dropped them, cleared once at load, and asserted against below so a key
 -- cannot be retired and registered at the same time.
 local RETIRED = {
+	-- 1.2: buffRacial was the switch on the racial nag while the racial was a
+	-- half of the row rather than an entry on it. It is an entry now, switched
+	-- and dragged the way the others are, under buffWatch.racial on the
+	-- character; an account-wide boolean for one character's racial was the
+	-- wrong scope in the first place.
+	buffRacial = true,
+
 	-- 1.2: the aim reticle, replaced by softAuto driving SoftTargetEnemy off
 	-- combat rather than drawing a box around what it resolved to.
 	softIcon = true,
@@ -710,6 +717,42 @@ function ns.CarrySpell(spell)
 
 	ClearCursor()
 	return false
+end
+
+-- Which spell is on the cursor, as an id, off the three values GetCursorInfo
+-- hands back after the kind.
+--
+-- Three readings, the same three Hover/Hover.lua takes for a name and for the
+-- same reason: this client answers a dragged spell with a spellbook index and
+-- the book it came out of, newer builds put the id in a fourth slot, and
+-- nothing installed on this machine proves which of those 2.5.6 hands back.
+--
+-- The book reading goes through GetSpellBookItemInfo, which is where
+-- Buttons/Ranks.lua reads its own ids from. The bare first value is tried last
+-- and only where the second is not a book: a spellbook index is a small number
+-- and every small number names some spell, so that reading taken first would
+-- put Charge on a row for anything dragged out of the top of the book.
+--
+-- Here rather than in the page that first wrote it, because the cooldown row
+-- and the buff row both take a spell off the cursor and a third copy of three
+-- guarded readings is the shape a probe takes on the way to being everywhere.
+function ns.SpellIdOnCursor(a, b, c)
+	if type(c) == "number" and ns.SpellName(c) then
+		return c
+	end
+
+	if type(a) == "number" and type(b) == "string"
+		and type(_G.GetSpellBookItemInfo) == "function" then
+		local ok, kind, id = pcall(_G.GetSpellBookItemInfo, a, b)
+		if ok and kind == "SPELL" and type(id) == "number" then
+			return id
+		end
+	end
+
+	if type(a) == "number" and type(b) ~= "string" and ns.SpellName(a) then
+		return a
+	end
+	return nil
 end
 
 -- The frame the client says the cursor is over, and the name of the call that
@@ -1822,11 +1865,11 @@ local KEPT = {
 	groups = true,
 	groupSeq = true,
 
-	-- Three lists you curated, each with a word of its own for emptying it:
-	-- `errors clear`, `buffs remove` and `mail unfav`. A button about the
-	-- layout has no business deleting the flask you track or the alt you mail.
+	-- Two lists you curated, each with a word of its own for emptying it:
+	-- `errors clear` and `mail unfav`. A button about the layout has no
+	-- business deleting the alt you mail. The flask list was the third and is
+	-- the character's now, which the reset never touches.
 	errorMuted = true,
-	buffExtra = true,
 	mailFavourites = true,
 
 	-- What three nameplate CVars held before the addon first wrote to them.

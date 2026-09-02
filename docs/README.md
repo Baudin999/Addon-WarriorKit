@@ -225,7 +225,10 @@ name of none of them.
                              the temporary enchant on each hand
     Buffs/Racials.lua        which racial this character owns, whether it is off
                              cooldown, and whether it is one worth nagging about
-    Buffs/Nag.lua            the row of squares, and the tick that paints it
+    Buffs/Nag.lua            the row of squares, the tick that paints it, and
+                             the click that opens the row's page
+    Buffs/Panel.lua          the row drawn again on the options page as its two
+                             lines, with what is off it underneath, to drag
     Buffs/Feature.lua
 
     Cooldowns/Cooldowns.lua  what is on the long-cooldown row: your class's own
@@ -459,10 +462,13 @@ to apply the loadout owned the only backup, the second overwrote its bars
 without taking one, and restoring on the second wrote the first one's bars into
 its slots. `Loadouts` keeps the loadouts themselves, because a set of weapon
 swaps is a fact about the character wearing the weapons. `Buffs` keeps
-`buffWatch`, the
-entries on the nag row this character still watches, and that one is the only
-scope decision in the addon taken on editorial grounds rather than on a
-technical one: see the buff nag notes.
+`buffWatch`, the entries on the nag row this character still watches,
+`buffLine`, which line each one you moved stands on, and `buffExtra`, the
+spells you put on the row yourself. The first of those was the only scope
+decision in the addon taken on editorial grounds rather than on a technical
+one, and the other two followed it the day a spell could be dragged onto the
+row: a shield one shaman drags on is not a fact about the same account's
+warrior. See the buff nag notes.
 
 A key that moves scope is migrated once at `ADDON_LOADED` and the account copy
 is dropped.
@@ -714,10 +720,17 @@ goes through `Feature.lua` or through the shared surface below:
                                  the points in it, whether this character has
                                  Slam, and whether the cast outruns the swing
     ns.Slam.Open()               whether pressing Slam right now is the press
+    ns.Upkeep.OUT / IN           the two lines, checked between fights and
+                                 during one
     ns.Upkeep.Count() / Entry(i) / Missing(i) / Ceiling()   how many buffs are
                                  watched, one of them, whether it is missing
                                  right now, and how many squares the row must
                                  be built to hold
+    ns.Upkeep.LineOf(entry) / Split() / OnLine(line, at)   which line an entry
+                                 stands on, how many stand on each, and the
+                                 at-th one on a line
+    ns.Upkeep.ShelfCount() / Shelved(i)   what is switched off and drawn under
+                                 the row on the page so it can be put back
     ns.Upkeep.Enchants()         both hands at once: enchanted or not, and the
                                  seconds left on each, or nil where this client
                                  has no GetWeaponEnchantInfo
@@ -727,8 +740,13 @@ goes through `Feature.lua` or through the shared surface below:
                                  none, and how long what is on it has to run
     ns.Upkeep.Scan() / Rebuild() / Refit()   re-read your auras, rebuild the
                                  list, re-read the art each hand draws
-    ns.Upkeep.Fixed() / ByWord(w)   the four entries that ship, read only, and
-                                 the one a slash word names
+    ns.Upkeep.Fixed() / ByWord(w)   the entries that ship, the racial among
+                                 them, plus your class's, read only, and the
+                                 one a slash word names
+    ns.Upkeep.Owner(id) / Place(key, line) / Put(id, line)   which entry answers
+                                 for a spell, one entry onto one line, and a
+                                 spell dropped on a line whether or not the row
+                                 has heard of it
     ns.Upkeep.Watched(key) / SetWatched(key, on)   whether this character still
                                  watches that entry, and switching it
     ns.Upkeep.Silent()           how many entries you switched off, and their
@@ -739,9 +757,18 @@ goes through `Feature.lua` or through the shared surface below:
                                  shouting about, whether it is off cooldown, both
                                  at once, and one line for the status
     ns.BuffNag.Apply / Lock / Reset / Update / Describe
-    ns.BuffNag.Mode() / Shown() / Caption() / Icon(slot)   which half is on
-                                 screen, how many squares, what the line under
-                                 them says, and one square for the harness
+    ns.BuffNag.Mode() / Shown() / Caption() / Icon(slot) / Metrics()   which
+                                 line is on screen, how many squares, what the
+                                 caption under them says, one square for the
+                                 harness, and the square and gap for the page
+    ns.BuffPanel.Rows(ui) / Tray(ui) / Square(i) / Shelved(i)   the two lines
+                                 and the tray on the options page, and one
+                                 square of each for the harness
+    ns.Options.Open(title)       the window, shown on the section with that
+                                 title; what a thing on screen calls to explain
+                                 itself
+    ns.SpellIdOnCursor(a, b, c)  which spell is on the cursor, as an id, off
+                                 the three values GetCursorInfo hands back
     ns.SwingGauges.Apply / Lock / Reset / Show / Update / Describe
     ns.SwingGauges.Bar(hand) / Applicable()   one hand's gauge, and whether
                                  there is a swing worth drawing at all

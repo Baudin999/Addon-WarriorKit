@@ -195,6 +195,9 @@ local SECTIONS = {
 	"28-cost",
 	"29-social",
 	"30-buff-nag",
+	-- The row's page, which reads the state the row left: an orc with both hands
+	-- bare, in a fight.
+	"30-buff-page",
 	"31-feeds",
 	"32-breakdown",
 	"33-anchors",

@@ -114,11 +114,11 @@ check(ns.db.swingPoint[5] == ns.DefaultFor("swingPoint")[5],
 
 -- One of each kind in Core's KEPT list: a ledger, a list you curated, a note
 -- of what the client held before the addon arrived, and the diagnostic the
--- chat window has to keep across a reload.
+-- chat window has to keep across a reload. The flask list used to be the
+-- fourth and is the character's now, which the reset never reaches.
 ns.db.purse["Nobody-Nowhere"] = 4200
 ns.db.mailFavourites[#ns.db.mailFavourites + 1] = "someone"
 ns.db.errorMuted.ERR_MADE_UP = "a message"
-ns.db.buffExtra[#ns.db.buffExtra + 1] = 17038
 ns.db.platesDistancePrior = "41"
 ns.db.chargeKeyDisplaced = "MULTIACTIONBAR3BUTTON11"
 ns.db.chatWhy = "the last build said this"
@@ -129,7 +129,6 @@ check(ns.db.purse["Nobody-Nowhere"] == 4200, "the reset emptied the gold ledger"
 check(ns.db.mailFavourites[#ns.db.mailFavourites] == "someone",
 	"the reset dropped a name off the mail favourites")
 check(ns.db.errorMuted.ERR_MADE_UP == "a message", "the reset unmuted an error")
-check(ns.db.buffExtra[#ns.db.buffExtra] == 17038, "the reset dropped a tracked flask")
 check(ns.db.platesDistancePrior == "41",
 	"the reset lost the note of what the nameplate CVar held")
 check(ns.db.chargeKeyDisplaced == "MULTIACTIONBAR3BUTTON11",

@@ -22,10 +22,18 @@ ns.BuffNag = Nag
 -- quarters alpha, which is the same trade Meter/Window.lua makes when it draws
 -- an outline and a title around a pane that has no rows in it.
 --
--- Two halves, taking turns rather than sharing. Out of combat the row is what
--- is missing: no stone, no shout, no food. In combat it is the racial you own
--- and have not pressed. They cannot both be on screen, so the row is never
--- longer than the shorter question, and each half means one thing.
+-- Two lines, taking turns rather than sharing. Out of combat the row is the out
+-- line: what is missing that you put on before a pull, no stone, no shout, no
+-- food. In combat it is the in line: the racial you own and have not pressed,
+-- and whatever you dragged there because it lapses mid fight, a shaman's shield
+-- being the one the feature was asked for. They cannot both be on screen, so
+-- the row is never longer than the shorter question, and each line means one
+-- thing. Upkeep.lua holds both lists and says which entry stands on which.
+--
+-- A square is a button as well as a picture. Clicking one opens the options
+-- window on the page the row is set up on, because the square is the one thing
+-- on screen you are certain to be looking at when you decide a nag is wrong,
+-- and the page it is switched off on is nine groups away.
 --
 -- Built out of UI/Ability.lua rather than out of textures. That file already
 -- draws a square with a cropped icon, a hairline that carries a status, a
@@ -50,7 +58,7 @@ local GAP = 4          -- one square to the next
 local CAPTION = ns.UI.OutlineFloor()
 local CAPTION_GAP = 4
 
--- The two palettes, and the one real difference between the halves.
+-- The two palettes, and the one real difference between an aura and the racial.
 --
 -- Only `go` is ever reached in either of them. Everything this row draws is
 -- something you could act on right now, which is what UI/Ability.lua's "ready"
@@ -125,6 +133,10 @@ local REFRESH = 0.1
 local IsResting = _G.IsResting
 local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
 
+-- The page a square opens, by the title of its section. A title rather than a
+-- part name because that is what the rail lists and what Options.Open takes.
+local PAGE = "Missing buffs"
+
 local frame, caption, place
 local icons = {}
 local shown = {}
@@ -133,30 +145,33 @@ local built = false
 local unit = 1
 
 -- What Place last decided, so a tick that changes nothing does no work at all.
--- `mode` is which half is on screen and `mask` is which entries within it, as
+-- `mode` is which line is on screen and `mask` is which entries within it, as
 -- one bit per slot, because a number compares without allocating and a list of
 -- entries does not.
 local mode, mask = nil, -1
 
--- When the racial half last came up, so the tooltip can say how long you have
--- been sitting on a cooldown you own. Nothing in the client answers that: a
--- spell that is ready reports a duration of zero and no end time, so the only
--- honest source is the moment this row noticed. Recorded at the transition
--- inside Nag.Update, which is behind the comparison and runs when the row
--- changes rather than when it is drawn.
-local racialSince = 0
+-- When the racial last came off cooldown in a fight, so the tooltip can say how
+-- long you have been sitting on a cooldown you own. Nothing in the client
+-- answers that: a spell that is ready reports a duration of zero and no end
+-- time, so the only honest source is the moment this row noticed. `racialIdle`
+-- is what it noticed last tick, so the moment is the transition and not every
+-- tick after it.
+local racialSince, racialIdle = 0, false
 
 local BIT = {}
 for index = 1, 32 do
 	BIT[index] = 2 ^ (index - 1)
 end
 
--- The racial's square, as one entry shaped like an upkeep entry so Place can
--- treat both halves the same. Filled in at Place time rather than at login,
--- because the client can take a moment to answer for a spell.
-local racial = { label = "" }
-
 local Whole = ns.UI.Whole
+
+-- The square and the gap between two, for the page that draws the row as it
+-- will look. Handed out rather than copied, the way Cooldowns/Row.lua hands its
+-- own to Cooldowns/Panel.lua: a page that picked its own size would be drawing
+-- a different row from the one it exists to arrange.
+function Nag.Metrics()
+	return ICON, GAP
+end
 
 
 --------------------------------------------------------------------------
@@ -172,8 +187,8 @@ local Whole = ns.UI.Whole
 -- up in the bank before every raid then you want the row there. The dead case
 -- is not, because nobody wants it.
 --
--- Neither applies to the racial half. You cannot be dead and in combat, and a
--- fight in a capital is still a fight.
+-- Neither applies to the in line. You cannot be dead and in combat, and a fight
+-- in a capital is still a fight.
 function Nag.Resting()
 	if ns.db.buffResting then
 		return false
@@ -191,11 +206,11 @@ function Nag.Dead()
 	return UnitIsDeadOrGhost("player") and true or false
 end
 
--- One bit per missing entry. On the tick.
-function Nag.MissingMask()
+-- One bit per missing entry on one line. On the tick.
+function Nag.MissingMask(line)
 	local bits = 0
 	for index = 1, ns.Upkeep.Count() do
-		if ns.Upkeep.Missing(index) then
+		if ns.Upkeep.Entry(index).layer == line and ns.Upkeep.Missing(index) then
 			bits = bits + BIT[index]
 		end
 	end
@@ -211,47 +226,44 @@ end
 -- placement has and for the same reason.
 --------------------------------------------------------------------------
 
+-- Which line a mode draws, or nil for a mode that draws every entry.
+local LINE_OF = { upkeep = ns.Upkeep.OUT, combat = ns.Upkeep.IN }
+
 local function Collect()
 	shownCount = 0
-
-	if mode == "racial" then
-		racial.texture = ns.Racials.Texture()
-		racial.label = ns.Racials.Name() or ""
-		-- The id as well as the name, because the tooltip reads with it. Written
-		-- every time rather than once, for the same reason the texture is: the
-		-- client can take a moment after login to answer for a spell, and a race
-		-- change answers differently.
-		racial.spell = ns.Racials.Spell()
-		shownCount = 1
-		shown[1] = racial
+	if mode ~= "upkeep" and mode ~= "combat" and mode ~= "preview" then
 		return
 	end
 
-	if mode ~= "upkeep" and mode ~= "preview" then
-		return
-	end
-
+	local line = LINE_OF[mode]
 	for index = 1, ns.Upkeep.Count() do
-		if mode == "preview" or ns.Upkeep.Missing(index) then
+		local entry = ns.Upkeep.Entry(index)
+		if not line or (entry.layer == line and ns.Upkeep.Missing(index)) then
 			shownCount = shownCount + 1
-			shown[shownCount] = ns.Upkeep.Entry(index)
+			shown[shownCount] = entry
 		end
 	end
+end
+
+-- What one square says under itself. A missing aura is named; the racial is an
+-- instruction, because there is nothing missing about it except your thumb.
+local function Word(entry)
+	if entry.racial then
+		return "press " .. (entry.label or "")
+	end
+	return entry.label or ""
 end
 
 -- The line under the row. It exists because a square of drained art tells you
 -- something is missing and not which hand, and "no stone" is a shorter sentence
 -- than a picture.
 local function Words()
-	if mode == "racial" then
-		return "press " .. racial.label
-	end
 	if mode == "preview" then
 		return "everything this row watches"
 	end
 	local text = ""
 	for slot = 1, shownCount do
-		text = text .. (slot > 1 and ", " or "") .. (shown[slot].label or "")
+		text = text .. (slot > 1 and ", " or "") .. Word(shown[slot])
 	end
 	return text
 end
@@ -324,7 +336,7 @@ end
 
 -- What the caption could not hold.
 local function Detail(entry)
-	if entry == racial then
+	if entry.racial then
 		local idle = GetTime() - racialSince
 		if racialSince > 0 and idle >= 1 then
 			return ("Off cooldown for %d seconds and doing nothing there. Press it.")
@@ -341,14 +353,20 @@ local function Detail(entry)
 		.. " is not on you. You put it on the row yourself."
 end
 
+-- The one sentence every square ends on. It is a body line and not the blue
+-- hint band that used to sit under every box in the addon: this square is the
+-- one place a click does something, and a box that did not say so would be a
+-- button nobody finds.
+local CLICK = "Click it to open the page this row is set up on."
+
 -- The subject one square is about, in whichever of the three kinds this square
--- has a handle for. Everything under the head is the same three lines whichever
--- one it picks.
+-- has a handle for. Everything under the head is the same lines whichever one
+-- it picks.
 local function Subject(entry)
 	local subject = {
 		kind = "note",
-		title = entry.label,
-		lines = { Detail(entry) },
+		title = Word(entry),
+		lines = { Detail(entry), CLICK },
 	}
 	if entry.spell then
 		subject.kind = "spell"
@@ -375,6 +393,21 @@ local function Hover(w)
 	end)
 end
 
+-- The click. Left button only, on the way up, and only while the square is
+-- taking the mouse at all, which Place decides: a hidden square answers no
+-- script because it has no mouse to answer with, and the preview hands the
+-- button to the parent for the drag. The right button is already handed back
+-- to the camera by ns.Tip.Hang.
+local function Open(_, button)
+	if button == "LeftButton" then
+		ns.Options.Open(PAGE)
+	end
+end
+
+local function Press(w)
+	w:SetScript("OnMouseUp", Open)
+end
+
 -- cold: layout, run on a settings change and a rescale rather than on a tick.
 local function Place()
 	Collect()
@@ -383,11 +416,10 @@ local function Place()
 	-- and the parent gets the button. Every other mode is a square you can hover
 	-- and a square you cannot move.
 	local hoverable = mode ~= "preview"
-	local palette = (mode == "racial") and URGENT or MISSING
 	for slot = 1, #icons do
 		local w = icons[slot]
 		if slot <= shownCount then
-			w.palette = palette
+			w.palette = shown[slot].racial and URGENT or MISSING
 			w.art = shown[slot].texture
 			w.entry = shown[slot]
 			w:EnableMouse(hoverable)
@@ -432,16 +464,17 @@ local function Pulse()
 	return Whole((PULSE_FLOOR + (1 - PULSE_FLOOR) * wave) * PULSE_STEPS) / PULSE_STEPS
 end
 
+-- The racial square breathes and nothing else does. A missing aura is a fact
+-- and sits still; the racial is a press, and the pulse is what the brief asked
+-- for. Pulse is asked once per paint rather than once per square, because the
+-- wave is one number and the comparison inside Draw is what keeps a square
+-- whose alpha did not move from being written.
 local function Paint()
-	local fade = 1
-	if mode == "racial" then
-		fade = Pulse()
-	elseif mode == "preview" then
-		fade = PREVIEW_FADE
-	end
+	local fade = (mode == "preview") and PREVIEW_FADE or 1
+	local breath = Pulse()
 	for slot = 1, shownCount do
 		local w = icons[slot]
-		w.fade = fade
+		w.fade = (shown[slot].racial and mode ~= "preview") and breath or fade
 		ns.UI.Ability.Draw(w, w.art, "ready")
 	end
 end
@@ -452,27 +485,35 @@ function Nag.Update()
 	end
 
 	local want, bits = "quiet", 0
+	local fighting = UnitAffectingCombat("player")
 	if not ns.db.buffs then
 		want = "quiet"
 	elseif not ns.db.locked then
 		want = "preview"
 	elseif Nag.Dead() then
 		want = "quiet"
-	elseif UnitAffectingCombat("player") then
-		if ns.db.buffRacial and ns.Racials.Idle() then
-			want = "racial"
+	elseif fighting then
+		bits = Nag.MissingMask(ns.Upkeep.IN)
+		if bits ~= 0 then
+			want = "combat"
 		end
 	elseif not Nag.Resting() then
-		bits = Nag.MissingMask()
+		bits = Nag.MissingMask(ns.Upkeep.OUT)
 		if bits ~= 0 then
 			want = "upkeep"
 		end
 	end
 
+	-- The moment the racial came up, kept whether or not its square is drawn,
+	-- because the row can be quiet with the racial switched off and still owe
+	-- the number to a square that comes back later.
+	local idle = fighting and ns.Racials.Idle() or false
+	if idle and not racialIdle then
+		racialSince = GetTime()
+	end
+	racialIdle = idle
+
 	if want ~= mode or bits ~= mask then
-		if want == "racial" and mode ~= "racial" then
-			racialSince = GetTime()
-		end
 		mode, mask = want, bits
 		Place()
 	end
@@ -556,7 +597,7 @@ function Nag.Describe()
 		return "off"
 	end
 	local line = ns.Upkeep.Describe()
-	if not ns.db.buffRacial then
+	if not ns.Upkeep.Watched("racial") then
 		return line .. "; racial off"
 	end
 	return line .. "; racial " .. ns.Racials.Describe()
@@ -604,6 +645,7 @@ events:SetScript("OnEvent", function(_, event, token)
 			-- The scripts go on once. Whether the square answers them is
 			-- EnableMouse, written by Place every time the row changes.
 			Hover(icons[slot])
+			Press(icons[slot])
 		end
 
 		built = true
@@ -634,8 +676,15 @@ events:SetScript("OnEvent", function(_, event, token)
 		return
 	end
 
-	if event == "PLAYER_ENTERING_WORLD" or token == "player"
-		or event == "PLAYER_EQUIPMENT_CHANGED" then
+	if event == "PLAYER_ENTERING_WORLD" then
+		-- Rebuilt rather than refitted, because the racial resolves off the
+		-- client's answer for your race and that answer can arrive after
+		-- PLAYER_LOGIN. A rebuild is a walk of a dozen entries, off a tick.
+		ns.Upkeep.Rebuild()
+		return
+	end
+
+	if token == "player" or event == "PLAYER_EQUIPMENT_CHANGED" then
 		ns.Upkeep.Refit()
 		ns.Upkeep.Scan()
 	end

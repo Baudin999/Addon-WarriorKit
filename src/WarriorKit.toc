@@ -450,6 +450,7 @@ Swing\Feature.lua
 Buffs\Upkeep.lua
 Buffs\Racials.lua
 Buffs\Nag.lua
+Buffs\Panel.lua
 Buffs\Feature.lua
 
 # The cooldowns, in two layers. Cooldowns.lua is what is on the row, out of the

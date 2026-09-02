@@ -74,6 +74,29 @@ local MAX_CLASS = 4
 local NONE = {}
 
 --------------------------------------------------------------------------
+-- The two lines
+--
+-- Every entry stands on one of two lines, and the line is the whole of when it
+-- is asked about. The out line is checked between fights, because a stone and a
+-- plate of food are things you put on before the pull and cannot put on during
+-- it. The in line is checked during a fight, because a shield that spent its
+-- last charge on the third mob and a racial sitting off cooldown are things you
+-- fix mid swing or not at all.
+--
+-- One line each, not a set. A shield you want nagged about in both states is a
+-- real want and the answer today is to pick the line it lapses on, which is the
+-- fight; a square on both lines would be a third state for every drag on the
+-- page to know about.
+--
+-- Two strings rather than a boolean, for the reason Cooldowns.lua gives for its
+-- own pair: every reader compares one of them, and a misspelling is then a
+-- square on the wrong line rather than a nil error.
+--------------------------------------------------------------------------
+
+local OUT, IN = "out", "in"
+Upkeep.OUT, Upkeep.IN = OUT, IN
+
+--------------------------------------------------------------------------
 -- The three that ship, and whatever your class adds
 --
 -- Each is here because it is silent when it lapses and expensive while it is
@@ -121,7 +144,7 @@ local FIXED = {
 	-- imbue. Nagged only while there is a weapon in the slot, because an empty
 	-- hand is a state you are in on purpose and briefly.
 	{
-		key = "mainhand", hand = MAIN,
+		key = "mainhand", hand = MAIN, line = OUT,
 		fixed = "bare weapon",
 		word = "weapon",
 		switch = "tell me about a bare weapon",
@@ -137,7 +160,7 @@ local FIXED = {
 	-- "is there a weapon in that hand", so the test is that call and not
 	-- whether the slot has something in it.
 	{
-		key = "offhand", hand = OFF,
+		key = "offhand", hand = OFF, line = OUT,
 		fixed = "bare off hand",
 		word = "offhand",
 		switch = "tell me about a bare off hand",
@@ -152,12 +175,25 @@ local FIXED = {
 	-- and which food granted it does not matter: the name is the thing being
 	-- compared and every food shares it.
 	{
-		key = "food", spell = 19705,
+		key = "food", spell = 19705, line = OUT,
 		fixed = "food",
 		word = "food",
 		switch = "tell me when I am not fed",
 		hint = "You are not Well Fed. Every food buff in the game lands as that one"
 			.. " aura, so any of them clears this square.",
+	},
+
+	-- The racial, which is the one entry on this list that is not an aura and
+	-- the one that ships on the in line. Racials.lua says which spell it is and
+	-- whether it is worth a square; this entry is what puts it on the row beside
+	-- the others so it can be switched, dragged off and dragged back the same
+	-- way. It is missing while it is off cooldown in a fight, which is the only
+	-- moment pressing it is worth saying, and it cannot be moved to the out
+	-- line: a cooldown that is ready between fights is ready all afternoon.
+	{
+		key = "racial", racial = true, line = IN,
+		word = "racial",
+		switch = "nag me about my racial",
 	},
 }
 
@@ -188,13 +224,32 @@ local order = {}
 -- aura slot per scan instead of a walk of the list per slot.
 local wanted = {}
 
--- The extra entries, pooled. A rebuild reuses these tables rather than making
--- new ones, because a rebuild runs on every add and every remove and the panel
--- can call it a dozen times while somebody is deciding.
+-- The extra entries, one table per spell you added and held rather than
+-- rebuilt, so a rebuild hands the row the same table it was drawing. Keyed by
+-- the spell rather than by the place on the list, because the key is what the
+-- line and the switch are saved under and a place moves when the one before it
+-- is removed.
 local extras = {}
-for index = 1, MAX_EXTRA do
-	extras[index] = { key = "extra" .. index }
+
+local function MineKey(spellID)
+	return "spell" .. spellID
 end
+
+local function MineEntry(spellID)
+	local key = MineKey(spellID)
+	local entry = extras[key]
+	if not entry then
+		entry = { key = key, spell = spellID, mine = true, line = OUT }
+		extras[key] = entry
+	end
+	return entry
+end
+
+-- What is off the row on purpose: the entries this character could draw and
+-- has switched off. Built in the same walk as `order`, because the page draws
+-- both and a square you took off the row that is nowhere on the page is a
+-- square you cannot put back.
+local shelf = {}
 
 -- How many entries the row must be built to hold. A frame cannot be destroyed
 -- on this client, only hidden, so Nag.lua builds this many squares once and
@@ -209,6 +264,54 @@ end
 
 function Upkeep.Entry(index)
 	return order[index]
+end
+
+function Upkeep.ShelfCount()
+	return #shelf
+end
+
+function Upkeep.Shelved(index)
+	return shelf[index]
+end
+
+-- Which line an entry stands on: the one you moved it to, or the one it
+-- shipped on. The racial answers the in line whatever was saved, because a
+-- saved line for it can only be a file edited by hand.
+function Upkeep.LineOf(entry)
+	if entry.racial then
+		return IN
+	end
+	local moved = ns.dbc.buffLine[entry.key]
+	if moved == OUT or moved == IN then
+		return moved
+	end
+	return entry.line or OUT
+end
+
+-- How many drawn entries each line carries.
+function Upkeep.Split()
+	local out = 0
+	for index = 1, #order do
+		if order[index].layer == OUT then
+			out = out + 1
+		end
+	end
+	return out, #order - out
+end
+
+-- The at-th drawn entry on one line, or nil past the end of it. What the page
+-- reads a square off.
+function Upkeep.OnLine(line, at)
+	local seen = 0
+	for index = 1, #order do
+		if order[index].layer == line then
+			seen = seen + 1
+			if seen == at then
+				return order[index]
+			end
+		end
+	end
+	return nil
 end
 
 -- What ships, plus whatever your class added, as one list. Read only, so
@@ -316,7 +419,7 @@ function Upkeep.Silent()
 		local entry = list[index]
 		if not Upkeep.Watched(entry.key) then
 			count = count + 1
-			names = names .. (count > 1 and ", " or "") .. entry.fixed
+			names = names .. (count > 1 and ", " or "") .. (entry.fixed or entry.word)
 		end
 	end
 	return count, names
@@ -436,13 +539,18 @@ local function AuraName(index)
 end
 
 -- One spell id into the lookup, under whatever this client calls it. The first
--- one that resolves gives the entry its name and its picture.
-local function TrackName(entry, id)
+-- one that resolves gives the entry its name and its picture. `watch` is
+-- whether the scan should match the name onto this entry: a shelved entry gets
+-- its name and its picture for the page and no place in the lookup, because a
+-- present aura on a square nobody can see is a missing square nobody can see.
+local function TrackName(entry, id, watch)
 	local name = ns.SpellName(id)
 	if not name then
 		return
 	end
-	wanted[name] = entry
+	if watch then
+		wanted[name] = entry
+	end
 	if not entry.name then
 		entry.name = name
 		entry.texture = ns.SpellTexture(id)
@@ -454,17 +562,27 @@ end
 -- Water Shield is not missing Lightning Shield, so all of the names point at the
 -- one entry and the scan cannot tell which of them arrived.
 --
+-- The racial is not an aura and resolves off Racials.lua instead: the spell,
+-- the name and the picture, read again on every rebuild because the client can
+-- take a moment after login to answer for a race.
+--
 -- Named rather than written inside Rebuild, where the set inside the entry walk
 -- was five levels deep and the shape gate stops at four. The gate was right:
 -- what the inner loop does is a different job from rebuilding the list.
-local function Track(entry)
+local function Track(entry, watch)
 	entry.name, entry.texture = nil, nil
+	if entry.racial then
+		entry.spell = ns.Racials.Spell()
+		entry.name = ns.Racials.Name()
+		entry.texture = ns.Racials.Texture()
+		return
+	end
 	if entry.spells then
 		for at = 1, #entry.spells do
-			TrackName(entry, entry.spells[at])
+			TrackName(entry, entry.spells[at], watch)
 		end
 	elseif entry.spell then
-		TrackName(entry, entry.spell)
+		TrackName(entry, entry.spell, watch)
 	end
 end
 
@@ -504,40 +622,61 @@ function Upkeep.Refit()
 	end
 end
 
+-- Whether one entry goes on the row at all, whichever line and whatever you
+-- switched. The racial is the only one with a condition: a race with no racial
+-- listed, or one that is situational rather than damage, has no square to draw
+-- and no square to put back, the way a trinket slot with nothing pressable in
+-- it has none on the cooldown row.
+local function Drawable(entry)
+	if entry.racial then
+		return ns.Racials.Worth() and entry.name ~= nil
+	end
+	return true
+end
+
 -- Rebuild the live list from what ships, what your class added and whatever you
 -- have put on it yourself.
 function Upkeep.Rebuild()
 	for index = #order, 1, -1 do
 		order[index] = nil
 	end
+	for index = #shelf, 1, -1 do
+		shelf[index] = nil
+	end
 	for name in pairs(wanted) do
 		wanted[name] = nil
 	end
 
-	local watched = Upkeep.Fixed()
-	for index = 1, #watched do
-		local entry = watched[index]
-		if Upkeep.Watched(entry.key) then
-			order[#order + 1] = entry
-		end
+	local list = Upkeep.Fixed()
+	local all, count = {}, 0
+	for index = 1, #list do
+		count = count + 1
+		all[count] = list[index]
+	end
+	local own = ns.dbc.buffExtra
+	for index = 1, math.min(#own, MAX_EXTRA) do
+		count = count + 1
+		all[count] = MineEntry(own[index])
 	end
 
-	local list = ns.db.buffExtra
-	for index = 1, math.min(#list, MAX_EXTRA) do
-		local entry = extras[index]
-		entry.spell = list[index]
-		order[#order + 1] = entry
-	end
-
-	for index = 1, #order do
-		local entry = order[index]
+	for index = 1, count do
+		local entry = all[index]
+		local watched = Upkeep.Watched(entry.key)
 		entry.present = false
-		Track(entry)
+		entry.layer = Upkeep.LineOf(entry)
+		Track(entry, watched)
 		-- A shipped entry says what it is in the caption's own words; one you
 		-- added says whatever this client calls it, because "flask" is not a
 		-- word the client would use and the spell's name is.
 		entry.label = entry.fixed or entry.name
 			or (entry.spell and ("spell " .. entry.spell)) or "?"
+		if Drawable(entry) then
+			if watched then
+				order[#order + 1] = entry
+			else
+				shelf[#shelf + 1] = entry
+			end
+		end
 	end
 
 	Upkeep.Refit()
@@ -555,6 +694,9 @@ function Upkeep.Missing(index)
 	if not entry then
 		return false
 	end
+	if entry.racial then
+		return ns.Racials.Idle()
+	end
 	if entry.hand then
 		return Upkeep.Bare(entry.hand)
 	end
@@ -569,11 +711,15 @@ end
 --------------------------------------------------------------------------
 
 function Upkeep.Extra()
-	return ns.db.buffExtra
+	return ns.dbc.buffExtra
 end
 
 function Upkeep.MaxExtra()
 	return MAX_EXTRA
+end
+
+function Upkeep.MineKey(spellID)
+	return MineKey(spellID)
 end
 
 function Upkeep.Add(spell)
@@ -581,7 +727,7 @@ function Upkeep.Add(spell)
 	if not id or id <= 0 then
 		return false, "that is not a spell id."
 	end
-	local list = ns.db.buffExtra
+	local list = ns.dbc.buffExtra
 	for index = 1, #list do
 		if list[index] == id then
 			return false, (ns.SpellName(id) or ("spell " .. id)) .. " is already on the row."
@@ -597,15 +743,102 @@ end
 
 function Upkeep.Remove(spell)
 	local id = tonumber(spell)
-	local list = ns.db.buffExtra
+	local list = ns.dbc.buffExtra
 	for index = 1, #list do
 		if list[index] == id then
 			table.remove(list, index)
+			ns.dbc.buffLine[MineKey(id)] = nil
+			ns.dbc.buffWatch[MineKey(id)] = nil
 			Upkeep.Rebuild()
 			return true
 		end
 	end
 	return false
+end
+
+--------------------------------------------------------------------------
+-- Moving a square between the lines
+--
+-- What the page does when you drag one, and what `buffs line <word>` does
+-- with the same fact typed. Every entry the row could draw is a candidate,
+-- whichever line it is on and whether it is switched off, because dragging a
+-- square onto a line means "watch this, here" and there is nothing else the
+-- gesture could mean.
+--------------------------------------------------------------------------
+
+-- Which entry already answers for a spell, or nil for one nothing on the row
+-- has heard of. Every id an entry carries and the name as well, so a shield
+-- dragged out of the spellbook at rank three lands on the shield square the
+-- class file wrote at rank one rather than beside it.
+function Upkeep.Owner(spellID)
+	local name = ns.SpellName(spellID)
+	local list = Upkeep.Fixed()
+	for index = 1, #list do
+		local entry = list[index]
+		if entry.spell == spellID or (name and entry.name == name) then
+			return entry
+		end
+		for at = 1, #(entry.spells or NONE) do
+			if entry.spells[at] == spellID then
+				return entry
+			end
+		end
+	end
+	return extras[MineKey(spellID)]
+end
+
+-- One entry onto one line, switched back on if it was off. Returns whether
+-- anything moved, and the sentence to print where it refused.
+function Upkeep.Place(key, line)
+	if line ~= OUT and line ~= IN then
+		return false, "a square goes on the in line or the out line."
+	end
+	local entry
+	local list = Upkeep.Fixed()
+	for index = 1, #list do
+		if list[index].key == key then
+			entry = list[index]
+		end
+	end
+	entry = entry or extras[key]
+	if not entry then
+		return false, "nothing on the row answers to " .. tostring(key) .. "."
+	end
+	if entry.racial and line == OUT then
+		return false, "your racial is a cooldown, and a cooldown that is ready"
+			.. " between fights is ready all afternoon. It stays on the in line."
+	end
+
+	-- Saved only where it differs from what shipped, so an entry you put back
+	-- where it came from follows its class file again.
+	if line == (entry.line or OUT) then
+		ns.dbc.buffLine[key] = nil
+	else
+		ns.dbc.buffLine[key] = line
+	end
+	ns.dbc.buffWatch[key] = nil
+	Upkeep.Rebuild()
+	return true
+end
+
+-- A spell dropped on a line: off your spellbook, off the other line, or off
+-- the squares under the row. Matched against the whole row before anything is
+-- added, so dragging a square the row already knows about moves it rather than
+-- arriving twice.
+function Upkeep.Put(spellID, line)
+	spellID = tonumber(spellID)
+	if not spellID then
+		return false, "that is not a spell this row can watch."
+	end
+	local owner = Upkeep.Owner(spellID)
+	if owner then
+		return Upkeep.Place(owner.key, line)
+	end
+	local ok, message = Upkeep.Add(spellID)
+	if not ok then
+		return false, message
+	end
+	return Upkeep.Place(MineKey(spellID), line)
 end
 
 -- One line for the status and the panel. Names what is missing right now, which

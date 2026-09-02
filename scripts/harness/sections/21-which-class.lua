@@ -180,8 +180,9 @@ do
 end
 
 -- What your class puts on the buff row is merged in, and nobody else's is.
+-- Four ship: two hands, food, and the racial.
 local shipped = ns.Upkeep.Fixed()
-local added = #shipped - 3
+local added = #shipped - 4
 check(added == #(Class.Of("upkeep") or {}),
 	("the buff row took %d class entries and the registry gave %d")
 		:format(added, #(Class.Of("upkeep") or {})))

@@ -1,10 +1,13 @@
 -- The buff nag
 --
--- Two halves that take turns, and the assertions are mostly about the turns
+-- Two lines that take turns, and the assertions are mostly about the turns
 -- rather than about the drawing. A missing sharpening stone must be noticed out
 -- of combat and must go quiet the moment a fight starts, because you cannot
 -- apply one mid pull. Blood Fury must be silent out of combat and loud in it,
--- because pressing it is only worth saying while you are swinging.
+-- because pressing it is only worth saying while you are swinging. And an
+-- entry you dragged from the out line to the in line must follow the racial's
+-- turn rather than the stone's, because that is the whole of what the drag
+-- means.
 --
 -- The one assertion here that is about a client API rather than about the
 -- feature is the off hand. GetWeaponEnchantInfo answers six values on the
@@ -206,16 +209,24 @@ check(not walked,
 
 -- Not counted anywhere either, and said out loud. A status line reporting
 -- squares you cannot see has moved the nag rather than turned it off.
-local counted = 0
+--
+-- Counted on the out line, because that is the line on screen. The racial
+-- is on the in line and is "missing" whenever it is ready, which out of a
+-- fight it always is; the status line counts it and the row does not draw
+-- it, and both are right.
+local counted, allMissing = 0, 0
 for index = 1, Upkeep.Count() do
 	if Upkeep.Missing(index) then
-		counted = counted + 1
+		allMissing = allMissing + 1
+		if Upkeep.Entry(index).layer == Upkeep.OUT then
+			counted = counted + 1
+		end
 	end
 end
 check(Nag.Shown() == counted,
 	("%d squares are drawn and %d entries are missing"):format(Nag.Shown(), counted))
 check(Upkeep.Describe():find(("%d tracked, %d missing")
-	:format(Upkeep.Count(), counted), 1, true) ~= nil,
+	:format(Upkeep.Count(), allMissing), 1, true) ~= nil,
 	"the status line counts entries the row does not: " .. Upkeep.Describe())
 check(Upkeep.Describe():find("bare weapon switched off", 1, true) ~= nil,
 	"nothing anywhere says what was switched off: " .. Upkeep.Describe())
@@ -412,13 +423,13 @@ check(Racials.Spell() == nil, "a race with no racial listed kept the last one")
 own.race, own.raceName = "Orc", "Orc"
 
 ----------------------------------------------------------------------
--- The racial half, in a fight
+-- The in line, in a fight
 ----------------------------------------------------------------------
 
 inCombat.player = true
 tick()
-check(Nag.Mode() == "racial", "Blood Fury off cooldown in a fight drew nothing")
-check(Nag.Shown() == 1, "the racial half drew more than one square")
+check(Nag.Mode() == "combat", "Blood Fury off cooldown in a fight drew nothing")
+check(Nag.Shown() == 1, "the in line drew more than one square")
 check(Nag.Caption() == "press Blood Fury",
 	"the caption read " .. Nag.Caption())
 check(not says("bare weapon"),
@@ -464,16 +475,85 @@ check(Nag.Shown() == 0, "a spent racial still drew a square")
 -- blink the square out for a second and a half after every other press.
 own.cooldowns[20572] = { _G.GetTime(), 1.5 }
 tick()
-check(Nag.Mode() == "racial", "a global cooldown counted as the racial being spent")
+check(Nag.Mode() == "combat", "a global cooldown counted as the racial being spent")
 own.cooldowns[20572] = nil
 
--- Turned off, the racial half goes quiet and the missing stone stays quiet
--- too, because combat is combat.
-ns.db.buffRacial = false
+-- Switched off, the in line goes quiet and the missing stone stays quiet too,
+-- because combat is combat. The switch is the same per-character switch every
+-- other entry has, and it puts the racial under the row on the page rather
+-- than nowhere.
+Upkeep.SetWatched("racial", false)
+Nag.Apply()
 tick()
-check(Nag.Mode() == "quiet", "the racial setting did nothing")
-ns.db.buffRacial = true
+check(Nag.Mode() == "quiet", "the racial switch did nothing")
+check(Nag.Describe():find("racial off", 1, true) ~= nil,
+	"/wk status does not say the racial is off: " .. Nag.Describe())
+do
+	local shelvedRacial = false
+	for index = 1, Upkeep.ShelfCount() do
+		shelvedRacial = shelvedRacial or Upkeep.Shelved(index).key == "racial"
+	end
+	check(shelvedRacial, "a switched off racial is nowhere under the row to put back")
+end
+Upkeep.SetWatched("racial", true)
+Nag.Apply()
 tick()
+check(Nag.Mode() == "combat", "switching the racial back on did not put it back")
+
+----------------------------------------------------------------------
+-- A square moved to the in line
+--
+-- The request this feature exists for: a shaman's shield lapses mid fight and
+-- the shaman wants telling then. Food stands in for it here because every class
+-- ships it, and the assertion is the same: dragged to the in line it goes quiet
+-- between fights and comes up beside the racial in one.
+----------------------------------------------------------------------
+
+do
+	local moved, why = Upkeep.Place("food", Upkeep.IN)
+	check(moved, "food could not be moved to the in line: " .. tostring(why))
+	Nag.Apply()
+	tick()
+	check(Nag.Mode() == "combat" and says("food") and says("press Blood Fury"),
+		"food on the in line did not draw beside the racial in a fight: " .. Nag.Caption())
+	check(Nag.Shown() == 2, ("the in line drew %d squares of 2"):format(Nag.Shown()))
+	check(_G.WarriorKitCharDB.buffLine.food == "in",
+		"the line an entry was moved to never reached the character's saved variables")
+
+	-- Only the racial breathes. Food is a fact and sits still beside it.
+	advance(0.8)
+	tick()
+	local still, breathing
+	for slot = 1, Nag.Shown() do
+		local square = Nag.Icon(slot)
+		if square.entry.racial then
+			breathing = square.shownAlpha
+		else
+			still = square.shownAlpha
+		end
+end
+	check(still == 1, ("an aura square on the in line pulsed, alpha %s"):format(tostring(still)))
+	check(breathing ~= nil and breathing < 1, "the racial square stopped pulsing beside another square")
+
+	inCombat.player = nil
+	tick()
+	check(not says("food"), "food on the in line was nagged about between fights")
+	inCombat.player = true
+
+	-- And back, which clears the saved line rather than writing the shipped one
+	-- into it, so a class file that changes its mind is followed.
+	Upkeep.Place("food", Upkeep.OUT)
+	check(_G.WarriorKitCharDB.buffLine.food == nil,
+		"moving an entry back to its own line left the line in the saved variables")
+
+	-- The racial cannot go to the out line, because a cooldown that is ready
+	-- between fights is ready all afternoon.
+	local allowed = Upkeep.Place("racial", Upkeep.OUT)
+	check(allowed == false, "the racial was allowed onto the out line")
+	check(Upkeep.LineOf(Upkeep.ByWord("racial")) == Upkeep.IN, "the refusal moved it anyway")
+	Nag.Apply()
+	tick()
+end
 
 ----------------------------------------------------------------------
 -- The pulse

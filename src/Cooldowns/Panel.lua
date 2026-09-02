@@ -86,43 +86,11 @@ local function Say(line)
 	ns.Print(line)
 end
 
--- Which spell is on the cursor, as an id.
---
--- Three readings, the same three Hover/Hover.lua takes and for the same reason:
--- this client answers a dragged spell with a spellbook index and the book it
--- came out of, newer builds put the id in a fourth slot, and nothing installed
--- on this machine proves which of those 2.5.6 hands back.
---
--- The id is what the row counts by, so the book reading goes through
--- GetSpellBookItemInfo, which is where Buttons/Ranks.lua reads its own ids
--- from. The bare first value is tried last and only where the second is not a
--- book: a spellbook index is a small number and every small number names some
--- spell, so that reading taken first would put Charge on the row for anything
--- dragged out of the top of the book.
-local function Cursor(a, b, c)
-	if type(c) == "number" and ns.SpellName(c) then
-		return c
-	end
-
-	if type(a) == "number" and type(b) == "string"
-		and type(_G.GetSpellBookItemInfo) == "function" then
-		local ok, kind, id = pcall(_G.GetSpellBookItemInfo, a, b)
-		if ok and kind == "SPELL" and type(id) == "number" then
-			return id
-		end
-	end
-
-	if type(a) == "number" and type(b) ~= "string" and ns.SpellName(a) then
-		return a
-	end
-	return nil
-end
-
 -- What a square will take off the cursor, handed to the widget layer, which
 -- knows what a square is and nothing about a spell.
 local function Take(kind, a, b, c)
 	if kind == "spell" then
-		local id = Cursor(a, b, c)
+		local id = ns.SpellIdOnCursor(a, b, c)
 		if id then
 			return id
 		end

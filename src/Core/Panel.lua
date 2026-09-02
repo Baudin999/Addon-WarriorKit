@@ -812,6 +812,27 @@ function Options.SelectSection(index)
 	end
 end
 
+-- One page, by the title of its section, shown. What a thing on the screen
+-- calls when it wants to be explained: a nag square opens the page the row is
+-- set up on rather than the page the window was last left on. A title nothing
+-- opened is a login error, because the caller wrote it and a page that quietly
+-- fell back to the front would be a click that appears to do nothing.
+function Options.Open(title)
+	if not window then
+		return false
+	end
+	for _, group in ipairs(groups) do
+		for _, section in ipairs(group.sections) do
+			if section.title == title then
+				rail:Select(group.at, section.at)
+				Options.Show()
+				return true
+			end
+		end
+	end
+	error(("nothing in the options window opened a section called %q"):format(tostring(title)))
+end
+
 function Options.Show()
 	if not window then
 		return

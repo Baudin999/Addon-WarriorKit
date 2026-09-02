@@ -94,17 +94,21 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
 - **A nag for what you forgot.** A row of squares over your character when
   something that should be up is not: a sharpening stone worn off either hand,
   Battle Shout lapsed, no food. It is not there at all when nothing is wrong, so
-  seeing it is the whole message, and it is checked out of combat, which is when
-  you can fix it. A shield is never nagged about. Hover a square and it tells you
-  what is missing and what fixes it. Every entry has its own switch, per
-  character, because a bank alt that will never own a sharpening stone does not
-  need to be told about one forever, and one square you cannot silence teaches
-  you to ignore the whole row. Add your flask and your elixirs
-  by spell id, because these clients will not say that an aura came from one.
-  In combat the row turns into the other question: the racial you own and have
-  not pressed. Blood Fury on an orc and Berserking on a troll pulse in the middle
-  of your screen until you spend them, because those are the two that are damage
-  and the rest are cooldowns you spend when something happens.
+  seeing it is the whole message. A shield is never nagged about. Hover a
+  square and it tells you what is missing and what fixes it; click it and the
+  options window opens on the row's own page. The row has two lines. The out
+  line is checked between fights, because a stone and a plate of food are
+  things you put on before the pull. The in line is checked during one: the
+  racial you own and have not pressed, Blood Fury on an orc and Berserking on
+  a troll pulsing in the middle of your screen until you spend them, and
+  whatever you dragged there because it lapses mid swing, a shaman's shield
+  being the case it was built for. The page draws both lines, and you drag a
+  spell out of your spellbook onto either, drag a square between them, or drag
+  one off. Every entry has its own tick box too, per character, because a bank
+  alt that will never own a sharpening stone does not need to be told about one
+  forever, and a low level character has no buff food yet. Add a flask by spell
+  id where there is nothing to drag, because these clients will not say that an
+  aura came from one.
 - **A loot stream, and the combat log beside it.** Two columns of what just
   happened, newest at the top and older underneath, scrolled with the wheel. A
   loot row is the item's icon, its name in its own quality colour and how many
