@@ -11,7 +11,7 @@ would have chosen if the two had ever been separable.
 They are now. There is a Zoom page under The screen with a row per screen: the
 map, the quest log, the bags, the mail, the merchant, the character sheet, the
 adventure guide, the breakdown, the clutter window, the chat window, the options
-panel, the hover box, the confirm box, and every part of the HUD that was
+panel, the tooltips, the confirm box, and every part of the HUD that was
 already sized on its own. Twenty three rows. Scale the map down and the hover
 box up in the same sitting and neither moves the other.
 

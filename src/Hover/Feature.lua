@@ -90,7 +90,7 @@ ns.Register({
 	order = 3,
 
 	zooms = {
-		{ key = "hoverSheetZoom", label = "Hover sheet", apply = function() ns.HoverSheet.Apply() end },
+		{ key = "hoverSheetZoom", label = "Mouseover keys", apply = function() ns.HoverSheet.Apply() end },
 	},
 
 	defaults = {

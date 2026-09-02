@@ -186,7 +186,7 @@ ns.Register({
 	-- undo, so neither has a part to be owned by.
 	zooms = {
 		{ key = "panelZoom", label = "Options panel", window = true },
-		{ key = "tipZoom", label = "Hover box",
+		{ key = "tipZoom", label = "Tooltips",
 		  apply = function() Settings.SetTipZoom(ns.db.tipZoom) end },
 		{ key = "dialogZoom", label = "Confirm box", window = true,
 		  apply = function() Settings.Set(ns.db.dialogZoom) end },
