@@ -116,6 +116,28 @@ local inherited = true
 -- business saying anything about it.
 local paying
 
+-- The air between the two lanes, in whole pixels.
+--
+-- UI.SLOT_LANE is half a square and half a square is half a pixel on a window
+-- whose zoom is not a whole number. Every other distance in this grid is a
+-- whole number of square pitches, so every square in a row falls on the same
+-- fraction of a pixel and the client rasterises them all the same way. An
+-- offset that is not a whole number of pixels puts the second lane on a
+-- different fraction from the first, and a one pixel hairline landing between
+-- two pixels is drawn on neither of them. What that looked like was the right
+-- edge missing from the last square of the left lane and the left edge missing
+-- from the first square of the right, with every other edge in the window
+-- correct.
+--
+-- Rounded here rather than baked into the constant because the answer is a fact
+-- about the frame: the same fifteen units is a different number of pixels at
+-- every window zoom, and only the canvas can say which. Asked of the canvas
+-- rather than of a square because the squares inherit its scale and there is no
+-- square yet when the window first asks how wide it should be.
+local function Gap()
+	return UI.Round(canvas, LANE)
+end
+
 -- How wide a grid of this many columns is, which is the number the window sizes
 -- itself off. UI/Slot.lua answers the squares and the gaps between them, because
 -- the merchant window asks the same question of the same squares and two files
@@ -127,7 +149,7 @@ local paying
 -- end in the same place, and the alternative -- a window as wide as the widest
 -- pile in it -- is a window that changes width when you pick up a sword.
 function Grid.Width(columns)
-	return UI.SlotSpan(columns) + LANE
+	return UI.SlotSpan(columns) + Gap()
 end
 
 -- How wide the left lane of a split pile is, in squares.
@@ -442,7 +464,7 @@ function Grid.Paint(state, columns)
 		local split = Splits(group, columns)
 		local lane = split and Lane(columns) or columns
 		local rest = split and (columns - lane) or columns
-		local shift = lane * (SLOT + GAP) + LANE
+		local shift = lane * (SLOT + GAP) + Gap()
 		for held = 1, #entries do
 			at = at + 1
 			local entry = entries[held]

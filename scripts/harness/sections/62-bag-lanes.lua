@@ -126,8 +126,22 @@ end
 -- Half the columns of squares and gaps, and then half a square of air. That
 -- last term is the whole of the split: without it the second lane is just the
 -- sixth column and there is nothing to see.
-local lane = math.ceil(ns.db.bagColumns / 2) * (ns.UI.SLOT + ns.UI.SLOT_GAP)
-	+ ns.UI.SLOT_LANE
+--
+-- Half a square is half a pixel at this window's zoom, and half a pixel puts
+-- the second lane on a different fraction of a pixel from the first, which is
+-- how a one pixel hairline comes to be drawn on neither of the two pixels it
+-- falls between. So the air is a whole number of pixels and the arithmetic here
+-- says so: the square's own frame is what knows how many units that is.
+local gap = ns.UI.Round(squares[1]:GetParent(), ns.UI.SLOT_LANE)
+local lane = math.ceil(ns.db.bagColumns / 2) * (ns.UI.SLOT + ns.UI.SLOT_GAP) + gap
+
+-- And the claim that makes it worth rounding: the second lane starts a whole
+-- number of pixels along, so every square in it falls on the fraction of a
+-- pixel the square directly left of it in the first lane fell on.
+local px = ns.UI.Pixel(squares[1]:GetParent())
+check(math.abs(gap / px - math.floor(gap / px + 0.5)) < 0.001,
+	("the air between the lanes is %.3f pixels and it has to be a whole number")
+		:format(gap / px))
 
 check(offset("Arcanite Reaper") == 0,
 	("the bound weapon is %s pixels in and the left lane starts at nought")
@@ -146,15 +160,13 @@ check(offset("Bloodspiller") == lane,
 ----------------------------------------------------------------------
 
 local window = Window.Frame()
-local wide = ns.UI.Metric.pad * 2 + ns.UI.SlotSpan(ns.db.bagColumns)
-	+ ns.UI.SLOT_LANE
+local wide = ns.UI.Metric.pad * 2 + ns.UI.SlotSpan(ns.db.bagColumns) + gap
 check(window ~= nil and window.width == wide,
-	("the window is %s wide and the squares, the gaps, a lane and the padding come to %d")
+	("the window is %s wide and the squares, the gaps, a lane and the padding come to %.2f")
 		:format(tostring(window and window.width), wide))
 
-print(("lanes  %d weapons in two lanes, the bound one %s px in and the unbound one %s px in, in a window %d wide")
-	:format(weapon and #weapon.entries or 0, tostring(offset("Arcanite Reaper")),
-		tostring(offset("Bloodspiller")), wide))
+print(("lanes  %d weapons in two lanes, %.0f px of air between them, in a window %.0f wide")
+	:format(weapon and #weapon.entries or 0, gap / px, wide))
 
 -- Left shut, the way 55-bags.lua found it.
 Window.Hide()

@@ -67,6 +67,19 @@ UI.SLOT, UI.SLOT_GAP, UI.SLOT_INSET = 31, 2, 2
 -- Every other pile in that window is one lane of the full width, and the window
 -- carries this much air at its right edge instead, so the two kinds of pile end
 -- at the same place.
+--
+-- **It is a design number and the caller has to snap it.** Every other distance
+-- in that grid is a whole number of square pitches, so every square in a row
+-- lands on the same fraction of a pixel as the one before it and they all
+-- rasterise the same way. A lane offset that is not a whole number of pixels
+-- puts the second lane on a different fraction from the first, and a hairline
+-- one pixel wide on the wrong fraction is a hairline the client draws on
+-- neither of the two pixels it falls between. That is not hypothetical: at half
+-- a pixel it took the right edge off the last square of the left lane and the
+-- left edge off the first square of the right, and left every other edge in the
+-- window alone. Bags/Grid.lua puts this through UI.Round for that reason, and a
+-- whole number of pixels between the lanes means the second lane's squares
+-- share the first lane's fractions exactly.
 UI.SLOT_LANE = math.floor(UI.SLOT / 2)
 
 -- What is left of a square you cannot act on: something a vendor will not take,
