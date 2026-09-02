@@ -242,6 +242,313 @@ nine times, and they are below in that order.
     still to write the shared grid and see what will not fit through it.
 
 
+Items 32 to 45 came out of a performance review on 2026-09-02, read from source
+against a five-man pull with fifteen plates up. The numbers are client calls per
+second at steady state, counted from the code rather than measured on the live
+client, and the Perf tab is where to check them before and after. One of them
+is a bug. The rest are polls that should be events, formats that run before the
+compare that would have skipped them, and windows built at login for a session
+that never opens them. Ordered by what they cost, with the one that grows all
+session first. The full review with every citation is off-tree
+
+The architecture question the review raised is answered in item 36 and item 33
+together. The client is already the event stream. What the addon lacks is not
+a bus of its own on top of it but two things narrower than that: one shared
+reader in front of each raw source whose read is the cost, and a dirty bit per
+widget so that events mark and a tick draws. A general addon-wide stream would
+re-broadcast client events through one more dispatch that every handler pays
+for, and it would not have found a single item below.
+
+32. The action ticker is armed again on every loading screen.
+
+    `src/Buttons/Bars.lua:893-898` arms
+    `ns.UI.Ticker(events, 0.1, "action", Bars.Update)` inside the branch that
+    runs on PLAYER_LOGIN and on PLAYER_ENTERING_WORLD, and
+    `src/UI/Ticker.lua:121-143` appends a tick on every call with no dedupe by
+    name. After login and the first world entry there are two action tickers.
+    Every instance door, hearth and zone load adds one. Three loading screens
+    in, Bars.Update runs four times per 100 ms. It is the only ticker in the
+    addon armed outside a login-only branch.
+
+    Keep the returned tick in a local and arm only when it is nil. Then make
+    UI.Ticker assert that no running tick on the same frame carries the same
+    name, so the next one fails at the call rather than in the frame budget.
+
+33. `Bars.Update` polls every square, twelve to sixteen calls each, ten times a
+    second.
+
+    `src/Buttons/Bars.lua:697-708` and `src/Buttons/Slot.lua:365` onward. Per
+    square per tick: GetAttribute, HasAction, GetActionTexture,
+    GetActionCooldown, GetActionInfo and GetMacroSpell on a macro,
+    IsHarmfulAction, GetTime, IsUsableAction, UnitExists, IsActionInRange,
+    then GetActionTexture a second time through `Slot.Texture`, GetActionCount,
+    IsCurrentAction, IsAutoRepeatAction and IsEquippedAction. At 24 squares
+    that is about 3,200 calls a second, and the header at `:686` says five bars
+    is sixty squares, which is about 8,000. Item 32 multiplies it.
+
+    Blizzard's own ActionButton on this client repaints from
+    ACTIONBAR_UPDATE_COOLDOWN, ACTIONBAR_UPDATE_STATE,
+    ACTIONBAR_UPDATE_USABLE, ACTIONBAR_SLOT_CHANGED, SPELL_UPDATE_USABLE,
+    UPDATE_SHAPESHIFT_FORM and PLAYER_TARGET_CHANGED, and keeps a 0.1 s
+    OnUpdate for range and the count text only. Do the same: a dirty bit per
+    square set from those events, Draw only the dirty squares, and the tick
+    shrinks to one IsActionInRange per harmful square while a target exists.
+    The Reaction and Requires rungs raise the bit from their own events. The
+    cheap first step that needs no restructuring: return the texture from
+    `Slot.State` and drop the second GetActionTexture.
+
+34. `EnemyBars.Update` formats a threat string per plate per tick, then compares
+    it.
+
+    `src/UnitFrames/EnemyBars.lua:697-722` builds `("%d%% %s"):format(...)` or
+    `("%d%%"):format(...)` in `ThreatState`, and only then does `UpdateWidget`
+    at `:1422` compare it to what is shown. Every engaged plate allocates one
+    string per 0.2 s tick, about 75 a second in a pull, and `Record` at `:651`
+    concatenates a targeter label on top. The guard scan does not count a
+    format as an allocation, which is why this is on disk.
+
+    The rest of the tick is about thirty client calls per plate, roughly
+    2,400 a second at fifteen: `Unit/Threat.lua:98` calls
+    UnitDetailedThreatSituation and then `ns.Threat` again to re-read what the
+    first call returned and discarded; `Unit/Level.lua:119` asks UnitLevel
+    twice, UnitClassification and UnitIsTapDenied for a mob whose level does
+    not move; `ScanDebuffs` at `:731` walks UnitAura to the first nil.
+
+    In order of payoff: compare percent and challenger as numbers and format
+    on change; drop the duplicate `ns.Threat` call; cache the level tag and
+    classification per GUID, keeping UnitIsTapDenied live; register
+    UNIT_AURA, UNIT_HEALTH, UNIT_THREAT_LIST_UPDATE and UNIT_TARGET for the
+    plate token on attach, set a dirty bit, and demote the 5 Hz pass to a 1 Hz
+    verify.
+
+35. `EnemyBars.Sweep` visits every plate every frame to find no casts.
+
+    `src/UnitFrames/EnemyBars.lua:2278-2296`, driven at interval 0 from
+    `:2333`. It calls GetTime, then walks `pairs(attached)` and asks each
+    widget's cast box IsShown through `src/UnitFrames/Cast.lua:429`. Fifteen
+    plates at 60 fps is about a thousand client calls a second, twice that in
+    C entries counting the iterator, to learn that nobody is casting.
+
+    Keep a set of widgets whose cast box is up, added where `Cast` shows the
+    box at `Cast.lua:372` and removed in `Cast.Clear` at `:180`. Sweep walks
+    that set, and the ticker stops when the set and `fading` are both empty
+    and starts again from Show and from `StartFade` at `:1852`. Steady state
+    becomes zero. Same shape, smaller: the "castsweep" tick in
+    `src/UnitFrames/PlayerCast.lua:473` calls GetTime before asking whether
+    the bar is shown at `:269`. Swap the order.
+
+36. Six files each unpack the combat log, three of them for features that are
+    off.
+
+    `src/Meter/Meter.lua:180`, `src/Breakdown/Breakdown.lua:352`,
+    `src/Swing/Swing.lua:266`, `src/Feeds/Combat.lua:359`,
+    `src/Buttons/Reaction.lua:246` and `src/Comfort/Thanks.lua:145` each call
+    CombatLogGetCurrentEventInfo on every COMBAT_LOG_EVENT_UNFILTERED line,
+    pulling 15 to 21 return values. At 60 lines a second in a pull that is 360
+    handler entries and about 7,000 value copies before any filter runs.
+    Meter at `:289`, Swing at `:289` and Breakdown at `:667` register at load
+    whatever their switch says. Only Thanks at `:202-206` unregisters when
+    off, and it is the model.
+
+    Two smaller costs on the same path. `Feeds/Combat.lua:366` calls
+    UnitGUID("player") on every line that passes the shape filter, which is
+    nearly all of them, before rejecting at `:371`; the other five cache the
+    GUID at login. `Meter.lua:175` and `Swing.lua:260` call
+    `type(CombatLogGetCurrentEventInfo)` per event for an answer fixed at
+    load; `Combat.lua:252-255` resolves it once and is the pattern.
+
+    The code is already shaped for a shared reader: all six read positional
+    arguments, none mutates them, five reject on a GUID. One
+    `ns.CombatLog.Subscribe(fn)` in Core, one unpack per line handed to a
+    plain array of subscribers, each feature subscribing from its `Apply` when
+    its switch is on, and the client event unregistered when the array is
+    empty. On a night with meter, breakdown and swing off, that is nothing
+    instead of three unpacks a line.
+
+37. The Options window is built at login and every getter on it runs twice.
+
+    `src/Core/Panel.lua:868-872` runs `Build()` at PLAYER_LOGIN. Build at
+    `:590-716` creates the window and calls all 29 panel builders, and
+    `src/UI/Widgets.lua:1061-1067` runs each widget's refresh the moment it is
+    built, then `Options.Refresh()` at `:714` runs them all again. Roughly a
+    thousand frames, 1,800 textures, a thousand font strings and a thousand
+    closures for a window most sessions never open. What the getters reach is
+    worse than the frames:
+
+    `src/Comfort/Feature.lua:457` reads `Destroy.Describe`, which runs
+    `Clutter.Scan` over every bag slot with item info, value and Questie
+    queries, twice, against a cold item cache. `src/Buttons/Feature.lua:655`
+    forces `Ranks.Scan`, a full spellbook walk and 120 slot reads.
+    `src/Map/Feature.lua:118-139` builds a check per Questie place and each
+    refresh rebuilds Questie's three menus, so N rows cost N+2 rebuilds.
+    `src/Dungeons/Feature.lua:160-167` runs `Book.Count`, which allocates about
+    500 tables to produce a number, and `Places.Count`, 78 GetMapInfo calls.
+    `src/Character/Feature.lua:118-122` walks worn items, durability, every
+    skill and every faction. All of it again on every one of the 49
+    `Options.Refresh()` call sites, on every click, on every page.
+
+    Build the window on first Show, build a feature's sections on first rail
+    selection, and make `kit.Refresh` at `Widgets.lua:1070` skip a widget
+    that is not visible. About half of all deferrable login work is this one
+    item.
+
+38. Skin and party frames poll what UNIT_AURA and UNIT_HEALTH would tell them.
+
+    `src/UnitFrames/Skin.lua:492-508` through `src/UnitFrames/Paint.lua:132`
+    and `src/UnitFrames/Auras.lua:293`: about 110 client calls per 0.2 s tick
+    across player, target and target-of-target, 550 a second, of which the
+    two-pass aura scan is about 45 and the texture readbacks that defend
+    against Blizzard rewriting the bar are five per entry.
+    `src/UnitFrames/Group.lua:979-986` through `src/UnitFrames/Member.lua:420`:
+    about 16 per member, 320 a second in a five-man and 3,200 in a raid.
+
+    Blizzard's own TargetFrame runs on UNIT_AURA for "target" on this client,
+    so the worry in Skin's header about unproven events does not apply here. A
+    dirty bit per unit from UNIT_AURA, UNIT_HEALTH, UNIT_POWER_UPDATE,
+    UNIT_CONNECTION and PLAYER_TARGET_CHANGED leaves the tick with one
+    UnitInRange per member, which has no event and which Blizzard polls at
+    0.25 s too. Hook SetStatusBarTexture on the bar to retire the readbacks.
+    While in Auras.lua: `AuraAt` at `:207-231` prefers C_UnitAuras, which
+    returns a fresh table per call, so the "no allocation" note at `:241` only
+    holds on the UnitAura fallback. Read the Perf tab on the live client before
+    believing either comment.
+
+39. Charge asks `State` twice a frame, at 20 Hz and at 10 Hz.
+
+    `src/Charge/Marker.lua:119-125` and `src/Charge/Icon.lua:336-406` both
+    call `Charge.State` at `src/Charge/Charge.lua:305`. `Charge.Pick` at
+    `:265` is memoised per frame; State is not. A plated mob out of combat
+    costs about 28 calls per marker tick and 12 per icon tick, 560 plus 120 a
+    second. `Charge.Known` at `:114` walks IsSpellKnown over the rank list on
+    every tick, twice, for an answer that changes at a trainer.
+
+    Cache Known on SPELLS_CHANGED, memoise State per frame the way Pick is,
+    and run State, Draw and AttachTo only when Pick's key, unit and plate
+    triple changes or a cooldown, usable, stance or target event fires. The
+    20 Hz stays for softenemy alone, which has no event.
+
+40. `Blizz.Apply` re-asks every caged frame where it is, once a second.
+
+    `src/UnitFrames/Blizzard.lua:336-425` resolves 19 globals and for each
+    present frame calls GetObjectType, GetParent and IsShown through
+    `src/Core/Attic.lua:143-219`. `Attic.Sweep` then calls GetParent on every
+    frame the room holds, around a hundred once chat, character, talents,
+    spellbook, map and merchant have caged theirs, and the seven `Blizz.Also`
+    registrants re-vanish their own. About 400 calls in one frame every
+    second, all answering a question whose answer changed zero times.
+
+    The file names its two failure modes: a frame built late and a foreign
+    SetParent. ADDON_LOADED covers the first.
+    `hooksecurefunc(frame, "SetParent", ...)` and `"Show"` on each caged frame
+    at Take time covers the second exactly. With those the verify pass drops
+    to 5 or 10 seconds without weakening the promise in the header.
+
+41. Feeds and chat pay a full repaint per line.
+
+    `src/Feeds/Combat.lua:297-330`: every hit you deal or take runs `Add`,
+    which allocates two or three strings, calls GetSpellTexture uncached at
+    `:330`, and pushes into `Feed:Paint` at `src/UI/Feed.lua:1266`, which
+    repaints all thirteen visible rows and runs `Sync` at `:1349-1372`, four
+    scrollbar writes with no compare. Mark dirty in Push, paint once per frame
+    from the strip's existing ticker, and cache SpellTexture by id in Core the
+    way `SpellNameHeld` caches names.
+
+    `Feed.lua:1335-1341` reopens the tooltip when the entry under a parked
+    cursor changed, which with the mouse resting on row one of a live feed is
+    a full `Tip.Build`, `Scan.Read` and `Tooltip.Layout` on every arrival.
+    Throttle the reopen to 0.2 s.
+
+    `src/UI/Log.lua:302-307` calls `Sync` on every chat line in every room the
+    line routes to through `src/Chat/Window.lua:359-386`, hidden rooms
+    included, and `Restore` at `:419-431` replays up to 400 lines each with its
+    own Sync. Skip Sync on a hidden log and mark it stale for Show; compare the
+    range before writing.
+
+42. Closed windows and pools built at ceiling on login.
+
+    `src/Character/Window.lua:270-271` paints the sheet twice on a hidden
+    window and `src/Character/Paperdoll.lua:436` loads a PlayerModel into it,
+    about 200 client calls. `src/Spellbook/Window.lua:376` walks every spell
+    at login and `:689` again on every SPELLS_CHANGED with the window closed,
+    and `Ranks.Scan` walks the same spellbook separately. `src/UnitFrames/
+    Auras.lua:665-670` builds 96 aura squares to the ceilings at `:150-165`
+    before the player has a target, about 290 frames with 96 Cooldown
+    templates, and `src/UnitFrames/Skin.lua:559` runs the full `Block.Place` on
+    every target change. `src/UI/Feed.lua:376-384` builds all 24 rows and 400
+    ring tables per feed whatever the rows setting, and
+    `src/Feeds/Stream.lua:343-394` builds both feeds with no check on the on
+    switch. `src/Meter/Window.lua:595-621` builds 20 rows and arms its ticker
+    with the meter off. `src/Swing/Gauges.lua:361-392` is built and ticking at
+    interval 0 with the feature off. `src/Cooldowns/Row.lua:407-438` builds 23
+    squares for a row that shows eight to ten.
+
+    `src/Breakdown/Window.lua:500-503` builds on first open and is the
+    pattern. What has to exist at login is the bars, the three skin blocks, the
+    two group headers, the enemy bar anchor, the charge binder, the rims and
+    the bindings. By frame count that leaves 80 to 85 percent of login
+    construction as first-open work.
+
+43. Thirteen OnUpdate handlers on frames that never hide.
+
+    `src/UI/Ticker.lua:57-90` installs `Drive` per frame, and thirteen
+    permanent tickers each hang off a private events frame. The client
+    dispatches thirteen Lua entries per frame before any interval check runs,
+    about 780 a second. One never-hidden driver frame shared by the permanent
+    tickers makes that one. Under everything above, and last of the tick
+    items for that reason.
+
+44. Smaller costs worth fixing when the file is open.
+
+    `src/Swing/Gauges.lua:233` is exempt as unguarded and writes zero onto a
+    bar already at zero every frame between swings. Guard the write when the
+    fraction is zero and shownValue is already zero.
+    `src/Buffs/Nag.lua:483-511` calls UnitRace three times per tick through
+    `Racials.Mine`, probes GetWeaponEnchantInfo's arity every tick, and asks
+    `Racials.Idle` twice; capture the race at login and the tick drops from
+    16 calls to two. `src/Cooldowns/Row.lua:265-282` reads every cooldown
+    twice per tick out of combat, once in Busy and once in Paint.
+    `src/Buffs/Upkeep.lua:606` and `src/Cooldowns/Cooldowns.lua:853` both walk
+    UnitAura on the same UNIT_AURA event; one scan handing the set to both
+    halves it. `src/Dungeons/Book.lua:92-101` scans 237 bosses linearly three
+    or four times per paint and once per loot slot; a byId hash in `Book.All`
+    is fifteen lines. `src/Breakdown/Breakdown.lua:176` `levels[guid]` leaks on
+    the target path, written on every PLAYER_TARGET_CHANGED and removed only on
+    NAME_PLATE_UNIT_REMOVED. `src/Bags/Window.lua:391` runs a full Refresh on
+    every BAG_UPDATE, which fires once per bag per change; coalesce to one per
+    frame. `src/World/World.lua:175` builds a tooltip on every
+    UPDATE_MOUSEOVER_UNIT; early-out on the same GUID as last time.
+    `src/UI/Text.lua:170` builds the font cache key by concat on every
+    `UI.Font` call, on the keystroke path and on every tooltip line; key it as
+    `fonts[flags][size]`. `src/Perf/Perf.lua:59` lists 14 slots and ten
+    registered ticker names are missing from it: trace, vendor, thanks, chart,
+    tip, world, bagstack, sampler, stream and clock, so two every-frame
+    tickers are invisible on the tab.
+
+45. The gate reaches the tick paths and not the event paths.
+
+    `scripts/hot.lua` walks out from tickers and OnUpdate roots. A combat-log
+    handler at 60 lines a second is hotter than any 5 Hz tick and is outside
+    the walk, because event handlers are closures the root finder cannot
+    name. The cheap way in is the marker the file already has. Seeding twelve
+    functions with `-- hot:` (the four `OnLog`, `Swing.Retime`,
+    `CombatFeed.OnLog`, `Upkeep.Scan`, `Cooldowns.Scan`, `Feed.Handle`, and
+    EnemyBars `Attach` and `Release`) grows the closure from 355 to 439
+    functions and the existing scan reports thirteen violations: four real
+    per-event allocations at `Breakdown.lua:275`, `Chat/History.lua:143`,
+    `Chat/Rooms.lua:339` and `EnemyBars.lua:1735`, seven writes in Attach and
+    Release that want `-- cold:`, and two first-use paths at `UI/Ticker.lua:133`
+    and `UI/Pixel.lua:97` that want a per-line reason. Do not seed wider:
+    eighteen roots reached 937 functions because `Window.Refresh` resolves to
+    all eight `Window.lua` files at once, which is the list-not-a-gate failure
+    hot.lua's own header warns about.
+
+    Two more rules that would have caught items 32 and 34. `UI.Ticker` refuses
+    a running tick of the same name on the same frame. And the allocation scan
+    counts `:format(` and `..` as allocations on a hot path, which it does not
+    today; `ThreatState` formatting before its caller compares is exactly the
+    shape the scan exists to catch.
+
+
 ## Deliberately not on this list
 
 The architecture review turned up two more repeats and both are right as they
@@ -261,3 +568,11 @@ palettes that happen to be the same size. And ten parts open a placeable HUD
 frame with the same four calls, `CreateFrame`, `ns.UI.Adopt`, `ns.UI.Unit` and
 `ns.UI.Placeable`, which is four lines with no logic in them and is what a
 constructor already looks like.
+
+The performance review adds two more that were looked at and left alone.
+Stripping comments from the shipped files: all 230 compile in 26 ms in stock
+Lua 5.1 with the comments in, so the 45 percent of lines that are comment or
+blank cost under 10 ms a login and a build step would buy nothing. And the saved
+variables: chat history, quest drops, dungeon drops, breakdown spells and
+loadouts are all capped, most at 400, and nothing logs a growing feed or combat
+sample, so there is no serialise-on-logout cost to chase.
