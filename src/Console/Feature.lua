@@ -31,7 +31,9 @@ local function Show(lines)
 	if #lines > LINES_SHOWN then
 		shown[#shown + 1] = ("and %d more, in the chat window"):format(#lines - LINES_SHOWN)
 	end
-	page.output:SetText(table.concat(shown, "\n"))
+	page.text = table.concat(shown, "\n")
+	page.output:SetText(page.text)
+	page.output:SetCursorPosition(0)
 end
 
 -- Run, show, and send to chat whatever the page could not fit.
@@ -119,20 +121,59 @@ local function BuildEditor(row)
 	return nil
 end
 
+-- The readout is a field rather than a label, because the client has no
+-- clipboard call and the one way text leaves the game is Ctrl-C over a
+-- selection in a field that holds the keyboard. It draws as the label did,
+-- and anything typed over it is put back, so what it shows is always what the
+-- last run printed and never a line someone's Ctrl-V landed in.
 local function BuildOutput(row)
 	local UI = ns.UI
 	local M, C = UI.Metric, UI.Color
 	local box = UI.Box(row, C.sunken, C.edge)
 	box:SetAllPoints()
 
-	local text = UI.Label(box, M.small, C.accent, "LEFT", UI.FLAT)
-	UI.Wrap(text, true)
-	text:SetJustifyV("TOP")
-	text:SetPoint("TOPLEFT", 4, -3)
-	text:SetPoint("BOTTOMRIGHT", -4, 3)
-	page.output = text
+	local edit = CreateFrame("EditBox", nil, box)
+	edit:SetMultiLine(true)
+	edit:SetPoint("TOPLEFT", 4, -3)
+	edit:SetPoint("BOTTOMRIGHT", -4, 3)
+	edit:SetFontObject(UI.Font(M.small, UI.FLAT))
+	edit:SetTextColor(C.accent[1], C.accent[2], C.accent[3])
+	edit:SetAutoFocus(false)
+	edit:SetScript("OnTextChanged", function(self, userInput)
+		if userInput then
+			self:SetText(page.text or "")
+		end
+	end)
+	edit:SetScript("OnEscapePressed", function(self)
+		self:ClearFocus()
+	end)
+	edit:SetScript("OnEditFocusGained", function(self)
+		UI.CloseDropdown()
+		UI.StopCapture()
+		UI.Typing(self)
+	end)
+	edit:SetScript("OnEditFocusLost", function()
+		UI.StopTyping()
+	end)
+	edit:SetScript("OnHide", function(self)
+		self:ClearFocus()
+	end)
+	page.output = edit
 	Show(page.lines or { "nothing run yet" })
 	return nil
+end
+
+-- The copy button. Puts the keyboard in the readout and selects the whole of
+-- it, which is as far as an addon can take a copy; the Ctrl-C is yours. The
+-- field is handed back so the harness can read what was selected.
+local function Select()
+	local out = page.output
+	if not out then
+		return nil
+	end
+	out:SetFocus()
+	out:HighlightText()
+	return out
 end
 
 ns.Register({
@@ -180,10 +221,12 @@ ns.Register({
 
 		ui.Custom(BuildOutput, {
 			height = (LINES_SHOWN + 1) * (M.small + 2) + 6,
+			label = "what it printed",
 			refresh = function()
 				Show(page.lines or { "nothing run yet" })
 			end,
 		})
+		ui.Action(function() return "select the result, then Ctrl-C copies it" end, Select)
 		ui.Hint("Lines past the tenth go to the chat window.")
 	end,
 })

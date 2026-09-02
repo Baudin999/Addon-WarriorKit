@@ -92,6 +92,33 @@ _G.DEFAULT_CHAT_FRAME.AddMessage = chat
 
 check(ns.Options.Find("run it") >= 1, "the run button is findable by its label")
 check(ns.Options.Find("the lines to run") >= 1, "the box is findable by its label")
+check(ns.Options.Find("what it printed") >= 1, "the readout is findable by its label")
+
+----------------------------------------------------------------------
+-- The copy button
+----------------------------------------------------------------------
+
+-- The client has no clipboard call, so a copy is the readout taking the
+-- keyboard with everything selected and the Ctrl-C left to the player. The
+-- button is pressed the way the panel presses it, and the field it hands back
+-- is read for what was selected.
+local copy
+for _, entry in ipairs(ns.Options.Indexed()) do
+	local label = type(entry.label) == "function" and entry.label() or entry.label
+	if label and label:find("Ctrl-C", 1, true) then
+		copy = entry.widget
+	end
+end
+check(copy ~= nil, "the copy button is on the page")
+say("console run print(7 * 6)")
+local out = copy and copy.scripts.OnClick(copy)
+check(out ~= nil and out:HasFocus(), "the copy button puts the keyboard in the readout")
+check(out and out:GetText() == "42", "the readout holds what the last run printed")
+local range = out and out:GetHighlighted()
+check(range and range[1] == 0 and range[2] == -1, "the copy button selects the whole readout")
+out:Type("pasted over")
+check(out:GetText() == "42", "a line typed over the readout is put back")
+out:ClearFocus()
 
 print(("console %d probes, a raise leaves print alone, %d lines from the xp probe")
 	:format(#Console.PROBES, #lines))

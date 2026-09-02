@@ -603,6 +603,20 @@ function Region:ClearFocus()
 end
 
 function Region:HasFocus() return self.focused and true or false end
+
+-- The selection, kept so a section can say a field was selected whole. The
+-- client's arguments are a start and an end in letters; none is everything.
+function Region:HighlightText(from, to) self.highlighted = { from or 0, to or -1 } end
+function Region:GetHighlighted() return self.highlighted end
+-- A person typing, which SetText cannot model: the client hands OnTextChanged
+-- true for a keypress and false for a script's write. Harness only.
+function Region:Type(s)
+	self.text = s
+	local changed = self.scripts and self.scripts.OnTextChanged
+	if changed then
+		changed(self, true)
+	end
+end
 -- Idempotent, the way the client's is. A frame that registers the same event
 -- twice is registered once and is handed the event once, and a stub that
 -- appended instead delivered every line twice to any part that reapplies its
