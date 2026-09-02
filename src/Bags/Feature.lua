@@ -1,8 +1,9 @@
 local ADDON, ns = ...
 
 -- Everything Core and the panel need to know about the bag window. Bags.lua,
--- Grid.lua, Window.lua and Blizzard.lua hold the behaviour, and this is the
--- only file in the folder that names anything outside it.
+-- Stack.lua, Session.lua, Grid.lua, Merchant.lua, Window.lua and Blizzard.lua
+-- hold the behaviour, and this is the only file in the folder that names
+-- anything outside it.
 
 local LOW_COLUMNS, HIGH_COLUMNS = 6, 16
 
@@ -25,6 +26,37 @@ local function SetColumns(value)
 	ns.BagsWindow.Refit()
 end
 
+-- What the record button on the settings page says, and what a press does.
+--
+-- Both are functions for the reason the stack pair below are: the kit asks on
+-- every refresh, so the word on the page is the state the session is actually
+-- in rather than the state it was in when the page was built.
+local function SessionLabel()
+	if ns.BagsSession.Running() then
+		return "stop recording " .. (ns.BagsSession.Name() or "this session")
+	end
+	return "record what you pick up"
+end
+
+-- The second press, which says how much it is about to throw away. A function
+-- for the same reason as the one above it.
+local function ForgetLabel()
+	local kinds = ns.BagsSession.Held()
+	if kinds == 0 then
+		return "forget the last session"
+	end
+	return ("forget the last session, %d item%s"):format(kinds, kinds == 1 and "" or "s")
+end
+
+-- What the button says. A function because the kit asks on every refresh, which
+-- is how the label reads as the state it is in while the ticker is running.
+local function StackLabel()
+	if ns.BagsStack.Running() then
+		return "putting your half stacks together"
+	end
+	return "put your half stacks together"
+end
+
 --------------------------------------------------------------------------
 -- The slash word
 --------------------------------------------------------------------------
@@ -44,6 +76,27 @@ local function BagsWord(arg, rawArg)
 		end
 	elseif word == "count" then
 		ns.Print(ns.Bags.Describe() .. ".")
+	elseif word == "stack" then
+		ns.BagsStack.Press()
+	elseif word == "session" then
+		-- The rest of the line is a name, untouched, because a session called
+		-- "second BRD run" is three words and every other sub-word in this
+		-- feature takes a switch or a number. `clear` is the one reserved word,
+		-- which costs a player who wanted to call a session that exactly
+		-- nothing they will notice.
+		if rest == "clear" then
+			ns.BagsSession.Clear()
+			ns.BagsWindow.Refresh()
+			ns.Print("the session pile is empty.")
+		elseif rest ~= "" and not ns.BagsSession.Running() then
+			ns.BagsSession.Start(rest)
+			ns.BagsWindow.Refresh()
+			ns.Print(("recording what you pick up in %s.")
+				:format(ns.BagsSession.Name()))
+		else
+			ns.BagsSession.Press()
+		end
+		ns.Options.Refresh()
 	elseif word == "on" or word == "off" then
 		SetBags(word == "on")
 		ns.Options.Refresh()
@@ -55,7 +108,7 @@ local function BagsWord(arg, rawArg)
 		end
 		ns.BagsWindow.Toggle()
 	else
-		ns.Print("bags takes on, off, hide, columns or count.")
+		ns.Print("bags takes on, off, hide, columns, count, stack or session.")
 	end
 	-- rawArg is the untouched line, which this word has no use for: every
 	-- sub-word above takes a switch or a number rather than a name. Named so the
@@ -77,6 +130,19 @@ ns.Register({
 
 	zooms = {
 		{ key = "bagsZoom", label = "Bags", window = true },
+	},
+
+	-- This character's, not the account's. What one character carried out of
+	-- Scholomance is a record of an hour rather than a preference, and putting
+	-- it account-wide would have the second character open their bags to a pile
+	-- headed with a dungeon they were not in.
+	--
+	-- An empty table rather than the shape underneath it, because ns.DefaultCopy
+	-- copies a default one level deep: a nested table registered here would be
+	-- handed out shared, and every character would write into the same one.
+	-- Bags/Session.lua fills in the two maps on first use.
+	charDefaults = {
+		bagSession = {},
 	},
 
 	defaults = {
@@ -109,6 +175,9 @@ ns.Register({
 		"bags hide on|off, take the client's own bag calls so B opens this one",
 		"bags columns <6-16>, how many squares across",
 		"bags count, how many slots you have and how many are free",
+		"bags stack, put your half stacks together and free the slots under them",
+		"bags session [name], start or stop recording what reaches your bags",
+		"bags session clear, forget what the last session recorded",
 	},
 
 	status = function()
@@ -130,7 +199,14 @@ ns.Register({
 		ui.Count("columns", LOW_COLUMNS, HIGH_COLUMNS,
 			function() return ns.db.bagColumns end,
 			SetColumns)
+		ui.Action(StackLabel, ns.BagsStack.Press)
+		ui.Hint("Twelve cloth in one slot and eighteen in another come out twenty and ten, and the slot under them is yours again. Nothing else moves. The same press is on the window's own footer.")
+		ui.Action(SessionLabel, ns.BagsSession.Press)
+		ui.Hint("Everything reaching your bags until you press it again goes in one pile at the top of the window, headed with where you were. Stopping leaves it there to sell later.")
+		ui.Action(ForgetLabel, ns.BagsSession.Clear)
 		ui.Reading("what you are carrying", ns.Bags.Describe)
+		ui.Reading("the session", ns.BagsSession.Describe)
+		ui.Reading("stacking", ns.BagsStack.Describe)
 		ui.Reading("this window", ns.BagsWindow.Describe)
 		ui.Reading("the client's bags", ns.BagsBlizzard.Describe)
 		ui.Reading("the squares", ns.BagsGrid.Describe)

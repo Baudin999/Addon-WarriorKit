@@ -509,7 +509,12 @@ if window then
 	-- hint is the sentence saying which stop that screen is on and whether the
 	-- stop keeps a hairline sharp, which is the one thing about a zoom nobody can
 	-- work out by looking at the number. 27,000 is that measurement plus a hint's
-	-- worth of room again.
+	-- worth of room again. Stacking your bags costs 179 across one hint and takes
+	-- it to 27,129 across the same sixty-nine: no new page, one more control on a
+	-- section that already had three, and the hint is the sentence saying twelve
+	-- cloth and eighteen come out twenty and ten, which is the one thing about a
+	-- button marked stack nobody can work out by pressing it once. 27,300 is that
+	-- measurement plus a hint's worth of room again.
 	--
 	-- That raise is the largest on this list and it is worth saying what it does
 	-- not measure. Those twenty three sentences replaced twenty three readings
@@ -519,8 +524,8 @@ if window then
 	-- counter does not tell those apart. Separating them is a change to what the
 	-- budget means and it is not being made in the commit that would benefit from
 	-- it, which is the only honest order to make it in.
-	check(prose < 27000,
-		("the window holds %d characters of prose and the budget is 27,000"):format(prose))
+	check(prose < 27300,
+		("the window holds %d characters of prose and the budget is 27,300"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

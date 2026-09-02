@@ -14,10 +14,18 @@ ns.Piles = Piles
 -- grouping is fifteen lines rather than a feature: the client has already done
 -- it and every bag addon in the world throws the answer away.
 --
--- Two piles are not a class and both are worth the exception. Junk is quality
+-- Three piles are not a class and each is worth the exception. Junk is quality
 -- zero whatever class it is, because the thing every grey has in common is that
 -- a vendor is where it goes. Empty is the absence of an item, and it is a pile
 -- rather than a gap so a free count has something you can point at.
+--
+-- Session is the third and it is the odd one, because nothing in this file can
+-- decide it. It is what reached your bags between pressing record and pressing
+-- stop, which is a fact about an hour of your evening rather than about an
+-- item, and the only part that knows it is Bags/Session.lua. What is here is
+-- the pile's place in the order and its heading, and Piles.Rename below is how
+-- that heading comes to say Dire Maul. Nothing fills it but the bag window: a
+-- vendor's rack goes through Piles.Of, which never answers this key.
 --
 -- **Quality can be nil and the pile still has to be right.** GetItemInfo, which
 -- is the only call that grades an item, answers nothing for an item the client
@@ -61,6 +69,9 @@ local HEARTHSTONE = 6948
 -- own word for the class where it will say one, resolved once at the first
 -- scan, so a German client reads Handwerkswaren rather than Trade Goods.
 local ORDER = {
+	-- First, above even the hearthstone. It is what you pressed a button to
+	-- start recording, so it is the reason the window is open.
+	{ key = "session",     name = "Session" },
 	{ key = "hearthstone", name = "Hearthstone" },
 	{ key = "consumable",  name = "Consumable",   classId = 0 },
 	{ key = "weapon",      name = "Weapon",       classId = 2 },
@@ -80,6 +91,7 @@ local ORDER = {
 }
 
 Piles.EMPTY, Piles.JUNK, Piles.OTHER = "empty", "junk", "other"
+Piles.SESSION = "session"
 
 -- Class number to pile, built off the list above so the two cannot drift.
 local BY_CLASS = {}
@@ -147,6 +159,23 @@ local function Word(group)
 end
 
 Piles.Word = Word
+
+-- The heading on a pile, said by the part that owns it.
+--
+-- One pile takes one and it is the session's: its heading is the zone you were
+-- standing in when you pressed record, which no table in this file could hold.
+-- Written onto the pile rather than into a second table for the reason Word
+-- caches there, and nil puts the fallback name back, so a cleared session is a
+-- pile called Session again rather than one still wearing last night's dungeon.
+function Piles.Rename(key, word)
+	for index = 1, #ORDER do
+		if ORDER[index].key == key then
+			ORDER[index].word = (type(word) == "string" and word ~= "") and word or nil
+			return true
+		end
+	end
+	return false
+end
 
 --------------------------------------------------------------------------
 -- The grouping

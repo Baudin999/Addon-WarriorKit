@@ -2,6 +2,133 @@
 
 ## Unreleased
 
+### The vendor's rack says what a thing is and what it costs
+
+A rack of small pictures is not a shop. The merchant window was a grid of bag
+squares for a day, and on it nothing was named and nothing was priced: both were
+a hover away, on every single entry. What you are deciding at a vendor is
+whether a thing is worth what he is asking, and a window that puts one half of
+that behind a tooltip is asking you to point at sixty things in turn.
+
+An entry is a card now. The bag window's square, the item's name beside it in
+its own grade, the price under the name in coins, and what is left of a limited
+supply at the right of the same line. A rack priced in tokens draws a chip per
+token after the money, with the count on it in the loss colour when you have not
+got that many. Two columns of them, which is the client's own merchant frame,
+and the window is two cards wide rather than as wide as your bags. That last
+part was the mistake under the first one: the bag window's width is how many
+pictures fit on a line, a rack's is how long an item's name is, and tying the
+second to the first gave the rack a width nothing about a rack asked for.
+
+What is not copied from the client is the paging. Ten lines of two cards is
+twenty entries at once against Blizzard's ten, the piles keep their headings the
+whole way down, and a quartermaster is three flicks of a wheel rather than six
+presses of an arrow. `Merchant/Grid.lua` works the columns out from the width it
+is handed, so a card's width is the one number that decides the window's.
+
+### A press on the water buys the water
+
+It bought one, and it charged for five.
+
+`BuyMerchantItem(index, count)` counts in items rather than in the vendor's own
+batches, which is the post-4.1 spelling both clients this addon ships to answer.
+`Merchant/Stock.lua` asked for one of everything. A vendor selling water five at
+a time handed over a single water for the price of the five, and the square said
+`5` in its corner the whole time. It asks for `quantity` now, which is that same
+number, and the harness asserts the two agree: a press moves the purse by one
+batch price and puts one batch in your bags.
+
+`ns.BuyMerchant` carries the unit in its comment, because getting it backwards
+is silent in both directions and expensive in one.
+
+### How many, before you spend it
+
+There was no way to buy four stacks of arrows. The client's own stack split is
+on `MerchantFrame`, which spends the session parked off the side of the screen,
+so replacing the rack took the number picker with it and left four presses and
+counting.
+
+`UI/Amount.lua` is that window, and it is a window rather than a control on
+sixty cards. Shift-click anything the vendor sells in stacks: the thing you are
+buying is along the top, the number sits between two ends you can nudge, a bar
+drags it, the wheel works anywhere over the window, and the line underneath says
+what that many comes to in things and in money. That line goes red, with the
+plain spelling of the price, when it comes to more than your purse holds.
+
+The range is the item's stack over the vendor's batch, capped by what he has
+left. Water is twenty over five and offers four; a flask that does not stack
+offers nothing, and a shift-click on it is an ordinary press.
+`ns.MerchantMaxStack` is the new shim, and it answers nil where the client has
+no such call: "no answer" and "one" are different facts and the window that asks
+wants to tell them apart.
+
+The box on a card says `Shift-click, up to 20` on the entries where more than
+one press-worth can be bought, and on no others. It is the only sentence in the
+addon that says what to press, and it earns the exception by being a fact about
+that offer rather than a footnote under every hover in the window.
+
+Nothing else uses the picker yet. It takes a range, a note function and a
+callback, and it draws whatever is being counted on `UI/Slot.lua`'s square, so
+splitting a stack in your bags is the same window with a different sentence
+under the number.
+
+### The half stacks, put together
+
+Twelve cloth in one slot and eighteen in another is two slots holding one
+stack's worth. `Bags/Stack.lua` walks the five bags you carry, finds two partial
+stacks of the same item, and drags one onto the other until each item is down to
+a single partial. Twelve and eighteen come out twenty and ten, and the slot
+under the second ten is yours again.
+
+It is not a sort. Nothing moves to a different pile, nothing moves to a
+different bag, and what you carry stays in the order you picked it up in.
+`Bags/Bags.lua` already groups your bags into piles for the window to draw, so a
+sort would be the addon rearranging bags it has no other reason to touch.
+Combining stacks is the one rearrangement that is only ever an improvement: it
+frees slots and it loses nothing.
+
+The move is the client's own, twice. `ns.PickupContainerItem` on the later slot,
+then on the earlier one, then `ClearCursor`. Blizzard splits the stack: as much
+as will fit goes across and the rest goes back where it came from. Nothing here
+calls `SplitContainerItem` and nothing here decides how many to move.
+Baganator's `Sorting/CombineStacks.lua` is the same two calls in the same order
+and its comment says the same thing. The drag is from the later slot onto the
+earlier one, which is the direction that reads right afterwards: the full stack
+ends up nearer the front of your bags and whatever would not fit drifts to the
+back.
+
+A pass cannot see the result of its own work, because a pickup locks both slots
+until the server has finished with them. So it is a ticker at a fifth of a
+second, which is `Comfort/Vendor.lua`'s interval and for the same reason, and it
+stops on the first pass that finds nothing to merge and nothing still locked.
+Stopping on the first half alone is how the third stack of an item gets left
+behind while the first two are still in flight: three fives take two passes, and
+a sweep that stopped after the first would leave a ten and a five.
+
+`ns.ItemStack` is the new shim, and it is the eighth thing `GetItemInfo`
+answers. It sits beside `ns.ItemLevel` rather than folded into `ns.ItemValue`,
+for the reason that one gives: a sell price is read for every grey in your bags
+on a vendor sweep and does not want a stack size riding along with it. Nil is an
+item the client has not cached, and the sweep treats that as "ask again" rather
+than as "does not stack", because guessing one there is a partial stack left
+behind with nothing to say why.
+
+The press is in three places and all three go through `Stack.Press`, so the
+sentence a refused press prints is written once: a button marked stack between
+the two numbers along the bottom of the bag window, a press on the settings
+page, and `/wk bags stack`. It refuses with a reason where your cursor is
+already holding something, because the sweep picks items up and starting one
+mid-drag drops your item somewhere you did not ask for. It says something either
+way when it finishes, including when there was nothing to do, because a button
+that says nothing reads as a button that does nothing.
+
+The harness models the drop rather than waving it through. `GetContainerItemInfo`
+answers a count a section wrote and one otherwise, `GetItemInfo` answers a stack
+size, and a second `PickupContainerItem` onto a slot holding the same item moves
+what fits and leaves the rest. The whole claim of the sweep is the arithmetic of
+what lands where, and a stub that merged the lot would let a sweep that
+overfilled a stack pass.
+
 ### Your corpse on the map, and a drag that moves the map
 
 Two things the world map did not do, both of them things the client's own map

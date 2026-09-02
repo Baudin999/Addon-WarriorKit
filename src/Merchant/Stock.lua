@@ -106,6 +106,12 @@ local function Fill(index)
 	entry.usable = usable and true or false
 	entry.extended = extended and true or false
 	entry.quality = link and ns.ItemValue(link) or nil
+	-- The most the client will sell in one call, in items. Read per entry
+	-- rather than worked out from the batch size, because it is the item's own
+	-- stack and the two are unrelated: water is five a batch and twenty a
+	-- stack, arrows are two hundred a batch and a thousand a stack, and a helm
+	-- is one of each.
+	entry.stack = ns.MerchantMaxStack(index)
 	-- A link the client has not handed over yet is a row that still has a name,
 	-- a picture and a price, so it is drawn under Other rather than under Empty.
 	-- Empty is the bag window's pile for a slot with nothing in it and a vendor
@@ -179,16 +185,44 @@ function Stock.Count()
 	return state.count
 end
 
--- Buy one of what is on this row.
+-- How many batches one call can buy, which is what the number picker's range
+-- is.
 --
--- One purchase unit and no more, which is the client's own `quantity`: a stack
--- of two hundred arrows is one press because that is how the vendor sells them,
--- and a flask is one press per flask because that is how the vendor sells that.
--- Nothing here multiplies. A window that could spend ten times what you meant
--- on a modifier you forgot you were holding is not a window worth the clicks it
--- saves, and the client's own stack split is still there on its own frame.
-local function Spend(entry)
-	if not ns.BuyMerchant(entry.index, 1) then
+-- The client sells in items and the vendor prices in batches, so this is the
+-- one place the two units meet: the stack divided by the batch, floored, and
+-- never under one. Water is twenty over five and comes out four presses' worth;
+-- a flask is one over one and comes out one, which is a rack entry with nothing
+-- to choose.
+--
+-- A limited supply caps it as well, because `available` counts batches and the
+-- server refuses the call that asks for more than he has. That refusal is
+-- silent, so a picker that offered five of the two he is holding would look
+-- like a window whose buy button does nothing.
+--
+-- One where the client has no stack call at all. That is the honest floor: the
+-- feature stops offering a choice rather than guessing at a number the server
+-- may refuse.
+function Stock.Batches(entry)
+	local batch = math.max(entry.quantity or 1, 1)
+	local most = math.floor(math.max(entry.stack or batch, batch) / batch)
+	local left = Stock.Left(entry)
+	if left then
+		most = math.min(most, left)
+	end
+	return math.max(most, 1)
+end
+
+-- Buy that many batches of what is on this row.
+--
+-- Batches in and items out, because those are the two units and the conversion
+-- has to happen once. `quantity` is the client's own batch size: a vendor
+-- selling water five at a time and asked for one press is asked for five water,
+-- and asking him for one buys one water for the price of five. That was the
+-- bug this call is written around, and it is the whole difference between a
+-- press that fills your bags and a press that looks like it did nothing.
+local function Spend(entry, batches)
+	local items = math.max(batches or 1, 1) * math.max(entry.quantity or 1, 1)
+	if not ns.BuyMerchant(entry.index, items) then
 		return false, "this client has no call to buy with"
 	end
 	return true
@@ -202,9 +236,9 @@ end
 -- the game that returns them. That is the one kind of thing UI/Ask.lua exists
 -- for, and a rack where one click costs a fortnight of dailies is the case the
 -- client puts its own confirmation in front of too.
-local function Sentence(entry)
+local function Sentence(entry, batches)
 	local first = entry.costs[1]
-	local wants = ("%d %s"):format(first.count or 1, first.name or "tokens")
+	local wants = ("%d %s"):format((first.count or 1) * batches, first.name or "tokens")
 	if (entry.wants or 0) > 1 then
 		wants = ("%s and %d other"):format(wants, entry.wants - 1)
 	end
@@ -212,23 +246,26 @@ local function Sentence(entry)
 		:format(entry.name or "this", wants)
 end
 
-function Stock.Buy(entry)
+-- `batches` is how many of the vendor's own units to take, and one where the
+-- caller did not say. A plain press does not say; the number picker does.
+function Stock.Buy(entry, batches)
 	if not entry or not entry.index then
 		return false, "nothing on that row"
 	end
 	if not Stock.InStock(entry) then
 		return false, "this vendor has none of those left"
 	end
+	batches = math.min(math.max(math.floor(batches or 1), 1), Stock.Batches(entry))
 	if (entry.wants or 0) > 0 then
 		ns.UI.Ask({
 			title = "Spend tokens",
-			question = Sentence(entry),
+			question = Sentence(entry, batches),
 			accept = "buy it",
-			onAccept = function() Spend(entry) end,
+			onAccept = function() Spend(entry, batches) end,
 		})
 		return true
 	end
-	return Spend(entry)
+	return Spend(entry, batches)
 end
 
 function Stock.Describe()

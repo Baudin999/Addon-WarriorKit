@@ -80,10 +80,10 @@ end
 --------------------------------------------------------------------------
 -- What a row asks about an entry
 --
--- The four calls Grid.lua makes on whichever rack it is drawing. Stock.lua
+-- The five calls Grid.lua makes on whichever rack it is drawing. Stock.lua
 -- answers them about the vendor's stock and this answers them about your own
--- returns, which is what lets one pool of squares draw both racks: the square
--- knows how to lay a thing out and nothing about which of the two it came off.
+-- returns, which is what lets one pool of cards draw both racks: the card knows
+-- how to lay a thing out and nothing about which of the two it came off.
 --------------------------------------------------------------------------
 
 -- Always. What is on this rack is one of a thing you sold, and the vendor
@@ -96,6 +96,13 @@ end
 -- no such thing here: every slot holds exactly what you sold out of it.
 function Buyback.Left()
 	return nil
+end
+
+-- One, every time. A buyback slot holds exactly what you sold out of it and
+-- there is no second one to ask for, so the rack that draws both this and the
+-- vendor's stock never offers a number to pick here.
+function Buyback.Batches()
+	return 1
 end
 
 -- Whether you could pay for it back. Money only, because nothing that reaches

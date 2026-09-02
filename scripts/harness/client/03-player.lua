@@ -412,7 +412,11 @@ local ITEMS = {
 	-- chip is an override on the white quality and a quest item is white. With
 	-- nothing white beside it, "the whites are off and the quest item is still
 	-- drawn" is a claim about a column with one row in it.
-	["Linen Cloth"]       = { id = 2005, classId = 7, quality = 1, price = 8 },
+	-- It stacks to twenty, which is the one thing about it this file has to
+	-- carry: Bags/Stack.lua only ever touches an item whose stack size is more
+	-- than one, so an item table where everything stacks to one is a table its
+	-- sweep can be pointed at and never move anything in.
+	["Linen Cloth"]       = { id = 2005, classId = 7, quality = 1, price = 8, stack = 20 },
 	-- The third bag, one item per branch the clutter verdict can take. Which of
 	-- them is clutter and which is not is decided by the quest fixtures below,
 	-- not here.
@@ -460,6 +464,22 @@ end
 local function refillQuests()
 	reset(QUESTBAG, "Hogger's Claw", "Diplomat's Ring", "Sealed Letter",
 		"Zul'Mamwe Fetish", "Rogue's Token", "Old Cipher", "Unknown Trinket")
+end
+
+-- How many are in a bag slot, and the way a section says otherwise.
+--
+-- One unless something has written a count, which is what keeps every scene
+-- written before stacks existed reading exactly as it did: a bag of gear is
+-- twelve slots holding one thing each and that is what the client answers for
+-- it. Writing a count is how a section stands up two half stacks of the same
+-- item, which is the only state Bags/Stack.lua has anything to do.
+local COUNTS = {}
+local function counted(bag, slot, value)
+	if value then
+		COUNTS[bag] = COUNTS[bag] or {}
+		COUNTS[bag][slot] = value
+	end
+	return (COUNTS[bag] and COUNTS[bag][slot]) or 1
 end
 
 -- A sold slot is left as false rather than removed, because the client does
@@ -586,4 +606,5 @@ H.own, H.realPlayers, H.inCombat = own, realPlayers, inCombat
 H.debuffs, H.buffs, H.advance, H.ITEMS = debuffs, buffs, advance, ITEMS
 H.JUNK, H.QUESTBAG, H.CARRIED = JUNK, QUESTBAG, CARRIED
 H.refill, H.refillQuests, H.carrying = refill, refillQuests, carrying
+H.counted = counted
 H.itemLink, H.progress = itemLink, progress

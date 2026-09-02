@@ -7,11 +7,11 @@
 -- that a vendor's stock lands in the same piles in the same order, with the
 -- same tie broken the same way.
 --
--- A square shows what the scan put on it, the box that opens on it says what
--- that costs, and a press on it buys that entry. Every other window in this
--- addon can be wrong about a picture; this one spends money, so the thing
--- checked is that the entry the box described is the entry the purchase was
--- aimed at.
+-- A card shows what the scan put on it, names it, prices it, and a press on it
+-- buys that entry in the vendor's own batch. Every other window in this addon
+-- can be wrong about a picture; this one spends money, so what is checked is
+-- that the entry the card described is the entry the purchase was aimed at, and
+-- that a press buys the number the card said it would.
 --
 -- And the client's own merchant window is moved rather than hidden. That is the
 -- one decision in this part that cannot be recovered from: hiding that frame
@@ -91,64 +91,97 @@ check(ns.Piles.Of(_G.GetMerchantItemLink(1)) == "consumable",
 	"the vendor's water is filed under a different pile than the bag window would file it")
 
 ----------------------------------------------------------------------
--- The squares
+-- The cards
 --
--- The rack is the bag window's grid, so what is on a square is the picture, the
--- grade, how many one press buys, and the dim on what you cannot buy. Every
--- branch a square can take is on this rack at once, which is why there are five
--- things on it and not two: an ordinary price, a stack the vendor sells two
--- hundred at a time, a limited supply, something this class cannot use, and one
--- priced in tokens you have not got.
+-- A card is the bag window's square with the item's name and the vendor's price
+-- beside it, which is the whole of what a rack has to say and the whole of what
+-- a bare grid of pictures could not. Every branch a card can take is on this
+-- rack at once, which is why there are five things on it and not two: an
+-- ordinary price, a stack the vendor sells two hundred at a time, a limited
+-- supply, something this class cannot use, and one priced in tokens you have
+-- not got.
 ----------------------------------------------------------------------
 
-local squares = Grid.Squares()
+local cards = Grid.Cards()
 
 local function shown()
 	local count = 0
-	for index = 1, #squares do
-		if squares[index]:IsShown() then
+	for index = 1, #cards do
+		if cards[index]:IsShown() then
 			count = count + 1
 		end
 	end
 	return count
 end
 
-local function square(name)
-	for index = 1, #squares do
-		if squares[index]:IsShown() and squares[index].name == name then
-			return squares[index], index
+local function card(name)
+	for index = 1, #cards do
+		if cards[index]:IsShown() and cards[index].name == name then
+			return cards[index], index
 		end
 	end
 	return nil
 end
 
-check(shown() == 5, ("%d squares are drawn and the rack has 5"):format(shown()))
+check(shown() == 5, ("%d cards are drawn and the rack has 5"):format(shown()))
 
-local flask, flaskAt = square("Flask of Petrification")
-local water = square("Refreshing Spring Water")
-local arrow = square("Sharp Arrow")
-local rod = square("Runed Copper Rod")
-local helm = square("Gladiator's Plate Helm")
+local flask, flaskAt = card("Flask of Petrification")
+local water = card("Refreshing Spring Water")
+local arrow = card("Sharp Arrow")
+local rod = card("Runed Copper Rod")
+local helm = card("Gladiator's Plate Helm")
 
-check(flaskAt == 1, ("the first square drawn is %s and the blue consumable heads the first pile")
+check(flaskAt == 1, ("the first card drawn is %s and the blue consumable heads the first pile")
 	:format(flaskAt == 1 and "right" or "wrong"))
 
-check(arrow and arrow.tally:GetText() == "200",
+check(arrow and arrow.square.tally:GetText() == "200",
 	"the arrows do not say on the square that one press buys two hundred")
-check(water and water.tally:GetText() == "5",
+check(water and water.square.tally:GetText() == "5",
 	"a stack of five does not say so on the square")
-check(rod and rod.tally:GetText() == "",
+check(rod and rod.square.tally:GetText() == "",
 	"something sold one at a time drew a count on its square")
 
 ----------------------------------------------------------------------
--- The box on a square
+-- What the card says without being pointed at
 --
--- Everything the row used to write out is here now, which is the whole of the
--- trade the grid made: the price, the tokens, what one press buys, how many the
--- vendor has left, and the one line about the item rather than about the offer.
--- A square with none of that is a picture nobody can shop from, so it is read
--- back off the tooltip the hover actually drew rather than off the table handed
--- to it.
+-- The two strings a shop cannot do without. A rack of pictures alone was the
+-- shape this window had for a day: it named nothing, priced nothing, and put
+-- both a hover away on every entry. So the name is on the card in the item's
+-- own grade, the price is on the card in coins, and what is left of a limited
+-- supply is on the card beside the price.
+----------------------------------------------------------------------
+
+check(water and water.label:GetText() == "Refreshing Spring Water",
+	"the card does not name what is on it")
+check(water and water.price:GetText() == ns.Coined(25),
+	"the card does not carry the price the vendor is asking")
+check(flask and flask.note:GetText() == "2 left",
+	"a limited supply does not say on the card how many are left")
+check(water and water.note:GetText() == "",
+	"an endless supply drew a count of how many are left")
+check(helm and helm.price:GetText() == "" and helm.chips[1]:IsShown(),
+	"a rack entry priced in tokens drew money, or drew no token at all")
+check(helm and helm.chips[1].count:GetText() == "40",
+	"the token chip does not say how many of it the helm costs")
+check(water and not water.chips[1]:IsShown(),
+	"something paid for in money drew a token chip")
+
+-- The grade is on the name as well as on the rim, which is the one thing a row
+-- of words can say that a row of pictures cannot.
+local blue = UI.Quality[3]
+check(flask and select(1, flask.label:GetTextColor()) == blue[1],
+	"a blue item's name is not drawn in its own grade")
+check(rod and select(1, rod.label:GetTextColor()) == C.quiet[1],
+	"something this class cannot use is not drawn as though it could not")
+
+----------------------------------------------------------------------
+-- The box on a card
+--
+-- The whole of the offer, which is more than the card has room for: the price,
+-- the tokens and how many of each you are holding, what one press buys, how
+-- many the vendor has left, how many you may ask for at once, and the one line
+-- about the item rather than about the sale. It is read back off the tooltip
+-- the hover actually drew rather than off the table handed to it.
 ----------------------------------------------------------------------
 
 -- The box a hover on this square drew, as a list of what each line said and
@@ -188,13 +221,20 @@ local function inked(tone, color)
 end
 
 check(box(water) ~= nil and box(water)[1][1] == "Refreshing Spring Water",
-	"the box on a square does not name what is on it")
+	"the box on a card does not name what is on it")
 check(said(box(water), "Price") == ns.Coined(25),
 	"the box on the water does not carry the price the vendor is asking")
 check(said(box(arrow), "One press buys") == "200",
 	"the box on the arrows does not say that one press buys two hundred")
 check(said(box(rod), "One press buys") == nil,
 	"something sold one at a time said what one press buys, which is one")
+
+-- The one sentence in the addon that says what to press, and it is on the two
+-- entries where more than one press-worth can be bought and nowhere else.
+check(said(box(water), "Shift-click") == "up to 20",
+	"the box on the water does not say how many of it one call can buy")
+check(said(box(rod), "Shift-click") == nil,
+	"something sold one at a time offered a number to pick")
 
 -- The one number a limited supply is for, and the one it must not draw. -1 is
 -- the client saying it has an endless supply, and a box that read it as a count
@@ -241,50 +281,119 @@ check(helm and helm:GetAlpha() < 1,
 check(said(box(water), "Mark of Honor Hold") == nil,
 	"the box on something paid for in money drew a token line")
 
-check(not H.tipSettle(), "the box stayed up after the pointer left the square")
+check(not H.tipSettle(), "the box stayed up after the pointer left the card")
 
 ----------------------------------------------------------------------
 -- A press
 --
--- Through the client's own click rather than through the square's handler, and
+-- Through the client's own click rather than through the card's handler, and
 -- that is the whole point of doing it this way. A frame that hands the right
 -- and middle buttons to the camera has had which buttons it answers written,
--- and the left one has to be asked for again afterwards or the square draws
+-- and the left one has to be asked for again afterwards or the card draws
 -- perfectly, hovers perfectly and does nothing at all when you press it. The
--- harness refuses a click a button is not registered for, so a square that lost
+-- harness refuses a click a button is not registered for, so a card that lost
 -- its registration fails here rather than in Ironforge.
 --
--- What is checked is the entry, not the square: the purse moves by the price of
--- the thing the box on the pressed square described.
+-- What is checked is the entry, not the card: the purse moves by the price of
+-- the thing the box on the pressed card described.
+--
+-- And it buys the batch. The client counts a purchase in items rather than in
+-- the vendor's own stacks, so asking it for one at a vendor selling water five
+-- at a time bought a single water and charged the price of five. The card says
+-- 5 in its corner and this is the assertion that the press agrees with it.
 ----------------------------------------------------------------------
 
 local passing = 0
-for index = 1, #squares do
-	local passed = squares[index]:GetPassThroughButtons()
-	local clicks = squares[index]:GetRegisteredClicks()
+for index = 1, #cards do
+	local passed = cards[index]:GetPassThroughButtons()
+	local clicks = cards[index]:GetRegisteredClicks()
 	if passed and passed["RightButton"] and clicks and clicks["LeftButtonUp"] then
 		passing = passing + 1
 	end
 end
-check(passing == #squares,
-	("%d of %d squares both hand the right button to the camera and still answer the left")
-		:format(passing, #squares))
+check(passing == #cards,
+	("%d of %d cards both hand the right button to the camera and still answer the left")
+		:format(passing, #cards))
 
 local before = state.purse
 check(water:Click("LeftButton") == true,
-	"a left click on a square was refused, so the square is a button that does nothing")
+	"a left click on a card was refused, so the card is a button that does nothing")
 
 check(state.purse == before - 25,
 	("a press on the water moved the purse by %d and the water costs 25")
 		:format(before - state.purse))
-check(merchant.bought[water.entry.index] == 1,
-	"the press bought something other than the thing the square was showing")
+check(merchant.bought[water.entry.index] == 5,
+	("the press bought %d water and the vendor sells them five at a time")
+		:format(merchant.bought[water.entry.index] or 0))
 
--- The square under the pointer is the one that pays, whatever the layout did
+-- The card under the pointer is the one that pays, whatever the layout did
 -- next. The rack is re-read on the client's own update, so this also says the
 -- window answered that update rather than drawing what it had.
 check(Window.Shown() and shown() == 5,
-	"buying something took a square off the rack")
+	"buying something took a card off the rack")
+
+----------------------------------------------------------------------
+-- Picking a number
+--
+-- The other half of the same bug. A press buys one batch, and until this there
+-- was no way at all to buy four: the client's own stack split is on the frame
+-- parked off the side of the screen, so a player who wanted twenty water had to
+-- press four times and count.
+--
+-- The range is the item's stack over the vendor's batch, capped by what he has
+-- left, which is the arithmetic the picker exists to do for you. Four for the
+-- water, one for the rod, and two for the flask because he only has two.
+----------------------------------------------------------------------
+
+check(Stock.Batches(water.entry) == 4,
+	("the water offers %d presses' worth and twenty over five is 4")
+		:format(Stock.Batches(water.entry)))
+check(Stock.Batches(rod.entry) == 1,
+	"something that does not stack offers a number to pick")
+check(Stock.Batches(flask.entry) == 2,
+	("the flask offers %d and the vendor has 2, so the supply is not capping it")
+		:format(Stock.Batches(flask.entry)))
+
+check(UI.Amounting() == nil, "the picker is on the screen before anything asked for it")
+
+_G.WarriorKitShift(true)
+water:Click("LeftButton")
+check(UI.Amounting() == 1, "a shift-click on a stack did not put the picker up on one")
+check(UI.Choose(99) == 4,
+	"the picker let you ask for more than one call can carry")
+check(UI.Choose(0) == 1, "the picker let you ask for none")
+check(UI.Choose(4) == 4, "the picker refused a number inside its own range")
+
+before = state.purse
+local was = merchant.bought[water.entry.index] or 0
+check(UI.Take(true) == true, "the picker refused the button that buys")
+check(UI.Amounting() == nil, "the picker stayed up after it was answered")
+check(state.purse == before - 100,
+	("four stacks of water moved the purse by %d and four at 25 is 100")
+		:format(before - state.purse))
+check((merchant.bought[water.entry.index] or 0) == was + 20,
+	("the picker bought %d water and four stacks of five is 20")
+		:format((merchant.bought[water.entry.index] or 0) - was))
+
+-- Cancelling spends nothing, which is the one thing a window over a vendor's
+-- rack has to get right.
+water = card("Refreshing Spring Water")
+water:Click("LeftButton")
+before = state.purse
+check(UI.Take(false) == true, "the picker refused the button that does not buy")
+check(state.purse == before, "cancelling the picker spent money")
+
+-- Nothing to pick is a press, not an empty window. A rod is one to a batch and
+-- one to a stack, so shift on it is the same as no shift at all.
+before = state.purse
+rod = card("Runed Copper Rod")
+rod:Click("LeftButton")
+check(UI.Amounting() == nil,
+	"a shift-click on something sold one at a time put a picker up with one choice on it")
+check(state.purse == before - 4000, "the shift-click on the rod did not buy the rod")
+_G.WarriorKitShift(false)
+
+water = card("Refreshing Spring Water")
 
 ----------------------------------------------------------------------
 -- Spending tokens
@@ -323,14 +432,14 @@ end
 -- The vendor running out
 --
 -- The one refusal this window makes on its own. Everything else is left to the
--- server, because a window that greys a square out on its own arithmetic is a
+-- server, because a window that greys a card out on its own arithmetic is a
 -- window that can be wrong in the direction that costs you the sale.
 ----------------------------------------------------------------------
 
 merchant.rack[3].available = 0
 Window.Refresh()
 
-local gone = square("Flask of Petrification")
+local gone = card("Flask of Petrification")
 check(gone ~= nil and not Stock.InStock(gone.entry),
 	"the vendor has none left and the window still thinks he has")
 check(select(1, Stock.Buy(gone.entry)) == false,
@@ -379,17 +488,19 @@ check(tabs.buttons[2]:Click("LeftButton") == true,
 	"the buyback tab refused a click")
 
 check(shown() == 2,
-	("the buyback tab drew %d squares and two things were sold"):format(shown()))
-check(squares[1].name == "Refreshing Spring Water",
+	("the buyback tab drew %d cards and two things were sold"):format(shown()))
+check(cards[1].name == "Refreshing Spring Water",
 	"the buyback rack is not newest first, so the thing you just sold is not the first one")
-check(squares[2].name == "Runed Copper Rod",
+check(cards[2].name == "Runed Copper Rod",
 	"the older of the two sales is not after the newer one")
 check(not Grid.Headers()[1]:IsShown(),
 	"the buyback rack drew a pile heading, which the tab above it already says")
-check(said(box(squares[2]), "Price") == ns.Coined(1000),
-	"the box on a buyback square does not carry the price it costs to take back")
-check(said(box(squares[2]), "Left") == nil,
-	"a buyback square drew a count of how many the vendor has left")
+check(said(box(cards[2]), "Price") == ns.Coined(1000),
+	"the box on a buyback card does not carry the price it costs to take back")
+check(said(box(cards[2]), "Left") == nil,
+	"a buyback card drew a count of how many the vendor has left")
+check(said(box(cards[2]), "Shift-click") == nil,
+	"a buyback card offered a number to pick, and a slot holds what you sold and no more")
 check(foot:GetText() == "2 to buy back",
 	("the footer says %q with two things on the rack"):format(foot:GetText()))
 
@@ -397,12 +508,12 @@ check(foot:GetText() == "2 to buy back",
 -- belonged to. Taking the rod back costs the thousand he paid for it; the rack
 -- entry drawn on this same button a moment ago was the water at twenty five.
 purse = state.purse
-check(squares[2]:Click("LeftButton") == true, "a click on a buyback square was refused")
+check(cards[2]:Click("LeftButton") == true, "a click on a buyback card was refused")
 check(state.purse == purse - 1000,
 	("taking the rod back moved the purse by %d and he paid 1000 for it")
 		:format(purse - state.purse))
 
-check(shown() == 1 and squares[1].name == "Refreshing Spring Water",
+check(shown() == 1 and cards[1].name == "Refreshing Spring Water",
 	"a slot taken back is still on the rack, or the hole it left was drawn as a square")
 check(_G.GetNumBuybackItems() == 2,
 	"the client stopped counting the empty slot, which is not what it does")
@@ -412,7 +523,7 @@ check(Window.Describe():find("buy back") ~= nil,
 
 tabs.buttons[1]:Click("LeftButton")
 check(shown() == 5 and foot:GetText() == "5 for sale",
-	"going back to the rack tab did not put the vendor's stock back on the squares")
+	"going back to the rack tab did not put the vendor's stock back on the cards")
 
 ----------------------------------------------------------------------
 -- Blizzard's window
@@ -443,10 +554,18 @@ check(_G.MerchantFrame:GetLeft() >= _G.UIParent:GetRight(),
 -- window is what is pressed rather than the handler.
 ----------------------------------------------------------------------
 
+-- With a picker up, because closing the window has to take it with it.
+_G.WarriorKitShift(true)
+card("Refreshing Spring Water"):Click("LeftButton")
+_G.WarriorKitShift(false)
+check(UI.Amounting() == 1, "the picker did not open for the walking-away check")
+
 Window.Hide()
 
 check(not merchant.shown(),
 	"closing the window left the conversation with the vendor open")
+check(UI.Amounting() == nil,
+	"a number picker was left on the screen after the window under it went down")
 check(not Window.Open(), "the session ended and the window still thinks it is up")
 
 Blizz.Apply()

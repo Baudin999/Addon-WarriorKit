@@ -114,7 +114,7 @@ end
 -- Building one
 --------------------------------------------------------------------------
 
--- The two strings a bag square carries that no other square in the addon does.
+-- The three strings a bag square carries that no other square in the addon does.
 local function Extras(button)
 	-- How many slots you have free, on the one square the empty pile folds
 	-- into. Its own string rather than the tally in the corner, and in the
@@ -138,6 +138,24 @@ local function Extras(button)
 	UI.Wrap(button.coin, false)
 	button.coin:SetText(COIN)
 	button.coin:Hide()
+
+	-- How many of this the session recorded, in the corner the stack count and
+	-- the coin are both not in.
+	--
+	-- Two numbers on one square is a thing to justify rather than a thing to
+	-- do, and these two are genuinely different facts: the tally in the bottom
+	-- corner is how many you are holding and this is how many arrived while you
+	-- were recording. Eight Runecloth carried in and twelve looted is a square
+	-- reading twenty at the bottom and twelve at the top, and there is no call
+	-- on this client that could split the stack to make it read any other way.
+	-- It is only ever drawn under a session heading, so what it counts is named
+	-- one line above the square.
+	--
+	-- Outlined and at M.tally for the reason UI/Slot.lua gives its own number:
+	-- it lands on art this addon did not paint.
+	button.gained = UI.Label(button, M.tally, C.heading, "LEFT", UI.OUTLINE)
+	button.gained:SetPoint("TOPRIGHT", -3, -3)
+	UI.Wrap(button.gained, false)
 	return button
 end
 
@@ -311,6 +329,7 @@ local function Paint(button, entry, selling)
 		entry.quality, refused)
 	button.free:SetText(free and tostring(entry.count or 1) or "")
 	button.coin:SetShown(sellable and entry.group == ns.Bags.JUNK)
+	button.gained:SetText(entry.gained and tostring(entry.gained) or "")
 
 	button.sells = selling and sellable
 	-- The square under the pointer just sold, so what is lying on it now is

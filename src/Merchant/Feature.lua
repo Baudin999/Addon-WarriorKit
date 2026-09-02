@@ -108,7 +108,7 @@ ns.Register({
 		ui.Check("the addon's merchant window",
 			function() return ns.db.merchant end,
 			SetMerchant)
-		ui.Hint("It opens at a vendor and closes when you walk away. A click buys one of what he sells it in: one flask, or one stack of arrows, and the box on a square is the price. The tab is what you sold.")
+		ui.Hint("It opens at a vendor and closes when you walk away. A click buys one of what he sells it in: one flask, or one stack of arrows. Shift-click a stack to pick how many. The tab is what you sold.")
 		ui.Check("move the client's merchant window aside",
 			function() return ns.db.merchantHideBlizz end,
 			SetHide)
@@ -116,7 +116,7 @@ ns.Register({
 		ui.Reading("this window", ns.MerchantWindow.Describe)
 		ui.Reading("the rack", ns.Stock.Describe)
 		ui.Reading("what you sold", ns.Buyback.Describe)
-		ui.Reading("the squares", ns.MerchantGrid.Describe)
+		ui.Reading("the cards", ns.MerchantGrid.Describe)
 		ui.Reading("the client's window", ns.MerchantBlizzard.Describe)
 	end,
 })

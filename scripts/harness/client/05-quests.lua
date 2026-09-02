@@ -9,6 +9,7 @@
 local H = ...
 local region, constant, ITEMS = H.region, H.constant, H.ITEMS
 local CARRIED, carrying, itemLink = H.CARRIED, H.carrying, H.itemLink
+local counted = H.counted
 
 local QUESTS = {
 	[101] = { name = "Wanted: Hogger", completed = true },
@@ -132,11 +133,43 @@ _G.ClearCursor = function() cursor = nil end
 -- second one caught it.
 local pickups = 0
 
+-- The second of the two calls, which is a drop rather than a pickup.
+--
+-- A cursor already holding a stack of the same item is what turns this into the
+-- move Bags/Stack.lua is built on, and the split is the client's: as much as
+-- will fit goes across, the rest stays where it came from, and a slot the move
+-- empties reads false afterwards the way a sold one does. Modelled rather than
+-- waved through, because the whole claim of that sweep is the arithmetic of
+-- what lands where, and a stub that merged the lot would let a sweep that
+-- overfilled a stack pass.
+local function drop(bag, slot, held)
+	local from = cursor
+	local room = (ITEMS[held].stack or 1) - counted(bag, slot)
+	local moved = math.min(counted(from.bag, from.slot), room)
+	local left = counted(from.bag, from.slot) - moved
+	counted(bag, slot, counted(bag, slot) + moved)
+	-- An emptied slot goes back to the default of one rather than staying at
+	-- nought. Nothing holds a count for a slot with nothing in it, and a nought
+	-- left behind is what the next thing to land there would be read as.
+	counted(from.bag, from.slot, left > 0 and left or 1)
+	if left == 0 then
+		CARRIED[from.bag][from.slot] = false
+	end
+	cursor = nil
+end
+
 _G.PickupContainerItem = function(bag, slot)
 	pickups = pickups + 1
 	local held = carrying(bag, slot)
 	if not held then
 		cursor = nil
+		return
+	end
+	-- `cursor.bag` is what says the hands are holding a bag slot rather than a
+	-- spell, which is the other thing that can be on this cursor.
+	if cursor and cursor.bag and cursor.id == ITEMS[held].id
+		and (ITEMS[held].stack or 1) > 1 then
+		drop(bag, slot, held)
 		return
 	end
 	cursor = { id = ITEMS[held].id, link = itemLink(held), bag = bag, slot = slot }

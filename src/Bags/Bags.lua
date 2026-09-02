@@ -112,6 +112,21 @@ local function Fill(index, bag, slot)
 		entry.count = ns.ContainerItem(bag, slot) or 1
 	end
 	entry.group = ns.Piles.Of(link)
+	-- The session pile overrules the class, and it is the only thing that does.
+	-- What you picked up in the last hour is not a fact about the item, so it
+	-- cannot be a rule in Core/Piles.lua and it must not reach the merchant
+	-- window: a vendor's rack goes through Piles.Of and never comes here.
+	--
+	-- The count on the square is the session's rather than the stack's, because
+	-- they are different numbers and the session's is the one you opened the
+	-- window to read. See Bags/Session.lua on why this client cannot tell the
+	-- twelve you looted from the eight you were already carrying.
+	if link and ns.BagsSession.Holds(link) then
+		entry.group = ns.Piles.SESSION
+		entry.gained = ns.BagsSession.Gained(link)
+	else
+		entry.gained = nil
+	end
 	return entry
 end
 

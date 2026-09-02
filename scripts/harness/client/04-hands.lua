@@ -13,6 +13,7 @@ local H = ...
 local state = H.state
 local region, constant, ITEMS = H.region, H.constant, H.ITEMS
 local CARRIED, carrying, itemLink = H.CARRIED, H.carrying, H.itemLink
+local counted = H.counted
 
 local swing = {
 	main = 3.4,   -- a slow two hander, which is the weapon Slam is pressed with
@@ -155,7 +156,8 @@ local function itemInfo(link)
 	if not item then
 		return nil
 	end
-	return name, link, item.quality, 60, 60, nil, nil, 1, item.equip, item.icon, item.price
+	return name, link, item.quality, 60, 60, nil, nil, item.stack or 1,
+		item.equip, item.icon, item.price
 end
 -- The fourth and fifth returns are the two ns.ItemInfo reads, the equip
 -- location and the icon.
@@ -186,12 +188,16 @@ end
 -- Nothing is ever locked here: a locked slot is a sale the server has not
 -- finished, and modelling that would be modelling latency rather than the
 -- addon.
+--
+-- The count is the one a section wrote and one otherwise, which is what the
+-- client answers for a slot holding a single thing. Everything that reads it
+-- read a literal one until stacks could be combined.
 _G.GetContainerItemInfo = function(bag, slot)
 	local held = carrying(bag, slot)
 	if not held then
 		return nil
 	end
-	return ITEMS[held].icon, 1, false, ITEMS[held].quality
+	return ITEMS[held].icon, counted(bag, slot), false, ITEMS[held].quality
 end
 
 -- The call the whole vendor part is built around, and the reason it checks the

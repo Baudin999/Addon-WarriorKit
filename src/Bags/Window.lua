@@ -52,7 +52,18 @@ ns.BagsWindow = Window
 -- does not own them either.
 local FLOOR = UI.SLOT_HEADER + UI.SLOT * 2 + UI.SLOT_GAP
 
-local window, view, free, purse
+-- The stack button's width, fixed rather than sized to its word. The merchant
+-- row's buttons carry numbers that change as you sell and are measured for that
+-- reason; this one says the same thing forever and a fixed width keeps it
+-- centred between two numbers that are both changing under it.
+local STACK_WIDTH = 60
+
+-- The record button in the title bar, wide enough for the longer of the two
+-- words it says. Fixed rather than measured, because a button that shrinks when
+-- you press it is a button that moves out from under the pointer.
+local RECORD_WIDTH = 54
+
+local window, view, free, purse, stack, record
 
 --------------------------------------------------------------------------
 
@@ -169,13 +180,35 @@ local function Build()
 	purse:SetPoint("RIGHT")
 	UI.Wrap(purse, false)
 
+	-- Between the two numbers, because it is the one thing in this window that
+	-- changes both of them: every pair of half stacks it puts together is a slot
+	-- back on the left, and it is the only control the window has that is not
+	-- about one square. It is up whatever you are standing in front of, unlike
+	-- the merchant row, because loose stacks are not a vendor's business.
+	stack = UI.Button(window.footer, { label = "stack", width = STACK_WIDTH,
+		height = M.row, onClick = ns.BagsStack.Press })
+	stack:SetPoint("CENTER")
+
+	-- In the title bar rather than the footer, beside the close cross, which is
+	-- where UI/Window.lua already puts the settings window's search field. It
+	-- belongs there for the same reason that one does: it is a control over the
+	-- whole window rather than over anything in it, and the footer's stack
+	-- button is centred between the free count and your gold on purpose, so a
+	-- second button there would take that arrangement apart.
+	record = UI.Button(window.frame, { label = ns.BagsSession.Label(),
+		width = RECORD_WIDTH, height = M.title - 8, size = M.small,
+		onClick = ns.BagsSession.Press })
+	record:SetPoint("TOPRIGHT", window.close, "TOPLEFT", -M.rowGap, 0)
+
 	Fit()
 
-	-- The two numbers along the bottom, recorded on the window the way the
-	-- clutter window records its card. Nothing in the addon reads them; the
-	-- harness reads the strings the footer actually drew rather than going
-	-- through a hook cut into this file for its benefit.
-	window.free, window.purse = free, purse
+	-- The two numbers along the bottom and the button between them, recorded on
+	-- the window the way the clutter window records its card. Nothing in the
+	-- addon reads them; the harness reads the strings the footer actually drew
+	-- and presses the button rather than going through a hook cut into this file
+	-- for its benefit.
+	window.free, window.purse, window.stack = free, purse, stack
+	window.record = record
 
 	return window
 end
@@ -198,6 +231,13 @@ function Window.Refresh()
 	view:Update(content)
 	free:SetText(("%d free of %d"):format(state.free, state.slots))
 	purse:SetText(ns.Coined(GetMoney()))
+	-- The word and the colour together, because they say one thing between them:
+	-- green while it is recording, and the button's own control grey when it is
+	-- not. `tone` as well as the tint, because UI.Button repaints its background
+	-- from that field every time the mouse leaves it.
+	record.text:SetText(ns.BagsSession.Label())
+	record.tone = ns.BagsSession.Running() and C.tick or C.control
+	UI.Tint(record.bg, record.tone)
 	return true
 end
 

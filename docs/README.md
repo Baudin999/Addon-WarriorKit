@@ -336,12 +336,16 @@ name of none of them.
     Bags/Bags.lua            the five bags you carry, walked, and what is in
                              them sorted into piles on the item class the client
                              already files each one under. Draws nothing
+    Bags/Stack.lua           the half stacks, put together. Two partial stacks
+                             of one item, one dropped on the other until each
+                             item is down to a single partial. Draws nothing
     Bags/Grid.lua            the pool of squares. Each one is built on the
                              client's own bag button, so the click, the drag and
                              the stack split are the client's code, and each is
                              parented to a holder frame carrying its bag number,
                              which is the only thing that handler has to go on
-    Bags/Window.lua          the window, and the free count along the bottom
+    Bags/Window.lua          the window, the free count along the bottom and
+                             the stack button between it and your purse
     Bags/Blizzard.lua        the nine calls the client opens and shuts a bag
                              through, taken, so B opens this one
     Bags/Feature.lua
@@ -638,9 +642,14 @@ goes through `Feature.lua` or through the shared surface below:
     ns.ItemKind(link)            the item's id and the class and subclass the
                                  client files it under, read from the client's
                                  own database rather than the cache
+    ns.ItemStack(link)           how many of it one bag slot holds, 1 for
+                                 everything that does not stack, and nil where
+                                 the client has not cached it, which the
+                                 stacking sweep treats as "ask again"
     ns.PickupContainerItem(bag, slot)   put a bag slot on the cursor, so the
                                  caller can ask the client what it is really
-                                 holding; false where neither API is here
+                                 holding, or call it twice to drop one stack on
+                                 another; false where neither API is here
     ns.Questie(name, ...)        one of Questie's modules, asked for by the
                                  name of the module and the names of the calls
                                  you are about to make, and nil for a module

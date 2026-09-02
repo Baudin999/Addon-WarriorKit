@@ -76,11 +76,11 @@ UI.SLOT_HEADER, UI.SLOT_BREAK = M.heading + 3, M.rowGap
 
 -- How wide a line of this many squares is.
 --
--- Here rather than in either window because both windows ask it and neither
--- owns the answer: it is the square and the gap, and those are this file's.
--- The bag window sizes itself off it and the merchant window sizes itself off
--- the same call with the same column count, which is what makes the two the
--- same width when they are open beside each other.
+-- Here rather than in the window that asks because it is the square and the
+-- gap, and those are this file's. The bag window sizes itself off it. The
+-- merchant window used to as well and no longer does: its unit is a card with a
+-- name and a price on it rather than a bare square, so Merchant/Grid.lua owns
+-- that width and says why.
 function UI.SlotSpan(columns)
 	return columns * UI.SLOT + (columns - 1) * UI.SLOT_GAP
 end

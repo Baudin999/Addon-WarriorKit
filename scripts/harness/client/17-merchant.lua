@@ -36,17 +36,21 @@ ITEMS["Mark of Honor Hold"] = { id = 5006, classId = 12, quality = 1,
 	price = 0, icon = "Interface\\Icons\\Mark" }
 
 -- `available` is -1 for an endless supply, which is the client's own answer and
--- the one number a window must not draw as a count.
+-- the one number a window must not draw as a count. `quantity` is what one
+-- press buys and `stack` is what one call can carry, and the four combinations
+-- of the two are on this rack: five in a batch and four batches to a stack, two
+-- hundred in a batch and five batches, a single that stacks and a single that
+-- does not.
 local RACK = {
-	{ name = "Refreshing Spring Water", price = 25, quantity = 5,
+	{ name = "Refreshing Spring Water", price = 25, quantity = 5, stack = 20,
 		available = -1, usable = true },
-	{ name = "Sharp Arrow", price = 200, quantity = 200,
+	{ name = "Sharp Arrow", price = 200, quantity = 200, stack = 1000,
 		available = -1, usable = true },
-	{ name = "Flask of Petrification", price = 90000, quantity = 1,
+	{ name = "Flask of Petrification", price = 90000, quantity = 1, stack = 5,
 		available = 2, usable = true },
-	{ name = "Runed Copper Rod", price = 4000, quantity = 1,
+	{ name = "Runed Copper Rod", price = 4000, quantity = 1, stack = 1,
 		available = -1, usable = false },
-	{ name = "Gladiator's Plate Helm", price = 0, quantity = 1,
+	{ name = "Gladiator's Plate Helm", price = 0, quantity = 1, stack = 1,
 		available = -1, usable = true,
 		costs = { { name = "Mark of Honor Hold", count = 40 } } },
 }
@@ -124,21 +128,44 @@ _G.GetItemCount = function(link)
 	return held
 end
 
+-- The most of one entry the client will sell in one call, in items.
+--
+-- The item's own stack size and not the vendor's batch, which is the difference
+-- the window has to do arithmetic on: water is five a batch and twenty a stack,
+-- so four presses' worth is what one call can carry. A rack row with no stack
+-- of its own answers its batch, which is one call's worth and no choice.
+_G.GetMerchantItemMaxStack = function(index)
+	local row = entry(index)
+	if not row then
+		return 0
+	end
+	return row.stack or row.quantity or 1
+end
+
 -- The sale. The purse moves, a limited supply counts down, and the client says
 -- so, which is the whole of what the window reads.
+--
+-- `count` is items and not batches, which is the post-4.1 spelling both clients
+-- this addon ships to answer. The price and the supply are per batch, so both
+-- are worked out from how many batches the count came to: asking for five water
+-- off a vendor selling five at a time is one batch, one price and one off his
+-- shelf. Asking for fewer than a batch is what the addon did for a day, and it
+-- is modelled rather than rounded away: the client charges the batch price for
+-- the part batch, which is what makes buying one water cost five water's money.
 _G.BuyMerchantItem = function(index, count)
 	local row = entry(index)
 	if not row then
 		return
 	end
-	count = count or 1
+	count = count or row.quantity or 1
+	local batches = math.ceil(count / (row.quantity or 1))
 	if row.available >= 0 then
-		if row.available < count then
+		if row.available < batches then
 			return
 		end
-		row.available = row.available - count
+		row.available = row.available - batches
 	end
-	state.purse = state.purse - row.price * count
+	state.purse = state.purse - row.price * batches
 	bought[index] = (bought[index] or 0) + count
 	H.fire("MERCHANT_UPDATE")
 end

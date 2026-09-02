@@ -654,6 +654,119 @@ check(not Window.Shown(), "the window came back up with the feature switched off
 SlashCmdList.WARRIORKIT("bags on")
 check(ns.BagsBlizzard.Held(), "turning the window back on did not take the keys again")
 
+----------------------------------------------------------------------
+-- Putting the half stacks together
+--
+-- One claim, and it is arithmetic: twelve in one slot and eighteen in another
+-- come out twenty and ten, and three fives come out one fifteen with two slots
+-- free under it. Nothing here checks that a drag happened. What is checked is
+-- where the items ended up, because the sweep does not decide how many move:
+-- it puts one stack on the cursor and drops it on another, and the client
+-- splits it. A test that asserted on the two calls would pass on a sweep that
+-- aimed them at the wrong pair of slots.
+--
+-- Bag 3 again, which this section already owns, and Linen Cloth because it is
+-- the one item in the fixtures that stacks at all.
+--
+-- The whole block is scoped, because this file is at the chunk-level name
+-- budget check.sh holds the harness to.
+----------------------------------------------------------------------
+
+do
+	local counted, frames = H.counted, H.frames
+
+	-- The sweep's own frame, taken as the one the first press adds rather than
+	-- looked up by the file that made it. Every other section that drives a
+	-- ticker finds its frame by origin, and that only works for a frame built
+	-- while a file was loading; this one is built on the first press, so its
+	-- origin is "runtime" like everything else made after login.
+	local tick
+
+	-- The sweep run to its own stopping point rather than for a fixed number of
+	-- passes, because how many it takes is the thing being measured: a pass can
+	-- only move one pair of any one item, so three stacks is two passes and a
+	-- backstop that ran twenty would hide a sweep that never converged.
+	local function drive()
+		local passes = 0
+		while ns.BagsStack.Running() and passes < 40 do
+			tick.scripts.OnUpdate(tick, 0.2)
+			passes = passes + 1
+		end
+		return passes
+	end
+
+	local button = Window.Frame().stack
+	check(button ~= nil and button.text:GetText() == "stack",
+		"the footer has no button marked stack on it")
+
+	-- Twelve and eighteen, through the button rather than through the module,
+	-- so what is driven is the press a player makes.
+	CARRIED[3] = { "Linen Cloth", "Linen Cloth", false }
+	counted(3, 1, 12)
+	counted(3, 2, 18)
+	local built = #frames
+	button:Click()
+	check(ns.BagsStack.Running(), "the footer button did not start a sweep")
+	check(#frames == built + 1, "the sweep started and built no ticker of its own")
+	tick = frames[#frames]
+	check(tick.scripts.OnUpdate ~= nil, "the sweep's frame carries no tick")
+
+	local passes, first, second = drive(), 0, 0
+	first, second = counted(3, 1), counted(3, 2)
+	check(not ns.BagsStack.Running(),
+		("the sweep never stopped on its own in %d passes"):format(passes))
+	check(counted(3, 1) == 20 and counted(3, 2) == 10,
+		("twelve and eighteen came out %d and %d")
+			:format(counted(3, 1), counted(3, 2)))
+	check(CARRIED[3][2] == "Linen Cloth",
+		"the ten that would not fit went missing rather than staying behind")
+
+	-- And the addon reads back what the client holds, which is the half the two
+	-- checks above cannot make: they read the fixture.
+	check(ns.ContainerItem(3, 1) == 20,
+		"the client answers twenty and the addon's own shim does not")
+
+	-- Three fives are two passes and two slots. This is the case a sweep that
+	-- stopped as soon as one pass had nothing left to reach would get wrong:
+	-- the first pass merges two of them and the third is still sitting there.
+	CARRIED[3] = { "Linen Cloth", "Linen Cloth", "Linen Cloth" }
+	counted(3, 1, 5)
+	counted(3, 2, 5)
+	counted(3, 3, 5)
+	check(ns.BagsStack.Run(), "the sweep refused to start on three half stacks")
+	drive()
+	local single = counted(3, 1)
+	check(single == 15,
+		("three fives came to %d in the first slot"):format(single))
+	check(CARRIED[3][2] == false and CARRIED[3][3] == false,
+		"three fives left something in the two slots they came out of")
+
+	-- Nothing to do is not an error and it is not a move either.
+	check(ns.BagsStack.Run(), "the sweep refused to start on one stack")
+	drive()
+	check(counted(3, 1) == 15 and CARRIED[3][1] == "Linen Cloth",
+		"a sweep with one partial stack in the bags moved it anyway")
+
+	-- A cursor with something on it is a drag the player started, and the sweep
+	-- picks items up: starting one here is dropping their item somewhere they
+	-- did not ask for.
+	_G.PickupContainerItem(3, 1)
+	local going, why = ns.BagsStack.Run()
+	check(not going and why:find("cursor", 1, true) ~= nil,
+		("a sweep started with a stack on the cursor, saying %q"):format(tostring(why)))
+	_G.ClearCursor()
+
+	print(("bags   twelve and eighteen came out %d and %d over %d passes, and three fives came to %d in one slot with two free under it")
+		:format(first, second, passes, single))
+
+	-- Bag 3 back to the three empty slots the scene opened with, and the counts
+	-- back to the default, so nothing below this reads a nought left behind.
+	CARRIED[3] = { false, false, false }
+	counted(3, 1, 1)
+	counted(3, 2, 1)
+	counted(3, 3, 1)
+end
+
 CARRIED[3] = nil
 Window.Hide()
 

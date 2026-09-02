@@ -1092,10 +1092,13 @@ function ns.UseContainerItem(bag, slot)
 	return false
 end
 
--- Put what is in a bag slot on the cursor. The only caller is the clutter
--- window, which picks an item up so it can ask the cursor what it is really
--- holding before destroying it. False where the client has neither API, so the
--- caller stops rather than carrying on to a delete it cannot aim.
+-- Put what is in a bag slot on the cursor. Two callers, and they want opposite
+-- halves of it: the clutter window picks an item up so it can ask the cursor
+-- what it is really holding before destroying it, and the bag window's stacking
+-- sweep calls it twice, once on each of two slots, which is how the client is
+-- asked to put two half stacks together. False where the client has neither API,
+-- so a caller stops rather than carrying on to a delete it cannot aim or
+-- counting a move that never happened.
 function ns.PickupContainerItem(bag, slot)
 	if C_Container and C_Container.PickupContainerItem then
 		C_Container.PickupContainerItem(bag, slot)
@@ -1246,6 +1249,38 @@ function ns.ItemLevel(link)
 	return level
 end
 
+-- How many of an item one bag slot will hold.
+--
+-- The eighth thing GetItemInfo answers, and the number the stacking sweep is
+-- built on: a slot holding fewer than this is a partial stack and two partials
+-- of the same item are one drag away from being one stack and some free space.
+--
+-- Beside ns.ItemLevel rather than folded into ns.ItemValue, for the reason that
+-- one gives: the two are asked at different moments about different things, and
+-- a sell price read for every grey in your bags does not want a stack size
+-- riding along with it.
+--
+-- One is the answer for everything that does not stack, and nil is an item the
+-- client has not cached, which the sweep has to treat as "ask again" rather
+-- than as "does not stack". Guessing one there is a partial stack left behind
+-- with nothing to say why.
+function ns.ItemStack(link)
+	if type(link) ~= "string" then
+		return nil
+	end
+
+	local lookup = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+	if type(lookup) ~= "function" then
+		return nil
+	end
+
+	local stack = select(8, lookup(link))
+	if type(stack) ~= "number" then
+		return nil
+	end
+	return stack
+end
+
 -- The item's id, and the class and subclass the client files it under. Class 12
 -- is a quest item, which is the one the clutter scan turns on, and Baganator
 -- categorises on the same number on this client.
@@ -1346,6 +1381,27 @@ function ns.MerchantCost(index, which)
 	return _G.GetMerchantItemCostItem(index, which)
 end
 
+-- The most of this the client will sell in one call.
+--
+-- Counted in items rather than in the vendor's own batches, which is the same
+-- unit ns.BuyMerchant spends in: water sold five at a time with a stack of
+-- twenty answers twenty, and that is four presses' worth bought at once.
+--
+-- Nil where the client has no such call, because "no answer" and "one" are
+-- different facts and the window that asks wants to tell them apart: one means
+-- the vendor sells this singly, and no answer means ask for a batch and leave
+-- the rest alone.
+function ns.MerchantMaxStack(index)
+	if type(_G.GetMerchantItemMaxStack) ~= "function" then
+		return nil
+	end
+	local stack = _G.GetMerchantItemMaxStack(index)
+	if type(stack) ~= "number" or stack < 1 then
+		return nil
+	end
+	return stack
+end
+
 -- How many of something you are carrying, counting every stack in every bag.
 --
 -- Here rather than beside the container calls above because there is one
@@ -1374,9 +1430,16 @@ function ns.CloseMerchant()
 	return true
 end
 
--- Buy one. False where the client has neither the call nor a merchant open, so
--- a caller can say nothing happened rather than believe a purchase went
--- through.
+-- Buy that many. False where the client has neither the call nor a merchant
+-- open, so a caller can say nothing happened rather than believe a purchase
+-- went through.
+--
+-- The count is items and not batches, and getting that backwards is what this
+-- comment is for. Both clients this addon ships to take the post-4.1 spelling:
+-- BuyMerchantItem(index) with nothing after it buys one of the vendor's own
+-- batches, and BuyMerchantItem(index, n) buys n items whatever the batch size
+-- is. So asking for one at a vendor selling water five at a time buys one
+-- water, not one stack, and a caller that wants the stack asks for five.
 function ns.BuyMerchant(index, count)
 	if type(_G.BuyMerchantItem) ~= "function" then
 		return false

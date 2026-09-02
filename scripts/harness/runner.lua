@@ -263,6 +263,12 @@ local SECTIONS = {
 	-- slash runner parses and reads the setting back, which is a question
 	-- about ns.Command.Word rather than about any of the parts above.
 	"60-slash-words",
+
+	-- Last, and after 55-bags.lua for the reason every section in that pair
+	-- runs in order: it changes what is in the trash bag under a running
+	-- session and puts it back. It also stands up GetZoneText, which no client
+	-- stub provides, and takes it down again.
+	"61-bag-session",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

@@ -193,6 +193,13 @@ UI\Window.lua
 # after UI\Widgets.lua because its two buttons are.
 UI\Ask.lua
 
+# The number a part asks for before it does something to that many of a thing:
+# how many stacks to buy off a vendor, how many to split off a pile. One window
+# for all of them, after UI\Window.lua and UI\Widgets.lua because it is one of
+# those and its controls are theirs, and after UI\Slot.lua because it draws the
+# thing being counted on that file's square.
+UI\Amount.lua
+
 Core\Command.lua
 Core\Panel.lua
 
@@ -765,9 +772,17 @@ Map\Feature.lua
 
 # The bags. Bags.lua walks the five bags you carry and sorts what is in them
 # into piles, on the item class the client already files each one under, and
-# nothing in it draws. Grid.lua is the pool of squares, each one built on the
-# client's own bag button so the click, the drag and the stack split are the
-# client's code rather than ours. Merchant.lua is the row of buttons that is
+# nothing in it draws. Stack.lua is the other thing you can ask about the five
+# bags you are carrying and it does not draw either: it finds two half stacks of
+# one item and drags one onto the other until each item is down to a single
+# partial, which is the one rearrangement that only ever frees slots.
+# Session.lua is the third file that walks those bags and draws nothing: between
+# a press of record and a press of stop it counts what arrives, so a dungeon run
+# comes out of the evening as one pile at the top of the window instead of a bag
+# you have to remember your way around.
+# Grid.lua is the pool of squares, each one built on the client's own bag button
+# so the click, the drag and the stack split are the client's code rather than
+# ours. Merchant.lua is the row of buttons that is
 # only there while a vendor is open, and it does neither job itself: the sale is
 # Comfort\Vendor.lua's and the mending is Comfort\Repair.lua's, both of them
 # loaded far above this line. Window.lua is the window and the free count along
@@ -778,6 +793,8 @@ Map\Feature.lua
 # Blizzard.lua registers on lives, and after UI\Tip.lua, which is the box a
 # square opens. Both are far above this line.
 Bags\Bags.lua
+Bags\Stack.lua
+Bags\Session.lua
 Bags\Grid.lua
 Bags\Merchant.lua
 Bags\Window.lua

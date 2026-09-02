@@ -229,16 +229,17 @@ nine times, and they are below in that order.
 
 30. `Bags/Grid.lua` and `Merchant/Grid.lua` are one grid.
 
-    701 lines between them, and the same eighteen functions in the same order:
-    `Subject`, `Enter`, `Leave`, `Build`, `Square`, `Paint`, `Place`, `Trim`,
-    then `Attach`, `Paint`, `Squares`, `Headers` and `Describe` public.
-    `src/Bags/Grid.lua:366-377` and `src/Merchant/Grid.lua:268-279` are the same
-    lines.
+    The same functions in the same order: `Subject`, `Enter`, `Leave`, `Build`,
+    `Paint`, `Place`, `Trim`, then `Attach`, `Paint`, the pool, `Headers` and
+    `Describe` public. The pile walk at the bottom of each is the same walk.
 
-    The two differ in where a square's contents come from and what a click does,
-    which is a table of callbacks rather than a second file. Ranked last of the
-    seven because it is the one where the split might be right, and the way to
-    find out is to write the shared grid and see what will not fit through it.
+    Weaker than it was, and it is worth saying why rather than deleting it. The
+    merchant's unit is a card now: a square with the item's name, the price and
+    what is left of the supply beside it, laid out in columns worked out from the
+    window's width. The bag window's unit is a bare square in a column count you
+    set. So the shared thing left is the pile walk and the pool, and the parts
+    that differ have grown. Ranked last of the seven, and the way to find out is
+    still to write the shared grid and see what will not fit through it.
 
 
 ## Deliberately not on this list
