@@ -48,6 +48,10 @@ merchant.open("Innkeeper Allison")
 
 check(Window.Shown(), "a merchant opened and the window did not")
 check(Window.Open(), "the window is up and does not think a session is open")
+-- Before the once-a-second pass has run. The park used to land on that pass
+-- and the gap was a flash of the client's window under ours on every vendor.
+check(Blizz.Parked() and _G.MerchantFrame:GetAlpha() == 0,
+	"the vendor opened and the client's window was on the screen until the next pass")
 
 local read = Stock.Read()
 

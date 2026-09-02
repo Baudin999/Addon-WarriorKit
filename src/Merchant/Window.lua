@@ -227,6 +227,11 @@ function Window.Show()
 		tabs:Select(RACK)
 	end
 	window:Show()
+	-- Park the client's window now rather than on the once-a-second pass.
+	-- MERCHANT_SHOW puts MerchantFrame back in the middle of the screen at
+	-- full alpha, and the pass parks it up to a second later; that gap was a
+	-- flash of Blizzard's window under ours on every vendor.
+	ns.MerchantBlizzard.Apply()
 	Window.Refresh()
 	return true
 end
