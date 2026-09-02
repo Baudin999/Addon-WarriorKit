@@ -278,7 +278,14 @@ local function Aimed(slot, spell, macro)
 	if macro and spell then
 		harmful = ns.SpellHarmful(spell)
 	elseif isHarmful then
-		harmful = isHarmful(slot)
+		-- Blizzard_APIDocumentationGenerated/ActionBarFrameDocumentation.lua on
+		-- the classic_anniversary branch: IsHarmfulAction(actionID, useNeutral),
+		-- and useNeutral is not nilable. Left out, the client throws a usage
+		-- error on the first square of the tick, before its texture is drawn,
+		-- and with scriptErrors off that is twelve empty squares per bar. False,
+		-- because a neutral mob is not the one this rung is about: Aimless
+		-- already asks UnitCanAttack, and a yellow one you can attack is aimed.
+		harmful = isHarmful(slot, false)
 	end
 	if harmful and Slot.Aimless() then
 		return "notarget"

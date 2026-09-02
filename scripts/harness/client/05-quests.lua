@@ -262,7 +262,15 @@ end
 -- and false unless a section writes it, so a totem and a heal stay ready and
 -- only the square the section calls an attack can be greyed for having
 -- nothing to hit.
-_G.IsHarmfulAction = function(slot)
+-- Under C_ActionBar, the way the 2.5.6 client holds it, and with the second
+-- argument the client's documentation marks not nilable, so a caller that
+-- leaves it out fails here rather than on the first square of the live tick.
+-- Slot.CanRead probes the namespace first, so this is the path the bar runs.
+_G.C_ActionBar = _G.C_ActionBar or {}
+_G.C_ActionBar.IsHarmfulAction = function(slot, useNeutral)
+	if type(slot) ~= "number" or type(useNeutral) ~= "boolean" then
+		error("Usage: C_ActionBar.IsHarmfulAction(actionID, useNeutral)", 2)
+	end
 	local held = slots[slot]
 	return (held and held.harmful) and true or false
 end

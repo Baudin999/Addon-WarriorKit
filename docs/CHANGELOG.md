@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### The bars come back
+
+The square that needs something to hit emptied every bar on the live client.
+It asked C_ActionBar.IsHarmfulAction for the slot alone, and the 2.5.6
+client's own documentation marks the second argument, useNeutral, not
+nilable: the call threw a usage error on the first square of every tick,
+before that square's texture was written, and with scriptErrors off there was
+nothing on screen to say so. The call now passes false, since a neutral mob
+you can attack is already aimed by the UnitCanAttack rung, and the harness
+holds the same function under the same namespace with the same two required
+arguments, so leaving one out fails the section rather than the bar.
+
 ### The piles flow
 
 Cutting the trade goods and the miscellany into sub-piles made the bag window
