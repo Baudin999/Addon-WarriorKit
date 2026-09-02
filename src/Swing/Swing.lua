@@ -296,21 +296,13 @@ events:RegisterEvent("PLAYER_REGEN_ENABLED")
 -- comparison against the speed already held. The third is a weapon swap, which
 -- this addon does itself from the loadout keys.
 --
--- Filtered to the player where the client can filter, the way
--- UnitFrames/Skin.lua filters its aura event. Unfiltered, UNIT_AURA is every
--- aura on every unit in range, which in a raid is thousands of events a fight
--- reaching a handler that answers "not you" to all but a handful.
-local function Watch(event)
-	if type(events.RegisterUnitEvent) == "function" then
-		events:RegisterUnitEvent(event, "player")
-	else
-		events:RegisterEvent(event)
-	end
-end
-
-Watch("UNIT_ATTACK_SPEED")
-Watch("UNIT_AURA")
-Watch("UNIT_INVENTORY_CHANGED")
+-- Filtered to the player where the client can filter, which is ns.RegisterUnitEvent
+-- in Core. Unfiltered, UNIT_AURA is every aura on every unit in range, which in
+-- a raid is thousands of events a fight reaching a handler that answers "not
+-- you" to all but a handful.
+ns.RegisterUnitEvent(events, "UNIT_ATTACK_SPEED", "player")
+ns.RegisterUnitEvent(events, "UNIT_AURA", "player")
+ns.RegisterUnitEvent(events, "UNIT_INVENTORY_CHANGED", "player")
 events:SetScript("OnEvent", function(_, event, unit)
 	if event == "COMBAT_LOG_EVENT_UNFILTERED" then
 		OnLog()

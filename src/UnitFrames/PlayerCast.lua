@@ -508,12 +508,10 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 
+-- pcall'd because a client that does not carry one of these seven raises on
+-- the register rather than answering, and the other six are worth having.
 local function Watch(event)
-	if type(events.RegisterUnitEvent) == "function" then
-		pcall(events.RegisterUnitEvent, events, event, "player")
-	else
-		pcall(events.RegisterEvent, events, event)
-	end
+	pcall(ns.RegisterUnitEvent, events, event, "player")
 end
 
 for index = 1, #WATCHED do

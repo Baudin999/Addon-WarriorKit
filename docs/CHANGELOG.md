@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### One filtered event registration, in Core with the other shims
+
+`Core/Core.lua` opens by saying it is the client shim layer: about thirty
+questions the two clients answer differently, each asked once. Filtered event
+registration was not one of them. Six files tested
+`type(events.RegisterUnitEvent) == "function"` themselves and wrote a
+two-branch registration under it, and four of the six wrote the same comment
+above that explaining why UNIT_AURA unfiltered is thousands of events a fight.
+
+`ns.RegisterUnitEvent(frame, event, unit)` takes the frame, the event and the
+unit, calls the filtered register where the client has one and the plain one
+where it does not. The six branches are gone. Every caller still reads the unit
+off the payload, because that is what a client without the filtered call
+requires and it costs one comparison where the filter already ran.
+
+`UnitFrames/PlayerCast.lua` keeps its `pcall`, on the outside now. None of its
+seven `UNIT_SPELLCAST_*` names is proven on both clients and a register that
+raises would take the other six down with it. The other five sites register
+names both clients carry and stay strict, so a name typed wrong there is an
+error at load rather than a handler that never fires.
+
 ### A row with a hint says so, with a `?` in the corner
 
 Hints have been drawn in the addon's own tooltip on hover for a long time, which

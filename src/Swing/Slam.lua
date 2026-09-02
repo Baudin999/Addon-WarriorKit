@@ -353,13 +353,8 @@ events:RegisterEvent("CHARACTER_POINTS_CHANGED")
 -- Filtered to the player where the client can filter. Unfiltered, these two
 -- carry every cast every unit in range starts and finishes, which in a raid is
 -- a great many events reaching a handler whose first line is "not you".
-if type(events.RegisterUnitEvent) == "function" then
-	events:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
-	events:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
-else
-	events:RegisterEvent("UNIT_SPELLCAST_START")
-	events:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-end
+ns.RegisterUnitEvent(events, "UNIT_SPELLCAST_START", "player")
+ns.RegisterUnitEvent(events, "UNIT_SPELLCAST_SUCCEEDED", "player")
 events:SetScript("OnEvent", function(_, event, unit, a, b)
 	if event == "UNIT_SPELLCAST_START" then
 		if IsSlam(unit, a, b) then

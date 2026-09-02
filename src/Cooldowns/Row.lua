@@ -412,13 +412,8 @@ events:RegisterEvent("SPELLS_CHANGED")
 -- Which burst window is open, out of your own auras. Filtered to the player
 -- where the client will filter, because UNIT_AURA fires for every mob on the
 -- screen.
-if type(events.RegisterUnitEvent) == "function" then
-	events:RegisterUnitEvent("UNIT_AURA", "player")
-	events:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
-else
-	events:RegisterEvent("UNIT_AURA")
-	events:RegisterEvent("UNIT_INVENTORY_CHANGED")
-end
+ns.RegisterUnitEvent(events, "UNIT_AURA", "player")
+ns.RegisterUnitEvent(events, "UNIT_INVENTORY_CHANGED", "player")
 
 events:SetScript("OnEvent", function(_, event, token)
 	if event == "PLAYER_LOGIN" then

@@ -361,13 +361,8 @@ events:RegisterEvent("PLAYER_LOGIN")
 --
 -- Filtered to the player where the client can filter, for the reason
 -- Swing/Swing.lua filters the same two.
-if type(events.RegisterUnitEvent) == "function" then
-	events:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
-	events:RegisterUnitEvent("UNIT_ATTACK_SPEED", "player")
-else
-	events:RegisterEvent("UNIT_INVENTORY_CHANGED")
-	events:RegisterEvent("UNIT_ATTACK_SPEED")
-end
+ns.RegisterUnitEvent(events, "UNIT_INVENTORY_CHANGED", "player")
+ns.RegisterUnitEvent(events, "UNIT_ATTACK_SPEED", "player")
 events:SetScript("OnEvent", function(_, event, token)
 	if event == "PLAYER_LOGIN" then
 		frame = CreateFrame("Frame", FRAME_NAME, UIParent)

@@ -31,6 +31,8 @@ in the README's untested list, and the full text of each item is this file at
 14. check.sh derives its class shapes from `Class/*.lua` rather than naming
     them. `371d82d`
 15. A placeable HUD frame, named at last. `80528bc`
+16. `ns.RegisterUnitEvent` in Core, where the other thirty shims live. Six
+    files deleted their own two-branch registration. `2e94f56`
 19. `UI.Window` re-zooms its own frame, and every screen sizes on its own.
 
     The item asked for two lines to move out of four windows and into
@@ -51,28 +53,13 @@ finished. Nothing tracks it now. Its text is in this file at `d05546c`.
 
 ## Open
 
-Items 16 to 22 came out of an architecture review on 2026-08-29. Item 19 landed
-on 2026-09-02 and is above. Every one is a duplication or a rule the addon
-already believes in and does not enforce. None is a bug: the addon draws the
-right thing today. They are the shapes that make the next change cost more than
-it should, ordered so the one that drags the most out with it goes first. Item 15 undercounted its own sites by five and asked
-for a fix `0312cf3` had already made, so read an item against the code before
-working it.
-
-16. `ns.RegisterUnitEvent` in Core, where the other thirty shims live.
-
-    `src/Core/Core.lua` is the client shim layer and says so. It holds
-    `ns.HasThreat`, `ns.HasCastInfo`, `ns.ContainerSlots` and about thirty more,
-    each one a question the two clients answer differently, asked once. And then
-    six files ask `type(events.RegisterUnitEvent) == "function"` inline and
-    write their own two-branch registration underneath:
-    `src/UnitFrames/PlayerCast.lua:548`, `src/Buffs/Nag.lua:620`,
-    `src/Swing/Swing.lua:304`, `src/Swing/Gauges.lua:379`,
-    `src/Cooldowns/Row.lua:328`, `src/Swing/Slam.lua:356`.
-
-    One function in Core taking a frame, an event and a unit, falling back to
-    the plain register where the client has no filtered one, deletes all six.
-    This is the cheapest item in the list.
+Items 16 to 22 came out of an architecture review on 2026-08-29. Items 19 and
+16 landed on 2026-09-02 and are above. Every one is a duplication or a rule the
+addon already believes in and does not enforce. None is a bug: the addon draws
+the right thing today. They are the shapes that make the next change cost more
+than it should, ordered so the one that drags the most out with it goes first.
+Item 15 undercounted its own sites by five and asked for a fix `0312cf3` had
+already made, so read an item against the code before working it.
 
 17. The slash dispatchers, off a table rather than a chain of ifs.
 
@@ -119,10 +106,10 @@ working it.
 
 21. One layering rule, gated rather than commented.
 
-    Item 16's rule, once item 16 has landed: outside `src/Core/`, no file probes
-    the client for a call it means to make. It belongs with the GameTooltip rule
-    and with the `src/UI/` rule item 15 wrote, which are the same idea already
-    written down and already enforced.
+    Item 16 has landed, so the rule it leaves behind can be gated. Outside
+    `src/Core/`, no file probes the client for a call it means to make. It
+    belongs with the GameTooltip rule and with the `src/UI/` rule item 15
+    wrote, which are the same idea already written down and already enforced.
 
     The other rule this item asked for is one of those two now.
 

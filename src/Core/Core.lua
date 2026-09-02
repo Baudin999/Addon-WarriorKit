@@ -369,6 +369,24 @@ ns.vanilla = ns.interface > 0 and ns.interface < 20000
 
 local C_Spell = _G.C_Spell
 
+-- Register an event filtered to one unit, on a client that can filter.
+--
+-- RegisterUnitEvent is the client saying "only call me about this unit", and
+-- the ones that have it hand a UNIT_AURA handler a handful of events a fight
+-- instead of every aura on every mob on the screen. A client without it has
+-- one call and the handler has to check the token itself, which is why every
+-- caller of this still reads the unit off the payload.
+--
+-- Six files wrote this two-branch registration out by hand before it moved
+-- here, and each one wrote the comment above it too.
+function ns.RegisterUnitEvent(frame, event, unit)
+	if type(frame.RegisterUnitEvent) == "function" then
+		frame:RegisterUnitEvent(event, unit)
+	else
+		frame:RegisterEvent(event)
+	end
+end
+
 -- Vanilla has no threat API. Nothing in that client computes threat, which is
 -- why every Classic threat meter parses the combat log instead. Resolved once
 -- so a caller asks a question rather than calling a nil five times a second.
