@@ -113,7 +113,91 @@ local function EditBox(index)
 		self:ClearFocus()
 		self:Hide()
 	end)
+	-- The parser, on the client's own handler rather than on a hook, because
+	-- that is where FrameXML puts it and the order is what the addon has to
+	-- survive: the client reads the slash out of the line before anything of
+	-- the addon's is told the line changed.
+	box:SetScript("OnTextChanged", function(self)
+		_G.ChatEdit_ParseText(self, 0)
+	end)
 	return box
+end
+
+----------------------------------------------------------------------
+-- The client's own parser
+--
+-- What FrameXML does with a line beginning in a slash, modelled because the
+-- line the addon writes begins in one every time: the room's own prefix goes
+-- into the field and the client takes it straight back out, sets the channel
+-- from it, and leaves an empty line with a word in front of it. A stub that
+-- left `/p ` sitting in the field was reading back a screen no player has ever
+-- seen, and it could not see the whisper at all.
+--
+-- ChatFrameEditBoxBaseMixin:ParseText is the shape, cut to the half that runs
+-- with send == 0: a channel prefix, and nothing else. Slash commands, emotes,
+-- history and the secure list are the other half and none of them touches the
+-- field.
+----------------------------------------------------------------------
+
+-- The prefixes the client turns into a channel, in its own spelling. Every one
+-- the addon can write is here, because a prefix this table does not know is a
+-- line the parser leaves alone and the harness would be checking the wrong
+-- half of the arrangement.
+local CHAT_SLASH = {
+	["/S"] = "SAY", ["/SAY"] = "SAY",
+	["/Y"] = "YELL", ["/YELL"] = "YELL",
+	["/E"] = "EMOTE", ["/EM"] = "EMOTE", ["/ME"] = "EMOTE", ["/EMOTE"] = "EMOTE",
+	["/P"] = "PARTY", ["/PA"] = "PARTY", ["/PARTY"] = "PARTY",
+	["/RA"] = "RAID", ["/RAID"] = "RAID",
+	["/RW"] = "RAID_WARNING",
+	["/G"] = "GUILD", ["/GUILD"] = "GUILD",
+	["/O"] = "OFFICER", ["/OFFICER"] = "OFFICER",
+	["/I"] = "INSTANCE_CHAT", ["/INSTANCE"] = "INSTANCE_CHAT",
+	["/W"] = "WHISPER", ["/T"] = "WHISPER", ["/TELL"] = "WHISPER",
+	["/WHISPER"] = "WHISPER", ["/MSG"] = "WHISPER",
+}
+
+_G.ChatEdit_ParseText = function(box, send, parseIfNoSpaces)
+	local text = box:GetText() or ""
+	if text == "" or text:sub(1, 1) ~= "/" then
+		return
+	end
+	-- A line with no space in it is still being typed, so the client leaves it
+	-- until it is sent or until something asks for it by name. This is why the
+	-- slash key's own "/" survives being written into the field.
+	if send ~= 1 and not parseIfNoSpaces and not text:find("%s") then
+		return
+	end
+	local command = text:match("^(/[^%s]+)") or ""
+	local msg = ""
+	if command ~= text then
+		msg = text:sub(#command + 2)
+		msg = msg:match("^%s*(.*)$") or msg
+	end
+	local kind = CHAT_SLASH[command:upper()]
+	if not kind then
+		return
+	end
+	if kind == "WHISPER" then
+		-- The name off the front, and the rest of the line is the message.
+		--
+		-- The space after the name is required, and it is the whole of what
+		-- keeps a whisper typed by hand from being addressed to Ari on its way
+		-- to Aria: ExtractTellTarget refuses a target it has not seen the end
+		-- of. So `/w Aria` is still a line being typed and `/w Aria ` is a
+		-- whisper to her, which is exactly the string the unit menu writes.
+		local target, rest = msg:match("^(%S+)%s(.*)$")
+		if not target then
+			return
+		end
+		box:SetAttribute("tellTarget", target)
+		box:SetAttribute("chatType", "WHISPER")
+		box:SetText(rest)
+	else
+		box:SetAttribute("chatType", kind)
+		box:SetText(msg)
+	end
+	_G.ChatEdit_UpdateHeader(box)
 end
 
 -- Which line the client would send from. The first, because that is the answer
@@ -168,6 +252,33 @@ _G.ChatFrame_OpenChat = function(text)
 	local box = _G.ChatEdit_ChooseBoxForSend()
 	_G.ChatEdit_ActivateChat(box)
 	box:SetText(text or "")
+	-- Parsed even with no space in it, which is what the client does with the
+	-- text a key asked for: it is a finished line rather than one being typed.
+	_G.ChatEdit_ParseText(box, 0, true)
+	return box
+end
+
+-- Whisper on the unit menu, and on the right click menu in the friends list,
+-- and on a name in Blizzard's own log. All three end in this, and what it does
+-- is write `/w Aria ` into the line a moment after the line took the focus.
+--
+-- That moment is the whole reason it is here. The addon fills an empty line
+-- with the room's own prefix as the focus arrives, so the two writes land in
+-- order, the client's parser empties the line on the second one, and an addon
+-- that reads that emptying as "the client blanked what I wrote" fills the room
+-- prefix back in over the whisper. Which is a line meant for one person said
+-- out loud to a city.
+_G.ChatFrame_SendTell = function(name)
+	local box = _G.ChatEdit_ChooseBoxForSend()
+	local text = ("/w %s "):format(name)
+	-- Shown stands in for "is the active window", which is what the client
+	-- asks: a line already up is written into, and one that is not is opened.
+	if box:IsShown() then
+		box:SetText(text)
+	else
+		_G.ChatFrame_OpenChat(text)
+	end
+	_G.ChatEdit_ParseText(box, 0)
 	return box
 end
 

@@ -492,8 +492,26 @@ end
 --
 -- The room you are reading is the channel you are typing into. There is no
 -- second piece of state holding that, which is the whole redesign, so every
--- assertion here reads either the text in the field or what was sent.
+-- assertion here reads either where the field is pointed or what was sent.
+--
+-- Where the field is pointed rather than what is written in it, because the
+-- prefix the window writes does not stay written: the client's parser reads the
+-- slash out of the line, sets the channel from it and leaves the line empty
+-- with a word in front of it. `/p ` is what the window types and PARTY is what
+-- a player sees, and the second is the one worth asserting.
 ----------------------------------------------------------------------
+
+-- Where a line typed right now would go, in the client's own hand: the channel
+-- off the field, and the person after it when that channel is a whisper.
+local function Pointed()
+	local box = Window.Entry()
+	local kind = box and box:GetAttribute("chatType")
+	local who = box and box:GetAttribute("tellTarget")
+	if kind == "WHISPER" and who then
+		return ("WHISPER %s"):format(who)
+	end
+	return tostring(kind)
+end
 
 do
 	local sent = #chat.sent
@@ -514,9 +532,8 @@ do
 
 	-- And the field says so before you type a word.
 	Window.Focus()
-	check(Window.Line() == "/p ",
-		("the party room filled the line in with %q, expected \"/p \"")
-			:format(Window.Line()))
+	check(Pointed() == "PARTY",
+		("the party room pointed the line at %s, expected PARTY"):format(Pointed()))
 	check(Compose.Note(Rooms.Target("party")) == "enter types /p",
 		("the note above the log reads %q"):format(Compose.Note(Rooms.Target("party"))))
 
@@ -526,8 +543,8 @@ do
 	fire("GROUP_ROSTER_UPDATE")
 	Window.Go("raid")
 	Window.Focus()
-	check(Window.Line() == "/raid ",
-		("the raid room filled the line in with %q"):format(Window.Line()))
+	check(Pointed() == "RAID",
+		("the raid room pointed the line at %s"):format(Pointed()))
 
 	-- The line you type in is drawn only while the cursor is in it. Not drawn
 	-- means no fill and no hairline, so what is behind it is the window's own
@@ -597,9 +614,9 @@ do
 	-- has to survive that blanking or the line comes up empty.
 	Window.Go("party")
 	_G.ChatFrame_OpenChat("")
-	check(Window.Line() == "/p ",
-		("the client's own enter key left the line reading %q, expected \"/p \"")
-			:format(Window.Line()))
+	check(Pointed() == "PARTY",
+		("the client's own enter key pointed the line at %s, expected PARTY")
+			:format(Pointed()))
 
 	-- And the client's own slash key opens a line with a slash in it and no
 	-- room prefix. The prefix would turn /dance into a sentence said out loud.
@@ -687,17 +704,17 @@ do
 	-- and means the same thing.
 	Window.Go("say")
 	Window.Focus()
-	check(Window.Line() == "/s ", ("the say room filled in %q"):format(Window.Line()))
+	check(Pointed() == "SAY", ("the say room pointed the line at %s"):format(Pointed()))
 	Window.Step(1)
 	check(Window.Room() ~= "say", "tab did not move to another room")
-	check(Window.Line() ~= "/s ", "tab moved room and left the old slash in the line")
+	check(Pointed() ~= "SAY", "tab moved room and left the line on the old channel")
 
 	-- Clicking a name answers it: their own room, and their name in the field.
 	Window.Reply("Bram")
 	check(Window.Room() == Rooms.WhisperId("Bram"),
 		("answering a name landed in %s"):format(tostring(Window.Room())))
-	check(Window.Line() == "/w Bram ",
-		("answering a name filled in %q"):format(Window.Line()))
+	check(Pointed() == "WHISPER Bram",
+		("answering a name pointed the line at %s"):format(Pointed()))
 	Window.Send("on my way")
 	check(chat.sent[#chat.sent].kind == "WHISPER" and chat.sent[#chat.sent].target == "Bram",
 		"the reply did not go to the person whose name was clicked")
@@ -707,16 +724,16 @@ do
 	-- by sending.
 	Window.Go(family)
 	Window.Focus()
-	check(Window.Line() == "/w Aria " or Window.Line() == "/w Bram ",
-		("a group room filled in %q, expected a whisper to whoever spoke last")
-			:format(Window.Line()))
+	check(Pointed() == "WHISPER Aria" or Pointed() == "WHISPER Bram",
+		("a group room pointed the line at %s, expected a whisper to whoever spoke last")
+			:format(Pointed()))
 
 	-- One tick and the field is empty again, for somebody who types /p by hand.
 	ns.db.chatPrefix = false
 	Window.Go("party")
 	Window.Focus()
-	check(Window.Line() == "/w Aria " or Window.Line() == "/w Bram ",
-		"turning the prefix off rewrote a line that was already there")
+	check(Pointed() == "WHISPER Aria" or Pointed() == "WHISPER Bram",
+		"turning the prefix off moved a line that was already pointed somewhere")
 	ns.db.chatPrefix = true
 end
 

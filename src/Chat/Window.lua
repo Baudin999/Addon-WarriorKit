@@ -715,8 +715,8 @@ local function BuildEntry()
 	-- into", and it was missing: the slash went to the right channel and the
 	-- window went on saying Conversation, so the next time the line opened it
 	-- was filled in with Conversation's slash over the player's own choice.
-	ns.ChatField.OnChannel = function(kind, target)
-		ChatWindow.Follow(kind, target)
+	ns.ChatField.OnChannel = function(kind, target, meant)
+		ChatWindow.Follow(kind, target, meant)
 	end
 
 	-- Tab steps to the next room, which rewrites the slash in front of the
@@ -1052,7 +1052,7 @@ end
 -- Refused as well where the channel names no room that exists: a whisper to
 -- somebody with no conversation on the rail yet, a channel the client knows and
 -- this window does not, a party you have left.
-function ChatWindow.Follow(kind, target)
+function ChatWindow.Follow(kind, target, meant)
 	if not built then
 		return false
 	end
@@ -1061,6 +1061,21 @@ function ChatWindow.Follow(kind, target)
 		return false
 	end
 	local id = ns.Rooms.For(kind, target)
+	-- Except for a whisper the client aimed itself, which is Whisper on the
+	-- unit menu and the same word on a name in the friends list. There is no
+	-- conversation with that person yet by definition, and refusing to make one
+	-- leaves the rail sitting in Conversation while the line under it says To
+	-- Aria. The window's one promise is that those two agree.
+	--
+	-- Only ever on `meant`. The same channel arriving because somebody typed a
+	-- name into the line is the case above and stays refused: a room per
+	-- keystroke is a rail full of people who do not exist.
+	if not id and meant and kind == "WHISPER" and target and target ~= "" then
+		id = ns.Rooms.Whisper(target)
+		if id then
+			Refresh()
+		end
+	end
 	if not id or id == active then
 		return false
 	end

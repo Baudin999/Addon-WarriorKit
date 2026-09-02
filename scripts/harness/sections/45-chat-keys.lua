@@ -202,8 +202,16 @@ check(_G.WarriorKitChatEnterButton == nil,
 _G.ChatEdit_DeactivateChat(line)
 Window.Go(ns.Rooms.ALL)
 _G.ChatFrame_OpenChat("")
-check(Window.Line() == "/s ",
-	("enter left the line reading %q, expected \"/s \""):format(Window.Line()))
+check(line:GetAttribute("chatType") == "SAY",
+	("enter pointed the line at %s, expected SAY")
+		:format(tostring(line:GetAttribute("chatType"))))
+-- Empty, and empty is what the prefix arriving looks like from a chair. The
+-- window writes `/s `, the client's parser reads the slash, sets the channel
+-- from it and takes the slash back out, and what is left is a line with the
+-- word Say in front of it. A check that read `/s ` back out of the field would
+-- be asserting on a screen no player has ever seen.
+check(Window.Line() == "",
+	("enter left the slash in the line: %q"):format(Window.Line()))
 check(line:IsShown(), "the line was opened and not shown")
 
 -- The slash key opens a line with a slash in it and no room prefix, because the
@@ -223,14 +231,67 @@ check(Window.Line() == "half a sentence",
 _G.ChatEdit_DeactivateChat(line)
 Window.Type("")
 
--- With the prefix turned off the line opens empty, and the client's own sticky
--- channel is what decides where it goes. That is the setting doing what it
--- says rather than the fill failing.
+----------------------------------------------------------------------
+-- Whisper on the unit menu
+--
+-- Right click a player, pick Whisper, and the client writes `/w Aria ` into
+-- this line a moment after the line has taken the focus. Its own parser reads
+-- that back out: the channel goes to a whisper addressed to her and the line is
+-- left empty, which is the same empty line the room prefix leaves behind.
+--
+-- Which is what broke it. Chat/Field.lua fills an empty line as the focus
+-- arrives and fills it again if the client blanks what it wrote, and this
+-- blanking is indistinguishable from that one by the text alone. So the room's
+-- own slash went in over the whisper, the channel came back to whatever room
+-- was open, and a line meant for one person was said out loud to a city.
+--
+-- The channel is what tells them apart, and this is the check that it does.
+----------------------------------------------------------------------
+
+_G.ChatEdit_DeactivateChat(line)
+Window.Go(ns.Rooms.ALL)
+_G.ChatFrame_SendTell("Aria")
+check(line:GetAttribute("chatType") == "WHISPER",
+	("whisper on the unit menu pointed the line at %s, expected WHISPER")
+		:format(tostring(line:GetAttribute("chatType"))))
+check(line:GetAttribute("tellTarget") == "Aria",
+	("whisper on the unit menu addressed the line to %s, expected Aria")
+		:format(tostring(line:GetAttribute("tellTarget"))))
+check(Window.Line() == "",
+	("whisper on the unit menu left %q in the line to say it with")
+		:format(Window.Line()))
+
+-- And the rail followed the line into her conversation, making it if this is
+-- the first thing either of you has said. The window's one promise is that the
+-- room you are reading is the channel you are typing into, and a rail sitting
+-- in Conversation under a line addressed to Aria breaks it.
+check(Window.Room() == ns.Rooms.WhisperId("Aria"),
+	("whisper on the unit menu left the window in %s rather than her room")
+		:format(tostring(Window.Room())))
+
+-- Half a name typed by hand still opens nothing, which is the other half of
+-- the same rule: the client aimed the line above, and here the player is still
+-- typing. A room per keystroke is a rail full of people who do not exist.
+Window.Go(ns.Rooms.ALL)
+Window.Follow("WHISPER", "Nob")
+check(Window.Room() == ns.Rooms.ALL,
+	("half a name typed into the line opened a room and went to %s")
+		:format(tostring(Window.Room())))
+
+-- With the prefix turned off the line is not filled at all, so the channel it
+-- opens on is the one the client already had. Read straight after the whisper
+-- above, because "left alone" is only worth checking against a channel that is
+-- not the one the room would have chosen anyway.
 local heldPrefix = ns.db.chatPrefix
 ns.db.chatPrefix = false
+_G.ChatEdit_DeactivateChat(line)
+Window.Go("say")
 _G.ChatFrame_OpenChat("")
 check(Window.Line() == "",
 	("the prefix is off and the line still opened reading %q"):format(Window.Line()))
+check(line:GetAttribute("chatType") == "WHISPER",
+	("the prefix is off and the line was moved to %s anyway")
+		:format(tostring(line:GetAttribute("chatType"))))
 _G.ChatEdit_DeactivateChat(line)
 ns.db.chatPrefix = heldPrefix
 

@@ -97,8 +97,13 @@ Field.OnFill = nil
 -- the rectangle round the line on this and hides the sentence in it.
 Field.OnLight = nil
 
--- Where the client now thinks the line is going, called with the channel and
--- the person when that channel is a whisper.
+-- Where the client now thinks the line is going, called with the channel, the
+-- person when that channel is a whisper, and whether the client aimed the line
+-- there itself rather than the player typing the slash.
+--
+-- That last one is what separates Whisper on the unit menu from `/w Ari` half
+-- typed. The window opens a conversation on the first and must not on the
+-- second.
 --
 -- This is the only way to see that the player has changed channel by hand.
 -- Typing `/p ` into this frame does not leave `/p ` in it: the client's own
@@ -136,6 +141,32 @@ local function Windows()
 end
 
 --------------------------------------------------------------------------
+-- Which channel the line is on
+--
+-- Read back off the frame rather than off the text, for the reason
+-- Field.OnChannel says: the slash is gone by the time anything of ours runs.
+--
+-- Both spellings of the target, because the client keeps two. A whisper is
+-- addressed through `tellTarget` and a numbered channel through
+-- `channelTarget`, and reading only the second gives every whisper a nil name,
+-- which is a room nobody can be sent to.
+--------------------------------------------------------------------------
+
+local function Channel(box)
+	local kind = box:GetAttribute("chatType")
+	local target = box:GetAttribute("tellTarget") or box:GetAttribute("channelTarget")
+	return type(kind) == "string" and kind or nil,
+		(type(target) == "string" and target ~= "") and target or nil
+end
+
+-- The pair as one string, for the comparisons that only ask whether it has
+-- moved.
+local function Key(box)
+	local kind, target = Channel(box)
+	return tostring(kind) .. "/" .. tostring(target)
+end
+
+--------------------------------------------------------------------------
 -- Opening
 --
 -- The client's own OPENCHAT does three things in this order: it picks a field,
@@ -155,7 +186,30 @@ end
 -- skipped on `filling`; a write that leaves anything at all in the line is
 -- skipped because the line is not empty, which is how the slash key keeps its
 -- "/" and how a line you came back to keeps what you had typed.
+--
+-- **And a write that emptied the line on its way to a channel of its own is
+-- skipped too, which is the whisper this flag used to eat.** Whisper on the
+-- unit menu is ChatFrameUtil.SendTell, and what that does is put `/w Aria ` in
+-- the field a frame after the field took the focus. The client's parser reads
+-- it, sets the channel to a whisper addressed to her, and then writes the rest
+-- of the line back, which is the empty string. That empty string looks exactly
+-- like the blanking above: a write nobody typed, into a line with nothing left
+-- in it, while the flag is up. So the room's slash went in over it and the
+-- whisper became whatever the room was, which from Say is a sentence about
+-- your evening said out loud to a city.
+--
+-- The two are told apart by the channel rather than by the text, because the
+-- channel is the thing that differs: a blanking leaves it where our own fill
+-- put it, and this leaves it somewhere else. Somewhere else means somebody
+-- meant it, and the line is left alone. Moved below runs a moment later off
+-- the same write and walks the window into that person's room.
 --------------------------------------------------------------------------
+
+-- Where the last fill left the channel, which is what "somewhere else" is
+-- measured against. Written after the call rather than before, because the
+-- client parses the slash out of the line inside our own SetText and the
+-- channel we want recorded is the one that parse arrived at.
+local filled
 
 local function Fill(box)
 	if filling or type(Field.OnFill) ~= "function" then
@@ -164,8 +218,17 @@ local function Fill(box)
 	filling = true
 	local ok, wrote = pcall(Field.OnFill, box)
 	filling = false
+	filled = Key(box)
 	return ok and wrote and true or false
 end
+
+-- Set on the one write above that turned out to be the client aiming the line
+-- somewhere itself, and read by Moved a moment later off the same write. It is
+-- the difference between a channel that was chosen for you and one that arrived
+-- a letter at a time while you typed, and the window wants to know: a whisper
+-- picked off a menu is a conversation to open, and half a name in a line being
+-- typed is not.
+local pointed = false
 
 local function Opened(box, userInput)
 	if userInput or filling or not waiting then
@@ -175,26 +238,11 @@ local function Opened(box, userInput)
 		return
 	end
 	waiting = false
+	if Key(box) ~= filled then
+		pointed = true
+		return
+	end
 	Fill(box)
-end
-
---------------------------------------------------------------------------
--- Which channel the line is on
---
--- Read back off the frame rather than off the text, for the reason
--- Field.OnChannel says: the slash is gone by the time anything of ours runs.
---
--- Both spellings of the target, because the client keeps two. A whisper is
--- addressed through `tellTarget` and a numbered channel through
--- `channelTarget`, and reading only the second gives every whisper a nil name,
--- which is a room nobody can be sent to.
---------------------------------------------------------------------------
-
-local function Channel(box)
-	local kind = box:GetAttribute("chatType")
-	local target = box:GetAttribute("tellTarget") or box:GetAttribute("channelTarget")
-	return type(kind) == "string" and kind or nil,
-		(type(target) == "string" and target ~= "") and target or nil
 end
 
 -- What each field was last seen on, so a keystroke that does not move the
@@ -202,8 +250,13 @@ end
 local channel = {}
 
 local function Moved(box)
+	-- Taken and dropped in the same breath, whatever this call decides. It is
+	-- about the write being handled right now and a flag left standing would be
+	-- read by the next one.
+	local meant = pointed
+	pointed = false
 	local kind, target = Channel(box)
-	local key = tostring(kind) .. "/" .. tostring(target)
+	local key = Key(box)
 	if channel[box] == key then
 		return false
 	end
@@ -214,7 +267,7 @@ local function Moved(box)
 	if filling or not kind then
 		return false
 	end
-	Call(Field.OnChannel, kind, target)
+	Call(Field.OnChannel, kind, target, meant)
 	return true
 end
 
@@ -403,10 +456,23 @@ end
 -- header, and the header is what moves everything else.
 local styled = {}
 
+-- And the client having been at it since, which the channel alone cannot see.
+--
+-- ChatEdit_UpdateHeader is the last thing the client's parser does, after the
+-- slash has been read out of the line and after every hook of ours has run, and
+-- what it writes is Blizzard's font, Blizzard's channel colour and Blizzard's
+-- inset. A restyle that only fires when the channel moved skips that, because
+-- the channel it moved to is the one the room was already on: the line comes up
+-- in the addon's own hand the first time it is opened and in FrameXML's every
+-- time after.
+--
+-- The font is the tell and it is one table lookup and one compare. Everything
+-- Style writes is written in the same breath as the font, so a field wearing
+-- ours is a field the client has not touched since.
 local function Restyle(box, name)
 	local kind, target = Channel(box)
 	local key = ("%s/%s/%s"):format(tostring(kind), tostring(target), tostring(size))
-	if styled[box] == key then
+	if styled[box] == key and box:GetFontObject() == UI.Font(size, UI.SHADOW) then
 		return false
 	end
 	styled[box] = key
