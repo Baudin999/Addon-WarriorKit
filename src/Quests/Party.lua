@@ -43,27 +43,10 @@ local Client = ns.QuestClient
 -- name, which is what the two lists are merged on.
 --------------------------------------------------------------------------
 
-local function Module(name)
-	local loader = _G.QuestieLoader
-	if not loader or type(loader.ImportModule) ~= "function" then
-		return nil
-	end
-	local ok, module = pcall(loader.ImportModule, loader, name)
-	if not ok or type(module) ~= "table" then
-		return nil
-	end
-	return module
-end
-
--- Questie's comms, or nil. ImportModule hands back a fresh empty table for a
--- name it has never heard of, so the module coming back proves nothing and the
--- call it is about to make is what is checked.
+-- Questie's comms, or nil. ns.Questie in Core takes the call this file is about
+-- to make, because a module coming back proves nothing on its own.
 local function Comms()
-	local comms = Module("QuestieComms")
-	if not comms or type(comms.GetQuest) ~= "function" then
-		return nil
-	end
-	return comms
+	return ns.Questie("QuestieComms", "GetQuest")
 end
 
 --------------------------------------------------------------------------

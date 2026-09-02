@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### One Questie probe, in Core
+
+`QuestieLoader:ImportModule` hands back a fresh empty table for a module it has
+never heard of rather than nil, so a client with no Questie answers every
+question with a table. Every caller therefore has to check for the call it means
+to make, and five files wrote that out: `Quests/Where.lua`, `Quests/Tracker.lua`,
+`Quests/Party.lua`, `Map/Pins.lua` and `Comfort/Clutter.lua`. Four of the five
+were the same six lines character for character, each under its own paragraph
+explaining the same trap. `Where.lua` handed its copy out as `Where.Module` so
+`Quests/Drops.lua` could borrow it, which is how a sixth file ends up depending
+on a quest module for a loader call.
+
+`ns.Questie(name, ...)` in `Core/Core.lua` takes the module name and the calls
+the caller is about to make:
+
+    local db = ns.Questie("QuestieDB", "QueryItemSingle", "QueryQuestSingle")
+
+Nil means Questie is absent, is a version without those calls, or has not
+compiled yet, and every caller already treats those three the same way. Function
+names only: `currentQuestlog` and `questIdFrames` fill in after login, so a probe
+that refused the module over one would report a missing Questie for a quest log
+that is merely not built yet. Those fields are still checked where they are read.
+Nothing is cached, as before.
+
+`Where.Module` is gone and `Quests/Drops.lua` asks Core. Four of its five reads
+lost their "is there a where, and does it have a Module" preamble with it.
+
+`scripts/check.sh` fails on `QuestieLoader` or `ImportModule` in any file outside
+`Core/Core.lua`, comments included, the way the `GameTooltip` rule reads
+comments. That is todo item 21's rule with a name on it: outside Core, a file
+does not probe for a call it means to make.
+
 ### The slash words come off a table
 
 `Command.Number` parsed a value and stopped there. Its callers then wrote the

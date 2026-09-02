@@ -105,11 +105,10 @@ end
 -- The table is Questie's own and is handed back rather than copied, so nothing
 -- downstream may write to it. Everything below only reads.
 local function Registered(npcId)
-	local where = ns.QuestWhere
-	if not npcId or not where or type(where.Module) ~= "function" then
+	if not npcId then
 		return nil
 	end
-	local tips = where.Module("QuestieTooltips")
+	local tips = ns.Questie("QuestieTooltips")
 	if not tips or type(tips.lookupByKey) ~= "table" then
 		return nil
 	end
@@ -120,12 +119,11 @@ end
 -- its own log is indexed by position and the whole point of holding an id is
 -- not to have to walk it.
 local function QuestName(questId)
-	local where = ns.QuestWhere
-	if type(questId) ~= "number" or not where or type(where.Module) ~= "function" then
+	if type(questId) ~= "number" then
 		return nil
 	end
-	local db = where.Module("QuestieDB")
-	if not db or type(db.QueryQuestSingle) ~= "function" then
+	local db = ns.Questie("QuestieDB", "QueryQuestSingle")
+	if not db then
 		return nil
 	end
 	local ok, name = pcall(db.QueryQuestSingle, questId, "name")
@@ -139,11 +137,7 @@ end
 -- a hand-in until something walks it, so a creature you finished the quest on
 -- would otherwise still be answering for it a zone later.
 local function Carrying(questId)
-	local where = ns.QuestWhere
-	if not where or type(where.Module) ~= "function" then
-		return false
-	end
-	local player = where.Module("QuestiePlayer")
+	local player = ns.Questie("QuestiePlayer")
 	if not player or type(player.currentQuestlog) ~= "table" then
 		return false
 	end
@@ -411,13 +405,11 @@ end)
 -- and the box falls back to the ledger, which is exactly the behaviour it had
 -- before this existed.
 local function Listed(npcId, itemId)
-	local where = ns.QuestWhere
-	if type(npcId) ~= "number" or type(itemId) ~= "number"
-		or not where or type(where.Module) ~= "function" then
+	if type(npcId) ~= "number" or type(itemId) ~= "number" then
 		return nil
 	end
-	local db = where.Module("QuestieDB")
-	if not db or type(db.GetItemDroprate) ~= "function" then
+	local db = ns.Questie("QuestieDB", "GetItemDroprate")
+	if not db then
 		return nil
 	end
 	local ok, found = pcall(db.GetItemDroprate, itemId, npcId)
@@ -670,8 +662,7 @@ function Drops.Describe()
 	for _ in pairs(type(ledger) == "table" and ledger or {}) do
 		held = held + 1
 	end
-	local db = where.Module("QuestieDB")
-	local rates = db and type(db.GetItemDroprate) == "function"
+	local rates = ns.Questie("QuestieDB", "GetItemDroprate") ~= nil
 	return ("which quest and how many, %s, and %s"):format(
 		rates and "with Questie's drop rate under an item"
 			or "with no drop rate from Questie, which is a version of it that ships no drop table",

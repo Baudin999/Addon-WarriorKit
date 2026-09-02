@@ -431,7 +431,8 @@ read_globals = {
 	-- installed; the container call goes through C_Container in Core; and
 	-- nothing here calls DeleteCursorItem, Questie only hooks it, which proves
 	-- the global exists and is not the same as proving the call is ours to make.
-	-- All three are probed and pcalled at their use sites.
+	-- All three are probed and pcalled in Core: ns.Questie is the one door on
+	-- QuestieLoader and scripts/check.sh refuses a second.
 	-- profiling, read by the Perf part. Every one of these is called unguarded
 	-- by an addon in this install: debugprofilestop by Details, Questie and
 	-- Auctionator, the memory pair by Details, TitanPerformance and Leatrix,

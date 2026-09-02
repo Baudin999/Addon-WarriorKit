@@ -803,7 +803,53 @@ function ns.OutOfRange(answer)
 	return answer == 0
 end
 
+----------------------------------------------------------------------------
+-- Questie
+--
+-- Every question this addon asks Questie goes through one door, and it is
+-- here. Five files wrote that door out by hand, four of them character for
+-- character, and one handed its copy back out as Where.Module so a sixth could
+-- borrow it. Questie is not the client, so this is not an API shim: it is the
+-- one place that knows another addon's loader by name.
+--
+-- The rule that keeps it one place is in scripts/check.sh. Outside this file,
+-- naming QuestieLoader fails the gate.
 --------------------------------------------------------------------------
+
+-- One of Questie's modules, or nil, asked for by the calls you mean to make.
+--
+-- ImportModule hands back a fresh empty table for a name it has never heard of
+-- rather than nil, so the module coming back proves nothing at all. What proves
+-- it is the calls being on it, which is why they are arguments: ask for
+-- QuestieDB and a table comes back on a client with no Questie, ask for
+-- QuestieDB with QueryItemSingle on it and nil means what it says.
+--
+-- Functions only, deliberately. A data field like currentQuestlog is filled in
+-- after login rather than at load, so refusing the module over one would report
+-- a missing Questie for a quest log that is merely not built yet. A caller that
+-- reads a field checks that field itself, next to the read.
+--
+-- Nothing is cached, for the reason EditMode.CanApply is not: the database is
+-- compiled minutes after login and an answer taken too early would be wrong for
+-- the rest of the session.
+function ns.Questie(name, ...)
+	local loader = _G.QuestieLoader
+	if not loader or type(loader.ImportModule) ~= "function" then
+		return nil
+	end
+	local ok, module = pcall(loader.ImportModule, loader, name)
+	if not ok or type(module) ~= "table" then
+		return nil
+	end
+	for i = 1, select("#", ...) do
+		if type(module[(select(i, ...))]) ~= "function" then
+			return nil
+		end
+	end
+	return module
+end
+
+------------------------------------------------------------------------
 -- Money
 --
 -- One number turned into the shortest true reading of it, which is the shape

@@ -86,20 +86,11 @@ local TIER = { available = AVAILABLE_TIER, complete = TURNIN_TIER }
 -- what Questie draws at the client's default scale.
 local BADGE = 14
 
--- One of Questie's modules, or nil. The same accessor and the same warning as
--- Quests/Where.lua's: ImportModule hands back a fresh empty table for a name it
--- has never heard of, so the module coming back proves nothing and every caller
--- checks for the field it is about to read.
-local function Module(name)
-	local loader = _G.QuestieLoader
-	if not loader or type(loader.ImportModule) ~= "function" then
-		return nil
-	end
-	local ok, module = pcall(loader.ImportModule, loader, name)
-	if not ok or type(module) ~= "table" then
-		return nil
-	end
-	return module
+-- Questie's map module, or nil. What this file reads off it is questIdFrames, a
+-- table Questie fills in as it draws rather than a call, so the check is on the
+-- field at each read below. ns.Questie in Core is the probe.
+local function Map()
+	return ns.Questie("QuestieMap")
 end
 
 --------------------------------------------------------------------------
@@ -255,7 +246,7 @@ function Pins.Of(map)
 	if type(map) ~= "number" then
 		return {}
 	end
-	local questie = Module("QuestieMap")
+	local questie = Map()
 	if not questie then
 		return {}
 	end
@@ -354,7 +345,7 @@ end
 -- the complaint. Nobody notices that a zone is four markers short. They notice
 -- that the quest they just finished has nowhere to hand it in.
 function Pins.Chase(questId, map)
-	local questie = Module("QuestieMap")
+	local questie = Map()
 	if not questie then
 		return "Questie is not answering"
 	end
@@ -417,7 +408,7 @@ end
 -- whether it has finished drawing rather than whether this zone has anything in
 -- it.
 function Pins.Held()
-	local questie = Module("QuestieMap")
+	local questie = Map()
 	local register = questie and questie.questIdFrames
 	if type(register) ~= "table" then
 		return 0
@@ -441,7 +432,7 @@ function Pins.Crowd()
 end
 
 function Pins.Describe()
-	if not Module("QuestieMap") then
+	if not Map() then
 		return "Questie is not answering, so the map has no markers on it"
 	end
 	local held = Pins.Held()

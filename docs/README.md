@@ -641,6 +641,11 @@ goes through `Feature.lua` or through the shared surface below:
     ns.PickupContainerItem(bag, slot)   put a bag slot on the cursor, so the
                                  caller can ask the client what it is really
                                  holding; false where neither API is here
+    ns.Questie(name, ...)        one of Questie's modules, asked for by the
+                                 name of the module and the names of the calls
+                                 you are about to make, and nil for a module
+                                 missing any of them. The only place
+                                 QuestieLoader is named. See Asking Questie
     ns.Charge.Pick()             ability key, the unit it takes, that unit's nameplate
     ns.Charge.SoftUnit()         the softenemy token when it resolves, whatever is under it
     ns.Charge.State(key, unit)   a status string, plus cooldown times
@@ -989,6 +994,44 @@ Adding a setting means adding a key to the `defaults` table in that part's
 rather than the account. Core merges every part's defaults and backfills missing keys on
 load, so existing saved variables pick it up without a migration step. Two parts
 defining the same key is an assertion at load, not a last-writer-wins surprise.
+
+### Asking Questie
+
+Questie is another addon and half a dozen files here read something out of it:
+where a quest sends you, what a creature is wanted for, which quest an item in
+your bags belongs to, what Questie has drawn on the map, and whose quest log a
+party member has broadcast. All of it comes through `QuestieLoader:ImportModule`,
+and that call has a trap in it. A name it has never heard of gets a fresh empty
+table back rather than nil, so a client with no Questie at all answers every
+question with a table and the module coming back proves nothing.
+
+The honest test is whether the call you meant to make is on the module, so
+`ns.Questie` takes the names of the calls:
+
+    local db = ns.Questie("QuestieDB", "QueryItemSingle", "QueryQuestSingle")
+    if not db then
+        return nil
+    end
+
+Nil there means Questie is not installed, is a version without those calls, or
+has not finished compiling its database. All three are the same answer to the
+caller: ask the client instead, or say out loud that this cannot be answered.
+
+Function names only. A data field like `currentQuestlog` or `questIdFrames` is
+filled in after login rather than at load, so refusing the module over one would
+report a missing Questie for a quest log that is merely not built yet. A caller
+reading a field checks that field itself, at the read.
+
+Nothing is cached. The database compiles minutes after login and an answer taken
+before that would be wrong for the rest of the session, which is the reason
+`EditMode.CanApply` is not cached either.
+
+Five files had written this probe out by hand, four of them character for
+character, and `Quests/Where.lua` handed its copy back out as `Where.Module` so
+`Quests/Drops.lua` could borrow it. `scripts/check.sh` fails on `QuestieLoader`
+or `ImportModule` anywhere outside `Core/Core.lua`, comments included, which is
+the layering rule the addon already believed in: outside Core, a file does not
+probe for a call it means to make.
 
 ### The pixel grid
 
@@ -5278,12 +5321,11 @@ which is loaded on both of these clients and whose item database carries
 `startQuest` and `relatedQuests` per item. Without Questie the window says so and
 offers nothing, because "every quest item in your bags" is not the question.
 
-`QuestieLoader:ImportModule` hands back a fresh empty table for a module it has
-never heard of rather than nil, so the module coming back proves nothing. What
-is checked is that `QueryItemSingle` and `QueryQuestSingle` are on it, and the
-answer is not cached, for the reason `EditMode.CanApply` is not cached: the
-database is compiled after login and an answer taken too early would be wrong
-for the session.
+It asks through `ns.Questie`, naming `QueryItemSingle` and `QueryQuestSingle`,
+because those two are what turn an item id into a quest id and a quest id into a
+name. Neither of them present is the same answer as no Questie. See Asking
+Questie for why the module coming back proves nothing on its own and why the
+answer is not cached.
 
 **Three ways an item is kept, and the first one is the one that matters.** An
 item that starts a quest you have not provably finished is never offered.

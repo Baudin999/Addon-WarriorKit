@@ -71,29 +71,11 @@ local STEP = 1.5
 -- database row covers a continent.
 local CROWD = 80
 
--- One of Questie's modules, or nil.
---
--- ImportModule hands back a fresh empty table for a name it has never heard of
--- rather than nil, so the module coming back proves nothing at all. Every
--- caller below checks for the function it is about to make, which is the same
--- test Comfort/Clutter.lua makes and for the same reason.
---
--- Handed out as Where.Module because Quests/Drops.lua wants the same accessor
--- and the same warning about it, and a third copy of a pcall round ImportModule
--- is how the first two got here.
-local function Module(name)
-	local loader = _G.QuestieLoader
-	if not loader or type(loader.ImportModule) ~= "function" then
-		return nil
-	end
-	local ok, module = pcall(loader.ImportModule, loader, name)
-	if not ok or type(module) ~= "table" then
-		return nil
-	end
-	return module
-end
-
-Where.Module = Module
+-- Questie's modules are asked for through ns.Questie, in Core/Core.lua, which
+-- takes the name of the module and the names of the calls the reader below is
+-- about to make. This file had its own copy of that probe and handed it out as
+-- Where.Module for Quests/Drops.lua to borrow, which is how a probe becomes
+-- five probes. Both are gone.
 
 -- The live quest object for one id: the one Questie has filled in from your
 -- log, not the bare database row. GetNearestQuestSpawn reads objectives off it
@@ -103,7 +85,7 @@ local function Quest(questId)
 	if type(questId) ~= "number" then
 		return nil
 	end
-	local player = Module("QuestiePlayer")
+	local player = ns.Questie("QuestiePlayer")
 	if not player or type(player.currentQuestlog) ~= "table" then
 		return nil
 	end
@@ -125,12 +107,11 @@ end
 -- but none of that is this addon's to guarantee. Comfort/Clutter.lua asks the
 -- same database the same way.
 local function Ask(call, id, field)
-	local db = Module("QuestieDB")
-	local query = db and db[call]
-	if type(query) ~= "function" or type(id) ~= "number" then
+	local db = ns.Questie("QuestieDB", call)
+	if not db or type(id) ~= "number" then
 		return nil
 	end
-	local ok, value = pcall(query, id, field)
+	local ok, value = pcall(db[call], id, field)
 	if not ok then
 		return nil
 	end
@@ -224,12 +205,11 @@ local function Soonest(quest)
 	if memoQuest == quest and memoAt and (GetTime() - memoAt) < FRESH then
 		return memoArea, memoName, memoDistance
 	end
-	local distances = Module("DistanceUtils")
-	local nearest = distances and distances.GetNearestSpawnForQuest
-	if type(nearest) ~= "function" then
+	local distances = ns.Questie("DistanceUtils", "GetNearestSpawnForQuest")
+	if not distances then
 		return nil
 	end
-	local ok, _, area, name, distance = pcall(nearest, quest)
+	local ok, _, area, name, distance = pcall(distances.GetNearestSpawnForQuest, quest)
 	if not ok then
 		return nil
 	end
@@ -486,8 +466,8 @@ end
 
 -- Which map the client draws one of Questie's area ids under.
 function Where.Map(area)
-	local zones = Module("ZoneDB")
-	if not zones or type(zones.GetUiMapIdByAreaId) ~= "function" then
+	local zones = ns.Questie("ZoneDB", "GetUiMapIdByAreaId")
+	if not zones then
 		return nil
 	end
 	local ok, map = pcall(zones.GetUiMapIdByAreaId, zones, area)
@@ -530,7 +510,7 @@ end
 -- Whether Questie is answering at all. The window drops the two lines rather
 -- than drawing them empty, and the panel says which way round it is.
 function Where.Ready()
-	return Module("QuestiePlayer") ~= nil and Module("QuestieMap") ~= nil
+	return ns.Questie("QuestiePlayer") ~= nil and ns.Questie("QuestieMap") ~= nil
 end
 
 -- Whether the compiled database is answering yet.
@@ -542,8 +522,7 @@ end
 -- unreachable. That is the state the map used to report as "Questie has no
 -- place on the map for this quest", which is a sentence about the wrong thing.
 function Where.Compiled()
-	local db = Module("QuestieDB")
-	return type(db) == "table" and type(db.QueryNPCSingle) == "function"
+	return ns.Questie("QuestieDB", "QueryNPCSingle") ~= nil
 end
 
 function Where.Describe()
@@ -553,7 +532,7 @@ function Where.Describe()
 	if not Where.Compiled() then
 		return "Questie is loaded and its database has not compiled yet"
 	end
-	local player = Module("QuestiePlayer")
+	local player = ns.Questie("QuestiePlayer")
 	local held = 0
 	if player and type(player.currentQuestlog) == "table" then
 		for _ in pairs(player.currentQuestlog) do

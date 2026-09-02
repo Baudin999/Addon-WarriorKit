@@ -34,27 +34,15 @@ local SPENT, OPEN = "spent", "open"
 -- Questie
 --------------------------------------------------------------------------
 
--- QuestieLoader:ImportModule hands back a fresh empty table for a name it has
--- never heard of rather than nil, so the module coming back proves nothing at
--- all. What proves it is the two query functions being on it.
---
--- Not cached, for the same reason EditMode.CanApply is not cached: the database
--- is compiled after login and an answer taken too early would be wrong for the
--- rest of the session.
+-- The two query functions are named because a module coming back proves nothing
+-- on its own, and because this file cannot do its work without either of them:
+-- an item id is turned into a quest id by the first and into a quest name by
+-- the second. ns.Questie in Core is the probe, and it is asked again on every
+-- scan rather than cached, for the same reason EditMode.CanApply is not cached:
+-- the database is compiled after login and an answer taken too early would be
+-- wrong for the rest of the session.
 local function Database()
-	local loader = _G.QuestieLoader
-	if not loader or type(loader.ImportModule) ~= "function" then
-		return nil
-	end
-
-	local ok, db = pcall(loader.ImportModule, loader, "QuestieDB")
-	if not ok or type(db) ~= "table" then
-		return nil
-	end
-	if type(db.QueryItemSingle) ~= "function" or type(db.QueryQuestSingle) ~= "function" then
-		return nil
-	end
-	return db
+	return ns.Questie("QuestieDB", "QueryItemSingle", "QueryQuestSingle")
 end
 
 -- Every query is pcalled. The database is another addon's, it is compiled

@@ -568,6 +568,31 @@ while IFS= read -r bad; do
 done < <(grep -rn 'GameTooltip' --include='*.lua' . \
 	| grep -v '^\./UI/Scan\.lua:' || true)
 
+# One file talks to Questie, and it is Core/Core.lua.
+#
+# Questie is another addon. Every question this one asks it starts at
+# QuestieLoader:ImportModule, which hands back a fresh empty table for a name it
+# has never heard of rather than nil, so the module coming back proves nothing
+# and the caller has to check for the call it means to make. That is six lines
+# and a paragraph explaining them, and five files wrote both out: Quests/Where,
+# Quests/Tracker, Quests/Party, Map/Pins and Comfort/Clutter. Four of the five
+# were character for character the same, and Where.lua handed its copy back out
+# as Where.Module so Quests/Drops could borrow it, which is the shape a probe
+# takes on the way to being everywhere.
+#
+# ns.Questie in Core/Core.lua is that probe, asked for by the name of the module
+# and the names of the calls the reader is about to make. It is the rule item 21
+# wrote with a name on it: outside Core, a file does not probe for a call it
+# means to make.
+#
+# Comments are read too, for the reason the GameTooltip rule reads them. A file
+# explaining what ImportModule does is a file about to do it.
+while IFS= read -r bad; do
+	echo "only Core/Core.lua may name QuestieLoader, and ns.Questie is the probe: $bad"
+	status=1
+done < <(grep -rnE 'QuestieLoader|ImportModule' --include='*.lua' . \
+	| grep -v '^\./Core/Core\.lua:' || true)
+
 # No tooltip carries a blue line naming a switch.
 #
 # UI/Tip.lua used to build a fourth band called `hint`: one quiet blue sentence

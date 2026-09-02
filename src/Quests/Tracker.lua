@@ -42,33 +42,20 @@ local taken = false
 
 -- The table ShowQuestLog is a field on.
 --
--- QuestieLoader hands out one table per module name and every Questie file
--- takes its reference from that, so writing the field on the module is what a
--- click reads. The name is TrackerUtils, its own module, and this file spent
--- its first version asking for QuestieTracker and reading a `utils` field off
--- it. There is no such field on any build that ships, so the swap never
--- happened and every click went to the log in the attic. Both spellings are
--- tried, because ImportModule on a name nothing registered hands back a fresh
--- empty table rather than nil, and the only honest test for "this is the one"
--- is whether the function is on it.
-local function Module(name)
-	local loader = _G.QuestieLoader
-	if not loader or type(loader.ImportModule) ~= "function" then
-		return nil
-	end
-	local ok, module = pcall(loader.ImportModule, loader, name)
-	if not ok or type(module) ~= "table" then
-		return nil
-	end
-	return module
-end
-
+-- Questie hands out one table per module name and every Questie file takes its
+-- reference from that, so writing the field on the module is what a click
+-- reads. The name is TrackerUtils, its own module, and this file spent its
+-- first version asking for QuestieTracker and reading a `utils` field off it.
+-- There is no such field on any build that ships, so the swap never happened
+-- and every click went to the log in the attic. Both spellings are still tried,
+-- because a build that answers for neither name is the same answer as no
+-- Questie at all, and ns.Questie in Core is what asks for the call by name.
 local function Utils()
-	local utils = Module("TrackerUtils")
-	if utils and type(utils.ShowQuestLog) == "function" then
+	local utils = ns.Questie("TrackerUtils", "ShowQuestLog")
+	if utils then
 		return utils
 	end
-	local tracker = Module("QuestieTracker")
+	local tracker = ns.Questie("QuestieTracker")
 	if tracker and type(tracker.utils) == "table"
 		and type(tracker.utils.ShowQuestLog) == "function" then
 		return tracker.utils
