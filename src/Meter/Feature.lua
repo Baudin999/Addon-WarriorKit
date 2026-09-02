@@ -123,6 +123,10 @@ ns.Register({
 		apply = function() MeterWindow.Show() end,
 	},
 
+	zooms = {
+		{ key = "meterZoom", label = "Meter", apply = function() ns.MeterWindow.Apply() end },
+	},
+
 	defaults = {
 		meter = true,
 

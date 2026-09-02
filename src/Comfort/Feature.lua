@@ -136,7 +136,19 @@ ns.Register({
 	name = "comfort",
 	order = 18,
 
+	zooms = {
+		{ key = "clutterZoom", label = "Clutter", window = true },
+	},
+
 	defaults = {
+		-- 1.3, and it was 1.25 when every window in the addon shared one number.
+		-- A tenth is the step now and 1.25 is not on one, so a default that
+		-- stayed there would be a value the page cannot reach and the reset
+		-- cannot restore. A window at 1 is a window you lean in to read on the
+		-- panel most people are playing on, and the screen height already
+		-- doubles this where a panel is tall enough to need it.
+		clutterZoom = 1.3,
+
 		-- All four on. Every one of them is a thing you would otherwise do by
 		-- hand every few minutes, so off is not a state anyone would choose to
 		-- start in, and the part exists because doing them by hand is the

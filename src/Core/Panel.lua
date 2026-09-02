@@ -570,6 +570,27 @@ local function Build()
 		title = "WarriorKit",
 		width = WINDOW_W,
 		height = WINDOW_H,
+		zoom = function() return ns.Zoom("panelZoom") end,
+		-- The grid moves when the resolution changes, when the UI scale does, or
+		-- when this window's own zoom is dragged, which is a thing you can now do
+		-- from inside the window you are dragging it in. The window takes itself
+		-- back onto the grid and the layout follows, because every number below
+		-- is in the window's own units and those units are what just changed.
+		rescale = function(apply)
+			apply()
+			window:Resize(WINDOW_W, WINDOW_H)
+			Relayout()
+			-- Every row, not only the section showing. Relayout reflows the one
+			-- section on screen, and a row that snapped a measurement to the
+			-- pixel of the old zoom keeps it until something asks it again. The
+			-- tab strip inside the Loadouts page is the one that shows: its
+			-- buttons are rounded to whole pixels when they are laid out, so
+			-- after a size change they sat on thirds of a pixel until you
+			-- clicked onto that page. This costs one walk of the rows on a size
+			-- change and nothing at all otherwise, which is the right price for
+			-- a settings window.
+			Options.Refresh()
+		end,
 	})
 	ns.Remember(window)
 
@@ -669,28 +690,6 @@ local function Build()
 	rail:Select(1)
 	Options.Refresh()
 
-	-- The grid moves when the resolution changes or the UI scale does, and the
-	-- window's own scale is put right by UI.Refresh before this runs. What is
-	-- left is the zoom, which is chosen off the screen height, and the layout,
-	-- which depends on both.
-	UI.OnRescale(function()
-		if not window then
-			return
-		end
-		UI.Rezoom(window.frame, UI.WindowZoom())
-		window.zoom = UI.WindowZoom()
-		window:Resize(WINDOW_W, WINDOW_H)
-		Relayout()
-		-- Every row, not only the section showing. Relayout reflows the one
-		-- section on screen, and a row that snapped a measurement to the pixel
-		-- of the old zoom keeps it until something asks it again. The tab strip
-		-- inside the Loadouts page is the one that shows: its buttons are
-		-- rounded to whole pixels when they are laid out, so after a size change
-		-- they sat on thirds of a pixel until you clicked onto that page. This
-		-- costs one walk of the rows on a size change and nothing at all
-		-- otherwise, which is the right price for a settings window.
-		Options.Refresh()
-	end)
 end
 
 --------------------------------------------------------------------------

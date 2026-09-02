@@ -65,7 +65,19 @@ ns.Register({
 		apply = function(value) SetCharacter(value) end,
 	},
 
+	zooms = {
+		{ key = "characterZoom", label = "Character sheet", window = true },
+	},
+
 	defaults = {
+		-- 1.3, and it was 1.25 when every window in the addon shared one number.
+		-- A tenth is the step now and 1.25 is not on one, so a default that
+		-- stayed there would be a value the page cannot reach and the reset
+		-- cannot restore. A window at 1 is a window you lean in to read on the
+		-- panel most people are playing on, and the screen height already
+		-- doubles this where a panel is tall enough to need it.
+		characterZoom = 1.3,
+
 		-- On. The client's own sheet spends its largest area on a picture of
 		-- your back and answers none of the three questions anybody opens it
 		-- for, and everything this replaces it with is reversible in one press.

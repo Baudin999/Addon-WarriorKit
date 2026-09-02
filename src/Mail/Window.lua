@@ -1008,6 +1008,7 @@ local function Build()
 		title = "Mail",
 		width = WIDTH,
 		height = HEIGHT,
+		zoom = function() return ns.Zoom("mailZoom") end,
 	})
 	ns.Remember(window)
 
@@ -1050,12 +1051,6 @@ local function Build()
 		end)
 	end
 
-	UI.OnRescale(function()
-		if window then
-			UI.Rezoom(window.frame, UI.WindowZoom())
-			window.zoom = UI.WindowZoom()
-		end
-	end)
 	return window
 end
 

@@ -165,6 +165,10 @@ ns.Register({
 	-- the room, because the registry takes whole numbers only.
 	order = 11,
 
+	zooms = {
+		{ key = "cooldownZoom", label = "Cooldown row", apply = function() ns.CooldownRow.Apply() end },
+	},
+
 	defaults = {
 		cooldowns = true,
 

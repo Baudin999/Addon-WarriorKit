@@ -567,20 +567,23 @@ do
 
 	do
 		local Tip = ns.UI.Tooltip
-		local size = ns.UI.Size()
+		local size = Tip.Scale()
+		local function Wanted()
+			return ns.UI.ScreenZoom() * Tip.Scale()
+		end
 
 		ns.db.combatFeedZoom = 2
 		combatStream:Apply()
-		-- The slider, put well above both feeds, so the window's answer and
-		-- either feed's are three different numbers. At 1x nothing here can
+		-- The hover's own zoom, put well above both feeds, so the box's answer
+		-- and either feed's are three different numbers. At 1x nothing here can
 		-- fail.
-		ns.UI.SetSize(3)
+		ns.Settings.SetTipZoom(3)
 
 		local row = combat:Row(2)
 		row:GetScript("OnEnter")(row)
-		check(Tip.Zoom() == ns.UI.WindowZoom(),
-			("a tooltip opened on a feed at 2x drew at %s and the addon is at %s")
-				:format(tostring(Tip.Zoom()), tostring(ns.UI.WindowZoom())))
+		check(Tip.Zoom() == Wanted(),
+			("a tooltip opened on a feed at 2x drew at %s and a hover box is at %s")
+				:format(tostring(Tip.Zoom()), tostring(Wanted())))
 
 		-- And the other feed, at a different zoom again. A box that had gone
 		-- on following its owner would answer 2 here and a box following the
@@ -588,15 +591,15 @@ do
 		-- what tells those apart from the one right answer.
 		local loot = feed:Row(1)
 		loot:GetScript("OnEnter")(loot)
-		check(Tip.Zoom() == ns.UI.WindowZoom(),
-			("a tooltip opened on a feed at %sx drew at %s and the addon is at %s")
+		check(Tip.Zoom() == Wanted(),
+			("a tooltip opened on a feed at %sx drew at %s and a hover box is at %s")
 				:format(tostring(ns.db.lootFeedZoom), tostring(Tip.Zoom()),
-					tostring(ns.UI.WindowZoom())))
-		check(ns.db.lootFeedZoom ~= ns.UI.WindowZoom(),
-			"both feeds are drawn at the addon's own zoom, so this proves nothing")
+					tostring(Wanted())))
+		check(ns.db.lootFeedZoom ~= Wanted(),
+			"both feeds are drawn at the hover box's own zoom, so this proves nothing")
 		loot:GetScript("OnLeave")(loot)
 
-		ns.UI.SetSize(size)
+		ns.Settings.SetTipZoom(size)
 		ns.db.combatFeedZoom = 1
 		combatStream:Apply()
 

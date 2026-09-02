@@ -68,6 +68,10 @@ ns.Register({
 		apply = function() Gauges.Apply() end,
 	},
 
+	zooms = {
+		{ key = "swingZoom", label = "Swing bars", apply = function() ns.SwingGauges.Apply() end },
+	},
+
 	defaults = {
 		-- Off. Every other readout in this addon is something you cannot get
 		-- anywhere else; a swing bar is a rhythm you already feel through the

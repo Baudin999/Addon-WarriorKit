@@ -31,17 +31,31 @@ in the README's untested list, and the full text of each item is this file at
 14. check.sh derives its class shapes from `Class/*.lua` rather than naming
     them. `371d82d`
 15. A placeable HUD frame, named at last. `80528bc`
+19. `UI.Window` re-zooms its own frame, and every screen sizes on its own.
+
+    The item asked for two lines to move out of four windows and into
+    `UI.Window`. By the time it was worked it was ten windows, because six new
+    ones landed while it sat open and every one of them copied the pair, which
+    is the item predicting its own cost and being right.
+
+    It came out larger than the item asked because the shape underneath was
+    wrong rather than repeated. One number sized every window, so the duplicated
+    lines were four windows agreeing about a fact none of them owned.
+    `UI.Window` takes a getter, each screen carries its own key, and the twenty
+    three of them are declared through `ns.Register` and drawn off `ns.Zooms()`.
+    Item 17's argument applies to this list too: a registry entry retires a
+    hand-written page, and the page was never the thing worth writing.
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
 
 ## Open
 
-Items 16 to 22 came out of an architecture review on 2026-08-29. Every one is a
-duplication or a rule the addon already believes in and does not enforce. None
-is a bug: the addon draws the right thing today. They are the shapes that make
-the next change cost more than it should, ordered so the one that drags the most
-out with it goes first. Item 15 undercounted its own sites by five and asked
+Items 16 to 22 came out of an architecture review on 2026-08-29. Item 19 landed
+on 2026-09-02 and is above. Every one is a duplication or a rule the addon
+already believes in and does not enforce. None is a bug: the addon draws the
+right thing today. They are the shapes that make the next change cost more than
+it should, ordered so the one that drags the most out with it goes first. Item 15 undercounted its own sites by five and asked
 for a fix `0312cf3` had already made, so read an item against the code before
 working it.
 
@@ -93,17 +107,6 @@ working it.
     that matters. A hot function that grows a new callee nobody added to the
     list takes the guard scan quietly off that code. Registering every ticker
     through one call is what makes the closure derivable instead of typed.
-
-19. `UI.Window` re-zooms its own frame.
-
-    Four windows carry the same pair of lines,
-    `UI.Rezoom(window.frame, UI.WindowZoom())` followed by
-    `window.zoom = UI.WindowZoom()`, inside their own `UI.OnRescale` listener:
-    `src/Breakdown/Window.lua`, `src/Quests/Window.lua`, `src/Chat/Window.lua`,
-    `src/Mail/Window.lua`. `UI.Window` made the frame. It should keep the frame
-    on the grid, and the four callers should register nothing. What is left in
-    each listener afterwards is the part that is genuinely the caller's: Quests
-    re-fits and refreshes, Chat relays out, the other two have nothing to do.
 
 20. `EachTexture` into Core, beside `ns.Strip`.
 

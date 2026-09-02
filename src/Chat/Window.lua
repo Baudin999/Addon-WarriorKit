@@ -454,39 +454,21 @@ end
 --------------------------------------------------------------------------
 -- How big it is drawn
 --
--- Its own zoom, off its own setting, and not UI.WindowZoom.
+-- This window had its own zoom before any of the others did, and the argument
+-- it was written with is the argument the whole addon runs on now.
 --
--- Every other window in the addon is something you open, read and shut, so one
--- size for all of them is right: the slider on the settings page says how big
--- this addon looks to you and they all take it. The chat window is the one that
--- is up while you play. It sits in a corner beside the game all evening and how
--- big you want it there has nothing to do with how big you want a settings
--- panel you have open for a minute, which is why a player who had sized the
--- rest of the interface up found the conversation had gone with it.
---
--- The screen's own whole step is still in it, because that step is not a
--- preference: it is what keeps a 21 pixel row from being half a row on a 4K
--- panel. What is left out is UI.Size, and the setting below stands in its place
--- for this window alone.
+-- Every other window used to share one number, on the reasoning that they are
+-- all things you open, read and shut. The chat window is the one that is up
+-- while you play, so how big you want it in a corner all evening has nothing to
+-- do with how big you want a settings panel you have open for a minute, and a
+-- player who sized the rest of the interface up found the conversation had gone
+-- with it. That is true of a map beside a quest log too. Every screen carries
+-- its own number now, and this window's is no longer the exception: it is one
+-- row on the zoom page like the rest, and the only thing left here is its key.
 --------------------------------------------------------------------------
 
--- The range and the stops, here rather than beside the control that offers
--- them. The clamp below is what the window will actually honour, and a panel
--- that offered a stop this refused would be a control that does nothing at one
--- end of its own travel.
-ChatWindow.SCALE_LOW, ChatWindow.SCALE_HIGH, ChatWindow.SCALE_STEP = 0.5, 3, 0.25
-
--- Clamped rather than trusted, the same as the addon-wide size is: a file
--- edited by hand can hold a nought, and a nought here is SetScale(0), which is
--- a window with no pixels in it and nothing anywhere saying why.
 function ChatWindow.Zoom()
-	local scale = tonumber(ns.db.chatScale) or 1
-	if scale < ChatWindow.SCALE_LOW then
-		scale = ChatWindow.SCALE_LOW
-	elseif scale > ChatWindow.SCALE_HIGH then
-		scale = ChatWindow.SCALE_HIGH
-	end
-	return UI.ScreenZoom() * scale
+	return ns.Zoom("chatScale")
 end
 
 --------------------------------------------------------------------------
@@ -765,9 +747,14 @@ local function Build()
 		name = FRAME_NAME,
 		width = ns.db.chatWidth,
 		height = ns.db.chatHeight,
-		-- Its own, rather than the size every other window in the addon takes.
-		-- See ChatWindow.Zoom.
-		zoom = ChatWindow.Zoom(),
+		-- See ChatWindow.Zoom. Relayout below takes the window back onto the
+		-- grid itself, because every measurement in it is in the window's own
+		-- units, so this window hands the rezoom nowhere and does it in one
+		-- place.
+		zoom = ChatWindow.Zoom,
+		rescale = function()
+			Relayout()
+		end,
 		-- No title bar. A bar across the top of a window says which window it
 		-- is, and this one is a window you have had open all evening drawing
 		-- the conversation it is named after. The twenty four pixels are worth
@@ -1520,15 +1507,3 @@ events:SetScript("OnEvent", function(_, event)
 	Refresh()
 end)
 
--- The window is on the pixel grid, so a resolution change or a UI size change
--- moves every number in it at once. The zoom first, because every measurement
--- below is in the window's own units and those units are what the zoom decides.
--- The screen's own step is half of this window's zoom, so a resolution change
--- still moves it. Relayout is what re-zooms now, because the setting under it
--- can move without the screen moving at all.
-ns.UI.OnRescale(function()
-	if not built then
-		return
-	end
-	Relayout()
-end)

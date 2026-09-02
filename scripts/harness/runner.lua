@@ -110,15 +110,25 @@ end
 -- Everything the addon draws in a window is a design number multiplied by the
 -- pixel of the frame it is in, and the sections below assert on those numbers:
 -- a row is a whole number of pixels tall, a hairline is one pixel, an anchor
--- offset is not half of one. At a quarter stop of the UI size slider none of
--- that is true, and Settings/Settings.lua is explicit that it is not meant to
--- be: a window is the one thing in the addon allowed to go soft, that is the
--- price the slider charges, and Settings.Grid names the stops that pay it.
+-- offset is not half of one. At a stop that is not a whole number none of that
+-- is true, and Settings/Settings.lua is explicit that it is not meant to be: a
+-- screen is allowed to go soft, that is the price a tenth charges, and
+-- Settings.Grid names the stops that pay it.
 --
 -- So the size is set before the first window is built rather than moved
 -- afterwards, because a window carries the pixel it was built at in the anchors
 -- of its own chrome. Section 17 is where the stops themselves are walked.
-ns.Settings.Set(1)
+--
+-- Every screen, off the registry rather than by name. There was one number for
+-- all of them and one call here; each screen carries its own now, and a walk is
+-- what keeps this line covering a part that registers a screen tomorrow.
+for _, zoom in ipairs(ns.Zooms()) do
+	ns.db[zoom.key] = 1
+	if zoom.apply then
+		zoom.apply()
+	end
+end
+ns.UI.Notify()
 
 fire("PLAYER_LOGIN")
 fire("PLAYER_ENTERING_WORLD")
@@ -171,7 +181,7 @@ local SECTIONS = {
 	"14-aura-row",
 	"15-skin-fit",
 	"16-options-window",
-	"17-ui-size-slider",
+	"17-zoom-page",
 	"18-which-bar",
 	"19-resolution-change",
 	"20-loadouts",

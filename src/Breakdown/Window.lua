@@ -371,6 +371,7 @@ local function Build()
 		title = "Breakdown",
 		width = WIDTH,
 		height = HEIGHT,
+		zoom = function() return ns.Zoom("breakdownZoom") end,
 	})
 	ns.Remember(window)
 
@@ -433,12 +434,6 @@ local function Build()
 		onClick = function() Window.Close() end })
 	close:SetPoint("RIGHT")
 
-	UI.OnRescale(function()
-		if window then
-			UI.Rezoom(window.frame, UI.WindowZoom())
-			window.zoom = UI.WindowZoom()
-		end
-	end)
 end
 
 --------------------------------------------------------------------------

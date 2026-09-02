@@ -69,7 +69,7 @@ check(math.abs(ns.UI.Pixel(frame) - 1) < 1e-9,
 check(whole(frame:GetWidth()) and whole(frame:GetHeight()),
 	("the character window is %.2f x %.2f, not a whole number of pixels")
 		:format(frame:GetWidth(), frame:GetHeight()))
-check(frame:GetHeight() * ns.UI.WindowZoom() <= state.SCREEN_H,
+check(frame:GetHeight() * ns.Zoom("characterZoom") <= state.SCREEN_H,
 	"the character window is taller than the screen")
 
 for index = GEAR, LOADOUTS do

@@ -989,11 +989,12 @@ Three consequences worth knowing before changing anything under it:
 
 - **Sizes are absolute now.** A 21 pixel bar is 21 pixels on a laptop and 21 on
   a 4K panel. That is the point and it is also the cost, which is what
-  `bars zoom` and `uisize` are for. `bars zoom` is a whole number and refuses to
-  be anything else, because a bar you read at a glance mid-pull is worth keeping
-  exact. `uisize` runs in quarters and lets you off the grid on purpose, because
-  a settings window is read deliberately and a soft hairline is a price you are
-  allowed to choose. The panel prints which of the two states you are in.
+  the zoom page is for. Every screen the addon draws carries its own number,
+  from 0.5x to 3x in tenths, so you can shrink the map and grow the hover box in
+  the same sitting. Three of those stops keep the grid on a screen that
+  contributes 1 and the rest let you off it on purpose, because a soft hairline
+  is a price you are allowed to choose. The page prints, per screen, which of
+  the two states that screen is in.
 - **`ns.UI.Pixel` and `ns.UI.Unit` are not the same question, and mixing them up
   makes a zoom setting inert.** `Pixel` answers "how many units is one screen
   pixel", which on the grid is `1 / zoom`. `Unit` answers "how many units is one
@@ -1264,18 +1265,27 @@ physical pixels and the window is 544 by 452 of them. It does not resize itself
 to its content and it does not grow: a section that does not fit scrolls.
 
 **Zoom comes from two numbers that multiply.** `UI.ScreenZoom` is a whole step
-read off the screen height, 1 below 2000 pixels tall and 2 above. `UI.Size` is
-whatever the player dragged the size slider to, 0.5 to 3 in quarters, and
-`Settings/Settings.lua` pushes it in. `UI.WindowZoom` is the product, and it is
-what every window is adopted at. A 4K screen that has already doubled everything
-and a player who halves it land back on the design size with the grid intact,
-which is the arithmetic you want from a control called "UI size".
+read off the screen height, 1 below 2000 pixels tall and 2 above. The other is
+the number the player set for that one screen, 0.5 to 3 in tenths, held in the
+account file under the key the part registered. `ns.Zoom(key)` is the product,
+and it is what a window is adopted at. A 4K screen that has already doubled
+everything and a player who halves it land back on the design size with the grid
+intact.
 
-`UI.SetSize` stores the number and calls `UI.Notify`, which runs the same
-listeners a monitor swap runs. Each window's own `OnRescale` handler re-zooms
-it, re-clamps its height against the screen and lays it out again. There is no
-second path for a size change, and adding a window means registering that
-handler and nothing else.
+There was one number for every window, called `uiSize`, and it was wrong for the
+reason the chat window worked out first: shrinking a map to sit beside a quest
+log shrank the quest log with it. A part declares each sizeable screen in its
+`ns.Register` call under `zooms`, and the zoom page draws a row per entry
+without naming a single feature. A player who had dragged the old slider has
+that number written onto every window key still at its default, once, and
+`uiSize` is dropped.
+
+`UI.Window` takes `opts.zoom` as a getter and keeps its own frame on the grid:
+it registers one `OnRescale` listener that asks the getter and re-zooms. A
+caller with layout to redo passes `opts.rescale`, which receives the rezoom as a
+function so it can defer it, as the character sheet does in combat, or run it
+before its own `Fit`. Adding a window means passing a getter and nothing else.
+Ten windows each carried the rezoom in a listener of their own before this.
 
 **Three client questions, all probed.** Clipping is `SetClipsChildren` where it
 answers, the `ScrollFrame` frame type where it does not, and nothing at all
@@ -5223,22 +5233,26 @@ where they started" and this part has no frames. Registering one would make
 `/wk reset`, which is what you type when a window has wandered off screen,
 quietly turn selling back on for someone who had deliberately turned it off.
 
-### UI size
+### Zoom
 
 Every size in this addon is a count of physical pixels, decided once and true on
 every monitor. That is the right default and it answers the wrong question for
-one setting, which is how big a window should look to the person reading it. A
+one setting, which is how big a screen should look to the person reading it. A
 544 pixel panel is comfortable on a 1080p monitor and a postage stamp on a 27
 inch 4K one, and no measurement the addon can take separates the two, because
 the difference is how far your eyes are from the glass.
 
-So `Settings/` is a preference and not a calculation. One rail entry, one row,
-`uiSize` in the account file. It multiplies the whole step `UI.ScreenZoom`
-already picks, so a 4K screen at 0.5x lands back on the design size with every
-edge exact. It ships at 1.25, which is a quarter more than the design size and
-one of the stops that does not keep the grid; the paragraph below is what that
-buys and what it costs, and 1x is one step down for anyone who wants the exact
-one back.
+So this is a preference and not a calculation. One rail entry, one row per
+screen, one key per row in the account file. Each multiplies the whole step
+`UI.ScreenZoom` already picks, so a 4K screen at 0.5x lands back on the design
+size with every edge exact. Windows ship at 1.3, which is a stop that does not
+keep the grid; the paragraph below is what that buys and what it costs, and 1x
+is three steps down for anyone who wants the exact one back.
+
+The page is built off `ns.Zooms()`, which walks the registry, so the list of
+screens is the list of parts that draw one and cannot go stale. `Settings/` owns
+three of the rows itself: the options panel, the hover box and the confirm box,
+which are the screens no feature has a claim on.
 
 **Back to the shipped answers.** `ApplyDefaults` fills in a setting that is
 missing and leaves one that is present alone. That is the right rule for a
@@ -5609,8 +5623,8 @@ on different realms read as the same person.
     /wk ui save                  capture the active Edit Mode layout
     /wk ui apply                 import the baked layout and make it active
     /wk ui auto on|off           import it on a client that does not have it
-    /wk uisize                   how big the addon's windows are, and what it costs
-    /wk uisize 1.5               0.5 to 3 in quarters, refused off a step
+    /wk scale                    every screen, what it is drawn at and what it costs
+    /wk scale map 0.8            one screen, 0.5 to 3 in tenths, refused off a step
     /wk mail                     the mail window, at a mailbox
     /wk mail on|off              the addon's window instead of the client's
     /wk mail hide on|off         move Blizzard's own mail frame out of the way

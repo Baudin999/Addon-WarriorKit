@@ -58,24 +58,29 @@ function UI.ScreenZoom()
 	return 1
 end
 
--- What the player asked for on top of that, which is the UI size slider in the
--- settings panel. It is held here rather than read out of ns.db, because this
--- layer is not allowed to know the name of a setting: Settings/Settings.lua
--- reads the saved value and pushes it in, the same way a widget takes a getter
--- rather than a key.
+-- What the boxes this layer draws itself are sized at.
 --
--- The two multiply. On a 4K panel the screen has already doubled everything, so
--- half size lands back on the design size and is exact; on a 1080p panel the
--- screen contributes 1 and half size is genuinely half. That is the behaviour
--- you want from a control called "UI size": it says how big this looks to you,
--- not how many pixels went into it.
+-- There was one of these for the whole addon, called UI size, and every window
+-- took it. Each screen carries its own number now and asks for it with a
+-- getter, so what is left here is the two things the UI layer draws that belong
+-- to no feature and so have nobody to ask: the confirm box in UI/Ask.lua and,
+-- through its own setter, the hover box.
+--
+-- The number is held here rather than read out of ns.db, because this layer is
+-- not allowed to know the name of a setting. Settings/Settings.lua reads the
+-- saved value and pushes it in, the same way a widget takes a getter rather than a key.
+--
+-- The screen's step and the player's multiply. On a 4K panel the screen has
+-- already doubled everything, so half size lands back on the design size and is
+-- exact; on a 1080p panel the screen contributes 1 and half size is genuinely
+-- half.
 local chosen = 1
 
 function UI.Size()
 	return chosen
 end
 
--- Every window on the grid is re-zoomed by its own rescale listener, which is
+-- Every frame on the grid is re-zoomed by its own rescale listener, which is
 -- the same path a monitor swap takes, so this only has to say that the ground
 -- moved. Returns whether it did: an unchanged size relays out nothing.
 function UI.SetSize(scale)
@@ -88,7 +93,7 @@ function UI.SetSize(scale)
 	return true
 end
 
-function UI.WindowZoom()
+function UI.DialogZoom()
 	return UI.ScreenZoom() * chosen
 end
 
@@ -97,7 +102,7 @@ end
 -- step is whole and why the panel says out loud which stops of the slider are
 -- and which are not.
 function UI.Exact(zoom)
-	zoom = zoom or UI.WindowZoom()
+	zoom = zoom or UI.DialogZoom()
 	return math.abs(zoom - math.floor(zoom + 0.5)) < 1e-6
 end
 
@@ -190,9 +195,80 @@ local function Footer(window, frame)
 	window.footerRule:SetPoint("BOTTOMRIGHT", -M.pad, window.foot)
 end
 
+-- The two ways out of a dropdown that is open over this window and a key field
+-- that has the keyboard. Its own function beside TitleBar and Footer, because
+-- both scripts are the same two calls for two different reasons and neither
+-- reason is about how a window is assembled.
+--
+-- A listening key field has the keyboard and an open dropdown covers whatever is
+-- under it, so a click anywhere else in the window has to be a way out of both.
+-- Each of them eats its own click, so this never cancels the click that opened
+-- it.
+--
+-- Escape closes the window through UISpecialFrames, which calls Hide on the
+-- frame and knows nothing about either. So the cleanup hangs off the frame
+-- rather than off the Hide method, and every route out goes through it.
+local function Dismissals(frame)
+	local function Clear()
+		UI.StopCapture()
+		UI.CloseDropdown()
+	end
+	frame:SetScript("OnMouseDown", Clear)
+	frame:SetScript("OnHide", Clear)
+end
+
+-- opts.zoom is a number or a getter returning one, and a getter is what every
+-- window in the addon passes. This layer is still not allowed to know the name
+-- of a setting, so the window is handed a way to ask rather than a key to read,
+-- the same way every widget in the kit is. A getter is also what lets the
+-- window keep itself on the grid, which is KeepOnGrid below.
+local function ZoomOf(opts)
+	if type(opts.zoom) == "function" then
+		return opts.zoom
+	end
+	return function()
+		return tonumber(opts.zoom) or UI.DialogZoom()
+	end
+end
+
+-- The grid moved: a monitor swap, combat letting go of a frame, or this
+-- window's own zoom being dragged. Its own function for the reason TitleBar and
+-- Footer are: it is one piece of what a window is, and the argument for the
+-- shape it has is a paragraph nobody reading how a window is assembled has to
+-- step through.
+--
+-- Ten windows carried these two lines in a listener of their own, which is
+-- todo.md item 19 and was six windows worse than the item said. The library made
+-- the frame; keeping it at the size it is meant to be drawn at is the library's
+-- job and not something each caller re-derives.
+--
+-- What the caller gets is the rezoom as a function rather than a callback after
+-- it, because two of the twelve do not want it run where it would fall by
+-- default. The character sheet defers the whole thing in combat, since scaling
+-- the frame its secure gear squares hang off is refused. Every window that lays
+-- itself out in its own units has to do that after the units change and not
+-- before, which is the same ordering by a different route. Left out, the rezoom
+-- simply happens, which is the whole of what eight of the twelve wanted.
+local function KeepOnGrid(window, opts)
+	local function Apply()
+		local want = window.zoomOf()
+		window.zoom = want
+		return UI.Rezoom(window.frame, want)
+	end
+	window.Rezoom = Apply
+	UI.OnRescale(function()
+		if opts.rescale then
+			return opts.rescale(Apply)
+		end
+		return Apply()
+	end)
+end
+
 function UI.Window(opts)
 	local window = setmetatable({}, Window)
-	local zoom = opts.zoom or UI.WindowZoom()
+
+	window.zoomOf = ZoomOf(opts)
+	local zoom = window.zoomOf()
 
 	-- Whether this window has a protected frame somewhere inside it. One does:
 	-- the character sheet, whose gear squares are secure buttons because using
@@ -237,22 +313,7 @@ function UI.Window(opts)
 	-- to sit under the tooltip and under anything the client puts over the
 	-- world, so it asks for a lower one.
 	frame:SetFrameStrata(opts.strata or "DIALOG")
-	-- A listening key field has the keyboard and an open dropdown covers
-	-- whatever is under it, so a click anywhere else in the window has to be a
-	-- way out of both. Each of them eats its own click, so this never cancels the
-	-- click that opened it.
-	frame:SetScript("OnMouseDown", function()
-		UI.StopCapture()
-		UI.CloseDropdown()
-	end)
-	-- Escape closes the window through UISpecialFrames, which calls Hide on the
-	-- frame and knows nothing about the dropdown that is open over it or the key
-	-- field that has the keyboard. So the cleanup hangs off the frame rather than
-	-- off the Hide method, and every route out of the window goes through it.
-	frame:SetScript("OnHide", function()
-		UI.StopCapture()
-		UI.CloseDropdown()
-	end)
+	Dismissals(frame)
 	frame:Hide()
 
 	local px = Surface(window, frame, opts)
@@ -293,6 +354,8 @@ function UI.Window(opts)
 	if opts.name and opts.escape ~= false then
 		tinsert(UISpecialFrames, opts.name)
 	end
+
+	KeepOnGrid(window, opts)
 
 	UI.Windows[#UI.Windows + 1] = window
 	return window

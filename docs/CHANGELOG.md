@@ -2,6 +2,62 @@
 
 ## Unreleased
 
+### Every screen carries its own zoom, in tenths
+
+One number sized every window in the addon. Shrinking the map so it sat beside
+the quest log shrank the quest log with it, which is not a compromise anybody
+would have chosen if the two had ever been separable.
+
+They are now. There is a Zoom page under The screen with a row per screen: the
+map, the quest log, the bags, the mail, the merchant, the character sheet, the
+adventure guide, the breakdown, the clutter window, the chat window, the options
+panel, the hover box, the confirm box, and every part of the HUD that was
+already sized on its own. Twenty three rows. Scale the map down and the hover
+box up in the same sitting and neither moves the other.
+
+The step is a tenth, from 0.5x to 3x. It was a quarter for windows and a whole
+number for anything you read mid fight, and the argument for the whole number
+was that a bar you glance at during a pull is worth keeping pixel exact. That
+argument is about one stop being better than another and it was being made by
+putting the other stops out of reach. Every row says, under itself, whether the
+stop it is on keeps a hairline sharp or draws it soft, so the cost is quoted
+rather than decided for you.
+
+`/wk scale` lists every screen and what it is drawn at. `/wk scale map 0.8` sets
+one. It is not called `zoom` because Comfort already answers that word and means
+the camera, and not `size` because Charge answers that one and means the charge
+button in pixels.
+
+**What the page is made of.** A part declares its sizeable screens in its own
+`ns.Register` call under `zooms`, giving a key, a label and what to run after
+the number changes. `ns.Zooms()` walks the registry and the page draws a row per
+entry, so it names no feature and cannot go stale: a part that adds a window
+turns up, and one that stops drawing a screen takes its row away. Core keeps its
+promise that an eighth part must not mean editing Core.
+
+**What came out with it.** `UI.Window` takes `opts.zoom` as a getter now and
+keeps its own frame on the grid. Ten windows carried the same two lines in a
+listener of their own, which is todo.md item 19 and was six windows worse than
+the item said when it was written: six new windows landed while it sat open and
+every one of them copied the pair. Seven of those listeners are gone entirely.
+The four with real work in them pass `opts.rescale`, which receives the rezoom
+as a function rather than running before it, so the character sheet can still
+defer the whole thing in combat and the three that lay themselves out in their
+own units can still do it in the right order.
+
+The chat window had worked all of this out first. It has had its own zoom, its
+own key and its own range since it was written, on the argument that a window
+you have up all evening is a different question from a panel you open for a
+minute. It is one row on the page like everything else now, and the range it
+kept privately is the range the whole addon runs on.
+
+**On login.** A player who had dragged the old UI size slider has that number
+written onto every window still sitting at its default, once, and `uiSize` is
+dropped from the account file. A screen already sized on its own keeps what it
+was given. The shipped default for a window is 1.3 rather than 1.25, because
+1.25 is not on a tenth stop and a default the page cannot reach is a default the
+reset cannot restore.
+
 ### One square on the cooldown page was dead to the mouse
 
 Two defects, and both of them read the same way from the chair: one spell you

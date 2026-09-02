@@ -94,6 +94,10 @@ ns.Register({
 		apply = function() Rails.Apply() end,
 	},
 
+	zooms = {
+		{ key = "progressZoom", label = "Experience rail", apply = function() ns.ProgressRails.Apply() end },
+	},
+
 	defaults = {
 		progress = true,
 

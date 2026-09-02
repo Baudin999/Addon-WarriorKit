@@ -402,6 +402,10 @@ ns.Register({
 		apply = function(value) SetChat(value) end,
 	},
 
+	zooms = {
+		{ key = "chatScale", label = "Chat", apply = function() ns.ChatWindow.Apply() end },
+	},
+
 	defaults = {
 		-- On, because a part whose whole point is that the window it replaces is
 		-- unreadable does not ship switched off. Everything it does is

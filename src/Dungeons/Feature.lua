@@ -78,7 +78,19 @@ ns.Register({
 		apply = function(value) SetDungeons(value) end,
 	},
 
+	zooms = {
+		{ key = "dungeonsZoom", label = "Adventure guide", window = true },
+	},
+
 	defaults = {
+		-- 1.3, and it was 1.25 when every window in the addon shared one number.
+		-- A tenth is the step now and 1.25 is not on one, so a default that
+		-- stayed there would be a value the page cannot reach and the reset
+		-- cannot restore. A window at 1 is a window you lean in to read on the
+		-- panel most people are playing on, and the screen height already
+		-- doubles this where a panel is tall enough to need it.
+		dungeonsZoom = 1.3,
+
 		-- On. There is no window on either client this replaces, so nothing is
 		-- taken away by it being on, and the key it holds is one nothing else
 		-- uses.

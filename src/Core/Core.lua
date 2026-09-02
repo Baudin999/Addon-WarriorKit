@@ -28,6 +28,16 @@ ns.version = "1.9"
 --   lock          function applying ns.db.locked to this part's frames
 --   reset         function putting this part's frames back where they started
 --   panel         function(ui) building this part's sections of the panel
+--   zooms         { { key, label, apply } } one entry per screen this part
+--                 draws that can be sized on its own. key is the account
+--                 setting holding the number, label is what the zoom page
+--                 calls that screen, and apply is called after the number
+--                 changes. A part with one screen registers one entry; the
+--                 unit frames register several, because a party list and a
+--                 nameplate are two screens by every measure but the folder
+--                 they live in. window = true says this screen is one of the
+--                 windows that shared uiSize before it was split, which is the
+--                 only thing the one migration reads
 --   showing       function(open) the options window opened or closed. For a
 --                 part that draws something on the screen to say which of its
 --                 rows the page is on, and has to stop when the page is gone
@@ -156,6 +166,7 @@ local function Claim(into, source)
 end
 
 local taken = {}
+local zoomKeys = {}
 
 function ns.Register(feature)
 	assert(type(feature) == "table" and type(feature.name) == "string",
@@ -176,6 +187,21 @@ function ns.Register(feature)
 				:format(feature.name, feature.switch.key))
 	end
 
+	-- Held to the same contract as switch and for the same reason: a zoom whose
+	-- key is not in the part's own defaults is a row on the zoom page that reads
+	-- nil, writes a number nothing merges, and is gone again next login.
+	for _, zoom in ipairs(feature.zooms or {}) do
+		assert(type(zoom.key) == "string" and type(zoom.label) == "string",
+			("%s registered a zoom with no key or no label"):format(feature.name))
+		assert(type((feature.defaults or {})[zoom.key]) == "number",
+			("%s says a zoom is %q and no number of that name is in its defaults")
+				:format(feature.name, zoom.key))
+		assert(not zoomKeys[zoom.key],
+			("%s and %s both registered the zoom %q")
+				:format(feature.name, tostring(zoomKeys[zoom.key]), zoom.key))
+		zoomKeys[zoom.key] = feature.name
+	end
+
 	Claim(defaults, feature.defaults)
 	Claim(charDefaults, feature.charDefaults)
 
@@ -194,6 +220,41 @@ function ns.Each(hook, ...)
 			feature[hook](...)
 		end
 	end
+end
+
+--------------------------------------------------------------------------
+-- How big one screen is drawn
+--
+-- Every part of the addon that puts a frame on the screen sizes it on its own.
+-- There used to be two answers to this and they disagreed: the HUD parts each
+-- kept a key, and every window in the addon shared one number called uiSize, so
+-- shrinking the map to fit beside the quest log shrank the quest log with it.
+--
+-- The screen's own contribution is still shared, because it is not a
+-- preference. A 4K panel halves the size of every metric the addon is drawn in
+-- and doubling it back is arithmetic, not taste. What the player chose
+-- multiplies on top of that, per screen, which is the whole of the change.
+--------------------------------------------------------------------------
+
+-- The zoom one screen is drawn at, screen contribution included. Handed to
+-- UI.Window and to UI.Rezoom as a number, or as a closure over this for a frame
+-- that has to ask again after the grid moves.
+function ns.Zoom(key)
+	local chosen = ns.UI.ZoomSnap(ns.db and ns.db[key] or 1)
+	return ns.UI.ScreenZoom() * chosen
+end
+
+-- Every registered screen, in feature order, so the zoom page can list them
+-- without naming a single feature. Flat rather than grouped: the page draws one
+-- row per screen and the part it came from is already in the label.
+function ns.Zooms()
+	local out = {}
+	for _, feature in ipairs(ns.features) do
+		for _, zoom in ipairs(feature.zooms or {}) do
+			out[#out + 1] = zoom
+		end
+	end
+	return out
 end
 
 -- Nameplate frames are restricted regions on this client. A positional
@@ -1714,6 +1775,32 @@ local function Migrate()
 	end
 end
 
+-- uiSize was one number for every window in the addon, and it is gone: each
+-- screen carries its own now. A player who had dragged that slider gets the
+-- number they chose written onto every window zoom still sitting at its
+-- default, so the screen they log into is the screen they logged out of, and
+-- the old key is dropped. A screen they had already sized on its own keeps what
+-- they gave it.
+--
+-- Runs once, because the key it reads is deleted on the way out. Windows only:
+-- the HUD parts each had their own zoom before this and none of them was ever
+-- multiplied by uiSize.
+local function MigrateZooms()
+	local was = tonumber(WarriorKitDB.uiSize)
+	WarriorKitDB.uiSize = nil
+	if not was or was == 1 then
+		return 0
+	end
+	local moved = 0
+	for _, zoom in ipairs(ns.Zooms()) do
+		if zoom.window and ns.db[zoom.key] == defaults[zoom.key] then
+			ns.db[zoom.key] = ns.UI.ZoomSnap(was)
+			moved = moved + 1
+		end
+	end
+	return moved
+end
+
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("ADDON_LOADED")
 loader:SetScript("OnEvent", function(self, _, name)
@@ -1726,6 +1813,7 @@ loader:SetScript("OnEvent", function(self, _, name)
 	Migrate()
 	ns.db = ApplyDefaults(WarriorKitDB, defaults)
 	ns.dbc = ApplyDefaults(WarriorKitCharDB, charDefaults)
+	MigrateZooms()
 
 	-- Said here rather than beside the list, because every feature has
 	-- registered by now and not one of them had when the list was written. A

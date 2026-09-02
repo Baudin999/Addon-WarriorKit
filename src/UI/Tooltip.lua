@@ -29,7 +29,7 @@ local C, M = UI.Color, UI.Metric
 -- locals. See NewBox, and see `alongside` on Tooltip.Show.
 --
 -- **It is one size, and that size is the addon's.** Every box this file draws
--- comes out at UI.WindowZoom, whatever it was opened on.
+-- comes out at the size the hover setting asks for, whatever it was opened on.
 --
 -- It used to take the owner's zoom instead, on the argument that a box six
 -- hundred pixels across cannot explain a row thirty pixels tall. What that
@@ -123,7 +123,7 @@ local DOCK_X, DOCK_Y = 0, 70
 -- gets.
 --
 -- **And both of them move together.** How big a tooltip reads is a preference
--- the same way UI.WindowZoom is one, and for the same reason: a box you read in
+-- the same way the zoom under it is one, and for the same reason: a box you read in
 -- the half second before you move on is a box whose text you should not be
 -- leaning in for. So the body is a number the player sets and the title is that
 -- number plus the one pixel that separates them, which keeps the pair a pair at
@@ -473,11 +473,29 @@ end
 -- Putting it on screen
 --------------------------------------------------------------------------
 
+-- What the player asked a hover box to be drawn at, on top of the screen's own
+-- step. Pushed in by Settings/Settings.lua rather than read out of
+-- ns.db for the reason UI.Size is, and the same as the place, the linger and
+-- the font above it: this layer is not allowed to know the name of a setting.
+-- Tooltip.SetZoom is below, beside the walk that takes the boxes already built
+-- to a new size. Named chosen rather than scale, the same as UI/Window.lua's,
+-- because a frame's effective scale is a different number this file also asks
+-- for and one of them shadowing the other is how they get confused.
+local chosen = 1
+
+-- The number the player chose, not a box's effective zoom: Tooltip.Zoom below
+-- answers that and answers it per box. Named apart because the two differ by
+-- the screen's own step and a reader who conflated them would be off by 2x on
+-- a 4K panel.
+function Tooltip.Scale()
+	return chosen
+end
+
 -- The current zoom, asked for rather than remembered, because a box built after
--- the slider moved has to arrive at the size the boxes beside it are already
+-- the setting moved has to arrive at the size the boxes beside it are already
 -- drawn at.
 local function Wanted()
-	return (UI.WindowZoom and UI.WindowZoom()) or 1
+	return ((UI.ScreenZoom and UI.ScreenZoom()) or 1) * chosen
 end
 
 -- One box built. `name` is nil for every box but the first: a frame's own name
@@ -564,6 +582,20 @@ local function Match(box)
 	box.zoom = want
 	UI.Rezoom(box.frame, want)
 	Hairlines(box)
+	return true
+end
+
+-- Answered as whether anything moved, which is the shape every setter in this
+-- file has. Every box already built is taken to the new size on the spot,
+-- because a hover is the one control in the addon you are looking at while you
+-- change it: the row on the zoom page has a hover of its own.
+function Tooltip.SetZoom(value)
+	value = tonumber(value) or 1
+	if value == chosen then
+		return false
+	end
+	chosen = value
+	Each(Match)
 	return true
 end
 
@@ -1281,12 +1313,13 @@ function Tooltip.Size(index, which)
 	return size
 end
 
--- The grid moved under the frame. Nothing is laid out here and the zoom is not
--- touched: the box is rebuilt on every open, the next hover is the next open,
--- and what the zoom should be is the owner's business rather than this file's.
--- What does have to be rewritten is the two hairlines, because on a client with
--- no SetIgnoreParentScale a physical pixel is a fraction of a unit that moves
--- with the UI scale.
+-- The grid moved under the frame: a resolution change, or combat letting go of
+-- one. The screen's own step is half of what a box is drawn at, so the zoom is
+-- taken again here rather than left for the next open, and Match rewrites the
+-- hairlines for the boxes it moved. Hairlines runs on all of them regardless,
+-- because on a client with no SetIgnoreParentScale a physical pixel is a
+-- fraction of a unit that moves with the UI scale whether the zoom did or not.
 UI.OnRescale(function()
+	Each(Match)
 	Each(Hairlines)
 end)

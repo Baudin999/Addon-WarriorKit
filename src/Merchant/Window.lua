@@ -139,6 +139,7 @@ local function Build()
 		title = "Merchant",
 		width = Width(),
 		height = HEIGHT,
+		zoom = function() return ns.Zoom("merchantZoom") end,
 	})
 	ns.Remember(window)
 
@@ -186,12 +187,6 @@ local function Build()
 
 	tabs:Select(RACK)
 
-	UI.OnRescale(function()
-		if window then
-			UI.Rezoom(window.frame, UI.WindowZoom())
-			window.zoom = UI.WindowZoom()
-		end
-	end)
 	return window
 end
 

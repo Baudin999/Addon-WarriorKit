@@ -89,6 +89,10 @@ ns.Register({
 	-- one to make the room, because the registry takes whole numbers only.
 	order = 3,
 
+	zooms = {
+		{ key = "hoverSheetZoom", label = "Hover sheet", apply = function() ns.HoverSheet.Apply() end },
+	},
+
 	defaults = {
 		hover = true,
 

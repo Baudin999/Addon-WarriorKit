@@ -30,55 +30,39 @@ local UI = ns.UI
 -- to. The two compose: on a screen that has already doubled everything, half
 -- size lands back on the design size and every edge is exact again.
 --
--- **Quarters, and the grid.** The stops are 0.5 through 3 in quarters, eleven of
--- them. A stop keeps the grid when the size times the screen's own step comes
--- out whole, because one unit is then a whole number of pixels and a hairline is
--- a hairline. On a screen that contributes 1 those are 1x, 2x and 3x; on one
--- that contributes 2 every half step is exact, which is the composition doing
--- what it was meant to. The rest are soft: at 1.25x on a 1080p screen a one
--- pixel edge is asked for at 1.25 pixels and the renderer lays down a blur.
+-- **Tenths, and the grid.** The stops are 0.5 through 3 in tenths, twenty six
+-- of them. A stop keeps the grid when the size times the screen's own step
+-- comes out whole, because one unit is then a whole number of pixels and a
+-- hairline is a hairline. On a screen that contributes 1 those are 1x, 2x and
+-- 3x; on one that contributes 2 every half step is exact, which is the
+-- composition doing what it was meant to. The rest are soft: at 1.4x on a 1080p
+-- screen a one pixel edge is asked for at 1.4 pixels and the renderer lays down
+-- a blur.
 --
--- That is the same cost `bars zoom` refuses to let anyone pay, and the split is
--- deliberate rather than an oversight. A bar over a mob's head is the addon
--- deciding what you see mid-pull. A settings window is you deciding how you want
--- to read it, and a soft hairline on it is a price you are allowed to choose.
--- Settings.Describe is the one sentence that says which stop you are on and what
--- it costs, and Settings.Grid names the stops that stay exact on this screen.
+-- The step used to be a quarter here and a whole number on anything you read
+-- mid fight, on the argument that the addon should not let you pay for a soft
+-- hairline on a health bar. That argument is about one stop being better than
+-- another and it was being made by putting the other stops out of reach. Every
+-- part of the addon runs on the same tenth now, and Settings.Describe is what
+-- says which stop you are on and what it costs, per screen, rather than a rule
+-- deciding it for you.
 --
--- **What it covers.** The windows this addon draws: the `/wk` panel and the
--- Clutter window. Not the enemy bars, which have their own whole-step zoom
--- under Unit frames, and not the skinned unit frames or the charge button,
--- which are sized in pixels where they sit. Those are things you read in a
--- fight and they are worth keeping exact.
+-- **What it covers.** Every screen this addon draws, each on its own number.
+-- There was one number for all of them and it was wrong for the reason the chat
+-- window worked out first: shrinking a map to sit beside a quest log shrank the
+-- quest log with it. What is left here is the two the UI layer draws for
+-- nobody, the hover box and the confirm box, because a part has to own a
+-- setting and neither of those belongs to one.
 --------------------------------------------------------------------------
 
-Settings.LOW = 0.5
-Settings.HIGH = 3
-Settings.STEP = 0.25
-
--- Clamped into range and onto a stop. Everything that can set the size goes
--- through here, so a saved variable edited by hand, a macro and the slider all
--- land on the same set of values.
-function Settings.Snap(scale)
-	scale = tonumber(scale) or 1
-	if scale < Settings.LOW then
-		scale = Settings.LOW
-	elseif scale > Settings.HIGH then
-		scale = Settings.HIGH
-	end
-	local steps = math.floor((scale - Settings.LOW) / Settings.STEP + 0.5)
-	return Settings.LOW + steps * Settings.STEP
-end
-
--- "1x", "1.25x", "2.5x". Two decimal places with the dead zeros taken off,
--- rather than a lookup table of eleven strings that has to be kept in step with
--- three constants.
-function Settings.Label(scale)
-	local text = ("%.2f"):format(tonumber(scale) or 1)
-	text = (text:gsub("0+$", ""))
-	text = (text:gsub("%.$", ""))
-	return text .. "x"
-end
+-- The range, the stops, the clamp and the label all live in UI/Widgets.lua now,
+-- beside the control that offers them, because they stopped being this file's
+-- private answer the moment every part of the addon took the same one. Aliased
+-- rather than called through: this file quotes all four a dozen times and the
+-- slash word quotes the range.
+Settings.LOW, Settings.HIGH, Settings.STEP = UI.ZOOM_LOW, UI.ZOOM_HIGH, UI.ZOOM_STEP
+Settings.Snap = UI.ZoomSnap
+Settings.Label = UI.ZoomLabel
 
 -- Push the saved value into the UI layer, which relays out every open window.
 -- Called at ADDON_LOADED so the panel is built at the right size rather than
@@ -90,13 +74,22 @@ function Settings.Apply()
 	ns.Compare.SetEnabled(ns.db.tipCompare)
 	Settings.ApplyAnchor()
 	Settings.LockAnchor()
-	return UI.SetSize(Settings.Snap(ns.db.uiSize))
+	UI.Tooltip.SetZoom(Settings.Snap(ns.db.tipZoom))
+	return UI.SetSize(Settings.Snap(ns.db.dialogZoom))
 end
 
+-- The confirm box's own size. The hover box's is beside the rest of the hover
+-- settings below, because that is where a player looking for it will be.
 function Settings.Set(scale)
-	ns.db.uiSize = Settings.Snap(scale)
+	ns.db.dialogZoom = Settings.Snap(scale)
 	Settings.Apply()
-	return ns.db.uiSize
+	return ns.db.dialogZoom
+end
+
+function Settings.SetTipZoom(scale)
+	ns.db.tipZoom = Settings.Snap(scale)
+	UI.Tooltip.SetZoom(ns.db.tipZoom)
+	return ns.db.tipZoom
 end
 
 --------------------------------------------------------------------------
@@ -326,9 +319,9 @@ function Settings.Grid()
 	return table.concat(names, ", ", 1, #names - 1) .. " and " .. names[#names]
 end
 
--- What a window measures on this screen right now, in physical pixels. The panel
--- is the one worth quoting because it is the one you are looking at while you
--- drag the slider, and it is UI.Windows[1] because Core/Panel.lua builds at
+-- What a window measures on this screen right now, in physical pixels. The
+-- panel is the one worth quoting because it is the one you are looking at while
+-- you drag a row, and it is UI.Windows[1] because Core/Panel.lua builds at
 -- PLAYER_LOGIN and everything else in the addon builds its window on first use.
 function Settings.Pixels()
 	local window = UI.Windows[1]
@@ -339,13 +332,17 @@ function Settings.Pixels()
 	return window.width * zoom, window.height * zoom
 end
 
--- One sentence saying what the size is doing, and it does not flatter the
--- setting. A stop that costs the grid says so, in the same terms UI.Describe
+-- One sentence saying what one screen's size is doing, and it does not flatter
+-- the setting. A stop that costs the grid says so, in the same terms UI.Describe
 -- uses for the grid itself, because a control that hides its own cost is a
 -- control you cannot make a decision with.
-function Settings.Describe()
-	local size = Settings.Snap(ns.db.uiSize)
-	local zoom = UI.WindowZoom()
+--
+-- Takes a key rather than reading one, so the zoom page can put the sentence
+-- under every row it draws. Left out, it answers for the panel you are reading
+-- it in, which is what /wk status wants.
+function Settings.Describe(key)
+	local chosen = Settings.Snap(ns.db[key or "panelZoom"])
+	local zoom = UI.ScreenZoom() * chosen
 	local screen = UI.ScreenZoom()
 
 	local edges
@@ -360,14 +357,20 @@ function Settings.Describe()
 		edges = ("one unit is %.2f pixels, so a hairline draws soft"):format(zoom)
 	end
 
-	local width, height = Settings.Pixels()
-	local measured = width and (", panel %d x %d px"):format(width, height) or ""
+	-- Only for the panel. Every other screen on the zoom page is a window that
+	-- may not have been built yet, and a measurement of a frame that does not
+	-- exist is a sentence with a hole in it.
+	local measured = ""
+	if not key or key == "panelZoom" then
+		local width, height = Settings.Pixels()
+		measured = width and (", panel %d x %d px"):format(width, height) or ""
+	end
 
 	if screen == 1 then
-		return ("%s%s, %s"):format(Settings.Label(size), measured, edges)
+		return ("%s%s, %s"):format(Settings.Label(chosen), measured, edges)
 	end
 	return ("%s on a %d pixel screen the addon already zooms %dx%s, %s")
-		:format(Settings.Label(size), UI.ScreenHeight(), screen, measured, edges)
+		:format(Settings.Label(chosen), UI.ScreenHeight(), screen, measured, edges)
 end
 
 local loader = CreateFrame("Frame")

@@ -220,6 +220,7 @@ local function Build()
 		name = "WarriorKitClutter",
 		title = "Clutter",
 		width = WIDTH,
+		zoom = function() return ns.Zoom("clutterZoom") end,
 		height = M.title + M.pad * 2 + ICON + M.gutter
 			+ (M.font + 2) * REASON_LINES + M.footer,
 	})
@@ -270,12 +271,6 @@ local function Build()
 	-- two buttons through it rather than through a hook cut in for its benefit.
 	window.card = card
 
-	UI.OnRescale(function()
-		if window then
-			UI.Rezoom(window.frame, UI.WindowZoom())
-			window.zoom = UI.WindowZoom()
-		end
-	end)
 end
 
 function Destroy.Show()

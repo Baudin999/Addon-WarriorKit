@@ -206,6 +206,23 @@ function Window.Build()
 		title = "Character",
 		width = WIDTH,
 		height = HEIGHT,
+		zoom = function() return ns.Zoom("characterZoom") end,
+		-- The grid moved: the screen changed size, combat let go of a frame, or
+		-- this sheet's own zoom was dragged. The rezoom is handed over rather
+		-- than run for us because this is one of the two windows that does not
+		-- always want it where it would fall. The grid moving in the middle of a
+		-- fight is a sheet that keeps the zoom it had until the fight ends:
+		-- scaling the frame the secure gear squares hang off is refused, and Fit
+		-- is refused for the same reason.
+		rescale = function(apply)
+			if InCombatLockdown() then
+				pending = true
+				return
+			end
+			apply()
+			Window.Fit()
+			Window.Refresh()
+		end,
 		-- The gear squares are secure buttons, so everything the client refuses
 		-- an addon in combat it refuses this window: the close box runs a snippet
 		-- instead of Lua, and the window is not dragged in a fight. UI/Window.lua
@@ -485,19 +502,3 @@ end)
 -- slider. The window goes back onto the grid at the new zoom and is then laid
 -- out again, in that order, because every number Fit uses is in the window's
 -- own units and those units are what just changed.
-UI.OnRescale(function()
-	if not window then
-		return
-	end
-	-- The grid moving in the middle of a fight is a window that keeps the zoom
-	-- it had until the fight ends: rezooming scales the frame the secure squares
-	-- hang off, which is refused, and Fit below is refused for the same reason.
-	if InCombatLockdown() then
-		pending = true
-		return
-	end
-	UI.Rezoom(window.frame, UI.WindowZoom())
-	window.zoom = UI.WindowZoom()
-	Window.Fit()
-	Window.Refresh()
-end)

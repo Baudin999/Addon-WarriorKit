@@ -876,6 +876,15 @@ function Window.Build()
 		title = "Quest Log",
 		width = WIDTH,
 		height = HEIGHT,
+		zoom = function() return ns.Zoom("questsZoom") end,
+		-- The window takes itself back onto the grid and then this lays it out
+		-- again, in that order, because every number Fit uses is in the window's
+		-- own units and those units are what just changed.
+		rescale = function(apply)
+			apply()
+			Window.Fit()
+			Window.Refresh()
+		end,
 	})
 	ns.Remember(window)
 
@@ -1234,16 +1243,3 @@ events:SetScript("OnEvent", function(_, event)
 	Window.Refresh()
 end)
 
--- The grid moved: the screen changed size, combat let go of a frame, or the
--- player dragged the UI size slider. The window is taken back onto the grid at
--- the new zoom and then laid out again, in that order, because every number Fit
--- uses is in the window's own units and those units are what just changed.
-UI.OnRescale(function()
-	if not window then
-		return
-	end
-	UI.Rezoom(window.frame, UI.WindowZoom())
-	window.zoom = UI.WindowZoom()
-	Window.Fit()
-	Window.Refresh()
-end)

@@ -77,7 +77,7 @@ check(ns.DefaultsMoved() == 0,
 ----------------------------------------------------------------------
 
 ns.db.swingWidth = 200
-ns.db.uiSize = 2
+ns.db.panelZoom = 2
 ns.db.markBinds.skull = "F9"
 check(ns.DefaultsMoved() == 3,
 	("three settings moved and DefaultsMoved says %d"):format(ns.DefaultsMoved()))
@@ -192,7 +192,7 @@ if window then
 		check(state.reloads == reloads + 1, "the button reloaded with nothing to put back")
 
 		ns.db.swingWidth = 200
-		ns.db.uiSize = 2
+		ns.db.panelZoom = 2
 		ns.Options.Refresh()
 		check(button.text:GetText() == "back to the shipped answers",
 			("with two settings moved the button reads %q"):format(tostring(button.text:GetText())))

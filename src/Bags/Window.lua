@@ -147,6 +147,7 @@ local function Build()
 		title = "Bags",
 		width = Width(),
 		height = FLOOR,
+		zoom = function() return ns.Zoom("bagsZoom") end,
 	})
 	ns.Remember(window)
 
@@ -176,12 +177,6 @@ local function Build()
 	-- through a hook cut into this file for its benefit.
 	window.free, window.purse = free, purse
 
-	UI.OnRescale(function()
-		if window then
-			UI.Rezoom(window.frame, UI.WindowZoom())
-			window.zoom = UI.WindowZoom()
-		end
-	end)
 	return window
 end
 

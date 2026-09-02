@@ -37,8 +37,43 @@ local C, M = UI.Color, UI.Metric
 -- respectively, the same numbers written seven times. They are here so the kit
 -- calls below can supply them, and public so the slash words that take the same
 -- number can read them rather than keeping a private copy that drifts.
-UI.ZOOM_LOW, UI.ZOOM_HIGH = 1, 3
+UI.ZOOM_LOW, UI.ZOOM_HIGH, UI.ZOOM_STEP = 0.5, 3, 0.1
 UI.ALPHA_LOW, UI.ALPHA_HIGH, UI.ALPHA_STEP = 0, 100, 5
+
+-- One range, where there used to be two that disagreed.
+--
+-- The HUD parts ran 1 to 3 in whole steps and the windows ran 0.5 to 3 in
+-- quarters, and the argument for the whole step was that a widget you read mid
+-- swing is worth keeping exact. That argument is about one stop being better
+-- than another, not about the other stops being unreachable, and it was being
+-- enforced by making them unreachable. A tenth is the step now, for every part
+-- of the addon, and UI.Exact is what says which stops keep a hairline sharp.
+--
+-- Snapped rather than passed through, because the stepper accumulates: ten
+-- presses of + from 1 is 1.9999999999999998 in a double, and a readout that
+-- says 2x while UI.Exact says the frame is not on a whole number is a readout
+-- that is lying about which of those stops you are on.
+function UI.ZoomSnap(value)
+	value = tonumber(value) or 1
+	if value < UI.ZOOM_LOW then
+		value = UI.ZOOM_LOW
+	elseif value > UI.ZOOM_HIGH then
+		value = UI.ZOOM_HIGH
+	end
+	local steps = math.floor((value - UI.ZOOM_LOW) / UI.ZOOM_STEP + 0.5)
+	return UI.ZOOM_LOW + steps * UI.ZOOM_STEP
+end
+
+-- "1x", "1.4x", "2.5x". Two decimals with the dead zeros taken off, so a tenth
+-- reads as one digit and a whole number carries none. Settings/Settings.lua had
+-- this written out; it delegates here now, because a label for a zoom and the
+-- range that zoom is drawn from are the same fact.
+function UI.ZoomLabel(value)
+	local text = ("%.2f"):format(UI.ZoomSnap(value))
+	text = (text:gsub("0+$", ""))
+	text = (text:gsub("%.$", ""))
+	return text .. "x"
+end
 
 -- At most one of each in the whole interface, which is the behaviour you want
 -- and also the reason they are module state rather than per kit. Two open
@@ -828,12 +863,14 @@ end
 --------------------------------------------------------------------------
 
 local function InstallKnobs(kit)
-	-- Whole steps, one to three. No label and no range, because there is one of
-	-- each: a widget you read mid swing is worth keeping exact, and exact means a
-	-- whole number of source texels per screen pixel.
-	function kit.Zoom(get, set)
-		return kit.Stepper("zoom", UI.ZOOM_LOW, UI.ZOOM_HIGH, 1, get, set,
-			function(value) return value .. "x" end)
+	-- Tenths, half size to triple. The label is the caller's only when it has
+	-- one: the zoom page names the screen the row belongs to, and a feature's own
+	-- page has one zoom on it and calls the row "zoom" like it always did.
+	function kit.Zoom(get, set, label)
+		return kit.Stepper(label or "zoom", UI.ZOOM_LOW, UI.ZOOM_HIGH, UI.ZOOM_STEP,
+			function() return UI.ZoomSnap(get()) end,
+			function(value) return set(UI.ZoomSnap(value)) end,
+			UI.ZoomLabel)
 	end
 
 	-- Nought to a hundred in fives, which is the only range this has ever had.

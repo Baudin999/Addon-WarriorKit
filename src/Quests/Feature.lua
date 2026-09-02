@@ -69,7 +69,19 @@ ns.Register({
 		apply = function(value) SetQuests(value) end,
 	},
 
+	zooms = {
+		{ key = "questsZoom", label = "Quest log", window = true },
+	},
+
 	defaults = {
+		-- 1.3, and it was 1.25 when every window in the addon shared one number.
+		-- A tenth is the step now and 1.25 is not on one, so a default that
+		-- stayed there would be a value the page cannot reach and the reset
+		-- cannot restore. A window at 1 is a window you lean in to read on the
+		-- panel most people are playing on, and the screen height already
+		-- doubles this where a panel is tall enough to need it.
+		questsZoom = 1.3,
+
 		-- On. The client's own log shows six of your twenty quests through a
 		-- slot and pushes the list off the window to show you one of them, and
 		-- everything this replaces it with is reversible in one press.

@@ -187,6 +187,10 @@ ns.Register({
 	-- cooldown row at 10 did to the nine parts below it.
 	order = 10,
 
+	zooms = {
+		{ key = "buffZoom", label = "Missing buff row", apply = function() ns.BuffNag.Apply() end },
+	},
+
 	defaults = {
 		buffs = true,
 

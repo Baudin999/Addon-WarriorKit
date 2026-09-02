@@ -64,7 +64,19 @@ ns.Register({
 		apply = function(value) SetMerchant(value) end,
 	},
 
+	zooms = {
+		{ key = "merchantZoom", label = "Merchant", window = true },
+	},
+
 	defaults = {
+		-- 1.3, and it was 1.25 when every window in the addon shared one number.
+		-- A tenth is the step now and 1.25 is not on one, so a default that
+		-- stayed there would be a value the page cannot reach and the reset
+		-- cannot restore. A window at 1 is a window you lean in to read on the
+		-- panel most people are playing on, and the screen height already
+		-- doubles this where a panel is tall enough to need it.
+		merchantZoom = 1.3,
+
 		-- On. Everything it replaces is one tick box away.
 		merchant = true,
 

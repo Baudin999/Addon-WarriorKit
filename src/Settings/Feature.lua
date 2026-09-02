@@ -12,21 +12,66 @@ local ADDON, ns = ...
 
 local Settings = ns.Settings
 
-local function SizeWord(arg)
-	local value = arg:match("^(%S*)")
+-- A screen is named by its label with the spaces taken out and the case
+-- dropped, so "Quest log" is `quest log` or `questlog` and both are the same
+-- word. Matched rather than listed, because the list is ns.Zooms() and a word
+-- table written here would be the thing that goes stale when a part registers a
+-- screen.
+local function ZoomNamed(word)
+	word = word:lower():gsub("%s+", "")
+	for _, zoom in ipairs(ns.Zooms()) do
+		if zoom.label:lower():gsub("%s+", "") == word then
+			return zoom
+		end
+	end
+	return nil
+end
 
-	if value == "" then
-		ns.Print("UI size " .. Settings.Describe() .. ".")
+-- `scale` on its own lists every screen and what it is drawn at.
+-- `scale <screen>` reports one, `scale <screen> <number>` sets it. The screen comes first because
+-- that is the order you think in: you know which thing is the wrong size before
+-- you know what to make it.
+--
+-- Called scale because the two better words are taken and mean something else:
+-- Comfort answers `zoom` and means the camera, Charge answers `size` and means
+-- the charge button in pixels. The page in the options window is called Zoom,
+-- which is the word for the thing; this is the word still free to type.
+local function ZoomWord(arg)
+	local name, value = arg:match("^(.-)%s*(%S*)$")
+	if tonumber(value) == nil and value ~= "" then
+		name, value = arg:match("^(.-)%s*$"), ""
+	end
+
+	if name == "" and value == "" then
+		for _, zoom in ipairs(ns.Zooms()) do
+			ns.Print(("  %-18s %s"):format(zoom.label:lower(), Settings.Describe(zoom.key)))
+		end
 		return
 	end
 
-	local scale = ns.Command.Step(value, Settings.LOW, Settings.HIGH, Settings.STEP, "UI size")
+	local zoom = ZoomNamed(name)
+	if not zoom then
+		ns.Print(("no screen called %q. scale on its own lists them."):format(name))
+		return
+	end
+
+	if value == "" then
+		ns.Print(("%s %s."):format(zoom.label:lower(), Settings.Describe(zoom.key)))
+		return
+	end
+
+	local scale = ns.Command.Step(value, Settings.LOW, Settings.HIGH, Settings.STEP,
+		zoom.label:lower())
 	if not scale then
 		return
 	end
 
-	Settings.Set(scale)
-	ns.Print("UI size " .. Settings.Describe() .. ".")
+	ns.db[zoom.key] = Settings.Snap(scale)
+	if zoom.apply then
+		zoom.apply()
+	end
+	ns.UI.Notify()
+	ns.Print(("%s %s."):format(zoom.label:lower(), Settings.Describe(zoom.key)))
 end
 
 -- Where the box goes, how long it stays and how big it reads, under one word.
@@ -134,12 +179,32 @@ ns.Register({
 	name = "settings",
 	order = 19,
 
+	-- The three screens that belong to no feature. The options panel is one of
+	-- them because a settings window is nobody's feature, and the two boxes the
+	-- UI layer draws are the other two: a hover opens over anything in the addon
+	-- and a confirm box is asked by whoever is about to do something you cannot
+	-- undo, so neither has a part to be owned by.
+	zooms = {
+		{ key = "panelZoom", label = "Options panel", window = true },
+		{ key = "tipZoom", label = "Hover box",
+		  apply = function() Settings.SetTipZoom(ns.db.tipZoom) end },
+		{ key = "dialogZoom", label = "Confirm box", window = true,
+		  apply = function() Settings.Set(ns.db.dialogZoom) end },
+	},
+
 	defaults = {
-		-- 1.25. Everything in this addon was drawn at 1, and 1 is a size you
-		-- lean in to read on the panel most people are playing on. The screen
-		-- height already doubles it where a panel is tall enough to need that,
-		-- so this is a quarter more on top of whatever the screen decided.
-		uiSize = 1.25,
+		-- 1.25 for both, which is what every window in the addon was drawn at
+		-- when they shared one number called uiSize. A window at 1 is a window
+		-- you lean in to read on the panel most people are playing on, and the
+		-- screen height already doubles this where a panel is tall enough to
+		-- need it.
+		panelZoom = 1.3,
+		dialogZoom = 1.3,
+
+		-- 1, not 1.25. A hover box is small, opens over what you are reading and
+		-- goes again, and how big its text is is already a setting of its own
+		-- two lines down. This is the box, air and all.
+		tipZoom = 1,
 
 		-- Docked. It is where this game has put a tooltip since the day it
 		-- shipped, and a box beside the row under the cursor covers the row you
@@ -170,12 +235,13 @@ ns.Register({
 	},
 
 	words = {
-		uisize = SizeWord,
+		scale = ZoomWord,
 		tips = TipsWord,
 	},
 
 	help = {
-		"uisize 0.5 to 3 in quarters, how big the addon's own windows are",
+		"scale, list every screen and what it is drawn at",
+		"scale <screen> <0.5 to 3>, how big one screen is drawn, in tenths",
 		"tips docked|beside|anchor, where a hover's box opens",
 		"tips linger <seconds>, font <pixels>, how long it stays and how big it reads",
 	},
@@ -189,7 +255,8 @@ ns.Register({
 	end,
 
 	reset = function()
-		Settings.Set(ns.DefaultFor("uiSize"))
+		Settings.Set(ns.DefaultFor("dialogZoom"))
+		Settings.SetTipZoom(ns.DefaultFor("tipZoom"))
 		Settings.SetPlace(ns.DefaultFor("tipPlace"))
 		Settings.SetLinger(ns.DefaultFor("tipLinger"))
 		Settings.SetTipFont(ns.DefaultFor("tipFont"))
@@ -209,24 +276,53 @@ ns.Register({
 		local low, high = ns.UI.Tooltip.LingerRange()
 		local fontLow, fontHigh = ns.UI.Tooltip.FontRange()
 
-		ui.Section("UI size", "The screen")
-		ui.Lede("How big this window and the Clutter window are drawn. Nothing on the game screen moves.")
+		ui.Section("Zoom", "The screen")
+		ui.Lede("Every screen this addon draws, each on its own number. Shrink the map and grow the hover box; nothing here moves anything else.")
 
-		ui.Slider("size", Settings.LOW, Settings.HIGH, Settings.STEP,
-			function() return Settings.Snap(ns.db.uiSize) end,
-			function(value) Settings.Set(value) end,
-			Settings.Label)
-		ui.Hint("The number follows the thumb while you drag and the window takes the size when you let go, because a window that resized under the cursor would fight you for it.")
+		-- One row per registered screen, in feature order, and not one of them
+		-- named here. A part that draws something sizeable says so in its own
+		-- ns.Register call and turns up on this page; a part that stops drawing
+		-- it takes its row with it. The alternative was a list of every screen
+		-- in the addon written out in this file, which is the list that goes
+		-- stale the first time somebody adds a window.
+		for _, zoom in ipairs(ns.Zooms()) do
+			ui.Zoom(
+				function() return Settings.Snap(ns.db[zoom.key]) end,
+				function(value)
+					ns.db[zoom.key] = Settings.Snap(value)
+					if zoom.apply then
+						zoom.apply()
+					end
+					-- Every window keeps itself on the grid off this, including
+					-- the one you are reading the row in. A part with an apply of
+					-- its own has already run it; this is what reaches the ones
+					-- whose whole answer is the rezoom.
+					ns.UI.Notify()
+				end,
+				zoom.label)
+			ui.Reading("", function() return Settings.Describe(zoom.key) end)
+		end
 
-		ui.Reading("now", Settings.Describe)
 		ui.Reading("exact on this screen at", Settings.Grid)
+		ui.Hint("A stop off that list draws a hairline soft, which is a price you are allowed to choose. It was not offered before: windows moved in quarters and anything you read mid fight in whole numbers.")
 
 		ui.Action(function()
-			return "back to " .. Settings.Label(ns.DefaultFor("uiSize"))
+			return "every screen back to its own default"
 		end, function()
-			Settings.Set(ns.DefaultFor("uiSize"))
+			for _, zoom in ipairs(ns.Zooms()) do
+				ns.db[zoom.key] = ns.DefaultFor(zoom.key)
+				if zoom.apply then
+					zoom.apply()
+				end
+			end
+			ns.UI.Notify()
 		end, function()
-			return Settings.Snap(ns.db.uiSize) ~= ns.DefaultFor("uiSize")
+			for _, zoom in ipairs(ns.Zooms()) do
+				if Settings.Snap(ns.db[zoom.key]) ~= ns.DefaultFor(zoom.key) then
+					return true
+				end
+			end
+			return false
 		end)
 
 		-- Here rather than on the feeds page, where the first of these two used

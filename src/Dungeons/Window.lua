@@ -738,6 +738,15 @@ function Window.Build()
 		title = "Adventure Guide",
 		width = WIDTH,
 		height = HEIGHT,
+		zoom = function() return ns.Zoom("dungeonsZoom") end,
+		-- The window takes itself back onto the grid and then this lays it out
+		-- again, in that order, because every number Fit uses is in the window's
+		-- own units and those units are what just changed.
+		rescale = function(apply)
+			apply()
+			Window.Fit()
+			Window.Refresh()
+		end,
 	})
 	ns.Remember(window)
 
@@ -994,16 +1003,3 @@ events:SetScript("OnEvent", function(_, event)
 	Window.Refresh()
 end)
 
-UI.OnRescale(function()
-	if not window then
-		return
-	end
-	-- The two lines every window in the addon carries, and todo.md item 19 is
-	-- the note asking for them to move into UI.Window. Written the same way as
-	-- the other four so that when they do move, five identical pairs come out
-	-- rather than four and an exception.
-	UI.Rezoom(window.frame, UI.WindowZoom())
-	window.zoom = UI.WindowZoom()
-	Window.Fit()
-	Window.Refresh()
-end)
