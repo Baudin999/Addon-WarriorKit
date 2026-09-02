@@ -571,9 +571,13 @@ end
 -- Water Shield is not missing Lightning Shield, so all of the names point at the
 -- one entry and the scan cannot tell which of them arrived.
 --
--- The racial is not an aura and resolves off Racials.lua instead: the spell,
+-- The racial is a cooldown and resolves off Racials.lua instead: the spell,
 -- the name and the picture, read again on every rebuild because the client can
--- take a moment after login to answer for a race.
+-- take a moment after login to answer for a race. Its name goes into the
+-- lookup all the same, because pressing it leaves an aura of the same name on
+-- you for fifteen seconds and the square must not shout through them: the
+-- cooldown alone said "press it" while it was already pressed, on a client
+-- that reads the cooldown as ready until the buff has run out.
 --
 -- Named rather than written inside Rebuild, where the set inside the entry walk
 -- was five levels deep and the shape gate stops at four. The gate was right:
@@ -584,6 +588,9 @@ local function Track(entry, watch)
 		entry.spell = ns.Racials.Spell()
 		entry.name = ns.Racials.Name()
 		entry.texture = ns.Racials.Texture()
+		if watch and entry.name then
+			wanted[entry.name] = entry
+		end
 		return
 	end
 	if entry.spells then
@@ -709,8 +716,9 @@ function Upkeep.Missing(index)
 	if not entry then
 		return false
 	end
+	-- Ready, worth a square, and not already running on you.
 	if entry.racial then
-		return ns.Racials.Idle()
+		return ns.Racials.Idle() and not entry.present
 	end
 	if entry.hand then
 		return Upkeep.Bare(entry.hand)

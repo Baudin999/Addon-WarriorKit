@@ -36,7 +36,10 @@ The racial is an entry on the row rather than a half of it. It ships on the
 in line, it has the same per-character switch the food has, it can be dragged
 off and dragged back, and it cannot be dragged to the out line, because a
 cooldown that is ready between fights is ready all afternoon. `buffRacial` is
-retired and `buffs racial off` goes the way `buffs food off` does.
+retired and `buffs racial off` goes the way `buffs food off` does. Its own
+buff counts too: the live client reads Blood Fury as ready until the fifteen
+seconds have run, so the square used to shout through them, and now the aura
+on you is what puts it away.
 
 Clicking a square opens the options window on the row's own page. The square
 is the one thing on screen you are certain to be looking at when you decide

@@ -464,8 +464,20 @@ check(racialText:find("/wk", 1, true) == nil,
 	"the racial box still carries the blue line naming a switch: " .. racialText)
 H.tooltips.spell[20572] = nil
 
--- Pressed. The cooldown is the only thing that says so and it is what takes
--- the square off the screen.
+-- Pressed, and the buff on you. The live client reads the cooldown as ready
+-- until the fifteen seconds have run, so the aura is what takes the square
+-- off the screen while the racial is doing its work.
+own.auras[1] = { name = "Blood Fury", expires = _G.GetTime() + 15 }
+fire("UNIT_AURA", "player")
+tick()
+check(Nag.Mode() == "quiet", "the racial square shouted through its own buff")
+own.auras[1] = nil
+fire("UNIT_AURA", "player")
+tick()
+check(Nag.Mode() == "combat", "the racial square did not come back when its buff ran out")
+
+-- Pressed, on a client whose cooldown says so at once. The cooldown alone is
+-- enough to take the square off the screen.
 own.cooldowns[20572] = { _G.GetTime(), 120 }
 tick()
 check(Nag.Mode() == "quiet", "pressing Blood Fury left the square on screen")
