@@ -156,6 +156,53 @@ check(cloth and cloth.count == 28,
 	("the same square is holding %s"):format(tostring(cloth and cloth.count)))
 
 ----------------------------------------------------------------------
+-- A scan that could not see the bags
+--
+-- The bug this section was written after, and the reason the baseline is
+-- written over rather than replaced. Walking into Uldaman with a session
+-- running, the bags read short for a frame. The baseline was emptied and
+-- refilled from that reading, forty ids fell out of it, and the next scan
+-- counted everything the character had walked in carrying as loot.
+--
+-- Modelled by taking the bag away and putting it back with nothing changed in
+-- it, which is what a loading screen looks like from in here.
+----------------------------------------------------------------------
+
+local before = select(2, Session.Held())
+
+local stashed = CARRIED[1]
+CARRIED[1] = {}
+fire("BAG_UPDATE", 1)
+CARRIED[1] = stashed
+fire("BAG_UPDATE", 1)
+
+local _, restored = Session.Held()
+check(restored == before,
+	("a bag that read short for one scan added %d to the ledger")
+		:format(restored - before))
+
+----------------------------------------------------------------------
+-- A stack on the cursor
+--
+-- The same failure wearing a different hat. Twelve out of a stack of twenty
+-- leaves eight in the bag, which is a true reading of a real removal, so the
+-- baseline follows it down and putting them back reads as twelve arriving. No
+-- scan is taken at all while the cursor is holding something.
+----------------------------------------------------------------------
+
+local cursor = _G.GetCursorInfo
+_G.GetCursorInfo = function() return "item", 2005, H.itemLink("Linen Cloth") end
+
+put(5, "Linen Cloth", 16)
+_G.GetCursorInfo = cursor
+put(5, "Linen Cloth", 28)
+
+local _, dragged = Session.Held()
+check(dragged == before,
+	("twelve lifted out of a stack and dropped back added %d to the ledger")
+		:format(dragged - before))
+
+----------------------------------------------------------------------
 -- After the stop
 ----------------------------------------------------------------------
 

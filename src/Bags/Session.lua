@@ -101,10 +101,23 @@ local function Count()
 	return counts
 end
 
--- The counts this scan found, written over the ones the last scan left.
-local function Keep(record, now)
-	local held = record.held
-	wipe(held)
+-- The counts this scan found, over the top of the ones the last scan left.
+--
+-- Over the top rather than in place of, which is the whole correctness of this
+-- file and is the second thing it did. Emptying the baseline and refilling it
+-- from the scan is right on a bag the client will answer for and catastrophic
+-- on one it will not: an item missing from a single scan comes back on the next
+-- one looking like a hundred and sixty one arrows you have just picked up.
+--
+-- The loading screen into a dungeon is exactly that. Press record at the
+-- meeting stone, walk in, and for a frame the bags read short; forty ids fall
+-- out of the baseline, and the pile fills with everything you walked in
+-- carrying. That is what this shipped doing, on the first real run.
+--
+-- So an id this scan did not see keeps whatever it had. An id it did see is
+-- written down at what it reads now, in both directions, because a stack that
+-- is genuinely smaller than it was has genuinely been sold or eaten.
+local function Keep(held, now)
 	for id, count in pairs(now) do
 		held[id] = count
 	end
@@ -117,26 +130,42 @@ end
 -- One scan, and everything that went up since the last one added to the pile.
 --
 -- Only a rise counts. Selling, eating, mailing and equipping all take the count
--- down and none of them is a thing you collected, and the baseline follows them
--- down so that re-looting something you used up in there is recorded the second
--- time as well as the first.
+-- down and none of them is a thing you collected, and the baseline follows a
+-- present item down so that re-looting something you sold in there is recorded
+-- the second time as well as the first.
 --
 -- The count added is the whole of the rise rather than the stack's size, so
 -- twelve cloth arriving in three separate stacks over an hour reads twelve.
+--
+-- The cost of the rule above Keep is one honest under-count: an item you sold
+-- or drank every last one of and then looted again is not recorded the second
+-- time, because nothing here distinguishes that from a stack the client could
+-- not read. Missing a potion is a smaller wrong answer than filing the whole
+-- bag under Uldaman.
+--
+-- **A stack on the cursor is the same failure wearing a different hat.** Pick
+-- twelve out of a stack of twenty and the bags hold eight, which is a true
+-- reading of a real removal, so the baseline follows it down and putting them
+-- back reads as twelve arriving. Nothing here can tell that from a sale, so no
+-- scan is taken at all while the cursor is holding something. Bags/Stack.lua
+-- refuses to start for the same reason and says so at its own guard.
 function Session.Take()
 	local record = Record()
 	if not record or not record.running then
 		return false
 	end
+	if GetCursorInfo() then
+		return false
+	end
 	local now = Count()
-	local items = record.items
+	local items, held = record.items, record.held
 	for id, count in pairs(now) do
-		local was = record.held[id] or 0
+		local was = held[id] or 0
 		if count > was then
 			items[id] = (items[id] or 0) + (count - was)
 		end
 	end
-	Keep(record, now)
+	Keep(held, now)
 	return true
 end
 
@@ -177,7 +206,14 @@ function Session.Start(name)
 	-- The baseline first and the flag second would be the same thing here, but
 	-- the order matters if anything ever scans between them: a session that is
 	-- running with no baseline behind it counts your whole bag as a gain.
-	Keep(record, Count())
+	--
+	-- Emptied and refilled, which is the one place that is safe to do it. This
+	-- is a press somebody made while standing still with their bags in front of
+	-- them, not a scan off an event that may have caught the client mid-stride,
+	-- and it has to forget the last session's counts rather than sit on top of
+	-- them. Every other write to the baseline goes through Keep.
+	wipe(record.held)
+	Keep(record.held, Count())
 	Label(record)
 	return true
 end
