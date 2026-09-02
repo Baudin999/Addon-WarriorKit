@@ -74,6 +74,10 @@ ns.Tip = Tip
 -- draw the caller's title and nothing else in the head band, which is correct
 -- and is not a fallback.
 --
+-- `talent` is a square on the talent window. Its two fields are whatever the
+-- client's setter wants on this build, which Talents/Read.lua settles once
+-- and UI/Scan.lua's entry for the kind explains.
+--
 -- `spell` is what a subject the client knows but nobody is carrying reads with,
 -- and it is here for the nag row. A square that says a buff is missing was the
 -- one hover in the addon whose head was a phrase this addon wrote, because
@@ -87,6 +91,7 @@ local READS = {
 	debuff    = { "unit", "index" },
 	inventory = { "unit", "slot" },
 	unit      = { "unit" },
+	talent    = { "tab", "index" },
 }
 
 -- Every kind a subject may name. `note` is here and not above because it is a
@@ -94,6 +99,7 @@ local READS = {
 local KINDS = {
 	note = true, item = true, action = true, spell = true,
 	buff = true, debuff = true, inventory = true, unit = true,
+	talent = true,
 }
 
 -- The bands a source may write into, and the order they are drawn in. `head` is

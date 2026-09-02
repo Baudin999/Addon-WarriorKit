@@ -600,8 +600,13 @@ if window then
 	-- sixty-five: two ledes and three hints went, the row is drawn instead of
 	-- listed, and the racial's page folded into the row's. 25,900 is that plus
 	-- the same room again.
-	check(prose < 25900,
-		("the window holds %d characters of prose and the budget is 25,900"):format(prose))
+	--
+	-- The talent window arrived and it is 25,984 across sixty-six: a switch
+	-- sentence, a lede, four readings and one line on the Blizzard page, and
+	-- nothing else, because the window itself is where the talents are
+	-- explained. 26,100 is that plus the same room again.
+	check(prose < 26100,
+		("the window holds %d characters of prose and the budget is 26,100"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

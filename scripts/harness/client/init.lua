@@ -231,6 +231,11 @@ for _, part in ipairs({
 	-- something to check. It gives that frame a size, because the addon parks it
 	-- off the side of the screen and a frame with no width has no edges to read.
 	"17-merchant",
+	-- Last, and it reads what 06-log.lua left: the three trees the window
+	-- heads its boards with, so a spec run that gives one tree every point is
+	-- the same run the talent window paints. It takes GetNumTalents over from
+	-- 04-hands.lua and leaves that file's GetTalentInfo for the Slam window.
+	"18-talents",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

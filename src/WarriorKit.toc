@@ -1,6 +1,6 @@
 ## Interface: 20506
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a character sheet of the addon's own with your gear, your skills, your standings, your weapon loadouts and how often you miss on it, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, two rows of cooldowns, the seconds a fight is made of over the minutes, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, the addon's own tooltip on a creature you point at in the world with where you stand on it under the name, a mail window that colours a recipient green for one of yours, blue for somebody you know and red for a stranger and splits more than twelve attachments across as many mails as it takes, a quest log three columns wide with every quest you are on down the left grouped by zone, what this one wants in the middle and what it pays on the right, a dungeon log the same three columns wide with every boss in the game down the left in level order, the dungeon's own map in the middle with the ones you have looted marked on it and what this one drops on the right, one window for your bags with what you are carrying sorted into piles and how many slots are free counted along the bottom, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a whispered thank you to a stranger who buffs you, five seconds of the eighties every time you level, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a character sheet of the addon's own with your gear, your skills, your standings, your weapon loadouts and how often you miss on it, a talent window with all three trees side by side and nothing to scroll and what unlearning them would cost along the bottom, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, two rows of cooldowns, the seconds a fight is made of over the minutes, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, the addon's own tooltip on a creature you point at in the world with where you stand on it under the name, a mail window that colours a recipient green for one of yours, blue for somebody you know and red for a stranger and splits more than twelve attachments across as many mails as it takes, a quest log three columns wide with every quest you are on down the left grouped by zone, what this one wants in the middle and what it pays on the right, a dungeon log the same three columns wide with every boss in the game down the left in level order, the dungeon's own map in the middle with the ones you have looted marked on it and what this one drops on the right, one window for your bags with what you are carrying sorted into piles and how many slots are free counted along the bottom, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a whispered thank you to a stranger who buffs you, five seconds of the eighties every time you level, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
@@ -701,6 +701,30 @@ Character\Paperdoll.lua
 Character\Window.lua
 Character\Blizzard.lua
 Character\Feature.lua
+
+# The talent window. All three trees side by side, every talent on the screen
+# at once, in place of the client's one-tree-at-a-time frame.
+#
+# Read.lua is the one file in the folder that touches a client API, and it
+# loads first because everything else reads through it: three shapes of the
+# same answer across the two clients, and the talent group carried down every
+# call whether or not this client has a second one. Cost.lua is what unlearning
+# costs, off the one moment the client says it, which is its own dialog at the
+# trainer. Board.lua draws one tree, Window.lua puts three of them side by side
+# with the spec strip over them and the two numbers along the foot, Blizzard.lua
+# keeps the client's own frame from loading and takes the N key, and
+# Feature.lua last, as everywhere else.
+#
+# After Character, whose Blizzard.lua this one is shaped like, and after
+# UnitFrames\Blizzard.lua, which owns the switch list Blizzard.lua signs into.
+# UI\Slot.lua, whose square every talent is drawn on, and UI\Scan.lua, which
+# reads the client's own description of one, are far above this line.
+Talents\Read.lua
+Talents\Cost.lua
+Talents\Board.lua
+Talents\Window.lua
+Talents\Blizzard.lua
+Talents\Feature.lua
 
 # The world hover. A creature under the cursor, described in the addon's own box
 # instead of Blizzard's.

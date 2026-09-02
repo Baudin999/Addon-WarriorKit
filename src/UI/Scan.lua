@@ -79,6 +79,12 @@ local NAME = "WarriorKitTooltipScan"
 -- SetSpellByID landed in Wrath. On the older client this kind answers nil like
 -- any other question the client will not take, and the caller draws the name it
 -- knew on its own.
+--
+-- `talent` is two values whose meaning moved: a tab and an index on every
+-- client up to the anniversary build, and the talent's own id with a false
+-- after it on that one. Talents/Read.lua asks both ways once and keeps the
+-- one that wrote the talent's name on its first line, which is why this entry
+-- says nothing about what the two values are.
 local KINDS = {
 	item      = { method = "SetHyperlink",     args = 1 },
 	bag       = { method = "SetBagItem",       args = 2 },
@@ -88,6 +94,7 @@ local KINDS = {
 	debuff    = { method = "SetUnitDebuff",    args = 2 },
 	inventory = { method = "SetInventoryItem", args = 2 },
 	unit      = { method = "SetUnit",          args = 1 },
+	talent    = { method = "SetTalent",        args = 2 },
 }
 
 local tip

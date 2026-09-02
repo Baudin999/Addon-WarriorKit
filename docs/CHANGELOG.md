@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+### The three trees on one screen
+
+The client's talent frame shows one tree at a time behind three tabs, in a
+scroll view that hides the last tiers of the wider trees under the fold. The
+question anybody opens it with, where the forty one points went, was three
+tabs and a scroll bar away.
+
+`Talents/` is the addon's own window in its place: all three trees side by
+side, every talent on the screen at once, and nothing to scroll. The window
+is sized to the tallest tree the client reports, seven tiers on the older
+client and nine on the newer, so it is exactly as tall as it has to be on
+either. A talent is the bag window's square with its rank in the corner
+reading `3/5`, and the rim carries the state: gold when every rank is in,
+green while a point would land there, the theme's edge for one half filled
+with nothing to fill it, and the hairline with a greyed picture for one you
+cannot reach yet. The lines between a talent and what it needs first are
+drawn as flat rectangles along the client's own routes, green where the
+requirement is met and grey where it is not, and the requirement itself is
+worked out off the ranks on the board rather than off a flag the two clients
+put in different slots. A hover reads the client's own description through
+the scanner, with the rank and the one thing standing in the way under it. A
+click spends a point, where one would land, and nowhere else.
+
+Where the client has dual specialisation the window carries a strip of two
+tabs, the live one marked, and a button that makes the other one live. Points
+go into the live one only, which is the client's rule, and a square in the
+other spec says so on a hover. A client with one group draws no strip.
+
+The foot of the window is the two numbers the client's frame never puts
+together: how many points are waiting, and what unlearning them all would
+cost. No call answers the second, so `Talents/Cost.lua` catches the one
+moment the client says it, the trainer's own dialog, and writes the quote
+down for this character with the day. The schedule everybody knows is worded
+as an estimate beside it, and a reset is only counted when a quote is
+followed by every tree emptying, because the dialog is usually cancelled.
+
+`Talents/Read.lua` is the one file that names a client call, and it reads
+three shapes of the same answer: `C_SpecializationInfo` on the anniversary
+client, and a `GetTalentInfo` that answers a run of values under it and on
+the older client alone. Blizzard's own frame is never loaded while the switch
+on the Blizzard page is ticked, because taking `ToggleTalentFrame` is what
+would have loaded it, and N opens this one.
+
 ### Let go of it anywhere on the bag window
 
 A piece pulled off the character sheet could only be dropped on a square,

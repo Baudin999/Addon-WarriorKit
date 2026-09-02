@@ -42,7 +42,7 @@ local child = H.child
 -- where color is three numbers and is left out on every line whose colour does
 -- not carry information.
 local tooltips = { item = {}, bag = {}, action = {}, spell = {}, buff = {},
-	debuff = {}, inventory = {}, unit = {} }
+	debuff = {}, inventory = {}, unit = {}, talent = {} }
 H.tooltips = tooltips
 
 local function Pair(unit, at)
@@ -126,6 +126,10 @@ local function Dress(frame)
 	-- back is the client's five lines about a creature, and a section seeds them
 	-- the same way it seeds an item's.
 	frame.SetUnit = Setter("unit")
+	-- A tab and an index, keyed the way the two unit kinds are. The newer
+	-- client keys this setter by the talent's id instead, and Talents/Read.lua
+	-- asks both ways once; a section that seeds the id form seeds "id:false".
+	frame.SetTalent = Setter("talent", Pair)
 end
 
 local made = _G.CreateFrame

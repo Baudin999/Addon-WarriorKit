@@ -92,6 +92,12 @@ local SWITCHES = {
 	{ key = "hideBlizzCharacter", word = "character",
 		label = "Blizzard's character sheet",
 		hint = "The C key opens this addon's instead, on the page you asked for. Your pet's sheet and the honour tab are the two pages it does not draw, so untick this if you want either." },
+	-- The third whose frames are not in FRAMES below, and a file for the reason
+	-- the character sheet's is: the N key comes with the window. Talents
+	-- /Blizzard.lua registers through Blizz.Also.
+	{ key = "hideBlizzTalents", word = "talents",
+		label = "Blizzard's talent window",
+		hint = "N opens this addon's instead, and Blizzard's is never loaded while this is ticked." },
 }
 
 -- What each switch takes down, and what it takes to take it down.
