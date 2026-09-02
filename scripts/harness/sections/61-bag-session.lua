@@ -213,6 +213,61 @@ check(cloth2 and cloth2.gained == 3,
 		:format(tostring(cloth2 and cloth2.gained)))
 
 ----------------------------------------------------------------------
+-- A session that came back from a reload
+--
+-- The record is a per-character saved variable, so a /reload is meant to change
+-- nothing about it. Two things would break that quietly and neither shows up in
+-- any other check here.
+--
+-- The heading is the first. It is a string written onto Core/Piles.lua's pile
+-- at the press, and Core/Piles.lua starts every session over, so a login that
+-- did not push it back would draw last night's dungeon under the word Session.
+--
+-- The baseline is the second and it is the one that would go wrong silently. A
+-- session counts the rise since the last scan, so if the counts it was holding
+-- did not survive the reload, the first bag update afterwards would read your
+-- whole bag as freshly gained and file everything you own under the dungeon.
+--
+-- Both are driven the way the client would: the saved table put back as it was
+-- written, PLAYER_LOGIN fired over it, then a bag update with nothing new in it.
+----------------------------------------------------------------------
+
+-- The bags as they were when you reloaded, and a session recording over them.
+-- Session.Start is what takes the baseline, and taking it that way rather than
+-- writing one by hand is the point: the saved file holds a count for every item
+-- you were carrying, and a hand-written one that missed a bag would prove the
+-- opposite of what this is for.
+put(5, "Linen Cloth", 12)
+
+zone = "Stratholme"
+Session.Start()
+ns.dbc.bagSession.items = { [2005] = 12 }
+
+-- Core/Piles.lua, as a fresh load leaves it: a pile with no heading on it.
+Piles.Rename(Piles.SESSION, nil)
+fire("PLAYER_LOGIN")
+
+local back = pile("session")
+check(back ~= nil and back.name == zone,
+	("a session that survived a reload is headed %s and the zone was %s")
+		:format(tostring(back and back.name), zone))
+check(Session.Running(), "a session that was recording stopped across the reload")
+
+-- A bag update with nothing new in it. This is the one that would go wrong
+-- quietly: with no baseline in the saved file, it reads the whole bag as gained.
+put(5, "Linen Cloth", 12)
+local kinds2, total2 = Session.Held()
+check(kinds2 == 1 and total2 == 12,
+	("the first scan after the reload left the ledger holding %d kind(s), %d in all")
+		:format(kinds2, total2))
+
+-- And it is still recording, so eight more still land.
+put(5, "Linen Cloth", 20)
+local _, grown = Session.Held()
+check(grown == 20,
+	("eight more arrived after the reload and the ledger says %d"):format(grown))
+
+----------------------------------------------------------------------
 -- The scene, put back
 ----------------------------------------------------------------------
 
