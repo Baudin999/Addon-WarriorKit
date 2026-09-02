@@ -1548,11 +1548,19 @@ end
 -- so caging them would take them out of the plate's chain to fix a bug they do
 -- not have.
 --
--- One name and no fallback list. `castBar` is what the nameplate driver calls
--- it on every flavour of this client, and a second guess at a PascalCase
--- spelling is how a walk like this ends up handed a method rather than a frame:
--- the harness models a plate faithfully enough that it answered one the first
--- time this was asked for as `CastBar`.
+-- Read off the client's own XML rather than guessed. Both clients this addon
+-- runs on, 2.5.6 and 1.15.9, declare the plate's cast bar as
+-- `CastBarsContainer.castBar`: a container frame the health bar's container is
+-- anchored under, with the bar inside it. That is the same shape PlateRegions
+-- already reads the health bar through. The bare `castBar` this used to read
+-- was a key neither client carries, so the lookup answered nil, nothing went
+-- in the attic, and Blizzard's bar came up under the plate on the first cast
+-- of every fight with `bars cast` on and the switch saying it was hidden. The
+-- bare key stays as the second answer for a build that predates the container.
+--
+-- Only the bar, not the container. The client anchors the health bar to the
+-- container, so caging it would move that anchor out of the plate's chain to
+-- fix a bug the container does not have.
 --
 -- `every` is what Restore passes, for the reason PlateRegions takes one: a bar
 -- caged while `bars cast` was on has to be handed back after the setting goes
@@ -1561,6 +1569,10 @@ local function PlateCage(plate, every)
 	local unitFrame = plate.UnitFrame
 	if not unitFrame or not (every or ns.db.barsCast) then
 		return nil
+	end
+	local container = unitFrame.CastBarsContainer
+	if type(container) == "table" and container.castBar then
+		return container.castBar
 	end
 	return unitFrame.castBar
 end

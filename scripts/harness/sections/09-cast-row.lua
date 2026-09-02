@@ -71,7 +71,7 @@ do
 
 	-- Blizzard's own plate cast bar goes with the rest of the plate while ours
 	-- is on. Two cast bars for one cast, in two places, is worse than either.
-	check(plate.UnitFrame.castBar.wkStripped,
+	check(plate.UnitFrame.CastBarsContainer.castBar.wkStripped,
 		"our cast row is on and Blizzard's plate cast bar is still drawn under it")
 
 	-- And it stays down through the call that used to put it back. The plate's
@@ -81,8 +81,8 @@ do
 	-- cast bars for the rest of the session, and the strip flag above went on
 	-- saying the region was hidden the whole time, which is why this asks what
 	-- is on the screen instead.
-	plate.UnitFrame.castBar:SetShown(true)
-	check(not plate.UnitFrame.castBar:IsVisible(),
+	plate.UnitFrame.CastBarsContainer.castBar:SetShown(true)
+	check(not plate.UnitFrame.CastBarsContainer.castBar:IsVisible(),
 		"the plate cast bar showed itself with SetShown and nothing put it back down")
 
 	----------------------------------------------------------------------
@@ -284,7 +284,7 @@ do
 		"the chamber was on and the box could not open any further than idle")
 	check(not bar.cast:IsShown(),
 		"the cast row is switched off and still drawn")
-	check(plate.UnitFrame.castBar:IsShown(),
+	check(plate.UnitFrame.CastBarsContainer.castBar:IsShown(),
 		"our cast row is off and Blizzard's plate cast bar did not come back with it")
 
 	-- The same door, and the bug that was already standing at it. Every region

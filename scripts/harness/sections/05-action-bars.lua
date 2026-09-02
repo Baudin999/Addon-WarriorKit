@@ -893,14 +893,14 @@ local function Pull(index)
 	plate:SetSize(plateSize[1] or PLATE_W, plateSize[2] or PLATE_H)
 	plate.UnitFrame = region("frame", plate)
 	plate.UnitFrame:SetSize(plate:GetWidth(), plate:GetHeight())
-	-- The child regions a TBC nameplate actually carries. They have to exist
-	-- rather than fall through to the metatable above: several are PascalCase,
-	-- and a stub that answers a method there hands the strip a function where
-	-- it expected a texture.
+	-- The child regions a nameplate carries, read off the client's XML: they
+	-- must exist rather than fall through to the metatable above, which hands
+	-- the strip a method. The cast bar sits inside its container, nowhere else.
 	for _, child in ipairs({ "healthBar", "name", "LevelFrame", "ClassificationFrame",
-		"selectionHighlight", "aggroHighlight", "RaidTargetFrame", "castBar" }) do
+		"selectionHighlight", "aggroHighlight", "RaidTargetFrame", "CastBarsContainer" }) do
 		plate.UnitFrame[child] = region("frame", plate.UnitFrame)
 	end
+	plate.UnitFrame.CastBarsContainer.castBar = region("frame", plate.UnitFrame.CastBarsContainer)
 	plates[#plates + 1] = plate
 	guids[unit] = ("Creature-0-0-0-0-1234-0000000%d"):format(index)
 	fire("NAME_PLATE_UNIT_ADDED", unit)
