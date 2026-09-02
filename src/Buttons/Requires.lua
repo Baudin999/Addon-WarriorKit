@@ -37,8 +37,10 @@ ns.Requires = Requires
 -- names a condition is an ability aimed at something, so with nothing to aim it
 -- at the answer is "notarget" before any threshold is read. That is what makes
 -- the list short. Rend and Hamstring need a target too and are not here,
--- because the addon has no fact about them worth writing down and a list of
--- every attack a class owns is a list that goes wrong quietly.
+-- because the client already knows they are aimed at an enemy and Slot.State
+-- greys every such square with nothing selected before this file is asked.
+-- This file reads the same "nothing to aim at" off ns.Slot.Aimless, so a
+-- threshold is never read off a unit that is not there.
 --
 -- Adding a second kind is a field on the entry and a branch in Unmet. It is
 -- deliberately not done on speculation: "the target has to be casting" looks
@@ -131,7 +133,7 @@ end
 -- Order is the ladder's own rule again, one level down: nothing to aim it at
 -- outranks a threshold, because a threshold read off no unit is not a fact.
 local function Unmet(entry)
-	if not UnitExists(UNIT) or UnitIsDead(UNIT) or not UnitCanAttack("player", UNIT) then
+	if ns.Slot.Aimless() then
 		return "notarget"
 	end
 	if entry.below then

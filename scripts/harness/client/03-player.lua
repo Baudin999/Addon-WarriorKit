@@ -350,6 +350,15 @@ _G.IsUsableSpell = function(spell)
 	end
 	return false, entry == "power"
 end
+-- Table driven, keyed by name the way the unusable list is, and false unless a
+-- section says otherwise. This is the call Buttons/Slot.lua reaches for a macro
+-- square, where the action-level answer is about the macro and not about the
+-- spell it would cast, so a stub answering a flat false here would leave the
+-- macro half of the "nothing to aim at" rung unreachable from a test.
+_G.WarriorKitHarmfulSpells = {}
+_G.IsHarmfulSpell = function(spell)
+	return _G.WarriorKitHarmfulSpells[spell] == true
+end
 -- Table driven, and true unless a section says otherwise. What it is here for
 -- is the cooldown row: every entry in a class file is walked with this call, a
 -- talent nobody took has to leave no square behind, and a stub that answered

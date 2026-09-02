@@ -169,6 +169,7 @@ local SECTIONS = {
 	"02-layout-engine",
 	"03-gauge",
 	"04-ability-square",
+	"04-aimed-square",
 	"05-action-bars",
 	"06-debuff-row",
 	"07-tracked-debuff",

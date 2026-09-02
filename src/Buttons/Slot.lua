@@ -19,16 +19,17 @@ ns.Slot = Slot
 -- same vocabulary; the inputs have nothing in common.
 --
 -- What they do share is the order, and the order is the design. What cannot be
--- fixed at all comes first, then what a stance swap or a few seconds of rage
--- fixes, then range. Reversing any two of those makes the square say the less
--- useful of two true things: a spell you have no rage for and are also out of
--- range of is a spell to walk towards, and one you are out of range of and
--- cannot cast in this stance is a spell to swap for.
+-- fixed at all comes first, then what a click on something fixes, then what a
+-- stance swap or a few seconds of rage fixes, then range. Reversing any two of
+-- those makes the square say the less useful of two true things: a spell you
+-- have no rage for and are also out of range of is a spell to walk towards,
+-- and one you are out of range of and cannot cast in this stance is a spell to
+-- swap for.
 --
 -- Everything here runs on the bar's ticker against every button on it, so
 -- nothing allocates and nothing is cached that the client already holds.
--- check.sh's HOT list covers Slot.State, Slot.Spell, Slot.Active and
--- Slot.Equipped.
+-- check.sh's HOT list covers Slot.State, Slot.Spell, Slot.Aimless, Slot.Active
+-- and Slot.Equipped.
 --------------------------------------------------------------------------
 
 -- Below this a cooldown is the global and not the ability's own, and the two
@@ -113,6 +114,13 @@ local isCurrent, isRepeating, isEquipped
 -- ends there on five of the twelve keys the warrior plan writes.
 local readAction, macroSpell
 
+-- Whether what is in a slot is aimed at an enemy. Same tier again: a client
+-- without it loses the one rung that knows about the target with nothing
+-- selected, and keeps the bar. Blizzard's own 2.5.6 API documentation lists it
+-- under C_ActionBar with the loose name beside it, and nothing installed on
+-- this machine calls either, so both are looked for.
+local isHarmful
+
 function Slot.CanRead()
 	if probe == nil then
 		probe = true
@@ -127,6 +135,11 @@ function Slot.CanRead()
 		isEquipped = type(IsEquippedAction) == "function" and IsEquippedAction or nil
 		readAction = type(GetActionInfo) == "function" and GetActionInfo or nil
 		macroSpell = type(GetMacroSpell) == "function" and GetMacroSpell or nil
+		if C_ActionBar and type(C_ActionBar.IsHarmfulAction) == "function" then
+			isHarmful = C_ActionBar.IsHarmfulAction
+		elseif type(IsHarmfulAction) == "function" then
+			isHarmful = IsHarmfulAction
+		end
 	end
 	if probe ~= true then
 		return false, probe
@@ -223,6 +236,54 @@ function Slot.Count(slot)
 		return nil
 	end
 	return count
+end
+
+-- Whether there is nothing live and attackable selected. The one definition of
+-- "nothing to aim at" in the addon: Aimed below reads it for every square and
+-- Buttons/Requires.lua reads it in front of every threshold, because a
+-- threshold read off no unit is not a fact. Two copies of three unit calls is
+-- how the two drift, and the drift would be silent.
+function Slot.Aimless()
+	return not UnitExists(RANGE_UNIT) or UnitIsDead(RANGE_UNIT)
+		or not UnitCanAttack("player", RANGE_UNIT)
+end
+
+-- The rung the client's own bar does not have.
+--
+-- IsUsableAction knows about your resources, your stance, your cooldowns and
+-- what you are wearing, and nothing about the target. Blizzard's own button
+-- colours the icon off that call alone, so a Flame Shock in an inn with
+-- nothing selected draws white on their bar and drew ready on this one. The
+-- range rung could not catch it, because with nothing targeted there is no
+-- distance to be out of and it skips itself, and the condition rung only
+-- speaks for the spells a class file names. Every other attack on the bar fell
+-- through to ready.
+--
+-- The fact the client does hold is whether the slot is aimed at an enemy, and
+-- an attack with nothing to attack is a press that does nothing. A spell that
+-- is not harmful is left alone on purpose: a heal or a shield with nothing
+-- selected lands on you under the self cast setting, and a totem has no target
+-- at all, so for both of those the press does something and the square stays
+-- ready.
+--
+-- Asked of the spell where a macro is what is in the slot, for the reason
+-- Refused below asks ns.SpellUsable there, and of the slot for everything
+-- else. A macro that resolves to no spell falls back to the slot, which is the
+-- honest answer for a /startattack with no /cast in it. Both are read against
+-- the target, as range is: a mouseover macro hovered over a mob with nothing
+-- targeted is the one press this reads wrong, and it reads it grey rather
+-- than lit.
+local function Aimed(slot, spell, macro)
+	local harmful
+	if macro and spell then
+		harmful = ns.SpellHarmful(spell)
+	elseif isHarmful then
+		harmful = isHarmful(slot)
+	end
+	if harmful and Slot.Aimless() then
+		return "notarget"
+	end
+	return nil
 end
 
 -- The two rungs that know more than the client does, as one question, or nil
@@ -327,6 +388,16 @@ function Slot.State(slot)
 	-- resolves through here too, which is the whole of the fix for a plan that
 	-- puts five of its twelve keys in macros.
 	local spell, macro = Slot.Spell(slot)
+
+	-- Above the two rungs that outrank the client, and that is the ladder's
+	-- own rule once more: a shut window or a threshold read off no unit is not
+	-- a fact, and Requires.lua already refuses to read one. Nothing selected is
+	-- also the one state on the bar a single click fixes, so it is the first
+	-- thing worth saying.
+	local aimed = Aimed(slot, spell, macro)
+	if aimed then
+		return aimed, swipeStart, swipeDuration
+	end
 
 	local beyond = Beyond(spell)
 	if beyond then

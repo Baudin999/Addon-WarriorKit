@@ -278,6 +278,13 @@ read_globals = {
 	-- bar that raises once per button per tick is worse than a grey bar.
 	"HasAction", "GetActionTexture", "GetActionCooldown", "GetActionCount",
 	"IsUsableAction", "IsActionInRange",
+	-- and the one fact the usable call does not hold: whether the slot is aimed
+	-- at an enemy. Blizzard's 2.5.6 API documentation lists it under C_ActionBar
+	-- with the loose name beside it; Slot.CanRead probes both and resolves
+	-- whichever answers to a local, and a client with neither keeps the bar.
+	-- Core/Core.lua's ns.SpellHarmful shim reads the spell-level pair the same
+	-- way, so a macro square is asked about the spell it would cast.
+	"C_ActionBar", "IsHarmfulAction", "IsHarmfulSpell",
 	-- and the three that say something about a slot beyond whether a press would
 	-- land: the stance you are standing in, the auto attack already swinging,
 	-- and the weapon you are wielding. Probed separately from the five above and

@@ -344,6 +344,12 @@ else
 	check(Slot.State(SLOT) == "reaction",
 		"Overpower is drawn ready with nothing having dodged you, which is the whole bug")
 
+	-- Nothing to hit outranks a shut window: a window read off no unit is not
+	-- a fact, and a click fixes one of the two.
+	put({ texture = ART, spell = OVERPOWER, harmful = true })
+	check(Slot.State(SLOT) == "notarget", "a shut window is being reported ahead of nothing to hit")
+	put({ texture = ART, spell = OVERPOWER })
+
 	-- Somebody else's fight does not arm your button.
 	logLine("SWING_MISSED", "Player-0-0000009r", MOB, 12, "DODGE")
 	check(Slot.State(SLOT) == "reaction", "a stranger's attack being dodged opened your window")

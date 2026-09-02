@@ -793,6 +793,25 @@ function ns.SpellUsable(spell)
 	return _G.IsUsableSpell(spell)
 end
 
+-- Whether a spell is aimed at an enemy, or nil for a client that cannot say.
+--
+-- The one fact IsUsableAction does not hold. It knows your mana, your stance
+-- and your gear and nothing about the target, so a Flame Shock in an inn with
+-- nothing selected reads as pressable. Buttons/Slot.lua asks this of a macro's
+-- spell for the reason it asks ns.SpellUsable of one, and asks the slot's own
+-- call for a plain spell. Nil rather than false where neither call exists,
+-- because "cannot say" must not grey a square and "not harmful" must not
+-- either, and only one of those is a fact about the spell.
+function ns.SpellHarmful(spell)
+	if C_Spell and C_Spell.IsSpellHarmful then
+		return C_Spell.IsSpellHarmful(spell)
+	end
+	if type(_G.IsHarmfulSpell) == "function" then
+		return _G.IsHarmfulSpell(spell)
+	end
+	return nil
+end
+
 -- One of your own buffs, by slot, as the name alone.
 --
 -- UnitAura is asked first and C_UnitAuras second, which is the opposite way

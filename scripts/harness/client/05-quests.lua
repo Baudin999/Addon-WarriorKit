@@ -257,6 +257,15 @@ _G.GetActionTexture = function(slot)
 	local held = slots[slot]
 	return held and held.texture or nil
 end
+-- Whether the slot is aimed at an enemy, which is the one thing about the
+-- target the client will say without one selected. Off a field on the slot
+-- and false unless a section writes it, so a totem and a heal stay ready and
+-- only the square the section calls an attack can be greyed for having
+-- nothing to hit.
+_G.IsHarmfulAction = function(slot)
+	local held = slots[slot]
+	return (held and held.harmful) and true or false
+end
 -- start, duration, enabled, in the order the loose global answers them.
 _G.GetActionCooldown = function(slot)
 	local held = slots[slot]
