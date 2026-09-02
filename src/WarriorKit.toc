@@ -767,6 +767,7 @@ Dungeons\Feature.lua
 # line.
 Map\Zones.lua
 Map\Pins.lua
+Map\Places.lua
 Map\Mates.lua
 Map\Window.lua
 Map\Blizzard.lua

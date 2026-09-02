@@ -533,8 +533,16 @@ if window then
 	-- how far behind you a piece of gear has to be. A stepper reading 5 says
 	-- neither of those on its own, and both of them decide whether an item is
 	-- destroyed. 28,000 is that measurement plus a hint's worth of room again.
-	check(prose < 28000,
-		("the window holds %d characters of prose and the budget is 28,000"):format(prose))
+	--
+	-- The places on the map cost 276 across a lede, a hint and a reading, and
+	-- take it to 28,084 across seventy: one new page, and its controls are not
+	-- counted because their labels are Questie's own words rather than this
+	-- addon's prose. The hint is the one sentence nobody can work out from a
+	-- row of tick boxes: that a tick here is a tick in Questie's menu, and not a
+	-- second setting that could disagree with it. 28,300 is that measurement
+	-- plus a hint's worth of room again.
+	check(prose < 28300,
+		("the window holds %d characters of prose and the budget is 28,300"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

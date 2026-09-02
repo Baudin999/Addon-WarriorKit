@@ -83,6 +83,93 @@ local function TurnIns(want)
 end
 
 --------------------------------------------------------------------------
+-- The places, as a page of tick boxes and as a word
+--------------------------------------------------------------------------
+
+-- One kind of place switched, and the map painted again if it is open.
+-- Map/Places.lua carries the reason the state is Questie's and not this
+-- addon's.
+--
+-- Painted now rather than a moment later, and that is a known short fall.
+-- Questie spawns a kind of NPC over a few ticks, thirty two a hundredth of a
+-- second, so a repaint on the click has the mailboxes, which Questie draws in
+-- one go, and not yet the flight masters. They are on the map the next time
+-- it is painted, which is when it opens and on every quest log event, and in
+-- play that is the next few seconds. A repaint booked half a second out would
+-- be the whole chart on a tick path, which is what the hot path scan in
+-- scripts/hot.lua refuses, and it is right to.
+local function SetPlace(label, on)
+	local changed = ns.MapPlaces.Set(label, on)
+	if changed then
+		ns.MapWindow.Refresh()
+	end
+	return changed
+end
+
+-- The page. One tick box per kind of place Questie offers this character, in
+-- Questie's own order and under Questie's own labels, with a hairline between
+-- the townsfolk, the vendors and the trainers, which is where Questie's own
+-- dropdown breaks into its two submenus.
+--
+-- Built out of the list at the panel's build, which is login, and Questie's
+-- lists are saved variables it fills on its first ever login, so on every
+-- login after that the rows are there. On the first they are not, and the
+-- page says so instead of drawing an empty checklist that looks like a bug.
+local function PlacesPage(ui)
+	ui.Section("Places", "Chores")
+	ui.Lede("The flight masters, innkeepers, mailboxes, trainers and vendors Questie can draw, ticked on here rather than in the dropdown behind its minimap button.")
+	local rows = ns.MapPlaces.List()
+	local group
+	for index = 1, #rows do
+		local row = rows[index]
+		if group and row.group ~= group then
+			ui.Divider()
+		end
+		group = row.group
+		local label = row.label
+		ui.Check(label,
+			function() return ns.MapPlaces.On(label) end,
+			function(on) SetPlace(label, on) end)
+	end
+	if #rows == 0 then
+		ui.Hint("Questie fills this list on its first login and keeps it, so on a fresh install the boxes are here after the next reload.")
+	end
+	ui.Reading("the places", ns.MapPlaces.Describe)
+	ui.Hint("A tick here is a tick in Questie's own menu, and both maps draw the same places.")
+end
+
+-- The word: the whole list with no argument, or one kind switched.
+--
+-- The kind is every word before the last, because Questie's labels have
+-- spaces in them: "Flight Master" is two words and "Class Trainer" is two, and
+-- a word that took only the first would find neither.
+local function PlacesWord(rest)
+	if rest == "" then
+		local lines = ns.MapPlaces.Lines()
+		if #lines == 0 then
+			ns.Print(ns.MapPlaces.Describe() .. ".")
+			return
+		end
+		for index = 1, #lines do
+			ns.Print(lines[index] .. ".")
+		end
+		return
+	end
+	local label, switch = rest:match("^(.-)%s+(%S+)$")
+	if not label or (switch ~= "on" and switch ~= "off") then
+		ns.Print("map places takes a kind of place and then on or off.")
+		return
+	end
+	local changed = SetPlace(label, switch == "on")
+	if changed == nil then
+		ns.Print(("Questie offers no kind of place called %q."):format(label))
+		return
+	end
+	ns.Print(("%s is %s%s."):format(label, switch,
+		changed and "" or ", and it already was"))
+end
+
+--------------------------------------------------------------------------
 -- The slash word
 --------------------------------------------------------------------------
 
@@ -100,6 +187,10 @@ local function MapWord(arg, rawArg)
 		TurnIns(rest)
 	elseif word == "group" then
 		ns.Print(ns.MapMates.Describe() .. ".")
+	elseif word == "places" then
+		-- The untouched line rather than the lowered one, because the word
+		-- prints the kind back and "flight master" is not what Questie calls it.
+		PlacesWord((select(2, rawArg:match("^(%S*)%s*(.-)$"))))
 	elseif word == "on" or word == "off" then
 		SetMap(word == "on")
 		ns.Print("the world map is " .. (ns.db.worldMap and "on" or "off") .. ".")
@@ -110,12 +201,10 @@ local function MapWord(arg, rawArg)
 		end
 		ns.MapWindow.Toggle()
 	else
-		ns.Print("map takes on, off, hide, zones, markers, turnins or group.")
+		ns.Print("map takes on, off, hide, zones, markers, turnins, group or places.")
 	end
-	-- rawArg is the untouched line, which this word has no use for: every
-	-- sub-word above takes a switch rather than a name. Named so the signature
-	-- matches every other word in the addon and so the next one that needs it
-	-- does not have to change the registration.
+	-- rawArg is the untouched line, and places is the one sub-word above with
+	-- a use for it: every other takes a switch rather than a name.
 	return rawArg
 end
 
@@ -168,12 +257,14 @@ ns.Register({
 		"map turnins, where the question mark went for every quest you have finished",
 		"map turnins <name>, the same for one quest, finished or not",
 		"map group, whether the client will say where the people you are with are",
+		"map places, every kind of place Questie can draw, and which are on",
+		"map places <kind> on|off, one of them switched, in Questie and on both maps",
 	},
 
 	status = function()
-		return ("%s; %s; Blizzard's %s"):format(
+		return ("%s; %s; %s; Blizzard's %s"):format(
 			ns.MapWindow.Describe(), ns.MapZones.Describe(),
-			ns.MapBlizzard.Describe())
+			ns.MapPlaces.Describe(), ns.MapBlizzard.Describe())
 	end,
 
 	panel = function(ui)
@@ -192,5 +283,7 @@ ns.Register({
 		ui.Reading("your group", ns.MapMates.Describe)
 		ui.Reading("this window", ns.MapWindow.Describe)
 		ui.Reading("Blizzard's window", ns.MapBlizzard.Describe)
+
+		PlacesPage(ui)
 	end,
 })

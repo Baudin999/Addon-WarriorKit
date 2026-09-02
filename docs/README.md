@@ -769,7 +769,7 @@ goes through `Feature.lua` or through the shared surface below:
     ns.FrameAuras.Under(entry, frame)
                                  what now sits between a block and its first
                                  row, which Perch is the only thing that knows
-    ns.FrameAuras.Describe() / Probe(entry) / SizeRange() / CountCeiling(key)
+    ns.FrameAuras.Describe() / Probe(entry) / SizeRange()
     ns.Group.Apply()             everything a setting can move about the party
                                  and raid list: where it sits, its zoom, its
                                  attributes and every block under it
@@ -5775,10 +5775,10 @@ on different realms read as the same person.
     /wk skin link on|off         mirror the target block off the player block
     /wk skin level 0             -100 to 100, the target's drop from the player
     /wk skin heals on|off        the incoming heal slice on the health gauge
-    /wk skin auras on|off        the target's own buff and debuff rows
+    /wk skin auras on|off        the buff and debuff rows on both blocks, every
+                                 aura the client reports, wrapped away from
+                                 the block
     /wk skin aura 28             12 to 32, the size of one aura square
-    /wk skin debuffs 8           0 to 16, how long the debuff row runs
-    /wk skin buffs 8             0 to 32, how long the buff row runs
     /wk skin probe               what this client answered for each frame
     /wk party on|off             blocks for the people you are grouped with
     /wk party self on|off        whether your own block is in the list
@@ -5832,6 +5832,15 @@ on different realms read as the same person.
     /wk minimap buttons on|off   collect the addon buttons behind one square
     /wk minimap scan             look for buttons that appeared since login
     /wk minimap list             what the corral holds, and what it left as pins
+    /wk map                      open the world map
+    /wk map on|off               the addon's world map instead of the client's
+    /wk map hide on|off          Blizzard's map in the attic, and M opens this one
+    /wk map zones                how many zones the client names, and how many have a level
+    /wk map markers              whether Questie is answering for the markers
+    /wk map turnins [name]       where the question mark went for a finished quest
+    /wk map group                whether the client will say where your group is
+    /wk map places               every kind of place Questie can draw, and which are on
+    /wk map places Innkeeper on  one of them switched, in Questie and on both maps
     /wk destroy                  the clutter window, one quest item at a time
     /wk ui                       what is baked in, and whether Edit Mode answers
     /wk ui save                  capture the active Edit Mode layout
@@ -6294,6 +6303,17 @@ Everything below was written from the API contract and has never executed:
   a Questie whose internals moved draws fewer markers rather than raising. What
   is unproven is the count: `/wk map markers` says how many Questie is holding,
   and a map with none on it where that number is large is the failure.
+- **Whether a tick on the Places page makes Questie draw.** The page is built
+  out of `QuestieMenu.buildTownsfolkMenu`, `buildVendorMenu` and
+  `buildProfessionMenu`, the three lists Questie's own dropdown is built from,
+  and a tick calls the `func` on the entry, which is what a click in that
+  dropdown calls. Read off the installed 11.37.1 and pcalled, so a Questie whose
+  menu moved shows a page with one line on it saying so. What is unproven is
+  the round trip: tick Innkeeper, open the map on a town, and the innkeeper is
+  on it; open Questie's own dropdown and Innkeeper is ticked there too. A kind
+  of NPC is spawned by Questie over a few ticks, so a map that is already open
+  when the box is ticked shows it on its next repaint rather than on the click.
+  `/wk map places` prints what Questie says it has on.
 - **Whether `C_DeathInfo.GetCorpseMapPosition` answers on these builds.** Your
   corpse is on the map because that call says where it is, asked against the map
   being drawn so the skull lands on the continent picture as well as on the zone

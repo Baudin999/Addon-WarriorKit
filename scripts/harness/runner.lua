@@ -275,6 +275,12 @@ local SECTIONS = {
 	-- section that seeds the client's binding line, and it leaves the seed
 	-- behind: nothing after it reads a tooltip off a bag slot.
 	"62-bag-lanes",
+
+	-- Last, and after 54-world-map.lua, whose window it opens again and whose
+	-- fixtures it reads. It is the only section that makes Questie draw
+	-- something rather than reading what Questie drew, and it puts every
+	-- place it switched back the way it found it.
+	"63-map-places",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

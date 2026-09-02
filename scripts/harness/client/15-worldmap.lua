@@ -334,6 +334,72 @@ register({ kind = "flightMaster", id = 55, map = 1436, x = 75, y = 25,
 	name = "Thor", art = "Questie/Icons/flight" })
 
 --------------------------------------------------------------------------
+-- Questie's townsfolk menu
+--------------------------------------------------------------------------
+
+-- The three lists Questie's dropdown is built from, in the shape
+-- Modules/QuestieMenu/QuestieMenu.lua (v11) leaves an entry: the label in the
+-- player's language, whether the profile has it on, and a function that flips
+-- the profile and spawns or unloads the frames. Map/Places.lua reads nothing
+-- else off an entry, and a divider is what Questie puts between the primary
+-- and secondary professions.
+--
+-- The flip is modelled the way Questie's is, as a toggle rather than a set,
+-- because that is the trap: a caller that calls it on a box already ticked
+-- unticks it.
+local menu = _G.QuestieLoader:ImportModule("QuestieMenu")
+
+-- What Questie's profile holds, keyed the way townsfolkConfig is.
+local townsfolk = {
+	["Flight Master"] = true, ["Innkeeper"] = false, ["Mailbox"] = true,
+	["Food"] = false, ["Blacksmithing"] = false, ["Cooking"] = false,
+}
+
+-- The frames a kind spawns when it goes on, so a section can see the map
+-- change. One per kind, all on Westfall, named after who stands there.
+local stands = {
+	["Innkeeper"] = { id = 295, x = 56, y = 47, name = "Innkeeper Heather" },
+	["Food"] = { id = 1500, x = 52, y = 53, name = "Vendor Wilhelm" },
+}
+
+local function flip(key)
+	townsfolk[key] = not townsfolk[key]
+	local stand = stands[key]
+	if not stand then
+		return
+	end
+	if townsfolk[key] then
+		register({ kind = key, id = stand.id, map = 1436, x = stand.x, y = stand.y,
+			name = stand.name, art = "Questie/Icons/townsfolk" })
+	else
+		questie.manualFrames[key] = nil
+	end
+end
+
+local function entry(key)
+	return {
+		text = key,
+		func = function() flip(key) end,
+		notCheckable = false,
+		checked = townsfolk[key],
+		isNotRadio = true,
+		keepShownOnClick = true,
+	}
+end
+
+local divider = { isSeparator = true, notCheckable = true, text = "" }
+
+menu.buildTownsfolkMenu = function()
+	return { entry("Flight Master"), entry("Innkeeper"), entry("Mailbox") }
+end
+menu.buildVendorMenu = function()
+	return { entry("Food") }
+end
+menu.buildProfessionMenu = function()
+	return { entry("Blacksmithing"), divider, entry("Cooking") }
+end
+
+--------------------------------------------------------------------------
 -- Blizzard's window and the M key
 --------------------------------------------------------------------------
 
@@ -349,6 +415,20 @@ end
 H.worldmap = {
 	nodes = NODES,
 	uncovered = UNCOVERED,
+	-- Questie's profile for the places, so a section can read back whether a
+	-- tick reached Questie rather than only this addon's own reading of it.
+	townsfolk = townsfolk,
+	-- The three builders taken away and put back, which is a Questie that is
+	-- installed and has not built its lists, or one whose menu has moved.
+	Menuless = function(gone)
+		if gone then
+			menu.buildTownsfolkMenu = nil
+		else
+			menu.buildTownsfolkMenu = function()
+				return { entry("Flight Master"), entry("Innkeeper"), entry("Mailbox") }
+			end
+		end
+	end,
 	-- Which way you are pointing, so a section can turn you and read the arrow.
 	Face = function(radians)
 		facing = radians
