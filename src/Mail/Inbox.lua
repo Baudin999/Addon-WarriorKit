@@ -23,9 +23,13 @@ ns.MailInbox = Inbox
 -- which is the classic way to write this wrongly; walking down from the end
 -- cannot, because deleting message seven moves nothing below seven.
 --
--- **A full bag stops it rather than losing anything.** TakeInboxItem on no free
--- slot fails quietly and the message stays where it is, so the honest thing is
--- to count the free slots first and say why the sweep stopped.
+-- **A full bag steps past a message rather than ending the sweep.** A take with
+-- no free slot fails quietly and the message stays where it is, so the free
+-- slots are counted first. Counted per message rather than once for the whole
+-- sweep: an inbox after a night of auctions is mostly coin and a few stacks,
+-- coin needs no room at all, and stopping dead on the first message carrying a
+-- leftover stack leaves forty mails of gold sitting behind it. What was stepped
+-- past is counted and said at the end.
 --
 -- Nothing here is on a ticker. An inbox changes when the server says so, which
 -- is MAIL_INBOX_UPDATE, and it changes when you press something, which is a
@@ -154,15 +158,25 @@ end
 -- The sweep
 --------------------------------------------------------------------------
 
--- Which message the last take was aimed at and how much was on it, so a
--- message that does not empty cannot be asked again forever.
+-- Which message the last take was aimed at, how much was on it, and how many
+-- times it has been asked again since, so a message that does not empty cannot
+-- be asked forever and one that is merely slow is not given up on.
 --
--- That is not a theoretical loop. A message carrying five items with two free
--- slots in your bags takes two and keeps three, and the free-slot check above
--- passed, because there was room for something. Asking again takes nothing and
--- changes nothing, and the sweep would sit on that message until the mailbox
--- closed. So a message whose load did not go down is stepped past and counted.
-local aimed, held, stuck = 0, 0, 0
+-- Neither of those is theoretical. A message carrying five items with two free
+-- slots in your bags takes two and keeps three, and the free-slot count passed,
+-- because there was room for something; asking again takes nothing and changes
+-- nothing, and the sweep would sit on that message until the mailbox closed.
+--
+-- The other way round is the one that was wrong. MAIL_INBOX_UPDATE arrives when
+-- the server has taken the coin off a message, which is before the attachment
+-- has left it, so the first reading after a take on a message carrying one item
+-- and no coin is the same reading as before the take. Giving up there marks an
+-- ordinary auction mail as one that would not empty and steps past it, and an
+-- inbox of forty of them ends with most of them still in it. So a message is
+-- asked again a few times, and only a message that answers the same every time
+-- is stepped past.
+local PATIENCE = 4
+local aimed, held, asked, stuck, full = 0, 0, 0, 0, 0
 
 local function Halt(why)
 	at = 0
@@ -170,41 +184,64 @@ local function Halt(why)
 	return false
 end
 
--- How much is on one message, as a single number: nought for a message with
--- nothing to take, and a value that must go down after a take that worked.
--- Money and a count of items added together, which is not a quantity of
--- anything and is not meant to be.
-local function Load(index)
+-- What is on one message: its coin and how many attachments. A COD message
+-- answers nothing on purpose, so the sweep never aims at one.
+local function Carrying(index)
 	local ask = _G.GetInboxHeaderInfo
 	if type(ask) ~= "function" then
-		return 0
+		return 0, 0
 	end
 	local ok, _, _, _, _, money, cod, _, items = pcall(ask, index)
 	if not ok or (cod or 0) > 0 then
-		return 0
+		return 0, 0
 	end
-	return (money or 0) + (items or 0)
+	return money or 0, items or 0
 end
 
--- The next message at or below the cursor that has something on it, or nil when
--- the sweep is finished. The header is read again on every step rather than
--- trusted from before the last take, because taking is what renumbers the
--- inbox.
+-- The next message at or below the cursor that has something on it and somewhere
+-- for it to go, or nil when the sweep is finished. The header is read again on
+-- every step rather than trusted from before the last take, because taking is
+-- what renumbers the inbox.
+--
+-- The load a message is judged by is its coin and its item count added
+-- together, which is not a quantity of anything and is not meant to be. It is
+-- nought for a message with nothing to take and it has to go down after a take
+-- that worked, and those are the only two things asked of it.
+--
+-- The bags are counted once here rather than once per message: the count is the
+-- same for every message this pass, and a scan of five bags inside the loop is
+-- that scan again for every message in a mailbox of fifty.
 local function Next()
+	local room = Inbox.FreeSlots()
 	while at > 0 do
-		local load = Load(at)
-		if load > 0 and at == aimed and load >= held then
-			stuck = stuck + 1
-		elseif load > 0 then
-			return at, load
+		local money, items = Carrying(at)
+		local load = money + items
+		-- A load of nought is an empty message or a COD, and neither is the
+		-- sweep's business.
+		if load > 0 then
+			if items > 0 and room < 1 then
+				full = full + 1
+			elseif at ~= aimed or load < held then
+				asked = 0
+				return at, load
+			elseif asked < PATIENCE then
+				asked = asked + 1
+				return at, load
+			else
+				stuck = stuck + 1
+			end
 		end
 		at = at - 1
+		asked = 0
 	end
 	return nil
 end
 
 local function Finished()
 	local said = ("took %d %s"):format(taken, taken == 1 and "message" or "messages")
+	if full > 0 then
+		said = said .. (", %d needs a free bag slot"):format(full)
+	end
 	if stuck > 0 then
 		said = said .. (", %d would not empty"):format(stuck)
 	end
@@ -216,14 +253,18 @@ local function Step()
 	if not index then
 		return Finished()
 	end
-	if Inbox.FreeSlots() < 1 then
-		return Halt(("your bags are full, %d taken"):format(taken))
+	-- Aimed at before it is asked for, and counted only when the message is one
+	-- the sweep has not already asked for. A retry and the second half of a
+	-- part-taken message both come back at the index the last take was aimed at,
+	-- and counting either of them would report more messages taken than the
+	-- mailbox held.
+	if index ~= aimed then
+		taken = taken + 1
 	end
+	aimed, held = index, load
 	if not Inbox.Take(index) then
 		return Halt("this client will not take a message for you")
 	end
-	aimed, held = index, load
-	taken = taken + 1
 	return true
 end
 
@@ -236,7 +277,7 @@ function Inbox.Sweep()
 		return false, "there is nothing in your mailbox"
 	end
 	at, taken, note = count, 0, ""
-	aimed, held, stuck = 0, 0, 0
+	aimed, held, asked, stuck, full = 0, 0, 0, 0, 0
 	return Step()
 end
 
@@ -275,7 +316,15 @@ function Inbox.Describe()
 		return note ~= "" and note or "nothing in your mailbox"
 	end
 	local money, items = Inbox.Waiting()
-	return ("%d waiting, %d attachments, %s"):format(count, items, ns.Coin(money))
+	local said = ("%d waiting, %d attachments, %s"):format(count, items, ns.Coin(money))
+	-- Why the last sweep stopped, in front of what is still sitting there. A
+	-- mailbox that is not empty after a sweep is the only case this sentence is
+	-- read in anger, and it used to answer it by describing the mailbox and
+	-- never saying why anything had been left in it.
+	if note ~= "" then
+		return note .. "; " .. said
+	end
+	return said
 end
 
 --------------------------------------------------------------------------

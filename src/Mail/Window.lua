@@ -33,6 +33,11 @@ local C, M = UI.Color, UI.Metric
 -- Anything you change in between disarms it, because the thing you changed is
 -- the thing the warning was about.
 --
+-- The send button sits under the right end of that band, at the right end of
+-- the footer, for the reason spelled out at BuildFoot: everything you touch
+-- while writing is in the compose column, and the corner of the window that
+-- column does not reach is the corner the button used to be in.
+--
 -- **Why the favourites are a column and not a dropdown.** A dropdown answers
 -- "who can I pick" only after a click, which is one click more than a name you
 -- mail every day is worth. The column is the same argument the chat window's
@@ -731,6 +736,7 @@ local function PaintWaiting()
 	waiting.stack:SetWidth(waiting.view.width or 0)
 	waiting.view:Update(waiting.stack:Reflow())
 	waiting.note:SetText(ns.MailInbox.Describe())
+	waiting.sweep.text:SetText(ns.MailInbox.Sweeping() and "stop" or "take everything")
 	waiting.blank:SetShown(#waiting.rows == 0)
 end
 
@@ -931,14 +937,27 @@ local function BuildWaiting(parent, tall)
 	local body = CreateFrame("Frame", nil, parent)
 	body:SetAllPoints()
 
-	local sweep = UI.Button(body, { label = "take everything", width = 130, height = M.row,
+	-- One button with two jobs, and the second one is not a nicety. A sweep is a
+	-- chain of takes and each link is the server answering the one before it, so
+	-- a server that answers nothing leaves the sweep waiting with no way to
+	-- start another. Mail/Send.lua has the same shape and the same answer: a
+	-- stop where the go was, rather than a timeout this addon would then have to
+	-- defend forever.
+	waiting.sweep = UI.Button(body, { label = "take everything", width = 130, height = M.row,
 		onClick = function()
-			local ok, why = ns.MailInbox.Sweep()
-			if not ok and why then
-				ns.Print(why .. ".")
+			local Inbox = ns.MailInbox
+			if Inbox.Sweeping() then
+				Inbox.Stop()
+				ns.Print(Inbox.Describe() .. ".")
+			else
+				local ok, why = Inbox.Sweep()
+				if not ok and why then
+					ns.Print(why .. ".")
+				end
 			end
 			Window.Paint()
 		end })
+	local sweep = waiting.sweep
 	sweep:SetPoint("TOPLEFT", M.pad, -M.rowGap)
 
 	waiting.note = UI.Label(body, M.font, C.dim, "RIGHT", UI.FLAT)
@@ -966,9 +985,22 @@ end
 
 local function BuildFoot()
 	foot = {}
+
+	-- **The send is at the right end of the row, and that is a fix rather than a
+	-- taste.** It was at the left, which put it under the favourites column and
+	-- outside the compose column entirely: every part of the letter you touch
+	-- with a mouse is to the right of that rail, and the attachment block, the
+	-- one thing here you cannot do from the keyboard, is at the far top right.
+	-- The button pressed at the end of every letter was the longest reach on
+	-- the page, corner to opposite corner, and it was that on every letter.
+	--
+	-- Here it sits under the right edge of the band, which is the line you read
+	-- immediately before pressing it, and under the attachment block above that.
+	-- The reason a send is refused goes where the send used to be, so the row
+	-- reads left to right the way the page does: what is wrong, undo, go.
 	foot.send = UI.Button(window.footer, { label = "send", width = 118, height = M.row,
 		onClick = Press })
-	foot.send:SetPoint("LEFT")
+	foot.send:SetPoint("RIGHT")
 	foot.send:SetScript("OnEnter", function(this)
 		UI.Tint(this.bg, this.lit or C.hover)
 	end)
@@ -982,7 +1014,7 @@ local function BuildFoot()
 			ns.MailInbox.Stop()
 			Window.Paint()
 		end })
-	foot.stop:SetPoint("LEFT", foot.send, "RIGHT", M.rowGap, 0)
+	foot.stop:SetPoint("RIGHT", foot.send, "LEFT", -M.rowGap, 0)
 	foot.stop:Hide()
 
 	-- Empties the draft and nothing else. The fields follow on the repaint,
@@ -993,11 +1025,11 @@ local function BuildFoot()
 			ns.MailDraft.Clear()
 			Changed()
 		end })
-	foot.clear:SetPoint("LEFT", foot.send, "RIGHT", M.rowGap, 0)
+	foot.clear:SetPoint("RIGHT", foot.send, "LEFT", -M.rowGap, 0)
 
-	foot.note = UI.Label(window.footer, M.small, C.quiet, "RIGHT", UI.FLAT)
-	foot.note:SetPoint("RIGHT")
-	foot.note:SetPoint("LEFT", foot.clear, "RIGHT", M.gutter, 0)
+	foot.note = UI.Label(window.footer, M.small, C.quiet, "LEFT", UI.FLAT)
+	foot.note:SetPoint("LEFT")
+	foot.note:SetPoint("RIGHT", foot.clear, "LEFT", -M.gutter, 0)
 	foot.note:SetPoint("TOP", foot.send, "TOP", 0, -4)
 	UI.Wrap(foot.note, false)
 end
@@ -1202,6 +1234,13 @@ events:SetScript("OnEvent", function(_, event)
 	if event == "MAIL_CLOSED" then
 		atMailbox = false
 		Window.Hide()
+		-- The letter goes with the mailbox. The client has already handed its
+		-- attachments back to your bags by the time this fires, so a draft that
+		-- survives is what the window reopens on: a list of things it is not
+		-- carrying, over a name and a body you have finished with. Emptied on
+		-- the way down rather than on the way up, because the client's word is
+		-- what ends the letter and Window.Show is reached by a toggle as well.
+		ns.MailDraft.Reset()
 		return
 	end
 	-- Everything else is the server saying something moved, and the window is

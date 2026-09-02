@@ -178,6 +178,17 @@ _G.GetInboxText = function(index)
 	return mail and mail.body or nil
 end
 
+-- Whether the server answers before it has finished, which is what the live one
+-- does and is the shape the sweep was wrong against. MAIL_INBOX_UPDATE arrives
+-- once the coin is off a message and the attachment is still on its way, so the
+-- first reading after a take on a message carrying one item and no coin is the
+-- same reading as before it. A sweep that decides on that one reading marks an
+-- ordinary auction mail as one that will not empty and steps past it.
+--
+-- Off by default, because most of the mail section is about the send and a take
+-- that answers straight away is the shorter path through it.
+local late = false
+
 -- Takes the coin and every attachment it has room for, and the message goes
 -- when there is nothing left on it and nothing written in it. Both halves
 -- matter: the addon's sweep counts down because taking renumbers, and it steps
@@ -200,6 +211,12 @@ _G.AutoLootMailItem = function(index)
 	end
 	H.state.purse = H.state.purse + mail.money
 	mail.money = 0
+	if late and not mail.answered then
+		mail.answered = true
+		H.fire("MAIL_INBOX_UPDATE")
+		return
+	end
+	mail.answered = nil
 	while #mail.items > 0 do
 		local bag, slot = Room()
 		if not bag then
@@ -247,6 +264,7 @@ H.mail = {
 	form = form, sent = sent, inbox = inbox, friends = friends,
 	deliver = deliver,
 	refuse = function(value) refuse = value and true or false end,
+	late = function(value) late = value and true or false end,
 	pending = function() return pending end,
 	POSTAGE = POSTAGE,
 }

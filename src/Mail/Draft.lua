@@ -262,6 +262,17 @@ function Draft.Clear()
 	return Draft.Empty()
 end
 
+-- The recipient with it, which is the one thing Draft.Clear keeps. Walking away
+-- from the mailbox is the end of the letter rather than the end of one send,
+-- and the client agrees: closing a mailbox hands every attachment on the form
+-- back to your bags. A draft that outlived the close is a window that reopens
+-- listing things it is not carrying, over a name you were writing to an hour
+-- ago, and there is no reading of it that is true.
+function Draft.Reset()
+	to = ""
+	return Draft.Clear()
+end
+
 --------------------------------------------------------------------------
 -- How many mails that is
 --------------------------------------------------------------------------

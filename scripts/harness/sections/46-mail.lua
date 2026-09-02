@@ -29,6 +29,18 @@
 -- And does the sweep count down. Taking a message renumbers the inbox, and a
 -- sweep walking upwards skips every other message while reporting that it took
 -- them all.
+--
+-- Does the sweep survive a server that answers before it has finished. This is
+-- the one that was broken in game. The first MAIL_INBOX_UPDATE after a take
+-- arrives with the coin gone and the attachment still on the message, so a
+-- sweep that decides on one unchanged reading gives up on every ordinary
+-- auction mail and reports most of a full mailbox as messages that would not
+-- empty. The stub answers late on request, and the assertion is that the whole
+-- mailbox still comes out.
+--
+-- And does a full bag stop one message rather than the sweep. Coin needs no
+-- room, and a mailbox of gold behind one leftover stack is what the old halt
+-- left sitting there.
 
 local H = ...
 local ns, fire, check, mail = H.ns, H.fire, H.check, H.mail
@@ -480,11 +492,105 @@ check(H.state.purse == purse + 2 * GOLD,
 check(not Inbox.Sweeping(), "the sweep says it is still going with an empty mailbox")
 
 ----------------------------------------------------------------------
+-- A server that answers before it has finished
+--
+-- Four auction mails, one stack each and no coin, against a stub that fires
+-- MAIL_INBOX_UPDATE with the item still on the message. That reading is the
+-- reading the sweep had before the take, and a sweep that concludes from it
+-- takes the first message and steps past the other three while saying so.
+----------------------------------------------------------------------
+
+mail.late(true)
+for index = 1, 4 do
+	mail.inbox[index] = { sender = STRANGER, subject = "auction " .. index,
+		money = 0, items = { "Linen Cloth" } }
+end
+fire("MAIL_INBOX_UPDATE")
+
+Inbox.Sweep()
+check(Inbox.Count() == 0,
+	("a server answering late left %d of four messages behind"):format(Inbox.Count()))
+check(not Inbox.Describe():find("would not empty", 1, true),
+	("the sweep gave up on a message that was only slow: %s"):format(Inbox.Describe()))
+mail.late(false)
+
+----------------------------------------------------------------------
+-- A full bag
+--
+-- Coin needs nowhere to put it, and the message carrying a stack is the only
+-- one the bags can refuse. So the gold behind it has to come out, and what was
+-- left has to be said rather than reported as a mailbox that was emptied.
+----------------------------------------------------------------------
+
+do
+	-- Every empty slot in every bag, remembered so the sections after this one
+	-- get their bags back. A harness that fills the player's bags and walks
+	-- away is a harness whose later failures are about this section.
+	local emptied = {}
+	for bag = 0, 4 do
+		for slot = 1, (CARRIED[bag] and #CARRIED[bag] or 0) do
+			if not CARRIED[bag][slot] then
+				emptied[#emptied + 1] = { bag, slot }
+				CARRIED[bag][slot] = "Linen Cloth"
+			end
+		end
+	end
+
+	mail.inbox[1] = { sender = STRANGER, subject = "a stack", money = 0,
+		items = { "Copper Ore" } }
+	mail.inbox[2] = { sender = ALT, subject = "your cut", money = 5 * GOLD, items = {} }
+	fire("MAIL_INBOX_UPDATE")
+
+	local coin = H.state.purse
+	Inbox.Sweep()
+	check(H.state.purse == coin + 5 * GOLD,
+		("a full bag kept %d of the five gold sitting behind a stack"):format(
+			coin + 5 * GOLD - H.state.purse))
+	check(Inbox.Count() == 1,
+		("%d messages left where only the one carrying a stack should be")
+			:format(Inbox.Count()))
+	check(Inbox.Describe():find("free bag slot", 1, true) ~= nil,
+		("the sweep did not say what the bags refused: %s"):format(Inbox.Describe()))
+
+	for index = 1, #emptied do
+		CARRIED[emptied[index][1]][emptied[index][2]] = false
+	end
+	mail.inbox[1] = nil
+	fire("MAIL_INBOX_UPDATE")
+end
+
+----------------------------------------------------------------------
 -- Walking away
 ----------------------------------------------------------------------
 
+-- Something half written, so the close has a letter to end. The client hands
+-- every attachment back to the bags when the mailbox shuts, so a draft that
+-- outlives it is a window that reopens listing things it is not carrying.
+Draft.SetTo(ALT)
+Draft.SetSubject("half a thought")
+Draft.SetBody("and the rest of it")
+Draft.SetMoney(GOLD)
+CARRIED[3][1] = "Copper Ore"
+Draft.AttachSlot(3, 1)
+
 fire("MAIL_CLOSED")
 check(not Window.Shown(), "the window stayed up after the mailbox closed")
+check(Draft.To() == "" and Draft.Subject() == "" and Draft.Body() == "",
+	("a closed mailbox left %q writing to %q"):format(Draft.Subject(), Draft.To()))
+check(Draft.Money() == 0 and Draft.Held() == 0,
+	("a closed mailbox left %s and %d attachments on the letter"):format(
+		ns.Coin(Draft.Money()), Draft.Held()))
+
+-- And the window reopens on that empty letter rather than on the fields it was
+-- last painted with, which is the half a person sees.
+fire("MAIL_SHOW")
+do
+	local reopened = Window.Parts()
+	check(reopened.to.edit:GetText() == "" and reopened.subject.edit:GetText() == "",
+		("a reopened window still says %q to %q"):format(
+			reopened.subject.edit:GetText(), reopened.to.edit:GetText()))
+end
+fire("MAIL_CLOSED")
 
 -- And the bags are the client's again, which is the promise the takeover makes.
 -- Asserted by clicking rather than by asking, because the flag and the global
