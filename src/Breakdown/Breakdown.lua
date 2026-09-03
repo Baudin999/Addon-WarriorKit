@@ -122,10 +122,6 @@ local MISSED = {
 	RANGE_MISSED = 15,
 }
 
--- Resolved at load, the way Meter/Meter.lua resolves it, so the handler asks a
--- local rather than reaching into the globals once per combat log line.
-local CombatLogGetCurrentEventInfo = _G.CombatLogGetCurrentEventInfo
-
 --------------------------------------------------------------------------
 -- The store
 --
@@ -149,7 +145,6 @@ local CombatLogGetCurrentEventInfo = _G.CombatLogGetCurrentEventInfo
 local MAX_SPELLS = 400
 
 local refused = 0
-local playerGUID
 local myLevel = 0
 
 -- What a white swing is called, in this client's own language. Auto Attack is
@@ -327,7 +322,12 @@ local function Missed(record, band, kind)
 	slot.miss[kind] = (slot.miss[kind] or 0) + 1
 end
 
-function Breakdown.OnLog()
+-- The twenty one values the client hands over and your own GUID after them,
+-- which is what ns.CombatLog adds to the list. Read positionally, because the
+-- positions are the whole contract, and the blanks are the values this file has
+-- no use for.
+function Breakdown.OnLog(_, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
+	a12, a13, _, a15, a16, _, a18, _, _, a21, me)
 	-- The switch is account wide and the record is this character's. Turning
 	-- counting off is a preference about the addon; what your warrior has done
 	-- is a fact about your warrior, and Core/Core.lua draws that line for the
@@ -336,22 +336,7 @@ function Breakdown.OnLog()
 		return false
 	end
 
-	-- Read again where it is missing. PLAYER_LOGIN and PLAYER_ENTERING_WORLD
-	-- both fire around a loading screen and nowhere else, so a client with no
-	-- GUID for you at either moment would leave this file inert until the next
-	-- zone with nothing to say so. Buttons/Reaction.lua carries the same three
-	-- lines for the same reason. In the steady state it is one comparison.
-	if not playerGUID then
-		playerGUID = UnitGUID("player")
-		if not playerGUID then
-			return false
-		end
-	end
-
-	local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
-		a12, a13, _, a15, a16, _, a18, _, _, a21 = CombatLogGetCurrentEventInfo()
-
-	if sourceGUID ~= playerGUID then
+	if not me or sourceGUID ~= me then
 		return false
 	end
 
@@ -628,7 +613,7 @@ end
 -- it has to say so in the panel rather than showing an empty table with no
 -- explanation on it.
 function Breakdown.Ready()
-	return type(CombatLogGetCurrentEventInfo) == "function"
+	return ns.CombatLog.Ready()
 end
 
 function Breakdown.Describe()
@@ -657,6 +642,19 @@ function Breakdown.MeleeKey()
 	return MELEE
 end
 
+-- On the log while the switch is on and off it entirely while it is not.
+--
+-- This file registered the event at load whatever the setting said, so a player
+-- who had turned counting off still paid an unpack of every combat log line in
+-- the zone for a record nothing was writing to.
+function Breakdown.Apply()
+	if ns.db and ns.db.breakdown then
+		ns.CombatLog.Subscribe(Breakdown.OnLog)
+	else
+		ns.CombatLog.Unsubscribe(Breakdown.OnLog)
+	end
+end
+
 --------------------------------------------------------------------------
 
 local events = CreateFrame("Frame")
@@ -664,7 +662,6 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("PLAYER_LEVEL_UP")
 events:RegisterEvent("PLAYER_TARGET_CHANGED")
-events:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 -- Guarded the way Marking/Marking.lua guards it. A client with no nameplate
 -- API answers no levels at all, and everything lands in the band that says so.
 if C_NamePlate then
@@ -673,11 +670,6 @@ if C_NamePlate then
 end
 
 events:SetScript("OnEvent", function(_, event, unit)
-	if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-		Breakdown.OnLog()
-		return
-	end
-
 	if event == "NAME_PLATE_UNIT_ADDED" then
 		local guid = UnitGUID(unit)
 		if guid then
@@ -705,7 +697,7 @@ events:SetScript("OnEvent", function(_, event, unit)
 		return
 	end
 
-	playerGUID = UnitGUID("player")
+	Breakdown.Apply()
 	myLevel = UnitLevel("player") or 0
 	-- Stamped on the first login that has the saved table rather than at the
 	-- first counted hit, so "since" means when the record started and not when

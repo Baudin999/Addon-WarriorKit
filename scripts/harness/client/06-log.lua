@@ -18,9 +18,21 @@ local H = ...
 local state = H.state
 local WARRIOR, constant = H.WARRIOR, H.constant
 
+-- Counted as well as answered, because "one line, one read" is a claim about
+-- the addon that nothing else can see. Six parts read this log and the shared
+-- reader in Core/CombatLog.lua exists so the client is asked once per line
+-- however many of them are listening; a part that went back to calling the
+-- client itself would pass every assertion about what a row says and would put
+-- this counter up.
 local logArgs = {}
+local reads = 0
 _G.CombatLogGetCurrentEventInfo = function()
+	reads = reads + 1
 	return unpack(logArgs, 1, 21)
+end
+
+local function logReads()
+	return reads
 end
 
 -- Three trees per character, points and an icon each. Two shapes, because
@@ -67,4 +79,4 @@ _G.CLASS_ICON_TCOORDS = {
 	PRIEST = { 0.5, 0.75, 0, 0.25 },
 }
 
-H.logArgs, H.talentTrees = logArgs, talentTrees
+H.logArgs, H.talentTrees, H.logReads = logArgs, talentTrees, logReads

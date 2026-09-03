@@ -104,7 +104,13 @@ ns.Register({
 	switch = {
 		key = "meter",
 		label = "the meters",
-		apply = function() MeterWindow.Show() end,
+		-- Both halves, because off means off. Show takes the window away and
+		-- Apply takes the totals off the combat log, which is the half that
+		-- costs something when nobody is looking.
+		apply = function()
+			Meter.Apply()
+			MeterWindow.Show()
+		end,
 	},
 
 	zooms = {

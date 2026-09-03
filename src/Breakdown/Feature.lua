@@ -150,6 +150,11 @@ ns.Register({
 	switch = {
 		key = "breakdown",
 		label = "the breakdown record",
+		-- The switch had no apply because nothing on the screen changed with
+		-- it. What changes now is whether this part reads the combat log at
+		-- all, so off is off from the next line rather than from the next
+		-- login.
+		apply = function() Breakdown.Apply() end,
 	},
 
 	zooms = {

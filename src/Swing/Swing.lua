@@ -46,7 +46,6 @@ ns.Swing = Swing
 -- than a swing timer that says it cannot read the client.
 local UnitAttackSpeed = _G.UnitAttackSpeed
 local OffhandHasWeapon = _G.OffhandHasWeapon
-local CombatLogGetCurrentEventInfo = _G.CombatLogGetCurrentEventInfo
 
 Swing.MAIN = "main"
 Swing.OFF = "off"
@@ -63,8 +62,6 @@ local hands = {
 	main = { at = 0, duration = 0, speed = 0, running = false },
 	off  = { at = 0, duration = 0, speed = 0, running = false },
 }
-
-local playerGUID
 
 --------------------------------------------------------------------------
 -- What the client says
@@ -251,21 +248,15 @@ end
 -- The log
 --
 -- Twenty-one values, because the off hand flag is the last of them on a
--- landed swing. Everything between is read as a blank on purpose: naming the
--- eight values this file does not use would be eight more chances to shift the
--- one it does.
+-- landed swing, and your own GUID after them, which is what ns.CombatLog adds
+-- to the client's own list. Everything between is read as a blank on purpose:
+-- naming the eight values this file does not use would be eight more chances to
+-- shift the one it does.
 --------------------------------------------------------------------------
 
-local function OnLog()
-	if type(CombatLogGetCurrentEventInfo) ~= "function" or not playerGUID then
-		return
-	end
-
-	local _, subevent, _, sourceGUID, _, _, _, _, _, _, _,
-		_, missOffhand, _, _, _, _, _, _, _, damageOffhand =
-		CombatLogGetCurrentEventInfo()
-
-	if sourceGUID ~= playerGUID then
+local function OnLog(_, subevent, _, sourceGUID, _, _, _, _, _, _, _,
+	_, missOffhand, _, _, _, _, _, _, _, damageOffhand, me)
+	if sourceGUID ~= me then
 		return
 	end
 
@@ -283,10 +274,22 @@ end
 
 --------------------------------------------------------------------------
 
+-- On the log while the switch is on and off it entirely while it is not.
+--
+-- The swing bars ship off, and this file registered the event at load anyway,
+-- so a player who never turned them on paid an unpack of every combat log line
+-- in the zone to time a bar that was never drawn.
+function Swing.Apply()
+	if ns.db and ns.db.swing then
+		ns.CombatLog.Subscribe(OnLog)
+	else
+		ns.CombatLog.Unsubscribe(OnLog)
+	end
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
-events:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 -- The three ways a swing changes length. The first is the client saying so and
 -- is the one that ought to be enough. It is not: Flurry is an aura and the
@@ -304,11 +307,6 @@ ns.RegisterUnitEvent(events, "UNIT_ATTACK_SPEED", "player")
 ns.RegisterUnitEvent(events, "UNIT_AURA", "player")
 ns.RegisterUnitEvent(events, "UNIT_INVENTORY_CHANGED", "player")
 events:SetScript("OnEvent", function(_, event, unit)
-	if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-		OnLog()
-		return
-	end
-
 	if event == "PLAYER_REGEN_ENABLED" then
 		Swing.Stop(Swing.MAIN)
 		Swing.Stop(Swing.OFF)
@@ -323,6 +321,6 @@ events:SetScript("OnEvent", function(_, event, unit)
 		return
 	end
 
-	playerGUID = UnitGUID("player")
+	Swing.Apply()
 	Swing.Retime()
 end)

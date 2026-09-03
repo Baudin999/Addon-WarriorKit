@@ -54,10 +54,16 @@ local STREAMS = {
 		title = "Combat",
 		describe = CombatFeed.Describe,
 		collects = "what happens to you",
-		costs = "a combat log event is turned away on one table lookup, which in a raid"
-			.. " is the difference between a few hundred lookups a second and a few"
-			.. " hundred rows a second.",
-		cheap = "a combat log event is turned away on one table lookup",
+		costs = "the addon is not on the combat log event at all, which in a raid"
+			.. " is the difference between nothing a second and a few hundred rows"
+			.. " a second.",
+		cheap = "the addon is not on the combat log event at all",
+
+		-- Off takes this stream off the combat log rather than turning every
+		-- line away inside a handler the client is still calling, so the
+		-- collecting switch has a second half to apply. The loot feed has no
+		-- entry here because its own event is cheap and it reads it either way.
+		applied = function() ns.CombatFeed.Apply() end,
 	},
 }
 
@@ -85,6 +91,9 @@ end
 
 local function Apply(entry)
 	entry.stream:Apply()
+	if entry.applied then
+		entry.applied()
+	end
 end
 
 -- On screen or hidden, which is not the same switch as collecting: a hidden
@@ -340,6 +349,9 @@ local function SharedPage(ui, entry)
 		function(on)
 			ns.db[prefix] = on
 			entry.stream:Show()
+			if entry.applied then
+				entry.applied()
+			end
 		end)
 	ui.Hint("Reach for this to make the feed cost nothing: off, " .. entry.cheap .. ".")
 

@@ -47,7 +47,13 @@ ns.Register({
 	switch = {
 		key = "swing",
 		label = "the swing bars",
-		apply = function() Gauges.Apply() end,
+		-- Both halves, because off means off. Gauges takes the bars away and
+		-- Swing.Apply takes the clock off the combat log, which is the half
+		-- that costs something when there is nothing on the screen.
+		apply = function()
+			Swing.Apply()
+			Gauges.Apply()
+		end,
 	},
 
 	zooms = {

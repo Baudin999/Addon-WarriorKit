@@ -44,16 +44,16 @@ local C = ns.UI.Color
 -- **Nothing is on a ticker.** A row arrives when the log says so.
 --
 -- **Collecting and being on screen are two settings.** `combatFeed` is whether
--- this file does anything at all, and it is read on the first line of the
--- handler, so a feed that is off costs one table lookup per combat log event
--- and nothing else. `combatFeedShown` only decides whether you can see the
--- column, and a feed hidden with that one keeps filling: what you get when you
--- bring it back is the last four hundred things that happened rather than a
--- blank. That matters because the two are nowhere near the same price. Reaching
--- the end of this file and pushing a row costs roughly thirty times what
--- turning an event away at the top costs, and nearly all of that thirty is
--- UI/Feed.lua repainting the column. Feeds/Stream.lua puts the hidden feed's
--- widget to sleep for exactly that reason.
+-- this file does anything at all, and it decides whether this file is
+-- subscribed to ns.CombatLog, so a feed that is off costs nothing at all per
+-- combat log event: the addon is not on the event. `combatFeedShown` only
+-- decides whether you can see the column, and a feed hidden with that one keeps
+-- filling: what you get when you bring it back is the last four hundred things
+-- that happened rather than a blank. That matters because the two are nowhere
+-- near the same price. Reaching the end of this file and pushing a row costs
+-- roughly thirty times what turning an event away at the top costs, and nearly
+-- all of that thirty is UI/Feed.lua repainting the column. Feeds/Stream.lua
+-- puts the hidden feed's widget to sleep for exactly that reason.
 --------------------------------------------------------------------------
 
 -- Where the amount and the crit flag sit for each shape of event.
@@ -209,10 +209,10 @@ function CombatFeed.Defaults()
 	-- column off the screen.
 	--
 	-- Off because of what it costs rather than what it is worth. This is the
-	-- one feature in the addon that runs on every COMBAT_LOG_EVENT_UNFILTERED
-	-- in the zone, and the meter and the breakdown already answer "how did that
-	-- fight go" from the same log without a row per swing. `/wk feed combat on`
-	-- for the pull you actually want to read back.
+	-- part of the addon with something to say about every line in the zone, and
+	-- the meter and the breakdown already answer "how did that fight go" from
+	-- the same log without a row per swing. `/wk feed combat on` for the pull
+	-- you actually want to read back.
 	defaults.combatFeed = false
 	defaults.combatFeedShown = false
 
@@ -241,18 +241,6 @@ end
 --------------------------------------------------------------------------
 -- One event
 --------------------------------------------------------------------------
-
--- Asked once at load rather than once per event.
---
--- It used to be a `type(...) == "function"` on the first line of the handler,
--- which is a call and a comparison on the path the combat log drives, to answer
--- a question that cannot change after login: a client either carries the call
--- or it does not. Nil where it does not, so the guard below is a truth test on
--- an upvalue.
-local readLog = _G.CombatLogGetCurrentEventInfo
-if type(readLog) ~= "function" then
-	readLog = nil
-end
 
 -- Whether a GUID is you or something of yours. Roster.Owner answers the owner
 -- for a pet and nil for anything that is not one of the group's, so one call
@@ -350,20 +338,25 @@ local function Add(subevent, shape, outgoing, source, dest, spellId, spellName,
 	return true
 end
 
-function CombatFeed.OnLog()
-	if not readLog or not ns.db.combatFeed then
+-- The twenty one values the client hands over, in the client's own order, and
+-- your own GUID after them, which is what ns.CombatLog adds to the list.
+--
+-- The GUID is the first thing read, and it used to be the last. This file
+-- called UnitGUID("player") once per line that got past the shape filter, which
+-- in a pull is nearly every line, to reject on the answer three lines later.
+-- Handed over now, and the rejection is where it belongs: no player means
+-- nothing in the log is yours and there is nothing here to work out.
+function CombatFeed.OnLog(_, subevent, _, sourceGUID, sourceName, _, _, destGUID,
+	destName, _, _, a12, a13, _, a15, a16, _, a18, _, _, a21, me)
+	if not me or not ns.db.combatFeed then
 		return false
 	end
-
-	local _, subevent, _, sourceGUID, sourceName, _, _, destGUID, destName,
-		_, _, a12, a13, _, a15, a16, _, a18, _, _, a21 = readLog()
 
 	local shape = SHAPES[subevent]
 	if not shape then
 		return false
 	end
 
-	local me = UnitGUID("player")
 	local outgoing = Mine(sourceGUID, me)
 	local incoming = Mine(destGUID, me)
 	-- Neither end is yours, which is nearly every event in a raid, so the miss
@@ -463,7 +456,7 @@ end
 -- and a client without it has to say so in the panel rather than draw an empty
 -- column with no explanation in it.
 function CombatFeed.Ready()
-	return readLog ~= nil
+	return ns.CombatLog.Ready()
 end
 
 function CombatFeed.Describe()
@@ -502,17 +495,25 @@ function CombatFeed.OnCombat(entering)
 	return Lull()
 end
 
+-- On the log while the feed is collecting and off it entirely while it is not.
+--
+-- The feed ships off, because it is the one part of the addon that has
+-- something to say about every line in the zone, and it registered the event at
+-- load anyway. Off now means the client does not call into this addon for the
+-- combat log at all, which is what the panel's hint has always claimed.
+function CombatFeed.Apply()
+	if ns.db and ns.db.combatFeed then
+		ns.CombatLog.Subscribe(CombatFeed.OnLog)
+	else
+		ns.CombatLog.Unsubscribe(CombatFeed.OnLog)
+	end
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
-events:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:SetScript("OnEvent", function(_, event)
-	if event == "PLAYER_LOGIN" then
-		swingIcon = ns.SpellTexture(AUTO_ATTACK) or UNKNOWN
-		swingWord = ns.SpellName(AUTO_ATTACK) or swingWord
-		return
-	end
 	if event == "PLAYER_REGEN_DISABLED" then
 		Pull()
 		return
@@ -521,5 +522,7 @@ events:SetScript("OnEvent", function(_, event)
 		Lull()
 		return
 	end
-	CombatFeed.OnLog()
+	swingIcon = ns.SpellTexture(AUTO_ATTACK) or UNKNOWN
+	swingWord = ns.SpellName(AUTO_ATTACK) or swingWord
+	CombatFeed.Apply()
 end)

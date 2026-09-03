@@ -48,8 +48,6 @@ ns.Reaction = Reaction
 -- everything below is one table built off the class and then read on the tick.
 --------------------------------------------------------------------------
 
-local CombatLogGetCurrentEventInfo = _G.CombatLogGetCurrentEventInfo
-
 -- The two triggers this file can watch. A class names one of these against
 -- each of its reactive abilities and nothing else here is a class fact.
 Reaction.DODGED = "dodged"     -- your own attack was dodged
@@ -97,8 +95,6 @@ local DEFENDED = {
 -- class the client has not settled. Reaction.Of returns nil for all three
 -- states, so a square is never greyed on an answer this file does not have.
 local watching
-
-local playerGUID
 
 --------------------------------------------------------------------------
 -- Which spell a slot is holding
@@ -229,21 +225,15 @@ end
 -- have Revenge dark through most of a fight it was open in.
 --------------------------------------------------------------------------
 
-local function OnLog()
-	-- Read again where the two events that own it came up with nothing. That is
-	-- not belt and braces: both of them fire around a loading screen and nowhere
-	-- else, so a client that had no GUID for you at either moment would leave
-	-- this file inert until the next zone, with nothing on screen to say so. In
-	-- the steady state it is one comparison per log line.
+-- The nineteen values this file reads, in the order ns.CombatLog hands them
+-- over, which is the client's own, and your GUID last. The read again where the
+-- two login events came up with nothing is ns.CombatLog's now, and it is one
+-- comparison there for all six readers rather than three lines here.
+local function OnLog(_, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
+	arg12, _, _, arg15, arg16, _, _, arg19, _, _, playerGUID)
 	if not playerGUID then
-		playerGUID = UnitGUID("player")
-		if not playerGUID then
-			return
-		end
+		return
 	end
-
-	local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
-		arg12, _, _, arg15, arg16, _, _, arg19 = CombatLogGetCurrentEventInfo()
 
 	if sourceGUID == playerGUID then
 		-- Spending it shuts it. The server takes the window away on the press
@@ -335,7 +325,6 @@ events:RegisterEvent("PLAYER_ENTERING_WORLD")
 -- class data is not reliable while the files load, so a file-scope answer locks
 -- a warrior out for the session.
 local function Arm()
-	playerGUID = UnitGUID("player")
 	if watching ~= nil then
 		return
 	end
@@ -345,7 +334,7 @@ local function Arm()
 			:format(ns.Class.Label())
 		return
 	end
-	if type(CombatLogGetCurrentEventInfo) ~= "function" then
+	if not ns.CombatLog.Ready() then
 		watching = "this client has no combat log to read, so neither window can be seen"
 		return
 	end
@@ -370,14 +359,12 @@ local function Arm()
 	end
 
 	watching = true
-	events:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+	ns.CombatLog.Subscribe(OnLog)
 	events:RegisterEvent("PLAYER_REGEN_ENABLED")
 end
 
 events:SetScript("OnEvent", function(_, event)
-	if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-		OnLog()
-	elseif event == "PLAYER_REGEN_ENABLED" then
+	if event == "PLAYER_REGEN_ENABLED" then
 		-- The fight is over, so nothing else is going to dodge you and nothing
 		-- else is going to hit your shield. Shut both rather than let them run
 		-- out, the same way Swing.lua stops a swing that is not coming.

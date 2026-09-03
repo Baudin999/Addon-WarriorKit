@@ -190,6 +190,9 @@ local SECTIONS = {
 	"22-chores",
 	"23-minimap",
 	"24-clutter-window",
+	-- Above the three sections that read the combat log, because what it asks
+	-- about is the reader in front of all of them.
+	"24-combat-log",
 	"25-meters",
 	"26-swing-timer",
 	"27-swing-visible",

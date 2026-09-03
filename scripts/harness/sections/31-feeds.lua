@@ -285,12 +285,19 @@ do
 	local shippedCollect, shippedShown = ns.db.combatFeed, ns.db.combatFeedShown
 	ns.db.combatFeed, ns.db.combatFeedShown = true, true
 	ns.Stream.Each("Apply")
+	-- Collecting is a subscription to ns.CombatLog now rather than a branch
+	-- inside a handler the client is always calling, so turning it on has a
+	-- second half and this is the call the panel makes for it.
+	ns.CombatFeed.Apply()
 
 	-- The sections above this one leave the player with no GUID, which is
 	-- what the client looks like across a loading screen. That is a real
 	-- state and it has its own assertion below; the rest of this block needs
 	-- a player, so one is put back and the roster is rebuilt around it.
+	-- PLAYER_ENTERING_WORLD is what Core/CombatLog.lua reads the GUID on, so
+	-- it is fired rather than the module local being reached into.
 	guids.player = "Player-0-0000000f"
+	fire("PLAYER_ENTERING_WORLD")
 	ns.Unit.Roster.Build()
 	local me = _G.UnitGUID("player")
 	check(me ~= nil and ns.Unit.Roster.Owner(me) == me,
@@ -403,12 +410,17 @@ do
 	-- nil, which makes every creature in the zone yours. The symptom is a
 	-- feed drawing the other party's pull, and it is a comparison that looks
 	-- correct in the source.
+	-- Fired both ways round, because the GUID is read at login now rather than
+	-- per line: Core/CombatLog.lua caches it on the two events that fire around
+	-- a loading screen, which is exactly the moment this is about.
 	guids.player = nil
+	fire("PLAYER_ENTERING_WORLD")
 	held = combat:Count()
 	log("SWING_DAMAGE", "Creature-77", "Ragged Wolf", "Creature-88", "Snarler", { [12] = 900 })
 	check(combat:Count() == held,
 		"with no player GUID the feed drew a fight between two creatures as yours")
 	guids.player = "Player-0-0000000f"
+	fire("PLAYER_ENTERING_WORLD")
 
 	check(Combat.Ready(), "the combat feed says this client has no combat log")
 

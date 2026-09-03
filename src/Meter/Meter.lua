@@ -41,8 +41,6 @@ ns.Meter = Meter
 -- damage column cannot be read across.
 --------------------------------------------------------------------------
 
-local CombatLogGetCurrentEventInfo = _G.CombatLogGetCurrentEventInfo
-
 -- The subevents that carry a number worth adding, and which slot it lands in.
 -- A table lookup rather than a chain of comparisons: the log delivers a few
 -- hundred of these a second in a raid and this is the first line of the
@@ -171,14 +169,11 @@ local function Record(guid, damage, healing)
 	slot.healing = slot.healing + healing
 end
 
-local function OnLog()
-	if type(CombatLogGetCurrentEventInfo) ~= "function" then
-		return
-	end
-
-	local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
-		arg12, arg13, _, arg15, arg16 = CombatLogGetCurrentEventInfo()
-
+-- The sixteen values this file reads, in the order ns.CombatLog hands them over,
+-- which is the client's own. The blanks are on purpose: naming the values this
+-- file does not use would be more chances to shift the ones it does.
+local function OnLog(_, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
+	arg12, arg13, _, arg15, arg16)
 	local at = DAMAGE[subevent]
 	if at then
 		local amount = (at == 12) and arg12 or arg15
@@ -285,18 +280,32 @@ end
 
 --------------------------------------------------------------------------
 
+-- On the log while the switch is on and off it entirely while it is not.
+--
+-- This file used to register the event at load whatever the setting said, so a
+-- player with the meters switched off paid an unpack of every combat log line
+-- in the zone to total damage nothing was going to draw. Comfort/Thanks.lua is
+-- the part that had this right first.
+function Meter.Apply()
+	if ns.db and ns.db.meter then
+		ns.CombatLog.Subscribe(OnLog)
+	else
+		ns.CombatLog.Unsubscribe(OnLog)
+	end
+end
+
 local events = CreateFrame("Frame")
-events:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:SetScript("OnEvent", function(_, event)
-	if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-		OnLog()
-	elseif event == "PLAYER_REGEN_DISABLED" then
+	if event == "PLAYER_REGEN_DISABLED" then
 		if not running then
 			Meter.Start()
 		end
-	else
+	elseif event == "PLAYER_REGEN_ENABLED" then
 		Meter.Stop()
+	else
+		Meter.Apply()
 	end
 end)

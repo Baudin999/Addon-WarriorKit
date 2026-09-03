@@ -33,6 +33,27 @@ instead of up to a second afterwards. The walk is still there and runs every
 five seconds, because a client that will not take the hook is a client this
 addon has not met and the promise should not depend on meeting it. Nothing on
 screen changes.
+### The combat log is read once, and only when something wants it
+
+Six parts of the addon read the combat log: the meters, the breakdown record,
+the swing timer, the combat feed, the reaction windows and the thank you
+whisper. Every one of them asked the client for the line itself. In a five man
+pull that is six calls sixty times a second and around seven thousand values
+copied before a single one of the six had decided the line was not about you.
+Three of the six did it whatever their switch said, so a night with the meters,
+the breakdown and the swing bars turned off still paid three of those reads a
+line for features that drew nothing.
+
+There is one reader now. The line is read once and handed to whichever parts
+are listening, along with your own GUID, which is what five of them reject a
+line on and which the combat feed used to ask the client for on every line. A
+part subscribes when its switch is on and leaves when it goes off, and with
+nobody left the addon comes off the event entirely: the meters off, the
+breakdown off and the swing bars off is now nothing at all rather than three
+reads a line.
+
+Turning the breakdown record off takes effect from the next line rather than
+from the next login, which is what its switch always said it did.
 
 ### One key on the bar and under the cursor
 

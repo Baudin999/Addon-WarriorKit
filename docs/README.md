@@ -6304,6 +6304,15 @@ Everything below was written from the API contract and has never executed:
   while the last answer was ready or out of range, and every other status waits
   for an event. A mistake looks like the marker staying red after you close the
   distance, or staying green while you back away.
+- **Whether the addon comes off COMBAT_LOG_EVENT_UNFILTERED with every reader
+  switched off.** The harness proves the subscriber list empties and that the
+  stub holds no registration, but the stub is the addon's own model of
+  RegisterEvent and UnregisterEvent rather than the client's. A mistake looks
+  like a meter that counts nothing after its switch has been off and on again,
+  or a swing bar that never arms, both of which are the event never coming
+  back. What would settle it: turn the meters, the breakdown and the swing bars
+  off, pull something, then turn the meters back on and pull again and read the
+  meter.
 - **Whether every ticker still runs at the rate it asks for.** `ns.UI.Ticker`
   replaced twelve hand-written accumulators, and nine of the twelve zeroed
   theirs where the shared one subtracts the interval. Those nine were running

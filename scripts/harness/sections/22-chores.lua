@@ -717,22 +717,25 @@ do
 	check(ns.db.thankWord == "   ", "the empty word was overwritten rather than kept")
 	ns.db.thankWord = "ty"
 
-	-- Off is unregistered, not a branch inside a handler the client still
-	-- calls. This is the busiest event in the game and the setting off has to
-	-- take the addon off it entirely.
-	local readers = #(events["COMBAT_LOG_EVENT_UNFILTERED"] or {})
+	-- Off is unsubscribed, not a branch inside a handler that is still being
+	-- called. This is the busiest event in the game and the setting off has to
+	-- take this part off it entirely. Counted on ns.CombatLog rather than on
+	-- the client's own registration list, because six parts share one frame
+	-- now: what the client holds is asserted in 24-combat-log, where the last
+	-- reader leaving is the thing under test.
+	local readers = ns.CombatLog.Count()
 	ns.db.thankStrangers = false
 	ns.Thanks.Apply()
-	check(#(events["COMBAT_LOG_EVENT_UNFILTERED"] or {}) == readers - 1,
+	check(ns.CombatLog.Count() == readers - 1,
 		("thanks off left %d parts on the combat log and %d were on it")
-			:format(#(events["COMBAT_LOG_EVENT_UNFILTERED"] or {}), readers))
+			:format(ns.CombatLog.Count(), readers))
 	buffLine("Player-0-00000c08", "Druid", ME)
 	deliver()
 	check(sentCount() == 2, "thanks off still whispered somebody")
 
 	ns.db.thankStrangers = true
 	ns.Thanks.Apply()
-	check(#(events["COMBAT_LOG_EVENT_UNFILTERED"] or {}) == readers,
+	check(ns.CombatLog.Count() == readers,
 		"thanks back on did not put the part back on the combat log")
 	buffLine("Player-0-00000c08", "Druid", ME)
 	deliver()

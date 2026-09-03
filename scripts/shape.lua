@@ -71,7 +71,7 @@ local ALLOWED = {
 	  why = "the kit's own body, one closure per control, returned as a table" },
 	{ path = "./UI/Ability.lua", fn = "Ability.New", own = 123,
 	  why = "builds one ability square and every region on it" },
-	{ path = "./Breakdown/Breakdown.lua", fn = "Breakdown.OnLog", branches = 38,
+	{ path = "./Breakdown/Breakdown.lua", fn = "Breakdown.OnLog", branches = 37,
 	  why = "combat log dispatch, one branch per event the record counts" },
 	{ path = "./Feeds/Combat.lua", fn = "CombatFeed.OnLog", branches = 33,
 	  why = "combat log dispatch, one branch per event the feed draws" },

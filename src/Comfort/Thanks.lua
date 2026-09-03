@@ -26,8 +26,6 @@ local ADDON, ns = ...
 local Thanks = {}
 ns.Thanks = Thanks
 
-local readLog = _G.CombatLogGetCurrentEventInfo
-
 -- How long the same person stays thanked, in seconds. Ten minutes.
 --
 -- A paladin who blesses you, sees the blessing fall off and blesses you again
@@ -61,9 +59,6 @@ local SETTLE = 5
 -- answering, and the person who buffed you reads it that way. A second or two
 -- is somebody seeing the buff land and typing two letters.
 local MIN_WAIT, MAX_WAIT = 1, 3
-
-local frame
-local playerGUID
 
 -- Built here rather than when the first whisper is queued, because a frame that
 -- comes into being at some unpredictable moment mid-session is a frame no test
@@ -140,10 +135,10 @@ local function Queue(who)
 	end
 end
 
-local function OnLog()
-	local _, subevent, hideCaster, sourceGUID, sourceName, _, _, destGUID,
-		_, _, _, _, _, _, auraType = readLog()
-
+-- The fifteen values this file reads, in the order ns.CombatLog hands them over,
+-- which is the client's own, and your GUID last.
+local function OnLog(_, subevent, hideCaster, sourceGUID, sourceName, _, _, destGUID,
+	_, _, _, _, _, _, auraType, _, _, _, _, _, _, playerGUID)
 	-- Cheapest test first, and it is the one that throws nearly every line
 	-- away: the log carries the whole pack, both sides of the duel by the
 	-- mailbox and the other party fighting next door, and almost none of it
@@ -187,27 +182,24 @@ local function OnLog()
 	Queue(sourceName)
 end
 
--- Registered and unregistered rather than left on with a branch inside, so the
+-- Subscribed and unsubscribed rather than left on with a branch inside, so the
 -- setting off means the addon is not reading the combat log at all. That is
 -- worth more here than it is on the loot path: this is the busiest event in the
 -- game and the part that reads it does nothing at all most nights.
+--
+-- This file had its own frame and its own registration and was the only one of
+-- the six that turned the event off when its setting was off. ns.CombatLog is
+-- that argument made once, and the other five subscribe the same way now.
 function Thanks.Apply()
-	if type(readLog) ~= "function" then
-		return
-	end
-	if not frame then
-		frame = CreateFrame("Frame")
-		frame:SetScript("OnEvent", OnLog)
-	end
 	if ns.db.thankStrangers then
-		frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+		ns.CombatLog.Subscribe(OnLog)
 	else
-		frame:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+		ns.CombatLog.Unsubscribe(OnLog)
 	end
 end
 
 function Thanks.Describe()
-	if type(readLog) ~= "function" then
+	if not ns.CombatLog.Ready() then
 		return "this client has no combat log to read the caster from"
 	end
 	if not ns.db.thankStrangers then
@@ -238,8 +230,6 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:SetScript("OnEvent", function()
-	playerGUID = UnitGUID("player")
-
 	-- Anything still waiting is dropped rather than sent late. The whisper was
 	-- for a buff on the other side of a loading screen, and a chat message
 	-- posted on the way out of the world goes nowhere anyway.
