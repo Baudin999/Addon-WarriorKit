@@ -17,6 +17,18 @@ local attachedPlate, attachedAnchor, appliedSize, appliedOffset, appliedScale
 local warnedSoftTarget
 local warnedNameplates = false
 
+-- What the last drawn marker was drawn against. The tick runs at 20 Hz for
+-- softenemy, which the client answers with no event of its own, and everything
+-- past the pick is a redraw of the same square unless one of these five moved.
+local drawnKey, drawnUnit, drawnPlate, drawnAnchor, drawnEpoch
+
+-- Public because a setting is not an event. Feature.lua writes chargeMode and
+-- then asks for a pass, and the pass has to be told that the answer it holds
+-- was drawn under the old rule.
+function ChargeMarker.Forget()
+	drawnKey, drawnUnit, drawnPlate, drawnAnchor, drawnEpoch = nil, nil, nil, nil, nil
+end
+
 local function Build()
 	-- The same square the HUD icon is, out of the same file, so the two cannot
 	-- drift apart again. What is left here is where it sits: a nameplate the
@@ -30,6 +42,7 @@ local function Detach()
 	if not frame then
 		return
 	end
+	ChargeMarker.Forget()
 	if not frame:IsShown() and not attachedPlate then
 		return
 	end
@@ -49,7 +62,11 @@ local function AnchorFor(plate, unit)
 	return plate
 end
 
-local function AttachTo(plate, unit)
+-- The anchor is handed in rather than asked for again. Update has to know it to
+-- decide whether this pass is worth making at all: an enemy bar appearing on a
+-- plate moves the marker up and does it without changing the pick, so the
+-- anchor is the fifth thing compared and this would be the second read of it.
+local function AttachTo(plate, anchor)
 	local db = ns.db
 	if attachedPlate ~= plate then
 		frame:SetParent(plate)
@@ -78,7 +95,6 @@ local function AttachTo(plate, unit)
 		end
 	end
 
-	local anchor = AnchorFor(plate, unit)
 	if anchor ~= attachedAnchor or appliedSize ~= db.chargeMarkerSize or appliedOffset ~= db.chargeMarkerOffset then
 		-- The size is in this frame's own units. The marker rides a nameplate
 		-- and cancels the plate's scale out above rather than joining the
@@ -146,29 +162,51 @@ function ChargeMarker.Update()
 		return
 	end
 
-	local status, start, duration = ns.Charge.State(key, unit)
-	local ready = status == "ready"
-	if db.chargeMode == "ready" and not ready then
-		Detach()
+	-- Everything below this line is the same square drawn again unless one of
+	-- these moved. The pick above is what the 20 Hz is for: softenemy follows
+	-- the camera and the client announces nothing when it changes. The status
+	-- has four events behind it and a range watch, which is what the epoch is,
+	-- and the anchor is the enemy bar arriving under the marker.
+	local anchor = AnchorFor(plate, unit)
+	local epoch = ns.Charge.StateEpoch(key, unit)
+	if key == drawnKey and unit == drawnUnit and plate == drawnPlate
+		and anchor == drawnAnchor and epoch == drawnEpoch then
 		return
 	end
 
-	AttachTo(plate, unit)
+	local status, start, duration = ns.Charge.State(key, unit)
+	if db.chargeMode == "ready" and status ~= "ready" then
+		Detach()
+	else
+		AttachTo(plate, anchor)
 
-	-- The art, the swipe, the timer and the status colour, all of it guarded
-	-- against what was drawn last. This was twenty-eight lines here and the
-	-- same twenty-eight in Charge/Icon.lua, which is what UI/Ability.lua was
-	-- extracted to end. The world icon and the HUD icon now say the same thing
-	-- because they run the same code, not because two copies agree today.
-	ns.UI.Ability.Draw(frame, ns.Charge.Texture(key) or FALLBACK_TEXTURE,
-		status, start, duration)
-	frame:Show()
+		-- The art, the swipe, the timer and the status colour, all of it guarded
+		-- against what was drawn last. This was twenty-eight lines here and the
+		-- same twenty-eight in Charge/Icon.lua, which is what UI/Ability.lua was
+		-- extracted to end. The world icon and the HUD icon now say the same
+		-- thing because they run the same code, not because two copies agree
+		-- today.
+		ns.UI.Ability.Draw(frame, ns.Charge.Texture(key) or FALLBACK_TEXTURE,
+			status, start, duration)
+		frame:Show()
+	end
+
+	-- Written last, and after the Detach above rather than before it, because
+	-- Detach forgets. "Ready only, and it is not ready" is a pick this pass has
+	-- already answered, and forgetting it would ask again twenty times a second
+	-- for as long as the cooldown runs.
+	drawnKey, drawnUnit, drawnPlate, drawnAnchor, drawnEpoch = key, unit, plate, anchor, epoch
 end
 
 -- Nothing to lay out or lock: the marker lives on a nameplate, not on a spot
 -- you drag. Both exist so the slash handler can drive every module the same.
 function ChargeMarker.ApplyLayout()
-	appliedSize = nil -- force the next Update to re-anchor at the new size
+	-- All three, because the next Update now decides whether to run at all
+	-- before AttachTo gets to compare anything. A settings change and a rescale
+	-- move the size and the plate's scale without moving the pick, so the pass
+	-- has to be told to make one.
+	appliedSize, appliedScale = nil, nil
+	ChargeMarker.Forget()
 end
 
 function ChargeMarker.ApplyLock()

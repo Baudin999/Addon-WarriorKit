@@ -61,6 +61,14 @@ end
 
 local names, textures = {}, {}
 
+-- Whether each of the three is trained, held rather than walked.
+--
+-- The answer is a fact about your spellbook and it changes at a trainer, which
+-- is an event. Asked straight it is one IsSpellKnown per rank per call, the
+-- rank list is nine long for Charge, and both displays ask it on every tick.
+-- Wiped with the names below, on the one event that can make it wrong.
+local knows = {}
+
 -- Bumped whenever the name caches below are dropped, which is the only thing
 -- that can change the text of the generated macro without the unit changing.
 -- Icon.lua guards its macro rebuild on this rather than on the built string,
@@ -112,16 +120,22 @@ function Charge.Refusal()
 end
 
 function Charge.Known(key)
-	local info = Charge.Ability(key)
-	if not info then
-		return false
+	local held = knows[key]
+	if held ~= nil then
+		return held
 	end
-	for _, id in ipairs(info.ranks) do
-		if IsSpellKnown(id) then
-			return true
+	local found = false
+	local info = Charge.Ability(key)
+	if info then
+		for _, id in ipairs(info.ranks) do
+			if IsSpellKnown(id) then
+				found = true
+				break
+			end
 		end
 	end
-	return false
+	knows[key] = found
+	return found
 end
 
 --------------------------------------------------------------------------
@@ -302,7 +316,7 @@ end
 -- Returns a status, which Charge.Look turns into a colour, plus the cooldown
 -- start and duration when there is one. Order is deliberate: what you cannot fix at all comes first,
 -- then what a stance swap or a few seconds of rage fixes, then range.
-function Charge.State(key, unit)
+local function Answer(key, unit)
 	local info = Charge.Ability(key)
 	local name = Charge.Name(key)
 	if not info or not name or not Charge.Known(key) then
@@ -345,11 +359,94 @@ function Charge.State(key, unit)
 	return "ready"
 end
 
+local stateKey, stateUnit, stateAt = nil, nil, -1
+local stateStatus, stateStart, stateDuration
+
+-- Memoised per frame the way Pick is, and for the same reason: GetTime is
+-- frame-constant, the world icon and the HUD icon ask the identical question
+-- off the identical pick, and a dozen client calls is what two used to cost.
+--
+-- Keyed on the pick as well as the clock, because the two displays part company
+-- in combat: the marker detaches and the icon asks about Intervene.
+function Charge.State(key, unit)
+	local now = GetTime()
+	if now == stateAt and key == stateKey and unit == stateUnit then
+		return stateStatus, stateStart, stateDuration
+	end
+	stateAt, stateKey, stateUnit = now, key, unit
+	stateStatus, stateStart, stateDuration = Answer(key, unit)
+	return stateStatus, stateStart, stateDuration
+end
+
+--------------------------------------------------------------------------
+-- When to ask again
+--------------------------------------------------------------------------
+
+-- A number that changes when anything Charge.State reads might have. Both
+-- displays hold the number they last drew at and compare, so a tick where
+-- nothing moved costs a comparison instead of a status.
+--
+-- Cooldown, usable, stance and target all announce themselves and all four are
+-- registered at the foot of this file. Combat shows up in Pick's key, which
+-- both displays already compare against what they drew.
+--
+-- Range announces nothing. You walk into it and the client says so only when
+-- asked, and range is the whole question you are asking the marker while you
+-- run at a mob, so it is asked here at one call rather than left to go stale
+-- until something else moves. Item 39 named the four events and left this one
+-- out; it is the same carve-out the 20 Hz tick already gets for softenemy, and
+-- for the same reason.
+--
+-- Asked only while the last answer was one that range can move. "ready" and
+-- "range" are the two sides of that line and every other status is settled
+-- before Answer reaches the range check, so asking outside those two would feed
+-- nils to ns.OutOfRange for units the spell was never going to take, and forty
+-- of those print a sentence about a client fault that is not one.
+local epoch = 0
+local beyond, epochAt = nil, -1
+
+function Charge.StateEpoch(key, unit)
+	local now = GetTime()
+	if now == epochAt then
+		return epoch
+	end
+	epochAt = now
+
+	if unit and key == stateKey and unit == stateUnit
+		and (stateStatus == "ready" or stateStatus == "range") then
+		local far = ns.OutOfRange(ns.SpellInRange(Charge.Name(key), unit))
+		if far ~= beyond then
+			beyond = far
+			epoch = epoch + 1
+		end
+	else
+		beyond = nil
+	end
+	return epoch
+end
+
 local events = CreateFrame("Frame")
+
+-- Everything the client will say about the four inputs above, plus the two
+-- edges of combat, because a status that reads inCombat is a status that moved
+-- when the fight started.
+local function Moved(_, event)
+	if event == "SPELLS_CHANGED" then
+		-- A new rank changes nothing, but a locale reload would.
+		wipe(names)
+		wipe(textures)
+		wipe(knows)
+		nameEpoch = nameEpoch + 1
+	end
+	epoch = epoch + 1
+	stateAt = -1 -- the memo above is this frame's and is now a frame out of date
+end
+
 events:RegisterEvent("SPELLS_CHANGED")
-events:SetScript("OnEvent", function()
-	-- A new rank changes nothing, but a locale reload would.
-	wipe(names)
-	wipe(textures)
-	nameEpoch = nameEpoch + 1
-end)
+events:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+events:RegisterEvent("SPELL_UPDATE_USABLE")
+events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+events:RegisterEvent("PLAYER_TARGET_CHANGED")
+events:RegisterEvent("PLAYER_REGEN_ENABLED")
+events:RegisterEvent("PLAYER_REGEN_DISABLED")
+events:SetScript("OnEvent", Moved)

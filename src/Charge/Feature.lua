@@ -3,9 +3,15 @@ local ADDON, ns = ...
 -- Everything Core and the panel need to know about the charge button. The
 -- three Charge files hold the behaviour and never talk to either.
 
+-- Both displays now skip a pass where nothing they read has moved, and a
+-- setting is not something they read. chargeMode decides whether the square is
+-- drawn at all and the switch that writes it is right here, so both are told to
+-- forget what they last drew before either is asked to draw again.
 local function ApplyChargeChange()
 	ns.ChargeIcon.ApplySecure()
 	ns.ChargeIcon.SyncMacro()
+	ns.ChargeIcon.Forget()
+	ns.ChargeMarker.Forget()
 	ns.ChargeIcon.Update()
 	ns.ChargeMarker.Update()
 	ns.SoftTarget.Apply()

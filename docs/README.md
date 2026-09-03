@@ -6283,6 +6283,27 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- **Whether `hooksecurefunc` takes on a Blizzard frame's `SetParent`.** It is
+  what replaced the once-a-second parent check: `Core/Attic.lua` hooks the call
+  on every frame it cages, and the walk that used to catch a foreign re-parent
+  now runs every five seconds behind it. The hook is probed and pcalled, so a
+  client that refuses it loses nothing but the speed. A mistake looks like one
+  of Blizzard's frames back on the screen for up to five seconds after something
+  moved it, where it used to be one. What would settle it: `/wk hide probe` with
+  the switches on, which says ON SCREEN against any name a switch asked to hide.
+- **Whether `SPELL_UPDATE_COOLDOWN` and `SPELL_UPDATE_USABLE` fire on 2.5.6.**
+  The wiki lists both for this build and no addon on this machine registers
+  either, so they are read off the contract. `Charge/Charge.lua` marks its
+  answer stale on them, and the charge icon and the world marker only ask the
+  client again once something has. A mistake looks like the charge square
+  keeping its colour through a cooldown ending or through a rage bar filling,
+  and clearing the moment you change target. What would settle it: charge
+  something, then watch the square while the cooldown runs out.
+- **Whether the charge marker still tracks range while you run.** Range is the
+  one thing the client announces nothing about, so it is polled on the tick
+  while the last answer was ready or out of range, and every other status waits
+  for an event. A mistake looks like the marker staying red after you close the
+  distance, or staying green while you back away.
 - **Whether every ticker still runs at the rate it asks for.** `ns.UI.Ticker`
   replaced twelve hand-written accumulators, and nine of the twelve zeroed
   theirs where the shared one subtracts the interval. Those nine were running

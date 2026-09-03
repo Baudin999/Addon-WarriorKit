@@ -43,12 +43,19 @@ ns.Attic = Attic
 -- to perform protected actions, and an addon's frame in that chain is a taint.
 -- Nothing in this file is reached from that path.
 --
--- **Everything held is checked once a second.** Attic.Sweep walks what the room
--- holds and puts back anything whose parent has drifted. Only an explicit
--- SetParent by somebody else can undo a cage, so the sweep almost never has work
--- to do, and it is what turns "no path we thought of can show it" into "nothing
--- stays on the screen for longer than a second". UnitFrames/Blizzard.lua owns
--- the clock.
+-- **The one call that undoes a cage is hooked.** Only an explicit SetParent by
+-- somebody else can take a frame out of this room, so every frame that comes in
+-- gets a hook on that call and goes straight back on the same frame it was
+-- moved. Show is hooked beside it, because that is the other handle anybody
+-- reaches for and a Show on a caged frame is a frame whose own flag disagrees
+-- with the picture.
+--
+-- **And everything held is swept anyway.** Attic.Sweep walks what the room holds
+-- and puts back anything whose parent has drifted. It is the answer to the
+-- client this addon has not met: a frame that would not take a hook, a build
+-- where hooksecurefunc is not there at all. The hook makes it almost always find
+-- nothing, which is what lets UnitFrames/Blizzard.lua run the clock at a fifth
+-- of the rate it used to.
 --------------------------------------------------------------------------
 
 -- What this room will not take. Everything else the client makes is a frame of
@@ -127,6 +134,57 @@ function Attic.Held(frame)
 	return home[frame] ~= nil
 end
 
+-- This file's own re-parents, which the hooks below must not answer for.
+--
+-- Attic.Give hands a frame back before it clears the record, so without this the
+-- hook would read the release as a foreign SetParent and put the frame the
+-- switch just turned off straight back in the room.
+local moving = false
+
+local function Reparent(frame, parent)
+	moving = true
+	local ok = pcall(frame.SetParent, frame, parent)
+	moving = false
+	return ok
+end
+
+-- What the sweep was, on the frame it happens rather than a second later.
+--
+-- Written to do exactly what Attic.Vanish does, because Vanish is what put the
+-- frame here: the parent back, and the frame hidden if the flag came on. A frame
+-- this file has already handed back is left alone, which is what the home lookup
+-- says.
+local function Recage(frame)
+	if moving or home[frame] == nil then
+		return
+	end
+	Attic.Take(frame)
+	if frame:IsShown() and not ns.Blocked(frame) then
+		frame:Hide()
+	end
+end
+
+-- Both hooks on one frame, once, on the way in.
+--
+-- hooksecurefunc rather than a replacement of the method, so the client's own
+-- call still runs and nothing downstream of it changes. Probed and pcalled: it
+-- is a global this addon does not own and a frame may refuse the write, and
+-- either way the sweep is still there.
+--
+-- SetParent is the one that holds. Show is the second handle and it is worth
+-- less than it looks: ns.Strip has usually already put the frame's Hide in that
+-- field, and SetShown is resolved in C and reads no Lua field at all. It is here
+-- for the frame a combat lockdown refused the strip on, which is the one caged
+-- frame whose Show is still its own.
+local function Watch(frame)
+	if frame.wkCaged or type(_G.hooksecurefunc) ~= "function" then
+		return
+	end
+	frame.wkCaged = true
+	pcall(_G.hooksecurefunc, frame, "SetParent", Recage)
+	pcall(_G.hooksecurefunc, frame, "Show", Recage)
+end
+
 function Attic.Count()
 	return held
 end
@@ -155,9 +213,10 @@ function Attic.Take(frame)
 	if was == nil then
 		was = frame:GetParent() or false
 	end
-	if not pcall(frame.SetParent, frame, attic) then
+	if not Reparent(frame, attic) then
 		return false
 	end
+	Watch(frame)
 	if home[frame] == nil then
 		home[frame] = was
 		held = held + 1
@@ -175,7 +234,7 @@ function Attic.Give(frame)
 	if ns.Blocked(frame) then
 		return false
 	end
-	if not pcall(frame.SetParent, frame, was or nil) then
+	if not Reparent(frame, was or nil) then
 		return false
 	end
 	home[frame] = nil
@@ -208,11 +267,12 @@ end
 
 -- Everything the room holds, checked against what is actually on the screen.
 --
--- This is the line that makes the feature hold rather than merely be right at
--- login. A cage survives Show, SetShown, an alpha, a fade and a layout pass, and
--- the one call that undoes it is somebody else's SetParent. Nothing in the
--- client is known to make one on these frames, which is exactly the kind of
--- claim that has been wrong twice, so it is checked instead of believed.
+-- The hook above answers the same call on the frame it happens, so this walk now
+-- runs behind it rather than instead of it, and it almost never finds anything.
+-- It stays because the hook is the thing that could be missing: a build with no
+-- hooksecurefunc, a frame that refused the write, a frame taken before the
+-- global existed. Believing the hook is the shape of claim this file has already
+-- been wrong about twice.
 --
 -- Cheap by construction: one comparison per frame held, and a write only where
 -- the comparison failed.

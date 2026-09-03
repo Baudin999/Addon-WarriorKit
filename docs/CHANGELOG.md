@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### The charge displays redraw when something moved
+
+The world marker follows the mob you are aiming at, so it looks twenty times a
+second, and the icon on the HUD looks ten. Both then put the whole question to
+the client again on every look: is the ability trained, is it on cooldown, are
+you in the right stance, do you have the rage, is the mob in range. Sitting at
+a vendor with a mob plated cost about seven hundred of those a second, and the
+answer was the same answer every time.
+
+Both displays now hold what they last drew and compare against it. A cooldown
+starting or ending, an ability becoming usable, a stance swap and a new target
+all say so, and each of the four marks the answer stale. Range is asked once a
+tick because nothing says so and range is what you are watching while you run
+at something. What you have trained is read once and again when you visit a
+trainer. The marker still tracks the camera twenty times a second, because the
+mob you are aiming at is the one thing the client announces nothing about.
+
+### Blizzard's frames stay down without the walk every second
+
+Every frame this addon draws over goes into a room that is hidden and cannot be
+shown, and once a second the addon asked all of them where they were. About
+four hundred questions a second in a five-man, and in a year the answer has
+never once been the wrong one.
+
+The room now hooks the single call that can take a frame out of it. A frame
+somebody else re-parents is back before the next line of their code runs, and a
+window the client loads on demand goes down inside the event that loads it
+instead of up to a second afterwards. The walk is still there and runs every
+five seconds, because a client that will not take the hook is a client this
+addon has not met and the promise should not depend on meeting it. Nothing on
+screen changes.
+
 ### One key on the bar and under the cursor
 
 A heal on a square and the same key on the mouseover list was a key that

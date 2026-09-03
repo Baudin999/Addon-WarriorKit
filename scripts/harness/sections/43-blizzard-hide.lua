@@ -30,6 +30,11 @@ local CHURN = H.CHURN
 
 local Attic, Blizz = ns.Attic, ns.BlizzHide
 
+-- The seconds UnitFrames/Blizzard.lua puts between passes. Written here rather
+-- than read off the ticker, because the ticker is the thing being driven and a
+-- number taken from it would agree with itself whatever it was.
+local HIDE_INTERVAL = 5
+
 ----------------------------------------------------------------------
 -- The room itself
 ----------------------------------------------------------------------
@@ -167,10 +172,58 @@ do
 	check(bar:IsVisible() == false,
 		"the fixture's re-parent did not put the bar back where it can be seen")
 
-	-- The sweep is what turns "no call we thought of can undo this" into "nothing
-	-- stays up for longer than a second". It runs inside every pass.
+	-- The sweep is the backstop, and it is what a client with no hooks has. It
+	-- runs inside every pass.
 	check(Attic.Sweep(), "the sweep refused to put a re-parented frame back")
 	check(bar:GetParent() == attic, "a frame re-parented out of the attic stayed out")
+end
+
+----------------------------------------------------------------------
+-- The same call answered on the frame it happens
+--
+-- The sweep above used to be the whole answer and ran once a second for it.
+-- Core/Attic.lua now hooks SetParent on every frame it takes, so the frame is
+-- back in the room before the caller's next line and the walk is a backstop
+-- rather than the mechanism. That is what lets the clock drop to five seconds.
+--
+-- hooksecurefunc is installed for this block alone and taken away after, the
+-- same as in 29-social.lua and 39-party-raid.lua and for the same reason:
+-- leaving it in the fixture switches on hooks in UnitFrames/Skin.lua and
+-- Chat/Blizzard.lua that have never been able to install here, which changes
+-- what every section above is measuring. The attic asks for it at Take time, so
+-- the bar is handed back and taken again for the hook to land on it.
+----------------------------------------------------------------------
+
+do
+	_G.hooksecurefunc = function(target, name, post)
+		local original = target[name]
+		target[name] = function(...)
+			original(...)
+			post(...)
+		end
+	end
+
+	ns.db.hideBlizzTargetCast = false
+	Blizz.Apply()
+	ns.db.hideBlizzTargetCast = true
+	Blizz.Apply()
+	_G.hooksecurefunc = nil
+
+	local bar = _G.TargetFrameSpellBar
+	check(Attic.Held(bar), "the cast bar went back in the room and the attic did not record it")
+
+	-- No sweep, no tick, no pass. The call itself and then the question.
+	bar:SetParent(_G.TargetFrame)
+	check(bar:GetParent() == attic,
+		"a frame re-parented out of the attic is still out of it on the very next line")
+	check(bar:IsVisible() == false, "the re-parented bar was on the screen")
+
+	-- The second hook rides on a field ns.Strip already owns, so what is
+	-- measured here is the pair of them: the strip put Hide where Show was, the
+	-- hook sits over that, and a Show still leaves nothing on the screen.
+	bar:Show()
+	check(bar:IsVisible() == false, "a Show put the caged cast bar back on the screen")
+	check(bar:GetParent() == attic, "a Show took the cast bar out of the attic")
 end
 
 ----------------------------------------------------------------------
@@ -197,11 +250,15 @@ end
 ----------------------------------------------------------------------
 -- The clock
 --
--- One hertz forever, so a frame the client builds later is down within a second
--- without anybody having guessed which event says so. What it must not do is
--- allocate: a pass that produces garbage once a second is a pass the collector
--- walks in the middle of a frame, which is the rule every ticker in this addon
--- is held to.
+-- Every five seconds forever, behind the hook and ADDON_LOADED rather than in
+-- front of them, so a client where neither works still has nothing of Blizzard's
+-- left on the screen. What it must not do is allocate: a pass that produces
+-- garbage on a timer is a pass the collector walks in the middle of a frame,
+-- which is the rule every ticker in this addon is held to.
+--
+-- Driven at the interval rather than at one second, so the number below is a
+-- hundred passes of the work and stays comparable with what it measured while
+-- the clock ran at one hertz.
 ----------------------------------------------------------------------
 
 do
@@ -218,8 +275,8 @@ do
 		collectgarbage("stop")
 		local before = collectgarbage("count")
 		for _ = 1, ticks do
-			advance(1)
-			ticker.scripts.OnUpdate(ticker, 1)
+			advance(HIDE_INTERVAL)
+			ticker.scripts.OnUpdate(ticker, HIDE_INTERVAL)
 		end
 		local after = collectgarbage("count")
 		collectgarbage("restart")

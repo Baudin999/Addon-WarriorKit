@@ -407,25 +407,43 @@ end
 --------------------------------------------------------------------------
 -- The clock
 --
--- One hertz, forever, and it is not a workaround for a mechanism that does not
--- hold. The cage holds. What the second buys is the two things a cage cannot
--- answer for on its own: a frame the client had not built yet at the last pass,
--- which is every load-on-demand frame and every chat window a whisper opens, and
--- a frame somebody else re-parented, which nothing here is known to do and which
--- is exactly the kind of claim that has already been wrong twice.
+-- This file named its two failure modes and then answered both with a second
+-- hand: a frame the client had not built yet at the last pass, and a frame
+-- somebody else re-parented. Both now have the thing that says so.
 --
--- So the guarantee this file makes is not "no path we thought of can show it".
--- It is "nothing the addon replaces stays on the screen for longer than a
--- second", and that one does not depend on having guessed the client's call
--- sites correctly.
+-- A frame built late says ADDON_LOADED. That is every load-on-demand window,
+-- the talent frame and the spell book among them, and it fires before anything
+-- the new frame does can put it on the screen.
+--
+-- A frame re-parented says SetParent, and Core/Attic.lua hooks that call on
+-- every frame it cages. A cage is undone by nothing else, so the hook is not a
+-- guess at the client's call sites: it is the call itself.
+--
+-- What is left for the clock is the client this addon has not met, where the
+-- hook would not install or the frame came in before the global existed. That
+-- is a backstop rather than the mechanism, so it runs at five seconds instead of
+-- one.
+--
+-- The guarantee in the header is unchanged and is now made by three things
+-- instead of one. Nothing the addon replaces stays on the screen: the cage holds
+-- it, the hook puts it back on the frame it moved, and this walk is what proves
+-- the first two on a client where either turns out not to work.
 --
 -- The cost is a dozen global lookups and a parent comparison per frame held,
--- once a second, with a write only where a comparison failed. It is bracketed
--- like every other tick in the addon so the performance tab accounts for it
--- rather than leaving it as the one pass nobody can see.
+-- once every five seconds, with a write only where a comparison failed. It is
+-- bracketed like every other tick in the addon so the performance tab accounts
+-- for it rather than leaving it as the one pass nobody can see.
+--
+-- The seven Blizz.Also registrants ride the same change and none of them needed
+-- a hook of its own. Five of the seven put their frames in the attic and are
+-- covered by its hook exactly. Bags/Blizzard.lua swaps globals rather than
+-- moving a frame, so there is nothing for anybody to re-parent. Merchant
+-- /Blizzard.lua parks a frame it may not cage, and it already hooks that frame's
+-- own OnShow for the one thing that moves it, which is the client relaying its
+-- panels.
 --------------------------------------------------------------------------
 
-local INTERVAL = 1.0
+local INTERVAL = 5.0
 
 
 -- The switches, for the panel and the slash word, so neither writes the list
@@ -531,15 +549,32 @@ function Blizz.Describe()
 end
 
 -- PLAYER_LOGIN starts the clock. PLAYER_REGEN_ENABLED is the retry every strip
--- in the addon uses, and here it only saves a pass its share of a second: the
--- tick would have reached the same work anyway, which is the difference between
--- this file and the one it replaced.
+-- in the addon uses. ADDON_LOADED is the first of the clock's two jobs taken off
+-- it: a load-on-demand window is built inside that event, so the pass that hides
+-- it runs before the frame has been drawn once rather than up to five seconds
+-- later.
+--
+-- Only once login has been through, which is the whole of what `started` is
+-- for. ADDON_LOADED fires once per addon in the list on the way in, and the
+-- addon this file belongs to is one of them. A pass run there walks frames that
+-- most of this addon has not built yet, and the order it settles is not the
+-- order login settles: it moved which window came first and the options window
+-- stopped being the one the harness found.
 local events = CreateFrame("Frame")
-events:RegisterEvent("PLAYER_LOGIN")
-events:RegisterEvent("PLAYER_REGEN_ENABLED")
-events:SetScript("OnEvent", function(_, event)
+local started = false
+
+local function Moved(_, event)
+	if event == "ADDON_LOADED" and not started then
+		return
+	end
 	Blizz.Apply()
 	if event == "PLAYER_LOGIN" then
+		started = true
 		ns.UI.Ticker(events, INTERVAL, "hide", Blizz.Apply)
 	end
-end)
+end
+
+events:RegisterEvent("PLAYER_LOGIN")
+events:RegisterEvent("PLAYER_REGEN_ENABLED")
+events:RegisterEvent("ADDON_LOADED")
+events:SetScript("OnEvent", Moved)

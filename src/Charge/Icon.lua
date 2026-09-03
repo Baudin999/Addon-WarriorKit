@@ -21,6 +21,19 @@ local frame, handle, binder
 local lastMacro, securePending
 local lastUnit, lastWeapon, lastEpoch
 
+-- What the square was last drawn against. The ticker runs at 10 Hz because the
+-- marker's pick can move without an event, and everything past the pick is the
+-- same square drawn again unless one of these four moved.
+local drawnKey, drawnUnit, drawnEpoch, drawnPlacing
+
+-- Said out loud rather than left to the compare, because the client dispatches
+-- an event to two frames in an order this file does not choose: Charge.lua
+-- raises its epoch on the same event that brings us here, and this handler may
+-- run first.
+function ChargeIcon.Forget()
+	drawnKey, drawnUnit, drawnEpoch, drawnPlacing = nil, nil, nil, nil
+end
+
 --------------------------------------------------------------------------
 -- The macro the button runs
 --------------------------------------------------------------------------
@@ -353,6 +366,7 @@ function ChargeIcon.Update()
 	-- a key from the last pass: an absent key raises on the table write inside
 	-- Texture, and the last pass is not guaranteed to have had one.
 	if not db.charge then
+		ChargeIcon.Forget()
 		frame.fade = placing and 1 or 0
 		Ability.Draw(frame, ns.Charge.Texture("charge") or FALLBACK_TEXTURE, "unknown")
 		return
@@ -361,6 +375,18 @@ function ChargeIcon.Update()
 	-- The icon shows whichever of the three the button would cast right now,
 	-- judged against the unit it would take.
 	local key, unit = ns.Charge.Pick()
+
+	-- And it shows it again only when something moved. The pick is what the
+	-- tick is for; the status has four events behind it and a range watch,
+	-- which is what the epoch is; placing is in here because it decides the
+	-- fade and a lock is a setting rather than an event this file hears.
+	local epoch = ns.Charge.StateEpoch(key, unit)
+	if key == drawnKey and unit == drawnUnit and epoch == drawnEpoch
+		and placing == drawnPlacing then
+		return
+	end
+	drawnKey, drawnUnit, drawnEpoch, drawnPlacing = key, unit, epoch, placing
+
 	local status, start, duration = ns.Charge.State(key, unit)
 
 	-- Mode "ready" is the setting that keeps the icon off the screen until a
@@ -410,6 +436,7 @@ events:SetScript("OnEvent", function(_, event)
 		end
 		ChargeIcon.SyncMacro()
 	end
+	ChargeIcon.Forget()
 	ChargeIcon.Update()
 end)
 
