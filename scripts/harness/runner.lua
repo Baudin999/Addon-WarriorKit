@@ -404,6 +404,11 @@ local SECTIONS = {
 	-- window is built once and 55-bags.lua asserts on that first build, which
 	-- is why this cannot sit in the mail section where it was.
 	"75-mail-bags",
+	-- The bars you made yourself. It adds bars, takes keys and puts a spell
+	-- on the cursor, and it deletes every bar and clears the cursor at the
+	-- foot of the file, so nothing after it finds a key held or a scene it
+	-- did not expect.
+	"76-adhoc",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

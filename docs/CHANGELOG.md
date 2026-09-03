@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Bars you made yourself, on a key
+
+A trade skill lives three clicks deep in the spellbook and a shaman's totems
+fill a bar you do not want on the screen while you fight. An ad hoc bar is a
+bar of your own: a name, a key, a place on the screen and whatever you dragged
+onto it, hidden until you press the key and hidden again after a press on one
+of its squares. `/wk adhoc add trade`, `/wk adhoc trade T`, press T, drag
+Blacksmithing out of the book onto the empty square. Up to six bars, sixteen
+squares each, per character. The page under Action bars in the settings window
+is where you design one: a strip of tabs with a plus on the end, the name, the
+key, and the bar drawn as a line of squares you drop things onto, drag between
+to reorder and drag off to take away. A bar that should stay up after a press
+has a tick box for that.
+
+Every part of it a fight refuses to an addon runs from a snippet instead. The
+key shows and hides the bar through a secure click handler, the same one the
+C key opens the character sheet with; a press on a square hides the bar through
+a wrap on the square's own click, which is what OPie does to every ring; and
+the bar is moved by a strip along its left edge through the secure drag the
+character sheet already had. So the bar comes up, casts and goes away mid
+pull, and a spell dropped on it mid pull lands when the fight ends.
+
+A square holds a spell by name, so the bar casts the best rank you know after
+every trainer visit without being told. An item is pressed through `/use`, a
+macro by its name. The squares are the same squares the cloned action bars
+draw, with the same swipe and the same edge colours, so a totem on cooldown
+reads the way it does anywhere else.
+
 ### The pickup filter, from the bag window
 
 A run of an old dungeon fills your bags with teeth and vendor mail, and the

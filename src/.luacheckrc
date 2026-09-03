@@ -219,6 +219,23 @@ globals = {
 	"SlashCmdList",
 }
 
+-- One frame, one key button and sixteen squares per ad hoc bar, plus the
+-- cooldown frame UI/Ability.lua names after each square, six bars deep. All of
+-- them are made by CreateFrame with a name built by concatenation, so luacheck
+-- never sees the write; listed here because the game makes the global and the
+-- README says every one of those is written down. The key button is named
+-- because SetOverrideBindingClick binds to a name, and the frame and the
+-- squares for the reason the cloned bars' are: one that has landed somewhere
+-- wrong has to be findable from a macro.
+for bar = 1, 6 do
+	globals[#globals + 1] = ("WarriorKitAdHoc%d"):format(bar)
+	globals[#globals + 1] = ("WarriorKitAdHoc%dKey"):format(bar)
+	for at = 1, 16 do
+		globals[#globals + 1] = ("WarriorKitAdHoc%dButton%d"):format(bar, at)
+		globals[#globals + 1] = ("WarriorKitAdHoc%dButton%dCooldown"):format(bar, at)
+	end
+end
+
 read_globals = {
 	"CreateFrame", "UIParent", "WorldFrame", "GameFontNormal", "DEFAULT_CHAT_FRAME",
 	"GameTooltip", "GameFontHighlightSmall", "GetBindingAction",

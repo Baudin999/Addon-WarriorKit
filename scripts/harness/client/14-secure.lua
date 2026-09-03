@@ -107,3 +107,16 @@ function Region:Click(button, down)
 	end
 	return true
 end
+
+-- A wrapped script, recorded rather than swallowed by the metatable.
+--
+-- AdHoc/Bars.lua wraps every square's OnClick with a snippet that hides the
+-- bar after the cast, and that snippet is the whole of what makes a bar go
+-- away on a press. A no-op here would let a wrap on the wrong script, or no
+-- wrap at all, pass every assertion. The bodies are kept as strings, the way
+-- SetAttribute keeps a snippet, so a section can read them back; nothing here
+-- runs them, which is the same limit the state driver stub states.
+function Region:WrapScript(frame, script, preBody, postBody)
+	frame.wraps = frame.wraps or {}
+	frame.wraps[script] = { header = self, pre = preBody, post = postBody }
+end

@@ -161,34 +161,41 @@ end
 -- is down. The Lua half may do all of this in a fight. Reading a cursor and
 -- writing an attribute are not protected acts. Only the SetPoint at the far end
 -- is, and that one happens inside the snippet.
-local function Secure(place, frame)
+--
+-- The drag is taken by the grip where one is named and by the frame where none
+-- is. A window is grabbed by its own chrome, so the frame is the grip. A bar
+-- is squares from edge to edge, and a drag started on a square is a drag of
+-- what the square holds, so the bar names a strip along its edge and the
+-- strip is what the client delivers the drag to; the scripts still act on the
+-- frame, which is the thing being moved.
+local function Secure(place, frame, grip)
 	frame.placing = place
 	place.moves = 0
 	frame:SetFrameRef("screen", UIParent)
 	frame:SetAttribute("_onattributechanged", MOVE)
 
-	frame:SetScript("OnDragStart", function(self)
-		local point, _, relativePoint, x, y = self:GetPoint()
+	grip:SetScript("OnDragStart", function()
+		local point, _, relativePoint, x, y = frame:GetPoint()
 		local cursorX, cursorY = GetCursorPosition()
-		local scale = self:GetEffectiveScale()
+		local scale = frame:GetEffectiveScale()
 		place.grabbed = { x = x, y = y,
 			x0 = cursorX / scale, y0 = cursorY / scale }
-		self:SetAttribute("wk-point", point)
-		self:SetAttribute("wk-rel", relativePoint)
-		self:SetScript("OnUpdate", Follow)
+		frame:SetAttribute("wk-point", point)
+		frame:SetAttribute("wk-rel", relativePoint)
+		frame:SetScript("OnUpdate", Follow)
 	end)
 
-	frame:SetScript("OnDragStop", function(self)
-		self:SetScript("OnUpdate", nil)
+	grip:SetScript("OnDragStop", function()
+		frame:SetScript("OnUpdate", nil)
 		if not place.grabbed then
 			return
 		end
 		-- Once more on the way out, because the last OnUpdate ran a frame before
 		-- the button came up and the window would land a cursor's worth short of
 		-- where it was dropped.
-		Push(place, self)
+		Push(place, frame)
 		place.grabbed = nil
-		Landed(place, self)
+		Landed(place, frame)
 	end)
 end
 
@@ -210,7 +217,7 @@ local function Finish(place, frame, opts)
 	end
 
 	if not place.lockable then
-		frame:RegisterForDrag("LeftButton")
+		place.grip:RegisterForDrag("LeftButton")
 	end
 
 	return place
@@ -240,6 +247,14 @@ function UI.Placeable(frame, opts)
 
 	place.secure = opts.secure == true
 
+	-- What the drag is delivered to. The frame itself, unless a secure caller
+	-- names a strip of its own; Secure says why one would.
+	place.grip = frame
+	if opts.grip then
+		assert(place.secure, "UI.Placeable: a grip is only for a frame dragged from a snippet")
+		place.grip = opts.grip
+	end
+
 	frame:SetMovable(true)
 	frame:SetClampedToScreen(true)
 
@@ -259,7 +274,7 @@ function UI.Placeable(frame, opts)
 	if place.secure then
 		assert(not place.lockable,
 			"UI.Placeable: a secure frame is dragged from a snippet, which the lock cannot reach")
-		Secure(place, frame)
+		Secure(place, frame, place.grip)
 		return Finish(place, frame, opts)
 	end
 

@@ -83,6 +83,10 @@ written longer than they are here.
 49. Chrome waits for the hand to stop: tabs, close marks, chips and settings
     hints open after four tenths of a second held still, through the settle
     the bags already use. `cce5ebc`
+50. Ad hoc bars: a bar of your own on a key, hidden until the key is pressed
+    and hidden again after a press on one of its squares, holding only what
+    you dragged onto it, up to six bars of sixteen per character. Shown,
+    hidden, moved and put away from snippets so it works mid fight.
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.

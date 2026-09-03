@@ -67,7 +67,7 @@ local SAMPLE_RATE = 1.0
 local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast",
 	"castsweep", "tip", "settle", "chart", "skin", "skinread", "party", "partyread", "meter",
 	"buffs", "cooldowns", "stream", "world", "trace", "hide", "clock", "bagstack",
-	"vendor", "thanks", "sampler", "feed",
+	"vendor", "thanks", "sampler", "feed", "adhoc",
 	-- The one slot that is not a ticker. Bags/Window.lua brackets its refresh,
 	-- which the bag events book up to ten times a second at a vendor, and
 	-- scripts/check.sh reads a literal ns.Perf.Start as a slot for that reason.

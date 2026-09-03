@@ -269,6 +269,16 @@ Loadouts\Loadouts.lua
 Loadouts\Page.lua
 Loadouts\Feature.lua
 
+# Bars you made yourself, each on a key. AdHoc.lua is the list, Bars.lua the
+# secure frames, the keys and the tick, Panel.lua the page you design one on,
+# and Feature.lua last as everywhere else. After Loadouts, which is the part
+# whose key-per-row shape this borrows, and it reads Hover\Hover.lua for what
+# the cursor is carrying and Buttons\Castable.lua on its tick, both far above.
+AdHoc\AdHoc.lua
+AdHoc\Bars.lua
+AdHoc\Panel.lua
+AdHoc\Feature.lua
+
 # Which of the two reactive abilities a slot is holding, and whether its window
 # is open. Out of the combat log, warrior only, and read by Slot.lua on the
 # bar's ticker, so it loads before it.

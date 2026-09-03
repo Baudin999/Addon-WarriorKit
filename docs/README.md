@@ -67,7 +67,7 @@ the probes that were already there, never by loading different files:
 
 ## Files and load order
 
-The addon is twenty-eight parts and a core. Each part is a folder, and Core knows the
+The addon is twenty-nine parts and a core. Each part is a folder, and Core knows the
 name of none of them.
 
     Core/Core.lua        SavedVariables, API shims, the feature registry
@@ -162,6 +162,13 @@ name of none of them.
                              into whichever widget kit is handed to it, which is
                              the character window's
     Loadouts/Feature.lua     the registration and the slash word, and no panel
+
+    AdHoc/AdHoc.lua          the bars you made yourself: a list per character of
+                             a name, a key, a place, and what you dragged onto it
+    AdHoc/Bars.lua           the secure frame per bar, the key button whose
+                             snippet shows it, the squares on it, and the tick
+    AdHoc/Panel.lua          the page you design a bar on
+    AdHoc/Feature.lua        the registration and the slash word
 
     Buttons/Reaction.lua     whether the Overpower or Revenge window is open,
                              tracked off the combat log
@@ -2698,6 +2705,63 @@ headers each feature writes, and it cannot grow. A loadout list is a setting tha
 while the window is open, so it is a control instead, pooled inside one row.
 That is the whole reason no rebuild path had to be cut into the panel, and the
 reason adding a loadout costs no frames after the first time.
+
+**Ad hoc bars.** A bar of your own on a key: a name, a key, a place on the
+screen and a list of what you dragged onto it, hidden until the key is pressed
+and hidden again after a press on one of its squares. A bar of trade skills
+under T, a bar of totems under Shift-T, up to six. Four files under `AdHoc/`.
+`AdHoc.lua` is the list, per character for the reason loadouts are. `Bars.lua`
+is the frames, the keys and the tick. `Panel.lua` is the page, under Action
+bars in the options window. `Feature.lua` is the registration and `/wk adhoc`.
+
+**A square holds a spell by name and never by id.** `/cast Frost Shock` with no
+rank named casts the best rank you know, so a bar never goes stale after a
+trainer visit, which is the argument `Hover/Hover.lua` makes for a mouseover
+key. An item is held by name too, with its id beside it for the cooldown call,
+and pressed through `/use` in a macro the way a hover key uses one. A macro is
+held by name, because a macro index moves every time you make or delete one.
+
+**Three protected things per bar, and a snippet stands in front of each.** A
+frame with a secure button inside it may not be shown, hidden, moved or given
+attributes by an addon in a fight, and a bar of totems is pressed in one. The
+key is an override binding onto a button built on `SecureHandlerClickTemplate`,
+and that button's `_onclick` snippet is what shows or hides the bar: the same
+shape the C key has on the character sheet. Every square's `OnClick` is wrapped
+by the bar with a snippet that runs after the cast and hides the bar if the
+bar's `wk-close` attribute says so, which is what makes a press put the bar
+away in combat; `WrapScript` is what OPie does to every ring proxy on this
+client. The bar is built on `SecureHandlerAttributeTemplate` and dragged
+through `UI/Placeable.lua`'s secure drag, by a strip along its left edge rather
+than by the bar itself, because the bar is squares from edge to edge and a drag
+started on a square is a drag of what the square holds. `Placeable` grew a
+`grip` option for that, and the bar is its only caller.
+
+**Everything else is deferred, not refused.** Attributes, anchors and bindings
+are written in one `Bars.Apply`, which sets `pending` under lockdown and runs
+again at `PLAYER_REGEN_ENABLED`; a spell dropped on a bar mid fight lands when
+the fight ends. Rebinding a key is refused outright with a sentence, the way
+every key in the addon is.
+
+**The frames are made on first use and never destroyed.** A secure frame
+cannot be. A bar you delete keeps its frame and the next bar you add takes it,
+so the pool never grows past six, and every attribute is written again from
+the list on every apply, which is what makes a deleted bar's key land on the
+right frame. Loadouts makes the same argument for its ten buttons.
+
+**An empty bar draws one square.** A bar you just made and pressed the key for
+is a square saying drop something here rather than a sliver of background. A
+drop lands on the bar itself, through `OnReceiveDrag` and `PostClick` the way
+`Buttons/Square.lua` takes both, or on the page, where the bar is drawn as a
+line of squares with an empty one on the end: drag onto the empty square to
+add, onto a full one to replace, between two to reorder, off the line to take
+away, and a right click takes away too.
+
+**The tick draws only the bars that are up.** Ten times a second, off
+`UI.Forever` under the `adhoc` Perf slot, and the pass over six entries with
+nothing shown is the whole cost most of the time. A spell square reads
+`Castable.State` by name, an item square its count and cooldown, a macro square
+is simply ready. Range is not read, because a bar you press a key for is not a
+bar you fight off.
 
 **Where the weapons come from.** The panel does not offer a text field for them.
 You drag a weapon or a shield out of your bags onto a hand and right click a hand
@@ -6168,6 +6232,12 @@ on different realms read as the same person.
     /wk loadout 2 SHIFT-2        the key for that loadout, or none to clear
     /wk loadout add Sword        a new one
     /wk loadout combat on|off    whether the weapon swap fires mid fight
+    /wk adhoc                    every ad hoc bar, its key and how many squares it holds
+    /wk adhoc add totems         a new bar
+    /wk adhoc totems SHIFT-T     the key that shows and hides that bar, or none
+    /wk adhoc zoom 1.5           the bars' zoom, 0.5 to 3
+    /wk adhoc reset              every bar back where it started
+    /wk adhoc on|off
     /wk console                  the console page, under Under the hood
     /wk console xp               a probe: the experience readings, in chat
     /wk console rail             a probe: the experience rail's frame, and what is over it
@@ -6483,6 +6553,28 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- **Whether a click snippet shows a bar with secure buttons on it.** An ad hoc
+  bar's key is an override binding onto a `SecureHandlerClickTemplate` button
+  whose `_onclick` snippet calls `Show` and `Hide` on the bar through a frame
+  reference. The character sheet's C key is the same shape and has been
+  pressed in game, but a bar is a `SecureHandlerAttributeTemplate` frame
+  rather than a window, and the harness records the snippet as a string and
+  never runs it. A mistake looks like the key doing nothing, in and out of a
+  fight. What would settle it: `/wk adhoc add trade`, `/wk adhoc trade T`,
+  press T twice.
+- **Whether a wrapped OnClick hides the bar after the cast.** Every square's
+  `OnClick` is wrapped by its bar with a post snippet that reads the bar's
+  `wk-close` attribute and hides it. OPie wraps every ring proxy the same way
+  on this client, but nothing in this addon called `WrapScript` before, and
+  the stub only records the bodies. A mistake looks like a press casting and
+  the bar staying up, or a press casting nothing at all if the wrap taints the
+  click. What would settle it: drop a spell on a bar, press its key, press the
+  square, in and out of combat.
+- **Whether the grip drags a secure bar.** The drag is delivered to a strip
+  along the bar's left edge and the scripts move the bar through the same four
+  attributes the character sheet's drag writes. A mistake looks like the strip
+  taking the mouse and the bar sitting still, or the bar jumping to the
+  cursor. What would settle it: press the key and drag the strip.
 - **Whether one frame can carry every tick that never stops.** `UI/Ticker.lua`
   builds a frame of its own and the eighteen parts that used to keep one each
   hang off it. That frame has no parent and is never hidden, which is what all
