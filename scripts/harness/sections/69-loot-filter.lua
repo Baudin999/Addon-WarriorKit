@@ -178,6 +178,9 @@ end
 -- pass: one where it is there and says yes to one item, and one where it is not
 -- there at all, which is the state a build without that file is in and must not
 -- be a Lua error over a corpse.
+-- The real part is loaded by now and 70-reagents.lua reads it, so it is put
+-- back at the foot of this block rather than dropped.
+local reagents = ns.Reagents
 nothing()
 ns.dbc.lootCrafted = true
 ns.Reagents = {
@@ -192,6 +195,7 @@ ns.Reagents = nil
 pass()
 check(took() == expect(COINS, QUEST),
 	("with no profession scan the filter took %s"):format(took()))
+ns.Reagents = reagents
 
 ----------------------------------------------------------------------
 -- Master loot, with the filter on top of it

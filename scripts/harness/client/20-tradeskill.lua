@@ -29,8 +29,9 @@ ITEMS["Silver Bar"] = { id = 7003, classId = 7, quality = 1, price = 300,
 	icon = "Interface\\Icons\\Bar", stack = 20 }
 ITEMS["Coarse Stone"] = { id = 7004, classId = 7, quality = 1, price = 25,
 	icon = "Interface\\Icons\\Stone", stack = 20 }
-ITEMS["Strange Dust"] = { id = 7005, classId = 7, quality = 1, price = 120,
-	icon = "Interface\\Icons\\Dust", stack = 10 }
+-- Strange Dust is not here: 04-hands.lua already carries it, with the subclass
+-- the loot filter's enchanting rule reads, and a second definition under the
+-- same name would land on top of that one and take the subclass away.
 ITEMS["Lesser Magic Essence"] = { id = 7006, classId = 7, quality = 1, price = 400,
 	icon = "Interface\\Icons\\Essence", stack = 10 }
 
