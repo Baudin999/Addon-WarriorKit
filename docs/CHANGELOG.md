@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### The player and target frames are ours
+
+The player, target and target of target frames were Blizzard's own three
+wearing this addon's look, and the client this addon runs on has no Edit Mode,
+so nothing could move them. They are three frames of ours now: secure unit
+buttons on the pixel grid, with a portrait, two bars, the four numbers, the
+rest, combat, PvP and raid marker badges, and the aura rows under them. Left
+click targets, right click opens the unit menu, hovering shows the tooltip.
+
+`/wk unlock` and drag them, the way every other piece of the HUD is placed.
+The link is as it was: the target is the player mirrored in the middle of the
+screen, dragging the player sets the corridor, dragging the target sets the
+level, and target of target hangs under the target. With `skin link off` the
+target sits wherever you drop it. Both corners are settings and `/wk reset`
+puts them back.
+
+Blizzard's own two go to the attic through `/wk hide frames`, on by default,
+beside the other switches on that page. `UnitFrames/Art.lua`, which stripped
+and restored the client's regions, is gone with the frames it worked on.
+
 ### The charge button reads your stance and your spellbook
 
 Out of combat the button was always Charge, with a swap to Battle Stance under

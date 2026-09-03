@@ -255,10 +255,10 @@ local SkinWord = ns.Command.Word({
 	  say = function(on)
 		return "frame link " .. (on and "on" or "off")
 				.. ": " .. ns.FrameSkin.DescribeLink() .. ".",
-			on and "Edit Mode positions the player block and this addon positions"
-				.. " everything against it. The target is the player mirrored in the"
-				.. " middle of the screen, so drag the player to set the corridor;"
-				.. " dragging the target sets the level." or nil
+			on and "The target is the player mirrored in the middle of the"
+				.. " screen. Unlock the frames and drag the player to set the"
+				.. " corridor; dragging the target sets the level."
+			or "Unlock the frames and drag the target wherever you like."
 	  end },
 
 	{ "level", key = "skinLevel", apply = SkinRelayout,
@@ -516,6 +516,15 @@ ns.Group.OnMember(function(button)
 	end
 end)
 
+-- And on the player, target and target of target buttons, which Marking used
+-- to reach by hooking Blizzard's three by name. Those three are in the attic
+-- now and ours take the click.
+ns.FrameSkin.OnFrame(function(button)
+	if ns.Marking then
+		ns.Marking.Watch(button)
+	end
+end)
+
 ns.Register({
 	name = "unit frames",
 	order = 7,
@@ -642,13 +651,19 @@ ns.Register({
 		skinHeight = 68,
 		skinWidth = 198,
 
-		-- The target block hung off the player block, which is the whole
-		-- shape of the change: Edit Mode is left positioning the player
-		-- block and this addon positions everything against it. On by
-		-- default for the reason the skin itself is, and it is the point of
-		-- the part rather than an extra. `/wk skin link off` puts the
-		-- target frame back on the point Edit Mode gave it, without a
-		-- reload, and every drag in Edit Mode goes on working either way.
+		-- Where the player block sits, and where the target block sits while
+		-- the link below is off. Two of the twelve HUD frames you drag, and
+		-- the corners are roughly where the client keeps its own two: yours
+		-- top left, the target's top right, both in pixels because both
+		-- frames are on the grid.
+		skinPlayerPoint = { "TOPLEFT", "UIParent", "TOPLEFT", 40, -40 },
+		skinTargetPoint = { "TOPRIGHT", "UIParent", "TOPRIGHT", -40, -40 },
+
+		-- The target block hung off the player block: you place the player
+		-- and this addon positions everything against it. On by default for
+		-- the reason the frames themselves are, and it is the point of the
+		-- part rather than an extra. `/wk skin link off` puts the target on
+		-- the corner above, without a reload.
 		skinLink = true,
 
 		-- How far the target's top edge drops below the player's, in screen
@@ -709,14 +724,15 @@ ns.Register({
 		-- of an odd one is half a pixel and this frame is on the grid.
 		playerCastPoint = { "CENTER", "UIParent", "CENTER", 0, -250 },
 
-		-- The client's own copies of what this addon draws. Five switches, one
-		-- per thing you can see twice, and every one of them means exactly what
+		-- The client's own copies of what this addon draws. One switch per
+		-- thing you can see twice, and every one of them means exactly what
 		-- its label says.
 		--
-		-- All four ship on, because an addon that draws your buffs under your
-		-- portrait and leaves the client's in the corner has not replaced
+		-- All of them ship on, because an addon that draws your buffs under
+		-- your portrait and leaves the client's in the corner has not replaced
 		-- anything, it has added to it. The frames each one takes down are in
 		-- UnitFrames/Blizzard.lua.
+		hideBlizzUnitFrames = true,
 		hideBlizzBuffs = true,
 		hideBlizzDebuffs = true,
 		hideBlizzTargetAuras = true,
@@ -947,7 +963,7 @@ ns.Register({
 		"skin player|target|tot on|off, one frame at a time",
 		"skin height <18-72>, skin width <90-360>, both in screen pixels",
 		"skin link on|off, mirror the target block off the player block",
-		"skin level <-100-100>, the target's drop from the player",
+		"skin level <-100-100>, the target's drop from the player; drag either with the frames unlocked",
 		"skin heals on|off, the incoming heal on the health gauge",
 		"skin auras on|off, our own aura rows under the player and target blocks",
 		"skin aura <12 up to the block height>, one aura square, in screen pixels",
@@ -999,6 +1015,7 @@ ns.Register({
 		ns.EnemyBars.ApplyLock()
 		ns.PlayerCast.Lock()
 		ns.Group.Lock()
+		ns.FrameSkin.Lock()
 	end,
 
 	reset = function()
@@ -1026,9 +1043,12 @@ ns.Register({
 		ns.db.skinHeight = ns.DefaultCopy("skinHeight")
 		ns.db.skinWidth = ns.DefaultCopy("skinWidth")
 		ns.db.skinHeals = ns.DefaultCopy("skinHeals")
-		-- The number a drag in Edit Mode writes, back where it started. Reset
-		-- already means put the frames back, and a level that survived one
-		-- would be the only thing on these three frames that did not.
+		-- The two corners a drag writes and the number a linked drag writes,
+		-- back where they started. Reset already means put the frames back,
+		-- and a level that survived one would be the only thing on these
+		-- three frames that did not.
+		ns.db.skinPlayerPoint = ns.DefaultCopy("skinPlayerPoint")
+		ns.db.skinTargetPoint = ns.DefaultCopy("skinTargetPoint")
 		ns.db.skinLink = ns.DefaultCopy("skinLink")
 		ns.db.skinLevel = ns.DefaultCopy("skinLevel")
 		ns.db.skinAuras = ns.DefaultCopy("skinAuras")

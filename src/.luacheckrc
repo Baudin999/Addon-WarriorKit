@@ -324,7 +324,7 @@ read_globals = {
 	-- from it, and GetCursorInfo, which is already in this list, answers for
 	-- everything a slot will accept.
 	"GetInventorySlotInfo",
-	"UnitExists", "UnitGUID", "UnitClass", "UnitAffectingCombat", "UnitCanAttack",
+	"UnitExists", "UnitGUID", "UnitClass", "UnitAffectingCombat", "IsResting", "UnitCanAttack",
 	"UnitIsDead", "UnitIsGroupLeader", "UnitIsGroupAssistant", "IsInRaid",
 	"IsControlKeyDown", "IsShiftKeyDown",
 	"UnitHealth", "UnitHealthMax", "UnitName", "UnitIsUnit", "UnitCanAttack",

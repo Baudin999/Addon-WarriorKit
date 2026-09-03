@@ -365,25 +365,22 @@ UnitFrames\Auras.lua
 # with no skin at all and knows nothing about a row.
 UnitFrames\Blizzard.lua
 
-# The skin, in four files. Skin.lua is the part: which of the three frames this
-# client has, whether each one is wanted, and the order that styles and unstyles
-# them without losing half a skin to combat. The three below it are the three
-# subjects it used to hold, and each is loaded before the file that calls it.
+# The player, target and target of target frames, in three files. Skin.lua is
+# the part: it builds the three secure buttons, decides whether each one is
+# wanted, shows and hides them in the order that survives combat, and places
+# them. The two below it are the two subjects it used to hold, and each is
+# loaded before the file that calls it.
 #
-# Everything the skin does to a region Blizzard owns: record it, hide it, hand
-# it back. It knows nothing about a rectangle, and Block.lua reads the two lists
-# in it rather than writing them out again.
-UnitFrames\Art.lua
-
-# The block itself: the square, the two rails, the four strings, and where the
-# three blocks hang off each other. After Art.lua, whose kept-badge list it
-# places, and after Auras.lua, whose rows it builds and lays out.
+# The block itself: the square, the two bars, the four strings, the badges, and
+# where the three blocks hang off each other. After Auras.lua, whose rows it
+# builds and lays out.
 UnitFrames\Block.lua
 
-# One pass over one block: the colours off the unit, the four numbers and the
-# incoming heal. Its own file for the reason UnitFrames\Cast.lua is: it knows
-# nothing about a walk, an anchor or an Edit Mode selection, and everything in
-# it takes a block that already exists and writes what changed.
+# One pass over one block: the colours off the unit, the two bars, the four
+# numbers, the incoming heal, the portrait and the badges. Its own file for the
+# reason UnitFrames\Cast.lua is: it knows nothing about an anchor or a drag,
+# and everything in it takes a block that already exists and writes what
+# changed.
 UnitFrames\Paint.lua
 
 UnitFrames\Skin.lua

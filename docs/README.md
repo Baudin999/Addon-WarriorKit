@@ -191,16 +191,15 @@ name of none of them.
     UnitFrames/EnemyBars.lua enemy bars, nameplate replacement and list fallback
     UnitFrames/Auras.lua     your own and the target's buff and debuff rows,
                              and hiding the client's, which cannot be moved
-    UnitFrames/Art.lua       what the skin does to a region Blizzard owns:
-                             record it, hide it, hand it back
     UnitFrames/Block.lua     the square itself: portrait, two gauges, four
-                             strings, and where the three blocks hang off
-                             each other
+                             strings, the badges, and where the three blocks
+                             hang off each other
     UnitFrames/Paint.lua     one pass over one block: the colours off the unit,
-                             the four numbers and the incoming heal
-    UnitFrames/Skin.lua      the part: which frames this client has, whether
-                             each is wanted, and styling them in an order that
-                             survives combat
+                             the numbers, the incoming heal, the portrait and
+                             the badges
+    UnitFrames/Skin.lua      the part: builds the three secure unit buttons,
+                             whether each is wanted, showing and placing them
+                             in an order that survives combat
     UnitFrames/Member.lua    one party or raid member's block: build, lay out, tick
     UnitFrames/Group.lua     the secure group header, its attributes, and the
                              slot order every member falls into
@@ -797,8 +796,12 @@ goes through `Feature.lua` or through the shared surface below:
     ns.EnemyBars.WidgetFor(unit) the bar on that unit's plate, if there is one
     ns.EnemyBars.Describe()      what the grid resolved to and whether the client
                                  agreed to space plates by the size of a bar
-    ns.FrameSkin.Apply()         put the three Blizzard unit frames where
-                                 ns.db.skin says they should be
+    ns.FrameSkin.Apply()         put our three unit frames where ns.db.skin
+                                 says they should be
+    ns.FrameSkin.Lock() / OnFrame(callback) / Entry(key)
+                                 the lock on the two you drag, what to do to
+                                 each button once built, and one frame's parts
+                                 for a macro or the harness
     ns.FrameSkin.Describe()      one line on what the skin did or did not find
     ns.FrameAuras.Build/Place/Update/Style/Unstyle(entry)
                                  the aura rows under a block, built and placed
@@ -874,10 +877,8 @@ goes through `Feature.lua` or through the shared surface below:
     ns.BlizzHide.Probe()         one line per name: whether this client has the
                                  frame, whether the attic holds it, and whether
                                  it is on the screen anyway. `/wk hide probe`
-    ns.FrameSkin.Landed()        Edit Mode dropped a linked frame: read the gap
-                                 and the level back off where it came to rest
-    ns.FrameSkin.LinkRange()     gap low, gap high, level low, level high, so the
-                                 command, the panel and a drag clamp to one set
+    ns.FrameSkin.LinkRange()     level low, level high, so the command, the
+                                 panel and a drag clamp to one range
     ns.FrameSkin.DescribeLink()  one line on where the target block is hanging,
                                  or which frame it is waiting on
     ns.Options.Refresh()         put the panel back in step with the database

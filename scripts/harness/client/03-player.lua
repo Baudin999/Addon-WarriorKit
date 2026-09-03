@@ -212,8 +212,39 @@ _G.UnitIsGroupLeader, _G.UnitIsGroupAssistant = constant(true), constant(false)
 -- the nothing it saw before, and 09-group.lua writes it when a section sets a
 -- roster.
 _G.GetNumGroupMembers, _G.IsInRaid = function() return chat.groupSize end, constant(false)
-_G.GetRaidTargetIndex, _G.SetRaidTarget = constant(nil), function() end
-_G.SetRaidTargetIconTexture = function() end
+-- The raid marker on a unit, table driven and empty by default, because a
+-- marker is the exception and the badge on the target block is what draws
+-- it. SetRaidTargetIconTexture records which of the eight it was handed, the
+-- way the real one crops one of eight out of a sheet, so a section can read
+-- the badge back rather than trust that the call was made. On H rather than
+-- in a local, because this chunk is at its name budget.
+H.raidMarks = {}
+_G.GetRaidTargetIndex = function(unit) return H.raidMarks[unit] end
+_G.SetRaidTarget = function(unit, index) H.raidMarks[unit] = index ~= 0 and index or nil end
+_G.SetRaidTargetIconTexture = function(texture, index) texture.raidIcon = index end
+
+-- The portrait render, which the client writes onto a texture from the C side.
+-- Recorded as the unit it was asked for, so a section can tell a block that
+-- asked for its unit's face from one that never asked.
+_G.SetPortraitTexture = function(texture, unit) texture.portraitUnit = unit end
+
+-- The client's unit watch, which is the one thing that can put a secure frame
+-- up and take it down in a fight. A registered frame is shown while its unit
+-- exists and hidden while it does not, read off the unit attribute the way the
+-- secure state driver reads it. The runner calls H.unitWatch on the two events
+-- that say a unit changed, so the frame moves before any addon code hears.
+H.watched = {}
+H.unitWatch = function()
+	for frame in pairs(H.watched) do
+		frame:SetShown(_G.UnitExists(frame:GetAttribute("unit")))
+	end
+end
+_G.RegisterUnitWatch = function(frame)
+	H.watched[frame] = true
+	frame:SetShown(_G.UnitExists(frame:GetAttribute("unit")))
+end
+_G.UnregisterUnitWatch = function(frame) H.watched[frame] = nil end
+_G.UnitWatchRegistered = function(frame) return H.watched[frame] == true end
 -- The wall clock, which the tests move rather than wait out. It starts where
 -- the old constant sat, so everything written against a fixed 100 still sees
 -- one, and the loot throttle can be stepped past a tenth of a second at a time.

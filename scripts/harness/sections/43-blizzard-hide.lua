@@ -56,6 +56,10 @@ check(attic:IsShown() == false, "SetShown put the attic on the screen")
 ----------------------------------------------------------------------
 
 do
+	-- With Blizzard's target frame on the screen, because the cast bar is a
+	-- child of it and every question below about whether the bar can be seen
+	-- is a question about the bar's own switch and not about its parent's.
+	ns.db.hideBlizzUnitFrames = false
 	ns.db.hideBlizzTargetCast = true
 	Blizz.Apply()
 
@@ -158,6 +162,11 @@ do
 	ns.db.hideBlizzChat = false
 	ns.ChatWindow.Apply()
 	check(chat:IsVisible(), "the client's chat window was left hidden for whatever runs next")
+
+	-- And Blizzard's target frame back in the attic, which is where every
+	-- section after this one expects it.
+	ns.db.hideBlizzUnitFrames = true
+	Blizz.Apply()
 end
 
 ----------------------------------------------------------------------

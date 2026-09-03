@@ -1,18 +1,17 @@
 -- A resolution change that lands in combat
 --
--- The grid re-scales every frame on it, and the unit frame skin puts blocks on
--- it that are children of secure unit buttons. SetScale on a protected frame in
--- lockdown raises, and a monitor swapped or a window resized mid pull is how
--- that arrives. Refused frames wait for PLAYER_REGEN_ENABLED.
+-- The grid re-scales every frame on it, and the unit frames put anchors on it
+-- that hold secure unit buttons. SetScale on a protected frame in lockdown
+-- raises, and a monitor swapped or a window resized mid pull is how that
+-- arrives. Refused frames wait for PLAYER_REGEN_ENABLED.
 
 local H = ...
 local state = H.state
-local Region, inCombat, ns = H.Region, H.inCombat, H.ns
+local Region, ns = H.Region, H.ns
 local fire, check = H.fire, H.check
-local wanted = H.carry.wanted
 
-local box = _G.WarriorKitSkinPlayer
-check(box ~= nil, "the skin's player block is not a named frame, so this cannot be tested")
+local box = _G.WarriorKitPlayerFrame
+check(box ~= nil, "the player frame's anchor is not a named frame, so this cannot be tested")
 if box then
 	local blocked, inCombat = {}, false
 	local realLockdown, realProtected = _G.InCombatLockdown, Region.IsProtected
@@ -27,7 +26,7 @@ if box then
 
 	local wanted = 768 / state.SCREEN_H
 	check(box:GetScale() == before,
-		("a protected block was re-scaled in combat, %.4f"):format(box:GetScale()))
+		("a protected anchor was re-scaled in combat, %.4f"):format(box:GetScale()))
 	check(math.abs(ns.UI.Scale() - wanted) < 1e-9,
 		"the grid did not pick up the new screen height")
 	check(math.abs(_G.WarriorKitEnemyBarsAnchor:GetScale() - wanted) < 1e-9,
@@ -36,8 +35,8 @@ if box then
 	inCombat = false
 	fire("PLAYER_REGEN_ENABLED")
 	check(math.abs(box:GetScale() - wanted) < 1e-9,
-		("the block never caught up after combat, %.4f"):format(box:GetScale()))
-	print(("lockdown a protected block held %.4f in combat and took %.4f after it")
+		("the anchor never caught up after combat, %.4f"):format(box:GetScale()))
+	print(("lockdown a protected anchor held %.4f in combat and took %.4f after it")
 		:format(before, box:GetScale()))
 
 	_G.InCombatLockdown, Region.IsProtected = realLockdown, realProtected

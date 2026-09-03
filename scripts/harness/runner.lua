@@ -43,6 +43,14 @@ H.order = order
 -- feature that would have worked in the game and failed here.
 local events = H.events
 local function fire(event, ...)
+	-- What the client's unit watch does before any Lua hears about it: a
+	-- secure frame watching a unit is shown or hidden as the unit comes and
+	-- goes. Modelled in 03-player.lua and run here on the two events that say
+	-- a unit changed, so a section that changes a target and fires the event
+	-- sees the frame move the way the game moves it.
+	if H.unitWatch and (event == "PLAYER_TARGET_CHANGED" or event == "UNIT_TARGET") then
+		H.unitWatch()
+	end
 	local list = events[event]
 	if not list then
 		return

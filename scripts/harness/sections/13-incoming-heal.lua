@@ -15,16 +15,17 @@ local state = H.state
 local ns, check = H.ns, H.check
 local playerBox, skinSlice, skinTicker = H.carry.playerBox, H.carry.skinSlice, H.carry.skinTicker
 
-local healSlice = skinSlice(_G.PlayerFrame.healthbar)
+local healthBar = ns.FrameSkin.Entry("player").healthBar
+local healSlice = skinSlice(healthBar)
 check(healSlice ~= nil, "the skin drew no incoming heal slice on the health bar")
 
 local sliceAnchor = healSlice and healSlice.points and healSlice.points[1]
-check(sliceAnchor ~= nil and sliceAnchor[2] == _G.PlayerFrame.healthbar.fill,
+check(sliceAnchor ~= nil and sliceAnchor[2] == healthBar.fill,
 	"the heal slice is not pinned to the health bar's own fill texture, so it starts"
-	.. " wherever the two scales happen to agree rather than where the bar stops")
+	.. " wherever the arithmetic happens to agree rather than where the bar stops")
 
 -- A whole second per call, and that is the assertion rather than an
--- inconvenience. An incoming heal is not one of the four unit events a block is
+-- inconvenience. An incoming heal is not one of the unit events a block is
 -- marked by, so it lands on the reading behind them, which runs once a second.
 -- A quarter of a second here would drive the fast pass, find nothing marked and
 -- measure a slice nobody had drawn yet.
@@ -34,13 +35,7 @@ local function healTick(amount)
 	if not healSlice.shown then
 		return 0
 	end
-	-- Back into pixels, because the slice is a region of Blizzard's health bar
-	-- and its width is written in that bar's units. That is the boundary this
-	-- part is built on and the reason the number is asserted here at all: the
-	-- span is worked out in whole pixels of the gauge and multiplied by one
-	-- pixel in the bar's units on the way out, so dividing by the same figure
-	-- is what the client will have drawn.
-	return healSlice:GetWidth() / ns.UI.Pixel(_G.PlayerFrame.healthbar)
+	return healSlice:GetWidth() / ns.UI.Pixel(healthBar)
 end
 
 -- The gauge is the block less the portrait's square and the one pixel it is

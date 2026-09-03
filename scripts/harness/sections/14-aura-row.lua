@@ -27,6 +27,7 @@
 local H = ...
 local ns, check = H.ns, H.check
 local targetFrame, debuffs, buffs = H.targetFrame, H.debuffs, H.buffs
+local targetAnchor = _G.WarriorKitTargetFrame
 local child, Region, own = H.child, H.Region, H.own
 local skinTicker, fire = H.carry.skinTicker, H.fire
 
@@ -44,7 +45,7 @@ local function tick()
 	skinTicker:Beat(0.25)
 end
 
-local box = _G.WarriorKitSkinTarget
+local box = _G.WarriorKitTargetButton
 local px = ns.Pixel(box)
 -- The one gap in UnitFrames/Auras.lua, in the units these frames are drawn in.
 local gap = 3 * px
@@ -53,20 +54,14 @@ local rowD, rowB = _G.WarriorKitTargetDebuffs, _G.WarriorKitTargetBuffs
 check(rowD ~= nil and rowB ~= nil,
 	"the skin built no aura rows under the target block")
 
--- The frame is the block, on every one of the three. That was the whole point
--- of deleting the lift: a tail is a strip of frame under the block that takes
--- clicks and draws an Edit Mode selection round nothing you can see.
+-- The anchor is the block, on every one of the three. A tail would be a strip
+-- of anchor under the block that the drag rim draws round and nothing fills.
 local function screenHeight(frame)
 	return frame:GetHeight() * frame:GetEffectiveScale()
 end
-check(math.abs(screenHeight(targetFrame) - screenHeight(box)) < 1e-6,
-	("the target frame is %.2f of screen and the block is %.2f, so something is"
-		.. " still tailing it"):format(screenHeight(targetFrame), screenHeight(box)))
-
-local _, _, _, bottom = targetFrame:GetHitRectInsets()
-check((bottom or 0) == 0,
-	("the target frame refuses clicks %s units above its own bottom edge, and"
-		.. " there is no longer anything down there"):format(tostring(bottom)))
+check(math.abs(screenHeight(targetAnchor) - screenHeight(box)) < 1e-6,
+	("the target's anchor is %.2f of screen and the block is %.2f, so something is"
+		.. " still tailing it"):format(screenHeight(targetAnchor), screenHeight(box)))
 
 local function anchor(frame)
 	local point, relative, relativePoint, x, y = frame:GetPoint()
@@ -94,7 +89,7 @@ do
 	-- portrait is on, and the debuff row runs from the other corner, so the two
 	-- cannot be chained: the row would land inset by the difference between the
 	-- two widths. It clears that frame by dropping past it instead.
-	local tot = _G.TargetFrameToT
+	local tot = _G.WarriorKitTargetOfTargetButton
 	check(tot:IsShown(), "nothing is parked under the target block, so the drop"
 		.. " the debuff row has to clear is not being tested at all")
 	local tall = tot:GetHeight() * tot:GetEffectiveScale() / box:GetEffectiveScale()
@@ -352,7 +347,7 @@ end
 -- pair reflected across the corridor between them.
 --------------------------------------------------------------------------
 do
-	local playerBox = _G.WarriorKitSkinPlayer
+	local playerBox = _G.WarriorKitPlayerButton
 	local yourD, yourB = _G.WarriorKitPlayerDebuffs, _G.WarriorKitPlayerBuffs
 	check(yourD ~= nil and yourB ~= nil,
 		"the skin built no aura rows on the player block")

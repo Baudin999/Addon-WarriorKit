@@ -1,6 +1,6 @@
 -- What the lock reaches, and what it does not
 --
--- Twenty frames in this addon can be dragged. Twelve of them are the HUD, and
+-- Twenty two frames in this addon can be dragged. Fourteen of them are the HUD, and
 -- /wk lock is what stops you shoving the swing bars off the screen with a
 -- misplaced click during a pull. Eight are chrome windows, and locking one of
 -- those would be locking a window rather than placing a piece of the HUD: you
@@ -37,6 +37,8 @@ local HUD = {
 	{ "WarriorKitMeter", "the meters" },
 	{ "WarriorKitProgress", "the experience rails" },
 	{ "WarriorKitPlayerCast", "your cast bar" },
+	{ "WarriorKitPlayerFrame", "the player frame" },
+	{ "WarriorKitTargetFrame", "the target frame" },
 	{ "WarriorKitGroup", "the party anchor" },
 	{ "WarriorKitEnemyBarsAnchor", "the enemy bars anchor" },
 	{ "WarriorKitCorral", "the minimap corral" },
@@ -88,7 +90,7 @@ for _, entry in ipairs(HUD) do
 		check(state == false, entry[2] .. " can still be dragged with the frames locked")
 	end
 end
-check(hudSeen >= 11, ("only %d of the 12 HUD frames were built"):format(hudSeen))
+check(hudSeen >= 13, ("only %d of the 14 HUD frames were built"):format(hudSeen))
 
 local free, windowsSeen = 0, 0
 for _, entry in ipairs(WINDOWS) do

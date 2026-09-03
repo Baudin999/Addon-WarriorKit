@@ -3,186 +3,130 @@ local ADDON, ns = ...
 local Skin = {}
 ns.FrameSkin = Skin
 
--- The player frame, the target frame and target of target, wearing the enemy
--- bar's look: flat fills, one pixel edges, a square portrait, and the class
--- colour on the gauge and on the frame around it.
+-- The player frame, the target frame and target of target, drawn by this
+-- addon: flat fills, one pixel edges, a square portrait, and the class colour
+-- on the gauge and on the frame around it.
 --
--- Almost nothing is rebuilt. Blizzard's frames stay where they are and keep
--- their clicks, their dropdown and their cast bar, because a frame drawn from
--- scratch here would have to earn all of that back and would fight the Edit
--- Mode layout this addon already carries. The target's aura row is the one
--- exception and UnitFrames/Auras.lua is where it went, along with the reason
--- it could not stay. Every region the skin moves, resizes, recolours or hides
--- is written down before it is touched and put back by `/wk skin off`, without
--- a reload.
+-- They are our own frames. For a long time they were Blizzard's three frames
+-- wearing this look, because a frame drawn from scratch would have to earn
+-- back the click, the menu and the cast bar, and would fight the Edit Mode
+-- layout the addon carried for a client that turned out not to have Edit Mode
+-- at all. That left three frames nobody could move. UnitFrames/Group.lua had
+-- already shown the shape of the answer: a secure unit button of ours carries
+-- the click and the menu through two attributes, the client's unit watch puts
+-- it up and down with the unit, and UI.Placeable drags it the way every other
+-- piece of this HUD is dragged. Blizzard's own three go to the attic through
+-- the switch in UnitFrames/Blizzard.lua, like every other frame this addon
+-- replaces.
 --
--- Four rules shape the skin, and they are quoted where the code they govern
--- lives, because this file is no longer where any of it happens:
+-- Three files behind this one, each with one subject:
 --
---   Textures go, frames stay, and walk the regions rather than naming them.
---   Both are UnitFrames/Art.lua's, which is the whole of what the skin does to
---   a region Blizzard owns: remember it, hide it, hand it back.
+--   UnitFrames/Block.lua is the geometry: the square, the two bars, the four
+--   strings, the badges, and where the three blocks hang off each other.
 --
---   Fit the frame to the block, and draw on the grid while measuring off it.
---   Both are UnitFrames/Block.lua's, which is the whole of the geometry: the
---   square, the two rails, the four strings, and where the three blocks hang
---   off each other.
+--   UnitFrames/Paint.lua is the tick: given a block that already exists, read
+--   the unit and write what changed.
 --
--- The fourth thing that was in here is the tick, and it is UnitFrames/Paint.lua
--- now: given a block that already exists, read the unit and write what changed.
+--   UnitFrames/Auras.lua is the two aura rows on each of the first two.
 --
 -- What is left is this file, and it is the part rather than any of the three.
--- Which frames this client has, whether each one is wanted, styling and
--- unstyling them in the order that survives combat, and what the slash commands
--- and the panel are told. It owns the entry list, so it is the only file that
--- can answer which block a link or a perch hangs off, and it hands that answer
--- to Block rather than letting Block go looking.
+-- Building the three frames, whether each one is wanted, showing and hiding
+-- them in the order that survives combat, placing them, and what the slash
+-- commands and the panel are told. It owns the entry list, so it is the only
+-- file that can answer which block a link or a perch hangs off, and it hands
+-- that answer to Block rather than letting Block go looking.
 --
--- It also owns when a block is drawn, which is the fifth thing and is new. The
--- three used to be read off the client from the top five times a second because
--- nobody had checked what the client fires. Four unit events mark a block and
--- the pass draws what is marked; see the note over WATCHED for which four and
--- why they are safe to trust on this client.
+-- It also owns when a block is drawn. Unit events mark a block and the pass
+-- draws what is marked; see the note over WATCHED for which and why they are
+-- safe to trust on this client.
 
-local Art = ns.FrameArt
 local Block = ns.FrameBlock
 local Paint = ns.FramePaint
-
--- The two rails Blizzard's bars are pinned to, by the key on the entry. Taken
--- at load the way UnitFrames/Block.lua takes it, and for the same reason: the
--- table is a constant over there and the files have to agree about it.
-local BARS = Art.Bars()
 
 -- How often the three blocks are looked at, and how often they are read off the
 -- client from the top.
 --
--- The fast one used to be the only one, and on it every pass read health,
--- power, the name, the level, both aura rows and five texture readbacks off
--- three units: about 110 client calls a fifth of a second. The client already
--- says when a unit's health, power, auras or connection move, so a frame is
--- marked by Watched below and this pass draws what is marked. What it costs
--- when nothing has happened is the walk and Block.Reveal, which is one question
--- about target of target and nothing at all about the other two.
+-- The client already says when a unit's health, power, auras or connection
+-- move, so a frame is marked by Watched below and this pass draws what is
+-- marked. What it costs when nothing has happened is the walk.
 --
--- The reading behind it is what no event on the list carries: an incoming heal,
--- a level, a name, and target of target, which has no event stream on this
--- client at all. Blizzard's own TargetOfTargetMixin:Update is driven off the
--- target frame rather than off the unit for exactly that reason, and the
--- comment in CompactUnitFrame.lua beside it says there is no good way round it.
+-- The reading behind it is what no event on the list carries: an incoming
+-- heal, a mob somebody else has tagged, and target of target, which has no
+-- event stream of its own on this client beyond UNIT_TARGET on its host.
 local REFRESH = 0.2
 local VERIFY = 1
 
 -- Target of target against the other two. It is a glance, not a frame you
--- read, so it is the one that has to stay out of the way. Blizzard parked it
--- across the target's aura row, which is where this addon's own rows go now,
--- so Perch tells them to hang under it rather than through it.
+-- read, so it is the one that has to stay out of the way.
 local TOT_SCALE = 0.62
 
+-- The client's unit watch, taken at load. It is the one mechanism that can put
+-- a secure frame up and take it down in a fight: RegisterUnitWatch hands the
+-- frame to a secure state driver that shows it while its unit exists, and
+-- nothing an addon calls in combat can do that. Blizzard_RestrictedAddOnEnvironment
+-- /SecureStateDriver.lua declares both on this client. A client without them
+-- falls to Reveal below, which shows and hides out of combat only.
+local RegisterUnitWatch = _G.RegisterUnitWatch
+local UnregisterUnitWatch = _G.UnregisterUnitWatch
 
 --------------------------------------------------------------------------
 -- The three frames
 --
--- frames  candidate globals, first one that exists wins
--- art     extra frames to walk that are not children, if a client has any
--- names   globals to fall back to when a parent key is missing
--- level   the level text, which has no parent key on any of them
--- scale   this frame's share of the height and width settings
--- mirror  the gauge sits left of the portrait rather than right of it
--- under   the key of the frame this one is parked beneath once both are
---         fitted, because its own anchor was written against the size the
---         frame no longer is. It is also what says this frame goes up and
---         down with its host's unit rather than with the player's own, which
---         is Block.Reveal's question
--- beside  the key of the frame this one hangs off sideways, gauge edge to
---         gauge edge, once both are fitted. Edit Mode positions the block
---         named here and this file positions everything against it
--- global  what the block this file draws over that frame is called. Named
---         rather than anonymous for one reason: the box is the frame every
---         measurement in this file is taken in, so a block that lands wrong
---         can be measured from a macro or a harness without this file
---         handing out a reference to its own internals.
+-- key      the setting, the slash word and the panel line
+-- unit     the token the button targets and the block reads
+-- mirror   the gauge sits left of the portrait rather than right of it
+-- scale    this frame's share of the height and width settings
+-- badges   which state icons the block carries, out of Block's three
+-- global   the anchor's name, which is the rectangle you drag and the one
+--          every measurement in Block is taken in. Named so a block that
+--          lands wrong can be measured from a macro or a harness
+-- button   the secure unit button's name, for the same reason
+-- title    what the frame is called while it is being placed
+-- point    the setting its own corner is written to, for the two you drag
+-- watch    the button goes up and down with the unit rather than staying up
+-- beside   the key of the frame this one hangs off sideways, gauge edge to
+--          gauge edge, while the link is on
+-- under    the key of the frame this one is parked beneath
 --------------------------------------------------------------------------
 
 local SPECS = {
 	{
-		key = "player", unit = "player", mirror = false,
-		scale = 1, global = "WarriorKitSkinPlayer",
-		frames = { "PlayerFrame" },
-		art = { "PlayerFrameTextureFrame" },
-		names = {
-			portrait = { "PlayerPortrait" },
-			name = { "PlayerName" },
-			healthbar = { "PlayerFrameHealthBar" },
-			manabar = { "PlayerFrameManaBar" },
-		},
-		level = { "PlayerLevelText" },
-		-- Blizzard's combat feedback text: the damage number it flashes over
-		-- the portrait. See the note in StripArt.
-		feedback = { "PlayerHitIndicator" },
+		key = "player", unit = "player", mirror = false, scale = 1,
+		badges = { "state", "pvp" },
+		global = "WarriorKitPlayerFrame", button = "WarriorKitPlayerButton",
+		title = "WarriorKit player", point = "skinPlayerPoint",
 	},
 	{
 		-- Mirrored, because the target frame sits on the right of the screen
-		-- and its portrait has always been on the outside edge. Moving it to
-		-- the left would be a second change nobody asked for.
-		key = "target", unit = "target", mirror = true, beside = "player",
-		scale = 1, global = "WarriorKitSkinTarget",
-		frames = { "TargetFrame" },
-		art = { "TargetFrameTextureFrame" },
-		names = {
-			portrait = { "TargetFramePortrait" },
-			name = { "TargetName", "TargetFrameTextureFrameName" },
-			healthbar = { "TargetFrameHealthBar" },
-			manabar = { "TargetFrameManaBar" },
-		},
-		level = { "TargetLevelText", "TargetFrameTextureFrameLevelText" },
-		feedback = { "TargetFrameHitIndicator", "TargetHitIndicator" },
+		-- and its portrait has always been on the outside edge.
+		key = "target", unit = "target", mirror = true, scale = 1,
+		badges = { "marker", "pvp" }, beside = "player", watch = true,
+		global = "WarriorKitTargetFrame", button = "WarriorKitTargetButton",
+		title = "WarriorKit target", point = "skinTargetPoint",
 	},
 	{
-		key = "tot", unit = "targettarget", mirror = false, under = "target",
-		scale = TOT_SCALE, global = "WarriorKitSkinToT",
-		frames = { "TargetFrameToT", "TargetofTargetFrame" },
-		art = { "TargetFrameToTTextureFrame" },
-		names = {
-			portrait = { "TargetFrameToTPortrait" },
-			name = { "TargetFrameToTName", "TargetFrameToTTextureFrameName" },
-			healthbar = { "TargetFrameToTHealthBar" },
-			manabar = { "TargetFrameToTManaBar" },
-		},
-		level = {},
+		key = "tot", unit = "targettarget", mirror = false, scale = TOT_SCALE,
+		badges = { "marker" }, under = "target", watch = true,
+		global = "WarriorKitTargetOfTargetFrame",
+		button = "WarriorKitTargetOfTargetButton",
 	},
 }
 
 local entries = {}
+local watchers = {}
 local pending = false
-
-local function Piece(frame, key, names)
-	if key and frame[key] then
-		return frame[key]
-	end
-	for _, name in ipairs(names or {}) do
-		if _G[name] then
-			return _G[name]
-		end
-	end
-	return nil
-end
+local missing = false
 
 --------------------------------------------------------------------------
 -- What the client says has moved
 --
--- Four events per unit, and every one of them is something a block draws: the
--- gauge, the power rail, the two aura rows and the word for somebody who has
--- gone offline. Between them they are most of what the fifth-of-a-second pass
--- was polling for.
---
--- The header of this file used to say the event names that carry health and
--- auras have been renamed between these two clients, so the tick read them
--- instead. That was a fair worry and it is answered rather than believed now.
--- These four are what Blizzard's own frames register on this client:
--- TargetFrame.lua takes UNIT_AURA against the target's token, UnitFrame.lua
--- takes UNIT_HEALTH and UNIT_POWER_UPDATE, and PartyMemberFrame.lua takes
--- UNIT_CONNECTION. A frame that draws what the client's own frame draws may
--- listen to what the client's own frame listens to.
+-- The unit events Blizzard's own three frames register on this client, and
+-- every one of them is something a block draws. UnitFrame.lua takes
+-- UNIT_HEALTH, UNIT_MAXHEALTH, UNIT_POWER_UPDATE, UNIT_MAXPOWER,
+-- UNIT_NAME_UPDATE and UNIT_PORTRAIT_UPDATE, PlayerFrame.lua takes UNIT_LEVEL
+-- and UNIT_FACTION, TargetFrame.lua takes UNIT_AURA and PartyMemberFrame.lua
+-- takes UNIT_CONNECTION. A frame that draws what the client's own frame draws
+-- may listen to what the client's own frame listens to.
 --
 -- Marked rather than drawn, because a unit taking four hits between two frames
 -- is four events and one block. The pass a fifth of a second later draws what
@@ -194,21 +138,34 @@ end
 local WATCHED = {
 	"UNIT_AURA",
 	"UNIT_HEALTH",
+	"UNIT_MAXHEALTH",
 	"UNIT_POWER_UPDATE",
+	"UNIT_MAXPOWER",
 	"UNIT_CONNECTION",
+	"UNIT_NAME_UPDATE",
+	"UNIT_LEVEL",
+	"UNIT_FACTION",
+	"UNIT_PORTRAIT_UPDATE",
+	-- The one event that carries target of target: the host's target moved.
+	-- Registered against every unit and acted on by the frame under it, which
+	-- is why Touched marks the perched entry too.
+	"UNIT_TARGET",
 }
 
--- A bit on the entry rather than a set of them, which is where this parts
--- company with UnitFrames/EnemyBars.lua. There are three of these and the pass
--- walks all three anyway to ask about target of target, so a set would be a
--- second thing to keep in step with the list for no walk saved.
-local function Touched(watch, _, unit)
-	if unit == watch.unit then
-		watch.entry.dirty = true
+local function Touched(watch, event, unit)
+	if unit ~= watch.unit then
+		return
+	end
+	local entry = watch.entry
+	entry.dirty = true
+	if event == "UNIT_PORTRAIT_UPDATE" then
+		entry.portraitDirty = true
+	elseif event == "UNIT_TARGET" and entry.perch then
+		entry.perch.dirty = true
 	end
 end
 
--- The news turned on with the skin and off again with it. A frame nobody is
+-- The news turned on with the block and off again with it. A frame nobody is
 -- drawing has nothing to be told.
 local function Listen(entry, on)
 	if entry.listening == on then
@@ -224,89 +181,15 @@ local function Listen(entry, on)
 	end
 end
 
--- Blizzard putting its own texture back on one of the two bars.
---
--- The tick used to defend against that by reading both bars back on every pass,
--- which is four client calls per frame five times a second to find out that
--- nothing had touched them. The client cannot swap a status bar's fill without
--- calling this method, so the hook is the whole of the question: it fires when
--- the answer changes and never otherwise.
---
--- Like the two hooks in UnitFrames/Block.lua this one cannot be taken off
--- again, which is why it does nothing at all unless the entry is one this file
--- is still drawing. A client with no hooksecurefunc leaves `barsHooked` false
--- and UnitFrames/Paint.lua goes on reading the bars back, which is what it did
--- before and is the safe half to be wrong on.
-local function Retextured(bar)
-	local entry = bar.wkSkin
-	if entry then
-		entry.flatten, entry.dirty = true, true
-	end
-end
-
-local function HookBars(entry)
-	if entry.barsHooked or type(hooksecurefunc) ~= "function" then
-		return
-	end
-	local held = true
-	for index = 1, #BARS do
-		local bar = entry[BARS[index]]
-		bar.wkSkin = entry
-		if type(bar.SetStatusBarTexture) ~= "function"
-			or not pcall(hooksecurefunc, bar, "SetStatusBarTexture", Retextured) then
-			held = false
-		end
-	end
-	entry.barsHooked = held
-end
-
-local function Resolve(spec)
-	local frame = Piece(_G, nil, spec.frames)
-	if not frame or type(frame.GetRegions) ~= "function" then
-		return nil
-	end
-
-	local entry = {
-		spec = spec,
-		frame = frame,
-		level = Piece(frame, nil, spec.level),
-		-- Resolved by global name only, the way the level text is and for the
-		-- same reason: it hangs off no parent key on either client, and asking
-		-- a frame for a key it does not carry is a question whose answer
-		-- depends on what that frame's metatable does with a miss.
-		feedback = Piece(frame, nil, spec.feedback),
-		badges = {},
-		stripped = {},
-		names = {},
-		hidden = 0,
-		styled = false,
-	}
-	for key, names in pairs(spec.names) do
-		entry[key] = Piece(frame, key, names)
-	end
-
-	-- The frame the client's news about this unit lands on, and it is ours
-	-- rather than Blizzard's: these three frames carry the client's own OnEvent
-	-- and a script written over one of them would take a unit frame off the air.
-	-- One frame per entry rather than one shared, because the filtered
-	-- registration is per unit and a shared frame would be handed every unit the
-	-- client tracks.
-	entry.watch = CreateFrame("Frame")
-	entry.watch.entry = entry
-	entry.watch.unit = spec.unit
-	entry.watch:SetScript("OnEvent", Touched)
-	return entry
-end
-
 --------------------------------------------------------------------------
 -- The chain
 --
--- Edit Mode positions the player block and nothing else. The target block
--- hangs off the player block and target of target hangs off the target block,
--- so the three are one HUD and Edit Mode keeps the one job it is good at.
--- UnitFrames/Block.lua writes the anchors; what this file adds is the only
--- part of it that needs the list, which is which entry a spec's `beside` or
--- `under` names.
+-- The player block is placed by dragging it and nothing else is. The target
+-- block hangs off the player block while the link is on and sits on a point
+-- of its own while it is off, and target of target hangs off the target block
+-- always. UnitFrames/Block.lua writes the anchors; what this file adds is the
+-- only part of it that needs the list, which is which entry a spec's `beside`
+-- or `under` names.
 --------------------------------------------------------------------------
 
 local function EntryFor(key)
@@ -318,73 +201,174 @@ local function EntryFor(key)
 	return nil
 end
 
--- Edit Mode's drop, turned back into the level setting. Hooked onto the frame
--- at style time and called from Skin.Landed, and it lives here rather than in
--- Block for one reason: it is the host lookup, and the list is here.
-local function Dropped(entry)
-	return Block.Landed(entry, EntryFor(entry.spec.beside))
+local function Linked(entry)
+	local host = EntryFor(entry.spec.beside)
+	return host and ns.db.skinLink and entry.styled and host.styled and true or false, host
+end
+
+-- Where a block hangs, written on every pass. False where combat refused or a
+-- host has not resolved a position yet, and the caller carries it to the next
+-- pass.
+local function Hang(entry)
+	local spec = entry.spec
+	local want, host = Linked(entry)
+	if want then
+		return Block.Link(entry, host)
+	end
+	entry.linked = false
+	local under = EntryFor(spec.under)
+	if under then
+		return Block.Perch(entry, under)
+	end
+	if ns.Blocked(entry.frame) then
+		return false
+	end
+	entry.place:Place(ns.db[spec.point])
+	return true
+end
+
+-- Where a drag left a frame, from UI.Placeable's drop.
+--
+-- The player's corner is the setting. The target's is the setting too while
+-- the link is off, and the level while it is on: the horizontal half of a
+-- linked drop is thrown away, because the target's edge is the player's
+-- reflected and the only place it can land is opposite wherever the player is.
+-- Either way the chain is written again, so the frames under the one that
+-- moved follow it on the same pass.
+local function Dropped(entry, point)
+	if entry.linked then
+		Block.Landed(entry, EntryFor(entry.spec.beside))
+	else
+		ns.db[entry.spec.point] = point
+	end
+	Skin.Relayout()
 end
 
 --------------------------------------------------------------------------
--- Styling and unstyling
---
--- The order in both directions is the whole content of these two, and it is
--- not arbitrary. Everything Blizzard owns is recorded before the first change
--- reaches it; the block is built before the walk, so the walk knows to spare
--- it; the block is placed after the walk, because the walk is what finds the
--- badges the layout moves. Coming off, the aura rows go down between the
--- artwork coming back and the regions being handed their old state, because a
--- row anchored to something already reverted is a row hanging off nothing.
---
--- Anchoring and resizing a protected region is what combat forbids, and these
--- are children of a secure unit button, so both halves ask ns.Blocked first
--- and the caller carries a refusal to the next PLAYER_REGEN_ENABLED.
+-- Building
 --------------------------------------------------------------------------
+
+-- The tooltip on a hover, which is the client's own for the unit. Hung by
+-- hand rather than through ns.Tip.Hang, because Hang passes the right button
+-- through to the camera and the right button is the menu here.
+local function Hover(entry)
+	local frame = entry.frame
+	entry.subject = { kind = "unit", unit = entry.spec.unit }
+	frame:SetScript("OnEnter", function(self)
+		ns.Tip.Open(self, entry.subject)
+	end)
+	frame:SetScript("OnLeave", function()
+		ns.Tip.Close()
+	end)
+end
+
+-- One frame, built once at login. Nil where this client refuses the template,
+-- in which case the part says so and draws nothing rather than drawing a
+-- square that cannot be clicked.
+local function Build(spec)
+	local anchor = CreateFrame("Frame", spec.global, UIParent)
+	ns.UI.Adopt(anchor)
+
+	-- The one call in this file that names a Blizzard template. A client that
+	-- does not carry it refuses the frame rather than raising, and everything
+	-- below then answers that the part is not on this client.
+	local ok, button = pcall(CreateFrame, "Button", spec.button, anchor,
+		"SecureUnitButtonTemplate")
+	if not ok or type(button) ~= "table" then
+		anchor:Hide()
+		return nil
+	end
+
+	-- The click and the menu, which are the two things a unit frame does that
+	-- this addon cannot write. Left targets, right opens the client's own
+	-- dropdown for whatever the unit turns out to be, and both are the
+	-- attributes UnitFrames/Group.lua's tiles carry.
+	button:SetAttribute("unit", spec.unit)
+	button:SetAttribute("*type1", "target")
+	button:SetAttribute("*type2", "togglemenu")
+	button:RegisterForClicks("AnyUp")
+	button:Hide()
+
+	local entry = {
+		spec = spec,
+		anchor = anchor,
+		frame = button,
+		styled = false,
+	}
+
+	if spec.point then
+		entry.place = ns.UI.Placeable(anchor, {
+			name = spec.title,
+			-- Refuses in combat: the anchor holds a secure button, and moving
+			-- the frame a protected frame is parented to in a lockdown is
+			-- what the client raises on.
+			combat = false,
+			moved = function(point)
+				Dropped(entry, point)
+			end,
+		})
+	end
+
+	-- The frame the client's news about this unit lands on. One per entry
+	-- rather than one shared, because the filtered registration is per unit
+	-- and a shared frame would be handed every unit the client tracks.
+	entry.watch = CreateFrame("Frame")
+	entry.watch.entry = entry
+	entry.watch.unit = spec.unit
+	entry.watch:SetScript("OnEvent", Touched)
+
+	Block.Build(entry)
+	Hover(entry)
+	for index = 1, #watchers do
+		watchers[index](button)
+	end
+	return entry
+end
+
+--------------------------------------------------------------------------
+-- Showing and hiding
+--
+-- The button goes up through the unit watch on the two frames that follow a
+-- unit and through a plain Show on your own, and comes down the reverse way.
+-- Both are protected calls on a secure button, so both ask ns.Blocked first
+-- and a refusal is carried to the next PLAYER_REGEN_ENABLED.
+--------------------------------------------------------------------------
+
+local function Reveal(entry)
+	local frame, spec = entry.frame, entry.spec
+	if not spec.watch then
+		frame:Show()
+	elseif RegisterUnitWatch then
+		RegisterUnitWatch(frame)
+	else
+		frame:SetShown(UnitExists(spec.unit))
+	end
+end
+
+local function Conceal(entry)
+	if entry.spec.watch and UnregisterUnitWatch then
+		UnregisterUnitWatch(entry.frame)
+	end
+	entry.frame:Hide()
+end
 
 local function Style(entry)
 	if entry.styled then
 		return true
 	end
-	-- Everything else here would go through in combat, but half a skin is
-	-- worse than none, so the whole of it waits together.
-	if ns.Blocked(entry.frame) then
+	-- Everything here would go through in combat except the size and the
+	-- show, and half a frame is worse than none, so the whole of it waits
+	-- together.
+	if not Block.Place(entry) then
 		return false
 	end
-	if not entry.healthbar or not entry.manabar then
-		return true -- nothing to skin on this client, and saying so is Describe's job
-	end
-
-	Art.Remember(entry)
-	-- Before Place, which is the first thing here that resizes the frame.
-	Block.Remember(entry)
-	Block.Hook(entry, Dropped)
-
-	if not entry.box then
-		Block.Build(entry)
-	end
-
-	-- After Build, because the walk is told to spare our own three frames and
-	-- the two tracks, and none of them exists until Build has run.
-	local complete = Art.Strip(entry, entries)
-
-	Block.Place(entry)
-	Block.Show(entry)
-	entry.tint, entry.power, entry.levelTag = nil, nil, nil
-	entry.shownPercent, entry.shownPower, entry.shownName = nil, nil, nil
-	-- Both bars asked once on the way in, whatever the hook does afterwards: a
-	-- frame the skin has only just taken over is carrying whatever art the
-	-- client last put on it.
-	entry.flatten, entry.dirty = true, true
 	entry.styled = true
-	HookBars(entry)
+	Paint.Forget(entry)
+	entry.dirty = true
 	Listen(entry, true)
-	-- After entry.styled, because the rows only draw on a styled frame, and
-	-- not folded into `complete` with an `and`, which would skip the call on a
-	-- strip that combat had already refused.
-	if not ns.FrameAuras.Style(entry) then
-		complete = false
-	end
-	return complete
+	Reveal(entry)
+	-- After entry.styled, because the rows only draw on a styled frame.
+	return ns.FrameAuras.Style(entry)
 end
 
 local function Unstyle(entry)
@@ -394,32 +378,24 @@ local function Unstyle(entry)
 	if ns.Blocked(entry.frame) then
 		return false
 	end
-
 	entry.styled = false
 	Listen(entry, false)
-	Block.Hide(entry)
-
-	local complete = Art.Restore(entry)
-	if not ns.FrameAuras.Unstyle(entry) then
-		complete = false
-	end
-	Art.Forget(entry)
-	Block.Restore(entry)
-	return complete
+	Conceal(entry)
+	return ns.FrameAuras.Unstyle(entry)
 end
+
 --------------------------------------------------------------------------
 -- Public
 --------------------------------------------------------------------------
 
--- Puts every frame where the setting says it should be. Idempotent, and safe
--- to call before the saved variables exist, the same as every other part.
 -- Both halves have to agree: the part is on, and this frame has not been
--- turned off on its own. Target of target is the one worth turning off by
--- itself, because Blizzard parks it where this addon's own aura rows go.
+-- turned off on its own.
 function Skin.Wanted(key)
 	return ns.db.skin and ns.db.skinFrames[key] ~= false
 end
 
+-- Puts every frame where the setting says it should be. Idempotent, and safe
+-- to call before the saved variables exist, the same as every other part.
 function Skin.Apply()
 	if not ns.db or #entries == 0 then
 		return
@@ -437,18 +413,9 @@ function Skin.Apply()
 		end
 	end
 	-- After every frame has settled, not inside the loop above: where a frame
-	-- hangs depends on whether the one it hangs off came out fitted, and the
-	-- target is styled after target of target on a client that names them in
-	-- that order.
+	-- hangs depends on whether the one it hangs off came up.
 	for _, entry in ipairs(entries) do
-		if not Block.Link(entry, EntryFor(entry.spec.beside)) then
-			pending = true
-		end
-		local host = EntryFor(entry.spec.under)
-		if not Block.Perch(entry, host) then
-			pending = true
-		end
-		if not Block.Reveal(entry, host) then
+		if not Hang(entry) then
 			pending = true
 		end
 	end
@@ -459,64 +426,64 @@ function Skin.Apply()
 	end
 end
 
--- Blizzard re-lays a unit frame out when the unit under it changes, so the
--- block is put back on its anchors then rather than trusted to stay.
---
--- Anchoring a region of a secure unit button is what combat forbids, so a
--- relayout that arrives in lockdown is remembered rather than dropped. That
--- matters more now than it did: a resolution change comes through here too,
--- and a block left on the old grid is the wrong size until something else
--- happens to move it.
+-- Every block laid out again on the settings it has now, and hung again.
+-- Sizing a secure button is what combat forbids, so a relayout that arrives
+-- in lockdown is remembered rather than dropped: a resolution change comes
+-- through here, and a block left on the old grid is the wrong size until
+-- something else happens to move it.
 function Skin.Relayout()
 	if not ns.db or not ns.db.skin then
 		return
 	end
 	for _, entry in ipairs(entries) do
 		if entry.styled then
-			if ns.Blocked(entry.frame) then
+			if not Block.Place(entry) then
 				pending = true
-			else
-				Block.Place(entry)
-				if not Block.Link(entry, EntryFor(entry.spec.beside)) then
-					pending = true
-				end
-				local host = EntryFor(entry.spec.under)
-				if not Block.Perch(entry, host) then
-					pending = true
-				end
-				if not Block.Reveal(entry, host) then
-					pending = true
-				end
 			end
+		end
+	end
+	for _, entry in ipairs(entries) do
+		if not Hang(entry) then
+			pending = true
 		end
 	end
 end
 
--- How many regions the last apply hid. Zero with the skin on is the answer
--- worth seeing: it means the walk found no textures on these frames, which
--- says this client builds them out of something else rather than that they
--- were already bare.
-function Skin.Hidden()
-	local count = 0
+-- Locked is the normal state. Unlocked, the two anchors you can drag wear
+-- their rim and their name and take the mouse, and the buttons inside them
+-- stop taking it, because a secure button over the whole of the anchor would
+-- otherwise swallow the drag. Out of combat only: EnableMouse is not a
+-- protected call, but a frame that changes what it does with the mouse in the
+-- middle of a pull is a frame that just ate a click.
+function Skin.Lock()
 	for _, entry in ipairs(entries) do
-		count = count + entry.hidden
+		if entry.place then
+			local unlocked = not ns.db.locked
+			entry.place:Lock(unlocked)
+			if not InCombatLockdown() then
+				entry.frame:EnableMouse(not unlocked)
+			end
+		end
 	end
-	return count
 end
 
 function Skin.Deferred()
 	return pending
 end
 
--- The drop, from Edit Mode's own hook or from a harness standing one up.
--- Public because a drag is a scene rather than a state and there is no other
--- way to reach it: the hook needs a client with Edit Mode and a mouse on it.
-function Skin.Landed()
-	for _, entry in ipairs(entries) do
-		if entry.spec.beside then
-			Dropped(entry)
-		end
-	end
+-- What to do to each button once it exists. It exists for ctrl-click
+-- marking, which a behaviour file may not reach across for, and it is the
+-- seam UnitFrames/Group.lua offers for the same reason.
+function Skin.OnFrame(callback)
+	watchers[#watchers + 1] = callback
+end
+
+-- One frame's own parts, for a macro and for the harness. Handed out for the
+-- reason SwingGauges.Bar and PlayerCast.Bar are: what was drawn has to be
+-- measurable, and the alternative is this file answering a dozen questions
+-- about itself one at a time.
+function Skin.Entry(key)
+	return EntryFor(key)
 end
 
 -- What a level is allowed to be. One source for the slash command, the panel's
@@ -528,17 +495,17 @@ function Skin.LinkRange()
 end
 
 -- What the link is doing, which is not always what the setting asks for. It
--- needs both frames skinned, so this says which half is missing rather than
--- leaving the setting on and nothing drawn.
+-- needs both frames up, so this says which half is missing rather than leaving
+-- the setting on and nothing drawn.
 function Skin.DescribeLink()
 	if not ns.db.skinLink then
-		return "the target block sits on its own Edit Mode point"
+		return "the target block sits on a point of its own, drag it where you like"
 	end
 	if not ns.db.skin then
-		return "the link is on and waiting for the skin, which is off"
+		return "the link is on and waiting for the frames, which are off"
 	end
 	if not (Skin.Wanted("player") and Skin.Wanted("target")) then
-		return "the link needs the player and target frames skinned, and one of them is off"
+		return "the link needs the player and target frames on, and one of them is off"
 	end
 	return ("the target block is the player block mirrored in the middle of the"
 		.. " screen, %s"):format(ns.db.skinLevel == 0 and "both tops on one line"
@@ -550,50 +517,28 @@ end
 -- number the layout is built from comes out here, so a block that lands in the
 -- wrong place is one line of output rather than another round of inference.
 function Skin.Probe()
-	if #entries == 0 then
-		ns.Print("skin: none of the three unit frames exist under any name this addon knows.")
+	if missing then
+		ns.Print("frames: this client refused SecureUnitButtonTemplate, so none of the three was built.")
 		return
 	end
+	if #entries == 0 then
+		ns.Print("frames: nothing built yet, the frames are made at login.")
+		return
+	end
+	ns.Print(("frames: unit watch %s on this client."):format(
+		RegisterUnitWatch and "answers" or "missing, so the target goes up and down out of combat only"))
 	for _, entry in ipairs(entries) do
-		-- Taken here as well, so the probe answers with real numbers while the
-		-- skin is off.
-		Art.Measure(entry)
-
-		local spec = entry.spec
-		ns.Print(("%s: %s %dx%d, portrait %s %d tall, bar %d wide, %s"):format(
-			spec.key, spec.frames[1],
-			math.floor(ns.Measure(entry.frame, "GetWidth") or 0),
-			math.floor(ns.Measure(entry.frame, "GetHeight") or 0),
-			entry.portrait and "found" or "MISSING",
-			math.floor(Art.Was(entry.portrait, "height") or 0),
-			math.floor(Art.Was(entry.healthbar, "width") or 0),
-			entry.styled and ("skinned, " .. entry.hidden .. " hidden") or "not skinned"))
-		ns.Print("  " .. Block.Probe(entry))
-		local kept = {}
-		for slot in pairs(entry.badges) do
-			kept[#kept + 1] = slot
-		end
-		if #kept > 0 then
-			ns.Print("  kept " .. table.concat(kept, " "))
-		end
-		if #entry.names > 0 then
-			ns.Print("  hid " .. table.concat(entry.names, " "))
-		end
+		ns.Print(("%s: %s, %s"):format(entry.spec.key,
+			entry.styled and "up" or "down", Block.Probe(entry)))
 	end
 end
 
 function Skin.Describe()
-	if #entries == 0 then
-		return "no unit frames found, this client names them something else"
-	end
-	local missing = 0
-	for _, entry in ipairs(entries) do
-		if not entry.healthbar or not entry.manabar then
-			missing = missing + 1
-		end
+	if missing then
+		return "this client refused the secure button template, so no frames were built"
 	end
 	if not ns.db.skin then
-		return "Blizzard frames, untouched"
+		return "our frames off"
 	end
 	local off = {}
 	for _, entry in ipairs(entries) do
@@ -601,22 +546,17 @@ function Skin.Describe()
 			off[#off + 1] = entry.spec.key
 		end
 	end
-	local line = ("square frames, %d regions hidden, %s"):format(Skin.Hidden(),
-		Skin.DescribeLink())
+	local line = "our own player, target and target of target frames, " .. Skin.DescribeLink()
 	if ns.db.skinHeals then
 		line = line .. (ns.HasHealPrediction() and ", incoming heals on the gauge"
 			or ", incoming heals asked for and this client has no prediction api")
 	end
-	if missing > 0 then
-		line = line .. (", %d of 3 frames had no bars to skin"):format(missing)
-	end
 	if #off > 0 then
-		line = line .. ", " .. table.concat(off, " and ") .. " left alone"
+		line = line .. ", " .. table.concat(off, " and ") .. " left off"
 	end
 	-- Combat is the usual reason a pass did not finish, and it is not the only
-	-- one any more: a link written before the client has resolved the player
-	-- block's edge waits for a pass that can measure it. Saying "when combat
-	-- drops" out of combat sends the reader to look at the wrong thing.
+	-- one: a link written before the client has resolved the player block's
+	-- edge waits for a pass that can measure it.
 	if pending then
 		line = line .. (InCombatLockdown() and ", the rest follows when combat drops"
 			or ", the rest follows on the next pass")
@@ -634,17 +574,6 @@ end
 -- has always redrawn at, and a unit nothing has happened to costs the walk.
 local function Tick()
 	for _, entry in ipairs(entries) do
-		-- Before the paint, because a frame that has just been put up wants
-		-- its numbers on this pass rather than a fifth of a second later, for
-		-- the reason Apply paints in line rather than leaving it to the tick.
-		--
-		-- On the ticker rather than on UNIT_TARGET, which is the event that
-		-- carries it: target of target has no unit event stream on this client
-		-- and Blizzard drives its own copy of this frame off a timer for the
-		-- same reason. A refusal is left to the next pass, which is a fifth of
-		-- a second away, rather than setting the deferred flag: the answer
-		-- changes with the units and the flag is for work that stays undone.
-		Block.Reveal(entry, EntryFor(entry.spec.under))
 		if entry.dirty then
 			entry.dirty = false
 			Paint.Refresh(entry)
@@ -653,8 +582,8 @@ local function Tick()
 end
 
 -- And every block read off the client from the top, once a second, for what the
--- four events do not carry: an incoming heal, a level, a name, a mob somebody
--- else has tagged, and target of target, which is nobody's event.
+-- events do not carry: an incoming heal, a mob somebody else has tagged, and
+-- whatever target of target did that its host did not say.
 local function Read()
 	for _, entry in ipairs(entries) do
 		entry.dirty = false
@@ -662,32 +591,56 @@ local function Read()
 	end
 end
 
+local function MarkAll()
+	for _, entry in ipairs(entries) do
+		entry.dirty = true
+	end
+end
+
+-- The events that mark every block rather than one unit's. The four about you
+-- are the badge on your own frame; a raid marker moving is anybody's; and a
+-- target change is the one unit change no per-unit event carries, because
+-- "target" and "targettarget" are both a different creature now and the client
+-- fires nothing against either token to say so. All three are marked rather
+-- than the two, because your own block draws nothing that moved and a pass
+-- over it is a handful of comparisons that all hold.
+local MARKS = {
+	PLAYER_TARGET_CHANGED = true,
+	PLAYER_UPDATE_RESTING = true,
+	PLAYER_REGEN_DISABLED = true,
+	PLAYER_ENTER_COMBAT = true,
+	PLAYER_LEAVE_COMBAT = true,
+	RAID_TARGET_UPDATE = true,
+}
+
 local events = CreateFrame("Frame")
 local tick -- the refresh ticker, armed once, see below
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
-events:RegisterEvent("PLAYER_TARGET_CHANGED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
--- Blizzard_EditMode is load on demand, so the selection this file pins may not
--- exist until the first time the user opens Edit Mode.
-events:RegisterEvent("ADDON_LOADED")
--- Edit Mode writes its own saved point back over the link's anchor whenever a
--- layout is applied, so the link is written again on the event that says it
--- did. The name is retail's and this client is a backport of it, so the
--- registration goes through pcall: a client that has never heard of the event
--- refuses it and loses nothing, because PLAYER_ENTERING_WORLD and the
--- Blizzard_EditMode load already reach Relayout. Which of the three this
--- client actually fires is in docs/README.md under what has never run.
-pcall(events.RegisterEvent, events, "EDIT_MODE_LAYOUTS_UPDATED")
-events:SetScript("OnEvent", function(_, event, arg1)
+for event in pairs(MARKS) do
+	events:RegisterEvent(event)
+end
+events:SetScript("OnEvent", function(_, event)
 	if event == "PLAYER_LOGIN" then
 		for _, spec in ipairs(SPECS) do
-			local entry = Resolve(spec)
+			local entry = Build(spec)
 			if entry then
 				entries[#entries + 1] = entry
+			else
+				missing = true
+			end
+		end
+		-- What target of target is parked under, so the host's UNIT_TARGET can
+		-- mark it. Resolved once, here, because the list is complete now.
+		for _, entry in ipairs(entries) do
+			local host = EntryFor(entry.spec.under)
+			if host then
+				host.perch = entry
 			end
 		end
 		Skin.Apply()
+		Skin.Lock()
 
 		-- Armed once. UI.Ticker appends and refuses a second tick of either name
 		-- on this frame, so a branch that arms one has to be a branch that runs
@@ -699,46 +652,43 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		return
 	end
 
-	if event == "ADDON_LOADED" then
-		if arg1 == "Blizzard_EditMode" then
-			Skin.Relayout()
-		end
-		return
-	end
-
 	if event == "PLAYER_REGEN_ENABLED" then
+		MarkAll()
 		if pending then
-			-- Apply finishes a strip or a style combat refused. Relayout
-			-- finishes a re-anchor it refused, which Apply cannot: Style
-			-- returns early on a frame that is already styled, so a block on
-			-- the wrong grid would stay there.
+			-- Apply finishes a style combat refused. Relayout finishes a
+			-- re-anchor it refused, which Apply cannot: Style returns early on
+			-- a frame that is already styled, so a block on the wrong grid
+			-- would stay there.
 			Skin.Apply()
 			Skin.Relayout()
 		end
 		return
 	end
 
-	if event == "PLAYER_TARGET_CHANGED" then
-		-- The one unit change no per-unit event carries: "target" and
-		-- "targettarget" are both a different creature now and the client fires
-		-- nothing against either token to say so. All three are marked rather
-		-- than the two, because your own block draws nothing that moved and a
-		-- pass over it is a handful of comparisons that all hold.
-		for _, entry in ipairs(entries) do
-			entry.dirty = true
+	if MARKS[event] then
+		MarkAll()
+		if event == "PLAYER_TARGET_CHANGED" then
+			-- A client with no unit watch has the target's button put up and
+			-- down here, out of combat, which is the most it can do.
+			for _, entry in ipairs(entries) do
+				if entry.styled and entry.spec.watch and not RegisterUnitWatch
+					and not ns.Blocked(entry.frame) then
+					entry.frame:SetShown(UnitExists(entry.spec.unit))
+				end
+			end
 		end
+		return
 	end
 
+	-- PLAYER_ENTERING_WORLD: the world may have changed scale under the
+	-- frames, so they are laid out again on what it says now.
+	MarkAll()
 	Skin.Relayout()
 end)
 
--- A resolution change moves the grid under the whole block at once, and a UI
--- scale change moves the three Blizzard frames it is anchored to without
--- moving the block, because the block is off their scale by construction. Both
--- want the same answer: measure the frames again and lay the block out on what
--- they say now. Relayout refuses in lockdown and PLAYER_REGEN_ENABLED picks it
--- up, so a monitor swapped mid pull is a block one fight out of date rather
--- than an error.
+-- A resolution change moves the grid under the whole block at once. Relayout
+-- refuses in lockdown and PLAYER_REGEN_ENABLED picks it up, so a monitor
+-- swapped mid pull is a block one fight out of date rather than an error.
 ns.UI.OnRescale(function()
 	Skin.Relayout()
 end)

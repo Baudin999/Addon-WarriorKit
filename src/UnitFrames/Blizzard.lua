@@ -56,16 +56,19 @@ ns.BlizzHide = Blizz
 --   word   what `/wk hide` calls it
 --   label  the panel's line, and the sentence the slash word prints back
 --   hint   the one thing about this switch a label cannot hold, where there is
---          one. Seven of the ten have a catch and the other three do not, and a
---          line of reassurance under a switch that has nothing to warn about
---          is how a page teaches you to stop reading the hints
+--          one. Eight of the eleven have a catch and the other three do not,
+--          and a line of reassurance under a switch that has nothing to warn
+--          about is how a page teaches you to stop reading the hints
 local SWITCHES = {
+	{ key = "hideBlizzUnitFrames", word = "frames",
+		label = "Blizzard's player, target and target of target frames",
+		hint = "Ours draw all three. Read this one with our frames switch: both off is the one combination with no unit frames at all." },
 	{ key = "hideBlizzBuffs", word = "buffs", label = "Blizzard's buffs",
 		hint = "Right click to cancel a buff goes with them. Cancelling one is a call an addon is not allowed to make." },
 	{ key = "hideBlizzDebuffs", word = "debuffs", label = "Blizzard's debuffs" },
 	{ key = "hideBlizzTargetAuras", word = "target",
 		label = "Blizzard's target buffs and debuffs",
-		hint = "These have no frame of their own, so this one needs the target frame skinned to reach them." },
+		hint = "These have no frame of their own and are swept one button at a time, so this one needs our target frame on to reach them." },
 	{ key = "hideBlizzTargetCast", word = "cast",
 		label = "Blizzard's target cast bar",
 		hint = "The cast is drawn on the enemy bar instead, in the second chamber of the box." },
@@ -143,6 +146,12 @@ local SWITCHES = {
 -- the frame you are targeting with, and the sweep in UnitFrames/Auras.lua is the
 -- only handle.
 local FRAMES = {
+	-- Two names for three frames: target of target is a child of the target
+	-- frame on both clients, so it goes down with its parent. Both are secure
+	-- unit buttons, which is the same shape the four party frames below are
+	-- and takes the same road: caged out of combat, refused in it, and the
+	-- refusal picked up at PLAYER_REGEN_ENABLED.
+	{ needs = { "hideBlizzUnitFrames" }, names = { "PlayerFrame", "TargetFrame" } },
 	{ needs = { "hideBlizzBuffs", "hideBlizzDebuffs" }, names = { "BuffFrame" } },
 	{ needs = { "hideBlizzBuffs" }, names = { "TemporaryEnchantFrame" } },
 	{ needs = { "hideBlizzDebuffs" }, names = { "DebuffFrame" } },

@@ -6,16 +6,13 @@ ns.FramePaint = Paint
 --------------------------------------------------------------------------
 -- The tick
 --
--- One pass over one skinned block: the colours off the unit, the four numbers,
--- the incoming heal, and the two things Blizzard writes back over.
+-- One pass over one block: the colours off the unit, the two bars, the four
+-- numbers, the incoming heal, the portrait and the badges.
 --
 -- Run when UnitFrames/Skin.lua says the unit moved, and once a second behind
--- that whatever the client has said. It used to run five times a second on
--- every block whatever had happened, because the head of this file said the
--- event names that carry health and power have been renamed between these two
--- clients and a missed one is a bar that lies. The names are checked against
--- Blizzard's own frames now and the note over Skin.lua's WATCHED is what they
--- came back as.
+-- that whatever the client has said. The names of the events that carry health
+-- and power are checked against Blizzard's own frames and the note over
+-- Skin.lua's WATCHED is what they came back as.
 --
 -- Everything here takes a unit token and nil guards, because anything a ticker
 -- does has to be incapable of raising. Every write is guarded on the value
@@ -27,12 +24,13 @@ ns.FramePaint = Paint
 -- out at layout time and left the answers on the entry, which is why this file
 -- reads entry.railPixels and entry.pixel rather than measuring anything.
 --
--- All of the colour is ns.Unit.Color's. What used to be in here was a class
--- colour cache, a reaction ladder and a level tag cache, and every one of the
--- three had a twin in UnitFrames/EnemyBars.lua. The two class caches even
--- disagreed about the shape of an answer, one returning a table and one a hex
--- string, which is what happens when the same thing is written twice by the
--- same person a month apart.
+-- Nothing here is written back either. The file used to spend a third of
+-- itself re-applying a flat texture to Blizzard's bars and a crop to Blizzard's
+-- portrait, because the client's own code put both back whenever it swapped
+-- the art underneath. The bars and the portrait are ours now and nothing else
+-- writes on them, so a value written once stays written.
+--
+-- All of the colour is ns.Unit.Color's.
 --------------------------------------------------------------------------
 
 local Unit = ns.Unit
@@ -49,57 +47,64 @@ local PLAIN_LEVEL = Color.text.value
 
 local UnitCanAttack = UnitCanAttack
 
--- The portrait render carries dead space around the head. Blizzard hides it
--- under the ring; with the ring gone it has to be cropped instead.
---
--- Written as a fraction of 64 rather than as a decimal, for the reason
--- UI/Draw.lua crops an icon at 5/64: a portrait is sampled art, and a crop
--- that lands between two texels makes the sampler interpolate across the whole
--- image to find the edge. 0.15 cut 9.6 texels. Ten is the nearest boundary,
--- and 10/64 is exact in binary as well, which is what lets the tick compare
--- what it reads back against what it wrote.
-local PORTRAIT_TRIM = 10 / 64
+-- The three client calls the badges are read with, taken at load. Every one is
+-- FrameXML's on both clients this addon runs on, and a client that turns out
+-- not to carry one draws no badge of that kind rather than raising on a tick.
+local SetPortraitTexture = _G.SetPortraitTexture
+local SetRaidTargetIconTexture = _G.SetRaidTargetIconTexture
+local GetRaidTargetIndex = _G.GetRaidTargetIndex
 
--- The slice of the gauge an incoming heal is about to fill, drawn from where
--- the bar stops to where it is headed.
---
--- Pinned to the health bar's own fill texture rather than measured along the
--- rail. The fill's inner edge is exactly where the bar stops, whichever end the
--- client fills from and whatever the scale between us comes to, so the slice
--- starts on the fill rather than a pixel off it and stands as tall as the bar
--- without this file having to know how tall that is. The width is ours, in
--- whole pixels, the same way every other number here is.
---
--- Every write is guarded on the span last drawn. This runs five times a second
--- on three frames, and on all three the common case is that nobody is healing
--- anybody, which should cost a comparison and nothing else.
+-- The two cells of Interface\CharacterFrame\UI-StateIcon: resting on the left
+-- and fighting on the right, each the top half of its column. Blizzard crops
+-- them a few texels short of the half; the whole half is a square and lands on
+-- a texel boundary, which is what keeps the sampler off the seam.
+local STATE = {
+	rest = { 0, 0.5, 0, 0.5 },
+	combat = { 0.5, 1, 0, 0.5 },
+}
+
+-- The PvP flag per faction, built once rather than concatenated on the tick.
+-- Keyed by what UnitFactionGroup answers, plus the free for all flag, which is
+-- not a faction and is asked about first the way PlayerFrame.lua asks.
+local PVP = {
+	Alliance = "Interface\\TargetingFrame\\UI-PVP-Alliance",
+	Horde = "Interface\\TargetingFrame\\UI-PVP-Horde",
+	FFA = "Interface\\TargetingFrame\\UI-PVP-FFA",
+}
+
+-- The slice of the gauge an incoming heal is about to fill, from where the
+-- fill stops to where it is headed. Block pinned it to the fill's inner edge
+-- once; what moves here is its width, in whole pixels of the rail, guarded on
+-- the span last drawn. This runs five times a second on three frames, and on
+-- all three the common case is that nobody is healing anybody, which should
+-- cost a comparison and nothing else.
 local function HealSlice(entry, span)
-	local slice = entry.healSlice
-	local bar = entry.healthbar
-	local fill = bar and bar.GetStatusBarTexture and bar:GetStatusBarTexture()
-	if not fill then
-		span = 0
-	end
-	-- Re-pinned only when the client hands back a different texture object.
-	-- That is the readback Flatten does, for the reason Flatten gives. A cached
-	-- one would be pointing at nothing.
-	if fill and entry.healAnchor ~= fill then
-		entry.healAnchor = fill
-		local mine = entry.healReverse and "RIGHT" or "LEFT"
-		local theirs = entry.healReverse and "LEFT" or "RIGHT"
-		slice:ClearAllPoints()
-		slice:SetPoint("TOP" .. mine, fill, "TOP" .. theirs, 0, 0)
-		slice:SetPoint("BOTTOM" .. mine, fill, "BOTTOM" .. theirs, 0, 0)
-	end
 	if entry.healSpan == span then
 		return
 	end
 	entry.healSpan = span
+	local slice = entry.healSlice
 	if span > 0 then
 		slice:SetWidth(span * entry.pixel)
 		slice:Show()
 	else
 		slice:Hide()
+	end
+end
+
+-- One bar's range and value, written only when either moved. A unit with no
+-- power at all gets an empty bar over its track, which is what the idle colour
+-- on the track is for. The two field names arrive as constants rather than
+-- being built from a prefix, because this runs on the tick and a string built
+-- there is garbage on the tick.
+local function Fill(bar, entry, drawnValue, drawnMax, value, max)
+	if entry[drawnMax] ~= max then
+		entry[drawnMax] = max
+		bar:SetMinMaxValues(0, max > 0 and max or 1)
+	end
+	if entry[drawnValue] ~= value then
+		entry[drawnValue] = value
+		bar:SetValue(value)
 	end
 end
 
@@ -109,15 +114,11 @@ end
 -- than building one per tick to compare, and on the colour table's identity the
 -- way every other colour on this frame is.
 --
--- The colour is the newer half. This frame drew the level in one flat shade for
--- its whole life while the nameplates beside it carried the XP scale on the
--- same two characters, so the one mob you had actually picked was the one the
--- addon would not price. Grey here is the plate's grey: the kill pays nothing,
--- because the mob is too far below you or because somebody else tagged it.
---
--- Only on something you can attack. Your own frame and a friendly target are
--- not asking what a kill is worth, and an even yellow on those two is a reward
--- being claimed where there is none.
+-- Grey here is the plate's grey: the kill pays nothing, because the mob is too
+-- far below you or because somebody else tagged it. Only on something you can
+-- attack. Your own frame and a friendly target are not asking what a kill is
+-- worth, and an even yellow on those two is a reward being claimed where there
+-- is none.
 local function PaintLevel(entry, unit)
 	local tag, xp = Level.Of(unit)
 	if not UnitCanAttack("player", unit) then
@@ -133,40 +134,94 @@ local function PaintLevel(entry, unit)
 	end
 end
 
--- The two things Blizzard writes back over, put back.
---
--- Both are re-applied rather than set once, because the bars and the portrait
--- are Blizzard's and their own code puts a texture and a crop on them whenever
--- it swaps the art underneath.
---
--- The bars are asked only when something has asked for them. UnitFrames/Skin.lua
--- hooks SetStatusBarTexture on both, which is the only call that can swap a
--- status bar's fill, so the hook says exactly when the answer changed and the
--- four readbacks this used to make on every pass are gone. Where the hook could
--- not be installed `barsHooked` is false, the flag never comes down, and both
--- bars are read back on every pass the way they always were.
---
--- The portrait keeps its readback and has to. Blizzard swaps the render through
--- SetPortraitTexture, which is handed the texture and writes it from the C side
--- without going through any method an addon can hook, so there is nothing to be
--- told by and one comparison is the whole cost.
---
--- That comparison is exact because the crop is a power of two fraction. A crop
--- written as 0.15 would come back as whatever the client rounded it to and the
--- guard would never hold.
-local function Writeback(entry)
-	if entry.flatten then
-		entry.flatten = not entry.barsHooked
-		Gauge.Flatten(entry.healthbar)
-		Gauge.Flatten(entry.manabar)
+-- The portrait, asked for again when the unit behind the token is a different
+-- creature or when the client said the render moved. UNIT_PORTRAIT_UPDATE is
+-- one of the events Skin.lua marks a block on, and it sets the dirty bit here
+-- because a new render for the same GUID is not a change this comparison can
+-- see. One GUID read per pass otherwise, which is the cost of being told.
+local function PaintPortrait(entry, unit)
+	local guid = UnitGUID(unit)
+	if entry.portraitGuid == guid and not entry.portraitDirty then
+		return
 	end
-	local portrait = entry.portrait
-	if portrait then
-		local left = portrait.GetTexCoord and portrait:GetTexCoord()
-		if left ~= PORTRAIT_TRIM then
-			portrait:SetTexCoord(PORTRAIT_TRIM, 1 - PORTRAIT_TRIM,
-				PORTRAIT_TRIM, 1 - PORTRAIT_TRIM)
-		end
+	entry.portraitGuid, entry.portraitDirty = guid, false
+	if SetPortraitTexture then
+		SetPortraitTexture(entry.portrait, unit)
+	end
+end
+
+-- The raid marker on the square's corner, on the frames that carry one.
+-- Guarded on the index, and nil is a value here: a marker taken off is a
+-- change from a number to nothing.
+local function PaintMarker(entry, unit)
+	local texture = entry.badges.marker
+	if not texture or not GetRaidTargetIndex then
+		return
+	end
+	local index = GetRaidTargetIndex(unit)
+	if entry.marker == index then
+		return
+	end
+	entry.marker = index
+	if index and SetRaidTargetIconTexture then
+		SetRaidTargetIconTexture(texture, index)
+		texture:Show()
+	else
+		texture:Hide()
+	end
+end
+
+-- Resting or fighting, on your own frame. One or the other, never both, which
+-- is Blizzard's own rule for the same corner, and resting wins because you
+-- cannot be resting in a fight.
+local function PaintState(entry)
+	local texture = entry.badges.state
+	if not texture then
+		return
+	end
+	local state = nil
+	if IsResting() then
+		state = "rest"
+	elseif UnitAffectingCombat("player") then
+		state = "combat"
+	end
+	if entry.state == state then
+		return
+	end
+	entry.state = state
+	if state then
+		local crop = STATE[state]
+		texture:SetTexCoord(crop[1], crop[2], crop[3], crop[4])
+		texture:Show()
+	else
+		texture:Hide()
+	end
+end
+
+-- The PvP flag, asked the way PlayerFrame.lua asks: free for all first, then
+-- the faction's own flag while the unit is flagged, and nothing otherwise.
+-- Guarded on the path, which is a constant per faction, so a unit that stays
+-- flagged costs two client calls and a comparison.
+local function PaintPvp(entry, unit)
+	local texture = entry.badges.pvp
+	if not texture then
+		return
+	end
+	local art = nil
+	if UnitIsPVPFreeForAll(unit) then
+		art = PVP.FFA
+	elseif UnitIsPVP(unit) then
+		art = PVP[UnitFactionGroup(unit) or ""]
+	end
+	if entry.pvp == art then
+		return
+	end
+	entry.pvp = art
+	if art then
+		texture:SetTexture(art)
+		texture:Show()
+	else
+		texture:Hide()
 	end
 end
 
@@ -179,9 +234,9 @@ function Paint.Refresh(entry)
 	local tint = Color.OfUnit(unit)
 	if entry.tint ~= tint then
 		entry.tint = tint
-		Gauge.Paint(entry.healthbar, entry.healthTrack, tint)
+		Gauge.Paint(entry.healthBar, entry.healthTrack, tint)
 		local edge = Color.Dim(tint, Color.edgeDim)
-		ns.Recolor(entry.box.edges, edge)
+		ns.Recolor(entry.edges, edge)
 		entry.divider:SetColorTexture(edge[1], edge[2], edge[3], 1)
 	end
 
@@ -189,13 +244,16 @@ function Paint.Refresh(entry)
 	local power = (maxPower > 0 and Color.power[powerType]) or IDLE
 	if entry.power ~= power then
 		entry.power = power
-		Gauge.Paint(entry.manabar, entry.powerTrack, power)
+		Gauge.Paint(entry.powerBar, entry.powerTrack, power)
 	end
+
+	local health, maxHealth, percent = Unit.Health(unit)
+	Fill(entry.healthBar, entry, "healthValue", "healthMax", health, maxHealth)
+	Fill(entry.powerBar, entry, "powerValue", "powerMax", shownPower, maxPower)
 
 	-- Compared as the integers that get drawn, the same way the enemy bars do
 	-- it. A SetText costs a string measure and a relayout whether or not the
 	-- text changed, and a player at full health is the common case.
-	local health, maxHealth, percent = Unit.Health(unit)
 	if entry.shownPercent ~= percent then
 		entry.shownPercent = percent
 		entry.healthText:SetText(percent >= 0 and (percent .. "%") or "")
@@ -235,12 +293,26 @@ function Paint.Refresh(entry)
 	end
 
 	PaintLevel(entry, unit)
-
-	Writeback(entry)
+	PaintPortrait(entry, unit)
+	PaintMarker(entry, unit)
+	PaintState(entry)
+	PaintPvp(entry, unit)
 
 	-- The aura rows, which come along on the same pass. UNIT_AURA is one of the
-	-- four events that mark this block, so a target gaining a debuff is a row
+	-- events that mark this block, so a target gaining a debuff is a row
 	-- redrawn a fifth of a second later and a target standing still is a row
 	-- nothing reads. Everything it does is guarded in there.
 	ns.FrameAuras.Update(entry)
+end
+
+-- Every cache a pass compares against, forgotten. Called when a block goes up,
+-- so the first pass after it writes everything rather than trusting what the
+-- widgets carried from before the block came down.
+function Paint.Forget(entry)
+	entry.tint, entry.power, entry.levelTag, entry.levelColor = nil, nil, nil, nil
+	entry.shownPercent, entry.shownPower, entry.shownName = nil, nil, nil
+	entry.healthValue, entry.healthMax, entry.powerValue, entry.powerMax = nil, nil, nil, nil
+	entry.portraitGuid, entry.portraitDirty = nil, true
+	entry.marker, entry.state, entry.pvp = nil, nil, nil
+	entry.healSpan = nil
 end

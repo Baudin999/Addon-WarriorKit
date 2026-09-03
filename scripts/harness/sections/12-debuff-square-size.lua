@@ -14,7 +14,7 @@
 local H = ...
 local CHURN, region, ns = H.CHURN, H.region, H.ns
 local check = H.check
-local blockChurn, flattenWrites, listChurn = H.carry.blockChurn, H.carry.flattenWrites, H.carry.listChurn
+local blockChurn, idleWrites, listChurn = H.carry.blockChurn, H.carry.idleWrites, H.carry.listChurn
 local plateChurn, widget = H.carry.plateChurn, H.carry.widget
 
 do
@@ -224,15 +224,16 @@ print(("bar    %.0f x %.0f px, box %.0f idle and %.0f casting, icon %.0f, hairli
 	:format(widget:GetWidth(), widget:GetHeight(), widget.boxIdle, widget.boxOpen,
 		widget.icons[1]:GetWidth(), widget.box.edges[1].height))
 print(("plates %s"):format(ns.Plates.Describe()))
-local playerBox = _G.WarriorKitSkinPlayer
+local playerBox = _G.WarriorKitPlayerButton
+local player = ns.FrameSkin.Entry("player")
 print(("skin   %s; player block %.0f x %.0f px, gauge %.0f and %.0f, hairline %.0f")
 	:format(ns.FrameSkin.Describe(), playerBox:GetWidth(), playerBox:GetHeight(),
-		playerBox.children[1]:GetHeight(), playerBox.children[2]:GetHeight(),
-		playerBox.edges[1].height))
+		player.healthBar:GetHeight(), player.powerBar:GetHeight(),
+		player.edges[1].height))
 print(("churn  %.2f KB per 50 plate ticks, %.2f KB per 50 list ticks, two bars, gate is %.2f")
 	:format(plateChurn, listChurn, CHURN.list))
-print(("skin   %.2f KB per 50 ticks across three frames, gate is %.2f; %d bar flattens in 50 ticks")
-	:format(blockChurn, CHURN.skin, flattenWrites))
+print(("skin   %.2f KB per 50 ticks across three frames, gate is %.2f; %d colour writes on the fill in 200 idle ticks")
+	:format(blockChurn, CHURN.skin, idleWrites))
 
 check(listChurn <= CHURN.list,
 	("the list collector allocates %.2f KB per 50 ticks, over the %.2f gate")
@@ -243,13 +244,13 @@ check(plateChurn <= CHURN.list,
 check(blockChurn <= CHURN.skin,
 	("the skin allocates %.2f KB per 50 ticks, over the %.2f gate")
 		:format(blockChurn, CHURN.skin))
--- The bars and the portrait are the two things this file re-applies on every
--- tick because Blizzard's code puts them back. Re-applying is not the same as
--- writing: nothing has touched either one here, so the readback should hold and
--- the count should be flat.
-check(flattenWrites == 0,
-	("the skin flattened one bar %d times in 50 idle ticks, and nothing had unflattened it")
-		:format(flattenWrites))
+-- The bars are ours and nothing writes their colour back, so an idle tick
+-- must not paint one: the unit's colour is compared by table identity before
+-- the write, and a tick that wrote anyway is a tick that measures and relays
+-- out a bar for nothing.
+check(idleWrites == 0,
+	("the skin painted the health bar's fill %d times in 200 idle ticks, and nothing had moved")
+		:format(idleWrites))
 
 -- Left for the sections below.
 H.carry.playerBox = playerBox

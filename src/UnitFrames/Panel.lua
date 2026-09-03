@@ -288,20 +288,20 @@ end
 
 local function Frames(ui)
 	ui.Section("Player and target frames", "Frames")
-	ui.Lede("Squares Blizzard's own player, target and target of target frames in your class colour.")
+	ui.Lede("Our own player, target and target of target frames, in your class colour.")
 
-	ui.Check("square frames in your class colour",
+	ui.Check("our own frames in your class colour",
 		function() return ns.db.skin end,
 		function(value)
 			ns.db.skin = value
 			ns.FrameSkin.Apply()
 		end)
-	ui.Hint("The ring and banner are hidden, the portrait is square and the gauge takes the class colour. Clicking, the dropdown and the cast bar are still Blizzard's.")
+	ui.Hint("Left click targets, right click opens the menu, hover for the tooltip. Unlock the frames to drag the player and the target.")
 
 	for _, frame in ipairs({ { "player", "the player frame" },
 		{ "target", "the target frame" },
-		{ "tot", "target of target, which sits on the target's auras" } }) do
-		ui.Check("skin " .. frame[2],
+		{ "tot", "target of target, under the target frame" } }) do
+		ui.Check("draw " .. frame[2],
 			function() return ns.db.skinFrames[frame[1]] end,
 			function(value)
 				ns.db.skinFrames[frame[1]] = value
@@ -321,7 +321,7 @@ local function Frames(ui)
 			ns.db.skinWidth = value
 			ns.FrameSkin.Relayout()
 		end)
-	ui.Hint("Each Blizzard frame is resized to the block over it, so a frame you have already placed in Edit Mode needs placing again after these move.")
+	ui.Hint("Both in screen pixels. Each block grows away from its portrait.")
 
 	local levelLow, levelHigh = ns.FrameSkin.LinkRange()
 	ui.Check("mirror the target block off the player block",
@@ -330,7 +330,7 @@ local function Frames(ui)
 			ns.db.skinLink = value
 			ns.FrameSkin.Apply()
 		end)
-	ui.Hint("The target becomes the player reflected in the middle of the screen. Drag the player to widen or close the corridor, or past the centre to make the pair cross.")
+	ui.Hint("The target becomes the player reflected in the middle of the screen. Drag the player to widen or close the corridor, or past the centre to make the pair cross. Off, the target sits where you drag it.")
 
 	ui.Size("the target's drop from the player", levelLow, levelHigh, 5,
 		function() return ns.db.skinLevel end,
