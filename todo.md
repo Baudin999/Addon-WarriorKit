@@ -63,6 +63,8 @@ written longer than they are here.
 41. Feeds and chat rooms mark on arrival and draw once a frame. `2d08eeb`
 44. Eleven smaller costs, and a gate that every ticker name has a Perf slot.
     `ba87227`
+43. One frame for the ticks that never stop, and a gate that a tick on a frame
+    of its own says why. `156dede`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
@@ -272,13 +274,11 @@ compare that would have skipped them, and windows built at login for a session
 that never opens them. Ordered by what they cost, with the one that grows all
 session first. The full review with every citation is off-tree
 
-Eleven of the fourteen landed on 2026-09-03, one agent per item in its
-own worktree, and are above. Items 42 and 43 were started the same day and
-not finished: `.worktrees/first-open` on `worktree-first-open` and
-`.worktrees/one-driver` on `worktree-one-driver` hold their uncommitted
-work, cut from `eb884ee` and `2d08eeb`. Read what is there before starting
-either again. Item 45 seeds markers on functions 42 and 43 touch, so it goes
-after them.
+Twelve of the fourteen landed on 2026-09-03, one agent per item in its
+own worktree, and are above. Item 42 was started the same day and not
+finished: `.worktrees/first-open` on `worktree-first-open` holds its
+uncommitted work, cut from `eb884ee`. Read what is there before starting it
+again. Item 45 seeds markers on functions 42 touches, so it goes after it.
 
 The architecture question the review raised is answered in item 36 and item 33
 together. The client is already the event stream. What the addon lacks is not
@@ -311,15 +311,6 @@ for, and it would not have found a single item below.
     two group headers, the enemy bar anchor, the charge binder, the rims and
     the bindings. By frame count that leaves 80 to 85 percent of login
     construction as first-open work.
-
-43. Thirteen OnUpdate handlers on frames that never hide.
-
-    `src/UI/Ticker.lua:57-90` installs `Drive` per frame, and thirteen
-    permanent tickers each hang off a private events frame. The client
-    dispatches thirteen Lua entries per frame before any interval check runs,
-    about 780 a second. One never-hidden driver frame shared by the permanent
-    tickers makes that one. Under everything above, and last of the tick
-    items for that reason.
 
 45. The gate reaches the tick paths and not the event paths.
 
