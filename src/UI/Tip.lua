@@ -396,11 +396,154 @@ function Tip.Again()
 	return true
 end
 
+--------------------------------------------------------------------------
+-- Waiting for the pointer to hold still
+--
+-- A grid of a hundred squares is crossed on the way to the one you want, and
+-- a box that opens over every square on the path is a box flickering its way
+-- across the window. So a caller that hangs over a grid asks for the box only
+-- once the pointer has stopped. Tip.Settle arms a wait, the tick below reads
+-- the pointer every frame while one is armed, a move past DRIFT pixels starts
+-- the wait again from where the pointer is now, and the box opens on the frame
+-- the wait runs out. Leaving the owner cancels it, through Tip.Close, and a
+-- wait of nought is Tip.Open.
+--
+-- A box already up on the same owner is redrawn on the spot rather than taken
+-- through the wait again. The client's own bag template refreshes a square's
+-- box by calling its OnEnter while the pointer has not moved, and the one
+-- thing this must never do is take down a box you were reading to make you
+-- wait for the same one.
+--
+-- The wait is the caller's number and not this file's. How long a pointer has
+-- to hold still is a fact about the window it is over, a bag has a setting for
+-- it, and this layer may not know the name of a setting.
+--
+-- Nothing is allocated on the tick. The one pending hover is a table filled in
+-- at the arm and read at the open, and the pointer is two numbers.
+--------------------------------------------------------------------------
+
+-- How far the pointer may wander, in physical pixels, and still count as
+-- holding still. Two is a hand resting on a mouse; three is a hand moving it.
+local DRIFT = 2
+
+-- What the wait will open, filled in at the arm.
+local pending = { owner = nil, subject = nil, above = nil, place = nil }
+
+-- How long the caller asked for, how long the pointer has held so far, and
+-- where it was when the count last started. A wait of nought means nothing is
+-- armed, which is the ordinary state.
+local wait, still = 0, 0
+local heldX, heldY = 0, 0
+
+-- What the wait runs on. Hidden whenever nothing is armed, for the reason
+-- UI/Tooltip.lua hides its linger: a tick that answers "no" sixty times a
+-- second for a whole evening is the shape of every addon that costs a frame.
+local settle = CreateFrame("Frame")
+settle:Hide()
+
+local function Cancel()
+	if wait <= 0 then
+		return false
+	end
+	wait, still = 0, 0
+	settle:Hide()
+	return true
+end
+
 -- The pointer left. The box counts itself down rather than going at once; see
--- UI/Tooltip.lua for why and for what `now` is.
+-- UI/Tooltip.lua for why and for what `now` is. A wait that had not run out
+-- goes with it: the thing it was waiting to describe is no longer under the
+-- pointer.
 function Tip.Close(now)
 	open = nil
+	Cancel()
 	return UI.Tooltip.Close(now)
+end
+
+-- Where the pointer is, in physical pixels, or nothing on a client that will
+-- not say. Read here rather than through UI/Tooltip.lua's own reading because
+-- that one is a local of that file and this is a different question: not
+-- where to put the box, but whether the hand has stopped.
+local function Pointer()
+	if type(GetCursorPosition) ~= "function" then
+		return nil, nil
+	end
+	return GetCursorPosition()
+end
+
+-- The frame the wait ran out on. Its own function and marked cold so the walk
+-- from the tick stops here: Tip.Open builds the box, which is a hover's worth
+-- of allocation, and it runs once per hover rather than once per frame.
+-- cold: Land opens the box once, on the frame the wait ran out, and hides the tick with it
+local function Land()
+	wait, still = 0, 0
+	settle:Hide()
+	Tip.Open(pending.owner, pending.subject, pending.above, pending.place)
+end
+
+-- Open on an owner once the pointer has held still on it for `seconds`.
+--
+-- The same four arguments as Tip.Open and the wait after them. Nought, or a
+-- subject with nothing in it, is the plain open: nothing to wait for and
+-- nothing to wait with. So is a box already up on this owner, for the reason
+-- the header gives, and so is a client that will not say where the pointer is,
+-- because a wait that cannot see the hand stop is a box that never opens.
+--
+-- Answers what Tip.Open answers when it opened on the spot, and false while
+-- the wait is running.
+function Tip.Settle(owner, subject, above, place, seconds)
+	seconds = tonumber(seconds) or 0
+	if type(subject) ~= "table" or seconds <= 0 then
+		Cancel()
+		return Tip.Open(owner, subject, above, place)
+	end
+	if UI.Tooltip.IsShown() and UI.Tooltip.Owner() == owner then
+		Cancel()
+		return Tip.Open(owner, subject, above, place)
+	end
+	local x, y = Pointer()
+	if not x or not y then
+		Cancel()
+		return Tip.Open(owner, subject, above, place)
+	end
+	pending.owner, pending.subject = owner, subject
+	pending.above, pending.place = above, place
+	wait, still = seconds, 0
+	heldX, heldY = x, y
+	settle:Show()
+	return false
+end
+
+-- One frame of the wait. The pointer is read, a move past DRIFT starts the
+-- count again from where it is now, and a count that reaches the wait opens
+-- the box. True on the frame it opened.
+function Tip.Settling(elapsed)
+	if wait <= 0 then
+		return false
+	end
+	local x, y = Pointer()
+	if x and y and (math.abs(x - heldX) > DRIFT or math.abs(y - heldY) > DRIFT) then
+		heldX, heldY, still = x, y, 0
+		return false
+	end
+	still = still + (tonumber(elapsed) or 0)
+	if still < wait then
+		return false
+	end
+	Land()
+	return true
+end
+
+UI.Ticker(settle, 0, "settle", Tip.Settling)
+
+-- What is left of the wait, for scripts/harness.lua. Nought when nothing is
+-- armed, which is both "opened" and "never asked": the two are told apart by
+-- UI.Tooltip.IsShown, the way the linger's reading is.
+function Tip.Waiting()
+	if wait <= 0 then
+		return 0
+	end
+	return wait - still
 end
 
 --------------------------------------------------------------------------

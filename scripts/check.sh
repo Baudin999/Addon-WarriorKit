@@ -371,6 +371,7 @@ Core/Core.lua:1:ns.Print writes one line into the chat frame, which is the addon
 UI/Ability.lua:1:Ability.Size is a settings change and a rescale, never a tick
 UI/Aura.lua:1:Aura.Size is a settings change and a rescale, never a tick
 UI/Feed.lua:1:Feed:Enter fills a tooltip, which is a hover, and the one reopen that is not is throttled to a fifth of a second
+UI/Tip.lua:1:Land opens the box once, on the frame the wait ran out, and hides the tick with it
 UnitFrames/Auras.lua:1:Grow builds the squares an aura row has not needed yet, on the pass a unit first carries that many
 UnitFrames/EnemyBars.lua:2:CreateWidget builds one nameplate widget, on the tick a plate first appears
 UnitFrames/EnemyBars.lua:2:LayoutWidget places every region of one widget, on a rescale or a settings change
@@ -802,6 +803,7 @@ FRAMED_TICKERS_ALLOWED="
 Feeds/Stream.lua:1:the strip is a region of the feed window and goes with it
 UI/Chart.lua:2:the follow and the drift both go with the board they are drawn on
 UI/Feed.lua:1:the repaint goes with the feed's own frame
+UI/Tip.lua:1:the frame is hidden and shown to gate the wait, which is armed by a hover and runs for a few frames
 UI/Tooltip.lua:1:the frame is hidden and shown to gate the sweep, which is the whole of what hanging a tick off a frame buys
 World/World.lua:1:the frame is hidden and shown to gate the sweep
 "

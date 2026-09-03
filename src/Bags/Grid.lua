@@ -82,6 +82,15 @@ ns.BagsGrid = Grid
 -- Goods" reads once at the left and the cloth, the leather and the meat sit in
 -- one row beside it.
 --
+-- **At a merchant the layout holds still.** Selling a grey takes it out of its
+-- pile, and a pile that closes the gap moves every square after it, so a grid
+-- you were reading for the next thing to be rid of is a grid you read again
+-- from the top after every sale. The first paint at a vendor lays the piles
+-- out and holds them; every paint after it keeps each square where it is and
+-- asks the scan what is lying on its slot now. A slot that emptied stays as
+-- an empty square, which is the placeholder that keeps everything else in
+-- place. Walking away lets go. See Hold below for what breaks it early.
+--
 -- **The art is ours and the behaviour is theirs.** The template arrives dressed
 -- for a window that looks nothing like this one, so UI.Undress sweeps every
 -- region it brought and UI.Dress draws the square again in the addon's palette.
@@ -311,7 +320,14 @@ local function Enter(button)
 	end
 	-- On the square. An item in a bag is a thing you are pointing at, and the
 	-- corner of the screen is a long way from a grid of a hundred of them.
-	ns.Tip.Open(button, Subject(button), nil, UI.Tooltip.BESIDE)
+	--
+	-- And only once the pointer has stopped on it. The way to any square is
+	-- across a dozen others, and a box for each of them on the way is a box
+	-- flickering across the window. The wait is the bag setting, in
+	-- milliseconds because that is the size of number it is; UI/Tip.lua takes
+	-- seconds like every other duration in the addon.
+	ns.Tip.Settle(button, Subject(button), nil, UI.Tooltip.BESIDE,
+		(ns.db.bagHover or 0) / 1000)
 end
 
 local function Leave(button)
@@ -410,10 +426,13 @@ local function Sweep(button, entry)
 	return true
 end
 
-local function Paint(button, entry, selling)
-	-- The one square the empty pile folded into, which is the only entry in the
-	-- window whose count is a number of slots rather than a number of items.
-	local free = entry.group == ns.Bags.EMPTY
+-- `counted` is the number drawn in the middle of the square, or nothing. It is
+-- written on one square in the window, the one the empty pile folded into, and
+-- it is a number of free slots rather than a number of items: the caller says
+-- which square that is, because on a held layout it is the square that was the
+-- fold when the hold began and not whichever slot the scan sorted first.
+local function Paint(button, entry, selling, counted)
+	local free = entry.link == nil
 	local sellable = ns.Bags.Sellable(entry)
 	-- Dim while a merchant is open, and only then. What a vendor will not buy
 	-- is a fact about this minute rather than about the item: a quest item you
@@ -426,7 +445,7 @@ local function Paint(button, entry, selling)
 	button.bag, button.slot = entry.bag, entry.slot
 	UI.SlotPaint(button, entry.icon, not free and entry.count or nil,
 		entry.quality, refused)
-	button.free:SetText(free and tostring(entry.count or 1) or "")
+	button.free:SetText(counted and tostring(counted) or "")
 	button.coin:SetShown(sellable and entry.group == ns.Bags.JUNK)
 	button.gained:SetText(entry.gained and tostring(entry.gained) or "")
 
@@ -482,6 +501,11 @@ end
 -- The two lanes are counted rather than collected. A split pile could be
 -- partitioned into two lists and walked twice, and that is two tables per
 -- pile per bag update for an answer a running count already has.
+--
+-- The square the empty pile folded into is written down as it is laid, for the
+-- hold below: it is the one square whose number is not about the item on it.
+local folded
+
 local function Lay(group, width, at, left, top, side, selling)
 	local entries = group.entries
 	local mine, theirs = 0, 0
@@ -489,11 +513,15 @@ local function Lay(group, width, at, left, top, side, selling)
 	local lane = split and Lane(width) or width
 	local rest = split and (width - lane) or width
 	local shift = left + lane * (SLOT + GAP) + Gap()
-	for held = 1, #entries do
+	local empty = group.key == ns.Bags.EMPTY
+	for index = 1, #entries do
 		at = at + 1
-		local entry = entries[held]
+		local entry = entries[index]
 		local button = Square(at)
-		Paint(button, entry, selling)
+		if empty then
+			folded = at
+		end
+		Paint(button, entry, selling, empty and (entry.count or 1) or nil)
 		if split and not entry.yours then
 			Place(button, top, theirs % rest, math.floor(theirs / rest), shift, side)
 			theirs = theirs + 1
@@ -506,6 +534,59 @@ local function Lay(group, width, at, left, top, side, selling)
 	-- As tall as the taller lane. On an unsplit pile the right one is empty
 	-- and this is the count it always was.
 	return at, math.max(math.ceil(mine / lane), math.ceil(theirs / rest))
+end
+
+--------------------------------------------------------------------------
+-- The hold
+--
+-- What the first paint at a merchant laid out, kept until the merchant closes:
+-- how many squares, which of them is the fold, the columns and the side they
+-- were laid at, and the height they came to. Nil while nothing is held, which
+-- is every moment away from a vendor.
+--
+-- Three things end a hold early, and each is a layout the held one cannot
+-- describe. Something landing in a slot no held square points at, which is a
+-- purchase going into a free slot the fold was not drawn on. The column
+-- setting moving. And the zoom moving, which changes what a square's side is
+-- and is only ever written in Place.
+--------------------------------------------------------------------------
+
+local held
+
+local function Keep(count, columns, side, height)
+	held = held or {}
+	held.count, held.fold = count, folded
+	held.columns, held.side, held.height = columns, side, height
+end
+
+-- The held layout painted again from a fresh scan, or false where the scan
+-- describes something it cannot, which is the caller's cue to lay the piles
+-- out again.
+--
+-- Every held square asks for the entry on its own slot and is painted from it
+-- where it stands. A slot that emptied paints as an empty square with nothing
+-- on it. The fold keeps counting the free slots, off the scan's total rather
+-- than the entry's count, because the entry that carries the count after a
+-- sale is whichever empty slot sorted first and that is now a hole somewhere
+-- else in the grid.
+local function Hold(state, columns, side, selling)
+	if held.columns ~= columns or held.side ~= side then
+		return false
+	end
+	local carrying = 0
+	for index = 1, held.count do
+		local button = squares[index]
+		local entry = ns.Bags.Entry(button.bag, button.slot)
+		if not entry then
+			return false
+		end
+		if entry.link then
+			carrying = carrying + 1
+		end
+		local counted = (index == held.fold and not entry.link) and state.free or nil
+		Paint(button, entry, selling, counted)
+	end
+	return carrying == state.slots - state.free
 end
 
 --------------------------------------------------------------------------
@@ -592,13 +673,18 @@ function Grid.Paint(state, columns)
 	-- Walking away from a vendor with the pointer still on a square you could
 	-- have sold. There is no OnLeave for that, because the mouse did not move:
 	-- the merchant closed under it, and the repaint is where this file finds
-	-- out.
+	-- out. The hold goes with the vendor, and this paint closes the gaps.
 	if not selling then
 		Give()
+		held = nil
 	end
 	-- Once a pass, like the merchant check above and for the same reason: the
 	-- zoom cannot change inside one layout.
 	local side = Snap(SLOT)
+	if held and Hold(state, columns, side, selling) then
+		return held.height
+	end
+	folded = nil
 	for index = 1, state.shown do
 		local group = state.groups[index]
 		-- A sub-pile's caption is the smaller one, and both pools are counted
@@ -631,7 +717,21 @@ function Grid.Paint(state, columns)
 		left = here + UI.SlotSpan(width) + Gap()
 	end
 	Trim(at, named, subs)
-	return math.max(line + tall, 1)
+	local height = math.max(line + tall, 1)
+	-- The first paint at a vendor, or the one after a hold broke, is the one
+	-- the squares are held at from here until the vendor closes.
+	if selling then
+		Keep(at, columns, side, height)
+	end
+	return height
+end
+
+-- How many squares the hold is keeping in place, or nothing while none are.
+-- Handed out because "the squares did not move when one of them sold" is a
+-- claim scripts/harness.lua makes about a layout, and whether a layout is
+-- held is the fact under it.
+function Grid.Held()
+	return held and held.count or nil
 end
 
 -- The pool, for the harness. It reads the squares to say that a click on one
@@ -657,6 +757,10 @@ function Grid.Describe()
 	if not inherited then
 		return ("%d squares, and this client refused the bag button template, so a click does nothing")
 			:format(#squares)
+	end
+	if held then
+		return ("%d squares on the client's own bag button, %d of them held in place for the merchant")
+			:format(#squares, held.count)
 	end
 	return ("%d squares on the client's own bag button"):format(#squares)
 end

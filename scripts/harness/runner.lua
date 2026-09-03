@@ -389,6 +389,7 @@ local SECTIONS = {
 	-- three Berserkings a troll gets. Moves the clock, the target, the race
 	-- and what is affordable, and puts all four back.
 	"73-castable",
+	"74-bag-hold",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

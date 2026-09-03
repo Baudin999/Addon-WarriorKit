@@ -56,6 +56,12 @@ local SOULBOUND = _G.ITEM_SOULBOUND or "Soulbound"
 -- entry one whatever is in it.
 local state = { groups = {}, entries = {}, shown = 0, free = 0, slots = 0 }
 
+-- Where each bag's slots begin in the walk, so a square can find the entry for
+-- its own slot by arithmetic rather than by searching a hundred and fifty.
+-- Written on every sweep, because a bag swapped for a bigger one moves every
+-- bag after it.
+local starts = {}
+
 --------------------------------------------------------------------------
 
 -- Whether a vendor will take what is on this square.
@@ -215,6 +221,7 @@ local function Sweep()
 	for bag = FIRST_BAG, LAST_BAG do
 		local count = ns.ContainerSlots(bag)
 		slots = slots + count
+		starts[bag] = used
 		for slot = 1, count do
 			used = used + 1
 			if not Fill(used, bag, slot).link then
@@ -236,6 +243,25 @@ function Bags.Read()
 	ns.Piles.Fill(Bags, state.entries, used)
 	ns.Piles.Collect(Bags, state, Consolidate)
 	return state
+end
+
+-- What the last scan found on one slot, or nothing for a slot it did not walk.
+--
+-- Asked by Grid.lua while the layout is held at a merchant: the squares keep
+-- their places and each one asks what is lying on its own slot now. The answer
+-- is checked against the slot it names rather than trusted, because a bag
+-- swapped in the middle of a hold shifts every entry after it, and the pool
+-- keeps entries past the end of a walk that has shrunk.
+function Bags.Entry(bag, slot)
+	local start = starts[bag]
+	if not start or start + slot > state.slots then
+		return nil
+	end
+	local entry = state.entries[start + slot]
+	if not entry or entry.bag ~= bag or entry.slot ~= slot then
+		return nil
+	end
+	return entry
 end
 
 -- How many piles the last scan found. Public because the grid walks them by

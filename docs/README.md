@@ -1581,6 +1581,7 @@ below is the whole of what runs.
     UnitFrames/EnemyBars.lua every frame  the cast fill on every bar on screen
     UnitFrames/PlayerCast.lua every frame your own cast fill, moving
     UI/Tooltip.lua           every frame  the linger before a box goes
+    UI/Tip.lua               every frame  the wait before a box opens, only while a hover is waiting
     Comfort/Thanks.lua       every frame  only while a whisper is waiting
     Charge/Marker.lua           20 Hz     it tracks the camera
     Charge/Icon.lua             10 Hz     the HUD icon and the macro

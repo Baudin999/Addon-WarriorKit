@@ -680,8 +680,17 @@ if window then
 	-- writes itself the first time each profession window is open, and what the
 	-- destroy switch refuses to destroy. 27,450 is that plus a hint's worth of
 	-- room again.
-	check(prose < 27450,
-		("the window holds %d characters of prose and the budget is 27,450"):format(prose))
+	--
+	-- The wait before a bag square's box arrived and it is 27,576 across the
+	-- same sixty-eight: one stepper and one hint on the bag page, and nothing
+	-- else. The hint is the half the stepper cannot say: not that the box waits,
+	-- which a number in milliseconds already says, but that crossing the window
+	-- opens nothing on the way. The hold at a merchant that landed with it
+	-- cost no prose at all, because a square that stays where it was when its
+	-- item sold is a thing you watch happen. 27,750 is that plus a hint's worth
+	-- of room again.
+	check(prose < 27750,
+		("the window holds %d characters of prose and the budget is 27,750"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

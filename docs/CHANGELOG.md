@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### The squares hold still while you sell
+
+Selling a grey took it out of its pile and the pile closed the gap, so every
+square after it moved and you read the grid again from the top after every
+sale. The bag window now holds its layout while a merchant is open: the first
+paint at the vendor lays the piles out, and every paint after it keeps each
+square where it is and asks what is lying on its slot now. A slot that
+emptied stays as an empty square, the square the empty pile folds into keeps
+counting the free slots, and the footer counts with it. Walking away closes
+the gaps.
+
+Three things end the hold early, each a layout the held one cannot draw: a
+purchase landing in a free slot that was not drawn, the column setting
+moving, and the zoom moving.
+
+### A bag square's box waits for the pointer to stop
+
+The way to any square is across a dozen others, and a tooltip for each of
+them on the way was a box flickering across the window. A square's box now
+opens only once the pointer has held still on it, fifty milliseconds by
+default: moving more than two pixels starts the wait again, and leaving the
+square before it runs out opens nothing. A box already up on a square is
+redrawn on the spot rather than taken down to wait for itself, which is what
+the client's own template asks for when it refreshes a square under a still
+pointer.
+
+The wait is `hover wait` on the Bags page, off to half a second in steps of
+ten, and `/wk bags hover <ms>` sets it from the line. Off is the box on the
+way in, which is what every other hover in the addon does. The mechanism is
+`Tip.Settle` in `UI/Tip.lua`, beside `Tip.Open`, and any hover over a grid
+can ask for it.
+
 ### The player and target frames are ours
 
 The player, target and target of target frames were Blizzard's own three

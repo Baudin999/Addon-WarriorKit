@@ -8,6 +8,11 @@ local ADDON, ns = ...
 
 local LOW_COLUMNS, HIGH_COLUMNS = 6, 16
 
+-- How long the pointer holds still on a square before its box opens, in
+-- milliseconds. Nought is the box on the way in, which is what every other
+-- hover in the addon does; half a second is a box you have to wait for.
+local LOW_HOVER, HIGH_HOVER, HOVER_STEP = 0, 500, 10
+
 local function SetBags(value)
 	ns.db.bags = value
 	if not value then
@@ -25,6 +30,22 @@ end
 local function SetColumns(value)
 	ns.db.bagColumns = value
 	ns.BagsWindow.Refit()
+end
+
+-- Nothing is redrawn. The square reads the number on the next hover.
+local function SetHover(value)
+	ns.db.bagHover = value
+end
+
+-- "50ms", "off". The unit goes after the number the way every duration on the
+-- panel wears one, and nought is a word rather than a number because nought
+-- milliseconds is not a short wait, it is no wait.
+local function HoverLabel(value)
+	value = tonumber(value) or 0
+	if value <= 0 then
+		return "off"
+	end
+	return value .. "ms"
 end
 
 -- What the record button on the settings page says, and what a press does.
@@ -75,6 +96,16 @@ local function BagsWord(arg, rawArg)
 			ns.Options.Refresh()
 			ns.Print(("the bag window is %d squares across."):format(count))
 		end
+	elseif word == "hover" then
+		-- The panel's own ruler, so a number typed here is a stop the panel
+		-- can show and the reset can restore.
+		local wait = ns.Command.Step(rest, LOW_HOVER, HIGH_HOVER, HOVER_STEP, "bag hover")
+		if wait then
+			SetHover(wait)
+			ns.Options.Refresh()
+			ns.Print(("a square's box opens after the pointer holds still for %s.")
+				:format(HoverLabel(wait)))
+		end
 	elseif word == "count" then
 		ns.Print(ns.Bags.Describe() .. ".")
 	elseif word == "stack" then
@@ -114,7 +145,7 @@ local function BagsWord(arg, rawArg)
 		end
 		ns.BagsWindow.Toggle()
 	else
-		ns.Print("bags takes on, off, hide, columns, count, stack, clear or session.")
+		ns.Print("bags takes on, off, hide, columns, hover, count, stack, clear or session.")
 	end
 	-- rawArg is the untouched line, which this word has no use for: every
 	-- sub-word above takes a switch or a number rather than a name. Named so the
@@ -170,6 +201,10 @@ ns.Register({
 		-- Ten across. Wide enough that the piles most people carry sit on one
 		-- line each and narrow enough that the window is not half the screen.
 		bagColumns = 10,
+
+		-- Fifty milliseconds. Three frames of a hand at rest, and under what a
+		-- hand crossing the window spends on any one square on the way.
+		bagHover = 50,
 	},
 
 	words = {
@@ -181,6 +216,7 @@ ns.Register({
 		"bags on|off, one window with your bags grouped instead of five of the client's",
 		"bags hide on|off, take the client's own bag calls so B opens this one",
 		"bags columns <6-16>, how many squares across",
+		"bags hover <0-500>, how long the pointer holds still on a square before its box opens, in milliseconds",
 		"bags count, how many slots you have and how many are free",
 		"bags stack, put your half stacks together and free the slots under them",
 		"bags clear, review what your bags are finished with, one at a time",
@@ -203,6 +239,10 @@ ns.Register({
 		ui.Count("columns", LOW_COLUMNS, HIGH_COLUMNS,
 			function() return ns.db.bagColumns end,
 			SetColumns)
+		ui.Stepper("hover wait", LOW_HOVER, HIGH_HOVER, HOVER_STEP,
+			function() return ns.db.bagHover end,
+			SetHover, HoverLabel)
+		ui.Hint("How long the pointer holds still on a square before its box opens. Crossing the window to reach a square opens nothing on the way.")
 		ui.Action(StackLabel, ns.BagsStack.Press)
 		ui.Hint("Twelve cloth in one slot and eighteen in another come out twenty and ten, and the slot under them is yours again. Nothing else moves. The same press is on the window's own footer.")
 		ui.Action(function() return "clear what you are finished with" end,
