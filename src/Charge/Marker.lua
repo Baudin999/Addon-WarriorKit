@@ -213,6 +213,7 @@ function ChargeMarker.ApplyLock()
 end
 
 local events = CreateFrame("Frame")
+local tick -- the update ticker, armed once, see below
 
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -235,5 +236,10 @@ events:SetScript("OnEvent", function(_, event)
 	ChargeMarker.Update()
 	-- The ticker hangs off this frame, which is never hidden. On the marker
 	-- itself it would stop the moment the marker hid and never come back.
-	ns.UI.Ticker(events, UPDATE_INTERVAL, "marker", ChargeMarker.Update)
+	--
+	-- Armed once. UI.Ticker appends and refuses a second tick of this name on
+	-- this frame, so a branch that arms one has to be a branch that runs once.
+	if not tick then
+		tick = ns.UI.Ticker(events, UPDATE_INTERVAL, "marker", ChargeMarker.Update)
+	end
 end)

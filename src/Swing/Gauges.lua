@@ -342,6 +342,7 @@ end
 --------------------------------------------------------------------------
 
 local events = CreateFrame("Frame")
+local tick -- the motion ticker, armed once, see below
 
 -- No accumulator, because there is no rate to keep. See the header: this is the
 -- one thing in the addon that draws motion, and motion is drawn on the frame
@@ -387,7 +388,13 @@ events:SetScript("OnEvent", function(_, event, token)
 		-- it would stop the moment the bars hid and never come back, which is
 		-- the trap Charge/Icon.lua already carries a note about. Update's first
 		-- line is what makes a hidden pair of bars free anyway.
-		ns.UI.Ticker(events, 0, "swing", SwingGauges.Update)
+		--
+		-- Armed once. UI.Ticker appends and refuses a second tick of this name
+		-- on this frame, so a branch that arms one has to be a branch that runs
+		-- once.
+		if not tick then
+			tick = ns.UI.Ticker(events, 0, "swing", SwingGauges.Update)
+		end
 		return
 	end
 

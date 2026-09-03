@@ -28,8 +28,14 @@ ns.Slot = Slot
 --
 -- Everything here runs on the bar's ticker against every button on it, so
 -- nothing allocates and nothing is cached that the client already holds.
--- check.sh's HOT list covers Slot.State, Slot.Spell, Slot.Aimless, Slot.Active
--- and Slot.Equipped.
+-- check.sh's HOT list covers Slot.State, Slot.Spell, Slot.Aimless, Slot.Aiming,
+-- Slot.Range, Slot.Count, Slot.Active and Slot.Equipped.
+--
+-- What the bar asks on a tick and what it asks on a repaint are two different
+-- questions now, and this file answers both. Buttons/Bars.lua draws a square
+-- when an event says something about it moved, and otherwise asks it only
+-- Slot.Range and Slot.Count, so the whole ladder runs on the squares that
+-- changed rather than on all sixty of them ten times a second.
 --------------------------------------------------------------------------
 
 -- Below this a cooldown is the global and not the ability's own, and the two
@@ -273,7 +279,12 @@ end
 -- the target, as range is: a mouseover macro hovered over a mob with nothing
 -- targeted is the one press this reads wrong, and it reads it grey rather
 -- than lit.
-local function Aimed(slot, spell, macro)
+--
+-- Answers the fact rather than the status, because Slot.State hands it back to
+-- the caller as well as reading it. Buttons/Bars.lua keeps it against the
+-- square and asks about range on the tick only where it is true, which is what
+-- turns a range check per square into a range check per attack.
+local function Harmful(slot, spell, macro)
 	local harmful
 	if macro and spell then
 		harmful = ns.SpellHarmful(spell)
@@ -287,10 +298,7 @@ local function Aimed(slot, spell, macro)
 		-- already asks UnitCanAttack, and a yellow one you can attack is aimed.
 		harmful = isHarmful(slot, false)
 	end
-	if harmful and Slot.Aimless() then
-		return "notarget"
-	end
-	return nil
+	return harmful and true or false
 end
 
 -- The two rungs that know more than the client does, as one question, or nil
@@ -360,8 +368,43 @@ local function Refused(slot, spell, macro)
 	return noPower and "cost" or "stance"
 end
 
--- Returns a status from UI/Ability.lua's vocabulary, plus the cooldown start
--- and duration when there is one.
+-- Whether there is anything to be at a distance from.
+--
+-- Its own answer because the bars tick asks it once for the whole bar and then
+-- asks Slot.Range per attack, and because which unit a range check is about is
+-- this file's to say and not the caller's.
+function Slot.Aiming()
+	return UnitExists(RANGE_UNIT) and true or false
+end
+
+-- Whether a press would fall short. Asked only with something selected, and
+-- Slot.Aiming is that question.
+--
+-- Without that guard the check answers nil on every button on every tick you
+-- are standing around untargeted, and ns.OutOfRange counts nils towards the
+-- once-a-session warning that this client answers no range checks at all.
+-- Twenty-four buttons would reach the fortieth nil in under a second and print
+-- a sentence about a client fault that is not one.
+--
+-- ns.OutOfRange owns what a nil answer means past that point.
+-- Charge/Charge.lua asks the identical question of a spell and a unit, and
+-- reaches it only with a unit it has already checked exists.
+function Slot.Range(slot)
+	if not slot or not Slot.CanRead() then
+		return false
+	end
+	return ns.OutOfRange(IsActionInRange(slot, RANGE_UNIT)) and true or false
+end
+
+-- Returns a status from UI/Ability.lua's vocabulary, the cooldown start and
+-- duration when there is one, the art the slot is holding, and whether what is
+-- in it is aimed at an enemy.
+--
+-- Five returns because all five are worked out in here anyway and the caller
+-- wants four of them. The art used to be read a second time through
+-- Slot.Texture, which was a client call per square per tick to ask a question
+-- this function had already asked. The last one is what lets Buttons/Bars.lua
+-- keep the range check off every square that is not an attack.
 function Slot.State(slot)
 	if not slot or not Slot.CanRead() then
 		return "empty"
@@ -372,7 +415,8 @@ function Slot.State(slot)
 
 	-- An empty slot answered above, so a slot with no art is one the client
 	-- has not resolved yet rather than one with nothing in it.
-	if not GetActionTexture(slot) then
+	local texture = GetActionTexture(slot)
+	if not texture then
 		return "unknown"
 	end
 
@@ -380,7 +424,7 @@ function Slot.State(slot)
 	local running = enabled and enabled ~= 0 and duration and duration > 0
 		and start and start > 0
 	if running and duration > GCD then
-		return "cooldown", start, duration
+		return "cooldown", start, duration, texture
 	end
 	-- A global. Not a status, so the ladder carries on and whatever it decides
 	-- is returned with the swipe's two numbers stapled on. Nil when nothing is
@@ -401,36 +445,29 @@ function Slot.State(slot)
 	-- a fact, and Requires.lua already refuses to read one. Nothing selected is
 	-- also the one state on the bar a single click fixes, so it is the first
 	-- thing worth saying.
-	local aimed = Aimed(slot, spell, macro)
-	if aimed then
-		return aimed, swipeStart, swipeDuration
+	local harmful = Harmful(slot, spell, macro)
+	if harmful and Slot.Aimless() then
+		return "notarget", swipeStart, swipeDuration, texture, harmful
 	end
 
 	local beyond = Beyond(spell)
 	if beyond then
-		return beyond, swipeStart, swipeDuration
+		return beyond, swipeStart, swipeDuration, texture, harmful
 	end
 
 	local refused = Refused(slot, spell, macro)
 	if refused then
-		return refused, swipeStart, swipeDuration
+		return refused, swipeStart, swipeDuration, texture, harmful
 	end
 
-	-- Asked only when there is something to be at a distance from. Without
-	-- that guard the check answers nil on every button on every tick you are
-	-- standing around untargeted, and ns.OutOfRange counts nils towards the
-	-- once-a-session warning that this client answers no range checks at all.
-	-- Twenty-four buttons would reach the fortieth nil in under a second and
-	-- print a sentence about a client fault that is not one.
-	--
-	-- ns.OutOfRange owns what a nil answer means past that point.
-	-- Charge/Charge.lua asks the identical question of a spell and a unit, and
-	-- reaches it only with a unit it has already checked exists.
-	if UnitExists(RANGE_UNIT) and ns.OutOfRange(IsActionInRange(slot, RANGE_UNIT)) then
-		return "range", swipeStart, swipeDuration
+	-- The two halves of the range rung, split so that the bars tick can ask the
+	-- first once for the whole bar. Both are above; the order between them is
+	-- the guard and is why they are not one call.
+	if Slot.Aiming() and Slot.Range(slot) then
+		return "range", swipeStart, swipeDuration, texture, harmful
 	end
 
-	return "ready", swipeStart, swipeDuration
+	return "ready", swipeStart, swipeDuration, texture, harmful
 end
 
 -- Whether a press would be asking for something already happening: the stance

@@ -173,6 +173,36 @@ function Requires.Watching()
 end
 
 --------------------------------------------------------------------------
+-- Telling the bar
+--
+-- The bars draw a square when something says it moved, and this file is one of
+-- the two things that has to say so. What a condition is read off is the
+-- target's health, the client does send an event for that, and this is that
+-- event turned into one call.
+--
+-- Every entry is asked before the bar is told, because a mob going from 90% to
+-- 89% moves nothing on any square. Execute's answer changes once in a fight, at
+-- a fifth, and that is the only health tick worth a repaint. The rest cost two
+-- unit calls and stop here.
+--------------------------------------------------------------------------
+
+-- Each entry's last answer, so an event that changed nothing costs nothing.
+local was = {}
+
+local function Moved()
+	local moved = false
+	for index = 1, #list do
+		local entry = list[index]
+		local now = Unmet(entry) or false
+		if now ~= was[entry] then
+			was[entry] = now
+			moved = true
+		end
+	end
+	return moved
+end
+
+--------------------------------------------------------------------------
 
 function Requires.Describe()
 	if watching == nil then
@@ -226,6 +256,25 @@ local function Arm()
 		list[index] = mine[index]
 	end
 	watching = true
+
+	-- Registered here rather than at file scope for the reason everything else
+	-- in this function is: a class that names no condition watches nothing.
+	-- Filtered to the one unit where the client can filter, which is what
+	-- ns.RegisterUnitEvent is for.
+	ns.RegisterUnitEvent(events, "UNIT_HEALTH", UNIT)
 end
 
-events:SetScript("OnEvent", Arm)
+local function OnEvent(_, event, unit)
+	if event == "UNIT_HEALTH" then
+		-- The unit is read off the payload whether or not the registration was
+		-- filtered, because a client with no RegisterUnitEvent hands over every
+		-- unit in the raid.
+		if unit == UNIT and Moved() and ns.Bars then
+			ns.Bars.Soil()
+		end
+		return
+	end
+	Arm()
+end
+
+events:SetScript("OnEvent", OnEvent)

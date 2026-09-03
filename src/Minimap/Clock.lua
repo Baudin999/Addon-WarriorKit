@@ -225,6 +225,7 @@ end
 --------------------------------------------------------------------------
 
 local events = CreateFrame("Frame")
+local tick -- the clock's ticker, armed once, see below
 
 -- Off with the square. The tab is parented to the bezel, so it is already off
 -- the screen; this is so that a hidden clock is not also a string comparison
@@ -242,7 +243,13 @@ events:SetScript("OnEvent", function(_, event)
 		Clock.Apply()
 		-- The ticker lives on this frame, which is never hidden. On the tab it
 		-- would stop the moment the square went off and never start again.
-		ns.UI.Ticker(events, INTERVAL, "clock", Tick)
+		--
+		-- Armed once. UI.Ticker appends and refuses a second tick of this name
+		-- on this frame, so a branch that arms one has to be a branch that runs
+		-- once.
+		if not tick then
+			tick = ns.UI.Ticker(events, INTERVAL, "clock", Tick)
+		end
 	elseif frame and Format() ~= military then
 		-- CVAR_UPDATE carries every CVar the client writes. The one this file
 		-- has a stake in is the twelve hour toggle, and it changes both what the

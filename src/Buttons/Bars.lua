@@ -71,8 +71,9 @@ local Which = ns.WhichBars
 
 -- Ten a second, which is what the charge icon runs at and is the rate a
 -- cooldown timer has to be redrawn at for the tenths under ten seconds to
--- count down rather than jump. Every square is walked on every pass and every
--- write behind it is guarded, so the cost is a read per square.
+-- count down rather than jump. Every square is walked on every pass, and a
+-- square nothing has happened to costs one read and a comparison rather than
+-- the twelve to sixteen reads the whole ladder is.
 local UPDATE_INTERVAL = 0.1
 
 -- Twelve is every action bar the client has ever had, and the stride between
@@ -104,7 +105,20 @@ local built = {}       -- bar key to entry, so a second look adds rather than re
 local squares = {}     -- every square on every bar, flat, walked by the tick
 local pool = 0         -- next name out of the button pool
 
+-- What the last look at one square found, one record per square, built when the
+-- square joins the walk above and written in place after that.
+--
+--   dirty     something says the picture may have moved, so the next pass draws
+--   harmful   what is in the slot is aimed at an enemy, so the pass asks about
+--             range; false for a heal, a totem or an empty square
+--   counting  a real cooldown is running, so the number over it has to be
+--             written again on every pass
+--   range     the last range answer a pass read, so a flip can be seen
+--   count     the last stack a pass read, for the same reason
+local seen = {}
+
 local live = false     -- the squares are up and the tick should draw them
+local tick             -- the action ticker, armed once and kept, see the foot
 local pending          -- work combat refused, retried at PLAYER_REGEN_ENABLED
 local paging           -- true once a state driver has been accepted
 local binding          -- re-entrancy latch, see Bars.ApplyBindings
@@ -679,12 +693,18 @@ local function Build()
 	-- so a bar you untick leaves the tick as well as the screen.
 	wipe(order)
 	wipe(squares)
+	wipe(seen)
 	for index = 1, #Which.PLAN do
 		local entry = built[Which.PLAN[index].key]
 		if entry and entry.wanted then
 			order[#order + 1] = entry
 			for slot = 1, PER_BAR do
 				squares[#squares + 1] = entry.buttons[slot]
+				-- A record rather than a reused one, because the walk is
+				-- rebuilt in the plan's order and a bar unticked shifts every
+				-- square below it onto a different index. Sixty small tables on
+				-- an apply, and none on a tick.
+				seen[#squares] = { dirty = true }
 			end
 		end
 	end
@@ -770,9 +790,32 @@ end
 --
 -- One ticker for every square on every bar, on a frame that is never hidden,
 -- because a hidden frame's OnUpdate stops and never starts again. Everything
--- below runs sixty times a pass at ten passes a second, so nothing allocates
--- and nothing writes a value already on the widget. check.sh's HOT list holds
--- Bars.Update to both.
+-- below runs against sixty squares ten times a second, so nothing allocates and
+-- nothing writes a value already on the widget. check.sh's HOT list holds the
+-- tick and everything under it to both.
+--
+-- What a pass no longer does is ask the client what every square is doing.
+-- Reading one square is twelve to sixteen calls, and at five bars that was
+-- eight thousand calls a second spent redrawing a bar that had not moved. So an
+-- event raises a bit on the squares it could have changed and the pass draws
+-- those. That is what Blizzard's own ActionButton does on this client: it
+-- carries a stateDirty flag set out of its event handler, applies it at the top
+-- of its OnUpdate, and spends the rest of the pass on the range check.
+--
+-- Three things move with nothing sent to say so, and all three are on the pass.
+--
+--   Range. One IsActionInRange per square holding an attack, and only while
+--   something is targeted, which is the one call Blizzard keeps on its own tick.
+--
+--   The stack on an item. One GetActionCount per square.
+--
+--   A reaction window shutting. Buttons/Reaction.lua answers that for the whole
+--   bar in one clock read, because a window running out is the one thing on the
+--   ladder the client sends nothing at all for.
+--
+-- A square counting down is drawn on every pass as well. The tenths under ten
+-- seconds are a number this addon prints in Lua rather than a swipe the client
+-- animates, so a frozen square is a frozen number.
 --
 -- The slot is read back off the button's own action attribute rather than
 -- worked out from the stance again. That attribute is what a press actually
@@ -781,16 +824,89 @@ end
 -- agreeing.
 --------------------------------------------------------------------------
 
+-- Raise the bit on every square, or on the ones pointing at one action slot.
+--
+-- Nothing is drawn here. The handler says what moved and the next pass draws
+-- it, which is at most a tenth of a second later and is the rate the squares
+-- were being drawn at anyway. Drawing from the handler instead would put a
+-- sixty square repaint inside ACTIONBAR_UPDATE_USABLE, which fires on every
+-- point of rage a warrior gains.
+--
+-- A slot of zero is the client saying it changed something and not which, which
+-- is the same reading Blizzard's own button takes off ACTIONBAR_SLOT_CHANGED,
+-- and it means every square.
+function Bars.Soil(slot)
+	if not live then
+		return
+	end
+	if slot == 0 then
+		slot = nil
+	end
+	for index = 1, #squares do
+		if not slot or squares[index]:GetAttribute("action") == slot then
+			seen[index].dirty = true
+		end
+	end
+end
+
+-- One square drawn from what the client says its slot is doing, and what was
+-- found written down so the next pass can tell whether anything moved.
+local function Paint(index, w, slot)
+	local mark = seen[index]
+	local status, start, duration, texture, harmful = ns.Slot.State(slot)
+	local count = ns.Slot.Count(slot)
+	Ability.Draw(w, texture, status, start, duration, count,
+		ns.Slot.Active(slot), ns.Slot.Equipped(slot))
+	mark.dirty = nil
+	mark.harmful = harmful
+	mark.counting = status == "cooldown"
+	mark.count = count
+end
+
+-- Every square drawn from scratch whatever the bits say. What an apply ends
+-- with, because an apply has just changed which slot every square is on.
 function Bars.Update()
 	if not live then
 		return
 	end
 	for index = 1, #squares do
 		local w = squares[index]
+		Paint(index, w, w:GetAttribute("action"))
+	end
+end
+
+function Bars.Tick()
+	if not live then
+		return
+	end
+	if ns.Reaction.Moved() then
+		Bars.Soil()
+	end
+
+	local aiming = ns.Slot.Aiming()
+	for index = 1, #squares do
+		local w = squares[index]
 		local slot = w:GetAttribute("action")
-		local status, start, duration = ns.Slot.State(slot)
-		Ability.Draw(w, ns.Slot.Texture(slot), status, start, duration,
-			ns.Slot.Count(slot), ns.Slot.Active(slot), ns.Slot.Equipped(slot))
+		local mark = seen[index]
+
+		-- Read before the bit is tested, because reading them is what raises
+		-- it. Both are compared against what the last pass read rather than
+		-- against what was drawn: the ladder can stop above either of them, so
+		-- the picture does not say what the answer was.
+		if aiming and mark.harmful then
+			local out = ns.Slot.Range(slot)
+			if out ~= mark.range then
+				mark.range = out
+				mark.dirty = true
+			end
+		end
+		if ns.Slot.Count(slot) ~= mark.count then
+			mark.dirty = true
+		end
+
+		if mark.dirty or mark.counting then
+			Paint(index, w, slot)
+		end
 	end
 end
 
@@ -878,6 +994,32 @@ UI.OnRescale(function()
 	end
 end)
 
+-- The events a square's picture moves on, none of which says which square.
+--
+-- Read off Blizzard's own ActionButton on this client rather than guessed at.
+-- ACTIONBAR_UPDATE_COOLDOWN, ACTIONBAR_SLOT_CHANGED and UPDATE_SHAPESHIFT_FORM
+-- are on the frame every one of their buttons listens to, and
+-- ACTIONBAR_UPDATE_STATE, ACTIONBAR_UPDATE_USABLE and PLAYER_TARGET_CHANGED are
+-- on the one only a button with something in it listens to. Their newest file
+-- has swapped two of those for ACTION_USABLE_CHANGED and
+-- ACTION_RANGE_CHECK_UPDATE, which are a subscription per slot rather than a
+-- broadcast; the broadcasts are still sent and are what this reads.
+--
+-- SPELL_UPDATE_USABLE is the same answer arriving at the spell rather than at
+-- the slot, and it is here because five of the warrior plan's twelve bar 1 keys
+-- are macros: what a macro would cast is resolved to a spell and the rungs above
+-- ask about the spell, so the slot's own event is not always the one that fires.
+--
+-- ACTIONBAR_SLOT_CHANGED is not in this table because it names the slot and is
+-- the one event that raises the bit on one square rather than on all of them.
+local PAINT = {
+	ACTIONBAR_UPDATE_COOLDOWN = true,
+	ACTIONBAR_UPDATE_STATE = true,
+	ACTIONBAR_UPDATE_USABLE = true,
+	SPELL_UPDATE_USABLE = true,
+	PLAYER_TARGET_CHANGED = true,
+}
+
 events:RegisterEvent("PLAYER_LOGIN")
 -- PLAYER_ENTERING_WORLD as well as PLAYER_LOGIN, and it is not belt and braces.
 -- The client puts its own bars up and fills in ActionButton1.action on entering
@@ -894,13 +1036,39 @@ events:RegisterEvent("UPDATE_BINDINGS")
 events:RegisterEvent("UPDATE_BONUS_ACTIONBAR")
 events:RegisterEvent("ACTIONBAR_SHOWGRID")
 events:RegisterEvent("ACTIONBAR_HIDEGRID")
-events:SetScript("OnEvent", function(_, event)
+-- The six a square's picture moves on. Nothing is drawn from any of them; each
+-- raises a bit and the next pass of the tick spends it.
+events:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
+events:RegisterEvent("ACTIONBAR_UPDATE_STATE")
+events:RegisterEvent("ACTIONBAR_UPDATE_USABLE")
+events:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
+events:RegisterEvent("SPELL_UPDATE_USABLE")
+events:RegisterEvent("PLAYER_TARGET_CHANGED")
+events:SetScript("OnEvent", function(_, event, arg1)
 	if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
 		Bars.Apply()
 		ns.TheirBars.Recheck()
 		-- The ticker lives on this frame, which is never hidden. On a bar it
 		-- would stop the moment the bar hid and never come back.
-		ns.UI.Ticker(events, UPDATE_INTERVAL, "action", Bars.Update)
+		--
+		-- Armed once and then kept, because this branch runs on login and again
+		-- on every loading screen after it, and UI.Ticker appends. Three
+		-- instance doors in there were four action tickers walking every square
+		-- forty times a second, and nothing on screen said so. UI.Ticker refuses
+		-- the second one now as well, so the two halves of this cannot drift.
+		if not tick then
+			tick = ns.UI.Ticker(events, UPDATE_INTERVAL, "action", Bars.Tick)
+		end
+		return
+	end
+
+	if PAINT[event] then
+		Bars.Soil()
+		return
+	end
+
+	if event == "ACTIONBAR_SLOT_CHANGED" then
+		Bars.Soil(arg1)
 		return
 	end
 
@@ -917,7 +1085,9 @@ events:SetScript("OnEvent", function(_, event)
 	end
 
 	-- Every event left here is one the client repaints its bars on, so any of
-	-- them can have put a hidden button back.
+	-- them can have put a hidden button back and any of them can have changed
+	-- what a square is pointing at.
+	Bars.Soil()
 	ns.TheirBars.Recheck()
 
 	-- A stance change and a page change both re-point bar 1. The snippet has

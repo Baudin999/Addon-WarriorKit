@@ -130,6 +130,25 @@ function UI.Ticker(frame, interval, name, fn)
 		lists[frame] = list
 	end
 
+	-- One running tick of a name per frame, and the second one fails here.
+	--
+	-- Nothing below dedupes. The list is appended to and then walked, so a
+	-- second ticker of the same name on the same frame is the same body called
+	-- twice at the same rate, and the only trace it leaves is the frame budget.
+	-- Buttons/Bars.lua armed its ticker inside a branch that runs on every
+	-- loading screen and had four of them after three zone loads, which reads as
+	-- a bar that gets heavier the longer the session runs. This is the call that
+	-- would have said so.
+	--
+	-- A stopped tick of the same name is left alone: that is a part switching
+	-- itself back on, which is what Perf/Perf.lua does with its sampler, and it
+	-- goes through Start rather than through here.
+	for index = 1, #list do
+		local other = list[index]
+		assert(not (other.running and other.name == name),
+			"a ticker named " .. name .. " is already running on this frame")
+	end
+
 	local tick = setmetatable({
 		frame = frame,
 		interval = interval,

@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### The bars stop asking
+
+The action squares used to read every slot on every bar ten times a second,
+twelve to sixteen questions each, whether or not anything on them had moved.
+At five bars that is eight thousand questions a second to draw a picture that
+was already right. And the ticker doing the asking was armed inside the code
+that runs when you enter the world, so every instance door, hearth and zone
+load added another copy of it: three loading screens in, the whole walk was
+running forty times a second instead of ten.
+
+The ticker is armed once now, and arming a second one under the same name on
+the same frame stops the addon at the line that tried rather than quietly
+costing you frames. Every other ticker in the addon holds on to the one it
+armed as well, so the swing bars, the buff row, the cooldown row, the party
+blocks, the enemy bars, the skinned frames, the meter, the minimap clock, the
+charge icon, the charge marker, your own cast bar and the Blizzard hider each
+have exactly one. The squares are drawn when something happens to them: the
+client says a cooldown started, a slot changed, an ability became usable, you
+changed stance or you changed target, and the square that could have moved is
+the one that gets redrawn. That is what Blizzard's own buttons do on this
+client.
+
+Three things nothing is sent for stay on the tick and are what it now costs. A
+square holding an attack is asked once whether the target is in range, and only
+while you have one. Every square is asked its stack. And a square counting down
+is redrawn, because the tenths under ten seconds are a number this addon prints
+rather than a sweep the client animates. Overpower and Revenge keep their
+windows the same way, in one clock read for the whole bar rather than a
+question per square, since the server sends nothing when a window runs out.
+Execute's square now comes in off the target's health event instead of a poll.
+
 ### The charge displays redraw when something moved
 
 The world marker follows the mob you are aiming at, so it looks twenty times a

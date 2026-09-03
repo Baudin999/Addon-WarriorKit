@@ -2502,6 +2502,7 @@ end
 
 local lastMode
 local events = CreateFrame("Frame")
+local ticks = false -- the two below are armed once, see the foot of this file
 
 -- You pressed tab, and every bar on the screen has to say so.
 --
@@ -2701,11 +2702,17 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	-- fills, the arrival ramps and the widgets an event marked run every frame,
 	-- and that pass stops itself when all three are empty. See EnemyBars.Sweep.
 	-- The reading behind them is the second.
-	moving = ns.UI.Ticker(events, 0, "cast", Moving)
-	-- Told where to send a chamber opening, now rather than at load, because the
-	-- tick it starts does not exist until the line above has run.
-	Cast.OnWake(Wake)
-	ns.UI.Ticker(events, VERIFY, "bars", EnemyBars.Update)
+	--
+	-- Armed once. UI.Ticker appends and refuses a second tick of either name on
+	-- this frame, so a branch that arms one has to be a branch that runs once.
+	if not ticks then
+		ticks = true
+		moving = ns.UI.Ticker(events, 0, "cast", Moving)
+		-- Told where to send a chamber opening, now rather than at load, because
+		-- the tick it starts does not exist until the line above has run.
+		Cast.OnWake(Wake)
+		ns.UI.Ticker(events, VERIFY, "bars", EnemyBars.Update)
+	end
 end)
 
 -- A resolution change moves every size in this file at once, and a UI scale

@@ -6326,6 +6326,25 @@ Everything below was written from the API contract and has never executed:
   back. What would settle it: turn the meters, the breakdown and the swing bars
   off, pull something, then turn the meters back on and pull again and read the
   meter.
+- **Whether the seven events the action squares now repaint on cover
+  everything they used to poll for.** The squares are drawn on
+  `ACTIONBAR_UPDATE_COOLDOWN`, `ACTIONBAR_UPDATE_STATE`,
+  `ACTIONBAR_UPDATE_USABLE`, `ACTIONBAR_SLOT_CHANGED`, `SPELL_UPDATE_USABLE`,
+  `UPDATE_SHAPESHIFT_FORM` and `PLAYER_TARGET_CHANGED`, read off Blizzard's own
+  ActionButton, and only range, the stack and a running countdown are still
+  read on the tick. Two of the seven are events this client's own button has
+  stopped registering in favour of a per-slot subscription, so a build that has
+  also stopped sending them would leave a square stuck: an Overpower that stays
+  grey after the rage arrives, or a stance swap that does not recolour bar 1.
+  What would settle it: stand still with a target, gain rage from nothing but
+  auto attack, and watch whether a square you cannot afford lights the moment
+  you can.
+- **Whether `UNIT_HEALTH` is what a warrior's Execute square comes in on.**
+  `Buttons/Requires.lua` reads the target's health off that event now rather
+  than off the bar's tick, and raises the squares' bit only when the answer
+  crosses the fifth. A mistake looks like an Execute that stays grey below 20%
+  until something else redraws the bar. What would settle it: pull anything and
+  watch the square at the moment the health bar crosses a fifth.
 - **Whether every ticker still runs at the rate it asks for.** `ns.UI.Ticker`
   replaced twelve hand-written accumulators, and nine of the twelve zeroed
   theirs where the shared one subtracts the interval. Those nine were running

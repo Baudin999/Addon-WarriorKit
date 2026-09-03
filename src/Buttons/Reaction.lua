@@ -205,6 +205,40 @@ function Reaction.Watching()
 	return watching == true
 end
 
+-- Whether any window has opened or shut since the last time this was asked.
+--
+-- The one question the bars tick asks this file. Every other rung on
+-- Buttons/Slot.lua's ladder now moves on a client event and Buttons/Bars.lua
+-- draws the square that event named, and this rung has no event to be woken by:
+-- a window opens on a combat log line, which the client does send, and shuts on
+-- a clock running out, which it does not. Nothing is sent when the five seconds
+-- are up, so nothing but a comparison against the clock can see it happen.
+--
+-- One clock read and a comparison per ability, for the whole bar, in place of
+-- the rung being read against every square on it. A warrior has two.
+--
+-- The first call answers true whatever the windows are doing, because nothing
+-- has been written down to compare against yet, and one repaint at login is
+-- cheaper than an entry point that has to be primed.
+local wasOpen = {}
+
+function Reaction.Moved()
+	if watching ~= true then
+		return false
+	end
+	local moved = false
+	local now = GetTime()
+	for index = 1, #keys do
+		local key = keys[index]
+		local open = (openUntil[key] or 0) > now
+		if open ~= wasOpen[key] then
+			wasOpen[key] = open
+			moved = true
+		end
+	end
+	return moved
+end
+
 --------------------------------------------------------------------------
 -- The log
 --

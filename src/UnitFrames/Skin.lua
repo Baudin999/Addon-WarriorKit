@@ -508,6 +508,7 @@ local function Tick()
 end
 
 local events = CreateFrame("Frame")
+local tick -- the refresh ticker, armed once, see below
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -533,7 +534,12 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		end
 		Skin.Apply()
 
-		ns.UI.Ticker(events, REFRESH, "skin", Tick)
+		-- Armed once. UI.Ticker appends and refuses a second tick of this name
+		-- on this frame, so a branch that arms one has to be a branch that runs
+		-- once.
+		if not tick then
+			tick = ns.UI.Ticker(events, REFRESH, "skin", Tick)
+		end
 		return
 	end
 

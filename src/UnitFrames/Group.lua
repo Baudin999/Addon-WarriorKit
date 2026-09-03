@@ -1125,6 +1125,7 @@ local function Deferring()
 end
 
 local events = CreateFrame("Frame")
+local tick -- the poll, armed once, see below
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("GROUP_ROSTER_UPDATE")
@@ -1144,7 +1145,12 @@ events:SetScript("OnEvent", function(_, event)
 		end
 		if any then
 			Group.Apply()
-			ns.UI.Ticker(events, POLL, "party", Group.Update)
+			-- Armed once. UI.Ticker appends and refuses a second tick of this
+			-- name on this frame, so a branch that arms one has to be a branch
+			-- that runs once.
+			if not tick then
+				tick = ns.UI.Ticker(events, POLL, "party", Group.Update)
+			end
 		end
 		return
 	end

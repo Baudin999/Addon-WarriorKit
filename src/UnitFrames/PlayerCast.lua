@@ -96,6 +96,7 @@ local TIMER_TEXT = Color.text.value
 
 local frame, bar, spellName, timer, place
 local built = false
+local ticks = false     -- the poll and the fill are armed once, see the foot
 
 -- One design pixel in this frame's units, which is exactly 1 once ns.UI.Adopt
 -- has taken the frame onto the grid. Read again on every layout pass rather
@@ -528,8 +529,16 @@ events:SetScript("OnEvent", function(_, event, token)
 	if event == "PLAYER_LOGIN" then
 		Build()
 		PlayerCast.Apply()
-		ns.UI.Ticker(events, POLL, "playercast", Poll)
-		ns.UI.Ticker(events, 0, "castsweep", Sweep)
+		-- Armed once and kept. UI.Ticker appends, so a branch that arms a tick
+		-- is a branch that must not run twice: a second pair here is the poll
+		-- and the fill both running twice over, and the only trace is the frame
+		-- budget. UI.Ticker refuses the second one at the call now, and this is
+		-- the half that keeps the call from being made.
+		if not ticks then
+			ticks = true
+			ns.UI.Ticker(events, POLL, "playercast", Poll)
+			ns.UI.Ticker(events, 0, "castsweep", Sweep)
+		end
 		return
 	end
 	if event == "PLAYER_ENTERING_WORLD" then

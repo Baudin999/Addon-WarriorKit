@@ -607,6 +607,7 @@ end
 --------------------------------------------------------------------------
 
 local events = CreateFrame("Frame")
+local tick -- the refresh ticker, armed once, see below
 
 
 events:RegisterEvent("PLAYER_LOGIN")
@@ -657,7 +658,13 @@ events:SetScript("OnEvent", function(_, event, token)
 		-- itself it would stop the moment the row hid and never come back, and
 		-- the row is hidden almost all the time, which is the trap
 		-- Charge/Icon.lua already carries a note about.
-		ns.UI.Ticker(events, REFRESH, "buffs", Nag.Update)
+		--
+		-- Armed once. UI.Ticker appends and refuses a second tick of this name
+		-- on this frame, so a branch that arms one has to be a branch that runs
+		-- once.
+		if not tick then
+			tick = ns.UI.Ticker(events, REFRESH, "buffs", Nag.Update)
+		end
 		return
 	end
 

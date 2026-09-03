@@ -171,6 +171,10 @@ local SECTIONS = {
 	"04-ability-square",
 	"04-aimed-square",
 	"05-action-bars",
+	-- Straight after it, and it reads the bars that section left standing: what
+	-- a pass of their ticker costs, which is a different question from whether
+	-- the squares are right.
+	"05-bars-tick",
 	"06-debuff-row",
 	"07-tracked-debuff",
 	"08-bars-zoom",

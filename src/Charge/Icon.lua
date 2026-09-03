@@ -18,6 +18,7 @@ local FALLBACK_TEXTURE = "Interface\\Icons\\Ability_Warrior_Charge"
 local UPDATE_INTERVAL = 0.1
 
 local frame, handle, binder
+local tick             -- the refresh ticker, armed once, see the foot
 local lastMacro, securePending
 local lastUnit, lastWeapon, lastEpoch
 
@@ -429,7 +430,15 @@ events:SetScript("OnEvent", function(_, event)
 		frame:Show() -- the only Show there is, before any combat can block it
 		-- The ticker lives on this frame, which is never hidden. On the button
 		-- it would stop the moment the button hid and never come back.
-		ns.UI.Ticker(events, UPDATE_INTERVAL, "icon", Refresh)
+		--
+		-- Kept and armed once. A branch that arms a tick is a branch that must
+		-- not run twice, because UI.Ticker appends and a second copy of this
+		-- one is the whole refresh running at twenty a second with nothing on
+		-- screen to say so. UI.Ticker refuses it at the call now, and this is
+		-- the half that keeps the call from being made.
+		if not tick then
+			tick = ns.UI.Ticker(events, UPDATE_INTERVAL, "icon", Refresh)
+		end
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		if securePending then
 			ChargeIcon.ApplySecure()

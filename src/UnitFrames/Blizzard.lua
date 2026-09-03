@@ -562,15 +562,19 @@ end
 -- stopped being the one the harness found.
 local events = CreateFrame("Frame")
 local started = false
+local tick -- the sweep, armed once, see below
 
 local function Moved(_, event)
 	if event == "ADDON_LOADED" and not started then
 		return
 	end
 	Blizz.Apply()
-	if event == "PLAYER_LOGIN" then
+	if event == "PLAYER_LOGIN" and not tick then
 		started = true
-		ns.UI.Ticker(events, INTERVAL, "hide", Blizz.Apply)
+		-- Armed once. UI.Ticker appends and refuses a second tick of this name
+		-- on this frame, so a branch that arms one has to be a branch that runs
+		-- once.
+		tick = ns.UI.Ticker(events, INTERVAL, "hide", Blizz.Apply)
 	end
 end
 

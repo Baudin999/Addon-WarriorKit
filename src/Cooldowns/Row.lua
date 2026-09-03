@@ -391,6 +391,7 @@ end
 --------------------------------------------------------------------------
 
 local events = CreateFrame("Frame")
+local tick -- the refresh ticker, armed once, see below
 
 
 events:RegisterEvent("PLAYER_LOGIN")
@@ -434,7 +435,13 @@ events:SetScript("OnEvent", function(_, event, token)
 		-- The ticker lives on this frame, which is never hidden. On the row
 		-- itself it would stop the moment the row hid and never come back, and
 		-- the row is hidden between every fight.
-		ns.UI.Ticker(events, REFRESH, "cooldowns", Row.Update)
+		--
+		-- Armed once. UI.Ticker appends and refuses a second tick of this name
+		-- on this frame, so a branch that arms one has to be a branch that runs
+		-- once.
+		if not tick then
+			tick = ns.UI.Ticker(events, REFRESH, "cooldowns", Row.Update)
+		end
 		return
 	end
 

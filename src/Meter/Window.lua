@@ -593,6 +593,7 @@ end
 --------------------------------------------------------------------------
 
 local events = CreateFrame("Frame")
+local tick -- the refresh ticker, armed once, see below
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function()
 	frame = CreateFrame("Frame", FRAME_NAME, UIParent)
@@ -617,7 +618,11 @@ events:SetScript("OnEvent", function()
 	built = true
 	MeterWindow.Apply()
 
-	ns.UI.Ticker(events, REFRESH, "meter", MeterWindow.Update)
+	-- Armed once. UI.Ticker appends and refuses a second tick of this name on
+	-- this frame, so a branch that arms one has to be a branch that runs once.
+	if not tick then
+		tick = ns.UI.Ticker(events, REFRESH, "meter", MeterWindow.Update)
+	end
 end)
 
 -- A resolution change moves every size in this file at once, the same way it
