@@ -353,9 +353,7 @@ local function Corpses()
 		if npcId then
 			corpses = corpses or {}
 			corpses[npcId] = corpses[npcId] or {}
-			local read = _G.GetLootSlotLink
-			local link = type(read) == "function" and read(slot) or nil
-			local itemId = link and ns.ItemKind(link)
+			local itemId = ns.ItemKind(ns.LootSlotLink(slot))
 			if itemId then
 				corpses[npcId][itemId] = true
 			end

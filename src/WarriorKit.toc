@@ -569,6 +569,14 @@ Minimap\Feature.lua
 # the addon looted before this file existed.
 Comfort\Wanted.lua
 Comfort\Loot.lua
+
+# Destroying what the loot filter refused, for the person who skins. A corpse
+# only opens for a skinner once every slot is gone, so with that switch on a
+# slot the filter would have left is looted anyway and the item is destroyed
+# when it lands. Under Comfort\Loot.lua because that is the only thing that
+# calls it. Neither reads the other while it loads, so the order here is for
+# whoever is reading rather than for the client.
+Comfort\Leftovers.lua
 Comfort\Vendor.lua
 Comfort\Repair.lua
 Comfort\Camera.lua

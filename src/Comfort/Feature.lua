@@ -203,6 +203,14 @@ ns.Register({
 		-- the rest of the list alone, so dropping a profession takes its
 		-- reagents off the filter rather than leaving them on it for good.
 		lootReagents = {},
+
+		-- Off, and it is the one setting in this part that ships off because of
+		-- what it does rather than because of taste. It destroys things. A
+		-- switch that deletes what you looted has to be one somebody turned on
+		-- on purpose, on the character they meant it for, which is also why it
+		-- is this character's and not the account's: skinning is a profession
+		-- one of your characters has.
+		lootDestroy = false,
 	},
 
 	defaults = {

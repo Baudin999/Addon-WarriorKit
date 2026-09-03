@@ -1259,6 +1259,25 @@ function ns.PickupContainerItem(bag, slot)
 	return false
 end
 
+-- Part of what is in a bag slot onto the cursor, and the rest left where it is.
+-- One caller, and it is the one call in the addon that has to be exact about a
+-- number rather than about a slot. What Comfort/Leftovers.lua destroys is the
+-- count that arrived off a corpse, and the stack it arrived into is usually
+-- holding what you were already carrying as well, so picking the slot up whole
+-- would delete both. False where the client has neither API, so the caller
+-- stops rather than reaching for a delete aimed at more than it meant.
+function ns.SplitContainerItem(bag, slot, amount)
+	if C_Container and C_Container.SplitContainerItem then
+		C_Container.SplitContainerItem(bag, slot, amount)
+		return true
+	end
+	if type(_G.SplitContainerItem) == "function" then
+		_G.SplitContainerItem(bag, slot, amount)
+		return true
+	end
+	return false
+end
+
 -- Whatever is on the cursor into the first bag with room for it. True once it
 -- has landed, false while it is still on the cursor.
 --
@@ -1957,6 +1976,27 @@ function ns.CreatureId(guid)
 		return nil
 	end
 	return tonumber(id)
+end
+
+-- The link on one slot of the loot window, or nothing where the slot is coin
+-- or where this client has no such call.
+--
+-- Here for the reason ns.CreatureId is here, and the count is the same: three
+-- parts ask. The quest log's drop ledger reads it to learn what came off a
+-- creature, the dungeon log's reads it to learn what came off a boss, and
+-- Comfort/Leftovers.lua reads it to tell an item from the coin it will not
+-- destroy. All three had their own copy of the probe.
+--
+-- Nothing back is two answers wearing one shape and every caller wants the
+-- same thing from both: a slot holding coin has no link, and a client with no
+-- GetLootSlotLink has nothing to say about any slot. Neither is a reason to
+-- guess at what the slot holds.
+function ns.LootSlotLink(slot)
+	local read = _G.GetLootSlotLink
+	if type(read) ~= "function" then
+		return nil
+	end
+	return read(slot)
 end
 
 --------------------------------------------------------------------------

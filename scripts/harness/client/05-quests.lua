@@ -195,6 +195,33 @@ _G.PickupContainerItem = function(bag, slot)
 	cursor = { id = ITEMS[held].id, link = itemLink(held), bag = bag, slot = slot }
 end
 
+-- Part of a stack onto the cursor, and the rest left in the slot.
+--
+-- The one call in the client the loot filter has to be exact about. What it
+-- destroys is the count that arrived off a corpse and the stack it arrived
+-- into is holding what the character was already carrying, so a split that
+-- moved the wrong number would pass a filter that deleted somebody's cloth.
+--
+-- An amount at or over the whole stack is a pickup, which is what the client
+-- does with it: there is no such thing as splitting a stack into nothing. The
+-- cursor carries how many it is holding, and that is what tells the delete
+-- below apart from a delete of a whole slot.
+_G.SplitContainerItem = function(bag, slot, amount)
+	local held = carrying(bag, slot)
+	if not held then
+		cursor = nil
+		return
+	end
+	local have = counted(bag, slot)
+	if amount >= have then
+		_G.PickupContainerItem(bag, slot)
+		return
+	end
+	counted(bag, slot, have - amount)
+	cursor = { id = ITEMS[held].id, link = itemLink(held), bag = bag, slot = slot,
+		amount = amount }
+end
+
 -- The drop on a bag rather than on a slot, which is what the two bag buttons
 -- along the client's bar do with whatever the cursor holds.
 --
@@ -236,7 +263,14 @@ _G.DeleteCursorItem = function()
 		return
 	end
 	destroyed[#destroyed + 1] = cursor.link
-	CARRIED[cursor.bag][cursor.slot] = false
+	-- A split stack takes only what the cursor is holding with it. The slot it
+	-- came out of still holds the remainder and its count came down when the
+	-- split was made, so emptying the slot here would destroy that remainder
+	-- too, which is the whole of what the filter is written not to do.
+	if not cursor.amount then
+		CARRIED[cursor.bag][cursor.slot] = false
+		counted(cursor.bag, cursor.slot, 1)
+	end
 	cursor = nil
 end
 _G.CursorHasItem = constant(false)

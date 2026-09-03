@@ -452,7 +452,50 @@ _G.GetLootSlotLink = function(slot)
 	return held and held.item and itemLink(held.item) or nil
 end
 
-_G.LootSlot = function(slot) looted[slot] = true end
+-- Where a slot lands when it is taken.
+--
+-- The client's own order: into a stack of the same item where one is already
+-- open, otherwise into the first free slot there is. A bag with neither leaves
+-- the item on the corpse and says nothing, which is what a full bag does in the
+-- game and is the state the leftovers' five second rule exists for.
+local function land(held)
+	local item = ITEMS[held.item]
+	local quantity = held.count or 1
+	for bag = 0, 4 do
+		local slots = CARRIED[bag]
+		for slot = 1, slots and #slots or 0 do
+			if slots[slot] == held.item and (item.stack or 1) > 1 then
+				counted(bag, slot, counted(bag, slot) + quantity)
+				return true
+			end
+		end
+	end
+	for bag = 0, 4 do
+		local slots = CARRIED[bag]
+		for slot = 1, slots and #slots or 0 do
+			if slots[slot] == false then
+				slots[slot] = held.item
+				counted(bag, slot, quantity)
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Taking one slot off the corpse. The counter is what every loot assertion
+-- written before the filter reads, and it is ticked whatever the slot held. An
+-- item that reached a bag says so with the event the client says it with,
+-- which is what the leftovers part is waiting for; H.fire is read at the call
+-- because the runner builds it after this file loads. The four slots every
+-- other section counts name no item, so nothing of theirs ever lands.
+_G.LootSlot = function(slot)
+	looted[slot] = true
+	local held = corpse[slot]
+	if held and held.item and land(held) then
+		H.fire("BAG_UPDATE_DELAYED")
+	end
+end
 _G.GetLootThreshold = constant(2)
 _G.GetLootMethod = function() return state.lootMethod end
 -- No C_PartyInfo here on purpose, so Comfort/Loot.lua resolves through the

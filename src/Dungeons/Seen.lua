@@ -152,9 +152,8 @@ local function Bosses()
 		if npcId and ns.DungeonBook.Boss(npcId) then
 			found = found or {}
 			found[npcId] = found[npcId] or {}
-			local link = _G.GetLootSlotLink
-			link = type(link) == "function" and link(slot) or nil
-			local itemId = link and ns.ItemKind(link)
+			local link = ns.LootSlotLink(slot)
+			local itemId = ns.ItemKind(link)
 			if itemId then
 				found[npcId][itemId] = (ns.ItemInfo(link)) or ""
 			end
