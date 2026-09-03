@@ -306,6 +306,37 @@ one, and it landed the same day and is above. The harness had passed it, and
 the fix is the gate as much as the code: the stub now refuses a press on a
 button the frame passes through, the way it refuses one never registered for.
 
+Item 47 was asked for in game on 2026-09-03: a mode for a run of an old
+dungeon, rather than a fix.
+
+47. A bag pickup filter, switched from the bag window.
+
+    A mode you turn on for a run of an old dungeon so your bags do not fill
+    with rubbish. While it is on, four kinds of thing reach your bags: cloth;
+    anything at or above the colour floor, which ships at green; a grey or
+    white whose vendor price is at or above a minimum you set, written as
+    gold, silver and copper, `0g 20s 0c` say; and anything your professions
+    make or use, which `Comfort/Reagents.lua` already answers. Everything else
+    is looted and destroyed rather than left on the corpse, so the corpse
+    empties and can be skinned. There is no call that destroys an item on a
+    corpse, so the destroy happens the moment the item lands in a bag, which
+    is what `Comfort/Leftovers.lua` already does for a refused slot.
+
+    Most of it is built. `Comfort/Wanted.lua` has the colour floor, the kind
+    boxes and the profession list, and `Comfort/Leftovers.lua` destroys what
+    the filter refused. What is missing is the vendor minimum, which is the
+    rule that keeps a white sword worth two gold out of the bin, and the
+    switch on the bag window.
+
+    One button on the bag window starts and stops it, and shows which state it
+    is in. It sits in the top row with the other window controls. The colour
+    floor, the kinds, the vendor minimum and the profession switch stay on the
+    settings page under `/wk`; the button only starts and stops.
+
+    The row it joins is tidied at the same time. The stack button moves from
+    the footer to the top row, every button in that row becomes an icon, and
+    hovering an icon says in a sentence what it does.
+
 ## Deliberately not on this list
 
 The architecture review turned up two more repeats and both are right as they
