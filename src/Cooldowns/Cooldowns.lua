@@ -875,32 +875,41 @@ end
 -- values rather than a table, because a table here is one allocation per square
 -- per tick to say what four values already say.
 --
--- Four of the ten statuses are reachable. "empty" is a slot past the end of the
--- list, "unknown" is the client refusing to answer for something it otherwise
--- lists, "cooldown" is a real wait and "ready" is a press. Range and cost are
--- not asked: a cooldown row that greyed Death Wish out because you are ten rage
--- short would be answering a question the bar already answers, and the answer
--- moves twice a second.
+-- A spell is answered by Buttons/Castable.lua, which is the ladder the action
+-- bars climb and is climbed here for the same reason: this row used to read
+-- the cooldown and nothing else, so Bloodthirst drew ready at five rage,
+-- Overpower drew ready with nothing having dodged you, and a square that says
+-- "press this" over a press that does nothing is the one thing a row of
+-- cooldowns must never do. The argument that greying a square for cost answers
+-- a question the bar already answers was the argument for the old shape, and
+-- it lost: a reader glances at whichever of the two is nearer, and the two
+-- disagreeing is worse than either being wrong.
+--
+-- A trinket has no spell to climb, so it keeps the two-rung read it always
+-- had: the client refusing, a real wait, or ready. "empty" is a slot past the
+-- end of the list.
 function Cooldowns.State(index)
 	local entry = order[index]
 	if not entry then
 		return "empty", 0, 0, false
 	end
 
-	local start, duration, enabled
 	if entry.slot then
-		start, duration, enabled = ns.InventoryCooldown(entry.slot)
-	else
-		start, duration, enabled = ns.SpellCooldown(entry.id)
+		local start, duration, enabled = ns.InventoryCooldown(entry.slot)
+		if enabled == false then
+			return "unknown", 0, 0, false
+		end
+		if duration and duration > GCD then
+			return "cooldown", start, duration, entry.present
+		end
+		return "ready", start, duration, entry.present
 	end
 
-	if enabled == false then
+	local status, start, duration = ns.Castable.State(entry.id)
+	if status == "unknown" then
 		return "unknown", 0, 0, false
 	end
-	if duration and duration > GCD then
-		return "cooldown", start, duration, entry.present
-	end
-	return "ready", start, duration, entry.present
+	return status, start, duration, entry.present
 end
 
 --------------------------------------------------------------------------

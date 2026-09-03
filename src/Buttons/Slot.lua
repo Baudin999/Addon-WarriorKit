@@ -317,40 +317,12 @@ local function Harmful(slot, spell, macro)
 	return harmful and true or false
 end
 
--- The two rungs that know more than the client does, as one question, or nil
--- when neither has anything to say. Most of the bar is nil in two table
--- lookups.
---
--- Overpower and Revenge are not spells you press, they are spells the fight
--- hands you, and the client will not say so. IsUsableAction answers yes for
--- Overpower in Battle Stance whether or not anything has dodged you, so without
--- this the square said "ready" for the whole of every fight. Execute is the
--- same defect read off the target instead of out of the log: usable from full
--- health down, and castable for the last fifth of a fight.
--- Buttons/Reaction.lua and Buttons/Requires.lua own the two mechanisms; this
--- asks each of them one question.
---
--- Above the usable split rather than below it, and that is the ladder's own
--- rule rather than a preference: what cannot be fixed at all comes first. A
--- shut window is not something you can do anything about, and neither is a mob
--- at half health, and a wrong stance is. Putting them here also fixes the one
--- square on a warrior's bar that shouted all fight for nothing. Overpower
--- sitting in Defensive Stance used to draw orange "swap" from the first pull to
--- the last, which is a colour saying "swap and press this" over a press that
--- would not land. Now the orange appears on the two or three seconds where
--- swapping really would let you press it, and the rest of the time the square
--- is quiet.
---
--- The order between the two is arbitrary today, because no ability a class file
--- names is both a reactive and a condition. Written in the order the harness
--- already drives.
-local function Beyond(spell)
-	local reactive = ns.Reaction.OfSpell(spell)
-	if reactive and not ns.Reaction.Open(reactive) then
-		return "reaction"
-	end
-	return ns.Requires.State(spell)
-end
+-- The two rungs that know more than the client does, a shut reaction window
+-- and an unmet condition, are asked of Buttons/Castable.lua, which owns them
+-- so that the cooldown row and the racial climb the same two rungs as a
+-- square. They stand above the usable split, and that is the ladder's own
+-- rule: what cannot be fixed at all comes first, and a shut window or a mob
+-- at half health is not something a stance swap fixes.
 
 -- The client's own answer, as a status or nil for a press that would land.
 --
@@ -466,7 +438,7 @@ function Slot.State(slot)
 		return "notarget", swipeStart, swipeDuration, texture, harmful
 	end
 
-	local beyond = Beyond(spell)
+	local beyond = ns.Castable.Beyond(spell)
 	if beyond then
 		return beyond, swipeStart, swipeDuration, texture, harmful
 	end

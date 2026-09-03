@@ -422,7 +422,7 @@ check(Racials.Spell() == 20572,
 
 Racials.Forget()
 check(Racials.Name() == "Berserking", "a troll did not get Berserking")
-check(Racials.Spell() == 26297, "Berserking is not 26297")
+check(Racials.Spell() == 26296, "a troll who knows every Berserking did not get the rage one")
 check(Racials.Worth(), "Berserking is not worth nagging about")
 
 own.race, own.raceName = "Dwarf", "Dwarf"
@@ -495,7 +495,10 @@ tick()
 check(Nag.Mode() == "combat", "the racial square did not come back when its buff ran out")
 
 -- Pressed, on a client whose cooldown says so at once. The cooldown alone is
--- enough to take the square off the screen.
+-- enough to take the square off the screen. The clock moves first, because
+-- the racial's answer is held for the frame it was read in and this clock
+-- only moves when a section moves it.
+advance(0.1)
 own.cooldowns[20572] = { _G.GetTime(), 120 }
 tick()
 check(Nag.Mode() == "quiet", "pressing Blood Fury left the square on screen")
@@ -503,6 +506,7 @@ check(Nag.Shown() == 0, "a spent racial still drew a square")
 
 -- A global sweep is not the ability's own cooldown. Reading it as one would
 -- blink the square out for a second and a half after every other press.
+advance(0.1)
 own.cooldowns[20572] = { _G.GetTime(), 1.5 }
 tick()
 check(Nag.Mode() == "combat", "a global cooldown counted as the racial being spent")

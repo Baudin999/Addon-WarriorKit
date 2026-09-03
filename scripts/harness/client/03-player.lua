@@ -339,7 +339,14 @@ local SPELL_NAMES = {
 	-- Spell20572" would pass an assertion about a caption.
 	[6673] = "Battle Shout",
 	[19705] = "Well Fed",
+	-- Three Blood Furies and three Berserkings, one per power type, because
+	-- that is how the client ships them and which one you know is the whole of
+	-- what Buffs/Racials.lua has to work out.
 	[20572] = "Blood Fury",
+	[33697] = "Blood Fury",
+	[33702] = "Blood Fury",
+	[26296] = "Berserking",
+	[20554] = "Berserking",
 	[26297] = "Berserking",
 	[20594] = "Stoneform",
 }

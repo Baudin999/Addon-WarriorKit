@@ -113,6 +113,17 @@ local mode, seen, count = nil, -1, 0
 -- cannot carry: which of the three reasons this square is here.
 --------------------------------------------------------------------------
 
+-- One sentence per reason a square is not a press, in the words of
+-- UI/Ability.lua's statuses. The cooldown is the only one with a number in it.
+local REASON = {
+	unknown   = "This client will not answer for it.",
+	notarget  = "Nothing to press it on.",
+	reaction  = "The window is shut. The fight opens it, and you cannot.",
+	condition = "The target is not where this needs it yet.",
+	cost      = "Off cooldown, and you cannot afford it yet.",
+	stance    = "Off cooldown, and not castable from where you stand.",
+}
+
 local function Detail(w)
 	local entry = w.entry
 	if w.status == "cooldown" then
@@ -121,6 +132,9 @@ local function Detail(w)
 			return ("Back in %d minutes or so."):format(math.floor(remaining / 60))
 		end
 		return ("Back in %d seconds."):format(math.ceil(remaining))
+	end
+	if REASON[w.status] then
+		return REASON[w.status]
 	end
 	if entry.present then
 		return "Running right now. This is the window you pressed it for."

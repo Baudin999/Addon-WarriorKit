@@ -281,6 +281,13 @@ Buttons\Reaction.lua
 # target rather than out of the log, class data like the windows next door, and
 # read by Slot.lua on the same tick, so it loads before it too.
 Buttons\Requires.lua
+
+# The ladder for a spell rather than a slot: the two rungs above and the
+# client's own refusal, memoised per frame. Slot.lua asks it for the rungs the
+# client cannot answer, and the cooldown row and the racial ask it for the
+# whole ladder, which is what stops a row saying "ready" over a press that
+# does nothing.
+Buttons\Castable.lua
 Buttons\Slot.lua
 Buttons\Layout.lua
 Buttons\Ranks.lua

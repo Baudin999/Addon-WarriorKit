@@ -384,6 +384,11 @@ local SECTIONS = {
 	-- The charge button's pick, by stance and by what is trained. It moves
 	-- combat, the stance, the cursor and the book, and puts all four back.
 	"72-charge-stance",
+	-- What a square answers past its own cooldown: the ladder the cooldown
+	-- row and the racial read through Buttons/Castable.lua, and which of the
+	-- three Berserkings a troll gets. Moves the clock, the target, the race
+	-- and what is affordable, and puts all four back.
+	"73-castable",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

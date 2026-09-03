@@ -35,12 +35,6 @@ ns.Racials = Racials
 -- addon offered up for disabling.
 local UnitRace = _G.UnitRace
 
--- Below this a cooldown is the global rather than the ability's own. The same
--- 1.5 Buttons/Slot.lua carries, stated again here for the reason that file
--- states: they are the same number for the same reason and a client that ever
--- moved one would not have moved the other.
-local GCD = 1.5
-
 --------------------------------------------------------------------------
 -- One racial per race, and whether an idle one is worth shouting about
 --
@@ -57,47 +51,65 @@ local GCD = 1.5
 -- racial and say why it is never nagged, which is a better answer than silence.
 --
 -- Every id below is the one Wowhead's TBC Classic database gives for that spell
--- slug, checked against the cooldown the page states. Blood Fury has a second
--- proof: 20572 appears as a buff with uptime in this install's own Details
--- saved variables, recorded off a live 2.5.6 session, so it is the id this
--- client actually casts and not a database entry that happens to share a name.
+-- slug, checked against the cooldown the page states.
+--
+-- Two races carry three ids, and that is the bug this table shipped with. The
+-- client ships Blood Fury and Berserking once per power type, one spell per
+-- class group with its own id and its own cost, and a character knows exactly
+-- one of the three. This file held one id per race, the warrior's Blood Fury
+-- and the rogue's Berserking, so a troll shaman was asked about a spell they
+-- never learned, the client answered no cooldown for it, and the racial read
+-- ready through the whole of its three minutes and nagged while it was.
+-- Racials.Spell walks the list for the id this character knows.
+--
+-- The three Blood Furies, off Wowhead's TBC pages: 20572 costs nothing and
+-- gives attack power, and is the one a warrior, a hunter and a rogue know.
+-- 20572 has a second proof, it appears as a buff with uptime in this
+-- install's own Details saved variables recorded off a live 2.5.6 session.
+-- 33697 gives attack power and spell damage, and is the shaman's. 33702 gives
+-- spell damage and healing, and is the mage's, the warlock's and the priest's.
+--
+-- The three Berserkings, the same way: 26296 costs 5 rage and is the
+-- warrior's. 20554 costs 6% of base mana and is what every mana user knows,
+-- the shaman on this account among them. 26297 costs 10 energy and is the
+-- rogue's. Nothing else about the three differs.
 --
 -- Blood elves are absent on purpose. Arcane Torrent is two spells split by
 -- power type, no warrior can be one on either client, and it is an interrupt
 -- rather than a cooldown, so it would ship with nag off and never draw. An
 -- entry that can never draw is not coverage.
 local BY_RACE = {
-	-- Blood Fury, 2 minute cooldown, attack power for 15 seconds. The reason
+	-- Blood Fury, 2 minute cooldown, 15 seconds of attack power. The reason
 	-- this feature exists.
-	Orc = { spell = 20572, nag = true },
+	Orc = { spells = { 20572, 33697, 33702 }, nag = true },
 
 	-- Berserking, 3 minute cooldown. Haste rather than attack power and the
 	-- same argument: pressed on cooldown or thrown away.
-	Troll = { spell = 26297, nag = true },
+	Troll = { spells = { 26296, 20554, 26297 }, nag = true },
 
 	-- War Stomp, 2 minutes. An area stun. Worth having and worth spending when
 	-- something needs stunning, which is not "whenever it is ready".
-	Tauren = { spell = 20549 },
+	Tauren = { spells = { 20549 } },
 
 	-- Will of the Forsaken, 2 minutes. Scourge is the token the client uses for
 	-- undead, not "Undead". Spent on a fear, so never on a timer.
-	Scourge = { spell = 7744 },
+	Scourge = { spells = { 7744 } },
 
 	-- Stoneform, 3 minutes. A defensive spent on a bleed or a poison.
-	Dwarf = { spell = 20594 },
+	Dwarf = { spells = { 20594 } },
 
 	-- Escape Artist, 1.75 minutes. Spent on a root.
-	Gnome = { spell = 20589 },
+	Gnome = { spells = { 20589 } },
 
 	-- Perception, 3 minutes. Stealth detection, and nothing to do with damage.
-	Human = { spell = 20600 },
+	Human = { spells = { 20600 } },
 
 	-- Shadowmeld, 10 seconds. Cannot be used in combat at all on this client,
 	-- so it could never appear on a row that only draws in combat.
-	NightElf = { spell = 20580 },
+	NightElf = { spells = { 20580 } },
 
 	-- Gift of the Naaru, 3 minutes. A heal over time, spent when you are hurt.
-	Draenei = { spell = 28880 },
+	Draenei = { spells = { 28880 } },
 }
 
 -- Held from the first answer that is not nil, which is ns.Class.Token's rule and
@@ -111,6 +123,9 @@ local BY_RACE = {
 -- asked this three times a tick through Worth, Name and Ready: six calls to
 -- UnitRace every tenth of a second to be told the same word all evening.
 local token, mine
+
+-- The one of the race's ids this character knows, held once found. Below.
+local known
 
 function Racials.Mine()
 	if token then
@@ -134,13 +149,44 @@ end
 -- you log in. scripts/harness.lua is four characters in one process, and this
 -- is how it changes its mind about which one it is.
 function Racials.Forget()
-	token, mine = nil, nil
+	token, mine, known = nil, nil, nil
 end
 
 -- The spell id of your racial, or nil for a race with none listed.
+--
+-- The first of the race's ids this client names and this character knows,
+-- which is the walk Cooldowns/Cooldowns.lua's Resolve makes for the row and
+-- for the same reason: an id is one class's copy of the spell, and only the
+-- book says which copy is yours. Held once IsSpellKnown has said yes to one,
+-- because a character does not change class either.
+--
+-- Until it says yes, the first id the client can name is answered and nothing
+-- is held. That is a client whose book has not loaded yet, or one that does
+-- not carry racials in IsSpellKnown at all, and on the first the next ask
+-- gets it right while a held guess would have been wrong all session. On the
+-- second the walk is three cheap calls a tick, which is what the row paid to
+-- read the race before it was held, and Describe says which of the two you
+-- are on.
 function Racials.Spell()
+	if known then
+		return known
+	end
 	local entry = Racials.Mine()
-	return entry and entry.spell or nil
+	if not entry then
+		return nil
+	end
+	local first
+	for index = 1, #entry.spells do
+		local id = entry.spells[index]
+		if ns.SpellNameHeld(id) then
+			first = first or id
+			if IsSpellKnown(id) then
+				known = id
+				return id
+			end
+		end
+	end
+	return first
 end
 
 -- This client's own name for it, and nil where the client does not know the id.
@@ -161,27 +207,20 @@ function Racials.Worth()
 	return entry ~= nil and entry.nag == true
 end
 
--- Off cooldown right now.
+-- Whether a press would land right now.
 --
--- A global sweep is not a cooldown, which is the rule the action bar squares
--- already follow. Blood Fury has no global of its own, but the ability you just
--- pressed put one on the client and the racial would read as busy for a second
--- and a half of every rotation if that counted.
+-- Buttons/Castable.lua's ladder, which is the action bars' own, and the whole
+-- of it: a global sweep is not a cooldown, a real one is, and a Berserking you
+-- cannot afford is not a press either. This used to read the cooldown alone,
+-- so a warrior at four rage was told to press a five rage racial.
 --
 -- On the tick.
 function Racials.Ready()
-	local spell = Racials.Spell()
-	if not spell then
+	local id = Racials.Spell()
+	if not id then
 		return false
 	end
-	local _, duration, enabled = ns.SpellCooldown(spell)
-	if enabled == false then
-		return false
-	end
-	if duration and duration > GCD then
-		return false
-	end
-	return true
+	return ns.Castable.State(id) == "ready"
 end
 
 -- Ready, worth shouting about, and this client can name the spell. The combat
@@ -209,10 +248,12 @@ function Racials.Describe()
 	end
 	local name = Racials.Name()
 	if not name then
-		return ("spell %d, which this client cannot name"):format(entry.spell)
+		return ("spell %d, which this client cannot name"):format(entry.spells[1])
 	end
 	if not entry.nag then
 		return name .. ", which is situational rather than damage, so it is never nagged"
 	end
-	return name .. (Racials.Ready() and ", ready" or ", on cooldown")
+	local id = Racials.Spell()
+	local book = known and "known" or "not known to this character, so the first the client names"
+	return ("%s (spell %d, %s), %s"):format(name, id, book, ns.Castable.State(id))
 end
