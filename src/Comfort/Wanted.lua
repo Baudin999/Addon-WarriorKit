@@ -1,0 +1,190 @@
+local ADDON, ns = ...
+
+-- What is worth picking up.
+--
+-- Fast loot empties a corpse, which is the right thing to do on the four
+-- corpses of a pull and the wrong thing on the twelfth corpse of an old
+-- dungeon you are running for one drop. The bags fill with teeth and vendor
+-- mail, and clearing them out again is the tax the fast loot was supposed to
+-- save you.
+--
+-- So this file is one question asked once per slot: do you want this. It has
+-- three kinds of answer and any one of them takes the slot.
+--
+--   The colour. A quality floor, because "greens and up" is the sentence
+--   people say out loud when they describe how they run an old instance. Five
+--   is the floor switched off, and off has to be reachable: a run you are
+--   doing for the ore is a run where a green is clutter too.
+--
+--   The kind. Cloth, ore, herbs, leather, enchanting, gems and meat, one tick
+--   box each, read off the class and subclass the client already files the
+--   item under. Nothing here is a name or a search string, for the reason
+--   Core/Piles.lua gives: the client has already sorted every item in the game
+--   and every bag addon in the world throws the answer away.
+--
+--   What your professions use, which is Comfort/Reagents.lua's answer rather
+--   than this file's. It is asked for by name at the moment the question comes
+--   up, so a build where that part is missing is a build where nothing is
+--   crafted and every other rule still works.
+--
+-- Two things are never refused. Money, because there is no corpse whose coins
+-- you did not want, and a quest item, because the client flags that slot
+-- itself and a quest item left behind is a walk back.
+--
+-- Every setting here is this character's. Which professions you have and what
+-- your bags are for is a fact about the character standing over the corpse,
+-- and the alternative is a bank alt looting mageweave.
+--
+-- This part owns no frame and draws nothing. Comfort/Loot.lua is the only
+-- caller and it calls once per slot on LOOT_READY.
+
+local Wanted = {}
+ns.Wanted = Wanted
+
+-- The kind rules, by the two numbers the client files an item under.
+--
+-- Trade Goods is class 7 and its subclasses are the six professions worth
+-- picking up for: cloth 5, leather 6, metal and stone 7, meat 8, herb 9 and
+-- enchanting 12. The numbers are the client's own, read off Questie's TBC item
+-- database rather than typed from memory, and they are the same numbers
+-- Core/Piles.lua cuts the trade pile into sub-piles with.
+local KINDS = {
+	[7] = {
+		[5] = "lootCloth",
+		[6] = "lootLeather",
+		[7] = "lootOre",
+		[8] = "lootMeat",
+		[9] = "lootHerbs",
+		[12] = "lootEnchanting",
+	},
+}
+
+-- Gems are the one rule that is a whole class rather than a subclass. Class 3
+-- is every gem in the game, cut or raw, and there is no subclass of it a
+-- prospector would want and another they would not.
+local GEMS = 3
+
+-- The floor switched off. Nothing in the game is quality 5 to a looter, so a
+-- floor there is the colour rule taking nothing and leaving the decision to
+-- the kind rules and to your professions.
+local NO_COLOUR = 5
+
+-- Which setting decides an item of this class and subclass, or nil for an item
+-- no kind rule has anything to say about.
+local function KindOf(classId, subClassId)
+	if classId == GEMS then
+		return "lootGems"
+	end
+	local row = KINDS[classId]
+	return row and row[subClassId] or nil
+end
+
+-- Whether fast loot should take this slot.
+--
+-- The order is cheapest first and it is also the order of certainty: the
+-- switch, then the two slots that are never refused, then the colour, then the
+-- kind, and last the profession scan, which is the only one of them that reads
+-- another part.
+function Wanted.Take(slot)
+	if not ns.dbc.lootFilter then
+		return true
+	end
+
+	local kind, link = ns.LootKind(slot)
+	if kind ~= "item" then
+		return true
+	end
+
+	-- The fifth return is the quality and the seventh is the quest flag the
+	-- client sets on the slot itself, which is a fact about your log rather
+	-- than about the item: the same grey tooth is a quest item on one
+	-- character and litter on the next. The sixth, between them, is whether
+	-- the slot is locked, and nothing here has anything to say about that.
+	local quality, _, isQuestItem = select(5, GetLootSlotInfo(slot))
+	if isQuestItem then
+		return true
+	end
+
+	local floor = ns.dbc.lootFloor
+	if floor < NO_COLOUR and quality and quality >= floor then
+		return true
+	end
+
+	local itemId, classId, subClassId = ns.ItemKind(link)
+	if not itemId then
+		-- The client would say nothing about this one. Nothing can be decided
+		-- about an item with no class, and of the two ways to be wrong here,
+		-- leaving something behind is the one you cannot undo from a bag.
+		return true
+	end
+
+	local key = KindOf(classId, subClassId)
+	if key and ns.dbc[key] then
+		return true
+	end
+
+	-- Resolved here rather than at load, because Comfort/Reagents.lua is a
+	-- separate part and a missing one answers "no profession asked for this"
+	-- rather than a Lua error over a corpse.
+	if ns.dbc.lootCrafted then
+		local reagents = ns.Reagents
+		if reagents and reagents.Has(itemId) then
+			return true
+		end
+	end
+
+	return false
+end
+
+-- What each floor is called, in the words somebody would use for it out loud.
+local COLOURS = {
+	[0] = "greys and up",
+	[1] = "whites and up",
+	[2] = "greens and up",
+	[3] = "blues and up",
+	[4] = "epics only",
+}
+
+-- The kind rules in the order they are read out, which is the order the
+-- settings page draws them in and has nothing to do with the numbers above.
+local WORDS = {
+	{ key = "lootCloth", word = "cloth" },
+	{ key = "lootOre", word = "ore" },
+	{ key = "lootHerbs", word = "herbs" },
+	{ key = "lootLeather", word = "leather" },
+	{ key = "lootEnchanting", word = "enchanting" },
+	{ key = "lootGems", word = "gems" },
+	{ key = "lootMeat", word = "meat" },
+}
+
+-- A plain list. Two things are a comma between them and three or more take an
+-- and before the last, which is how the same sentence is written by hand.
+local function Listed(parts)
+	if #parts < 3 then
+		return table.concat(parts, ", ")
+	end
+	return table.concat(parts, ", ", 1, #parts - 1) .. ", and " .. parts[#parts]
+end
+
+-- One phrase for the status line and for the panel's reading, saying what is
+-- coming home with you. Money and quest items are left out of it: they are not
+-- a rule anybody turned on and a list that named them would be a list where
+-- the things you chose are outnumbered by the things you did not.
+function Wanted.Describe()
+	if not ns.dbc.lootFilter then
+		return "off"
+	end
+
+	local parts = { COLOURS[ns.dbc.lootFloor] or "nothing by colour" }
+	for index = 1, #WORDS do
+		local entry = WORDS[index]
+		if ns.dbc[entry.key] then
+			parts[#parts + 1] = entry.word
+		end
+	end
+	if ns.dbc.lootCrafted then
+		parts[#parts + 1] = "what my professions use"
+	end
+
+	return Listed(parts)
+end

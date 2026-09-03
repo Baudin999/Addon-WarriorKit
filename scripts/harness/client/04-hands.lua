@@ -351,15 +351,107 @@ _G.GetInventoryItemDurability = function(slot)
 	return pair[1], pair[2]
 end
 
+-- What the loot filter is pointed at, in no bag and on nobody's rack: one item
+-- per rule the filter has, so a claim about one rule is a claim about one slot.
+--
+-- The class and subclass numbers are the client's, read off Questie's TBC item
+-- database rather than typed from memory: cloth is 7 and 5, leather 7 and 6,
+-- metal and stone 7 and 7, meat 7 and 8, herb 7 and 9, enchanting 7 and 12, and
+-- a gem is class 3 whatever its subclass. Elemental Water is 7 and 10, which no
+-- rule in the addon names, so it is the one item here that can only be taken
+-- because a profession asked for it.
+--
+-- Every name is the fixture's own. Silver Ore rather than the copper a level
+-- twelve character digs, because 46-mail.lua carries a Copper Ore of its own
+-- with no subclass on it, and a fixture that quietly replaces another file's is
+-- a test that passes on whichever ran last.
+ITEMS["Moth-eaten Wool"] = { id = 7001, classId = 7, subClassId = 5, quality = 0,
+	price = 4, icon = "Interface\\Icons\\Wool" }
+ITEMS["Silver Ore"] = { id = 7002, classId = 7, subClassId = 7, quality = 1,
+	price = 30, icon = "Interface\\Icons\\Ore" }
+ITEMS["Peacebloom"] = { id = 7003, classId = 7, subClassId = 9, quality = 1,
+	price = 10, icon = "Interface\\Icons\\Herb" }
+ITEMS["Light Leather"] = { id = 7004, classId = 7, subClassId = 6, quality = 1,
+	price = 25, icon = "Interface\\Icons\\Leather" }
+ITEMS["Strange Dust"] = { id = 7005, classId = 7, subClassId = 12, quality = 1,
+	price = 100, icon = "Interface\\Icons\\Dust" }
+ITEMS["Chunk of Boar Meat"] = { id = 7006, classId = 7, subClassId = 8, quality = 1,
+	price = 5, icon = "Interface\\Icons\\Meat" }
+ITEMS["Tigerseye"] = { id = 7007, classId = 3, subClassId = 7, quality = 1,
+	price = 200, icon = "Interface\\Icons\\Gem" }
+ITEMS["Elemental Water"] = { id = 7008, classId = 7, subClassId = 10, quality = 1,
+	price = 400, icon = "Interface\\Icons\\Water" }
+ITEMS["Bandit's Cudgel"] = { id = 7009, classId = 2, subClassId = 4, quality = 2,
+	price = 1200, icon = "Interface\\Icons\\Mace" }
+ITEMS["Splintered Femur"] = { id = 7010, classId = 15, subClassId = 0, quality = 0,
+	price = 3, icon = "Interface\\Icons\\Bone" }
+ITEMS["Mangled Sigil"] = { id = 7011, classId = 12, subClassId = 0, quality = 1,
+	price = 0, icon = "Interface\\Icons\\Sigil" }
+
+-- The quest the client names on a slot a quest in your log wants. One number
+-- for every such slot, because nothing in the addon reads which quest it is:
+-- what is read is that there is one.
+local QUEST_ON_A_SLOT = 231
+
 -- A corpse, with a quality on each slot so a master loot threshold has
 -- something to sort by: two under a threshold of 2 and two at or above it.
-local CORPSE = { 0, 1, 3, 2 }
+--
+-- A slot is a table rather than a bare quality, because the loot filter reads
+-- what is in a slot and not only how good it is. `item` is a name out of ITEMS
+-- and a slot carrying none is the coins, which is what every corpse in the game
+-- has on it. `quest` is the flag the client sets on a slot a quest in your log
+-- wants, which is a fact about the log rather than about the item and is why it
+-- is written on the slot and not in ITEMS.
+local CORPSE = {
+	{ quality = 0 },
+	{ quality = 1, item = "Linen Cloth" },
+	{ quality = 3, item = "Bloodspiller" },
+	{ quality = 2, item = "Emerald Pigment" },
+}
+
+-- What the loot window is showing. The four above, unless a section stands a
+-- longer corpse up in their place: 69-loot-filter.lua does and puts them back,
+-- because every other section in the suite counts those four.
+local corpse = CORPSE
 local looted = {}
 
-_G.GetNumLootItems = function() return #CORPSE end
+_G.GetNumLootItems = function() return #corpse end
+
+-- Nine values, in the order this client answers them: the icon, the name, how
+-- many, the currency id, the quality, whether the slot is locked, whether a
+-- quest in your log wants it, which quest, and whether that quest is active.
+-- Nothing is ever locked, for the reason no bag slot is: a locked slot is a
+-- server that has not answered yet, which is latency rather than the addon.
 _G.GetLootSlotInfo = function(slot)
-	return "Interface\\Icons\\Coin", "Something", 1, nil, CORPSE[slot]
+	local held = corpse[slot]
+	if not held then
+		return nil
+	end
+	local item = held.item and ITEMS[held.item]
+	return item and item.icon or "Interface\\Icons\\Coin",
+		held.item or "Coins", held.count or 1, nil, held.quality, false,
+		held.quest == true, held.quest and QUEST_ON_A_SLOT or nil, held.quest == true
 end
+
+-- 1 for an item, 2 for money, 3 for a currency. Nothing here is a currency:
+-- there is none on this client that drops off a corpse, and the branch that
+-- reads one is reached from the money side of the same call.
+_G.GetLootSlotType = function(slot)
+	local held = corpse[slot]
+	if not held then
+		return nil
+	end
+	return held.item and 1 or 2
+end
+
+-- The link, which is the older client's way of telling money from an item and
+-- is what ns.LootKind falls back to. 16-dungeons.lua puts its own in front of
+-- this one for the length of a dungeon loot window and hands it back.
+_G.GetLootSlotLink = function(slot)
+	local held = corpse[slot]
+	return held and held.item and itemLink(held.item) or nil
+end
+
 _G.LootSlot = function(slot) looted[slot] = true end
 _G.GetLootThreshold = constant(2)
 _G.GetLootMethod = function() return state.lootMethod end
@@ -378,4 +470,11 @@ end
 
 H.swing, H.enemyCasts, H.misused = swing, enemyCasts, misused
 H.worn = worn
+-- The corpse a section stands up in place of the four, and the way back. A
+-- section that swaps one in puts the four back before the next one runs, the
+-- way 16-dungeons.lua's own loot window does.
+H.loot = {
+	Set = function(slots) corpse = slots end,
+	Reset = function() corpse = CORPSE end,
+}
 H.GUILD, H.CORPSE, H.looted = GUILD, CORPSE, looted

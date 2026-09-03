@@ -181,12 +181,17 @@ local function Loot(corpse)
 	end
 end
 
-local size = _G.GetNumLootItems
+-- Both calls as 04-hands.lua left them, so a section that opens a dungeon loot
+-- window hands the ordinary corpse back rather than a client that has no loot
+-- window at all. GetLootSourceInfo is the one this file invents outright: a
+-- client only answers it while something is being looted, and nothing else in
+-- the suite stands a source up.
+local size, link = _G.GetNumLootItems, _G.GetLootSlotLink
 
 local function Unloot()
 	_G.GetNumLootItems = size
 	_G.GetLootSourceInfo = nil
-	_G.GetLootSlotLink = nil
+	_G.GetLootSlotLink = link
 end
 
 H.dungeons = {

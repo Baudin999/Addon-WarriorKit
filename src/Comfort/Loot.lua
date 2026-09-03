@@ -13,6 +13,11 @@ local ADDON, ns = ...
 -- window appearing at all.
 --
 -- This part owns no frame and draws nothing, so nothing here is on a ticker.
+--
+-- What is worth taking is not decided here. Comfort/Wanted.lua answers that,
+-- one slot at a time, and this file is the loop that asks it: emptying a
+-- corpse and choosing what to empty out of it are two questions, and only the
+-- first one has anything to do with the loot window being drawn.
 
 local Loot = {}
 ns.Loot = Loot
@@ -51,6 +56,23 @@ local function MasterLooting()
 	return nil
 end
 
+-- One slot, taken if the filter wants it and refused if it does not.
+--
+-- A refused slot is where the leftovers rule gets its turn. It is off unless
+-- you turned it on, and what it means is that the slot is looted anyway and
+-- what came out of it is destroyed, so a skinner behind you finds an empty
+-- corpse rather than one nobody can touch. Comfort/Leftovers.lua owns that
+-- setting and that decision; this line is the only place it is reached from.
+local function Consider(slot)
+	if ns.Wanted.Take(slot) then
+		LootSlot(slot)
+		return
+	end
+	if ns.dbc.lootDestroy then
+		ns.Leftovers.Discard(slot)
+	end
+end
+
 -- Empty the corpse.
 --
 -- Under master loot every slot at or above the threshold belongs to the master
@@ -76,11 +98,11 @@ local function Take()
 
 	for slot = GetNumLootItems(), 1, -1 do
 		if not master then
-			LootSlot(slot)
+			Consider(slot)
 		else
 			local quality = select(5, GetLootSlotInfo(slot))
 			if quality and threshold and quality < threshold then
-				LootSlot(slot)
+				Consider(slot)
 			end
 		end
 	end

@@ -554,7 +554,7 @@ Minimap\Clock.lua
 Minimap\Corral.lua
 Minimap\Feature.lua
 
-# The chores. Nothing here is on the combat path, and the first four draw
+# The chores. Nothing here is on the combat path, and the first five draw
 # nothing at all, so they are independent of each other and of load order within
 # the part. Clutter decides what is finished with and Destroy is the window that
 # acts on it, so Clutter loads first. Feature.lua last, as everywhere else.
@@ -563,6 +563,13 @@ Minimap\Feature.lua
 # empties the bags and one pays for the mending, and neither knows the other
 # exists. Vendor is listed first because it is the older of the two and for no
 # other reason.
+
+# What is worth picking up, which is a question Comfort\Loot.lua asks and does
+# not answer. Above it because that is the order the two read in and for no
+# other reason: nothing is resolved at load, the filter is asked one slot at a
+# time over a corpse, and a character who has turned none of it on loots the way
+# the addon looted before this file existed.
+Comfort\Wanted.lua
 Comfort\Loot.lua
 Comfort\Vendor.lua
 Comfort\Repair.lua

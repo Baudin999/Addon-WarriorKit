@@ -1534,6 +1534,38 @@ function ns.ItemKind(link)
 	return itemId, classId, subClassId
 end
 
+-- What a loot slot is holding: the word "item", "money" or "currency", and the
+-- item's link where there is one.
+--
+-- GetLootSlotType is the client's own answer and it is not on every build this
+-- addon ships to. Where it is missing the same fact is read off the link, which
+-- both builds carry: a slot the client will hand no link for is the coins.
+--
+-- Here rather than in the part that asks, for the reason every other shim in
+-- this file is here: which of the two calls a build answers is a fact about the
+-- build and not about the feature, and a part does not probe the client for a
+-- call it means to make.
+local LOOT_MONEY, LOOT_CURRENCY = 2, 3
+
+function ns.LootKind(slot)
+	local read = _G.GetLootSlotLink
+	local link = type(read) == "function" and read(slot) or nil
+
+	local kind = _G.GetLootSlotType
+	if type(kind) == "function" then
+		local answer = kind(slot)
+		if answer == LOOT_MONEY then
+			return "money", nil
+		end
+		if answer == LOOT_CURRENCY then
+			return "currency", link
+		end
+		return "item", link
+	end
+
+	return link and "item" or "money", link
+end
+
 --------------------------------------------------------------------------
 -- The merchant
 --

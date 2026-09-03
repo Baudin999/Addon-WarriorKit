@@ -344,6 +344,14 @@ local SECTIONS = {
 	"66-bag-drop",
 	"67-talents",
 	"68-spellbook",
+
+	-- Last, and it is the only section that stands a corpse up other than the
+	-- four slots 22-chores.lua counts. It swaps one in with a slot per rule the
+	-- loot filter has, drives every rule over it, and puts those four back at
+	-- the foot of the file. It also installs a stand-in for Comfort/Reagents.lua
+	-- for two passes and takes it away again, because what the filter has to do
+	-- when that part is missing is half of what it promises.
+	"69-loot-filter",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

@@ -158,6 +158,44 @@ ns.Register({
 		{ key = "clutterZoom", label = "Clutter", window = true, own = true },
 	},
 
+	-- The loot filter's settings, and this character's rather than the
+	-- account's. Which professions you have is a fact about the character, what
+	-- a bag is for is a fact about the character, and the one setting that
+	-- would be most annoying to get wrong is a bank alt quietly filling forty
+	-- slots with somebody else's mageweave. Comfort/Wanted.lua reads all of
+	-- them and Comfort/Loot.lua reads none.
+	charDefaults = {
+		-- Off. Fast loot without it behaves exactly as it did before the filter
+		-- existed, and a part that decides what you may not pick up is not a
+		-- part that gets to start switched on for somebody who never asked.
+		lootFilter = false,
+
+		-- Greens and up. The quality everybody names out loud when they say how
+		-- they run an old instance, and the one where the colour rule is doing
+		-- something without being the whole of the answer. 5 is the colour rule
+		-- switched off, which is the run you are doing for the ore.
+		lootFloor = 2,
+
+		-- Cloth and ore on, the other five off. Every character in the game has
+		-- a use for cloth, first aid alone, and ore is the other pile that is
+		-- worth money to somebody whatever you do. The rest are a profession
+		-- you either have or do not, and a herb you cannot pick is a bag slot
+		-- somebody has to clear.
+		lootCloth = true,
+		lootOre = true,
+		lootHerbs = false,
+		lootLeather = false,
+		lootEnchanting = false,
+		lootGems = false,
+		lootMeat = false,
+
+		-- On, and it is the rule that costs nothing when it is wrong. It takes
+		-- what a profession on this character actually asks for, which is a
+		-- list read off your own trade skills rather than anything typed, and
+		-- on a character with no professions it takes nothing at all.
+		lootCrafted = true,
+	},
+
 	defaults = {
 		-- 1.3, and it was 1.25 when every window in the addon shared one number.
 		-- A tenth is the step now and 1.25 is not on one, so a default that
