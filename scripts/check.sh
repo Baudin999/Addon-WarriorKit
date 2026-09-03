@@ -767,7 +767,16 @@ done < <(grep -rnE 'SetScript\("OnUpdate", *function|UI\.Ticker\([^)]*, *functio
 # The other direction is the same debt spelled backwards. A slot left behind by
 # a ticker that was renamed or deleted draws a row nobody is filling in, which
 # reads as a part that costs nothing rather than as a part that is not there.
-armed=$(grep -rhoE 'UI\.Ticker\([^)]*"[a-z]+"' --include='*.lua' . \
+#
+# A slot can also time something that is not a ticker, and one does: the bag
+# window brackets its refresh in ns.Perf.Start and ns.Perf.Stop by a literal
+# name, because the bag events book it up to ten times a second at a vendor
+# and a cost that shape has to be on the tab. So a literal name handed to
+# ns.Perf.Start counts as armed the same as a ticker name does, and the two
+# directions stay exact: a bracket with no slot and a slot with no bracket
+# both fail here.
+armed=$({ grep -rhoE 'UI\.Ticker\([^)]*"[a-z]+"' --include='*.lua' . ; \
+	grep -rhoE 'ns\.Perf\.Start\("[a-z]+"\)' --include='*.lua' . ; } \
 	| grep -oE '"[a-z]+"' | tr -d '"' | sort -u)
 timed=$(sed -n '/^local ORDER = {/,/}/p' Perf/Perf.lua \
 	| grep -oE '"[a-z]+"' | tr -d '"' | sort -u)

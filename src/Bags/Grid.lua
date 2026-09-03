@@ -462,8 +462,18 @@ local function Paint(button, entry, selling, counted)
 	end
 	button:SetAlpha(refused and UI.SLOT_DIM or 1)
 
-	button:SetParent(Holder(entry.bag))
-	button:SetID(entry.slot)
+	-- Both guarded on what the square already answers, because on a held
+	-- layout neither changes and this runs on every square ten times a second
+	-- while a sale sweeps. SetParent is the dear one: it takes the frame out of
+	-- one tree and puts it in another, and a square that was already there
+	-- pays that for nothing.
+	local holder = Holder(entry.bag)
+	if button:GetParent() ~= holder then
+		button:SetParent(holder)
+	end
+	if button:GetID() ~= entry.slot then
+		button:SetID(entry.slot)
+	end
 	Sweep(button, entry)
 end
 
@@ -484,9 +494,21 @@ local function Place(button, top, column, line, shift, side)
 		button:SetSize(side, side)
 		ns.EdgeSize(button.edges, ns.Pixel(button))
 	end
+	-- Anchored only when the point moves. A refresh that changed nothing, which
+	-- is what PLAYER_MONEY and most ITEM_LOCK_CHANGEDs are, lays every square
+	-- on the point it is already on, and a SetPoint is a relayout whether or
+	-- not the number moved. The parent is part of the key: Paint may have moved
+	-- the square to another bag's holder just before this, and an anchor
+	-- written against the old holder is an anchor to the wrong frame even
+	-- though the two are the same size.
+	local x, y = Snap(shift + column * (SLOT + GAP)), -Snap(top + line * (SLOT + GAP))
+	local parent = button:GetParent()
+	if button.x == x and button.y == y and button.on == parent then
+		return
+	end
+	button.x, button.y, button.on = x, y, parent
 	button:ClearAllPoints()
-	button:SetPoint("TOPLEFT", button:GetParent(), "TOPLEFT",
-		Snap(shift + column * (SLOT + GAP)), -Snap(top + line * (SLOT + GAP)))
+	button:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
 end
 
 -- Everything the pool made and this pass did not use.

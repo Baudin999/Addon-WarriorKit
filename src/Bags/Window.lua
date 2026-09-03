@@ -348,6 +348,14 @@ function Window.Refresh()
 	if not window or not window:IsShown() then
 		return false
 	end
+	-- Timed under its own slot on the performance tab, the way a tick is. It is
+	-- not a tick, and that is why it needs one: at a vendor with the sale
+	-- sweeping, the bag events book this close to ten times a second, and a
+	-- pass that walks every slot, grades every item and lays out every square
+	-- is the most expensive thing the addon does on an event. The bracket
+	-- is here rather than in Booked so a press and a loot line are measured
+	-- the same as a bag update.
+	ns.Perf.Start("bags")
 	local state = ns.Bags.Read()
 	-- Before the grid and before the fit. What the row says comes out of this
 	-- scan, and whether it is up decides both how far down the first pile starts
@@ -373,6 +381,7 @@ function Window.Refresh()
 	filter.tone = ns.Wanted.Running() and C.tick or C.control
 	UI.Tint(filter.bg, filter.tone)
 	forget:SetShown(ns.BagsSession.Held() > 0)
+	ns.Perf.Stop("bags")
 	return true
 end
 
