@@ -390,6 +390,11 @@ local SECTIONS = {
 	-- and what is affordable, and puts all four back.
 	"73-castable",
 	"74-bag-hold",
+	-- Last, and after 55-bags.lua and 46-mail.lua both: it opens the mail
+	-- window over a built bag window and right clicks the squares. The bag
+	-- window is built once and 55-bags.lua asserts on that first build, which
+	-- is why this cannot sit in the mail section where it was.
+	"75-mail-bags",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

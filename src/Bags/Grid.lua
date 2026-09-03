@@ -30,11 +30,14 @@ ns.BagsGrid = Grid
 -- one thing the merchant window's rows do not do and do not want: buying is one
 -- call with one meaning.
 --
--- It also keeps a seam this addon already depends on. Mail/Bags.lua takes over
--- `ContainerFrameItemButton_OnClick` while the mail window is open so a right
--- click attaches a stack to the letter, and it works by name at click time
--- rather than by frame, so a square built on this template arrives there with
--- no change to that file at all.
+-- It also keeps that click secure, which is the only way a right click on a
+-- scroll reads it: `C_Container.UseContainerItem` is protected, and the
+-- template's own OnClick is the only path to it this addon has. So the OnClick
+-- is never set here. Mail/Bags.lua wants the right button while the mail
+-- window is open, and it takes it through Bags.Dress, which registers the
+-- square for the left button alone and hangs an OnMouseUp on it; both are
+-- widget settings and taint nothing. A square is dressed once when built, so
+-- one born with the mail window open arrives already knowing.
 --
 -- **A slot is its own id and its bag is its parent's.** That is where the
 -- client keeps it and the only thing the template's own handlers have to go on,
@@ -380,6 +383,7 @@ local function Build(index)
 	-- still on the square. Ours has to answer the same name or the client's would
 	-- open underneath the addon's on the next refresh.
 	button.UpdateTooltip = Enter
+	ns.MailBags.Dress(button)
 	return button
 end
 

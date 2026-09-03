@@ -10,58 +10,62 @@ ns.MailBags = Bags
 -- attaches anything: you right click the stack and it goes. Dragging twelve
 -- items onto a block one at a time is not a thing a person does twice.
 --
--- **Why the handler is replaced and not hooked.** Everything else in this addon
--- that touches a Blizzard frame uses hooksecurefunc, which runs after the
--- client's own code and cannot stop it. That is exactly no use here: the thing
--- to stop is the client's own right click, and by the time a hook runs the
--- bread roll has been eaten. So the global is taken over, with whatever was
--- there kept and called for every click this file does not want, which is all
--- but one of them.
+-- **The right button is taken off the square, not off the client.** A bag
+-- button's OnClick is the template's own and it is secure, which is the only
+-- reason a right click on a scroll reads it: `C_Container.UseContainerItem` is
+-- protected and refuses insecure code. The handler resolves
+-- `ContainerFrameItemButton_OnClick` by name on every click, so this file used
+-- to take that name over while the window was open and hand it back when it
+-- closed. That was the bug. A global written by an addon is tainted, and it
+-- stays tainted when the value written back is the client's own function, so
+-- one visit to a mailbox left every right click in the bags refused for the
+-- rest of the session. Nothing here writes a global any more.
 --
--- The one hooked function is the one the bags actually call. Both clients route
--- every bag button through `ContainerFrameItemButton_OnClick`, resolved by name
--- at click time rather than captured when the frame was built, which is what
--- lets one replacement cover every bag in the game: Blizzard's own, and
--- Baganator's, whose buttons inherit ContainerFrameItemButtonTemplate and
--- arrive at the same global. Auctionator hooks this same name on this same
--- client to put a bag item on the auction form, which is the same feature
--- pointed at a different window.
+-- What a square answers to is a widget setting rather than a Lua value, and
+-- writing it taints nothing. So while the window is open every square in this
+-- addon's bag window is registered for the left button alone, which keeps the
+-- secure OnClick off the right one, and an OnMouseUp of this file's takes the
+-- right button instead. The window closes and both go back. The OnClick itself
+-- is never set, read or replaced, and the client's own handler runs as secure
+-- as it was built.
 --
--- **It is installed while the window is open and taken off when it closes.**
--- One press of escape and the bags behave exactly as the client built them,
--- which is the same promise Mail/Blizzard.lua makes about the frame it parks.
--- The restore is guarded on the global still being ours: an addon that took the
--- name over while our window was up is an addon whose handler would otherwise
--- be thrown away by our restore.
+-- **Only this addon's squares.** The old takeover reached Blizzard's bags and
+-- Baganator's through the shared name; a widget setting reaches the widgets it
+-- is set on. This addon draws the bag window, so those are the squares under
+-- the pointer. A square built while the window is open arrives through
+-- Bags.Dress from Bags/Grid.lua, already holding the right state.
 --
 -- **A click this file claims is never passed on.** Not when the list is full,
--- not when the stack is already on the mail, not while a send is in flight.
--- Every one of those falls through to the client otherwise, and the client's
--- answer to a right click on a bag slot is to eat, equip or open what is in it.
--- A refusal says why and stops there.
+-- not when the stack is already on the mail, not while a send is in flight. A
+-- refusal says why and stops there. A bare right click on a square this file
+-- does not want, an empty slot, does nothing: the client's own answer would go
+-- through the protected call, and from here that call is refused. There is
+-- nothing in an empty slot to use.
 --
 -- **Only a bare right click.** Shift is the client's stack split, ctrl is its
--- dress-up, and every modified click goes where it always went. The left button
--- is untouched, so picking a stack up and dropping it on the block still works
--- and is still the way to attach something out of the bank.
+-- dress-up, and a modified right click is handed to the client's own modified
+-- click handler by name. None of what that does is protected, so it can be
+-- called from here. The left button is untouched, so picking a stack up and
+-- dropping it on the block still works and is still the way to attach
+-- something out of the bank.
 --------------------------------------------------------------------------
 
 -- The bags a mail can be filled out of: the backpack and the four on the belt.
--- The bank's are numbered past these and cannot be mailed from, and a click on
--- one of those is the client's to answer.
+-- The bank's are numbered past these and cannot be mailed from.
 local FIRST_BAG, LAST_BAG = 0, 4
 
-local HANDLER = "ContainerFrameItemButton_OnClick"
+-- The client's own answer to a modified click on a bag button, by the name its
+-- template resolves at click time.
+local MODIFIED = "ContainerFrameItemButton_OnModifiedClick"
 
--- Ours while it is the global, and whatever we found there when we put it in.
--- Both are nil while the window is closed.
-local mine, theirs = nil, nil
+-- Whether the right button on the squares is this file's at the moment.
+local taking = false
 
 --------------------------------------------------------------------------
 
 -- Which bag a button is in. Its own answer where it has one and its parent's
--- otherwise, which is where the classic bags keep it and where Baganator's
--- buttons keep it too. Both are tried rather than one or the other, because a
+-- otherwise, which is where the classic bags keep it and where this addon's
+-- squares keep it too. Both are tried rather than one or the other, because a
 -- button can carry the method and still answer nothing through it, and a nil
 -- taken for an answer is a click that lands on no slot at all.
 local function BagOf(button)
@@ -112,19 +116,10 @@ local function Modified()
 	return Down(_G.IsShiftKeyDown) or Down(_G.IsControlKeyDown) or Down(_G.IsAltKeyDown)
 end
 
--- Whether this click is the window's rather than the client's. Everything here
--- is about the click; whether the slot holds anything is Draft's answer and is
--- asked after, because a refusal is still ours to report.
-local function Wanted(which)
-	return which == "RightButton"
-		and ns.MailWindow.Shown()
-		and not Modified()
-end
-
 --------------------------------------------------------------------------
 
--- One click, taken. True where the click was answered here and must go no
--- further, false where the client should have it.
+-- One click, taken. True where the click was answered here, false where the
+-- slot is not one this window has anything to say about.
 local function Take(button)
 	local bag, slot = Where(button)
 	if not bag then
@@ -137,7 +132,7 @@ local function Take(button)
 	-- A send in flight is walking the list and filling the client's own form
 	-- out of the bags. Something arriving on the list underneath that would be
 	-- an attachment counted into no mail, so it is refused out loud rather than
-	-- attached or handed back to the client.
+	-- attached.
 	if ns.MailSend.Running() then
 		ns.Print("a send is going, so nothing else can go on the mail yet.")
 		return true
@@ -155,13 +150,20 @@ local function Take(button)
 	return true
 end
 
-local function Click(button, which, ...)
-	if Wanted(which) and Take(button) then
+-- The right button coming up on a square while the window is open. A modified
+-- click is the client's, by name; a bare one is this file's.
+local function Release(button, which)
+	if which ~= "RightButton" then
 		return
 	end
-	if theirs then
-		return theirs(button, which, ...)
+	if Modified() then
+		local theirs = _G[MODIFIED]
+		if type(theirs) == "function" then
+			theirs(button, which)
+		end
+		return
 	end
+	Take(button)
 end
 
 --------------------------------------------------------------------------
@@ -172,40 +174,46 @@ function Bags.Wanted()
 	return (ns.db.mail and ns.db.mailBags and ns.MailWindow.Shown()) and true or false
 end
 
-local function Install()
-	local held = _G[HANDLER]
-	if type(held) ~= "function" then
+-- One square, brought to the current state. Called from Bags/Grid.lua when a
+-- square is built and from here when the state changes, so a square arrives
+-- and stays correct by the same call.
+--
+-- Both edges the template registers are put back by name, because that is
+-- what ContainerFrameItemButton_OnLoad registers and a square handed back with
+-- fewer would be a square the client could not use from.
+function Bags.Dress(button)
+	if type(button) ~= "table" or type(button.RegisterForClicks) ~= "function" then
 		return false
 	end
-	theirs, mine = held, Click
-	_G[HANDLER] = Click
+	if taking then
+		button:RegisterForClicks("LeftButtonUp")
+		button:SetScript("OnMouseUp", Release)
+	else
+		button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+		button:SetScript("OnMouseUp", nil)
+	end
 	return true
 end
 
-local function Remove()
-	-- Only if the name is still holding ours. Anything else there is another
-	-- addon's, put in while the window was open, and giving the client's own
-	-- handler back over the top of it would be throwing that addon away.
-	if _G[HANDLER] == mine then
-		_G[HANDLER] = theirs
+local function Sweep()
+	local squares = ns.BagsGrid and ns.BagsGrid.Squares() or {}
+	for index = 1, #squares do
+		Bags.Dress(squares[index])
 	end
-	theirs, mine = nil, nil
-	return true
 end
 
 function Bags.Apply()
 	local wanted = Bags.Wanted()
-	if wanted == (mine ~= nil) then
+	if wanted == taking then
 		return false
 	end
-	if wanted then
-		return Install()
-	end
-	return Remove()
+	taking = wanted
+	Sweep()
+	return true
 end
 
 function Bags.Taking()
-	return mine ~= nil
+	return taking
 end
 
 function Bags.Describe()

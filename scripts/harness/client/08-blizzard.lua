@@ -437,6 +437,21 @@ do
 			local glow = child("texture", frame, nil)
 			glow:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
 			glow:Show()
+			-- What ContainerFrameItemButton_OnLoad registers and what the
+			-- template's OnClick does: both handlers are reached by name at
+			-- click time, which is the seam Mail/Bags.lua once wrote through.
+			-- A square that is not registered for the right button never
+			-- reaches this, exactly as on the client, and that is the whole
+			-- of how the mail window takes a right click without touching
+			-- a handler.
+			frame:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+			frame:SetScript("OnClick", function(self, which)
+				if _G.IsModifiedClick() then
+					_G.ContainerFrameItemButton_OnModifiedClick(self, which)
+				else
+					_G.ContainerFrameItemButton_OnClick(self, which)
+				end
+			end)
 		end
 		return frame
 	end
@@ -446,6 +461,22 @@ do
 			return
 		end
 		_G.UseContainerItem(button:GetParent():GetID(), button:GetID())
+	end
+	-- The handler as the client shipped it, so a section can say the global
+	-- was never written. Written back or not, a global an addon assigns is a
+	-- tainted global, and a tainted handler is a bag the client will not use
+	-- a scroll from.
+	H.bagClick = _G.ContainerFrameItemButton_OnClick
+
+	-- A modified click is a stack split or a dress-up on the client, neither of
+	-- which this fixture models. Counted, because the claim a section makes is
+	-- that a shift click reached the client and not what the client then did.
+	local modified = 0
+	function _G.ContainerFrameItemButton_OnModifiedClick()
+		modified = modified + 1
+	end
+	function H.modifiedBagClicks()
+		return modified
 	end
 end
 

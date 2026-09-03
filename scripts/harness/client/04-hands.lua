@@ -508,6 +508,13 @@ _G.IsModifiedClick = function(binding)
 	if binding == "SPLITSTACK" or binding == "CHATLINK" then
 		return _G.IsShiftKeyDown and _G.IsShiftKeyDown() or false
 	end
+	-- No binding named is the client's "is any modifier down at all", which is
+	-- the question a bag button's OnClick asks before choosing a handler.
+	if binding == nil then
+		return (_G.IsShiftKeyDown and _G.IsShiftKeyDown())
+			or (_G.IsControlKeyDown and _G.IsControlKeyDown())
+			or (_G.IsAltKeyDown and _G.IsAltKeyDown()) or false
+	end
 	return false
 end
 

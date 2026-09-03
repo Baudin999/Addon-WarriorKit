@@ -71,10 +71,6 @@ end
 function Region:Click(button, down)
 	button = button or "LeftButton"
 	local edge = down and "Down" or "Up"
-	local clicks = self.clicks
-	if clicks and not (clicks["Any" .. edge] or clicks[button .. edge]) then
-		return false
-	end
 	-- A button the frame hands through to whatever is behind it never reaches
 	-- the frame's own scripts, however it registered. The chat rail shipped
 	-- with the right button registered and passed through at once, and the
@@ -84,6 +80,19 @@ function Region:Click(button, down)
 		return false
 	end
 	local scripts = self.scripts
+	-- OnMouseDown and OnMouseUp fire for every button on a frame that takes
+	-- the mouse, registered or not; RegisterForClicks decides OnClick alone.
+	-- The mail window's take on a bag square rests on exactly that: the right
+	-- button taken off the registration, so the secure OnClick never runs, and
+	-- an OnMouseUp of the addon's answering in its place.
+	local mouse = scripts and scripts["OnMouse" .. edge]
+	if mouse then
+		mouse(self, button)
+	end
+	local clicks = self.clicks
+	if clicks and not (clicks["Any" .. edge] or clicks[button .. edge]) then
+		return mouse ~= nil
+	end
 	if scripts and scripts.PreClick then
 		scripts.PreClick(self, button, down and true or false)
 	end

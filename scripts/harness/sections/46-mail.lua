@@ -246,62 +246,19 @@ Draft.SetBody("")
 ----------------------------------------------------------------------
 -- Right click in the bags
 --
--- The client's own way of attaching something and the only one anybody uses.
--- Driven by calling ContainerFrameItemButton_OnClick, which is the name the
--- bags themselves call and the name Mail/Bags.lua takes over while the window
--- is open. The takeover is the half that can be wrong, so a test that called
--- the addon's own handler would be testing nothing.
---
--- Every check here is about where the stack ends up. A click the addon claimed
--- and then handed back is the failure worth catching: the client's answer to a
--- right click on a bag slot is to eat, equip or sell what is in it.
+-- The take itself is 75-mail-bags.lua's, because it lands on the squares of
+-- the bag window and that window is built for the first time in 55-bags.lua,
+-- which asserts on the first build. What is asserted here is the two facts
+-- this window can answer for on its own: that it is holding the right button
+-- while open, and that it did so without writing the global the client's own
+-- template resolves. The old takeover wrote that global and a written global
+-- is tainted, so one visit to a mailbox left every right click in the bags
+-- unable to use a scroll for the rest of the session.
 ----------------------------------------------------------------------
 
---
--- Scoped in a do block, because both names in it are read once and this file is
--- against the harness name budget. An indented local is not a name at chunk
--- level, which is the shape scripts/check.sh asks every section for.
-do
-	check(ns.MailBags.Taking(), "the bag click was not taken over with the window open")
-	check(Draft.Held() == 0, "the right click block began with something on the draft")
-
-	local ORE = 7
-	_G.ContainerFrameItemButton_OnClick(H.bagButton(3, ORE), "RightButton")
-	check(Draft.Held() == 1,
-		("a right click in the bags put %d on the mail"):format(Draft.Held()))
-	check(CARRIED[3][ORE] == "Copper Ore",
-		"the right click used the stack rather than putting it on the mail")
-
-	-- The slot that was clicked, not the first one holding that item. This is
-	-- the whole difference between the click and a drop: twenty identical
-	-- stacks, and the seventh one you point at is the seventh one that goes.
-	local put = Draft.At(1)
-	check(put and put.bag == 3 and put.slot == ORE,
-		("the click attached bag %s slot %s rather than the one it landed on")
-			:format(tostring(put and put.bag), tostring(put and put.slot)))
-
-	-- The same slot twice is one attachment and a refusal, and the refusal is
-	-- the half that matters: a claimed click handed back is a client that eats
-	-- the ore.
-	_G.ContainerFrameItemButton_OnClick(H.bagButton(3, ORE), "RightButton")
-	check(Draft.Held() == 1, "the same stack went on the mail twice")
-	check(CARRIED[3][ORE] == "Copper Ore",
-		"a refused right click let the client use the stack")
-
-	_G.ContainerFrameItemButton_OnClick(H.bagButton(3, ORE + 1), "RightButton")
-	check(Draft.Held() == 2, "a second stack of the same item would not go on")
-
-	-- A modified click is the client's and goes where it always went, which
-	-- with no merchant open and no send pane flagged means the stack is used.
-	-- Slot twenty is put back after, because everything below counts on twenty.
-	_G.WarriorKitShift(true)
-	_G.ContainerFrameItemButton_OnClick(H.bagButton(3, 20), "RightButton")
-	_G.WarriorKitShift(false)
-	check(Draft.Held() == 2, "a shift click put something on the mail")
-	check(CARRIED[3][20] == false, "a shift click did not reach the client")
-	CARRIED[3][20] = "Copper Ore"
-	Draft.Empty()
-end
+check(ns.MailBags.Taking(), "the bag click was not taken over with the window open")
+check(_G.ContainerFrameItemButton_OnClick == H.bagClick,
+	"the bag click global was written with the window open, which taints it")
 
 ----------------------------------------------------------------------
 -- The send
@@ -592,15 +549,14 @@ do
 end
 fire("MAIL_CLOSED")
 
--- And the bags are the client's again, which is the promise the takeover makes.
--- Asserted by clicking rather than by asking, because the flag and the global
--- are two different things and it is the global a bag button reaches.
+-- And the bags are the client's again, which is the promise the take makes.
+-- The global is checked last, after the window has been opened and closed
+-- twice, because the write that tainted it was the one on close. That a click
+-- on a square now reaches the client is 75-mail-bags.lua's to show.
 check(not ns.MailBags.Taking(),
 	"the bag click was left taken over with the window closed")
-CARRIED[3][1] = "Copper Ore"
-_G.ContainerFrameItemButton_OnClick(H.bagButton(3, 1), "RightButton")
-check(CARRIED[3][1] == false,
-	"a right click with the window closed did not reach the client")
+check(_G.ContainerFrameItemButton_OnClick == H.bagClick,
+	"the bag click global was written on the way out, which taints it for the session")
 check(not ns.MailBlizzard.Parked(),
 	"Blizzard's mail window was left parked off screen with ours closed")
 
