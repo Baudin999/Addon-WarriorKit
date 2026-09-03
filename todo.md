@@ -86,7 +86,7 @@ written longer than they are here.
 50. Ad hoc bars: a bar of your own on a key, hidden until the key is pressed
     and hidden again after a press on one of its squares, holding only what
     you dragged onto it, up to six bars of sixteen per character. Shown,
-    hidden, moved and put away from snippets so it works mid fight.
+    hidden, moved and put away from snippets so it works mid fight. `66ce6fc`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
