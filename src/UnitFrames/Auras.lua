@@ -513,10 +513,21 @@ local function Hang(list)
 	end
 end
 
-local function Fill(row, unit, now)
-	local squares = row.squares
-	local count = Scan(row, unit, now)
+-- Declared here and written under Hover, which it calls. The tick is what finds
+-- out how long a row has to be, and this is the one thing on that path that
+-- builds anything.
+local Grow
 
+local function Fill(row, unit, now)
+	local count = Scan(row, unit, now)
+	-- The squares this unit has turned out to need, built the first time it
+	-- needs them. See Grow, which is where the placing happens and why it is not
+	-- on this path more than once per row per session.
+	if count > row.drawn then
+		Grow(row, count)
+	end
+
+	local squares = row.squares
 	for slot = 1, count do
 		local found = row.found[slot]
 		local square = squares[slot]
@@ -575,6 +586,64 @@ local function Hover(square, unit, filter)
 	end)
 end
 
+-- The squares a row has turned out to need, built and placed.
+--
+-- This is the one thing on the tick path that builds a frame, and it is here
+-- because the alternative was building all of them at login: ninety six
+-- squares, sixteen debuffs and thirty two buffs on each of two blocks, before
+-- the player had a target. Nobody carries thirty two buffs, and a session where
+-- nothing is ever targeted carried the whole ninety six anyway.
+--
+-- So a row is as long as the longest list that unit has actually shown it, and
+-- it grows on the pass that finds the list longer. That happens a handful of
+-- times in the first minute of a session and never again, which is what the
+-- cold marker says: the walk in scripts/hot.lua stops here, and Aura.New,
+-- Aura.Size and Flow.Arrange are not on the tick path because of it.
+--
+-- Everything the placing needs was worked out in Auras.Place and left on the
+-- row, so nothing here decides anything: the node is the one Place built, in
+-- the direction and at the width it chose, and this appends to it.
+--
+-- cold: builds the squares a row has not needed yet, on the pass a unit first
+-- carries that many auras
+function Grow(row, count)
+	local plan = row.plan
+	if not plan then
+		return 0
+	end
+
+	-- A node of its own each time rather than one kept and appended to. Flow
+	-- caches a node's measurement on the node, so a tree handed back a second
+	-- time is laid out at the size it came out at the first time, which is a row
+	-- of squares all sitting on the same corner.
+	local node = {
+		direction = "row", wrap = true, width = plan.width, gap = plan.gap,
+		flow = plan.flow, pad = plan.pad,
+	}
+	for slot = 1, count do
+		local held = row.squares[slot]
+		if not held then
+			held = Aura.New(row.frame)
+			Hover(held, plan.unit, row.filter)
+			row.squares[slot] = held
+		end
+		-- The height is what comes back rather than the square, because the
+		-- number stands over the art now and the widget is taller than it is
+		-- wide. UI/Aura.lua is the only file that knows by how much.
+		local wide, tall = Aura.Size(held, plan.square, plan.px, plan.timer, plan.count)
+		node[slot] = { frame = held, width = wide, height = tall }
+	end
+	row.drawn = count
+
+	Flow.Arrange(row.frame, node)
+	-- How many fit on a line, asked of Flow rather than worked out again here,
+	-- so there is one rule for where a line breaks and not two that agree until
+	-- somebody changes the gap. Only /wk skin probe reads it.
+	local lines = Flow.Lines(node)
+	row.perLine = math.max(lines[1] and #lines[1] or 0, 1)
+	return count
+end
+
 -- One frame per row, parented to the unit frame so it hides with it. Nothing
 -- is anchored or sized here: where a row goes is Auras.Place's, and the
 -- squares are built there too, because their size is a setting that moves
@@ -611,10 +680,34 @@ function Auras.Build(entry)
 			key = spec.key, filter = spec.filter, below = spec.below, enchants = spec.enchants, hides = spec.hides,
 			frame = frame, squares = {}, found = {},
 			runs = runs, ceiling = ceiling, stripped = {},
-			wanted = 0, perLine = 1,
+			-- `wanted` is the longest this row may ever be and `drawn` is how
+			-- much of it has been built and placed. The second starts at nothing
+			-- and Grow is the only thing that moves it.
+			wanted = 0, drawn = 0, perLine = 1,
 		}
 	end
 	entry.auras = list
+end
+
+-- Whether anything this row is laid out from has moved since the last pass.
+--
+-- Block.Place runs on every target change, which is every few seconds in a
+-- pull, and this is the half of it that used to walk ninety six squares. Five
+-- numbers decide the whole of the layout below: whether the rows are on, how
+-- large a square is, what a pixel costs in the block's units, how wide the
+-- block is, and which way it is mirrored. Nothing else in Place can move one of
+-- them, so a pass where all five hold is a pass with nothing to do.
+--
+-- The five are written down here rather than compared and written by the
+-- caller, so there is one place that knows what the layout depends on.
+local function Settled(row, on, side, px, width, mirror)
+	if row.laidOn == on and row.laidSide == side and row.laidPx == px
+		and row.laidWidth == width and row.laidMirror == mirror then
+		return true
+	end
+	row.laidOn, row.laidSide, row.laidPx = on, side, px
+	row.laidWidth, row.laidMirror = width, mirror
+	return false
 end
 
 -- Both rows, under the block, in the units the block is drawn in.
@@ -625,10 +718,13 @@ end
 -- corner the portrait is on and runs away from it, so the target's row reads
 -- outward from its own edge exactly as the block inside it does.
 --
--- Every square is placed once, here, for the longest the row is allowed to be.
--- The tick shows a prefix of them and never moves one. That is what keeps
--- ns.UI.Flow off the ticker, which is the boundary the head of UI/Flow.lua
--- draws and check.sh enforces.
+-- Every square this row has is placed here and the tick moves none of them. It
+-- used to place the longest the row is ever allowed to be, which is sixteen
+-- debuffs and thirty two buffs on each of two blocks before the player had a
+-- target, and none of that is built until a unit turns up carrying it now. The
+-- one thing that builds a square outside this is Grow, and it carries a cold
+-- marker so ns.UI.Flow stays off the tick path, which is the boundary the head
+-- of UI/Flow.lua draws and check.sh enforces.
 function Auras.Place(entry, px, width, mirror)
 	local list = entry.auras
 	if not list then
@@ -654,63 +750,58 @@ function Auras.Place(entry, px, width, mirror)
 
 	for index = 1, #list do
 		local row = list[index]
-		local unit = ns.UI.Unit(row.frame)
 		row.wanted = on and row.ceiling or 0
 		row.edge = (row.below and "TOP" or "BOTTOM") .. hand
 		row.corner = (row.below and "BOTTOM" or "TOP") .. hand
 
-		-- Wrapped, packed to the gauge end, and growing away from the block.
-		--
-		-- The direction is one word each way. Across: away from the gauge
-		-- end, which is leftward on your block and rightward on the mirrored
-		-- target. Down the lines: away from the block, so a row under it
-		-- stacks downward and a row over it stacks upward, and line one stays
-		-- against the block whichever side it is on. Flow turns the pair into
-		-- the reverse, justify and lineOrder it needs, and it owns them: the
-		-- earlier version set two of the three by hand and a short line on
-		-- the target hugged the wrong edge until somebody set the third.
-		local node = {
-			direction = "row", wrap = true, width = width, gap = gap,
-			flow = (mirror and "right" or "left") .. (row.below and " down" or " up"),
-			pad = row.below and { 0, gap, 0, 0 } or { 0, 0, 0, gap },
-		}
-		for slot = 1, row.wanted do
-			local held = row.squares[slot]
-			if not held then
-				held = Aura.New(row.frame)
-				Hover(held, entry.spec.unit, row.filter)
-				row.squares[slot] = held
+		if not Settled(row, on, side, px, width, mirror) then
+			local unit = ns.UI.Unit(row.frame)
+
+			-- Wrapped, packed to the gauge end, and growing away from the block.
+			--
+			-- The direction is one word each way. Across: away from the gauge
+			-- end, which is leftward on your block and rightward on the mirrored
+			-- target. Down the lines: away from the block, so a row under it
+			-- stacks downward and a row over it stacks upward, and line one stays
+			-- against the block whichever side it is on. Flow turns the pair into
+			-- the reverse, justify and lineOrder it needs, and it owns them: the
+			-- earlier version set two of the three by hand and a short line on
+			-- the target hugged the wrong edge until somebody set the third.
+			--
+			-- Everything the layout is decided from, kept on the row, because Grow
+			-- lays the row out again on the pass a unit first turns up carrying more
+			-- auras than the row has squares and nothing about the shape may be
+			-- worked out twice.
+			local plan = row.plan
+			if not plan then
+				plan = {}
+				row.plan = plan
 			end
-			-- The height is what comes back rather than the square, because the
-			-- number stands over the art now and the widget is taller than it
-			-- is wide. UI/Aura.lua is the only file that knows by how much.
-			local wide, tall = Aura.Size(held, square, px,
-				math.floor(TIMER_CEILING * unit + 0.5),
-				math.floor(COUNT_CEILING * unit + 0.5))
-			node[slot] = { frame = held, width = wide, height = tall }
+			plan.width, plan.gap = width, gap
+			plan.flow = (mirror and "right" or "left") .. (row.below and " down" or " up")
+			plan.pad = row.below and { 0, gap, 0, 0 } or { 0, 0, 0, gap }
+			plan.square, plan.px, plan.unit = square, px, entry.spec.unit
+			plan.timer = math.floor(TIMER_CEILING * unit + 0.5)
+			plan.count = math.floor(COUNT_CEILING * unit + 0.5)
+
+			row.frame:ClearAllPoints()
+			row.frame:SetPoint(row.edge, entry.box, row.corner, 0, 0)
+			row.frame:SetWidth(width)
+			-- Every square the row already has, placed again at the size the
+			-- settings now say, and none it has not needed yet. The tick draws a
+			-- prefix of them and moves none, and nothing hangs off a row any
+			-- more, so a height that changed with the count would buy nothing and
+			-- would cost the row above the block every square it had: those are
+			-- placed against the frame's bottom edge, and that edge is the one an
+			-- anchor on the block's top holds still.
+			row.drawn = 0
+			Grow(row, math.min(#row.squares, row.wanted))
+			for slot = row.wanted + 1, #row.squares do
+				row.squares[slot]:Hide()
+			end
+
+			row.frame:SetShown(on and row.wanted > 0)
 		end
-		for slot = row.wanted + 1, #row.squares do
-			row.squares[slot]:Hide()
-		end
-
-		row.frame:ClearAllPoints()
-		row.frame:SetPoint(row.edge, entry.box, row.corner, 0, 0)
-		row.frame:SetWidth(width)
-		-- Sized to the longest the row is allowed to be and left at it. The
-		-- tick draws a prefix of the squares and moves none of them, and
-		-- nothing hangs off a row any more, so a height that changed with the
-		-- count would buy nothing and would cost the row above the block every
-		-- square it had: those are placed against the frame's bottom edge, and
-		-- that edge is the one an anchor on the block's top holds still.
-		Flow.Arrange(row.frame, node)
-
-		-- How many fit on a line, asked of Flow rather than worked out again
-		-- here, so there is one rule for where a line breaks and not two that
-		-- agree until somebody changes the gap. Only /wk skin probe reads it.
-		local lines = Flow.Lines(node)
-		row.perLine = math.max(lines[1] and #lines[1] or 0, 1)
-
-		row.frame:SetShown(on and row.wanted > 0)
 	end
 end
 

@@ -348,6 +348,7 @@ Cooldowns/Row.lua:1:Place is layout rather than tick
 UI/Ability.lua:1:Ability.Size is a settings change and a rescale, never a tick
 UI/Aura.lua:1:Aura.Size is a settings change and a rescale, never a tick
 UI/Feed.lua:1:Feed:Enter fills a tooltip, which is a hover, and the one reopen that is not is throttled to a fifth of a second
+UnitFrames/Auras.lua:1:Grow builds the squares an aura row has not needed yet, on the pass a unit first carries that many
 UnitFrames/EnemyBars.lua:3:CreateWidget builds one nameplate widget, on the tick a plate first appears
 UnitFrames/EnemyBars.lua:3:LayoutWidget places every region of one widget, on a rescale or a settings change
 UnitFrames/EnemyBars.lua:3:Release takes a widget off a plate, on the tick that plate goes

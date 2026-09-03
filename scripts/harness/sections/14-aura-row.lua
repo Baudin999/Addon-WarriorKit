@@ -118,8 +118,36 @@ local function underTop(square)
 	return -select(5, anchor(square))
 end
 
+-- Nothing built for a unit carrying nothing.
+--
+-- The rows were built to the client's own ceilings the moment the skin went on:
+-- sixteen debuff squares and thirty two buff squares under each of two blocks,
+-- ninety six of them, before the player had a target. A row is now as long as
+-- the longest list it has actually been shown, and it grows on the pass that
+-- finds one longer.
+check(#squares(rowD) == 0 and #squares(rowB) == 0,
+	("the target's rows built %d squares with nothing on the target")
+		:format(#squares(rowD) + #squares(rowB)))
+
+-- Three debuffs, one of them yours and third in the client's order.
+local now = _G.GetTime()
+debuffs.target = {
+	{ name = "Sunder Armor", icon = "sunder", count = 4, expires = now + 20, source = "party1" },
+	{ name = "Demoralizing Shout", icon = "demo", expires = now + 25, source = "party2" },
+	{ name = "Rend", icon = "rend", expires = now + 12, source = "player" },
+}
+buffs.target = {
+	{ name = "Battle Shout", icon = "shout", expires = now + 100, source = "party1" },
+}
+tick()
+
 local first, second = squares(rowD)[1], squares(rowD)[2]
-check(first ~= nil and second ~= nil, "the debuff row built fewer than two squares")
+check(first ~= nil and second ~= nil,
+	"three debuffs on the target built fewer than two squares")
+check(#squares(rowD) == 3,
+	("three debuffs built %d squares"):format(#squares(rowD)))
+check(#squares(rowB) == 1,
+	("one buff built %d squares"):format(#squares(rowB)))
 local side = first:GetWidth()
 
 -- The target block is mirrored, so its gauge end is its left edge and both its
@@ -132,8 +160,8 @@ check(math.abs(leftOf(first)) < 1e-6,
 	("square 1 starts %.1f in from the block's gauge end"):format(leftOf(first)))
 
 -- One gap between the block and line one, on both sides of it. Under the
--- block that is the row's own top edge; over it, the row is sized for a full
--- list and line one sits against the bottom.
+-- block that is the row's own top edge; over it, line one sits against the
+-- bottom, which is the edge anchored to the block.
 --
 -- Measured off the square's height rather than its width, because the two
 -- parted company when the time left moved over the art: a square is the icon
@@ -148,31 +176,28 @@ do
 			:format(over, gap))
 end
 
--- Nothing on the target, so nothing drawn.
-check(not first:IsShown(), "a square is drawn with no debuff on the target")
-
--- Three debuffs, one of them yours and third in the client's order.
-local now = _G.GetTime()
-debuffs.target = {
-	{ name = "Sunder Armor", icon = "sunder", count = 4, expires = now + 20, source = "party1" },
-	{ name = "Demoralizing Shout", icon = "demo", expires = now + 25, source = "party2" },
-	{ name = "Rend", icon = "rend", expires = now + 12, source = "player" },
-}
-buffs.target = {
-	{ name = "Battle Shout", icon = "shout", expires = now + 100, source = "party1" },
-}
-tick()
-
 check(first.shownIcon == "rend",
 	("square 1 drew %s. Yours go first, because the client's order is the order"
 		.. " the auras landed in and a capped row loses your Rend under a raid's"
 		.. " worth of other people's bleeds"):format(tostring(first.shownIcon)))
 check(first.shownState == "mine", "your own Rend is not drawn as yours")
 check(second.shownState == "theirs", "someone else's debuff is not drained")
-check(squares(rowD)[3]:IsShown() and not squares(rowD)[4]:IsShown(),
-	"three debuffs did not light exactly three squares")
+check(squares(rowD)[3]:IsShown(), "three debuffs did not light three squares")
 check(squares(rowB)[1].shownIcon == "shout",
 	"the buff row drew nothing for the buff on the target")
+
+-- And nothing on the target again leaves the squares built and dark, because a
+-- frame cannot be destroyed on this client and a row that unbuilt itself would
+-- build the same three squares on the next mob.
+do
+	local held = debuffs.target
+	debuffs.target = nil
+	tick()
+	check(#squares(rowD) == 3 and not first:IsShown(),
+		"a square is drawn with no debuff on the target")
+	debuffs.target = held
+	tick()
+end
 
 -- The client's own row, hidden, and hidden as it is built rather than once.
 check(not _G.TargetFrameDebuff1:IsShown(),
@@ -198,9 +223,10 @@ do
 	end
 	debuffs.target = many
 	tick()
-	check(rowD:GetHeight() == held[1] and underTop(first) == held[2]
-		and leftOf(first) == held[3],
-		"twelve debuffs moved the row or the square you read first")
+	check(underTop(first) == held[2] and leftOf(first) == held[3],
+		"twelve debuffs moved the square you read first")
+	check(rowD:GetHeight() > held[1],
+		"twelve debuffs wrapped onto a second line and the row did not grow")
 	check(underTop(squares(rowB)[1]) == held[4],
 		"twelve debuffs on the target moved the buffs over the block")
 
@@ -341,19 +367,10 @@ do
 		("your buff row is anchored %s to %s and belongs over the block")
 			:format(tostring(ybp), tostring(ybrp)))
 
-	local yours = squares(yourD)
-	check(leftOf(yours[1]) > leftOf(yours[2]),
-		("square 1 is at x=%.1f and square 2 at x=%.1f, so your row runs back"
-			.. " towards the corridor"):format(leftOf(yours[1]), leftOf(yours[2])))
-	check(math.abs((leftOf(yours[1]) + side) - yourD:GetWidth()) < 1e-6,
-		("square 1's right edge is at %.1f and the row is %.1f wide, so it does"
-			.. " not start on the block's gauge end")
-			:format(leftOf(yours[1]) + side, yourD:GetWidth()))
-	local yourOver = yourB:GetHeight() - underTop(squares(yourB)[1])
-		- squares(yourB)[1]:GetHeight()
-	check(math.abs(yourOver - gap) < 1e-6,
-		("line one of your buff row is %.2f over the block and the gap is %.2f")
-			:format(yourOver, gap))
+	-- Nothing on you, nothing built, the same as the target's pair.
+	check(#squares(yourD) == 0 and #squares(yourB) == 0,
+		("your rows built %d squares with nothing on you")
+			:format(#squares(yourD) + #squares(yourB)))
 
 	-- What is on you, put on the same two stub tables the buff nag walks, and
 	-- taken off again at the end of this block so no later section sees a buff
@@ -370,6 +387,21 @@ do
 			source = "party2" },
 	}
 	tick()
+
+	local yours = squares(yourD)
+	check(leftOf(yours[1]) > leftOf(yours[2]),
+		("square 1 is at x=%.1f and square 2 at x=%.1f, so your row runs back"
+			.. " towards the corridor"):format(leftOf(yours[1]), leftOf(yours[2])))
+	check(math.abs((leftOf(yours[1]) + side) - yourD:GetWidth()) < 1e-6,
+		("square 1's right edge is at %.1f and the row is %.1f wide, so it does"
+			.. " not start on the block's gauge end")
+			:format(leftOf(yours[1]) + side, yourD:GetWidth()))
+	local yourOver = yourB:GetHeight() - underTop(squares(yourB)[1])
+		- squares(yourB)[1]:GetHeight()
+	check(math.abs(yourOver - gap) < 1e-6,
+		("line one of your buff row is %.2f over the block and the gap is %.2f")
+			:format(yourOver, gap))
+
 	check(yours[1].shownIcon == "poison" and yours[2].shownIcon == "demo",
 		"your debuff row drew nothing for the two debuffs on you")
 	local mine = squares(yourB)
@@ -662,7 +694,7 @@ do
 	_G.InCombatLockdown, Region.IsProtected = realLockdown, realProtected
 end
 
-print(("auras  debuffs %d wide under each block and buffs %d over it, square"
+print(("auras  debuffs grown to %d under each block and buffs to %d over it, square"
 	.. " %.0f px under a %.0f px strip for the time, the client's own rows"
 	.. " hidden as they are built")
 	:format(#squares(rowD), #squares(rowB), side,

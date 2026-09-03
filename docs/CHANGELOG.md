@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### The aura rows are as long as what is on the unit
+
+Two rows under each of the two blocks, and each of the four was built to the
+client's own ceiling the moment the skin went on: sixteen debuff squares and
+thirty two buff squares, ninety six squares in all, with a timer, a stack count
+and a sweep on every one of them, before you had a target. Nobody carries thirty
+two buffs, and a session where nothing is ever targeted built the whole ninety
+six anyway.
+
+A row is as long as the longest list it has actually been shown now. It starts
+at nothing and grows on the pass that finds a unit carrying more than it has
+squares for, which happens a handful of times in the first minute of an evening
+and then never again. Nothing about the picture changed: line one still sits
+against the block, the tail still wraps away from it, and a row that has grown
+never shrinks.
+
+The other half is the target change. Every time you tabbed to something, the
+whole layout of all three blocks ran again, and most of what it cost was
+re-placing those ninety six squares against numbers that had not moved. The rows
+compare the five things they are laid out from and do nothing when all five
+hold.
+
 ### The character sheet and the spell book stop working at login
 
 Both windows were made at login and both then did the expensive half of their
