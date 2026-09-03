@@ -499,7 +499,7 @@ function Region:SetValue(value)
 	if high and value > high then
 		value = high
 	end
-	self.value = value
+	self.value, self.valueWrites = value, (self.valueWrites or 0) + 1 -- counted for the reason the log stub counts reads: a bar written once and a bar written per line hold the same number afterwards
 	local handler = self.scripts.OnValueChanged
 	if handler then
 		handler(self, value)

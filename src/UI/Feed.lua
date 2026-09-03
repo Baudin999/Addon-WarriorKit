@@ -34,12 +34,22 @@ local C, M = UI.Color, UI.Metric
 -- ScrollFrame to probe. The rows exactly fill the space, so there is nothing
 -- to clip.
 --
--- **Nothing here is on a ticker.** A feed changes when something happens to
--- you, which is an event, and it changes when you scroll it, which is a
--- gesture. A relative timestamp on a row would be the one thing that has to be
--- redrawn while nothing is happening, which is why a row carries no clock and
--- the tooltip is where the time is: opening a tooltip is a moment, and a moment
--- can afford to build a string.
+-- **An arrival marks and a frame draws.** A feed changes when something happens
+-- to you, which is an event, and it changes when you scroll it, which is a
+-- gesture. Neither of those is a clock, and a row carries none: a relative
+-- timestamp would be the one thing here that has to be redrawn while nothing is
+-- happening, which is why the time lives in the tooltip.
+--
+-- What the tick is for is the other end of that. In a pull the combat log
+-- arrives faster than the screen is drawn, so painting on the arrival painted
+-- thirteen rows three or four times for one frame the player ever saw. Push
+-- marks the feed instead and the tick paints whatever is marked, once, on the
+-- frame that is about to be drawn. An idle feed costs one field read a frame,
+-- and a feed nobody can see costs nothing at all: the tick hangs off the feed's
+-- own frame, so the client stops calling it the moment the column is hidden.
+--
+-- A feed that has never been built has no frame and no tick, and nothing can
+-- mark it. That is the shape on purpose: what is not there is not dirty.
 --
 -- **A row has three text columns and the middle one is optional.** A name and a
 -- number were not enough for the combat log: "Overpower 321" and "Plains
@@ -145,6 +155,16 @@ local WHEEL_ROWS = 3
 -- are built once at this count and the setting decides how many are shown.
 local MAX_ROWS = 24
 local HELD = 400
+
+-- How often the box over a parked cursor is filled again.
+--
+-- With the mouse resting on the top row of a live feed the entry under it
+-- changes on every arrival, and following that unthrottled is a Tip.Build, a
+-- Scan.Read and a Tooltip.Layout per combat log line. Five times a second is
+-- faster than anybody reads a tooltip and it is two orders of magnitude below
+-- what a pull was asking for. What it costs is that the box can name the row
+-- before last for a fifth of a second, which is a box you are still reading.
+local REOPEN = 0.2
 
 -- What the bottom row fades to when there is more underneath it.
 --
@@ -299,6 +319,23 @@ local function BuildHeader(feed)
 	return feed
 end
 
+-- One paint per frame, and none at all on a frame where nothing arrived.
+--
+-- This is the whole of what the tick does: read a field and, on the frames
+-- something happened, draw. In a pull the combat log lands three or four times
+-- between two frames of the screen and the column was repainting for each of
+-- them, which is thirteen rows drawn three times for one frame anybody saw.
+--
+-- The frame is the second argument rather than a closure, because
+-- scripts/hot.lua walks out from the function ns.UI.Ticker was handed and a
+-- closure is a body it cannot name.
+local function Repaint(_, frame)
+	local feed = frame.feed
+	if feed.stale then
+		feed:Paint()
+	end
+end
+
 --------------------------------------------------------------------------
 -- Standing one up
 --
@@ -368,10 +405,19 @@ function UI.Feed(parent, opts)
 		-- setting at login, and a feed built by anything else is one somebody is
 		-- looking at.
 		awake = true,
+		-- Whether the column owes the screen a paint. Set by an arrival, and by
+		-- a paint that could not run because nobody could see it. Cleared by
+		-- the paint that pays it. A gesture and a settings change draw at once
+		-- rather than marking: neither of them is on a path that repeats.
 		stale = false,
 	}, Feed)
 
 	feed.frame = CreateFrame("Frame", nil, parent)
+	-- The feed found on its own frame rather than closed over, which is the
+	-- shape UI/Ticker.lua asks for and the reason it hands the frame back to the
+	-- tick: there is one of these per feed and a ticker takes a named function.
+	feed.frame.feed = feed
+	UI.Ticker(feed.frame, 0, "feed", Repaint)
 
 	for index = 1, feed.cap do
 		feed.ring[index] = {}
@@ -788,7 +834,13 @@ function Feed:Entry()
 	return slot
 end
 
--- Make the filled slot the newest, and redraw.
+-- Make the filled slot the newest, and mark the column.
+--
+-- Marked rather than drawn. This runs on the path the combat log drives and
+-- Repaint above is what turns however many arrivals landed between two frames
+-- into the one paint the player was ever going to see. Everything below this
+-- line is table writes, which is what makes a hidden feed and a busy one cost
+-- nearly the same.
 --
 -- The offset moves with it when you are reading history. Everything below the
 -- top has just been pushed one row down the list, so leaving the offset alone
@@ -810,7 +862,7 @@ function Feed:Push()
 		self.offset = self.offset + 1
 	end
 
-	self:Paint()
+	self.stale = true
 	return slot
 end
 
@@ -1071,6 +1123,8 @@ end
 -- The mouse
 --------------------------------------------------------------------------
 
+-- cold: filling a box is a hover, and the one caller that is not is the reopen
+-- in Paint, which is behind a fifth of a second
 function Feed:Enter(index)
 	local row = self.rows[index]
 	if not row then
@@ -1078,6 +1132,10 @@ function Feed:Enter(index)
 	end
 	self.hovered = index
 	row.glow:Show()
+	-- When the box was last filled, which is what the reopen in Paint throttles
+	-- against. Stamped here rather than there so one place owns it: a hover is a
+	-- fill, and a reopen a frame after one is the case the throttle is for.
+	self.reopenedAt = GetTime()
 
 	local entry = row.shownEntry
 	-- What the row was showing when this tooltip was filled, so Paint can tell a
@@ -1150,7 +1208,7 @@ local function Marked(row, mark)
 
 	row.shownMark = mark
 	row.shownName, row.shownColor, row.shownIcon, row.shownNote = nil, nil, nil, nil
-	row.stripe:SetWidth(mark and row.band or row.rib)
+	row.stripe:SetWidth(mark and row.band or row.rib) -- unguarded: the return above compares the mark against what is drawn
 	if mark then
 		row.icon:Hide()
 		row.name:Hide()
@@ -1257,7 +1315,6 @@ function Feed:Awake(on)
 	end
 	self.awake = on
 	if on and self.stale then
-		self.stale = false
 		self:Paint()
 	end
 	return true
@@ -1268,6 +1325,7 @@ function Feed:Paint()
 		self.stale = true
 		return false
 	end
+	self.stale = false
 
 	local count, shown = self:Count(), self:Shown()
 	local room = self:Room()
@@ -1332,11 +1390,21 @@ function Feed:Paint()
 	-- unconditionally made that one fill per combat log event for as long as the
 	-- cursor rested anywhere on the feed. The row under the cursor mostly does
 	-- not move: the mouse is on row seven and the arrival lands on row one.
+	--
+	-- And throttled under the guard, because the one place the guard does not
+	-- hold is the case a live feed spends its time in: the cursor parked on row
+	-- one, where every arrival moves the entry under it. Refused, the feed is
+	-- left marked so the next frame looks again, which is what keeps the box
+	-- from settling on the row before last after the pull stops.
 	if self.hovered and self.hovered <= self.visible then
 		local row = self.rows[self.hovered]
 		if row.shownEntry ~= self.hoveredEntry
 			or (row.shownEntry and row.shownEntry.at ~= self.hoveredAt) then
-			self:Enter(self.hovered)
+			if GetTime() - (self.reopenedAt or 0) >= REOPEN then
+				self:Enter(self.hovered)
+			else
+				self.stale = true
+			end
 		end
 	end
 
@@ -1346,6 +1414,17 @@ end
 
 -- Puts the bar back in step with the offset. Called after anything that could
 -- move either, which is an arrival, a scroll and a resize.
+--
+-- Every write here is compared first, the same as every write on a row. It was
+-- four unconditional writes on a widget nobody had touched, and in a pull that
+-- is a thumb resized, a range rewritten and a value pushed back for every line
+-- in the zone. The steady state of a feed at the top of its own history is a
+-- bar whose range grows by one and whose thumb and value do not move at all.
+--
+-- The range, the thumb size and whether the bar is up are compared against what
+-- this file last wrote, because nothing else writes them. The value is compared
+-- against the widget, because a drag writes that one from the other end and a
+-- clamped drag leaves the thumb somewhere this file never put it.
 function Feed:Sync()
 	local bar = self.bar
 	if not bar then
@@ -1354,20 +1433,35 @@ function Feed:Sync()
 
 	local room = self:Room()
 	if room <= 0 then
-		bar:Hide()
+		if self.barShown ~= false then
+			self.barShown = false
+			bar:Hide()
+		end
 		return false
 	end
 
 	local height = self.visible * (self.row + ROW_GAP) - ROW_GAP
 	local size = math.max(M.thumb,
 		UI.Round(self.frame, height * self.unit * self.visible / math.max(self:Shown(), 1)))
-	bar.thumb:SetSize(M.bar, size)
+	if self.thumbAt ~= size then
+		self.thumbAt = size
+		bar.thumb:SetSize(M.bar, size)
+	end
 
 	self.syncing = true
-	bar:SetMinMaxValues(0, room)
-	bar:SetValue(self.offset)
+	if self.roomAt ~= room then
+		self.roomAt = room
+		bar:SetMinMaxValues(0, room)
+	end
+	if bar:GetValue() ~= self.offset then
+		bar:SetValue(self.offset)
+	end
 	self.syncing = nil
-	bar:Show()
+
+	if self.barShown ~= true then
+		self.barShown = true
+		bar:Show()
+	end
 	return true
 end
 

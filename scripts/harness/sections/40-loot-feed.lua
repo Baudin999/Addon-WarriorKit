@@ -33,8 +33,16 @@ local Loot = ns.LootFeed
 local lootStream = Loot.Stream()
 local feed = lootStream:Feed()
 
+-- One frame of the client, because a feed marks itself when a drop lands and
+-- paints on its own tick. 31-feeds.lua is where that is asserted; here it is
+-- only what has to happen before a row can be read.
+local FRAME = 1 / 60
 local function drop(format, ...)
 	fire("CHAT_MSG_LOOT", (format):format(...))
+	local tick = feed.frame:GetScript("OnUpdate")
+	if tick then
+		tick(feed.frame, FRAME)
+	end
 end
 
 local function newest()

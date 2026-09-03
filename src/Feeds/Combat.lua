@@ -315,7 +315,9 @@ local function Add(subevent, shape, outgoing, source, dest, spellId, spellName,
 	end
 
 	local entry = stream:Feed():Entry()
-	entry.icon = (spellId and ns.SpellTexture(spellId)) or swingIcon or UNKNOWN
+	-- Held rather than asked. The icon for a spell id was decided when the
+	-- client shipped and this line runs on every hit in the zone that is yours.
+	entry.icon = (spellId and ns.SpellTextureHeld(spellId)) or swingIcon or UNKNOWN
 	entry.name = Caption(spellName)
 	entry.note = Note(outgoing, source, dest)
 	entry.amount = miss or Amount(amount, crit)

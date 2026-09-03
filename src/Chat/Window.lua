@@ -179,7 +179,7 @@ local function LogFor(id)
 	-- somebody, the rail said one line had arrived, the log held it, and the
 	-- window was blank until you stepped to another room and back. The first
 	-- thing you say to anybody is the case, every time.
-	log.frame:SetShown(id == active)
+	log:Show(id == active)
 	logs[id] = log
 	return log
 end
@@ -193,7 +193,7 @@ local function Close(id)
 		return false
 	end
 	logs[id] = nil
-	log.frame:Hide()
+	log:Show(false)
 	log:Clear()
 	spare[#spare + 1] = log
 	return true
@@ -232,14 +232,16 @@ function ChatWindow.Paint()
 	return true
 end
 
+-- The room you are reading, and every other one off the screen.
+--
+-- The bar is not written separately any more. A log that was hidden while lines
+-- landed in it comes back owing one Sync and UI/Log.lua's Show is what pays it,
+-- which is the same call the eleven rooms nobody is looking at go through and
+-- costs them nothing.
 local function Show(id)
 	active = id
 	for _, log in ipairs(every) do
-		log.frame:SetShown(logs[id] == log)
-	end
-	local log = logs[id]
-	if log then
-		log:Sync()
+		log:Show(logs[id] == log)
 	end
 	ns.Rooms.Read(id)
 	rail:Mark(id, 0)
@@ -407,11 +409,15 @@ local function Replay(held, touched, order)
 	for _, id in ipairs(held.rooms) do
 		local log = LogFor(id)
 		if log then
-			log:Add(held.line, held.r, held.g, held.b)
 			if not touched[id] then
 				touched[id] = true
 				order[#order + 1] = id
+				-- The room is about to take a run of lines rather than one, so
+				-- it stops putting its scrollbar in step until they have all
+				-- landed. See UI/Log.lua's Bulk.
+				log:Bulk(true)
 			end
+			log:Add(held.line, held.r, held.g, held.b)
 		end
 	end
 end
@@ -426,6 +432,9 @@ local function Restore()
 	local color = ns.UI.Color.text
 	for _, id in ipairs(order) do
 		logs[id]:Add(EARLIER, color[1], color[2], color[3])
+		-- The rule under the replay is the last line of it, so the bar goes back
+		-- in step here and not before: four hundred lines cost one Sync.
+		logs[id]:Bulk(false)
 	end
 	return #lines
 end
@@ -920,6 +929,13 @@ function ChatWindow.Apply()
 
 	local shown = ns.db.chat and true or false
 	window.frame:SetShown(shown)
+	-- The room you were reading, put back in step. Nothing writes a scrollbar
+	-- while the window is closed, so a window opened after an hour of party
+	-- chat would otherwise come up with the thumb that hour never moved.
+	local log = logs[active]
+	if shown and log then
+		log:Show(true)
+	end
 	-- Three things follow the window rather than the settings, and all three for
 	-- the same reason: each of them takes something off the screen on the
 	-- promise that this window is drawing it instead, and a closed window keeps
@@ -1352,6 +1368,18 @@ end
 function ChatWindow.Drawn(id)
 	local log = logs[id]
 	return (log and log.frame:IsShown()) and true or false
+end
+
+-- The scrollbar beside one room's log, for the harness.
+--
+-- Named for the reason Drawn above is. A room nobody is looking at does not
+-- write its bar, and what that saves cannot be read off the bar afterwards: the
+-- number on it is the same either way, because the room you come back to is put
+-- in step the moment it is shown. The stub counts its own writes, which is the
+-- only way to tell one write from forty.
+function ChatWindow.Bar(id)
+	local log = logs[id]
+	return log and log.bar or nil
 end
 
 -- How many lines one room is holding.

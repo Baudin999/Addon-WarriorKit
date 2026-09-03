@@ -334,10 +334,10 @@ HOT=$(lua5.1 ../scripts/hot.lua .) || {
 # another function or deleted fails here by name.
 #
 # `cold:` is the largest of the four and it is a work list, not a settled shape.
-# Seven of the eight are a builder or a layout pass, which is one repeated idea:
+# Seven of the nine are a builder or a layout pass, which is one repeated idea:
 # a function whose writes belong to a widget appearing rather than to the tick
 # that found it. If UI/ ever grows a construction seam those seven go through,
-# this list is one entry.
+# this list is three entries.
 
 # path:cold markers in that file:function, and why the walk stops there
 COLD_ALLOWED="
@@ -346,6 +346,7 @@ Charge/Icon.lua:1:MacroText runs behind SyncMacro comparing target, weapon and s
 Cooldowns/Row.lua:1:Place is layout rather than tick
 UI/Ability.lua:1:Ability.Size is a settings change and a rescale, never a tick
 UI/Aura.lua:1:Aura.Size is a settings change and a rescale, never a tick
+UI/Feed.lua:1:Feed:Enter fills a tooltip, which is a hover, and the one reopen that is not is throttled to a fifth of a second
 UnitFrames/EnemyBars.lua:3:CreateWidget builds one nameplate widget, on the tick a plate first appears
 UnitFrames/EnemyBars.lua:3:LayoutWidget places every region of one widget, on a rescale or a settings change
 UnitFrames/EnemyBars.lua:3:Release takes a widget off a plate, on the tick that plate goes
@@ -363,6 +364,7 @@ Charge/Marker.lua:1:the two returns above leave only a marker that is already up
 Core/Core.lua:1:a one-shot ticker handing its own handler back
 Swing/Gauges.lua:1:the moving edge of a swing bar, and a frame it skips is a frame it does not move on
 UI/Draw.lua:1:the return above compares all four channels
+UI/Feed.lua:1:the return above compares the marker against what the row is drawing
 UnitFrames/Block.lua:1:the return above compares shown against want
 UnitFrames/Cast.lua:1:the moving edge of a cast bar
 UnitFrames/PlayerCast.lua:2:the moving edge of the player's cast and of the channel it replaces
@@ -1127,6 +1129,7 @@ HARNESS_LINE_LIMIT=800
 # path:ceiling:why it is exempt
 HARNESS_LINE_ALLOWED="
 sections/05-action-bars.lua:1061:one subject, five bars; splits at the keys, the paging and the churn
+sections/29-social.lua:817:one subject, the chat window; the rooms, what routes into them, what is unread in them and what each one draws are four readings of the same scene
 client/02-text.lua:804:one class, the Region stub; every line is a method of the client's own frame, and a frame API split across two files is two halves of one object
 sections/39-party-raid.lua:971:one subject, two lists, two directions each; the party line and the raid grid share a tile, a roster fixture and a header model, and splitting them copies all three
 "

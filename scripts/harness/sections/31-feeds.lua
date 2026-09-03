@@ -25,16 +25,38 @@
 -- that as a test rather than as a measurement is by identity: the four hundred
 -- and first drop has to land in the table the first one used.
 --
--- And does a row answer the mouse with the addon's own tooltip, anchored to the
+-- Does a row answer the mouse with the addon's own tooltip, anchored to the
 -- row that was hovered rather than to whichever one was hovered last.
+--
+-- And does an arrival draw. It used to, on the arrival itself, and in a pull
+-- the combat log lands three or four times between two frames of the screen, so
+-- thirteen rows were repainted three times for one frame anybody saw. A push
+-- marks the column now and the tick paints it. That is a claim about when the
+-- drawing happened rather than about what was drawn, so nothing in a count or
+-- an entry can see it: what says it is a row read between the arrival and the
+-- frame, which is where the two implementations disagree and the only place
+-- they do.
 
 local H = ...
 local guids, slots, logArgs = H.guids, H.slots, H.logArgs
-local ns, fire, check = H.ns, H.fire, H.check
+local ns, fire, check, advance = H.ns, H.fire, H.check, H.advance
 
 local Loot, Combat = ns.LootFeed, ns.CombatFeed
 local lootStream, combatStream = Loot.Stream(), Combat.Stream()
 local feed = lootStream:Feed()
+
+-- One frame of the client, for a feed that has been marked.
+--
+-- Driven through the frame's own OnUpdate rather than through a method on the
+-- feed, because what is being checked below is what the client would have drawn
+-- and the client reaches this file by exactly one road.
+local FRAME = 1 / 60
+local function frame(one)
+	local tick = one.frame:GetScript("OnUpdate")
+	if tick then
+		tick(one.frame, FRAME)
+	end
+end
 
 check(_G.WarriorKitLootFeed ~= nil, "no loot feed was built at login")
 check(_G.WarriorKitCombatFeed ~= nil, "no combat feed was built at login")
@@ -57,6 +79,7 @@ check(not feed:Row(ns.db.lootFeedRows + 1):IsShown(),
 
 local function drop(format, ...)
 	fire("CHAT_MSG_LOOT", (format):format(...))
+	frame(feed)
 end
 
 local function newest()
@@ -151,6 +174,26 @@ feed:Clear()
 check(feed:Count() == 0, "clearing the feed left entries in it")
 check(feed:Live(), "a cleared feed did not go back to the top")
 
+-- An arrival marks and the frame draws.
+--
+-- Fired rather than dropped, because the helper above lets a frame pass and
+-- what is being asserted here is the state between the two. A feed that painted
+-- from the push would put the item on the row before the frame ever came, which
+-- is the shape that repainted thirteen rows three times a frame in a pull.
+check(feed.frame:GetScript("OnUpdate") ~= nil,
+	"the feed registered no painter, so nothing will ever draw what arrives")
+fire("CHAT_MSG_LOOT",
+	("You receive loot: %s."):format(_G.WarriorKitItemLink("Arcanite Reaper")))
+check(feed:Count() == 1, "the drop did not reach the ring at all")
+check(feed:Row(1).name:GetText() ~= "Arcanite Reaper",
+	"the arrival painted the column itself rather than marking it for the frame")
+frame(feed)
+check(feed:Row(1).name:GetText() == "Arcanite Reaper",
+	"a frame passed and the column still has not drawn what arrived: "
+		.. tostring(feed:Row(1).name:GetText()))
+
+feed:Clear()
+
 for index = 1, ns.db.lootFeedRows + 6 do
 	drop("You receive item: %sx%d.", _G.WarriorKitItemLink("Aegis"), index)
 end
@@ -231,6 +274,25 @@ do
 	-- is the one the fallback exists for: the row's own name and the facts
 	-- the feed knows, rather than an empty box.
 	check(ns.UI.Tooltip.Lines() > 1, "the tooltip fell back to a name and nothing else")
+
+	-- The box over a parked cursor follows the row, on a throttle.
+	--
+	-- The mouse resting on row one of a live feed is the one case the guard in
+	-- Paint cannot help with: the entry under the cursor moves on every
+	-- arrival, so following it unthrottled is a Tip.Build, a Scan.Read and a
+	-- Tooltip.Layout per line in the zone. Both halves are asserted, because a
+	-- throttle that never lets go is a tooltip stuck on the row before last and
+	-- looks exactly like the fix.
+	local named = ns.UI.Tooltip.Text(1)
+	drop("You receive loot: %s.", _G.WarriorKitItemLink("Arcanite Reaper"))
+	check(ns.UI.Tooltip.Text(1) == named,
+		"the box was filled again on the arrival that landed under the cursor: "
+			.. tostring(ns.UI.Tooltip.Text(1)))
+	advance(0.25)
+	drop("You receive loot: %s.", _G.WarriorKitItemLink("Bloodspiller"))
+	check(ns.UI.Tooltip.Text(1) == "Bloodspiller",
+		"past the throttle the box is still describing a row that has moved on: "
+			.. tostring(ns.UI.Tooltip.Text(1)))
 
 	leave()
 	check(not H.tipSettle(), "the tooltip stayed up after the mouse left")
@@ -317,6 +379,7 @@ do
 			logArgs[at] = value
 		end
 		fire("COMBAT_LOG_EVENT_UNFILTERED")
+		frame(combat)
 	end
 
 	combat:Clear()
@@ -443,6 +506,7 @@ do
 
 	combat:Clear()
 	fire("PLAYER_REGEN_DISABLED")
+	frame(combat)
 	check(combat:Count() == 1, "entering combat drew no marker")
 	check(combat:At(0).mark == "in",
 		"the marker for entering combat is not marked as one: "
@@ -451,6 +515,7 @@ do
 	log("SPELL_DAMAGE", me, "Baudin", "Creature-77", "Ragged Wolf",
 		{ [12] = 12294, [13] = "Mortal Strike", [15] = 400 })
 	fire("PLAYER_REGEN_ENABLED")
+	frame(combat)
 
 	check(combat:Count() == 3, ("a pull came out as %d rows rather than a marker, a hit and a marker")
 		:format(combat:Count()))

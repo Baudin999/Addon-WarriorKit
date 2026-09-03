@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### The feeds and the chat rooms draw once a frame
+
+The combat feed put a row on the screen the moment the log said so. In a pull
+the log says so three or four times between two frames of the game, and each
+one repainted every visible row of the column and rewrote its scrollbar, so
+thirteen rows were drawn three times over for the one frame you ever saw. An
+arrival now marks the column and the frame draws it, once. A feed you have
+hidden costs nothing at all, because the thing that draws hangs off the
+column's own frame and the game stops calling it.
+
+Three smaller things went with it. The icon on a combat row is remembered per
+spell instead of asked of the client per hit. The tooltip under a parked cursor
+follows the row it is on five times a second rather than on every line in the
+zone, which was a fresh tooltip built, scanned and laid out per swing. And a
+scrollbar is compared before it is written, so a feed sitting at the top of its
+own history writes one number per arrival instead of four.
+
+The chat window had the same shape. A party line belongs to your party room and
+to Conversation, a guild line to two more, and every room it landed in measured
+its own buffer and pushed its own scrollbar about, including the eleven you
+were not reading and all thirteen while the window was closed. Only the room on
+screen does that now, and a room you come back to is put in step as it appears.
+The replay of what was said before a reload used to do the same work per line
+for up to four hundred lines; it does it once, at the end.
+
 ### The settings window is built when you open it
 
 The window and everything in it used to be made at login: about a thousand

@@ -302,8 +302,28 @@ end
 function Log:Add(text, r, g, b)
 	self.lines = self.lines + 1
 	self.view:AddMessage(text, r or C.text[1], g or C.text[2], b or C.text[3])
-	self:Sync()
+	if not self.bulk then
+		self:Sync()
+	end
 	return self.lines
+end
+
+-- Many lines at once, and one Sync at the end of them.
+--
+-- The case is the replay at login. Chat/History.lua hands back up to four
+-- hundred lines said before the reload, each of them routed into every room it
+-- belonged to, and each arrival was putting a scrollbar back in step with a
+-- buffer three hundred and ninety nine lines short of where it was going to
+-- end up. The bar only has to be right once, when the replay stops.
+--
+-- A pair rather than a flag the caller writes, so the log is the thing that
+-- knows a bulk ended and the Sync cannot be forgotten at one of the call sites.
+function Log:Bulk(on)
+	self.bulk = on and true or false
+	if not on then
+		self:Sync()
+	end
+	return true
 end
 
 function Log:Clear()
@@ -383,29 +403,80 @@ function Log:ToEnd(top)
 	self:Sync()
 end
 
+-- On screen or not, and the bar caught up when it comes back.
+--
+-- The window keeps one of these per room and shows the room you are reading, so
+-- a line that belongs to your party, your guild and Conversation lands in three
+-- logs of which at most one is on the screen. The other two were measuring
+-- their own buffers and writing their own scrollbars for nobody, and in a raid
+-- that is most of what a chat line costs.
+--
+-- IsVisible rather than IsShown, because the room you are reading inside a
+-- window you have closed is exactly as invisible as the two you are not, and
+-- that is the case a busy evening with the chat window shut spends its time in.
+--
+-- The skipped writes are owed rather than lost. A log that refused a Sync is
+-- marked, and coming back on screen pays the one that matters.
+function Log:Show(on)
+	self.frame:SetShown(on and true or false)
+	if on and self.stale then
+		self:Sync()
+	end
+	return true
+end
+
 -- Puts the bar back in step with the frame. Called after anything that could
 -- have moved either, which is a line arriving, a scroll, a resize and a tab
 -- coming up.
+--
+-- Every write is compared first. The range is compared against what this file
+-- last wrote, because nothing else writes it; the value is compared against the
+-- widget, because a drag writes that one from the other end and a drag past the
+-- end leaves the thumb somewhere this file never put it. A room sitting at the
+-- bottom of its own history, which is every room you are not scrolled back in,
+-- writes one number per line instead of four.
 function Log:Sync()
 	local bar = self.bar
 	if not bar then
 		return false
 	end
+	if not self.frame:IsVisible() then
+		self.stale = true
+		return false
+	end
+	self.stale = false
+
 	local range = self:Range()
 	if range <= 0 then
-		bar:Hide()
+		if self.barShown ~= false then
+			self.barShown = false
+			bar:Hide()
+		end
 		return false
 	end
 
 	local size = math.max(M.thumb,
 		UI.Round(self.frame, (self.height or 0) * self:Displayed() / math.max(self:Count(), 1)))
-	bar.thumb:SetSize(M.bar, size)
+	if self.thumbAt ~= size then
+		self.thumbAt = size
+		bar.thumb:SetSize(M.bar, size)
+	end
 
+	local at = range - self:Offset()
 	self.syncing = true
-	bar:SetMinMaxValues(0, range)
-	bar:SetValue(range - self:Offset())
+	if self.rangeAt ~= range then
+		self.rangeAt = range
+		bar:SetMinMaxValues(0, range)
+	end
+	if bar:GetValue() ~= at then
+		bar:SetValue(at)
+	end
 	self.syncing = nil
-	bar:Show()
+
+	if self.barShown ~= true then
+		self.barShown = true
+		bar:Show()
+	end
 	return true
 end
 

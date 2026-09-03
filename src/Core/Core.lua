@@ -666,6 +666,31 @@ function ns.SpellTexture(spell)
 	return _G.GetSpellTexture(spell)
 end
 
+-- The same path, held after the first time the client gives one.
+--
+-- ns.SpellNameHeld above holds a name for the reason the action bars ask for
+-- one on every square on every tick. This holds a path for the reason the
+-- combat feed asks for one on every hit you deal or take: in a pull that is a
+-- lookup into the client's spell data a few dozen times a second, and the
+-- answer for a given spell was decided when the client shipped.
+--
+-- The same guard on nil as the name cache, and the same reason. A spell asked
+-- about before the client has the data for it answers nothing, and a nothing
+-- written down here would be the icon for the rest of the session.
+local iconOf = {}
+
+function ns.SpellTextureHeld(spell)
+	local held = iconOf[spell]
+	if held then
+		return held
+	end
+	local path = ns.SpellTexture(spell)
+	if path then
+		iconOf[spell] = path
+	end
+	return path
+end
+
 function ns.SpellCooldown(spell)
 	if C_Spell and C_Spell.GetSpellCooldown then
 		local info = C_Spell.GetSpellCooldown(spell)

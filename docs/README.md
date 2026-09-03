@@ -7440,3 +7440,20 @@ Everything below was written from the API contract and has never executed:
   symptom is a rail that reads nearly empty at a standing you are most of the way
   through. What would settle it: watch a faction you are partway into and compare
   the rail against the client's own reputation pane.
+- **Whether `IsVisible` answers false for a chat room inside a closed window.**
+  A room's log writes its scrollbar only while somebody can see it, and that
+  reading is what decides. The harness proves the eleven rooms you are not
+  reading go quiet, because their own frames are hidden; what it cannot prove is
+  the window shut over the room you are, which turns on the parent walk rather
+  than on the frame's own flag. A client that answered true there costs the
+  writes back and nothing else. One that answered false for a room on screen is
+  a scrollbar beside the room you are reading that never moves again. What would
+  settle it: open the chat window, sit in the party room through a pull, and drag
+  the bar.
+- **Whether four hundred restored lines come back with a working scrollbar.**
+  The replay of what was said before a reload now writes each room's bar once, at
+  the end of that room's lines, rather than per line. The harness has never run
+  it with a record in it, because the run's own login starts with an empty one. A
+  mistake looks like a chat window that opens after a reload with the last
+  session's lines in it and a thumb that is the wrong size or missing. What would
+  settle it: talk in a party, `/reload`, and open the window.

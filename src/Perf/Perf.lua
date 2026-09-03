@@ -47,8 +47,12 @@ local SAMPLE_RATE = 1.0
 -- as one number, and splitting the poll from the per-frame fill split the
 -- measurement with it rather than reporting a fifth-of-a-second poll as
 -- something that happens sixty times a second.
+-- "feed" is the third that runs on every frame, and it is the cheapest of the
+-- three by design: it reads one field and draws only on the frames a line
+-- arrived on. Named here so the tab can say what that costs during a pull,
+-- which is the question the change that put it on a tick was answering.
 local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast",
-	"castsweep", "skin", "party", "meter", "buffs", "cooldowns", "hide" }
+	"castsweep", "skin", "party", "meter", "buffs", "cooldowns", "hide", "feed" }
 local slots = {}
 local gauges, gaugeOrder = {}, {}
 
