@@ -87,8 +87,14 @@ local Member = ns.GroupMember
 local Role = ns.Unit.Role
 local Roster = ns.Unit.Roster
 
--- The rate every readout in this addon runs at.
+-- The rate every readout in this addon runs at, and how often every tile is
+-- read off the client from the top behind it.
+--
+-- The fast one is the range and the tiles an event has marked; see the head of
+-- UnitFrames/Member.lua for which events and why. The reading is the belt: a
+-- name, a class colour and a client that fires none of the three.
 local POLL = 0.2
+local VERIFY = 1
 
 -- What a tile is allowed to be, shared with the panel and the slash words so
 -- all three clamp to the same numbers. The width floor is under the skin's,
@@ -969,9 +975,49 @@ function Group.Reset(which)
 	Group.Apply()
 end
 
--- Every member redrawn. Nothing here allocates and every write inside
--- Member.Update is guarded on the value already on the frame, which is what
--- check.sh's HOT list holds both files to.
+-- One member on the fast pass: the range, and a redraw if anything has said
+-- this tile moved. A tile nothing has happened to costs one UnitInRange and a
+-- comparison.
+local function DrainOne(button)
+	if not button:IsShown() then
+		return
+	end
+	Member.Ranged(button)
+	local block = button.wk
+	if block and block.dirty then
+		Member.Update(button)
+	end
+end
+
+-- And one on the reading, which redraws whatever the events said.
+local function ReadOne(button)
+	if not button:IsShown() then
+		return
+	end
+	Member.Ranged(button)
+	Member.Update(button)
+end
+
+-- The fast pass over both lists, five times a second.
+local function Drain()
+	if not ns.db then
+		return
+	end
+	for index = 1, #lists do
+		local members = lists[index].members
+		for slot = 1, #members do
+			DrainOne(members[slot])
+		end
+	end
+end
+
+-- Every member redrawn, once a second and whenever something asks. Nothing here
+-- allocates and every write inside Member.Update is guarded on the value
+-- already on the frame, which is what check.sh's HOT list holds both files to.
+--
+-- Still the whole pass rather than the marked ones, because this is what a
+-- roster change, a settings change and a rebuild all reach for: at those moments
+-- nobody has been told anything and every tile is out of date.
 function Group.Update()
 	if not ns.db then
 		return
@@ -979,10 +1025,7 @@ function Group.Update()
 	for index = 1, #lists do
 		local members = lists[index].members
 		for slot = 1, #members do
-			local button = members[slot]
-			if button:IsShown() then
-				Member.Update(button)
-			end
+			ReadOne(members[slot])
 		end
 	end
 end
@@ -1108,9 +1151,9 @@ end
 --------------------------------------------------------------------------
 -- The tick and the events
 --
--- The ticker lives on the event frame, which is never hidden. On an anchor it
--- would stop the moment a group broke up and never come back, which is the trap
--- Charge/Icon.lua and Swing/Gauges.lua both carry a note about.
+-- Both tickers live on the event frame, which is never hidden. On an anchor
+-- they would stop the moment a group broke up and never come back, which is the
+-- trap Charge/Icon.lua and Swing/Gauges.lua both carry a note about.
 --------------------------------------------------------------------------
 
 
@@ -1145,11 +1188,12 @@ events:SetScript("OnEvent", function(_, event)
 		end
 		if any then
 			Group.Apply()
-			-- Armed once. UI.Ticker appends and refuses a second tick of this
+			-- Armed once. UI.Ticker appends and refuses a second tick of either
 			-- name on this frame, so a branch that arms one has to be a branch
 			-- that runs once.
 			if not tick then
-				tick = ns.UI.Ticker(events, POLL, "party", Group.Update)
+				tick = ns.UI.Ticker(events, POLL, "party", Drain)
+				ns.UI.Ticker(events, VERIFY, "partyread", Group.Update)
 			end
 		end
 		return

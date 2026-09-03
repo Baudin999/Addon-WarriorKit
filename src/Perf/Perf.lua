@@ -52,6 +52,12 @@ local SAMPLE_RATE = 1.0
 -- arrived on. Named here so the tab can say what that costs during a pull,
 -- which is the question the change that put it on a tick was answering.
 --
+-- "skinread" and "partyread" are the other halves of "skin" and "party". Both
+-- parts were one number when both were a poll; each is now a fast pass over
+-- what the client said moved and a slower reading of everything, and timing the
+-- pair as one would report a once-a-second reading as something that happens
+-- five times a second.
+--
 -- Ten more of them were missing the same way, and two of those run on every
 -- frame: the tooltip's own sweep and the chart's drift. A ticker whose name is
 -- not here is not timed at all and its row on the tab reads as unavailable, so
@@ -59,9 +65,9 @@ local SAMPLE_RATE = 1.0
 -- written to find them. scripts/check.sh compares this list against every
 -- ns.UI.Ticker call in the addon now, in both directions.
 local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast",
-	"castsweep", "tip", "chart", "skin", "party", "meter", "buffs", "cooldowns",
-	"stream", "world", "trace", "hide", "clock", "bagstack", "vendor", "thanks",
-	"sampler", "feed" }
+	"castsweep", "tip", "chart", "skin", "skinread", "party", "partyread", "meter",
+	"buffs", "cooldowns", "stream", "world", "trace", "hide", "clock", "bagstack",
+	"vendor", "thanks", "sampler", "feed" }
 local slots = {}
 local gauges, gaugeOrder = {}, {}
 

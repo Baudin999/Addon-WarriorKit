@@ -192,9 +192,20 @@ local function Art(icon, spell)
 	return ns.SpellTexture(spell)
 end
 
--- One aura slot, whichever API this client has. The shape is EnemyBars.lua's,
--- because it is the same question asked of a mob rather than of your target,
--- and the positional read of UnitAura is the only way that call can be read on
+-- One aura slot, whichever API this client has.
+--
+-- UnitAura is asked first and C_UnitAuras second, which is the rule
+-- ns.BuffName states in Core/Core.lua and for the reason it gives there: the
+-- old call hands back a row of values and the new one hands back a table it
+-- built to put them in. Every caller here wants the values. This file had the
+-- preference the other way round, and the note under Scan saying the per-slot
+-- tables are built once and never again was true of this file's own tables and
+-- false of the walk that fills them: a fresh table per aura per pass, which on
+-- a target carrying a raid's worth of bleeds is the garbage that shows up as a
+-- stutter rather than as a number. Where only the new call exists the table is
+-- made and dropped, which is the cost of that client.
+--
+-- The positional read of UnitAura is the only way that call can be read on
 -- 2.5.6: name is first, the icon second, the stack count third, the duration
 -- fifth, the expiry sixth, the caster seventh and the spell tenth.
 --
@@ -205,6 +216,11 @@ end
 -- The name is the existence flag rather than the icon, because a client is
 -- allowed to hand back an aura with no art and the walk must not stop there.
 local function AuraAt(unit, index, filter)
+	if type(UnitAura) == "function" then
+		local name, icon, count, _, duration, expires, source, _, _, spell =
+			UnitAura(unit, index, filter)
+		return name, Art(icon, spell), expires, duration, count, source
+	end
 	local api = C_UnitAuras
 	local getter
 	if api then
@@ -214,20 +230,15 @@ local function AuraAt(unit, index, filter)
 			getter = api.GetBuffDataByIndex
 		end
 	end
-	if getter then
-		local aura = getter(unit, index)
-		if not aura then
-			return nil
-		end
-		return aura.name, Art(aura.icon, aura.spellId), aura.expirationTime,
-			aura.duration, aura.applications, aura.sourceUnit
-	end
-	if type(UnitAura) ~= "function" then
+	if not getter then
 		return nil
 	end
-	local name, icon, count, _, duration, expires, source, _, _, spell =
-		UnitAura(unit, index, filter)
-	return name, Art(icon, spell), expires, duration, count, source
+	local aura = getter(unit, index)
+	if not aura then
+		return nil
+	end
+	return aura.name, Art(aura.icon, aura.spellId), aura.expirationTime,
+		aura.duration, aura.applications, aura.sourceUnit
 end
 
 -- Fill one row's slots from the unit, yours first, and answer how many came
@@ -241,8 +252,9 @@ end
 --
 -- The per-slot tables are built once and reused for the life of the session,
 -- which is EnemyBars.lua's rule for the same reason: a fresh table per aura per
--- tick is the kind of garbage that shows up as a stutter on a pull rather than
--- as a number on a frame counter.
+-- pass is the kind of garbage that shows up as a stutter on a pull rather than
+-- as a number on a frame counter. The walk that fills them allocates nothing
+-- either now, which it did not before; see the head of AuraAt.
 -- The sharpening stone on your weapon, at the head of the row it belongs to.
 --
 -- It is here rather than left to the client because it is the one thing on you
@@ -336,7 +348,7 @@ end
 --
 -- It is neither. The buttons are built in order, so the only one that can have
 -- appeared since the last look is the one after the last one hidden. That is a
--- single global lookup per run per tick once the run has settled, and a run of
+-- single global lookup per run per pass once the run has settled, and a run of
 -- them the first time a unit turns up with a full list.
 --
 -- A run is one name the client counts from 1, and a row can replace more than
@@ -740,10 +752,13 @@ function Auras.Unstyle(entry)
 	return complete
 end
 
--- The tick, off UnitFrames/Skin.lua's. Both halves are here rather than on an
--- event for the reason the head of that file gives for reading health on a
--- ticker: the event names that carry auras have been renamed between these two
--- clients and a missed one is a row that lies.
+-- One pass, off UnitFrames/Paint.lua's, which runs when UNIT_AURA said this
+-- unit's list moved and once a second behind that. Both halves are here: the
+-- sweep of the client's own buttons and the fill of ours. The sweep belongs on
+-- the same pass rather than on its own clock because the client builds
+-- BuffButton9 the first time you carry nine buffs, which is an aura event. A
+-- switch under `/wk hide` that moves is picked up by the reading behind the
+-- events, so it takes up to a second rather than up to a fifth of one.
 function Auras.Update(entry)
 	local list = entry.auras
 	if not list or not entry.styled then

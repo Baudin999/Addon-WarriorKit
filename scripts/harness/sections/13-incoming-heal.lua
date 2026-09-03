@@ -23,12 +23,14 @@ check(sliceAnchor ~= nil and sliceAnchor[2] == _G.PlayerFrame.healthbar.fill,
 	"the heal slice is not pinned to the health bar's own fill texture, so it starts"
 	.. " wherever the two scales happen to agree rather than where the bar stops")
 
--- A whole refresh interval per call, because the ticker only does the work
--- every fifth of a second and a heal set between two of those is a heal the
--- frame has not been told about yet.
+-- A whole second per call, and that is the assertion rather than an
+-- inconvenience. An incoming heal is not one of the four unit events a block is
+-- marked by, so it lands on the reading behind them, which runs once a second.
+-- A quarter of a second here would drive the fast pass, find nothing marked and
+-- measure a slice nobody had drawn yet.
 local function healTick(amount)
 	state.incomingHeals = amount
-	skinTicker.scripts.OnUpdate(skinTicker, 0.25)
+	skinTicker.scripts.OnUpdate(skinTicker, 1)
 	if not healSlice.shown then
 		return 0
 	end

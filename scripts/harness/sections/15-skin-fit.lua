@@ -18,6 +18,7 @@ local H = ...
 local ns, check, targetFrame = H.ns, H.check, H.targetFrame
 local totFrame, BUILT = H.totFrame, H.BUILT
 local blocks = H.carry.blocks
+local fire, debuffs, skinTicker = H.fire, H.debuffs, H.carry.skinTicker
 
 local function screenSize(frame)
 	return frame:GetWidth() * frame:GetEffectiveScale(),
@@ -254,6 +255,120 @@ do
 	print(("link   the mirror line is the middle of the screen at ui scale 0.65,"
 		.. " 1 and 0.5, 3 px under the target block; a drag reads back %d down")
 		:format(wantLevel))
+end
+
+----------------------------------------------------------------------
+-- Told rather than polled
+--
+-- The sections above are what the three blocks draw. This is when they draw it:
+-- the client says a unit's health, power, auras or connection moved, the block
+-- is marked, and the pass a fifth of a second later draws what is marked. A
+-- part that only ever ran on the tick would pass every check above and be
+-- reading the client from the top five times a second to find out that nothing
+-- had happened.
+--
+-- The target's debuff row is what all of it is read off, because the row is a
+-- named global and a square is either up or it is not. What is being asserted
+-- is the marking, not the drawing, which section 14 already settled.
+--
+-- The two clocks have to be put in a known phase before any of it means
+-- anything. Both tickers hang off one frame and one long frame fires them both
+-- and leaves both accumulators at zero, after which four short frames drive the
+-- fast pass alone. Without that the reading could land on any of these lines
+-- and the section would be measuring the phase it happened to start in.
+----------------------------------------------------------------------
+
+do
+	local row = _G.WarriorKitTargetDebuffs
+	local function settle()
+		skinTicker.scripts.OnUpdate(skinTicker, 5)
+	end
+	local function pass()
+		skinTicker.scripts.OnUpdate(skinTicker, 0.25)
+	end
+	local function lit()
+		return row.children[1]:IsShown()
+	end
+
+	debuffs.target = nil
+	settle()
+	check(not lit(), "the target's debuff row is drawing something before this starts")
+
+	-- One debuff and the event that says so, then one pass.
+	debuffs.target = { { name = "Rend", icon = "Rend", spell = 11574,
+		count = 1, duration = 21, expires = 121, source = "player" } }
+	fire("UNIT_AURA", "target")
+	pass()
+	check(lit(), "a debuff and its event did not reach the row on the next pass")
+
+	-- Taken away with nobody telling the addon, which is the half that says the
+	-- pass is not reading the client any more.
+	debuffs.target = nil
+	pass()
+	check(lit(), "the row redrew on a pass nothing had marked, so it is still polling")
+
+	-- And an event about the wrong unit is not this block's news.
+	fire("UNIT_AURA", "player")
+	pass()
+	check(lit(), "the target block redrew on an event that named another unit")
+
+	-- The reading behind the events, which is what catches a client that fires
+	-- none of them.
+	settle()
+	check(not lit(), "the once a second reading never caught up with the client")
+end
+
+----------------------------------------------------------------------
+-- The bars, when Blizzard writes its own texture back
+--
+-- The tick used to read both bars back on every pass to find out whether the
+-- client had put UI-StatusBar over the flat colour. It hooks
+-- SetStatusBarTexture instead, which is the only call that can swap a status
+-- bar's fill, so the readbacks are gone and the hook is what asks for the
+-- flatten.
+--
+-- hooksecurefunc is installed for this block alone and taken away after, the
+-- same as in 29-social.lua, 39-party-raid.lua and 43-blizzard-hide.lua and for
+-- the same reason: left in the fixture it switches on hooks in other files that
+-- have never been able to install here. The skin is turned off and on again
+-- because the hook is asked for at style time.
+----------------------------------------------------------------------
+
+do
+	_G.hooksecurefunc = function(target, name, post)
+		local original = target[name]
+		target[name] = function(...)
+			original(...)
+			post(...)
+		end
+	end
+	ns.db.skin = false
+	ns.FrameSkin.Apply()
+	ns.db.skin = true
+	ns.FrameSkin.Apply()
+	_G.hooksecurefunc = nil
+
+	local bar = _G.PlayerFrame.healthbar
+	skinTicker.scripts.OnUpdate(skinTicker, 5)
+	local flat = bar.fill.colorWrites
+	skinTicker.scripts.OnUpdate(skinTicker, 5)
+	check(bar.fill.colorWrites == flat,
+		("the skin flattened the health bar %d more times with nothing having"
+			.. " touched it"):format(bar.fill.colorWrites - flat))
+
+	-- The client swapping the art under the bar, which is what the readback used
+	-- to be looking for once a fifth of a second per bar.
+	bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+	skinTicker.scripts.OnUpdate(skinTicker, 0.25)
+	check(bar.fill.colorWrites == flat + 1,
+		"Blizzard put its own texture back on the health bar and the skin did not"
+		.. " flatten it again on the next pass")
+	check(bar.fill:GetTexture() == nil,
+		"the health bar is drawing Blizzard's own art under the flat colour")
+
+	print("told   a debuff event draws on the next pass, a pass with nothing"
+		.. " marked draws nothing, and the bar is flattened when the client"
+		.. " writes its own texture back")
 end
 
 -- Left for the sections below.

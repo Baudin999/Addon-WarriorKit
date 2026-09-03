@@ -36,6 +36,13 @@ ns.GroupMember = Member
 -- Every widget write on the tick is guarded on the value already on the frame.
 -- Forty of these on a raid at five ticks a second is where that stops being a
 -- style rule and starts being the difference you can feel.
+--
+-- When a tile is drawn is the other half of that, and it is this file's too. A
+-- tile registers three unit events against whichever token the header has its
+-- button pointed at and marks itself when one arrives, so the pass over forty
+-- of them draws the ones something happened to. What is left on the pass for
+-- every tile is one UnitInRange, which is the one reading on here the client
+-- has no event for.
 --------------------------------------------------------------------------
 
 local Unit = ns.Unit
@@ -109,6 +116,52 @@ local UnitIsGhost = _G.UnitIsGhost
 local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
 
 --------------------------------------------------------------------------
+-- What the client says has moved on one member
+--
+-- Three events, and every one is something a tile draws: the fill, the power
+-- rail, and the word for somebody who has gone offline. They are what
+-- Blizzard's own frames take on this client, PartyMemberFrame.lua for the
+-- connection and UnitFrame.lua for the other two, and the compact raid frame
+-- keeps the same pair of dirty bits behind them that this does.
+--
+-- No UNIT_AURA, because a tile draws no auras. Being dead or a ghost is not on
+-- the list either and does not need to be: a member who dies loses their health
+-- to zero on the way, which is UNIT_HEALTH, and the reading behind the events
+-- catches a release.
+--
+-- The events land on the tile's own box rather than on the button, because the
+-- button is a secure unit button the header owns and its scripts are the
+-- header's business.
+--------------------------------------------------------------------------
+
+local WATCHED = { "UNIT_HEALTH", "UNIT_POWER_UPDATE", "UNIT_CONNECTION" }
+
+local function Touched(box, _, unit)
+	if unit == box.unit then
+		box.block.dirty = true
+	end
+end
+
+-- The token this tile answers for, and the three events about it. Both move
+-- together: Touched compares the token, so a box carrying events and no token
+-- would ignore every one of them.
+--
+-- Called whenever the unit under a button changes, which the header only does
+-- out of combat.
+local function Listen(block, unit)
+	local box = block.box
+	box.unit = unit
+	for index = 1, #WATCHED do
+		if unit then
+			ns.RegisterUnitEvent(box, WATCHED[index], unit)
+		else
+			box:UnregisterEvent(WATCHED[index])
+		end
+	end
+	block.dirty = true
+end
+
+--------------------------------------------------------------------------
 -- Building one
 --------------------------------------------------------------------------
 
@@ -132,6 +185,8 @@ function Member.Build(button)
 
 	block.box = CreateFrame("Frame", nil, button)
 	block.box:EnableMouse(false)
+	block.box.block = block
+	block.box:SetScript("OnEvent", Touched)
 	local backdrop = ns.Fill(block.box, "BACKGROUND",
 		BACKDROP[1], BACKDROP[2], BACKDROP[3], BACKDROP[4])
 	backdrop:SetAllPoints()
@@ -271,6 +326,10 @@ function Member.Place(button, look)
 	-- A preview tile has nobody behind it, so it says for itself whether it
 	-- carries a rail and never asks the client about a unit it does not have.
 	block.unit = not look.preview and button:GetAttribute("unit") or nil
+	-- And the events follow the token. This is the pass that runs when the
+	-- header re-points a button at somebody else, so it is where a tile stops
+	-- being told about the person who used to stand in it.
+	Listen(block, block.unit)
 	local rails = look.preview and look.rails ~= false or false
 	if block.unit and UnitExists(block.unit) then
 		rails = select(2, Unit.Power(block.unit)) > 0
@@ -311,15 +370,22 @@ end
 --------------------------------------------------------------------------
 -- The tick
 --
--- Five times a second, the same rate the skin runs at and for the same reason
--- it does not use events: the names that carry health and power have been
--- renamed twice between these two clients and a missed one is a bar that lies.
+-- Five times a second for the range, and on the three events above for
+-- everything else, with a reading of every tile behind them once a second.
+-- It used to be sixteen client calls per tile five times a second whatever had
+-- happened, which in a raid is 3,200 a second to redraw forty tiles that were
+-- already right.
 --------------------------------------------------------------------------
 
 -- Everything this tile last drew, forgotten. Every field, rather than the ones
 -- that look like they matter: a field left behind is a write that will not
 -- happen the next time the same value comes round, and the symptom is a tile
 -- carrying the last member's name for as long as the new one stands in it.
+--
+-- The range answer goes with them, and it is a reading rather than a drawing.
+-- Nobody is out of range until the next pass has asked, which is the right
+-- default: the alternative is a tile that says "out of range" about somebody
+-- standing next to you because the person who used to be in that slot was.
 function Member.Clear(button)
 	local block = button.wk
 	if not block then
@@ -327,14 +393,42 @@ function Member.Clear(button)
 	end
 	block.tint, block.shade, block.hue = nil, nil, nil
 	block.percent, block.power, block.label = nil, nil, nil
+	block.away = nil
+end
+
+-- Whether this member is close enough to be worth pressing anything on, which
+-- is the one reading on the tile that no event carries. UnitInRange is a
+-- distance and the client fires nothing when it changes, so the pass asks it
+-- and marks the tile only when the answer moves. Blizzard's own compact frame
+-- keeps calling the same function for the same reason.
+--
+-- Probed by name, like the three below. Nothing installed on this machine calls
+-- UnitInRange, and a client missing it has to lose the state rather than raise
+-- once per member five times a second.
+function Member.Ranged(button)
+	local block = button.wk
+	if not block or not block.range or not block.unit
+		or type(UnitInRange) ~= "function" then
+		return
+	end
+	local within, checked = UnitInRange(block.unit)
+	local away = (checked and not within) and true or false
+	if block.away ~= away then
+		block.away = away
+		block.dirty = true
+	end
 end
 
 -- Which of the four states this member is in, or nothing at all.
 --
 -- Every call is probed by name. Nothing installed on this machine calls
--- UnitInRange, UnitIsGhost or UnitIsDeadOrGhost, and a client missing one has
--- to lose that state rather than raise once per member five times a second.
-function Member.Shade(unit, range)
+-- UnitIsGhost or UnitIsDeadOrGhost, and a client missing one has to lose that
+-- state rather than raise once per member five times a second.
+--
+-- The range answer is read off the tile rather than asked for again. It is
+-- Member.Ranged's, taken on the pass rather than here, so a redraw the events
+-- ask for does not cost a second distance check.
+function Member.Shade(block, unit)
 	if type(UnitIsConnected) == "function" and not UnitIsConnected(unit) then
 		return OFFLINE
 	end
@@ -344,11 +438,8 @@ function Member.Shade(unit, range)
 	if type(UnitIsDeadOrGhost) == "function" and UnitIsDeadOrGhost(unit) then
 		return DEAD
 	end
-	if range and type(UnitInRange) == "function" then
-		local within, checked = UnitInRange(unit)
-		if checked and not within then
-			return AWAY
-		end
+	if block.range and block.away then
+		return AWAY
 	end
 	return nil
 end
@@ -413,10 +504,12 @@ end
 
 -- One member, redrawn.
 --
--- The unit is read off the button every pass rather than trusted from the last
+-- The unit is read off the button here rather than trusted from the last
 -- layout. The header only re-points a button out of combat, so this should
--- never move between two ticks, and one attribute read per member is cheaper
--- than being wrong about which person's health is on the screen.
+-- never move between two readings, and one attribute read per member is cheaper
+-- than being wrong about which person's health is on the screen. It is on this
+-- side of the dirty bit rather than on the pass, which is what takes it off the
+-- fifth of a second and leaves it on the reading.
 function Member.Update(button)
 	local block = button.wk
 	if not block then
@@ -424,14 +517,16 @@ function Member.Update(button)
 	end
 	local unit = button:GetAttribute("unit")
 	if block.unit ~= unit then
+		Listen(block, unit)
 		block.unit = unit
 		Member.Clear(button)
 	end
+	block.dirty = false
 	if not unit or not UnitExists(unit) then
 		return
 	end
 
-	local shade = Member.Shade(unit, block.range)
+	local shade = Member.Shade(block, unit)
 	local tint = Color.OfUnit(unit)
 	if block.tint ~= tint or block.shade ~= shade then
 		block.tint, block.shade = tint, shade

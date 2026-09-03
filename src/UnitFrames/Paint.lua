@@ -7,11 +7,15 @@ ns.FramePaint = Paint
 -- The tick
 --
 -- One pass over one skinned block: the colours off the unit, the four numbers,
--- the incoming heal, and the two things Blizzard writes back over. Five times a
--- second, the same rate the enemy bars run at, and on a ticker rather than on
--- events for the reason the walk in UnitFrames/Art.lua does not use them
--- either: the event names that carry health and power have been renamed twice
--- between these two clients and a missed one is a bar that lies.
+-- the incoming heal, and the two things Blizzard writes back over.
+--
+-- Run when UnitFrames/Skin.lua says the unit moved, and once a second behind
+-- that whatever the client has said. It used to run five times a second on
+-- every block whatever had happened, because the head of this file said the
+-- event names that carry health and power have been renamed between these two
+-- clients and a missed one is a bar that lies. The names are checked against
+-- Blizzard's own frames now and the note over Skin.lua's WATCHED is what they
+-- came back as.
 --
 -- Everything here takes a unit token and nil guards, because anything a ticker
 -- does has to be incapable of raising. Every write is guarded on the value
@@ -129,6 +133,43 @@ local function PaintLevel(entry, unit)
 	end
 end
 
+-- The two things Blizzard writes back over, put back.
+--
+-- Both are re-applied rather than set once, because the bars and the portrait
+-- are Blizzard's and their own code puts a texture and a crop on them whenever
+-- it swaps the art underneath.
+--
+-- The bars are asked only when something has asked for them. UnitFrames/Skin.lua
+-- hooks SetStatusBarTexture on both, which is the only call that can swap a
+-- status bar's fill, so the hook says exactly when the answer changed and the
+-- four readbacks this used to make on every pass are gone. Where the hook could
+-- not be installed `barsHooked` is false, the flag never comes down, and both
+-- bars are read back on every pass the way they always were.
+--
+-- The portrait keeps its readback and has to. Blizzard swaps the render through
+-- SetPortraitTexture, which is handed the texture and writes it from the C side
+-- without going through any method an addon can hook, so there is nothing to be
+-- told by and one comparison is the whole cost.
+--
+-- That comparison is exact because the crop is a power of two fraction. A crop
+-- written as 0.15 would come back as whatever the client rounded it to and the
+-- guard would never hold.
+local function Writeback(entry)
+	if entry.flatten then
+		entry.flatten = not entry.barsHooked
+		Gauge.Flatten(entry.healthbar)
+		Gauge.Flatten(entry.manabar)
+	end
+	local portrait = entry.portrait
+	if portrait then
+		local left = portrait.GetTexCoord and portrait:GetTexCoord()
+		if left ~= PORTRAIT_TRIM then
+			portrait:SetTexCoord(PORTRAIT_TRIM, 1 - PORTRAIT_TRIM,
+				PORTRAIT_TRIM, 1 - PORTRAIT_TRIM)
+		end
+	end
+end
+
 function Paint.Refresh(entry)
 	local unit = entry.spec.unit
 	if not entry.styled or not UnitExists(unit) then
@@ -195,30 +236,11 @@ function Paint.Refresh(entry)
 
 	PaintLevel(entry, unit)
 
-	-- Both re-applied rather than set once, because the bars and the portrait
-	-- are Blizzard's and their own code puts a texture and a crop back on them
-	-- whenever it swaps the art underneath. Both now read back first: being the
-	-- last word costs one comparison in the common case, where nothing has
-	-- touched either since the last tick, rather than nine writes across three
-	-- frames five times a second.
-	--
-	-- The comparison is exact because the crop is a power of two fraction. A
-	-- crop written as 0.15 would come back as whatever the client rounded it
-	-- to and this guard would never hold.
-	Gauge.Flatten(entry.healthbar)
-	Gauge.Flatten(entry.manabar)
-	local portrait = entry.portrait
-	if portrait then
-		local left = portrait.GetTexCoord and portrait:GetTexCoord()
-		if left ~= PORTRAIT_TRIM then
-			portrait:SetTexCoord(PORTRAIT_TRIM, 1 - PORTRAIT_TRIM,
-				PORTRAIT_TRIM, 1 - PORTRAIT_TRIM)
-		end
-	end
+	Writeback(entry)
 
-	-- The aura rows, on this ticker rather than on UNIT_AURA, for the reason
-	-- the head of this file gives for reading health here: the event names
-	-- that carry auras have been renamed between these two clients and a
-	-- missed one is a row that lies. Everything it does is guarded in there.
+	-- The aura rows, which come along on the same pass. UNIT_AURA is one of the
+	-- four events that mark this block, so a target gaining a debuff is a row
+	-- redrawn a fifth of a second later and a target standing still is a row
+	-- nothing reads. Everything it does is guarded in there.
 	ns.FrameAuras.Update(entry)
 end

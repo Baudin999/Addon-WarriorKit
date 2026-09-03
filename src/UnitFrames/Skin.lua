@@ -37,12 +37,40 @@ ns.FrameSkin = Skin
 -- and the panel are told. It owns the entry list, so it is the only file that
 -- can answer which block a link or a perch hangs off, and it hands that answer
 -- to Block rather than letting Block go looking.
+--
+-- It also owns when a block is drawn, which is the fifth thing and is new. The
+-- three used to be read off the client from the top five times a second because
+-- nobody had checked what the client fires. Four unit events mark a block and
+-- the pass draws what is marked; see the note over WATCHED for which four and
+-- why they are safe to trust on this client.
 
 local Art = ns.FrameArt
 local Block = ns.FrameBlock
 local Paint = ns.FramePaint
 
+-- The two rails Blizzard's bars are pinned to, by the key on the entry. Taken
+-- at load the way UnitFrames/Block.lua takes it, and for the same reason: the
+-- table is a constant over there and the files have to agree about it.
+local BARS = Art.Bars()
+
+-- How often the three blocks are looked at, and how often they are read off the
+-- client from the top.
+--
+-- The fast one used to be the only one, and on it every pass read health,
+-- power, the name, the level, both aura rows and five texture readbacks off
+-- three units: about 110 client calls a fifth of a second. The client already
+-- says when a unit's health, power, auras or connection move, so a frame is
+-- marked by Watched below and this pass draws what is marked. What it costs
+-- when nothing has happened is the walk and Block.Reveal, which is one question
+-- about target of target and nothing at all about the other two.
+--
+-- The reading behind it is what no event on the list carries: an incoming heal,
+-- a level, a name, and target of target, which has no event stream on this
+-- client at all. Blizzard's own TargetOfTargetMixin:Update is driven off the
+-- target frame rather than off the unit for exactly that reason, and the
+-- comment in CompactUnitFrame.lua beside it says there is no good way round it.
 local REFRESH = 0.2
+local VERIFY = 1
 
 -- Target of target against the other two. It is a glance, not a frame you
 -- read, so it is the one that has to stay out of the way. Blizzard parked it
@@ -139,6 +167,99 @@ local function Piece(frame, key, names)
 	return nil
 end
 
+--------------------------------------------------------------------------
+-- What the client says has moved
+--
+-- Four events per unit, and every one of them is something a block draws: the
+-- gauge, the power rail, the two aura rows and the word for somebody who has
+-- gone offline. Between them they are most of what the fifth-of-a-second pass
+-- was polling for.
+--
+-- The header of this file used to say the event names that carry health and
+-- auras have been renamed between these two clients, so the tick read them
+-- instead. That was a fair worry and it is answered rather than believed now.
+-- These four are what Blizzard's own frames register on this client:
+-- TargetFrame.lua takes UNIT_AURA against the target's token, UnitFrame.lua
+-- takes UNIT_HEALTH and UNIT_POWER_UPDATE, and PartyMemberFrame.lua takes
+-- UNIT_CONNECTION. A frame that draws what the client's own frame draws may
+-- listen to what the client's own frame listens to.
+--
+-- Marked rather than drawn, because a unit taking four hits between two frames
+-- is four events and one block. The pass a fifth of a second later draws what
+-- is marked, which is the rate this part has always redrawn at.
+--
+-- The unit is compared even though ns.RegisterUnitEvent asked the client to
+-- filter, because a client without RegisterUnitEvent gets the plain
+-- registration and hands over every unit it tracks.
+local WATCHED = {
+	"UNIT_AURA",
+	"UNIT_HEALTH",
+	"UNIT_POWER_UPDATE",
+	"UNIT_CONNECTION",
+}
+
+-- A bit on the entry rather than a set of them, which is where this parts
+-- company with UnitFrames/EnemyBars.lua. There are three of these and the pass
+-- walks all three anyway to ask about target of target, so a set would be a
+-- second thing to keep in step with the list for no walk saved.
+local function Touched(watch, _, unit)
+	if unit == watch.unit then
+		watch.entry.dirty = true
+	end
+end
+
+-- The news turned on with the skin and off again with it. A frame nobody is
+-- drawing has nothing to be told.
+local function Listen(entry, on)
+	if entry.listening == on then
+		return
+	end
+	entry.listening = on
+	for index = 1, #WATCHED do
+		if on then
+			ns.RegisterUnitEvent(entry.watch, WATCHED[index], entry.spec.unit)
+		else
+			entry.watch:UnregisterEvent(WATCHED[index])
+		end
+	end
+end
+
+-- Blizzard putting its own texture back on one of the two bars.
+--
+-- The tick used to defend against that by reading both bars back on every pass,
+-- which is four client calls per frame five times a second to find out that
+-- nothing had touched them. The client cannot swap a status bar's fill without
+-- calling this method, so the hook is the whole of the question: it fires when
+-- the answer changes and never otherwise.
+--
+-- Like the two hooks in UnitFrames/Block.lua this one cannot be taken off
+-- again, which is why it does nothing at all unless the entry is one this file
+-- is still drawing. A client with no hooksecurefunc leaves `barsHooked` false
+-- and UnitFrames/Paint.lua goes on reading the bars back, which is what it did
+-- before and is the safe half to be wrong on.
+local function Retextured(bar)
+	local entry = bar.wkSkin
+	if entry then
+		entry.flatten, entry.dirty = true, true
+	end
+end
+
+local function HookBars(entry)
+	if entry.barsHooked or type(hooksecurefunc) ~= "function" then
+		return
+	end
+	local held = true
+	for index = 1, #BARS do
+		local bar = entry[BARS[index]]
+		bar.wkSkin = entry
+		if type(bar.SetStatusBarTexture) ~= "function"
+			or not pcall(hooksecurefunc, bar, "SetStatusBarTexture", Retextured) then
+			held = false
+		end
+	end
+	entry.barsHooked = held
+end
+
 local function Resolve(spec)
 	local frame = Piece(_G, nil, spec.frames)
 	if not frame or type(frame.GetRegions) ~= "function" then
@@ -163,6 +284,17 @@ local function Resolve(spec)
 	for key, names in pairs(spec.names) do
 		entry[key] = Piece(frame, key, names)
 	end
+
+	-- The frame the client's news about this unit lands on, and it is ours
+	-- rather than Blizzard's: these three frames carry the client's own OnEvent
+	-- and a script written over one of them would take a unit frame off the air.
+	-- One frame per entry rather than one shared, because the filtered
+	-- registration is per unit and a shared frame would be handed every unit the
+	-- client tracks.
+	entry.watch = CreateFrame("Frame")
+	entry.watch.entry = entry
+	entry.watch.unit = spec.unit
+	entry.watch:SetScript("OnEvent", Touched)
 	return entry
 end
 
@@ -239,7 +371,13 @@ local function Style(entry)
 	Block.Show(entry)
 	entry.tint, entry.power, entry.levelTag = nil, nil, nil
 	entry.shownPercent, entry.shownPower, entry.shownName = nil, nil, nil
+	-- Both bars asked once on the way in, whatever the hook does afterwards: a
+	-- frame the skin has only just taken over is carrying whatever art the
+	-- client last put on it.
+	entry.flatten, entry.dirty = true, true
 	entry.styled = true
+	HookBars(entry)
+	Listen(entry, true)
 	-- After entry.styled, because the rows only draw on a styled frame, and
 	-- not folded into `complete` with an `and`, which would skip the call on a
 	-- strip that combat had already refused.
@@ -258,6 +396,7 @@ local function Unstyle(entry)
 	end
 
 	entry.styled = false
+	Listen(entry, false)
 	Block.Hide(entry)
 
 	local complete = Art.Restore(entry)
@@ -488,7 +627,11 @@ end
 --------------------------------------------------------------------------
 
 -- When a pass over the three blocks happens. What one pass does is
--- UnitFrames/Paint.lua's; this is the clock and nothing else.
+-- UnitFrames/Paint.lua's; these two are the clocks and nothing else.
+--
+-- The marked ones, drawn. Whatever the client said about a unit since the last
+-- pass is on the screen a fifth of a second later, which is the rate this part
+-- has always redrawn at, and a unit nothing has happened to costs the walk.
 local function Tick()
 	for _, entry in ipairs(entries) do
 		-- Before the paint, because a frame that has just been put up wants
@@ -496,13 +639,25 @@ local function Tick()
 		-- the reason Apply paints in line rather than leaving it to the tick.
 		--
 		-- On the ticker rather than on UNIT_TARGET, which is the event that
-		-- carries it: this file reads health, power and auras off a ticker
-		-- already, and the head of it says why. A target that picks up a
-		-- target is the same kind of change and gets the same treatment. A
-		-- refusal is left to the next pass, which is a fifth of a second away,
-		-- rather than setting the deferred flag: the answer changes with the
-		-- units and the flag is for work that stays undone.
+		-- carries it: target of target has no unit event stream on this client
+		-- and Blizzard drives its own copy of this frame off a timer for the
+		-- same reason. A refusal is left to the next pass, which is a fifth of
+		-- a second away, rather than setting the deferred flag: the answer
+		-- changes with the units and the flag is for work that stays undone.
 		Block.Reveal(entry, EntryFor(entry.spec.under))
+		if entry.dirty then
+			entry.dirty = false
+			Paint.Refresh(entry)
+		end
+	end
+end
+
+-- And every block read off the client from the top, once a second, for what the
+-- four events do not carry: an incoming heal, a level, a name, a mob somebody
+-- else has tagged, and target of target, which is nobody's event.
+local function Read()
+	for _, entry in ipairs(entries) do
+		entry.dirty = false
 		Paint.Refresh(entry)
 	end
 end
@@ -534,11 +689,12 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		end
 		Skin.Apply()
 
-		-- Armed once. UI.Ticker appends and refuses a second tick of this name
+		-- Armed once. UI.Ticker appends and refuses a second tick of either name
 		-- on this frame, so a branch that arms one has to be a branch that runs
 		-- once.
 		if not tick then
 			tick = ns.UI.Ticker(events, REFRESH, "skin", Tick)
+			ns.UI.Ticker(events, VERIFY, "skinread", Read)
 		end
 		return
 	end
@@ -560,6 +716,17 @@ events:SetScript("OnEvent", function(_, event, arg1)
 			Skin.Relayout()
 		end
 		return
+	end
+
+	if event == "PLAYER_TARGET_CHANGED" then
+		-- The one unit change no per-unit event carries: "target" and
+		-- "targettarget" are both a different creature now and the client fires
+		-- nothing against either token to say so. All three are marked rather
+		-- than the two, because your own block draws nothing that moved and a
+		-- pass over it is a handful of comparisons that all hold.
+		for _, entry in ipairs(entries) do
+			entry.dirty = true
+		end
 	end
 
 	Skin.Relayout()

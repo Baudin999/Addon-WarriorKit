@@ -18,16 +18,25 @@ local ADDON, ns = ...
 -- Both are costed against 60 frames a second, which is the same budget Total
 -- below measures everything against, and `rate` is what the heading says
 -- instead of a number of hertz.
+--
+-- Three parts have two rows now, because three parts are told rather than
+-- asked: a fast pass over what the client said moved, and a slower reading of
+-- everything for what no event carries. The enemy bars are "enemy cast fills"
+-- and "enemy bars"; the other two say which half they are. A row's hertz is the
+-- ticker's own interval and has to be moved with it, or the tab reports a share
+-- of a second that is five times what the part actually takes.
 local ROWS = {
 	{ key = "marker", label = "charge marker", hz = 20 },
 	{ key = "swing", label = "swing timer", hz = 60, rate = "every frame" },
 	{ key = "icon", label = "charge icon", hz = 10 },
 	{ key = "action", label = "action bars", hz = 10 },
-	{ key = "bars", label = "enemy bars", hz = 5 },
+	{ key = "bars", label = "enemy bars", hz = 1 },
 	{ key = "cast", label = "enemy cast fills", hz = 60, rate = "every frame" },
 	{ key = "playercast", label = "your cast bar", hz = 60, rate = "every frame" },
 	{ key = "skin", label = "unit frames", hz = 5 },
+	{ key = "skinread", label = "unit frames, full read", hz = 1 },
 	{ key = "party", label = "party and raid", hz = 5 },
+	{ key = "partyread", label = "party and raid, full read", hz = 1 },
 	{ key = "meter", label = "meters", hz = 5 },
 	{ key = "buffs", label = "buff nag", hz = 10 },
 	{ key = "cooldowns", label = "cooldown row", hz = 10 },

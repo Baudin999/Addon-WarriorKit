@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+### The unit frames and the party tiles are told rather than asked
+
+The player frame, the target and target of target were read off the client from
+the top five times a second: the colour, both bars, the name, the level, the
+incoming heal, two aura rows each and five texture readbacks per frame. About
+five hundred and fifty questions a second to redraw three frames that were
+already right. The party tiles did the same, sixteen questions per tile, which
+is three hundred a second in a five man and three thousand two hundred in a
+raid.
+
+The reason written down for polling was that nobody had checked which events
+this client fires. They are checked now, against the client's own frames:
+Blizzard's target frame asks to hear UNIT_AURA about your target, its unit
+frame asks for UNIT_HEALTH and UNIT_POWER_UPDATE, and its party frame asks for
+UNIT_CONNECTION. Each block and each tile asks for the same ones about its own
+unit and marks itself when one arrives, and the pass a fifth of a second later
+draws the ones something happened to. A target change marks all three blocks,
+because the client says nothing per unit when the creature under a token
+changes.
+
+A full reading of everything still runs behind them, once a second, for what no
+event carries: an incoming heal, a name, a level, somebody else tagging your
+target, and target of target, which has no event stream on this client at all.
+Blizzard drives its own copy of that frame off a timer for the same reason.
+
+What is left on the fast pass is one question per party tile, which is whether
+that person is close enough to help. There is no event for a distance and
+Blizzard's own frames poll it too.
+
+Two smaller ones on the same path. The skin used to read both of Blizzard's
+bars back on every pass to find out whether the client had put its own artwork
+over the flat colour; it hooks the one call that can do that instead. And the
+target's aura scan asked for each aura through the newer of the client's two
+calls, which builds a table to hand the answer over in, so a target carrying a
+raid's worth of bleeds was a fresh table per bleed per pass. It asks through
+the older call first now, the way the rest of the addon already did.
+
+Costs: a frame is redrawn when the client says its unit moved rather than on a
+fixed tick, so a target under sustained damage is drawn more often than it was
+and a target standing still is not drawn at all. On a client that fires none of
+the four, everything falls back to the one second reading. The performance tab
+has a row for each half, because timing a once a second reading and a five
+times a second pass as one number reports neither.
+
 ### Eleven smaller costs, taken off the paths that paid them
 
 The performance review that produced the last few entries ended with a list of

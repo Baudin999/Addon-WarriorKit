@@ -808,7 +808,10 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Group.Rebuild()           the slot order recomputed and every block laid
                                  out under it. What the roster events reach, and
                                  the one entry a harness drives
-    ns.Group.Update()            every block redrawn, five times a second
+    ns.Group.Update()            every block read off the client and redrawn,
+                                 once a second and after anything that moves the
+                                 roster. The five times a second pass beside it
+                                 draws only the blocks an event marked
     ns.Group.Order()             the slot order as the header was last told it.
                                  Empty while `party order group` is running,
                                  because the header is deciding it then
@@ -821,6 +824,11 @@ goes through `Feature.lua` or through the shared surface below:
                                  one member's block, built, laid out and ticked.
                                  `look` is the whole of what that file knows
                                  about the settings
+    ns.GroupMember.Ranged(button)
+                                 whether that member is close enough to help,
+                                 which is the one reading on a tile no event
+                                 carries and the only thing the fast pass asks
+                                 the client about every tile
     ns.GroupMember.Rails(button) whether the block still wants the power rail it
                                  was laid out with, which is a relayout rather
                                  than a write
@@ -1565,13 +1573,15 @@ below is the whole of what runs.
     Cooldowns/Row.lua           10 Hz     the long-cooldown row and its countdowns
     UI/Chart.lua                10 Hz     the arrow on an open map
     World/World.lua             10 Hz     whether you are still looking at it
-    UnitFrames/EnemyBars.lua     5 Hz     everything else on every bar on screen
     UnitFrames/PlayerCast.lua    5 Hz     what you are casting, asked again
-    UnitFrames/Skin.lua          5 Hz     the three Blizzard unit frames
-    UnitFrames/Group.lua         5 Hz     every party or raid block on screen
+    UnitFrames/Skin.lua          5 Hz     the marked blocks, and target of target
+    UnitFrames/Group.lua         5 Hz     the range on every tile, and the marked
     Meter/Window.lua             5 Hz     the two panes of numbers
     Buttons/Trace.lua            5 Hz     only while /wk bars trace is on
     Comfort/Vendor.lua           5 Hz     only during a sale, and it stops itself
+    UnitFrames/EnemyBars.lua     1 Hz     everything else on every bar on screen
+    UnitFrames/Skin.lua          1 Hz     all three blocks read from the top
+    UnitFrames/Group.lua         1 Hz     every tile read from the top
     Feeds/Stream.lua             1 Hz     the strip under a feed
     Minimap/Clock.lua            1 Hz     the reading on the minimap square
     UnitFrames/Blizzard.lua      1 Hz     every Blizzard frame the switches hide
@@ -1584,10 +1594,14 @@ window they are drawn in. A frame whose tickers have all stopped gives its
 `OnUpdate` back, so a part nobody is looking at costs the client nothing rather
 than a call and a comparison every frame forever.
 
-The enemy bars and your own cast bar each carry two, at two rates and under two
-`Perf` slots. Both were one handler with a throttle written inside it, which
-meant a fifth-of-a-second poll and a per-frame fill were reported as one
-number.
+Four parts carry two tickers, at two rates and under two `Perf` slots each: the
+enemy bars, your own cast bar, the skinned unit frames and the party tiles. The
+first two were one handler with a throttle written inside it, which meant a
+fifth-of-a-second poll and a per-frame fill were reported as one number. The
+other two are the same split the bars already took: a fast pass over what the
+client said moved, and a slower reading of everything for what no event carries.
+A row's hertz in `Perf/Feature.lua` is what turns a per-tick figure into a share
+of a second, so it moves with the interval or the tab lies.
 
 The accumulator subtracts the interval rather than zeroing it. Zeroing throws
 away however far past the interval the frame landed and turns 5 Hz into every
@@ -1632,6 +1646,14 @@ advances the cast fills and nothing else, and `EnemyBars.Update` at one second,
 which reads everything a bar says that is not moving. They were one handler
 with a hand-written accumulator inside it, and the accumulator is now `UI.Ticker`
 for every part of the addon at once.
+
+The skinned frames and the party tiles are on it twice for the other reason. The
+fast pass draws only what an event marked, and each has exactly one thing left
+on it that no event carries: whether target of target belongs on the screen, and
+whether a party member is close enough to help. Both are asked every pass for
+every unit and both are one call. The reading behind them draws everything and
+is what covers an incoming heal, a name, a level and a client that says nothing
+about a `targettarget` token.
 
 The report back was that the timer "jumps chunks", and it took two repairs
 because there were two throttles on that one edge. The first was the 20 Hz
@@ -4336,21 +4358,32 @@ token beside it, because the number is the half that has never been renamed.
 `PowerBarColor` would answer the same question and is a global nothing
 installed here calls unguarded, so the five colours are constants in the file.
 
-The tick runs at 5Hz, the same rate the enemy bars run at, and for the reason
-the artwork part does not use events either: the event names carrying health
-and power have been renamed twice between these two clients and a missed one is
-a bar that lies.
+The fast pass runs at 5Hz and draws only the blocks an event marked. It used to
+draw all three whatever had happened, for the reason the artwork part does not
+use events either: the event names carrying health and power have been renamed
+between these two clients and a missed one is a bar that lies. That was a fair
+worry and it is answered rather than believed now. `UNIT_AURA`, `UNIT_HEALTH`,
+`UNIT_POWER_UPDATE` and `UNIT_CONNECTION` are what `Blizzard_UnitFrame` on the
+`classic_anniversary` branch registers for these same units, so a frame drawing
+what the client's own frame draws listens to what the client's own frame listens
+to. `PLAYER_TARGET_CHANGED` marks all three, because no per-unit event says the
+creature under a token changed. The reading at 1Hz behind them is what covers
+the rest, and target of target above all: that token has no event stream on this
+client and Blizzard drives its own copy of the frame off a timer for it.
 
-**Re-applying is not the same as writing.** The tick still has to be the last
+**Re-applying is not the same as writing.** The pass still has to be the last
 word on the bar fill and the portrait crop, because Blizzard's code puts both
-back whenever it swaps the art underneath. It reads back first now. A colour
-texture answers no file path, so a bar that is still flat costs one comparison,
-and the moment `UI-StatusBar` comes back the path answers and the write happens.
-The crop compares the left coordinate the same way. Across three frames that was
-300 texture writes and 150 crop writes every fifty ticks, all of them writing
-the value already there, and it is zero. Where a client has no `GetTexture` the
-write stands unguarded, which is what this did before and is the safe half to be
-wrong on.
+back whenever it swaps the art underneath. Neither is written blind. The two
+bars are hooked on `SetStatusBarTexture`, which is the only call that can swap a
+status bar's fill, so the flatten happens when the client asks for it and the
+four readbacks per frame per pass are gone; where `hooksecurefunc` will not
+install, the readback stays and the pass reads both bars as it always did. The
+portrait cannot be hooked, because `SetPortraitTexture` is handed the texture and
+writes it from the C side, so the crop compares its left coordinate. Across
+three frames that was 300 texture writes and 150 crop writes every fifty ticks,
+all of them writing the value already there. Where a client has no `GetTexture`
+the write stands unguarded, which is what this did before and is the safe half
+to be wrong on.
 
 The level tag was the other one. `Refresh` built the string with a `tostring`
 and a concat and then compared it, so the guard never saved the building: three
@@ -4476,6 +4509,15 @@ the track colour and the name says which. Out of range is in that list on
 purpose. A member you cannot reach and a member who is not there are the same
 fact as far as the next thing you were going to press is concerned, and the slot
 is what says who it is, which is the whole point of a fixed order.
+
+Three of the four arrive as events. A tile registers `UNIT_HEALTH`,
+`UNIT_POWER_UPDATE` and `UNIT_CONNECTION` against whatever token the header has
+its button pointed at, marks itself when one lands, and the pass draws the tiles
+that are marked. The registration moves with the token, because a tile still
+listening for the person who used to stand in that slot is a tile marked by
+somebody else's health. The fourth is out of range, and it is the whole of what
+the pass still asks the client for every tile: a distance has no event and
+Blizzard's own frames poll `UnitInRange` too.
 
 **`UnitFrames/Member.lua` reads no setting at all.** What one block is drawn from
 arrives as one table at layout time: the two sizes, the role, and the two
@@ -6401,6 +6443,26 @@ Everything below was written from the API contract and has never executed:
   is moving: the threat line stuck at what it read when the box opened, and the
   box left where the pointer was rather than where it is. What would settle it:
   hover something that is running at you and watch the threat percentage.
+- **Whether the client fires UNIT_HEALTH, UNIT_POWER_UPDATE and UNIT_CONNECTION
+  for the `targettarget` and `partyN` tokens.** The names are Blizzard's own,
+  taken off the frames in `Blizzard_UnitFrame` that draw the same units, but
+  Blizzard registers them for `target` and `party1` rather than for a derived
+  token, and its own comment beside the compact raid frame says there is no good
+  way to hear about a target's target. The skinned frames and the party tiles
+  register all three against their own unit and redraw on the next pass when one
+  arrives; a token the client stays quiet about falls back to the reading that
+  runs once a second. A mistake looks like target of target, or a party member's
+  health, stepping once a second while the target frame beside it moves five
+  times a second. What would settle it: stand next to somebody losing health,
+  watch their tile and your target frame together.
+- **Whether `hooksecurefunc` takes on a unit frame's `SetStatusBarTexture`.** It
+  is what replaced reading both of Blizzard's bars back on every pass to find
+  out whether the client had put its own artwork over the flat colour. The hook
+  is probed and pcalled, and where it will not install the readback stays. A
+  mistake looks like the health or power bar on one of the three frames wearing
+  Blizzard's rounded UI-StatusBar art under the flat colour, most likely just
+  after a target change. What would settle it: change target a few times and
+  look at the ends of the gauge for the soft rounded cap.
 - **Whether splitting your own cast bar into two tickers still draws it.**
   `UnitFrames/PlayerCast.lua` ran one handler that polled the client at 5 Hz and
   moved the fill on every frame. It is two tickers now, timed separately as

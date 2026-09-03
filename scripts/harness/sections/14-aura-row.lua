@@ -28,11 +28,19 @@ local H = ...
 local ns, check = H.ns, H.check
 local targetFrame, debuffs, buffs = H.targetFrame, H.debuffs, H.buffs
 local child, Region, own = H.child, H.Region, H.own
-local skinTicker = H.carry.skinTicker
+local skinTicker, fire = H.carry.skinTicker, H.fire
 
--- One pass of the skin's own ticker, which is what draws the rows. REFRESH is
--- a fifth of a second, so a quarter of one is exactly one pass.
+-- The client saying an aura list moved, and then the pass that draws it.
+--
+-- Both halves, because the rows are told rather than polled now: UNIT_AURA is
+-- one of the four events that mark a block, and a pass with nothing marked
+-- draws nothing at all. Firing it against both units rather than working out
+-- which of the four rows a given check is about, since every one of them is a
+-- row on one of these two frames. REFRESH is a fifth of a second, so a quarter
+-- of one is exactly one pass and never two.
 local function tick()
+	fire("UNIT_AURA", "player")
+	fire("UNIT_AURA", "target")
 	skinTicker.scripts.OnUpdate(skinTicker, 0.25)
 end
 

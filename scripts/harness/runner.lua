@@ -215,6 +215,9 @@ local SECTIONS = {
 	"37-player-cast",
 	"38-bar-look",
 	"39-party-raid",
+	-- Under it, because it stands a party of its own up and puts the roster back
+	-- the way that section left it: empty.
+	"39-party-told",
 	"40-loot-feed",
 	"41-voice",
 	"42-cooldown-row",
