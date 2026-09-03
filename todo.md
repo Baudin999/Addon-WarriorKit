@@ -65,6 +65,9 @@ written longer than they are here.
     `ba87227`
 43. One frame for the ticks that never stop, and a gate that a tick on a frame
     of its own says why. `156dede`
+42. The sheet, the book, the aura squares, the feeds, the meters, the swing
+    bars and the cooldown row built on first open or first switch. `d87c42d`,
+    the last of three
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
@@ -274,11 +277,10 @@ compare that would have skipped them, and windows built at login for a session
 that never opens them. Ordered by what they cost, with the one that grows all
 session first. The full review with every citation is off-tree
 
-Twelve of the fourteen landed on 2026-09-03, one agent per item in its
-own worktree, and are above. Item 42 was started the same day and not
-finished: `.worktrees/first-open` on `worktree-first-open` holds its
-uncommitted work, cut from `eb884ee`. Read what is there before starting it
-again. Item 45 seeds markers on functions 42 touches, so it goes after it.
+Thirteen of the fourteen landed on 2026-09-03, one agent per item in
+its own worktree, and are above. Item 45 is what is left, and it was held
+back on purpose: it seeds markers on functions the other thirteen touched, so
+its counts had to be taken after them.
 
 The architecture question the review raised is answered in item 36 and item 33
 together. The client is already the event stream. What the addon lacks is not
@@ -287,30 +289,6 @@ reader in front of each raw source whose read is the cost, and a dirty bit per
 widget so that events mark and a tick draws. A general addon-wide stream would
 re-broadcast client events through one more dispatch that every handler pays
 for, and it would not have found a single item below.
-
-42. Closed windows and pools built at ceiling on login.
-
-    `src/Character/Window.lua:270-271` paints the sheet twice on a hidden
-    window and `src/Character/Paperdoll.lua:436` loads a PlayerModel into it,
-    about 200 client calls. `src/Spellbook/Window.lua:376` walks every spell
-    at login and `:689` again on every SPELLS_CHANGED with the window closed,
-    and `Ranks.Scan` walks the same spellbook separately. `src/UnitFrames/
-    Auras.lua:665-670` builds 96 aura squares to the ceilings at `:150-165`
-    before the player has a target, about 290 frames with 96 Cooldown
-    templates, and `src/UnitFrames/Skin.lua:559` runs the full `Block.Place` on
-    every target change. `src/UI/Feed.lua:376-384` builds all 24 rows and 400
-    ring tables per feed whatever the rows setting, and
-    `src/Feeds/Stream.lua:343-394` builds both feeds with no check on the on
-    switch. `src/Meter/Window.lua:595-621` builds 20 rows and arms its ticker
-    with the meter off. `src/Swing/Gauges.lua:361-392` is built and ticking at
-    interval 0 with the feature off. `src/Cooldowns/Row.lua:407-438` builds 23
-    squares for a row that shows eight to ten.
-
-    `src/Breakdown/Window.lua:500-503` builds on first open and is the
-    pattern. What has to exist at login is the bars, the three skin blocks, the
-    two group headers, the enemy bar anchor, the charge binder, the rims and
-    the bindings. By frame count that leaves 80 to 85 percent of login
-    construction as first-open work.
 
 45. The gate reaches the tick paths and not the event paths.
 
