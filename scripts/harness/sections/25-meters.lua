@@ -32,13 +32,8 @@ local talentTrees, ns, fire = H.talentTrees, H.ns, H.fire
 local check = H.check
 local drawn = H.carry.drawn
 
-local meterTicker
-for _, f in ipairs(frames) do
-	if f.scripts.OnUpdate and f.origin:match("Meter/Window") then
-		meterTicker = f
-	end
-end
-check(meterTicker ~= nil, "the meters registered no ticker")
+check(ns.UI.Ticking("meter") ~= nil, "the meters registered no ticker")
+local meterTicker = H.tick("meter")
 
 -- Before anything in this file has ever been in a fight. Nothing has been
 -- recorded and no segment has ever opened, so the clock reads zero, and
@@ -50,7 +45,7 @@ check(ns.Meter.Elapsed() == 0,
 	("the clock reads %s before the first fight"):format(tostring(ns.Meter.Elapsed())))
 check(ns.Meter.Total("dps") == 0,
 	("the group total reads %s before the first fight"):format(tostring(ns.Meter.Total("dps"))))
-meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+meterTicker:Beat(0.25)
 
 local frame = _G.WarriorKitMeter
 check(frame ~= nil, "no meter frame came up")
@@ -507,7 +502,7 @@ check(ns.MeterThreat.Soonest() == nil, "a member whose threat is falling was pro
 
 threatPct.party1 = 82
 ns.db.meterMode = "dps"
-meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+meterTicker:Beat(0.25)
 
 check(damagePane.rows[1]:IsShown(), "the meter ticked and drew no rows")
 check(damagePane.rows[1].name:GetText() == "Sneakyman",
@@ -533,20 +528,20 @@ check(math.abs(damagePane.rows[1].bar.a - shipped) < 1e-6,
 		:format(damagePane.rows[1].bar.a, shipped))
 ns.db.meterBarAlpha = 60
 ns.MeterWindow.Apply()
-meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+meterTicker:Beat(0.25)
 check(math.abs(damagePane.rows[1].bar.a - 0.6) < 1e-6,
 	("the opacity setting says 60 percent, the bar drew at %.2f")
 		:format(damagePane.rows[1].bar.a))
 ns.db.meterBarAlpha = ns.DefaultFor("meterBarAlpha")
 ns.MeterWindow.Apply()
-meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+meterTicker:Beat(0.25)
 
 -- The header carries two clicks. The right one is the whole of the toggle;
 -- the left one opens the breakdown, and is asserted where the breakdown is.
 check(damagePane.button ~= nil, "the damage header is not clickable")
 damagePane.button.scripts.OnClick(damagePane.button, "RightButton")
 check(ns.db.meterMode == "hps", "right clicking the header did not swap to healing")
-meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+meterTicker:Beat(0.25)
 check(damagePane.left:GetText() == "HPS", "the pane swapped and the header did not")
 check(damagePane.rows[1].name:GetText() == "Frostbite",
 	("the healing pane is topped by %q"):format(tostring(damagePane.rows[1].name:GetText())))
@@ -575,7 +570,7 @@ check(not ns.BreakdownWindow.IsShown(),
 advance(1)
 threatPct.party1 = 90
 ns.MeterThreat.Update()
-meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+meterTicker:Beat(0.25)
 check(threatPane.right:GetText():find("Sneakyman", 1, true) ~= nil,
 	("the header does not name the member converging on you: %q")
 		:format(tostring(threatPane.right:GetText())))
@@ -591,19 +586,19 @@ ns.MeterThreat.Update()
 -- that came back to the same quiet state found the projection guard already
 -- satisfied and the header went on reading "no target" over a full list of
 -- rows underneath it.
-meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+meterTicker:Beat(0.25)
 check(threatPane.right:GetText() == "held",
 	("the threat header says %q with the mob held and nobody climbing")
 		:format(tostring(threatPane.right:GetText())))
 
 guids.target = nil
-meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+meterTicker:Beat(0.25)
 check(threatPane.right:GetText() == "no target",
 	("the target went away and the header says %q")
 		:format(tostring(threatPane.right:GetText())))
 
 guids.target = "Creature-0-0000-000-boss"
-meterTicker.scripts.OnUpdate(meterTicker, 0.25)
+meterTicker:Beat(0.25)
 check(threatPane.right:GetText() ~= "no target",
 	"the target came back and the header was still reading no target")
 
@@ -623,7 +618,7 @@ local function meterChurn(n)
 	local before = collectgarbage("count")
 	for _ = 1, n do
 		advance(0.05)
-		meterTicker.scripts.OnUpdate(meterTicker, 0.05)
+		meterTicker:Beat(0.05)
 	end
 	local after = collectgarbage("count")
 	collectgarbage("restart")

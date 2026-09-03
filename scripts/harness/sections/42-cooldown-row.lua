@@ -37,16 +37,11 @@ local ns, fire, check = H.ns, H.fire, H.check
 
 local Cooldowns, Row = ns.Cooldowns, ns.CooldownRow
 
-local ticker
-for _, f in ipairs(frames) do
-	if f.scripts.OnUpdate and f.origin:match("Cooldowns/Row") then
-		ticker = f
-	end
-end
-check(ticker ~= nil, "the cooldown row registered no ticker")
+check(ns.UI.Ticking("cooldowns") ~= nil, "the cooldown row registered no ticker")
+local ticker = H.tick("cooldowns")
 
 local function tick()
-	ticker.scripts.OnUpdate(ticker, 0.2)
+	ticker:Beat(0.2)
 end
 
 -- What this spec brought, which is what every count below is measured against.

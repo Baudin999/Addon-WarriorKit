@@ -220,8 +220,6 @@ end
 -- this file the most expensive thing it measures.
 --------------------------------------------------------------------------
 
-local sampler = CreateFrame("Frame")
-
 -- The allocation figure counts rises only. Lua's collector runs whenever it
 -- likes and a fall in the resident number is that happening, not memory being
 -- handed back by anything the addon did, so averaging the two together reports
@@ -271,7 +269,7 @@ function Perf.Watch(on)
 		else
 			-- Not timed under a slot of its own: a sampler that measured
 			-- itself would be reporting the cost of the measurement.
-			ticker = ns.UI.Ticker(sampler, SAMPLE_RATE, "sampler", Perf.Sample)
+			ticker = ns.UI.Ticker(ns.UI.Forever, SAMPLE_RATE, "sampler", Perf.Sample)
 		end
 	elseif ticker then
 		ticker:Stop()

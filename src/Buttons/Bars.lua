@@ -1057,7 +1057,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		-- forty times a second, and nothing on screen said so. UI.Ticker refuses
 		-- the second one now as well, so the two halves of this cannot drift.
 		if not tick then
-			tick = ns.UI.Ticker(events, UPDATE_INTERVAL, "action", Bars.Tick)
+			tick = ns.UI.Ticker(ns.UI.Forever, UPDATE_INTERVAL, "action", Bars.Tick)
 		end
 		return
 	end

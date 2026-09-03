@@ -129,12 +129,10 @@ end
 --------------------------------------------------------------------------
 -- The sampler
 --
--- On its own frame rather than on the bars' ticker, because it has to keep
--- running with every bar hidden and because a diagnostic must never be able to
--- change the timing of the thing it is diagnosing.
+-- A tick of its own rather than a line inside the bars' tick, because it has to
+-- keep running with every bar hidden and because a diagnostic must never be
+-- able to change the timing of the thing it is diagnosing.
 --------------------------------------------------------------------------
-
-local watcher = CreateFrame("Frame")
 
 -- Named, so scripts/hot.lua can walk out from it. check.sh bans an unguarded
 -- write and an allocation on any path a ticker reaches, and both guards here
@@ -155,7 +153,7 @@ function Trace.Sample()
 		Trace.Name(focus), slot and (", action " .. slot) or "", Trace.Cursor()))
 end
 
-ns.UI.Ticker(watcher, INTERVAL, "trace", Trace.Sample)
+ns.UI.Ticker(ns.UI.Forever, INTERVAL, "trace", Trace.Sample)
 
 -- On or off, and it says which so the switch cannot be pressed twice by
 -- mistake. The sample state is dropped on the way in rather than on the way

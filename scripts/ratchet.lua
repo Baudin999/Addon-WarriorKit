@@ -57,18 +57,19 @@ end
 -- that grows the other one's shape is covered the day it does.
 --
 -- An allow-list entry is keyed by its list as well as its path. Nothing needed
--- that while there were two lists and they named different trees; there are six
--- now, three of them over src/, and the same file appearing on two of them is
--- ordinary rather than exotic.
+-- that while there were two lists and they named different trees; there are
+-- seven now, four of them over src/, and the same file appearing on two of them
+-- is ordinary rather than exotic.
 local function Ceilings(text)
 	local found = {}
 
 	-- Which allow-list the entry below belongs to, so two lists naming the same
 	-- file are two ceilings rather than one. They are keyed on the path alone
-	-- otherwise, and check.sh now holds six such lists: the two harness budgets,
-	-- the two markers and the two line exemptions. A path on two of them would
-	-- leave whichever came second watching the first one's number, which is a
-	-- ratchet that reads as green while the ceiling under it moves.
+	-- otherwise, and check.sh now holds seven such lists: the two harness
+	-- budgets, the two markers, the two line exemptions and the ticker frames. A
+	-- path on two of them would leave whichever came second watching the first
+	-- one's number, which is a ratchet that reads as green while the ceiling
+	-- under it moves.
 	local scope = nil
 
 	-- Walked a line at a time rather than swept with a newline on each end

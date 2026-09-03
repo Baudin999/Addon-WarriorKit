@@ -248,7 +248,7 @@ events:SetScript("OnEvent", function(_, event)
 		-- on this frame, so a branch that arms one has to be a branch that runs
 		-- once.
 		if not tick then
-			tick = ns.UI.Ticker(events, INTERVAL, "clock", Tick)
+			tick = ns.UI.Ticker(ns.UI.Forever, INTERVAL, "clock", Tick)
 		end
 	elseif frame and Format() ~= military then
 		-- CVAR_UPDATE carries every CVar the client writes. The one this file

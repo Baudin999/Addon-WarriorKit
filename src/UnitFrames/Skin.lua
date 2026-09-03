@@ -693,8 +693,8 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		-- on this frame, so a branch that arms one has to be a branch that runs
 		-- once.
 		if not tick then
-			tick = ns.UI.Ticker(events, REFRESH, "skin", Tick)
-			ns.UI.Ticker(events, VERIFY, "skinread", Read)
+			tick = ns.UI.Ticker(ns.UI.Forever, REFRESH, "skin", Tick)
+			ns.UI.Ticker(ns.UI.Forever, VERIFY, "skinread", Read)
 		end
 		return
 	end

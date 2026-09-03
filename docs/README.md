@@ -6338,6 +6338,16 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- **Whether one frame can carry every tick that never stops.** `UI/Ticker.lua`
+  builds a frame of its own and the eighteen parts that used to keep one each
+  hang off it. That frame has no parent and is never hidden, which is what all
+  eighteen were, so the game should call it the way it called them. The harness
+  cannot answer this one: its stub parents every frame to UIParent, so nothing
+  in it is parentless. A mistake looks like the whole addon standing still from
+  the moment you log in, with the bars, the enemy bars, the cast bar and the
+  swing gauges all frozen together and the windows still opening. What would
+  settle it: log in and watch a swing bar fill, or `/wk perf`, where every slot
+  counts the ticks it has had.
 - **Whether the first press of `/wk` is a noticeable pause.** The settings
   window is no longer built at login: the first thing that opens it makes the
   whole of it, which is about a thousand frames, eighteen hundred textures and

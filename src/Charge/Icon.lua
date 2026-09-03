@@ -437,7 +437,7 @@ events:SetScript("OnEvent", function(_, event)
 		-- screen to say so. UI.Ticker refuses it at the call now, and this is
 		-- the half that keeps the call from being made.
 		if not tick then
-			tick = ns.UI.Ticker(events, UPDATE_INTERVAL, "icon", Refresh)
+			tick = ns.UI.Ticker(ns.UI.Forever, UPDATE_INTERVAL, "icon", Refresh)
 		end
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		if securePending then

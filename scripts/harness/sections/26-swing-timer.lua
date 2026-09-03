@@ -36,13 +36,8 @@ local itemLink, swing, logArgs = H.itemLink, H.swing, H.logArgs
 local ns, fire, check = H.ns, H.fire, H.check
 local drawn, window = H.carry.drawn, H.carry.window
 
-local swingTicker
-for _, f in ipairs(frames) do
-	if f.scripts.OnUpdate and f.origin:match("Swing/Gauges") then
-		swingTicker = f
-	end
-end
-check(swingTicker ~= nil, "the swing timer registered no ticker")
+check(ns.UI.Ticking("swing") ~= nil, "the swing timer registered no ticker")
+local swingTicker = H.tick("swing")
 
 local ME = "Player-0-0000000f"
 local SOMEBODY = "Player-0-0000001f"
@@ -262,7 +257,7 @@ end
 
 white("SWING_DAMAGE", ME)
 advance(1.7)
-swingTicker.scripts.OnUpdate(swingTicker, 0.05)
+swingTicker:Beat(0.05)
 
 -- Read off the widget rather than off the bookkeeping field beside it, so a
 -- tick that worked out the right number and never wrote it fails here.
@@ -297,7 +292,7 @@ if WARRIOR then
 	-- And inside it. The press is at 2.4 seconds spent of 3.4, so another
 	-- seven tenths puts the fill on the mark.
 	advance(0.7)
-	swingTicker.scripts.OnUpdate(swingTicker, 0.05)
+	swingTicker:Beat(0.05)
 	check(mainBar.shownNow, "the fill reached the press mark and the gauge did not flip")
 	check(mainBar.edges.r > 0.3 and mainBar.edges.g > 0.9,
 		("the border did not go green while the window was open: %.2f, %.2f, %.2f")
@@ -305,7 +300,7 @@ if WARRIOR then
 
 	-- Out the other side.
 	advance(0.6)
-	swingTicker.scripts.OnUpdate(swingTicker, 0.05)
+	swingTicker:Beat(0.05)
 	check(not mainBar.shownNow, "the window never closed")
 
 	----------------------------------------------------------------
@@ -395,7 +390,7 @@ local function swingChurn(n)
 	local before = collectgarbage("count")
 	for _ = 1, n do
 		advance(0.05)
-		swingTicker.scripts.OnUpdate(swingTicker, 0.05)
+		swingTicker:Beat(0.05)
 		-- Restarted through ns.Swing rather than through the log, because a
 		-- log event wakes the meters too and what would be measured is
 		-- their segment rather than this tick.

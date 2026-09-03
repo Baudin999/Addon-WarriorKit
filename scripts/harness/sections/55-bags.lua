@@ -698,13 +698,12 @@ check(ns.BagsBlizzard.Held(), "turning the window back on did not take the keys 
 ----------------------------------------------------------------------
 
 do
-	local counted, frames = H.counted, H.frames
+	local counted = H.counted
 
-	-- The sweep's own frame, taken as the one the first press adds rather than
-	-- looked up by the file that made it. Every other section that drives a
-	-- ticker finds its frame by origin, and that only works for a frame built
-	-- while a file was loading; this one is built on the first press, so its
-	-- origin is "runtime" like everything else made after login.
+	-- The sweep's own tick, asked for by the ns.Perf slot it is timed under. It
+	-- is armed on the first press and hangs off ns.UI.Forever, so it exists
+	-- only from that press onwards and is looked up on every pass rather than
+	-- held.
 	local tick
 
 	-- The sweep run to its own stopping point rather than for a fixed number of
@@ -714,7 +713,7 @@ do
 	local function drive()
 		local passes = 0
 		while ns.BagsStack.Running() and passes < 40 do
-			tick.scripts.OnUpdate(tick, 0.2)
+			tick:Beat(0.2)
 			passes = passes + 1
 		end
 		return passes
@@ -729,12 +728,9 @@ do
 	CARRIED[3] = { "Linen Cloth", "Linen Cloth", false }
 	counted(3, 1, 12)
 	counted(3, 2, 18)
-	local built = #frames
 	button:Click()
 	check(ns.BagsStack.Running(), "the footer button did not start a sweep")
-	check(#frames == built + 1, "the sweep started and built no ticker of its own")
-	tick = frames[#frames]
-	check(tick.scripts.OnUpdate ~= nil, "the sweep's frame carries no tick")
+	tick = H.tick("bagstack")
 
 	local passes, first, second = drive(), 0, 0
 	first, second = counted(3, 1), counted(3, 2)

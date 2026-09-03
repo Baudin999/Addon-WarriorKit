@@ -701,6 +701,72 @@ elif [ "$armed" != "$timed" ]; then
 	status=1
 fi
 
+# A tick that never stops hangs off one frame, and which frame stays the
+# caller's word.
+#
+# The client makes a Lua call per frame for every frame carrying an OnUpdate,
+# before anything inside it compares an accumulator against an interval.
+# Eighteen parts of the addon armed a tick at login on a private frame of their
+# own, which was eighteen of those calls to run twenty ticks. They hang off
+# ns.UI.Forever now and it is one call.
+#
+# UI/Ticker.lua's header says why that file does not work out which tick is
+# which. Parentage is the probe that suggests itself and it answers a different
+# question: two parts here build a parentless frame for a tick and then hide and
+# show it to gate that tick, which is exactly what hanging a tick off a frame is
+# for. So the word is the caller's, and this is what stops it being forgotten. A
+# tick on a frame of its own needs an entry here saying why that frame can hide,
+# and a part that quietly takes a frame back for itself fails at the commit
+# rather than in somebody's frame budget.
+#
+# path:how many ticks in that file hang off a frame of their own:why it can hide
+FRAMED_TICKERS_ALLOWED="
+Feeds/Stream.lua:1:the strip is a region of the feed window and goes with it
+UI/Chart.lua:2:the follow and the drift both go with the board they are drawn on
+UI/Feed.lua:1:the repaint goes with the feed's own frame
+UI/Tooltip.lua:1:the frame is hidden and shown to gate the sweep, which is the whole of what hanging a tick off a frame buys
+World/World.lua:1:the frame is hidden and shown to gate the sweep
+"
+
+framed_count() {
+	local file="$1" held
+	held=$(grep -E '(ns\.)?UI\.Ticker\(' "$file" \
+		| grep -cvE 'UI\.Ticker\((ns\.)?UI\.Forever,' || true)
+	printf '%s' "${held:-0}"
+}
+
+framed_derived=$(grep -rlE '(ns\.)?UI\.Ticker\(' --include='*.lua' . \
+	| sed 's|^\./||' | grep -v '^UI/Ticker\.lua$' | sort | while IFS= read -r file; do
+		[ "$(framed_count "$file")" -gt 0 ] && printf '%s\n' "$file"
+	done)
+
+framed_listed=""
+while IFS= read -r entry; do
+	[ -n "$entry" ] || continue
+	marker_entry FRAMED_TICKERS_ALLOWED "$entry" || continue
+
+	[ -n "${entry_why# }" ] || {
+		echo "FRAMED_TICKERS_ALLOWED allow-lists $entry_path with no reason given"
+		status=1
+	}
+
+	held=$(framed_count "$entry_path")
+	if [ "$held" -ne "$entry_count" ]; then
+		echo "FRAMED_TICKERS_ALLOWED says $entry_path hangs $entry_count ticks off a frame of its own and it hangs $held: one added needs the count raised and defending, one moved to ns.UI.Forever needs it lowered in the same commit"
+		status=1
+	fi
+
+	framed_listed="$framed_listed$entry_path"$'\n'
+done <<< "$FRAMED_TICKERS_ALLOWED"
+
+while IFS= read -r entry; do
+	[ -n "$entry" ] || continue
+	grep -qxF "$entry" <<< "$framed_listed" || {
+		echo "src/$entry arms a ticker on a frame of its own: hang it off ns.UI.Forever, or add an entry with its count and why that frame can hide"
+		status=1
+	}
+done <<< "$framed_derived"
+
 # The options window's own rules, in the half a grep can settle.
 #
 # The harness measures the strings a feature actually produced, which is the

@@ -22,15 +22,10 @@ local ns, check = H.ns, H.check
 
 local Upkeep, Nag = ns.Upkeep, ns.BuffNag
 
-local ticker
-for _, f in ipairs(frames) do
-	if f.scripts.OnUpdate and f.origin:match("Buffs/Nag") then
-		ticker = f
-	end
-end
+local ticker = H.tick("buffs")
 
 local function tick()
-	ticker.scripts.OnUpdate(ticker, 0.2)
+	ticker:Beat(0.2)
 end
 
 ----------------------------------------------------------------------

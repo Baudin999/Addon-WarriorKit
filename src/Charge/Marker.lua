@@ -240,6 +240,6 @@ events:SetScript("OnEvent", function(_, event)
 	-- Armed once. UI.Ticker appends and refuses a second tick of this name on
 	-- this frame, so a branch that arms one has to be a branch that runs once.
 	if not tick then
-		tick = ns.UI.Ticker(events, UPDATE_INTERVAL, "marker", ChargeMarker.Update)
+		tick = ns.UI.Ticker(ns.UI.Forever, UPDATE_INTERVAL, "marker", ChargeMarker.Update)
 	end
 end)

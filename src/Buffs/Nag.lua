@@ -671,7 +671,7 @@ events:SetScript("OnEvent", function(_, event, token)
 		-- on this frame, so a branch that arms one has to be a branch that runs
 		-- once.
 		if not tick then
-			tick = ns.UI.Ticker(events, REFRESH, "buffs", Nag.Update)
+			tick = ns.UI.Ticker(ns.UI.Forever, REFRESH, "buffs", Nag.Update)
 		end
 		return
 	end

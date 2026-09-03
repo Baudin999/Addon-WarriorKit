@@ -32,13 +32,11 @@ do
 	local FRAME, FAST = 1 / 60, 1 / 144
 	local Palette = ns.Unit.Color.cast
 
-	local ticker
-	for _, f in ipairs(frames) do
-		if f.scripts.OnUpdate and f.origin:match("UnitFrames/PlayerCast") then
-			ticker = f
-		end
-	end
-	check(ticker ~= nil, "the cast bar registered no ticker")
+	check(ns.UI.Ticking("playercast") ~= nil and ns.UI.Ticking("castsweep") ~= nil,
+		"the cast bar registered no ticker")
+	-- Both of them, in the order they were armed in, which is the order the
+	-- client ran them in while they had a frame to themselves.
+	local poll, sweep = H.tick("playercast"), H.tick("castsweep")
 
 	-- At the design size. The bar ships at 2x, because it is under your
 	-- character and read while you are looking at the fight rather than at it,
@@ -59,7 +57,8 @@ do
 	local function paint(delta)
 		delta = delta or FRAME
 		advance(delta)
-		ticker.scripts.OnUpdate(ticker, delta)
+		poll:Beat(delta)
+		sweep:Beat(delta)
 	end
 
 	-- A cast of yours, in the milliseconds the stub answers UnitCastingInfo in.
@@ -234,7 +233,8 @@ do
 	paint()
 	check(frame:IsShown(), "half a second of cast did not come on")
 	advance(0.6)
-	ticker.scripts.OnUpdate(ticker, FRAME)
+	poll:Beat(FRAME)
+	sweep:Beat(FRAME)
 	check(not frame:IsShown(),
 		"a cast that ran out of time is still drawn, and no poll has happened yet")
 
@@ -273,7 +273,8 @@ do
 
 	-- And it does go, without needing another cast to push it off.
 	advance(1)
-	ticker.scripts.OnUpdate(ticker, FRAME)
+	poll:Beat(FRAME)
+	sweep:Beat(FRAME)
 	check(not frame:IsShown(), "the failed cast never came off the screen")
 
 	-- A press the client refused before anything started. There is no cast to
@@ -364,7 +365,8 @@ do
 				if swing.cast.stop <= now * 1000 then
 					swing.cast.start, swing.cast.stop = now * 1000, (now + 1.5) * 1000
 				end
-				ticker.scripts.OnUpdate(ticker, FRAME)
+				poll:Beat(FRAME)
+				sweep:Beat(FRAME)
 			end
 			local after = collectgarbage("count")
 			collectgarbage("restart")

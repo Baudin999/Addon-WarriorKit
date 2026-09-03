@@ -175,10 +175,19 @@ do
 		"the repair is not listening for the window shutting")
 end
 
+-- The sale's own tick, asked for by the ns.Perf slot it is timed under rather
+-- than found by the frame it hangs off: it hangs off ns.UI.Forever with every
+-- other tick that outlives a window, and the frame this part registers its
+-- merchant events on carries no script. Looked up per pass because the sweep
+-- stops its own tick when it runs out of things to sell.
 local function sweep()
 	local ticks = 0
 	while ns.Vendor.Running() and ticks < 60 do
-		vendorFrame.scripts.OnUpdate(vendorFrame, 0.2)
+		local tick = ns.UI.Ticking("vendor")
+		if not tick then
+			break
+		end
+		tick:Beat(0.2)
 		ticks = ticks + 1
 	end
 	return ticks
@@ -635,12 +644,13 @@ do
 	-- Nothing goes out in the frame the buff lands in. The whisper waits one
 	-- to three seconds, so every count below is read after the clock has been
 	-- moved past the longest of those and the part's own ticker has run.
+	-- The queue's tick, looked up rather than held, because it is armed on the
+	-- first whisper queued and stops itself the moment the queue empties.
 	local function deliver()
 		advance(4)
-		for _, f in ipairs(frames) do
-			if f.origin:match("Comfort/Thanks") and f.scripts.OnUpdate then
-				f.scripts.OnUpdate(f, 4)
-			end
+		local tick = ns.UI.Ticking("thanks")
+		if tick then
+			tick:Beat(4)
 		end
 	end
 

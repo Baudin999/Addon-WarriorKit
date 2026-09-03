@@ -41,7 +41,7 @@ local skinTicker, fire = H.carry.skinTicker, H.fire
 local function tick()
 	fire("UNIT_AURA", "player")
 	fire("UNIT_AURA", "target")
-	skinTicker.scripts.OnUpdate(skinTicker, 0.25)
+	skinTicker:Beat(0.25)
 end
 
 local box = _G.WarriorKitSkinTarget

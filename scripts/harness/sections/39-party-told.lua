@@ -17,7 +17,7 @@
 -- these lines and the section would be measuring the phase it started in.
 
 local H = ...
-local ns, check, fire, frames = H.ns, H.check, H.fire, H.frames
+local ns, check, fire = H.ns, H.check, H.fire
 local group = H.group
 
 local PARTY = {
@@ -33,19 +33,18 @@ local PARTY = {
 group.Set(PARTY, false)
 fire("GROUP_ROSTER_UPDATE")
 
-local ticker
-for _, f in ipairs(frames) do
-	if f.scripts.OnUpdate and f.origin:match("Group") then
-		ticker = f
-	end
-end
-check(ticker ~= nil, "the party registered no ticker")
+-- Both halves, the fast pass and the reading behind it, beaten together the
+-- way driving the party's own frame ran both before every permanent tick moved
+-- to one frame.
+local partyPass, partyRead = H.tick("party"), H.tick("partyread")
 
 local function settle()
-	ticker.scripts.OnUpdate(ticker, 5)
+	partyPass:Beat(5)
+	partyRead:Beat(5)
 end
 local function pass()
-	ticker.scripts.OnUpdate(ticker, 0.2)
+	partyPass:Beat(0.2)
+	partyRead:Beat(0.2)
 end
 
 local function tileOf(name)

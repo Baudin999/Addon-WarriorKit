@@ -49,7 +49,6 @@ local INTERVAL = 0.2
 -- slot the server never unlocks does not leave a ticker running forever.
 local MAX_PASSES = 25
 
-local frame
 local running = false
 local passes, merged = 0, 0
 local ticker
@@ -204,15 +203,12 @@ function Stack.Run()
 	if GetCursorInfo() then
 		return false, "your cursor is holding something"
 	end
-	if not frame then
-		frame = CreateFrame("Frame")
-	end
 	running, ran = true, true
 	passes, merged = 0, 0
 	if ticker then
 		ticker:Start()
 	else
-		ticker = ns.UI.Ticker(frame, INTERVAL, "bagstack", Tick)
+		ticker = ns.UI.Ticker(ns.UI.Forever, INTERVAL, "bagstack", Tick)
 	end
 	return true
 end

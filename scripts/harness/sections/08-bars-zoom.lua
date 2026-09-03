@@ -17,7 +17,7 @@
 -- the zoom.
 
 local H = ...
-local frames, cvars, plateSize = H.frames, H.cvars, H.plateSize
+local cvars, plateSize = H.cvars, H.plateSize
 local ns, check = H.ns, H.check
 local widget = H.carry.widget
 
@@ -153,14 +153,11 @@ do
 		"the plate is narrower than the bar on it, so a click near either end misses")
 end
 
--- Allocation. Every ticker but the bars' is somebody else's measurement.
-local barTicker
-for _, f in ipairs(frames) do
-	if f.scripts.OnUpdate and f.origin:match("EnemyBars") then
-		barTicker = f
-	end
-end
-check(barTicker ~= nil, "the enemy bars registered no ticker")
+-- Allocation. Every ticker but the bars' is somebody else's measurement, so the
+-- two the bars arm are named and nothing else on the driver frame is driven.
+check(ns.UI.Ticking("cast") ~= nil and ns.UI.Ticking("bars") ~= nil,
+	"the enemy bars registered no ticker")
+local barMoving, barVerify = H.tick("cast"), H.tick("bars")
 
 -- A quarter of a second a frame, which is what makes 200 of them 50 passes of
 -- the readouts. The bars read the client from the top once a second now and are
@@ -173,7 +170,8 @@ local function churn(n)
 	collectgarbage("stop")
 	local before = collectgarbage("count")
 	for _ = 1, n do
-		barTicker.scripts.OnUpdate(barTicker, FRAME)
+		barMoving:Beat(FRAME)
+		barVerify:Beat(FRAME)
 	end
 	local after = collectgarbage("count")
 	collectgarbage("restart")
@@ -186,5 +184,6 @@ churn(200)
 local plateChurn = churn(200)
 
 -- Left for the sections below.
-H.carry.barTicker, H.carry.churn, H.carry.plateChurn = barTicker, churn, plateChurn
+H.carry.barMoving, H.carry.barVerify = barMoving, barVerify
+H.carry.churn, H.carry.plateChurn = churn, plateChurn
 H.carry.widget = widget

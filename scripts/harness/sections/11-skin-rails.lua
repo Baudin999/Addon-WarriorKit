@@ -13,7 +13,7 @@
 -- other side of the block.
 
 local H = ...
-local frames, ns, check = H.frames, H.ns, H.check
+local ns, check = H.ns, H.check
 local blocks = H.carry.blocks
 
 for _, block in ipairs(blocks) do
@@ -58,20 +58,23 @@ for _, block in ipairs(blocks) do
 	end
 end
 
-local skinTicker
-for _, f in ipairs(frames) do
-	if f.scripts.OnUpdate and f.origin:match("Skin") then
-		skinTicker = f
-	end
+check(ns.UI.Ticking("skin") ~= nil, "the skin registered no ticker")
+local skinPass, skinRead = H.tick("skin"), H.tick("skinread")
+-- Both halves at once, the fast pass and the reading behind it, which is what
+-- driving the skin's own frame did before every permanent tick moved to one
+-- frame. A section that wants one half beats it through H.tick itself.
+local skinTicker = {}
+function skinTicker:Beat(delta)
+	skinPass:Beat(delta)
+	skinRead:Beat(delta)
 end
-check(skinTicker ~= nil, "the skin registered no ticker")
 
 local function skinChurn(n)
 	collectgarbage("collect")
 	collectgarbage("stop")
 	local before = collectgarbage("count")
 	for _ = 1, n do
-		skinTicker.scripts.OnUpdate(skinTicker, 0.05)
+		skinTicker:Beat(0.05)
 	end
 	local after = collectgarbage("count")
 	collectgarbage("restart")

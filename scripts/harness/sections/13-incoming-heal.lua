@@ -30,7 +30,7 @@ check(sliceAnchor ~= nil and sliceAnchor[2] == _G.PlayerFrame.healthbar.fill,
 -- measure a slice nobody had drawn yet.
 local function healTick(amount)
 	state.incomingHeals = amount
-	skinTicker.scripts.OnUpdate(skinTicker, 1)
+	skinTicker:Beat(1)
 	if not healSlice.shown then
 		return 0
 	end

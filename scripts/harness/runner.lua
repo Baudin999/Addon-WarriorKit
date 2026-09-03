@@ -156,6 +156,30 @@ function H.tipSettle()
 	return ns.UI.Tooltip.IsShown()
 end
 
+-- One part's tick, by the ns.Perf slot it is timed under.
+--
+-- Every ticker that never stops hangs off ns.UI.Forever now, because the client
+-- makes a Lua call per frame for every frame carrying an OnUpdate and there
+-- were eighteen of them. A section used to reach its own part's tick by walking
+-- H.frames for a frame from that file with a script on it and calling that
+-- script; those frames carry no script any more, and the one they share carries
+-- every part of the addon, so driving it would run twenty parts where a section
+-- means to run one.
+--
+-- What comes back is the tick itself and a section beats it: tick:Beat(delta)
+-- is one frame of the client, exactly what calling the frame's OnUpdate was.
+-- This does not hand back a function that drives it, and that is deliberate. A
+-- churn measurement runs its tick two hundred times between two readings of
+-- collectgarbage("count") with the collector stopped, and one more Lua call
+-- between the loop and the tick deepens the stack enough that Lua grows it
+-- again after every collect: six tenths of a kilobyte, attributed to whichever
+-- part is being measured. Beat the tick from the loop itself.
+function H.tick(name)
+	local tick = ns.UI.Ticking(name)
+	assert(tick, ("no ticker called %s is running"):format(name))
+	return tick
+end
+
 local failures = 0
 function H.check(ok, message)
 	if not ok then

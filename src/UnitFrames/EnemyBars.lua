@@ -2621,11 +2621,11 @@ local function Arm()
 		return
 	end
 	ticks = true
-	moving = ns.UI.Ticker(events, 0, "cast", Moving)
+	moving = ns.UI.Ticker(ns.UI.Forever, 0, "cast", Moving)
 	-- Told where to send a chamber opening, now rather than at load, because
 	-- the tick it starts does not exist until the line above has run.
 	Cast.OnWake(Wake)
-	ns.UI.Ticker(events, VERIFY, "bars", EnemyBars.Update)
+	ns.UI.Ticker(ns.UI.Forever, VERIFY, "bars", EnemyBars.Update)
 end
 
 events:SetScript("OnEvent", function(_, event, arg1)

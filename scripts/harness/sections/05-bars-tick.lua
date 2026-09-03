@@ -33,12 +33,13 @@ local ART = "Interface\\Icons\\Ability_Warrior_Charge"
 local MOB = "Creature-0-0-0-0-1234-00000099"
 local FRAME = 0.15 -- past the tenth of a second the action tick asks for
 
--- The frame the bars hang the ticker off, found by the one event nothing else
--- registers. It is a local in Buttons/Bars.lua and the ticker on it is the
--- subject here, so it is reached the way the client would reach it.
-local held = H.events["ACTIONBAR_PAGE_CHANGED"]
-local bars = held and held[1]
-check(bars ~= nil, "the bars registered no frame, so there is no ticker to drive")
+-- The bars' tick, asked for by the ns.Perf slot it is timed under. It used to
+-- be found by the frame the bars register ACTIONBAR_PAGE_CHANGED on, which was
+-- also the frame they hung the ticker off; every tick that never stops hangs
+-- off ns.UI.Forever now and that frame carries no script at all.
+check(ns.UI.Ticking("action") ~= nil,
+	"the bars armed no ticker, so there is nothing to drive")
+local action = H.tick("action")
 
 -- Three counters over the client. GetActionCount is asked once per square on
 -- every pass, so it counts passes; IsUsableAction is the rung nothing above it
@@ -61,7 +62,7 @@ _G.IsActionInRange = function(slot, unit)
 end
 
 local function pass()
-	bars.scripts.OnUpdate(bars, FRAME)
+	action:Beat(FRAME)
 end
 
 -- Two passes to spend whatever is standing, then the pass being measured. The
@@ -92,7 +93,7 @@ check(walked == once,
 		.. "and it walked %d"):format(walked, once))
 
 -- And the call refuses the second one, so the two halves of this cannot drift.
-local again = { pcall(ns.UI.Ticker, bars, 0.1, "action", ns.Bars.Tick) }
+local again = { pcall(ns.UI.Ticker, ns.UI.Forever, 0.1, "action", ns.Bars.Tick) }
 check(again[1] == false,
 	"a second running ticker named action was accepted on the frame that already has one")
 check(type(again[2]) == "string" and again[2]:find("action", 1, true),
@@ -110,6 +111,46 @@ other:Stop()
 local restarted = ns.UI.Ticker(spare, 0.1, "action", ns.Bars.Tick)
 check(restarted ~= nil, "a stopped tick of the same name blocks the frame it stopped on")
 restarted:Stop()
+
+--------------------------------------------------------------------------
+-- One OnUpdate for every tick that never stops
+--------------------------------------------------------------------------
+
+-- The client makes a Lua call per frame for every frame carrying an OnUpdate,
+-- before anything in it compares an accumulator against an interval. Eighteen
+-- parts of the addon armed a tick at login on a private frame of their own,
+-- which was eighteen of those calls, about eleven hundred a second at 60 Hz, to
+-- run twenty ticks. They hang off ns.UI.Forever now.
+--
+-- The eighteen are named rather than counted off the frames, because a part
+-- that quietly stopped arming its tick would make a count go down and read here
+-- as a pass. A frame from one of these files carrying the driver again is a
+-- part that took a frame back for itself.
+local PERMANENT = {
+	["Bags/Stack.lua"] = true, ["Buffs/Nag.lua"] = true,
+	["Buttons/Bars.lua"] = true, ["Buttons/Trace.lua"] = true,
+	["Charge/Icon.lua"] = true, ["Charge/Marker.lua"] = true,
+	["Comfort/Thanks.lua"] = true, ["Comfort/Vendor.lua"] = true,
+	["Cooldowns/Row.lua"] = true, ["Meter/Window.lua"] = true,
+	["Minimap/Clock.lua"] = true, ["Perf/Perf.lua"] = true,
+	["Swing/Gauges.lua"] = true, ["UnitFrames/Blizzard.lua"] = true,
+	["UnitFrames/EnemyBars.lua"] = true, ["UnitFrames/Group.lua"] = true,
+	["UnitFrames/PlayerCast.lua"] = true, ["UnitFrames/Skin.lua"] = true,
+}
+
+local Drive = ns.UI.Forever:GetScript("OnUpdate")
+check(Drive ~= nil,
+	"the frame the permanent tickers hang off carries no OnUpdate, so none of them runs")
+
+local driving = 0
+for _, f in ipairs(H.frames) do
+	if f.scripts.OnUpdate == Drive and (f == ns.UI.Forever or PERMANENT[f.origin]) then
+		driving = driving + 1
+	end
+end
+check(driving == 1,
+	("%d frames carry the ticker for ticks that never stop, and the client calls every one of them "
+		.. "on every frame"):format(driving))
 
 --------------------------------------------------------------------------
 -- Only what moved

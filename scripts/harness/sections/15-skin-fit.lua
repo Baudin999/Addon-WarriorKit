@@ -281,10 +281,10 @@ end
 do
 	local row = _G.WarriorKitTargetDebuffs
 	local function settle()
-		skinTicker.scripts.OnUpdate(skinTicker, 5)
+		skinTicker:Beat(5)
 	end
 	local function pass()
-		skinTicker.scripts.OnUpdate(skinTicker, 0.25)
+		skinTicker:Beat(0.25)
 	end
 	local function lit()
 		return row.children[1]:IsShown()
@@ -349,9 +349,9 @@ do
 	_G.hooksecurefunc = nil
 
 	local bar = _G.PlayerFrame.healthbar
-	skinTicker.scripts.OnUpdate(skinTicker, 5)
+	skinTicker:Beat(5)
 	local flat = bar.fill.colorWrites
-	skinTicker.scripts.OnUpdate(skinTicker, 5)
+	skinTicker:Beat(5)
 	check(bar.fill.colorWrites == flat,
 		("the skin flattened the health bar %d more times with nothing having"
 			.. " touched it"):format(bar.fill.colorWrites - flat))
@@ -359,7 +359,7 @@ do
 	-- The client swapping the art under the bar, which is what the readback used
 	-- to be looking for once a fifth of a second per bar.
 	bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-	skinTicker.scripts.OnUpdate(skinTicker, 0.25)
+	skinTicker:Beat(0.25)
 	check(bar.fill.colorWrites == flat + 1,
 		"Blizzard put its own texture back on the health bar and the skin did not"
 		.. " flatten it again on the next pass")

@@ -574,7 +574,7 @@ local function Moved(_, event)
 		-- Armed once. UI.Ticker appends and refuses a second tick of this name
 		-- on this frame, so a branch that arms one has to be a branch that runs
 		-- once.
-		tick = ns.UI.Ticker(events, INTERVAL, "hide", Blizz.Apply)
+		tick = ns.UI.Ticker(ns.UI.Forever, INTERVAL, "hide", Blizz.Apply)
 	end
 end
 

@@ -262,13 +262,8 @@ end
 ----------------------------------------------------------------------
 
 do
-	local ticker
-	for _, f in ipairs(frames) do
-		if f.scripts.OnUpdate and f.origin:match("UnitFrames/Blizzard") then
-			ticker = f
-		end
-	end
-	check(ticker ~= nil, "the hide pass registered no ticker")
+	check(ns.UI.Ticking("hide") ~= nil, "the hide pass registered no ticker")
+	local ticker = H.tick("hide")
 
 	local function churn(ticks)
 		collectgarbage("collect")
@@ -276,7 +271,7 @@ do
 		local before = collectgarbage("count")
 		for _ = 1, ticks do
 			advance(HIDE_INTERVAL)
-			ticker.scripts.OnUpdate(ticker, HIDE_INTERVAL)
+			ticker:Beat(HIDE_INTERVAL)
 		end
 		local after = collectgarbage("count")
 		collectgarbage("restart")

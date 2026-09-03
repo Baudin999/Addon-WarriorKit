@@ -1192,8 +1192,8 @@ events:SetScript("OnEvent", function(_, event)
 			-- name on this frame, so a branch that arms one has to be a branch
 			-- that runs once.
 			if not tick then
-				tick = ns.UI.Ticker(events, POLL, "party", Drain)
-				ns.UI.Ticker(events, VERIFY, "partyread", Group.Update)
+				tick = ns.UI.Ticker(ns.UI.Forever, POLL, "party", Drain)
+				ns.UI.Ticker(ns.UI.Forever, VERIFY, "partyread", Group.Update)
 			end
 		end
 		return

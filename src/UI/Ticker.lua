@@ -34,6 +34,33 @@ local UI = ns.UI
 -- tab is one entry in Perf's ORDER and nothing here.
 --------------------------------------------------------------------------
 
+-- The frame a tick that never stops hangs off.
+--
+-- A frame has one OnUpdate, and the client makes one Lua call per frame for
+-- every frame that carries one. Eighteen parts of the addon armed a tick at
+-- login on a private frame of their own that nothing ever hides, so twenty
+-- ticks cost eighteen calls a frame before the first comparison against an
+-- interval, about eleven hundred a second at 60 Hz. They hang off this one now
+-- and the client makes one call.
+--
+-- Which frame a tick hangs off stays the caller's word rather than something
+-- this file works out, because the question this file could ask is not the
+-- question that matters. The probe that suggests itself is parentage: a frame
+-- built with no parent is nobody's child and looks permanent. Two in the addon
+-- are not. UI/Tooltip.lua and World/World.lua each build a parentless frame for
+-- a tick and then Hide and Show it to gate that tick, which is the cheapest
+-- gate there is and is the whole reason the frame is an argument. A rule
+-- reading parentage would have turned both into ticks that run all session, and
+-- it would have read nothing at all in the harness, where every frame is
+-- parented to UIParent.
+--
+-- A word at a call site can be forgotten, so it is gated rather than trusted.
+-- check.sh holds every ns.UI.Ticker whose frame is not this one in a list with
+-- a reason per file, so a tick armed on a private frame fails the gate until
+-- somebody writes down why that frame can hide. Forgetting the word costs an
+-- entry on that list, not a tick nobody can see.
+UI.Forever = CreateFrame("Frame")
+
 -- Every ticker on one frame, because a frame has one OnUpdate and two parts of
 -- the addon may want a tick off the same never-hidden frame at two rates. The
 -- list is built when a ticker is added and only walked afterwards, so the
@@ -52,29 +79,48 @@ local function Wanted(list)
 	return false
 end
 
+local Ticker = {}
+Ticker.__index = Ticker
+
+-- One tick advanced by one frame's worth of time, which is the whole of what a
+-- tick is. Drive below is the loop around it, and the harness drives a single
+-- tick through it rather than through the frame: since every permanent tick
+-- hangs off one frame, calling that frame's OnUpdate would run twenty parts of
+-- the addon when a section means to run one.
+function Ticker:Beat(delta)
+	if not self.running then
+		return
+	end
+	self.elapsed = self.elapsed + delta
+	if self.elapsed < self.interval then
+		return
+	end
+	-- The remainder, not zero. See the head of this file.
+	local since = self.elapsed
+	self.elapsed = self.elapsed - self.interval
+	if self.elapsed >= self.interval then
+		-- A frame longer than the interval, which is a load spike rather than a
+		-- rate. Catching up would run the body twice in the frame after a
+		-- stall, so the debt is dropped.
+		self.elapsed = 0
+	end
+	ns.Perf.Start(self.name)
+	self.fn(since, self.frame)
+	ns.Perf.Stop(self.name)
+end
+
 local function Drive(frame, delta)
 	local list = lists[frame]
 	if not list then
 		return
 	end
 	for index = 1, #list do
+		-- Read here as well as inside Beat, because the list on UI.Forever holds
+		-- every part that has ever armed a tick and several of them spend the
+		-- session stopped. A field read is cheaper than the call it saves.
 		local tick = list[index]
 		if tick.running then
-			tick.elapsed = tick.elapsed + delta
-			if tick.elapsed >= tick.interval then
-				-- The remainder, not zero. See the head of this file.
-				local since = tick.elapsed
-				tick.elapsed = tick.elapsed - tick.interval
-				if tick.elapsed >= tick.interval then
-					-- A frame longer than the interval, which is a load spike
-					-- rather than a rate. Catching up would run the body twice
-					-- in the frame after a stall, so the debt is dropped.
-					tick.elapsed = 0
-				end
-				ns.Perf.Start(tick.name)
-				tick.fn(since, frame)
-				ns.Perf.Stop(tick.name)
-			end
+			tick:Beat(delta)
 		end
 	end
 end
@@ -87,9 +133,6 @@ local function Attach(frame)
 		frame:SetScript("OnUpdate", nil)
 	end
 end
-
-local Ticker = {}
-Ticker.__index = Ticker
 
 function Ticker:Start()
 	self.running = true
@@ -106,11 +149,10 @@ function Ticker:Running()
 	return self.running
 end
 
--- frame     what the tick hangs off, which decides when it stops. A frame that
---           is never hidden ticks for the session; a frame that goes with a
---           window stops when the window closes and there is nothing to switch
---           off. Both are wanted and neither is the default, so it is an
---           argument rather than a frame this file owns.
+-- frame     what the tick hangs off, which decides when it stops. UI.Forever
+--           above ticks for the session; a frame that goes with a window stops
+--           when the window closes and there is nothing to switch off. Both are
+--           wanted and neither is the default, so it is an argument.
 -- interval  seconds between calls, or 0 for every frame.
 -- name      the ns.Perf slot the body is timed under.
 -- fn        called with the seconds since it last ran and the frame it hangs
@@ -143,6 +185,11 @@ function UI.Ticker(frame, interval, name, fn)
 	-- A stopped tick of the same name is left alone: that is a part switching
 	-- itself back on, which is what Perf/Perf.lua does with its sampler, and it
 	-- goes through Start rather than through here.
+	--
+	-- On UI.Forever this reads the whole addon rather than one part of it,
+	-- because every permanent tick is on that one list. Two parts arming a tick
+	-- under the same name is two parts writing into one Perf slot, so the frame
+	-- they share is the right place to catch it.
 	for index = 1, #list do
 		local other = list[index]
 		assert(not (other.running and other.name == name),
@@ -160,4 +207,22 @@ function UI.Ticker(frame, interval, name, fn)
 	list[#list + 1] = tick
 	Attach(frame)
 	return tick
+end
+
+-- The running tick on a frame under a name, or nil.
+--
+-- The frame defaults to UI.Forever, where the name is unique across the addon
+-- by the assert above. It is here for the harness: a section used to reach its
+-- own tick by finding the frame that part had to itself and calling the
+-- OnUpdate on it, and the permanent ticks no longer have a frame each. The slot
+-- they are timed under is the name they already had.
+function UI.Ticking(name, frame)
+	local list = lists[frame or UI.Forever]
+	for index = 1, list and #list or 0 do
+		local tick = list[index]
+		if tick.running and tick.name == name then
+			return tick
+		end
+	end
+	return nil
 end

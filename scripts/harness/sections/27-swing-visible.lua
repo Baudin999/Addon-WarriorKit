@@ -67,12 +67,7 @@ fire("CHARACTER_POINTS_CHANGED")
 fire("PLAYER_ENTERING_WORLD")
 ns.SwingGauges.Apply()
 
-local ticker
-for _, f in ipairs(frames) do
-	if f.scripts.OnUpdate and f.origin:match("Swing/Gauges") then
-		ticker = f
-	end
-end
+local ticker = H.tick("swing")
 
 local bar = ns.SwingGauges.Bar(ns.Swing.MAIN)
 local width = ns.db.swingWidth
@@ -81,7 +76,7 @@ local width = ns.db.swingWidth
 -- Only the fill test below uses this, because it is the only test about the
 -- rate rather than about the drawing.
 local function tick(interval)
-	ticker.scripts.OnUpdate(ticker, interval or FRAME)
+	ticker:Beat(interval or FRAME)
 end
 
 -- A draw, taken straight rather than through the ticker, so a test about where

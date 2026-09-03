@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### One clock for the parts that never stop
+
+Eighteen parts of the addon each held a frame of their own whose only job was
+to be called every time the game drew: the action bars, the enemy bars, your
+cast bar, the party blocks, the cooldown row, the buff nag, the swing gauges,
+the minimap clock and ten more. That is eighteen calls into the addon per drawn
+frame, about eleven hundred a second, before a single one of them had looked at
+its own stopwatch, and most of them found nothing to do, because a part that
+works five times a second sits out fifty five frames in every sixty. They hang
+off one frame now and the game makes one call.
+
+Nothing about when a part runs has changed. A tick that belongs to a window
+still hangs off that window's own frame and stops when you close it, which is
+how the tooltip sweep, the feeds and the chart go on costing nothing while you
+are not looking at them.
+
 ### The unit frames and the party tiles are told rather than asked
 
 The player frame, the target and target of target were read off the client from

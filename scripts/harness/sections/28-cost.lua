@@ -9,7 +9,7 @@
 
 local H = ...
 local ns, check = H.ns, H.check
-local barTicker = H.carry.barTicker
+local barMoving, barVerify = H.carry.barMoving, H.carry.barVerify
 
 ns.db.perf = true
 ns.Perf.Reset()
@@ -18,7 +18,8 @@ check(ns.Perf.Ready(), "the harness clock is not reaching Perf")
 -- Two seconds of frames a quarter of a second long, because the bars read the
 -- client from the top once a second and are told about one mob in between.
 for _ = 1, 40 do
-	barTicker.scripts.OnUpdate(barTicker, 0.25)
+	barMoving:Beat(0.25)
+	barVerify:Beat(0.25)
 end
 local average, peak, ticks = ns.Perf.Slot("bars")
 check(ticks == 10, ("the bars ticker ran 10 times and Perf counted %s"):format(tostring(ticks)))
@@ -30,7 +31,8 @@ check(peak and peak >= average, "the worst tick is faster than the average one")
 ns.db.perf = false
 ns.Perf.Reset()
 for _ = 1, 40 do
-	barTicker.scripts.OnUpdate(barTicker, 0.25)
+	barMoving:Beat(0.25)
+	barVerify:Beat(0.25)
 end
 check(ns.Perf.Slot("bars") == nil, "timing kept accumulating with the setting off")
 ns.db.perf = true

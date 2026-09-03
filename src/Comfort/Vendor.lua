@@ -130,7 +130,7 @@ local function Start()
 	if ticker then
 		ticker:Start()
 	else
-		ticker = ns.UI.Ticker(frame, INTERVAL, "vendor", Tick)
+		ticker = ns.UI.Ticker(ns.UI.Forever, INTERVAL, "vendor", Tick)
 	end
 end
 

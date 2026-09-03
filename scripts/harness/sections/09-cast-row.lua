@@ -25,7 +25,8 @@ local H = ...
 local CHURN, frames, plates = H.CHURN, H.frames, H.plates
 local advance, enemyCasts, ns = H.advance, H.enemyCasts, H.ns
 local fire, check = H.fire, H.check
-local barTicker, churn = H.carry.barTicker, H.carry.churn
+local barMoving, barVerify = H.carry.barMoving, H.carry.barVerify
+local churn = H.carry.churn
 
 do
 	local FRAME, FAST = 1 / 60, 1 / 144
@@ -43,7 +44,8 @@ do
 	local function paint(delta)
 		delta = delta or FRAME
 		advance(delta)
-		barTicker.scripts.OnUpdate(barTicker, delta)
+		barMoving:Beat(delta)
+		barVerify:Beat(delta)
 	end
 
 	-- A cast on the mob, in the seconds the stub counts in.
@@ -205,7 +207,8 @@ do
 	-- full at the end of a cast is on the screen, which is the frame where you
 	-- are deciding whether there is still time to press anything.
 	advance(0.6)
-	barTicker.scripts.OnUpdate(barTicker, FRAME)
+	barMoving:Beat(FRAME)
+	barVerify:Beat(FRAME)
 	check(not row():IsShown(),
 		"a cast that ran out of time is still drawn, and no tick has happened yet")
 
@@ -374,7 +377,8 @@ do
 	check(not row().preview, "a locked row is still flagged as a preview")
 
 	advance(1.2)
-	barTicker.scripts.OnUpdate(barTicker, FRAME)
+	barMoving:Beat(FRAME)
+	barVerify:Beat(FRAME)
 	check(not row():IsShown(),
 		"the cast ended and the row rolled over into a preview instead of going out")
 
@@ -425,7 +429,8 @@ do
 					entry = enemyCasts.cast.nameplate2
 					entry.start, entry.finish = now, now + 3
 				end
-				barTicker.scripts.OnUpdate(barTicker, FRAME)
+				barMoving:Beat(FRAME)
+				barVerify:Beat(FRAME)
 			end
 			local after = collectgarbage("count")
 			collectgarbage("restart")

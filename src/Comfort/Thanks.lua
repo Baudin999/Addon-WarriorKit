@@ -60,10 +60,6 @@ local SETTLE = 5
 -- is somebody seeing the buff land and typing two letters.
 local MIN_WAIT, MAX_WAIT = 1, 3
 
--- Built here rather than when the first whisper is queued, because a frame that
--- comes into being at some unpredictable moment mid-session is a frame no test
--- can hold. It carries no script until there is something to send.
-local sender = CreateFrame("Frame")
 local ticker -- the queue's own tick, kept so an empty queue can stop it
 
 -- The clock time before which nothing in the log counts, set at every entry to
@@ -131,7 +127,7 @@ local function Queue(who)
 	if ticker then
 		ticker:Start()
 	else
-		ticker = ns.UI.Ticker(sender, 0, "thanks", Tick)
+		ticker = ns.UI.Ticker(ns.UI.Forever, 0, "thanks", Tick)
 	end
 end
 

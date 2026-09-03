@@ -33,16 +33,11 @@ local check = H.check
 
 local Upkeep, Racials, Nag = ns.Upkeep, ns.Racials, ns.BuffNag
 
-local ticker
-for _, f in ipairs(frames) do
-	if f.scripts.OnUpdate and f.origin:match("Buffs/Nag") then
-		ticker = f
-	end
-end
-check(ticker ~= nil, "the buff nag registered no ticker")
+check(ns.UI.Ticking("buffs") ~= nil, "the buff nag registered no ticker")
+local ticker = H.tick("buffs")
 
 local function tick()
-	ticker.scripts.OnUpdate(ticker, 0.2)
+	ticker:Beat(0.2)
 end
 
 local function says(word)
@@ -59,7 +54,7 @@ local function churnBuffs(n)
 	local start = collectgarbage("count")
 	for _ = 1, n do
 		advance(0.1)
-		ticker.scripts.OnUpdate(ticker, 0.2)
+		ticker:Beat(0.2)
 	end
 	local after = collectgarbage("count")
 	collectgarbage("restart")

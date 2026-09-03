@@ -621,7 +621,7 @@ events:SetScript("OnEvent", function()
 	-- Armed once. UI.Ticker appends and refuses a second tick of this name on
 	-- this frame, so a branch that arms one has to be a branch that runs once.
 	if not tick then
-		tick = ns.UI.Ticker(events, REFRESH, "meter", MeterWindow.Update)
+		tick = ns.UI.Ticker(ns.UI.Forever, REFRESH, "meter", MeterWindow.Update)
 	end
 end)
 

@@ -536,8 +536,8 @@ events:SetScript("OnEvent", function(_, event, token)
 		-- the half that keeps the call from being made.
 		if not ticks then
 			ticks = true
-			ns.UI.Ticker(events, POLL, "playercast", Poll)
-			ns.UI.Ticker(events, 0, "castsweep", Sweep)
+			ns.UI.Ticker(ns.UI.Forever, POLL, "playercast", Poll)
+			ns.UI.Ticker(ns.UI.Forever, 0, "castsweep", Sweep)
 		end
 		return
 	end

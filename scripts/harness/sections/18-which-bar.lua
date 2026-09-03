@@ -8,7 +8,7 @@
 local H = ...
 local guids, ns, fire = H.guids, H.ns, H.fire
 local check = H.check
-local barTicker = H.carry.barTicker
+local barMoving, barVerify = H.carry.barMoving, H.carry.barVerify
 
 -- Everything above this point has been driving the panel and the skin, so
 -- the bars are put back where this section needs them rather than assumed.
@@ -43,13 +43,15 @@ end
 -- sixty short ones because nothing below is measuring a ramp with this.
 local function Tick()
 	for _ = 1, 4 do
-		barTicker.scripts.OnUpdate(barTicker, 0.3)
+		barMoving:Beat(0.3)
+		barVerify:Beat(0.3)
 	end
 end
 
 -- One frame, which is what draws whatever an event just marked.
 local function Frame()
-	barTicker.scripts.OnUpdate(barTicker, 1 / 60)
+	barMoving:Beat(1 / 60)
+	barVerify:Beat(1 / 60)
 end
 
 Tick()
@@ -140,7 +142,8 @@ check(leaving:IsShown() and leaving:GetAlpha() > 0, "the bar went out in one fra
 check(leaving:GetParent() == _G.UIParent,
 	"a fading bar is still a child of the plate it is leaving")
 for _ = 1, 4 do
-	barTicker.scripts.OnUpdate(barTicker, frame)
+	barMoving:Beat(frame)
+	barVerify:Beat(frame)
 end
 check(leaving:GetAlpha() < 1 and leaving:GetAlpha() > 0,
 	("four frames out, a bar leaving is at %.2f"):format(leaving:GetAlpha()))
@@ -152,7 +155,8 @@ check(not leaving:IsShown(), "a bar leaving never finished")
 fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
 check(Alpha("nameplate1") == 0, "a bar arrived at full alpha instead of from nothing")
 for _ = 1, 4 do
-	barTicker.scripts.OnUpdate(barTicker, frame)
+	barMoving:Beat(frame)
+	barVerify:Beat(frame)
 end
 local arriving = Alpha("nameplate1")
 check(arriving > 0 and arriving < 1,
