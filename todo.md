@@ -13,8 +13,8 @@ in the README's untested list, and the full text of each item is this file at
 `e7ef4ca` for 1 to 6, 8, 11 and 12, at `ca59a77` for 7, 9 and 13, at
 `44c79ef` for 15, at `a7772af` for 16, at `c37c149` for 19, at `b5d2277` for
 17, at `30a42cb` for 28, at `2210d8f` for 18, at `f3222c6` for 32 to 45 and at
-`1ad54d1` for 46. Items 14, 23 and 31 were never written longer than they are
-here.
+`1ad54d1` for 46 and at `229a60f` for 47. Items 14, 23 and 31 were never
+written longer than they are here.
 
 1. Weapon swing timer. `8be9a43`
 2. Deep Wounds missing from the enemy bar debuffs. `05e40ec`
@@ -74,6 +74,9 @@ here.
 46. A right click on a whisper room turned the camera and left the room;
     a row that answers the right button keeps it, and the harness presses
     rows the way the client does. `673d78c`
+47. A bag pickup filter switched from the bag window: a price floor for greys
+    and whites, one button that throws the filter and the leftovers together,
+    and the title bar's buttons as marks with a sentence on hover. `547a5f8`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
@@ -306,36 +309,11 @@ one, and it landed the same day and is above. The harness had passed it, and
 the fix is the gate as much as the code: the stub now refuses a press on a
 button the frame passes through, the way it refuses one never registered for.
 
-Item 47 was asked for in game on 2026-09-03: a mode for a run of an old
-dungeon, rather than a fix.
-
-47. A bag pickup filter, switched from the bag window.
-
-    A mode you turn on for a run of an old dungeon so your bags do not fill
-    with rubbish. While it is on, four kinds of thing reach your bags: cloth;
-    anything at or above the colour floor, which ships at green; a grey or
-    white whose vendor price is at or above a minimum you set, written as
-    gold, silver and copper, `0g 20s 0c` say; and anything your professions
-    make or use, which `Comfort/Reagents.lua` already answers. Everything else
-    is looted and destroyed rather than left on the corpse, so the corpse
-    empties and can be skinned. There is no call that destroys an item on a
-    corpse, so the destroy happens the moment the item lands in a bag, which
-    is what `Comfort/Leftovers.lua` already does for a refused slot.
-
-    Most of it is built. `Comfort/Wanted.lua` has the colour floor, the kind
-    boxes and the profession list, and `Comfort/Leftovers.lua` destroys what
-    the filter refused. What is missing is the vendor minimum, which is the
-    rule that keeps a white sword worth two gold out of the bin, and the
-    switch on the bag window.
-
-    One button on the bag window starts and stops it, and shows which state it
-    is in. It sits in the top row with the other window controls. The colour
-    floor, the kinds, the vendor minimum and the profession switch stay on the
-    settings page under `/wk`; the button only starts and stops.
-
-    The row it joins is tidied at the same time. The stack button moves from
-    the footer to the top row, every button in that row becomes an icon, and
-    hovering an icon says in a sentence what it does.
+Item 47 was asked for in game on 2026-09-03, a mode for a run of an old
+dungeon rather than a fix, and it landed the same day and is above. Most of
+it was already built: the colour floor, the kinds and the profession list in
+`Comfort/Wanted.lua`, and the destroy in `Comfort/Leftovers.lua`. What was
+missing was the price floor and the switch on the window.
 
 ## Deliberately not on this list
 
