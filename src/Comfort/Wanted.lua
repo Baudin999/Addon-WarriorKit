@@ -93,7 +93,8 @@ local function KindOf(classId, subClassId)
 	return row and row[subClassId] or nil
 end
 
--- Whether fast loot should take this slot.
+-- Whether fast loot should take this slot: true, false, or nil for a slot the
+-- client cannot price yet, which the caller has to keep apart from false.
 --
 -- The order is cheapest first and it is also the order of certainty: the
 -- switch, then the two slots that are never refused, then the colour, then the
@@ -143,16 +144,18 @@ function Wanted.Take(slot)
 	-- the stack, so five whites at five silver each are a slot worth twenty
 	-- five.
 	--
-	-- An item the client has not cached yet is taken, the same answer the
-	-- class check above gives and for a sharper reason: with the leftovers on,
-	-- refused means destroyed, and a white sword worth two gold that the
-	-- client had not priced by the time the corpse opened is the one thing
-	-- this rule exists to keep.
+	-- An item the client has not priced yet is neither taken nor refused: the
+	-- answer is nil, which is "ask me again". Asking GetItemInfo is what makes
+	-- the client fetch the item, and GET_ITEM_INFO_RECEIVED is it arriving, so
+	-- Comfort/Loot.lua leaves the slot on the corpse and comes back for it on
+	-- that event. Guessing either way was wrong: keep let a Tough Cloak worth
+	-- four silver through on its first sighting of the session, and refuse
+	-- would have binned a white sword worth two gold on its.
 	local worth = ns.dbc.lootWorth or 0
 	if worth > 0 and quality and quality <= PLAIN then
 		local graded, price = ns.ItemValue(link)
 		if graded == nil then
-			return true
+			return nil
 		end
 		if (price or 0) * (quantity or 1) >= worth then
 			return true

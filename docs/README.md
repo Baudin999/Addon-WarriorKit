@@ -5507,7 +5507,13 @@ pays at least that much for, read against the whole slot the way
 above white the colour floor is the rule that spoke; and what your professions
 use. The price floor is typed as gold, silver and copper, and `ns.Uncoin` reads
 `0g 20s 0c`, `20s` and `1g5s` alike back to copper, keeping the old number when
-the line is not a sum of money. Money and a quest item
+the line is not a sum of money. A grey or white the client has not priced yet
+gets a third answer, nil, and `Comfort/Loot.lua` leaves that slot where it is
+and asks again on `GET_ITEM_INFO_RECEIVED`, which asking `GetItemInfo` is what
+provokes; the corpse closing forgets it. Both guesses were wrong in turn: keep
+let a Tough Cloak worth four silver through on its first sighting of the
+session, and refuse would have binned a white sword worth two gold on its.
+Money and a quest item
 are never refused, the quest flag being the seventh return of `GetLootSlotInfo`,
 which is a fact about your log rather than about the item: the same grey tooth
 is a quest item on one character and litter on the next. An item the client will
@@ -7729,15 +7735,15 @@ Everything below was written from the API contract and has never executed:
   when the corpse closes rather than as each one lands. What would settle it:
   turn leftovers on, empty a corpse the filter is refusing something on, and
   watch the bag while the window is still open.
-- **Whether `GetItemInfo` prices a loot link the first time you see the item.**
-  The price rule asks `ns.ItemValue` for the vendor price of a grey or white on
-  the corpse, and an item the client has not cached answers nil, which the
-  rule reads as keep. A client that answers a price of nought for an uncached
-  item instead would refuse it, and with the leftovers on refused is
-  destroyed. A mistake looks like a white weapon you have never seen before
-  going in the bin on its first drop and coming home on its second. What would
-  settle it: switch the filter on with the floor at a silver, loot a white you
-  have not seen this session, and watch whether it lands.
+- **Whether `GET_ITEM_INFO_RECEIVED` arrives while the loot window is still
+  open.** A grey or white the client has not priced is left on the corpse and
+  asked about again on that event, which is the client saying it has fetched
+  the item. Fast loot never draws the window, so the corpse is open for as
+  long as the client keeps it open with nothing taken from it. A mistake looks
+  like a grey you have not seen this session staying on the corpse, sparkling,
+  and coming home on the next one of its kind. What would settle it: switch the
+  filter on with the floor at a silver, loot a corpse carrying a grey you have
+  not seen since login, and watch whether it lands or stays.
 - **Whether `DeleteCursorItem` takes a green without a confirmation box.** The
   clutter window destroys greys with somebody looking at the card; this destroys
   greens unattended, and the client puts a type-DELETE box in front of some

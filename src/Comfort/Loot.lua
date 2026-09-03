@@ -31,6 +31,19 @@ local THROTTLE = 0.3
 local frame
 local last = 0
 
+-- The slots the filter could not answer yet, by number, on the corpse that is
+-- open. A grey or white the client has not priced is an item the filter can
+-- neither keep nor refuse, and asking for the price is what makes the client
+-- go and fetch it. So the slot is left where it is, GET_ITEM_INFO_RECEIVED is
+-- listened for while any slot is waiting, and the waiting slots are asked
+-- again when it fires. The corpse closing forgets them: what is left on it is
+-- a walk back at worst, and never a delete.
+--
+-- By slot rather than by walking the corpse again, because a slot the first
+-- pass took is still a slot on this client's stub and on some builds of the
+-- real one, and a second LootSlot on it is at best nothing.
+local waiting = {}
+
 -- Whether this click asked for auto loot. autoLootDefault is the setting and
 -- AUTOLOOTTOGGLE is the modifier that inverts it for one click, so the two
 -- disagreeing is the player asking for auto loot either way round. Emptying a
@@ -64,12 +77,38 @@ end
 -- corpse rather than one nobody can touch. Comfort/Leftovers.lua owns that
 -- setting and that decision; this line is the only place it is reached from.
 local function Consider(slot)
-	if ns.Wanted.Take(slot) then
+	local want = ns.Wanted.Take(slot)
+	if want == nil then
+		waiting[slot] = true
+		frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+		frame:RegisterEvent("LOOT_CLOSED")
+		return
+	end
+	waiting[slot] = nil
+	if want then
 		LootSlot(slot)
 		return
 	end
 	if ns.dbc.lootDestroy then
 		ns.Leftovers.Discard(slot)
+	end
+end
+
+local function Forget()
+	wipe(waiting)
+	frame:UnregisterEvent("GET_ITEM_INFO_RECEIVED")
+	frame:UnregisterEvent("LOOT_CLOSED")
+end
+
+-- The waiting slots asked again, once the client has answered something. Not
+-- matched against the id the event carries, because a corpse rarely has two
+-- slots waiting and a slot asked again before its answer simply waits on.
+local function Retry()
+	for slot in pairs(waiting) do
+		Consider(slot)
+	end
+	if not next(waiting) then
+		Forget()
 	end
 end
 
@@ -119,8 +158,20 @@ local function OnLootReady()
 	end
 	last = now
 
+	-- A new corpse, so whatever the last one left waiting is its own affair.
+	Forget()
 	if AutoLooting() then
 		Take()
+	end
+end
+
+local function OnEvent(_, event)
+	if event == "LOOT_READY" then
+		OnLootReady()
+	elseif event == "GET_ITEM_INFO_RECEIVED" then
+		Retry()
+	elseif event == "LOOT_CLOSED" then
+		Forget()
 	end
 end
 
@@ -129,13 +180,24 @@ end
 function Loot.Apply()
 	if not frame then
 		frame = CreateFrame("Frame")
-		frame:SetScript("OnEvent", OnLootReady)
+		frame:SetScript("OnEvent", OnEvent)
 	end
 	if ns.db.fastLoot then
 		frame:RegisterEvent("LOOT_READY")
 	else
 		frame:UnregisterEvent("LOOT_READY")
+		Forget()
 	end
+end
+
+-- How many slots on the open corpse are waiting for a price. For the panel
+-- and for the harness.
+function Loot.Waiting()
+	local count = 0
+	for _ in pairs(waiting) do
+		count = count + 1
+	end
+	return count
 end
 
 function Loot.Describe()

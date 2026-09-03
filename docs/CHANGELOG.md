@@ -21,6 +21,11 @@ gold. Nought switches the rule off. Green and better is still the colour's
 decision, so a run with the floor at blue refuses a green whatever it sells
 for.
 
+A grey or white the client has not priced yet, which is any item you have
+not seen since login, is left on the corpse until the price arrives and is
+then taken or refused on it. The first cut kept such an item, and a Tough
+Cloak worth four silver came home on that guess.
+
 ### Marks along the top of the bag window
 
 The title bar's buttons wore words, and record turned into stop under the

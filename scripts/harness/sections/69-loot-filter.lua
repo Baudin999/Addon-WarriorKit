@@ -205,12 +205,13 @@ check(took() == expect(1),
 	("three leather at twenty five is under a silver, and the pass took %s"):format(took()))
 loot.Set(SLOTS)
 
--- An item the client has not priced yet comes home. The stub's "not cached"
--- is GetItemInfo answering nothing, and with the floor on that has to read
--- as keep rather than as a price of nought, because refused is destroyed
--- once the leftovers are on and this is the one rule that stands between a
--- white sword and the bin.
-loot.Set({ { quality = 0 }, { quality = 1, item = "Light Leather", count = 1 } })
+-- An item the client has not priced yet is left on the corpse and asked
+-- about again when the price arrives. The stub's "not cached" is GetItemInfo
+-- answering nothing, and with the floor on that must read as neither: keep
+-- let a Tough Cloak worth four silver through on its first sighting in game,
+-- and refuse would bin a white sword worth two gold on its. Four whites at
+-- twenty five is a slot worth a gold, so the answer, once it comes, is take.
+loot.Set({ { quality = 0 }, { quality = 1, item = "Light Leather", count = 4 } })
 ns.dbc.lootWorth = 100
 do
 	-- Both doors, because Core resolves C_Item.GetItemInfo where the client
@@ -225,13 +226,40 @@ do
 	end
 	_G.C_Item.GetItemInfo, _G.GetItemInfo = uncached, uncached
 	pass()
+	check(took() == expect(1),
+		("an unpriced slot was decided on the first pass, which took %s"):format(took()))
+	check(ns.Loot.Waiting() == 1,
+		("%d slots are waiting for a price and one should be"):format(ns.Loot.Waiting()))
+	-- An answer about some other item asks again and the slot waits on.
+	fire("GET_ITEM_INFO_RECEIVED", 1, true)
+	check(took() == expect(1) and ns.Loot.Waiting() == 1,
+		"an answer about another item decided the waiting slot")
 	_G.C_Item.GetItemInfo, _G.GetItemInfo = real, real
 end
+fire("GET_ITEM_INFO_RECEIVED", ITEMS["Light Leather"].id, true)
 check(took() == expect(1, 2),
-	("one unpriced leather under a floor of a silver was left, and the pass took %s"):format(took()))
-pass()
-check(took() == expect(1),
-	("the same leather priced at twenty five was taken under a floor of a silver, the pass took %s"):format(took()))
+	("the price arrived and the pass had taken %s"):format(took()))
+check(ns.Loot.Waiting() == 0,
+	("%d slots still waiting after the price arrived"):format(ns.Loot.Waiting()))
+
+-- The corpse closing forgets what was waiting, and never deletes it.
+loot.Set({ { quality = 0 }, { quality = 1, item = "Light Leather", count = 4 } })
+do
+	local real = _G.C_Item.GetItemInfo
+	local function uncached(link)
+		if type(link) == "string" and link:find("Light Leather", 1, true) then
+			return nil
+		end
+		return real(link)
+	end
+	_G.C_Item.GetItemInfo, _G.GetItemInfo = uncached, uncached
+	pass()
+	_G.C_Item.GetItemInfo, _G.GetItemInfo = real, real
+end
+fire("LOOT_CLOSED")
+fire("GET_ITEM_INFO_RECEIVED", ITEMS["Light Leather"].id, true)
+check(took() == expect(1) and ns.Loot.Waiting() == 0,
+	("a corpse that closed while a slot waited took %s afterwards"):format(took()))
 loot.Set(SLOTS)
 
 -- Nought is the rule off, and the reading says nothing about it.
