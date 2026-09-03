@@ -68,6 +68,8 @@ written longer than they are here.
 42. The sheet, the book, the aura squares, the feeds, the meters, the swing
     bars and the cooldown row built on first open or first switch. `d87c42d`,
     the last of three
+45. Twelve event handlers seeded as hot roots, and a string built on a hot
+    path counted as the allocation it is. `f89b5be`, the second of two
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
@@ -277,10 +279,15 @@ compare that would have skipped them, and windows built at login for a session
 that never opens them. Ordered by what they cost, with the one that grows all
 session first. The full review with every citation is off-tree
 
-Thirteen of the fourteen landed on 2026-09-03, one agent per item in
-its own worktree, and are above. Item 45 is what is left, and it was held
-back on purpose: it seeds markers on functions the other thirteen touched, so
-its counts had to be taken after them.
+All fourteen landed on 2026-09-03, one agent per item in its own
+worktree, and are above. Item 45 went last on purpose: it seeds markers on
+functions the other thirteen touched, so its counts had to be taken after
+them. Its prediction missed in three places worth keeping: there are six
+combat-log subscribers, not five; `Breakdown.lua` allocates once per spell
+and not once per event; and the seven writes in `Attach` and `Release` could
+not take `-- cold:` because those two are the seeded roots, so they are
+per-line reasons instead. The Ticker refusal it asked for had already landed
+with item 32.
 
 The architecture question the review raised is answered in item 36 and item 33
 together. The client is already the event stream. What the addon lacks is not
@@ -289,31 +296,6 @@ reader in front of each raw source whose read is the cost, and a dirty bit per
 widget so that events mark and a tick draws. A general addon-wide stream would
 re-broadcast client events through one more dispatch that every handler pays
 for, and it would not have found a single item below.
-
-45. The gate reaches the tick paths and not the event paths.
-
-    `scripts/hot.lua` walks out from tickers and OnUpdate roots. A combat-log
-    handler at 60 lines a second is hotter than any 5 Hz tick and is outside
-    the walk, because event handlers are closures the root finder cannot
-    name. The cheap way in is the marker the file already has. Seeding twelve
-    functions with `-- hot:` (the four `OnLog`, `Swing.Retime`,
-    `CombatFeed.OnLog`, `Upkeep.Scan`, `Cooldowns.Scan`, `Feed.Handle`, and
-    EnemyBars `Attach` and `Release`) grows the closure from 355 to 439
-    functions and the existing scan reports thirteen violations: four real
-    per-event allocations at `Breakdown.lua:275`, `Chat/History.lua:143`,
-    `Chat/Rooms.lua:339` and `EnemyBars.lua:1735`, seven writes in Attach and
-    Release that want `-- cold:`, and two first-use paths at `UI/Ticker.lua:133`
-    and `UI/Pixel.lua:97` that want a per-line reason. Do not seed wider:
-    eighteen roots reached 937 functions because `Window.Refresh` resolves to
-    all eight `Window.lua` files at once, which is the list-not-a-gate failure
-    hot.lua's own header warns about.
-
-    Two more rules that would have caught items 32 and 34. `UI.Ticker` refuses
-    a running tick of the same name on the same frame. And the allocation scan
-    counts `:format(` and `..` as allocations on a hot path, which it does not
-    today; `ThreatState` formatting before its caller compares is exactly the
-    shape the scan exists to catch.
-
 
 ## Deliberately not on this list
 
