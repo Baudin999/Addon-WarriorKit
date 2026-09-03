@@ -46,19 +46,29 @@ ns.MerchantGrid = Grid
 -- the tab swaps it. A second pool would be a second copy of the layout below,
 -- kept in step by hand.
 --
--- **A press buys one of the vendor's own batches and shift picks a number.**
--- Both of those are the client's gestures and neither was here: a plain press
--- bought a single item off a rack that sells water five at a time, which is a
--- fifth of what the square said it would buy, and there was no way at all to
--- ask for four stacks. The number picker is UI/Amount.lua, which is a window of
--- its own rather than a control on sixty cards.
+-- **The buttons mean what they mean on Blizzard's rack.** Right buys one of
+-- the vendor's own batches. Left picks a batch up onto the cursor, where the
+-- client draws it under the pointer and buys it when you drop it on a bag, and
+-- a left drag is the same pickup. Shift opens the number picker on anything
+-- sold in stacks and does nothing on anything that is not, and any modified
+-- press is offered to the client first, which is how shift links the item
+-- into an open chat box and control opens the dressing room. All of that is
+-- MerchantItemButton_OnClick and _OnModifiedClick on the TBC branch, copied
+-- rather than improved, because a player who has bought water from every
+-- vendor since 2005 does not read a tooltip to learn which button spends.
+-- For a day the left button bought and the right went to the camera, and a
+-- right click did nothing at all. The number picker is UI/Amount.lua, which
+-- is a window of its own rather than a control on sixty cards.
 --
 -- **Nothing here is a secure button and nothing needs to be.** A bag square
 -- inherits the client's own template because a right click on one means eat,
 -- equip, open, sell or attach depending on what is in front of you, and the
--- rules for which are inside the client. Buying is one call with one meaning,
--- so the card is an ordinary button and the right button goes to the camera
--- like everything else in the addon that is not a bag slot.
+-- rules for which are inside the client. Buying is one call with one meaning
+-- and picking up is another, so the card is an ordinary button. What it does
+-- share with a bag square is the price named in UI/Tip.lua: a card whose right
+-- click spends cannot hand the right button to the camera, so a right drag
+-- begun on a card does not turn the view. The gaps and the frame around the
+-- rack are where a drag starts.
 --------------------------------------------------------------------------
 
 local SLOT, GAP, BREAK = UI.SLOT, UI.SLOT_GAP, UI.SLOT_BREAK
@@ -209,13 +219,11 @@ local function Leave(card)
 	ns.Tip.Close()
 end
 
--- Whether the player is asking for a number rather than for one batch.
---
--- Asked at the moment of the press rather than tracked, because the client
--- already knows and the answer is only ever wanted here. Guarded for the call's
--- existence the way Buttons/Placing.lua guards the same one.
+-- Whether the player is asking for a number rather than for one batch. Asked
+-- at the moment of the press rather than tracked, because the client already
+-- knows and the answer is only ever wanted here.
 local function Picking()
-	return type(IsShiftKeyDown) == "function" and IsShiftKeyDown() and true or false
+	return ns.Splitting()
 end
 
 -- The line under the number in the picker: what that many batches comes to, in
@@ -260,19 +268,40 @@ local function Pick(rack, entry)
 	})
 end
 
-local function Click(card)
+-- The press, in the client's own order: the link is offered to the client,
+-- then a stack split is a picker or nothing, then the left button picks up
+-- and the right button buys. The buyback rack has no Pickup, and both buttons
+-- take the thing back there, which is also the client's own rack.
+local function Click(card, button)
 	local rack = card.source or ns.Stock
 	local entry = card.entry
 	if not entry then
 		return
 	end
-	if Picking() and rack.InStock(entry) and rack.Batches(entry) > 1 then
-		return Pick(rack, entry)
+	if ns.LinkClick(entry.link) then
+		return
 	end
-	local going, why = rack.Buy(entry)
+	if Picking() then
+		if rack.InStock(entry) and rack.Batches(entry) > 1 then
+			Pick(rack, entry)
+		end
+		return
+	end
+	local going, why
+	if button == "LeftButton" and rack.Pickup then
+		going, why = rack.Pickup(entry)
+	else
+		going, why = rack.Buy(entry)
+	end
 	if not going then
 		ns.Print(why .. ".")
 	end
+end
+
+-- A drag begun on a card is the pickup, which is what the client's own rack
+-- does with OnDragStart and the reason dragging water into a bag works there.
+local function Drag(card)
+	return Click(card, "LeftButton")
 end
 
 -- One card. Named, because a card that has landed somewhere wrong has to be
@@ -313,15 +342,12 @@ local function Build(index)
 	card:SetScript("OnEnter", Enter)
 	card:SetScript("OnLeave", Leave)
 	card:SetScript("OnClick", Click)
-	-- The right button turns the camera and there is nothing on this card it
-	-- could mean instead. A bag square is the one place in the addon that keeps
-	-- it, because a right click there is the whole of eat, equip, open and sell.
-	UI.PassCamera(card)
-	-- After the pass-through and not before, and it is not belt and braces.
-	-- Handing two buttons to the camera is a write to which buttons this frame
-	-- answers at all, so the one it still wants has to be asked for again
-	-- afterwards or the card is a button you can press and nothing happens.
-	card:RegisterForClicks("LeftButtonUp")
+	card:SetScript("OnDragStart", Drag)
+	-- Both buttons, and the right one is not handed to the camera: it is the
+	-- one that spends, and the header says what that costs. The same two edges
+	-- MerchantItemButton_OnLoad registers, and the same drag button.
+	card:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	card:RegisterForDrag("LeftButton")
 
 	-- On the way down, in the addon's own black. A card that does not move under
 	-- the mouse reads as a card that did not take the click, and the click here

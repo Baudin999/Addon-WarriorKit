@@ -114,6 +114,11 @@ _G.GetCursorInfo = function()
 	if not cursor then
 		return nil
 	end
+	if cursor.merchant then
+		-- What the client answers with a vendor's batch on the cursor: the
+		-- word and the rack index, and nothing after them.
+		return "merchant", cursor.merchant
+	end
 	if cursor.spell then
 		-- The shape this client answers a spell in: the spellbook index and the
 		-- book it came out of, and nothing in a fourth slot. Modelled that way
@@ -134,6 +139,12 @@ _G.WarriorKitCarrySpell = function(index, book)
 end
 
 _G.ClearCursor = function() cursor = nil end
+
+-- Put anything at all in the hands, for a client file that models a pickup of
+-- its own. 17-merchant.lua writes a vendor's batch through this rather than
+-- onto a cursor of its own, for the reason PickupAction below writes onto this
+-- one: one upvalue is what every question about the hands reads.
+H.hold = function(held) cursor = held end
 
 -- Counted, because the window has two independent guards against destroying
 -- the wrong item and the counter is the only way to tell which one fired. The

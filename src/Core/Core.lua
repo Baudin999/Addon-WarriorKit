@@ -1676,6 +1676,40 @@ function ns.BuyMerchant(index, count)
 	return true
 end
 
+-- Put one of the vendor's batches on the cursor, which is what the client's
+-- own rack does on a left click. The client draws the icon under the pointer
+-- and dropping it on a bag square buys it into that slot; no Lua here sees any
+-- of that, which is the point. False where the client has no such call.
+function ns.PickupMerchant(index)
+	if type(_G.PickupMerchantItem) ~= "function" then
+		return false
+	end
+	_G.PickupMerchantItem(index)
+	return true
+end
+
+-- Whether the press being answered is asking for a number rather than for one
+-- batch. SPLITSTACK is the client's own name for that gesture, shift by
+-- default and rebindable in the key options, which is why the binding is
+-- asked rather than the key.
+function ns.Splitting()
+	if type(_G.IsModifiedClick) == "function" then
+		return _G.IsModifiedClick("SPLITSTACK") and true or false
+	end
+	return type(_G.IsShiftKeyDown) == "function" and _G.IsShiftKeyDown() and true or false
+end
+
+-- Hand a click on an item link to the client first. This is the call under
+-- every item button Blizzard draws: shift with the chat box open links the
+-- item into it, control opens the dressing room, and it answers true when it
+-- took the press so the caller does nothing else with it.
+function ns.LinkClick(link)
+	if type(link) ~= "string" or type(_G.HandleModifiedItemClick) ~= "function" then
+		return false
+	end
+	return _G.HandleModifiedItemClick(link) and true or false
+end
+
 --------------------------------------------------------------------------
 -- The buyback rack
 --

@@ -170,6 +170,27 @@ _G.BuyMerchantItem = function(index, count)
 	H.fire("MERCHANT_UPDATE")
 end
 
+-- A batch picked up onto the cursor, which is the client's left click. Nothing
+-- moves in the purse: the sale happens when the client puts the thing down in
+-- a bag, and that half is not modelled here for the reason the header gives.
+_G.PickupMerchantItem = function(index)
+	local row = entry(index)
+	if not row then
+		return
+	end
+	H.hold({ merchant = index })
+end
+
+-- The client's first look at any modified click on an item. Recorded rather
+-- than flat, because the fact worth asserting is that the rack offered the
+-- link to the client before it decided anything of its own; it never takes
+-- the press here, since no chat box is open and there is no dressing room.
+local linked = {}
+_G.HandleModifiedItemClick = function(link)
+	linked[#linked + 1] = link
+	return false
+end
+
 --------------------------------------------------------------------------
 
 -- What you sold him, and what taking it back costs. Five values in the order
@@ -242,6 +263,7 @@ _G.CloseMerchant = shut
 H.merchant = {
 	rack = RACK,
 	bought = bought,
+	linked = linked,
 	open = function(who)
 		if open then
 			return false

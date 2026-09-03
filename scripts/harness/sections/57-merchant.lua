@@ -301,27 +301,49 @@ check(not H.tipSettle(), "the box stayed up after the pointer left the card")
 -- What is checked is the entry, not the card: the purse moves by the price of
 -- the thing the box on the pressed card described.
 --
+-- The buttons are the client's own. Right buys, left picks a batch up onto
+-- the cursor and a left drag is the same pickup, which is what
+-- MerchantItemButton_OnLoad registers and what every vendor since 2005 has
+-- answered. For a day the left button bought and the right was handed to the
+-- camera, so a right click on the rack did nothing at all.
+--
 -- And it buys the batch. The client counts a purchase in items rather than in
 -- the vendor's own stacks, so asking it for one at a vendor selling water five
 -- at a time bought a single water and charged the price of five. The card says
 -- 5 in its corner and this is the assertion that the press agrees with it.
 ----------------------------------------------------------------------
 
-local passing = 0
+local wired = 0
 for index = 1, #cards do
 	local passed = cards[index]:GetPassThroughButtons()
 	local clicks = cards[index]:GetRegisteredClicks()
-	if passed and passed["RightButton"] and clicks and clicks["LeftButtonUp"] then
-		passing = passing + 1
+	if clicks and clicks["LeftButtonUp"] and clicks["RightButtonUp"]
+		and not (passed and passed["RightButton"])
+		and cards[index].dragButton == "LeftButton" then
+		wired = wired + 1
 	end
 end
-check(passing == #cards,
-	("%d of %d cards both hand the right button to the camera and still answer the left")
-		:format(passing, #cards))
+check(wired == #cards,
+	("%d of %d cards answer both buttons, keep the right one and drag on the left")
+		:format(wired, #cards))
 
 local before = state.purse
 check(water:Click("LeftButton") == true,
 	"a left click on a card was refused, so the card is a button that does nothing")
+check(state.purse == before, "a left click on the water bought it, and left picks up")
+check(_G.GetCursorInfo() == "merchant" and select(2, _G.GetCursorInfo()) == water.entry.index,
+	"a left click on the water did not put the water on the cursor")
+_G.ClearCursor()
+
+-- The drag is the same pickup, through the script the card hangs on it.
+water.scripts.OnDragStart(water)
+check(_G.GetCursorInfo() == "merchant",
+	"a drag begun on the water did not put the water on the cursor")
+_G.ClearCursor()
+
+check(water:Click("RightButton") == true,
+	"a right click on a card was refused, so the button that buys does nothing")
+check(_G.GetCursorInfo() == nil, "a right click on the water put it on the cursor")
 
 check(state.purse == before - 25,
 	("a press on the water moved the purse by %d and the water costs 25")
@@ -361,8 +383,11 @@ check(Stock.Batches(flask.entry) == 2,
 check(UI.Amounting() == nil, "the picker is on the screen before anything asked for it")
 
 _G.WarriorKitShift(true)
+local offered = #merchant.linked
 water:Click("LeftButton")
 check(UI.Amounting() == 1, "a shift-click on a stack did not put the picker up on one")
+check(#merchant.linked == offered + 1 and merchant.linked[#merchant.linked] == water.entry.link,
+	"the shift-click was not offered to the client first, so shift with a chat box open cannot link")
 check(UI.Choose(99) == 4,
 	"the picker let you ask for more than one call can carry")
 check(UI.Choose(0) == 1, "the picker let you ask for none")
@@ -380,21 +405,26 @@ check((merchant.bought[water.entry.index] or 0) == was + 20,
 		:format((merchant.bought[water.entry.index] or 0) - was))
 
 -- Cancelling spends nothing, which is the one thing a window over a vendor's
--- rack has to get right.
+-- rack has to get right. And the picker opens on either button, as the client's
+-- own split does.
 water = card("Refreshing Spring Water")
-water:Click("LeftButton")
+water:Click("RightButton")
+check(UI.Amounting() == 1, "a shift-right-click on a stack did not put the picker up")
 before = state.purse
 check(UI.Take(false) == true, "the picker refused the button that does not buy")
 check(state.purse == before, "cancelling the picker spent money")
 
--- Nothing to pick is a press, not an empty window. A rod is one to a batch and
--- one to a stack, so shift on it is the same as no shift at all.
+-- Nothing to pick is nothing, not a press and not an empty window. A rod is one
+-- to a batch and one to a stack, and the client's own rack returns from a
+-- shift-click on it having done nothing at all.
 before = state.purse
 rod = card("Runed Copper Rod")
 rod:Click("LeftButton")
+rod:Click("RightButton")
 check(UI.Amounting() == nil,
 	"a shift-click on something sold one at a time put a picker up with one choice on it")
-check(state.purse == before - 4000, "the shift-click on the rod did not buy the rod")
+check(state.purse == before, "a shift-click on the rod bought the rod")
+check(_G.GetCursorInfo() == nil, "a shift-click on the rod picked the rod up")
 _G.WarriorKitShift(false)
 
 water = card("Refreshing Spring Water")
@@ -410,7 +440,7 @@ water = card("Refreshing Spring Water")
 
 do
 	local was = merchant.bought[helm.entry.index] or 0
-	helm:Click("LeftButton")
+	helm:Click("RightButton")
 
 	check(UI.Asking() ~= nil,
 		"a press on a row priced in tokens bought them without asking")
@@ -422,12 +452,12 @@ do
 	check((merchant.bought[helm.entry.index] or 0) == was,
 		"saying no to the question spent the tokens")
 
-	helm:Click("LeftButton")
+	helm:Click("RightButton")
 	UI.Answer(true)
 	check((merchant.bought[helm.entry.index] or 0) == was + 1,
 		"saying yes to the question did not buy the thing it was asking about")
 
-	check(water:Click("LeftButton") and UI.Asking() == nil,
+	check(water:Click("RightButton") and UI.Asking() == nil,
 		"a row priced in money put a question up, which is a click asked about twice")
 	UI.Answer(false)
 end
@@ -511,11 +541,14 @@ check(foot:GetText() == "2 to buy back",
 -- The press, and the fact it proves is which of the two racks the square
 -- belonged to. Taking the rod back costs the thousand he paid for it; the rack
 -- entry drawn on this same button a moment ago was the water at twenty five.
+-- Either button takes it back, which is the client's own buyback rack: there
+-- is nothing to pick up, so the left button is not a different gesture there.
 purse = state.purse
 check(cards[2]:Click("LeftButton") == true, "a click on a buyback card was refused")
 check(state.purse == purse - 1000,
 	("taking the rod back moved the purse by %d and he paid 1000 for it")
 		:format(purse - state.purse))
+check(_G.GetCursorInfo() == nil, "a left click on a buyback card put something on the cursor")
 
 check(shown() == 1 and cards[1].name == "Refreshing Spring Water",
 	"a slot taken back is still on the rack, or the hole it left was drawn as a square")

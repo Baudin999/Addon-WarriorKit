@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Right buys, left picks up
+
+A right click on the vendor's rack did nothing and a left click bought at once.
+Blizzard's rack has done the opposite since 2005: right buys one of the
+vendor's own batches, left puts a batch on the cursor and drops it into the
+bag you choose, and a left drag is the same pickup. The cards do that now,
+through the same three client calls `MerchantItemButton_OnClick` makes.
+
+Two smaller things came along with it. A shift-click is offered to the client
+first, so shift with the chat box open links the item into it and control
+opens the dressing room, the way every item button in the game does. And a
+shift-click on something sold one at a time now does nothing, as the client's
+does, where before it bought the thing.
+
+The right button on a card no longer turns the camera. A card whose right
+click spends cannot also pass it through; the gaps between cards and the frame
+around the rack are where a right drag starts, which is the same trade the bag
+squares make. Buyback is unchanged: either button takes the thing back.
+
 ### One clock for the parts that never stop
 
 Eighteen parts of the addon each held a frame of their own whose only job was

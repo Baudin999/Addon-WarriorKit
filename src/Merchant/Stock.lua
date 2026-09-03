@@ -268,6 +268,22 @@ function Stock.Buy(entry, batches)
 	return Spend(entry, batches)
 end
 
+-- Pick one batch up onto the cursor, which is the client's own left click.
+-- Nothing is spent here: the purchase happens when the client puts the thing
+-- down in a bag, on its own side of the fence.
+function Stock.Pickup(entry)
+	if not entry or not entry.index then
+		return false, "nothing on that row"
+	end
+	if not Stock.InStock(entry) then
+		return false, "this vendor has none of those left"
+	end
+	if not ns.PickupMerchant(entry.index) then
+		return false, "this client has no call to pick up with"
+	end
+	return true
+end
+
 function Stock.Describe()
 	if state.count == 0 then
 		return "no merchant is open"

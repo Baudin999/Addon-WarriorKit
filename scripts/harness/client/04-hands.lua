@@ -358,7 +358,16 @@ _G.GetLootThreshold = constant(2)
 _G.GetLootMethod = function() return state.lootMethod end
 -- No C_PartyInfo here on purpose, so Comfort/Loot.lua resolves through the
 -- loose global and the fallback half of that probe is the half being tested.
-_G.IsModifiedClick = constant(false)
+-- The two bindings that sit on shift by default answer from the shift key
+-- 05-quests.lua holds, so a stack split on the merchant rack is reachable by
+-- pressing shift the way the player does. Everything else, autoloot included,
+-- is off, which is the loot section's premise.
+_G.IsModifiedClick = function(binding)
+	if binding == "SPLITSTACK" or binding == "CHATLINK" then
+		return _G.IsShiftKeyDown and _G.IsShiftKeyDown() or false
+	end
+	return false
+end
 
 H.swing, H.enemyCasts, H.misused = swing, enemyCasts, misused
 H.worn = worn
