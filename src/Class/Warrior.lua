@@ -121,28 +121,30 @@ ns.Class.Register("WARRIOR", {
 	--------------------------------------------------------------------------
 	-- The three openers the charge button casts
 	--
-	-- Which one applies is a function of combat and what the cursor is over.
-	-- Every rank is listed because Known asks IsSpellKnown per rank, and rank
-	-- one leads because the name and the icon are taken off it.
+	-- Which one applies is a function of combat, the stance you stand in and
+	-- what the cursor is over. The stance is the one the opener needs, in the
+	-- index above, and Charge/Charge.lua prefers the opener of the stance you
+	-- are already in over a swap. Only Charge has a combat rule; Intercept and
+	-- Intervene are cast on either side of the pull. Every rank is listed
+	-- because Known asks IsSpellKnown per rank, and rank one leads because the
+	-- name and the icon are taken off it.
 	--------------------------------------------------------------------------
 	charge = {
 		charge = {
 			ranks = { 100, 6178, 11578 },
 			stance = 1,
 			hostile = true,
-			inCombat = false, -- Charge only works out of combat
+			outOfCombat = true, -- Charge only works out of combat
 		},
 		intervene = {
 			ranks = { 3411 },
 			stance = 2,
 			hostile = false,
-			inCombat = true,
 		},
 		intercept = {
 			ranks = { 20252, 20616, 20617 },
 			stance = 3,
 			hostile = true,
-			inCombat = true,
 		},
 	},
 

@@ -5,8 +5,8 @@
 A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
 
 - **One Charge button.** It casts Charge, Intervene or Intercept depending on
-  what you are looking at, and out of combat it aims by camera rather than by
-  target.
+  the stance you stand in and what you are looking at, and out of combat it
+  aims by camera rather than by target.
 - **Easy raid marking.** Bind your raid target icons to simple buttons.
 - **One key that switches target and swings.** TAB cycles and stops there. Bind
   a key in `/wk` and it takes the next enemy and starts the attack on it.

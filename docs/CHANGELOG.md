@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### The charge button reads your stance and your spellbook
+
+Out of combat the button was always Charge, with a swap to Battle Stance under
+it. A fury warrior stands in Berserker Stance, and that stance has an opener of
+its own, so every pull cost a press on the swap and the rage that went with it.
+The button now casts the opener of the stance you stand in: Intercept from
+Berserker Stance, Charge from the other two with the swap where it was. TBC
+gives Defensive Stance no opener that takes a mob, so a tank still pays the
+press. In a fight the cursor still decides, and with nothing under it the icon
+shows what your stance owns rather than Intervene for everyone.
+
+An opener you have not trained is never shown and never written into the macro.
+A level twenty warrior in a fight used to see Intervene, fifty levels off,
+greyed as unknown. The icon now shows Charge greyed for being in combat, which
+is the truth about what that key can do.
+
 ### Four things the chat window was missing
 
 The pictures down the rail have a size of their own on the chat page, ten to

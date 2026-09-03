@@ -148,10 +148,12 @@ function ChargeMarker.Update()
 	-- the macro then name the same mob in the same frame.
 	ns.ChargeIcon.SyncMacro()
 
-	-- An aiming aid for the pull. In combat the button switches to Intervene or
-	-- Intercept, both aimed with the cursor, so there is nothing for a world
-	-- icon to add and the HUD icon carries that state instead.
-	if key ~= "charge" then
+	-- An aiming aid for the pull, whichever opener the stance makes it. In
+	-- combat the button is aimed with the cursor, so there is nothing for a
+	-- world icon to add and the HUD icon carries that state instead. Asked
+	-- outright rather than read off the key, because Intercept is the pull
+	-- from Berserker Stance and the fight both.
+	if UnitAffectingCombat("player") then
 		Detach()
 		return
 	end

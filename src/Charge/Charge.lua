@@ -4,9 +4,10 @@ local Charge = {}
 ns.Charge = Charge
 
 -- Three abilities that all close distance, driven by one button. Which one
--- applies is a function of combat and what the cursor is over, and every
--- display reads that single answer. Anything that would let the icon, the
--- world marker and the button disagree belongs in here.
+-- applies is a function of combat, the stance you stand in, what you have
+-- trained and what the cursor is over, and every display reads that single
+-- answer. Anything that would let the icon, the world marker and the button
+-- disagree belongs in here.
 
 local GCD = 1.5
 
@@ -255,24 +256,67 @@ function Charge.PlateFor(unit)
 	return nil
 end
 
+-- Whether you stand in the stance an opener needs. A client that will not say
+-- which stance you are in counts as standing in the right one, for the reason
+-- Answer gives below: IsUsableSpell knows the stance rule too and gets the last
+-- word there.
+local function Stands(key)
+	local info = Charge.Ability(key)
+	if not info then
+		return false
+	end
+	local form = ns.Stance.Current()
+	return form == nil or form == info.stance
+end
+
+-- The opener a stance owns, when you have trained it. Nil when you have not,
+-- or when the stance owns none, which is the whole of Battle Stance in a
+-- fight: Charge is out of combat only.
+local function Own(key)
+	if Stands(key) and Charge.Known(key) then
+		return key
+	end
+	return nil
+end
+
+-- What the fight's half of the button shows with nothing under the cursor.
+-- Your own stance's opener first, because that is the one a press lands
+-- without a swap; then Intercept, the one that takes a mob; then Intervene;
+-- then Charge, greyed as in combat, for a warrior who has trained nothing
+-- else yet. A level twenty warrior used to see Intervene here, an ability
+-- fifty levels away, drawn as unknown.
+local function Idle()
+	return Own("intervene") or Own("intercept")
+		or (Charge.Known("intercept") and "intercept")
+		or (Charge.Known("intervene") and "intervene")
+		or "charge"
+end
+
 local cachedKey, cachedUnit, cachedPlate, cachedAt = "charge", nil, nil, -1
 
 -- The one decision every display reads. Returns the ability key, the unit it
 -- would take, and that unit's nameplate when there is one.
 --
--- Out of combat it is Charge, and the mob you are aiming at wins, because
--- aiming by looking is the whole point of the marker. When the camera has no
--- answer it falls back to the target you chose on purpose, even a friendly one
--- that will make the charge fail, then the mob under the cursor, then nothing
--- and the macro's /targetenemy takes the press.
+-- Out of combat the stance decides the opener. Berserker Stance has one of
+-- its own, Intercept, and a fury warrior lives there, so the button reaches
+-- for it rather than spending the press and the rage on a swap to Battle
+-- Stance. Every other stance means Charge, with the swap the macro carries.
+-- Either way the mob you are aiming at wins, because aiming by looking is the
+-- whole point of the marker. When the camera has no answer it falls back to
+-- the target you chose on purpose, even a friendly one that will make the
+-- charge fail, then the mob under the cursor, then nothing and the macro's
+-- /targetenemy takes the press.
 --
 -- Soft targeting resolves to your own target while you hold one, so the
 -- reorder only bites when the two differ, which is exactly when the camera is
 -- the answer you wanted.
 --
 -- In combat the cursor decides. A party member under it means Intervene, a mob
--- means Intercept, and nothing under it shows Intervene greyed out, since that
--- is the one a tank reaches for.
+-- means Intercept, and nothing under it shows what Idle says.
+--
+-- An opener you have not trained is never picked. The macro writes no line
+-- for it either, so what the icon shows and what a press does agree on a
+-- character who is still levelling.
 --
 -- Memoised per frame because GetTime is frame-constant, so three callers cost
 -- one nameplate scan.
@@ -285,17 +329,17 @@ function Charge.Pick()
 
 	if UnitAffectingCombat("player") then
 		cachedPlate = nil
-		if Attackable("mouseover") then
+		if Attackable("mouseover") and Charge.Known("intercept") then
 			cachedKey, cachedUnit = "intercept", "mouseover"
-		elseif Assistable("mouseover") then
+		elseif Assistable("mouseover") and Charge.Known("intervene") then
 			cachedKey, cachedUnit = "intervene", "mouseover"
 		else
-			cachedKey, cachedUnit = "intervene", nil
+			cachedKey, cachedUnit = Idle(), nil
 		end
 		return cachedKey, cachedUnit, cachedPlate
 	end
 
-	cachedKey = "charge"
+	cachedKey = Own("intercept") or "charge"
 	local soft = SoftEnemy()
 	if soft then
 		cachedUnit, cachedPlate = soft, Charge.PlateFor(soft)
@@ -314,8 +358,9 @@ end
 --------------------------------------------------------------------------
 
 -- Returns a status, which Charge.Look turns into a colour, plus the cooldown
--- start and duration when there is one. Order is deliberate: what you cannot fix at all comes first,
--- then what a stance swap or a few seconds of rage fixes, then range.
+-- start and duration when there is one. Order is deliberate: what you cannot
+-- fix at all comes first, then what a stance swap or a few seconds of rage
+-- fixes, then range.
 local function Answer(key, unit)
 	local info = Charge.Ability(key)
 	local name = Charge.Name(key)
@@ -328,7 +373,10 @@ local function Answer(key, unit)
 		return "cooldown", start, duration
 	end
 
-	if info.inCombat ~= UnitAffectingCombat("player") then
+	-- Charge is the one of the three with a combat rule, and it is the only
+	-- rule IsUsableSpell does not know. Intercept and Intervene take a press
+	-- on either side of the pull.
+	if info.outOfCombat and UnitAffectingCombat("player") then
 		return "combat"
 	end
 
@@ -428,8 +476,8 @@ end
 local events = CreateFrame("Frame")
 
 -- Everything the client will say about the four inputs above, plus the two
--- edges of combat, because a status that reads inCombat is a status that moved
--- when the fight started.
+-- edges of combat, because a status that reads the combat rule is a status
+-- that moved when the fight started.
 local function Moved(_, event)
 	if event == "SPELLS_CHANGED" then
 		-- A new rank changes nothing, but a locale reload would.

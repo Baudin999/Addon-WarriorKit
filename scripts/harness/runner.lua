@@ -363,12 +363,15 @@ local SECTIONS = {
 	-- this one fills it, and it ends by emptying it again and shutting both
 	-- windows, so nothing after it would find a scene it did not expect.
 	"70-reagents",
-	-- Last, and it is the only section that takes every bag off the character
-	-- and hands back its own. What it measures is where one looted item landed
-	-- and how much of the stack it landed in came out again, and a bag of the
-	-- fixtures' own holding a second stack of the same cloth would answer that
-	-- question for it. The character's bags go back at the foot of the file.
+	-- The only section that takes every bag off the character and hands back
+	-- its own. What it measures is where one looted item landed and how much
+	-- of the stack it landed in came out again, and a bag of the fixtures' own
+	-- holding a second stack of the same cloth would answer that question for
+	-- it. The character's bags go back at the foot of the file.
 	"71-leftovers",
+	-- The charge button's pick, by stance and by what is trained. It moves
+	-- combat, the stance, the cursor and the book, and puts all four back.
+	"72-charge-stance",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

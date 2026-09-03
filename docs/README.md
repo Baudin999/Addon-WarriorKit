@@ -54,8 +54,8 @@ the probes that were already there, never by loading different files:
                       colour by who each mob is hitting instead. Said once in
                       chat at login and shown in /wk status.
     Edit Mode         absent. EditMode.CanApply says so and the panel greys out.
-    Intervene         a TBC ability. MacroText already builds its lines only if
-                      the spell name resolves, and Charge.Known is false, so the
+    Intervene         a TBC ability. MacroText writes a line only for an opener
+                      Charge.Known says is trained, and this one is not, so the
                       combat half of the button is Intercept alone.
     C_UnitAuras       absent, the aura shim falls back to UnitAura.
     C_Spell           absent, the spell shim falls back to the globals.
@@ -2321,12 +2321,23 @@ The saved settings are left alone. They are account-wide, a warrior alt shares
 them, and a class gate is a fact about this character rather than a preference
 about the addon.
 
-    out of combat            Charge     Battle Stance      the mob you are looking at
-    in combat, friendly hover Intervene Defensive Stance   that party member
-    in combat, hostile hover  Intercept Berserker Stance   that mob
+    out of combat, Berserker  Intercept  Berserker Stance   the mob you are looking at
+    out of combat, elsewhere  Charge     Battle Stance      the mob you are looking at
+    in combat, friendly hover Intervene  Defensive Stance   that party member
+    in combat, hostile hover  Intercept  Berserker Stance   that mob
 
-In combat with nothing under the cursor the icon shows Intervene greyed out,
-since that is the one a tank reaches for.
+The stance you stand in decides the pull. Berserker Stance owns Intercept, a
+fury warrior lives there, and a swap to Battle Stance for Charge costs the press
+and the rage. The other two stances go to Charge with the swap under it, because
+TBC gives neither an opener that takes a mob. Intercept has no combat rule, so
+out of combat it reads ready and not as waiting for a fight; Charge is the only
+one of the three that has one.
+
+In combat with nothing under the cursor the icon shows the opener your stance
+owns, and Intercept from Battle Stance, which owns none in a fight. An opener
+you have not trained is never picked and never written into the macro, so a
+warrior still levelling sees Charge greyed for combat rather than an Intervene
+fifty levels off drawn as unknown.
 
 Cooldown, usability and range are queried by localised spell name so the highest
 known rank answers. The GCD is filtered out by ignoring durations at or under
@@ -2395,8 +2406,9 @@ marker's ticker so the two never disagree by a frame:
     #showtooltip
     /target [nocombat,@softenemy,harm,nodead]
     /targetenemy [noexists][dead]
-    /cast [nocombat,nostance:1] Battle Stance
-    /cast [nocombat] Charge
+    /cast [nocombat,stance:3] Intercept
+    /cast [nocombat,nostance:1/3] Battle Stance
+    /cast [nocombat,nostance:3] Charge
     /cast [combat,@mouseover,help,nodead,nostance:2] Defensive Stance
     /cast [combat,@mouseover,help,nodead] Intervene
     /cast [combat,@mouseover,harm,nodead,nostance:3] Berserker Stance
@@ -2410,13 +2422,24 @@ resolves inside a macro conditional is unproven here, and if it silently does
 not, `/targetenemy` is what stops a press with nothing targeted from doing
 nothing at all. When line two worked, the target exists and is alive, so line
 three is a no-op. Everything in combat has to be a macro conditional, because
-attributes cannot be rewritten once lockdown is up. `help` and `harm` are exclusive, so exactly one of those two
-pairs can fire on a press.
+attributes cannot be rewritten once lockdown is up. The stance is a conditional
+on every line for the same reason, so a swap mid-fight moves the button without
+a rewrite. `help` and `harm` are exclusive, so exactly one of those two pairs
+can fire on a press. A line for an opener you have not trained is not written:
+the spell name resolves for an ability fifty levels off, so `Charge.Known` is
+the gate and not the name.
+
+The Battle Stance swap says `nostance:1/3` and Charge says `nostance:3`, so a
+press from Berserker Stance spends itself on Intercept alone. Without them
+Intercept would fire and the swap would follow it on the same press. When
+Intercept is not trained the two lines are written without the 3.
 
 Each pair spends a press on the stance swap when you are in the wrong one, the
 same as any stance-dance macro: the swap is sent to the server and the `/cast`
 below it runs before the answer arrives. A tank sitting in Defensive Stance
-pays that for Charge and Intercept, never for Intervene. The icon turns orange
+pays that for Charge and Intercept, never for Intervene. A fury warrior in
+Berserker Stance pays it for nothing, because Intercept is the pull from there
+and needs no swap. The icon turns orange
 when a press will go on the stance rather than the ability, so it is visible
 rather than surprising.
 

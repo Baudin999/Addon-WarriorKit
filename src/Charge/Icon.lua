@@ -41,10 +41,22 @@ end
 
 -- Attributes cannot be rewritten during combat, so everything the button does
 -- in combat has to be a macro conditional rather than a decision the addon
--- makes. Only the out-of-combat Charge target is resolved in Lua, and it
--- carries `nocombat` because the unit token in it goes stale the moment combat
--- starts. Without that guard a stale token would rip your target off the mob
--- you are tanking.
+-- makes. The stance is a conditional too, in and out of combat, so a stance
+-- swap mid-fight moves the button without a rewrite. Only the out-of-combat
+-- target is resolved in Lua, and it carries `nocombat` because the unit token
+-- in it goes stale the moment combat starts. Without that guard a stale token
+-- would rip your target off the mob you are tanking.
+--
+-- An opener you have not trained gets no line. The spell name resolves for an
+-- ability fifty levels away, so the name is not the gate; Charge.Known is.
+local function Opener(key)
+	if not ns.Charge.Known(key) then
+		return nil
+	end
+	local info = ns.Charge.Ability(key)
+	return ns.Charge.Name(key), ns.Charge.StanceName(info.stance)
+end
+
 -- cold: ChargeIcon.SyncMacro compares the target, the weapon and the spell
 -- names first and returns when none of them moved, so this runs on a change.
 local function MacroText(unit)
@@ -60,26 +72,33 @@ local function MacroText(unit)
 	-- above did work, the target exists and is alive, so this one is a no-op.
 	lines[#lines + 1] = "/targetenemy [noexists][dead]"
 
-	-- Out of combat: Charge the mob the marker is sitting on.
-	local charge, battle = ns.Charge.Name("charge"), ns.Charge.StanceName(1)
+	local charge, battle = Opener("charge")
+	local intervene, defensive = Opener("intervene")
+	local intercept, berserker = Opener("intercept")
+
+	-- Out of combat the stance decides. Berserker Stance keeps Intercept when
+	-- you have it, so the Battle Stance swap under it is written to leave
+	-- Berserker alone: a fury warrior on the pull is not sent through a swap
+	-- that costs a press and the rage. Every other stance goes to Charge.
+	if intercept then
+		lines[#lines + 1] = "/cast [nocombat,stance:3] " .. intercept
+	end
 	if charge then
+		local keep = intercept and "1/3" or "1"
 		if battle then
-			lines[#lines + 1] = "/cast [nocombat,nostance:1] " .. battle
+			lines[#lines + 1] = "/cast [nocombat,nostance:" .. keep .. "] " .. battle
 		end
-		lines[#lines + 1] = "/cast [nocombat] " .. charge
+		lines[#lines + 1] = (intercept and "/cast [nocombat,nostance:3] " or "/cast [nocombat] ") .. charge
 	end
 
 	-- In combat the cursor decides. help and harm are exclusive, so only one of
 	-- these two pairs can ever fire on a press.
-	local intervene, defensive = ns.Charge.Name("intervene"), ns.Charge.StanceName(2)
 	if intervene then
 		if defensive then
 			lines[#lines + 1] = "/cast [combat,@mouseover,help,nodead,nostance:2] " .. defensive
 		end
 		lines[#lines + 1] = "/cast [combat,@mouseover,help,nodead] " .. intervene
 	end
-
-	local intercept, berserker = ns.Charge.Name("intercept"), ns.Charge.StanceName(3)
 	if intercept then
 		if berserker then
 			lines[#lines + 1] = "/cast [combat,@mouseover,harm,nodead,nostance:3] " .. berserker
@@ -182,7 +201,7 @@ local function Build()
 		local at = "hover a party member or a mob"
 		if unit and UnitExists(unit) then
 			at = UnitName(unit) or "?"
-		elseif key == "charge" then
+		elseif not UnitAffectingCombat("player") then
 			at = "nothing in view"
 		end
 		return {
