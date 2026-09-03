@@ -1795,6 +1795,146 @@ function ns.TakeBack(index)
 	return true
 end
 
+--------------------------------------------------------------------------
+-- The professions
+--
+-- Two windows, because this client has two of them. Every profession but
+-- enchanting draws in the trade skill window and answers the GetTradeSkill
+-- names; enchanting draws in the craft window and answers a parallel set of
+-- names, and on Classic Era beast training draws there as well. Neither set
+-- answers for the other's window, so both are shimmed and the caller walks
+-- whichever one is open.
+--
+-- Here rather than in Comfort/Reagents.lua, which is the only caller, for the
+-- reason the merchant block above gives: a part may not probe the client for a
+-- call it means to make, because whether the call is there is a fact about the
+-- build and not about the feature.
+--
+-- The one real difference between the two windows is where a row says what
+-- kind of row it is, and it is the whole reason these are eleven functions
+-- rather than a table of names. GetTradeSkillInfo answers name, type,
+-- available, expanded. GetCraftInfo answers name, sub spell, type, available,
+-- expanded, so the type is third and the expanded flag fifth. Both call a
+-- category row "header" and neither says so anywhere but in that one slot, so
+-- a caller reading the wrong position would take every category for a recipe
+-- and every recipe for a category and would find no reagents at all, quietly.
+-- The pair each window answers is normalised here to that type and that flag,
+-- which is all a caller wants of a row.
+--
+-- Both windows are asked for their profession through the same guard. The
+-- trade skill call answers the string "UNKNOWN" and three zeroes when no
+-- window is open rather than answering nothing, and nothing says the craft
+-- call is different, so UNKNOWN is read as no window on both sides. A caller
+-- filing reagents under a profession called UNKNOWN would be a caller filing
+-- them under a heading no rescan can ever find again.
+--------------------------------------------------------------------------
+
+-- Which profession the trade skill window is showing, or nil where none is.
+-- The rank and the cap come back with the name and neither is read here.
+function ns.TradeSkillName()
+	if type(_G.GetTradeSkillLine) ~= "function" then
+		return nil
+	end
+	local name = _G.GetTradeSkillLine()
+	if type(name) ~= "string" or name == "" or name == "UNKNOWN" then
+		return nil
+	end
+	return name
+end
+
+-- How many rows the trade skill window is listing, categories included.
+function ns.TradeSkillCount()
+	if type(_G.GetNumTradeSkills) ~= "function" then
+		return 0
+	end
+	return _G.GetNumTradeSkills() or 0
+end
+
+-- One row: what kind it is, and whether it is opened out. "header" is a
+-- category and everything else is a recipe. The flag only means anything on a
+-- header, where false is a category whose recipes are not on the list at all.
+function ns.TradeSkillRow(index)
+	if type(_G.GetTradeSkillInfo) ~= "function" then
+		return nil
+	end
+	local _, kind, _, expanded = _G.GetTradeSkillInfo(index)
+	return kind, expanded and true or false
+end
+
+function ns.TradeSkillReagents(index)
+	if type(_G.GetTradeSkillNumReagents) ~= "function" then
+		return 0
+	end
+	return _G.GetTradeSkillNumReagents(index) or 0
+end
+
+function ns.TradeSkillReagent(index, which)
+	if type(_G.GetTradeSkillReagentItemLink) ~= "function" then
+		return nil
+	end
+	return _G.GetTradeSkillReagentItemLink(index, which)
+end
+
+-- Whether the window in front of you is somebody else's profession, opened
+-- from a link they put in chat. It is their recipe list and their reagents,
+-- and reading it as yours is how a warrior who has never mined ends up with
+-- the whole of somebody's mining list on his loot filter.
+--
+-- Blizzard's own documentation puts this call in 2.5.5 and in Classic Era
+-- 1.14.4, which is both clients this addon ships to, and it is still probed:
+-- a client with no such call has no linked trade skills either, and false is
+-- the honest answer there rather than a refusal to scan anything ever.
+function ns.TradeSkillLinked()
+	if type(_G.IsTradeSkillLinked) ~= "function" then
+		return false
+	end
+	return _G.IsTradeSkillLinked() and true or false
+end
+
+-- The craft window's half, in the same order and with the same meanings.
+function ns.CraftName()
+	local lookup = _G.GetCraftDisplaySkillLine or _G.GetCraftSkillLine
+	if type(lookup) ~= "function" then
+		return nil
+	end
+	local name = lookup()
+	if type(name) ~= "string" or name == "" or name == "UNKNOWN" then
+		return nil
+	end
+	return name
+end
+
+function ns.CraftCount()
+	if type(_G.GetNumCrafts) ~= "function" then
+		return 0
+	end
+	return _G.GetNumCrafts() or 0
+end
+
+-- Third and fifth rather than second and fourth, which is the difference the
+-- block header is about.
+function ns.CraftRow(index)
+	if type(_G.GetCraftInfo) ~= "function" then
+		return nil
+	end
+	local _, _, kind, _, expanded = _G.GetCraftInfo(index)
+	return kind, expanded and true or false
+end
+
+function ns.CraftReagents(index)
+	if type(_G.GetCraftNumReagents) ~= "function" then
+		return 0
+	end
+	return _G.GetCraftNumReagents(index) or 0
+end
+
+function ns.CraftReagent(index, which)
+	if type(_G.GetCraftReagentItemLink) ~= "function" then
+		return nil
+	end
+	return _G.GetCraftReagentItemLink(index, which)
+end
+
 -- Which creature a GUID belongs to, as the id the databases are keyed on.
 --
 -- The client hands GUIDs out everywhere and never hands out the number inside

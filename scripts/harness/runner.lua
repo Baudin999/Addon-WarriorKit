@@ -352,6 +352,11 @@ local SECTIONS = {
 	-- for two passes and takes it away again, because what the filter has to do
 	-- when that part is missing is half of what it promises.
 	"69-loot-filter",
+	-- Last, and it is the only section that opens a profession window. It
+	-- reads what no section above it has touched, a list that is empty until
+	-- this one fills it, and it ends by emptying it again and shutting both
+	-- windows, so nothing after it would find a scene it did not expect.
+	"70-reagents",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

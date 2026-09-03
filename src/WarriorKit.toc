@@ -598,6 +598,17 @@ Comfort\Fanfare.lua
 # because Comfort is the part that owns the settings that belong to no feature,
 # and because the list is one tab rather than a rail entry of its own.
 Comfort\Errors.lua
+
+# The reagent list. Not a chore either, and it has no switch of its own: it is
+# a page of notes the loot filter reads. Every time a profession window opens it
+# writes down every item every recipe you know wants, under the name of the
+# profession that wanted it, so that a corpse can be asked whether a slot is
+# something you craft with. It scans whether or not the filter is on, because a
+# list that only filled while the setting was on would be empty for whoever
+# turns the setting on. Depends on the trade skill and craft shims in
+# Core\Core.lua and on nothing else in the part.
+Comfort\Reagents.lua
+
 Comfort\Clutter.lua
 Comfort\Destroy.lua
 Comfort\Feature.lua

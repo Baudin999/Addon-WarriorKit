@@ -243,6 +243,11 @@ for _, part in ipairs({
 	-- sections that drag off them by index see no change. It also makes one
 	-- frame, so it wants the last word on CreateFrame above it.
 	"19-spellbook",
+	-- Last, and it reads what 03-player.lua left: the item table it adds six
+	-- reagents to, so a link off a recipe reads back as an id the same way a
+	-- link out of a bag does, and the link builder that makes one. It installs
+	-- nothing any file above it touches and makes no frame.
+	"20-tradeskill",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

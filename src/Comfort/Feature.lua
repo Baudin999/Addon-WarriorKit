@@ -194,6 +194,15 @@ ns.Register({
 		-- list read off your own trade skills rather than anything typed, and
 		-- on a character with no professions it takes nothing at all.
 		lootCrafted = true,
+
+		-- Per character, because a profession is. It ships empty and fills
+		-- itself: Reagents.lua writes every reagent every recipe you know wants
+		-- while a profession window is open, keyed by the item id and valued by
+		-- the name of the profession that named it. The profession name is what
+		-- lets one window's walk replace exactly that profession's ids and leave
+		-- the rest of the list alone, so dropping a profession takes its
+		-- reagents off the filter rather than leaving them on it for good.
+		lootReagents = {},
 	},
 
 	defaults = {
