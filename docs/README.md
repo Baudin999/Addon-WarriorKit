@@ -1721,14 +1721,18 @@ reads `ns.Alias = Local` out of each file first because the two spellings rarely
 agree, and takes a bare name as a same-file local, which is what Lua scoping says
 it can be. Calls are read at the function's own depth: a builder that defines
 twenty click handlers inside itself is not putting all twenty on a tick path.
-The list comes back at 335 functions where the typed one had 200.
+The list comes back at 480 functions where the typed one had 200.
 
 Two edges the text cannot carry are declared where they are, with a reason the
-script requires. `-- hot:` above a definition seeds it as a root, for a function
-called back through a table field. `-- cold:` stops the walk, for a function a
-tick reaches that does not run every time: a builder, a layout pass, or a body
-whose caller compares first. `check.sh` counts both against ceilings of 2 and 8,
-and `scripts/ratchet.lua` refuses the commit that raises either.
+script requires. `-- hot:` above a definition seeds it as a root: for a function
+called back through a table field, and for an event handler that runs faster than
+any tick. Twelve of those are seeded, the six combat log readers, the swing
+retimer, the two aura scans, the chat line handler and the two ends of a
+nameplate's life. `-- cold:` stops the walk, for a function a tick reaches that
+does not run every time: a builder, a layout pass, or a body whose caller
+compares first. `check.sh` holds both against a path-keyed allow-list, one entry
+per marked function carrying its file, that file's count and its reason, and
+`scripts/ratchet.lua` refuses the commit that raises a count already on it.
 
 A closure written in place at a `SetScript("OnUpdate", ...)` or as a ticker body
 fails, which is what makes all of the above possible. A handler with no name is a
@@ -1737,12 +1741,14 @@ with nothing above it and nothing would say so.
 
 To exempt one line, put `-- unguarded: <reason>` on a write or
 `-- allocates: <reason>` on an allocation. The reason is required and the gate
-checks that it is there. Fifteen exemptions stand today. Seven are `allocates:`
-and all seven are the same shape, a memoisation guarded by an early return the
-scan cannot see. Four `unguarded:` are the moving edges, the writes here that are
-meant to run on every frame whatever they are about to draw. The last four are
-the early-return shape again on the write side, where the line above compares the
-value and returns when it already matches.
+checks that it is there. Twenty four exemptions stand today. Nine are `allocates:`
+and all nine are the same shape, a cache filled once behind an early return the
+scan cannot see. Six of the fifteen `unguarded:` are the enemy bar putting a
+nameplate widget on a plate and taking it off again, which happens once per plate
+and not once per tick. Three are the moving edges, the writes meant to run on
+every frame whatever they are about to draw. The last six are the early-return
+shape on the write side, where the line above compares the value and returns when
+it already matches.
 
 What is deliberately not guarded: `Paint.lua` re-applies `Flatten` and the
 portrait crop on every tick because Blizzard's own code puts the texture and the

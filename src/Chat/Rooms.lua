@@ -326,25 +326,36 @@ end
 --------------------------------------------------------------------------
 -- Where a line goes
 --
--- Called once per captured message. It allocates one table per line, which is
--- the same table the feed built before rooms existed: this is not a ticker
--- path, and a line of chat that has already been formatted into a string is not
--- a line to be counting tables on.
+-- Called once per captured message, which on a raid night is the busiest event
+-- path in the addon. It built one table per line until the tick-path scan
+-- reached this file, and a table per line is garbage the collector walks in the
+-- middle of a frame.
+--
+-- So the answer is filled into one list this file keeps. The caller draws it and
+-- drops it; the one place that holds a line past the call is Chat/Feed.lua
+-- parking it for a window that has not been built yet, and that copies the ids
+-- out rather than keeping this table.
 --------------------------------------------------------------------------
+
+local route = {}
 
 -- room     the fixed room this kind of message belongs to, or nil
 -- who      whose line it is, which for one you sent is who you sent it to
 -- whisper  whether it belongs in a conversation with that person
 function Rooms.Route(room, who, whisper)
-	local out = { Rooms.ALL }
+	local out = route
+	local count = 1
+	out[1] = Rooms.ALL
 	if room and room ~= Rooms.ALL then
-		out[#out + 1] = room
+		count = count + 1
+		out[count] = room
 	end
 
 	if whisper and who then
 		local id = Rooms.Whisper(who)
 		if id then
-			out[#out + 1] = id
+			count = count + 1
+			out[count] = id
 			speaker[id] = who
 		end
 	end
@@ -353,9 +364,15 @@ function Rooms.Route(room, who, whisper)
 	if groups then
 		for _, group in ipairs(groups) do
 			local id = GROUP .. group.key
-			out[#out + 1] = id
+			count = count + 1
+			out[count] = id
 			speaker[id] = who
 		end
+	end
+	-- Everything the last line reached and this one did not. Left behind, the
+	-- previous message's groups would be drawn as this one's.
+	for at = #out, count + 1, -1 do
+		out[at] = nil
 	end
 	return out
 end

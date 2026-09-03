@@ -140,11 +140,22 @@ function History.Talked(list)
 	if not db then
 		return false
 	end
-	local out = {}
+	-- Written into the record that is already there rather than over it. This
+	-- runs on every whisper that moves the order, and a fresh eight name table
+	-- each time is garbage the collector walks in the middle of a fight. The
+	-- tail is cleared because the list only ever gets shorter when a
+	-- conversation drops off the end of it.
+	local out = db.chatWith
+	if type(out) ~= "table" then
+		out = {}
+		db.chatWith = out
+	end
 	for at, entry in ipairs(list) do
 		out[at] = entry.name
 	end
-	db.chatWith = out
+	for at = #out, #list + 1, -1 do
+		out[at] = nil
+	end
 	return true
 end
 

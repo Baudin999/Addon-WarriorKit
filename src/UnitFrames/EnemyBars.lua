@@ -1067,7 +1067,7 @@ end
 -- clickthrough on there is none: the plate has no mouse and nothing is being
 -- taken, so an outline would be claiming something that is not true.
 local function ShowHitbox(widget)
-	widget.hitbox:SetShown(widget.hitbox.hosted and not ns.db.locked and not ns.db.barsClickThrough)
+	widget.hitbox:SetShown(widget.hitbox.hosted and not ns.db.locked and not ns.db.barsClickThrough) -- unguarded: run when a plate appears and when the lock or the clickthrough setting moves, never from a tick
 end
 
 -- What the client needs to know to stop two bars landing on each other, and
@@ -1675,23 +1675,30 @@ end
 -- that had gone for good. Restore gives back everything this file has ever
 -- taken; ns.Unstrip is a no-op on a region that was never taken, so asking for
 -- all of them costs a table lookup.
+-- Filled rather than built, because a plate appearing and a plate going both
+-- walk this list and neither keeps it past its own loop. It used to be a fresh
+-- seven entry table every time, which in a busy zone is several a second on the
+-- path a nameplate arrives on. The seventh slot is cleared before the setting
+-- decides it: a reused table that kept the last plate's raid icon would hide a
+-- region this one never took.
+local regionList = {}
+
 local function PlateRegions(plate, every)
 	local unitFrame = plate.UnitFrame
 	if not unitFrame then
 		return nil
 	end
-	local regions = {
-		unitFrame.healthBar or unitFrame.HealthBarsContainer,
-		unitFrame.name,
-		unitFrame.LevelFrame,
-		unitFrame.ClassificationFrame,
-		unitFrame.selectionHighlight,
-		unitFrame.aggroHighlight,
-	}
+	regionList[1] = unitFrame.healthBar or unitFrame.HealthBarsContainer
+	regionList[2] = unitFrame.name
+	regionList[3] = unitFrame.LevelFrame
+	regionList[4] = unitFrame.ClassificationFrame
+	regionList[5] = unitFrame.selectionHighlight
+	regionList[6] = unitFrame.aggroHighlight
+	regionList[7] = nil
 	if every or ns.db.barsMarker then
-		regions[#regions + 1] = unitFrame.RaidTargetFrame or unitFrame.raidIcon or unitFrame.RaidTargetIcon
+		regionList[7] = unitFrame.RaidTargetFrame or unitFrame.raidIcon or unitFrame.RaidTargetIcon
 	end
-	return regions
+	return regionList
 end
 
 -- The one region on a plate that goes in the attic rather than under ns.Strip.
@@ -1860,10 +1867,15 @@ end
 local function StripPlate(plate)
 	local complete = PlateMouse(plate, not ns.db.barsClickThrough, CAMERA_BUTTONS[ns.db.barsCamera])
 	local replacing = ns.db.barsStyle == "replace"
+	-- Asked for only in the style that takes them, and walked only when there
+	-- is a list. The `or {}` that used to stand in the loop header built an
+	-- empty table on every plate the other style ever put up.
 	local regions = replacing and PlateRegions(plate) or nil
-	for _, region in ipairs(regions or {}) do
-		if not ns.Strip(region) then
-			complete = false
+	if regions then
+		for _, region in ipairs(regions) do
+			if not ns.Strip(region) then
+				complete = false
+			end
 		end
 	end
 	local cage = replacing and PlateCage(plate) or nil
@@ -1961,7 +1973,7 @@ local function Unhost(widget)
 	widget.hitbox:ClearAllPoints()
 	widget.hitbox.hosted = nil
 	widget:ClearAllPoints()
-	widget:SetParent(UIParent)
+	widget:SetParent(UIParent) -- unguarded: the plate this widget was a child of is going, and it is only ever reparented here
 end
 
 -- Back in the pool, drawn state and all.
@@ -2062,6 +2074,9 @@ local function Flush()
 	end
 end
 
+-- hot: run on NAME_PLATE_UNIT_ADDED for every nameplate the client puts up,
+-- which in a busy zone is several a second, and the OnEvent closure that calls
+-- it is not a root the walk can name.
 local function Attach(unit)
 	if not ns.db.bars or EnemyBars.Mode() ~= "plates" then
 		return
@@ -2083,9 +2098,9 @@ local function Attach(unit)
 
 	local widget = table.remove(pool) or CreateWidget()
 	ns.UI.Rezoom(widget, ns.db.barsZoom)
-	widget:SetParent(plate)
-	widget:SetFrameStrata(plate:GetFrameStrata())
-	widget:SetFrameLevel(math.min(plate:GetFrameLevel() + 5, 100))
+	widget:SetParent(plate) -- unguarded: the widget came out of the pool parented to UIParent and this is the plate it is going on
+	widget:SetFrameStrata(plate:GetFrameStrata()) -- unguarded: the strata is this plate's and the last plate this widget sat on was a different frame
+	widget:SetFrameLevel(math.min(plate:GetFrameLevel() + 5, 100)) -- unguarded: five above this plate's level, which no two plates agree on
 	if widget.SetIgnoreParentAlpha then
 		widget:SetIgnoreParentAlpha(true)
 	end
@@ -2145,7 +2160,9 @@ end
 -- `now` means take it off the screen this frame, which is what a settings
 -- change and a mode switch want: a ghost of the old shape fading out over a
 -- rebuild is a bar drawn to a design that no longer exists.
--- cold: takes a widget off a plate, on the tick that plate goes.
+-- hot: run on NAME_PLATE_UNIT_REMOVED for every nameplate the client takes
+-- down, which in a busy zone is several a second, and the OnEvent closure that
+-- calls it is not a root the walk can name.
 local function Release(unit, now)
 	local widget = attached[unit]
 	if not widget then
@@ -2176,7 +2193,7 @@ local function Release(unit, now)
 	-- else on the grid is anchored in whole ones and a bar spending a fifth of a
 	-- second drawn across two rows on the way out is the one thing the eye is
 	-- actually looking at.
-	widget:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT",
+	widget:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", -- unguarded: the returns above take every widget that is not fading home, and this is where its plate stood
 		Snap(widget, ns.UI.Convert(left, UIParent, widget)),
 		Snap(widget, ns.UI.Convert(bottom, UIParent, widget)))
 end

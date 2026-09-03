@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### The gate reaches the event paths too
+
+`scripts/hot.lua` walked out from tickers and `OnUpdate` handlers, so the guard
+scan covered every 5 Hz tick and none of the combat log. A combat log reader
+hears sixty lines a second in a pull, which is hotter than anything the walk
+reached, and it sat outside the scan because an event handler is a closure the
+root finder cannot name.
+
+Twelve of them are declared roots now, each with the reason written at the
+function: the six combat log readers, the swing retimer, the two aura scans
+behind the upkeep row and the cooldown row, the chat line handler, and the two
+ends of a nameplate's life. The walked list grew from 395 functions to 480 and
+the scan found thirteen things on it.
+
+Four were tables built on every event. The enemy bars built a seven entry region
+list for every nameplate that appeared, and an empty one for every plate the
+other style put up; both are filled into a list the file keeps now. The chat
+rooms built a table of room ids for every line of chat, and the whisper record
+rebuilt its list of names on every whisper that moved the order; both write into
+what is already there. The one place that holds a chat line past the call, a line
+parked for a window that has not been built yet, copies the ids out.
+
+The other nine are exempt with a reason on the line. Seven are the writes that
+put a nameplate widget on a plate and take it off again, which happens once per
+plate and not once per tick. Two are first use: one record per spell the
+breakdown has ever seen, and one object per tick a part arms.
+
 ### A part that is switched off costs nothing
 
 Four parts built themselves at login whatever their switch said, and two of them

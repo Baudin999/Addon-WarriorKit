@@ -196,7 +196,14 @@ local function Emit(rooms, line, key, important)
 	local r, g, b = LineColor(key)
 	if not Feed.OnLine then
 		if #pending < PENDING then
-			pending[#pending + 1] = { rooms = rooms, line = line, r = r, g = g, b = b,
+			-- The ids are copied out. ns.Rooms.Route hands back a list it fills
+			-- again on the next line, and a line parked here has to keep the
+			-- rooms it was said in until the window is built to draw it.
+			local held = {}
+			for at = 1, #rooms do
+				held[at] = rooms[at]
+			end
+			pending[#pending + 1] = { rooms = held, line = line, r = r, g = g, b = b,
 				important = important }
 		end
 		return false
@@ -205,6 +212,9 @@ local function Emit(rooms, line, key, important)
 	return true
 end
 
+-- hot: the OnEvent closure at the foot of this file calls it for every chat line
+-- the client delivers, and a closure handed to SetScript is not a root the walk
+-- can name.
 function Feed.Handle(event, text, sender, _, _, target, _, _, channelIndex,
 	channelName, _, _, guid)
 	local kind = KINDS[event]

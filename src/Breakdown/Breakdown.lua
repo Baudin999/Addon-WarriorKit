@@ -279,7 +279,7 @@ local function Spell(key, name)
 		return nil
 	end
 
-	record = { name = name, casts = 0, at = {} }
+	record = { name = name, casts = 0, at = {} } -- allocates: one record per spell id ever recorded, and the two returns above take the id that already has one and the store that is full
 	store[key] = record
 	return record
 end
@@ -338,6 +338,9 @@ end
 -- which is what ns.CombatLog adds to the list. Read positionally, because the
 -- positions are the whole contract, and the blanks are the values this file has
 -- no use for.
+-- hot: handed to ns.CombatLog.Subscribe when the breakdown is switched on and
+-- called back out of the reader list on every combat log line, which is an
+-- edge scripts/hot.lua cannot see.
 function Breakdown.OnLog(_, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
 	a12, a13, _, a15, a16, _, a18, _, _, a21, me)
 	-- The switch is account wide and the record is this character's. Turning

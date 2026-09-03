@@ -349,15 +349,26 @@ UI/Ability.lua:1:Ability.Size is a settings change and a rescale, never a tick
 UI/Aura.lua:1:Aura.Size is a settings change and a rescale, never a tick
 UI/Feed.lua:1:Feed:Enter fills a tooltip, which is a hover, and the one reopen that is not is throttled to a fifth of a second
 UnitFrames/Auras.lua:1:Grow builds the squares an aura row has not needed yet, on the pass a unit first carries that many
-UnitFrames/EnemyBars.lua:3:CreateWidget builds one nameplate widget, on the tick a plate first appears
-UnitFrames/EnemyBars.lua:3:LayoutWidget places every region of one widget, on a rescale or a settings change
-UnitFrames/EnemyBars.lua:3:Release takes a widget off a plate, on the tick that plate goes
+UnitFrames/EnemyBars.lua:2:CreateWidget builds one nameplate widget, on the tick a plate first appears
+UnitFrames/EnemyBars.lua:2:LayoutWidget places every region of one widget, on a rescale or a settings change
 "
 
 # path:hot markers in that file:function, and why the walk cannot reach it
 HOT_ALLOWED="
+Breakdown/Breakdown.lua:1:Breakdown.OnLog is a combat log reader, called back out of ns.CombatLog's list
+Buffs/Upkeep.lua:1:Upkeep.Scan runs on every UNIT_AURA on the player, off an OnEvent closure
+Buttons/Reaction.lua:1:OnLog is a combat log reader, called back out of ns.CombatLog's list
+Chat/Feed.lua:1:Feed.Handle runs on every chat line, off this file's OnEvent closure
+Comfort/Thanks.lua:1:OnLog is a combat log reader, called back out of ns.CombatLog's list
+Cooldowns/Cooldowns.lua:1:Cooldowns.Scan runs on every UNIT_AURA on the player, off an OnEvent closure
+Feeds/Combat.lua:1:CombatFeed.OnLog is a combat log reader, called back out of ns.CombatLog's list
 Feeds/Purse.lua:1:Purse.Line is handed to a stream as onStatus and called back through the field
+Meter/Meter.lua:1:OnLog is a combat log reader, called back out of ns.CombatLog's list
 Perf/Feature.lua:1:Paint is assigned to ns.Perf.OnSample and called back through the field
+Swing/Swing.lua:2:OnLog is a combat log reader, called back out of ns.CombatLog's list
+Swing/Swing.lua:2:Swing.Retime runs on UNIT_AURA and UNIT_ATTACK_SPEED, off an OnEvent closure
+UnitFrames/EnemyBars.lua:2:Attach runs on NAME_PLATE_UNIT_ADDED, off an OnEvent closure
+UnitFrames/EnemyBars.lua:2:Release runs on NAME_PLATE_UNIT_REMOVED, off an OnEvent closure
 "
 
 # path:unguarded writes in that file:why the tick may write there every time
@@ -366,14 +377,18 @@ Charge/Marker.lua:1:the two returns above leave only a marker that is already up
 Core/Core.lua:1:a one-shot ticker handing its own handler back
 UI/Draw.lua:1:the return above compares all four channels
 UI/Feed.lua:1:the return above compares the marker against what the row is drawing
+UI/Pixel.lua:1:UI.Rezoom compares the zoom a frame already carries before it calls Rescale
 UnitFrames/Block.lua:1:the return above compares shown against want
 UnitFrames/Cast.lua:1:the moving edge of a cast bar
+UnitFrames/EnemyBars.lua:6:a nameplate appearing and a nameplate going, which is once per plate and not once per tick
 UnitFrames/PlayerCast.lua:2:the moving edge of the player's cast and of the channel it replaces
 "
 
 # path:allocations in that file:why the tick does not reach them every time
 ALLOCATES_ALLOWED="
+Breakdown/Breakdown.lua:1:one record per spell id ever recorded, behind the two returns above it
 Charge/Charge.lua:1:a fallback path the live client's GetNamePlateForUnit never reaches
+UI/Ticker.lua:1:one object per tick a part arms, built where the tick is created
 Unit/Color.lua:3:one tint and one fill per class, filled once behind a lookup the scan cannot see
 Unit/Level.lua:2:one table per classification and one string per level, both behind a lookup
 Unit/Unit.lua:1:one token per unit ever seen, behind a lookup the scan cannot see

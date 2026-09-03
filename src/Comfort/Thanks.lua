@@ -133,6 +133,9 @@ end
 
 -- The fifteen values this file reads, in the order ns.CombatLog hands them over,
 -- which is the client's own, and your GUID last.
+-- hot: handed to ns.CombatLog.Subscribe when thanks is switched on and called
+-- back out of the reader list on every combat log line, which is an edge
+-- scripts/hot.lua cannot see.
 local function OnLog(_, subevent, hideCaster, sourceGUID, sourceName, _, _, destGUID,
 	_, _, _, _, _, _, auraType, _, _, _, _, _, _, playerGUID)
 	-- Cheapest test first, and it is the one that throws nearly every line

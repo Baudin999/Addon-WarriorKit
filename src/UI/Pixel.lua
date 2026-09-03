@@ -94,7 +94,7 @@ local function Rescale(frame, zoom)
 		return false
 	end
 	deferred[frame] = nil
-	frame:SetScale(perfect * zoom)
+	frame:SetScale(perfect * zoom) -- unguarded: UI.Rezoom compares the zoom this frame is already drawn at and returns before calling here, and UI.Flush only reaches it for a frame combat refused
 	return true
 end
 

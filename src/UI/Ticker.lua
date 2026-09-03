@@ -196,7 +196,7 @@ function UI.Ticker(frame, interval, name, fn)
 			"a ticker named " .. name .. " is already running on this frame")
 	end
 
-	local tick = setmetatable({
+	local tick = setmetatable({ -- allocates: one object per tick a part arms, built where the tick is created and never on the tick it then runs
 		frame = frame,
 		interval = interval,
 		name = name,

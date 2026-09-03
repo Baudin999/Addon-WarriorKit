@@ -849,6 +849,9 @@ end
 --
 -- The forty slots themselves are ns.MyBuffs, in Core. The upkeep row asks the
 -- same client the same question on the same event, and one walk answers both.
+-- hot: run from every UNIT_AURA on the player, which in combat outruns the
+-- cooldown row own ticker, and the OnEvent closure in Cooldowns/Row.lua that
+-- calls it is not a root the walk can name.
 function Cooldowns.Scan()
 	for index = 1, #order do
 		order[index].present = false

@@ -238,6 +238,9 @@ local function Rescale(hand, speed)
 	hand.at, hand.duration = now + left - speed, speed
 end
 
+-- hot: run from UNIT_AURA, UNIT_ATTACK_SPEED and UNIT_INVENTORY_CHANGED on the
+-- player, which in combat arrive faster than the swing bar ticks, and the OnEvent
+-- closure that calls it is not a root the walk can name.
 function Swing.Retime()
 	local main, off = Speeds()
 	Rescale(hands.main, main)
@@ -254,6 +257,9 @@ end
 -- shift the one it does.
 --------------------------------------------------------------------------
 
+-- hot: handed to ns.CombatLog.Subscribe when the swing timer arms and called
+-- back out of the reader list on every combat log line, which is an edge
+-- scripts/hot.lua cannot see.
 local function OnLog(_, subevent, _, sourceGUID, _, _, _, _, _, _, _,
 	_, missOffhand, _, _, _, _, _, _, _, damageOffhand, me)
 	if sourceGUID ~= me then

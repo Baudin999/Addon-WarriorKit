@@ -611,6 +611,9 @@ end
 -- shims, because the cooldown row asks the same client the same question on the
 -- same event. What is left here is the part that is about this row: which of the
 -- names on you is a square.
+-- hot: run from every UNIT_AURA on the player, which in combat outruns the five
+-- draws a second the upkeep row ticks at, and the OnEvent closure in Buffs/Nag.lua
+-- that calls it is not a root the walk can name.
 function Upkeep.Scan()
 	for index = 1, #order do
 		order[index].present = false

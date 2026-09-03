@@ -172,6 +172,9 @@ end
 -- The sixteen values this file reads, in the order ns.CombatLog hands them over,
 -- which is the client's own. The blanks are on purpose: naming the values this
 -- file does not use would be more chances to shift the ones it does.
+-- hot: handed to ns.CombatLog.Subscribe when the meter opens and called back
+-- out of the reader list on every combat log line, which is an edge
+-- scripts/hot.lua cannot see.
 local function OnLog(_, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
 	arg12, arg13, _, arg15, arg16)
 	local at = DAMAGE[subevent]

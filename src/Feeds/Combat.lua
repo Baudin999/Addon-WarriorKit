@@ -348,6 +348,9 @@ end
 -- in a pull is nearly every line, to reject on the answer three lines later.
 -- Handed over now, and the rejection is where it belongs: no player means
 -- nothing in the log is yours and there is nothing here to work out.
+-- hot: handed to ns.CombatLog.Subscribe when the combat feed is switched on and
+-- called back out of the reader list on every combat log line, which is an
+-- edge scripts/hot.lua cannot see.
 function CombatFeed.OnLog(_, subevent, _, sourceGUID, sourceName, _, _, destGUID,
 	destName, _, _, a12, a13, _, a15, a16, _, a18, _, _, a21, me)
 	if not me or not ns.db.combatFeed then

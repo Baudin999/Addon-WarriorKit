@@ -263,6 +263,9 @@ end
 -- over, which is the client's own, and your GUID last. The read again where the
 -- two login events came up with nothing is ns.CombatLog's now, and it is one
 -- comparison there for all six readers rather than three lines here.
+-- hot: handed to ns.CombatLog.Subscribe at the foot of this file and called
+-- back out of the reader list on every combat log line, which is an edge
+-- scripts/hot.lua cannot see.
 local function OnLog(_, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _,
 	arg12, _, _, arg15, arg16, _, _, arg19, _, _, playerGUID)
 	if not playerGUID then
