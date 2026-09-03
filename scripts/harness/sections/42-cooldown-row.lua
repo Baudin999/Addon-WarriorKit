@@ -30,18 +30,25 @@
 -- the ticks where the number behind it moved.
 
 local H = ...
-local PLAYER_CLASS, CHURN, frames = H.PLAYER_CLASS, H.CHURN, H.frames
+local PLAYER_CLASS, CHURN = H.PLAYER_CLASS, H.CHURN
 local own, worn, inCombat = H.own, H.worn, H.inCombat
 local itemLink, advance = H.itemLink, H.advance
 local ns, fire, check = H.ns, H.fire, H.check
 
 local Cooldowns, Row = ns.Cooldowns, ns.CooldownRow
 
-check(ns.UI.Ticking("cooldowns") ~= nil, "the cooldown row registered no ticker")
-local ticker = H.tick("cooldowns")
+-- The running cooldown tick, or nothing: it goes with the switch, and every
+-- permanent tick hangs off ns.UI.Forever, so the slot name is what to ask for.
+local function ticker()
+	return ns.UI.Ticking("cooldowns")
+end
+check(ticker() ~= nil, "the cooldown row registered no ticker")
 
 local function tick()
-	ticker:Beat(0.2)
+	local running = ticker()
+	if running then
+		running:Beat(0.2)
+	end
 end
 
 -- What this spec brought, which is what every count below is measured against.
@@ -73,6 +80,11 @@ rebuild()
 check(Cooldowns.Count() == BOTH,
 	("a %s was given %d squares and its class file lists %d over the two layers")
 		:format(PLAYER_CLASS, Cooldowns.Count(), BOTH))
+
+-- And the pool is that long and no longer. Twenty three squares were built at
+-- login, the ceiling of what any class could put on a row that draws ten.
+check(Row.Icon(Cooldowns.Count() + 1) == nil,
+	("the row built squares past the %d on the list"):format(Cooldowns.Count()))
 
 -- The rotation entries lead the list and every one of them is tagged, which is
 -- what the row reads to decide which line a square goes on and how big it is.
@@ -661,8 +673,8 @@ own.dead = false
 ns.db.cooldowns = false
 Row.Apply()
 tick()
-check(Row.Mode() == "quiet" and Row.Shown() == 0,
-	"the row is switched off and still drawing")
+check(Row.Mode() == "quiet" and Row.Shown() == 0 and ticker() == nil,
+	"the row is switched off and still drawing, or still being called ten times a second")
 
 -- A hidden row lays nothing out, which is a real bug rather than a hypothetical
 -- one: the tick compares what it drew last against what it would draw now, and
@@ -692,6 +704,7 @@ check(laid == 0, ("a hidden row laid its squares out %d times over 20 ticks"):fo
 
 ns.db.cooldowns = true
 Row.Apply()
+check(ticker() ~= nil, "the row went back on and nothing is driving it")
 
 ----------------------------------------------------------------------
 -- What a square says to the mouse

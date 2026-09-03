@@ -86,6 +86,11 @@ local frame, main, off, place
 local built = false
 local dual = false
 
+-- The frame the events and the tick hang off, and the tick itself. Declared
+-- here rather than at the foot of the file because SwingGauges.Apply is what
+-- arms and stops the tick and is written above where they are made.
+local events, tick
+
 -- One pixel of the design in this frame's units, which is exactly 1 once
 -- ns.UI.Adopt has taken the frame onto the grid. Read again in every layout
 -- pass rather than only at login: on a client with no SetIgnoreParentScale the
@@ -149,9 +154,61 @@ local function SizeBar(bar, width, height)
 	ns.EdgeSize(bar.edges, ns.Pixel(bar))
 end
 
+-- The frame and the two bars, made the first time the swing timer is switched
+-- on.
+--
+-- The part ships off. It was built at login anyway, and its ticker was armed at
+-- interval zero, so a feature nobody had turned on ran a function on every frame
+-- the client drew for the whole session to find out it had nothing to draw.
+local function Build()
+	frame = CreateFrame("Frame", FRAME_NAME, UIParent)
+	ns.UI.Adopt(frame, ns.db.swingZoom)
+	unit = ns.UI.Unit(frame)
+	place = ns.UI.Placeable(frame, {
+		name = "WarriorKit swing",
+		moved = function(anchor)
+			ns.db.swingPoint = anchor
+			SwingGauges.Apply()
+		end,
+	})
+
+	main = BuildBar(frame, MAIN_FILL, true)
+	main:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+	off = BuildBar(frame, OFF_FILL)
+	-- Anchored after both bars exist, because the off hand hangs off the main
+	-- hand's bottom edge and the gap between them is a design number rather than
+	-- a share of anything.
+	off:SetPoint("TOPLEFT", main, "BOTTOMLEFT", 0, -GAP * unit)
+	built = true
+end
+
+-- The tick, armed by the switch going on and stopped by it going off.
+--
+-- It lives on the events frame, which is never hidden. On the gauges it would
+-- stop the moment the bars hid and never come back, which is the trap
+-- Charge/Icon.lua already carries a note about, and Update's first line is what
+-- makes a hidden pair of bars free.
+--
+-- ns.UI.Ticker refuses a second running tick of one name on one frame, so the
+-- tick is kept here and started again rather than made again.
+local function Beat()
+	if ns.db.swing then
+		if not tick then
+			tick = ns.UI.Ticker(ns.UI.Forever, 0, "swing", SwingGauges.Update)
+		elseif not tick:Running() then
+			tick:Start()
+		end
+	elseif tick then
+		tick:Stop()
+	end
+end
+
 function SwingGauges.Apply()
 	if not built then
-		return
+		if not ns.db.swing then
+			return
+		end
+		Build()
 	end
 
 	local db = ns.db
@@ -172,6 +229,7 @@ function SwingGauges.Apply()
 	local total = dual and (height * 2 + GAP) or height
 	frame:SetSize(width * unit, total * unit)
 
+	Beat()
 	SwingGauges.Lock()
 	SwingGauges.Show()
 end
@@ -354,8 +412,7 @@ end
 
 --------------------------------------------------------------------------
 
-local events = CreateFrame("Frame")
-local tick -- the motion ticker, armed once, see below
+events = CreateFrame("Frame")
 
 -- No accumulator, because there is no rate to keep. See the header: this is the
 -- one thing in the addon that draws motion, and motion is drawn on the frame
@@ -374,40 +431,9 @@ ns.RegisterUnitEvent(events, "UNIT_INVENTORY_CHANGED", "player")
 ns.RegisterUnitEvent(events, "UNIT_ATTACK_SPEED", "player")
 events:SetScript("OnEvent", function(_, event, token)
 	if event == "PLAYER_LOGIN" then
-		frame = CreateFrame("Frame", FRAME_NAME, UIParent)
-		ns.UI.Adopt(frame, ns.db.swingZoom)
-		unit = ns.UI.Unit(frame)
-		place = ns.UI.Placeable(frame, {
-			name = "WarriorKit swing",
-			moved = function(anchor)
-				ns.db.swingPoint = anchor
-				SwingGauges.Apply()
-			end,
-		})
-
-		main = BuildBar(frame, MAIN_FILL, true)
-		main:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-		off = BuildBar(frame, OFF_FILL)
-
-		built = true
-		-- Anchored after both bars exist, because the off hand hangs off the
-		-- main hand's bottom edge and the gap between them is a design number
-		-- rather than a share of anything.
-		off:SetPoint("TOPLEFT", main, "BOTTOMLEFT", 0, -GAP * unit)
-
+		-- Apply is the only way in. It builds nothing while the part is off, and
+		-- the switch going on is what calls it next.
 		SwingGauges.Apply()
-
-		-- The ticker lives on this frame, which is never hidden. On the gauges
-		-- it would stop the moment the bars hid and never come back, which is
-		-- the trap Charge/Icon.lua already carries a note about. Update's first
-		-- line is what makes a hidden pair of bars free anyway.
-		--
-		-- Armed once. UI.Ticker appends and refuses a second tick of this name
-		-- on this frame, so a branch that arms one has to be a branch that runs
-		-- once.
-		if not tick then
-			tick = ns.UI.Ticker(ns.UI.Forever, 0, "swing", SwingGauges.Update)
-		end
 		return
 	end
 

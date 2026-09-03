@@ -145,6 +145,31 @@ ns.db.meterRows = 6
 ns.MeterWindow.Apply()
 check(#frames == built, "turning the threat pane off and on again built new frames")
 
+-- And the pool is as long as the setting and no longer. Ten rows per pane were
+-- built at login whatever the slider said, and it ships at six.
+check(damagePane.rows[ns.db.meterRows + 1] == nil,
+	"a pane built rows past the setting")
+
+-- The tick goes with the switch. It was armed at login whatever the switch said
+-- and ran five times a second for the session, reading a setting to find out it
+-- had nothing to draw.
+do
+	-- Every permanent tick hangs off ns.UI.Forever, so the frame says nothing
+	-- and the slot name is what to ask for.
+	local function ticking()
+		return ns.UI.Ticking("meter")
+	end
+
+	ns.db.meter = false
+	ns.MeterWindow.Apply()
+	check(ticking() == nil,
+		"the meters are switched off and the client is still calling the tick")
+	ns.db.meter = true
+	ns.MeterWindow.Apply()
+	check(ticking() ~= nil,
+		"the meters were switched back on and nothing is driving them")
+end
+
 ----------------------------------------------------------------------
 -- The group
 ----------------------------------------------------------------------

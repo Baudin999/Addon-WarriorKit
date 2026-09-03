@@ -108,8 +108,16 @@ end
 
 -- The loot feed's chips redrawn, which is what every word about what gets a row
 -- has to do and none of them has to apply.
+--
+-- Answered with nothing while the feed is off, because a stream that is not
+-- collecting has no column: Feeds/Stream.lua builds one when the switch goes on
+-- and the chips are drawn with it. Every caller of this goes through here for
+-- that reason.
 local function Chipped()
-	STREAMS.loot.stream:Feed():Chipped()
+	local feed = STREAMS.loot.stream:Feed()
+	if feed then
+		feed:Chipped()
+	end
 end
 
 -- What a feed is dressed in: how large the picture on a row is, whether there
@@ -186,7 +194,10 @@ local function SharedWords(entry)
 		  end },
 
 		{ "clear", run = function()
-			entry.stream:Feed():Clear()
+			local feed = entry.stream:Feed()
+			if feed then
+				feed:Clear()
+			end
 			ns.Print(("the %s feed is empty."):format(lower))
 		  end },
 
@@ -443,7 +454,7 @@ local function Panel(ui)
 			function() return ns.LootFeed.Lit(level) end,
 			function(on)
 				ns.LootFeed.Light(level, on)
-				STREAMS.loot.stream:Feed():Chipped()
+				Chipped()
 			end)
 	end
 	ui.Hint("The same switches as the chips. The feed records everything either way, so turning one back on brings its history with it.")
@@ -452,7 +463,7 @@ local function Panel(ui)
 		function() return ns.db.lootFeedQuest end,
 		function(on)
 			ns.db.lootFeedQuest = on
-			STREAMS.loot.stream:Feed():Chipped()
+			Chipped()
 		end)
 	ui.Hint("A quest item is white, the same white as linen. It gets a ring round its icon, and this keeps it on screen once the whites are off.")
 
@@ -463,7 +474,7 @@ local function Panel(ui)
 	ui.Check("coin", function() return ns.db.lootFeedMoney end,
 		function(on)
 			ns.db.lootFeedMoney = on
-			STREAMS.loot.stream:Feed():Chipped()
+			Chipped()
 		end)
 
 	ui.Check("the purse along the bottom", function() return ns.db.lootFeedPurse end,
@@ -572,7 +583,7 @@ ns.Register({
 		for _, key in ipairs({ "lootFeedShow", "lootFeedQuest", "lootFeedMoney" }) do
 			ns.db[key] = ns.DefaultCopy(key)
 		end
-		STREAMS.loot.stream:Feed():Chipped()
+		Chipped()
 	end,
 
 	panel = Panel,

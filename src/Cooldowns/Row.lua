@@ -84,6 +84,11 @@ local icons = {}
 local built = false
 local unit = 1
 
+-- The frame the events and the tick hang off, and the tick itself. Declared
+-- here rather than at the foot of the file because Row.Apply is what arms and
+-- stops the tick and is written above where they are made.
+local events, tick
+
 -- What Place last laid out, so a tick that changes nothing does no work.
 --
 -- Three values and the middle one is the one that is easy to leave out. `mode`
@@ -148,6 +153,26 @@ end
 -- Laying it out
 --------------------------------------------------------------------------
 
+-- The squares the row has turned out to need.
+--
+-- Twenty three were built at login, which is the ceiling of what any class could
+-- put on this row, and a row draws eight to ten of them. A square that has been
+-- built is kept: a frame cannot be destroyed on these clients, so a pool that
+-- shrank would build a new one every time you switched a cooldown back on.
+--
+-- Called by Place and by nothing else, so it runs when the list is rebuilt or
+-- the row changes shape, never on the tick that draws it.
+local function Stock(wanted)
+	for slot = #icons + 1, wanted do
+		icons[slot] = ns.UI.Ability.New(frame, nil, nil, ns.UI.Ability.SHOUT)
+		icons[slot]:Hide()
+		-- The scripts go on once. Whether the square answers them is EnableMouse,
+		-- written by Place every time the row changes.
+		Hover(icons[slot])
+	end
+	return #icons
+end
+
 -- Both lines, in one walk.
 --
 -- The list arrives with the rotation entries first and each one tagged, so this
@@ -207,6 +232,8 @@ local function Place()
 	-- and the parent frame gets the button.
 	local hoverable = mode ~= "preview"
 	local fast, long = 0, 0
+
+	Stock(drawn)
 
 	for slot = 1, #icons do
 		local w = icons[slot]
@@ -362,11 +389,33 @@ end
 -- a tick.
 --------------------------------------------------------------------------
 
+-- The tick, armed by the switch going on and stopped by it going off.
+--
+-- It lives on the events frame, which is never hidden. On the row itself it
+-- would stop the moment the row hid and never come back, and the row is hidden
+-- between every fight. It was armed at login whatever the switch said, and ten
+-- times a second it asked that switch and found there was nothing to draw.
+--
+-- ns.UI.Ticker refuses a second running tick of one name on one frame, so the
+-- tick is kept here and started again rather than made again.
+local function Beat()
+	if ns.db.cooldowns then
+		if not tick then
+			tick = ns.UI.Ticker(ns.UI.Forever, REFRESH, "cooldowns", Row.Update)
+		elseif not tick:Running() then
+			tick:Start()
+		end
+	elseif tick then
+		tick:Stop()
+	end
+end
+
 function Row.Apply()
 	if not built then
 		return
 	end
 
+	Beat()
 	local point = ns.db.cooldownPoint
 	frame:ClearAllPoints()
 	frame:SetPoint(point[1], UIParent, point[3], point[4], point[5])
@@ -428,9 +477,7 @@ end
 
 --------------------------------------------------------------------------
 
-local events = CreateFrame("Frame")
-local tick -- the refresh ticker, armed once, see below
-
+events = CreateFrame("Frame")
 
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -455,31 +502,9 @@ events:SetScript("OnEvent", function(_, event, token)
 			end,
 		})
 
-		-- Built once at the ceiling, because a frame cannot be destroyed on
-		-- these clients and a pool sized to the list would leak a square every
-		-- time you switched one back on.
-		for slot = 1, ns.Cooldowns.Ceiling() do
-			icons[slot] = ns.UI.Ability.New(frame, nil, nil, ns.UI.Ability.SHOUT)
-			icons[slot]:Hide()
-			-- The scripts go on once. Whether the square answers them is
-			-- EnableMouse, written by Place every time the row changes.
-			Hover(icons[slot])
-		end
-
 		built = true
 		ns.Cooldowns.Rebuild()
 		Row.Apply()
-
-		-- The ticker lives on this frame, which is never hidden. On the row
-		-- itself it would stop the moment the row hid and never come back, and
-		-- the row is hidden between every fight.
-		--
-		-- Armed once. UI.Ticker appends and refuses a second tick of this name
-		-- on this frame, so a branch that arms one has to be a branch that runs
-		-- once.
-		if not tick then
-			tick = ns.UI.Ticker(ns.UI.Forever, REFRESH, "cooldowns", Row.Update)
-		end
 		return
 	end
 

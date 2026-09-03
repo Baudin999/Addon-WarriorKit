@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### A part that is switched off costs nothing
+
+Four parts built themselves at login whatever their switch said, and two of them
+kept a clock running afterwards.
+
+The combat feed ships off, because it is the one thing in the addon that hears
+every line of the combat log in the zone. It was still a frame, a column of rows
+and four hundred entry tables at every login. The swing bars ship off, and they
+were built and then driven on every frame the game drew, all evening, to find
+out there was nothing to draw. The meters build two panes of ten rows each and
+the slider ships at six, and the meter tick ran five times a second with the
+meters off. The cooldown row built twenty three squares, which is the most any
+class could put on it, for a row that draws eight to ten.
+
+All four wait for the switch now, and the two clocks start when it goes on and
+stop when it goes off. Nothing you can see changed: turning a part on builds it
+and places it in the same press that used to only show it.
+
+The feeds and the meters also stop building rows nobody asked for. Both build
+what the setting says and grow when you raise it; a row that has been built is
+kept, because the game cannot destroy a frame and a pool that shrank would leak
+one every time the stepper went back up.
+
 ### The aura rows are as long as what is on the unit
 
 Two rows under each of the two blocks, and each of the four was built to the

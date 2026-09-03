@@ -151,8 +151,9 @@ local HEADER_TEXT = 14
 local WHEEL_ROWS = 3
 
 -- The most rows a feed will ever be asked to draw, and how many entries it
--- keeps behind them. A frame cannot be destroyed on this client, so the rows
--- are built once at this count and the setting decides how many are shown.
+-- keeps behind them. Neither is built to this number: the rows are built up to
+-- what the setting asks for, which ships at ten, and the ring fills as things
+-- drop. This is the ceiling the setting is clamped to and nothing else.
 local MAX_ROWS = 24
 local HELD = 400
 
@@ -378,10 +379,12 @@ function UI.Feed(parent, opts)
 		-- anybody has said otherwise.
 		icon = ICON,
 		row = ICON + ROW_PAD,
-		-- Every entry this feed will ever hold, made once. A ring rather than a
-		-- list that is trimmed: the four hundred and first drop overwrites the
-		-- first rather than allocating a table and dropping another, so a feed
-		-- in its steady state allocates nothing at all.
+		-- Every entry this feed holds, made as the feed fills and never again. A
+		-- ring rather than a list that is trimmed: the four hundred and first drop
+		-- overwrites the first rather than allocating a table and dropping another,
+		-- so a feed in its steady state allocates nothing at all. It was four
+		-- hundred tables per feed at login, for a column that mostly holds a dozen
+		-- things by the time you log out.
 		ring = {},
 		written = 0,
 		offset = 0,
@@ -419,15 +422,7 @@ function UI.Feed(parent, opts)
 	feed.frame.feed = feed
 	UI.Ticker(feed.frame, 0, "feed", Repaint)
 
-	for index = 1, feed.cap do
-		feed.ring[index] = {}
-	end
-
 	BuildHeader(feed)
-
-	for index = 1, MAX_ROWS do
-		feed.rows[index] = BuildRow(feed, index)
-	end
 
 	if opts.chips then
 		feed:BuildChips(opts.chips)
@@ -820,7 +815,15 @@ end
 -- would fix one feed's shape into this file, and passing a table would
 -- allocate one per event on a path the combat log drives.
 function Feed:Entry()
-	local slot = self.ring[(self.written % self.cap) + 1]
+	local at = (self.written % self.cap) + 1
+	local slot = self.ring[at]
+	if not slot then
+		-- The first time round the ring, which is the only time this allocates.
+		-- Past the cap every slot is one that has been here since.
+		slot = {}
+		self.ring[at] = slot
+		return slot
+	end
 	-- Past the cap this slot is holding the oldest entry, and wiping it is the
 	-- moment that entry leaves the feed. If the filter was letting it through,
 	-- the count goes down by it here, because in a line's time there will be
@@ -1040,7 +1043,15 @@ function Feed:Resize(width, rows, icon)
 	geom.name = math.max(free - (note > 0 and note + PAD or 0), 1)
 	geom.caption = math.max(content - STRIPE - INSET * 2 - AMOUNT - PAD, 1)
 
-	for index = 1, MAX_ROWS do
+	-- The rows this feed is set to draw, built here the first time it is set to
+	-- draw that many. Twenty four were built at login whatever the setting said,
+	-- and the setting ships at ten. A row that has been built is kept, because a
+	-- frame cannot be destroyed on this client and a pool that shrank would build
+	-- a new one every time the stepper went back up.
+	for index = #self.rows + 1, rows do
+		self.rows[index] = BuildRow(self, index)
+	end
+	for index = 1, #self.rows do
 		local row = self.rows[index]
 		ShapeRow(self, row, index, geom)
 		if index > rows then
@@ -1076,7 +1087,7 @@ end
 -- inert. That is a bug you find by hovering the bottom of a feed you have just
 -- made taller, which is to say not for weeks.
 function Feed:MouseRows()
-	for index = 1, MAX_ROWS do
+	for index = 1, #self.rows do
 		self.rows[index]:EnableMouse(self.mouse and index <= self.visible or false)
 	end
 	-- And the chips go with them. The setting says this feed is a picture, and
@@ -1357,7 +1368,7 @@ function Feed:Paint()
 			Blank(self.rows[index])
 		end
 	end
-	for index = self.visible + 1, MAX_ROWS do
+	for index = self.visible + 1, #self.rows do
 		Blank(self.rows[index])
 	end
 

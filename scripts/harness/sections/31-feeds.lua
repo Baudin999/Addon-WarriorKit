@@ -58,20 +58,26 @@ local function frame(one)
 	end
 end
 
+-- The loot feed collects out of the box and the combat feed does not, and a
+-- stream that is not collecting has nothing to draw and nothing to hold. It was
+-- built either way: a frame, a column of rows and four hundred entry tables for
+-- a part the player has never turned on.
 check(_G.WarriorKitLootFeed ~= nil, "no loot feed was built at login")
-check(_G.WarriorKitCombatFeed ~= nil, "no combat feed was built at login")
+check(combatStream:Feed() == nil,
+	"the combat feed was built at login and it ships switched off")
 check(_G.WarriorKitLootFeed:GetWidth() == ns.db.lootFeedWidth,
 	("the loot feed is %s wide and the setting says %s")
 		:format(tostring(_G.WarriorKitLootFeed:GetWidth()), tostring(ns.db.lootFeedWidth)))
 
--- Every row the setting asks for is built and placed, and the ones past it
--- are not drawn. A pool sized to the setting rather than to its ceiling
--- would leak a column of frames every time the stepper moved, which is the
--- leak Meter/Window.lua's row pool exists to avoid and is invisible in game.
+-- Every row the setting asks for is built and placed, and none past it. The
+-- pool only grows: a row built once is kept, because a frame cannot be
+-- destroyed on this client and a pool that shrank would build a new one every
+-- time the stepper went back up. Twenty four were built whatever the setting
+-- said, and it ships at ten.
 check(feed:Row(ns.db.lootFeedRows) ~= nil,
 	"the feed has fewer rows than the setting asks for")
-check(not feed:Row(ns.db.lootFeedRows + 1):IsShown(),
-	"a row past the setting is drawn")
+check(feed:Row(ns.db.lootFeedRows + 1) == nil,
+	"a row past the setting was built before anything asked for one")
 
 ----------------------------------------------------------------------
 -- Taking a sentence apart
@@ -322,7 +328,7 @@ ns.db.lootFeedRows = rows + 4
 lootStream:Apply()
 check(feed:Row(rows + 4):IsMouseEnabled(),
 	"a row the feed just grew by does not take the mouse")
-check(not feed:Row(rows + 5):IsMouseEnabled(),
+check(feed:Row(rows + 5) == nil or not feed:Row(rows + 5):IsMouseEnabled(),
 	"a row past the setting takes the mouse")
 ns.db.lootFeedRows = rows
 lootStream:Apply()
@@ -338,15 +344,17 @@ check(not feed:Row(rows + 4):IsMouseEnabled(),
 ----------------------------------------------------------------------
 
 do
-	local combat = combatStream:Feed()
-
 	-- The feed ships off, because it is the one thing in the addon that runs
 	-- on every combat log event in the zone. Everything below is about what a
 	-- row says once you have turned it on, so it is turned on here and put
-	-- back at the foot of the block.
+	-- back at the foot of the block. The switch is also what builds the column:
+	-- there is no feed to ask for until it has been on once.
 	local shippedCollect, shippedShown = ns.db.combatFeed, ns.db.combatFeedShown
 	ns.db.combatFeed, ns.db.combatFeedShown = true, true
 	ns.Stream.Each("Apply")
+
+	local combat = combatStream:Feed()
+	check(combat ~= nil, "turning the combat feed on built no column")
 	-- Collecting is a subscription to ns.CombatLog now rather than a branch
 	-- inside a handler the client is always calling, so turning it on has a
 	-- second half and this is the call the panel makes for it.

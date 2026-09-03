@@ -340,8 +340,24 @@ function Instance:Dress()
 	return (STATUS + STATUS_RULE) * unit
 end
 
+-- The frame, the column and the strip, made the first time the part is switched
+-- on and not before.
+--
+-- Both feeds were built at login whatever the switches said. The combat feed
+-- ships off, and off meant a frame, a column of rows and a ring of entry tables
+-- for a part the player has never turned on. A stream that is not collecting has
+-- nothing to draw and nothing to hold, so it has nothing at all until the switch
+-- moves.
+--
+-- The switch rather than whether you can see it, and the two are different
+-- questions: a feed you have hidden goes on collecting, and the capture files
+-- push into it. `on` is what they read before they do any work, so `on` is what
+-- has to have built the column they are pushing into.
 function Instance:Build()
 	if self.frame then
+		return false
+	end
+	if not self:Setting("on") then
 		return false
 	end
 
@@ -402,7 +418,12 @@ end
 
 function Instance:Apply()
 	if not self.frame then
-		return false
+		-- Nothing was built while the switch was off, so this is where the first
+		-- press of it lands. A stream built here has never been placed, sized or
+		-- dressed, and everything below is what does all three.
+		if not self:Build() then
+			return false
+		end
 	end
 
 	local point = self:Setting("point")
@@ -480,7 +501,12 @@ end
 
 function Instance:Show()
 	if not self.frame then
-		return false
+		-- The switch just went on. Apply builds it, places it and ends by calling
+		-- this again with a frame to show.
+		if not self:Setting("on") then
+			return false
+		end
+		return self:Apply()
 	end
 	local visible = self:Visible()
 	self.frame:SetShown(visible)
@@ -537,6 +563,9 @@ function Stream.Each(method, ...)
 	end
 end
 
+-- Build answers nothing for a stream whose switch is off, and Apply then has
+-- nothing to place. A session that never turns the combat feed on never makes
+-- one.
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function()

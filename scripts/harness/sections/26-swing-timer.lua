@@ -31,17 +31,30 @@
 
 local H = ...
 local PLAYER_CLASS, WARRIOR, CHURN = H.PLAYER_CLASS, H.WARRIOR, H.CHURN
-local frames, guids, advance = H.frames, H.guids, H.advance
+local guids, advance = H.guids, H.advance
 local itemLink, swing, logArgs = H.itemLink, H.swing, H.logArgs
 local ns, fire, check = H.ns, H.fire, H.check
 local drawn, window = H.carry.drawn, H.carry.window
 
-check(ns.UI.Ticking("swing") ~= nil, "the swing timer registered no ticker")
-local swingTicker = H.tick("swing")
+-- The running swing tick, or nothing. It goes with the switch: armed when the
+-- part is turned on and stopped when it is turned off, so this answers both
+-- halves. Every permanent tick hangs off ns.UI.Forever, so the frame says
+-- nothing and the slot name is what to ask for.
+local function ticker()
+	return ns.UI.Ticking("swing")
+end
 
 local ME = "Player-0-0000000f"
 local SOMEBODY = "Player-0-0000001f"
 local SLAM = 1464
+
+-- Nothing at all with the part off, which is how it ships. It was built at
+-- login whatever the switch said and its ticker was armed at interval zero, so
+-- a feature nobody had turned on ran a function on every frame the client drew
+-- for the whole session.
+check(ns.SwingGauges.Bar(ns.Swing.MAIN) == nil,
+	"the swing bars were built with the part off")
+check(ticker() == nil, "the swing ticker was armed with the part off")
 
 -- The scene is stated rather than inherited. The part ships off, and it ships
 -- at 2x for a bar read out of the corner of the eye; there is nothing at all
@@ -54,6 +67,9 @@ swing.mainhand = itemLink("Arcanite Reaper")
 swing.main, swing.off = 3.4, nil
 fire("PLAYER_ENTERING_WORLD")
 ns.SwingGauges.Apply()
+
+local swingTicker = ticker()
+check(swingTicker ~= nil, "turning the swing timer on armed no ticker")
 
 local frame = _G.WarriorKitSwing
 check(frame ~= nil, "no swing frame came up")

@@ -87,10 +87,12 @@ local HEADER_TEXT = 14
 
 local REFRESH = 0.2
 
--- The most rows either pane will ever draw. A frame cannot be destroyed on
--- this client, only hidden, so the rows are built once at this count and the
--- setting decides how many of them are shown. Building to the setting instead
--- would leak a pane's worth of frames every time the slider moved.
+-- The most rows either pane will ever draw, which is what the setting is
+-- clamped to here as well as in Meter/Feature.lua: a pane is built to the
+-- setting and a number from outside the panel must not build a pane taller than
+-- the meter is allowed to be. A row that has been built is kept, because a
+-- frame cannot be destroyed on this client and a pool that shrank with the
+-- slider would leak a row every time it went back up.
 local MAX_ROWS = 10
 
 -- How faint a bar is, as a fraction, out of the whole percent the setting
@@ -126,6 +128,11 @@ local GREY = { 0.50, 0.50, 0.50 }
 
 local frame, damage, threat, place
 local built = false
+
+-- The frame every event and the tick hang off, and the tick itself. Declared
+-- here rather than at the foot of the file because MeterWindow.Apply is what
+-- arms and stops the tick, and it is written above where they are made.
+local events, tick
 
 -- One pixel of the design, in the units the frame is drawn in. Exactly 1 once
 -- ns.UI.Adopt has taken the frame onto the grid, which is the case on both
@@ -234,10 +241,9 @@ local function BuildPane(clickable, percent)
 		pane.button = button
 	end
 
+	-- No rows yet. SizePane builds as many as the setting asks for, which ships
+	-- at six of the ten this pane may ever draw.
 	pane.rows = {}
-	for index = 1, MAX_ROWS do
-		pane.rows[index] = BuildRow(pane, index)
-	end
 	pane.visible = 0
 	return pane
 end
@@ -249,7 +255,15 @@ end
 local function SizePane(pane, width, rows)
 	pane:SetSize(width * unit, (HEADER + RULE + rows * (ROW + ROW_GAP) - ROW_GAP) * unit)
 	pane.visible = rows
-	for index = 1, MAX_ROWS do
+	-- The rows the setting asks for, built the first time it asks for that many.
+	-- Ten were built per pane at login and the slider ships at six, so eight of
+	-- the twenty were frames nothing would draw. A row that has been built
+	-- is kept: a frame cannot be destroyed on this client, so a pool that shrank
+	-- would leak a row every time the slider went back up.
+	for index = #pane.rows + 1, rows do
+		pane.rows[index] = BuildRow(pane, index)
+	end
+	for index = 1, #pane.rows do
 		local row = pane.rows[index]
 		row:SetWidth(width * unit)
 		if index > rows then
@@ -269,7 +283,10 @@ end
 -- the guard is cleared here, where a setting changes, and the next tick paints
 -- what the setting now says.
 local function Forget(pane)
-	for index = 1, MAX_ROWS do
+	if not pane then
+		return
+	end
+	for index = 1, #pane.rows do
 		pane.rows[index].shownClass = nil
 	end
 end
@@ -281,9 +298,69 @@ end
 -- in the panel changes, never from a tick.
 --------------------------------------------------------------------------
 
-function MeterWindow.Apply()
-	if not frame then
+-- The frame, the two panes and everything on them, made the first time the
+-- meters are switched on.
+--
+-- They were made at login whatever the switch said: twenty rows over two panes,
+-- four regions on each, and a ticker armed at five times a second whose first
+-- line is a test for a setting that was off. The meters ship on, so most
+-- sessions pay this either way; a session that has turned them off pays nothing
+-- at all now, and neither does the threat pane on a character who has never
+-- asked for it.
+local function Build()
+	frame = CreateFrame("Frame", FRAME_NAME, UIParent)
+	ns.UI.Adopt(frame, ns.db.meterZoom)
+	unit = ns.UI.Unit(frame)
+	-- This was the one of the twelve that did not round the offsets it saved,
+	-- and nothing said so because the other eleven agreed with each other rather
+	-- than with a rule written down anywhere. It rounds now, along with all of
+	-- them.
+	place = ns.UI.Placeable(frame, {
+		name = "WarriorKit meters",
+		moved = function(anchor)
+			ns.db.meterPoint = anchor
+		end,
+	})
+
+	damage = BuildPane(true)
+	damage:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+	built = true
+end
+
+-- The threat pane, which is a switch of its own under the switch above. A
+-- character who never ticks it never has a second pane.
+local function BuildThreat()
+	if threat then
 		return
+	end
+	threat = BuildPane(false, true)
+	threat:SetPoint("TOPLEFT", damage, "TOPRIGHT", PANE_GAP, 0)
+end
+
+-- The tick, armed by the switch going on and stopped by it going off.
+--
+-- It was armed at login and ran five times a second for the life of a session
+-- with the meters off, reading a setting to find out it had nothing to do.
+-- ns.UI.Ticker refuses a second running tick of one name on one frame, so the
+-- tick is kept here and started again rather than made again.
+local function Beat()
+	if ns.db.meter then
+		if not tick then
+			tick = ns.UI.Ticker(ns.UI.Forever, REFRESH, "meter", MeterWindow.Update)
+		elseif not tick:Running() then
+			tick:Start()
+		end
+	elseif tick then
+		tick:Stop()
+	end
+end
+
+function MeterWindow.Apply()
+	if not built then
+		if not ns.db.meter then
+			return
+		end
+		Build()
 	end
 
 	local db = ns.db
@@ -292,7 +369,11 @@ function MeterWindow.Apply()
 	frame:SetPoint(point[1], UIParent, point[3], point[4], point[5])
 	ns.UI.Rezoom(frame, db.meterZoom)
 
-	local width, rows = db.meterWidth, db.meterRows
+	-- Clamped here rather than trusted, because the panes are built to this
+	-- number now: a setting from outside the panel that asked for forty rows
+	-- would build forty frames a pane.
+	local width = db.meterWidth
+	local rows = math.max(1, math.min(db.meterRows, MAX_ROWS))
 	local height = (HEADER + RULE + rows * (ROW + ROW_GAP) - ROW_GAP) * unit
 
 	SizePane(damage, width, rows)
@@ -301,16 +382,18 @@ function MeterWindow.Apply()
 
 	local total = width
 	if db.meterThreat then
+		BuildThreat()
 		SizePane(threat, width, rows)
 		threat:Show()
 		total = width * 2 + PANE_GAP
-	else
+	elseif threat then
 		threat:Hide()
 		threat.visible = 0
 	end
 
 	frame:SetSize(total * unit, height)
 
+	Beat()
 	MeterWindow.Lock()
 	MeterWindow.Show()
 end
@@ -327,7 +410,13 @@ function MeterWindow.Lock()
 end
 
 function MeterWindow.Show()
-	if not frame then
+	if not built then
+		-- The switch just went on and this is the first thing it calls. Apply
+		-- builds the panes, sizes them, arms the tick and ends by calling this
+		-- again with something to show.
+		if ns.db.meter then
+			MeterWindow.Apply()
+		end
 		return
 	end
 	if ns.db.meter then
@@ -592,37 +681,12 @@ end
 
 --------------------------------------------------------------------------
 
-local events = CreateFrame("Frame")
-local tick -- the refresh ticker, armed once, see below
+events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function()
-	frame = CreateFrame("Frame", FRAME_NAME, UIParent)
-	ns.UI.Adopt(frame, ns.db.meterZoom)
-	unit = ns.UI.Unit(frame)
-	-- This was the one of the twelve that did not round the offsets it saved,
-	-- and nothing said so because the other eleven agreed with each other
-	-- rather than with a rule written down anywhere. It rounds now, along with
-	-- all of them.
-	place = ns.UI.Placeable(frame, {
-		name = "WarriorKit meters",
-		moved = function(anchor)
-			ns.db.meterPoint = anchor
-		end,
-	})
-
-	damage = BuildPane(true)
-	damage:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-	threat = BuildPane(false, true)
-	threat:SetPoint("TOPLEFT", damage, "TOPRIGHT", PANE_GAP, 0)
-
-	built = true
+	-- Apply is the only way in. It builds nothing while the meters are off, and
+	-- the switch going on is what calls it next.
 	MeterWindow.Apply()
-
-	-- Armed once. UI.Ticker appends and refuses a second tick of this name on
-	-- this frame, so a branch that arms one has to be a branch that runs once.
-	if not tick then
-		tick = ns.UI.Ticker(ns.UI.Forever, REFRESH, "meter", MeterWindow.Update)
-	end
 end)
 
 -- A resolution change moves every size in this file at once, the same way it
