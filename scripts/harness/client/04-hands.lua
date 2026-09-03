@@ -336,7 +336,14 @@ local DURABILITY = {
 	[5] = { 95, 100 },
 	[16] = { 12, 100 },
 }
+
+-- Counted, because the character sheet's gear page is the only caller and it
+-- asks once per slot per paint. A count that has not moved is a page nobody has
+-- painted, which is the whole of what login is supposed to cost now.
+H.gear = { durability = 0 }
+
 _G.GetInventoryItemDurability = function(slot)
+	H.gear.durability = H.gear.durability + 1
 	local pair = DURABILITY[slot]
 	if not pair then
 		return nil

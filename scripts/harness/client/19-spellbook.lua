@@ -48,7 +48,11 @@ local ENTRIES = {
 	{ kind = "SPELL", id = 18499, name = "Berserker Rage", sub = "" },
 }
 
-H.spellbook = { tabs = TABS, entries = ENTRIES, pickups = {} }
+-- `reads` counts entries handed over, so a section can tell a book that was
+-- walked from one that was marked stale and left alone. The window walked this
+-- at login and again on every SPELLS_CHANGED with nobody looking at it, and a
+-- read that does not happen leaves no other trace.
+H.spellbook = { tabs = TABS, entries = ENTRIES, pickups = {}, reads = 0 }
 
 _G.GetNumSpellTabs = function()
 	return #TABS
@@ -74,6 +78,7 @@ _G.GetSpellBookItemInfo = function(index, book)
 	if not entry then
 		return nil
 	end
+	H.spellbook.reads = H.spellbook.reads + 1
 	return entry.kind, entry.id
 end
 

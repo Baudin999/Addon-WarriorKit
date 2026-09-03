@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### The character sheet and the spell book stop working at login
+
+Both windows were made at login and both then did the expensive half of their
+job for nobody. The sheet painted itself twice on the way up: nineteen slots
+read for what is in them and how worn it is, every stat behind the column beside
+them, and a figure of your character loaded into the portrait, all of it for a
+window still shut. The spell book walked every rank of every spell you know,
+about eight hundred questions on a warrior at sixty, and walked it again every
+time the client said your spells had changed, whether or not you had ever
+pressed P.
+
+The frames of both still exist at login and have to. The C key and the P key
+open a window that holds protected buttons, which only a snippet may do in a
+fight, and a snippet can only touch a window that already exists. What waited is
+everything else. The sheet is painted when it comes up and the figure is loaded
+with it. The book is marked when the client says it changed and read by the next
+thing that draws it, which is opening the window or the reading on its settings
+page.
+
+A session that never opens either pays for neither. The first open of each costs
+what login used to, and the second costs what the first one always did.
+
 ### Right buys, left picks up
 
 A right click on the vendor's rack did nothing and a left click bought at once.

@@ -26,8 +26,11 @@ local function SpellbookWord(arg, rawArg)
 		ns.BlizzHide.Apply()
 		ns.Print("Blizzard's spell book is " .. ns.BookBlizzard.Describe() .. ".")
 	elseif word == "ranks" then
+		-- Marked rather than read, and the count below is what reads it. A word
+		-- asking what the book says is a word that wants today's answer, and
+		-- Refresh is the one door the read is behind.
 		ns.SpellWindow.Build()
-		ns.SpellWindow.Read()
+		ns.SpellWindow.Refresh()
 		ns.Print(ns.SpellWindow.Ranks() .. ".")
 	elseif word == "on" or word == "off" then
 		SetSpellbook(word == "on")

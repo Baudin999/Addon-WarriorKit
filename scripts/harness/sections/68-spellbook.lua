@@ -79,6 +79,32 @@ local function DropdownRows()
 end
 
 ----------------------------------------------------------------------
+-- The book is read on the way up
+--
+-- Reading it is four client calls per entry over every rank of every spell,
+-- and it ran at login and again on every SPELLS_CHANGED for a window most
+-- sessions never open. A change marks the book and the next paint pays for
+-- it, so a shut window costs nothing when the trainer sells you something.
+--
+-- Counted off the stub rather than asserted about the window, because a read
+-- that does not happen leaves nothing behind to look at.
+----------------------------------------------------------------------
+
+do
+	Window.Hide()
+	local before = fixture.reads
+	fire("SPELLS_CHANGED")
+	check(fixture.reads == before,
+		("the client said the book changed with the window shut and %d entries were read")
+			:format(fixture.reads - before))
+
+	Window.Show()
+	check(fixture.reads > before,
+		"opening the window after the book changed did not read it")
+	Window.Hide()
+end
+
+----------------------------------------------------------------------
 -- The window
 ----------------------------------------------------------------------
 

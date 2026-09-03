@@ -6365,6 +6365,22 @@ Everything below was written from the API contract and has never executed:
   page, change something with a slash word, then click to the page that shows
   it.
 
+- **Whether a spell book opened for the first time in a fight comes up the right
+  size.** The book is read on the way up now, and the window is sized to the
+  tallest tab of what that read found. Sizing a window that holds secure squares
+  is refused in combat, so a book whose first open of the session is mid-pull is
+  laid out on the size it had before the read, and the fit lands when the fight
+  ends. A mistake looks like rows running past the bottom edge of the window for
+  the rest of that fight and coming right the moment it drops. What would settle
+  it: press P for the first time in a session during a pull.
+- **Whether a model dresses itself when the page it is on comes up.** The
+  character sheet's figure and the loadout page's are loaded by the model's own
+  OnShow rather than at login, on the contract that showing a frame shows its
+  children and fires theirs. The sheet has a second way in, because its first
+  paint reloads the figure anyway; the loadout page has only the one. A mistake
+  looks like an empty panel where the figure should be on the loadouts tab,
+  until you change tab and come back. What would settle it: open the sheet on
+  the loadouts tab.
 - **Whether `hooksecurefunc` takes on a Blizzard frame's `SetParent`.** It is
   what replaced the once-a-second parent check: `Core/Attic.lua` hooks the call
   on every frame it cages, and the walk that used to catch a foreign re-parent

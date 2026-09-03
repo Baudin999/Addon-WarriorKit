@@ -428,12 +428,17 @@ local function Portrait(parent)
 			pcall(model.SetRotation, model, FACING)
 		end
 	end
-	-- Once now and once on the way back up, never on a refresh: SetUnit reloads
-	-- the model and a refresh is every click anywhere in the window. Pane:Redress
-	-- is the third caller and it asks first whether anything you are wearing
-	-- actually moved, which is the only question that earns a reload.
+	-- On the way up, never on a refresh: SetUnit reloads the model and a refresh
+	-- is every click anywhere in the window. Pane:Redress is the other caller and
+	-- it asks first whether anything you are wearing actually moved, which is the
+	-- only question that earns a reload.
+	--
+	-- And not once here, which is what it did. Loading a figure into a panel on a
+	-- window nobody has opened is the most expensive call this file makes and the
+	-- one nobody can see the result of. The first paint of the page dresses it,
+	-- because Redress compares nineteen links against a table that is empty until
+	-- then and finds all nineteen changed.
 	model:SetScript("OnShow", Dress)
-	Dress()
 	panel.model = model
 	panel.Dress = Dress
 
@@ -545,7 +550,12 @@ function Pane:Resize(width, height)
 			(index - 1) * (SQUARE + GAP) + (SQUARE - span) / 2, -GAP)
 	end
 
-	return self:Paint()
+	-- Sized, not painted. This runs at login on a window nobody has opened, and
+	-- the paint behind it walked nineteen slots, every stat and the durability of
+	-- each piece for a page nothing could show. Character/Window.lua paints the
+	-- tab that is up when the window comes up, and every other caller of Fit
+	-- refreshes straight after it.
+	return true
 end
 
 -- The four cells across the foot of the portrait, an equal slice each. The last

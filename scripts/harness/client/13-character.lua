@@ -22,6 +22,30 @@
 local H = ...
 local ITEMS, itemLink, worn = H.ITEMS, H.itemLink, H.worn
 
+--------------------------------------------------------------------------
+-- The figure on the page
+--
+-- SetUnit is the one call that loads a model, and it is counted rather than
+-- left to the widget stub's PascalCase no-op. What it costs is the whole reason
+-- the sheet does not load one until somebody opens it, and a load nobody asked
+-- for leaves nothing else behind to assert on.
+--
+-- It lives here rather than beside the other Region methods because the sheet
+-- is the only thing in the addon that draws a player model, and 02-text.lua is
+-- at its own ceiling.
+--
+-- Counted twice: on the region, for the sheet's own section, and once for the
+-- run, which is what says login loaded none.
+--------------------------------------------------------------------------
+
+H.models = { loaded = 0 }
+
+function H.Region:SetUnit(unit)
+	self.modelUnit = unit
+	self.dressed = (self.dressed or 0) + 1
+	H.models.loaded = H.models.loaded + 1
+end
+
 -- The cap a weapon skill has at this character's level, which every number
 -- below is written against rather than against a level written down here. The
 -- player is level 62 in this client and a fixture holding 310 would go quietly

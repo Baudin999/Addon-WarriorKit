@@ -58,7 +58,17 @@ local C, M = UI.Color, UI.Metric
 --
 -- **Nothing here is on a ticker.** Your gear changes when the server says it
 -- did, which is six events, and every one of them ends in a repaint of the tab
--- that happens to be up. A window nobody has open is not repainted at all.
+-- that happens to be up. A window nobody has open is not repainted at all, and
+-- neither is one nobody has opened yet: Window.Paint refuses while the window
+-- is down and the window's own OnShow is what pays the first one.
+--
+-- **The frames are built at login and that is deliberate.** Every other window
+-- in the addon waits for the first open. This one cannot: the key press runs a
+-- snippet, a snippet may only touch a frame it has been handed a reference to,
+-- and neither the window nor the reference can be made in a fight. A sheet
+-- built on first press would be a C key that does nothing the first time it is
+-- pressed in a pull. What login no longer pays for is the two paints and the
+-- model, which is where nearly all of the cost was.
 --------------------------------------------------------------------------
 
 -- Wide enough for the gear page to carry the stats beside it: the block of
@@ -276,8 +286,14 @@ end
 
 -- The tab that is up, and the line along the bottom. Nothing else, because
 -- every other pane is behind this one and cannot be measured while it is.
+--
+-- And nothing at all while the window is shut. This is nineteen slots, every
+-- stat, every skill or every faction depending on the tab, and it ran twice at
+-- login on a window nobody had opened: once out of the fit and once out of the
+-- tab strip choosing its first tab. The window's own OnShow is what pays for it
+-- now, so the sheet is painted when it comes up and not before.
 function Window.Paint()
-	if not window then
+	if not window or not window:IsShown() then
 		return false
 	end
 	local tab = TABS[showing]

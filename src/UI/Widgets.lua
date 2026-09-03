@@ -1584,9 +1584,9 @@ function UI.Kit(host)
 	-- draw a model leaves an empty box and the slots underneath still work,
 	-- which is the honest degradation.
 	--
-	-- SetUnit is called once and again when the model is shown, never on a
-	-- refresh, because it reloads the model and a refresh is every click
-	-- anywhere in the window.
+	-- SetUnit is called when the model comes up and never on a refresh, because
+	-- it reloads the model and a refresh is every click anywhere in the window.
+	-- The one below says why it is not called on the way past either.
 	function kit.Paperdoll(opts)
 		opts = opts or {}
 		local slots = opts.slots or {}
@@ -1609,8 +1609,11 @@ function UI.Kit(host)
 				pcall(model.SetUnit, model, "player")
 			end
 		end
+		-- On the way up and not on the way past. This row is built with the page
+		-- it sits on, before anybody has looked at either, so a figure loaded here
+		-- is the most expensive call in the kit made for a picture nothing can
+		-- draw yet.
 		model:SetScript("OnShow", Dress)
-		Dress()
 
 		-- Laid out from the middle out, so two slots straddle the model's centre
 		-- line the way the client's own hand row does.

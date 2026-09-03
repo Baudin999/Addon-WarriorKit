@@ -56,6 +56,23 @@ local function Find(groups, title, label)
 end
 
 ----------------------------------------------------------------------
+-- The first open pays for the sheet
+--
+-- 00-login has the other half: login reads no slot and loads no figure for a
+-- window nobody has opened. This is what opening it costs, and it is asserted
+-- before anything below drives the window.
+----------------------------------------------------------------------
+
+do
+	local model = Window.Pane(GEAR).panel.model
+	check((model.dressed or 0) == 0, "the figure was loaded before the sheet was opened")
+
+	Window.Show()
+	check((model.dressed or 0) > 0, "opening the sheet did not load the figure")
+	check(H.gear.durability > 0, "opening the sheet did not read what you are wearing")
+end
+
+----------------------------------------------------------------------
 -- The window
 ----------------------------------------------------------------------
 

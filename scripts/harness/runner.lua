@@ -139,6 +139,23 @@ if PLAYER_SPEC then
 			:format(PLAYER_SPEC, tostring(ns.Class.Spec.Token())))
 end
 
+-- What login built, read here because this is the only moment that can see it.
+--
+-- Most of the addon's construction waits for the first open now, and every
+-- section below opens something: a count taken inside one of them is a count of
+-- what that section did. Four readings, each the cheapest honest probe for one
+-- thing that used to happen at login and no longer does, and the sections that
+-- care read them out of H.login rather than taking them again.
+H.login = {
+	frames = #H.frames,
+	models = H.models.loaded,
+	book = H.spellbook.reads,
+	durability = H.gear.durability,
+}
+
+print(("login  %d frames, %d spell book entries read, %d gear slots read, %d models loaded")
+	:format(H.login.frames, H.login.book, H.login.durability, H.login.models))
+
 -- The tooltip's linger, run out.
 --
 -- Leaving a hoverable thing starts a countdown rather than taking the box down,
@@ -189,6 +206,9 @@ function H.check(ok, message)
 end
 
 local SECTIONS = {
+	-- First, and it is the only section that can answer for login: every one
+	-- below it opens something. It reads H.login and asserts nothing else.
+	"00-login",
 	"01-unit-layer",
 	"02-layout-engine",
 	"03-gauge",

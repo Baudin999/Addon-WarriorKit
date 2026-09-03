@@ -50,6 +50,19 @@ local Read = ns.BookRead
 -- Nothing here is on a ticker. The window paints when it opens and when the
 -- client says the book changed, and a window nobody has open is not painted
 -- at all.
+--
+-- **The book is read on the way up, not at login.** Reading it is four client
+-- calls per entry over every rank of every spell you know, which on a warrior
+-- at sixty is about eight hundred, and it ran at login and again on every
+-- SPELLS_CHANGED whether or not anybody had ever opened this. SPELLS_CHANGED
+-- marks the book stale now and the first paint after that is what pays for it.
+-- A session that never presses P reads the book never.
+--
+-- The frames are a different question and they stay at login, because the key
+-- has to work in a fight. The snippet below is handed the window as a frame
+-- reference, a snippet may only touch what it has been given, and neither the
+-- window nor the reference can be made in combat. A book built on first press
+-- would be a key that does nothing the first time it is pressed in a pull.
 --------------------------------------------------------------------------
 
 -- The rows go in columns of this many, and the window is as wide as that
@@ -87,6 +100,10 @@ local deepest = 1
 -- everything deferred here ends in the same pass: fit the window and paint
 -- the tab that is up.
 local pending = false
+
+-- Whether the book on file is older than the client's. True until something
+-- has read it, so the first read is the first paint rather than login.
+local stale = true
 
 --------------------------------------------------------------------------
 -- Which rank a square holds
@@ -373,9 +390,26 @@ function Window.Build()
 		Window.Paint()
 	end)
 
-	Window.Read()
+	-- Sized for an empty book, which is what it is until somebody opens it. The
+	-- read below is what gives the window its real height, and it happens on the
+	-- first paint.
 	Window.Fit()
 	return window
+end
+
+-- The book, read if something has happened to it since the last read.
+--
+-- Every paint goes through here and nothing else does, which is what keeps the
+-- walk to one per change rather than one per event. The fit comes with it
+-- because the window is sized to the tallest tab and a new rank can move that.
+local function Freshen()
+	if not window or not stale then
+		return false
+	end
+	stale = false
+	Window.Read()
+	Window.Fit()
+	return true
 end
 
 --------------------------------------------------------------------------
@@ -430,6 +464,10 @@ function Window.Paint()
 	if not window then
 		return false
 	end
+	-- The one place the book is read. Everything that draws a row comes through
+	-- here, so a book read on the way to the screen is read once however many
+	-- things changed it while the window was shut.
+	Freshen()
 	local tab = book[viewing]
 	local count = tab and #tab.spells or 0
 	local per = PerColumn(count)
@@ -466,6 +504,11 @@ end
 -- How many spells the book holds and how many squares are set below the best
 -- rank you know, for the foot and the panel.
 function Window.Counts()
+	-- The panel's own reading asks this while the window is shut, and it is the
+	-- one caller that is not a paint. It reads the book rather than answering
+	-- off an empty one, because a line saying you know no spells is worse than
+	-- the walk it saved.
+	Freshen()
 	local spells, lowered = 0, 0
 	for index = 1, #book do
 		for at = 1, #book[index].spells do
@@ -603,6 +646,7 @@ end
 -- Another tab, for the harness and the slash word. A tab the book does not
 -- have is refused rather than drawn empty.
 function Window.View(index)
+	Freshen()
 	if index < 1 or index > #book then
 		return false
 	end
@@ -622,17 +666,19 @@ function Window.Book()
 	return book
 end
 
--- Read again and sized again either way, painted only while it is up. The
--- book is what the foot and the panel count off, and reading it is a walk of
--- a hundred names, which is cheap once per trainer visit and not worth a
--- window; the fit is what a new rank on the tallest tab would need before the
--- window next opens, and OnShow paints but does not size.
+-- Marked either way, read only while it is up.
+--
+-- Reading the book is four client calls per entry over every rank you know, and
+-- this runs on SPELLS_CHANGED, which the client fires at login, at a trainer, on
+-- a talent change and on a handful of things that are none of those. It read and
+-- refitted the window on every one of them for a window most sessions never
+-- open. The mark is what the next paint pays for, and the fit rides along with
+-- the read because both answer to the same change.
 function Window.Refresh()
 	if not window then
 		return false
 	end
-	Window.Read()
-	Window.Fit()
+	stale = true
 	if Window.Shown() then
 		return Window.Paint()
 	end
