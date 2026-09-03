@@ -22,7 +22,8 @@ ns.EnemyBars = EnemyBars
 -- debuffs matter is a fight question as well as a spec one.
 
 -- The most a bar will track. The aura scan is forty slots against every name on
--- the list, per mob, five times a second, and the row still has to fit above a
+-- the list, per mob, on every reading and on every aura the mob gains or loses,
+-- and the row still has to fit above a
 -- bar that is 120 pixels wide at its narrowest. Ten is past anything a warrior
 -- applies and cheap enough not to be worth arguing about.
 local MAX_SPELLS = 10
@@ -65,7 +66,20 @@ local REPLACED = {
 	[12162] = 12721, -- the Deep Wounds talent, for the Deep Wound bleed
 }
 
-local REFRESH = 0.2
+-- How often every bar is read off the client from the top, in seconds.
+--
+-- It was a fifth of a second, which is the rate every readout in this addon
+-- runs at, and on this one it was a poll: thirty client calls per bar per pass
+-- to find out that a mob nothing had happened to still had the same name, the
+-- same level and the same debuffs. Fifteen plates made that about 2,400 calls a
+-- second.
+--
+-- The client already says when a mob's health, auras, threat or target move,
+-- and Attach registers for all four against the plate's own token. What is left
+-- for a pass over everything is the part no event carries: a plate that should
+-- no longer have a bar, the line saying who else is on the mob, and a client
+-- that fires none of the four. A second is soon enough for all three.
+local VERIFY = 1
 
 -- One empty table handed back wherever the registry answers nothing, so a class
 -- with no file and a client that has not said what you are both walk zero
@@ -210,8 +224,9 @@ local OTHER_ALPHA = 0.55
 -- already read and the eye is helped by the tail, so it is the slower of the
 -- two by half again.
 --
--- Both are short enough that the whole ramp is inside the fifth of a second the
--- readouts tick at, so nothing on the bar is ever drawn stale on the way in.
+-- Both are short enough that the whole ramp is over before a bar that has just
+-- arrived could be stale: a plate arriving marks its widget and the next frame
+-- draws it.
 --
 -- This is a multiplier on the alpha above, never a replacement for it: the two
 -- say different things and both have to survive. Which bar is yours is 1.00
@@ -224,6 +239,25 @@ local FADE_OUT = 0.22
 -- `next` per frame.
 local fading = {}
 
+-- Every widget an event has said something about and no frame has drawn yet, as
+-- a set. Same shape as `fading` above and for the same reason: empty is the
+-- normal state and the pass that drains it opens by saying so.
+local dirty = {}
+
+-- The per-frame pass, kept rather than discarded so it can be switched off.
+--
+-- A frame with no chamber open, no ramp running and nothing marked has no work
+-- at all, and a ticker with no work is one the client should not be calling
+-- sixty times a second. Whatever puts work on it starts it and the frame that
+-- finds none left stops it.
+local moving
+
+local function Wake()
+	if moving and not moving:Running() then
+		moving:Start()
+	end
+end
+
 local anchor, header, place
 -- Assigned in the events section at the foot of the file, because it is the
 -- event frame's business and that frame is made down there. Declared up here
@@ -233,12 +267,12 @@ local CastEvents
 local pool, attached, listWidgets = {}, {}, {}
 -- Every enemy plate the client currently has up, kept by the add and remove
 -- events. GetNamePlates builds a fresh table on every call, and both the list
--- collector and the attach walk wanted one five times a second.
+-- collector and the attach walk wanted one on every reading.
 local plateUnits = {}
 
 -- Probed rather than called, the way Unit/Role.lua reads its optional APIs: a
 -- client without one of these treats every player as unflagged, which is a
--- missing bar rather than an error five times a second.
+-- missing bar rather than an error on every reading.
 local UnitIsPVP, UnitIsPVPFreeForAll = _G.UnitIsPVP, _G.UnitIsPVPFreeForAll
 local UnitFactionGroup = _G.UnitFactionGroup
 
@@ -638,7 +672,7 @@ local function Label(unit, owner)
 end
 
 -- Hoisted out of BuildTargeters rather than declared inside it, because two
--- closures per call is two closures five times a second for the life of the
+-- closures per call is two closures per reading for the life of the
 -- session. They read the same two module tables either way.
 local function Record(unit, owner)
 	local targetUnit = ns.Unit.TargetToken(unit)
@@ -694,29 +728,60 @@ end
 --
 -- While you hold the mob the number that matters is the nearest challenger, not
 -- your own permanent 100%.
+--
+-- Three values rather than the line they make, and that is the whole of why
+-- this is not a format on the tick. The line changes when the percentage rolls
+-- over a whole number or when a different player is behind you; the numbers
+-- behind it are what says whether either happened. Building the string first
+-- and comparing it afterwards is one throwaway string per engaged bar per tick
+-- to find out that nothing moved, and the guard scan does not count a format as
+-- an allocation, which is how it stayed there.
+--
+--   colour      always
+--   percent     the number worth printing, or nil for none
+--   who         the name beside it
+--   mode        nil on a client with the threat API, and one of three words on
+--               a client without, so the two questions cannot be told apart by
+--               luck when both answer nothing
 local function ThreatState(unit)
 	local color, percent, challenger = Threat.State(unit)
+	if color then
+		return color, percent, challenger and UnitName(challenger) or nil, nil
+	end
 
 	-- Vanilla has no threat API. The colour comes from who the mob is swinging
 	-- at instead: you, someone else, or nobody yet. That is not threat. It
 	-- cannot warn you before a mob turns, only tell you after it has. It is the
 	-- honest half of the question that client can answer, and it beats a screen
 	-- of identical grey bars.
-	if not color then
-		local shade, victim, mine = Threat.Swinging(unit)
-		if not victim then
-			return shade, ""
-		end
-		return shade, mine and "on you" or ("on " .. ShortName(UnitName(victim)))
+	local shade, victim, mine = Threat.Swinging(unit)
+	if not victim then
+		return shade, nil, nil, "nobody"
 	end
+	if mine then
+		return shade, nil, nil, "you"
+	end
+	return shade, nil, UnitName(victim), "them"
+end
 
+-- The wording, reached only when one of the three above moved. ShortName walks
+-- a name a character at a time, so it is on this side of the guard along with
+-- the format.
+local function ThreatLabel(percent, who, mode)
+	if mode == "you" then
+		return "on you"
+	elseif mode == "them" then
+		return "on " .. ShortName(who)
+	elseif mode then
+		return ""
+	end
 	if not percent then
-		return color, ""
+		return ""
 	end
-	if challenger then
-		return color, ("%d%% %s"):format(percent, ShortName(UnitName(challenger)))
+	if who then
+		return ("%d%% %s"):format(percent, ShortName(who))
 	end
-	return color, ("%d%%"):format(percent)
+	return ("%d%%"):format(percent)
 end
 
 -- The per-slot tables are reused rather than rebuilt, so `found` carries one
@@ -783,8 +848,8 @@ end
 -- answer a tracked list has and a live aura row does not.
 --
 -- Bounded by the widget as well as by the list. FitIcons makes the row as long
--- as the list and LayoutWidget calls it, but this runs five times a second
--- whether or not a layout has happened since the list last moved, and a nil
+-- as the list and LayoutWidget calls it, but this runs on every reading and on
+-- every aura event whether or not a layout has happened since the list moved, and a nil
 -- index on a ticker is a thousand errors a minute rather than one.
 --
 -- It is a function rather than a block in UpdateWidget because it is the one
@@ -875,10 +940,45 @@ local function IconRow(widget, iconSize, iconGap, width, px, timerCeiling, count
 	return icons, height
 end
 
+-- What the client says has moved on one mob.
+--
+-- Four events, registered against the plate's own unit token when a bar
+-- attaches, and every one of them is something a bar draws: the aura row, the
+-- health gauge, the threat number, and who the mob is swinging at on a client
+-- with no threat API. Between them they are the whole of what the five hertz
+-- pass was polling for, and polling for it meant thirty client calls per bar
+-- whether or not anything had happened.
+--
+-- Marked rather than drawn, because a mob taking four hits in one frame is four
+-- events and one bar. The per-frame pass draws what is marked, so a change is on
+-- screen on the next frame rather than up to a fifth of a second later.
+--
+-- The unit is compared even though ns.RegisterUnitEvent asked the client to
+-- filter, because a client without RegisterUnitEvent gets the plain
+-- registration and hands over every unit it tracks. Both live clients filter;
+-- the comparison is what makes the fallback correct rather than merely quiet.
+local WATCHED = {
+	"UNIT_HEALTH",
+	"UNIT_AURA",
+	"UNIT_THREAT_LIST_UPDATE",
+	"UNIT_TARGET",
+}
+
+local function Touched(widget, _, unit)
+	if unit == widget.unit then
+		dirty[widget] = true
+		Wake()
+	end
+end
+
 -- cold: builds one nameplate widget, on the tick a plate first appears.
 local function CreateWidget()
 	local widget = CreateFrame("Frame", nil, UIParent)
 	widget:EnableMouse(false) -- never steal a click from the nameplate underneath
+	-- The widget is the frame the unit events land on, so there is no second
+	-- frame per plate to build, hide and pool alongside it. Attach registers
+	-- them against the token and Unhost gives them back.
+	widget:SetScript("OnEvent", Touched)
 
 	-- On the grid, and off whatever scale the plate it ends up parented to
 	-- carries. A nameplate is scaled by three client settings at once and the
@@ -1339,7 +1439,7 @@ end
 local function PaintQuest(widget, guid)
 	-- The npc id behind the GUID, parsed only when the widget changes mobs. The
 	-- parse is a string match and a tonumber, which is nothing on its own and is
-	-- fifteen of them five times a second on a pull; the badge under it is one
+	-- fifteen of them per reading on a pull; the badge under it is one
 	-- table index once the creature has been asked about.
 	if widget.questGuid ~= guid then
 		widget.questGuid = guid
@@ -1361,7 +1461,8 @@ end
 -- The one place a widget's alpha is written, because two things decide it and
 -- neither knows about the other.
 --
--- `baseAlpha` is which bar is yours, written by the tick five times a second.
+-- `baseAlpha` is which bar is yours, written by the tick and by the target
+-- change that moved it.
 -- `fade` is how far through arriving or leaving this bar is, written by the
 -- ramp on every frame. They multiply: a bar that is not your target and is
 -- halfway in is 0.55 of half, and both facts are still on screen.
@@ -1381,8 +1482,8 @@ end
 -- tag and the name.
 --
 -- Guarded on the string and on the colour table's identity, the way the frame
--- is: this runs five times a second per mob and a level changes when the mob
--- does. Two things it used to do and no longer has to: measure its own string
+-- is: this runs on every reading and on every event about the mob, and a level
+-- changes when the mob does. Two things it used to do and no longer has to: measure its own string
 -- to resize a frame, and call PlaceOnPlate, because a tag that changed width
 -- moved the assembly's centre. The name yields through one anchor now.
 --
@@ -1398,8 +1499,23 @@ end
 -- wins over the warm colour your target wears rather than yielding to it: which
 -- mob is yours is already said by the alpha, and a mob you picked up by mistake
 -- is exactly the one that has to tell you it is worth nothing.
-local function PaintWorth(widget, unit, isTarget)
-	local tag, xp = Level.Of(unit)
+local function PaintWorth(widget, unit, guid, isTarget)
+	-- The tag and the level under it, read when the widget changes mobs and not
+	-- on the tick, the way PaintQuest reads the creature id. A mob keeps the
+	-- level and the classification it spawned at, so UnitLevel twice and
+	-- UnitClassification once per bar per tick were four answers to a question
+	-- that had already been answered.
+	--
+	-- The tap is not in there and must not be. Somebody else tagging the mob is
+	-- the half of "is this kill worth anything" that moves between two frames,
+	-- so ns.TapDenied is asked live inside Level.WorthAt.
+	if widget.worthGuid ~= guid then
+		widget.worthGuid = guid
+		widget.worthTag, widget.worthLevel = Level.Tagged(unit)
+	end
+
+	local tag = widget.worthTag
+	local xp = Level.WorthAt(unit, widget.worthLevel or 0)
 	if ns.db.barsLevel then
 		if widget.levelTag ~= tag then
 			widget.levelTag = tag
@@ -1419,8 +1535,38 @@ local function PaintWorth(widget, unit, isTarget)
 	end
 end
 
+-- The gauge, the track behind it and the threat number take the one colour, so
+-- a single identity guard covers the three of them. These are the five module
+-- constants, so identity is the right comparison.
+--
+-- The edge is not one of them any more; see the note in CreateWidget. What pays
+-- for losing it is the track: the spent part keeps three tenths of the hue
+-- rather than a fifth, so a mob at ten percent reads as yours across the bar's
+-- width instead of round its rim. That fraction is UI/Gauge.lua's.
+--
+-- The line above the gauge is guarded on the three values it is made of rather
+-- than on itself. See ThreatState: building the string first and comparing it
+-- afterwards was one throwaway string per engaged bar per pass to find out that
+-- nothing had moved.
+local function PaintThreat(widget, unit)
+	local color, percent, who, mode = ThreatState(unit)
+	if widget.threatColor ~= color then
+		widget.threatColor = color
+		Gauge.Paint(widget.health, widget.health.track, color)
+		widget.threatText:SetTextColor(color[1], color[2], color[3])
+	end
+	if widget.threatPercent ~= percent or widget.threatWho ~= who
+		or widget.threatMode ~= mode then
+		widget.threatPercent, widget.threatWho, widget.threatMode = percent, who, mode
+		widget.threatText:SetText(ThreatLabel(percent, who, mode))
+	end
+end
+
 local function UpdateWidget(widget, unit, guid)
 	local now = GetTime()
+	-- Kept so the event drain can redraw this widget without asking the client
+	-- for a GUID it was handed a moment ago.
+	widget.guid = guid
 
 	local health, healthMax = UnitHealth(unit), UnitHealthMax(unit)
 	local scale = healthMax > 0 and healthMax or 1
@@ -1433,24 +1579,7 @@ local function UpdateWidget(widget, unit, guid)
 		widget.health:SetValue(health)
 	end
 
-	-- The gauge, the track behind it and the threat number take the one colour,
-	-- so a single identity guard covers the three of them. These are the five
-	-- module constants, so identity is the right comparison.
-	--
-	-- The edge is not one of them any more; see the note in CreateWidget. What
-	-- pays for losing it is the track: the spent part keeps three tenths of the
-	-- hue rather than a fifth, so a mob at ten percent reads as yours across the
-	-- bar's width instead of round its rim. That fraction is UI/Gauge.lua's.
-	local color, label = ThreatState(unit)
-	if widget.threatColor ~= color then
-		widget.threatColor = color
-		Gauge.Paint(widget.health, widget.health.track, color)
-		widget.threatText:SetTextColor(color[1], color[2], color[3])
-	end
-	if widget.shownThreat ~= label then
-		widget.shownThreat = label
-		widget.threatText:SetText(label)
-	end
+	PaintThreat(widget, unit)
 
 	-- The frame, which is reaction and nothing else: hostile draws chrome and
 	-- disappears, neutral draws amber and does not. Read here rather than under
@@ -1493,7 +1622,7 @@ local function UpdateWidget(widget, unit, guid)
 	-- The name is PaintWorth's, because what it says is mostly about the kill
 	-- and only partly about the target.
 	local isTarget = UnitIsUnit(unit, "target")
-	PaintWorth(widget, unit, isTarget)
+	PaintWorth(widget, unit, guid, isTarget)
 
 	local alpha = (isTarget or not haveTarget) and TARGET_ALPHA or OTHER_ALPHA
 	if widget.baseAlpha ~= alpha then
@@ -1818,6 +1947,14 @@ end
 -- a fading bar does half of it now and the other half when the ramp lands.
 local function Unhost(widget)
 	widget.plate = nil
+	-- The events go back with the plate. A pooled widget still registered
+	-- against a token the client has handed to another mob is a widget marked
+	-- dirty by somebody else's aura.
+	widget.unit = nil
+	dirty[widget] = nil
+	for index = 1, #WATCHED do
+		widget:UnregisterEvent(WATCHED[index])
+	end
 	-- Cleared before the reparent, so no anchor survives pointing at a plate
 	-- this widget is about to stop being a child of.
 	widget.hitbox:Hide()
@@ -1856,6 +1993,7 @@ local function StartFade(widget, from, goal)
 	widget.fadeGoal = goal
 	if ns.db.barsFade then
 		fading[widget] = true
+		Wake()
 	else
 		widget.fade = goal
 		fading[widget] = nil
@@ -1866,7 +2004,7 @@ end
 
 -- The ramp itself, run once per frame off the bars' own ticker.
 --
--- Per frame and not on the fifth of a second the readouts take, for the reason
+-- Per frame and not on the second the readouts take, for the reason
 -- the cast fill is: this is a moving edge, and a moving edge drawn five times a
 -- second is drawn in steps. The note at the head of EnemyBars.Sweep is the long
 -- version.
@@ -1899,6 +2037,27 @@ local function Fades(delta)
 				Cast.Clear(widget)
 				widget:Hide()
 			end
+		end
+	end
+end
+
+-- The widgets the events marked, drawn.
+--
+-- On the per-frame pass rather than on the verify below, so a mob that loses
+-- health or gains a debuff is redrawn on the next frame. What it costs when
+-- nothing has happened is the `next` on the first line.
+--
+-- The unit is checked again because a plate can be released between the frame
+-- an event marked its widget and the frame this reaches it.
+local function Flush()
+	if not next(dirty) then
+		return
+	end
+	for widget in pairs(dirty) do
+		dirty[widget] = nil
+		local unit = widget.unit
+		if unit and attached[unit] == widget then
+			UpdateWidget(widget, unit, widget.guid)
 		end
 	end
 end
@@ -1966,6 +2125,21 @@ local function Attach(unit)
 	StartFade(widget, 0, 1)
 	widget:Show()
 	attached[unit] = widget
+
+	-- The token this widget answers for, and the four events that say something
+	-- about it. Both go on together: Touched compares the token, so a widget
+	-- carrying events and no token would ignore every one of them.
+	widget.unit = unit
+	widget.guid = UnitGUID(unit)
+	for index = 1, #WATCHED do
+		ns.RegisterUnitEvent(widget, WATCHED[index], unit)
+	end
+
+	-- Marked rather than drawn here. A widget out of the pool still carries the
+	-- last mob's name and health, and the next frame is a great deal sooner than
+	-- the next verify.
+	dirty[widget] = true
+	Wake()
 end
 
 -- `now` means take it off the screen this frame, which is what a settings
@@ -2249,6 +2423,9 @@ function EnemyBars.Rebuild()
 		-- layout that no longer exists.
 		fading[widget] = nil
 		widget.fade, widget.fadeGoal = 1, 1
+		-- And off the sweep's set. A row hidden with its chamber still open
+		-- would be swept every frame for the length of a cast nobody can see.
+		Cast.Clear(widget)
 		widget:Hide()
 	end
 	if ns.db.bars and EnemyBars.Mode() == "plates" then
@@ -2266,36 +2443,33 @@ end
 --
 -- Split off EnemyBars.Update rather than folded into it, because the two are
 -- different kinds of thing running at different rates. Everything Update draws
--- is a readout, and a readout a fifth of a second stale is one nobody can
--- fault. A cast fill is a moving edge, and a moving edge is an animation: it is
+-- is a readout, and a readout drawn when the client says it moved is one nobody
+-- can fault. A cast fill is a moving edge, and a moving edge is an animation: it is
 -- drawn on the frame the screen is drawn on or it is drawn in steps. That
 -- argument is Swing/Gauges.lua's and the note at the head of it is the long
 -- version.
 --
--- What this costs when nothing is casting is the walk and one IsShown per bar,
--- because Cast.Sweep's first line is the hidden row returning. GetTime is asked
--- once here rather than once per bar.
+-- What this costs when nothing is casting is nothing at all. It used to walk
+-- every bar on the screen and ask each one's chamber whether it was shown,
+-- which at fifteen plates and sixty frames is about a thousand client calls a
+-- second to learn that nobody is casting. Cast.lua keeps the set of open
+-- chambers instead, so the walk is as long as the number of casts, and with no
+-- cast up the pass this runs on has stopped itself.
+--
+-- Both modes still, and no mode check. EnemyBars.Mode reads a CVar, which is a
+-- reasonable thing to do once a second and not sixty times, and the set holds
+-- whichever kind of widget has a chamber open.
 function EnemyBars.Sweep()
-	if not anchor or not ns.db.bars or not ns.db.barsCast then
-		return
-	end
-
-	-- Both lists, and no mode check. EnemyBars.Mode reads a CVar, which is a
-	-- reasonable thing to do five times a second and not sixty, and it is not
-	-- needed: `attached` is empty in list mode and every list widget is hidden
-	-- in plate mode, so the walk the mode would have skipped is the walk that
-	-- finds nothing anyway.
-	local now = GetTime()
-	for _, widget in pairs(attached) do
-		Cast.Sweep(widget, now)
-	end
-	for _, widget in ipairs(listWidgets) do
-		if widget:IsShown() then
-			Cast.Sweep(widget, now)
-		end
-	end
+	Cast.SweepAll()
 end
 
+-- Every bar read off the client from the top.
+--
+-- Once a second now rather than five times, because the four events registered
+-- in Attach are what says a bar has moved and this is the belt behind them: a
+-- mob whose events this client does not fire, a plate that should no longer
+-- carry a bar at all, and the targeted-by line, which is about who else is on
+-- the mob rather than about the mob. Everything else arrives marked.
 function EnemyBars.Update()
 	if not anchor or not ns.db.bars then
 		return
@@ -2329,23 +2503,52 @@ end
 local lastMode
 local events = CreateFrame("Frame")
 
+-- You pressed tab, and every bar on the screen has to say so.
+--
+-- Every bar on a plate marked, because which one is yours is a comparison
+-- across all of them rather than a fact about any one. The list takes the whole
+-- pass instead: a row there is found by position rather than by unit, so there
+-- is no widget to mark.
+local function Retarget()
+	if next(attached) then
+		BuildTargeters()
+		for _, widget in pairs(attached) do
+			dirty[widget] = true
+		end
+		Wake()
+	else
+		EnemyBars.Update()
+	end
+end
+
 -- What moves every frame, in one named function because a ticker takes one.
+--
+-- And what stops it. Three sets decide whether there is anything to do: the
+-- chambers Cast.lua holds, the ramps in `fading`, and the widgets an event has
+-- marked. All three empty is a settled screen, and a settled screen should not
+-- be paying for an OnUpdate. Wake is what starts it again, from Cast's Show,
+-- from StartFade and from the event handler.
 local function Moving(delta)
 	EnemyBars.Sweep()
 	Fades(delta)
+	Flush()
+	if moving and Cast.Idle() and not next(fading) and not next(dirty) then
+		moving:Stop()
+	end
 end
 
 -- The cast events, and what they are and are not for.
 --
 -- They are not what the feature is built on. ns.CastingInfo is read again for
--- every bar on every tick, so a client that never fires one of these for a
--- nameplate unit draws exactly the same bar a fifth of a second later. That is
--- deliberate after the Deep Wounds bug: a feature whose only source is an event
--- nobody has proved fires is a feature that draws nothing and says nothing.
+-- every bar on every reading, so a client that never fires one of these for a
+-- nameplate unit draws exactly the same bar a second later. That is deliberate
+-- after the Deep Wounds bug: a feature whose only source is an event nobody has
+-- proved fires is a feature that draws nothing and says nothing.
 --
--- What they buy is the fifth of a second. A cast that starts just after a tick
--- is 200 ms old before any bar admits it, and on a one and a half second window
--- that is an eighth of the reason to look.
+-- What they buy is that second, and it is worth more than it was: the reading
+-- behind them used to run five times as often. A cast that starts just after
+-- one is most of a one and a half second window old before any bar admits it,
+-- which is most of the reason to look.
 --
 -- Registered only while there is something to draw with them, because
 -- registered they wake this frame on every cast every unit the client tracks
@@ -2389,11 +2592,16 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("CVAR_UPDATE")
+-- Which bar is yours is the loudest thing on the screen and it is said on every
+-- bar at once, so it is the one readout the per-unit events cannot mark: the
+-- alpha on fifteen bars moves because you pressed tab. A second of every bar
+-- being bright is not a verify being late, it is the wrong picture.
+events:RegisterEvent("PLAYER_TARGET_CHANGED")
 if C_NamePlate then
 	events:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 	events:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-	-- The PvP flag going up or down on a unit with a plate. The tick would
-	-- catch a bar that has to go, a fifth of a second later; what it cannot
+	-- The PvP flag going up or down on a unit with a plate. The reading would
+	-- catch a bar that has to go, a second later; what it cannot
 	-- catch is a plate that arrived unflagged and has no bar for the tick to
 	-- look at, which is every enemy player who flags in front of you.
 	events:RegisterEvent("UNIT_FACTION")
@@ -2428,6 +2636,9 @@ events:SetScript("OnEvent", function(_, event, arg1)
 				Release(arg1)
 			end
 		end
+		return
+	elseif event == "PLAYER_TARGET_CHANGED" then
+		Retarget()
 		return
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		FlushPending()
@@ -2487,11 +2698,14 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	EnemyBars.Rebuild()
 
 	-- Two tickers off one frame, at two rates and under two gauges. The cast
-	-- fills and the arrival ramps run every frame, which is one answer to one
-	-- question: what on a bar moves faster than a fifth of a second. See
-	-- EnemyBars.Sweep. The list behind them is the fifth of a second.
-	ns.UI.Ticker(events, 0, "cast", Moving)
-	ns.UI.Ticker(events, REFRESH, "bars", EnemyBars.Update)
+	-- fills, the arrival ramps and the widgets an event marked run every frame,
+	-- and that pass stops itself when all three are empty. See EnemyBars.Sweep.
+	-- The reading behind them is the second.
+	moving = ns.UI.Ticker(events, 0, "cast", Moving)
+	-- Told where to send a chamber opening, now rather than at load, because the
+	-- tick it starts does not exist until the line above has run.
+	Cast.OnWake(Wake)
+	ns.UI.Ticker(events, VERIFY, "bars", EnemyBars.Update)
 end)
 
 -- A resolution change moves every size in this file at once, and a UI scale

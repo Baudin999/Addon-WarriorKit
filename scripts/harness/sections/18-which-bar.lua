@@ -37,10 +37,19 @@ local function Alpha(unit)
 	local bar = ns.EnemyBars.WidgetFor(unit)
 	return bar and bar:GetAlpha() or -1
 end
+-- One full reading of every bar, which is a second of frames now rather than a
+-- fifth of one: the bars are told about a mob by four unit events and read the
+-- client from the top once a second behind them. Four long frames rather than
+-- sixty short ones because nothing below is measuring a ramp with this.
 local function Tick()
 	for _ = 1, 4 do
-		barTicker.scripts.OnUpdate(barTicker, 0.05)
+		barTicker.scripts.OnUpdate(barTicker, 0.3)
 	end
+end
+
+-- One frame, which is what draws whatever an event just marked.
+local function Frame()
+	barTicker.scripts.OnUpdate(barTicker, 1 / 60)
 end
 
 Tick()
@@ -68,6 +77,43 @@ guids.target = guids.nameplate1
 Tick()
 print(("alpha  yours %.2f, theirs %.2f, and every bar %.2f with nothing targeted")
 	:format(Alpha("nameplate1"), Alpha("nameplate2"), 1))
+
+--------------------------------------------------------------------------
+-- Told rather than polled
+--
+-- The four states above are what the bars draw. What follows is when they draw
+-- it: the client says a mob's health, auras, threat or target moved and the
+-- bars mark that widget, so the change is on screen on the next frame rather
+-- than at the next reading. A pass that only ever ran on the tick would pass
+-- every check above and put all of them up to a second late.
+--------------------------------------------------------------------------
+
+guids.target = guids.nameplate2
+fire("PLAYER_TARGET_CHANGED")
+Frame()
+check(Alpha("nameplate2") > Alpha("nameplate1"),
+	"changing target did not reach the bars until the next reading")
+
+local hit = ns.EnemyBars.WidgetFor("nameplate1")
+_G.WarriorKitHealth.nameplate1 = 1200
+fire("UNIT_HEALTH", "nameplate1")
+Frame()
+check(hit.health:GetValue() == 1200,
+	("a mob taking a hit did not reach its gauge until the next reading: %s")
+		:format(tostring(hit.health:GetValue())))
+
+-- And the other way: an event for somebody else's mob is not this one's news.
+_G.WarriorKitHealth.nameplate1 = 800
+fire("UNIT_HEALTH", "nameplate2")
+Frame()
+check(hit.health:GetValue() == 1200,
+	"a bar redrew on an event that named another unit")
+
+_G.WarriorKitHealth.nameplate1 = nil
+guids.target = nil
+fire("PLAYER_TARGET_CHANGED")
+Tick()
+print("told   a target change and a health event are on screen the next frame, and neither reaches the other bar")
 
 --------------------------------------------------------------------------
 -- Arriving and leaving

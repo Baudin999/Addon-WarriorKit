@@ -162,12 +162,18 @@ for _, f in ipairs(frames) do
 end
 check(barTicker ~= nil, "the enemy bars registered no ticker")
 
+-- A quarter of a second a frame, which is what makes 200 of them 50 passes of
+-- the readouts. The bars read the client from the top once a second now and are
+-- told about a mob in between, so a twentieth of a second a frame would have
+-- measured four passes and called it fifty.
+local FRAME = 0.25
+
 local function churn(n)
 	collectgarbage("collect")
 	collectgarbage("stop")
 	local before = collectgarbage("count")
 	for _ = 1, n do
-		barTicker.scripts.OnUpdate(barTicker, 0.05)
+		barTicker.scripts.OnUpdate(barTicker, FRAME)
 	end
 	local after = collectgarbage("count")
 	collectgarbage("restart")

@@ -1628,8 +1628,8 @@ drawn on or it is drawn in steps.
 
 The enemy bars are on that list twice, and that is the arrangement rather than a
 duplicate. Two tickers hang off one frame: `EnemyBars.Sweep` every frame, which
-advances the cast fills and nothing else, and `EnemyBars.Update` at a fifth of a
-second, which is everything a bar says that is not moving. They were one handler
+advances the cast fills and nothing else, and `EnemyBars.Update` at one second,
+which reads everything a bar says that is not moving. They were one handler
 with a hand-written accumulator inside it, and the accumulator is now `UI.Ticker`
 for every part of the addon at once.
 
@@ -1729,9 +1729,11 @@ word. That is three frames at 5 Hz.
 
 What is knowingly still expensive: `ThreatState` walks every group member for
 every mob you are tanking, because the number it shows is the nearest
-challenger and there is no cheaper way to find it. Solo that is two threat
-queries per mob. In a forty man raid with fifteen plates it is about 2,900 a
-second, and the only way to cut it is to show a different number.
+challenger and there is no cheaper way to find it. Solo that is one threat
+query per mob, down from two. In a forty man raid with fifteen plates it is
+about 600 per reading, and a reading is once a second plus whatever
+`UNIT_THREAT_LIST_UPDATE` asks for, where it used to be five times a second
+regardless. The only way to cut it further is to show a different number.
 
 ## What the client will not let you do
 
@@ -3491,22 +3493,33 @@ that a chamber opened into the bar underneath. Spacing for the taller of two
 states is correct in both; spacing for the shorter is correct in neither.
 
 **The fill is drawn on every frame and the rest is not.** One `OnUpdate` runs
-`EnemyBars.Sweep`, which advances the fills and nothing else, and
-`EnemyBars.Update` behind the same fifth of a second accumulator it always had.
-The argument is the swing bar's and the note at the head of `Swing/Gauges.lua`
-is the long version: a readout a fifth of a second stale is one nobody can
-fault, and a moving edge drawn at five hertz is a moving edge that steps.
+`EnemyBars.Sweep`, which advances the fills and nothing else, drains the
+widgets the unit events have marked, and runs the arrival ramps.
+`EnemyBars.Update` sits behind a one second accumulator on the same frame and
+reads every bar off the client from the top. The argument is the swing bar's
+and the note at the head of `Swing/Gauges.lua` is the long version: a readout
+that is late by the time between two events is one nobody can fault, and a
+moving edge drawn at five hertz is a moving edge that steps.
+
+**The per-frame pass stops.** `Cast.lua` keeps the set of open chambers,
+`EnemyBars` keeps the ramps and the marked widgets, and a frame that finds all
+three empty gives the `OnUpdate` back. `Cast.OnWake` is how the cast row starts
+it again without knowing what a plate or a pool is; `StartFade` and the unit
+event handler start it directly. Before this the sweep walked every bar every
+frame and asked each chamber whether it was shown, which at fifteen plates and
+sixty frames is about a thousand client calls a second to learn that nobody is
+casting.
 
 **Nothing is kept between frames.** `ns.CastingInfo` is a live question with a
 live answer, so the tick asks it once per bar and `Cast.lua` draws what came
 back. A model keyed by unit token would have to survive nameplate tokens being
 recycled the moment a mob dies, which is a whole class of stale bar that cannot
 happen if there is no model. The `UNIT_SPELLCAST_*` events are registered too,
-and they are worth exactly one thing: the fifth of a second between a cast
-starting and the next tick, which on a one and a half second window is an eighth
-of the reason to look. They are not what the feature rests on. A client that
-never fires one of them for a nameplate unit draws the same bar a fifth of a
-second later, which is the lesson the debuff row paid for.
+and they are worth exactly one thing: the second between a cast starting and the
+next reading, which on a one and a half second window is the whole of the reason
+to look. They are not what the feature rests on. A client that never fires one
+of them for a nameplate unit draws the same bar a second later, which is the
+lesson the debuff row paid for.
 
 They are registered only while the row is on, the client answers, and the bars
 are on plates. Registered they wake the bars' frame on every cast every unit the
@@ -6323,6 +6336,16 @@ Everything below was written from the API contract and has never executed:
   a row that has stopped moving, or the performance tab reporting a tick count
   well off the interval beside it. What would settle it: `/wk perf` with a
   target up, and read the ticks per second against each rate.
+- **Whether the client fires UNIT_HEALTH, UNIT_AURA, UNIT_THREAT_LIST_UPDATE
+  and UNIT_TARGET for a `nameplateN` token.** The enemy bars register all four
+  against the plate's own unit when a bar attaches and redraw that bar on the
+  next frame when one arrives. Nothing installed here proves any of the four
+  reaches a nameplate token, and the same doubt is already written down for the
+  cast events on the same frames. A client that fires none of them draws every
+  bar off the reading that runs once a second instead, so a mistake looks like
+  health, debuff squares and the threat number all stepping once a second while
+  the cast fill under them stays smooth. What would settle it: pull one mob,
+  watch its health bar, and see whether it slides or steps.
 - **Whether splitting your own cast bar into two tickers still draws it.**
   `UnitFrames/PlayerCast.lua` ran one handler that polled the client at 5 Hz and
   moved the fill on every frame. It is two tickers now, timed separately as
@@ -6818,10 +6841,11 @@ Everything below was written from the API contract and has never executed:
   `UNIT_SPELLCAST_*` events fire for a `nameplateN` token, which of the eighth
   and seventh returns really carries `notInterruptible` on 2.5.6 and 1.15.9, and
   whether `plate.UnitFrame.castBar` is what these clients call the region the
-  strip walk now hides. The first two fail soft by design: the tick re-reads
-  every bar every fifth of a second whatever the events do, and a slot that
-  holds something other than a boolean is read as "this client does not say" and
-  every cast draws as one you can stop. The third does not fail soft: a region
+  strip walk now hides. The first two fail soft by design: the reading behind
+  the events re-reads every bar once a second whatever the events do, and a slot
+  that holds something other than a boolean is read as "this client does not
+  say" and every cast draws as one you can stop. The third does not fail soft: a
+  region
   the strip walk cannot find is Blizzard's cast bar still drawn under ours, and
   it announces itself. `/wk status` reports the other two, so one login answers
   them: whether a cast event has ever reached a bar, and what the client put in

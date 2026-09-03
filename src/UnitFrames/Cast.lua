@@ -109,6 +109,33 @@ function Cast.Seconds(tenths)
 	return held
 end
 
+-- Every widget whose chamber is open, as a set.
+--
+-- The per-frame sweep used to walk every bar on the screen and ask each one's
+-- chamber whether it was shown, which at fifteen plates and sixty frames is a
+-- thousand client calls a second to learn that nobody is casting. The set is
+-- the same answer kept rather than re-asked: Show puts a widget in it and
+-- Cast.Clear takes it out, so the walk is as long as the number of casts and
+-- empty is the normal state.
+local casting = {}
+
+-- Told when the set stops being empty, because the per-frame pass that walks it
+-- is a ticker this file does not own and a ticker with nothing to walk should
+-- not be running.
+--
+-- A function handed in rather than a call into the bars, because this file
+-- knows nothing about a plate, a list or a pool and should not learn.
+local wake
+
+function Cast.OnWake(fn)
+	wake = fn
+end
+
+-- Whether there is anything to sweep, for the owner of that ticker.
+function Cast.Idle()
+	return next(casting) == nil
+end
+
 local NAME_TEXT = Color.text.name
 local TIMER_TEXT = Color.text.value
 local OPEN = Color.cast.open
@@ -183,6 +210,7 @@ function Cast.Clear(widget)
 		return
 	end
 	box.shownSpell, box.shownTenths, box.look, box.preview = nil, nil, nil, nil
+	casting[widget] = nil
 	box:Hide()
 	Chamber(box, false)
 end
@@ -228,8 +256,8 @@ function Cast.Fit(widget, unit, px, onPlate)
 	-- against the old ones and the guards would keep it. Cleared rather than
 	-- reset field by field, which hides a cast that was running: a layout
 	-- happens on a setting change, a resolution change or a rebuild, and losing
-	-- a fifth of a second of one cast bar to any of those costs nothing that a
-	-- second list of fields to keep true would not cost more of.
+	-- one cast bar until the next reading of it costs nothing that a second list
+	-- of fields to keep true would not cost more of.
 	Cast.Clear(widget)
 
 	-- Under the health gauge, one seam below it, and squared off against that
@@ -258,8 +286,8 @@ end
 -- the reason EnemyBars.CameraState counts: nothing installed on these clients
 -- proves UNIT_SPELLCAST_START fires for a `nameplateN` token, and the honest
 -- answers are "none yet" and a number, not a claim either way. Losing the
--- events costs a fifth of a second and nothing else, so this is a line in the
--- status rather than a warning.
+-- events costs a second and nothing else, so this is a line in the status
+-- rather than a warning.
 local heard = 0
 
 --------------------------------------------------------------------------
@@ -369,6 +397,16 @@ local function Show(box, name, start, finish, channel, immune)
 		Gauge.Paint(box.bar, box.bar.track, look)
 	end
 
+	-- Into the set before the frame is shown, and the ticker woken with it. A
+	-- chamber that opened without either would draw its first fill on whatever
+	-- frame something else happened to start the pass.
+	if not casting[box.widget] then
+		casting[box.widget] = true
+		if wake then
+			wake()
+		end
+	end
+
 	if not box:IsShown() then
 		box:Show()
 	end
@@ -422,10 +460,10 @@ end
 -- steps. This one crosses the bar in a second and a half rather than in three
 -- and a half, so it steps harder than the swing bar did.
 --
--- A cast that has run out of time is over here rather than at the next tick.
--- The client will say so within a fifth of a second, but a fifth of a second is
--- what a bar sitting full at the end of a cast looks like, and that is the
--- frame where you are deciding whether you still have time to press anything.
+-- A cast that has run out of time is over here rather than at the next reading.
+-- The client will say so within a second, and a second is what a bar sitting
+-- full at the end of a cast looks like, which is the frame where you are
+-- deciding whether you still have time to press anything.
 function Cast.Sweep(widget, now)
 	local box = widget.cast
 	if not box or not box:IsShown() then
@@ -433,9 +471,9 @@ function Cast.Sweep(widget, now)
 	end
 
 	-- A preview rolls over instead of ending. Refreshed here rather than left to
-	-- the tick, because the tick is up to a fifth of a second away and a fifth
-	-- of a second of empty row on every loop is exactly the flicker a preview
-	-- exists to rule out.
+	-- the reading, because the reading is up to a second away and a second of
+	-- empty row on every loop is exactly the flicker a preview exists to rule
+	-- out.
 	if box.preview and box.finish - now <= 0 then
 		Show(box, Cast.Preview(now))
 	end
@@ -454,6 +492,21 @@ function Cast.Sweep(widget, now)
 	if box.shownTenths ~= tenths then
 		box.shownTenths = tenths
 		box.timer:SetText(Cast.Seconds(tenths))
+	end
+end
+
+-- Every open chamber, swept.
+--
+-- The clock is read once and only where there is a chamber to read it for: a
+-- screen with nothing casting costs one `next` and no client call at all, which
+-- is what lets the pass this runs on stop itself.
+function Cast.SweepAll()
+	if next(casting) == nil then
+		return
+	end
+	local now = GetTime()
+	for widget in pairs(casting) do
+		Cast.Sweep(widget, now)
 	end
 end
 

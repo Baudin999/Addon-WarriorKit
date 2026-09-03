@@ -37,9 +37,11 @@ local tags = {}
 
 local UnitLevel = UnitLevel
 
-function Level.Tag(unit)
-	local level = UnitLevel(unit) or 0
-	local suffix = CLASSIFICATION[ns.Classification(unit) or "normal"] or ""
+-- The tag for a level and a classification already in hand. Split out of
+-- Level.Tag so a caller that has both can reach the cache without asking the
+-- client for them again.
+local function TagFor(level, classification)
+	local suffix = CLASSIFICATION[classification or "normal"] or ""
 	local bySuffix = tags[suffix]
 	if not bySuffix then
 		bySuffix = {} -- allocates: once per classification, and the lookup above is the guard the scan cannot see
@@ -51,6 +53,22 @@ function Level.Tag(unit)
 		bySuffix[level] = tag
 	end
 	return tag
+end
+
+function Level.Tag(unit)
+	return TagFor(UnitLevel(unit) or 0, ns.Classification(unit))
+end
+
+-- The tag and the level behind it, for a caller that keeps the pair against a
+-- GUID. Neither half moves under one GUID: a mob is the level and the
+-- classification it spawned at, so the two client calls behind them belong to
+-- the moment a bar changes mobs rather than to the tick.
+--
+-- Two returns rather than a table, because this is reached from a nameplate
+-- attaching and there is one of those per plate.
+function Level.Tagged(unit)
+	local level = UnitLevel(unit) or 0
+	return TagFor(level, ns.Classification(unit)), level
 end
 
 -- What killing it pays, on the client's own quest scale, which is also its XP
@@ -97,10 +115,20 @@ end
 -- because WorthOf is handed a level by the quest log and a quest cannot be
 -- tagged out from under you.
 function Level.Worth(unit)
+	return Level.WorthAt(unit, UnitLevel(unit) or 0)
+end
+
+-- The same two halves against a level the caller already holds.
+--
+-- The tap is asked live and the level is not, which is the whole split: a mob
+-- keeps the level it spawned at and can be tagged out from under you between
+-- two frames. A caller that cached the answer whole would go on saying a kill
+-- pays until it next changed mobs.
+function Level.WorthAt(unit, level)
 	if ns.TapDenied(unit) then
 		return Color.xp.none
 	end
-	return Level.WorthOf(UnitLevel(unit) or 0)
+	return Level.WorthOf(level)
 end
 
 -- Whether the kill pays anything at all: the five colour scale collapsed to

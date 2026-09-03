@@ -470,8 +470,11 @@ local function Poll()
 	end
 end
 
+-- The bar is down almost all of the time, so the question that costs nothing is
+-- asked first. Reading the clock and then finding there was nothing to time it
+-- against is one client call per frame for the life of the session.
 local function Sweep()
-	if built then
+	if built and frame:IsShown() then
 		PlayerCast.Sweep(GetTime())
 	end
 end

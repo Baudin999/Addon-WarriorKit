@@ -100,7 +100,10 @@ function Threat.State(unit)
 		return nil
 	end
 
-	local isTanking, status = ns.Threat("player", unit)
+	-- All three returns off one call. The third was read a second time at the
+	-- foot of this function, which asked the client the same question twice per
+	-- mob per tick and threw the first answer away.
+	local isTanking, status, yours = ns.Threat("player", unit)
 	if status == nil then
 		return Color.threat.idle, nil, nil
 	end
@@ -115,8 +118,7 @@ function Threat.State(unit)
 
 	-- On somebody else, which is always red: the mob is on the wrong person and
 	-- how far behind you are does not change that.
-	local _, _, percent = ns.Threat("player", unit)
-	return Color.threat.off, percent or 0, nil
+	return Color.threat.off, yours or 0, nil
 end
 
 -- Who a mob is actually swinging at, which is the honest half of the question

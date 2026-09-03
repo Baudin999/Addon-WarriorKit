@@ -55,6 +55,32 @@ reads a line.
 Turning the breakdown record off takes effect from the next line rather than
 from the next login, which is what its switch always said it did.
 
+### The enemy bars are told rather than asked
+
+Every bar used to read the client from the top five times a second: the mob's
+health, its level, its elite marker, forty aura slots, the threat table, who
+was casting. Nothing about a mob standing still had changed and the bar asked
+anyway. Fifteen plates in a pull came to about two thousand four hundred
+questions a second to redraw fifteen bars that were already right.
+
+The client says when a mob's health, auras, threat or target moves, so a bar
+now asks to hear those four about its own plate and marks itself when one
+arrives. The next frame draws what is marked, which is sooner than the fifth
+of a second the poll used to take. A full reading of every bar still runs
+behind them, once a second, for the plate that should no longer carry a bar
+and for a client that fires none of the four. Pressing tab moves the bright
+bar on the frame you press it.
+
+The cast rows stopped being swept as well. Every frame walked every bar to ask
+whether its chamber was open, which on a full screen of plates is a thousand
+questions a second to find no casts; the open chambers are kept in a list now.
+With nothing casting, nothing arriving and nothing leaving, the bars hand
+their per-frame work back to the game entirely. Three smaller ones went with
+it: the threat line is built when the number or the name in it moves rather
+than built and then compared, the threat API is asked once per mob instead of
+twice, and your own cast bar asks whether it is on screen before it asks what
+time it is.
+
 ### One key on the bar and under the cursor
 
 A heal on a square and the same key on the mouseover list was a key that
