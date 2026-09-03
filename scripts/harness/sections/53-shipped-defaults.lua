@@ -167,7 +167,10 @@ check(state.reloads == reloads + 1,
 ----------------------------------------------------------------------
 
 if window then
-	ns.Options.Show()
+	-- Open on the page the button is on, not merely open. A row is put back in
+	-- step when the page it sits on is showing and at no other time, so a label
+	-- read off a page nobody is looking at is the label it had last time.
+	ns.Options.Open("Shipped defaults")
 
 	local button
 	for _, entry in ipairs(window.indexed) do

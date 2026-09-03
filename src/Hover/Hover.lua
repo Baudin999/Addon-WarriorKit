@@ -31,7 +31,7 @@ ns.Hover = Hover
 
 -- Twelve, which is a full action bar's worth of keys and more than anybody
 -- holds in their hands at once. The ceiling exists because the sheet and the
--- panel both build their rows once at login and show the ones that are used:
+-- panel both build their rows once and show the ones that are used:
 -- a row that appears when you bind a key has to already be there.
 local MAX = 12
 

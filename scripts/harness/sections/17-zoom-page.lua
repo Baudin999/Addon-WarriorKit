@@ -163,12 +163,33 @@ if window then
 				("%s put %.0f pixels of window on a %d pixel screen")
 					:format(where, window.height * window.zoom, state.SCREEN_H))
 
-			-- The zoom multiplies the scale and must not reach the layout, so
-			-- every row on the section showing is still whole units.
-			local group = window.groups[1]
-			for _, cell in ipairs(group.sections[group.current or 1].stack.cells) do
-				check(whole(cell.height),
-					("%s made a row %.3f units tall"):format(where, cell.height))
+			-- The zoom multiplies the scale and must not reach the layout. A row
+			-- is measured in the window's own units and then snapped to the pixel
+			-- grid, so at every stop a row is a whole number of physical pixels.
+			-- It is not a whole number of units at a stop that is not exact and it
+			-- must not be: three of the twenty six stops keep a unit on a pixel,
+			-- the page says which three, and rounding a row to the unit at the
+			-- other twenty three is how a hairline lands on two thirds of a pixel.
+			--
+			-- The section that is showing, found rather than assumed. This took
+			-- the first group whatever was up, and the first group was not up: it
+			-- was holding the heights it was last laid out at, which were the ones
+			-- from zoom 1, so the walk asserted the same twenty numbers twenty six
+			-- times and never measured a stop at all.
+			local showing
+			for _, other in ipairs(window.groups) do
+				for _, section in ipairs(other.sections) do
+					if section.stack.frame:IsShown() then
+						showing = showing or section
+					end
+				end
+			end
+			check(showing ~= nil, ("%s left no section showing"):format(where))
+			local px = showing and ns.UI.Pixel(showing.stack.frame) or 1
+			for _, cell in ipairs(showing and showing.stack.cells or {}) do
+				check(whole(cell.height / px),
+					("%s made a row %.3f units tall, which is %.3f pixels")
+						:format(where, cell.height, cell.height / px))
 			end
 
 			local said = Settings.Describe("panelZoom")

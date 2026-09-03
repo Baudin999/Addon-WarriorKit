@@ -361,11 +361,12 @@ do
 	local BOOK = _G.WarriorKitSpellBookIds
 	local baseline = Cooldowns.Count()
 
-	-- Standing on the page, because the window lays out the section you are
-	-- looking at and no other. That is the state a drag happens in and it is not
-	-- an arrangement for the test: a square nobody can see is a square nobody
-	-- can drop anything on.
-	local window = ns.UI.Windows[1]
+	-- Open, and standing on the page, because the window lays out the section
+	-- you are looking at and no other and puts the rows on it back in step as it
+	-- goes. That is the state a drag happens in and it is not an arrangement for
+	-- the test: a square nobody can see is a square nobody can drop anything on.
+	ns.Options.Show()
+	local window = ns.Options.Window()
 	for index = 1, #window.groups do
 		local group = window.groups[index]
 		for section = 1, #group.sections do
@@ -375,7 +376,6 @@ do
 			end
 		end
 	end
-	ns.Options.Refresh()
 	check(Page.Square(1) ~= nil, "the page built no squares to drag")
 
 	local square = Page.Square

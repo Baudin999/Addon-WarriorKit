@@ -50,7 +50,11 @@ do
 	local BOOK = _G.WarriorKitSpellBookIds
 	local baseline = Upkeep.Count()
 
-	local window = ns.UI.Windows[1]
+	-- Open, and standing on the page. A square is in step only while the page it
+	-- is on is showing, because a row on a page nobody is looking at is left
+	-- alone, so the window has to be up before any of this means anything.
+	ns.Options.Show()
+	local window = ns.Options.Window()
 	for index = 1, #window.groups do
 		local group = window.groups[index]
 		for section = 1, #group.sections do
@@ -60,7 +64,6 @@ do
 			end
 		end
 	end
-	ns.Options.Refresh()
 	check(Page.Square(1) ~= nil, "the page built no squares to drag")
 
 	local function drop(w, book)
@@ -193,7 +196,7 @@ inCombat.player = nil
 own.main = false
 tick()
 check(Nag.Shown() > 0, "nothing is drawn to click")
-local window = ns.UI.Windows[1]
+local window = ns.Options.Window()
 ns.Options.Hide()
 local press = Nag.Icon(1):GetScript("OnMouseUp")
 check(press ~= nil, "a nag square has no click")

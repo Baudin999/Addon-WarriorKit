@@ -6296,6 +6296,23 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- **Whether the first press of `/wk` is a noticeable pause.** The settings
+  window is no longer built at login: the first thing that opens it makes the
+  whole of it, which is about a thousand frames, eighteen hundred textures and
+  one reading of every row on the page it lands on. Login is that much quicker
+  and the cost moved rather than went away. A mistake looks like a hitch of a
+  frame or two on the first `/wk` of a session, worst mid-pull, and nothing at
+  all on every press after it. What would settle it: `/wk perf`, then `/wk`
+  from a standstill and again during a fight.
+- **Whether a row on a page you are not looking at can go stale.** A row is put
+  back in step when its page comes up and at no other time, so a setting
+  changed by a slash word while the window sits on another page is read when
+  you click over to that page. A mistake looks like a number in the window
+  disagreeing with what `/wk status` says, and correcting itself the moment you
+  leave the page and come back. What would settle it: open the window on one
+  page, change something with a slash word, then click to the page that shows
+  it.
+
 - **Whether `hooksecurefunc` takes on a Blizzard frame's `SetParent`.** It is
   what replaced the once-a-second parent check: `Core/Attic.lua` hooks the call
   on every frame it cages, and the walk that used to catch a foreign re-parent

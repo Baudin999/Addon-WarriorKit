@@ -111,10 +111,11 @@ end
 -- the townsfolk, the vendors and the trainers, which is where Questie's own
 -- dropdown breaks into its two submenus.
 --
--- Built out of the list at the panel's build, which is login, and Questie's
--- lists are saved variables it fills on its first ever login, so on every
--- login after that the rows are there. On the first they are not, and the
--- page says so instead of drawing an empty checklist that looks like a bug.
+-- Built out of the list at the panel's build, which is the first time anybody
+-- opens the options window, and Questie's lists are saved variables it fills
+-- on its first ever login, so on every login after that the rows are there. On
+-- the first they are not, and the page says so instead of drawing an empty
+-- checklist that looks like a bug.
 local function PlacesPage(ui)
 	ui.Section("Places", "Windows")
 	ui.Lede("The flight masters, innkeepers, mailboxes, trainers and vendors Questie can draw, ticked on here rather than in the dropdown behind its minimap button.")

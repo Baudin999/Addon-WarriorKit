@@ -397,8 +397,8 @@ function Cooldowns.All()
 			:format(ns.Class.Spec.Says(), #long, MAX_CLASS))
 
 	-- Resolved as each one is taken rather than only in Rebuild, because the
-	-- options page is built at login off this list and names its rows with the
-	-- client's own name for each spell. A page built a moment before the first
+	-- options page is built off this list and names its rows with the client's
+	-- own name for each spell. A page built a moment before the first
 	-- rebuild would carry the entry's key instead, and a label is a string the
 	-- page keeps rather than a question it asks again.
 	shipped = {}

@@ -7,8 +7,23 @@ local UI = ns.UI
 local M = UI.Metric
 
 -- The options window. It builds one page of its own, On and off, and gets the
--- rest at PLAYER_LOGIN by walking the registry, handing each feature the widget
--- kit from UI/Widgets.lua and letting it draw its own rows.
+-- rest by walking the registry, handing each feature the widget kit from
+-- UI/Widgets.lua and letting it draw its own rows.
+--
+-- None of that happens until somebody opens it.
+--
+-- It happened at PLAYER_LOGIN until now, and it is about a thousand frames,
+-- eighteen hundred textures and one run of every getter behind every row on
+-- sixty five pages, for a window most sessions never open. The window is made
+-- by the first Show, the first Open or the first Toggle, and a session that
+-- never asks for it pays nothing at all. Anything that wants the window rather
+-- than a page of it asks Options.Window, which answers nil until then.
+--
+-- A row is put back in step when the page it is on comes up, and at no other
+-- time. UI/Widgets.lua skips a widget that is not on the screen, so the getters
+-- behind the other sixty four pages, which walk your bags, your spellbook, your
+-- factions and Questie's lists, no longer run because something moved on the
+-- page you are looking at.
 --
 -- One piece of navigation, and it is not the registry.
 --
@@ -221,7 +236,11 @@ local function ShowSection(index)
 	-- Back to the top. Carrying the last section's scroll position into a
 	-- section of a different length lands you somewhere arbitrary in it.
 	view:ScrollTo(0)
-	Reflow()
+	-- The rows on this page, put back in step now that they are on the screen.
+	-- Nothing refreshed them while they were hidden, and this is where that debt
+	-- is paid: shown first, asked second, measured last, which is also the order
+	-- a wrapped lede needs to be able to report its own height.
+	Options.Refresh()
 	return true
 end
 
@@ -388,7 +407,7 @@ end
 --------------------------------------------------------------------------
 
 -- A section, filed under the group it named. A group that does not exist is a
--- login error rather than a section that quietly lands in a default, because a
+-- build error rather than a section that quietly lands in a default, because a
 -- default is how the junk drawers got filled in the first place.
 local function AddSection(host, title, group)
 	local into = byName[group]
@@ -439,7 +458,7 @@ local function BuildFeature(feature)
 	-- it, because On and off quotes the lede of the page a part's switch is on
 	-- under that switch and has nowhere else to read it from.
 	--
-	-- One per section, and a second is a login error rather than the first one
+	-- One per section, and a second is a build error rather than the first one
 	-- quietly overwritten. A page that wants two ledes wants two sections, which
 	-- is most of what stops the notes growing back.
 	host.Lede = function(text)
@@ -463,7 +482,7 @@ local function BuildFeature(feature)
 	-- A part that is not built on this character opens nothing, and that is the
 	-- whole of how a page disappears: no rail line, no switch on On and off, and
 	-- no tick box writing a setting nothing here reads. Anything else opening
-	-- nothing is a panel that lost its sections and is still a login error.
+	-- nothing is a panel that lost its sections and is still a build error.
 	assert(host.opened or not Options.SwitchAvailable(feature),
 		("%s has a panel and opened no section"):format(feature.name))
 	-- A page named for the switch that the part never opened is a switch drawn
@@ -563,7 +582,7 @@ end
 -- on the buff row. It is dropped rather than folded open onto nothing. A fixed
 -- group with none is a section that lost its group in a refactor, which is a
 -- rail entry that does not work and an empty page rather than a mistake anybody
--- would see, so that one is a login error.
+-- would see, so that one is a build error.
 local function FillRail()
 	local mine = byName[Options.CLASS]
 	if mine and #mine.sections == 0 then
@@ -603,15 +622,14 @@ local function Build()
 			apply()
 			window:Resize(WINDOW_W, WINDOW_H)
 			Relayout()
-			-- Every row, not only the section showing. Relayout reflows the one
-			-- section on screen, and a row that snapped a measurement to the
-			-- pixel of the old zoom keeps it until something asks it again. The
-			-- tab strip inside the Loadouts page is the one that shows: its
-			-- buttons are rounded to whole pixels when they are laid out, so
-			-- after a size change they sat on thirds of a pixel until you
-			-- clicked onto that page. This costs one walk of the rows on a size
-			-- change and nothing at all otherwise, which is the right price for
-			-- a settings window.
+			-- The section on screen. A row that snapped a measurement to the
+			-- pixel of the old zoom keeps it until something asks it again, and
+			-- what asks is this on the page you are looking at and the refresh
+			-- every other page gets on its way up. The tab strip inside the
+			-- Loadouts page is the one that shows: its buttons are rounded to
+			-- whole pixels when they are laid out, so after a size change they
+			-- sat on thirds of a pixel until you clicked onto that page. The
+			-- click that takes you there is what puts them right now.
 			Options.Refresh()
 		end,
 	})
@@ -710,9 +728,20 @@ local function Build()
 	window.rail, window.view, window.groups, window.kits = rail, view, groups, kits
 	window.finder, window.indexed, window.header = finder, indexed, header
 
+	-- The first page, chosen but not refreshed: the window is still hidden and
+	-- a row measured behind a hidden frame measures wrong. Options.Show shows it
+	-- and then asks, in that order.
 	rail:Select(1)
-	Options.Refresh()
+end
 
+-- The window, made the first time anything asks to see it. Every way in goes
+-- through here: the slash word, the button in the Escape menu, a nag square
+-- naming its own page, and the harness.
+local function Ensure()
+	if not window then
+		Build()
+	end
+	return window
 end
 
 --------------------------------------------------------------------------
@@ -776,7 +805,11 @@ end
 --------------------------------------------------------------------------
 
 function Options.Refresh()
-	if not window then
+	-- Nothing to put back in step while the window is shut, and forty nine
+	-- places in the addon call this. Every one of them used to walk every row on
+	-- every page whether or not anybody could see the answer, and a slash
+	-- command that moves one number is one of them.
+	if not window or not window:IsShown() then
 		return
 	end
 	for index = 1, #kits do
@@ -791,13 +824,13 @@ function Options.Refresh()
 	Reflow()
 end
 
+-- Neither of these refreshes afterwards. The rail says which section it chose,
+-- and a section coming up refreshes the rows on it as part of coming up.
 function Options.SelectGroup(index)
 	if not window then
 		return
 	end
-	if rail:Select(index) then
-		Options.Refresh()
-	end
+	rail:Select(index)
 end
 
 -- One section of the group already selected, chosen through the rail rather
@@ -807,20 +840,16 @@ function Options.SelectSection(index)
 	if not window then
 		return
 	end
-	if rail:Select(active, index) then
-		Options.Refresh()
-	end
+	rail:Select(active, index)
 end
 
 -- One page, by the title of its section, shown. What a thing on the screen
 -- calls when it wants to be explained: a nag square opens the page the row is
 -- set up on rather than the page the window was last left on. A title nothing
--- opened is a login error, because the caller wrote it and a page that quietly
--- fell back to the front would be a click that appears to do nothing.
+-- opened raises, because the caller wrote it and a page that quietly fell back
+-- to the front would be a click that appears to do nothing.
 function Options.Open(title)
-	if not window then
-		return false
-	end
+	Ensure()
 	for _, group in ipairs(groups) do
 		for _, section in ipairs(group.sections) do
 			if section.title == title then
@@ -834,9 +863,7 @@ function Options.Open(title)
 end
 
 function Options.Show()
-	if not window then
-		return
-	end
+	Ensure()
 	-- Shown before refreshed, because a lede measures its own wrapped height and
 	-- a hidden font string is not obliged to answer.
 	window:Show()
@@ -855,18 +882,19 @@ function Options.Hide()
 end
 
 function Options.Toggle()
-	if not window then
-		return
-	end
-	if window:IsShown() then
+	if window and window:IsShown() then
 		Options.Hide()
 	else
 		Options.Show()
 	end
 end
 
-local events = CreateFrame("Frame")
-events:RegisterEvent("PLAYER_LOGIN")
-events:SetScript("OnEvent", function()
-	Build()
-end)
+-- The window, or nil where nothing has opened it yet.
+--
+-- Handed out for the harness, which drives the panel through this rather than
+-- through UI.Windows. The options window used to be the first window the addon
+-- made and so was always UI.Windows[1]; it is made by whoever opens it now, and
+-- on a session that never does it is not in that list at all.
+function Options.Window()
+	return window
+end

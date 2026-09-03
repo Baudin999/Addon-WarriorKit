@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### The settings window is built when you open it
+
+The window and everything in it used to be made at login: about a thousand
+frames, eighteen hundred textures and sixty eight pages of rows, for a window
+most evenings never open. Worse than the frames was what the rows asked on the
+way up. Building the Chores page walked every slot in your bags twice and asked
+Questie about each item, the Action bars page walked your whole spellbook, the
+Windows page counted seventy eight maps and about five hundred dungeon entries,
+and the Character page read every worn item, your durability, every weapon
+skill and every faction you have met. All of that ran before you had seen a
+single pixel of it.
+
+Nothing is built now until you open the window, and a page's rows are read when
+that page comes up rather than all sixty eight at once. Changing a setting, from
+the window or from a slash command, puts the page you are looking at back in
+step and leaves the other sixty seven alone; they are read on their way up, so
+what you see is never stale. Turning a check box on used to run all of the above
+again, on every click, on every page.
+
+Logging in is quicker, the first press of `/wk` costs what login used to, and
+every press after it costs one page.
+
 ### The bars stop asking
 
 The action squares used to read every slot on every bar ten times a second,

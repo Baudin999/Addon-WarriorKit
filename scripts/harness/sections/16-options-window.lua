@@ -31,8 +31,15 @@ local state = H.state
 local plain, ns, check = H.plain, H.ns, H.check
 local wrapped = H.carry.wrapped
 
-local window = ns.UI.Windows[1]
-check(window ~= nil, "no window was built")
+-- Nothing has opened it, so nothing has built it. That is the whole of the
+-- deferral and it is the one part of it no amount of reading the source
+-- settles: fifteen sections of login and play have run above this line, and if
+-- any of them reached a getter on a page the window would already be here.
+check(ns.Options.Window() == nil,
+	"the options window was built before anything asked to see it")
+ns.Options.Show()
+local window = ns.Options.Window()
+check(window ~= nil, "showing the options window built no window")
 
 local function whole(value)
 	return math.abs(value - math.floor(value + 0.5)) < 1e-6
@@ -53,8 +60,6 @@ local NO_SWITCH = {
 }
 
 if window then
-	ns.Options.Show()
-
 	check(math.abs(ns.UI.Pixel(window.frame) - 1) < 1e-9,
 		("the window is not on the grid: one pixel is %.4f units"):format(ns.UI.Pixel(window.frame)))
 	check(whole(window.width) and whole(window.height),
@@ -454,6 +459,58 @@ if window then
 	check(ns.Options.Find("Swing timer") > 0, "no row matched the section title Swing timer")
 	check(ns.Options.Find("skin") > 0, "no row matched the slash word skin")
 	ns.Options.Find("")
+
+	-- What a refresh reaches, and what it leaves alone.
+	--
+	-- Forty nine places in the addon call Options.Refresh, and every one of them
+	-- used to run every getter on every page: the bag walk behind what clear
+	-- would find, the spellbook walk behind the spell ranks, Questie's three
+	-- menus behind the places, the faction list behind your standings. A row is
+	-- asked when the page it is on is showing and at no other time, and nothing
+	-- about the shape of the code says so, which is why it is counted here.
+	local function firstRow(section)
+		for _, cell in ipairs(section.stack.cells) do
+			if cell.frame and cell.frame.Refresh then
+				return cell.frame
+			end
+		end
+		return nil
+	end
+
+	local here, away, awayGroup, awaySection
+	for at, group in ipairs(window.groups) do
+		for index, section in ipairs(group.sections) do
+			local row = firstRow(section)
+			if row and section.stack.frame:IsShown() then
+				here = here or row
+			elseif row and not away then
+				away, awayGroup, awaySection = row, at, index
+			end
+		end
+	end
+	check(here ~= nil and away ~= nil, "no pair of rows to count a refresh over")
+
+	if here and away then
+		local ranHere, ranAway = 0, 0
+		local wasHere, wasAway = here.Refresh, away.Refresh
+		here.Refresh = function() ranHere = ranHere + 1 return wasHere() end
+		away.Refresh = function() ranAway = ranAway + 1 return wasAway() end
+
+		ns.Options.Refresh()
+		check(ranHere == 1,
+			("a refresh asked the row on the page that is up %d times"):format(ranHere))
+		check(ranAway == 0,
+			("a refresh asked a row on a page nobody is looking at %d times"):format(ranAway))
+
+		-- And the other half, which is what makes the first half safe: the page
+		-- that was skipped is put back in step on its way up, so nothing anybody
+		-- can read is ever stale.
+		ns.Options.SelectGroup(awayGroup)
+		ns.Options.SelectSection(awaySection)
+		check(ranAway > 0, "the page came up and the rows on it were never asked")
+
+		here.Refresh, away.Refresh = wasHere, wasAway
+	end
 
 	check(wrapped > 0, "not one string in the whole panel wrapped, so nothing was measured")
 	check(tallest > window.view.height,

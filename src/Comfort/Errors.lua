@@ -24,8 +24,8 @@ local ADDON, ns = ...
 local Errors = {}
 ns.Errors = Errors
 
--- How many rows the panel offers. The list is a fixed pool built once at login
--- and shown a row at a time, the same shape the debuff list on the enemy bars
+-- How many rows the panel offers. The list is a fixed pool built once and
+-- shown a row at a time, the same shape the debuff list on the enemy bars
 -- has, so this is a real ceiling rather than a page size.
 local ROWS = 14
 

@@ -726,9 +726,18 @@ end
 --
 -- Every row registers what puts it back in step with whatever it is showing, so
 -- one refresh after any change covers the lot, no matter whether the change came
--- from a click here or from a slash command. Rows on a section nobody is looking
--- at refresh too: they cost nothing, and it means opening a section never shows
--- a stale value.
+-- from a click here or from a slash command.
+--
+-- Only the rows on a page that is on the screen. A refresh is one getter per row
+-- and the getters are not cheap: they walk your bags, your spellbook, your
+-- factions and Questie's lists. The options window holds sixty five pages and
+-- shows one of them, so a click on a tick box used to run sixty four pages of
+-- client calls whose answers nobody could see. The page that comes up next is
+-- refreshed as it comes up, which is where the work belongs.
+--
+-- Nothing refreshes at the moment it is built either. Every row used to run its
+-- getter as it was made and then again on the first refresh after, which is one
+-- whole extra walk of every getter in the window for nothing.
 --------------------------------------------------------------------------
 
 --------------------------------------------------------------------------
@@ -1059,18 +1068,23 @@ function UI.Kit(host)
 	end
 
 	local function Remember(frame, refresh)
+		-- Registered and left alone. What puts it in step is the page it sits on
+		-- being shown; see the note on refreshing above.
 		frame.Refresh = refresh
 		kit.widgets[#kit.widgets + 1] = frame
-		if refresh then
-			refresh()
-		end
 		return frame
 	end
 
 	function kit.Refresh()
 		for index = 1, #kit.widgets do
 			local widget = kit.widgets[index]
-			if widget.Refresh then
+			-- The column the row is in rather than the row, and IsVisible rather
+			-- than IsShown, so the question is whether the page is on the screen
+			-- and not whether this one row is. A row that has nothing to say
+			-- hides itself, and it does it in the refresh below: skipped for
+			-- being hidden, it would never come back.
+			local page = widget:GetParent()
+			if widget.Refresh and (page == nil or page:IsVisible()) then
 				widget.Refresh()
 			end
 		end
@@ -1626,8 +1640,8 @@ function UI.Kit(host)
 
 	-- A strip of buttons where one is chosen
 	--
-	-- The window's own tab strip is chrome: it is built once at login out of
-	-- the headers a feature writes, and it cannot grow. This one is a control.
+	-- The window's own tab strip is chrome: it is built once out of the headers
+	-- a feature writes, and it cannot grow. This one is a control.
 	-- The list it shows is a setting, so it grows and shrinks while the window
 	-- is open, and it lays out from a pool rather than making a button per
 	-- refresh. Blizzard's character sheet puts the same strip along the foot of
