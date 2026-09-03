@@ -181,6 +181,15 @@ function H.tipSettle()
 	return ns.UI.Tooltip.IsShown()
 end
 
+-- The hand, held still on a piece of chrome until its box opens. A tab, a chip
+-- or a hint waits ns.Tip.HOLD for the pointer to stop, and a section that
+-- hovers one and reads the box has to let that wait run out. The whole hold
+-- and a frame more, so no section carries the number.
+function H.tipHold()
+	ns.Tip.Settling(ns.Tip.HOLD + 0.1)
+	return ns.UI.Tooltip.IsShown()
+end
+
 -- One part's tick, by the ns.Perf slot it is timed under.
 --
 -- Every ticker that never stops hangs off ns.UI.Forever now, because the client

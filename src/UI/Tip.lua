@@ -426,6 +426,18 @@ end
 -- holding still. Two is a hand resting on a mouse; three is a hand moving it.
 local DRIFT = 2
 
+-- How long the hand holds on a piece of chrome before it gets a box.
+--
+-- The client's own tooltip describes a thing you act on: an item, a spell, a
+-- unit. It has never described a tab, a close mark, a filter chip or the hint
+-- under a settings row, and this addon does, which is right where the words
+-- are worth having and wrong where a pointer on its way somewhere else crosses
+-- three of them and opens three boxes. So the furniture waits for the hand to
+-- stop and a thing waits for nothing. This is the number the furniture waits,
+-- and it is one number rather than four so that every bit of chrome in the
+-- addon answers a held pointer at the same moment.
+Tip.HOLD = 0.4
+
 -- What the wait will open, filled in at the arm.
 local pending = { owner = nil, subject = nil, above = nil, place = nil }
 

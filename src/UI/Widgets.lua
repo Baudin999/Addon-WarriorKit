@@ -156,8 +156,8 @@ function UI.Button(parent, opts)
 			tip = tip()
 		end
 		if tip then
-			ns.Tip.Open(self, { kind = "note",
-				lines = type(tip) == "table" and tip or { tip } }, true)
+			ns.Tip.Settle(self, { kind = "note",
+				lines = type(tip) == "table" and tip or { tip } }, true, nil, ns.Tip.HOLD)
 		end
 	end)
 	button:SetScript("OnLeave", function(self)
@@ -922,7 +922,7 @@ local function InstallProse(kit, ctx)
 			if type(said) == "function" then
 				said = Capped("hint", said(), HINT_MAX)
 			end
-			ns.Tip.Open(self, { kind = "note", lines = { said } })
+			ns.Tip.Settle(self, { kind = "note", lines = { said } }, nil, nil, ns.Tip.HOLD)
 		end)
 		owner:SetScript("OnLeave", function(self, ...)
 			if leave then

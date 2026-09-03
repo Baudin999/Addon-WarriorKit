@@ -1293,7 +1293,7 @@ local function RowMark(button, spec, outermost, right)
 	mark:SetScript("OnEnter", function(self)
 		self.text:SetTextColor(C.text[1], C.text[2], C.text[3])
 		if spec.tip then
-			ns.Tip.Open(self, { kind = "note", title = spec.tip }, true)
+			ns.Tip.Settle(self, { kind = "note", title = spec.tip }, true, nil, ns.Tip.HOLD)
 		end
 	end)
 	mark:SetScript("OnLeave", function(self)

@@ -642,8 +642,8 @@ function Feed:BuildChips(specs)
 				-- loading, which is the same trap Feeds/Loot.lua builds its
 				-- loot patterns at login to avoid.
 				local tip = this.tip
-				ns.Tip.Open(this, { kind = "note",
-					lines = { type(tip) == "function" and tip() or tip } }, true)
+				ns.Tip.Settle(this, { kind = "note",
+					lines = { type(tip) == "function" and tip() or tip } }, true, nil, ns.Tip.HOLD)
 			end)
 			chip:SetScript("OnLeave", function(this)
 				UI.Tint(this.bg, C.control)

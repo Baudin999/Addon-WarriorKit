@@ -240,7 +240,8 @@ do
 	ns.UI.Tooltip.SetPlace(ns.UI.Tooltip.BESIDE)
 	ns.UI.Tooltip.Close(true)
 	chip:GetScript("OnEnter")(chip)
-	check(ns.UI.Tooltip.IsShown(), "hovering a chip said nothing")
+	check(not ns.UI.Tooltip.IsShown(), "a chip opened its box before the hand had stopped")
+	check(H.tipHold(), "hovering a chip said nothing")
 	check(ns.Measure(ns.UI.Tooltip.Frame(), "GetBottom") >= ns.Measure(chip, "GetTop"),
 		"a chip's tooltip opens beside it, which puts it under the cursor")
 	chip:GetScript("OnLeave")(chip)
