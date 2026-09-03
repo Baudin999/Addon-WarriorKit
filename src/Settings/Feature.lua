@@ -221,11 +221,15 @@ ns.Register({
 		-- you can see the rim the first time you unlock the frames.
 		tipPoint = { "CENTER", "UIParent", "CENTER", 220, -140 },
 
-		-- One second. Long enough to finish a sentence you were half way
-		-- through when the pointer moved, short enough that a box you have
-		-- stopped caring about is gone before you notice it. Zero is a real
-		-- answer and is the client's own behaviour.
-		tipLinger = 1,
+		-- Off. The box goes the instant the pointer leaves, which is what the
+		-- client's own tooltip has done since the day it shipped. It shipped at
+		-- one second, on the argument that a sentence you were half way through
+		-- deserved a moment, and what a second bought in practice was a box
+		-- hanging over the next row on every pass down a column: the pointer
+		-- crosses two things on the way to the third, and each of them left a
+		-- paragraph behind that covered what you were reaching for. The number
+		-- is still the player's to raise.
+		tipLinger = 0,
 
 		-- The addon's body size, which is what every tooltip in it was drawn at
 		-- before this was a number anybody could move.

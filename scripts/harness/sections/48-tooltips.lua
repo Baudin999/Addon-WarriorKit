@@ -592,8 +592,16 @@ do
 	-- linger at all.
 	------------------------------------------------------------------
 
-	check(Box.Linger() == 1,
-		("the shipped linger is %s seconds and the addon ships one"):format(tostring(Box.Linger())))
+	-- Shipped off, which is what the client's own tooltip does: the box goes
+	-- with the pointer. The countdown below is what a player who raises the
+	-- number gets, and it is tested at one second because that is what the
+	-- addon shipped for long enough that every claim here was written for it.
+	check(Box.Linger() == 0,
+		("the shipped linger is %s seconds and the client's own is nought"):format(tostring(Box.Linger())))
+	Tip.Open(owner, { kind = "note", title = "Going", lines = { { "A fact" } } })
+	Tip.Close()
+	check(not Box.IsShown(), "with the linger shipped off the box outlived the pointer")
+	check(Box.SetLinger(1), "raising the linger to a second reported that nothing moved")
 
 	Tip.Open(owner, { kind = "note", title = "Staying", lines = { { "A fact" } } })
 	Tip.Close()
@@ -643,7 +651,7 @@ do
 	Box.SetLinger(-5)
 	check(Box.Linger() == lingerLow,
 		("a linger under the floor landed on %s"):format(tostring(Box.Linger())))
-	Box.SetLinger(1)
+	Box.SetLinger(0)
 
 	------------------------------------------------------------------
 	-- How big it reads

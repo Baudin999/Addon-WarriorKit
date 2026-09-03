@@ -609,7 +609,9 @@ do
 	if leave then
 		leave(square)
 	end
-	check(Tip.IsShown(), "the box went the instant the pointer left, with nothing to replace it")
+	-- Gone with the pointer, the way the client's own goes. The linger is a
+	-- setting and ships off; 48-tooltips.lua is where the countdown is tested.
+	check(not Tip.IsShown(), "the box outlived the pointer with the linger shipped off")
 	check(not H.tipSettle(), "the tooltip stays up after the cursor has left the square")
 
 	-- An empty slot fills nothing and would leave the last ability's tooltip on

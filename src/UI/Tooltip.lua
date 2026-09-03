@@ -265,8 +265,16 @@ local marker
 -- countdown is the player's number. Hovering anything else cancels it outright
 -- and draws the new box on the spot, because the one thing a linger must never
 -- do is make the next hover wait for the last one.
+--
+-- **And the number ships at nought.** The countdown was the default for a
+-- while and the argument above is the argument for it. The argument against it
+-- is what the client's own tooltip has always done, and it won: a box that
+-- outlives the hover by a second is a box over the row under the pointer on
+-- every pass down a column, and a player who has stopped reading it sees it as
+-- a thing in the way rather than a thing that waited. The linger is a setting
+-- for whoever reads slowly; the shipped behaviour is the client's.
 local LINGER_LOW, LINGER_HIGH = 0, 10
-local ttl = 1
+local ttl = 0
 local linger = 0
 
 -- What the countdown runs on. Hidden is the ordinary state and means nothing is
