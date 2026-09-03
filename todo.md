@@ -12,8 +12,9 @@ hash is the last of them. What was wrong and what fixed it is in
 in the README's untested list, and the full text of each item is this file at
 `e7ef4ca` for 1 to 6, 8, 11 and 12, at `ca59a77` for 7, 9 and 13, at
 `44c79ef` for 15, at `a7772af` for 16, at `c37c149` for 19, at `b5d2277` for
-17, at `30a42cb` for 28, at `2210d8f` for 18 and at `f3222c6` for 32 to 45. Items 14, 23 and 31 were never
-written longer than they are here.
+17, at `30a42cb` for 28, at `2210d8f` for 18, at `f3222c6` for 32 to 45 and at
+`1ad54d1` for 46. Items 14, 23 and 31 were never written longer than they are
+here.
 
 1. Weapon swing timer. `8be9a43`
 2. Deep Wounds missing from the enemy bar debuffs. `05e40ec`
@@ -70,6 +71,9 @@ written longer than they are here.
     the last of three
 45. Twelve event handlers seeded as hot roots, and a string built on a hot
     path counted as the allocation it is. `f89b5be`, the second of two
+46. A right click on a whisper room turned the camera and left the room;
+    a row that answers the right button keeps it, and the harness presses
+    rows the way the client does. `673d78c`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
@@ -297,36 +301,10 @@ widget so that events mark and a tick draws. A general addon-wide stream would
 re-broadcast client events through one more dispatch that every handler pays
 for, and it would not have found a single item below.
 
-Item 46 is a bug found in game on 2026-09-03, the first on this list that is
-one. It is here because the harness passed it, and the fix has to be the gate
-as much as the code.
-
-46. A right click on a whisper room turns the camera and leaves the room.
-
-    `src/Chat/Window.lua:787` hands `UI.List` an `onRight` that calls
-    `ChatWindow.Close`, and `src/UI/Window.lua:1366` registers the row for
-    `RightButtonUp` when a list offers one. Eight lines under that, `IconRow`
-    calls `UI.PassCamera` on every row of an icon column, which is
-    `SetPassThroughButtons("RightButton", "MiddleButton")`. A button passed
-    through never reaches the frame's scripts, however the frame registered,
-    so the chat rail hands the camera its right button on the same row that
-    is waiting for it. In game the click turns the camera a degree and the
-    conversation stays on the rail. `/wk chat close <name>` works, because it
-    reaches `Close` without a row.
-
-    The harness certified it. `List:Click` fetched the row's `OnClick` script
-    and called it, so `59-chat-rooms` saw the close it asked for on a row the
-    client would never have told. The stub records `SetPassThroughButtons` at
-    `scripts/harness/client/02-text.lua:395` and nothing read the record back.
-
-    Three lines. `IconRow` keeps the right button on a column that offers
-    `onRight` or `onBack`, and the price is a right drag begun on those rows
-    does not turn the camera, which is the same price every row that answers
-    the button pays. `List:Click` goes through `Button:Click`, which is the
-    client's own decision of whether a press reaches the script. And the
-    stub's `Region:Click` refuses a button the frame passes through, the way
-    it refuses one it never registered for, so the section fails on the code
-    it passed.
+Item 46 is a bug found in game on 2026-09-03, the first on this list that was
+one, and it landed the same day and is above. The harness had passed it, and
+the fix is the gate as much as the code: the stub now refuses a press on a
+button the frame passes through, the way it refuses one never registered for.
 
 ## Deliberately not on this list
 
