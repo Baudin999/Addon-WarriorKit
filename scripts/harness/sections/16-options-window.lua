@@ -668,8 +668,20 @@ if window then
 	-- page, plus a lede for the zoom page's third list, which is the windows
 	-- list split in two because a thirteenth window no longer fit the view.
 	-- 26,700 is that plus the same room again.
-	check(prose < 26700,
-		("the window holds %d characters of prose and the budget is 26,700"):format(prose))
+	--
+	-- The loot filter arrived and it is 27,244 across the same sixty-eight:
+	-- four hints on the page fast loot already had, and nothing else. It is
+	-- twelve new controls and none of them needed a sentence, because a colour,
+	-- seven kinds of trade good, what your professions use and a destroy are
+	-- their own labels. The four say what pressing a control cannot: that money
+	-- and a quest item come home whatever the rules below say and that none of
+	-- it runs unless the click asked for auto loot, that a corpse you left
+	-- something on keeps sparkling until it despawns, that the reagent list
+	-- writes itself the first time each profession window is open, and what the
+	-- destroy switch refuses to destroy. 27,450 is that plus a hint's worth of
+	-- room again.
+	check(prose < 27450,
+		("the window holds %d characters of prose and the budget is 27,450"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

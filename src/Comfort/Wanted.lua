@@ -143,7 +143,38 @@ local COLOURS = {
 	[2] = "greens and up",
 	[3] = "blues and up",
 	[4] = "epics only",
+
+	-- The floor switched off, in the words the reading falls back to. It is in
+	-- the table rather than only in Describe because the settings page offers
+	-- all six as one cycle, and a sixth phrase written on the page would be a
+	-- second wording of this one that is free to drift away from it.
+	[NO_COLOUR] = "nothing by colour",
 }
+
+-- The same six as an array in floor order, so the page can hand the cycle a
+-- list. Built once at load rather than per call, because a list built when a
+-- window opens is a table built for a window.
+local FLOOR_WORDS = {}
+for floor = 0, NO_COLOUR do
+	FLOOR_WORDS[floor + 1] = COLOURS[floor]
+end
+
+-- The six words the colour rule can be set to, lowest floor first.
+function Wanted.Floors()
+	return FLOOR_WORDS
+end
+
+-- Which floor one of those words stands for, and nil for anything else. The
+-- cycle hands back the word it is showing rather than a number, so this is the
+-- other half of the same table and the page carries no copy of either.
+function Wanted.Floor(word)
+	for floor = 0, NO_COLOUR do
+		if COLOURS[floor] == word then
+			return floor
+		end
+	end
+	return nil
+end
 
 -- The kind rules in the order they are read out, which is the order the
 -- settings page draws them in and has nothing to do with the numbers above.
@@ -156,6 +187,13 @@ local WORDS = {
 	{ key = "lootGems", word = "gems" },
 	{ key = "lootMeat", word = "meat" },
 }
+
+-- The kind rules for the settings page, which draws one tick box per entry in
+-- this order. Handed back rather than copied into Comfort/Feature.lua so that
+-- the boxes and the sentence under them are one list and read in one order.
+function Wanted.Kinds()
+	return WORDS
+end
 
 -- A plain list. Two things are a comma between them and three or more take an
 -- and before the last, which is how the same sentence is written by hand.

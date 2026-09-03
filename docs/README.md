@@ -293,13 +293,17 @@ name of none of them.
                              rectangle the client's line sits in
     Chat/Feature.lua
 
+    Comfort/Wanted.lua       one question per slot: is this worth picking up
     Comfort/Loot.lua         empties a corpse on LOOT_READY, before the window draws
+    Comfort/Leftovers.lua    loots what the filter refused and destroys it as it lands
     Comfort/Vendor.lua       sells grey items while a merchant window is up
     Comfort/Repair.lua       pays the merchant to mend, guild funds first
     Comfort/Camera.lua       how far cameraDistanceMaxZoomFactor lets you pull back
     Comfort/Thanks.lua       whispers a stranger who buffs you, and nobody you are grouped with
     Comfort/Errors.lua       the muted-message list, and the method that stands in
                              front of UIErrorsFrame
+    Comfort/Reagents.lua     what every recipe you know wants, written down per
+                             profession while its window is open
     Comfort/Clutter.lua      which quest items are finished with, and why
     Comfort/Destroy.lua      the one-card-at-a-time window that acts on that
     Comfort/Feature.lua
@@ -5454,6 +5458,69 @@ neither answering is a third state: solo the corpse is still emptied, because
 there is nobody to take a slot from, and in a group it falls back to the
 client's own auto loot, which is slower and correct.
 
+**The filter is one question asked once per slot, and any rule that says yes
+takes it.** `Comfort/Wanted.lua` answers `Take(slot)` and `Comfort/Loot.lua`
+asks it before every `LootSlot`. There are three kinds of answer: a quality
+floor, where 5 is the colour rule switched off, because a run you are doing for
+the ore is a run where a green is clutter too; a tick box per kind, read off the
+class and subclass the client already files the item under rather than off a
+name or a search string; and what your professions use. Money and a quest item
+are never refused, the quest flag being the seventh return of `GetLootSlotInfo`,
+which is a fact about your log rather than about the item: the same grey tooth
+is a quest item on one character and litter on the next. An item the client will
+say nothing about is taken, because of the two ways to be wrong here, leaving
+something behind is the one you cannot undo from a bag. Every setting is on
+`ns.dbc`, because which professions you have and what a bag is for is a fact
+about the character standing over the corpse, and the one that would be most
+annoying to get wrong is a bank alt quietly filling forty slots with somebody
+else's mageweave.
+
+**There is no call that answers "is this one of mine", so the list is written
+down while a profession window is open.** The client will say what a recipe
+wants while its window is up and says nothing at all once it is shut, so
+`Comfort/Reagents.lua` walks the recipe list on `TRADE_SKILL_UPDATE` and
+`CRAFT_UPDATE`, throttled to a second and keyed by profession name, because the
+window fires that event on every change it makes to itself and a profession with
+four hundred recipes is four hundred reagent counts. Every reagent goes on the
+list keyed by item id and valued by the name of the profession that named it,
+and that name is what makes a rescan safe: a walk of mining replaces exactly the
+ids mining put there and leaves blacksmithing's alone, so a profession you drop
+takes its reagents off the filter rather than leaving them on it for good. It is
+per character for the reason above, and it scans whether or not the filter is
+switched on, because a list that only filled while the setting was on would be
+empty at the moment somebody turns the setting on.
+
+A category folded up hides its recipes, and the walk does not unfold it. The
+window belongs to the player, they folded it on purpose, and expanding fires the
+very event that got us here. What that would cost is handled instead: a walk
+that saw every category open replaces this profession's ids, and a walk that
+found one folded adds and never takes away, because a category you folded is not
+a reagent you stopped using. The list only ever loses an id on the evidence of a
+window that could see all of them. A linked window is refused outright, because
+the recipes and the profession name on it are somebody else's and entries taken
+off one could not be told from your own afterwards.
+
+**Destroying the leftovers is the switch for the person who skins.** The filter
+leaves what you did not ask for on the corpse, which is the point of it and is
+the wrong answer for one person: a corpse only opens for a skinner once every
+slot is gone. So `Comfort/Leftovers.lua` loots what the filter refused anyway
+and destroys the item when it lands. Four refusals leave the slot exactly where
+it is: a slot with no link, which is coin; a quality this client will not state,
+because a guess is how a blue gets deleted; blue or better; and a quest item.
+
+What is remembered is the item id and how many arrived rather than the bag slot.
+Loot lands in a stack you already had, so twelve cloth in a bag and two off a
+corpse is one stack of fourteen and picking that slot up would destroy the
+twelve you walked in with. The walk splits off exactly what arrived with
+`ns.SplitContainerItem` and then makes the same four checks `Comfort/Destroy.lua`
+makes before the delete, everything pcalled. A pending entry is dropped after
+five seconds, because a `LootSlot` the server refused for a full bag is an item
+that never arrives, and an entry left waiting on one would destroy the next of
+those you picked up an hour later. The walk runs on `BAG_UPDATE_DELAYED` where
+the client answers it, settled by registering the event and reading whether the
+call was taken, and on `BAG_UPDATE` behind a once-a-frame throttle where it does
+not, with `LOOT_CLOSED` coming back for anything that arrived under the throttle.
+
 **The vendor part can destroy what you own, and that is the whole design.**
 `ns.UseContainerItem` sells a bag slot while a merchant window is up and *uses*
 it when one is not. It eats the food, equips the weapon, opens the box. So the
@@ -5985,6 +6052,10 @@ on different realms read as the same person.
     /wk xp zoom 2                1 to 3
     /wk xp reset                 back along the bottom of the screen
     /wk loot on|off              empty a corpse in one go
+    /wk filter on|off            take only the colours and kinds you asked for
+    /wk leftovers on|off         loot and destroy the rest, so a corpse can be skinned
+    /wk reagents                 what your professions have put on the filter
+    /wk reagents clear           empty the list, and write it again next window
     /wk sell on|off              grey items at every merchant, shift to skip one
     /wk repair                   pay the merchant in front of you now
     /wk repair on|off            every merchant who mends, shift to skip one
@@ -7585,3 +7656,44 @@ Everything below was written from the API contract and has never executed:
   mistake looks like a chat window that opens after a reload with the last
   session's lines in it and a thumb that is the wrong size or missing. What would
   settle it: talk in a party, `/reload`, and open the window.
+- **Whether the seventh return of `GetLootSlotInfo` is the quest flag on 2.5.6.**
+  It is the one thing keeping a quest item on a corpse the filter would otherwise
+  refuse, and the harness's corpse answers the nine returns the documented
+  signature has rather than the ones this build hands back. A mistake looks like
+  a quest item left behind with the filter on and a run back to the mob for it,
+  or, if whatever sits in that position is usually truthy, every slot taken and
+  no filtering happening at all. What would settle it: take a quest that drops
+  off a mob, turn the filter on with every kind rule off and the colour at epics
+  only, and kill one.
+- **Whether `GetLootSlotType` exists on either of these clients.** The kind rules
+  need to know a slot holds an item rather than coin, and `ns.LootKind` calls
+  that where it is there and reads the link where it is not. Both paths are
+  written and only the second has been driven against anything but the stub. A
+  mistake looks like coin left on a corpse, which is the one thing the filter
+  promises never to refuse. What would settle it: switch the filter on with every
+  rule off, kill something that drops money, and count your purse across the
+  corpse.
+- **Whether `BAG_UPDATE_DELAYED` fires on 2.5.6.** The destroy walk registers it
+  and falls back to `BAG_UPDATE` behind a once-a-frame throttle when the
+  registration is refused, which settles a client that has never heard of the
+  event. What that cannot settle is a client that accepts the registration and
+  then never fires it. A mistake looks like the leftovers switch on, refused
+  greys looted into the bags and left sitting there, and the lot going at once
+  when the corpse closes rather than as each one lands. What would settle it:
+  turn leftovers on, empty a corpse the filter is refusing something on, and
+  watch the bag while the window is still open.
+- **Whether `DeleteCursorItem` takes a green without a confirmation box.** The
+  clutter window destroys greys with somebody looking at the card; this destroys
+  greens unattended, and the client puts a type-DELETE box in front of some
+  deletions. A mistake looks like a dialog over the game every time a green is
+  refused off a corpse, with the item stuck on the cursor behind it until you
+  answer. What would settle it: turn leftovers on with the colour at blues and
+  up, loot a corpse with a green on it, and watch for a box.
+- **Whether `TRADE_SKILL_UPDATE` fires with the recipe list already filled.** The
+  reagent walk runs on that event and on `CRAFT_UPDATE`, on the contract that the
+  window has its recipes by the time either fires. A client that fires before the
+  list is there would have the walk see a count of nothing and write nothing. A
+  mistake looks like the reagent list staying empty however many times you open
+  blacksmithing, with `/wk reagents` saying none scanned yet while the window is
+  open in front of you. What would settle it: open each profession window once
+  and type `/wk reagents`.

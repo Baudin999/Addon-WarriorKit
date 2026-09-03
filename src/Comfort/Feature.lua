@@ -44,6 +44,19 @@ local function SetLoot(value)
 	ns.Loot.Apply()
 end
 
+local function SetFilter(value)
+	ns.dbc.lootFilter = value
+end
+
+-- The one setter in this file that has to tell its part, because Leftovers.lua
+-- holds events rather than answering a question. Off unregisters them and drops
+-- whatever was waiting to be destroyed, which is what makes turning the switch
+-- off mid-corpse safe.
+local function SetLeftovers(value)
+	ns.dbc.lootDestroy = value
+	ns.Leftovers.Apply()
+end
+
 local function SetVendor(value)
 	ns.db.sellTrash = value
 	ns.Vendor.Apply()
@@ -148,6 +161,69 @@ local function ErrorRow(ui, slot)
 			label:SetText(entry.text)
 		end
 	end })
+end
+
+-- The whole of looting on one page, in the order a person sets it up: empty a
+-- corpse, then decide what "empty" means, then decide what to do with the rest.
+--
+-- One page and one section, rather than a Loot tab that turns fast loot on and
+-- a Filter tab that says what it takes. A second tab to configure what a first
+-- one switched on is two places to look for one answer, and the reader has to
+-- find both before either makes sense. It is a function of its own only because
+-- it is the longest section this part draws; every other one is still written
+-- out in the panel below.
+local function LootPage(ui)
+	ui.Section("Loot", "Chores")
+	ui.Lede("Empties a corpse the moment the server says what is on it, so the loot window never draws.")
+	ui.Check("empty a corpse in one go",
+		function() return ns.db.fastLoot end,
+		SetLoot)
+	ui.Hint("Only when auto loot is what your click asked for, so a shift-click still opens the window. Under master loot only the slots below the threshold are taken.")
+
+	ui.Check("take only what I ask for",
+		function() return ns.dbc.lootFilter end,
+		SetFilter)
+	ui.Hint("It runs only while fast loot is on and while auto loot is what your click asked for, so a shift-click still opens the window. Money and a quest item are always taken.")
+
+	ui.Cycle("colour", ns.Wanted.Floors(),
+		function() return ns.Wanted.Floors()[ns.dbc.lootFloor + 1] end,
+		function(word) ns.dbc.lootFloor = ns.Wanted.Floor(word) or ns.dbc.lootFloor end)
+	ui.Hint("Nothing by colour leaves the whole answer to the boxes under it, which is the run you are doing for the ore. A corpse you left something on sparkles until it despawns.")
+
+	-- One box per kind, in Comfort/Wanted.lua's own order, so the page and the
+	-- reading under it name the same things in the same order.
+	for _, entry in ipairs(ns.Wanted.Kinds()) do
+		ui.Check(entry.word,
+			function() return ns.dbc[entry.key] end,
+			function(value) ns.dbc[entry.key] = value end)
+	end
+
+	ui.Check("what my professions use",
+		function() return ns.dbc.lootCrafted end,
+		function(value) ns.dbc.lootCrafted = value end)
+	ui.Hint("The list writes itself the first time you open each profession window and it is remembered, so a corpse days later still knows what your smithing asks for.")
+	ui.Action(function()
+		local count = ns.Reagents.Count()
+		if count == 0 then
+			return "nothing on the reagent list yet"
+		end
+		return ("forget the %d reagents on the list"):format(count)
+	end,
+		function()
+			ns.Print(("%d reagents forgotten, open each profession window again to write the list back."):format(ns.Reagents.Clear()))
+			ns.Options.Refresh()
+		end,
+		function() return ns.Reagents.Count() > 0 end)
+
+	ui.Check("destroy what it left, so a corpse can be skinned",
+		function() return ns.dbc.lootDestroy end,
+		SetLeftovers)
+	ui.Hint("Blue and better is never destroyed, nor a quest item, nor anything this client will not quote a quality for. What never reached your bags is forgotten after five seconds.")
+
+	ui.Reading("looting", ns.Loot.Describe)
+	ui.Reading("the filter", ns.Wanted.Describe)
+	ui.Reading("professions", ns.Reagents.Describe)
+	ui.Reading("leftovers", ns.Leftovers.Describe)
 end
 
 ns.Register({
@@ -285,6 +361,37 @@ ns.Register({
 			ns.Print("fast loot " .. ns.Loot.Describe() .. ".")
 		end,
 
+		-- Three words rather than one with sub-words under it. `loot` is the
+		-- switch that empties a corpse, `filter` is what it takes, `leftovers`
+		-- is what happens to the rest, and each of the three is a thing you
+		-- turn on or off on its own. Written as `filter destroy on` the middle
+		-- word would be an argument of an argument, and `/wk help` would carry
+		-- a line whose first two words are both nouns.
+		filter = function(arg)
+			SetFilter(ns.Command.Toggle(arg))
+			ns.Print("loot filter " .. ns.Wanted.Describe() .. ".")
+		end,
+
+		leftovers = function(arg)
+			SetLeftovers(ns.Command.Toggle(arg))
+			ns.Print("leftovers " .. ns.Leftovers.Describe() .. ".")
+		end,
+
+		-- `list` and `clear`, the shape `errors` has, and no on and off under
+		-- them. The list is not a switch: `what my professions use` on the page
+		-- is the switch, and this word is the audit of what it would keep. So
+		-- the bare word lists rather than toggling, which is the one place it
+		-- parts company with `errors`: somebody typing `reagents` to look at
+		-- the list would otherwise have switched a loot rule on by reading it.
+		reagents = function(arg)
+			if arg == "clear" then
+				ns.Print(("%d reagents forgotten, open each profession window"
+					.. " again to write the list back."):format(ns.Reagents.Clear()))
+				return
+			end
+			ns.Print("reagents on the filter: " .. ns.Reagents.Describe() .. ".")
+		end,
+
 		sell = function(arg)
 			SetVendor(ns.Command.Toggle(arg))
 			ns.Print("selling trash " .. ns.Vendor.Describe() .. ".")
@@ -389,6 +496,9 @@ ns.Register({
 
 	help = {
 		"loot on|off, empty a corpse in one go",
+		"filter on|off, take only the colours and the kinds you asked for",
+		"leftovers on|off, loot and destroy the rest, so a corpse can be skinned",
+		"reagents list|clear, what your professions have put on the filter, or empty it",
 		"sell on|off, grey items at every merchant",
 		"repair, pay the merchant in front of you now",
 		"repair on|off, pay every merchant who mends, guild funds first",
@@ -404,21 +514,16 @@ ns.Register({
 	},
 
 	status = function()
-		return ("loot %s; vendor %s; repair %s; camera %s; thanks %s; fanfare %s;"
-			.. " errors %s; clutter %s")
-			:format(ns.Loot.Describe(), ns.Vendor.Describe(), ns.Repair.Describe(),
-				ns.Camera.Describe(), ns.Thanks.Describe(), ns.Fanfare.Describe(),
-				ns.Errors.Describe(), ns.Destroy.Describe())
+		return ("loot %s; filter %s; leftovers %s; vendor %s; repair %s; camera %s;"
+			.. " thanks %s; fanfare %s; errors %s; clutter %s")
+			:format(ns.Loot.Describe(), ns.Wanted.Describe(), ns.Leftovers.Describe(),
+				ns.Vendor.Describe(), ns.Repair.Describe(), ns.Camera.Describe(),
+				ns.Thanks.Describe(), ns.Fanfare.Describe(), ns.Errors.Describe(),
+				ns.Destroy.Describe())
 	end,
 
 	panel = function(ui)
-		ui.Section("Loot", "Chores")
-		ui.Lede("Empties a corpse the moment the server says what is on it, so the loot window never draws.")
-		ui.Check("empty a corpse in one go",
-			function() return ns.db.fastLoot end,
-			SetLoot)
-		ui.Hint("Only when auto loot is what your click asked for, so a shift-click still opens the window. Under master loot only the slots below the threshold are taken.")
-		ui.Reading("looting", ns.Loot.Describe)
+		LootPage(ui)
 
 		ui.Section("Vendor", "Chores")
 		ui.Lede("Sells your grey items at every merchant you open, and nothing else.")

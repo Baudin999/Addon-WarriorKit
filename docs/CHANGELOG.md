@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### Cloth, greens and up, mining
+
+Fast loot empties a corpse, which is the right answer on the four corpses of a
+pull and the wrong one on the twelfth corpse of an old dungeon you are running
+for a single drop. You come out with a bag of teeth and vendor mail, and
+clearing it out again is exactly the work the fast loot was there to save.
+
+The loot page carries a filter now. The switch first, then the rules that shape
+it: a colour floor that runs from greys and up to epics only, with a sixth stop
+where the colour rule takes nothing at all, seven tick boxes for the kinds of
+trade good, and one for what your own professions use. Any rule that says yes
+takes the slot. Money and a quest item are always taken and no setting can
+refuse them, and the filter only runs while fast loot is on and while auto loot
+is what your click asked for, so a shift-click still opens the window and you
+can take a grey by hand.
+
+What your professions use is read off your trade skills rather than typed. Open
+each profession window once and every reagent every recipe you know wants is
+written down under that profession's name. It is remembered, so a corpse days
+later still knows what your smithing asks for, and opening that window again
+after you drop a profession takes its reagents back off the filter. `/wk
+reagents` says what is on the list and `/wk reagents clear` empties it.
+
+A filter leaves things on the corpse, and a corpse with anything left on it will
+not open for a skinner. So there is a second switch, off until you turn it on:
+loot what the filter refused anyway and destroy it as it lands. Blue and better
+is never destroyed, nor a quest item, nor anything this client will not quote a
+quality for, and something that never reached your bags, which is what a full
+bag looks like, is forgotten after five seconds rather than destroyed an hour
+later.
+
+All of it sits on the Loot page under the fast loot box, with `/wk filter on|off`
+and `/wk leftovers on|off` for the same two switches and both of them in
+`/wk status`. Every setting here is this character's rather than the account's,
+because which professions you have and what your bags are for is a fact about
+the character standing over the corpse.
+
 ### A string built every tick is garbage every tick
 
 The allocation scan counted a table constructor and an anonymous function and
