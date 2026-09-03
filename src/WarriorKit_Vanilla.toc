@@ -327,6 +327,13 @@ Buttons\Trace.lua
 # picks anything up.
 Buttons\Square.lua
 
+# Which key presses a thing, on the tooltip of the thing. After Square.lua,
+# because the hover it adds a line to is that file's, and after Which.lua and
+# Bars.lua, whose plan and whose recorded keys it reads the answer off. A source
+# on UI\Tip.lua rather than a hover of its own, so the hearthstone in the bag
+# window and the same hearthstone on a square say the same key.
+Buttons\Bound.lua
+
 # Where each cloned bar sits and the handle you drag it by. After Bars.lua,
 # which is the only caller, and separate from it because the bar's shape is
 # decided by the plan in source and its position is the one thing you cannot

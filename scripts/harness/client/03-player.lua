@@ -459,6 +459,10 @@ local ITEMS = {
 	["Tattered Cloth"]    = { id = 2002, classId = 7, quality = 0, price = 12 },
 	["Broken Twig"]       = { id = 2003, classId = 7, quality = 0, price = 0 },
 	["Emerald Pigment"]   = { id = 2004, classId = 7, quality = 2, price = 1900 },
+	-- The hearthstone, under its live id, because Core/Piles.lua files it by
+	-- that number and the tooltip's key line finds it on a bar by the same
+	-- one. In no bag: it stands on an action slot when a section puts it there.
+	["Hearthstone"]       = { id = 6948, classId = 15, quality = 1, price = 0 },
 	-- A white item that is not a quest item, and the only one. It is in no bag:
 	-- it exists so the loot feed's quest chip can be tested at all, because that
 	-- chip is an override on the white quality and a quest item is white. With

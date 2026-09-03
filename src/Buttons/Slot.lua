@@ -216,6 +216,22 @@ function Slot.Spell(slot)
 	return nil, true
 end
 
+-- Which item a press on this slot would use, by id, or nil for a slot holding
+-- anything else. The one reader in the addon for the third thing a slot can
+-- hold: the hearthstone, a potion, a bandage. Buttons/Bound.lua walks every
+-- slot through this to find the one an item in your bag is standing on, which
+-- is how the item's tooltip learns which key presses it.
+function Slot.Item(slot)
+	if not slot or not Slot.CanName() then
+		return nil
+	end
+	local kind, id = readAction(slot)
+	if kind == "item" and type(id) == "number" then
+		return id
+	end
+	return nil
+end
+
 --------------------------------------------------------------------------
 -- The ladder
 --------------------------------------------------------------------------

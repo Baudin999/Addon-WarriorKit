@@ -124,6 +124,7 @@ local paging           -- true once a state driver has been accepted
 local binding          -- re-entrancy latch, see Bars.ApplyBindings
 local proven           -- nil until the override readback has answered once
 local keysHeld = 0     -- how many keys the override layer took, last pass
+local held = {}        -- the key drawn on each command's square, see Bars.Held
 
 --------------------------------------------------------------------------
 -- The key, shortened
@@ -442,6 +443,17 @@ function Bars.Keys()
 	return keysHeld
 end
 
+-- The key the clone put on this command's square, or nil for a command the
+-- clone is not standing in for. Read off what ApplyBindings recorded rather
+-- than asked of GetBindingKey, because a key with an override on it stops
+-- answering to its command, and every key the clone holds has one. That is
+-- the same reason Under reads the set from the key's side. Buttons/Bound.lua
+-- asks this first and the binding set second, so a tooltip says the same key
+-- the corner of the square does whether the clone is on or off.
+function Bars.Held(command)
+	return held[command]
+end
+
 function Bars.CanPage()
 	return paging == true
 end
@@ -483,6 +495,9 @@ end
 -- you have just unticked is exactly the bar whose keys have to go back and is
 -- exactly the bar that is no longer in `order`.
 local function DropKeys()
+	for command in pairs(held) do
+		held[command] = nil
+	end
 	if type(ClearOverrideBindings) ~= "function" then
 		return
 	end
@@ -531,6 +546,7 @@ function Bars.ApplyBindings()
 			-- pixel corner is one string nobody can read. A key lent to the
 			-- mouseover part is drawn when it is the only one, because it
 			-- still presses this square.
+			held[command] = first or lent
 			Ability.Bind(w, Bars.Short(first or lent))
 		end
 	end

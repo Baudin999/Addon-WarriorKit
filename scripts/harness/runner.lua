@@ -281,6 +281,10 @@ local SECTIONS = {
 	-- Last, and it registers a source of its own that stays registered. A
 	-- section after this one would be reading tooltips with the harness's own
 	-- line hooked into them.
+	-- Which key presses the thing under the cursor, on an item's box and on a
+	-- square's. Before 48-tooltips, which is the last section that may read a
+	-- tooltip without the harness's own line in it.
+	"48-key-line",
 	"48-tooltips",
 	"49-world-hover",
 	-- After 48-tooltips, which is fine and is worth saying why: what that

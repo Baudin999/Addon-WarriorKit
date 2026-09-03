@@ -311,6 +311,11 @@ _G.GetActionInfo = function(slot)
 	if held.macro then
 		return "macro", held.macro
 	end
+	-- An item answers "item" and its id, which is what a hearthstone dragged
+	-- onto a bar is, and is the third kind Buttons/Slot.lua reads.
+	if held.item then
+		return "item", held.item
+	end
 	if not held.spell then
 		return nil
 	end
