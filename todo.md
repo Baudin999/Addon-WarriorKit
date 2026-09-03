@@ -297,6 +297,37 @@ widget so that events mark and a tick draws. A general addon-wide stream would
 re-broadcast client events through one more dispatch that every handler pays
 for, and it would not have found a single item below.
 
+Item 46 is a bug found in game on 2026-09-03, the first on this list that is
+one. It is here because the harness passed it, and the fix has to be the gate
+as much as the code.
+
+46. A right click on a whisper room turns the camera and leaves the room.
+
+    `src/Chat/Window.lua:787` hands `UI.List` an `onRight` that calls
+    `ChatWindow.Close`, and `src/UI/Window.lua:1366` registers the row for
+    `RightButtonUp` when a list offers one. Eight lines under that, `IconRow`
+    calls `UI.PassCamera` on every row of an icon column, which is
+    `SetPassThroughButtons("RightButton", "MiddleButton")`. A button passed
+    through never reaches the frame's scripts, however the frame registered,
+    so the chat rail hands the camera its right button on the same row that
+    is waiting for it. In game the click turns the camera a degree and the
+    conversation stays on the rail. `/wk chat close <name>` works, because it
+    reaches `Close` without a row.
+
+    The harness certified it. `List:Click` fetched the row's `OnClick` script
+    and called it, so `59-chat-rooms` saw the close it asked for on a row the
+    client would never have told. The stub records `SetPassThroughButtons` at
+    `scripts/harness/client/02-text.lua:395` and nothing read the record back.
+
+    Three lines. `IconRow` keeps the right button on a column that offers
+    `onRight` or `onBack`, and the price is a right drag begun on those rows
+    does not turn the camera, which is the same price every row that answers
+    the button pays. `List:Click` goes through `Button:Click`, which is the
+    client's own decision of whether a press reaches the script. And the
+    stub's `Region:Click` refuses a button the frame passes through, the way
+    it refuses one it never registered for, so the section fails on the code
+    it passed.
+
 ## Deliberately not on this list
 
 The architecture review turned up two more repeats and both are right as they
