@@ -102,9 +102,18 @@ end
 -- Which shape this client answers in
 ----------------------------------------------------------------------
 
+-- Counted where the row is built and held after that, so the flip is followed by
+-- a rebuild the way a client that changed its mind would have to be a client you
+-- logged into again. The hold is the third check: without it the row asked how
+-- many values the call answers with before every read of it, four times a tenth
+-- of a second, all evening.
 own.wide = false
+Upkeep.Rebuild()
 check(Upkeep.EnchantShape() == 3, "six returns did not read as a stride of three")
 own.wide = true
+check(Upkeep.EnchantShape() == 3,
+	"the stride was counted again on a read, and it is counted where the row is built")
+Upkeep.Rebuild()
 check(Upkeep.EnchantShape() == 4, "eight returns did not read as a stride of four")
 
 ----------------------------------------------------------------------
@@ -152,13 +161,16 @@ tick()
 check(not says("bare off hand"), "a sharpened off hand was nagged about anyway")
 
 -- And again on the six value shape, so neither branch of the decode is only
--- ever run one way round.
+-- ever run one way round. Rebuilt after each flip, because the stride is counted
+-- there rather than on every read.
 own.wide = false
 own.off = false
+Upkeep.Rebuild()
 tick()
 check(says("bare off hand"), "the six value shape lost the off hand")
 own.wide = true
 own.off = true
+Upkeep.Rebuild()
 tick()
 
 ----------------------------------------------------------------------
@@ -405,12 +417,21 @@ check(Racials.Name() == "Blood Fury", "an orc did not get Blood Fury")
 check(Racials.Spell() == 20572, "Blood Fury is not 20572")
 check(Racials.Worth(), "Blood Fury is not worth nagging about")
 
+-- The race is read once and held, the way the class token is, because the row
+-- asked for it three times a tick and a character does not change race. So each
+-- race below is a different character rather than a different answer from the
+-- same one, and Forget is what says so.
 own.race, own.raceName = "Troll", "Troll"
+check(Racials.Spell() == 20572,
+	"the race was read again on the tick path, and it is read once and held")
+
+Racials.Forget()
 check(Racials.Name() == "Berserking", "a troll did not get Berserking")
 check(Racials.Spell() == 26297, "Berserking is not 26297")
 check(Racials.Worth(), "Berserking is not worth nagging about")
 
 own.race, own.raceName = "Dwarf", "Dwarf"
+Racials.Forget()
 check(Racials.Name() == "Stoneform", "a dwarf did not get Stoneform")
 check(not Racials.Worth(),
 	"Stoneform is nagged about, and a defensive spent on a bleed is not a rotation")
@@ -418,9 +439,11 @@ check(not Racials.Worth(),
 -- A race with nothing listed answers nothing rather than answering the last
 -- race's spell, which is what a cache keyed on nothing would have done.
 own.race, own.raceName = "Goblin", "Goblin"
+Racials.Forget()
 check(Racials.Spell() == nil, "a race with no racial listed kept the last one")
 
 own.race, own.raceName = "Orc", "Orc"
+Racials.Forget()
 
 ----------------------------------------------------------------------
 -- The in line, in a fight

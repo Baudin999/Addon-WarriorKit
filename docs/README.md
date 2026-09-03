@@ -6382,6 +6382,25 @@ Everything below was written from the API contract and has never executed:
   health, debuff squares and the threat number all stepping once a second while
   the cast fill under them stays smooth. What would settle it: pull one mob,
   watch its health bar, and see whether it slides or steps.
+- **Whether Core hears UNIT_AURA before the buff row and the cooldown row do.**
+  Both rows read your own buffs off one walk in `Core/Core.lua` now, and that
+  walk runs again on the first ask after the event marks it stale. Core's frame
+  registers the event first because Core is the first file in both TOCs, and the
+  client is taken at its word that a frame which asked first is handed the event
+  first. A mistake looks like one of the two rows being one aura event behind:
+  a sharpening stone square that clears when the next buff lands rather than
+  when the stone goes on, or a cooldown square that keeps its running border for
+  one aura longer than the buff was up. What would settle it: shout, and watch
+  the Battle Shout square clear on the shout rather than on the next thing that
+  buffs you.
+- **Whether UPDATE_MOUSEOVER_UNIT fires again for a creature you are already
+  pointing at.** The world hover turns away a second event about the creature
+  its box is already open on, because rebuilding is a scan of Blizzard's
+  tooltip, every band laid out again and the suppression armed on top of the box
+  it is already holding. A mistake looks like the box freezing over a mob that
+  is moving: the threat line stuck at what it read when the box opened, and the
+  box left where the pointer was rather than where it is. What would settle it:
+  hover something that is running at you and watch the threat percentage.
 - **Whether splitting your own cast bar into two tickers still draws it.**
   `UnitFrames/PlayerCast.lua` ran one handler that polled the client at 5 Hz and
   moved the fill on every frame. It is two tickers now, timed separately as

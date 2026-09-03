@@ -121,7 +121,11 @@ local FALLBACK = UI.OUTLINE
 -- honest degradation the rest of the addon takes there.
 local SHADOW_OFFSET = 1
 
+-- One table of sizes per flag string for the text face, and one table of sizes
+-- for the glyph face, which has no flags to key on. Two tables rather than one
+-- keyed by a built string, so nothing here concatenates to find a font.
 local fonts = {}
+local glyphs = {}
 local made = 0
 
 -- What actually reaches SetFont, and whether the font wants a shadow.
@@ -159,16 +163,25 @@ local function Justify(font)
 	return font
 end
 
--- One object per size and flag pair, made on first ask and never freed. The key
--- is the caller's own string rather than the composed one, because two callers
--- that asked differently are allowed to land on one object and neither should
--- have to know that they did. The face is in the key and the path is not: there
--- are two faces and neither is a setting, so which one you get is a function
--- you called rather than a string you passed.
+-- One object per size and flag pair, made on first ask and never freed. The
+-- flags are the caller's own string rather than the composed one, because two
+-- callers that asked differently are allowed to land on one object and neither
+-- should have to know that they did. The face is in the key and the path is not:
+-- there are two faces and neither is a setting, so which one you get is a
+-- function you called rather than a string you passed.
+--
+-- Two lookups rather than a string built out of the size and the flags. This is
+-- asked for every line of every tooltip and again on the keystroke path, and a
+-- concatenation there is a fresh string per ask for a table this file already
+-- has: the flags name a table of sizes, and the size is a number key in it.
 function UI.Font(size, flags)
 	flags = flags or FALLBACK
-	local key = "text" .. size .. flags
-	local font = fonts[key]
+	local sized = fonts[flags]
+	if not sized then
+		sized = {}
+		fonts[flags] = sized
+	end
+	local font = sized[size]
 	if font then
 		return font
 	end
@@ -187,7 +200,7 @@ function UI.Font(size, flags)
 		font:SetShadowOffset(SHADOW_OFFSET, -SHADOW_OFFSET)
 	end
 	Justify(font)
-	fonts[key] = font
+	sized[size] = font
 	return font
 end
 
@@ -227,8 +240,7 @@ end
 -- would not take it. Flat and unshadowed, because every glyph in the addon sits
 -- on a surface this addon painted, which is the same argument UI.FLAT is.
 function UI.GlyphFont(size)
-	local key = "glyph" .. size
-	local font = fonts[key]
+	local font = glyphs[size]
 	if font then
 		return font
 	end
@@ -243,7 +255,7 @@ function UI.GlyphFont(size)
 	if not font:GetFont() then
 		font:SetFont(PATH, size, "")
 	end
-	fonts[key] = font
+	glyphs[size] = font
 	return font
 end
 

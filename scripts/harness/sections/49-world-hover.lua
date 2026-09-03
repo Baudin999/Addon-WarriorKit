@@ -39,6 +39,28 @@ do
 	local World, Box = ns.World, ns.UI.Tooltip
 	local MOB = "Creature-0-0-0-0-1234-0000ab77"
 
+	-- A hover, which is looking away and back rather than one event.
+	--
+	-- The addon turns away a second UPDATE_MOUSEOVER_UNIT about the creature its
+	-- box is already open on, because the client fires that event again for a mob
+	-- that moved and rebuilding the whole box is a unit scan, every band laid out
+	-- and the suppression armed on top of the box it is already holding down.
+	-- Every claim below is about a box that was built, so the section clears the
+	-- token first, which is what the pointer leaving does. The refusal itself is
+	-- asserted on its own further down, with the raw event.
+	local raw = fire
+	local function hover(event, ...)
+		if event ~= "UPDATE_MOUSEOVER_UNIT" or not guids.mouseover then
+			return raw(event, ...)
+		end
+		local was = guids.mouseover
+		guids.mouseover = nil
+		raw(event)
+		guids.mouseover = was
+		return raw(event)
+	end
+	fire = hover
+
 	-- Every line of the box, left side only. Read off what was drawn rather
 	-- than off Tip.Build, because the order things landed in on screen is the
 	-- thing being asserted.
@@ -271,6 +293,36 @@ do
 	local _, idle = Box.Text(4)
 	check(idle == "nothing on it yet",
 		"a mob that has never heard of you reads as: " .. tostring(idle))
+
+	------------------------------------------------------------------
+	-- The same creature twice
+	--
+	-- The client fires this event again for a mob that moved, and the box for
+	-- that mob is already on screen. Building it again is a scan of Blizzard's
+	-- tooltip, every band laid out a second time and the suppression armed on
+	-- top of the box it is already holding down, to draw what is drawn. So the
+	-- second event about one creature is turned away, and the pointer leaving is
+	-- what makes the next one a hover.
+	------------------------------------------------------------------
+
+	state.threatReader = function(source)
+		if source ~= "player" then
+			return nil
+		end
+		return true, 3, 100
+	end
+	raw("UPDATE_MOUSEOVER_UNIT")
+	local _, held = Box.Text(4)
+	check(held == idle,
+		"a second event about the creature already on screen built the box again")
+
+	fire("UPDATE_MOUSEOVER_UNIT")
+	local _, back = Box.Text(4)
+	check(back == "yours, and nobody is close",
+		"looking away and back did not build the box again: " .. tostring(back))
+
+	state.threatReader = function() return nil end
+	fire("UPDATE_MOUSEOVER_UNIT")
 
 	------------------------------------------------------------------
 	-- What the mob is wanted for

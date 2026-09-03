@@ -218,5 +218,48 @@ check(window ~= nil and window.width == wide,
 print(("lanes  %d weapons in two lanes, %.0f px of air between them, in a window %.0f wide")
 	:format(weapon and #weapon.entries or 0, gap / px, wide))
 
+----------------------------------------------------------------------
+-- One redraw a frame
+--
+-- BAG_UPDATE fires once per bag, so a stack that spills across two of them is
+-- two events for one thing happening, and a vendor sale that moves the money is
+-- a third with PLAYER_MONEY behind it. A refresh reads every slot you own,
+-- regrades every item and lays the piles out again, so answering each event
+-- where it lands is four full passes to draw one picture.
+--
+-- So the events book a pass and the frame runs it once. What is asserted is the
+-- booking rather than the drawing: the handler is there after the storm, one
+-- pass takes it away again, and a frame in which nothing moved never had one.
+----------------------------------------------------------------------
+
+do
+	local events
+	for _, frame in ipairs(H.frames) do
+		if frame.origin and frame.origin:match("Bags/Window") and frame.scripts.OnEvent then
+			events = frame
+		end
+	end
+	check(events ~= nil, "the bag window registered no events")
+
+	-- Whatever the sections above left booked, run off first: they loot, sell
+	-- and destroy out of these bags, and every one of those is a BAG_UPDATE.
+	if events.scripts.OnUpdate then
+		events.scripts.OnUpdate(events, 0)
+	end
+	check(events.scripts.OnUpdate == nil,
+		"the bag window is driving an OnUpdate with nothing booked on it")
+
+	H.fire("BAG_UPDATE", 1)
+	H.fire("BAG_UPDATE", 2)
+	H.fire("PLAYER_MONEY")
+	check(events.scripts.OnUpdate ~= nil,
+		"three events about one change booked no redraw at all")
+
+	events.scripts.OnUpdate(events, 0)
+	check(events.scripts.OnUpdate == nil,
+		"the redraw ran and left its handler on the frame, so the window is now"
+			.. " laying itself out on every frame of the game")
+end
+
 -- Left shut, the way 55-bags.lua found it.
 Window.Hide()

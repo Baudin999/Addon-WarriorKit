@@ -52,8 +52,25 @@ Book.DUNGEONS = Book.DUNGEONS or {}
 -- read past every time.
 local shown = nil
 
+-- Every boss by creature id, filled in the same walk. Two hundred and thirty
+-- seven bosses were scanned from the top three or four times per paint of the
+-- window and once per slot of a boss's loot, to answer a question a hash answers
+-- without looking at anything. One record per boss rather than three tables,
+-- because Boss hands back the boss, its dungeon and where in the run it stands.
+local byId = nil
+
 local function Wanted(dungeon)
 	return not (ns.vanilla and dungeon.era == "tbc")
+end
+
+-- Named rather than written inside All, where the boss walk would put the write
+-- four blocks deep and the shape gate stops at four. The gate is right: filing
+-- one dungeon's bosses is a different job from deciding which dungeons there
+-- are.
+local function Index(dungeon)
+	for order, boss in ipairs(dungeon.bosses) do
+		byId[boss.id] = { boss = boss, dungeon = dungeon, order = order }
+	end
 end
 
 -- Every dungeon this client can reach, in the order the list was written, which
@@ -63,10 +80,11 @@ function Book.All()
 	if shown then
 		return shown
 	end
-	shown = {}
+	shown, byId = {}, {}
 	for _, dungeon in ipairs(Book.DUNGEONS) do
 		if Wanted(dungeon) then
 			shown[#shown + 1] = dungeon
+			Index(dungeon)
 		end
 	end
 	return shown
@@ -90,14 +108,12 @@ end
 -- name and because the id is what a combat log line carries. Dungeons/Seen.lua
 -- has nothing but an id to work from.
 function Book.Boss(id)
-	for _, dungeon in ipairs(Book.All()) do
-		for order, boss in ipairs(dungeon.bosses) do
-			if boss.id == id then
-				return boss, dungeon, order
-			end
-		end
+	Book.All()
+	local found = byId[id]
+	if not found then
+		return nil
 	end
-	return nil
+	return found.boss, found.dungeon, found.order
 end
 
 -- Which dungeon holds this boss, by the key the window's left column selects

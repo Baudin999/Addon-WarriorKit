@@ -208,10 +208,13 @@ function Nag.Dead()
 end
 
 -- One bit per missing entry on one line. On the tick.
-function Nag.MissingMask(line)
+--
+-- `idle` is your racial's readiness, asked once by Update and handed down rather
+-- than asked again inside the walk.
+function Nag.MissingMask(line, idle)
 	local bits = 0
 	for index = 1, ns.Upkeep.Count() do
-		if ns.Upkeep.On(ns.Upkeep.Entry(index), line) and ns.Upkeep.Missing(index) then
+		if ns.Upkeep.On(ns.Upkeep.Entry(index), line) and ns.Upkeep.Missing(index, idle) then
 			bits = bits + BIT[index]
 		end
 	end
@@ -487,6 +490,12 @@ function Nag.Update()
 
 	local want, bits = "quiet", 0
 	local fighting = UnitAffectingCombat("player")
+
+	-- Asked once a tick, here, because two things want the same answer: whether
+	-- the racial square is missing, and the moment below that the tooltip counts
+	-- from. It is a spell name and a cooldown read, and it used to be both twice.
+	local idle = fighting and ns.Racials.Idle() or false
+
 	if not ns.db.buffs then
 		want = "quiet"
 	elseif not ns.db.locked then
@@ -494,7 +503,7 @@ function Nag.Update()
 	elseif Nag.Dead() then
 		want = "quiet"
 	elseif fighting then
-		bits = Nag.MissingMask(ns.Upkeep.IN)
+		bits = Nag.MissingMask(ns.Upkeep.IN, idle)
 		if bits ~= 0 then
 			want = "combat"
 		end
@@ -508,7 +517,6 @@ function Nag.Update()
 	-- The moment the racial came up, kept whether or not its square is drawn,
 	-- because the row can be quiet with the racial switched off and still owe
 	-- the number to a square that comes back later.
-	local idle = fighting and ns.Racials.Idle() or false
 	if idle and not racialIdle then
 		racialSince = GetTime()
 	end

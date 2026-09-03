@@ -859,6 +859,57 @@ function ns.BuffName(unit, index)
 	return nil
 end
 
+-- Every buff on you, as a set of names, walked once per change rather than once
+-- per reader.
+--
+-- Two parts ask this and both ask it on the same event. Buffs/Upkeep.lua asks
+-- what is missing and Cooldowns/Cooldowns.lua asks which burst window is open,
+-- and each walked forty slots of its own on every UNIT_AURA: eighty lookups to
+-- read one list twice. Neither may call the other, and neither is the natural
+-- owner of a list that is not about buffs it watches, so the walk is here with
+-- the rest of the shims and the answer is a set the callers key into. What a
+-- name means is still their business; this knows nothing but what is on you.
+--
+-- Walked on the first ask after an aura moved and read out of the table every
+-- time after that. The frame below registers UNIT_AURA before any feature does,
+-- because Core is the first file in both TOCs and the client hands an event to
+-- its frames in the order they asked for it, so the mark is already set by the
+-- time a feature's own handler runs.
+--
+-- Forty slots, which is the number every aura scan in the game stops at.
+local BUFF_SLOTS = 40
+
+local onMe = {}
+local buffsMoved = true
+
+function ns.MyBuffs()
+	if not buffsMoved then
+		return onMe
+	end
+	buffsMoved = false
+	for name in pairs(onMe) do
+		onMe[name] = nil
+	end
+	local index = 1
+	while index <= BUFF_SLOTS do
+		local name = ns.BuffName("player", index)
+		if not name then
+			break
+		end
+		onMe[name] = true
+		index = index + 1
+	end
+	return onMe
+end
+
+local function BuffsMoved()
+	buffsMoved = true
+end
+
+local auras = CreateFrame("Frame")
+ns.RegisterUnitEvent(auras, "UNIT_AURA", "player")
+auras:SetScript("OnEvent", BuffsMoved)
+
 -- Returns 1 in range, 0 out of range, nil when the check does not apply.
 function ns.SpellInRange(spell, unit)
 	if C_Spell and C_Spell.IsSpellInRange then

@@ -51,8 +51,17 @@ local SAMPLE_RATE = 1.0
 -- three by design: it reads one field and draws only on the frames a line
 -- arrived on. Named here so the tab can say what that costs during a pull,
 -- which is the question the change that put it on a tick was answering.
+--
+-- Ten more of them were missing the same way, and two of those run on every
+-- frame: the tooltip's own sweep and the chart's drift. A ticker whose name is
+-- not here is not timed at all and its row on the tab reads as unavailable, so
+-- the two most expensive shapes a tick can have were invisible on the tab
+-- written to find them. scripts/check.sh compares this list against every
+-- ns.UI.Ticker call in the addon now, in both directions.
 local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast",
-	"castsweep", "skin", "party", "meter", "buffs", "cooldowns", "hide", "feed" }
+	"castsweep", "tip", "chart", "skin", "party", "meter", "buffs", "cooldowns",
+	"stream", "world", "trace", "hide", "clock", "bagstack", "vendor", "thanks",
+	"sampler", "feed" }
 local slots = {}
 local gauges, gaugeOrder = {}, {}
 

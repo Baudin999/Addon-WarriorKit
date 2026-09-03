@@ -27,6 +27,10 @@ ns.Upkeep = Upkeep
 -- this client what it calls the spell in the language it is running in, which
 -- is what makes the comparison locale independent.
 --
+-- The walk of your own auras is ns.MyBuffs in Core rather than a loop here. The
+-- cooldown row reads the same forty slots off the same event to find out which
+-- burst window is open, and one walk answers both.
+--
 -- The aura scan is event driven and never runs from the ticker. UNIT_AURA fires
 -- for every aura you gain and every aura you lose, so a walk of forty slots ten
 -- times a second would be four hundred lookups to learn what one event already
@@ -50,11 +54,6 @@ local MAIN, OFF = ns.Gear.MAINHAND, ns.Gear.OFFHAND
 -- offered up for disabling.
 local GetWeaponEnchantInfo = _G.GetWeaponEnchantInfo
 local OffhandHasWeapon = _G.OffhandHasWeapon
-
--- How many of your own aura slots the client will answer for. Forty is the
--- number every aura scan in the game uses and the number the enemy bars' own
--- debuff walk stops at.
-local SLOTS = 40
 
 -- How many spells of your own you may add on top of the list below. Six,
 -- because the list this covers in practice is a flask and one or two elixirs,
@@ -457,22 +456,32 @@ end
 -- would be read out of the main hand's enchant id, which is a number, which is
 -- truthy, which is a nag that never fires and never says why.
 --
--- Counted on every read rather than once. A client does not change its mind
--- about an API mid-session, so a cache would be correct; what a cache also is
--- is a client answer this file has written down, and the whole point of the
--- count is not to have written a client answer down. It costs one extra call to
--- a function that reads two numbers off the player, four times a tenth of a
--- second, which is not a cost.
+-- Counted where the row is built and held after that, rather than counted on
+-- every read. Four times a tenth of a second the row asked how many values the
+-- call answers with and then asked for the values, which is double the calls all
+-- evening to be told the same number.
+--
+-- What is written down is the shape of the call and not a word about your gear.
+-- A client does not change its mind about an API mid-session, and the one moment
+-- it could answer differently is before it is ready to answer at all, which is
+-- why Rebuild counts it again: that runs at login, on the way into the world,
+-- when your spells arrive and on a settings change, and never on a tick.
 --------------------------------------------------------------------------
 
+-- 3 or 4 once counted, false for a client with no such call, nil for a shape
+-- nobody has asked for yet.
+local stride
+
 function Upkeep.EnchantShape()
+	if stride ~= nil then
+		return stride or nil
+	end
 	if type(GetWeaponEnchantInfo) ~= "function" then
+		stride = false
 		return nil
 	end
-	if select("#", GetWeaponEnchantInfo()) >= 8 then
-		return 4
-	end
-	return 3
+	stride = (select("#", GetWeaponEnchantInfo()) >= 8) and 4 or 3
+	return stride
 end
 
 -- Both hands out of one call: whether each is enchanted and how many seconds
@@ -541,12 +550,6 @@ end
 -- The list
 --------------------------------------------------------------------------
 
--- One aura slot's name. ns.BuffName is the shim, in Core with the rest of them
--- since the cooldown row started walking the same list for the same string.
-local function AuraName(index)
-	return ns.BuffName("player", index)
-end
-
 -- One spell id into the lookup, under whatever this client calls it. The first
 -- one that resolves gives the entry its name and its picture. `watch` is
 -- whether the scan should match the name onto this entry: a shelved entry gets
@@ -603,22 +606,21 @@ local function Track(entry, watch)
 end
 
 -- Which of the tracked auras are on you. Called from an event, never a tick.
+--
+-- The walk of your forty aura slots is ns.MyBuffs, in Core with the rest of the
+-- shims, because the cooldown row asks the same client the same question on the
+-- same event. What is left here is the part that is about this row: which of the
+-- names on you is a square.
 function Upkeep.Scan()
 	for index = 1, #order do
 		order[index].present = false
 	end
 
-	local index = 1
-	while index <= SLOTS do
-		local name = AuraName(index)
-		if not name then
-			break
-		end
+	for name in pairs(ns.MyBuffs()) do
 		local entry = wanted[name]
 		if entry then
 			entry.present = true
 		end
-		index = index + 1
 	end
 end
 
@@ -653,6 +655,12 @@ end
 -- Rebuild the live list from what ships, what your class added and whatever you
 -- have put on it yourself.
 function Upkeep.Rebuild()
+	-- Counted again, here, because this is the one path that runs at login, on
+	-- the way into the world and on a settings change, which is as often as the
+	-- shape of a client call can move: never, plus the once where the client was
+	-- not ready to answer.
+	stride = nil
+
 	for index = #order, 1, -1 do
 		order[index] = nil
 	end
@@ -711,14 +719,22 @@ end
 -- An entry this client cannot name is never missing. That is the same answer
 -- the debuff row gives an id it does not know: the slot keeps its place in case
 -- you log in on the flavour that does know it, and nothing is drawn meanwhile.
-function Upkeep.Missing(index)
+--
+-- `idle` is whether your racial is off cooldown, answered by a caller that is
+-- walking the whole list. It costs a spell name and a cooldown read, Nag.lua
+-- wants the same answer for the row and for the square's own record, and asking
+-- it here as well was that pair of calls twice a tick. Nil asks.
+function Upkeep.Missing(index, idle)
 	local entry = order[index]
 	if not entry then
 		return false
 	end
 	-- Ready, worth a square, and not already running on you.
 	if entry.racial then
-		return ns.Racials.Idle() and not entry.present
+		if idle == nil then
+			idle = ns.Racials.Idle()
+		end
+		return idle and not entry.present
 	end
 	if entry.hand then
 		return Upkeep.Bare(entry.hand)

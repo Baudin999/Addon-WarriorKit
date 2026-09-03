@@ -100,27 +100,41 @@ local BY_RACE = {
 	Draenei = { spell = 28880 },
 }
 
--- Asked every time and looked up only when the answer moves, which is the shape
--- ns.Class.Token uses and for the same reason. Race data is not reliably there
--- while files load, and a nil cached at load would lock an orc out of this for
--- the whole session. What is cached is the lookup, not the client's answer, so
--- the entry table stays the same table between ticks and nothing that compares
--- by identity sees it move.
+-- Held from the first answer that is not nil, which is ns.Class.Token's rule and
+-- is here for the same two reasons.
+--
+-- Race data is not reliably there while the files load, so an answer taken then
+-- would be nil and a nil written down would lock an orc out of this for the
+-- whole session. Nothing is written down until the client has spoken.
+--
+-- After that it is a local read. A character does not change race, and the row
+-- asked this three times a tick through Worth, Name and Ready: six calls to
+-- UnitRace every tenth of a second to be told the same word all evening.
 local token, mine
 
 function Racials.Mine()
+	if token then
+		return mine or nil
+	end
 	if type(UnitRace) ~= "function" then
 		return nil
 	end
 	local _, now = UnitRace("player")
 	if not now then
-		return mine or nil
+		return nil
 	end
-	if now ~= token then
-		token = now
-		mine = BY_RACE[now] or false
-	end
+	token = now
+	mine = BY_RACE[now] or false
 	return mine or nil
+end
+
+-- Drops the held race so the next ask reads the client again.
+--
+-- Nothing in a session calls this and nothing should: a race is settled before
+-- you log in. scripts/harness.lua is four characters in one process, and this
+-- is how it changes its mind about which one it is.
+function Racials.Forget()
+	token, mine = nil, nil
 end
 
 -- The spell id of your racial, or nil for a race with none listed.

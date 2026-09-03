@@ -39,9 +39,10 @@ ns.SwingGauges = SwingGauges
 -- and left that second throttle standing, which is why the bar still stepped
 -- after the first repair.
 --
--- So the fill is written as a fraction, on every frame, with no comparison in
--- front of it. What that costs was measured rather than argued: the harness
--- reads 0.03 KB per fifty ticks rounded and guarded, and 0.03 unguarded.
+-- So the fill is written as a fraction, on every frame a hand is swinging, with
+-- no comparison in front of it except the one that catches a hand that is not.
+-- What that costs was measured rather than argued: the harness reads 0.03 KB
+-- per fifty ticks rounded and guarded, and 0.03 unguarded.
 --
 -- Every other part of this addon draws on a ticker, because every other part is
 -- a readout and a readout fifty milliseconds stale is one nobody can fault.
@@ -223,14 +224,26 @@ end
 -- Everything below runs on every frame and nothing below allocates. Every
 -- write to the band, the mark and the colours is guarded on what is already on
 -- the widget, because those are static edges that change a few times a swing.
--- The fill is the one exception and check.sh is told why on the line itself.
+-- The fill is guarded on the one value it repeats, which is the empty bar
+-- between two swings.
 --------------------------------------------------------------------------
 
 -- Fraction returns zero for a hand with no swing running, so a bar between
 -- swings draws empty without a branch here.
+--
+-- The one comparison is the empty bar. A hand that is not swinging answers zero
+-- on every frame for as long as you stand there, and writing zero onto a bar
+-- already at zero is a measure and a relayout for a bar nobody can see moving.
+-- A hand that is swinging fails the test on its first frame and is written on
+-- every frame after it, which is what the header above argues for: the velocity
+-- of the edge is read out of where it sits between two pixels, and a frame it
+-- does not write is a frame it does not move on.
 local function DrawHand(bar, which)
-	bar.shownValue = ns.Swing.Fraction(which) * bar.pixels
-	bar:SetValue(bar.shownValue) -- unguarded: the moving edge, and a frame it does not write is a frame it does not move on
+	local value = ns.Swing.Fraction(which) * bar.pixels
+	if value ~= 0 or bar.shownValue ~= 0 then
+		bar.shownValue = value
+		bar:SetValue(value)
+	end
 end
 
 -- The band, the line down the middle of it, and the colour of the whole gauge

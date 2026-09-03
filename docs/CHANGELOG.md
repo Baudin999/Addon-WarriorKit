@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### Eleven smaller costs, taken off the paths that paid them
+
+The performance review that produced the last few entries ended with a list of
+small ones, and this is that list. Nothing on screen changes.
+
+The swing bars stop writing an empty bar on every frame between two swings. The
+buff row asked the client what race you are sixteen times a second to be told
+the same word all evening, and asks once now. It also counted how many values
+the weapon enchant call answers with before every read of it, and counts that
+where the row is built instead. The cooldown row read every cooldown twice a
+tick out of combat, once to decide whether to be on screen and once to draw, and
+reads them once. The buff row and the cooldown row both walked your forty aura
+slots on every aura you gain or lose, and one walk answers both now.
+
+The bag window redrew itself once per bag per change, so a stack that spilled
+across two bags and moved your money was three full redraws for one thing
+happening. It books one and draws on the next frame. Pointing at the same
+creature twice no longer rebuilds the hover box over it. The dungeon book found
+a boss by reading all two hundred and thirty seven of them from the top, three
+or four times per window paint and once per item in the loot list, and looks the
+id up now. Fonts are found by two table lookups rather than by building a string
+on every tooltip line and every keystroke. And the damage breakdown kept the
+level of every mob you ever targeted for the whole session, which is the one of
+the eleven that grew all evening.
+
+The performance tab was missing ten of the addon's twenty four tickers, two of
+which run on every frame: the tooltip's own sweep and the chart's drift. A
+ticker whose name is not on that list is not timed at all and its row read as
+unavailable, so the tab written to find an expensive tick was the one place an
+expensive tick could hide. All twenty four are on it, and the build refuses a
+ticker that is not.
+
 ### The feeds and the chat rooms draw once a frame
 
 The combat feed put a row on the screen the moment the log said so. In a pull

@@ -77,10 +77,6 @@ local MAX_CLASS = 8
 -- what the row costs to have the feature at all.
 local MAX_MINE = 6
 
--- How many of your own aura slots the client will answer for. Forty, the same
--- number every aura scan in the addon stops at.
-local SLOTS = 40
-
 local NONE = {}
 
 -- Which line a square is drawn on. Two strings rather than two booleans or a
@@ -850,22 +846,19 @@ end
 -- from UNIT_AURA and never from the ticker, which is the rule Buffs\Upkeep.lua
 -- states at length: forty slots ten times a second is four hundred lookups to
 -- learn what one event already said.
+--
+-- The forty slots themselves are ns.MyBuffs, in Core. The upkeep row asks the
+-- same client the same question on the same event, and one walk answers both.
 function Cooldowns.Scan()
 	for index = 1, #order do
 		order[index].present = false
 	end
 
-	local index = 1
-	while index <= SLOTS do
-		local name = ns.BuffName("player", index)
-		if not name then
-			break
-		end
+	for name in pairs(ns.MyBuffs()) do
 		local entry = wanted[name]
 		if entry then
 			entry.present = true
 		end
-		index = index + 1
 	end
 end
 
@@ -905,20 +898,6 @@ function Cooldowns.State(index)
 		return "cooldown", start, duration, entry.present
 	end
 	return "ready", start, duration, entry.present
-end
-
--- Is anything on the row still recovering. What the row is up for out of
--- combat, and the reason it is not up the rest of the time.
---
--- On the tick.
-function Cooldowns.Busy()
-	for index = 1, #order do
-		local status = Cooldowns.State(index)
-		if status == "cooldown" then
-			return true
-		end
-	end
-	return false
 end
 
 --------------------------------------------------------------------------

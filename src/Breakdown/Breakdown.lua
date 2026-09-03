@@ -165,10 +165,22 @@ end
 -- guid -> level, for the mobs the client will currently answer for.
 --
 -- Bounded by construction rather than by pruning: an entry arrives when a
--- nameplate appears or you take a target, and leaves when that plate does. That
--- is at most the plates on screen plus one, a few dozen, and it never grows
--- across an evening the way a cache keyed by every mob you have ever hit would.
+-- nameplate appears or you take a target, and leaves when that plate does or
+-- when you take a different target. That is at most the plates on screen plus
+-- one, a few dozen, and it never grows across an evening the way a cache keyed
+-- by every mob you have ever hit would.
+--
+-- The target half had no such leaving. Every target you ever took wrote a level
+-- in, only a plate going away took one out, and a mob targeted out of range of
+-- any plate stayed in the table for the session: an evening of tab targeting is
+-- thousands of entries nothing reads again. So the plates are a set of their
+-- own, and a target that has no plate is dropped as soon as you look elsewhere.
 local levels = {}
+local plates = {}
+
+-- The guid the target path last wrote a level for, so the next target change
+-- knows what to drop.
+local targeted
 
 local function Store()
 	return ns.dbc and ns.dbc.breakdownSpells
@@ -673,6 +685,7 @@ events:SetScript("OnEvent", function(_, event, unit)
 	if event == "NAME_PLATE_UNIT_ADDED" then
 		local guid = UnitGUID(unit)
 		if guid then
+			plates[guid] = true
 			levels[guid] = UnitLevel(unit)
 		end
 		return
@@ -683,14 +696,23 @@ events:SetScript("OnEvent", function(_, event, unit)
 		-- Kept while it is still your target, because a plate going away and a
 		-- mob you are still fighting are not the same thing: the plate is gone
 		-- the moment it leaves the screen and the target is not.
-		if guid and guid ~= UnitGUID("target") then
-			levels[guid] = nil
+		if guid then
+			plates[guid] = nil
+			if guid ~= UnitGUID("target") then
+				levels[guid] = nil
+			end
 		end
 		return
 	end
 
 	if event == "PLAYER_TARGET_CHANGED" then
 		local guid = UnitGUID("target")
+		-- The one you were looking at, dropped unless a plate is holding it up.
+		-- Anything a plate wrote is the plate's to take away.
+		if targeted and targeted ~= guid and not plates[targeted] then
+			levels[targeted] = nil
+		end
+		targeted = guid
 		if guid then
 			levels[guid] = UnitLevel("target")
 		end

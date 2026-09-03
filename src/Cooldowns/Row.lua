@@ -262,17 +262,53 @@ end
 -- already carries, which UI\Ability.lua does the guarding for.
 --------------------------------------------------------------------------
 
+-- Every square's cooldown, as it was read this tick.
+--
+-- Four lists made once at load and written in place, because a table per square
+-- per tick is the allocation the gate bans and this is the tick it would be on.
+local status, start, duration, active = {}, {}, {}, {}
+
+-- Whether this tick has read them yet, cleared by Update at the top of every one.
+local read = false
+
+-- One read of every entry per tick.
+--
+-- Both questions the tick asks want the same numbers. Wanted asks whether
+-- anything is still recovering, which is what puts the row on screen out of
+-- combat, and Paint asks each square what to draw; each walked the whole list
+-- calling the client, so a row of eight cost sixteen cooldown reads a tick to
+-- answer one question twice. Nothing here is a client call the second time.
+local function Read()
+	if read then
+		return
+	end
+	read = true
+	for slot = 1, ns.Cooldowns.Count() do
+		status[slot], start[slot], duration[slot], active[slot] = ns.Cooldowns.State(slot)
+	end
+end
+
+-- Is anything on the row still recovering, off what Read already asked.
+local function Busy()
+	for slot = 1, ns.Cooldowns.Count() do
+		if status[slot] == "cooldown" then
+			return true
+		end
+	end
+	return false
+end
+
 local function Paint()
+	Read()
 	local fade = (mode == "preview") and PREVIEW_FADE or 1
 	for slot = 1, count do
 		local w = icons[slot]
-		local status, start, duration, active = ns.Cooldowns.State(slot)
 		w.fade = fade
 		-- Kept on the widget for the tooltip, which is a hover rather than a
 		-- tick and has nowhere else to read them from.
-		w.status, w.start, w.duration = status, start, duration
-		ns.UI.Ability.Draw(w, w.entry and w.entry.texture, status, start, duration,
-			nil, active)
+		w.status, w.start, w.duration = status[slot], start[slot], duration[slot]
+		ns.UI.Ability.Draw(w, w.entry and w.entry.texture, status[slot], start[slot],
+			duration[slot], nil, active[slot])
 	end
 end
 
@@ -292,10 +328,11 @@ function Row.Wanted()
 	if UnitIsDeadOrGhost and UnitIsDeadOrGhost("player") then
 		return "quiet"
 	end
+	Read()
 	if UnitAffectingCombat("player") then
 		return "fight"
 	end
-	if ns.db.cooldownIdle or ns.Cooldowns.Busy() then
+	if ns.db.cooldownIdle or Busy() then
 		return "waiting"
 	end
 	return "quiet"
@@ -306,6 +343,7 @@ function Row.Update()
 		return
 	end
 
+	read = false
 	local want = Row.Wanted()
 	if want ~= mode or seen ~= ns.Cooldowns.Epoch() then
 		mode = want

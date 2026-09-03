@@ -48,6 +48,16 @@ local STEP = 0.1
 
 local open = false
 
+-- The mob the box on screen is about.
+--
+-- UPDATE_MOUSEOVER_UNIT does not fire once per hover. It fires whenever the
+-- token resolves, which a moving mob, a moving camera and a mob that dies and
+-- leaves a corpse under your pointer all do again for the same creature, and
+-- each one built the whole box a second time: a unit scan of Blizzard's tooltip,
+-- every band laid out again and the suppression armed on top of the box it was
+-- already holding down. The same guid is the same box.
+local looking
+
 -- Whether the last arm of the suppression actually took, for Describe. Nil
 -- until the first hover, because "not tried yet" and "this client refused" are
 -- different things to tell a player.
@@ -93,6 +103,7 @@ function World.Close(now)
 		return false
 	end
 	open = false
+	looking = nil
 	ticker:Hide()
 	ns.UI.Scan.Suppress(false)
 	ns.Tip.Close(now)
@@ -111,12 +122,19 @@ function World.Open()
 	if not World.Wanted() or not UnitExists(UNIT) then
 		return false
 	end
+	-- The same creature again, with our box already up for it. One call to find
+	-- that out against the whole build.
+	local guid = UnitGUID(UNIT)
+	if open and guid and guid == looking then
+		return true
+	end
 	if not ns.Tip.Open(ns.UI.Tooltip.CURSOR, Subject()) then
 		World.Close()
 		return false
 	end
 
 	open = true
+	looking = guid
 	suppressed = ns.UI.Scan.Suppress(true)
 	ticker:Show()
 	return true

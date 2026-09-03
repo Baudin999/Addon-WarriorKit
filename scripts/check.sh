@@ -341,6 +341,7 @@ HOT=$(lua5.1 ../scripts/hot.lua .) || {
 
 # path:cold markers in that file:function, and why the walk stops there
 COLD_ALLOWED="
+Bags/Window.lua:1:Booked is the redraw a frame after a bag moved, booked by an event and not by a tick
 Buffs/Nag.lua:1:Place is layout, run on a settings change and a rescale
 Charge/Icon.lua:1:MacroText runs behind SyncMacro comparing target, weapon and spell
 Cooldowns/Row.lua:1:Place is layout rather than tick
@@ -362,7 +363,6 @@ Perf/Feature.lua:1:Paint is assigned to ns.Perf.OnSample and called back through
 UNGUARDED_ALLOWED="
 Charge/Marker.lua:1:the two returns above leave only a marker that is already up
 Core/Core.lua:1:a one-shot ticker handing its own handler back
-Swing/Gauges.lua:1:the moving edge of a swing bar, and a frame it skips is a frame it does not move on
 UI/Draw.lua:1:the return above compares all four channels
 UI/Feed.lua:1:the return above compares the marker against what the row is drawing
 UnitFrames/Block.lua:1:the return above compares shown against want
@@ -673,6 +673,33 @@ while IFS= read -r bad; do
 	status=1
 done < <(grep -rnE 'SetScript\("OnUpdate", *function|UI\.Ticker\([^)]*, *function' \
 	--include='*.lua' . | grep -v '^\./UI/Ticker\.lua:.*function UI\.Ticker' || true)
+
+# Every ticker is timed, and every slot times a ticker.
+#
+# ns.Perf.Start looks a tick's name up in Perf's ORDER and returns without doing
+# anything for a name that is not on it, so a ticker missing from that list is
+# not measured at all and its row on the performance tab reads as unavailable.
+# Ten of the twenty four were missing and two of those run on every frame: the
+# tooltip's sweep and the chart's drift. The tab written to find an expensive
+# tick was the one place an expensive tick could hide, and nothing said a word,
+# because a lookup that misses is what "not timed" and "no such ticker" both
+# look like from inside Perf.Start.
+#
+# The other direction is the same debt spelled backwards. A slot left behind by
+# a ticker that was renamed or deleted draws a row nobody is filling in, which
+# reads as a part that costs nothing rather than as a part that is not there.
+armed=$(grep -rhoE 'UI\.Ticker\([^)]*"[a-z]+"' --include='*.lua' . \
+	| grep -oE '"[a-z]+"' | tr -d '"' | sort -u)
+timed=$(sed -n '/^local ORDER = {/,/}/p' Perf/Perf.lua \
+	| grep -oE '"[a-z]+"' | tr -d '"' | sort -u)
+if [ -z "$armed" ] || [ -z "$timed" ]; then
+	echo "the ticker names or Perf's slot list are no longer a list this gate can read"
+	status=1
+elif [ "$armed" != "$timed" ]; then
+	echo "the tickers and Perf's slot list disagree:"
+	diff <(printf '%s\n' "$armed") <(printf '%s\n' "$timed") | sed 's/^/  /'
+	status=1
+fi
 
 # The options window's own rules, in the half a grep can settle.
 #

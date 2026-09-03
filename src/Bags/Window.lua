@@ -385,13 +385,36 @@ end
 -- that is not obvious: an item the client had not cached is graded nil, so it
 -- sits in its class pile rather than in Junk until the answer arrives, and this
 -- is the arrival.
+--
+-- One redraw a frame, whatever the client says in it. Every one of these fires
+-- more than once for one thing happening: BAG_UPDATE comes once per bag, so
+-- looting a stack that spills across two bags is two, and a vendor sale that
+-- moves the money is a third with PLAYER_MONEY behind it. A refresh reads every
+-- slot you own, regrades every item and lays the piles out again, so paying for
+-- it four times in a frame is four full passes to draw one picture.
+--
+-- Booked rather than run, the way Core's binding pass is booked: the events set
+-- a flag, an OnUpdate that only exists while one is booked runs the refresh on
+-- the next frame, and it hands its own handler back. A frame in which nothing
+-- moved costs nothing at all.
 --------------------------------------------------------------------------
 
 local events = CreateFrame("Frame")
+
+-- cold: the redraw one frame after a bag moved, which is a change rather than a
+-- tick: the frame is given an OnUpdate only while a refresh is booked and takes
+-- it away again in the pass.
+local function Booked(self)
+	self:SetScript("OnUpdate", nil)
+	Window.Refresh()
+end
+
+local function Book()
+	events:SetScript("OnUpdate", Booked)
+end
+
 events:RegisterEvent("BAG_UPDATE")
 events:RegisterEvent("ITEM_LOCK_CHANGED")
 events:RegisterEvent("PLAYER_MONEY")
 events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
-events:SetScript("OnEvent", function()
-	Window.Refresh()
-end)
+events:SetScript("OnEvent", Book)
