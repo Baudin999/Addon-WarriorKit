@@ -121,11 +121,24 @@ local frame = CreateFrame("Frame")
 
 local GRAY = "|cff6b6b73%s|r"
 
+-- The clock, coloured and spaced, held until the minute turns.
+--
+-- Every line in every room asks for this and the answer is the same five
+-- characters for sixty seconds. Reading the clock is a call into the client and
+-- costs nothing; colouring it is a format and a join, so that half is behind
+-- the comparison and runs once a minute rather than once a line.
+local stampClock, stampText = nil, ""
+
 local function Stamp()
 	if not ns.db.chatStamp then
 		return ""
 	end
-	return GRAY:format(date("%H:%M")) .. " "
+	local clock = date("%H:%M")
+	if clock ~= stampClock then
+		stampClock = clock
+		stampText = GRAY:format(clock) .. " "
+	end
+	return stampText
 end
 
 -- Public because Chat/Window.lua writes one line of its own, into the room you
@@ -142,21 +155,24 @@ end
 -- in or out of your group. ns.Unit.Color owns the palette so the name in this
 -- window is the colour that name is on a nameplate and in the meters.
 --
--- White where the client will not say, which is a Battle.net whisper, a system
--- line and anything on a client with no GUID on the event.
+-- Nil where the client will not say, which is a Battle.net whisper, a system
+-- line and anything on a client with no GUID on the event. The caller draws
+-- those white. It is nil here rather than white because the caller keeps what it
+-- built, and a name that arrived once without a GUID must not stay white for the
+-- rest of the session.
 local function NameColor(guid)
 	if type(guid) ~= "string" or guid == "" then
-		return "ffffffff"
+		return nil
 	end
 	if type(_G.GetPlayerInfoByGUID) ~= "function" then
-		return "ffffffff"
+		return nil
 	end
 	-- The second return, not the first. The first is the class in this client's
 	-- language and the palette is keyed by the English token, so taking the one
 	-- that reads right in a debugger gives every name white on a French client.
 	local ok, _, class = pcall(_G.GetPlayerInfoByGUID, guid)
 	if not ok then
-		return "ffffffff"
+		return nil
 	end
 	return ns.Unit.Color.ClassHex(class)
 end
@@ -165,9 +181,41 @@ end
 -- full name including any realm, because that is what a whisper has to be
 -- addressed to; the label is the short one, because the realm is noise in a
 -- window this narrow.
+--
+-- Kept against the name it was made from. A conversation is the same handful of
+-- people saying things one after another, and one person's link is the same
+-- string on every line they send: the realm strip, the class lookup and the
+-- format all ran per line to arrive back at it. The class behind a name does not
+-- change, so the first line from someone builds their link and the rest read it.
+-- A line the client sent no GUID on is drawn white and not kept, so the next
+-- line from that name can still find their colour.
+local links = {}
+
 local function NameLink(name, guid)
-	local shown = name:gsub("%-.*$", "")
-	return ("|Hplayer:%s|h|c%s%s|r|h"):format(name, NameColor(guid), shown)
+	local link = links[name]
+	if not link then
+		local color = NameColor(guid)
+		local shown = name:gsub("%-.*$", "")
+		link = ("|Hplayer:%s|h|c%s%s|r|h"):format(name, color or "ffffffff", shown)
+		if color then
+			links[name] = link
+		end
+	end
+	return link
+end
+
+-- The bracketed channel mark in front of a line, held against the tag inside
+-- it. There are a dozen of these across a session, one per channel you can
+-- hear, and every line was building its own copy of one of them.
+local tags = {}
+
+local function Tagged(tag)
+	local shown = tags[tag]
+	if not shown then
+		shown = GRAY:format("[" .. tag .. "]")
+		tags[tag] = shown
+	end
+	return shown
 end
 
 -- Which colour the whole line is drawn in. The client's own table first, so a
@@ -258,7 +306,7 @@ function Feed.Handle(event, text, sender, _, _, target, _, _, channelIndex,
 		body = text
 	end
 
-	local line = ("%s%s %s"):format(Stamp(), GRAY:format("[" .. tag .. "]"), body)
+	local line = ("%s%s %s"):format(Stamp(), Tagged(tag), body) -- allocates: one string per chat line, which is the line the window draws; the stamp and the channel mark in front of it are held rather than rebuilt
 	Emit(rooms, line, kind.color, important)
 	return true
 end

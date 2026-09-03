@@ -1707,10 +1707,21 @@ fifty ticks, that was 51.76 KB before and 4.10 KB after. The plate path was
 already clean and measures 0.17 KB. An allocation behind an `if` is a cache
 being filled once and is fine; one the tick reaches every time is not.
 
+A string is an allocation on the same terms, and the scan reads those too.
+`:format(`, `string.format(` and the `..` operator each hand back a fresh
+string, and the string usually goes straight into a `SetText`, so a label built
+before the guard defeats the guard. That was `ThreatState`: it built the
+percentage into a string and its caller compared the string against what the bar
+was drawing, which is a comparison that always ran and never saved anything. The
+rule is compare the numbers, format after. Reading `..` takes a small lexer
+rather than a match, because a trailing comment and a string literal both hold
+two dots that are not an operator, and `...` is varargs.
+
 `check.sh` enforces this. `HOT` is every function a frame handler can reach, and
-a `:SetSomething(` call or a table constructor inside one fails the build unless
-an `if`, `elseif` or `else` stands between it and the top of the function. A
-`for` loop is not a guard: it repeats the write, it does not decide it.
+a `:SetSomething(` call, a table constructor, an anonymous function or a string
+built with a format or a join inside one fails the build unless an `if`,
+`elseif` or `else` stands between it and the top of the function. A `for` loop
+is not a guard: it repeats the write, it does not decide it.
 
 `HOT` used to be two hundred lines typed at the top of `check.sh`, and a typed
 transitive closure fails one way and says nothing while it does: a hot function
@@ -1721,7 +1732,7 @@ reads `ns.Alias = Local` out of each file first because the two spellings rarely
 agree, and takes a bare name as a same-file local, which is what Lua scoping says
 it can be. Calls are read at the function's own depth: a builder that defines
 twenty click handlers inside itself is not putting all twenty on a tick path.
-The list comes back at 480 functions where the typed one had 200.
+The list comes back at 478 functions where the typed one had 200.
 
 Two edges the text cannot carry are declared where they are, with a reason the
 script requires. `-- hot:` above a definition seeds it as a root: for a function
@@ -1741,14 +1752,18 @@ with nothing above it and nothing would say so.
 
 To exempt one line, put `-- unguarded: <reason>` on a write or
 `-- allocates: <reason>` on an allocation. The reason is required and the gate
-checks that it is there. Twenty four exemptions stand today. Nine are `allocates:`
-and all nine are the same shape, a cache filled once behind an early return the
-scan cannot see. Six of the fifteen `unguarded:` are the enemy bar putting a
-nameplate widget on a plate and taking it off again, which happens once per plate
-and not once per tick. Three are the moving edges, the writes meant to run on
-every frame whatever they are about to draw. The last six are the early-return
-shape on the write side, where the line above compares the value and returns when
-it already matches.
+checks that it is there. Thirty exemptions stand today, fifteen of each. Seven
+of the `allocates:` are a cache filled once behind a lookup or an early return
+the scan cannot see. Four are a string whose caller compares the numbers behind
+it first: the threat wording, the meter's short number, the purse rate and the
+money words. The last four are one thing built per event rather than per tick,
+which is a chat line, the preposition on a feed row, the object a tick is made
+of, and a fallback this client never takes. Six of the fifteen `unguarded:` are
+the enemy bar putting a nameplate widget on a plate and taking it off again,
+which happens once per plate and not once per tick. Three are the moving edges,
+the writes meant to run on every frame whatever they are about to draw. The last
+six are the early-return shape on the write side, where the line above compares
+the value and returns when it already matches.
 
 What is deliberately not guarded: `Paint.lua` re-applies `Flatten` and the
 portrait crop on every tick because Blizzard's own code puts the texture and the

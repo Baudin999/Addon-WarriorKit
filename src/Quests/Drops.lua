@@ -100,6 +100,12 @@ function Drops.NpcId(guid)
 	return ns.CreatureId(guid)
 end
 
+-- Questie keys its tooltip table by the creature id with an "m_" in front of
+-- it, and this is asked on every hover and every plate pass. The key is built
+-- once per creature and kept, because the id is the same number every time and
+-- joining it to a prefix is a fresh string every time.
+local keys = {}
+
 -- Every objective Questie has registered against that creature, or nil.
 --
 -- The table is Questie's own and is handed back rather than copied, so nothing
@@ -112,7 +118,12 @@ local function Registered(npcId)
 	if not tips or type(tips.lookupByKey) ~= "table" then
 		return nil
 	end
-	return tips.lookupByKey["m_" .. npcId]
+	local key = keys[npcId]
+	if not key then
+		key = "m_" .. npcId
+		keys[npcId] = key
+	end
+	return tips.lookupByKey[key]
 end
 
 -- One quest's name, as Questie's database has it. The client cannot be asked:

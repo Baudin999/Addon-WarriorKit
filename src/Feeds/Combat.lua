@@ -282,7 +282,7 @@ local function Note(outgoing, source, dest)
 	if not other or other == "" then
 		return ""
 	end
-	return (outgoing and "on %s" or "from %s"):format(other)
+	return (outgoing and "on %s" or "from %s"):format(other) -- allocates: one preposition per feed row, which is a thing that happened to you rather than a tick, and the rows are capped
 end
 
 -- The number, with a crit said in a glyph as well as in gold.

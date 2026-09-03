@@ -287,7 +287,7 @@ local function RateText(perHour)
 	if perHour > 0 then
 		return "+" .. ns.Thousands(perHour) .. "g/h"
 	end
-	return "-" .. ns.Thousands(-perHour) .. "g/h"
+	return "-" .. ns.Thousands(-perHour) .. "g/h" -- allocates: Purse.Line compares the rate in whole gold before it asks for this, so the words are built when the figure moves and not on the beat
 end
 
 -- What colour that cell is. Stable tables, handed back rather than built, for

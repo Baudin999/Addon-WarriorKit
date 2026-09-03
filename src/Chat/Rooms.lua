@@ -212,6 +212,24 @@ Rooms.OnClose = nil
 
 local GROUP, WHISPER = "group:", "whisper:"
 
+-- The id of a conversation, kept rather than joined again.
+--
+-- Five places wrote `WHISPER .. key`, and one of them is on the path every
+-- whisper takes: a line arrives, the room is asked for by name, and the prefix
+-- is joined to the key to say which room it is. The key is the same string for
+-- the same person for the whole session, so the id is built the first time that
+-- person is named and read back after that.
+local ids = {}
+
+local function WhisperRoom(key)
+	local id = ids[key]
+	if not id then
+		id = WHISPER .. key
+		ids[key] = id
+	end
+	return id
+end
+
 -- The fixed room, or nil where the id names one of yours.
 local function Fixed(id)
 	return byId[id]
@@ -266,7 +284,7 @@ end
 
 function Rooms.WhisperId(name)
 	local key = ns.People.Key(name)
-	return key and (WHISPER .. key) or nil
+	return key and WhisperRoom(key) or nil
 end
 
 -- A conversation you are already having, moved to the front. Which is what
@@ -289,7 +307,7 @@ end
 local function Sink()
 	while #whispers > WHISPERS do
 		local dropped = table.remove(whispers)
-		local id = WHISPER .. dropped.key
+		local id = WhisperRoom(dropped.key)
 		unread[id], speaker[id], brought[id] = nil, nil, nil
 		if Rooms.OnClose then
 			Rooms.OnClose(id)
@@ -311,7 +329,7 @@ function Rooms.Whisper(name)
 	-- The saved record is this list in this order, so it is written where the
 	-- order moves rather than at each of the two things that move it.
 	ns.ChatHistory.Talked(whispers)
-	return WHISPER .. key
+	return WhisperRoom(key)
 end
 
 -- Who /r answers: the person at the front of that list, which is whoever last
@@ -409,7 +427,7 @@ end
 
 local function AddWhispers(rows)
 	for _, entry in ipairs(whispers) do
-		Add(rows, WHISPER .. entry.key, entry.name:gsub("%-.*$", ""), "Whispers",
+		Add(rows, WhisperRoom(entry.key), entry.name:gsub("%-.*$", ""), "Whispers",
 			Rooms.ICONS.whisper)
 	end
 end
@@ -717,7 +735,7 @@ end
 -- conversation from before the reload.
 function Rooms.Wipe()
 	for _, entry in ipairs(whispers) do
-		local id = WHISPER .. entry.key
+		local id = WhisperRoom(entry.key)
 		if Rooms.OnClose then
 			Rooms.OnClose(id)
 		end

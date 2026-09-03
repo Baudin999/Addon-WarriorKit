@@ -658,17 +658,35 @@ local function Label(unit, owner)
 	local subject = owner or unit
 	local name = UnitName(subject)
 	local entry = labels[unit]
-	if entry and entry.name == name then
-		return entry.label
+	if not entry then
+		entry = { name = false, label = "" }
+		labels[unit] = entry
 	end
-	local _, class = UnitClass(subject)
-	local label = ("|c%s%s%s|r"):format(Color.ClassHex(class), owner and "*" or "", ShortName(name))
-	if entry then
-		entry.name, entry.label = name, label
-	else
-		labels[unit] = { name = name, label = label }
+	if entry.name ~= name then
+		local _, class = UnitClass(subject)
+		entry.name = name
+		entry.label = ("|c%s%s%s|r"):format(Color.ClassHex(class), owner and "*" or "",
+			ShortName(name))
 	end
-	return label
+	return entry.label
+end
+
+-- Two labels joined, held against the pair they were joined from.
+--
+-- Everyone on one mob reads as one line, so the second and every later member
+-- found on a mob joins what is there to what they add. That ran per member per
+-- tick and gave back the same sentence every time, because a group holding a
+-- boss holds it for the length of the fight. The left hand side is the key and
+-- the right hand side is checked against it, so a group that switches target
+-- rebuilds once and then reads it back.
+local joinRight, joinResult = {}, {}
+
+local function Join(left, right)
+	if joinRight[left] ~= right then
+		joinRight[left] = right
+		joinResult[left] = left .. " " .. right
+	end
+	return joinResult[left]
 end
 
 -- Hoisted out of BuildTargeters rather than declared inside it, because two
@@ -684,7 +702,7 @@ local function Record(unit, owner)
 		return
 	end
 	local label = Label(unit, owner)
-	targeters[guid] = targeters[guid] and (targeters[guid] .. " " .. label) or label
+	targeters[guid] = targeters[guid] and Join(targeters[guid], label) or label
 end
 
 local function Member(unit, petUnit)
@@ -781,7 +799,7 @@ local function ThreatLabel(percent, who, mode)
 	if who then
 		return ("%d%% %s"):format(percent, ShortName(who))
 	end
-	return ("%d%%"):format(percent)
+	return ("%d%%"):format(percent) -- allocates: PaintThreat compares the percentage, the name and the mode before it asks for the wording, so this runs on the pass one of the three moved
 end
 
 -- The per-slot tables are reused rather than rebuilt, so `found` carries one

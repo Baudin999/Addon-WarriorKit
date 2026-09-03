@@ -190,10 +190,17 @@ function UI.Ticker(frame, interval, name, fn)
 	-- because every permanent tick is on that one list. Two parts arming a tick
 	-- under the same name is two parts writing into one Perf slot, so the frame
 	-- they share is the right place to catch it.
+	-- An if rather than an assert, because Lua builds an assert's message
+	-- before it knows whether the assert holds. That joined three strings for
+	-- every tick already on the frame and then threw them away, which on
+	-- UI.Forever is the whole addon's tick list every time a part arms one.
+	-- The level is zero so the text raised is the sentence and nothing else,
+	-- which is what assert raised.
 	for index = 1, #list do
 		local other = list[index]
-		assert(not (other.running and other.name == name),
-			"a ticker named " .. name .. " is already running on this frame")
+		if other.running and other.name == name then
+			error("a ticker named " .. name .. " is already running on this frame", 0)
+		end
 	end
 
 	local tick = setmetatable({ -- allocates: one object per tick a part arms, built where the tick is created and never on the tick it then runs

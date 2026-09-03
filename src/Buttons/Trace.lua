@@ -51,6 +51,8 @@ local STRATA_UNKNOWN = "?"
 -- first, because that is what a fix has to name, and the parent's name after it
 -- when the frame has none of its own: Blizzard's furniture is full of anonymous
 -- children and "unnamed on MainMenuBar" is still an answer.
+--
+-- cold: Trace.Name reads the frame under the cursor, on the pass that frame changed
 function Trace.Name(frame)
 	if not frame then
 		return "nothing"
@@ -72,6 +74,8 @@ end
 -- What the cursor is carrying, in the three fields that matter to a drop. A
 -- drop is a cursor before and a cursor after, and this is what both are read
 -- with, so the two lines are comparable by eye.
+--
+-- cold: Trace.Cursor reads the cursor, on the pass the frame under it changed
 function Trace.Cursor()
 	if type(GetCursorInfo) ~= "function" then
 		return "no cursor api"
@@ -119,6 +123,8 @@ end
 
 -- One line, and only while the switch is on. Every caller is a gesture that
 -- happened once, so nothing here is on a tick and nothing is rate limited.
+--
+-- cold: Trace.Say prints one line, and only while the trace switch is on
 function Trace.Say(line)
 	if not running then
 		return
@@ -144,13 +150,12 @@ function Trace.Sample()
 	end
 
 	local focus = Trace.Focus()
-	if focus == last then
-		return
+	if focus ~= last then
+		last = focus
+		local slot = Trace.Slot(focus)
+		Trace.Say(("under the cursor: %s%s, holding %s"):format(
+			Trace.Name(focus), slot and (", action " .. slot) or "", Trace.Cursor()))
 	end
-	last = focus
-	local slot = Trace.Slot(focus)
-	Trace.Say(("under the cursor: %s%s, holding %s"):format(
-		Trace.Name(focus), slot and (", action " .. slot) or "", Trace.Cursor()))
 end
 
 ns.UI.Ticker(ns.UI.Forever, INTERVAL, "trace", Trace.Sample)

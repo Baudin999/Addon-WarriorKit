@@ -275,6 +275,24 @@ fi
 # allocation behind an if is a cache being filled once and is fine; an
 # allocation the tick reaches every time is not.
 #
+# A string is the fourth shape and it was missed for a long time. `:format(`,
+# `string.format(` and the `..` operator each hand back a fresh string, and Lua
+# interns none of them, so a label built every tick is garbage on the same
+# terms a table is. It is worse than a table in one way: the string usually
+# goes straight into a SetText, and a SetText of a string that compares equal
+# to the one already there still costs the measure. That was item 34.
+# ThreatState built its percentage into a string and its caller compared the
+# string against what the bar was drawing, so the guard read as a guard and let
+# every tick through. The rule is: compare the numbers, format after.
+#
+# Reading `..` off a line takes a small lexer rather than a match, because the
+# scan skips a whole-line comment and nothing else. A trailing `-- two dots ..`
+# on a line of code, and a `..` inside a string literal, are both text and
+# neither is a concatenation. So `code_of` walks the line, drops anything from
+# an unquoted `--` or `[[` to the end of it, and blanks what is inside quotes.
+# Varargs are the other false hit: `...` is three dots and is not an operator,
+# so it comes out before the two-dot test.
+#
 # To exempt one line, put `-- unguarded: <reason>` or `-- allocates: <reason>`
 # on it. A reason is required, because an exemption without one is the same
 # invisible debt as a warning. A whole function that a tick reaches but does not
@@ -334,23 +352,29 @@ HOT=$(lua5.1 ../scripts/hot.lua .) || {
 # another function or deleted fails here by name.
 #
 # `cold:` is the largest of the four and it is a work list, not a settled shape.
-# Seven of the nine are a builder or a layout pass, which is one repeated idea:
-# a function whose writes belong to a widget appearing rather than to the tick
-# that found it. If UI/ ever grows a construction seam those seven go through,
-# this list is three entries.
+# Seven of the fifteen are a builder or a layout pass, which is one repeated
+# idea: a function whose writes belong to a widget appearing rather than to the
+# tick that found it. If UI/ ever grows a construction seam those seven go
+# through, this list is eight entries. Four of the rest are a part talking to
+# you rather than drawing: the three in the mouse tracer and ns.Print under it.
 
 # path:cold markers in that file:function, and why the walk stops there
 COLD_ALLOWED="
 Bags/Window.lua:1:Booked is the redraw a frame after a bag moved, booked by an event and not by a tick
 Buffs/Nag.lua:1:Place is layout, run on a settings change and a rescale
+Buttons/Trace.lua:3:Trace.Cursor reads what the cursor is holding, on the pass the frame under it changed
+Buttons/Trace.lua:3:Trace.Name names the frame under the cursor, on the pass that frame changed
+Buttons/Trace.lua:3:Trace.Say prints one trace line, and only while the trace switch is on
 Charge/Icon.lua:1:MacroText runs behind SyncMacro comparing target, weapon and spell
 Cooldowns/Row.lua:1:Place is layout rather than tick
+Core/Core.lua:1:ns.Print writes one line into the chat frame, which is the addon telling you something
 UI/Ability.lua:1:Ability.Size is a settings change and a rescale, never a tick
 UI/Aura.lua:1:Aura.Size is a settings change and a rescale, never a tick
 UI/Feed.lua:1:Feed:Enter fills a tooltip, which is a hover, and the one reopen that is not is throttled to a fifth of a second
 UnitFrames/Auras.lua:1:Grow builds the squares an aura row has not needed yet, on the pass a unit first carries that many
 UnitFrames/EnemyBars.lua:2:CreateWidget builds one nameplate widget, on the tick a plate first appears
 UnitFrames/EnemyBars.lua:2:LayoutWidget places every region of one widget, on a rescale or a settings change
+UnitFrames/Plates.lua:1:ApplyOverlap writes the plate overlap CVar, on a settings change and on the login that finds the size call did not take
 "
 
 # path:hot markers in that file:function, and why the walk cannot reach it
@@ -388,10 +412,16 @@ UnitFrames/PlayerCast.lua:2:the moving edge of the player's cast and of the chan
 ALLOCATES_ALLOWED="
 Breakdown/Breakdown.lua:1:one record per spell id ever recorded, behind the two returns above it
 Charge/Charge.lua:1:a fallback path the live client's GetNamePlateForUnit never reaches
+Chat/Feed.lua:1:one string per chat line, which is the line the window draws
+Core/Core.lua:1:one join per denomination in one money reading, and every caller compares the copper figure first
+Feeds/Combat.lua:1:one preposition per feed row, which is a thing that happened to you rather than a tick
+Feeds/Purse.lua:1:the words for a rate, built where Purse.Line found the figure in whole gold moved
+Meter/Window.lua:1:the words for a number, built where the row found the number moved
 UI/Ticker.lua:1:one object per tick a part arms, built where the tick is created
 Unit/Color.lua:3:one tint and one fill per class, filled once behind a lookup the scan cannot see
 Unit/Level.lua:2:one table per classification and one string per level, both behind a lookup
 Unit/Unit.lua:1:one token per unit ever seen, behind a lookup the scan cannot see
+UnitFrames/EnemyBars.lua:1:the threat wording, built where PaintThreat found one of the three values it compares moved
 "
 
 markers=$(lua5.1 ../scripts/hot.lua --markers .) || {
@@ -516,7 +546,34 @@ exemption_list unguarded UNGUARDED_ALLOWED "$UNGUARDED_ALLOWED"
 exemption_list allocates ALLOCATES_ALLOWED "$ALLOCATES_ALLOWED"
 
 hot_scan='
-BEGIN { inside = 0 }
+BEGIN { inside = 0; QUOTE = sprintf("%c", 39) }
+
+# The line with its comments and its string literals taken out, so that a `..`
+# which is prose or is part of a message does not read as an operator. Anything
+# from an unquoted `--` or an opening `[[` to the end of the line goes, and the
+# body of a quoted string goes while its quotes stay.
+function code_of(s,   out, i, n, c, q) {
+	out = ""
+	i = 1
+	n = length(s)
+	q = ""
+	while (i <= n) {
+		c = substr(s, i, 1)
+		if (q != "") {
+			if (c == "\\") { i += 2; continue }
+			if (c == q) { out = out c; q = "" }
+			i++
+			continue
+		}
+		if (c == "\"" || c == QUOTE) { q = c; out = out c; i++; continue }
+		if (c == "-" && substr(s, i + 1, 1) == "-") break
+		if (c == "[" && substr(s, i + 1, 1) == "[") break
+		out = out c
+		i++
+	}
+	return out
+}
+
 {
 	line = $0
 	if (!inside) {
@@ -541,8 +598,14 @@ BEGIN { inside = 0 }
 	else if (body ~ / then$/) opener[indent + 1] = "if"
 	else if (body ~ / do$/) opener[indent + 1] = "loop"
 
+	code = code_of(body)
+	joins = code
+	gsub(/\.\.\./, " ", joins)
+
 	writes = (body ~ /:Set[A-Z][A-Za-z]*\(/)
-	allocates = (body ~ /\{/ || body ~ /function[ ]*\(/)
+	allocates = (body ~ /\{/ || body ~ /function[ ]*\(/ \
+		|| code ~ /:format\(/ || code ~ /string\.format\(/ \
+		|| joins ~ /\.\./)
 	if (!writes && !allocates) next
 
 	kind = writes ? "writes" : "allocates"

@@ -342,6 +342,7 @@ function ns.Unstrip(region)
 	return true
 end
 
+-- cold: ns.Print writes one line into the chat frame, which is the addon telling you something and never a tick
 function ns.Print(msg)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff40c0f0WarriorKit|r: " .. msg)
 end
@@ -1113,7 +1114,7 @@ local function Spell(copper, exact, paint)
 		if index > 1 then
 			text = text .. " "
 		end
-		text = text .. paint(written[index], written[index + 1])
+		text = text .. paint(written[index], written[index + 1]) -- allocates: one join per denomination in one reading, and every caller compares the copper figure before it asks for the words
 	end
 	return text
 end

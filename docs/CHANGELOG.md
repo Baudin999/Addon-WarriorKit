@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+### A string built every tick is garbage every tick
+
+The allocation scan counted a table constructor and an anonymous function and
+stopped there. `:format(` and `..` hand back a fresh string just as a `{` hands
+back a fresh table, and the string is usually on its way into a `SetText`, so a
+label built before the guard is what defeats the guard. That was item 34:
+`ThreatState` formatted the percentage and its caller compared the formatted
+string against what the bar was drawing, a comparison that ran every tick and
+saved nothing. The scan reads all three shapes now. Two dots inside a trailing
+comment or inside a string are not an operator and `...` is varargs, so the line
+goes through a small lexer before the test rather than through a match.
+
+It found twenty things on the tick and event paths. Nine are fixed in code, six
+carry a reason on the line, and five sit inside a function marked cold.
+
+`UI.Ticker` built its refusal message before it knew whether it was refusing,
+because Lua evaluates an assert's message either way. Arming a tick on
+`UI.Forever` joined three strings for every tick already on that frame and threw
+them all away. It is an `if` and an `error` now, so the sentence is built when a
+name really is taken.
+
+Five more are a string held instead of rebuilt. The chat stamp is coloured once
+a minute rather than once a line, off the clock reading itself. A speaker's
+link, which is a realm strip, a class lookup and a format, is built on their
+first line and read back on the rest, and a line the client sent no GUID on is
+drawn white and not kept so their colour can still arrive. The bracketed channel
+mark is one string per channel. A whisper room's id is joined once per person
+rather than on every whisper. Questie's tooltip key is joined once per creature.
+
+Two more are the enemy bars. The group label cache built its string outside the
+lookup that was meant to save it, so the lookup holds the whole of it now. And
+everyone on one mob reads as one line, which joined two strings per member per
+tick to arrive at the same sentence all fight. That join is held against the
+pair it was made from.
+
+The ninth is the mouse tracer, where the test that decides whether the cursor
+has moved was a return rather than a branch. It is a branch now, which is where
+the scan can read it.
+
+Six are exempt with a reason on the line. Four are the item 34 shape done right,
+where the caller compares the numbers and only then asks for the words: the
+threat wording, the meter's short number, the purse rate and the money words.
+The other two are one string per thing that happened, which is a chat line and
+the preposition on a feed row. Five functions are marked `-- cold:` instead,
+because the whole of each is a part talking to you rather than drawing: the
+three in the mouse tracer, `ns.Print` under them, and the plate overlap CVar.
+
 ### The gate reaches the event paths too
 
 `scripts/hot.lua` walked out from tickers and `OnUpdate` handlers, so the guard

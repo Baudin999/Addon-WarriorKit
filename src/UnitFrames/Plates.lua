@@ -172,6 +172,8 @@ end
 -- Only on the fallback path. Where the size call took, the driver already knows
 -- how tall a plate is and multiplying that again would space plates by twice
 -- the bar; where it did not, this is the whole of the fix.
+--
+-- cold: ApplyOverlap writes the plate overlap CVar, on a settings change and on the login that finds the size call did not take
 local function ApplyOverlap()
 	if sizeApplied or not naturalHeight or not footprintHeight then
 		return true

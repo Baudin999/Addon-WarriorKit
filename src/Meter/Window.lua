@@ -457,7 +457,7 @@ local function Short(value)
 	if value >= 10000 then
 		return ("%.1fk"):format(value / 1000)
 	end
-	return ("%d"):format(value)
+	return ("%d"):format(value) -- allocates: every caller compares the number against the one the row is showing before it asks for the words, as the note above says
 end
 
 local function Blank(pane, from)
