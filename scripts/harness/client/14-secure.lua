@@ -75,6 +75,14 @@ function Region:Click(button, down)
 	if clicks and not (clicks["Any" .. edge] or clicks[button .. edge]) then
 		return false
 	end
+	-- A button the frame hands through to whatever is behind it never reaches
+	-- the frame's own scripts, however it registered. The chat rail shipped
+	-- with the right button registered and passed through at once, and the
+	-- harness pressed the script directly, so it certified a close the live
+	-- client could not perform.
+	if self.passed and self.passed[button] then
+		return false
+	end
 	local scripts = self.scripts
 	if scripts and scripts.PreClick then
 		scripts.PreClick(self, button, down and true or false)

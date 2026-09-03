@@ -79,7 +79,11 @@ eleven point text and wrong for anyone who had moved the text up.
 A conversation can be closed. Right click its room, or `/wk chat close
 <name>`, and it comes off the rail, hands its log back and stops being one of
 the conversations the next login brings back. What they said is still in
-Conversation, and the next whisper from them opens the room again.
+Conversation, and the next whisper from them opens the room again. The right
+click shipped turning the camera instead, because the rail's rows handed that
+button through to it; a row that answers the right button keeps it now, and
+the harness presses rows the way the client does so it fails on a button a
+row passes through.
 
 A room can be copied. Right click its lines, or `/wk chat copy`, and a box
 opens holding the room as plain text with the colour codes and the links taken

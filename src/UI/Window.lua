@@ -1255,7 +1255,17 @@ local function IconRow(list, button)
 	-- describe. What ns.Tip.Hang would have done for free is the one thing left, and
 	-- it is the thing a frame under the cursor all evening cannot do without:
 	-- a right drag over the rail has to turn the camera rather than stop dead.
-	UI.PassCamera(button)
+	--
+	-- Unless the row answers the right button itself. A button passed through
+	-- never reaches the frame's scripts, whatever RegisterForClicks said, so a
+	-- rail that hands the camera its right button and closes a conversation on
+	-- the same button does the first and never the second. That is how a
+	-- right click on a whisper room turned the camera and left the room where
+	-- it was. A column that took the gesture keeps the button, and the price
+	-- is that a right drag begun on its rows does not turn the camera.
+	if not (list.onBack or list.onRight) then
+		UI.PassCamera(button)
+	end
 	return button
 end
 
@@ -1534,11 +1544,12 @@ function List:Click(id, which)
 	for index = 1, #self.pool do
 		local button = self.pool[index]
 		if button.id ~= nil and button.id == id and button:IsShown() then
-			local press = button:GetScript("OnClick")
-			if press then
-				press(button, which or "LeftButton")
-				return true
-			end
+			-- Through the button's own press rather than its OnClick script,
+			-- because the press is where the client decides whether the
+			-- button reaches the script at all. Calling the script handed the
+			-- chat rail a right click its rows were passing through to the
+			-- camera, and certified a close that never happened in game.
+			return button:Click(which or "LeftButton")
 		end
 	end
 	return false
