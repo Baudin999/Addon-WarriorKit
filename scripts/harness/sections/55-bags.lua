@@ -719,9 +719,13 @@ do
 		return passes
 	end
 
+	-- In the title bar, a mark in the glyph face, and the hover is the word.
 	local button = Window.Frame().stack
-	check(button ~= nil and button.text:GetText() == "stack",
-		"the footer has no button marked stack on it")
+	check(button ~= nil and button.text:GetText() == "=" and (button.text:GetFont())
+		== "Interface\\AddOns\\WarriorKit\\Media\\Glyphs.ttf",
+		"the title bar has no button wearing the stack mark in the glyph face")
+	check(button ~= nil and button.tip():find("half stacks", 1, true) ~= nil,
+		"resting on the stack button says nothing about half stacks")
 
 	-- Twelve and eighteen, through the button rather than through the module,
 	-- so what is driven is the press a player makes.

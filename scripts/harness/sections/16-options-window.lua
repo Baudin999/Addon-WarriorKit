@@ -689,8 +689,16 @@ if window then
 	-- cost no prose at all, because a square that stays where it was when its
 	-- item sold is a thing you watch happen. 27,750 is that plus a hint's worth
 	-- of room again.
-	check(prose < 27750,
-		("the window holds %d characters of prose and the budget is 27,750"):format(prose))
+	--
+	-- The price rule arrived and it is 27,762 across the same sixty-eight: one
+	-- field and one hint on the loot page, and one sentence more on its lede.
+	-- The hint is what the field cannot say, that the floor is read against the
+	-- whole slot and that nought is off. The lede's sentence is the one link
+	-- the page needs to the bag window, whose filter button throws this switch
+	-- and the leftovers one together; the button's own hover says the same
+	-- thing the other way round. 27,950 is that plus a hint's worth of room.
+	check(prose < 27950,
+		("the window holds %d characters of prose and the budget is 27,950"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

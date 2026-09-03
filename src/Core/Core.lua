@@ -1169,6 +1169,47 @@ function ns.Coins(copper)
 		copper % SILVER
 end
 
+-- The same number written out in all three denominations, "0g 20s 0c". It is
+-- the shape a field you type a floor into shows, because ns.Coin drops the
+-- parts that are nought and ns.Coined colours them, and neither is what an
+-- edit box wants under the cursor: a field that shows "20s" teaches nobody
+-- that "1g 20s" is also an answer.
+function ns.CoinSpelt(copper)
+	local gold, silver, rest = ns.Coins(copper)
+	return ("%dg %ds %dc"):format(gold, silver, rest)
+end
+
+-- The inverse. "0g 20s 0c", "1g 20s", "20s" and "1g5s" are all a sum, and a
+-- bare number is copper, which is what ns.Coin prints for one. Nil for
+-- anything that is not a sum of money, so a caller keeps the number it had
+-- rather than writing nought over it because somebody typed a word.
+function ns.Uncoin(text)
+	if type(text) ~= "string" then
+		return nil
+	end
+	local rest = (text:lower():gsub("%s+", ""))
+	if rest == "" then
+		return nil
+	end
+	if rest:match("^%d+$") then
+		return tonumber(rest)
+	end
+	local total = 0
+	for amount, letter in rest:gmatch("(%d+)([gsc])") do
+		local unit = 1
+		if letter == "g" then
+			unit = GOLD
+		elseif letter == "s" then
+			unit = SILVER
+		end
+		total = total + tonumber(amount) * unit
+	end
+	if (rest:gsub("%d+[gsc]", "")) ~= "" then
+		return nil
+	end
+	return total
+end
+
 ns.GOLD, ns.SILVER = GOLD, SILVER
 
 --------------------------------------------------------------------------

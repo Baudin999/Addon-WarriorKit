@@ -84,6 +84,7 @@ local function nothing()
 	ns.dbc.lootLeather, ns.dbc.lootEnchanting = false, false
 	ns.dbc.lootGems, ns.dbc.lootMeat = false, false
 	ns.dbc.lootCrafted = false
+	ns.dbc.lootWorth = 0
 end
 
 _G.SetCVar("autoLootDefault", 1)
@@ -170,6 +171,92 @@ for index = 1, #KINDS do
 end
 
 ----------------------------------------------------------------------
+-- A grey or white worth carrying to a vendor
+----------------------------------------------------------------------
+
+-- The floor is read against the whole slot, so the fixture's prices are the
+-- claim: the dust is a slot worth one silver, the gem two, the water four,
+-- and the ore thirty copper. The cudgel is worth twelve silver and is green,
+-- and it staying on the corpse is the assertion that carries the weight: the
+-- price rule reads greys and whites and nothing the colour floor was told to
+-- refuse.
+nothing()
+ns.dbc.lootWorth = 100
+pass()
+check(took() == expect(COINS, QUEST, DUST, GEM, CRAFTED),
+	("a floor of one silver took %s, and the dust, the gem and the water are"
+		.. " the three slots worth that"):format(took()))
+
+ns.dbc.lootWorth = 30
+pass()
+check(took() == expect(COINS, QUEST, ORE, DUST, GEM, CRAFTED),
+	("a floor of thirty copper took %s, and the ore is worth exactly that"):format(took()))
+
+-- Two on the slot doubles what the slot is worth, which is the whole reason
+-- the rule reads the slot rather than the item.
+loot.Set({ { quality = 0 }, { quality = 1, item = "Light Leather", count = 4 } })
+ns.dbc.lootWorth = 100
+pass()
+check(took() == expect(1, 2),
+	("four leather at twenty five is a slot worth a silver, and the pass took %s"):format(took()))
+loot.Set({ { quality = 0 }, { quality = 1, item = "Light Leather", count = 3 } })
+pass()
+check(took() == expect(1),
+	("three leather at twenty five is under a silver, and the pass took %s"):format(took()))
+loot.Set(SLOTS)
+
+-- An item the client has not priced yet comes home. The stub's "not cached"
+-- is GetItemInfo answering nothing, and with the floor on that has to read
+-- as keep rather than as a price of nought, because refused is destroyed
+-- once the leftovers are on and this is the one rule that stands between a
+-- white sword and the bin.
+loot.Set({ { quality = 0 }, { quality = 1, item = "Light Leather", count = 1 } })
+ns.dbc.lootWorth = 100
+do
+	-- Both doors, because Core resolves C_Item.GetItemInfo where the client
+	-- carries it and the loose global where it does not, and the stub carries
+	-- both.
+	local real = _G.C_Item.GetItemInfo
+	local function uncached(link)
+		if type(link) == "string" and link:find("Light Leather", 1, true) then
+			return nil
+		end
+		return real(link)
+	end
+	_G.C_Item.GetItemInfo, _G.GetItemInfo = uncached, uncached
+	pass()
+	_G.C_Item.GetItemInfo, _G.GetItemInfo = real, real
+end
+check(took() == expect(1, 2),
+	("one unpriced leather under a floor of a silver was left, and the pass took %s"):format(took()))
+pass()
+check(took() == expect(1),
+	("the same leather priced at twenty five was taken under a floor of a silver, the pass took %s"):format(took()))
+loot.Set(SLOTS)
+
+-- Nought is the rule off, and the reading says nothing about it.
+nothing()
+pass()
+check(took() == expect(COINS, QUEST),
+	("the price rule at nought took %s"):format(took()))
+check(ns.Wanted.Describe() == "nothing by colour",
+	("the price rule at nought reads as %q"):format(ns.Wanted.Describe()))
+
+-- The two halves of the field on the settings page: what it shows and what it
+-- reads back. Every shape somebody would type is a sum, and a word is not.
+check(ns.CoinSpelt(2000) == "0g 20s 0c",
+	("twenty silver spelt as %q"):format(ns.CoinSpelt(2000)))
+check(ns.CoinSpelt(12345) == "1g 23s 45c",
+	("one gold twenty three forty five spelt as %q"):format(ns.CoinSpelt(12345)))
+check(ns.Uncoin("0g 20s 0c") == 2000 and ns.Uncoin("20s") == 2000
+	and ns.Uncoin("1g5s") == 10500 and ns.Uncoin(" 1G 20S 3C ") == 12003
+	and ns.Uncoin("45") == 45,
+	"a sum of money typed into the field did not read back as the copper it is")
+check(ns.Uncoin("twenty") == nil and ns.Uncoin("") == nil
+	and ns.Uncoin("20s and a bit") == nil and ns.Uncoin(nil) == nil,
+	"a line that is not a sum of money read back as one")
+
+----------------------------------------------------------------------
 -- What my professions use
 ----------------------------------------------------------------------
 
@@ -231,6 +318,26 @@ ns.dbc.lootCloth, ns.dbc.lootOre, ns.dbc.lootCrafted = true, true, true
 check(ns.Wanted.Describe() == "greens and up, cloth, ore, and what my professions use",
 	("the filter reads as %q"):format(ns.Wanted.Describe()))
 
+ns.dbc.lootWorth = 2000
+check(ns.Wanted.Describe() == "greens and up, cloth, ore, a grey or white worth 20s 0c, and what my professions use",
+	("the filter with a price floor reads as %q"):format(ns.Wanted.Describe()))
+
+----------------------------------------------------------------------
+-- The switch the bag window presses
+----------------------------------------------------------------------
+
+-- One press is both settings, because a filter without the leftovers is a
+-- corpse nobody can skin. Off puts both back, and Leftovers is told each
+-- way, which is what its pending count going to nought proves.
+ns.dbc.lootFilter, ns.dbc.lootDestroy = false, false
+check(ns.Wanted.Toggle() == true and ns.dbc.lootFilter and ns.dbc.lootDestroy,
+	"the first press did not switch the filter and the leftovers on together")
+check(ns.Wanted.Running(), "the filter is on and Running says it is not")
+check(ns.Wanted.Toggle() == false and not ns.dbc.lootFilter and not ns.dbc.lootDestroy,
+	"the second press did not switch both off again")
+check(not ns.Wanted.Running(), "the filter is off and Running says it is on")
+ns.dbc.lootFilter = true
+
 nothing()
 ns.dbc.lootHerbs = true
 check(ns.Wanted.Describe() == "nothing by colour, herbs",
@@ -243,6 +350,7 @@ check(ns.Wanted.Describe() == "nothing by colour, herbs",
 nothing()
 ns.dbc.lootFloor = 2
 ns.dbc.lootCloth, ns.dbc.lootOre, ns.dbc.lootCrafted = true, true, true
+ns.dbc.lootWorth = 2000
 local shipped = ns.Wanted.Describe()
 ns.dbc.lootFilter = false
 

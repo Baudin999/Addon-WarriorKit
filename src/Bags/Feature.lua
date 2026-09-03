@@ -3,8 +3,9 @@ local ADDON, ns = ...
 -- Everything Core and the panel need to know about the bag window. Bags.lua,
 -- Stack.lua, Session.lua, Grid.lua, Merchant.lua, Window.lua and Blizzard.lua
 -- hold the behaviour, and this and Window.lua are the only two files in the
--- folder that name anything outside it. Window.lua's one reach is the clutter
--- window, which its clear button opens and which it says why at.
+-- folder that name anything outside it. Window.lua reaches two things: the
+-- clutter window, which its clear button opens, and the pickup filter's
+-- switch, which its filter button presses. It says why at both.
 
 local LOW_COLUMNS, HIGH_COLUMNS = 6, 16
 
@@ -244,7 +245,7 @@ ns.Register({
 			SetHover, HoverLabel)
 		ui.Hint("How long the pointer holds still on a square before its box opens. Crossing the window to reach a square opens nothing on the way.")
 		ui.Action(StackLabel, ns.BagsStack.Press)
-		ui.Hint("Twelve cloth in one slot and eighteen in another come out twenty and ten, and the slot under them is yours again. Nothing else moves. The same press is on the window's own footer.")
+		ui.Hint("Twelve cloth in one slot and eighteen in another come out twenty and ten, and the slot under them is yours again. Nothing else moves. The same press is on the window's title bar.")
 		ui.Action(function() return "clear what you are finished with" end,
 			function() ns.Destroy.Show() end)
 		ui.Hint("The clear button in the title bar. One card at a time, skip or destroy: spent quest items, then greys not worth the slot, then gear you outgrew. The two thresholds are on the Clutter tab.")

@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### The pickup filter, from the bag window
+
+A run of an old dungeon fills your bags with teeth and vendor mail, and the
+loot filter that keeps them out was three tick boxes deep in the settings. The
+bag window's title bar now carries a filter button: one press starts the
+filter and the leftovers together, so what you did not ask for is looted and
+destroyed and the corpse can be skinned, and the next press stops both. It is
+green while it is on. The colour floor, the kinds, the professions and the
+price floor stay on the Loot page, and the button only starts and stops.
+
+The price floor is new. A grey or white whose vendor price is at or above a
+minimum you set comes home whatever the colour floor says, so a white sword
+worth two gold is not thrown in the bin with the femurs. The minimum is
+written as gold, silver and copper, `0g 20s 0c` by default, and is read
+against the whole slot: four whites at twenty five silver are a slot worth a
+gold. Nought switches the rule off. Green and better is still the colour's
+decision, so a run with the floor at blue refuses a green whatever it sells
+for.
+
+### Marks along the top of the bag window
+
+The title bar's buttons wore words, and record turned into stop under the
+pointer. Every button in that row is a mark now, at the height of the close
+cross: record, clear, stack, filter, and forget on the far left while there
+is a session to forget. Resting on one says in a sentence what it does, and
+the sentence reads the state, so the record button says which way the next
+press goes and forget says how much it is about to throw away. The stack
+button moved up from the footer, which is the two numbers and nothing else
+now.
+
 ### The squares hold still while you sell
 
 Selling a grey took it out of its pile and the pile closed the gap, so every

@@ -9,7 +9,7 @@ local ADDON, ns = ...
 -- save you.
 --
 -- So this file is one question asked once per slot: do you want this. It has
--- three kinds of answer and any one of them takes the slot.
+-- four kinds of answer and any one of them takes the slot.
 --
 --   The colour. A quality floor, because "greens and up" is the sentence
 --   people say out loud when they describe how they run an old instance. Five
@@ -21,6 +21,12 @@ local ADDON, ns = ...
 --   item under. Nothing here is a name or a search string, for the reason
 --   Core/Piles.lua gives: the client has already sorted every item in the game
 --   and every bag addon in the world throws the answer away.
+--
+--   The price. A grey or white the vendor pays at least your floor for, the
+--   floor written as gold, silver and copper on the settings page and read
+--   against the whole slot. This is the rule that keeps a white sword worth
+--   two gold out of the bin on a run where the colour floor is green, and
+--   nought is the rule switched off.
 --
 --   What your professions use, which is Comfort/Reagents.lua's answer rather
 --   than this file's. It is asked for by name at the moment the question comes
@@ -36,7 +42,9 @@ local ADDON, ns = ...
 -- and the alternative is a bank alt looting mageweave.
 --
 -- This part owns no frame and draws nothing. Comfort/Loot.lua is the only
--- caller and it calls once per slot on LOOT_READY.
+-- caller of the question and it calls once per slot on LOOT_READY. The bag
+-- window's filter button is the only other file that reaches in, and it
+-- reaches the switch at the foot of this file rather than the question.
 
 local Wanted = {}
 ns.Wanted = Wanted
@@ -69,6 +77,12 @@ local GEMS = 3
 -- the kind rules and to your professions.
 local NO_COLOUR = 5
 
+-- White. The price rule reads a grey and a white and nothing above, because
+-- above white the colour floor is the rule that speaks and a green under it
+-- was refused by name: a run with the floor at blue is a run where a green
+-- is clutter whatever a vendor pays for it.
+local PLAIN = 1
+
 -- Which setting decides an item of this class and subclass, or nil for an item
 -- no kind rule has anything to say about.
 local function KindOf(classId, subClassId)
@@ -95,12 +109,13 @@ function Wanted.Take(slot)
 		return true
 	end
 
-	-- The fifth return is the quality and the seventh is the quest flag the
-	-- client sets on the slot itself, which is a fact about your log rather
-	-- than about the item: the same grey tooth is a quest item on one
-	-- character and litter on the next. The sixth, between them, is whether
-	-- the slot is locked, and nothing here has anything to say about that.
-	local quality, _, isQuestItem = select(5, GetLootSlotInfo(slot))
+	-- The third return is how many are in the slot, the fifth is the quality
+	-- and the seventh is the quest flag the client sets on the slot itself,
+	-- which is a fact about your log rather than about the item: the same grey
+	-- tooth is a quest item on one character and litter on the next. The
+	-- sixth, between them, is whether the slot is locked, and nothing here has
+	-- anything to say about that.
+	local _, _, quantity, _, quality, _, isQuestItem = GetLootSlotInfo(slot)
 	if isQuestItem then
 		return true
 	end
@@ -121,6 +136,27 @@ function Wanted.Take(slot)
 	local key = KindOf(classId, subClassId)
 	if key and ns.dbc[key] then
 		return true
+	end
+
+	-- The whole slot against the floor, for the reason Comfort/Clutter.lua
+	-- reads a whole stack: a slot is what you are short of and a slot holds
+	-- the stack, so five whites at five silver each are a slot worth twenty
+	-- five.
+	--
+	-- An item the client has not cached yet is taken, the same answer the
+	-- class check above gives and for a sharper reason: with the leftovers on,
+	-- refused means destroyed, and a white sword worth two gold that the
+	-- client had not priced by the time the corpse opened is the one thing
+	-- this rule exists to keep.
+	local worth = ns.dbc.lootWorth or 0
+	if worth > 0 and quality and quality <= PLAIN then
+		local graded, price = ns.ItemValue(link)
+		if graded == nil then
+			return true
+		end
+		if (price or 0) * (quantity or 1) >= worth then
+			return true
+		end
 	end
 
 	-- Resolved here rather than at load, because Comfort/Reagents.lua is a
@@ -220,9 +256,42 @@ function Wanted.Describe()
 			parts[#parts + 1] = entry.word
 		end
 	end
+	if (ns.dbc.lootWorth or 0) > 0 then
+		parts[#parts + 1] = ("a grey or white worth %s"):format(ns.Coin(ns.dbc.lootWorth))
+	end
 	if ns.dbc.lootCrafted then
 		parts[#parts + 1] = "what my professions use"
 	end
 
 	return Listed(parts)
+end
+
+--------------------------------------------------------------------------
+-- The switch
+--
+-- The filter and the leftovers as one thing, which is what the button on the
+-- bag window presses. On its own the filter leaves what it refused on the
+-- corpse, and a corpse with a grey on it is a corpse nobody can skin, so the
+-- mode a person means when they say "the filter" for a run of an old dungeon
+-- is both switches at once. The settings page still has them apart, for the
+-- person who wants the refusals left where they lie.
+--
+-- Comfort/Leftovers.lua holds events rather than answering a question, so it
+-- is told, the same as Comfort/Feature.lua tells it from the page.
+--------------------------------------------------------------------------
+
+function Wanted.Running()
+	return ns.dbc.lootFilter and true or false
+end
+
+function Wanted.Switch(on)
+	on = on and true or false
+	ns.dbc.lootFilter = on
+	ns.dbc.lootDestroy = on
+	ns.Leftovers.Apply()
+	return on
+end
+
+function Wanted.Toggle()
+	return Wanted.Switch(not Wanted.Running())
 end

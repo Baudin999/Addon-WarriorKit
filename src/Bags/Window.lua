@@ -9,9 +9,9 @@ ns.BagsWindow = Window
 --------------------------------------------------------------------------
 -- The bag window
 --
--- One window, one scroll view, and the two numbers along the bottom. Bags.lua
--- answers what is in there and Grid.lua draws it; this file owns when to ask
--- and how big the answer is allowed to be.
+-- One window, one scroll view, five marks along the top and the two numbers
+-- along the bottom. Bags.lua answers what is in there and Grid.lua draws it;
+-- this file owns when to ask and how big the answer is allowed to be.
 --
 -- **The free count is in the footer and it is half the reason the window
 -- exists.** Every bag interface in the game makes you count the empty squares
@@ -52,37 +52,77 @@ ns.BagsWindow = Window
 -- does not own them either.
 local FLOOR = UI.SLOT_HEADER + UI.SLOT * 2 + UI.SLOT_GAP
 
--- The stack button's width, fixed rather than sized to its word. The merchant
--- row's buttons carry numbers that change as you sell and are measured for that
--- reason; this one says the same thing forever and a fixed width keeps it
--- centred between two numbers that are both changing under it.
-local STACK_WIDTH = 60
+-- The title bar's buttons are squares, one mark each, at the height the close
+-- cross already is. Five of them wearing words were a title bar that was more
+-- word than title, and a word that changes as you press it, record to stop, is
+-- a button that changes width under the pointer. A mark is one size forever
+-- and the sentence a hover says is where the word went.
+local ICON = M.title - 8
 
--- The record button in the title bar, wide enough for the longer of the two
--- words it says. Fixed rather than measured, because a button that shrinks when
--- you press it is a button that moves out from under the pointer.
-local RECORD_WIDTH = 54
+-- The marks, by the letter UI/Text.lua's glyph face carries each one on.
+local FILTER, STACK, CLEAR, FORGET = "f", "=", "t", "e"
+local RECORD, RECORDING = "o", "q"
 
--- The clear button beside it, and it says one word forever.
-local CLEAR_WIDTH = 44
+local window, view, free, purse, stack, record, clear, forget, filter
 
--- The forget button, wide enough for its word. It sits left of clear and is
--- only up while a session is holding something.
-local FORGET_WIDTH = 48
-
-local window, view, free, purse, stack, record, clear, forget
-
--- The clutter window, opened from here.
+-- The clutter window and the pickup filter, reached from here.
 --
--- This is the one name in this file that is not the bag window's own, and it is
--- deliberate rather than convenient. Comfort/Destroy.lua is the only file in
--- the addon that destroys anything and Comfort/Clutter.lua is the only one that
--- decides what may go; a clear button that did the work here would be a second
--- set of rules about what is finished with, and the first time the two
--- disagreed the bag window would be the one destroying an item the other would
--- have kept.
+-- These are the two names in this file that are not the bag window's own, and
+-- both are deliberate rather than convenient. Comfort/Destroy.lua is the only
+-- file in the addon that destroys anything from a window and
+-- Comfort/Clutter.lua is the only one that decides what may go; a clear button
+-- that did the work here would be a second set of rules about what is finished
+-- with, and the first time the two disagreed the bag window would be the one
+-- destroying an item the other would have kept. The filter is the same
+-- argument the other way round: Comfort/Wanted.lua owns the switch, and the
+-- button here presses it rather than writing the two settings it stands for.
 local function Clear()
 	ns.Destroy.Show()
+end
+
+local function Filter()
+	ns.Wanted.Toggle()
+	ns.BagsWindow.Refresh()
+end
+
+--------------------------------------------------------------------------
+-- What each mark says when you rest on it
+--
+-- Functions rather than strings, because three of the five read state: the
+-- filter says what it is taking, the record button says which way the next
+-- press goes, and forget says how much it is about to throw away.
+--------------------------------------------------------------------------
+
+local function FilterTip()
+	if ns.Wanted.Running() then
+		return { "Stop the pickup filter, so everything on a corpse comes home again.",
+			"Taking " .. ns.Wanted.Describe() .. "." }
+	end
+	return { "Start the pickup filter: " .. ns.Wanted.Describe() .. " come home,"
+		.. " and the rest is destroyed so the corpse can be skinned.",
+		"What it takes is on the Loot page." }
+end
+
+local function StackTip()
+	return "Put your half stacks together and free the slots under them."
+end
+
+local function ClearTip()
+	return "Review what your bags are finished with, one card at a time."
+end
+
+local function RecordTip()
+	if ns.BagsSession.Running() then
+		return ("Stop recording %s. The pile stays at the top to sell later.")
+			:format(ns.BagsSession.Name() or "this session")
+	end
+	return "Record what you pick up from here on, in a pile of its own at the top."
+end
+
+local function ForgetTip()
+	local kinds = ns.BagsSession.Held()
+	return ("Forget the last session's pile, %d item%s.")
+		:format(kinds, kinds == 1 and "" or "s")
 end
 
 --------------------------------------------------------------------------
@@ -193,6 +233,65 @@ local function Drop()
 	ns.Stow()
 end
 
+-- The five marks along the top, in the title bar beside the close cross,
+-- which is where UI/Window.lua already puts the settings window's search
+-- field. They belong there for the reason that one does: each is a control
+-- over the whole window rather than over anything in it. The footer is the
+-- two numbers and nothing else, so the free count and your gold have the
+-- whole width between them.
+--
+-- Right to left, so the one you press most is nearest the cross: record,
+-- clear, stack, filter, and forget on the far left, up only while there is
+-- a session to be rid of.
+local function Marks()
+	record = UI.Button(window.frame, { label = RECORD, glyph = true,
+		width = ICON, height = ICON, tip = RecordTip,
+		onClick = ns.BagsSession.Press })
+	record:SetPoint("TOPRIGHT", window.close, "TOPLEFT", -M.rowGap, 0)
+
+	-- The button you press when the footer says nought free, which is why it
+	-- is on the bag window at all rather than only on the settings page.
+	clear = UI.Button(window.frame, { label = CLEAR, glyph = true,
+		width = ICON, height = ICON, tip = ClearTip, onClick = Clear })
+	clear:SetPoint("TOPRIGHT", record, "TOPLEFT", -M.rowGap, 0)
+
+	-- It used to sit in the footer between the two numbers, because it is the
+	-- one thing in this window that changes both of them. It is up whatever
+	-- you are standing in front of, unlike the merchant row, because loose
+	-- stacks are not a vendor's business.
+	stack = UI.Button(window.frame, { label = STACK, glyph = true,
+		width = ICON, height = ICON, tip = StackTip,
+		onClick = ns.BagsStack.Press })
+	stack:SetPoint("TOPRIGHT", clear, "TOPLEFT", -M.rowGap, 0)
+
+	-- The pickup filter, which is the mode you switch on for a run of an old
+	-- dungeon. Green while it is on, the way record is green while it is
+	-- recording, because a mode you forgot you left on is the one thing about
+	-- it that has to be visible from across the room.
+	filter = UI.Button(window.frame, { label = FILTER, glyph = true,
+		width = ICON, height = ICON, tip = FilterTip, onClick = Filter })
+	filter:SetPoint("TOPRIGHT", stack, "TOPLEFT", -M.rowGap, 0)
+
+	-- Far left, and only up while there is a session to be rid of.
+	--
+	-- It is an eraser rather than the bin because the bin is already up there
+	-- and means something else: that one opens the destroy window to make
+	-- room, and this one throws away a record of an hour. Two marks a pixel
+	-- apart looking alike, meaning two different things, is worse than either
+	-- being slightly wrong on its own.
+	--
+	-- Hidden while there is nothing recorded, because stop and forget are two
+	-- presses on purpose. Stop leaves the pile there to work through at a
+	-- vendor; this is the press for the evening you want it gone early, and the
+	-- next session clears it for you anyway. A character who has never recorded
+	-- a run never sees it.
+	forget = UI.Button(window.frame, { label = FORGET, glyph = true,
+		width = ICON, height = ICON, tip = ForgetTip,
+		onClick = ns.BagsSession.Forget })
+	forget:SetPoint("TOPRIGHT", filter, "TOPLEFT", -M.rowGap, 0)
+	forget:Hide()
+end
+
 local function Build()
 	window = UI.Window({
 		name = "WarriorKitBags",
@@ -225,61 +324,18 @@ local function Build()
 	purse:SetPoint("RIGHT")
 	UI.Wrap(purse, false)
 
-	-- Between the two numbers, because it is the one thing in this window that
-	-- changes both of them: every pair of half stacks it puts together is a slot
-	-- back on the left, and it is the only control the window has that is not
-	-- about one square. It is up whatever you are standing in front of, unlike
-	-- the merchant row, because loose stacks are not a vendor's business.
-	stack = UI.Button(window.footer, { label = "stack", width = STACK_WIDTH,
-		height = M.row, onClick = ns.BagsStack.Press })
-	stack:SetPoint("CENTER")
-
-	-- In the title bar rather than the footer, beside the close cross, which is
-	-- where UI/Window.lua already puts the settings window's search field. It
-	-- belongs there for the same reason that one does: it is a control over the
-	-- whole window rather than over anything in it, and the footer's stack
-	-- button is centred between the free count and your gold on purpose, so a
-	-- second button there would take that arrangement apart.
-	record = UI.Button(window.frame, { label = ns.BagsSession.Label(),
-		width = RECORD_WIDTH, height = M.title - 8, size = M.small,
-		onClick = ns.BagsSession.Press })
-	record:SetPoint("TOPRIGHT", window.close, "TOPLEFT", -M.rowGap, 0)
-
-	-- Beside record and for the same reason it is up there: it is a control
-	-- over the whole window rather than over any one square. It is the button
-	-- you press when the footer says nought free, which is why it is on the bag
-	-- window at all rather than only on the settings page.
-	clear = UI.Button(window.frame, { label = "clear", width = CLEAR_WIDTH,
-		height = M.title - 8, size = M.small, onClick = Clear })
-	clear:SetPoint("TOPRIGHT", record, "TOPLEFT", -M.rowGap, 0)
-
-	-- Left of clear, and only up while there is a session to be rid of.
-	--
-	-- It says forget rather than clear because the button beside it already
-	-- says clear and means something else: that one opens the destroy window to
-	-- make room, and this one throws away a record of an hour. Two buttons a
-	-- pixel apart wearing one word, meaning two different things, is worse than
-	-- either word being slightly wrong on its own.
-	--
-	-- Hidden while there is nothing recorded, because stop and forget are two
-	-- presses on purpose. Stop leaves the pile there to work through at a
-	-- vendor; this is the press for the evening you want it gone early, and the
-	-- next session clears it for you anyway. A character who has never recorded
-	-- a run never sees it.
-	forget = UI.Button(window.frame, { label = "forget", width = FORGET_WIDTH,
-		height = M.title - 8, size = M.small, onClick = ns.BagsSession.Forget })
-	forget:SetPoint("TOPRIGHT", clear, "TOPLEFT", -M.rowGap, 0)
-	forget:Hide()
+	Marks()
 
 	Fit()
 
-	-- The two numbers along the bottom and the button between them, recorded on
-	-- the window the way the clutter window records its card. Nothing in the
-	-- addon reads them; the harness reads the strings the footer actually drew
-	-- and presses the button rather than going through a hook cut into this file
-	-- for its benefit.
+	-- The two numbers along the bottom and the five marks along the top,
+	-- recorded on the window the way the clutter window records its card.
+	-- Nothing in the addon reads them; the harness reads the strings the footer
+	-- actually drew and presses the buttons rather than going through a hook
+	-- cut into this file for its benefit.
 	window.free, window.purse, window.stack = free, purse, stack
 	window.record, window.clear, window.forget = record, clear, forget
+	window.filter = filter
 
 	return window
 end
@@ -302,13 +358,20 @@ function Window.Refresh()
 	view:Update(content)
 	free:SetText(("%d free of %d"):format(state.free, state.slots))
 	purse:SetText(ns.Coined(GetMoney()))
-	-- The word and the colour together, because they say one thing between them:
-	-- green while it is recording, and the button's own control grey when it is
-	-- not. `tone` as well as the tint, because UI.Button repaints its background
-	-- from that field every time the mouse leaves it.
-	record.text:SetText(ns.BagsSession.Label())
-	record.tone = ns.BagsSession.Running() and C.tick or C.control
+	-- The mark and the colour together, because they say one thing between
+	-- them: a stop square on green while it is recording, and a circle on the
+	-- button's own control grey when it is not. `tone` as well as the tint,
+	-- because UI.Button repaints its background from that field every time the
+	-- mouse leaves it.
+	local recording = ns.BagsSession.Running()
+	record.text:SetText(recording and RECORDING or RECORD)
+	record.tone = recording and C.tick or C.control
 	UI.Tint(record.bg, record.tone)
+	-- The filter keeps its mark and changes colour, for the same reason and in
+	-- the same green. It is read here rather than watched, so a switch thrown
+	-- from the page catches up on the next bag event or the next open.
+	filter.tone = ns.Wanted.Running() and C.tick or C.control
+	UI.Tint(filter.bg, filter.tone)
 	forget:SetShown(ns.BagsSession.Held() > 0)
 	return true
 end

@@ -142,11 +142,29 @@ function UI.Button(parent, opts)
 	button.text:SetPoint("CENTER")
 	button.text:SetText(opts.label or "")
 
+	-- opts.tip is the sentence a hover says, or a function answering one, or
+	-- a table of lines. A button wearing a glyph rather than a word has to
+	-- carry one: a mark is a name you learn, and until you have, the sentence
+	-- is the name. Opened above rather than beside, for the reason UI/Feed.lua
+	-- gives its chips: a box hung off the right of a sixteen pixel square
+	-- lands under the cursor that opened it.
+	button.tip = opts.tip
 	button:SetScript("OnEnter", function(self)
 		UI.Tint(self.bg, C.hover)
+		local tip = self.tip
+		if type(tip) == "function" then
+			tip = tip()
+		end
+		if tip then
+			ns.Tip.Open(self, { kind = "note",
+				lines = type(tip) == "table" and tip or { tip } }, true)
+		end
 	end)
 	button:SetScript("OnLeave", function(self)
 		UI.Tint(self.bg, self.tone)
+		if self.tip then
+			ns.Tip.Close()
+		end
 	end)
 	if opts.onClick then
 		assert(not opts.template,

@@ -48,6 +48,17 @@ local function SetFilter(value)
 	ns.dbc.lootFilter = value
 end
 
+-- The field's text back to copper, and a line that is not a sum of money
+-- leaves the floor where it was: the field redraws from the setting on the
+-- next refresh, so a typo shows up as the old number coming back rather than
+-- as a rule quietly switched off.
+local function SetWorthFloor(text)
+	local copper = ns.Uncoin(text)
+	if copper then
+		ns.dbc.lootWorth = copper
+	end
+end
+
 -- The one setter in this file that has to tell its part, because Leftovers.lua
 -- holds events rather than answering a question. Off unregisters them and drops
 -- whatever was waiting to be destroyed, which is what makes turning the switch
@@ -174,7 +185,7 @@ end
 -- out in the panel below.
 local function LootPage(ui)
 	ui.Section("Loot", "Chores")
-	ui.Lede("Empties a corpse the moment the server says what is on it, so the loot window never draws.")
+	ui.Lede("Empties a corpse the moment the server says what is on it, so the loot window never draws. The bag window's filter button is the filter and leftovers at once.")
 	ui.Check("empty a corpse in one go",
 		function() return ns.db.fastLoot end,
 		SetLoot)
@@ -197,6 +208,11 @@ local function LootPage(ui)
 			function() return ns.dbc[entry.key] end,
 			function(value) ns.dbc[entry.key] = value end)
 	end
+
+	ui.TextField("a grey or white worth at least",
+		function() return ns.CoinSpelt(ns.dbc.lootWorth) end,
+		SetWorthFloor)
+	ui.Hint("Against what a vendor pays for the whole slot, so four whites at 25s are a slot worth a gold. 0g 0s 0c switches it off.")
 
 	ui.Check("what my professions use",
 		function() return ns.dbc.lootCrafted end,
@@ -264,6 +280,13 @@ ns.Register({
 		lootEnchanting = false,
 		lootGems = false,
 		lootMeat = false,
+
+		-- Twenty silver, in copper. The floor a grey or white has to be worth
+		-- at a vendor for the price rule to take it, read against the whole
+		-- slot. Nought is the rule off. Twenty silver is where a white weapon
+		-- out of a level fifty instance starts and where a grey never gets to,
+		-- which is the line the rule is for.
+		lootWorth = 2000,
 
 		-- On, and it is the rule that costs nothing when it is wrong. It takes
 		-- what a profession on this character actually asks for, which is a
@@ -496,7 +519,7 @@ ns.Register({
 
 	help = {
 		"loot on|off, empty a corpse in one go",
-		"filter on|off, take only the colours and the kinds you asked for",
+		"filter on|off, take only the colours, the kinds and the prices you asked for",
 		"leftovers on|off, loot and destroy the rest, so a corpse can be skinned",
 		"reagents list|clear, what your professions have put on the filter, or empty it",
 		"sell on|off, grey items at every merchant",

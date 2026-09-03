@@ -74,6 +74,12 @@ PICK = {
     0xF130: "m",  # microphone, the voice button at the foot of the chat rail
     0xF00C: "V",  # check, a quest ready to hand in and a finished objective
     0xF064: "s",  # share, one quest handed to the party from its own row
+    0xF0B0: "f",  # filter, the pickup filter switch on the bag window
+    0xF5FD: "=",  # layer-group, the stack button on the bag window
+    0xF111: "o",  # circle, the record button while nothing is recording
+    0xF04D: "q",  # stop, the same button while a session is
+    0xF2ED: "t",  # trash-can, the clear button on the bag window
+    0xF12D: "e",  # eraser, the forget button beside it
 }
 
 font = TTFont(src)
@@ -100,7 +106,7 @@ for table in font["cmap"].tables:
 NAMES = {
     1: "WarriorKit Glyphs",
     2: "Regular",
-    3: "WarriorKit Glyphs: eleven glyphs of Font Awesome Free Solid",
+    3: "WarriorKit Glyphs: seventeen glyphs of Font Awesome Free Solid",
     4: "WarriorKit Glyphs",
     6: "WarriorKitGlyphs-Regular",
     13: "SIL Open Font License 1.1. See Media/Glyphs-LICENSE.txt.",

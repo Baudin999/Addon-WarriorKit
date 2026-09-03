@@ -60,7 +60,7 @@ local GLYPHS = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Glyphs.ttf"
 --
 -- Sorted, because the two lists are compared as text and an order nobody
 -- maintains is a diff nobody can read.
-UI.GLYPHS = "!$*+->Vmsvx"
+UI.GLYPHS = "!$*+-=>Vefmoqstvx"
 
 -- Three roles, and every string in the addon is exactly one of them. This is
 -- the whole font policy and it is here rather than argued again at each site.

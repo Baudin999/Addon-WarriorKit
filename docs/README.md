@@ -352,8 +352,9 @@ name of none of them.
                              the stack split are the client's code, and each is
                              parented to a holder frame carrying its bag number,
                              which is the only thing that handler has to go on
-    Bags/Window.lua          the window, the free count along the bottom and
-                             the stack button between it and your purse
+    Bags/Window.lua          the window, the free count and your purse along
+                             the bottom, and five marks along the top: record,
+                             clear, stack, the pickup filter and forget
     Bags/Blizzard.lua        the nine calls the client opens and shuts a bag
                              through, taken, so B opens this one
     Bags/Feature.lua
@@ -5496,11 +5497,17 @@ client's own auto loot, which is slower and correct.
 
 **The filter is one question asked once per slot, and any rule that says yes
 takes it.** `Comfort/Wanted.lua` answers `Take(slot)` and `Comfort/Loot.lua`
-asks it before every `LootSlot`. There are three kinds of answer: a quality
+asks it before every `LootSlot`. There are four kinds of answer: a quality
 floor, where 5 is the colour rule switched off, because a run you are doing for
 the ore is a run where a green is clutter too; a tick box per kind, read off the
 class and subclass the client already files the item under rather than off a
-name or a search string; and what your professions use. Money and a quest item
+name or a search string; a price floor, which takes a grey or white the vendor
+pays at least that much for, read against the whole slot the way
+`Comfort/Clutter.lua` reads a stack, and never anything green or better, because
+above white the colour floor is the rule that spoke; and what your professions
+use. The price floor is typed as gold, silver and copper, and `ns.Uncoin` reads
+`0g 20s 0c`, `20s` and `1g5s` alike back to copper, keeping the old number when
+the line is not a sum of money. Money and a quest item
 are never refused, the quest flag being the seventh return of `GetLootSlotInfo`,
 which is a fact about your log rather than about the item: the same grey tooth
 is a quest item on one character and litter on the next. An item the client will
@@ -5540,7 +5547,11 @@ off one could not be told from your own afterwards.
 leaves what you did not ask for on the corpse, which is the point of it and is
 the wrong answer for one person: a corpse only opens for a skinner once every
 slot is gone. So `Comfort/Leftovers.lua` loots what the filter refused anyway
-and destroys the item when it lands. Four refusals leave the slot exactly where
+and destroys the item when it lands. The bag window's filter button is the two
+switches thrown together, through `Wanted.Switch`, because the mode a person
+means by "the filter" for a run of an old dungeon is both: a filter on its own
+is a corpse with a grey on it that nobody can skin. The page keeps them apart
+for whoever wants the refusals left where they lie. Four refusals leave the slot exactly where
 it is: a slot with no link, which is coin; a quality this client will not state,
 because a guess is how a blue gets deleted; blue or better; and a quest item.
 
@@ -7718,6 +7729,15 @@ Everything below was written from the API contract and has never executed:
   when the corpse closes rather than as each one lands. What would settle it:
   turn leftovers on, empty a corpse the filter is refusing something on, and
   watch the bag while the window is still open.
+- **Whether `GetItemInfo` prices a loot link the first time you see the item.**
+  The price rule asks `ns.ItemValue` for the vendor price of a grey or white on
+  the corpse, and an item the client has not cached answers nil, which the
+  rule reads as keep. A client that answers a price of nought for an uncached
+  item instead would refuse it, and with the leftovers on refused is
+  destroyed. A mistake looks like a white weapon you have never seen before
+  going in the bin on its first drop and coming home on its second. What would
+  settle it: switch the filter on with the floor at a silver, loot a white you
+  have not seen this session, and watch whether it lands.
 - **Whether `DeleteCursorItem` takes a green without a confirmation box.** The
   clutter window destroys greys with somebody looking at the card; this destroys
   greens unattended, and the client puts a type-DELETE box in front of some
