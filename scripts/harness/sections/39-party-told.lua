@@ -103,16 +103,18 @@ end
 do
 	check(ns.db.partyRange, "range checking is off, so the one poll left is not"
 		.. " being driven at all")
+	local rogue = ns.Unit.Color.Class("ROGUE")
 	group.members.party1.range = false
 	pass()
-	check(sneaky.nameText.text == "out of range",
-		("a member walked out of range and the tile reads %q on the next pass")
-			:format(tostring(sneaky.nameText.text)))
+	check(sneaky.nameText.text == "Sneaky"
+		and math.abs(sneaky.health.barR - rogue[1] * ns.Unit.Color.track) < 1e-6,
+		("a member walked out of range and the tile reads %q at %s on the next pass")
+			:format(tostring(sneaky.nameText.text), tostring(sneaky.health.barR)))
 
 	group.members.party1.range = nil
 	pass()
-	check(sneaky.nameText.text == "Sneaky",
-		"a member who came back into range kept the word that said they were gone")
+	check(math.abs(sneaky.health.barR - rogue[1]) < 1e-6,
+		"a member who came back into range kept the drained fill")
 end
 
 ----------------------------------------------------------------------

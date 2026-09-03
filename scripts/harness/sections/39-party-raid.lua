@@ -46,29 +46,6 @@ local function tracks(bar, color)
 		and near(track.g, color[2] * Color.track) and near(track.a, 0.9)
 end
 
--- How far a tile's missing end is washed toward white, restated here rather
--- than read out of UnitFrames/Member.lua, because a gate that imported the
--- number it is checking would pass on the day somebody changed it by accident.
-local GROUND_WASH = 0.55
-
--- The ground behind a tile's fill: the class colour bleached, opaque, and not
--- the dimmed track every other gauge in the addon draws. That direction is the
--- whole look. Dimmed, a spent end reads as a second fill in a duller colour;
--- bleached, it reads as an absence.
-local function washes(bar, color)
-	local track = bar.track
-	if not track then
-		return false
-	end
-	for index, channel in ipairs({ "r", "g", "b" }) do
-		local want = color[index] + (1 - color[index]) * GROUND_WASH
-		if not near(track[channel], want) then
-			return false
-		end
-	end
-	return near(track.a, 1)
-end
-
 -- The list as it stands, read back off the buttons rather than off
 -- Group.Order, so what is checked is where the header put somebody and not what
 -- the addon meant to ask for.
@@ -161,6 +138,14 @@ check(header:IsVisible() and raidHeader:IsVisible(),
 
 stand(PARTY, false)
 
+-- You are in your own party out of the box. The scene below builds up from
+-- the four others, so a fifth block turning up is something it can measure,
+-- and it turns you off here rather than shipping the default it wants.
+check(header:GetAttribute("showPlayer") == true,
+	"your own block is off by default, and the party frame is where you read yourself")
+ns.db.partySelf = false
+ns.Group.Apply()
+
 ----------------------------------------------------------------------
 -- The attributes
 ----------------------------------------------------------------------
@@ -173,7 +158,7 @@ do
 	check(header:GetAttribute("showParty") == true and header:GetAttribute("showRaid") == false,
 		"the party header is not for a party alone, so it fights the raid grid for the screen")
 	check(header:GetAttribute("showPlayer") == false,
-		"your own block is in the list and the default says it is not")
+		"your own block is in the list and the scene turned it off")
 	check(header:GetAttribute("sortMethod") == "NAMELIST",
 		"the order is a role band and a name, which is a name list and nothing else")
 	-- A party ships across the screen, which is a header growing off its left
@@ -412,22 +397,13 @@ do
 		"the rogue's health fill is not the rogue class colour")
 	check(fills(priest.health, Color.Class("PRIEST")),
 		"the priest's health fill is not the priest class colour")
-	check(washes(rogue.health, Color.Class("ROGUE")),
-		"the missing end of the rogue's tile is not their colour bleached toward white")
-
-	-- And the weave over it, which is what makes that end read as an absence
-	-- rather than as a paler fill. One white file at one alpha over every class
-	-- there is, repeated at its own size rather than stretched: the texture
-	-- coordinates are the bar's own pixels divided by the tile's side, so the
-	-- stripe is the same width on a raid cell as on a party tile.
-	local weave = rogue.weave
-	check(weave and weave.texture and weave.texture:find("Hatch") ~= nil,
-		"the missing end of a tile is drawn through no weave at all")
-	check(select(4, weave:GetVertexColor()) < 1,
-		"the weave is drawn at full strength, which is a hatch that hides the colour under it")
-	check(weave.texcoord and weave.texcoord[2] > 1 and weave.texcoord[4] > 0,
-		("the weave is stretched to the tile rather than repeated across it: %s")
-			:format(table.concat(weave.texcoord or { "none" }, ", ")))
+	-- The missing end is the fill dimmed, the same track the player frame
+	-- keeps behind its own bar, and nothing is drawn over it. A tile and the
+	-- player's bar are one instrument saying "lost" one way.
+	check(tracks(rogue.health, Color.Class("ROGUE")),
+		"the missing end of the rogue's tile is not their colour dimmed to the track")
+	check(rogue.weave == nil,
+		"a tile still draws a weave over its missing end")
 
 	-- Power by the number UnitPowerType answers, which is the half of that API
 	-- that has never been renamed between these two clients.
@@ -460,8 +436,8 @@ do
 			tostring(druid.health.value)))
 	check(rogue.nameText.text == "Sneaky",
 		("a tile's name reads %q"):format(tostring(rogue.nameText.text)))
-	check(rogue.nameText.justify == "CENTER",
-		"a tile's name is not centred across the top of it")
+	check(rogue.nameText.justify == "LEFT",
+		"a tile's name is not left aligned beside the role square")
 end
 
 ----------------------------------------------------------------------
@@ -499,14 +475,14 @@ end
 ----------------------------------------------------------------------
 -- What a member you cannot read draws
 --
--- Four states, one picture: the fill goes to the track colour and the name says
--- which. Out of range is in the list with the other three on purpose, because
--- the slot is what says who it is.
+-- Four states, one fill: it goes to the track colour. Three of them put a word
+-- where the name was. Out of range keeps the name, because the colour already
+-- says you cannot reach them and the name says which way to walk.
 ----------------------------------------------------------------------
 
 do
 	local STATES = {
-		{ field = "range", value = false, word = "out of range" },
+		{ field = "range", value = false, word = "Sneaky" },
 		{ field = "dead", value = true, word = "dead" },
 		{ field = "ghost", value = true, word = "ghost" },
 		{ field = "connected", value = false, word = "offline" },
@@ -718,8 +694,9 @@ do
 		"range checking went off and a member out of range still drained")
 	ns.db.partyRange = true
 	ns.Group.Apply()
-	check(blockOf("Sneaky").nameText.text == "out of range",
-		"range checking came back on and nothing said so")
+	check(blockOf("Sneaky").nameText.text == "Sneaky"
+		and near(blockOf("Sneaky").health.barR, Color.Class("ROGUE")[1] * Color.track),
+		"range checking came back on and the fill did not drain")
 	group.members.party1.range = nil
 	ns.Group.Update()
 end
@@ -742,12 +719,14 @@ do
 	check(block.box:GetWidth() == 120 and block.box:GetHeight() == 28,
 		"the tile inside the button did not follow it")
 
-	-- The role square is taken off the tile's height rather than fixed, so a
-	-- raid cell gets a smaller one instead of being eaten by one.
+	-- The role square is the health bar's own height, so a raid cell gets a
+	-- smaller one instead of being eaten by one and a party tile gets one you
+	-- can read from across the screen.
 	check(block.roleIcon:GetWidth() == block.roleIcon:GetHeight()
-		and block.roleIcon:GetWidth() < 28,
-		("the role square is %.1f by %.1f inside a 28 pixel tile"):format(
-			block.roleIcon:GetWidth(), block.roleIcon:GetHeight()))
+		and block.roleIcon:GetHeight() == block.health:GetHeight(),
+		("the role square is %.1f by %.1f beside a %.1f pixel bar"):format(
+			block.roleIcon:GetWidth(), block.roleIcon:GetHeight(),
+			block.health:GetHeight()))
 
 	-- The two bars fill the tile between them, less its own outline top and
 	-- bottom and the one pixel seam that separates them, and each is the tile's

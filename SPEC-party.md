@@ -136,8 +136,11 @@ a second addon.
   `bake-glyphs.sh` and three more codepoints in `Media/Glyphs.ttf`. If a flavour
   turns out not to carry the texture, the glyph font is the fallback and the
   harness is where that gets caught.
-- Out of range, dead, offline and ghost all draw the same way: the fill goes to
-  the track colour and the name says which. `UnitInRange` is on both clients.
+- Out of range, dead, offline and ghost all drain the fill to the track colour.
+  Dead, offline and ghost put the word where the name was; out of range keeps
+  the name, because the colour says it. `UnitInRange` is on both clients.
+- The role icon is the health bar's own height, at the left end, and the name
+  runs left aligned from it.
 
 Nothing is rebuilt per tick and nothing allocates on one. Every widget write is
 guarded on the value already on the frame, which `check.sh` will enforce as soon
@@ -182,7 +185,7 @@ fast way to look at a party member.
 Defaults, in the shape `Feature.lua` already uses.
 
     party = true
-    partySelf = false
+    partySelf = true
     partyOrder = "role"        -- "role", or "group" for the raid
     partyRoleIcon = true
     partyWidth = 168           -- matches skinWidth

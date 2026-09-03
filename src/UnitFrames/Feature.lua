@@ -735,7 +735,7 @@ ns.Register({
 		-- draws you as a block and two of your own frames on one screen is the
 		-- exact complaint UnitFrames/Blizzard.lua exists to answer. On puts you
 		-- in at your own role's slot rather than at the top.
-		partySelf = false,
+		partySelf = true,
 
 		partyRoleIcon = true,
 

@@ -6,12 +6,12 @@ ns.GroupMember = Member
 --------------------------------------------------------------------------
 -- One party or raid member's tile
 --
--- A block of the person's class colour with their name across the top of it,
--- and what they have lost bleached and hatched at the right hand end. Nothing
--- else: no number, no second bar through the middle, no square bolted on the
--- side. You read a tile by how much of it is still the colour, which is a
--- shape rather than a reading and is what makes a wall of forty of them
--- scannable at a glance.
+-- A block of the person's class colour with their role at the left end and
+-- their name beside it, and what they have lost dimmed at the right hand end
+-- the way the player frame's own bar dims it. Nothing else: no number, no
+-- second bar through the middle, no square bolted on the side. You read a tile
+-- by how much of it is still the colour, which is a shape rather than a reading
+-- and is what makes a wall of forty of them scannable at a glance.
 --
 -- This replaced a row that was the player block repeated, and the reason is
 -- worth writing down. A party block that matched the skin was one gauge among
@@ -21,12 +21,11 @@ ns.GroupMember = Member
 -- as an area and not as a length, and the two things it says are who and how
 -- much, which are the only two questions a group frame is ever asked.
 --
--- The missing end is washed toward white rather than dimmed toward the
--- backdrop, and that is the one decision the whole look hangs off. A dimmed
--- end is a second fill in a duller colour and the eye has to find the join; a
--- bleached and hatched one is plainly an absence, and the join is where the
--- texture starts. ns.Unit.Color.Wash is that direction and ns.Unit.Color.Dim
--- is the other, which is what the four dead states still use.
+-- The missing end is the fill dimmed, which is what every other gauge in the
+-- addon keeps behind its fill. It was bleached toward white and hatched for a
+-- while, on the argument that a dimmed end reads as a second fill; on the
+-- screen the hatch read as a stripe through the tile and the player frame next
+-- to it dimmed, and two instruments saying "lost" two ways is one too many.
 --
 -- Nothing in here knows there is a header, an order or a raid, and nothing in
 -- here reads a setting. What one tile is drawn from arrives as one table at
@@ -50,14 +49,6 @@ local Color = Unit.Color
 local Role = Unit.Role
 local Gauge = ns.UI.Gauge
 
--- The weave the bleached end is drawn through. One 32 pixel tile repeated at
--- its own size across whatever the bar came out as, rather than stretched to
--- fit it: a stretched hatch is a hatch whose stripe width says how hurt
--- somebody is, and the mark has to read the same on a raid cell and a party
--- tile or it is saying two things at once.
-local WEAVE = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Hatch.tga"
-local WEAVE_SIDE = 32
-
 -- The tile's own outline, which every rectangle inside it is held off by.
 local PAD = 1
 
@@ -67,45 +58,35 @@ local PAD = 1
 local RAIL_SHARE = 0.11
 local RAIL_FLOOR = 2
 
--- The role square in the top corner, and where it may land. Taken off the
--- tile's height rather than fixed, because the same code draws a party tile
--- and a raid cell half its size.
+-- The role square is a column at the left end of the tile, as tall as the
+-- health bar it stands in, and the name starts this far to the right of it.
+-- Taken off the bar rather than fixed, because the same code draws a party
+-- tile and a raid cell half its size, and the art is a 75 pixel cell that
+-- scales down without going soft.
 --
--- A fifth of the height and not a third. The square is a mark in a corner, not
--- a column of its own, and it shares the top of the tile with the name: any
--- bigger and it is either eating the name's room or sitting under it.
-local ROLE_SHARE = 0.22
-local ROLE_FLOOR, ROLE_CEILING = 8, 18
+-- The whole bar's height and not a mark in a corner. The role is what the slot
+-- order is built on, so it is the first thing a tile says, and at a fifth of
+-- the height it was a dot nobody could read from across the screen.
+local ROLE_GAP = 3
 
 -- The name's share of the tile, and the tallest it may get. Its floor is
 -- ns.UI.OutlineFloor and is not a number of this file's own: the name sits
--- over the fill at one end of the tile and over the bleached weave at the
--- other, so there is no one colour behind it to read against and the rim is
--- the only thing that works. A rim under the floor closes the hole in a 6, so
--- the floor is where a name can be outlined at all rather than a preference.
+-- over the fill at one end of the tile and over the dimmed end at the other,
+-- so there is no one colour behind it to read against and the rim is the only
+-- thing that works. A rim under the floor closes the hole in a 6, so the floor
+-- is where a name can be outlined at all rather than a preference.
 local TEXT_SHARE = 0.34
 local TEXT_CEILING = 20
-
--- How far the missing end is washed toward white, and how much of the weave
--- over it is drawn.
-local GROUND_WASH = 0.55
-local WEAVE_ALPHA = 0.22
-
--- And what the whole tile keeps when there is nobody in it to read. Under
--- Color.track, so a member who is gone is darker across the tile than a member
--- at one percent is at their spent end, and the two states cannot be confused
--- for each other.
-local GROUND_DIM = 0.15
 
 local BACKDROP = Color.backdrop
 local NAME_TEXT = Color.text.name
 local IDLE = Color.reaction.idle
 
--- The four states that all draw the same way: the tile goes to the track
--- colour and the name says which. Out of range is in the list on purpose. A
--- member you cannot reach and a member who is not there are the same fact as
--- far as the next thing you were going to press is concerned, and the slot is
--- what says who it is, which is the whole point of a fixed order.
+-- The four states that all drain the tile to the track colour. Three of them
+-- put a word where the name was, because a member who is dead or gone is not
+-- somebody you are about to press anything on and the word is the reading.
+-- Out of range keeps the name: the colour already says you cannot reach them,
+-- and who they are is what you need to know to walk the right way.
 local OFFLINE, GHOST, DEAD, AWAY = "offline", "ghost", "dead", "out of range"
 
 local UnitExists = UnitExists
@@ -193,16 +174,6 @@ function Member.Build(button)
 	block.box.edges = ns.Outline(block.box, IDLE[1], IDLE[2], IDLE[3], 1)
 
 	block.health = Gauge.New(block.box)
-
-	-- The weave over the ground and under the fill. Both of those are
-	-- BACKGROUND inside the bar, so what orders them is a sublevel and not a
-	-- frame level, which is the one ordering nothing a caller writes can get
-	-- wrong. The fill is on ARTWORK and covers both, so the weave shows exactly
-	-- where the health is not and nowhere else.
-	block.weave = Gauge.Underlay(block.health, 1)
-	block.weave:SetTexture(WEAVE, "REPEAT", "REPEAT")
-	block.weave:SetVertexColor(1, 1, 1, WEAVE_ALPHA)
-
 	block.rail = Gauge.New(block.box)
 
 	block.top = CreateFrame("Frame", nil, block.box)
@@ -215,7 +186,7 @@ function Member.Build(button)
 	ns.UI.Crisp(block.roleIcon)
 
 	block.nameText = ns.UI.Label(block.top, ns.UI.OutlineFloor(), NAME_TEXT,
-		"CENTER", ns.UI.OUTLINE)
+		"LEFT", ns.UI.OUTLINE)
 	block.nameText:SetWordWrap(false)
 
 	return block
@@ -233,8 +204,8 @@ end
 -- plus the seam and not one pixel of dark along its bottom edge that no other
 -- tile has.
 --
--- Returns how tall the health bar came out, which is what the weave is
--- repeated across.
+-- Returns how tall the health bar came out, which is what the role square is
+-- sized off.
 local function Bars(block, px, wide, tall, rails)
 	local inner = tall - 2 * PAD
 	local rail = rails
@@ -250,28 +221,21 @@ local function Bars(block, px, wide, tall, rails)
 	block.rail:ClearAllPoints()
 	block.rail:SetPoint("BOTTOMLEFT", block.box, "BOTTOMLEFT", PAD * px, PAD * px)
 	block.rail:SetSize(across * px, math.max(rail, RAIL_FLOOR) * px)
-
-	-- In design pixels, so the stripe is the same width at every zoom and on
-	-- every tile size, which is the whole reason the weave is a tile rather
-	-- than a stretched texture.
-	block.weave:SetTexCoord(0, across / WEAVE_SIDE, 0, health / WEAVE_SIDE)
 	return health
 end
 
--- The role square in the top corner and the name across the top.
+-- The role square at the left end and the name beside it.
 --
--- The name is centred on the whole tile and not on the room left beside the
--- square. The tiles are read as a stack, and a title that wanders left and
--- right down the list is a list you have to read rather than scan. What that
--- costs is that a long name reaches the corner the square is in, which is why
--- the square is a fifth of the height rather than a third and why the name
--- carries a rim: the two can overlap for a letter without either being lost.
-local function Marks(block, px, tall)
-	local mark = math.min(math.max(math.floor(tall * ROLE_SHARE), ROLE_FLOOR),
-		ROLE_CEILING)
+-- The square is the height of the health bar and sits in its corner, so the
+-- bar reads as a column of role and a run of colour, the way the player frame
+-- is a portrait and a bar. The name starts to the right of it and runs to the
+-- far edge, left aligned like the player's own, so every name down a stack
+-- starts on the same line and the list is scanned rather than read. With the
+-- icons switched off the name takes the square's room back.
+local function Marks(block, px, tall, health, icons)
 	block.roleIcon:ClearAllPoints()
 	block.roleIcon:SetPoint("TOPLEFT", block.box, "TOPLEFT", PAD * px, -PAD * px)
-	block.roleIcon:SetSize(mark * px, mark * px)
+	block.roleIcon:SetSize(health * px, health * px)
 
 	-- Floored to a whole pixel: half of an odd tile is half a pixel, and a
 	-- glyph asked for at half a pixel is rasterised across two. The floor is
@@ -283,9 +247,16 @@ local function Marks(block, px, tall)
 	block.nameText:SetFontObject(
 		ns.UI.Font(math.max(size, ns.UI.OutlineFloor()) * px, ns.UI.OUTLINE))
 
+	-- Anchored by its two ends rather than by a corner, so the string sits on
+	-- the health bar's midline whatever height the bar came out. Both anchors
+	-- are on regions the bar's own height, so the two agree on where that is.
 	block.nameText:ClearAllPoints()
-	block.nameText:SetPoint("TOPLEFT", block.box, "TOPLEFT", PAD * px, -PAD * px)
-	block.nameText:SetPoint("TOPRIGHT", block.box, "TOPRIGHT", -PAD * px, -PAD * px)
+	if icons then
+		block.nameText:SetPoint("LEFT", block.roleIcon, "RIGHT", ROLE_GAP * px, 0)
+	else
+		block.nameText:SetPoint("LEFT", block.health, "LEFT", ROLE_GAP * px, 0)
+	end
+	block.nameText:SetPoint("RIGHT", block.health, "RIGHT", -ROLE_GAP * px, 0)
 end
 
 -- Everything a setting can move, for one member. Never called from the tick:
@@ -352,8 +323,8 @@ function Member.Place(button, look)
 	block.top:SetFrameLevel(button:GetFrameLevel() + TOP)
 	ns.EdgeSize(block.box.edges, px)
 
-	Bars(block, px, wide, tall, rails)
-	Marks(block, px, tall)
+	local health = Bars(block, px, wide, tall, rails)
+	Marks(block, px, tall, health, look.icons ~= false)
 
 	local sheet, left, right, top, bottom = Role.Art(look.role)
 	block.roleIcon:SetTexture(sheet)
@@ -446,20 +417,17 @@ end
 
 -- The fill, the ground behind it and the outline, in one colour.
 --
--- Three answers off one tint, and they are asked for in the order the scratch
--- tables allow. Color.Dim and Color.Wash each write into one table of their
--- own and the next call overwrites it, so every result here is handed straight
--- to a setter before the next one is asked for. That is the contract
--- Unit/Color.lua states and this is the one place in the addon that leans on
--- all of it.
+-- Gauge.Paint draws the ground as the fill dimmed, which is the same bar the
+-- player frame is, so a tile's missing end and the player's are one mark. A
+-- drained tile hands the dimmed fill over and gets a ground dimmed twice, which
+-- is darker than any healthy tile's spent end and is what keeps the two
+-- states apart.
 --
--- The weave is not repainted. It is white at a fixed alpha over whatever the
--- ground is, so it takes the class colour from underneath and there is nothing
--- per-unit for the tick to write.
+-- Color.Dim writes into one scratch table and the next call overwrites it, so
+-- each answer is handed straight to a setter before the next is asked for.
 function Member.Paint(block, tint, shade)
-	Gauge.Paint(block.health, nil, shade and Color.Dim(tint, Color.track) or tint)
-	Gauge.Ground(block.health.track, shade and Color.Dim(tint, GROUND_DIM)
-		or Color.Wash(tint, GROUND_WASH))
+	Gauge.Paint(block.health, block.health.track,
+		shade and Color.Dim(tint, Color.track) or tint)
 	ns.Recolor(block.box.edges, Color.Dim(tint, Color.edgeDim))
 end
 
@@ -493,9 +461,10 @@ function Member.Numbers(block, unit)
 	end
 end
 
--- The name, or the word that says why there is no reading to take.
+-- The name, or the word that says why there is no reading to take. Out of
+-- range is not a word: the drained fill says it, and the name stays.
 function Member.Label(block, unit, shade)
-	local text = shade or UnitName(unit) or ""
+	local text = (shade and shade ~= AWAY) and shade or UnitName(unit) or ""
 	if block.label ~= text then
 		block.label = text
 		block.nameText:SetText(text)
