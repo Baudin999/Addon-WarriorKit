@@ -169,11 +169,14 @@ end
 -- Where everybody is standing
 --------------------------------------------------------------------------
 
--- The client answers a unit's position as a fraction of whatever map it was
--- handed, and it answers for party and raid members as well as for you. That is
--- the whole of how Map/Mates.lua puts your group on the picture and how the
--- arrow reaches the continent one, so the fixture has to hold both halves: who
--- is where, and which maps will answer for a place.
+-- Two calls, the way the real client splits them. C_Map.GetPlayerMapPosition
+-- answers a position as a fraction of whatever map it was handed, and on 2.5.6
+-- it answers for you and for nobody else: the fixture used to answer it for a
+-- party token as well, and certified a map that drew the party on a client
+-- that did not. UnitPosition is what answers for a group member, in the
+-- continent's own yards, and C_Map.GetMapPosFromWorldPos is the client turning
+-- those yards into a fraction of the map it is handed. The fixture has to hold
+-- both halves: who is where, and which maps will answer for a place.
 --
 -- The player is the quest log's own record rather than a second one here, so
 -- the two files cannot drift apart about where you are standing. Everybody else
@@ -195,11 +198,57 @@ end
 local standing = H.quests.standing
 
 api.GetPlayerMapPosition = function(map, unit)
-	local at = (not unit or unit == "player") and standing or placed[unit]
-	if not at or not answers(at, map) then
+	if unit ~= nil and unit ~= "player" then
 		return nil
 	end
-	return { GetXY = function() return at.x / 100, at.y / 100 end }
+	if not standing or not answers(standing, map) then
+		return nil
+	end
+	return { GetXY = function() return standing.x / 100, standing.y / 100 end }
+end
+
+-- The continent a map is on, which is what the real client calls the instance
+-- a world position is in. The zone's parent is the continent in this tree.
+local function continentOf(map)
+	local node = NODES[map]
+	while node and node.kind ~= 2 do
+		map, node = node.parent, NODES[node.parent]
+	end
+	return node and map or nil
+end
+
+-- Yards, north-south first and east-west second, which is the order the real
+-- call answers in. The map is folded into the north-south number so that the
+-- conversion below can find its way back: a real client knows the zone from
+-- the yards, and this one has no yards, only the section's record of where
+-- somebody was stood. A caller that puts the two numbers into the vector the
+-- wrong way round decodes a map that does not exist and places nobody, which
+-- is the swap read back as a failure rather than as a mirrored mark.
+_G.UnitPosition = function(unit)
+	local at = (unit == nil or unit == "player") and standing or placed[unit]
+	if not at then
+		return nil
+	end
+	return at.map * 1000 + at.y, at.x, 0, continentOf(at.map)
+end
+
+-- The map asked for, and the place on it, where the yards are on that map's
+-- continent and the map answers for the zone they are in. Nothing otherwise,
+-- which is the documented shape: the call may return nothing.
+api.GetMapPosFromWorldPos = function(continent, world, override)
+	if type(world) ~= "table" or type(world.x) ~= "number" then
+		return nil
+	end
+	local map = math.floor(world.x / 1000)
+	local y, x = world.x - map * 1000, world.y
+	if continent ~= continentOf(map) then
+		return nil
+	end
+	local target = override or map
+	if not answers({ map = map }, target) then
+		return nil
+	end
+	return target, { GetXY = function() return x / 100, y / 100 end }
 end
 
 --------------------------------------------------------------------------

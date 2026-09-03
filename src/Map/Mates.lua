@@ -13,13 +13,15 @@ ns.MapMates = Mates
 -- flight master, and a party map that cannot say where the party is is a map
 -- you go back to the client's own for.
 --
--- **The client places them, not this file.** C_Map answers a unit's position as
--- a fraction of whatever map it was handed, and it will answer for your party
--- and your raid as well as for you. That is the whole mechanism. The
--- alternative is what the libraries do: read UnitPosition, which is a world
--- coordinate in a continent's own space, and carry a table of every zone's
--- rectangle to divide it by. That table is the thing that goes stale, and there
--- is no reason to keep one when the client will do the arithmetic.
+-- **The client places them, not this file.** It answers where a member is
+-- standing in the continent's own yards, and it turns those yards into a
+-- fraction of whatever map it is handed; both calls answer for your party and
+-- your raid. That is the whole mechanism, and it is two calls rather than the
+-- one the arrow uses because this client answers that one for you alone. The
+-- alternative is what the libraries do: read the yards and carry a table of
+-- every zone's rectangle to divide them by. That table is the thing that goes
+-- stale, and there is no reason to keep one when the client will do the
+-- arithmetic. UI/Chart.lua carries the calls and the order the yards go in.
 --
 -- It is also what makes the continent picture work for nothing. Ask about a
 -- zone and you get the people standing in that zone; ask about Kalimdor and you

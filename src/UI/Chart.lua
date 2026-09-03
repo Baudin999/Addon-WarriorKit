@@ -372,9 +372,26 @@ end
 -- anywhere on it. One call therefore puts you on Desolace and on Kalimdor, and
 -- puts the rest of the party on both.
 --
+-- **Two calls, because this client answers one of them for you alone.**
+-- C_Map.GetPlayerMapPosition is documented as answering for the player and
+-- the party, and on 2.5.6 it answers for the player. A party token comes back
+-- as nothing, which drew a map with everybody on it except the people you were
+-- playing with. Blizzard's own map never asks it for them: the group is placed
+-- inside a C++ widget, UnitPositionFrame, that no Lua position call is behind.
+--
+-- What the client does answer for a group member is UnitPosition, which is
+-- where they are standing in the continent's own yards, and it has answered
+-- that for a party since the first Classic client: every range check on this
+-- install reads it. C_Map.GetMapPosFromWorldPos is the other half, the client
+-- turning those yards into a fraction of whichever map it is handed. Handed
+-- the map being drawn, it answers against that map, so the zone and the
+-- continent both come out of the same two calls and nothing here carries a
+-- table of zone rectangles the way the libraries have to.
+--
 -- Only you, your party and your raid are ever answered for. That is the
 -- client's rule rather than this file's, and it is the reason a map cannot
--- draw the friend who is not in your group.
+-- draw the friend who is not in your group. Neither call answers inside an
+-- instance, which is the same rule and the same nothing.
 local function Placed(ok, at)
 	if not ok or type(at) ~= "table" or type(at.GetXY) ~= "function" then
 		return nil
@@ -393,10 +410,54 @@ local function Placed(ok, at)
 	return x * 100, y * 100
 end
 
+-- The one vector the world position is handed over in, filled in place. Spot
+-- is on the tick, ten times a second per person, and a fresh vector each time
+-- is garbage on the same terms a table is. The mixin's own constructor where
+-- the client has one, because that is what the call is documented to take; a
+-- bare pair of fields where it does not, because that is all the mixin is.
+local world = type(_G.CreateVector2D) == "function"
+	and _G.CreateVector2D(0, 0) or { x = 0, y = 0 }
+
+-- Somebody in your group, placed on one map by way of where they are standing
+-- in the world.
+--
+-- UnitPosition answers north-south first and east-west second, and the vector
+-- takes them in that order: the client's own conversion the other way, from
+-- a map fraction to the world, hands back a vector whose x is the north-south
+-- yard. Swapped, every mark lands mirrored about the diagonal and reads as
+-- being placed, which is the failure this order is written down to prevent.
+--
+-- The map that comes back is checked against the one asked for. A client
+-- that ignored the override and answered against the best map for that spot
+-- would hand back a fraction of some other zone, and a fraction of the wrong
+-- map is a mark in the wrong place rather than no mark.
+local function Standing(api, map, unit)
+	if type(api.GetMapPosFromWorldPos) ~= "function"
+		or type(_G.UnitPosition) ~= "function" then
+		return nil
+	end
+	local ok, north, east, _, continent = pcall(_G.UnitPosition, unit)
+	if not ok or type(north) ~= "number" or type(east) ~= "number"
+		or type(continent) ~= "number" then
+		return nil
+	end
+	world.x, world.y = north, east
+	local asked, found, at = pcall(api.GetMapPosFromWorldPos, continent, world, map)
+	if not asked or found ~= map then
+		return nil
+	end
+	return Placed(true, at)
+end
+
 function Chart.Spot(map, unit)
 	local api = Api()
-	if not api or type(map) ~= "number"
-		or type(api.GetPlayerMapPosition) ~= "function" then
+	if not api or type(map) ~= "number" then
+		return nil
+	end
+	if unit ~= nil and unit ~= "player" then
+		return Standing(api, map, unit)
+	end
+	if type(api.GetPlayerMapPosition) ~= "function" then
 		return nil
 	end
 	return Placed(pcall(api.GetPlayerMapPosition, map, unit))
