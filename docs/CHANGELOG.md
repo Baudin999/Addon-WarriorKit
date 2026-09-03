@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Four things the chat window was missing
+
+The pictures down the rail have a size of their own on the chat page, ten to
+thirty two, and the rail and its rows grow with them. Fourteen was right beside
+eleven point text and wrong for anyone who had moved the text up.
+
+A conversation can be closed. Right click its room, or `/wk chat close
+<name>`, and it comes off the rail, hands its log back and stops being one of
+the conversations the next login brings back. What they said is still in
+Conversation, and the next whisper from them opens the room again.
+
+A room can be copied. Right click its lines, or `/wk chat copy`, and a box
+opens holding the room as plain text with the colour codes and the links taken
+off, selected whole for the Ctrl-C the client has no call for. That covers the
+System room too.
+
+What the addon says has a room of its own. While Blizzard's window is hidden,
+every line this addon prints used to land in System under the loot and the
+experience. It goes to a WarriorKit room now, with the prefix off, because a
+line the addon said is an answer to something you just did.
+
 ### Cloth, greens and up, mining
 
 Fast loot empties a corpse, which is the right answer on the four corpses of a

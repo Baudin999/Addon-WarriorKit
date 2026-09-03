@@ -36,6 +36,12 @@ ns.Rooms = Rooms
 
 Rooms.ALL = "all"
 Rooms.SYSTEM = "system"
+-- What this addon says, on its own. It arrives the way every system line does,
+-- through the hook on Blizzard's frame, and it used to be filed in System with
+-- the loot and the experience. That is the wrong room for it: a line from the
+-- addon is an answer to something you just did, and it was landing under
+-- forty lines of a dungeon's drops.
+Rooms.KIT = "kit"
 
 -- How many people you can be in the middle of a conversation with before the
 -- oldest one stops having a room of its own. Eight is a rail you can read; the
@@ -113,6 +119,10 @@ local ICON = "Interface\\Icons\\"
 Rooms.ICONS = {
 	all      = ICON .. "INV_Misc_Note_01",
 	system   = ICON .. "INV_Misc_Gear_01",
+	-- The addon's own picture, which is the one texture in this table the client
+	-- did not ship. It is the icon the TOC names, so a client that has loaded
+	-- the addon at all has it.
+	kit      = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Icon.tga",
 	say      = ICON .. "Ability_Warrior_BattleShout",
 	party    = ICON .. "INV_Misc_GroupLooking",
 	raid     = ICON .. "INV_Misc_GroupNeedMore",
@@ -144,6 +154,11 @@ local TOP = {
 	{ id = Rooms.ALL,    label = "Conversation", under = "Everything",
 	  kind = "SAY", live = Always },
 	{ id = Rooms.SYSTEM, label = "System", under = "Everything",
+	  kind = "SAY", live = Hiding },
+	-- Live on the same terms as System, for the same reason: with Blizzard's
+	-- window up, that window is where the addon's lines are drawn and this
+	-- room would be an empty row.
+	{ id = Rooms.KIT,    label = "WarriorKit", under = "Everything",
 	  kind = "SAY", live = Hiding },
 }
 
@@ -278,6 +293,13 @@ function Rooms.IsGroup(id)
 	return Keyed(id, GROUP) ~= nil
 end
 
+-- Whether this id names a conversation with one person. Asked by the window,
+-- whose hover says a right click closes one and says nothing of the kind over
+-- a room that cannot be closed.
+function Rooms.IsWhisper(id)
+	return Keyed(id, WHISPER) ~= nil
+end
+
 --------------------------------------------------------------------------
 -- Whisper rooms
 --------------------------------------------------------------------------
@@ -330,6 +352,35 @@ function Rooms.Whisper(name)
 	-- order moves rather than at each of the two things that move it.
 	ns.ChatHistory.Talked(whispers)
 	return WhisperRoom(key)
+end
+
+-- A conversation taken off the rail on purpose, rather than pushed off by a
+-- ninth person.
+--
+-- The rail fills with people over an evening: a stranger asking for a summon,
+-- somebody selling a stack, a guildmate who said one word. Each of them stays
+-- until eight more have spoken, and the only way to be rid of one was to wait.
+-- This is the other way. The room goes, its log is handed back, and the saved
+-- record stops naming that person, so the login that brings back last night's
+-- conversations does not bring this one. What they said is still in
+-- Conversation, and a new whisper from them makes the room again.
+function Rooms.Forget(id)
+	local entry = Whispered(id)
+	if not entry then
+		return false
+	end
+	for at, held in ipairs(whispers) do
+		if held == entry then
+			table.remove(whispers, at)
+			break
+		end
+	end
+	unread[id], speaker[id], brought[id] = nil, nil, nil
+	if Rooms.OnClose then
+		Rooms.OnClose(id)
+	end
+	ns.ChatHistory.Talked(whispers)
+	return true
 end
 
 -- Who /r answers: the person at the front of that list, which is whoever last

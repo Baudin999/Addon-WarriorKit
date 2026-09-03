@@ -316,6 +316,12 @@ local SECTIONS = {
 	"57-merchant",
 	"58-spec",
 	"59-chat-history",
+	-- Straight after it, because it reads the rail that section wiped clean
+	-- and closes conversations of its own making. What it asks is the four
+	-- things the window grew after the history did: a picture size, a way to
+	-- close a conversation, a box to copy a room out of, and a room for what
+	-- the addon says.
+	"59-chat-rooms",
 
 	-- Last, and not about a feature. It drives one word of each kind the
 	-- slash runner parses and reads the setting back, which is a question

@@ -15,6 +15,10 @@ local ADDON, ns = ...
 local WIDTH_LOW, WIDTH_HIGH, WIDTH_STEP = 320, 900, 10
 local HEIGHT_LOW, HEIGHT_HIGH, HEIGHT_STEP = 140, 700, 10
 local FONT_LOW, FONT_HIGH = 9, 20
+-- The picture on a room's row. Ten is the smallest the client draws one of
+-- these legibly; thirty two is the size the game draws them on an action bar,
+-- and the rail is a column of pictures, not a bar.
+local ICON_LOW, ICON_HIGH = 10, 32
 
 -- "1x", "1.25x", "2.5x". Two decimal places with the dead zeros taken off. The
 -- range and the stops are Chat/Window.lua's, because the clamp there is what
@@ -239,6 +243,28 @@ local function RoomWord(arg)
 	ns.Print("no room called " .. arg .. ". /wk chat room lists them.")
 end
 
+-- A conversation off the rail, by the name on it.
+local function CloseWord(name)
+	if not name or name == "" then
+		ns.Print("chat close <name> closes the conversation with them. Right clicking their room does the same.")
+		return
+	end
+	local id = ns.Rooms.WhisperId(name)
+	if id and ns.ChatWindow.Close(id) then
+		ns.Print("the conversation with " .. name .. " is closed. What they said is still in Conversation.")
+		return
+	end
+	ns.Print("no conversation with " .. name .. " is open.")
+end
+
+-- The room you are reading, in the copy box.
+local function CopyWord()
+	local field, why = ns.ChatWindow.Copy()
+	if not field then
+		ns.Print("chat copy: " .. why .. ".")
+	end
+end
+
 -- The saved conversation, thrown away.
 --
 -- It reports on its own and only writes on `yes`, which is what `/wk defaults`
@@ -284,6 +310,14 @@ local function ChatWord(arg, raw)
 	end
 	if arg == "forget" then
 		ForgetWord((raw:match("^%s*forget%s+(%S+)$")))
+		return
+	end
+	if arg == "close" then
+		CloseWord((raw:match("^%s*close%s+(%S+)$")))
+		return
+	end
+	if arg == "copy" then
+		CopyWord()
 		return
 	end
 	ns.ChatWindow.Toggle()
@@ -478,6 +512,12 @@ ns.Register({
 		-- point off it buys another line of what somebody said in the same
 		-- rectangle. The stepper goes to twenty for anyone who wants it back.
 		chatFont = 11,
+		-- The theme's own size for the picture on a room's row, which is the
+		-- right one beside eleven point text. The stepper goes to thirty two,
+		-- and the row and the column grow with it, because a player who has
+		-- moved the text up to eighteen is reading a rail of pictures half the
+		-- height of the words beside them.
+		chatIcon = 14,
 		-- No ground at all. A chat window sits in a corner all evening, the
 		-- world behind it is the game, and the text carries its own outline, so
 		-- the panel under it was only ever covering scenery. The stepper goes
@@ -535,6 +575,8 @@ ns.Register({
 		"chat room, list the rooms; chat room <name>, go to one",
 		"chat claim, whether the same lines still draw in Blizzard's window",
 		"chat forget, what is kept across a reload; chat forget yes, throw it away",
+		"chat close <name>, close the conversation with them; a right click on their room does the same",
+		"chat copy, the room you are reading in a box you can Ctrl-C out of; a right click on the lines does the same",
 		"group, list your groups and who is in them",
 		"group new <name>, group <group> add|remove <name>, group <group> party",
 		"voice, what the voice pick is doing",
@@ -596,6 +638,10 @@ ns.Register({
 		ui.Size("text size", FONT_LOW, FONT_HIGH, 1,
 			function() return ns.db.chatFont end,
 			function(value) Redraw("chatFont", value) end)
+		ui.Size("room icons", ICON_LOW, ICON_HIGH, 1,
+			function() return ns.db.chatIcon end,
+			function(value) Redraw("chatIcon", value) end)
+		ui.Hint("The pictures down the rail, and the rail and its rows grow with them. A room's hover names it, and says what a right click on it does.")
 		ui.Stepper("scale", ns.ChatWindow.SCALE_LOW, ns.ChatWindow.SCALE_HIGH,
 			ns.ChatWindow.SCALE_STEP,
 			function() return ns.db.chatScale end,

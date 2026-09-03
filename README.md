@@ -231,7 +231,9 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   The conversation is taken out of Blizzard's frames through FrameXML's own
   message filter, so one tick box puts it back with no reload. Names are class
   coloured, a click on one answers it, item links still work, and nothing fades
-  out after two minutes.
+  out after two minutes. A right click on a conversation closes it, a right
+  click on the lines of any room opens a box you can copy them out of, and
+  what this addon says has a room of its own beside the System room.
 - **A voice channel joined when you log in.** Pick your party or raid channel,
   or any community or guild stream you are in, the same list the client's own
   Chat Channels window puts a voice button on. The addon activates it at login

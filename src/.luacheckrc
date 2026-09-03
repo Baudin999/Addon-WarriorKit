@@ -153,6 +153,9 @@ globals = {
 	-- a macro and from scripts/harness.lua without Chat/Window.lua handing out
 	-- a reference to its own tables.
 	"WarriorKitChatRooms",
+	-- the box a room is copied out of. Named so Escape closes it through
+	-- UISpecialFrames, which is a list of names.
+	"WarriorKitChatCopy",
 	-- the button the enter key is bound onto while Blizzard's chat window is
 	-- hidden. SetOverrideBindingClick binds to a name rather than to a frame,
 	-- which is the whole reason it has one.

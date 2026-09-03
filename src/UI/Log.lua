@@ -92,6 +92,7 @@ end
 -- opts.onLink   function(link, text, button) returning true when it has dealt
 --               with the click itself, which is how a player name becomes a
 --               whisper in our own field rather than in Blizzard's
+-- opts.onCopy   function() called on a right click on the lines
 -- opts.maxLines how many lines this log keeps, for a log that wants fewer
 --
 -- Returns the log, or nil and the reason, so a caller can say what happened
@@ -170,6 +171,20 @@ function UI.Log(parent, opts)
 		end)
 		frame:SetScript("OnHyperlinkLeave", function()
 			ns.Tip.Close()
+		end)
+	end
+
+	-- opts.onCopy is a right click anywhere on the lines, and it is how the
+	-- chat window opens the box you copy a room out of. The frame already
+	-- takes the mouse for its links, so the press was being eaten and telling
+	-- nobody; this is the one thing a right click on a wall of text could
+	-- mean.
+	if opts.onCopy then
+		frame:EnableMouse(true)
+		frame:SetScript("OnMouseUp", function(_, button)
+			if button == "RightButton" then
+				opts.onCopy()
+			end
 		end)
 	end
 
@@ -339,6 +354,46 @@ function Log:Count()
 		return self.view:GetNumMessages() or 0
 	end
 	return self.lines
+end
+
+-- The escape sequences a chat line carries, and what each becomes on the way
+-- to a text field. A colour and its close become nothing, a link becomes the
+-- words inside it, and a texture becomes nothing at all. Pasted anywhere
+-- outside the game the codes are noise, and inside an edit box the client
+-- draws them as the letters they are.
+local STRIPS = {
+	{ "|c%x%x%x%x%x%x%x%x", "" },
+	{ "|r", "" },
+	{ "|H[^|]*|h([^|]*)|h", "%1" },
+	{ "|T[^|]*|t", "" },
+}
+
+-- Every line the frame is holding, oldest first, as plain text.
+--
+-- Read back off the frame rather than kept here as well, because the frame is
+-- already a capped, ordered copy of exactly this and a second one would be the
+-- same five hundred strings held twice per room. The frame answers by index
+-- from one, the oldest, up to Count, which is what makes the order the order
+-- the lines were said in.
+--
+-- Nil rather than an empty list where the client will not hand the text back,
+-- so the caller can say so instead of offering an empty box.
+function Log:Lines()
+	local view = self.view
+	if type(view.GetMessageInfo) ~= "function" then
+		return nil
+	end
+	local out = {}
+	for index = 1, self:Count() do
+		local text = view:GetMessageInfo(index)
+		if type(text) == "string" then
+			for _, strip in ipairs(STRIPS) do
+				text = text:gsub(strip[1], strip[2])
+			end
+			out[#out + 1] = text
+		end
+	end
+	return out
 end
 
 --------------------------------------------------------------------------

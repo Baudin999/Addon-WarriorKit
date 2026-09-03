@@ -342,9 +342,16 @@ function ns.Unstrip(region)
 	return true
 end
 
+-- What every line the addon says starts with. Named rather than written into
+-- the call, because Chat/Feed.lua reads it back: with Blizzard's window hidden,
+-- everything that window would have drawn comes round through one hook, and
+-- the prefix is the only thing that tells a line of ours from a loot line. A
+-- second spelling of it anywhere would be a room that quietly stopped filling.
+ns.SIGNATURE = "|cff40c0f0WarriorKit|r: "
+
 -- cold: ns.Print writes one line into the chat frame, which is the addon telling you something and never a tick
 function ns.Print(msg)
-	DEFAULT_CHAT_FRAME:AddMessage("|cff40c0f0WarriorKit|r: " .. msg)
+	DEFAULT_CHAT_FRAME:AddMessage(ns.SIGNATURE .. msg)
 end
 
 --------------------------------------------------------------------------

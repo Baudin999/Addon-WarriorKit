@@ -1169,6 +1169,12 @@ end
 function UI.List(parent, opts)
 	local list = setmetatable({ pool = {}, rows = {}, onSelect = opts and opts.onSelect }, List)
 	list.icons = opts and opts.icons and true or false
+	-- How big the picture on an icon row is drawn, and the row and the column
+	-- follow it. The theme's number until the caller says otherwise, which the
+	-- chat window does from a setting: a fourteen pixel picture is the right
+	-- size beside eleven point text and the wrong size for anybody who has
+	-- moved the text to eighteen. See List:SetIconSize.
+	list.iconSize = M.roomIcon
 	list.describe = opts and opts.describe
 	list.marks = opts and opts.marks and true or false
 	list.actions = opts and opts.actions or nil
@@ -1177,6 +1183,12 @@ function UI.List(parent, opts)
 	-- dungeon's bosses and the gesture that leaves it for the shelf has to work
 	-- over the column as much as over the map beside it.
 	list.onBack = opts and opts.onBack or nil
+	-- opts.onRight is a right click on one entry, handed that entry's id. The
+	-- chat rail is what asked: a whisper room is closed by right clicking it,
+	-- and a column of pictures twenty four pixels wide has no room for a mark
+	-- beside each one. A list that offers both takes the row's own gesture
+	-- first, and the way out only where there was no row under the cursor.
+	list.onRight = opts and opts.onRight or nil
 	-- Named if the caller asks, for the reason the aura rows and the meter are:
 	-- a column that has laid itself out wrongly has to be measurable from a
 	-- macro and from scripts/harness.lua, and the alternative is the file that
@@ -1200,9 +1212,9 @@ end
 -- in a column this narrow, and it carries its own dark rectangle: an accent
 -- coloured 3 on top of whatever art the room's icon happens to be is a number
 -- you can lose against a bright corner.
-local function IconRow(button)
+local function IconRow(list, button)
 	button.icon = UI.Icon(button, "ARTWORK")
-	button.icon:SetSize(M.roomIcon, M.roomIcon)
+	button.icon:SetSize(list.iconSize, list.iconSize)
 	button.icon:SetPoint("CENTER")
 
 	-- The chip the count stands on, opaque and a rectangle of its own.
@@ -1346,16 +1358,19 @@ local function ListRow(list, index)
 	button.text:SetPoint("RIGHT", button.badge, "LEFT", -M.rowGap, 0)
 	UI.Wrap(button.text, false)
 
-	-- Both buttons where the caller offered a way back, because a gesture that
-	-- works on the window and not on the column under the cursor is a gesture
-	-- that works nowhere: a row is a button, a button with no right click
-	-- registered eats the press, and nothing behind it is ever told.
-	if list.onBack then
+	-- Both buttons where the caller offered a way back or a gesture on the
+	-- row, because a gesture that works on the window and not on the column
+	-- under the cursor is a gesture that works nowhere: a row is a button, a
+	-- button with no right click registered eats the press, and nothing behind
+	-- it is ever told.
+	if list.onBack or list.onRight then
 		button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	end
 	button:SetScript("OnClick", function(this, which)
 		if which == "RightButton" then
-			if list.onBack then
+			if list.onRight and this.id ~= nil then
+				list.onRight(this.id)
+			elseif list.onBack then
 				list.onBack()
 			end
 			return
@@ -1383,7 +1398,7 @@ local function ListRow(list, index)
 	end)
 
 	if list.icons then
-		IconRow(button)
+		IconRow(list, button)
 	end
 
 	-- A row made after the column was faded takes the fraction with it. A pool
@@ -1455,7 +1470,78 @@ function List:RowHeight(button)
 	if button.header then
 		return M.rowGap * 2 + 1
 	end
-	return M.roomRow
+	return self:IconRow()
+end
+
+-- One icon row's height, and the width a column of them wants. Both are the
+-- theme's differences kept over whatever the picture is: four pixels of air
+-- above and below it, five either side. The caller reads both back, because
+-- the column's width is the caller's layout and the caller is what places
+-- the rail, the log beside it and the line under both.
+function List:IconRow()
+	return self.iconSize + (M.roomRow - M.roomIcon)
+end
+
+function List:IconWidth()
+	return self.iconSize + (M.rooms - M.roomIcon)
+end
+
+-- How big the picture on every row is drawn from now on, and how wide a column
+-- of them wants to be.
+--
+-- The theme sets the picture at fourteen and the row and the column at four
+-- and ten more than that, and those two differences are what is kept: a
+-- twenty pixel picture sits in a twenty four pixel row down a thirty pixel
+-- column, with the same air round it the theme gave the fourteen. The width
+-- is answered rather than applied; see IconWidth above.
+--
+-- Rows already made are resized here; rows made later read the size off the
+-- list. Nothing is relaid, because the caller resizes the column right after
+-- and that is the one pass that lays the rows out again.
+function List:SetIconSize(px)
+	px = math.max(1, math.floor(tonumber(px) or M.roomIcon))
+	if self.iconSize ~= px then
+		self.iconSize = px
+		for index = 1, #self.pool do
+			local icon = self.pool[index].icon
+			if icon then
+				icon:SetSize(px, px)
+			end
+		end
+	end
+	return self:IconWidth()
+end
+
+-- The picture on the row with this id, for the harness. Handed out rather than
+-- answered about, because what is being checked is how big a texture came
+-- out, and a number this widget kept is a number this widget could keep
+-- wrongly and still agree with itself.
+function List:Icon(id)
+	for index = 1, #self.pool do
+		local button = self.pool[index]
+		if button.id ~= nil and button.id == id then
+			return button.icon
+		end
+	end
+	return nil
+end
+
+-- A click on the row with this id, with either button, for the harness. It
+-- runs the row's own OnClick, so what is asserted is the wiring from the row
+-- to whatever the caller hung on that button and not the caller's closure on
+-- its own.
+function List:Click(id, which)
+	for index = 1, #self.pool do
+		local button = self.pool[index]
+		if button.id ~= nil and button.id == id and button:IsShown() then
+			local press = button:GetScript("OnClick")
+			if press then
+				press(button, which or "LeftButton")
+				return true
+			end
+		end
+	end
+	return false
 end
 
 -- What the column holds now.
@@ -1491,7 +1577,14 @@ function List:Set(rows)
 		self.stack:Add(button, { height = self:RowHeight(button), gap = 1 })
 	end
 
+	-- A row that is not drawn names nothing. The pool keeps every frame ever
+	-- made, and a frame past the end of this refresh kept the id of whatever
+	-- room it last drew: Mark found it, answered that the room was on the rail,
+	-- and the window did not rebuild the column. In the game that was a
+	-- conversation that had fallen off the end of the rail coming back invisible
+	-- when the same person whispered again.
 	for index = #rows + 1, #self.pool do
+		self.pool[index].id = nil
 		self.pool[index]:Hide()
 	end
 

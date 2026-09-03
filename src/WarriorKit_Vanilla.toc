@@ -641,6 +641,7 @@ Chat\Field.lua
 Chat\Feed.lua
 Chat\Blizzard.lua
 Chat\Voice.lua
+Chat\Copy.lua
 Chat\Window.lua
 Chat\Feature.lua
 

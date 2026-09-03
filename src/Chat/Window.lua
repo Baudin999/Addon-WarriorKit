@@ -158,7 +158,8 @@ local function LogFor(id)
 	if log then
 		log:Clear()
 	else
-		local made, why = UI.Log(window.content, { onLink = ChatWindow.OnLink })
+		local made, why = UI.Log(window.content, { onLink = ChatWindow.OnLink,
+			onCopy = ChatWindow.Copy })
 		if not made then
 			ns.Print("no chat window: " .. why .. ".")
 			return nil
@@ -494,7 +495,7 @@ end
 -- places that answer it would be two places to disagree, and because a log made
 -- after the window was laid out has to be able to ask.
 function Frame()
-	local left = M.rooms + M.chatPad
+	local left = rail:IconWidth() + M.chatPad
 	local top = M.chatPad
 	local room = (window.width or 0) - left - M.chatPad
 	local body = window:Body()
@@ -518,6 +519,42 @@ function Place(log)
 	log:Resize(room, height)
 end
 
+-- The column down the left, and what stands in it and beside it: the rail,
+-- the microphone at its foot, and the line's strip to its right.
+--
+-- The pictures first, because the column's width and the row's height both
+-- follow them, and everything to the right of the column is placed off that
+-- width. What comes back is the width, because the logs are placed off it too
+-- and they are placed after this.
+local function PlaceRail(body)
+	local rooms = rail:SetIconSize(ns.db.chatIcon)
+	local roomRow = rail:IconRow()
+	rail.frame:ClearAllPoints()
+	rail.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT")
+	rail:Resize(rooms, math.max(body - roomRow, roomRow))
+
+	-- The line you type in starts where the lines you read start, so the rail
+	-- runs the whole height of the window, down its own column to the left of
+	-- everything you read.
+	window.footer:ClearAllPoints()
+	window.footer:SetPoint("BOTTOMLEFT", rooms + M.chatPad, 0)
+	window.footer:SetPoint("BOTTOMRIGHT", -M.chatPad, 0)
+	window.footerRule:ClearAllPoints()
+	window.footerRule:SetPoint("BOTTOMLEFT", rooms, window.foot)
+	window.footerRule:SetPoint("BOTTOMRIGHT", -M.chatPad, window.foot)
+
+	-- The voice button sits at the foot of the rail, one room row tall, in the
+	-- column the rooms are in. That is where it belongs because it is the same
+	-- question the rail asks: the rooms are who you are typing to and this is
+	-- who you are talking to. It is last in the column rather than first because
+	-- it is the one row there that is not a room, and the rail is shortened by
+	-- exactly its height so the two never overlap.
+	voice:ClearAllPoints()
+	voice:SetPoint("BOTTOMLEFT", window.content, "BOTTOMLEFT", 0, 0)
+	voice:SetSize(rooms, roomRow)
+	return rooms
+end
+
 local function Relayout()
 	if not built then
 		return
@@ -533,35 +570,11 @@ local function Relayout()
 	window.zoom = zoom
 	window:Resize(db.chatWidth, db.chatHeight)
 	local px = ns.Pixel(window.frame)
-	local body = window:Body()
 
-	rail.frame:ClearAllPoints()
-	rail.frame:SetPoint("TOPLEFT", window.content, "TOPLEFT")
-	rail:Resize(M.rooms, math.max(body - M.roomRow, M.roomRow))
-
+	PlaceRail(window:Body())
 	for _, log in ipairs(every) do
 		Place(log)
 	end
-
-	-- The line you type in starts where the lines you read start, so the rail
-	-- runs the whole height of the window, down its own column to the left of
-	-- everything you read.
-	window.footer:ClearAllPoints()
-	window.footer:SetPoint("BOTTOMLEFT", M.rooms + M.chatPad, 0)
-	window.footer:SetPoint("BOTTOMRIGHT", -M.chatPad, 0)
-	window.footerRule:ClearAllPoints()
-	window.footerRule:SetPoint("BOTTOMLEFT", M.rooms, window.foot)
-	window.footerRule:SetPoint("BOTTOMRIGHT", -M.chatPad, window.foot)
-
-	-- The voice button sits at the foot of the rail, one room row tall, in the
-	-- column the rooms are in. That is where it belongs because it is the same
-	-- question the rail asks: the rooms are who you are typing to and this is
-	-- who you are talking to. It is last in the column rather than first because
-	-- it is the one row there that is not a room, and the rail is shortened by
-	-- exactly its height so the two never overlap.
-	voice:ClearAllPoints()
-	voice:SetPoint("BOTTOMLEFT", window.content, "BOTTOMLEFT", 0, 0)
-	voice:SetSize(M.rooms, M.roomRow)
 
 	entry.box:ClearAllPoints()
 	entry.box:SetPoint("LEFT", window.footer, "LEFT", 0, 0)
@@ -738,17 +751,41 @@ end
 -- is waiting in it. The rail is a column of pictures, so this is where the
 -- words went, and it has to carry all three of them because none of them is on
 -- the screen any more.
+--
+-- The two right clicks are in it as well, because a gesture nothing on the
+-- screen names is a gesture nobody finds. One is on the row and only a
+-- conversation has it; the other is on the log and every room has it.
 local function Describe(row)
 	local kind, target = ns.Rooms.Target(row.id)
 	local waiting = row.unread or 0
+	local lines = {
+		{ ns.Compose.Note(kind, target) },
+		waiting > 0 and { ("%d waiting"):format(waiting) } or nil,
+	}
+	if ns.Rooms.IsWhisper(row.id) then
+		lines[#lines + 1] = { "Right click closes this conversation." }
+	end
+	lines[#lines + 1] = { "Right click the lines to copy them." }
 	return {
 		kind = "note",
 		title = row.label,
-		lines = {
-			{ ns.Compose.Note(kind, target) },
-			waiting > 0 and { ("%d waiting"):format(waiting) } or nil,
-		},
+		lines = lines,
 	}
+end
+
+-- The column of rooms. A picture per room rather than a word: thirteen words
+-- down the left were a hundred and four pixels of every line anybody said,
+-- spent naming rooms you know by sight, and the name is in the hover now.
+local function BuildRail()
+	return UI.List(window.content, {
+		name = "WarriorKitChatRooms",
+		icons = true,
+		describe = Describe,
+		onSelect = function(id) Show(id) end,
+		-- A right click on a conversation closes it. On any other room it does
+		-- nothing, and Close is what says so.
+		onRight = function(id) ChatWindow.Close(id) end,
+	})
 end
 
 local function Build()
@@ -798,15 +835,7 @@ local function Build()
 		lockable = true,
 	})
 
-	rail = UI.List(window.content, {
-		name = "WarriorKitChatRooms",
-		-- A picture per room rather than a word. Thirteen words down the left
-		-- were a hundred and four pixels of every line anybody said, spent
-		-- naming rooms you know by sight; the name is in the hover now.
-		icons = true,
-		describe = Describe,
-		onSelect = function(id) Show(id) end,
-	})
+	rail = BuildRail()
 	entry = BuildEntry()
 
 	-- Voice, at the foot of the rail. A microphone rather than a word, the same
@@ -1279,9 +1308,44 @@ function ChatWindow.Tell(text)
 	if not built or not window:IsShown() or type(text) ~= "string" or text == "" then
 		return false
 	end
-	OnLine({ active }, ("%s|cff40c0f0WarriorKit|r: %s"):format(ns.ChatFeed.Stamp(), text),
+	OnLine({ active }, ("%s%s%s"):format(ns.ChatFeed.Stamp(), ns.SIGNATURE, text),
 		C.quiet[1], C.quiet[2], C.quiet[3], false)
 	return true
+end
+
+--------------------------------------------------------------------------
+-- Closing a conversation, and copying a room
+--------------------------------------------------------------------------
+
+-- A conversation off the rail, on purpose. Chat/Rooms.lua says why and what
+-- survives it; this is the window's half, which is landing somewhere if the
+-- room that went was the one you were reading, and drawing the rail without
+-- it. Refused for anything that is not a conversation, which is how a right
+-- click on the party room does nothing rather than something surprising.
+function ChatWindow.Close(id)
+	if not built or not ns.Rooms.Forget(id) then
+		return false
+	end
+	if active == id then
+		Show(ns.Rooms.ALL)
+	end
+	Refresh()
+	return true
+end
+
+-- The room you are reading, in a box you can copy out of. Chat/Copy.lua is
+-- the box; what this adds is which log and what to call it. Returns the field
+-- the box put the text in, or nil and why there was nothing to put.
+function ChatWindow.Copy()
+	if not built then
+		return nil, "no chat window"
+	end
+	local log = logs[active]
+	local lines = log and log:Lines()
+	if log and lines == nil then
+		return nil, "this client will not hand the log back"
+	end
+	return ns.ChatCopy.Show(ns.Rooms.Title(active), lines or {})
 end
 
 --------------------------------------------------------------------------
@@ -1380,6 +1444,26 @@ end
 function ChatWindow.Bar(id)
 	local log = logs[id]
 	return log and log.bar or nil
+end
+
+-- A click on one room's row, for the harness. Handed through the rail's own
+-- row rather than answered here, because what is being checked is that a
+-- right click on a row reaches Close, and calling Close would check nothing.
+function ChatWindow.Press(id, which)
+	if not built then
+		return false
+	end
+	return rail:Click(id, which)
+end
+
+-- The picture on one room's row, for the harness, for the reason Bar above is.
+-- What is being checked is how big a texture came out after the setting moved,
+-- and a number this file kept is a number this file could keep wrongly.
+function ChatWindow.RowIcon(id)
+	if not built then
+		return nil
+	end
+	return rail:Icon(id)
 end
 
 -- How many lines one room is holding.

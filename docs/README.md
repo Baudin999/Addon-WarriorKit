@@ -289,6 +289,8 @@ name of none of them.
     Chat/Blizzard.lua        the client's own chat window off the screen, and
                              everything it would have drawn forwarded here
     Chat/Voice.lua           the voice channel pick, and the join it asks for
+    Chat/Copy.lua            the box a room is copied out of, selected whole
+                             for the Ctrl-C the client has no call for
     Chat/Window.lua          the window: the room rail, a log each, and the
                              rectangle the client's line sits in
     Chat/Feature.lua
@@ -556,7 +558,7 @@ goes through `Feature.lua` or through the shared surface below:
 
     ns.db           account SavedVariables, ready at ADDON_LOADED
     ns.dbc          this character's SavedVariables, ready at the same moment
-    ns.Print(msg)   prefixed chat output
+    ns.Print(msg)   prefixed chat output; ns.SIGNATURE is the prefix
     ns.Fill / ns.Outline / ns.Recolor   a coloured rectangle, a hairline edge,
                                         and a recolour of an edge already drawn
     ns.Pixel(frame) / ns.EdgeSize(edges, size)   one screen pixel in that
@@ -960,6 +962,9 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Rooms.Target(id)          the channel a line typed in that room goes to,
                                  and who it is addressed to when it is a whisper
     ns.Rooms.Whisper(name) / WhisperId(name) / Recent() / Exists(id) / Title(id)
+    ns.Rooms.Forget(id)          a conversation off the rail on purpose, and
+                                 out of the saved record
+    ns.Rooms.IsGroup(id) / IsWhisper(id)
     ns.Rooms.Mark(id) / Read(id) / Unread(id) / Waiting() / Describe()
     ns.Compose.Prefix(kind, target)  the slash the field starts with
     ns.Compose.Note(kind, target)    the same thing in a sentence
@@ -969,7 +974,9 @@ goes through `Feature.lua` or through the shared surface below:
     ns.ChatFeed.Apply()          register or unregister the chat events, and
                                  claim or hand back Blizzard's frames
     ns.ChatFeed.Attach(onLine)   set the sink, and get what arrived before it
-    ns.ChatFeed.System(text, r, g, b)  a line Blizzard's window would have drawn
+    ns.ChatFeed.System(text, r, g, b)  a line Blizzard's window would have drawn,
+                                 to System, or to the WarriorKit room when it
+                                 starts with ns.SIGNATURE
     ns.ChatFeed.Installed() / Claimed() / Describe()
     ns.ChatBlizzard.Apply()      the client's chat window off the screen, or back
     ns.ChatBlizzard.Wanted() / Hiding() / Count() / Describe()
@@ -979,6 +986,10 @@ goes through `Feature.lua` or through the shared surface below:
                                  between them say
     ns.ChatWindow.Go(id) / Step(delta) / Room() / Channel() / Reply(name)
     ns.ChatWindow.Fill() / Line() / Rooms() / Count(id) / Held() / Describe()
+    ns.ChatWindow.Close(id)      a conversation off the rail; a right click on
+                                 its row is what calls it
+    ns.ChatWindow.Copy()         the room you are reading, in the copy box
+    ns.ChatCopy.Show(title, lines) / Hide() / Shown()
     ns.Voice.Supported() / Ready()   whether there is a voice service, and
                                  whether it has signed in yet
     ns.Voice.Options() / Label(value) / Set(value)

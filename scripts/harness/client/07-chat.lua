@@ -10,6 +10,18 @@
 
 local H = ...
 local chat, region, child, GUILD = H.chat, H.region, H.child, H.GUILD
+local Region = H.Region
+
+-- One line back out of a message frame, by index from the oldest. Real rather
+-- than the metatable's no-op because the copy box is filled from it: a stub
+-- that answered nothing would let a window that copies an empty string pass.
+function Region:GetMessageInfo(index)
+	local held = self.messages and self.messages[index]
+	if not held then
+		return nil
+	end
+	return held.text, held.r, held.g, held.b
+end
 
 -- The client's own per type colours. Two entries with numbers that are not the
 -- theme's, so a line that fell back to the theme is visible as a wrong colour

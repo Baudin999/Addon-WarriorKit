@@ -97,8 +97,8 @@ end
 ----------------------------------------------------------------------
 
 check(People.Count() == 0, "the groups did not ship empty")
-check(Window.Rooms() == 3,
-	("%d rooms standing alone with no guild, expected Conversation, System and Say")
+check(Window.Rooms() == 4,
+	("%d rooms standing alone with no guild, expected Conversation, System, WarriorKit and Say")
 		:format(Window.Rooms()))
 check(Window.Room() == Rooms.ALL,
 	("the window opened in %s, expected everything"):format(tostring(Window.Room())))
@@ -113,7 +113,7 @@ local PARTY = {
 }
 group.Set(PARTY)
 fire("GROUP_ROSTER_UPDATE")
-check(Window.Rooms() == 4, ("%d rooms in a party, expected a party room to appear")
+check(Window.Rooms() == 5, ("%d rooms in a party, expected a party room to appear")
 	:format(Window.Rooms()))
 -- And the window is in it without anybody pressing anything. Conversation types
 -- into say, so a party room nothing selected meant the first line you typed
@@ -124,11 +124,11 @@ check(Window.Go("party"), "the party room could not be selected")
 
 group.Set(PARTY, true)
 fire("GROUP_ROSTER_UPDATE")
-check(Window.Rooms() == 5, ("%d rooms in a raid, expected a raid room as well")
+check(Window.Rooms() == 6, ("%d rooms in a raid, expected a raid room as well")
 	:format(Window.Rooms()))
 chat.inGuild = true
 fire("PLAYER_GUILD_UPDATE")
-check(Window.Rooms() == 6, ("%d rooms in a guild, expected a guild room as well")
+check(Window.Rooms() == 7, ("%d rooms in a guild, expected a guild room as well")
 	:format(Window.Rooms()))
 
 -- Back to a party for the rest of it. The raid room has been seen to appear and
@@ -141,7 +141,7 @@ fire("GROUP_ROSTER_UPDATE")
 ----------------------------------------------------------------------
 
 check(People.AddGroup("Family") == 1, "the first group was not made")
-check(Window.Rooms() == 6, ("%d rooms with a group named, expected one more")
+check(Window.Rooms() == 7, ("%d rooms with a group named, expected one more")
 	:format(Window.Rooms()))
 
 check(People.Add(1, "Aria") == 1, "the first name did not go into the group")

@@ -324,11 +324,31 @@ end
 -- into use. Chat/Blizzard.lua hooks the default frame and hands everything that
 -- reaches it here.
 --
+-- One kind of line is told apart from the rest, and it is this addon's own. It
+-- goes to the WarriorKit room rather than to System, because a line the addon
+-- said is an answer to something you just did and System is forty lines of
+-- loot deep by the time you look for it.
+--
 -- There is no doubling, and the reason is exact rather than lucky. Hiding the
 -- client's window forces the claim, the claim takes every conversation event
 -- out of its frames before they are drawn, and what is left arriving at
 -- AddMessage is precisely what this addon did not capture.
 --------------------------------------------------------------------------
+
+-- The two rooms a forwarded line can land in, held rather than built per line.
+-- A loot line on a corpse-heavy evening is the busiest thing this function sees
+-- and a table per line was garbage the collector walks in the middle of a
+-- frame.
+local SYSTEM_ROOMS = { ns.Rooms.SYSTEM }
+local KIT_ROOMS = { ns.Rooms.KIT }
+
+-- Whether the line is this addon's own, which is the one thing the hook cannot
+-- say and the prefix can. ns.Print writes it in front of everything the addon
+-- says and nothing else in the game starts a line with it.
+local function Ours(text)
+	local signature = ns.SIGNATURE
+	return text:sub(1, #signature) == signature
+end
 
 function Feed.System(text, r, g, b)
 	if type(text) ~= "string" or text == "" then
@@ -337,13 +357,20 @@ function Feed.System(text, r, g, b)
 	if not Feed.OnLine then
 		return false
 	end
+	local rooms = SYSTEM_ROOMS
+	if Ours(text) then
+		-- The prefix comes off. The room is named after the addon, so a name on
+		-- every line in it would be the same word down the whole left edge.
+		rooms = KIT_ROOMS
+		text = text:sub(#ns.SIGNATURE + 1)
+	end
 	local line = Stamp() .. text
 	local red, green, blue = r, g, b
 	if type(red) ~= "number" then
 		local color = ns.UI.Color.text
 		red, green, blue = color[1], color[2], color[3]
 	end
-	Feed.OnLine({ ns.Rooms.SYSTEM }, line, red, green, blue, false)
+	Feed.OnLine(rooms, line, red, green, blue, false)
 	return true
 end
 
