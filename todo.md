@@ -77,6 +77,12 @@ written longer than they are here.
 47. A bag pickup filter switched from the bag window: a price floor for greys
     and whites, one button that throws the filter and the leftovers together,
     and the title bar's buttons as marks with a sentence on hover. `547a5f8`
+48. The tooltip goes with the pointer, the way the client's own does: the
+    linger ships at zero and stays a setting for whoever reads slowly.
+    `06cd212`
+49. Chrome waits for the hand to stop: tabs, close marks, chips and settings
+    hints open after four tenths of a second held still, through the settle
+    the bags already use. `cce5ebc`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
