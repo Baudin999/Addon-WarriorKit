@@ -90,7 +90,7 @@ written longer than they are here.
 
 51. Ctrl-R, taken off the client and given a window: the last four seconds of
     frames as a strip, what the last second went on, and a log of the frames
-    that went wrong with a measured reason on each. `HASH`
+    that went wrong with a measured reason on each. `b32bd7c`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
