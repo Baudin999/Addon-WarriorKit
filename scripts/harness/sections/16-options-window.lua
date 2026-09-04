@@ -697,8 +697,19 @@ if window then
 	-- the page needs to the bag window, whose filter button throws this switch
 	-- and the leftovers one together; the button's own hover says the same
 	-- thing the other way round. 27,950 is that plus a hint's worth of room.
-	check(prose < 27950,
-		("the window holds %d characters of prose and the budget is 27,950"):format(prose))
+	-- The frame trace arrived and it is 28,609 across the same sixty-eight: two
+	-- sections on the performance page, two ledes, four hints and six readings.
+	-- It is the largest single addition this budget has taken and every sentence
+	-- is one a control cannot say. The key hint says the binding is an override,
+	-- which is the difference between shadowing the client's own frame rate
+	-- display and overwriting it. The watch hint says why the trace runs with
+	-- the window shut, which is the whole feature: a stutter is over before you
+	-- can reach for a key. The dip hint gives the number fifty a reason. The
+	-- profiler hint says what turning a client wide setting on buys and what it
+	-- costs, which is the one control in the addon that reloads the interface.
+	-- 28,750 is that plus a hint's worth of room.
+	check(prose < 28750,
+		("the window holds %d characters of prose and the budget is 28,750"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

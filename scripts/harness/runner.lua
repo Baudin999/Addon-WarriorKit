@@ -409,6 +409,12 @@ local SECTIONS = {
 	-- foot of the file, so nothing after it finds a key held or a scene it
 	-- did not expect.
 	"76-adhoc",
+	-- Last, because it stubs four client calls and a CVar to arrange each of
+	-- the four answers a dip can have, and puts all five back at the foot of
+	-- the file. It also counts 250 events into the census and fires 300
+	-- combat log lines, which is the loudest thing any section does and
+	-- belongs nowhere near a section reading a frame.
+	"77-frame-trace",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

@@ -42,6 +42,21 @@ local ROWS = {
 	{ key = "cooldowns", label = "cooldown row", hz = 10 },
 	{ key = "hide", label = "Blizzard frames held down", hz = 1 },
 	{ key = "feed", label = "feeds", hz = 60, rate = "every frame" },
+
+	-- The three the frame trace is made of, on the list they measure. A part
+	-- that will not account for itself is asking to be believed rather than
+	-- read, and this is the part whose whole subject is what things cost.
+	--
+	-- Two of them have no fixed rate. The recorder runs once per frame drawn,
+	-- which is whatever this machine is managing, and the census runs once per
+	-- event the client sends, which in a raid is a thousand a second and in an
+	-- inn is none. A hertz typed in here would report both as a number somebody
+	-- guessed, so each carries the reading that answers it instead.
+	{ key = "frame", label = "the frame trace", hz = 60, rate = "every frame",
+	  perSecond = function(average) return average * ns.Trace.Second().frames end },
+	{ key = "census", label = "counting events", hz = 0, rate = "every event",
+	  perSecond = function(average) return average * ns.Trace.Second().events end },
+	{ key = "hud", label = "the performance window", hz = 10 },
 }
 
 local lines = {}   -- every font string the sampler writes, and what writes it
@@ -77,6 +92,16 @@ local function Milliseconds(ms)
 	return ("%.2f ms"):format(ms)
 end
 
+-- What one ticker costs per second of wall clock. The row's own hertz for
+-- everything with a fixed rate, and the row's own reading for the two that have
+-- none.
+local function PerSecond(entry, average)
+	if entry.perSecond then
+		return entry.perSecond(average)
+	end
+	return average * entry.hz
+end
+
 local function SlotLine(entry)
 	local average, peak, ticks = ns.Perf.Slot(entry.key)
 	if not average then
@@ -88,7 +113,7 @@ local function SlotLine(entry)
 	-- Per tick is the spike you feel, per second is the share of the frame
 	-- budget it actually takes. Neither one alone answers "is this expensive".
 	return ("%s per tick, %.2f ms/s, worst %s, %d ticks")
-		:format(Milliseconds(average), average * entry.hz, Milliseconds(peak), ticks)
+		:format(Milliseconds(average), PerSecond(entry, average), Milliseconds(peak), ticks)
 end
 
 local function Total()
@@ -98,7 +123,7 @@ local function Total()
 		local average = ns.Perf.Slot(ROWS[index].key)
 		if average then
 			measured = true
-			perSecond = perSecond + average * ROWS[index].hz
+			perSecond = perSecond + PerSecond(ROWS[index], average)
 		end
 	end
 	if not measured then
@@ -112,18 +137,100 @@ end
 
 --------------------------------------------------------------------------
 
-local function PerfWord(arg)
-	-- One word, no value. Every other part splits the argument in two because
-	-- it has settings that take a number; this one has a switch and two verbs.
-	local option = arg:match("^(%S*)")
+-- What the recorder should be doing, given the setting and whether the window
+-- is up. Both are reasons to watch and neither is a reason to stop while the
+-- other holds.
+local function Rewatch()
+	ns.Trace.Watch((ns.db.perfWatch or ns.PerfHud.IsShown()) and true or false)
+end
 
-	if option == "reset" then
+-- The dip log, printed. What the window draws as eight rows this says as eight
+-- lines, because a slash word's answer is read in a chat frame and what you
+-- want out of it is the list rather than the picture.
+local function PrintDips()
+	local count = ns.Trace.Dips()
+	if count == 0 then
+		ns.Print(ns.Trace.Watching()
+			and "nothing has gone wrong yet."
+			or "not watching. Type /wk perf watch on.")
+		return
+	end
+	ns.Print(("the last %d frame%s that went wrong:"):format(count, count == 1 and "" or "s"))
+	for index = 1, count do
+		local age, took, why = ns.Trace.Dip(index)
+		ns.Print(("  %.0fs ago, %.0f ms: %s"):format(age, took, why or "no reason recorded"))
+	end
+end
+
+-- The verbs that take a value. Split from the word below because a dispatcher
+-- and its arguments are two things, and the shape gate measures a function
+-- rather than a file.
+local function PerfValue(word, rest)
+	if word == "key" then
+		local key = rest:upper()
+		if key == "NONE" then
+			key = ""
+		end
+		local displaced, why = ns.PerfKey.Bind(key)
+		if not displaced then
+			ns.Print(why)
+		elseif key == "" then
+			ns.Print("the performance window has no key now.")
+		elseif displaced ~= "" then
+			ns.Print(("%s opens the performance window. It shadows %s, and your saved bindings are untouched.")
+				:format(key, displaced))
+		else
+			ns.Print(("%s opens the performance window. Nothing else was bound to it."):format(key))
+		end
+		return true
+	end
+
+	if word == "dip" then
+		local want = tonumber(rest)
+		if not want then
+			ns.Print(("a dip is a frame over %d ms. Give a number of milliseconds."):format(ns.db.perfDip))
+			return true
+		end
+		ns.db.perfDip = math.max(20, math.min(500, math.floor(want)))
+		ns.Print(("a frame over %d ms is a dip now."):format(ns.db.perfDip))
+		return true
+	end
+
+	if word == "watch" then
+		ns.db.perfWatch = ns.Command.Toggle(rest)
+		Rewatch()
+		ns.Print("the frame trace is " .. (ns.db.perfWatch and "on all session." or "on only while the window is open."))
+		return true
+	end
+
+	return false
+end
+
+local function PerfWord(arg)
+	local word, rest = arg:match("^(%S*)%s*(.-)$")
+
+	if word == "" then
+		ns.PerfHud.Toggle()
+		return
+	end
+
+	if PerfValue(word, rest) then
+		return
+	end
+
+	if word == "reset" then
 		ns.Perf.Reset()
+		ns.Trace.Forget()
 		ns.Print("performance counters cleared.")
 		return
 	end
 
-	if option == "" or option == "show" then
+	if word == "dips" then
+		PrintDips()
+		return
+	end
+
+	if word == "show" then
 		ns.Perf.Sample()
 		local memory, rate = ns.Perf.Memory()
 		ns.Print(("lua memory %.0f KB, allocating %.1f KB/s"):format(memory, rate))
@@ -131,10 +238,12 @@ local function PerfWord(arg)
 			ns.Print(("%s: %s"):format(ROWS[index].label, SlotLine(ROWS[index])))
 		end
 		ns.Print("total " .. Total())
+		ns.Print("frames: " .. ns.Trace.Describe())
+		ns.Print("the client's profiler: " .. ns.Cause.Describe())
 		return
 	end
 
-	ns.db.perf = ns.Command.Toggle(option)
+	ns.db.perf = ns.Command.Toggle(word)
 	if not ns.db.perf then
 		ns.Perf.Reset()
 	end
@@ -158,12 +267,47 @@ ns.Register({
 		end,
 	},
 
+	zooms = {
+		{ key = "perfZoom", label = "Performance", window = true, own = true },
+	},
+
 	defaults = {
 		-- On, because two clock reads on forty ticks a second is not a cost
 		-- worth a decision, and a tab that opens empty is a tab nobody trusts.
 		-- The expensive half, the memory walk, is not gated by this: it runs
 		-- only while the tab is on screen and never otherwise.
 		perf = true,
+
+		-- The frame trace, all session rather than only while the window is
+		-- open. On, and this is the one setting in the part worth arguing.
+		--
+		-- It costs a tick on every frame and a Lua call on every event the
+		-- client sends, which is the most expensive thing this addon does when
+		-- nothing is on screen. It buys the only question anybody actually has:
+		-- a stutter is over before you can reach for a key, so a recorder you
+		-- have to start first can only ever explain the second time it happens.
+		-- What it costs is on the tab, under "frame" and "census", measured the
+		-- same way everything else is.
+		perfWatch = true,
+
+		-- A frame over this many milliseconds is written into the log. Fifty is
+		-- three frames' worth at 60 a second, which is where a stall stops being
+		-- a number and starts being something you felt.
+		perfDip = 50,
+
+		-- Ctrl-R, which is where the client puts its own frame rate. Held as an
+		-- override, so TOGGLEFPS comes back the moment this is unbound.
+		-- Perf/Key.lua carries the argument.
+		perfKey = "CTRL-R",
+
+		-- What that key was bound to before this took it, so the panel can say
+		-- what is being shadowed rather than the player finding out.
+		perfKeyDisplaced = "",
+
+		-- 1.2. A window of numbers is read at a glance from where you are
+		-- standing rather than leant into, and the screen's own step already
+		-- doubles this on a panel tall enough to need it.
+		perfZoom = 1.2,
 	},
 
 	words = {
@@ -171,17 +315,82 @@ ns.Register({
 	},
 
 	help = {
-		"perf, what each ticker costs and what the addon is holding",
-		"perf on|off, tick timing. perf reset, clear the counters",
+		"perf, the frame trace: what every frame cost and why the bad ones did",
+		"perf key <key|none>, which key opens it. Ctrl-R out of the box",
+		"perf dips, the frames that went wrong and what made each one",
+		"perf watch on|off, whether the trace runs while the window is shut",
+		"perf dip <ms>, how long a frame has to be to count as one",
+		"perf show, what each ticker costs. perf on|off, tick timing",
+		"perf reset, clear the counters and the log",
 	},
 
 	status = function()
-		local memory = ns.Perf.Memory()
-		return ("timing %s, %.0f KB held, %s")
-			:format(ns.db.perf and "on" or "off", memory, Total())
+		return ("%s; timing %s; opens on %s")
+			:format(ns.Trace.Describe(), ns.db.perf and "on" or "off", ns.PerfKey.Describe())
 	end,
 
 	panel = function(ui)
+		-- ui.Reading draws the row and the sampler writes it, which is why the
+		-- string is taken back off the row rather than left to kit.Refresh. That
+		-- walks every row on every page and re-measures the ones that wrap, which
+		-- is the right thing when a setting changed and the wrong thing once a
+		-- second forever.
+		local function Readout(label, read)
+			Track(ui.Reading(label, read).reading, read)
+		end
+
+		ui.Section("The frame trace", "Under the hood")
+		ui.Lede("Every frame the client draws, timed, with the ones that went wrong kept and explained.")
+		ui.Action(function() return "open the window" end, function()
+			ns.PerfHud.Toggle()
+		end)
+		ui.KeyField("key",
+			function()
+				if (ns.db.perfKey or "") ~= "" then
+					return ns.db.perfKey
+				end
+				return "|cff808080not bound|r"
+			end,
+			function(combo)
+				local ok, why = ns.PerfKey.Bind(combo)
+				if not ok and why then
+					ns.Print(why)
+				end
+			end,
+			function() ns.PerfKey.Bind("") end)
+		ui.Hint("Ctrl-R out of the box, which is where the client draws its own frame rate. It is an override, so whatever you had on the key comes back the moment this is unbound.")
+		ui.Check("watch all session", function() return ns.db.perfWatch end,
+			function(value)
+				ns.db.perfWatch = value
+				Rewatch()
+			end)
+		ui.Hint("A stutter is over before you can reach for a key. Off, the trace runs only while the window is open, and the dip you wanted explained is the one it missed.")
+		ui.Stepper("a dip is", 20, 500, 10,
+			function() return ns.db.perfDip end,
+			function(value) ns.db.perfDip = value end,
+			function(value) return value .. " ms" end)
+		ui.Hint("How long one frame has to take before it is written into the log. Fifty is three frames' worth at 60 a second.")
+		Readout("the trace", function() return ns.Trace.Describe() end)
+		Readout("the window", function() return ns.PerfHud.Describe() end)
+		Readout("the key", function() return ns.PerfKey.Describe() end)
+
+		ui.Section("Naming an addon", "Under the hood")
+		ui.Lede("The client counts Lua time per addon only while its own profiler is on, which costs the whole client and needs the interface reloaded.")
+		ui.Action(function()
+			return ns.Cause.Profiling() and "turn the profiler off" or "turn the profiler on"
+		end, function()
+			ns.PerfHud.AskProfiler()
+		end)
+		ui.Hint("Off, a dip still says how long it was, whether the collector ran and how many events arrived. On, it names the addon that spent the milliseconds. Nothing here turns it on quietly.")
+		Readout("the client's profiler", function() return ns.Cause.Describe() end)
+		Readout("events counted", function()
+			if not ns.Census.Watching() then
+				return "not counting"
+			end
+			return ns.Census.Heard() and "counting every event the client sends"
+				or "counting, nothing heard yet"
+		end)
+
 		ui.Section("Performance", "Under the hood")
 		ui.Lede("What the addon costs: how much Lua it holds, and how long each ticker takes.")
 
@@ -201,15 +410,6 @@ ns.Register({
 			return nil
 		end, { height = 1 })
 
-		-- ui.Reading draws the row and the sampler writes it, which is why the
-		-- string is taken back off the row rather than left to kit.Refresh. That
-		-- walks every row on every page and re-measures the ones that wrap, which
-		-- is the right thing when a setting changed and the wrong thing once a
-		-- second forever.
-		local function Readout(label, read)
-			Track(ui.Reading(label, read).reading, read)
-		end
-
 		Readout("lua memory held", function()
 			local memory = ns.Perf.Memory()
 			return ("%.0f KB"):format(memory)
@@ -218,14 +418,14 @@ ns.Register({
 			local _, rate = ns.Perf.Memory()
 			return (rate > 0) and ("%.1f KB/s"):format(rate) or "nothing measurable"
 		end)
-		Readout("frame rate", function()
+		Readout("the client's own frame rate", function()
 			local fps = GetFramerate and GetFramerate()
 			return fps and ("%.0f fps"):format(fps) or "unknown"
 		end)
-		Readout("the client's own profiler", function()
+		Readout("this addon, by the client's own count", function()
 			local cpu = ns.Perf.ClientCPU()
 			return cpu and ("%.0f ms since it started counting"):format(cpu)
-				or "off, and nothing here turns it on"
+				or "the profiler is off, so the client is not counting"
 		end)
 
 		ui.Section("What each ticker costs", "Under the hood")
@@ -236,7 +436,7 @@ ns.Register({
 				return SlotLine(entry)
 			end)
 		end
-		Readout("all five", Total)
+		Readout("all of them", Total)
 		Readout("this tab, sampling", function()
 			return Milliseconds(ns.Perf.SelfCost()) .. " per second while open"
 		end)

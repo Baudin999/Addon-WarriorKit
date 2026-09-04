@@ -64,6 +64,15 @@ local subscribers = {}
 local playerGUID
 local frame
 
+-- How many lines have come through, ever. One increment on the busiest event in
+-- the client, which is the cheapest thing this file could add and the only way
+-- the frame trace can name the combat log as what filled a frame: Perf/Census.lua
+-- counts every other event by registering for all of them, and this one event is
+-- deliberately not on that list. The rule at the top of this file is that the
+-- combat log is registered for once, here, and counting it twice would be the
+-- same debt wearing a different name.
+local lines = 0
+
 -- Whether this client will say what happened at all. Both targets carry the
 -- call, so this is expected to be true on both; a part asks it so it can say
 -- in the panel that it cannot run, rather than drawing an empty table with no
@@ -84,10 +93,22 @@ function CombatLog.Count()
 	return #subscribers
 end
 
+-- How many lines have arrived since login. Read once a frame by Perf/Trace.lua,
+-- whose difference is how many landed in that frame.
+--
+-- It counts what this addon was handed, which is nothing at all on an evening
+-- with every log reading part switched off: the event is unregistered then, by
+-- design, and the frame trace says the client sent no lines because as far as
+-- this addon is concerned it did not.
+function CombatLog.Lines()
+	return lines
+end
+
 --------------------------------------------------------------------------
 
 -- One line, read once, handed to everybody.
 local function OnLog()
+	lines = lines + 1
 	local count = #subscribers
 	if count == 0 then
 		return

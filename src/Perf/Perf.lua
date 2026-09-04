@@ -68,12 +68,31 @@ local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast
 	"castsweep", "tip", "settle", "chart", "skin", "skinread", "party", "partyread", "meter",
 	"buffs", "cooldowns", "stream", "world", "trace", "hide", "clock", "bagstack",
 	"vendor", "thanks", "sampler", "feed", "adhoc",
+	-- The three the frame trace is made of. "frame" is the recorder itself,
+	-- which runs on every frame and is the one tick in the addon whose cost has
+	-- to be subtracted from what it reports. "hud" is the window painting
+	-- itself, ten times a second and only while it is open. "census" is not a
+	-- ticker: Perf/Census.lua brackets its own OnEvent by a literal name, the
+	-- way the bag window does, because a handler the client calls on every
+	-- event in the game is the one cost on this list nobody can guess at.
+	"frame", "hud", "census",
 	-- The one slot that is not a ticker. Bags/Window.lua brackets its refresh,
 	-- which the bag events book up to ten times a second at a vendor, and
 	-- scripts/check.sh reads a literal ns.Perf.Start as a slot for that reason.
 	"bags" }
 local slots = {}
 local gauges, gaugeOrder = {}, {}
+
+-- What the whole addon has cost since the frame trace last read it, and the
+-- worst single tick inside that. Perf/Trace.lua reads and clears the pair once
+-- per frame, so the window between two reads is exactly one frame's worth of
+-- ticks, phase shifted by wherever the recorder sits in the tick list.
+--
+-- Two adds and a comparison on the addon's hottest path, inside the branch that
+-- only runs when timing is on. The alternative was for the trace to sum every
+-- slot's ring once a frame, which is thirty two table reads to answer a
+-- question three lines here answer exactly.
+local frameTotal, frameWorst, frameWorstKey = 0, 0, nil
 
 local watching = false   -- the tab is on screen
 local ticker             -- the sampler's own tick, kept so the tab can stop it
@@ -146,6 +165,21 @@ function Perf.Stop(key)
 		slot.peak = taken
 	end
 	slot.ticks = slot.ticks + 1
+
+	frameTotal = frameTotal + taken
+	if taken > frameWorst then
+		frameWorst = taken
+		frameWorstKey = slot.key
+	end
+end
+
+-- What the addon cost since this was last called, the worst single tick in it,
+-- and which ticker that was. Cleared by the read, because the caller is the
+-- frame trace and the question it asks is always "since the last frame".
+function Perf.FrameCost()
+	local total, worst, key = frameTotal, frameWorst, frameWorstKey
+	frameTotal, frameWorst, frameWorstKey = 0, 0, nil
+	return total, worst, key
 end
 
 -- A count a part wants shown beside its timing, because 0.31 ms means one thing
@@ -196,6 +230,7 @@ function Perf.Reset()
 		end
 	end
 	lastMemory, memoryRate = nil, 0
+	frameTotal, frameWorst, frameWorstKey = 0, 0, nil
 end
 
 -- Only when scriptProfile is already on, which is a client wide setting with a

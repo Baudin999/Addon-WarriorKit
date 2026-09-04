@@ -228,6 +228,15 @@ Core\Menu.lua
 # at load, so the order is belt and braces, and belt and braces is what a nil
 # namespace on a ticker is worth: that is 1,189 errors in two minutes.
 Perf\Perf.lua
+# The frame trace, in the order it is read in. Census counts events, Cause turns
+# a frame into a reason, Trace is the tick that records every frame, Hud is the
+# window Ctrl-R opens and Key is the key that opens it. Each names only the ones
+# above it, so the load order is also the dependency order.
+Perf\Census.lua
+Perf\Cause.lua
+Perf\Trace.lua
+Perf\Hud.lua
+Perf\Key.lua
 Perf\Feature.lua
 
 # The console next: a box that runs a line of Lua and shows what it printed.

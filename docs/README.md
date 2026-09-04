@@ -133,6 +133,17 @@ name of none of them.
                          whose rows change while the window is open
 
     Perf/Perf.lua        what each ticker costs and what the addon is holding
+    Perf/Census.lua      every event the client sends, counted, minus the
+                         combat log, which Core/CombatLog.lua counts at the
+                         one door it already owns
+    Perf/Cause.lua       why a frame took that long: the client's own profiler,
+                         which addon spent the Lua, and the sentence a dip
+                         gets written with
+    Perf/Trace.lua       every frame the client draws, timed into a ring of
+                         four seconds, with the ones that went wrong kept
+    Perf/Hud.lua         the window Ctrl-R opens: the strip, what the last
+                         second went on, and the log of frames that went wrong
+    Perf/Key.lua         Ctrl-R, held as an override on a plain button
     Perf/Feature.lua
 
     Marking/Marking.lua      ctrl-click raid marking, keybinding entry points
@@ -626,7 +637,24 @@ goes through `Feature.lua` or through the shared surface below:
     ns.Perf.Memory()             KB held and KB per second being allocated
     ns.Perf.Gauge(label, read)   a count shown beside a timing, from a Feature
     ns.Perf.Watch(on) / Watching() / Sample() / Reset() / Ready() / ClientCPU()
+    ns.Perf.FrameCost()          what the addon cost since the last read, the
+                                 worst tick in it, and which ticker that was
     ns.Perf.OnSample             set by whoever is displaying the numbers
+
+    ns.Trace.Watch(on) / Watching() / Describe() / Forget()
+    ns.Trace.Second()            one record: frames, worst, average, lua, ours,
+                                 events and the wall clock they cover
+    ns.Trace.Column(i) / Head() / Window()   the strip, drawn as a ring
+    ns.Trace.Dip(i) / Dips()     how long ago, how long it was, and why
+    ns.Trace.Heap()              every addon's Lua, as the last frame read it
+    ns.Cause.Profiling() / Describe() / Turn(on)    the scriptProfile CVar
+    ns.Cause.LuaSince()          Lua milliseconds since the last call, or nil
+    ns.Cause.Mark() / Rank() / Ranking() / Ranked(i)   per addon, per second
+    ns.Cause.Explain(dip)        the sentence under a dip
+    ns.Census.Watch(on) / Watching() / Heard() / Forget()
+    ns.Census.Count(event)       one event, counted
+    ns.Census.Take()             how many landed this frame, and the loudest
+    ns.CombatLog.Lines()         combat log lines since login
     ns.EnemyBars.Count()         how many bars are drawn right now
     ns.Plates.SetFootprint(w, h)  how much room one bar wants, in UIParent units
     ns.Plates.Measure(plate)     what a plate was before the addon touched it
@@ -1578,6 +1606,82 @@ regression. The tab measures the thing a stub cannot, which is real frame time
 at fifteen plates in a real raid. Numbers the tab surfaces are candidates to
 become new ratchets.
 
+### Why a frame took that long
+
+Ctrl-R draws a frame rate on this client. A frame rate is an average over a
+second, and an average is the one number that cannot show a stutter: sixty
+frames with a 200 ms stall in them read as 55 fps. What you felt was the 200.
+
+So Ctrl-R opens a window of the addon's own instead. It draws the last two
+hundred and forty frames as a strip, one column each, as tall as that frame
+took; what the last second went on under it; and a log of the frames that went
+wrong with a sentence each saying why. The key is an override on a plain button,
+so `TOGGLEFPS` is shadowed rather than overwritten and comes straight back when
+the key is unbound. It is the one key in the addon taken off Blizzard, and the
+argument is that there is something here to replace.
+
+**The recorder runs with the window shut**, which is the whole point of it. A
+stutter is over before you can reach for a key, so a tool you have to open first
+can only explain the second time. `perfWatch` ships on and is the one setting in
+the part that costs anything with nothing on screen: a tick on every frame, and
+a Lua call on every event the client sends.
+
+Four answers, in the order the evidence is worth:
+
+    a loading screen    the client draws one enormous frame coming back into
+                        the world. A second of them are marked, not counted.
+    Lua, and whose      GetScriptCPUUsage is a running total of every
+                        millisecond spent inside Lua. Read once a frame, its
+                        difference is that frame's Lua time exactly. Which
+                        addon spent it is answered a second at a time, because
+                        naming it means walking every addon the client has
+                        loaded.
+    the collector       a fall in collectgarbage("count") across one frame is a
+                        collection and nothing else is.
+    an event storm      four hundred lines arriving between two frames is a
+                        stall whether or not any one handler is slow.
+    the client itself   a frame with no Lua in it, no collection and no events
+                        went on drawing, streaming a texture off the disk, or
+                        compiling a shader.
+
+The last one is not a failure to explain. It is the answer, and it is the one
+worth hearing before spending an evening switching addons off.
+
+**Three of the four need `scriptProfile`.** It is a client wide CVar, it needs
+the interface reloaded, and it slows the whole client while it is on. With it
+off a dip still carries its length, whether the collector ran and how many
+events arrived, and the addon still knows what its own tickers cost because it
+times them itself; the ninety milliseconds some other addon spent are invisible,
+and the log says "unknown" rather than guessing. The window and the settings page
+each carry one button that offers to turn it on, which asks first and says what
+it costs. Nothing turns it on quietly.
+
+**The combat log is counted at the one door.** `Perf/Census.lua` registers a
+frame for every event in the game, which is the only part of the addon that
+listens to events it does not read, and it deliberately skips
+`COMBAT_LOG_EVENT_UNFILTERED`. `Core/CombatLog.lua`'s whole argument is that this
+addon registers for that event exactly once and hands it back when no part is
+reading, so a second registration would be the same debt wearing another name.
+That file counts its own lines with one increment and the recorder folds the
+difference in per frame. The skip is what stops it being counted twice on a
+build where `RegisterAllEvents` does deliver it, which none of these does
+reliably and which nothing installed here settles.
+
+**Nothing on the recording path allocates.** The ring is eight arrays sized once
+at load and written in place; the census stamps each event name with the frame
+it was last counted in rather than clearing a table sixty times a second; the
+one string built is the sentence under a dip, and a dip is a frame that already
+went wrong. `77-frame-trace.lua` measures 200 recorded frames against the same
+0.05 KB gate every other ticker is held to, and arranges all four answers in the
+stub to check the sentence each one writes.
+
+The window pays for itself the same way the tab does. The recorder is timed
+under the `frame` slot, the window's repaint under `hud`, the census under
+`census`, and all three have a row on the page they measure. The two with no
+fixed rate carry a reading instead of a hertz: the recorder runs once per frame
+drawn and the census once per event sent, and a number typed into the table for
+either would be a rate somebody guessed.
+
 ### Ticker discipline
 
 Every tick in the addon is one call, `ns.UI.Ticker(frame, interval, name, fn)`
@@ -1611,6 +1715,8 @@ below is the whole of what runs.
     Minimap/Clock.lua            1 Hz     the reading on the minimap square
     UnitFrames/Blizzard.lua      1 Hz     every Blizzard frame the switches hide
     Perf/Perf.lua                1 Hz     only while the performance tab is on screen
+    Perf/Trace.lua           every frame  the frame trace, all session by default
+    Perf/Hud.lua                10 Hz     only while the performance window is open
 
 Three of those hold their ticker and stop it: the sale when it runs out of
 trash, the whisper queue when it empties, and the sampler when you leave the
@@ -6242,6 +6348,15 @@ on different realms read as the same person.
     /wk console xp               a probe: the experience readings, in chat
     /wk console rail             a probe: the experience rail's frame, and what is over it
     /wk console run <lua>        one line of Lua, and what it printed, in chat
+    /wk perf                     the frame trace window, the same as Ctrl-R
+    /wk perf key CTRL-R          which key opens it, override binding only
+    /wk perf key none            hand that key back to the client's own display
+    /wk perf dips                the frames that went wrong, and what made each
+    /wk perf watch on|off        whether the trace runs while the window is shut
+    /wk perf dip 50              how long a frame has to be to count as one
+    /wk perf show                what each ticker costs, in chat
+    /wk perf on|off              tick timing, which is what that list is made of
+    /wk perf reset               clear the counters and the log
 
 **The key field takes mouse buttons.** `ui.KeyField` maps left and right onto
 `BUTTON1` and `BUTTON2` so a modified click can be captured, which is the whole
@@ -6552,6 +6667,28 @@ Aiming at a mob out of combat with no target selected is the whole test.
 ## Untested against the live client
 
 Everything below was written from the API contract and has never executed:
+
+- **Whether `RegisterAllEvents` delivers anything on 2.5.6.** `Perf/Census.lua`
+  registers one frame for every event in the game to count what arrives between
+  two frames. The name is in `WowClassic.exe`'s own symbol list, so the call
+  exists, but no addon in this install makes it and nothing here proves the
+  client delivers through it rather than taking the call and doing nothing. A
+  mistake looks like the performance page saying "counting, nothing heard yet"
+  after a minute in a city, and every dip explained without an event count. What
+  would settle it: `/wk perf`, stand in Shattrath for ten seconds, read the
+  events row on the page.
+- **Whether `GetScriptCPUUsage` answers a running total.** It is the one call
+  the whole Lua attribution stands on: read once a frame, its difference is that
+  frame's Lua time. The name is in the binary and Details ships a stub for it in
+  its own dev harness, which is not the same as a client answering. A mistake
+  looks like every dip reading "not Lua" with the profiler on, or a number that
+  never moves. What would settle it: turn the profiler on from the window,
+  reload, and watch the Lua figure on the top line move during a pull.
+- **Whether an override binding shadows `TOGGLEFPS`.** Ctrl-R is the client's
+  own frame rate key and the addon takes it with `SetOverrideBindingClick` on a
+  plain button, which is the same mechanism Shift-L already uses for a key
+  nothing else wanted. A mistake looks like Ctrl-R still drawing the client's
+  own counter, or drawing both. What would settle it: press Ctrl-R.
 
 - **Whether a click snippet shows a bar with secure buttons on it.** An ad hoc
   bar's key is an override binding onto a `SecureHandlerClickTemplate` button

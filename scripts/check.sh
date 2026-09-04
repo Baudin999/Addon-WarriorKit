@@ -367,6 +367,10 @@ Buttons/Trace.lua:3:Trace.Name names the frame under the cursor, on the pass tha
 Buttons/Trace.lua:3:Trace.Say prints one trace line, and only while the trace switch is on
 Charge/Icon.lua:1:MacroText runs behind SyncMacro comparing target, weapon and spell
 Cooldowns/Row.lua:1:Place is layout rather than tick
+Perf/Hud.lua:3:FillCost writes the five rows under the strip, on the second the ranking moved
+Perf/Hud.lua:3:FillDips writes the log, on the tick a dip arrived or an age rolled over a second
+Perf/Hud.lua:3:FillNow turns the second's numbers into words, on the tick one of them moved
+Perf/Trace.lua:1:Record writes one dip down, on the frames that already went wrong
 Core/Core.lua:1:ns.Print writes one line into the chat frame, which is the addon telling you something
 UI/Ability.lua:1:Ability.Size is a settings change and a rescale, never a tick
 UI/Aura.lua:1:Aura.Size is a settings change and a rescale, never a tick
@@ -389,6 +393,7 @@ Cooldowns/Cooldowns.lua:1:Cooldowns.Scan runs on every UNIT_AURA on the player, 
 Feeds/Combat.lua:1:CombatFeed.OnLog is a combat log reader, called back out of ns.CombatLog's list
 Feeds/Purse.lua:1:Purse.Line is handed to a stream as onStatus and called back through the field
 Meter/Meter.lua:1:OnLog is a combat log reader, called back out of ns.CombatLog's list
+Perf/Census.lua:1:Census.Count runs on every event the client sends, off this file's OnEvent closure
 Perf/Feature.lua:1:Paint is assigned to ns.Perf.OnSample and called back through the field
 Swing/Swing.lua:2:OnLog is a combat log reader, called back out of ns.CombatLog's list
 Swing/Swing.lua:2:Swing.Retime runs on UNIT_AURA and UNIT_ATTACK_SPEED, off an OnEvent closure
@@ -810,6 +815,7 @@ fi
 # path:how many ticks in that file hang off a frame of their own:why it can hide
 FRAMED_TICKERS_ALLOWED="
 Feeds/Stream.lua:1:the strip is a region of the feed window and goes with it
+Perf/Hud.lua:1:the repaint goes with the window it draws, which is the whole of what hanging a tick off a frame buys
 UI/Chart.lua:2:the follow and the drift both go with the board they are drawn on
 UI/Feed.lua:1:the repaint goes with the feed's own frame
 UI/Tip.lua:1:the frame is hidden and shown to gate the wait, which is armed by a hover and runs for a few frames

@@ -88,6 +88,10 @@ written longer than they are here.
     you dragged onto it, up to six bars of sixteen per character. Shown,
     hidden, moved and put away from snippets so it works mid fight. `66ce6fc`
 
+51. Ctrl-R, taken off the client and given a window: the last four seconds of
+    frames as a strip, what the last second went on, and a log of the frames
+    that went wrong with a measured reason on each. `HASH`
+
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
 

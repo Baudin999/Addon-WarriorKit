@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Ctrl-R says why, not just how fast
+
+Ctrl-R drew a frame rate. A frame rate is an average over a second, and an
+average is the one number that cannot show a stutter: sixty frames with a 200 ms
+stall in them read as 55 fps, and what you felt was the 200. The key now opens a
+window of the addon's own. The last two hundred and forty frames are drawn as a
+strip, one column each, as tall as that frame took, with lines across it at 60
+and 30 a second. Under it is what the last second went on, and under that a log
+of the frames that went wrong with a sentence each saying why.
+
+The sentence is the point. A dip is Lua, the collector, an event storm or the
+client itself, and each of the four is measured rather than guessed:
+`GetScriptCPUUsage` read once a frame gives that frame's Lua time exactly, a
+fall in the Lua heap across one frame is a collection and nothing else is, and
+one frame registered for every event in the game counts what arrived between two
+frames. With the client's own profiler on, the addon that spent the milliseconds
+is named. The fourth answer, that a frame with no Lua in it and no collection and
+no events went on drawing or streaming a texture off the disk, is the one no
+addon can see past and is worth hearing before you spend an evening switching
+addons off.
+
+The recorder runs while the window is shut, which is the whole point of it: a
+stutter is over before you can reach for a key. That is one tick a frame and a
+Lua call per event, both timed under their own slots on the page they report to,
+and both switchable. The key is an override, so the client's own display comes
+straight back the moment you unbind it. `/wk perf dips` prints the same log,
+`/wk perf watch off` records only while the window is open, and the one button
+that turns the client's profiler on asks first and says what it costs, because
+it slows the whole client and needs a reload.
+
 ### Bars you made yourself, on a key
 
 A trade skill lives three clicks deep in the spellbook and a shaman's totems

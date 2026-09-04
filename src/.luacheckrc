@@ -45,6 +45,10 @@ globals = {
 	"WarriorKitTargetDebuffs", "WarriorKitTargetBuffs",
 	"WarriorKitPlayerDebuffs", "WarriorKitPlayerBuffs",
 	"WarriorKitChargeButton",
+	-- The performance window and the button Ctrl-R presses. The window is named
+	-- so Escape closes it through UISpecialFrames, which is a list of names;
+	-- the button is named because SetOverrideBindingClick binds to a name.
+	"WarriorKitPerf", "WarriorKitPerfButton",
 	-- the button Core/Menu.lua puts in the client's own game menu. Named
 	-- because a button that did not turn up has to be findable from a macro,
 	-- which is the same reason the corral and the aura rows are named.
@@ -476,6 +480,15 @@ read_globals = {
 	"debugprofilestop", "GetFramerate",
 	"UpdateAddOnMemoryUsage", "GetAddOnMemoryUsage",
 	"UpdateAddOnCPUUsage", "GetAddOnCPUUsage",
+	-- The other half of the profiler, read by the frame trace. No addon in this
+	-- install calls any of these, so the evidence is the client itself: all four
+	-- names are in WowClassic.exe's own symbol list on 2.5.6, which is what
+	-- proves a call exists rather than what somebody else got away with. Every
+	-- one is still type-checked and pcalled at the point of use, because a name
+	-- in the binary says the call is there and says nothing about what it
+	-- answers with scriptProfile off.
+	"GetScriptCPUUsage", "GetNetStats",
+	"GetNumAddOns", "GetAddOnInfo",
 	"RAID_CLASS_COLORS", "wipe", "InCombatLockdown",
 	-- the wall clock, for the time of day a feed row landed. GetTime counts
 	-- from when the client started and is the right thing to record on; `time`
