@@ -692,6 +692,109 @@ while IFS= read -r bad; do
 done < <(grep -rnE 'QuestieLoader|ImportModule' --include='*.lua' . \
 	| grep -v '^\./Core/Core\.lua:' || true)
 
+# And the client half of the same rule, which item 21 asked for and could not
+# size. Outside Core/, a file does not probe the client for a call it means to
+# make.
+#
+# The reason the rule sat as a comment for a week is that it looks unmeasurable.
+# `_G` is read 365 times outside Core/ and most of those are a frame fetched by
+# name, `_G["MultiBarBottomLeftButtonName"..i]`, which is the client's own
+# naming scheme and is not a probe at all. A gate on `_G` would have been 365
+# violations, which is a warning wearing a gate's clothes.
+#
+# So the rule names the shape it refuses rather than the symbol: `type(_G.Foo)`
+# or `type(_G[name])`, which is the question "does this client have this call"
+# and nothing else. That shape is 78 sites in 39 files, small enough to hold
+# exactly, and every one of them is a file deciding for itself which flavour it
+# is running on. Core/ is exempt because deciding that is what Core is for:
+# ns.Questie, ns.RegisterUnitEvent and the thirty shims beside them exist so a
+# feature file can call one name and not know the answer.
+#
+# The list below is a migration state and it is counted, so it drains. A file
+# whose probe moves into Core comes off in the same commit, a raise fails the
+# ratchet, and a probe in a file that is not on the list fails outright.
+#
+# path:probes in that file:what it asks the client and why the answer is not Core's yet
+PROBED_ALLOWED="
+Bags/Blizzard.lua:2:the numbered ContainerFrame globals, hooked only on the flavour that defines them
+Bags/Grid.lua:1:ContainerFrame_UpdateCooldown, which the vanilla flavour does not carry
+Bags/Session.lua:1:GetZoneText, absent early in login on one flavour
+Buttons/Layout.lua:1:an action button global fetched by name and checked before it is hooked
+Buttons/Ranks.lua:1:an action button global fetched by name and checked before it is hooked
+Buttons/Slot.lua:1:an action button global fetched by name and checked before it is hooked
+Character/Blizzard.lua:3:ToggleCharacter and the binding pair, which item 26 retires into ns.TakeKey
+Character/Reputation.lua:2:GetNumFactions, which the two flavours spell differently
+Character/Worn.lua:1:PickupInventoryItem, guarded because the drag path runs under the stub too
+Chat/Blizzard.lua:1:hooksecurefunc, the one call that has to exist before anything else can be said
+Chat/Compose.lua:2:ChatEdit_SendText and SendChatMessage, the client's send path or ours
+Chat/Feed.lua:3:the message filter pair and GetPlayerInfoByGUID, none of them on vanilla
+Chat/Field.lua:2:ChatEdit_ActivateChat and ChatEdit_ChooseBoxForSend, the client's edit box handover
+Chat/Rooms.lua:7:seven ways to count a group, and which of them exists is the flavour
+Chat/Window.lua:1:PlaySound, whose signature changed between the two
+Comfort/Camera.lua:1:GetCVarDefault, so a reset can put back what the client shipped
+Comfort/Clutter.lua:2:the quest log pair, read the same way Quests/Client.lua reads it
+Comfort/Destroy.lua:2:ClearCursor, guarded because the destroy path runs under the stub
+Comfort/Fanfare.lua:1:PlaySoundFile, and the file it names is not in a public clone
+Comfort/Leftovers.lua:1:ClearCursor, the same guard as Destroy.lua for the same reason
+Comfort/Loot.lua:1:GetLootMethod, absent when the player is in no group
+Comfort/Thanks.lua:2:SendChatMessage, once per channel it will speak on
+Feeds/Auction.lua:2:two other addons' price calls, which is ns.Questie's rule and wants ns.Questie's shape
+Hover/Hover.lua:2:GetSpellBookItemName and SecureCmdOptionParse, both flavour-split
+Mail/Send.lua:1:SetSendMailMoney, absent on the flavour with no attachments
+Mail/Who.lua:2:the friend list pair, which changed name between the two
+Mail/Window.lua:1:CloseMail, guarded because the window closes under the stub as well
+Map/Blizzard.lua:1:ToggleWorldMap, the call the cage gives its key back to
+Perf/Cause.lua:2:GetScriptCPUUsage, which is off unless the player turned it on
+Quests/Blizzard.lua:1:ToggleQuestLog, the call the cage gives its key back to
+Quests/Client.lua:4:four quest log calls, and Progress/Progress.lua argues on disk why each part reads its own returns
+Spellbook/Blizzard.lua:3:ToggleSpellBook and the binding pair, which item 26 retires into ns.TakeKey
+Spellbook/Read.lua:1:SPELL_PASSIVE, a client string constant rather than a call
+Talents/Blizzard.lua:2:ToggleTalentFrame and GetBindingKey, which item 26 retires into ns.TakeKey
+Talents/Read.lua:10:the whole dual-spec API, which one flavour has and the other does not
+Talents/Window.lua:2:TALENT_SPEC_PRIMARY and SECONDARY, client string constants rather than calls
+UI/Chart.lua:3:the world position trio, which decides whether a map can be drawn at all
+UI/Log.lua:1:SetItemRef, so a link in a log line opens the client's own tooltip
+UnitFrames/Group.lua:1:GetRaidRosterInfo, absent on the flavour with no raids
+"
+
+# The list against src/, both directions, on the same terms as the four above.
+probe_list() {
+	local list="$1" allowed="$2"
+	local derived listed entry held
+
+	derived=$(grep -rlE 'type\(_G[.[]' --include='*.lua' . \
+		| sed 's|^\./||' | grep -v '^Core/' | sort)
+	listed=""
+
+	while IFS= read -r entry; do
+		[ -n "$entry" ] || continue
+		marker_entry "$list" "$entry" || continue
+
+		[ -n "${entry_why# }" ] || {
+			echo "$list allow-lists $entry_path with no reason given"
+			status=1
+		}
+
+		held=$(grep -cE 'type\(_G[.[]' "$entry_path")
+		if [ "$held" -ne "$entry_count" ]; then
+			echo "$list says $entry_path probes the client $entry_count times and it probes $held: one added needs the count raised and defending, one moved into Core needs it lowered in the same commit"
+			status=1
+		fi
+
+		listed="$listed$entry_path"$'\n'
+	done <<< "$allowed"
+
+	while IFS= read -r entry; do
+		[ -n "$entry" ] || continue
+		grep -qxF "$entry" <<< "$listed" || {
+			echo "src/$entry probes the client for a call it means to make, and only Core/ may: put the probe in Core/Core.lua beside ns.Questie, or add an entry with its count and its reason"
+			status=1
+		}
+	done <<< "$derived"
+}
+
+probe_list PROBED_ALLOWED "$PROBED_ALLOWED"
+
 # No tooltip carries a blue line naming a switch.
 #
 # UI/Tip.lua used to build a fourth band called `hint`: one quiet blue sentence

@@ -142,13 +142,20 @@ goes first. Item 15 undercounted its own sites by five and asked for a fix
     wrote, which are the same idea already written down and already enforced.
 
     Item 28 gated the Questie half on 2026-09-02: `QuestieLoader` and
-    `ImportModule` outside `Core/Core.lua` fail `check.sh`. The client half is
-    the work that is left, and it is not one grep. `_G.` reads 286 times outside
-    `src/Core/` and most of them are a frame looked up by name rather than a
-    call probed for, so the rule has to name the shape it refuses, which is
-    `type(_G.Something) == "function"` on a call the file then makes. Count
-    those first: a gate with 286 violations is a warning wearing a gate's
-    clothes.
+    `ImportModule` outside `Core/Core.lua` fail `check.sh`. The client half
+    landed on 2026-09-04 and is `PROBED_ALLOWED` in `check.sh`. The count the
+    item asked for first came back at 78, not 286: `_G` is read 365 times
+    outside `src/Core/` and most of those are a frame fetched by name, which is
+    the client's own naming scheme and not a probe. The gate names the shape
+    instead, `type(_G.Foo)` or `type(_G[name])`, which is 78 sites in 39 files
+    and holds exactly, in the path-keyed shape items 18 and 31 already use. It
+    ships as an error with every file on it and a reason on every entry, so it
+    is a migration state that drains: a probe moved into Core comes off the list
+    in the same commit, a raise fails `scripts/ratchet.lua`, and a probe in a
+    file that is not listed fails outright. Item 26 retires four of the entries
+    on its own, the `SetOverrideBindingClick` pairs in `Character`, `Spellbook`
+    and `Talents`, and `Feeds/Auction.lua` is two other addons' price calls and
+    wants `ns.Questie`'s shape rather than Core's shims.
 
     The other rule this item asked for is one of those two now.
 
