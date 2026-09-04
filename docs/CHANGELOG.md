@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### The aura rows come back when the frames do
+
+Turning the unit frames off and on again left your character with no debuffs and
+no buffs on it, and nothing brought them back short of a relog. The rows were
+still being read every pass; they were simply not on the screen.
+
+Two parts had drifted apart. Unstyle hides the four row frames, and Place is the
+only thing that shows one. Since the rows stopped being built at login, Place
+does its work only when one of the five numbers a row is laid out from has
+moved, and a skin switched off and straight back on moves none of them: the pass
+that should have put the rows back decided it had nothing to do. Whether a row
+is on the screen is not part of its layout, so it is written on every pass now
+rather than on the pass that happens to lay one out.
+
 ### A totem bar, with a hole where a totem is missing
 
 The client draws the totems you have out as a row that is as long as the number

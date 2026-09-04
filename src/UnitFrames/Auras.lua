@@ -696,7 +696,8 @@ end
 -- numbers decide the whole of the layout below: whether the rows are on, how
 -- large a square is, what a pixel costs in the block's units, how wide the
 -- block is, and which way it is mirrored. Nothing else in Place can move one of
--- them, so a pass where all five hold is a pass with nothing to do.
+-- them, so a pass where all five hold is a pass with nothing to lay out.
+-- Only the layout: whether the row is shown is written on every pass, below.
 --
 -- The five are written down here rather than compared and written by the
 -- caller, so there is one place that knows what the layout depends on.
@@ -799,9 +800,16 @@ function Auras.Place(entry, px, width, mirror)
 			for slot = row.wanted + 1, #row.squares do
 				row.squares[slot]:Hide()
 			end
-
-			row.frame:SetShown(on and row.wanted > 0)
 		end
+
+		-- Outside the guard above, because whether a row is on the screen is not
+		-- part of its layout and something else can move it. Auras.Unstyle hides
+		-- these frames, and the style that follows is five numbers that all held,
+		-- so a settled pass showed nothing: a row taken off by `/wk skin` and put
+		-- back came up empty and stayed empty for the rest of the session. Place is
+		-- the only thing that shows a row, so it says so on every pass rather than
+		-- on the pass that happens to lay one out.
+		row.frame:SetShown(on and row.wanted > 0)
 	end
 end
 

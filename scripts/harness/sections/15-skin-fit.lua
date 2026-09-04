@@ -64,6 +64,18 @@ end
 check(_G.UnitWatchRegistered(targetButton) and _G.UnitWatchRegistered(totButton),
 	"the frames went back on and the buttons are not back on the client's unit watch")
 
+-- The four aura rows, which are the one thing on a block that a second part
+-- takes off and puts back. Unstyle hides these frames and Auras.Place is the
+-- only thing that shows one, and Place lays a row out only when one of the five
+-- numbers it reads has moved. A skin toggled off and on moves none of them, so
+-- the rows came back hidden and the character carried no debuffs anybody could
+-- see for the rest of the session.
+for _, name in ipairs({ "WarriorKitPlayerDebuffs", "WarriorKitPlayerBuffs",
+	"WarriorKitTargetDebuffs", "WarriorKitTargetBuffs" }) do
+	check(_G[name] ~= nil and _G[name]:IsShown(),
+		("%s: the frames went back on and the aura row stayed down"):format(name))
+end
+
 -- Blizzard's three, through their own switch. Off, the player frame is
 -- handed back to its parent and drawn; on, it is caged again.
 ns.db.hideBlizzUnitFrames = false
