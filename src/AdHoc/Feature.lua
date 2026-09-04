@@ -95,7 +95,13 @@ ns.Register({
 
 	defaults = {
 		adhoc = true,
-		adhocZoom = 1,
+		-- 1.4, not 1. Every other zoom in the addon starts at 1 because every
+		-- other part is on the screen all the time and a part you read all
+		-- night wants to be small. A bar is on the screen for the second your
+		-- thumb is on its key, and a square you have that long has to be read
+		-- in one look. 1.4 puts the 27-unit square at 38, which is the size the
+		-- client's own action bar draws at.
+		adhocZoom = 1.4,
 	},
 
 	-- A bar is the character's, the way a loadout is: a trade skill belongs to

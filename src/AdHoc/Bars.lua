@@ -19,7 +19,10 @@ local C = ns.UI.Color
 --   hidden by an addon under lockdown. The key is bound to a button built on
 --   SecureHandlerClickTemplate, and the button's own snippet is what shows or
 --   hides the bar: the same shape Character/Window.lua uses for the C key on a
---   sheet with nineteen secure squares on it.
+--   sheet with nineteen secure squares on it. The key is held rather than
+--   pressed. The down edge shows the bar and the up edge puts it away, which is
+--   how every ring addon on this client reads a key, and it is why the button
+--   takes both edges instead of toggling on one.
 --
 --   Hiding it after a press. A press on a square casts the spell, and the bar
 --   is meant to go away again the way an OPie ring does. The button's OnClick
@@ -50,18 +53,25 @@ local MAX = ns.AdHoc.MAX
 local PER_BAR = ns.AdHoc.PER_BAR
 
 -- The two the state driver argument in Buttons/Bars.lua already fixed:
--- two units between squares and three round the lot.
-local GAP, PAD = 2, 3
+-- two units between squares, and four round the lot rather than three, because
+-- this bar carries a grip along one edge and a frame padded evenly on all four
+-- is what stops that edge reading as a mistake.
+local GAP, PAD = 2, 4
 
 -- 27, the sharp size, for the reason Buttons/Look.lua gives at length: it is
 -- the one drawn size where a stored texel lands on a pixel. The zoom is how you
 -- make a bar bigger, and it scales the whole frame rather than resampling the
--- art inside it.
+-- art inside it, which is why the default zoom in AdHoc/Feature.lua is not 1:
+-- a bar you hold a key to read wants a square you can read at a glance, and
+-- scaling the frame is the only way to get one that keeps the art sharp.
 local SIZE = 27
 
 -- The grip along the left edge, in units. Wide enough to land a cursor on and
--- no wider, because it is on the screen only while the bar is.
-local GRIP = 8
+-- no wider, because it is on the screen only while the bar is. It is painted
+-- in the rail colour, a shade off the background, and only lifts to the edge
+-- colour under the cursor: a solid chrome slab down the side of a row of icons
+-- reads as a piece of the bar rather than a handle for it.
+local GRIP = 5
 
 -- 120, the same depth Buttons/Placing.lua stands the cloned bars at, and for
 -- its reason: Blizzard's MainActionBar takes the mouse at level 50 across the
@@ -95,14 +105,27 @@ Bars.ButtonName = ButtonName
 -- The snippets
 --------------------------------------------------------------------------
 
--- What the key runs. The bar is handed over as a frame reference because a
--- snippet may only touch what it has been given.
-local TOGGLE = [[
+-- What the key runs, on both edges of the press. The bar is handed over as a
+-- frame reference because a snippet may only touch what it has been given.
+--
+-- `down` is the third argument the click handler is given, and it is what makes
+-- this a hold rather than a toggle: a toggle on the down edge alone needs a
+-- second press to put the bar away, and a bar of totems is opened in a fight
+-- with a thumb that is already going somewhere else.
+--
+-- The nil arm is not dead code. Nothing installed on this box hands a snippet
+-- that third argument, so it is the client's word and not a proven call, and a
+-- client that hands over nothing would otherwise leave the key showing a bar
+-- that never goes away. On that client the key is the toggle it used to be,
+-- which is worse than a hold and better than a bar you cannot dismiss.
+local HOLD = [[
 	local bar = self:GetFrameRef("bar")
-	if bar:IsShown() then
-		bar:Hide()
-	else
+	if down == nil then
+		if bar:IsShown() then bar:Hide() else bar:Show() end
+	elseif down then
 		bar:Show()
+	else
+		bar:Hide()
 	end
 ]]
 
@@ -138,7 +161,7 @@ local function Says(w)
 	local closes = ns.AdHoc.Closes(w.bar)
 	return { kind = "note", title = record.name,
 		lines = { closes and "A press uses it and puts the bar away."
-			or "A press uses it. The bar stays up.",
+			or "A press uses it. The bar stays up until you let the key go.",
 			"Drop something else on it to replace it." } }
 end
 
@@ -193,7 +216,7 @@ local function Build(index)
 	entries[index] = entry
 
 	-- The grip, which is the one part of the bar that answers a drag.
-	local grip = ns.Fill(frame, "ARTWORK", C.chrome[1], C.chrome[2], C.chrome[3], 1)
+	local grip = ns.Fill(frame, "ARTWORK", C.rail[1], C.rail[2], C.rail[3], 1)
 	local px = ns.Pixel(frame)
 	grip:SetPoint("TOPLEFT", px, -px)
 	grip:SetPoint("BOTTOMLEFT", px, px)
@@ -203,6 +226,14 @@ local function Build(index)
 	handle:SetAllPoints(grip)
 	handle:SetFrameLevel(LEVEL + 2)
 	handle:EnableMouse(true)
+	-- Painted directly rather than through ns.Recolor, which takes the four
+	-- textures of an outline. This is one texture.
+	handle:SetScript("OnEnter", function()
+		grip:SetColorTexture(C.edge[1], C.edge[2], C.edge[3], 1)
+	end)
+	handle:SetScript("OnLeave", function()
+		grip:SetColorTexture(C.rail[1], C.rail[2], C.rail[3], 1)
+	end)
 	entry.handle = handle
 
 	entry.place = UI.Placeable(frame, {
@@ -234,12 +265,14 @@ local function Build(index)
 		entry.buttons[at] = w
 	end
 
-	-- The key. Registered on the down edge only: both edges would run the
-	-- snippet twice and the bar would come and go in one press.
+	-- The key. Registered on both edges, because both are the point: the down
+	-- edge puts the bar up and the up edge takes it away, and the snippet tells
+	-- them apart by the argument the handler is given rather than by counting
+	-- presses.
 	local key = CreateFrame("Button", KeyName(index), UIParent, "SecureHandlerClickTemplate")
-	key:RegisterForClicks("AnyDown")
+	key:RegisterForClicks("AnyDown", "AnyUp")
 	key:SetFrameRef("bar", frame)
-	key:SetAttribute("_onclick", TOGGLE)
+	key:SetAttribute("_onclick", HOLD)
 	entry.key = key
 
 	return entry

@@ -62,8 +62,11 @@ check(k ~= nil and type(k:GetAttribute("_onclick")) == "string"
 	and k:GetAttribute("_onclick"):find("Show", 1, true) ~= nil,
 	"the key button carries no snippet that shows the bar")
 check(k ~= nil and k:GetFrameRef("bar") == f, "the snippet was handed the wrong frame")
-check(k ~= nil and k:GetRegisteredClicks().AnyDown == true and not k:GetRegisteredClicks().AnyUp,
-	"the key button is not registered on the down edge alone, so a press would open and shut the bar")
+check(k ~= nil and k:GetRegisteredClicks().AnyDown == true and k:GetRegisteredClicks().AnyUp == true,
+	"the key button is not registered on both edges, so letting the key go would not put the bar away")
+check(k ~= nil and k:GetAttribute("_onclick"):find("down", 1, true) ~= nil
+	and k:GetAttribute("_onclick"):find("Hide", 1, true) ~= nil,
+	"the key snippet does not read the edge of the press, so the key toggles instead of holding")
 
 local s1 = square(1, 1)
 check(s1 ~= nil and s1.secure == true, "a square is not a secure button")

@@ -294,7 +294,7 @@ function Panel.Build(ui)
 		if visible == nil then
 			return "not built yet"
 		end
-		return visible and "up" or "hidden, press the key"
+		return visible and "up" or "hidden, hold the key"
 	end)
 
 	ui.Action(
