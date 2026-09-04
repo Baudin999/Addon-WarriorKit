@@ -93,7 +93,7 @@ written longer than they are here.
     that went wrong with a measured reason on each. `b32bd7c`
 52. A totem bar: the four slots in a fixed order with a hole where one is
     missing, built so a warrior's three stances are one more plan and one more
-    reader rather than a second part.
+    reader rather than a second part. `245bbee`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
