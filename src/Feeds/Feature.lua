@@ -536,7 +536,7 @@ end
 
 ns.Register({
 	name = "feeds",
-	order = 13,
+	order = 14,
 
 	defaults = defaults,
 

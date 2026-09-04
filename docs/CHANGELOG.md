@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### A totem bar, with a hole where a totem is missing
+
+The client draws the totems you have out as a row that is as long as the number
+of them, so the square in the second place is a different totem every time you
+glance at it. There is no shape to learn, which is why nobody reads it in a
+fight, and the one thing it can never say is the thing worth knowing: which slot
+is empty.
+
+This row is the four slots instead, always in the same order and always in the
+same place. Earth, fire, water, air, which is Blizzard's own order rather than
+the numbering the client counts in. A filled slot is the totem's art with the
+seconds over it and a sweep that fills as it runs out; an empty one is a hole
+with the element's colour on its hairline. After a week you stop reading names:
+the second square is Windfury, and Windfury being a hole is a sentence.
+
+It is up in a fight and afterwards while anything is still standing, and gone
+when everything has run out, which is the cooldown row's rule and not the buff
+nag's. `/wk totems idle on` keeps it up between pulls.
+
+Nothing in `Standing/` knows what a totem is. The four slots, their order and
+their colours are written in `Class/Shaman.lua` as a plan, and the plan names
+which reader answers for them. A warrior's three stances are the same question
+with a different source: one more reader and one more plan, rather than a second
+part of the addon. Until somebody writes that, `/wk stances` reaches the same
+row and says a warrior has no slots to watch. A class with no plan builds no
+frame, arms no ticker and takes no row on On and off.
+
 ### Ctrl-R says why, not just how fast
 
 Ctrl-R drew a frame rate. A frame rate is an average over a second, and an

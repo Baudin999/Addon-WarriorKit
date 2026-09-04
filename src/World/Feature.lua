@@ -7,7 +7,7 @@ local World = ns.World
 
 ns.Register({
 	name = "world",
-	order = 24,
+	order = 25,
 
 	switch = {
 		key = "worldTips",

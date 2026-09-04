@@ -66,7 +66,7 @@ local SAMPLE_RATE = 1.0
 -- ns.UI.Ticker call in the addon now, in both directions.
 local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast",
 	"castsweep", "tip", "settle", "chart", "skin", "skinread", "party", "partyread", "meter",
-	"buffs", "cooldowns", "stream", "world", "trace", "hide", "clock", "bagstack",
+	"buffs", "cooldowns", "standing", "stream", "world", "trace", "hide", "clock", "bagstack",
 	"vendor", "thanks", "sampler", "feed", "adhoc",
 	-- The three the frame trace is made of. "frame" is the recorder itself,
 	-- which runs on every frame and is the one tick in the addon whose cost has

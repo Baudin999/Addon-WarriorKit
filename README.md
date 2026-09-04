@@ -111,6 +111,20 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   forever, and a low level character has no buff food yet. Add a flask by spell
   id where there is nothing to drag, because these clients will not say that an
   aura came from one.
+- **A totem bar with a hole where a totem is missing.** The client draws the
+  totems you have out as a row as long as the number of them, so the square in
+  the second place is a different totem every time you look and the one thing it
+  can never say is which slot is empty. This is the four slots instead, always
+  in the same order and always in the same place: earth, fire, water, air, which
+  is Blizzard's own order. A filled slot is the totem's art with the seconds
+  over it and a sweep that fills as it runs out; an empty one is a hole with the
+  element's colour on its edge. After a week you stop reading names, because the
+  second square is Windfury and Windfury being a hole is a sentence. It is up in
+  a fight and afterwards while anything is still standing, and gone once
+  everything has run out. Nothing in the part knows what a totem is: the slots,
+  their order and their colours are a plan in `Class/Shaman.lua`, so a warrior's
+  three stances are one more plan and one more reader rather than a second
+  feature.
 - **A loot stream, and the combat log beside it.** Two columns of what just
   happened, newest at the top and older underneath, scrolled with the wheel. A
   loot row is the item's icon, its name in its own quality colour and how many

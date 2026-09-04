@@ -95,7 +95,7 @@ end
 
 ns.Register({
 	name = "mail",
-	order = 22,
+	order = 23,
 
 	switch = {
 		key = "mail",

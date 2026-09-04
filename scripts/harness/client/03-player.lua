@@ -23,6 +23,11 @@ local own = {
 	resting = false, dead = false,
 	auras = {},
 	cooldowns = {},
+	-- The four totem slots, in the client's own numbering. On `own` rather
+	-- than in a table of its own because a chunk here has forty names to
+	-- spend and this file is at the limit; it also reads correctly, because a
+	-- totem you have out is one of your own things the way an aura is.
+	totems = {},
 	-- Spell ids this character has not learned, which is what a talent nobody
 	-- spent a point on looks like to the addon. Empty in the shipped scene, so
 	-- IsSpellKnown answers true for everything the way the constant it replaced
@@ -70,6 +75,25 @@ _G.GetWeaponEnchantInfo = function()
 	end
 	return own.main, own.mainLeft, own.main and 5 or 0,
 		own.off, own.offLeft, own.off and 5 or 0
+end
+
+-- The four totem slots, in the client's own numbering: fire 1, earth 2, water
+-- 3, air 4, which is what Constants.lua declares and what GetTotemInfo counts
+-- in. A section fills a slot by writing a table into `own.totems` and empties
+-- it by writing nil.
+--
+-- Answered positionally rather than out of a shaped table, because the client's
+-- own call returns five loose values and a stub that handed a table back would
+-- be a test of a call this addon never makes. `haveTotem` is answered false
+-- with nothing behind it for an empty slot, which is what the live client does:
+-- the documentation marks the call as one that may return nothing at all, so
+-- the addon may not read past the first value without testing it.
+_G.GetTotemInfo = function(slot)
+	local held = own.totems[slot]
+	if not held then
+		return false
+	end
+	return true, held.name, held.start, held.duration, held.icon
 end
 
 _G.IsResting = function() return own.resting end
@@ -740,3 +764,4 @@ H.JUNK, H.QUESTBAG, H.CARRIED = JUNK, QUESTBAG, CARRIED
 H.refill, H.refillQuests, H.carrying = refill, refillQuests, carrying
 H.counted = counted
 H.itemLink, H.progress = itemLink, progress
+H.totems = own.totems

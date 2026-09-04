@@ -9,7 +9,8 @@ Blizzard nameplate and carry a cast bar of their own, a chat window with a room
 per conversation in place of the client's own and a voice
 channel joined at login, a strip of the Blizzard bar art, three chores the
 client makes you do by hand, a swing timer with the Slam window marked on it,
-a row over your character counting down the cooldowns that decide fights,
+a row over your character counting down the cooldowns that decide fights, a
+second one holding a shaman's four totem slots with a hole where one is missing,
 a loot stream and a combat log drawn as scrolling feeds, and one Edit Mode
 layout carried inside the addon folder. Settings live in a panel opened with
 `/wk`.
@@ -255,6 +256,13 @@ name of none of them.
     Cooldowns/Row.lua        the row of squares, when it is on the screen, and
                              the tick that paints it
     Cooldowns/Feature.lua
+
+    Standing/Standing.lua    what slots your class owns and what is in each one
+                             right now, read through one of a table of readers
+                             the class's own plan names
+    Standing/Row.lua         the row of squares, when it is on the screen, and
+                             the tick that paints it
+    Standing/Feature.lua
 
     Feeds/Stream.lua         one feed put on the screen: its frame, its anchor,
                              its drag and the seven settings behind it, found by
@@ -1700,6 +1708,9 @@ below is the whole of what runs.
     Buttons/Bars.lua            10 Hz     every square on every cloned bar
     Buffs/Nag.lua               10 Hz     the missing buff row, and its pulse
     Cooldowns/Row.lua           10 Hz     the long-cooldown row and its countdowns
+    Standing/Row.lua            10 Hz     the row of what you have out, and its
+                                          countdowns; armed only on a class with
+                                          slots to draw
     UI/Chart.lua                10 Hz     the arrow on an open map
     World/World.lua             10 Hz     whether you are still looking at it
     UnitFrames/PlayerCast.lua    5 Hz     what you are casting, asked again
@@ -5296,6 +5307,60 @@ house; that one is `buffs resting` for anyone who buffs in the bank.
 are on both flavours, and whether 19705 is spelled exactly "Well Fed" in every
 locale. All three are in the untested list below.
 
+**What you have out.** A row of squares over your character, one per slot your
+class owns, in the same order and the same place every time. A shaman's four
+totems today; a warrior's three stances the day somebody writes them down.
+
+**The empty slots are drawn, and that is the whole feature.** The client's own
+totem row is as long as the number of totems you have out, so the square in the
+second place is a different totem every time you glance at it and there is no
+shape to learn. Four fixed places have one. After a week the answer to "is my
+Windfury still up" is a position rather than four names to read, and the row can
+say the thing a shrinking row cannot say at all, which is what is missing.
+
+**An empty slot is told apart by colour and by nothing else.** No caption, no
+letter on the square: four short words under four squares would be more text
+than the row carries information. The hue is the class file's, because the row
+has no opinion about elements and a stance plan will hand it three different
+ones. `UI.Aura.Edge` is the one call that writes it, on a layout rather than on
+a tick.
+
+**Up in a fight, and out of one only while something is still standing.** That
+is the cooldown row's rule rather than the buff nag's, and for the same reason:
+what you have out is a question you ask again thirty seconds later, so a row
+that appeared the moment something ran out would arrive exactly when you had
+stopped needing it. Four holes over your character between pulls is furniture.
+`/wk totems idle on` keeps it up anyway.
+
+**Built out of `UI/Aura.lua`, not `UI/Ability.lua`.** A totem is not a press. It
+has no cost, no range and no stance, its sweep fills as it runs out rather than
+emptying as it comes back, and the number over it is the thing you actually
+read. That is the aura square's whole vocabulary and none of it is the ability
+square's.
+
+**One reader per kind, and the plan names which.** `Standing/Standing.lua` holds
+a table of readers and a class plan says `kind = "totem"`. A totem is read out of
+`GetTotemInfo`, which counts slots the client numbers itself; a stance would be
+read out of `GetShapeshiftForm`, which answers one number and no clock at all.
+Neither is a fact about Warcraft that belongs in a class file and neither is a
+fact about a row of squares, so both live in the one file that is neither.
+
+**The slots are drawn in Blizzard's order and not the client's numbering.** The
+2.5.6 constants are fire 1, earth 2, water 3, air 4, and
+`SHAMAN_TOTEM_PRIORITIES` is earth, fire, water, air. A shaman has read them in
+that order for twenty years. The two orders being different is also what stops
+the row quietly reading one as the other: the harness asserts that at least one
+slot is drawn somewhere other than its own client index.
+
+**A square opens the page and does not dismiss the totem.** Dropping one is
+`DestroyTotem`, which Blizzard's own button calls from a hardware event and
+nothing on this disk calls at all. A call this addon has never seen answered is
+not one to put under a square you click by accident.
+
+**Nothing is built on a class with no plan.** No frame, no placeable rectangle
+and no ticker, and the switch is left out of On and off rather than drawn there
+refusing. That is `Charge/Feature.lua`'s argument and it applies word for word.
+
 **Breakdown.** One row per ability, counted out of the combat log and kept
 between sessions: how much of your damage it is, how often it lands, how often
 it crits, and what stopped it when it did not. It is not the meters. They total
@@ -6224,6 +6289,14 @@ on different realms read as the same person.
     /wk buffs list               the flask and elixirs you added
     /wk buffs add 17038          a spell id, up to six of your own
     /wk buffs remove 17038       by the same id
+    /wk totems                   how many of your slots are filled
+    /wk totems on|off            the row of what you have out, over your
+                                 character; a shaman's four totem slots today,
+                                 and `/wk stances` is the same row under the
+                                 name a warrior would look for it by
+    /wk totems list              one line per slot and what is standing in it
+    /wk totems idle on|off       keep it up out of combat, off by default
+    /wk totems zoom 1            1 to 3
     /wk skin on|off              square class-coloured player and target frames
     /wk skin player|target|tot on|off   one frame at a time
     /wk skin height 68           18 to 72, the block's height
@@ -6668,6 +6741,20 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- **Whether `GetTotemInfo` answers on 2.5.6, and what its fifth value is.** The
+  row of what you have out reads all four slots off it every tick. The call is
+  in the client's own generated documentation for this branch and Blizzard's
+  `TotemFrame` is written against it, but nothing installed on this disk calls
+  it, and the documentation marks it as one that may return nothing at all. The
+  fifth value is the art, documented as a fileID, and the addon hands it
+  straight to `SetTexture`. A mistake looks like four holes while four totems
+  are out, or four squares with no picture on them. What would settle it: drop
+  a totem and read `/wk totems list`.
+- **Whether `PLAYER_TOTEM_UPDATE` fires on this client.** It is what puts the
+  square up on the frame the totem landed rather than on the next tick; the row
+  reads the same answer off its own tick a tenth of a second later either way,
+  so a mistake here is a tenth of a second of lag and nothing else. What would
+  settle it: watch whether the square appears with the totem or just after it.
 - **Whether `RegisterAllEvents` delivers anything on 2.5.6.** `Perf/Census.lua`
   registers one frame for every event in the game to count what arrives between
   two frames. The name is in `WowClassic.exe`'s own symbol list, so the call

@@ -177,7 +177,7 @@ end
 
 ns.Register({
 	name = "settings",
-	order = 19,
+	order = 20,
 
 	-- The three screens that belong to no feature. The options panel is one of
 	-- them because a settings window is nobody's feature, and the two boxes the
@@ -189,7 +189,18 @@ ns.Register({
 		-- windows the client has no copy of; Where() on the panel below is
 		-- the whole of what reads it.
 		{ key = "panelZoom", label = "Options panel", window = true, own = true },
-		{ key = "tipZoom", label = "Tooltips",
+		-- A window, and one of the client's. Every hover in the addon opens
+		-- this box in place of the client's own, and UI/Scan.lua holds that one
+		-- down while ours is up, which is the definition the first list is
+		-- drawn by.
+		--
+		-- It sat on the third list until the row of what you have out arrived
+		-- and took that list one row past what fits in the view without
+		-- scrolling. That is what made the miscount worth looking at rather
+		-- than what changed the answer: the third list is what this addon draws
+		-- over the world of its own, and this is a box the client would have
+		-- drawn anyway.
+		{ key = "tipZoom", label = "Tooltips", window = true,
 		  apply = function() Settings.SetTipZoom(ns.db.tipZoom) end },
 		{ key = "dialogZoom", label = "Confirm box", window = true, own = true,
 		  apply = function() Settings.Set(ns.db.dialogZoom) end },

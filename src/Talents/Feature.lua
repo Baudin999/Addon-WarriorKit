@@ -52,7 +52,7 @@ end
 
 ns.Register({
 	name = "talents",
-	order = 32,
+	order = 33,
 
 	switch = {
 		key = "talents",

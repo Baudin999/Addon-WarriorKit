@@ -64,6 +64,7 @@ local CHURN = {
 	swing = 0.05,
 	buffs = 0.05,
 	cooldowns = 0.05,
+	standing = 0.30,
 	cast = 0.05,
 	world = 0.05,
 	party = 0.05,
@@ -160,6 +161,23 @@ local CHURN = {
 -- shown, so a mob casting the same spell twice draws the second one out of the
 -- first one's leavings. Written as a plain format call it measured 0.93, which
 -- is a hundred and fifty throwaway strings a second at raid size.
+
+-- The row of what you have out, in KB per fifty ticks with every slot filled
+-- and the clock running, which is the state where the seconds over each square
+-- have to be rebuilt as they fall.
+--
+-- Quoted with the clock moving for the reason the meters are. A row of four
+-- frozen squares allocates nothing at all, because UI/Aura.lua guards the timer
+-- on the reading rather than on the seconds, and a gate on that figure would be
+-- measuring the guard rather than the tick.
+--
+-- It measures 0.27 and the gate is 0.30. What is in that figure is one string
+-- per square per second and nothing else: four squares counting down in whole
+-- seconds is four SetTexts a second and four strings behind them, and above a
+-- minute it is four strings a minute instead. Everything else on the tick is
+-- guarded. Standing.State hands back five loose values rather than a table, and
+-- a table per square per tick is the shape this addon has caught twice already
+-- and the one this gate exists to refuse.
 
 local H = {
 	UI_SCALE = UI_SCALE, PLAYER_CLASS = PLAYER_CLASS,

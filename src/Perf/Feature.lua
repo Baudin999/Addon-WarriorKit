@@ -254,7 +254,7 @@ end
 
 ns.Register({
 	name = "performance",
-	order = 20,
+	order = 21,
 
 	switch = {
 		key = "perf",

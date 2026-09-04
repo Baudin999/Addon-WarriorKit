@@ -262,6 +262,11 @@ read_globals = {
 	-- would, and falls back where a client defines neither.
 	"CONTAINER_OFFSET_X", "CONTAINER_OFFSET_Y",
 	"IsAltKeyDown", "GetShapeshiftForm",
+	-- the four totem slots, read by Standing/Standing.lua. Probed by name
+	-- rather than called outright, because nothing installed on this disk
+	-- calls it and the client's own documentation marks it as a call that may
+	-- return nothing at all.
+	"GetTotemInfo",
 	"UnitPlayerOrPetInParty", "UnitPlayerOrPetInRaid", "UnitIsPlayer",
 	"C_NamePlate", "C_Spell",
 	-- the pixel grid in UI/Pixel.lua. GetPhysicalScreenSize is the only honest

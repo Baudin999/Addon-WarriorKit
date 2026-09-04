@@ -70,7 +70,7 @@ end
 
 ns.Register({
 	name = "dungeons",
-	order = 29,
+	order = 30,
 
 	switch = {
 		key = "dungeons",

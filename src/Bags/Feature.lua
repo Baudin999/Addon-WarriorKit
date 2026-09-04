@@ -158,7 +158,7 @@ end
 
 ns.Register({
 	name = "bags",
-	order = 28,
+	order = 29,
 
 	switch = {
 		key = "bags",

@@ -80,7 +80,7 @@ local Word = ns.Command.Word({
 
 ns.Register({
 	name = "adhoc",
-	order = 34,
+	order = 35,
 
 	switch = {
 		key = "adhoc",

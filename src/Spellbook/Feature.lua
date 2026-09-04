@@ -54,7 +54,7 @@ end
 
 ns.Register({
 	name = "spellbook",
-	order = 33,
+	order = 34,
 
 	switch = {
 		key = "spellbook",

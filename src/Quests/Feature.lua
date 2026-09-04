@@ -61,7 +61,7 @@ end
 
 ns.Register({
 	name = "quests",
-	order = 23,
+	order = 24,
 
 	switch = {
 		key = "quests",

@@ -56,7 +56,7 @@ end
 
 ns.Register({
 	name = "merchant",
-	order = 30,
+	order = 31,
 
 	switch = {
 		key = "merchant",

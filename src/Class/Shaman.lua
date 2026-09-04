@@ -28,6 +28,12 @@ local Spell, Macro = ns.Class.Spell, ns.Class.Macro
 -- about is written inside it: the four cooldowns worth counting, the debuffs
 -- worth a square above a mob, and the bar plan.
 --
+-- And one field no other class file writes yet. `standing` is the four totem
+-- slots, which is a fact about being a shaman in the way the three stances are
+-- a fact about being a warrior, and it is the first thing in this addon that
+-- both classes will fill in. Standing\Standing.lua reads it and knows the word
+-- totem nowhere.
+--
 -- The bar plan lives inside enhancement and nowhere else. That is the same
 -- decision Class\Priest.lua takes for the whole class: the plan below is
 -- written off a character somebody plays, and an elemental plan written from a
@@ -118,6 +124,48 @@ local LOADOUT = {
 }
 
 --------------------------------------------------------------------------
+-- The four slots
+--
+-- What Standing\Standing.lua draws a square for, and the whole of what this
+-- addon knows about a totem.
+--
+-- `index` is the client's own slot number and not ours to choose: the constants
+-- in the 2.5.6 interface are FIRE_TOTEM_SLOT 1, EARTH_TOTEM_SLOT 2,
+-- WATER_TOTEM_SLOT 3 and AIR_TOTEM_SLOT 4, and GetTotemInfo counts in those.
+--
+-- The order they are written in is the order they are drawn in, and it is
+-- Blizzard's rather than the numbers': SHAMAN_TOTEM_PRIORITIES is earth, fire,
+-- water, air. A shaman has read their totems in that order for twenty years and
+-- an addon that renumbered them would be teaching a second order for the same
+-- four things. It is also the order that reads best, because earth and fire are
+-- the two you drop every pull and they land where the eye starts.
+--
+-- The colour is the only thing an empty slot has to say. It is here rather than
+-- in the row because the row has no opinion about elements: a stance plan will
+-- hand it three different colours and neither list belongs to a file that draws
+-- squares. Four hues far enough apart to be told apart in one pixel of hairline
+-- over a dark floor.
+--
+-- `kind` names the reader. There is one today and the shape of the field is the
+-- point: a warrior's three stances are the same question with a different
+-- source, and they are a second reader and a second table like this one rather
+-- than a second part of the addon.
+--------------------------------------------------------------------------
+
+local STANDING = {
+	kind = "totem",
+	word = "totems",
+	one = "totem",
+
+	slots = {
+		{ key = "earth", label = "earth", index = 2, color = { 0.55, 0.42, 0.24 } },
+		{ key = "fire",  label = "fire",  index = 1, color = { 0.88, 0.35, 0.14 } },
+		{ key = "water", label = "water", index = 3, color = { 0.24, 0.58, 0.88 } },
+		{ key = "air",   label = "air",   index = 4, color = { 0.66, 0.62, 0.92 } },
+	},
+}
+
+--------------------------------------------------------------------------
 -- The cooldowns every spec counts
 --
 -- Written once and named by all three, because these three are facts about
@@ -140,6 +188,11 @@ local EARTH_ELEMENTAL = { key = "earthelemental", spells = { 2062 } }
 
 ns.Class.Register("SHAMAN", {
 	label = "shaman",
+
+	-- All three specs, because all three drop totems and none of them cares
+	-- which. Which totems you have out is a fight question rather than a tree
+	-- question, so nothing inside `specs` writes this again.
+	standing = STANDING,
 
 	--------------------------------------------------------------------------
 	-- What this class adds to the upkeep row

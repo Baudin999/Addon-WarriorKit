@@ -428,7 +428,7 @@ end
 
 ns.Register({
 	name = "chat",
-	order = 14,
+	order = 15,
 
 	switch = {
 		key = "chat",

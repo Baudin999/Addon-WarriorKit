@@ -57,7 +57,7 @@ end
 
 ns.Register({
 	name = "character",
-	order = 26,
+	order = 27,
 
 	switch = {
 		key = "character",

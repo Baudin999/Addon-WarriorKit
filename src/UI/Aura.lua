@@ -302,6 +302,22 @@ function Aura.Size(w, side, px, timerCeiling, countCeiling)
 	return side, side + lift
 end
 
+-- The hairline round one square, in the caller's own colour.
+--
+-- Every other row built out of this file draws squares that all mean the same
+-- kind of thing, so the edge is one colour written once when the square is
+-- made. The totem row is the one that does not: four holes in a fixed order are
+-- only readable if the holes are told apart, and which element a slot is for is
+-- the only thing an empty one has to say.
+--
+-- So the colour is the caller's, which is the same split UI/Ability.lua makes
+-- between a status and what a status is worth on screen. Written on a layout
+-- and never on a tick, which is why it carries no marker: nothing on a tick
+-- path reaches it.
+function Aura.Edge(w, color)
+	ns.Recolor(w.edges, color)
+end
+
 -- One square, one tick.
 --
 -- `texture` is the art, `state` one of the three above, `expires` when the

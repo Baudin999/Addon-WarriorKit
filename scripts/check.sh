@@ -367,6 +367,7 @@ Buttons/Trace.lua:3:Trace.Name names the frame under the cursor, on the pass tha
 Buttons/Trace.lua:3:Trace.Say prints one trace line, and only while the trace switch is on
 Charge/Icon.lua:1:MacroText runs behind SyncMacro comparing target, weapon and spell
 Cooldowns/Row.lua:1:Place is layout rather than tick
+Standing/Row.lua:1:Place is layout, run when the plan is rebuilt or a setting moves
 Perf/Hud.lua:3:FillCost writes the five rows under the strip, on the second the ranking moved
 Perf/Hud.lua:3:FillDips writes the log, on the tick a dip arrived or an age rolled over a second
 Perf/Hud.lua:3:FillNow turns the second's numbers into words, on the tick one of them moved

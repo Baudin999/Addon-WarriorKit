@@ -31,7 +31,7 @@ end
 
 ns.Register({
 	name = "minimap",
-	order = 15,
+	order = 16,
 
 	switch = {
 		key = "minimapSquare",

@@ -244,7 +244,7 @@ end
 
 ns.Register({
 	name = "comfort",
-	order = 18,
+	order = 19,
 
 	zooms = {
 		{ key = "clutterZoom", label = "Clutter", window = true, own = true },

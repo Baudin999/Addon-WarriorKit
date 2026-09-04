@@ -274,7 +274,7 @@ end)
 -- way to ask what happened has to be something you can type.
 ns.Register({
 	name = "menu",
-	order = 21,
+	order = 22,
 
 	words = {
 		menu = function()

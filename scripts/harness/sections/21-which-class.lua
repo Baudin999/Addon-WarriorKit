@@ -232,7 +232,7 @@ if classGroup then
 	-- find on the character they were looking for it on.
 	for _, section in ipairs(classGroup.sections) do
 		local part = section.feature and section.feature.name
-		check(part == "charge" or part == "swing",
+		check(part == "charge" or part == "swing" or part == "standing",
 			("%s put %q under the class group and is not gated on a class")
 				:format(tostring(part), section.title))
 	end

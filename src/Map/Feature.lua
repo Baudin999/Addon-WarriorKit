@@ -213,7 +213,7 @@ end
 
 ns.Register({
 	name = "map",
-	order = 27,
+	order = 28,
 
 	switch = {
 		key = "worldMap",

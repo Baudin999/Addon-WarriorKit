@@ -69,7 +69,7 @@ local XPWord = ns.Command.Word({
 
 ns.Register({
 	name = "progress",
-	order = 25,
+	order = 26,
 
 	switch = {
 		key = "progress",

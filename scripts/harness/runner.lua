@@ -415,6 +415,12 @@ local SECTIONS = {
 	-- combat log lines, which is the loudest thing any section does and
 	-- belongs nowhere near a section reading a frame.
 	"77-frame-trace",
+	-- After the frame trace rather than before it, which is the one place a
+	-- section that reads frames can sit next to that one: it puts every call it
+	-- stubbed back at the foot of its own file, and the row below is built at
+	-- login and reads nothing it touched. It fills every totem slot and empties
+	-- them again, so nothing after it would find a scene it did not expect.
+	"78-standing-row",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

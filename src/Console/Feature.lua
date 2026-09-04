@@ -178,7 +178,7 @@ end
 
 ns.Register({
 	name = "console",
-	order = 31,
+	order = 32,
 
 	words = {
 		console = ConsoleWord,
