@@ -116,8 +116,53 @@ local function Tint(texture)
 	return { r, g, b, a or 1 }
 end
 
--- What the hover says: the thing's own name at the top, the quest under it and
--- the coordinate under that.
+-- Questie's word for the two markers that are a quest rather than a step in
+-- one, said the way the quest log says it.
+local ERRAND = { available = "pick it up here", complete = "hand it in here" }
+
+-- The step this marker is part of, and how far through it you are.
+--
+-- The same count the client puts on the mob's own tooltip out in the world,
+-- which is the point: a marker on the map and the thing it stands for are the
+-- same errand, and a hover that names the thing and not the count makes you
+-- close the map to find out whether the camp is still worth walking to.
+--
+-- Read off Questie's objective rather than the client's log, because the
+-- objective is what the marker was drawn from, and it is the one that knows
+-- which of a four objective quest this dot belongs to. Questie keeps the two
+-- numbers on it up to date on the client's own log event, and Map/Window.lua
+-- repaints on that event too, so the count on the hover is the count in the
+-- log rather than the count at the moment the map opened.
+--
+-- The full description where Questie has one, because the short one is the
+-- word the client puts in the log ("Kobold Skin") and the full one is the
+-- sentence ("Kobold Skin gathered"). The trailing stop goes, the way Questie
+-- drops it, because the line ends in a count rather than in prose.
+local function Step(objective)
+	if type(objective) ~= "table" then
+		return nil
+	end
+	local what = objective.FullDescription or objective.Description
+	if type(what) ~= "string" or what == "" then
+		return nil
+	end
+	what = what:gsub("%.$", "")
+	local have, want = objective.Collected, objective.Needed
+	if type(have) == "number" and type(want) == "number" and want > 0 then
+		return { what, ("%d/%d"):format(have, want) }
+	end
+	return { what }
+end
+
+-- What the hover says: the thing's own name at the top, then the quest, then
+-- where you are up to on it, then the coordinate.
+--
+-- Every entry is a line of its own rather than a bare string, which is the
+-- shape UI/Tip.lua pours: a list whose first entry is a string is one line
+-- with a left and a right half, so two strings in a row came out as the quest
+-- name pushed against the coordinate on a single line instead of two lines.
+-- The pair shape is used on purpose for the step, where a description on the
+-- left and 3/6 on the right is exactly what it is for.
 --
 -- The coordinate rather than a distance, for the reason the quest log's map
 -- gives: a distance is the number that goes stale the moment you walk, and a
@@ -126,9 +171,15 @@ local function Told(data, x, y)
 	local lines = {}
 	local quest = type(data.QuestData) == "table" and data.QuestData.name or nil
 	if type(quest) == "string" and quest ~= "" and quest ~= data.Name then
-		lines[#lines + 1] = quest
+		lines[#lines + 1] = { quest }
 	end
-	lines[#lines + 1] = ("%.1f, %.1f"):format(x, y)
+	local step = Step(data.ObjectiveData)
+	if step then
+		lines[#lines + 1] = step
+	elseif ERRAND[data.Type] then
+		lines[#lines + 1] = { ERRAND[data.Type] }
+	end
+	lines[#lines + 1] = { ("%.1f, %.1f"):format(x, y) }
 	return lines
 end
 

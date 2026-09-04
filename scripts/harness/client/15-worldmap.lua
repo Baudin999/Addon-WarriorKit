@@ -341,7 +341,16 @@ local function icon(spec)
 			GetTexture = function() return spec.art or "Questie/Icons/available" end,
 		},
 		data = { Id = spec.quest, Name = spec.name, Type = spec.type,
-			QuestData = spec.title and { name = spec.title } or nil },
+			QuestData = spec.title and { name = spec.title } or nil,
+			-- The objective the marker was drawn from, in the shape
+			-- QuestieQuest._DetermineIconsToDraw hangs on icon data: the
+			-- sentence the log prints and the two numbers Questie keeps up to
+			-- date on the client's log event. A marker with no objective on it
+			-- is a quest giver or a flight master, and those have none.
+			ObjectiveData = spec.step and {
+				Description = spec.step,
+				Collected = spec.have, Needed = spec.want,
+			} or nil },
 	}
 	return name
 end
@@ -372,7 +381,8 @@ end
 -- dot is a "monster", a turn-in is a "complete", and a marker out of the manual
 -- register has no Type at all.
 register({ quest = 102, map = 1436, x = 30, y = 40, type = "monster",
-	name = "Kobold Miner", title = "Kobold Camp" })
+	name = "Kobold Miner", title = "Kobold Camp",
+	step = "Kobold Skin", have = 3, want = 6 })
 register({ quest = 102, map = 1436, x = 30, y = 40, mini = true, type = "monster",
 	name = "Kobold Miner", title = "Kobold Camp" })
 register({ quest = 102, map = 1436, x = 60, y = 20, hidden = true, type = "monster",

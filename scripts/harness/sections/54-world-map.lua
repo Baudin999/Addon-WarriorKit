@@ -155,8 +155,13 @@ check(miner and miner.icon == "Questie/Icons/available",
 	"the marker is not carrying Questie's own texture")
 check(miner and miner.tint and miner.tint[1] == 1 and miner.tint[2] == 0.75,
 	"the marker is not carrying the colour Questie tinted it")
-check(miner and miner.note and miner.note[1] == "Kobold Camp",
-	"the hover does not name the quest the marker came from")
+-- The hover, which answers what the map was opened to ask: which quest this is
+-- and how far through it you are, a line each rather than one line of two halves.
+local note = miner and miner.note or {}
+check(note[1] and note[1][1] == "Kobold Camp", "the quest is not on a line of its own")
+check(note[2] and note[2][1] == "Kobold Skin" and note[2][2] == "3/6",
+	"the step and its count are not on the hover")
+check(note[3] and note[3][1] == "30.0, 40.0", "the hover has lost the coordinate")
 
 -- You, on top of them, and only on the zone you are standing in.
 check(Pins.You(WESTFALL) ~= nil, "you are not on the map of the zone you are in")
