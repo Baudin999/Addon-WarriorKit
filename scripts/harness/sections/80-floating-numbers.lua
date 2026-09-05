@@ -5,13 +5,25 @@
 -- column is re-aimed when the one above it goes, and a number is never re-aimed
 -- at all, so its whole flight is a function of how long it has been alive.
 --
--- Eight questions, and not one is answerable by reading the files.
+-- Ten questions, and not one is answerable by reading the files.
 --
 -- Does a blow land on the right side. The rule is that a number is placed by
--- who it happened to and not by who caused it, so what is on the left is your
--- own health moving and what is on the right is the target's. A reader that
--- split on the source instead would put your own damage on the left and look
--- entirely correct until something hit you.
+-- who it happened to and not by who caused it, so what is on the left is the
+-- target's health moving and what is on the right is your own. A reader that
+-- split on the source instead would look entirely correct until something
+-- healed you.
+--
+-- The two anchors are `dealt` and `taken` and the ids were `mine` and `theirs`.
+-- That rename is here rather than in a comment because it was a real inversion:
+-- `mine` meant blows landing on me and sat on the right, so every name in the
+-- feature said the opposite of what it did and the columns were the wrong way
+-- round. Nothing but an assertion that names one column and reads the anchor
+-- back can hold that still.
+--
+-- Do they start above the character. A number falls ninety pixels from where it
+-- is born, so an anchor thirty below the middle of the screen spends the whole
+-- flight below the feet. This is a default, and a default is the one thing a
+-- section can assert about a placing the player owns after that.
 --
 -- Is a crushing blow gold. It is the one flag here that nobody can check by
 -- reading: it sits two slots past the critical on a swing, it is sent for no
@@ -22,13 +34,25 @@
 -- evaluated from the fraction of the life elapsed rather than interpolated
 -- between two stored ends, which is the whole reason the library is not a tween.
 --
+-- Does a number grow before it shrinks. This is the one the last three attempts
+-- got wrong, and it is not a taste: every channel used to decay from the
+-- instant of birth, which is the shape of a thing receding rather than of a
+-- blow landing. A number now snaps up past its resting size inside the first
+-- twentieth of a second, comes back, holds still for a beat and only then
+-- falls. Three assertions, because "it grows" and "it overshoots" and "it holds
+-- still" are three different ways of failing to be an impact and any one of
+-- them can be lost on its own.
+--
 -- Does a critical start bigger and outlive a plain hit. That is one style table
 -- against another and no branch on the tick, so what proves it is two numbers
 -- in the air at once measured against each other.
 --
--- Do they curve. A number bows out of its fall at the halfway point and comes
--- back, and two born in the same frame bow apart, which is the only thing
--- standing between a burst and one unreadable pile.
+-- Do they curve, and are they scattered. A number bows out of its fall at the
+-- halfway point and comes back, two born in the same frame bow apart, and each
+-- one is born a step above or below the row. The bow alone was not enough of
+-- it: eighteen pixels of it around a sixty pixel glyph is inside the glyph, so
+-- two blows a tenth of a second apart still meshed. Both are what stands
+-- between a burst and one unreadable pile.
 --
 -- Does the same blow twice become one number. A bleed ticking four times is one
 -- number carrying the total, and two different spells stay two numbers. This is
@@ -109,6 +133,18 @@ local function readAt(item)
 	return relative, x, y, item.frame.scale or 1, item.frame:GetAlpha()
 end
 
+-- Where a number actually is, which is not what its own anchor says.
+--
+-- A frame's offsets are read in its own scale, and the stream divides every one
+-- of them by the envelope for exactly that reason: a number swelling from six
+-- tenths of its resting size to one and a sixth writes a smaller offset on
+-- every one of those frames and does not move on the screen at all. Multiplying
+-- the offset back by the scale is the only way to ask whether it moved.
+local function screenAt(item)
+	local _, x, y, scale = readAt(item)
+	return x * scale, y * scale
+end
+
 local function isGold(item)
 	local r, g, b = item.frame.text:GetTextColor()
 	return r > 0.9 and g > 0.7 and b < 0.4
@@ -154,19 +190,34 @@ Numbers.Apply()
 ----------------------------------------------------------------------
 
 do
-	local left, right = Anchors.Of("mine"), Anchors.Of("theirs")
+	local left, right = Anchors.Of("dealt"), Anchors.Of("taken")
 	check(left ~= right, "both columns come off the same anchor")
 
-	swing(MOB, ME, 120)
-	local hit = newest()
-	local anchor = select(1, readAt(hit))
-	check(anchor == left,
-		"a blow that landed on you did not come off the left anchor")
+	-- The ids and the sides in one place, because the two are what got swapped.
+	-- `dealt` is the left one and it carries what you land; the shipped pair
+	-- said `mine` for blows landing on you and put them on the left.
+	local dealt = ns.DefaultCopy("hitsDealtPoint")
+	local taken = ns.DefaultCopy("hitsTakenPoint")
+	check(dealt[4] < 0 and taken[4] > 0,
+		("the columns ship at %d and %d, and what you deal is the left one")
+			:format(dealt[4], taken[4]))
+
+	-- And above the character rather than below it. A number falls the whole of
+	-- ns.db.hitsDrop from where it is born, so an anchor under the feet is an
+	-- anchor whose whole flight is in the grass.
+	check(dealt[5] > 0 and taken[5] > 0,
+		("the columns ship at %d and %d off the middle, and a number falls from there")
+			:format(dealt[5], taken[5]))
 
 	swing(ME, MOB, 340)
+	local anchor = select(1, readAt(newest()))
+	check(anchor == left,
+		"a blow you landed did not come off the left anchor")
+
+	swing(MOB, ME, 120)
 	anchor = select(1, readAt(newest()))
 	check(anchor == right,
-		"a blow you landed did not come off the right anchor")
+		"a blow that landed on you did not come off the right anchor")
 
 	-- Neither end is yours, which in a raid is nearly every line the client
 	-- sends and is the whole of the filter.
@@ -178,8 +229,8 @@ do
 	spellHeal(ME, ME, 4321, 210)
 	check(isGreen(newest()), "a heal on you is not green")
 	local healAnchor = select(1, readAt(newest()))
-	check(healAnchor == left,
-		"a heal on you did not come off the same anchor your damage does")
+	check(healAnchor == right,
+		"a heal on you did not come off the same anchor the damage you take does")
 
 	Stream.Clear()
 end
@@ -246,25 +297,59 @@ do
 end
 
 ----------------------------------------------------------------------
--- Large to small, fading while it falls, and curving on the way
+-- It arrives before it leaves
 ----------------------------------------------------------------------
 
 do
 	ns.db.hitsMerge = false
 	swing(MOB, ME, 500)
 	local item = Stream.At(1)
-	local _, bornX, bornY, bornScale, bornAlpha = readAt(item)
+	local _, _, _, bornScale = readAt(item)
+	local bornX, bornY = screenAt(item)
 
-	beat(0.05, 4)
+	-- A twentieth of a second, which is where an ordinary hit's attack peaks.
+	-- The number has to be bigger than it was born, and this is the assertion
+	-- three attempts at this feature failed: every channel used to decay from
+	-- birth, so nothing in the air ever grew and the whole thing read as a
+	-- caption drifting off rather than as a blow landing.
+	beat(0.05)
+	local _, _, _, peakScale = readAt(item)
+	check(peakScale > bornScale,
+		("a number does not grow on the way in, %.3f to %.3f"):format(bornScale, peakScale))
+
+	-- And it went past where it is going to rest rather than easing up to it.
+	-- Overshoot is what separates an impact from an appearance, and a number
+	-- that merely grew into place would pass the check above.
+	beat(0.05)
+	local _, _, _, settleScale = readAt(item)
+	check(settleScale < peakScale,
+		("a number does not overshoot its rest, peak %.3f and settling %.3f")
+			:format(peakScale, settleScale))
+
+	-- Still exactly where it was born through all of that. The fall is held for
+	-- the first tenth of the life, so what the eye gets is a number that snaps
+	-- up, holds where it landed and only then leaves. Within a unit of its own
+	-- offset, because the offset is rounded to a whole one and the scale it is
+	-- read in has moved under it.
+	local heldX, heldY = screenAt(item)
+	check(math.abs(heldY - bornY) <= bornScale and math.abs(heldX - bornX) <= bornScale,
+		("a number left before it had held still, %.1f,%.1f to %.1f,%.1f")
+			:format(bornX, bornY, heldX, heldY))
+
+	-- Past the beat it falls, it bows out of the fall, and it is smaller than it
+	-- rested at. The drift and the attack are two channels multiplied and this
+	-- is the drift on its own, with the attack long finished.
+	beat(0.05, 2)
 	local _, midX, midY, midScale, midAlpha = readAt(item)
-
-	check(midScale < bornScale,
-		("a number grew rather than shrank, %.3f to %.3f"):format(bornScale, midScale))
-	check(midY < bornY,
-		("a number rose rather than fell, %d to %d"):format(bornY, midY))
-	check(bornAlpha <= 1 and midAlpha <= 1, "a number is drawn more than solid")
-	check(math.abs(midX) > math.abs(bornX),
-		("a number did not bow out of its fall, %d to %d"):format(bornX, midX))
+	local _, fellY = screenAt(item)
+	check(midScale < settleScale,
+		("a number grew rather than shrank once it had settled, %.3f to %.3f")
+			:format(settleScale, midScale))
+	check(fellY < bornY,
+		("a number rose rather than fell, %.1f to %.1f"):format(bornY, fellY))
+	check(midAlpha <= 1, "a number is drawn more than solid")
+	check(math.abs(midX) > 0,
+		("a number did not bow out of its fall, it is at %d"):format(midX))
 
 	-- Past the hold it fades, and it is still falling while it does. Both
 	-- envelopes run off the same clock and neither waits for the other.
@@ -315,9 +400,24 @@ end
 do
 	spellHit(ME, MOB, 772, 100)
 	local first = newest()
+
+	-- Long enough for the first tick's own attack to be over, so what is
+	-- measured across the merge below is the merge and not the birth.
+	beat(0.05, 5)
+	local _, _, _, restScale = readAt(first)
+
 	spellHit(ME, MOB, 772, 150)
 	check(Stream.Count() == 1,
 		("the same bleed twice made %d numbers"):format(Stream.Count()))
+
+	-- And it swells from the size it is being drawn at rather than from the
+	-- size a new number starts at. Both are one line in Stream.Bump and the
+	-- wrong one is not subtle on a screen: a bleed ticking is a number that
+	-- flinches down to six tenths and grows back on every tick.
+	beat(0.02)
+	local _, _, _, bumpedScale = readAt(first)
+	check(bumpedScale > restScale,
+		("a number merged into shrank first, %.3f to %.3f"):format(restScale, bumpedScale))
 	check(first.amount == 250,
 		("a merged number reads %s and the two ticks were 100 and 150")
 			:format(tostring(first.amount)))
@@ -355,9 +455,20 @@ do
 	ns.db.hitsMerge = false
 	spellHit(ME, MOB, 772, 100)
 	spellHit(ME, MOB, 1160, 100)
-	beat(0.05, 6)
 
+	-- Apart before either of them has moved, which is the half the bow cannot
+	-- do. The bow is zero at birth and zero again at the end of the fall, and
+	-- with a beat in front of it there is a tenth of a second at the start
+	-- where it is zero as well: two numbers whose only difference was the bow
+	-- were drawn on top of each other for the whole of the part of the flight
+	-- the eye actually reads.
 	local one, two = Stream.At(1), Stream.At(2)
+	local _, _, oneBorn = readAt(one)
+	local _, _, twoBorn = readAt(two)
+	check(oneBorn ~= twoBorn,
+		("two numbers born together start on the same row at %d"):format(oneBorn))
+
+	beat(0.05, 6)
 	local _, oneX, oneY = readAt(one)
 	local _, twoX, twoY = readAt(two)
 	check(oneX ~= twoX or oneY ~= twoY,
@@ -508,7 +619,8 @@ end
 ns.db.hits, ns.db.hitsQuiet = true, true
 Numbers.Apply()
 
-print(("hits   left for what lands on you and right for what you land, white,"
-	.. " green and gold; a crushing blow reads off slot 20, %d styles, merging"
-	.. " on, %d of the client's own %d damage settings put away, %d in the air")
+print(("hits   left for what you land and right for what lands on you, white,"
+	.. " green and gold; a crushing blow reads off slot 20, %d styles that snap"
+	.. " up, hold and then fall, merging on, %d of the client's own %d damage"
+	.. " settings put away, %d in the air")
 	:format(3, select(1, Blizz.Quiet()), select(2, Blizz.Quiet()), Stream.Count()))

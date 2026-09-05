@@ -10,11 +10,12 @@ local Calls = ns.CombatTextCalls
 
 -- The ranges, written once and read by both the panel and the slash words, so
 -- the stops a macro can reach and the stops the page offers are one set.
--- The low end is the outline floor and not a taste: an outlined glyph under it
--- closes up its own counters buying an edge it cannot do without.
+-- The size is in pixels of the addon's own grid now, multiplied by the zoom on
+-- the size page, so both ends of it mean something on the screen rather than
+-- meaning whatever the player's UI scale slider makes of them.
 local SIZE_LOW, SIZE_HIGH = 14, 72
 local FALL_LOW, FALL_HIGH = 20, 240
-local ARC_LOW, ARC_HIGH = 0, 60
+local ARC_LOW, ARC_HIGH = 0, 90
 local LIFE_LOW, LIFE_HIGH, LIFE_STEP = 0.6, 3, 0.1
 
 local function Restyle()
@@ -93,6 +94,10 @@ ns.Register({
 		apply = Restyle,
 	},
 
+	zooms = {
+		{ key = "hitsZoom", label = "Floating numbers", fight = true, apply = Restyle },
+	},
+
 	defaults = {
 		-- On. Every other readout in this addon that ships off is one you can
 		-- get somewhere else; this replaces the client's own floating combat
@@ -102,13 +107,22 @@ ns.Register({
 		-- twice.
 		hits = true,
 
-		-- 36. It shipped at 22 and 22 was far too small on a screen, which is
-		-- the one thing about this part no gate could have answered and only
-		-- looking at it could. A panel draws its controls at twelve and the loot
-		-- captions at twenty, and both of those are read while standing still.
-		-- This is read out of the corner of an eye in the second before it goes,
-		-- over a mob, while you are pressing something.
-		hitsSize = 36,
+		-- Thirty at a zoom of two, which is sixty physical pixels.
+		--
+		-- It shipped at 22, then at 36, and both were reported too small. Both
+		-- were also wrong in a way no number could fix: the frames were off the
+		-- addon's pixel grid, so 36 meant 36 of UIParent's units and what
+		-- reached the screen depended on the player's UI scale, and the glyphs
+		-- were rasterised at fourteen pixels and stretched. They are adopted
+		-- now, the size is physical pixels times the zoom, and the face is
+		-- thirty-two, so what you set is what is drawn and it is drawn sharp.
+		--
+		-- A panel draws its controls at twelve and the loot captions at twenty,
+		-- and both of those are read while standing still. This is read out of
+		-- the corner of an eye in the second before it goes, over a mob, while
+		-- you are pressing something.
+		hitsSize = 30,
+		hitsZoom = 2,
 
 		-- Ninety pixels over one and three tenths of a second. Far enough that
 		-- a number has visibly travelled and short enough that six of them are
@@ -116,10 +130,16 @@ ns.Register({
 		hitsDrop = 90,
 		hitsLife = 1.3,
 
-		-- Eighteen pixels of bow at the halfway point. Enough that two numbers
-		-- born in the same frame separate, and little enough that the column
-		-- still reads as a column.
-		hitsArc = 18,
+		-- Forty-four pixels of bow at the halfway point, against the eighteen
+		-- that shipped. Eighteen was chosen when a number was drawn at less
+		-- than half this height, and around a sixty pixel glyph a bow of
+		-- eighteen is inside the glyph: two blows a tenth of a second apart
+		-- still meshed. Forty-four is a little over the width of a three digit
+		-- number at the shipped size, which is the width two of them have to be
+		-- apart to be two of them. The stream gives every number a height off
+		-- the row and a side to start on as well, and the three together are
+		-- what stops a burst being one pile.
+		hitsArc = 44,
 
 		-- On. Four ticks of a bleed in six seconds is four numbers drawn on top
 		-- of each other, each one unreadable because of the next, and one
@@ -133,12 +153,18 @@ ns.Register({
 		-- redraws; your dodges, combo points and energy are still its own.
 		hitsQuiet = true,
 
-		-- A hundred and fifty pixels either side of you and a little below,
-		-- which is where the two health bars this is about already are. The
-		-- calls sit above your head, clear of both columns and of the nameplate
-		-- over whatever you are hitting.
-		hitsMinePoint = { "CENTER", "UIParent", "CENTER", -150, -30 },
-		hitsTheirsPoint = { "CENTER", "UIParent", "CENTER", 150, -30 },
+		-- A hundred and fifty pixels either side of you and forty above, which
+		-- is chest height on the character rather than knee height. They began
+		-- thirty below and every number spent its whole fall in the grass; a
+		-- number falls ninety pixels from where it is born, so starting under
+		-- the character is starting at the end.
+		--
+		-- Dealt on the left. What you are doing is what is read most, and what
+		-- is read most goes where a left-to-right reader looks first. The calls
+		-- sit above your head, clear of both columns and of the nameplate over
+		-- whatever you are hitting.
+		hitsDealtPoint = { "CENTER", "UIParent", "CENTER", -150, 40 },
+		hitsTakenPoint = { "CENTER", "UIParent", "CENTER", 150, 40 },
 		hitsCallsPoint = { "CENTER", "UIParent", "CENTER", 0, 140 },
 	},
 
@@ -148,7 +174,7 @@ ns.Register({
 
 	help = {
 		"hits on|off, damage and healing floating off your character",
-		"hits size 22, fall 90, curve 18, time 1.3",
+		"hits size 30, fall 90, curve 44, time 1.3",
 		"hits merge on|off, calls on|off, quiet on|off",
 	},
 
@@ -169,6 +195,7 @@ ns.Register({
 
 	reset = function()
 		ns.db.hitsSize = ns.DefaultCopy("hitsSize")
+		ns.db.hitsZoom = ns.DefaultCopy("hitsZoom")
 		ns.db.hitsDrop = ns.DefaultCopy("hitsDrop")
 		ns.db.hitsArc = ns.DefaultCopy("hitsArc")
 		ns.db.hitsLife = ns.DefaultCopy("hitsLife")
@@ -178,7 +205,7 @@ ns.Register({
 
 	panel = function(ui)
 		ui.Section("Floating numbers", "Fighting")
-		ui.Lede("What lands on you falls away on your left, what you land on the right. Damage is white, healing is green, and more than a hit is gold.")
+		ui.Lede("What you land falls away on your left, what lands on you on the right. Damage is white, healing is green, and more than a hit is gold.")
 
 		ui.Size("size", SIZE_LOW, SIZE_HIGH, 1,
 			function() return ns.db.hitsSize end,

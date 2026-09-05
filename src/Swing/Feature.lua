@@ -57,7 +57,7 @@ ns.Register({
 	},
 
 	zooms = {
-		{ key = "swingZoom", label = "Swing bars", apply = function() ns.SwingGauges.Apply() end },
+		{ key = "swingZoom", label = "Swing bars", fight = true, apply = function() ns.SwingGauges.Apply() end },
 	},
 
 	defaults = {

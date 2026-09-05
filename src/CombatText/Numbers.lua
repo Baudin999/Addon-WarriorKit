@@ -10,16 +10,23 @@ ns.CombatTextNumbers = Numbers
 --------------------------------------------------------------------------
 -- What the fight is doing to you, in numbers
 --
--- Every blow that lands on you falls away from a point beside your left
--- shoulder, and every blow you land on something falls away from one on your
--- right. Damage is white, healing is green, and a hit the game itself calls
--- more than a hit is gold.
+-- Every blow you land on something falls away from a point beside your left
+-- shoulder, and every blow that lands on you falls away from one on your right.
+-- Damage is white, healing is green, and a hit the game itself calls more than
+-- a hit is gold.
 --
 -- **Where the split comes from.** A number is placed by who it happened to and
 -- not by who caused it, which is the one rule that makes two columns readable
--- at a glance: everything on the left is your health going down, everything on
--- the right is the target's. A heal on yourself is on the left with the damage
--- for the same reason, because it is your own bar moving.
+-- at a glance: everything on the left is the target's health going down,
+-- everything on the right is yours. A heal on yourself is on the right with the
+-- damage taken for the same reason, because it is your own bar moving.
+--
+-- The two columns are named `dealt` and `taken` rather than by a side. What is
+-- read most is what you are doing, and what is read most goes where a
+-- left-to-right reader looks first, so dealt is the left one; but that is a
+-- placing and a placing is a setting, so the anchors could not be called left
+-- and right without every identifier here going stale the first time somebody
+-- dragged one across the screen.
 --
 -- **Only your own end of it.** The log names every creature in range and a
 -- reader that drew all of it would be four other people's numbers over your
@@ -69,8 +76,8 @@ local MERGE_BEFORE = 0.45
 -- bigger hit and that is all it is for; the setting says how big numbers are.
 local FLOOR, REACH = 0.88, 0.30
 
--- Every number is drawn in one font, at the smallest size an outline is legible
--- at, and the size on the settings page is a multiplier on top of it.
+-- Every number in this part is drawn in one font object and the size on the
+-- settings page is a multiplier on top of it.
 --
 -- That is the opposite of the obvious design, which is a font object per size,
 -- and it is better for two reasons. The stream already scales every frame it
@@ -78,9 +85,21 @@ local FLOOR, REACH = 0.88, 0.30
 -- what a number was going to pay anyway; and a font rebuilt when a slider moves
 -- is a CreateFont per step of the drag, which the client never collects.
 --
--- Read off UI/Text.lua rather than typed, so the one number that decides
--- whether an outline closes up its own counters lives in one place.
-local BASE = UI.OutlineFloor()
+-- The face was UI.OutlineFloor, which is fourteen, and that was the bug behind
+-- two rounds of "the numbers are too small". They were not small. A glyph
+-- rasterised at fourteen pixels and then blown up to sixty by the frame's scale
+-- is a fourteen pixel picture of a digit stretched over sixty pixels, and the
+-- rim the outline buys is stretched with it. Nothing about it is legible at
+-- speed and nothing about it gets better by asking for a larger multiplier,
+-- which is what the last two attempts did.
+--
+-- Thirty-two is the face now, so the shipped size magnifies it by about two
+-- rather than by five, and the outline lands at about the weight a native
+-- thirty-two pixel outlined glyph has. It has to be a literal at file scope:
+-- scripts/check.sh reads the size out of every UI.Label that asks for a rim and
+-- fails a call whose size it cannot follow, which is the gate that keeps an
+-- outline off text too small to carry one. Well above the floor either way.
+local FACE = 32
 
 -- Where the numbers are on a line, read from the one place that knows. The two
 -- other readers of the combat log still hold copies of this table and the note
@@ -111,8 +130,19 @@ local function Build()
 	-- Outlined rather than shadowed, which is the opposite of what the loot
 	-- captions chose and is the rule rather than the exception. A rim reads as
 	-- a health number over a mob, and that is exactly what this is.
-	frame.text = UI.Label(frame, BASE, DAMAGE, "CENTER", UI.OUTLINE)
+	frame.text = UI.Label(frame, FACE, DAMAGE, "CENTER", UI.OUTLINE)
 	frame.text:SetPoint("CENTER")
+	-- Off UIParent's scale, which every other readout this addon draws over the
+	-- world already is and this one was not. On it, a number is drawn in
+	-- UIParent's units, so what "size 30" reaches the screen as is whatever the
+	-- player last left the UI scale slider on, and the zoom every other part
+	-- offers has nothing to hang on.
+	--
+	-- Adrift rather than Adopt, because the stream writes this frame's scale on
+	-- every tick and would overwrite anything Adopt set on the first one. What
+	-- Adopt would have written is in the style's `ground` instead, which the
+	-- stream multiplies its envelope onto rather than replacing.
+	UI.Adrift(frame, ns.db.hitsZoom)
 	return frame
 end
 
@@ -126,30 +156,45 @@ end
 -- The styles, rebuilt whenever a setting behind them moves.
 --
 -- Three tables rather than three branches on the tick. A critical is the
--- ordinary style with a larger start, a punch on the front of it and a later
--- fade, and saying that as data is what makes "crits start bigger and fade
--- slower" a number somebody can change rather than code somebody has to read.
+-- ordinary style with a larger start, a harder attack and a later fade, and
+-- saying that as data is what makes "crits hit harder and fade slower" a number
+-- somebody can change rather than code somebody has to read. Every one of the
+-- three has an attack, which is the difference between this and what shipped:
+-- an ordinary hit that only ever shrinks reads as a caption drifting off, and
+-- a caption is not what a blow landing looks like.
 function Numbers.Reshape()
 	local db = ns.db
 	local life, drop, arc = db.hitsLife, db.hitsDrop, db.hitsArc
-	-- The size, as the multiplier every envelope below is written in. One at the
-	-- outline floor and up from there, so a number is never drawn smaller than
-	-- the size its own rim was chosen for.
-	local grow = db.hitsSize / BASE
+	-- The size, as the multiplier every envelope below is written in, against
+	-- the face the glyphs are actually rasterised at.
+	local grow = db.hitsSize / FACE
+	-- What the frame is already scaled by, which the stream multiplies its own
+	-- envelope onto. On a client with no SetIgnoreParentScale nothing was
+	-- adopted, the frames are still riding UIParent, and one is the honest
+	-- answer rather than a scale nothing applied.
+	local ground = UI.Supported() and UI.Scale() * db.hitsZoom or 1
+	-- How far a number may be born off the row, either way. Read off the fall
+	-- rather than set on its own, because what it is for is keeping two numbers
+	-- out of each other on the way down and the fall is how far down that is.
+	local scatter = drop * 0.4
 
 	styles.plain = Stream.Style({
 		seconds = life, drop = drop, arc = arc,
+		ground = ground, scatter = scatter,
 		fromScale = grow, toScale = 0.85 * grow,
+		birth = 0.6, rise = 0.055, over = 0.16, settle = 0.1, beat = 0.13,
 		onGone = Release,
 	})
 
-	-- Longer, taller and gold. The punch is the part that reads as impact: a
-	-- number merely born bigger reads as a bigger font, and one that swells for
-	-- an eighth of a second and settles reads as a hit landing.
+	-- Longer, taller and gold, and it hits nearly twice as hard on the way in.
+	-- Different in degree from an ordinary hit and not in kind: the same four
+	-- numbers, all of them larger, and a beat at the top twice as long so the
+	-- one that mattered is the one that holds still.
 	styles.big = Stream.Style({
 		seconds = life * 1.35, drop = drop * 1.1, arc = arc,
-		fromScale = 1.45 * grow, toScale = 1.05 * grow,
-		punch = 0.35 * grow, punchFor = 0.14,
+		ground = ground, scatter = scatter,
+		fromScale = 1.25 * grow, toScale = 0.98 * grow,
+		birth = 0.6, rise = 0.07, over = 0.3, settle = 0.15, beat = 0.2,
 		holdFor = 0.62,
 		onGone = Release,
 	})
@@ -157,11 +202,13 @@ function Numbers.Reshape()
 	-- A word rather than a number, so it rises instead of falling and does not
 	-- bow at all. A negative drop is a lift, which is the one place the stream's
 	-- vocabulary reads oddly and is better than a second field that means the
-	-- same thing with the sign the other way round.
+	-- same thing with the sign the other way round. No scatter either: there is
+	-- never more than one of these in the air.
 	styles.call = Stream.Style({
 		seconds = life * 1.6, drop = -16, arc = 0,
-		fromScale = 1.45 * grow, toScale = 1.15 * grow,
-		punch = 0.4 * grow, punchFor = 0.12,
+		ground = ground, scatter = 0,
+		fromScale = 1.25 * grow, toScale = 1.05 * grow,
+		birth = 0.6, rise = 0.07, over = 0.26, settle = 0.14, beat = 0.22,
 		holdFor = 0.6,
 		onGone = Release,
 	})
@@ -219,7 +266,7 @@ end
 -- One number, on screen.
 --
 --   amount  what to draw
---   side    "mine" for the left anchor, "theirs" for the right
+--   side    "dealt" for the left anchor, "taken" for the right
 --   heal    whether it is health going up
 --   big     whether the game called it more than a hit
 --   key     what a later number has to match to merge into this one
@@ -284,8 +331,8 @@ function Numbers.OnLog(_, subevent, _, sourceGUID, _, _, _, destGUID,
 	end
 
 	-- Which of the two columns, and the answer decides everything after it. A
-	-- blow is placed by who it happened to, so what is on the left is your own
-	-- health moving and what is on the right is the target's.
+	-- blow is placed by who it happened to, so what is dealt is the target's
+	-- health moving and what is taken is your own.
 	local onMe = Mine(destGUID, me)
 	local byMe = Mine(sourceGUID, me)
 	if not onMe and not byMe then
@@ -318,7 +365,7 @@ function Numbers.OnLog(_, subevent, _, sourceGUID, _, _, _, destGUID,
 	-- is the right answer, because they draw on top of each other otherwise.
 	local key = ((shape.spell and a12 or 0) * 2 + (onMe and 1 or 0)) * 2
 		+ (big and 1 or 0)
-	Numbers.Show(amount, onMe and "mine" or "theirs", shape.heal, big and true, key)
+	Numbers.Show(amount, onMe and "taken" or "dealt", shape.heal, big and true, key)
 	return true
 end
 
@@ -383,6 +430,14 @@ end
 -- And the scale is measured against this fight rather than against the session.
 -- A boss that hit for nine thousand would otherwise flatten every number of the
 -- next hour's trash into the floor.
+-- A monitor swap moves the grid under every one of these frames, and `ground`
+-- is a number read off it at the moment the styles were last built.
+UI.OnRescale(function()
+	if ns.db and ns.db.hits then
+		Numbers.Reshape()
+	end
+end)
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")

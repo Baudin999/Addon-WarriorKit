@@ -9,9 +9,18 @@ ns.CombatTextAnchors = Anchors
 -- The three places numbers come from
 --
 -- Everything this part draws flies away from one of three points on the screen,
--- and every one of them is a rectangle you can unlock and drag. What lands on
--- you comes off the left one, what you land on your target comes off the right
+-- and every one of them is a rectangle you can unlock and drag. What you land
+-- on your target comes off the left one, what lands on you comes off the right
 -- one, and a word about the fight comes off the one above your head.
+--
+-- **They are named for the blow and not for the side.** `dealt` and `taken`
+-- say which half of the fight a number belongs to; where each one sits is a
+-- pair of numbers in the saved variables and the player may drag them anywhere,
+-- including across each other. Ids called `mine` and `theirs` shipped once and
+-- were worse than useless: `mine` meant blows landing on me, which reads as
+-- blows I dealt to everybody who ever had to change this file, and it was on
+-- the wrong side of the screen for the whole of its life without a single
+-- identifier looking wrong.
 --
 -- **Why the spawn point is the whole anchor.** A number's flight has two ends
 -- and only the first one is placed. Where it finishes is the start plus the
@@ -48,8 +57,8 @@ local WIDTH, HEIGHT = 90, 28
 -- is the shape this addon has had to be shown twice: UI/Placeable.lua exists
 -- because twelve parts wrote the same drag out longhand.
 local SPOTS = {
-	{ id = "mine", key = "hitsMinePoint", name = "WarriorKit hits on you" },
-	{ id = "theirs", key = "hitsTheirsPoint", name = "WarriorKit hits you land" },
+	{ id = "dealt", key = "hitsDealtPoint", name = "WarriorKit hits you land" },
+	{ id = "taken", key = "hitsTakenPoint", name = "WarriorKit hits on you" },
 	{ id = "calls", key = "hitsCallsPoint", name = "WarriorKit combat calls" },
 }
 
@@ -122,6 +131,6 @@ end
 -- file answers a question at all: three rectangles you cannot see are three
 -- things a status line has to be able to name.
 function Anchors.Describe()
-	local anchor = ns.db.hitsMinePoint
-	return ("hits on you at %d, %d"):format(anchor[4], anchor[5])
+	local anchor = ns.db.hitsDealtPoint
+	return ("hits you land at %d, %d"):format(anchor[4], anchor[5])
 end

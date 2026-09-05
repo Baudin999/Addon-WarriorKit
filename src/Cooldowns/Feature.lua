@@ -159,7 +159,7 @@ ns.Register({
 	order = 11,
 
 	zooms = {
-		{ key = "cooldownZoom", label = "Cooldown row", apply = function() ns.CooldownRow.Apply() end },
+		{ key = "cooldownZoom", label = "Cooldown row", fight = true, apply = function() ns.CooldownRow.Apply() end },
 	},
 
 	defaults = {

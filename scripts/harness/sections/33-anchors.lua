@@ -26,11 +26,24 @@
 -- nothing. The check stays, because the next odd constant will not announce
 -- itself either.
 --
--- Scope is every frame the addon put on the grid and everything under it, found
--- by walking up for the SetIgnoreParentScale that UI.Adopt calls. A frame that
--- is not on the grid is not held to this: the charge button rides UIParent's
--- scale, and Blizzard's own frames are Blizzard's business. UIParent itself is
--- skipped, because the stub sets the flag on it to model the client.
+-- Scope is every frame the addon put on the grid and everything under it, asked
+-- of ns.UI.OnGrid rather than sniffed off the client flag SetIgnoreParentScale
+-- leaves behind. Those were the same set until the floating numbers, and the
+-- difference is the exemption this rule now carries.
+--
+-- A frame that is not on the grid is not held to this: the charge button rides
+-- UIParent's scale, and Blizzard's own frames are Blizzard's business. UIParent
+-- itself is skipped, because the stub sets the flag on it to model the client.
+--
+-- And ns.UI.Adrift is off the parent's scale without being on the grid, which
+-- is one thing in the addon: a floating combat number, whose scale ns.Ck.Stream
+-- writes on every tick as it swells and shrinks. One unit inside it is a
+-- different fraction of a pixel on every frame it is drawn, so "a whole number
+-- of pixels" is not a rule it can be held to and would not mean anything if it
+-- were. It is the anchored twin of the moving fill excused two paragraphs down:
+-- a thing whose whole job is to be between pixels. What holds it instead is
+-- section 80, which reads its position back multiplied by its own scale and
+-- asserts where it is on the screen rather than what its anchor says.
 --
 -- This is the whole of the addon's first pixel rule and none of its second. It
 -- walks anchor offsets, and an anchor offset is a static edge by construction:
@@ -50,7 +63,7 @@ local note = "at 1x"
 local function onGrid(frame)
 	local node = frame
 	while node and node ~= _G.UIParent do
-		if node.ignoreScale then
+		if ns.UI.OnGrid(node) then
 			return true
 		end
 		node = node.parent

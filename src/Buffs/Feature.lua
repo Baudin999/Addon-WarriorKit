@@ -269,7 +269,7 @@ ns.Register({
 	order = 10,
 
 	zooms = {
-		{ key = "buffZoom", label = "Missing buff row", apply = function() ns.BuffNag.Apply() end },
+		{ key = "buffZoom", label = "Missing buff row", fight = true, apply = function() ns.BuffNag.Apply() end },
 	},
 
 	defaults = {

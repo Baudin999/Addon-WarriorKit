@@ -246,6 +246,46 @@ function UI.Adopt(frame, zoom)
 	return true
 end
 
+-- Whether this frame is one the addon put on the grid, so a caller can hold the
+-- promise Adopt makes rather than the client flag Adopt happens to set.
+--
+-- The two are not the same set and the difference is what UI.Adrift below is
+-- for. scripts/harness/sections/33-anchors.lua asks this: every offset inside a
+-- frame on the grid has to be a whole number of pixels, and that rule is only
+-- meaningful where one unit is one pixel.
+function UI.OnGrid(frame)
+	return grid[frame] ~= nil
+end
+
+-- Off the parent's scale, and not on the grid.
+--
+-- Adopt does two things at once, and until now nothing wanted them apart: it
+-- takes a frame off whatever scale its parent carries, and it writes the frame's
+-- own scale so one unit is one pixel. A frame whose scale is written by an
+-- animation on every tick wants the first and cannot have the second. The
+-- floating combat numbers are the case: ns.Ck.Stream owns their scale, so the
+-- next tick would overwrite anything set here, and their units are a different
+-- fraction of a pixel on every frame they are drawn.
+--
+-- They still want off the parent. A number's size is the one thing this addon
+-- promises about it, and on UIParent's scale what "thirty pixels" reaches the
+-- screen as is whatever the player last left the UI scale slider on.
+--
+-- Not held in `grid`, so a resolution change does not rescale it and nothing
+-- holds it to the whole-pixel rule. A caller here takes both of those on
+-- itself: it listens on UI.OnRescale and works its own scale out again.
+function UI.Adrift(frame, zoom)
+	if supported == nil then
+		supported = type(frame.SetIgnoreParentScale) == "function"
+	end
+	if not supported then
+		return false
+	end
+	frame:SetIgnoreParentScale(true)
+	frame:SetScale(perfect * (zoom or 1))
+	return true
+end
+
 -- There was a UI.ZoomOf here, which walked up from a region to whichever
 -- ancestor was adopted and answered what zoom it was drawn at. It had one
 -- caller ever: the tooltip, matching itself to the widget under the cursor.

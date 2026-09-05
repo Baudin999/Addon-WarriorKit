@@ -537,8 +537,8 @@ ns.Register({
 	},
 
 	zooms = {
-		{ key = "barsZoom", label = "Enemy bars", apply = function() ns.EnemyBars.ApplyLayout() end },
-		{ key = "playerCastZoom", label = "Your cast bar", apply = function() ns.PlayerCast.Apply() end },
+		{ key = "barsZoom", label = "Enemy bars", fight = true, apply = function() ns.EnemyBars.ApplyLayout() end },
+		{ key = "playerCastZoom", label = "Your cast bar", fight = true, apply = function() ns.PlayerCast.Apply() end },
 		{ key = "partyZoom", label = "Party list", apply = function() ns.Group.Apply() end },
 		{ key = "raidZoom", label = "Raid list", apply = function() ns.Group.Apply() end },
 	},

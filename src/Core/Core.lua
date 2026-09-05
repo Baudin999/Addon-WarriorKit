@@ -167,6 +167,23 @@ local RETIRED = {
 	partyOrder = true,
 	partyRaidColumns = true,
 	partyRaidPerColumn = true,
+
+	-- 1.9: the two spawn points the floating numbers fly from, named for whose
+	-- blow it was. hitsMinePoint held where blows landing on *me* came from and
+	-- hitsTheirsPoint where blows landing on my target did, which is the
+	-- opposite of what both names read as, and the two were on the wrong sides
+	-- of the screen for the whole of their life without one identifier in the
+	-- feature looking wrong. They are hitsDealtPoint and hitsTakenPoint now,
+	-- named for the blow rather than for the owner, and dealt is the left one.
+	--
+	-- Wiped rather than carried across. The numbers under the old names are the
+	-- corner a drag last left the frame on, and the sides have swapped: reading
+	-- hitsMinePoint into hitsTakenPoint would put a player's two columns back
+	-- exactly where the inversion had them, which is the bug rather than their
+	-- placing. Anybody who dragged them drags them once more, and anybody who
+	-- did not gets the new defaults, which is what they wanted either way.
+	hitsMinePoint = true,
+	hitsTheirsPoint = true,
 }
 
 -- A key lives in exactly one scope. Checking both tables on every insert is

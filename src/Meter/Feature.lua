@@ -114,7 +114,7 @@ ns.Register({
 	},
 
 	zooms = {
-		{ key = "meterZoom", label = "Meter", apply = function() ns.MeterWindow.Apply() end },
+		{ key = "meterZoom", label = "Meter", fight = true, apply = function() ns.MeterWindow.Apply() end },
 	},
 
 	defaults = {

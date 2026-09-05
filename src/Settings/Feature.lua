@@ -312,12 +312,20 @@ ns.Register({
 		-- row at once: the stops that stay exact are a fact about the monitor,
 		-- not about the screen being sized.
 		--
-		-- Which list a screen is on is read off two flags on its registration:
-		-- `window` says it is a window at all, and `own` that the client has
-		-- no copy of it. A screen with neither is drawn over the world.
+		-- And the same thing happened again to the things drawn over the world.
+		-- Fourteen of them is fifteen cells with the reading and the button
+		-- under them, which is the wall the windows hit, and the fourteenth
+		-- arrived with the floating numbers. So they are two lists as well, and
+		-- the line between them is the one a player already has in their head:
+		-- what a pull puts on the screen, and what was there before it.
+		--
+		-- Which list a screen is on is read off three flags on its
+		-- registration: `window` says it is a window at all, `own` that the
+		-- client has no copy of it, and `fight` that a screen drawn over the
+		-- world is one you read while something is hitting you.
 		local function Where(zoom)
 			if zoom.window ~= true then
-				return "screen"
+				return zoom.fight and "fight" or "screen"
 			end
 			return zoom.own and "own" or "client"
 		end
@@ -384,8 +392,10 @@ ns.Register({
 			"Every window this addon opens in place of one of the client's, on its own number. Shrink the map without shrinking the quest log beside it.")
 		Rows("own", "Zoom: own windows",
 			"The windows the client has no copy of, each on its own number.")
+		Rows("fight", "Zoom: in a fight",
+			"What a pull puts over the world, each on its own number.")
 		Rows("screen", "Zoom: on screen",
-			"Everything the addon draws over the world, on its own number.")
+			"What is over the world before the pull and after it, each on its own number.")
 
 		-- Here rather than on the feeds page, where the first of these two used
 		-- to live. It was a per-feed reading of an addon-wide fact, printed

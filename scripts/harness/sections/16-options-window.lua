@@ -756,6 +756,14 @@ if window then
 	-- values back rather than the defaults when this goes off, which is the
 	-- difference between borrowing a setting and overwriting one.
 	-- 30,700 is that plus a hint's worth of room.
+	-- The floating numbers took a zoom row and the budget did not move. A zoom
+	-- row is a label and a live sentence under the `?`, so it costs a hint; the
+	-- list it went on was already fourteen deep and had to split, so it costs a
+	-- lede as well. Both are paid for out of the room the last raise left, and
+	-- the two ledes say the one thing the two lists cannot say for themselves,
+	-- which is where the line between them is: what a pull puts over the world,
+	-- and what was there before it. A budget that is only ever raised is a
+	-- budget, and a budget nothing is ever paid out of is a ceiling.
 	check(prose < 30700,
 		("the window holds %d characters of prose and the budget is 30,700"):format(prose))
 
