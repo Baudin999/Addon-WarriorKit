@@ -96,6 +96,13 @@ name of none of them.
                          above: their names, and which one you are standing in
     Core/Command.lua     slash dispatch, built from the registry
     Core/Panel.lua       the options window and the widget kit
+    Core/MenuSkin.lua    the client's Escape menu drawn in the addon's look:
+                         Blizzard's art off it, the kit's panel under it, the
+                         kit's paint on every button in it, and all of it back
+                         again on one switch
+    Core/Menu.lua        one button at the foot of that menu, which opens the
+                         window Core/Panel.lua owns. After the paint, because
+                         it hands the paint the menu and its own button
 
     Unit/Unit.lua        health and power, as the integers that get drawn
     Unit/Color.lua       every colour the addon puts on a unit, in one palette
@@ -6340,6 +6347,10 @@ on different realms read as the same person.
     /wk ranks                    how many bar slots are holding an older rank
     /wk ranks refresh            move them all up to your best rank
     /wk art on|off               Blizzard bar art, off by default
+    /wk menu                     what the client's Escape menu is made of, and
+                                 where our button in it went
+    /wk menu on|off              that menu drawn in the addon's look, on by
+                                 default
     /wk xp on|off                the experience and reputation rails
     /wk xp faction on|off        the reputation rail under the experience one
     /wk xp bubbles on|off        the twenty segment marks
@@ -6741,6 +6752,25 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
+- **Where this client's game menu keeps its art, and whether the walk in
+  `Core/MenuSkin.lua` finds all of it.** The walk takes every texture off the
+  frame, off one level of boxes inside it and off each button, which is the
+  three places both flavours of this menu have used. A place it does not reach
+  looks like a piece of parchment or a gold corner standing on top of the
+  addon's panel, and it would be visible in the first press of Escape. What
+  would settle it: press Escape and read `/wk menu`, which lists every region
+  the menu holds and says how many were taken off.
+- **Whether the title bar has room on this client's menu.** The bar is drawn
+  over Blizzard's frame and `Room` refuses to draw it at all when the topmost
+  button sits closer to the top than the bar is tall. Every flavour of this menu
+  has left space for a heading of its own, and that is a habit rather than a
+  promise. A mistake in either direction is visible: a bar over the Options
+  button, or no heading on the menu at all. What would settle it: press Escape.
+- **Whether hiding a button's own textures leaves the button working.** Nothing
+  in `Core/MenuSkin.lua` calls anything of Blizzard's or replaces a script, so
+  Logout and Exit Game still run off Blizzard's own buttons and this addon is
+  paint on the path rather than a step in it. That is the argument; it has not
+  been pressed. What would settle it: press Logout.
 - **Whether `GetTotemInfo` answers on 2.5.6, and what its fifth value is.** The
   row of what you have out reads all four slots off it every tick. The call is
   in the client's own generated documentation for this branch and Blizzard's

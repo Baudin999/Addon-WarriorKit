@@ -29,8 +29,18 @@ local ADDON, ns = ...
 -- one of Blizzard's with it.
 --
 -- The one thing still read off the menu is a button to copy a size from, and
--- that is cosmetic: a size we cannot measure leaves the template's own, which
--- is the right size by construction.
+-- that is cosmetic: a size we cannot measure leaves the kit's own, which is a
+-- readable button in the addon's own proportions and only fails to line up with
+-- the column above it.
+--
+-- The paint is Core/MenuSkin.lua and it is a second subject rather than a
+-- second half of this one. That file answers the complaint this one made
+-- worse: our button stopped wearing Blizzard's art, which is right, and put a
+-- flat grey rectangle under nine red ones, which read as stapled on. It draws
+-- the whole menu in the kit's look instead, on a switch, and it moves nothing
+-- either. This file still owns the button, the placement and the height; that
+-- one owns every pixel of paint on the frame around it, and neither goes
+-- looking through the other.
 
 local Menu = {}
 ns.GameMenu = Menu
@@ -66,7 +76,7 @@ local button, refusal
 local base, grown
 
 -- What the last attach found to copy a size from. Carried for `/wk status`,
--- because a button at the template's own size in a menu whose buttons are a
+-- because a button at the kit's own size in a menu whose buttons are a
 -- different size is a thing you can see and would want explained.
 local copied
 
@@ -148,6 +158,12 @@ function Menu.Attach()
 		return false
 	end
 
+	-- The paint first, because it takes Blizzard's own art off the buttons the
+	-- next line measures, and a button is the same size either way. Its answer
+	-- is not tested here: a menu that could not be painted is still a menu our
+	-- button goes in, and the refusal it carries is reported on its own line.
+	ns.MenuSkin.Apply()
+
 	Fit(menu)
 	if not Grow(menu) then
 		refusal = "this client's game menu will not say how tall it is"
@@ -170,27 +186,33 @@ local function Build()
 		return
 	end
 
-	-- pcall, because a template that is not on this client is an error at the
-	-- call rather than a nil coming back, and the cost of that error is the rest
-	-- of this file not running.
-	local ok, made = pcall(CreateFrame, "Button", BUTTON, menu, "GameMenuButtonTemplate")
-	if not ok or not made then
-		refusal = "this client has no GameMenuButtonTemplate to build a button from"
-		return
-	end
+	-- The addon's own button, not the client's.
+	--
+	-- It was built on GameMenuButtonTemplate, and a button wearing Blizzard's
+	-- gold-on-parchment art in a menu you open to reach a window painted in
+	-- this addon's greys reads as somebody else's. The kit button is the same
+	-- one the close box and every stepper in the window is, so the way in looks
+	-- like the place it leads to. Fit still copies the column's width so ours
+	-- lines up with the buttons above it; only the paint changed.
+	button = ns.UI.Button(menu, {
+		name = BUTTON,
+		label = LABEL,
+		size = ns.UI.Metric.font,
+		tip = "The addon's own window: what it draws, and every number it draws it with.",
+		onClick = function()
+			-- Closed the way Escape closes it, so the client takes it off its
+			-- own panel stack. Hide alone leaves the stack believing it is
+			-- still up.
+			if type(HideUIPanel) == "function" then
+				HideUIPanel(menu)
+			else
+				menu:Hide()
+			end
+			ns.Options.Show()
+		end,
+	})
 
-	button = made
-	button:SetText(LABEL)
-	button:SetScript("OnClick", function()
-		-- Closed the way Escape closes it, so the client takes it off its own
-		-- panel stack. Hide alone leaves the stack believing it is still up.
-		if type(HideUIPanel) == "function" then
-			HideUIPanel(menu)
-		else
-			menu:Hide()
-		end
-		ns.Options.Show()
-	end)
+	ns.MenuSkin.Watch(menu, button)
 end
 
 function Menu.Describe()
@@ -200,8 +222,9 @@ function Menu.Describe()
 	if not button then
 		return "not built"
 	end
-	return ("at the bottom of the game menu, %s"):format(
-		copied and ("the size of " .. copied) or "at its template's own size")
+	return ("at the bottom of the game menu, %s, %s"):format(
+		copied and ("the size of " .. copied) or "at the kit's own size",
+		ns.MenuSkin.Describe())
 end
 
 -- What the client's menu is actually made of.
@@ -231,6 +254,7 @@ function Menu.Probe()
 
 	ns.Print(("game menu: %s tall, %s"):format(
 		tostring(ns.Measure(menu, "GetHeight")), Menu.Describe()))
+	ns.Print("  paint: " .. ns.MenuSkin.Describe() .. ".")
 	ns.Print(("  our button %s, AddButton %s, Layout %s, HookScript %s"):format(
 		button and "built" or "not built",
 		type(menu.AddButton) == "function" and "yes" or "no",
@@ -256,7 +280,19 @@ end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
-events:SetScript("OnEvent", function()
+-- Because a protected region will not be hidden in a fight, and the menu is a
+-- frame you open in one. Core/MenuSkin.lua says whether it had to leave part
+-- of the paint behind, and this is where it comes back for the rest, on the
+-- same event Artwork/Artwork.lua uses for the same refusal.
+events:RegisterEvent("PLAYER_REGEN_ENABLED")
+events:SetScript("OnEvent", function(_, event)
+	if event == "PLAYER_REGEN_ENABLED" then
+		if ns.MenuSkin.Deferred() then
+			ns.MenuSkin.Apply()
+		end
+		return
+	end
+
 	Build()
 	if not button then
 		return
@@ -268,25 +304,70 @@ events:SetScript("OnEvent", function()
 	end
 end)
 
--- A part with no settings and no page, and one word. It registers for the line
--- it puts in /wk status and for the probe above: this is the only thing in the
--- addon whose success depends on how somebody else's frame is built, and the
--- way to ask what happened has to be something you can type.
+local function Set(value)
+	ns.db.menuSkin = value
+	ns.MenuSkin.Apply()
+end
+
+-- One word that does two things, and the argument is what tells them apart.
+-- `menu` on its own is the probe, which is what you type when the button has
+-- not turned up. `menu on` and `menu off` are the paint.
+--
+-- The button itself has no switch and will not get one, for the reason at the
+-- head of this file: a checkbox that hides the way into the settings is a
+-- checkbox nobody can find their way back to. The paint is a different
+-- question. It is a look rather than a way in, somebody will want Blizzard's
+-- own back, and it goes back in one call.
 ns.Register({
 	name = "menu",
 	order = 22,
 
+	defaults = {
+		-- True means the client's menu is drawn in the addon's look, which is
+		-- the point of Core/MenuSkin.lua and so the state it starts in.
+		menuSkin = true,
+	},
+
+	-- Drawn by the panel, at the top of the page below, like every other part's.
+	-- The button in the menu is not on it and never will be: that one is the
+	-- way into this window, and a switch that hides the way in is a switch
+	-- nobody can find their way back to. This is the paint.
+	switch = {
+		key = "menuSkin",
+		label = "the game menu in the addon's look",
+		says = "Nothing moves and no button is replaced, so Logout and Exit Game are still Blizzard's own. Only the paint changes, and it comes off in one call.",
+		apply = function() ns.MenuSkin.Apply() end,
+	},
+
 	words = {
-		menu = function()
-			Menu.Probe()
+		menu = function(arg)
+			if arg == nil then
+				Menu.Probe()
+				return
+			end
+			Set(ns.Command.Toggle(arg))
+			ns.Print("The game menu is drawn "
+				.. (ns.db.menuSkin and "in the addon's look" or "the client's own way")
+				.. ", " .. Menu.Describe() .. ".")
 		end,
 	},
 
 	help = {
 		"menu, what the client's own menu is made of and where our button went",
+		"menu on|off, the client's menu in the addon's look or in its own",
 	},
 
 	status = function()
 		return Menu.Describe()
+	end,
+
+	reset = function()
+		Set(ns.DefaultFor("menuSkin"))
+	end,
+
+	panel = function(ui)
+		ui.Section("Game menu", "The screen")
+		ui.Lede("The menu Escape opens, drawn in this addon's greys rather than the client's parchment.")
+		ui.Reading("game menu", ns.MenuSkin.Describe)
 	end,
 })

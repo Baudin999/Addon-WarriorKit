@@ -708,8 +708,16 @@ if window then
 	-- profiler hint says what turning a client wide setting on buys and what it
 	-- costs, which is the one control in the addon that reloads the interface.
 	-- 28,750 is that plus a hint's worth of room.
-	check(prose < 28750,
-		("the window holds %d characters of prose and the budget is 28,750"):format(prose))
+	-- The game menu arrived and it is 28,897 across sixty-nine: one section on
+	-- The screen, one lede, one switch sentence and one reading. It is the
+	-- cheapest page this budget has taken, because the part has one control.
+	-- The switch sentence is the one thing the label cannot say and the one
+	-- thing somebody would want to know before throwing it: the paint does not
+	-- touch Blizzard's own buttons, so the two that log you out are still the
+	-- client's and still work in a fight. 29,100 is that plus a hint's worth
+	-- of room.
+	check(prose < 29100,
+		("the window holds %d characters of prose and the budget is 29,100"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

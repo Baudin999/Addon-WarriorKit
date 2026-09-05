@@ -1,9 +1,12 @@
--- The button in the client's own menu
+-- The client's own menu, and what the addon does to it
 --
--- Core/Menu.lua hangs one button off the bottom of Blizzard's game menu and
--- grows the frame by what that costs. Everything hard about it is arithmetic on
--- a frame the addon does not own, and none of it is visible from the source,
--- because the source names no Blizzard button.
+-- Two files. Core/Menu.lua hangs one button off the bottom of Blizzard's game
+-- menu and grows the frame by what that costs. Core/MenuSkin.lua paints the
+-- whole frame, every button in it and the heading over them in the addon's
+-- look. Everything hard about the first is arithmetic on a frame the addon does
+-- not own, and none of it is visible from the source, because the source names
+-- no Blizzard button. Everything hard about the second is that it walks a frame
+-- it did not build, twice, in both directions.
 --
 -- The first version of this file gated a walk that found the foot of the menu's
 -- anchor chain and re-anchored it. That walk is gone, and the reason it is gone
@@ -37,7 +40,7 @@ local button = _G.WarriorKitGameMenuButton
 
 local MARGIN = 8
 local STEP = H.MENU_BUTTON_H + H.MENU_GAP
-local BARE = #buttons * STEP + H.MENU_GAP
+local BARE = H.MENU_HEAD + #buttons * STEP
 
 check(button ~= nil, "no button was put in the game menu")
 check(Menu ~= nil, "Core/Menu.lua left nothing on ns")
@@ -93,6 +96,198 @@ local function unmoved(where)
 end
 
 unmoved("when the button was placed")
+
+--------------------------------------------------------------------------
+-- The paint
+--
+-- Core/MenuSkin.lua walks a frame the addon did not build and draws over it,
+-- and then walks it again on every press of Escape. Three ways that goes
+-- wrong and one thing it must never do.
+--
+-- It can miss art. Blizzard's menu keeps its textures in three places, on the
+-- frame, in a border box inside the frame and on each button, and a walk that
+-- only knows the first leaves two thirds of a parchment showing under a panel
+-- that was supposed to replace it.
+--
+-- It can eat its own. Our fill on one of Blizzard's buttons is a texture of
+-- that button, so the second pass finds it among theirs, and a version that
+-- did not mark its own work stripped the paint it had just put on.
+--
+-- It can grow. Every pass is a pass over the same frame, and a pass that made
+-- a texture rather than showing the one it made last time is a leak measured
+-- in presses of Escape.
+--
+-- And it must go back. The switch is a switch, not a reload: off means every
+-- one of Blizzard's regions showing again and every string back in the font it
+-- was wearing when this addon found it.
+--------------------------------------------------------------------------
+
+local Skin = ns.MenuSkin
+local UI = ns.UI
+local KIT = UI.Font(UI.Metric.font, UI.FLAT)
+
+check(Skin ~= nil, "Core/MenuSkin.lua left nothing on ns")
+
+local border = _G.GameMenuFrameBorder
+
+-- What this addon drew on the menu, and what the client had there already.
+-- Everything of ours is marked, which is the whole mechanism that stops the
+-- second pass stripping the first pass's work, so the two lists are the one
+-- flag read both ways.
+local function mine(frame, kind)
+	local out = {}
+	for _, region in ipairs(frame.regions) do
+		if region.wkOurs and region:GetObjectType() == kind then
+			out[#out + 1] = region
+		end
+	end
+	return out
+end
+
+local function theirs(frame, kind)
+	local out = {}
+	for _, region in ipairs(frame.regions) do
+		if not region.wkOurs and region:GetObjectType() == kind then
+			out[#out + 1] = region
+		end
+	end
+	return out
+end
+
+local function hidden(frame, where)
+	for _, art in ipairs(theirs(frame, "Texture")) do
+		check(art.wkStripped and not art:IsShown(),
+			("%s is still showing on %s"):format(art.name or "an unnamed texture", where))
+	end
+end
+
+local function shown(frame, where)
+	for _, art in ipairs(theirs(frame, "Texture")) do
+		check(not art.wkStripped and art:IsShown(),
+			("%s did not come back on %s"):format(art.name or "an unnamed texture", where))
+	end
+end
+
+-- The client's own art, in all three of the places it keeps it.
+hidden(menu, "the menu")
+hidden(border, "the menu's border")
+for _, entry in ipairs(buttons) do
+	hidden(entry, entry.name)
+end
+
+-- The heading. Blizzard's is hidden and ours says what it said, because a menu
+-- that lost its title to a skin is a menu you have to recognise by its shape.
+local heading = theirs(menu, "FontString")
+check(#heading == 1, ("the menu carries %d headings of Blizzard's"):format(#heading))
+for _, text in ipairs(heading) do
+	check(not text:IsShown(), "the client's own heading is still drawn under ours")
+end
+
+local title = mine(menu, "FontString")
+check(#title == 1, ("the addon drew %d headings on the menu"):format(#title))
+if #title == 1 then
+	check(title[1]:GetText() == "Game Menu",
+		("the title bar says %q and the client's menu said \"Game Menu\""):format(
+			tostring(title[1]:GetText())))
+	check(title[1]:IsShown(), "the title bar was not drawn and there is room for it")
+end
+
+-- Every one of Blizzard's buttons wears the kit: a fill, four edges and a
+-- label in the addon's own face. Nothing about the button itself changed.
+local painted, labels = 0, 0
+for _, entry in ipairs(buttons) do
+	check(entry.wkOn == true, entry.name .. " was not painted")
+	check(entry.wkPaint ~= nil and entry.wkPaint:IsShown(),
+		entry.name .. " carries no fill of the addon's")
+	if entry.wkPaint then
+		painted = painted + 1
+	end
+	for _, text in ipairs(theirs(entry, "FontString")) do
+		labels = labels + 1
+		check(text:GetFontObject() == KIT,
+			("%s draws its label in %s rather than the kit's font"):format(
+				entry.name, tostring(text:GetFont())))
+	end
+end
+check(labels == #buttons, ("%d labels dressed across %d buttons"):format(labels, #buttons))
+
+-- Our own button is not one of theirs. It arrived wearing the kit already, and
+-- a pass that treated it as Blizzard's would strip the paint UI.Button put on.
+check(button == nil or button.wkPaint == nil,
+	"the skin painted the addon's own button a second time")
+
+-- The same pass again, twice, which is two more presses of Escape. Nothing new
+-- is drawn and nothing of ours is taken off.
+do
+	local before, first = #menu.regions, #buttons[1].regions
+	Skin.Apply()
+	Skin.Apply()
+	check(#menu.regions == before,
+		("the menu went from %d regions to %d over two more passes")
+			:format(before, #menu.regions))
+	check(#buttons[1].regions == first,
+		("%s went from %d regions to %d over two more passes")
+			:format(buttons[1].name, first, #buttons[1].regions))
+	hidden(menu, "the menu after two more passes")
+	for _, entry in ipairs(buttons) do
+		hidden(entry, entry.name .. " after two more passes")
+		check(entry.wkPaint:IsShown(), entry.name .. " lost its fill to the second pass")
+	end
+end
+
+-- No room for a title bar. Every flavour of this menu has left some above the
+-- first button, and that is a habit rather than a promise: a bar drawn on top
+-- of Options is worse than no bar.
+if #title == 1 then
+	local point, relative, relativePoint, x = buttons[1]:GetPoint(1)
+	buttons[1]:ClearAllPoints()
+	buttons[1]:SetPoint("TOP", menu, "TOP", 0, -1)
+	Skin.Apply()
+	check(not title[1]:IsShown(),
+		"the title bar was drawn over a button one pixel under the top of the frame")
+
+	buttons[1]:ClearAllPoints()
+	buttons[1]:SetPoint(point, relative, relativePoint, x, -H.MENU_HEAD)
+	Skin.Apply()
+	check(title[1]:IsShown(), "the title bar did not come back when the room did")
+end
+
+-- Off, which is the switch on the panel. Everything of Blizzard's comes back
+-- and every string goes back into the font it was wearing.
+do
+	ns.db.menuSkin = false
+	Skin.Apply()
+
+	shown(menu, "the menu")
+	shown(border, "the menu's border")
+	for _, entry in ipairs(buttons) do
+		shown(entry, entry.name)
+		check(not entry.wkPaint:IsShown(), entry.name .. " kept the addon's fill")
+		for _, text in ipairs(theirs(entry, "FontString")) do
+			check(text:GetFontObject() == _G.GameFontNormal,
+				("%s did not get its own font back"):format(entry.name))
+		end
+	end
+	for _, text in ipairs(heading) do
+		check(text:IsShown(), "the client's own heading did not come back")
+	end
+	if #title == 1 then
+		check(not title[1]:IsShown(), "the addon's title bar stayed up with the paint off")
+	end
+	check(Skin.Describe():find("client's own") ~= nil,
+		"the reading does not say the menu is the client's own: " .. Skin.Describe())
+
+	ns.db.menuSkin = true
+	Skin.Apply()
+	hidden(menu, "the menu on the way back")
+	for _, entry in ipairs(buttons) do
+		hidden(entry, entry.name .. " on the way back")
+		check(entry.wkPaint:IsShown(), entry.name .. " did not get its fill back")
+	end
+end
+
+check(painted == #buttons,
+	("%d of the menu's %d buttons were painted"):format(painted, #buttons))
 
 -- Twice more, which is two more presses of Escape. This is the assertion the
 -- flip flop would have failed: it took two opens to see the button and two more
@@ -172,8 +367,8 @@ if button then
 	unmoved("in a menu holding a container")
 end
 
--- And a menu with nothing in it at all. There is no size to copy, so the
--- template's own stands, and the button still goes where it goes. This is the
+-- And a menu with nothing in it at all. There is no size to copy, so the kit's
+-- own stands, and the button still goes where it goes. This is the
 -- assertion that says placement does not depend on the walk: the old version
 -- refused here, and refusing here is what it was doing in game.
 if button then
@@ -187,8 +382,8 @@ if button then
 		"the button did not land on the menu's bottom edge: " .. anchored(button))
 	check(menu:GetHeight() == grown(),
 		("the menu is %g tall rather than %g"):format(menu:GetHeight(), grown()))
-	check(Menu.Describe():find("template") ~= nil,
-		"the status line does not say the size came from the template: " .. Menu.Describe())
+	check(Menu.Describe():find("the kit's own size") ~= nil,
+		"the status line does not say the size is the kit's own: " .. Menu.Describe())
 
 	menu.children = held
 end
@@ -198,5 +393,20 @@ end
 -- and a probe that raises at that moment is worse than no probe.
 check(pcall(SlashCmdList.WARRIORKIT, "menu"), "/wk menu raised")
 
+-- And the same word with an argument, which is the switch. One word does both
+-- because a probe you type when nothing turned up and a look you type when you
+-- want the client's own back are the same question asked of the same frame; the
+-- argument is what tells them apart, and a `menu` that quietly turned the paint
+-- on would be the worst of both.
+check(pcall(SlashCmdList.WARRIORKIT, "menu off"), "/wk menu off raised")
+check(ns.db.menuSkin == false, "/wk menu off left the paint on")
+check(pcall(SlashCmdList.WARRIORKIT, "menu on"), "/wk menu on raised")
+check(ns.db.menuSkin == true, "/wk menu on left the paint off")
+for _, entry in ipairs(buttons) do
+	check(entry.wkPaint:IsShown(), entry.name .. " did not come back after /wk menu on")
+end
+
 print(("game menu one button at the bottom, column %g to %g tall, %s")
 	:format(BARE, menu:GetHeight(), Menu.Describe()))
+print(("game menu %d buttons in the kit's paint, %d labels dressed, %s")
+	:format(painted, labels, Skin.Describe()))

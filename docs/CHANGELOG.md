@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+### The Escape menu is drawn by the addon
+
+There was one WarriorKit button at the foot of the client's game menu and it had
+just stopped wearing Blizzard's art, because the window it opens is painted in
+this addon's greys and a gold button is a poor door onto it. What that bought
+was a flat grey rectangle under nine red ones on a parchment frame, which reads
+as something that got stapled on, and it is.
+
+So the menu is the addon's now. Blizzard's art comes off the frame, off the
+border box inside it and off every button in it; the kit's panel goes on
+underneath, with a title bar carrying whatever heading the client's own menu
+had; and every button gets the fill, the hairline, the hover and the font that
+every other control in the addon has. One press of Escape and the way into this
+addon and the addon itself look like the same piece of software.
+
+Nothing moves. Not one of Blizzard's buttons is anchored, resized or
+relevelled, and the reason is the long one already written at the head of
+`Core/Menu.lua`: this column is laid out again on every show, on the newer
+flavours by a pass that runs after ours, so a placement of ours is a placement
+that comes undone in front of you. Paint survives that with no second
+mechanism behind it.
+
+Nothing of Blizzard's is called either. Every button keeps its own OnClick, so
+Logout is still Blizzard's Logout run off Blizzard's button, and that is the
+whole reason this is a skin rather than a menu of our own: a menu of our own
+would have to make those calls itself, and the two that matter are the two an
+addon is not allowed to make.
+
+`/wk menu on|off` and one check box on The screen, because a look is a thing
+somebody is allowed to want back. Off puts every region the addon hid on the
+screen again and every string back into the font it was wearing, in one call and
+without a reload. The button itself has no switch and will not get one: it is
+the way into the settings, and a switch that hides the way in is a switch nobody
+can find their way back to.
+
 ### The aura rows come back when the frames do
 
 Turning the unit frames off and on again left your character with no debuffs and

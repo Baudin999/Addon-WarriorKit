@@ -307,9 +307,9 @@ do
 	pinFrame:SetPoint("CENTER", map, "CENTER", 40, -40)
 end
 
--- The client's own menu, shaped the way both clients shape it: a column of
--- buttons, each hung off the bottom of the one above it, and a frame tall
--- enough to hold exactly that column.
+-- The client's own menu, shaped the way both clients shape it: a heading, a
+-- column of buttons each hung off the bottom of the one above it, and a frame
+-- tall enough to hold exactly that.
 --
 -- Stood up here rather than in 02-text.lua because it is Blizzard's frame and
 -- because Core/Menu.lua reads it at PLAYER_LOGIN, which is the window this file
@@ -319,7 +319,21 @@ end
 -- has to survive: the button below a hidden one still hangs off it, so a walk
 -- that only looks at shown buttons loses track of the button above and finds
 -- two feet where there is one. Blizzard hides buttons in this menu for real.
+--
+-- The art is here for Core/MenuSkin.lua, which takes it off. Three shapes of
+-- it, because the file has to cope with all three and a fixture holding only
+-- the easy one certifies a walk that would miss two thirds of a real menu: a
+-- texture belonging to the frame, a box of textures inside the frame, which is
+-- the nine slice border every newer flavour of this menu carries, and the two
+-- textures and the label on each button. The heading is a font string of the
+-- frame's own, because the addon's title bar redraws whatever it says.
 local MENU_BUTTON_W, MENU_BUTTON_H, MENU_GAP = 144, 21, 1
+
+-- The air above the first button, which is where Blizzard's own heading sits
+-- and where the addon draws its title bar. Real, because the one thing that
+-- bar must not do is land on a button, and a fixture with no room in it could
+-- never tell a bar that was placed from a bar that was refused.
+local MENU_HEAD = 30
 
 do
 	local menu = child("frame", _G.UIParent, "GameMenuFrame")
@@ -328,12 +342,32 @@ do
 		"GameMenuButtonMacros", "GameMenuButtonAddons", "GameMenuButtonLogout",
 		"GameMenuButtonContinue" }
 
+	menu:SetPoint("CENTER", _G.UIParent, "CENTER", 0, 0)
+
+	local parchment = child("texture", menu, "GameMenuFrameBackground")
+	parchment:SetAllPoints()
+	local title = child("fontstring", menu, "GameMenuFrameHeaderText")
+	title:SetText("Game Menu")
+
+	local border = child("frame", menu, "GameMenuFrameBorder")
+	border:SetAllPoints()
+	for _, corner in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight" }) do
+		child("texture", border, "GameMenuFrameBorder" .. corner)
+	end
+
 	local above
 	for index, name in ipairs(names) do
 		local entry = child("button", menu, name)
 		entry:SetSize(MENU_BUTTON_W, MENU_BUTTON_H)
-		entry:SetPoint("TOP", above or menu, above and "BOTTOM" or "TOP", 0, -MENU_GAP)
+		entry:SetPoint("TOP", above or menu, above and "BOTTOM" or "TOP", 0,
+			above and -MENU_GAP or -MENU_HEAD)
 		above = entry
+		entry:SetNormalTexture("Interface\\Buttons\\UI-Panel-Button-Up")
+		entry:SetHighlightTexture("Interface\\Buttons\\UI-Panel-Button-Highlight")
+		local label = child("fontstring", entry, name .. "Text")
+		label:SetFontObject(_G.GameFontNormal)
+		label:SetTextColor(1, 0.82, 0)
+		label:SetText(name:gsub("^GameMenuButton", ""))
 		if name == "GameMenuButtonMacros" then
 			entry:Hide()
 		end
@@ -341,11 +375,11 @@ do
 	end
 
 	menu:SetSize(MENU_BUTTON_W + 32,
-		#names * (MENU_BUTTON_H + MENU_GAP) + MENU_GAP)
+		MENU_HEAD + #names * (MENU_BUTTON_H + MENU_GAP))
 	H.menu, H.menuButtons = menu, buttons
 end
 
-H.MENU_BUTTON_H, H.MENU_GAP = MENU_BUTTON_H, MENU_GAP
+H.MENU_BUTTON_H, H.MENU_GAP, H.MENU_HEAD = MENU_BUTTON_H, MENU_GAP, MENU_HEAD
 
 -- Taking a frame off the client's panel stack. Real rather than the no-op the
 -- metatable would give it, because the game menu button closes the menu with

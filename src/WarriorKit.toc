@@ -213,10 +213,12 @@ UI\Amount.lua
 Core\Command.lua
 Core\Panel.lua
 
-# One button in the client's own menu, which opens the panel above. After
-# Core\Panel.lua because that is the file that owns the window it opens, and
-# before every part because it belongs to the addon rather than to any of
-# them.
+# The client's own menu: one button of ours at the foot of it, and the whole
+# frame drawn in the addon's look. After Core\Panel.lua because that is the
+# file that owns the window the button opens, and before every part because it
+# belongs to the addon rather than to any of them. The paint loads first
+# because Core\Menu.lua hands it the menu and the button on the way past.
+Core\MenuSkin.lua
 Core\Menu.lua
 
 # The parts. Within each, behaviour first and Feature.lua last, because
