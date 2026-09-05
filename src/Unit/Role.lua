@@ -74,12 +74,18 @@ local FLOOR = { PRIEST = HEALER }
 local ASSIGNED = { TANK = TANK, HEALER = HEALER, DAMAGER = DPS }
 
 -- Blizzard's own art for the three, which is the art everyone in the group
--- already recognises. Cut as a grid of 75 pixel cells out of a 256 square
--- sheet, which is what GetTexCoordsForRole does with the same file: the leader
--- is the first cell, the tank is under it, the healer beside it and damage on
--- the diagonal.
+-- already recognises. Cut as a grid of 67 pixel cells out of a 256 square
+-- sheet, which is the grid GetTexCoordsForRole cuts the same file on: the
+-- leader is the first cell, the tank is under it, the healer beside it and
+-- damage on the diagonal.
+--
+-- 67 and not 75. The cell is 66 pixels of art with a gutter after it, so a 75
+-- wide window keeps the whole icon and takes a slice of the two cells next to
+-- it as well. On Anniversary the overspill lands on empty sheet and nobody
+-- sees it; on Era there is art there, and a party tile came out as one role
+-- icon with a sliver of two more beside and under it.
 local SHEET = "Interface\\LFGFrame\\UI-LFG-ICON-ROLES"
-local CELL, SHEET_SIZE = 75, 256
+local CELL, SHEET_SIZE = 67, 256
 
 local function Cell(column, row)
 	return (column - 1) * CELL / SHEET_SIZE, column * CELL / SHEET_SIZE,

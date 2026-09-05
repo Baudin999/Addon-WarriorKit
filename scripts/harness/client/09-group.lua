@@ -285,7 +285,14 @@ local function Arrange(header, shown, per, wide, tall)
 		local button = header.buttons[index]
 		local column, row = math.floor((index - 1) / per), (index - 1) % per
 		columns = math.max(columns, column + 1)
-		button:ClearAllPoints()
+		-- No clear before the write, because the client does not do one. A
+		-- point replaces the point of the same name and sits beside a point of
+		-- any other, so a list arranged down the screen and then across leaves
+		-- every tile pinned by two corners and standing in a staircase. This
+		-- file used to clear, which is the tidier arrangement and the one that
+		-- made a party frame with a stale anchor pass every check in the suite.
+		-- The clear the client does do is on the children it stops showing, and
+		-- that is in Update below.
 		if index == 1 then
 			button:SetPoint(point, header, point, 0, 0)
 			start = button
@@ -364,6 +371,11 @@ local function Update(header)
 	end
 	for index = #shown + 1, #header.buttons do
 		header.buttons[index]:Hide()
+		-- The one clear the client does: a child it has stopped showing loses
+		-- its anchors and its unit, so somebody who leaves and comes back is
+		-- anchored from nothing rather than from what they had last time.
+		header.buttons[index]:ClearAllPoints()
+		header.buttons[index]:SetAttribute("unit", nil)
 	end
 
 	Arrange(header, shown, per, header.buttons[1] and header.buttons[1]:GetWidth() or 1,

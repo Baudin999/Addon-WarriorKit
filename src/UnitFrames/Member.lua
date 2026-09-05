@@ -58,15 +58,20 @@ local PAD = 1
 local RAIL_SHARE = 0.11
 local RAIL_FLOOR = 2
 
--- The role square is a column at the left end of the tile, as tall as the
--- health bar it stands in, and the name starts this far to the right of it.
--- Taken off the bar rather than fixed, because the same code draws a party
--- tile and a raid cell half its size, and the art is a 75 pixel cell that
--- scales down without going soft.
+-- The role square at the left end of the tile, as a share of the health bar it
+-- stands in, and the name starts this far to the right of it. Taken off the bar
+-- rather than fixed, because the same code draws a party tile and a raid cell
+-- half its size, and the art is a cell that scales down without going soft.
 --
--- The whole bar's height and not a mark in a corner. The role is what the slot
--- order is built on, so it is the first thing a tile says, and at a fifth of
--- the height it was a dot nobody could read from across the screen.
+-- Not the whole bar's height, which is what it was. A square the height of the
+-- bar is a third of a party tile's width, and the name that has to share the
+-- row with it came out as "Rando..." on a five letter name. Seven tenths keeps
+-- the art readable from across the screen and hands the rest of the row back to
+-- the name, which is the other thing the tile is for. The floor is under the
+-- raid cell, where the share alone lands at a size nobody can tell a shield
+-- from a sword at.
+local ROLE_SHARE = 0.7
+local ROLE_FLOOR = 8
 local ROLE_GAP = 3
 
 -- The name's share of the tile, and the tallest it may get. Its floor is
@@ -226,16 +231,21 @@ end
 
 -- The role square at the left end and the name beside it.
 --
--- The square is the height of the health bar and sits in its corner, so the
--- bar reads as a column of role and a run of colour, the way the player frame
--- is a portrait and a bar. The name starts to the right of it and runs to the
--- far edge, left aligned like the player's own, so every name down a stack
--- starts on the same line and the list is scanned rather than read. With the
--- icons switched off the name takes the square's room back.
+-- The square sits on the health bar's midline at its left end, so the bar reads
+-- as a mark of role and a run of colour, the way the player frame is a portrait
+-- and a bar. The name starts to the right of it and runs to the far edge, left
+-- aligned like the player's own, so every name down a stack starts on the same
+-- line and the list is scanned rather than read. With the icons switched off
+-- the name takes the square's room back.
+--
+-- Floored to a whole pixel for the same reason the name's size is: art asked
+-- for at half a pixel is rasterised across two and the ring round the icon goes
+-- soft.
 local function Marks(block, px, tall, health, icons)
+	local square = math.max(math.floor(health * ROLE_SHARE), ROLE_FLOOR)
 	block.roleIcon:ClearAllPoints()
-	block.roleIcon:SetPoint("TOPLEFT", block.box, "TOPLEFT", PAD * px, -PAD * px)
-	block.roleIcon:SetSize(health * px, health * px)
+	block.roleIcon:SetPoint("LEFT", block.health, "LEFT", 0, 0)
+	block.roleIcon:SetSize(square * px, square * px)
 
 	-- Floored to a whole pixel: half of an odd tile is half a pixel, and a
 	-- glyph asked for at half a pixel is rasterised across two. The floor is

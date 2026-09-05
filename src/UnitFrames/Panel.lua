@@ -575,7 +575,7 @@ local function Party(ui)
 			ns.db.partySelf = value
 			ns.Group.Apply()
 		end)
-	ui.Hint("Off, because the frames page above already draws you as a block.")
+	ui.Hint("On, and you go in at your own role's slot rather than at the top. Off leaves you to the block the frames page above draws.")
 
 	ui.Check("role square in each tile's corner",
 		function() return ns.db.partyRoleIcon end,

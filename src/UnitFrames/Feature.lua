@@ -747,10 +747,11 @@ ns.Register({
 		-- would ship a screen with no group frames on it at all.
 		party = true,
 
-		-- Your own block in the list. Off, because UnitFrames/Skin.lua already
-		-- draws you as a block and two of your own frames on one screen is the
-		-- exact complaint UnitFrames/Blizzard.lua exists to answer. On puts you
-		-- in at your own role's slot rather than at the top.
+		-- Your own block in the list, at your own role's slot rather than at the
+		-- top. On, because a party list you are not in reads as somebody else's
+		-- group: the four tiles are the other four and the fifth is somewhere
+		-- off to the side. Off leaves you to the block UnitFrames/Skin.lua
+		-- draws, which is the older answer and still a defensible one.
 		partySelf = true,
 
 		partyRoleIcon = true,

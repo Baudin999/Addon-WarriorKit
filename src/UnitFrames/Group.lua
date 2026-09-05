@@ -350,13 +350,16 @@ local function Secure(list)
 	header:SetAttribute("template", "SecureUnitButtonTemplate")
 	header:SetAttribute("initialConfigFunction", CONFIG:format(wide, tall))
 
-	-- The whole of what keeps two lists off one screen. Solo is never on: a
-	-- list of one is the player block the skin already draws.
-	header:SetAttribute("showParty", on and not list.raid)
-	header:SetAttribute("showRaid", on and list.raid)
-	header:SetAttribute("showSolo", false)
-	header:SetAttribute("showPlayer", S(list, "mine"))
-
+	-- The shape of the list before the switch that draws it, and the order is
+	-- the whole of why. Every attribute write arranges the header again, and
+	-- SecureGroupHeaders never clears a child's anchors before it writes the
+	-- new ones: a point replaces the point of the same name and sits beside a
+	-- point of any other. So the arrangement that runs on the write of
+	-- showParty, with point still at its own default of TOP, leaves a TOP
+	-- anchor on every button that the LEFT written a line later cannot reach,
+	-- and a party that logs in already grouped comes up as a staircase, each
+	-- tile a block right and a block down of the one before it. Written first,
+	-- the only arrangement that ever runs is the one this list asked for.
 	header:SetAttribute("point", Edge(list))
 	header:SetAttribute("xOffset", across and (grow == "left" and -gap or gap) or 0)
 	header:SetAttribute("yOffset", across and 0 or (grow == "up" and gap or -gap))
@@ -367,6 +370,13 @@ local function Secure(list)
 	-- person joined.
 	header:SetAttribute("maxColumns", list.raid and S(list, "columns") or 1)
 	header:SetAttribute("unitsPerColumn", list.raid and S(list, "per") or PARTY_SLOTS)
+
+	-- The whole of what keeps two lists off one screen. Solo is never on: a
+	-- list of one is the player block the skin already draws.
+	header:SetAttribute("showParty", on and not list.raid)
+	header:SetAttribute("showRaid", on and list.raid)
+	header:SetAttribute("showSolo", false)
+	header:SetAttribute("showPlayer", S(list, "mine"))
 
 	Sorting(list)
 	return true
@@ -411,6 +421,17 @@ local function Adopt(list)
 		if ns.Blocked(button) then
 			complete = false
 		else
+			-- One anchor per tile, and a second one is the header's leavings.
+			-- SecureGroupHeaders writes a child's anchor without clearing the
+			-- one it wrote last time, so a list that has ever been arranged on
+			-- the other axis has a tile pinned by two corners at once: the x
+			-- off the anchor it has now and the y off the anchor it had before
+			-- the growth setting moved. Cleared here rather than everywhere it
+			-- could happen, because Nudge arranges the header again on the next
+			-- line and that is what puts the one anchor back.
+			if button:GetNumPoints() > 1 then
+				button:ClearAllPoints()
+			end
 			look.role = Role.Of(button:GetAttribute("unit"))
 			Member.Place(button, look)
 		end

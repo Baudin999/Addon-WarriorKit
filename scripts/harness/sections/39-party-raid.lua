@@ -3,23 +3,20 @@
 -- Three questions, and only the first of them is about pixels.
 --
 -- Who ends up in which slot. That is the whole item: the order is a role band
--- and then a name, decided out of four sources that disagree, and it is
--- recomputed out of combat and nowhere else. Every roster below is the same six
--- people with one thing changed, so what is being read is the change and not
--- the scene.
+-- and then a name, decided out of four sources that disagree, and recomputed
+-- out of combat and nowhere else. Every roster below is the same six people
+-- with one thing changed, so what is read is the change and not the scene.
 --
 -- What one block draws. Class colour on the health fill, the power colour for
 -- the power type, no rail at all for a member the client answers no maximum
 -- for, and Blizzard's own role art at the quadrant that is that role. All four
--- were invisible in review, because each one is a value that reaches a widget
--- through three files.
+-- were invisible in review, because each is a value that reaches a widget
+-- through three files. What it costs is the third question: a tick over four
+-- blocks that allocates nothing, which is what the HOT list holds Member.lua to.
 --
--- What it costs. A tick over four blocks that allocates nothing, which is what
--- the HOT list holds Member.lua to and what this measures.
---
--- What this cannot prove is the header. It is FrameXML's and 09-group.lua is a
--- model of it, and a model that is wrong is a test that passes over a client
--- that does not. It was wrong once, at the gate that ignores a hidden header.
+-- What this cannot prove is the header. It is FrameXML's, 09-group.lua models
+-- it, and a model that is wrong is a test that passes over a client that does
+-- not. It was wrong once, at the gate that ignores a hidden header.
 
 local H = ...
 local ns, check, fire = H.ns, H.check, H.fire
@@ -97,15 +94,12 @@ end
 --
 -- Six people who turn up in every roster below, so a slot that moved moved
 -- because of the one thing that changed. Bramblefoot carries no power maximum
--- at all, which is a member the client has not filled in yet and is the case
--- that has to draw no rail rather than an empty one.
---
--- Every one of them carries a GUID of their own, spelled the same in the party
--- and in the raid. That is not decoration: a role resolved out of talents is
--- cached against the GUID, so a fixture that handed the same person a new one
--- when they moved from party2 to raid5 would be asserting that an inspect is
--- forgotten every time the group changes shape, which is the opposite of what
--- the file claims.
+-- at all, which is the member who has to draw no rail rather than an empty one.
+-- Each carries a GUID of their own, spelled the same in the party and in the
+-- raid: a role resolved out of talents is cached against the GUID, so a fixture
+-- that handed the same person a new one on the way from party2 to raid5 would
+-- be asserting that an inspect is forgotten every time the group changes shape,
+-- which is the opposite of what the file claims.
 ----------------------------------------------------------------------
 
 local PARTY = {
@@ -195,11 +189,9 @@ end
 -- The list fills outward from the middle. The header is centred on the frame
 -- you drag and takes its own size from the buttons it has just arranged, so a
 -- fifth person moves every slot half a block away from the anchor rather than
--- pushing one end of the list along and leaving the other where it was.
---
--- Measured off the buttons rather than off the header, because the header's own
--- size is the model's arithmetic and the buttons are where that arithmetic
--- actually put somebody.
+-- pushing one end along and leaving the other where it was. Measured off the
+-- buttons, because the header's own size is the model's arithmetic and the
+-- buttons are where that arithmetic actually put somebody.
 ----------------------------------------------------------------------
 
 -- The rectangle the shown blocks fill: its top left corner, then its middle.
@@ -273,17 +265,14 @@ end
 
 -- The same four people, each way round.
 --
--- Across is what the party ships as and is the arrangement the centring was
--- wrong for once, in the one direction a vertical list can never show: the
--- header sizes itself to every column it drew and then anchors the first column
--- across its own middle, so the tiles sat half a list to the right of the box.
--- Down is the switch the panel offers beside it, and it is here because a
--- direction with only one of its two answers checked is a direction that works
--- until somebody presses it.
---
--- Two halves to each: they are centred on the frame you drag, and they are the
--- shape the setting asked for. Without the second, the first passes on a list
--- that ignored the setting entirely.
+-- Across is what the party ships as, and it is the arrangement the centring was
+-- wrong for once: the header sizes itself to every column it drew and then
+-- anchors the first column across its own middle, so the tiles sat half a list
+-- to the right of the box. Down is the switch the panel offers beside it, here
+-- because a direction with only one of its two answers checked works until
+-- somebody presses it. Two halves to each: centred on the frame you drag, and
+-- the shape the setting asked for. Without the second, the first passes on a
+-- list that ignored the setting entirely.
 do
 	local was = ns.db.partyGrow
 
@@ -315,6 +304,21 @@ do
 
 	ns.db.partyGrow = was
 	ns.Group.Apply()
+
+	-- One anchor per tile, counted rather than read off the positions above.
+	-- SecureGroupHeaders writes a child's anchor without clearing the one it
+	-- wrote last time, so a list that has run down the screen and then across
+	-- has every tile pinned by two corners, taking its x from the anchor it has
+	-- and its y from the anchor it had. That is the staircase a party which logs
+	-- in already grouped came up as, and saying it as a count stops a second
+	-- anchor coming back as a rounding argument.
+	for _, button in ipairs(ns.Group.Members("party")) do
+		if button:IsShown() then
+			check(button:GetNumPoints() == 1,
+				("a tile is pinned by %d anchors, and the header only ever means one")
+					:format(button:GetNumPoints()))
+		end
+	end
 end
 
 ----------------------------------------------------------------------
@@ -443,14 +447,13 @@ end
 ----------------------------------------------------------------------
 -- The role icon
 --
--- Blizzard's own art, cut as a grid of 75 pixel cells out of a 256 square
--- sheet. The four numbers are restated here rather than read out of
--- Unit/Role.lua, because a gate that imported the value it is checking would
--- pass on the day somebody changed it by accident.
+-- Blizzard's own art, cut on the 67 pixel grid Details and DetailsFramework
+-- both cut this file on. The numbers are restated rather than read out of
+-- Unit/Role.lua: a gate importing the value it checks passes the day it moves.
 ----------------------------------------------------------------------
 
 do
-	local CELL, SHEET = 75 / 256, "Interface\\LFGFrame\\UI-LFG-ICON-ROLES"
+	local CELL, SHEET = 67 / 256, "Interface\\LFGFrame\\UI-LFG-ICON-ROLES"
 	local QUADRANT = {
 		tank = { 0, CELL, CELL, CELL * 2 },
 		healer = { CELL, CELL * 2, 0, CELL },
@@ -719,14 +722,14 @@ do
 	check(block.box:GetWidth() == 120 and block.box:GetHeight() == 28,
 		"the tile inside the button did not follow it")
 
-	-- The role square is the health bar's own height, so a raid cell gets a
-	-- smaller one instead of being eaten by one and a party tile gets one you
-	-- can read from across the screen.
-	check(block.roleIcon:GetWidth() == block.roleIcon:GetHeight()
-		and block.roleIcon:GetHeight() == block.health:GetHeight(),
-		("the role square is %.1f by %.1f beside a %.1f pixel bar"):format(
-			block.roleIcon:GetWidth(), block.roleIcon:GetHeight(),
-			block.health:GetHeight()))
+	-- Seven tenths of the health bar and whole pixels, with a floor under it for
+	-- the raid cell, on the bar's midline at its left end, not the tile's corner.
+	local icon, bar = block.roleIcon, block.health
+	local square = math.max(math.floor(bar:GetHeight() * 0.7), 8)
+	check(icon:GetWidth() == square and icon:GetHeight() == square
+		and math.abs(select(2, icon:GetCenter()) - select(2, bar:GetCenter())) < 1e-6
+		and math.abs(icon:GetLeft() - bar:GetLeft()) < 1e-6,
+		("the role square is %.1f and belongs %d"):format(icon:GetWidth(), square))
 
 	-- The two bars fill the tile between them, less its own outline top and
 	-- bottom and the one pixel seam that separates them, and each is the tile's
@@ -775,15 +778,12 @@ do
 		"the raid container is still on the screen")
 
 	-- The manager's own layout pass, which is what puts the container back. It
-	-- does it with SetShown, which is resolved in C and never reads the Lua Show
-	-- that ns.Strip replaced, so the flag on the frame really does come back on
-	-- and nothing the addon can install stops it.
-	--
-	-- What stops it is the parent. The container lives in the attic, the attic is
-	-- hidden and cannot be shown, so the frame's own flag is the only thing that
-	-- moved and the container is still not drawn. This used to be a hook on that
-	-- one function, which is a patch for the one frame somebody noticed rather
-	-- than an answer for the call.
+	-- uses SetShown, resolved in C and never reading the Lua Show that ns.Strip
+	-- replaced, so the flag on the frame really does come back on. What stops it
+	-- is the parent: the container lives in the attic, the attic is hidden and
+	-- cannot be shown, so the frame's own flag is the only thing that moved. This
+	-- used to be a hook on that one function, a patch for the one frame somebody
+	-- noticed rather than an answer for the call.
 	_G.CompactRaidFrameManager_UpdateShown()
 	check(_G.CompactRaidFrameContainer:IsShown(),
 		"the fixture cannot put the container back, so this proves nothing")

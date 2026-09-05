@@ -266,29 +266,34 @@ function Region:GetShadowOffset()
 	return 0, 0
 end
 -- Real anchors, because the skin reads Blizzard's back out of its own snapshot
--- and places the whole block on the first of them. With GetNumPoints answering
--- nothing the snapshot recorded nothing, the block fell to its fallback anchor,
--- and the one conversion in the file that matters was never exercised.
+-- and places the whole block on the first of them. Answering nothing dropped
+-- the block to its fallback and left the one conversion in the file that
+-- matters unexercised.
 --
--- Both shapes the client takes, because the addon writes both and this used to
--- record only one. SetPoint("TOPLEFT", x, y) means the parent's own corner at
--- that offset, and it is what every inset in the addon is written as; stored
--- as it arrived, the offsets landed in the fields GetPoint hands back as the
--- relative frame and the relative point, so an anchor read back out of here
--- was two numbers where a frame belonged and no offset at all. Anything
--- asserting on an inset was asserting on zero.
+-- All three shapes the client takes. SetPoint("TOPLEFT", x, y) is the parent's
+-- own corner at that offset, and stored as it arrived the offsets landed where
+-- GetPoint hands back the relative frame and the relative point, so every inset
+-- in the addon read as zero. SetPoint("CENTER") alone means the parent and the
+-- same corner, and the stored nils left an anchor nothing can be placed against
+-- and no drag can re-anchor. And an anchor is keyed by the corner it names: a
+-- second SetPoint on that corner moves it, one on another corner is a second
+-- anchor beside it. Appending both put a stale anchor in front of the live one,
+-- replacing both made a frame that cannot be pinned by two corners at all,
+-- which is the arrangement a secure header leaves behind.
 function Region:SetPoint(point, relative, relativePoint, x, y)
 	if type(relative) == "number" then
 		relative, relativePoint, x, y = self.parent, point, relative, relativePoint
 	elseif type(relativePoint) == "number" then
 		relativePoint, x, y = point, relativePoint, x
 	end
-	-- The third shape, which is SetPoint("CENTER") and nothing else. The client
-	-- fills the two it was not given, with the parent and with the same corner,
-	-- and answers them from GetPoint. A stub that stored the nils handed back an
-	-- anchor with no relative point in it, which is a frame nothing can be placed
-	-- against and a drag that reads one back cannot re-anchor.
 	self.points = self.points or {}
+	for index = 1, #self.points do
+		if self.points[index][1] == point then
+			self.points[index] = { point, relative or self.parent,
+				relativePoint or point, x or 0, y or 0 }
+			return
+		end
+	end
 	self.points[#self.points + 1] = { point, relative or self.parent,
 		relativePoint or point, x or 0, y or 0 }
 end
@@ -312,19 +317,18 @@ end
 --
 -- The frame link needs it. Dropping the target in Edit Mode is read back as a
 -- gap and a level by measuring four edges and taking two differences, and both
--- frames are on different scales, so a stub that answered nil made the
--- derivation untestable and one that answered a constant made it pass. These
--- four are also what UI/Tooltip.lua and UI/Widgets.lua ask when they decide
--- which way to open over an owner.
+-- frames are on different scales, so a stub answering nil made the derivation
+-- untestable and one answering a constant made it pass. UI/Tooltip.lua and
+-- UI/Widgets.lua ask the same four when they pick a side to open on.
 --
--- What is modelled is one anchor per frame, which is what the addon writes.
--- Both offsets are in the anchored frame's own units, the way the client reads
--- them, and the walk stops at UIParent or at a frame carrying no anchor at
--- all, either of which sits at the origin. Two things are deliberately not
--- modelled: a frame sized by a pair of opposing anchors rather than by
--- SetSize, and the client's own origin, which is the bottom left of the screen
--- where this is the top left of UIParent. Every reader in the addon takes a
--- difference between two of these, and a difference is the same on both.
+-- The walk follows the first anchor only, which is the one the addon places a
+-- frame on. Both offsets are in the anchored frame's own units, the way the
+-- client reads them, and the walk stops at UIParent or at a frame with no
+-- anchor at all, either of which sits at the origin. Not modelled: a frame
+-- sized by a pair of opposing anchors, and the client's own origin, which is
+-- the bottom left of the screen where this is the top left of UIParent. Every
+-- reader takes a difference between two of these, and a difference is the same
+-- on both.
 local function corner(point, width, height)
 	local x = width / 2
 	if point:find("LEFT") then
@@ -469,17 +473,15 @@ end
 -- A slider that behaves like one.
 --
 -- Real, rather than the metatable's no-op, because two things in the addon are
--- built on the client's Slider type and both of them are the client tracking a
--- drag on the addon's behalf: the scrollbar in UI/Scroll.lua and the UI size row
--- in UI/Widgets.lua. A no-op here would let a slider that never reports a value,
--- never snaps to its step and never clamps to its range pass every assertion in
--- this file, which is the whole widget.
---
--- The step is applied on the way in, which is what SetObeyStepOnDrag buys on the
--- real client: the setting can only ever hold a value the panel can also show.
--- OnValueChanged fires on every write, including the addon's own, because that
--- is what the client does and it is exactly what the latches in both callers
--- exist to survive.
+-- built on the client's Slider type and both are the client tracking a drag on
+-- the addon's behalf: the scrollbar in UI/Scroll.lua and the UI size row in
+-- UI/Widgets.lua. A no-op would let a slider that never reports a value, never
+-- snaps to its step and never clamps to its range pass every assertion here,
+-- which is the whole widget. The step is applied on the way in, which is what
+-- SetObeyStepOnDrag buys on the real client: the setting can only hold a value
+-- the panel can also show. OnValueChanged fires on every write, the addon's own
+-- included, because that is what the client does and it is what the latches in
+-- both callers exist to survive.
 function Region:SetMinMaxValues(low, high)
 	self.valueMin, self.valueMax = low, high
 end
@@ -513,14 +515,11 @@ function Region:GetValue() return self.value end
 -- the chat window is a ScrollingMessageFrame per tab and the whole question
 -- asked of it is which tab a line landed on. A stub that swallowed AddMessage
 -- would let a feed that routes every line to one log, or to none, pass every
--- assertion in this file.
---
--- The insert mode is data rather than a no-op for the same reason and one step
+-- assertion here. The insert mode is data for the same reason and one step
 -- further: UI/Log.lua writes it and reads it back, because the two clients
--- disagree about which spelling of the token they accept, and a stub that
--- swallowed the write would make that readback untestable. This one accepts
--- whichever spelling `insertStrict` says, so both paths through it are
--- reachable.
+-- disagree about which spelling of the token they accept, and a swallowed write
+-- would make that readback untestable. This one accepts whichever spelling
+-- `insertStrict` says, so both paths through it are reachable.
 function Region:AddMessage(text, r, g, b)
 	self.messages = self.messages or {}
 	self.messages[#self.messages + 1] = { text = text, r = r, g = g, b = b }
