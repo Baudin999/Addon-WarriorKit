@@ -155,13 +155,22 @@ check(miner and miner.icon == "Questie/Icons/available",
 	"the marker is not carrying Questie's own texture")
 check(miner and miner.tint and miner.tint[1] == 1 and miner.tint[2] == 0.75,
 	"the marker is not carrying the colour Questie tinted it")
--- The hover, which answers what the map was opened to ask: which quest this is
--- and how far through it you are, a line each rather than one line of two halves.
+-- The hover, which answers what the map was opened to ask: which quest this is,
+-- what kind of quest it is, and how far through it you are, a line each rather
+-- than one line of two halves. The tag is the one of the four you cannot work
+-- out standing there, because by then you are dead: an elite camp is a walk
+-- across the zone, and the word for it is on the log's row and on nothing the
+-- map drew. A marker with no quest behind it asks for that word on a nil id
+-- and must come back with the coordinate alone rather than an empty line.
 local note = miner and miner.note or {}
 check(note[1] and note[1][1] == "Kobold Camp", "the quest is not on a line of its own")
+check(note[1] and note[1][2] == "Elite", "the hover does not say the quest is elite")
 check(note[2] and note[2][1] == "Kobold Skin" and note[2][2] == "3/6",
 	"the step and its count are not on the hover")
 check(note[3] and note[3][1] == "30.0, 40.0", "the hover has lost the coordinate")
+check(seen["Thor"] and #seen["Thor"].note == 1
+	and seen["Thor"].note[1][1] == "75.0, 25.0",
+	"a marker with no quest behind it says more than where it is")
 
 -- You, on top of them, and only on the zone you are standing in.
 check(Pins.You(WESTFALL) ~= nil, "you are not on the map of the zone you are in")

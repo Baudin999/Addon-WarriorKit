@@ -120,6 +120,40 @@ end
 -- one, said the way the quest log says it.
 local ERRAND = { available = "pick it up here", complete = "hand it in here" }
 
+-- What kind of quest this is, in the client's own word, or nothing for the
+-- ordinary ones.
+--
+-- "Elite" is the one that matters and it is the one the map could not say. A
+-- marker is a place you decide to walk to, and the walk to an elite camp you
+-- cannot solo is the walk you find out about when you get there. The client
+-- tags them, the quest log prints the tag beside the level, and the map was
+-- the one place carrying the quest name without it.
+--
+-- Asked through Questie rather than by calling GetQuestTagInfo here, for two
+-- reasons that are both Questie's own. It caches, and this is asked once per
+-- marker per repaint over a zone that can hold two hundred and fifty of them,
+-- against an API the client throttles. And it corrects the quests Blizzard has
+-- tagged wrongly, which is a list this addon has no business keeping a second
+-- copy of.
+--
+-- The word is whatever the client hands back, not a table of ids turned into
+-- English here. A quest with no tag is an ordinary quest and gets no line,
+-- which is why nil is the common answer rather than the failure.
+local function Tag(questId)
+	if type(questId) ~= "number" then
+		return nil
+	end
+	local db = ns.Questie("QuestieDB", "GetQuestTagInfo")
+	if not db then
+		return nil
+	end
+	local ok, _, word = pcall(db.GetQuestTagInfo, questId)
+	if not ok or type(word) ~= "string" or word == "" then
+		return nil
+	end
+	return word
+end
+
 -- The step this marker is part of, and how far through it you are.
 --
 -- The same count the client puts on the mob's own tooltip out in the world,
@@ -154,15 +188,20 @@ local function Step(objective)
 	return { what }
 end
 
--- What the hover says: the thing's own name at the top, then the quest, then
--- where you are up to on it, then the coordinate.
+-- What the hover says: the thing's own name at the top, then the quest and
+-- what kind of quest it is, then where you are up to on it, then the
+-- coordinate.
 --
 -- Every entry is a line of its own rather than a bare string, which is the
 -- shape UI/Tip.lua pours: a list whose first entry is a string is one line
 -- with a left and a right half, so two strings in a row came out as the quest
 -- name pushed against the coordinate on a single line instead of two lines.
--- The pair shape is used on purpose for the step, where a description on the
--- left and 3/6 on the right is exactly what it is for.
+-- The pair shape is used on purpose twice: for the step, where a description on
+-- the left and 3/6 on the right is exactly what it is for, and for the quest,
+-- where the tag sits at the right edge the way the log prints it beside the
+-- level. A quest whose name the heading already carries still gets its tag, on
+-- a line of its own, because "Elite" is the half of that line that was not
+-- already said.
 --
 -- The coordinate rather than a distance, for the reason the quest log's map
 -- gives: a distance is the number that goes stale the moment you walk, and a
@@ -170,8 +209,11 @@ end
 local function Told(data, x, y)
 	local lines = {}
 	local quest = type(data.QuestData) == "table" and data.QuestData.name or nil
+	local tag = Tag(data.Id)
 	if type(quest) == "string" and quest ~= "" and quest ~= data.Name then
-		lines[#lines + 1] = { quest }
+		lines[#lines + 1] = tag and { quest, tag } or { quest }
+	elseif tag then
+		lines[#lines + 1] = { tag }
 	end
 	local step = Step(data.ObjectiveData)
 	if step then

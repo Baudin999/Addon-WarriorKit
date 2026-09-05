@@ -319,6 +319,25 @@ local questie = _G.QuestieLoader:ImportModule("QuestieMap")
 questie.questIdFrames = {}
 questie.manualFrames = {}
 
+-- What kind of quest each of these is, in the shape QuestieDB.GetQuestTagInfo
+-- answers: the client's tag id and the word for it, and nothing at all for an
+-- ordinary quest, which is most of them. Questie's wrapper is what the addon
+-- asks rather than the client's own call, so the wrapper is what is modelled.
+-- One quest is tagged and one deliberately is not, because a hover that prints
+-- the word for every marker is as wrong as one that prints it for none.
+local TAGS = {
+	[102] = { 1, "Elite" },
+}
+
+local knows = _G.QuestieLoader:ImportModule("QuestieDB")
+knows.GetQuestTagInfo = function(questId)
+	local tag = TAGS[questId]
+	if not tag then
+		return nil, nil
+	end
+	return tag[1], tag[2]
+end
+
 -- One of Questie's frames, in the shape QuestieMap:DrawWorldIcon leaves it: the
 -- map it belongs to, where on it, the texture it chose and the colour it
 -- tinted, with the quest hanging off .data.
