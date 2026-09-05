@@ -479,12 +479,22 @@ end
 -- The lines for one quest, given the objectives of that quest this creature
 -- feeds. One name line, then one line per objective, then the drop rates under
 -- the ones that are about an item.
+--
+-- The name line carries what kind of quest it is at its right edge, which is
+-- the same half-line the map's marker hover draws and is drawn here in the same
+-- two colours. It is the one fact on this box that is not about the creature
+-- under the cursor: three of these hides is a fact about the boar, and "Elite"
+-- is a fact about the four things you have not found yet. A player who has read
+-- it on the map should not have to wonder whether the box out in the world is
+-- quiet because the quest is ordinary or because this box never says.
 local function Quest(into, npcId, questId, objectives)
 	local name = QuestName(questId)
 	if not name then
 		return into
 	end
-	into[#into + 1] = { name, color = C.heading }
+	local tag = ns.QuestWhere.Tag(questId)
+	into[#into + 1] = tag and { name, tag, color = C.heading, tone = C.quiet }
+		or { name, color = C.heading }
 
 	for _, objective in ipairs(objectives) do
 		local held = tonumber(objective.Collected) or 0

@@ -46,6 +46,8 @@ ns.MapPins = Pins
 --------------------------------------------------------------------------
 
 local Chart = ns.UI.Chart
+local C = ns.UI.Color
+local Where = ns.QuestWhere
 
 -- The most markers one zone gets.
 --
@@ -120,40 +122,6 @@ end
 -- one, said the way the quest log says it.
 local ERRAND = { available = "pick it up here", complete = "hand it in here" }
 
--- What kind of quest this is, in the client's own word, or nothing for the
--- ordinary ones.
---
--- "Elite" is the one that matters and it is the one the map could not say. A
--- marker is a place you decide to walk to, and the walk to an elite camp you
--- cannot solo is the walk you find out about when you get there. The client
--- tags them, the quest log prints the tag beside the level, and the map was
--- the one place carrying the quest name without it.
---
--- Asked through Questie rather than by calling GetQuestTagInfo here, for two
--- reasons that are both Questie's own. It caches, and this is asked once per
--- marker per repaint over a zone that can hold two hundred and fifty of them,
--- against an API the client throttles. And it corrects the quests Blizzard has
--- tagged wrongly, which is a list this addon has no business keeping a second
--- copy of.
---
--- The word is whatever the client hands back, not a table of ids turned into
--- English here. A quest with no tag is an ordinary quest and gets no line,
--- which is why nil is the common answer rather than the failure.
-local function Tag(questId)
-	if type(questId) ~= "number" then
-		return nil
-	end
-	local db = ns.Questie("QuestieDB", "GetQuestTagInfo")
-	if not db then
-		return nil
-	end
-	local ok, _, word = pcall(db.GetQuestTagInfo, questId)
-	if not ok or type(word) ~= "string" or word == "" then
-		return nil
-	end
-	return word
-end
-
 -- The step this marker is part of, and how far through it you are.
 --
 -- The same count the client puts on the mob's own tooltip out in the world,
@@ -192,6 +160,15 @@ end
 -- what kind of quest it is, then where you are up to on it, then the
 -- coordinate.
 --
+-- Answered as a function rather than as the lines themselves, and the reason is
+-- the tag. Questie has nothing to say about a quest the first time it is asked
+-- and the word arrives a second later, so lines written when the marker was
+-- read are lines that say "Elite" on the second time you open a zone and not on
+-- the first. This walk is what warms that cache; the box asks again when it
+-- opens, which is the moment the words are actually wanted. The count on the
+-- step is live for the same reason and costs nothing extra: kill three more
+-- while the map is up and the hover says so without a repaint.
+--
 -- Every entry is a line of its own rather than a bare string, which is the
 -- shape UI/Tip.lua pours: a list whose first entry is a string is one line
 -- with a left and a right half, so two strings in a row came out as the quest
@@ -203,26 +180,43 @@ end
 -- a line of its own, because "Elite" is the half of that line that was not
 -- already said.
 --
+-- The quest is drawn as a heading and the tag beside it is quiet, which is what
+-- the creature hover in Quests/Drops.lua does with the same two facts. Two
+-- boxes naming one quest in two colours is the reader working out twice that
+-- they are looking at the same thing.
+--
 -- The coordinate rather than a distance, for the reason the quest log's map
 -- gives: a distance is the number that goes stale the moment you walk, and a
 -- coordinate is what you type into the thing every player already has open.
 local function Told(data, x, y)
-	local lines = {}
 	local quest = type(data.QuestData) == "table" and data.QuestData.name or nil
-	local tag = Tag(data.Id)
-	if type(quest) == "string" and quest ~= "" and quest ~= data.Name then
-		lines[#lines + 1] = tag and { quest, tag } or { quest }
-	elseif tag then
-		lines[#lines + 1] = { tag }
+	if type(quest) ~= "string" or quest == "" or quest == data.Name then
+		quest = nil
 	end
-	local step = Step(data.ObjectiveData)
-	if step then
-		lines[#lines + 1] = step
-	elseif ERRAND[data.Type] then
-		lines[#lines + 1] = { ERRAND[data.Type] }
+	local id = type(data.Id) == "number" and data.Id or nil
+	local errand = ERRAND[data.Type]
+	local objective = data.ObjectiveData
+	local at = ("%.1f, %.1f"):format(x, y)
+	Where.Tag(id)
+
+	return function()
+		local lines = {}
+		local tag = Where.Tag(id)
+		if quest then
+			lines[#lines + 1] = tag and { quest, tag, color = C.heading, tone = C.quiet }
+				or { quest, color = C.heading }
+		elseif tag then
+			lines[#lines + 1] = { tag, color = C.quiet }
+		end
+		local step = Step(objective)
+		if step then
+			lines[#lines + 1] = step
+		elseif errand then
+			lines[#lines + 1] = { errand }
+		end
+		lines[#lines + 1] = { at }
+		return lines
 	end
-	lines[#lines + 1] = { ("%.1f, %.1f"):format(x, y) }
-	return lines
 end
 
 -- One marker, or nothing at all.

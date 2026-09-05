@@ -685,10 +685,17 @@ local function Pin(board, index)
 	pin.tag:SetPoint("CENTER")
 	UI.Wrap(pin.tag, false)
 	pin.tag:Hide()
-	-- One line or several. The quest log's dots have one thing to say, the
-	-- coordinate; a world map dot is somebody else's icon and carries the quest
-	-- it belongs to as well as where it is. Both go through the same field so
-	-- neither caller has to know which shape the other passes.
+	-- One line, several, or a function that answers them when the box opens.
+	-- The quest log's dots have one thing to say, the coordinate; a world map
+	-- dot is somebody else's icon and carries the quest it belongs to as well as
+	-- where it is. All three go through the same field so no caller has to know
+	-- which shape another passes.
+	--
+	-- The third shape is there because one of those facts is not known when the
+	-- dot is placed. Map/Pins.lua carries the case: a quest's tag arrives from
+	-- Questie a second after it is first asked for, so lines written at paint
+	-- time say less than the same lines written on the hover. A caller with
+	-- nothing to defer passes the table and pays nothing.
 	--
 	-- On the dot, whatever the tooltip setting says, and above it rather than
 	-- beside it. A dot is a place on a picture of a zone: which camp this is is
@@ -703,6 +710,9 @@ local function Pin(board, index)
 			return nil
 		end
 		local note = self.note
+		if type(note) == "function" then
+			note = note()
+		end
 		return { kind = "note", title = self.name,
 			lines = (type(note) == "table") and note or { note },
 			place = ns.UI.Tooltip.BESIDE, above = true }

@@ -325,8 +325,13 @@ questie.manualFrames = {}
 -- asks rather than the client's own call, so the wrapper is what is modelled.
 -- One quest is tagged and one deliberately is not, because a hover that prints
 -- the word for every marker is as wrong as one that prints it for none.
+--
+-- Tag 1 is handed over as "Group", which is what the live client really said
+-- when the map printed it back. The quest log's own call names the same quest
+-- elite and so does the addon, so a fixture that said "Elite" here would agree
+-- with the addon by handing it the answer.
 local TAGS = {
-	[102] = { 1, "Elite" },
+	[102] = { 1, "Group" },
 }
 
 local knows = _G.QuestieLoader:ImportModule("QuestieDB")

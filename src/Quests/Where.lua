@@ -16,11 +16,14 @@ ns.QuestWhere = Where
 -- things in your log is nearest to where you are standing. Questie knows all
 -- three and spends them on a tracker sorted by zone.
 --
--- So this file is a reader and nothing else. Two facts come out of it:
+-- So this file is a reader and nothing else. Four facts come out of it:
 --
 --   the finisher   who or what you hand the quest to, off the quest object's
 --                  own Finisher, which Questie fills in with the name already
 --                  resolved.
+--   the tag        what kind of quest it is, which is the word "Elite" and the
+--                  handful like it, off Questie's corrected wrapper around the
+--                  client's own call.
 --   the nearest    the closest thing that would tick an objective, and how far
 --                  away it is, off QuestieMap:GetNearestQuestSpawn.
 --   the places     every spawn the quest has, grouped by the zone it is in and
@@ -159,6 +162,64 @@ function Where.Finisher(questId)
 		return nil
 	end
 	return name, kind
+end
+
+-- What kind of quest this is, in the client's own word, or nothing at all for
+-- the ordinary ones.
+--
+-- "Elite" is the one that matters, and it is a fact about the walk rather than
+-- about the quest text: an elite camp is a crossing of the zone and a corpse
+-- run back, and the word is the only thing that says so before you get there.
+--
+-- Here rather than beside whichever box drew it first, because three boxes draw
+-- it. The marker hover on the world map, the creature hover out in the world
+-- and the line under a quest's name in the log are all naming the same quest,
+-- and a word that came off a different call in each is three answers that
+-- disagree the day Blizzard tags one wrongly.
+--
+-- Asked through Questie rather than by calling GetQuestTagInfo here, for two
+-- reasons that are both Questie's own. It caches, and this is asked once per
+-- marker over a zone that can hold two hundred and fifty of them, against an
+-- API the client throttles. And it corrects the quests Blizzard has tagged
+-- wrongly, which is a list this addon has no business keeping a second copy of.
+--
+-- **The first ask about a quest always answers nothing.** The client's own call
+-- returns nil the first time it is asked and Questie says so in its wrapper: it
+-- schedules one retry a second later and caches what that gets. So the answer
+-- is worth asking for twice, and a caller that asks once while it is building
+-- something is a caller that has warmed the cache rather than one that has
+-- failed. Every box below asks again at the moment it draws the words.
+--
+-- The word is whatever the client hands back, with one exception, and the
+-- exception is the one tag anybody cares about. The client has two calls that
+-- name a quest's tag and they do not agree: GetQuestTagInfo calls tag 1
+-- "Group", and GetQuestLogTitle, which is what Blizzard's own quest log prints
+-- in brackets after the name, calls the same quest elite. Elite is also the
+-- word the game uses for the mobs that make the walk what it is, and it is the
+-- word the player is looking for. So that one id is named here and every other
+-- tag keeps the client's own word, which is what stops this file inventing a
+-- name for a tag it has never seen.
+local ELITE = 1
+
+function Where.Tag(questId)
+	if type(questId) ~= "number" then
+		return nil
+	end
+	local db = ns.Questie("QuestieDB", "GetQuestTagInfo")
+	if not db then
+		return nil
+	end
+	local ok, id, word = pcall(db.GetQuestTagInfo, questId)
+	if not ok then
+		return nil
+	end
+	if id == ELITE then
+		return "Elite"
+	end
+	if type(word) ~= "string" or word == "" then
+		return nil
+	end
+	return word
 end
 
 -- Questie's own answer to "where next", unpicked: the zone it is in, what it
