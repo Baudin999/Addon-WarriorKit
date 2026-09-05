@@ -145,21 +145,29 @@ check(ns.CombatLog.Count() == base,
 -- the class owning an ability that opens on a dodge or a block, and a class
 -- that owns none never subscribed. So the empty case is real on three of the
 -- four runs and the warrior run asserts the one reader that is left.
+--
+-- Six switches now, and the sixth is the floating numbers. A part added to this
+-- list is a part that arms itself at login, which is the half of a reader that
+-- nothing else here can see: a part armed only by its own settings page is
+-- silent until you open one, and it would pass every other line in this file.
 local held = {
 	meter = ns.db.meter,
 	breakdown = ns.db.breakdown,
 	swing = ns.db.swing,
 	combatFeed = ns.db.combatFeed,
 	thankStrangers = ns.db.thankStrangers,
+	hits = ns.db.hits,
 }
 
 ns.db.meter, ns.db.breakdown, ns.db.swing = false, false, false
 ns.db.combatFeed, ns.db.thankStrangers = false, false
+ns.db.hits = false
 ns.Meter.Apply()
 ns.Breakdown.Apply()
 ns.Swing.Apply()
 ns.CombatFeed.Apply()
 ns.Thanks.Apply()
+ns.CombatTextNumbers.Apply()
 
 local left = WARRIOR and 1 or 0
 check(ns.CombatLog.Count() == left,
@@ -193,11 +201,13 @@ end
 
 ns.db.meter, ns.db.breakdown, ns.db.swing = held.meter, held.breakdown, held.swing
 ns.db.combatFeed, ns.db.thankStrangers = held.combatFeed, held.thankStrangers
+ns.db.hits = held.hits
 ns.Meter.Apply()
 ns.Breakdown.Apply()
 ns.Swing.Apply()
 ns.CombatFeed.Apply()
 ns.Thanks.Apply()
+ns.CombatTextNumbers.Apply()
 
 check(ns.CombatLog.Count() == base,
 	("the switches went back and %d readers are on the log, expected %d")

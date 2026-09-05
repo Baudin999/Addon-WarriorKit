@@ -122,16 +122,31 @@ guids.player = ME
 fire("PLAYER_ENTERING_WORLD")
 fire("GROUP_ROSTER_UPDATE")
 
-ns.db.hits = true
-ns.db.hitsMerge = true
-Numbers.Apply()
-
 -- Whatever the sections above left in the air, because three of them fire
 -- combat log lines and this part has been reading the log since login. Clear is
 -- the switch-off path as well, so this is the first thing it answers for.
 Stream.Clear()
 check(Stream.Count() == 0,
 	("%d numbers still in the air after clearing"):format(Stream.Count()))
+
+----------------------------------------------------------------------
+-- It armed itself at login
+----------------------------------------------------------------------
+
+-- Before anything below applies a setting, because that is the whole of this
+-- question. Apply subscribes to the combat log, and nothing in a real session
+-- calls it until you change something: a part that only arms on a settings
+-- change is a part that does nothing at all until you open the options window,
+-- which is what a restart of the game showed and no assertion here caught.
+-- Every other part of this addon comes up on PLAYER_LOGIN and so does this one.
+swing(MOB, ME, 111)
+check(Stream.Count() == 1,
+	"the numbers were not reading the combat log until a setting was applied")
+Stream.Clear()
+
+ns.db.hits = true
+ns.db.hitsMerge = true
+Numbers.Apply()
 
 ----------------------------------------------------------------------
 -- Which side, and what colour

@@ -368,11 +368,23 @@ end
 
 --------------------------------------------------------------------------
 
--- The scale is measured against this fight and not against the session. A boss
--- that hit for nine thousand would otherwise flatten every number of the next
--- hour's trash into the floor.
+-- Armed at login, which is how every part of this addon comes up and is not
+-- something the settings page can do for it. Apply is the only way in: it
+-- subscribes to the combat log, builds the styles and places the anchors, and
+-- with the part switched off it does none of the three. Nothing else calls it
+-- until you change something, so without this line the numbers would appear the
+-- first time you opened the options window and never before.
+--
+-- And the scale is measured against this fight rather than against the session.
+-- A boss that hit for nine thousand would otherwise flatten every number of the
+-- next hour's trash into the floor.
 local events = CreateFrame("Frame")
+events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
-events:SetScript("OnEvent", function()
+events:SetScript("OnEvent", function(_, event)
+	if event == "PLAYER_LOGIN" then
+		Numbers.Apply()
+		return
+	end
 	biggest = 0
 end)
