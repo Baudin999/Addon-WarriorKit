@@ -703,6 +703,120 @@ to be confirmed one rank at a time or left out.
     Coil. Debuffs are Immolate, Corruption, Curse of the Elements and the
     Shadowfury stun.
 
+Items 60 to 62 came out of a redesign asked for on 2026-09-05, against two
+retail character sheets and one armory page. The gear page already answers
+every question those pictures answer and draws none of it the way they do:
+nineteen squares in two columns, a portrait boxed between them, and the name of
+what you are wearing nowhere on the page at all. These three make it that page
+without copying it. The hex frames in the references are deliberately not here.
+Round, with the icon fading out at its own edge, is what was asked for instead.
+
+60. A round icon that fades out, and the mask that draws it.
+
+    `UI.Icon` at `src/UI/Draw.lua:158` is a square texture with the client's
+    5/64 crop on it and every icon in the addon is one. This adds `UI.Round`
+    beside it, which is the same texture with a mask on it. A mask rather than
+    a circular border, because the ask is that the icon go soft at the rim
+    rather than stop at a line.
+
+    The mask is a texture the addon ships: 64 by 64, RGBA, alpha ramping from
+    opaque at the middle to nothing at the rim over the outer few pixels.
+    `src/Media/Icon.tga` is already that format and already in the folder the
+    .toc ships, so the new one sits beside it as `Media/Round.tga` and
+    `scripts/bake-round.sh` writes it with ImageMagick in the same shape as
+    `scripts/bake-glyphs.sh`. Baked rather than committed, so the falloff is a
+    number in a script and not a binary nobody can read.
+
+    `CreateMaskTexture` and `AddMaskTexture` both work on 2.5.6. Baganator's
+    GW2 skin and OPie's ring call them on this install, and a mask with a real
+    alpha ramp rather than a hard cut is what
+    `AdventureGuideClassic/ui/EncounterFrame.lua:25` puts on its instance
+    buttons, which is the same client asking the same question.
+
+    Check one square before all nineteen. A mask and `SetTexCoord` on the same
+    texture do not reliably compose, and `UI.Icon` sets texcoords for the crop.
+    If the crop comes out ignored, the crop goes into the mask instead, as a
+    circle whose radius stops short of the icon's own border, and `UI.Round`
+    does not call `SetTexCoord` at all.
+
+    The quality colour has to move. `src/Character/Paperdoll.lua:302` recolours
+    the box edges, and an icon that fades out has no edge to colour. It becomes
+    a ring drawn under the icon at BACKGROUND, wider than the icon by a pixel
+    or two, so the fade lands on the quality colour rather than on the panel.
+    That is also what makes an epic readable from across the page, which four
+    grey squares and one purple square already were and eighteen icons on a
+    dark panel would not be.
+
+61. The gear page, with the names on it.
+
+    A slot stops being a square and becomes a row: the round icon, the item's
+    name beside it in its quality colour, and under the name the item level and
+    the sockets. That is the one thing both references have and this page does
+    not, and it is the whole reason they read as a character sheet rather than
+    as a grid. `Square` at `src/Character/Paperdoll.lua:160` keeps its secure
+    button, its two click edges, its drag and its hover unchanged. Only what is
+    drawn inside it moves.
+
+    Sockets are real in TBC and nothing in the addon reads them yet.
+    `GetItemGem(link, index)` answers what is in each one, and they draw as
+    small dots under the name, empty ones included, because an empty socket is
+    the one thing on a piece of gear you can still fix.
+
+    The durability line moves with them. It is `box.wear` today, two pixels
+    along the bottom of a square, and in a row it belongs under the name beside
+    the item level rather than under an icon that no longer has a straight edge
+    to sit on.
+
+    The model goes behind the page rather than in a box between the columns.
+    `Portrait` at `src/Character/Paperdoll.lua:412` is a panel the two columns
+    are placed either side of, and the references put the figure behind
+    everything with the rows over it. Frame level is the only thing a model is
+    behind, which `Band` at `src/Character/Paperdoll.lua:365` already proves and
+    already says: the rows become frames above the model's level rather than
+    textures on a panel underneath it.
+
+    `Pane:Resize` at `src/Character/Paperdoll.lua:508` is where all of this
+    lands, and the two numbers it is built on both change. `PORTRAIT` is 260
+    because a wider stage was not a bigger figure, and with the figure behind
+    the page that argument no longer holds: the model takes the width it is
+    given. `READING` is 220 and stays, but the stats column now competes with
+    two columns of rows rather than two columns of squares, so the width the
+    page wants at all goes up and `src/Character/Window.lua` has to give it.
+    A window too narrow for names drops back to the square it draws today
+    rather than clipping every name on the page.
+
+62. A loadout that carries a whole set.
+
+    `src/Loadouts/Loadouts.lua:22` says nothing in that file calls
+    `EquipItemByName` and nothing in it needs to. That was true when a loadout
+    was two weapons and a stance, and it stops being true at nineteen slots:
+    a macro is 255 characters, `/equipslot 16 <name>` is twenty to forty five
+    of them, and four lines is the ceiling. The macro cannot carry a set and
+    no arrangement of it will.
+
+    Out of combat there is a second path and `src/Character/Worn.lua:260`
+    already walks it. `ns.PickupContainerItem(bag, slot)` then
+    `PickupInventoryItem(slot)` is the cursor swap the client's own sheet
+    makes, it is what every square on the gear page already does, and it has
+    no macro in it and no length limit on it.
+
+    It is one slot at a time, not a loop. A swap locks the bag slot until the
+    server answers, so a set is a queue drained on the event, which is the
+    shape `src/Comfort/Vendor.lua:73` already uses to sell a bag and the reason
+    that file is worth reading first.
+
+    The macro stays and keeps its job. A key press in a fight still puts a
+    shield in your off hand, because that is the half the client allows and it
+    is the half that matters mid pull. The other seventeen slots are refused
+    with the reason said out loud, the way `Worn.Swap` already refuses rather
+    than going quiet.
+
+    Saving a set is nineteen links off `ns.Worn.Link`. Finding a piece again is
+    a walk of the bags matching the link, which `src/Core/Gear.lua` already
+    does for the two weapons and is the same question for the other seventeen.
+    A slot left empty in a saved set means leave what is there alone, which is
+    the rule the panel already states and the one nothing about this changes.
+
 ## Deliberately not on this list
 
 The architecture review turned up two more repeats and both are right as they

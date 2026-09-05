@@ -271,10 +271,10 @@ do
 	check(not neck.wear:IsShown(),
 		"a necklace does not wear out and the slot drew a wear line anyway")
 
-	-- Quality is read off the item rather than off the slot, so the edge round
-	-- an epic is the epic colour and not the chrome.
-	check(head.edges.r == ns.UI.Quality[4][1],
-		"the epic helmet is not edged in the epic colour")
+	-- Quality is the ring behind the icon now a square is a disc, read off tone
+	-- because the stub swallows a vertex write; a mask answers nothing about itself.
+	check(head.tone[1] == ns.UI.Quality[4][1], "the epic helmet is not ringed in the epic colour")
+	check(head.icon.masks and #head.icon.masks == 1, "the helmet icon was not cut to the disc")
 
 	local shirt
 	for _, box in ipairs(pane.squares) do

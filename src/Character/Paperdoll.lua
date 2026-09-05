@@ -101,6 +101,20 @@ local SQUARE = 36
 local INSET = 2
 local WEAR = 2
 
+-- How far inside the ring the icon sits, which is also how wide the band of
+-- quality colour showing round it is.
+local RIM = 3
+
+-- How bright that band is with nothing pointing at it. Nineteen quality colours
+-- at full strength is a page of coloured lights; at this they are a tint you
+-- read without being shouted at, and the hover is what takes one to full.
+local REST = 0.55
+
+-- How wide the durability line under an icon is. A chord rather than the width
+-- of the square, because the square draws as a disc now and a line the full
+-- width of it would stick out of both sides.
+local WEARSPAN = 14
+
 -- How far apart two squares in a column sit, and the air between a column and
 -- the portrait.
 local GAP = 4
@@ -157,25 +171,47 @@ local function Act(entry)
 	return ok
 end
 
+-- What colour the ring behind an icon is, and how bright.
+--
+-- Two things decide it and they change at different times: a repaint sets the
+-- colour when what you are wearing moves, and the hover sets the brightness
+-- while the cursor is on the square. Either can happen while the other is
+-- standing, so both go through here and neither writes the texture itself.
+local function Ring(box, color)
+	box.tone = color or C.edge
+	box.ring:SetVertexColor(box.tone[1], box.tone[2], box.tone[3],
+		box.lit and 1 or REST)
+end
+
 local function Square(pane, entry)
-	local box = UI.Box(pane.frame, C.sunken, C.edge)
+	local box = CreateFrame("Frame", nil, pane.frame)
 	box:SetSize(SQUARE, SQUARE)
 
-	box.icon = UI.Icon(box, "ARTWORK")
-	box.icon:SetPoint("TOPLEFT", INSET, -INSET)
-	box.icon:SetPoint("BOTTOMRIGHT", -INSET, INSET)
+	-- The disc, and the whole reason the icon over it can afford to go soft at
+	-- its own edge. The icon is inset by RIM, so a band of this shows all the way
+	-- round and the icon's last few texels fade onto purple or onto green rather
+	-- than onto the panel. It carries the quality colour, which is what the box
+	-- edges carried before there were no edges to carry it.
+	box.ring = UI.Disc(box, "BACKGROUND")
+	box.ring:SetAllPoints()
+	Ring(box, nil)
+
+	box.icon = UI.Clip(UI.Icon(box, "ARTWORK"))
+	box.icon:SetPoint("TOPLEFT", RIM, -RIM)
+	box.icon:SetPoint("BOTTOMRIGHT", -RIM, RIM)
 
 	-- The client's own silhouette for an empty slot, uncropped: it is already
 	-- the shape it draws at, and cropping it the way an item icon is cropped
-	-- eats its own border.
-	box.empty = box:CreateTexture(nil, "ARTWORK")
-	box.empty:SetPoint("TOPLEFT", INSET, -INSET)
-	box.empty:SetPoint("BOTTOMRIGHT", -INSET, INSET)
+	-- eats its own border. Rounded all the same, because a square silhouette in
+	-- a round ring is the one slot on the page that looks like a mistake.
+	box.empty = UI.Clip(box:CreateTexture(nil, "ARTWORK"))
+	box.empty:SetPoint("TOPLEFT", RIM, -RIM)
+	box.empty:SetPoint("BOTTOMRIGHT", -RIM, RIM)
 	box.empty:SetVertexColor(1, 1, 1, 0.3)
 
 	box.wear = ns.Fill(box, "OVERLAY", C.tick[1], C.tick[2], C.tick[3], 1)
-	box.wear:SetPoint("BOTTOMLEFT", INSET, INSET)
-	box.wear:SetHeight(WEAR)
+	box.wear:SetPoint("BOTTOM")
+	box.wear:SetSize(WEARSPAN, WEAR)
 	box.wear:Hide()
 
 	-- The line the client already knows. `/use 16` is what every sharpening
@@ -252,14 +288,16 @@ local function Square(pane, entry)
 		end
 	end)
 	button:SetScript("OnEnter", function(self)
-		UI.Tint(box.bg, C.control)
+		box.lit = true
+		Ring(box, box.tone)
 		-- On the square rather than in the corner. A worn piece is an object
 		-- you are pointing at, and comparing two of them means reading one box
 		-- against the square beside it.
 		ns.Tip.Open(self, Subject(entry), nil, ns.UI.Tooltip.BESIDE)
 	end)
 	button:SetScript("OnLeave", function()
-		UI.Tint(box.bg, C.sunken)
+		box.lit = nil
+		Ring(box, box.tone)
 		ns.Tip.Close()
 	end)
 
@@ -299,7 +337,7 @@ local function PaintSquare(box)
 
 	local link = icon and ns.Worn.Link(entry.slot) or nil
 	local quality = link and ns.ItemValue(link) or nil
-	ns.Recolor(box.edges, (quality and UI.Quality[quality]) or C.edge)
+	Ring(box, quality and UI.Quality[quality] or nil)
 
 	local has, of = ns.Worn.Durability(entry.slot)
 	if has then
