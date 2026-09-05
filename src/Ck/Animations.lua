@@ -78,11 +78,39 @@ end
 
 --------------------------------------------------------------------------
 
--- Every tween currently being advanced. Appended to on Start and swap-removed
--- on finish, which is why the tick walks it backwards: the element moved into a
--- vacated slot has already been visited this frame and must not be beaten
--- twice.
+-- Every tween currently being advanced. Appended to on Start, and taken off two
+-- different ways, which is the part that was wrong.
+--
+-- Away from the tick a removal is a swap with the last entry: free, and there is
+-- no order here for it to disturb, because every tween is advanced by the same
+-- delta.
+--
+-- Under the tick it cannot be that, and a whole bag of loot is what found it. A
+-- completion calls the owner's code, that code stops other tweens, and the list
+-- the walk is indexing changes shape underneath it: a swap-remove below the
+-- walk drops an entry it has already beaten back into its path, and a list that
+-- shrinks past the walk's own bound leaves it reading a slot that is no longer
+-- there. Eight drops in one second is enough, and what it reads as in the game
+-- is `attempt to index local 'tween' (a nil value)` twice a pull.
+--
+-- So a removal under the tick writes `false` into the slot and the walk sweeps
+-- the holes out once it is finished with the list. Nothing moves while it is
+-- being walked, no tween is beaten twice, and no slot goes missing.
 local running = {}
+local walking = false
+local holes = 0
+
+-- One tween off the list, by whichever of those two the caller is inside.
+local function Drop(index)
+	if walking then
+		running[index] = false
+		holes = holes + 1
+		return
+	end
+	local last = #running
+	running[index] = running[last]
+	running[last] = nil
+end
 
 -- The one tick. Armed on the first Start rather than at load, because the addon
 -- spends most of a session with nothing moving and a tick that runs on every
@@ -185,9 +213,9 @@ end
 
 -- Take it off the list wherever it is, leaving the frame where it stands.
 --
--- Used when a message is dismissed under an animation rather than by it. The
--- swap is the same one the tick does; there is no ordering to keep, because
--- every tween is advanced by the same delta.
+-- Used when a message is dismissed under an animation rather than by it, which
+-- is a thing a completion does: this is one of the two callers Drop above is
+-- written for, and the reason it has two answers.
 function Animations.Stop(tween)
 	if not tween.playing then
 		return false
@@ -196,8 +224,7 @@ function Animations.Stop(tween)
 	tween.onDone = nil
 	for index = 1, #running do
 		if running[index] == tween then
-			running[index] = running[#running]
-			running[#running] = nil
+			Drop(index)
 			return true
 		end
 	end
@@ -244,9 +271,7 @@ end
 -- decline to add it because it is already there, so the second leg would run
 -- with the first leg's elapsed time and land instantly.
 local function Land(tween, index)
-	local last = #running
-	running[index] = running[last]
-	running[last] = nil
+	Drop(index)
 	tween.playing = false
 	local done = tween.onDone
 	if done then
@@ -255,27 +280,63 @@ local function Land(tween, index)
 	end
 end
 
+-- One tween moved on by a frame's worth of time, and whether that finished it.
+--
+-- Split out of the walk below rather than written inside it, because the walk
+-- now has a slot to test before it has a tween and the two questions are not
+-- the same one: this is what a run of a tween is, and that is which entries of
+-- the list are still entries.
+local function Step(tween, delta)
+	if tween.delay > 0 then
+		tween.delay = tween.delay - delta
+		return false
+	end
+	tween.elapsed = tween.elapsed + delta
+	local t = tween.elapsed / tween.seconds
+	local landed = t >= 1
+	if landed then
+		t = 1
+	end
+	Apply(tween, tween.ease(t))
+	return landed
+end
+
 -- Every tween advanced by one frame's worth of time.
 --
 -- Exported rather than local because ns.UI.Ticker takes a named function and
 -- scripts/hot.lua walks out from the name it is given. Nothing else calls it.
 function Animations.Beat(delta)
-	for index = #running, 1, -1 do
+	-- The length read once. A completion is free to start a tween, and one
+	-- armed from inside this walk is appended past the bound and begins on the
+	-- next frame rather than part way into its own first one.
+	local count = #running
+	walking = true
+	for index = 1, count do
 		local tween = running[index]
-		if tween.delay > 0 then
-			tween.delay = tween.delay - delta
-		else
-			tween.elapsed = tween.elapsed + delta
-			local t = tween.elapsed / tween.seconds
-			if t >= 1 then
-				t = 1
-			end
-			Apply(tween, tween.ease(t))
-			if t >= 1 then
-				Land(tween, index)
-			end
+		-- A hole, left by a completion that stopped this tween out of turn.
+		if tween and Step(tween, delta) then
+			Land(tween, index)
 		end
 	end
+	walking = false
+
+	-- Swept here, at the one moment nothing is indexing the list.
+	if holes > 0 then
+		local write = 0
+		local last = #running
+		for index = 1, last do
+			local tween = running[index]
+			if tween then
+				write = write + 1
+				running[write] = tween
+			end
+		end
+		for index = last, write + 1, -1 do
+			running[index] = nil
+		end
+		holes = 0
+	end
+
 	if #running == 0 and tick then
 		tick:Stop()
 	end

@@ -3,7 +3,7 @@
 -- ns.Ck.Animations and ns.Ck.Float, and the first thing built on them, which is
 -- a drop sliding in from the right edge of the screen.
 --
--- Six questions, and not one of them is answerable by reading the files.
+-- Seven questions, and not one of them is answerable by reading the files.
 --
 -- Does a message land where it was told to. The two offsets are measured
 -- against different things on purpose, one from the screen's edge and one from
@@ -23,6 +23,12 @@
 -- Do the survivors climb. This is the only behaviour here that runs from inside
 -- a tween's own completion, which is the tick path, and it is why Ck/Float.lua
 -- carries two `hot:` markers.
+--
+-- Does the walk keep its footing while the list changes under it. A message
+-- leaving stops two other tweens from inside a third one's completion, so the
+-- list the tick is halfway through indexing loses entries it has not reached.
+-- A bag's worth of drops at once is what found that, and what it read as was a
+-- Lua error rather than a wrong number.
 --
 -- Does arming clear the last run. A tween is re-armed rather than rebuilt, so
 -- every field of the previous run has to come off, and the way that fails is a
@@ -221,6 +227,80 @@ do
 
 	beat(2)
 	check(Floats.Count() == 0, "the lane did not clear")
+end
+
+----------------------------------------------------------------------
+-- A completion that takes other tweens off the list
+--
+-- The walk's own footing, asked of the library directly, because what goes
+-- wrong is arithmetic on the list rather than anything a message does. A
+-- message leaving stops the travel and the wait of the row it retires, from
+-- inside the fade's own completion, so the list the tick is halfway through
+-- indexing loses entries the tick has not reached yet.
+--
+-- Four tweens, and the third finishes on this frame and stops the first and
+-- the last. Both halves of what that used to do are measured: the walk read a
+-- slot that had been swapped out from under it, which was a Lua error in
+-- somebody's game every time a pull dropped more than a few things, and the
+-- entry the swap moved down into a slot it had already beaten was advanced
+-- twice in the one frame.
+----------------------------------------------------------------------
+
+do
+	local boxes, tweens = {}, {}
+	for index = 1, 4 do
+		boxes[index] = H.region("frame", _G.UIParent)
+		tweens[index] = Animations.New(boxes[index])
+		-- Six hundred pixels in a second, which is ten a frame at sixty and is
+		-- what makes a doubled beat readable off the anchor rather than a
+		-- rounding argument.
+		Animations.Arm(tweens[index], 1, Animations.Ease.linear, 0)
+		Animations.Path(tweens[index], "CENTER", _G.UIParent, "CENTER", 0, 0, 600, 0)
+		Animations.Start(tweens[index])
+	end
+
+	-- Half a frame, so it lands on the first beat and nothing else does.
+	Animations.Arm(tweens[3], FRAME / 2, Animations.Ease.linear, 0)
+	Animations.Path(tweens[3], "CENTER", _G.UIParent, "CENTER", 0, 0, 600, 0)
+	Animations.Start(tweens[3], function()
+		Animations.Stop(tweens[1])
+		Animations.Stop(tweens[4])
+	end)
+
+	ns.UI.Ticking("anim"):Beat(FRAME)
+
+	check(Animations.Running() == 1,
+		("%d tweens are still on the list, and one is: the other three landed or were stopped")
+			:format(Animations.Running()))
+	check(at(boxes[2]) == 10,
+		("the surviving tween is at %s after one frame of ten pixels, so it was beaten twice")
+			:format(tostring(at(boxes[2]))))
+
+	Animations.Stop(tweens[2])
+	beat(FRAME)
+end
+
+----------------------------------------------------------------------
+-- A bag's worth at once
+--
+-- The same thing through the front door, and the scene that found it. Eight
+-- drops in one frame is three more than the column holds, so the ceiling
+-- dismisses while the stagger is still letting messages in, and every one of
+-- those retirements stops two tweens from inside a third one's completion.
+----------------------------------------------------------------------
+
+do
+	for _ = 1, 8 do
+		show("Aegis")
+	end
+	check(Floats.Count() == 8,
+		("eight drops in one frame made %d messages: the three over the ceiling are"
+			.. " on their way out, not refused"):format(Floats.Count()))
+
+	beat(4)
+	check(Floats.Count() == 0 and Animations.Running() == 0,
+		("%d messages and %d tweens survived the burst"):format(
+			Floats.Count(), Animations.Running()))
 end
 
 ----------------------------------------------------------------------
