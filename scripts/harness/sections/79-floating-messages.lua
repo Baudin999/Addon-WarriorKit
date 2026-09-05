@@ -80,8 +80,35 @@ end
 -- message is pinned by the corner nearest the edge it came from, so stopping
 -- that corner forty short of the centre puts the rest of the message across it.
 -- Forty short means the far edge, and the far edge is a width away.
+--
+-- One rest offset per side, because both sides are settings now and the left
+-- one is not the right one with a sign on it in the file either: it is the same
+-- sentence written against the other corner, and that is where a mirrored
+-- branch goes wrong.
 local WIDTH = 380
 local REST = ns.UI.Whole(-(GetScreenWidth() / 2 - 40 - WIDTH))
+local LEFT_REST = ns.UI.Whole(GetScreenWidth() / 2 - 40 - WIDTH)
+
+-- Every number the scenes below type out, asserted once against what the addon
+-- actually starts at.
+--
+-- They are typed rather than read off ns.db for the reason above. That leaves
+-- one failure worth naming: a default moved and this section not moved with it,
+-- which without this loop reads three scenes down as a position off by a number
+-- nobody recognises. Here it reads as the name of the setting that moved.
+local DEFAULTS = {
+	lootFloatSide = "RIGHT", lootFloatEdge = 40, lootFloatRest = 40,
+	lootFloatTop = 100, lootFloatGap = 4, lootFloatEnter = 0,
+	lootFloatAlpha = 100, lootFloatSeconds = 0.5, lootFloatHold = 1,
+	lootFloatStagger = 0.08, lootFloatMost = 5, lootFloatWidth = 380,
+	lootFloatIcon = 50, lootFloatName = 20, lootFloatCount = 16,
+}
+
+for key, value in pairs(DEFAULTS) do
+	check(ns.db[key] == value,
+		("%s is %s and this section was written against %s"):format(
+			key, tostring(ns.db[key]), tostring(value)))
+end
 
 ----------------------------------------------------------------------
 -- The event reached it, and the scene drains
@@ -304,6 +331,100 @@ do
 end
 
 ----------------------------------------------------------------------
+-- The other way across
+--
+-- The left branch of Push, which is not the right branch with a sign on it:
+-- the message pins by the corner nearest the edge it came from, so both the
+-- anchor and the arithmetic change, and the rest offset still has the row's
+-- width taken off it or the message crosses the middle instead of stopping
+-- beside it.
+--
+-- The top offset moves in the same scene, because a lane resolves its numbers
+-- when it is built and a setting that does not reach it is the failure this
+-- page's rows were written to avoid. A message opening at the new height is
+-- the whole of the proof that the old lane was thrown away.
+----------------------------------------------------------------------
+
+do
+	ns.db.lootFloatSide = "LEFT"
+	ns.db.lootFloatTop = 60
+	Floats.Apply()
+
+	local frame = show("Aegis")
+	local point, _, relativePoint = frame:GetPoint(1)
+	check(point == "TOPLEFT" and relativePoint == "TOPLEFT",
+		("a message coming in from the left is pinned %s to %s")
+			:format(tostring(point), tostring(relativePoint)))
+
+	local x, y = at(frame)
+	check(x == 40 and y == -60,
+		("a message starts at %s,%s and the settings said 40 in from the left edge, 60 down")
+			:format(tostring(x), tostring(y)))
+
+	beat(0.6)
+	x, y = at(frame)
+	check(x == LEFT_REST and y == -60,
+		("a message came to rest at %s and forty short of the centre from the left is %d")
+			:format(tostring(x), LEFT_REST))
+
+	beat(2)
+	check(Floats.Count() == 0, "the message did not clear")
+end
+
+----------------------------------------------------------------------
+-- A setting changed under a message that is still on screen
+--
+-- The lane is thrown away rather than edited, and there is a message in the
+-- old one when that happens. It has to play out on the numbers it started on
+-- and hand its row back the ordinary way, because the pool belongs to
+-- Feeds/Floats.lua and not to the lane that borrowed the frame.
+--
+-- The sizes go back to their defaults here as well, and are read off a pooled
+-- row on the way past: the frames outlive the setting, so a pool that dressed
+-- its rows once would put two icon sizes on the screen at the same time.
+----------------------------------------------------------------------
+
+do
+	local old = show("Aegis")
+	beat(0.2)
+	check(old:GetWidth() == WIDTH, ("a row is %s wide"):format(tostring(old:GetWidth())))
+
+	ns.db.lootFloatSide = "RIGHT"
+	ns.db.lootFloatTop = 100
+	ns.db.lootFloatWidth = 200
+	ns.db.lootFloatIcon = 24
+	Floats.Apply()
+
+	local new = show("Bloodspiller")
+	check(new ~= old, "the second message re-used the frame the first is still holding")
+	check(new:GetWidth() == 200 and new.icon:GetWidth() == 24,
+		("the new row is %s wide with a %s icon, and the settings said 200 and 24")
+			:format(tostring(new:GetWidth()), tostring(new.icon:GetWidth())))
+	check(at(new) == -40,
+		("the new message came in at %s rather than 40 inside the right edge")
+			:format(tostring(at(new))))
+
+	beat(4)
+	check(Floats.Count() == 0 and Animations.Running() == 0,
+		("%d messages and %d tweens survived the settings change")
+			:format(Floats.Count(), Animations.Running()))
+
+	-- Back to the defaults, and the row that comes out of the pool next has to
+	-- be dressed in them rather than in what it was built as.
+	for key, value in pairs(DEFAULTS) do
+		ns.db[key] = value
+	end
+	Floats.Apply()
+
+	local back = show("Aegis")
+	check(back:GetWidth() == WIDTH and back.icon:GetWidth() == 50,
+		("a pooled row came back %s wide with a %s icon and was not re-dressed")
+			:format(tostring(back:GetWidth()), tostring(back.icon:GetWidth())))
+	beat(4)
+	check(Floats.Count() == 0, "the lane did not clear")
+end
+
+----------------------------------------------------------------------
 -- A tween re-armed is a tween with nothing left over
 --
 -- Arm is what clears the last run, and the way it fails is a travel that
@@ -424,6 +545,7 @@ check(Floats.Count() == 0 and ns.UI.Ticking("anim") == nil,
 	"the lane did not clear and hand the tick back")
 
 print(("float  in from 40 inside the right edge to %d, 100 down, 0.5s travel and"
-	.. " 1s on screen; three stack at 100, 154 and 208 and climb when the top"
-	.. " one goes; %.2f KB to walk 200 frames, %.2f KB of anchors to cross three"
-	.. " pixels"):format(REST, walk, writes))
+	.. " 1s on screen, and every one of those is a setting; the other way across"
+	.. " rests at %d; three stack at 100, 154 and 208 and climb when the top one"
+	.. " goes; %.2f KB to walk 200 frames, %.2f KB of anchors to cross three"
+	.. " pixels"):format(REST, LEFT_REST, walk, writes))

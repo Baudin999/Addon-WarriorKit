@@ -716,8 +716,24 @@ if window then
 	-- touch Blizzard's own buttons, so the two that log you out are still the
 	-- client's and still work in a fight. 29,100 is that plus a hint's worth
 	-- of room.
-	check(prose < 29100,
-		("the window holds %d characters of prose and the budget is 29,100"):format(prose))
+	-- The floating message's own numbers arrived and it is 29,620 across the
+	-- same sixty-nine: fifteen controls under the switch the loot page already
+	-- had, and six hints. Fifteen controls for five hundred characters is the
+	-- cheapest ratio this budget has taken, because a label that says what it
+	-- sets needs nothing under it and nine of them do. The six are each the
+	-- half a label cannot carry. The rest offset is measured to the far edge of
+	-- the message rather than to the corner it is pinned by, which is the
+	-- arithmetic that was wrong the first time it was written. The two alphas
+	-- are the ends of one fade and not two states, so equal numbers mean a
+	-- message that does not fade at all. The stagger has a ceiling nothing on
+	-- its row shows: a burst larger than the column holds does not book a beat
+	-- per drop. The count says which message goes when the column is full, and
+	-- it is the oldest rather than the newest. The width says a long name is
+	-- cut and not wrapped. And the three sizes say that the tallest of them is
+	-- the row height, which is the one number here that is not a control.
+	-- 29,800 is that plus a hint's worth of room.
+	check(prose < 29800,
+		("the window holds %d characters of prose and the budget is 29,800"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

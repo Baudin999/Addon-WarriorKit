@@ -9,13 +9,19 @@ ns.Floats = Floats
 --------------------------------------------------------------------------
 -- Drops, floated
 --
--- What you just picked up, sliding in from the right edge of the screen,
--- resting a moment beside the middle of it and fading. Several at once come in
--- one under the other, a beat apart, and climb when the one above them goes.
+-- What you just picked up, sliding in from the edge of the screen, resting a
+-- moment beside the middle of it and fading. Several at once come in one under
+-- the other, a beat apart, and climb when the one above them goes.
 --
 -- This is the first caller of ns.Ck.Float and it is deliberately the smallest
 -- one that proves the library: it builds a row, hands it to a lane and takes it
 -- back afterwards, and it does not know that anything moved.
+--
+-- **Where the settings live.** Every number the message is made of is one, and
+-- all of them are read here. The library takes each as a spec field and reads
+-- ns.db for none of them, which is what keeps it liftable into an addon of its
+-- own, so this file is the whole of the join between a slider on a page and a
+-- message crossing a screen.
 --
 -- **Why it reads chat rather than the loot window,** and why the sentence is
 -- taken apart by the client's own format strings rather than by text typed
@@ -35,48 +41,55 @@ ns.Floats = Floats
 -- then rebuilds.
 --------------------------------------------------------------------------
 
--- One row, sized around the icon rather than around the text.
+-- The defaults, which are the spec this was built to: in from forty pixels
+-- inside the right edge, invisible, to forty pixels short of the centre, solid,
+-- in half a second; a second on screen; a hundred pixels down from the top.
 --
--- This is drawn over the world at arm's length from the thing that dropped it
--- and read in the second before it goes, which is a different job from a row in
--- a window you have opened and are looking at. So the picture is fifty pixels,
--- two and a half times what the loot feed's column draws, and the name is
--- twenty rather than the twelve every panel in the addon uses.
+-- Every one of them is a setting now, and the reason is that none of them is a
+-- fact. Where the eye is on a screen, how long a caption has to be up to be
+-- read, and how much of the middle a message may cross are answers about a
+-- monitor and a person, not about loot, and the numbers below are one person's.
+-- ns.Ck.Float took them as spec fields from the first day for exactly this: the
+-- library reads no setting and this file reads them all.
 --
--- The width is what an item name fits in at that size with the icon beside it.
--- It is a fixed number and not a measurement, because the lane rests a message
--- by its far edge: a row that sized itself to the name in it would be a column
--- whose left edge moved with every drop.
-local WIDTH, HEIGHT, ICON = 380, 50, 50
-
--- The name, and the count after it. Both well over anything else in the addon,
--- and neither is UI.Metric: those numbers are the size of a control in a window
--- and this is a caption on the world.
-local NAME, COUNT = 20, 16
-
--- His numbers, and the reason each one is a number rather than a setting is
--- that nothing has asked for a second answer yet. They are the spec this was
--- built to: in from forty pixels inside the right edge, invisible, to forty
--- pixels short of the centre, solid, in half a second; a second on screen; a
--- hundred pixels down from the top.
-local LANE = {
-	side = "RIGHT",
-	enterEdge = 40,
-	restCentre = 40,
-	enterAlpha = 0,
-	restAlpha = 1,
-	seconds = 0.5,
-	ttl = 1,
-	top = 100,
-	gap = 4,
+-- One number is missing from the list and one is on it that looks like it
+-- should not be. The height is worked out rather than stored: a row is as tall
+-- as the tallest thing on it, because a height beside an icon size is two
+-- settings that have to agree and the one somebody forgets to move writes over
+-- the message underneath. The width is stored rather than measured, because the
+-- lane rests a message by its far edge and a row that sized itself to the name
+-- in it would be a column whose left edge moved with every drop.
+--
+-- The picture is fifty pixels by default, two and a half times what the loot
+-- feed's column draws, and the name is twenty rather than the twelve every
+-- panel in the addon uses. Neither is UI.Metric and neither should be: those
+-- numbers are the size of a control in a window, and this is a caption on the
+-- world read at arm's length in the second before it goes.
+local DEFAULTS = {
+	lootFloat = true,
+	lootFloatSide = "RIGHT",
+	lootFloatEdge = 40,
+	lootFloatRest = 40,
+	lootFloatTop = 100,
+	lootFloatGap = 4,
+	-- Percentages, because that is what the panel's opacity row speaks and a
+	-- setting a player reads as 0 to 100 should be stored as what they read.
+	lootFloatEnter = 0,
+	lootFloatAlpha = 100,
+	lootFloatSeconds = 0.5,
+	lootFloatHold = 1,
 	-- Two frames' worth of daylight at sixty. Enough that six drops read as six
 	-- arrivals rather than one block appearing, and short enough that the last
 	-- of them is still on screen while the first is.
-	stagger = 0.08,
+	lootFloatStagger = 0.08,
 	-- Five. A pull drops more than that and the column would be the screen; the
 	-- oldest goes early to make room, which is the trade the client's own
 	-- floating combat text makes and for the same reason.
-	most = 5,
+	lootFloatMost = 5,
+	lootFloatWidth = 380,
+	lootFloatIcon = 50,
+	lootFloatName = 20,
+	lootFloatCount = 16,
 }
 
 local pool = {}
@@ -84,13 +97,38 @@ local lane
 
 --------------------------------------------------------------------------
 
+-- How tall a row is: whichever of the three things on it stands tallest.
+--
+-- Asked rather than stored, because a height beside an icon size is two
+-- settings that have to agree, and the one somebody forgets to move is a
+-- message written over the message under it. The lane is told this number for
+-- every push and lays the column out by summing them, so a row that grows
+-- pushes the ones below it down rather than through.
+local function Height()
+	local db = ns.db
+	return math.max(db.lootFloatIcon, db.lootFloatName, db.lootFloatCount)
+end
+
+-- Every size on a row, put on it.
+--
+-- Run on every drop rather than at Build, because the frames are pooled: a row
+-- built when the icon was fifty is handed back and comes out again after the
+-- setting says thirty, and a pool that dressed its rows once would show both
+-- sizes on screen at the same time. This is five calls on an event that fires
+-- when something drops, not on a tick.
+local function Dress(frame)
+	local db = ns.db
+	frame:SetSize(db.lootFloatWidth, Height())
+	frame.icon:SetSize(db.lootFloatIcon, db.lootFloatIcon)
+	frame.name:SetFontObject(UI.Font(db.lootFloatName, UI.SHADOW))
+	frame.count:SetFontObject(UI.Font(db.lootFloatCount, UI.SHADOW))
+end
+
 local function Build()
 	local frame = CreateFrame("Frame", nil, UIParent)
-	frame:SetSize(WIDTH, HEIGHT)
 	frame:Hide()
 
 	frame.icon = UI.Icon(frame)
-	frame.icon:SetSize(ICON, ICON)
 	frame.icon:SetPoint("TOPLEFT")
 
 	-- Shadowed, not flat and not outlined. Flat is for a string on a surface
@@ -99,10 +137,15 @@ local function Build()
 	-- longer closes up Arial Narrow's own counters; a shadow is chosen anyway,
 	-- because a rim reads as a health number over a mob and this is a caption
 	-- that arrives and leaves.
-	frame.count = UI.Label(frame, COUNT, UI.Color.dim, "RIGHT", UI.SHADOW)
+	--
+	-- The two sizes handed to UI.Label here are replaced by Dress before the
+	-- frame is ever shown. They are read off the settings anyway rather than
+	-- written as numbers, so that there is one answer to how big the name is
+	-- and it is not in two places.
+	frame.count = UI.Label(frame, ns.db.lootFloatCount, UI.Color.dim, "RIGHT", UI.SHADOW)
 	frame.count:SetPoint("RIGHT")
 
-	frame.name = UI.Label(frame, NAME, UI.Color.text, "LEFT", UI.SHADOW)
+	frame.name = UI.Label(frame, ns.db.lootFloatName, UI.Color.text, "LEFT", UI.SHADOW)
 	frame.name:SetPoint("LEFT", frame.icon, "RIGHT", UI.Metric.gutter, 0)
 	-- Up to the count rather than to the row's own edge. Both were pinned to
 	-- the right edge and the count is drawn over the name, so a stack of eight
@@ -120,7 +163,54 @@ end
 --------------------------------------------------------------------------
 
 function Floats.Defaults()
-	return { lootFloat = true }
+	local copy = {}
+	for key, value in pairs(DEFAULTS) do
+		copy[key] = value
+	end
+	return copy
+end
+
+-- The lane the settings currently describe.
+--
+-- Built here rather than held as a table this file edits in place, because the
+-- lane copies the spec at the moment it is made and a table shared with it
+-- would be a lane whose numbers half changed.
+--
+-- The two alphas are the only settings that are not the spec's own units: they
+-- are stored as the percentages the panel row shows and the library wants a
+-- fraction, so the division happens here, once, at the boundary.
+local function Spec()
+	local db = ns.db
+	return {
+		side = db.lootFloatSide,
+		enterEdge = db.lootFloatEdge,
+		restCentre = db.lootFloatRest,
+		enterAlpha = db.lootFloatEnter / 100,
+		restAlpha = db.lootFloatAlpha / 100,
+		seconds = db.lootFloatSeconds,
+		ttl = db.lootFloatHold,
+		top = db.lootFloatTop,
+		gap = db.lootFloatGap,
+		stagger = db.lootFloatStagger,
+		most = db.lootFloatMost,
+		onGone = Release,
+	}
+end
+
+-- A setting changed, so the next drop gets a lane that has heard about it.
+--
+-- Thrown away rather than written into. A lane resolves its spec once and then
+-- owns rows, slots and a stagger clock that were worked out from those numbers,
+-- so a field poked into a live one would leave a column laid out on the old gap
+-- climbing to slots computed from the new one.
+--
+-- What is on screen when this runs is left alone and finishes on the old
+-- numbers. Its rows come back to the pool the ordinary way, because the lane
+-- hands them to Release, which is this file's and not that lane's. A message
+-- yanked off the screen because a slider moved under it would be a worse answer
+-- than one that plays out and is replaced by the next drop.
+function Floats.Apply()
+	lane = nil
 end
 
 -- One drop, on screen.
@@ -130,11 +220,11 @@ end
 -- two palettes for one fact is how one of them ends up wrong.
 function Floats.Show(link, count)
 	if not lane then
-		LANE.onGone = Release
-		lane = Float.Lane(LANE)
+		lane = Float.Lane(Spec())
 	end
 
 	local frame = table.remove(pool) or Build()
+	Dress(frame)
 	local name, icon = ns.ItemInfo(link)
 	local quality = ns.ItemValue(link)
 	local color = UI.Quality[quality or 1] or UI.Quality[1]
@@ -151,7 +241,7 @@ function Floats.Show(link, count)
 		frame.count:SetText("")
 	end
 
-	lane:Push(frame, HEIGHT)
+	lane:Push(frame, Height())
 	return frame
 end
 

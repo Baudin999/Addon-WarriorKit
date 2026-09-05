@@ -433,6 +433,99 @@ local function SharedPage(ui, entry)
 	end)
 end
 
+--------------------------------------------------------------------------
+-- The float's own rows
+--
+-- Every number a floating message is made of, on the page under the switch
+-- that turns it on. They were literals in Feeds/Floats.lua and none of them was
+-- a fact: where the eye sits on a screen, how long a caption has to be up to be
+-- read and how much of the middle a message may cross are answers about a
+-- monitor and a person.
+--
+-- The two sides both work, and the second offset is why that took saying. A
+-- message is pinned by the corner nearest the edge it came from, so the entry
+-- offset is a distance to that corner and needs no width; the rest offset is
+-- measured to the far edge and has the row's width taken off it, which is what
+-- stops the message crossing the centre rather than stopping at it. Both are
+-- resolved inside ns.Ck.Float at the moment of a push, so the numbers below
+-- mean the same thing on either side and on any monitor.
+--
+-- The ranges are here rather than beside the defaults for the same reason the
+-- feed's are: the file that draws the thing owns what it starts at, and the
+-- page that offers the row owns what it will offer.
+--------------------------------------------------------------------------
+
+-- One key, as the pair of closures every row on this page wants.
+--
+-- Every one of them throws the lane away, because a lane resolves its spec when
+-- it is built and then owns slots and a stagger clock worked out from those
+-- numbers; the next drop builds one that has heard about the change. Four of
+-- the rows would survive without it, since a row is dressed and measured on
+-- every drop, but a page where one row applies and the next silently does not
+-- is a page where the next number added lands in the wrong half.
+local function Knob(key)
+	return function()
+		return ns.db[key]
+	end, function(value)
+		ns.db[key] = value
+		ns.Floats.Apply()
+	end
+end
+
+-- Two decimals and a unit, because these are the three settings on the page
+-- measured in time and a bare 0.08 beside a bare 380 reads as the same kind of
+-- number.
+local function Seconds(value)
+	return ("%.2fs"):format(value)
+end
+
+local SIDES = {
+	{ value = "RIGHT", text = "right to left" },
+	{ value = "LEFT", text = "left to right" },
+}
+
+local function FloatPage(ui)
+	local function Time(label, low, high, step, key)
+		local get, set = Knob(key)
+		ui.Slider(label, low, high, step, get, set, Seconds)
+	end
+
+	ui.Check("float a drop across the screen", function() return ns.db.lootFloat end,
+		function(on) ns.db.lootFloat = on end)
+	ui.Hint("In from an edge, a moment beside the middle of the screen, then gone. Your own drops only, and it answers to nothing above: an item the chips have filtered out of the column still floats past.")
+
+	local side, setSide = Knob("lootFloatSide")
+	ui.Picker("crosses", side, setSide, function() return SIDES end)
+
+	ui.Size("in from that edge", 0, 300, 5, Knob("lootFloatEdge"))
+
+	ui.Size("stops short of the centre", 0, 500, 5, Knob("lootFloatRest"))
+	ui.Hint("Measured to the far edge, so it is the gap left beside the middle rather than where the message's own corner lands.")
+
+	ui.Size("down from the top", 0, 700, 10, Knob("lootFloatTop"))
+	ui.Size("between messages", 0, 40, 1, Knob("lootFloatGap"))
+
+	ui.Opacity("arrives at", Knob("lootFloatEnter"))
+	ui.Opacity("rests at", Knob("lootFloatAlpha"))
+	ui.Hint("It fades from the first to the second on the way in, and from the second to nothing when its time is up. Equal numbers slide without fading.")
+
+	Time("travel and fade", 0.1, 2, 0.05, "lootFloatSeconds")
+	Time("time on screen", 0.25, 10, 0.25, "lootFloatHold")
+	Time("between arrivals", 0, 0.5, 0.02, "lootFloatStagger")
+	ui.Hint("Nothing waits longer than it takes the column to fill, however many drop at once.")
+
+	ui.Count("most at once", 1, 12, Knob("lootFloatMost"))
+	ui.Hint("Past this the oldest message goes early to make room.")
+
+	ui.Size("message width", 120, 700, 10, Knob("lootFloatWidth"))
+	ui.Hint("A name too long for it is cut rather than wrapped.")
+
+	ui.Size("picture", 16, 96, 2, Knob("lootFloatIcon"))
+	ui.Size("name", 8, 36, 1, Knob("lootFloatName"))
+	ui.Size("count", 8, 36, 1, Knob("lootFloatCount"))
+	ui.Hint("A row is as tall as the tallest of the three and the column is laid out by summing the rows.")
+end
+
 local function Panel(ui)
 	ui.Section("Loot feed", "Feeds and meters")
 	ui.Lede("What dropped, newest at the top, in the item's own quality colour, filtered by the chips over it.")
@@ -486,9 +579,7 @@ local function Panel(ui)
 
 	ui.Divider()
 
-	ui.Check("float a drop across the screen", function() return ns.db.lootFloat end,
-		function(on) ns.db.lootFloat = on end)
-	ui.Hint("In from the right edge, a second beside the middle of the screen, then gone. Your own drops only, and it answers to nothing above: an item the chips have filtered out of the column still floats past.")
+	FloatPage(ui)
 
 	ui.Reading("rows so far", function()
 		return tostring(ns.LootFeed.Counts())
@@ -593,6 +684,18 @@ ns.Register({
 			ns.db[key] = ns.DefaultCopy(key)
 		end
 		Chipped()
+
+		-- And the float's numbers, every one of them, minus the switch that
+		-- turns it on for the reason the feed's own switch is not here either.
+		-- A message that comes in from the wrong side or rests off the edge of
+		-- the screen is unreadable rather than merely unwanted, and this is the
+		-- button somebody reaches for when it is.
+		for key in pairs(ns.Floats.Defaults()) do
+			if key ~= "lootFloat" then
+				ns.db[key] = ns.DefaultCopy(key)
+			end
+		end
+		ns.Floats.Apply()
 	end,
 
 	panel = Panel,
