@@ -61,10 +61,13 @@ local BIG = { 1.00, 0.82, 0.20 }
 -- reads as a number changing its mind rather than as one blow.
 local MERGE_BEFORE = 0.45
 
--- What a number is scaled by, between nothing at all and the biggest hit of the
--- fight. Never zero at the bottom: a one damage tick is still a thing that
--- happened and a number scaled to nothing is a number you cannot read.
-local FLOOR, REACH = 0.78, 0.42
+-- What a number is scaled by, between the smallest hit of the fight and the
+-- biggest. A narrow band on purpose, and it was too wide the first time: at
+-- 0.78 to 1.20 an ordinary hit late in a fight was drawn at four fifths of a
+-- setting that was itself too small, and the two shrinkings compounded into a
+-- number you had to go looking for. The band says which of two numbers was the
+-- bigger hit and that is all it is for; the setting says how big numbers are.
+local FLOOR, REACH = 0.88, 0.30
 
 -- Every number is drawn in one font, at the smallest size an outline is legible
 -- at, and the size on the settings page is a multiplier on top of it.
@@ -136,7 +139,7 @@ function Numbers.Reshape()
 
 	styles.plain = Stream.Style({
 		seconds = life, drop = drop, arc = arc,
-		fromScale = grow, toScale = 0.72 * grow,
+		fromScale = grow, toScale = 0.85 * grow,
 		onGone = Release,
 	})
 
@@ -145,7 +148,7 @@ function Numbers.Reshape()
 	-- an eighth of a second and settles reads as a hit landing.
 	styles.big = Stream.Style({
 		seconds = life * 1.35, drop = drop * 1.1, arc = arc,
-		fromScale = 1.3 * grow, toScale = 0.95 * grow,
+		fromScale = 1.45 * grow, toScale = 1.05 * grow,
 		punch = 0.35 * grow, punchFor = 0.14,
 		holdFor = 0.62,
 		onGone = Release,
@@ -344,6 +347,8 @@ function Numbers.Apply()
 	if ns.db.hits then
 		Anchors.Apply()
 	end
+	-- Last, because it is the only thing here that reaches outside the addon.
+	ns.CombatTextBlizzard.Apply()
 end
 
 -- How many are on screen, for the harness and for the status line.

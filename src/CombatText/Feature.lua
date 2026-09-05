@@ -12,7 +12,7 @@ local Calls = ns.CombatTextCalls
 -- the stops a macro can reach and the stops the page offers are one set.
 -- The low end is the outline floor and not a taste: an outlined glyph under it
 -- closes up its own counters buying an edge it cannot do without.
-local SIZE_LOW, SIZE_HIGH = 14, 48
+local SIZE_LOW, SIZE_HIGH = 14, 72
 local FALL_LOW, FALL_HIGH = 20, 240
 local ARC_LOW, ARC_HIGH = 0, 60
 local LIFE_LOW, LIFE_HIGH, LIFE_STEP = 0.6, 3, 0.1
@@ -62,6 +62,14 @@ local HitsWord = ns.Command.Word({
 		return "every blow is its own number."
 	  end },
 
+	{ "quiet", toggle = true, key = "hitsQuiet",
+	  say = function(on)
+		if on then
+			return "the client's own damage numbers are off while these are on."
+		end
+		return "the client draws its own damage numbers again."
+	  end },
+
 	{ "calls", toggle = true, key = "hitsCalls",
 	  say = function(on)
 		return "combat calls " .. (on and "on" or "off") .. ": " .. Calls.Describe() .. "."
@@ -94,11 +102,13 @@ ns.Register({
 		-- twice.
 		hits = true,
 
-		-- 22 is what a number over the world reads at from the middle of the
-		-- screen. Well above the twelve every panel in the addon draws at,
-		-- because that number is the size of a control in a window and this is
-		-- a caption on the fight.
-		hitsSize = 22,
+		-- 36. It shipped at 22 and 22 was far too small on a screen, which is
+		-- the one thing about this part no gate could have answered and only
+		-- looking at it could. A panel draws its controls at twelve and the loot
+		-- captions at twenty, and both of those are read while standing still.
+		-- This is read out of the corner of an eye in the second before it goes,
+		-- over a mob, while you are pressing something.
+		hitsSize = 36,
 
 		-- Ninety pixels over one and three tenths of a second. Far enough that
 		-- a number has visibly travelled and short enough that six of them are
@@ -117,6 +127,12 @@ ns.Register({
 		hitsMerge = true,
 		hitsCalls = true,
 
+		-- On. Two parts drawing the same hit is worse than either alone, and a
+		-- part that replaces the client's readout and leaves it running has
+		-- replaced nothing. Only the four the client draws that this part
+		-- redraws; your dodges, combo points and energy are still its own.
+		hitsQuiet = true,
+
 		-- A hundred and fifty pixels either side of you and a little below,
 		-- which is where the two health bars this is about already are. The
 		-- calls sit above your head, clear of both columns and of the nameplate
@@ -133,7 +149,7 @@ ns.Register({
 	help = {
 		"hits on|off, damage and healing floating off your character",
 		"hits size 22, fall 90, curve 18, time 1.3",
-		"hits merge on|off, calls on|off",
+		"hits merge on|off, calls on|off, quiet on|off",
 	},
 
 	status = function()
@@ -143,6 +159,13 @@ ns.Register({
 	lock = function(unlocked)
 		Anchors.Lock(unlocked)
 	end,
+
+	charDefaults = {
+		-- What the client's own damage number settings were before this addon
+		-- first touched them, so switching it off puts back what this character
+		-- chose rather than the default. Per character because the CVars are.
+		hitsPrior = {},
+	},
 
 	reset = function()
 		ns.db.hitsSize = ns.DefaultCopy("hitsSize")
@@ -197,6 +220,14 @@ ns.Register({
 				Restyle()
 			end)
 		ui.Hint("Four ticks of a bleed in six seconds are one number that grows rather than four drawn over each other.")
+
+		ui.Check("turn the client's own damage numbers off",
+			function() return ns.db.hitsQuiet end,
+			function(on)
+				ns.db.hitsQuiet = on
+				Restyle()
+			end)
+		ui.Hint("The four it draws that these replace. Your dodges, combo points and energy stay the client's, and it gets its own settings back when this goes off.")
 
 		ui.Reading("the numbers", function()
 			if not ns.CombatLog.Ready() then

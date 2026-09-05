@@ -73,9 +73,10 @@ local STYLE = {
 	-- How far it bows sideways at the halfway point.
 	arc = 18,
 	-- Large to small. The end is the readable floor rather than nothing: a
-	-- number that shrinks to a dot has spent its last third being unreadable.
+	-- number that shrinks to a dot has spent its last third being unreadable,
+	-- which is what 0.72 did here until somebody looked at it on a screen.
 	fromScale = 1,
-	toScale = 0.72,
+	toScale = 0.85,
 	-- An extra helping of scale at birth, gone by `punchFor` of the life. This
 	-- is what reads as impact. A number that is merely born bigger reads as a
 	-- bigger font.

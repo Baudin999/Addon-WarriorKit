@@ -48,6 +48,7 @@ local logArgs, guids, CHURN = H.logArgs, H.guids, H.CHURN
 local Stream = ns.Ck.Stream
 local Numbers = ns.CombatTextNumbers
 local Anchors = ns.CombatTextAnchors
+local Blizz = ns.CombatTextBlizzard
 
 local ME = "Player-0-00000e01"
 local MOB = "Creature-0-0-0-0-9999-00000e02"
@@ -421,6 +422,64 @@ do
 end
 
 ----------------------------------------------------------------------
+-- The client's own numbers are put away and given back
+----------------------------------------------------------------------
+
+do
+	-- What this character had before the addon touched anything. Set to
+	-- something other than the default so a restore that writes a guess rather
+	-- than the remembered value is visible.
+	local names = {
+		"floatingCombatTextCombatDamage_v2",
+		"floatingCombatTextCombatLogPeriodicSpells_v2",
+		"floatingCombatTextPetMeleeDamage_v2",
+		"floatingCombatTextCombatHealing_v2",
+	}
+	ns.db.hits, ns.db.hitsQuiet = false, true
+	Numbers.Apply()
+	for index = 1, #names do
+		_G.SetCVar(names[index], "1")
+	end
+	ns.dbc.hitsPrior = {}
+
+	ns.db.hits = true
+	Numbers.Apply()
+	local down, all = Blizz.Quiet()
+	check(down == all,
+		("%d of the client's %d damage number settings are off, expected all of them")
+			:format(down, all))
+
+	-- And the master is not one of them. It carries the dodges, the combo
+	-- points and the energy gains, none of which this part draws, so taking it
+	-- would delete a dozen readouts to stop one duplicate.
+	check(_G.GetCVar("enableFloatingCombatText") ~= "0",
+		"the part took the client's whole combat text and not its damage numbers")
+
+	ns.db.hits = false
+	Numbers.Apply()
+	down = Blizz.Quiet()
+	check(down == 0,
+		("%d of the client's damage number settings are still off after switching this part off")
+			:format(down))
+	for index = 1, #names do
+		check(_G.GetCVar(names[index]) == "1",
+			("%s came back as %s and it was 1"):format(names[index],
+				tostring(_G.GetCVar(names[index]))))
+	end
+
+	-- Left alone entirely when the setting says so, which is the escape hatch
+	-- for anybody who wants both.
+	ns.db.hits, ns.db.hitsQuiet = true, false
+	Numbers.Apply()
+	down = Blizz.Quiet()
+	check(down == 0,
+		("the part put %d of the client's settings away with quiet switched off"):format(down))
+
+	ns.db.hitsQuiet = true
+	Numbers.Apply()
+end
+
+----------------------------------------------------------------------
 -- Off means off
 ----------------------------------------------------------------------
 
@@ -444,6 +503,12 @@ do
 	Stream.Clear()
 end
 
+-- Put back what this section changed, so nothing below reads a client the
+-- harness left half configured.
+ns.db.hits, ns.db.hitsQuiet = true, true
+Numbers.Apply()
+
 print(("hits   left for what lands on you and right for what you land, white,"
 	.. " green and gold; a crushing blow reads off slot 20, %d styles, merging"
-	.. " on, %d in the air"):format(3, Stream.Count()))
+	.. " on, %d of the client's own %d damage settings put away, %d in the air")
+	:format(3, select(1, Blizz.Quiet()), select(2, Blizz.Quiet()), Stream.Count()))

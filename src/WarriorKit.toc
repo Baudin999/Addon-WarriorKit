@@ -985,7 +985,9 @@ Merchant\Feature.lua
 
 # The numbers that float off your character. Anchors.lua is the three
 # rectangles they come from, which are the only thing here you can see with the
-# frames locked; Numbers.lua reads the combat log and decides colour, size and
+# frames locked; Blizzard.lua puts the client's own damage numbers away while
+# these are drawing and gives them back when they are not; Numbers.lua reads the
+# combat log and decides colour, size and
 # which side; Calls.lua watches the two parts that know when an ability comes
 # up and says the word above your head. Feature.lua last, as everywhere else.
 #
@@ -994,6 +996,7 @@ Merchant\Feature.lua
 # which is what carries a number across the screen, and after Buttons so that
 # the two readers Calls.lua polls exist before anything asks them.
 CombatText\Anchors.lua
+CombatText\Blizzard.lua
 CombatText\Numbers.lua
 CombatText\Calls.lua
 CombatText\Feature.lua

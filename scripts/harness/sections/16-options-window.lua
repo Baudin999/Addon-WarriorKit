@@ -747,8 +747,17 @@ if window then
 	-- the client says yes to for a whole fight and means for a few seconds of
 	-- it, which is the only reason that half of the page exists.
 	-- 30,500 is that plus a hint's worth of room.
-	check(prose < 30500,
-		("the window holds %d characters of prose and the budget is 30,500"):format(prose))
+	-- And it is 30,530 with one more control on the same page: the switch that
+	-- puts the client's own damage numbers away. That one earns its hint three
+	-- times over, because a control that edits your client config has to say
+	-- what it edits. It names how much it takes, which is the four settings
+	-- these numbers replace and not the master switch above them, so the dodges
+	-- and the combo points are still drawn. And it says the client gets its own
+	-- values back rather than the defaults when this goes off, which is the
+	-- difference between borrowing a setting and overwriting one.
+	-- 30,700 is that plus a hint's worth of room.
+	check(prose < 30700,
+		("the window holds %d characters of prose and the budget is 30,700"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))
