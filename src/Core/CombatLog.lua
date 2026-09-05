@@ -195,3 +195,45 @@ function CombatLog.Unsubscribe(reader)
 		frame:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 	end
 end
+
+--------------------------------------------------------------------------
+-- Where the numbers are on a line
+--
+-- The twenty one values arrive in a fixed order and the meaning of the twelfth
+-- onwards depends on the subevent. A swing puts its amount at twelve; a spell
+-- puts its id, name and school there and its amount at fifteen. That is a fact
+-- about the client's own log and it belongs beside the call that reads it.
+--
+-- Three parts worked it out for themselves and two of them still do:
+-- Feeds/Combat.lua and Breakdown/Breakdown.lua each hold a copy of the table
+-- below. Those two are one commit away from reading this one and are not part
+-- of the change that put it here, because both of their readers carry a branch
+-- count in scripts/shape.lua and moving them is a change worth making on its
+-- own. CombatText/Numbers.lua is the third and it reads this rather than
+-- becoming a third copy.
+--
+--   amount    the slot the number is in
+--   spell     the slot the spell id is in, and nil for a swing, which has none
+--   crit      the slot the critical flag is in
+--   glancing  the slot the glancing flag is in
+--   crushing  the slot the crushing flag is in
+--   heal      whether the number is healing rather than damage
+--   miss      the slot the miss type is in, for the shapes that carry one
+--
+-- Glancing and crushing are on the swing only, and that is the client rather
+-- than an omission: both are melee mechanics and neither is sent for a spell.
+-- On a spell they would sit at twenty two and twenty three anyway, past the end
+-- of what this file hands over. Read back off Details' own parser on the live
+-- 2.5.6 install, which unpacks the tail as critical, glancing, crushing.
+CombatLog.SHAPES = {
+	SWING_DAMAGE          = { amount = 12, crit = 18, glancing = 19, crushing = 20 },
+	SPELL_DAMAGE          = { amount = 15, spell = 12, crit = 21 },
+	SPELL_PERIODIC_DAMAGE = { amount = 15, spell = 12, crit = 21 },
+	RANGE_DAMAGE          = { amount = 15, spell = 12, crit = 21 },
+	DAMAGE_SHIELD         = { amount = 15, spell = 12, crit = 21 },
+	SPELL_HEAL            = { amount = 15, spell = 12, crit = 18, heal = true },
+	SPELL_PERIODIC_HEAL   = { amount = 15, spell = 12, crit = 18, heal = true },
+	SWING_MISSED          = { miss = 12 },
+	SPELL_MISSED          = { miss = 15, spell = 12 },
+	RANGE_MISSED          = { miss = 15, spell = 12 },
+}

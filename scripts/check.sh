@@ -366,6 +366,9 @@ Buttons/Trace.lua:3:Trace.Cursor reads what the cursor is holding, on the pass t
 Buttons/Trace.lua:3:Trace.Name names the frame under the cursor, on the pass that frame changed
 Buttons/Trace.lua:3:Trace.Say prints one trace line, and only while the trace switch is on
 Charge/Icon.lua:1:MacroText runs behind SyncMacro comparing target, weapon and spell
+CombatText/Anchors.lua:2:Anchors.Apply places three anchors, on a settings change and on the first number of a session
+CombatText/Anchors.lua:2:Build makes one anchor, on the first pass after the part is switched on
+CombatText/Numbers.lua:1:Build makes one number's frame, on the spawn a busier second than any before it needs another
 Cooldowns/Row.lua:1:Place is layout rather than tick
 Standing/Row.lua:1:Place is layout, run when the plan is rebuilt or a setting moves
 Perf/Hud.lua:3:FillCost writes the five rows under the strip, on the second the ranking moved
@@ -391,6 +394,8 @@ Buttons/Reaction.lua:1:OnLog is a combat log reader, called back out of ns.Comba
 Chat/Feed.lua:1:Feed.Handle runs on every chat line, off this file's OnEvent closure
 Ck/Float.lua:2:Expire is a tween's onDone, called back through the field when a message's time on screen runs out
 Ck/Float.lua:2:Leave is a tween's onDone, called back through the field when a message has finished fading
+CombatText/Numbers.lua:2:Numbers.OnLog is a combat log reader, called back out of ns.CombatLog's list
+CombatText/Numbers.lua:2:Release is handed to a style as onGone and called back through the field when a number has finished falling
 Comfort/Thanks.lua:1:OnLog is a combat log reader, called back out of ns.CombatLog's list
 Cooldowns/Cooldowns.lua:1:Cooldowns.Scan runs on every UNIT_AURA on the player, off an OnEvent closure
 Feeds/Combat.lua:1:CombatFeed.OnLog is a combat log reader, called back out of ns.CombatLog's list
@@ -418,6 +423,7 @@ UnitFrames/PlayerCast.lua:2:the moving edge of the player's cast and of the chan
 
 # path:allocations in that file:why the tick does not reach them every time
 ALLOCATES_ALLOWED="
+Ck/Stream.lua:1:the pool was empty, which happens as many times as the busiest second of a session ever needs at once
 Breakdown/Breakdown.lua:1:one record per spell id ever recorded, behind the two returns above it
 Charge/Charge.lua:1:a fallback path the live client's GetNamePlateForUnit never reaches
 Chat/Feed.lua:1:one string per chat line, which is the line the window draws

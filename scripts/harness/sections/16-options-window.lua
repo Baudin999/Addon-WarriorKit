@@ -732,8 +732,23 @@ if window then
 	-- cut and not wrapped. And the three sizes say that the tallest of them is
 	-- the row height, which is the one number here that is not a control.
 	-- 29,800 is that plus a hint's worth of room.
-	check(prose < 29800,
-		("the window holds %d characters of prose and the budget is 29,800"):format(prose))
+	-- The floating numbers arrived and it is 30,383 across seventy-three: two
+	-- sections under Fighting, two ledes, five hints and two readings, over six
+	-- controls and three anchors you drag. The size hint says the number a big
+	-- hit is drawn at is not the one on the row, it is that one measured against
+	-- the biggest hit of the fight, and that the scale resets when the fight
+	-- does. The time hint says a critical outlives the setting by a third, so
+	-- the number on the row is not the longest anything is on screen. The merge
+	-- hint says four ticks of a bleed are one number, which is the whole
+	-- difference between this and every other floating number in the game. The
+	-- anchor hint says there are three of them and that unlocking is how you
+	-- reach them, because a rectangle you cannot see is not findable from a
+	-- button that says "put them back". And the calls hint names the two things
+	-- the client says yes to for a whole fight and means for a few seconds of
+	-- it, which is the only reason that half of the page exists.
+	-- 30,500 is that plus a hint's worth of room.
+	check(prose < 30500,
+		("the window holds %d characters of prose and the budget is 30,500"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

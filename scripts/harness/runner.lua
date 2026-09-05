@@ -426,6 +426,13 @@ local SECTIONS = {
 	-- state no section above it expects to find and none below it would
 	-- survive.
 	"79-floating-messages",
+	-- After it, which is the one place a section that drives an animation can
+	-- sit beside that one. 79 runs the tween tick out to nothing and asserts it
+	-- gave its OnUpdate back; this drives a different library on a different
+	-- ticker, and it clears everything in the air at the head of the file
+	-- because three sections above it fire combat log lines that this part has
+	-- been reading since login.
+	"80-floating-numbers",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

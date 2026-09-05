@@ -73,6 +73,12 @@ local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast
 	-- does not arm a ticker, so what a reader wants on the tab is what movement
 	-- costs in total on the frames there is any.
 	"anim",
+	-- Every number in the air, on one tick that stops itself when nothing is
+	-- falling, and the watch that says a word above your head. Two slots rather
+	-- than one because they answer different questions: the first is what a
+	-- busy pull costs to draw and the second is a poll that runs only in a
+	-- fight and only on a class with something to announce.
+	"numbers", "calls",
 	-- The three the frame trace is made of. "frame" is the recorder itself,
 	-- which runs on every frame and is the one tick in the addon whose cost has
 	-- to be subtracted from what it reports. "hud" is the window painting

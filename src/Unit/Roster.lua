@@ -168,6 +168,26 @@ function Roster.Owner(guid)
 	return units[guid] and guid or nil
 end
 
+-- Whether a GUID is one particular member or something of theirs, which on the
+-- combat log is nearly always you. One call covers a hunter's pet, a warlock's
+-- imp and a totem without the caller knowing what any of those are.
+--
+-- Both halves are checked before the comparison and the second one is not
+-- defensive tidying. Owner answers nil for anything the group does not own, so
+-- a moment where the client will not say who you are, which is a loading screen
+-- and the first frames after one, would compare nil against nil and make every
+-- creature in range yours. The symptom is a reader that draws the whole zone,
+-- and it is a comparison that looks correct.
+--
+-- Feeds/Combat.lua carries a copy of this, written before there was anywhere to
+-- put it. It comes off in the commit that moves that file onto this call.
+function Roster.Mine(guid, whose)
+	if not guid or not whose then
+		return false
+	end
+	return Roster.Owner(guid) == whose
+end
+
 -- What a member summoned belongs to them. Called from the combat log rather
 -- than from a roster scan, because a totem, a Water Elemental and an
 -- Eye of Kilrogg are not a pet unit and no unit token ever points at them.
