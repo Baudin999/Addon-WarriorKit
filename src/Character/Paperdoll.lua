@@ -9,10 +9,24 @@ local C, M = UI.Color, UI.Metric
 --------------------------------------------------------------------------
 -- The gear page
 --
--- Nineteen slots in the arrangement the client uses, the player standing
--- between the two columns, and on the glass over him the four numbers the
--- client's own sheet has never drawn: what your gear averages, how worn it is,
--- how many slots are empty and how often you miss.
+-- Nineteen slots in two columns, the player standing full height in the gap
+-- between them, and against the right edge who you are, what your gear adds up
+-- to and every number the client knows about you.
+--
+-- **This page is the screen, not a page in a window.** The sheet it is drawn on
+-- has no title bar, no border, no ground and no saved point: it is the size of
+-- the monitor, fixed to it, and sits at the floor of the frame pile so
+-- everything the player opens flows over the top. UI/Window.lua carries that as
+-- `screen`, and its own comment says why each piece of chrome came off. What it
+-- costs this file is that nothing here may assume a surface behind it. Every
+-- string takes the rim rather than the flat face, and the only ground on the
+-- page is the band under a stat row, which is a tint rather than a panel.
+--
+-- **The width is whatever the monitor is.** There is no fixed page any more, so
+-- the two columns and the readings take the room they need and the figure gets
+-- the rest, which on any screen worth playing on is most of it. That is the one
+-- number this layout is built on: a column is as wide as an item's name wants
+-- to be, and the middle is everything left over.
 --
 -- **The stats are the right hand column.** They were a tab of their own, which
 -- meant the two halves of one question lived on two pages: the squares say what
@@ -20,24 +34,17 @@ local C, M = UI.Color, UI.Metric
 -- to see the second one move is a tab press away from the first. So the stats
 -- readout is a column down the right of this page, filled from the same
 -- Character/Stats.lua and drawn by the same Character/Readout.lua that drew the
--- tab. The block of squares and the portrait keep their own width and sit
--- against the left edge; the column takes everything the block does not want.
+-- tab.
 --
--- **The model is the middle.** This page used to give that space to the four
--- numbers and leave the model out, on the argument that a picture of your back
--- answers nothing the nineteen squares have not already answered. That is a
--- true sentence and the wrong conclusion. You open a character sheet to look at
--- your character, and a sheet that will not show it is a spreadsheet wearing
--- slot art. The numbers lost nothing by moving: they are four cells along the
--- foot of the portrait, in the same place every time, each with its sentence in
--- its hover, and the window's own footer says all four in a line anyway.
---
--- **The readings are on the model rather than beside it.** Two bands of the
--- theme's shadow, one along the top for who you are and one along the bottom
--- for what you are wearing, both at frame level over the model so the client
--- draws them on top of it. That is what makes the middle one panel instead of
--- three boxes stacked up, and it is why the durability line is the bottom edge
--- of the portrait rather than a bar in a list.
+-- **The four readings are badges at the head of that column, over your name.**
+-- They were four cells along the foot of the portrait, drawn on a band of
+-- shadow laid over the model, and both of those went with the panel: a band of
+-- shadow across a figure standing on the world is a smear, and the numbers
+-- belong with the other numbers rather than on the picture. Each is a disc with
+-- the value in it and the word under it, in the same order every time, so after
+-- a week you read the second badge rather than the word durability. The
+-- sentence each of them is worth is still in its hover and the window's own
+-- footer still says all four in a line.
 --
 -- **A square carries the durability of what is in it.** One line along the
 -- bottom edge, drawn only where the piece is worn at all, green through to red.
@@ -98,7 +105,6 @@ local C, M = UI.Color, UI.Metric
 -- for the reason UI/Widgets.lua borrows the client's slot ring: a square you
 -- drag a helmet into should be the size of the square the helmet came out of.
 local SQUARE = 36
-local INSET = 2
 local WEAR = 2
 
 -- How far inside the ring the icon sits, which is also how wide the band of
@@ -110,43 +116,73 @@ local RIM = 3
 -- read without being shouted at, and the hover is what takes one to full.
 local REST = 0.55
 
--- How wide the durability line under a weapon is. A chord rather than the width
--- of the square, because the square draws as a disc now and a line the full
--- width of it would stick out of both sides. The sixteen sided slots do not use
--- it: theirs runs the width of the item's name.
-local WEARSPAN = 14
-
 -- The socket dots. Three because three is the most holes anything in this
 -- expansion has, and five pixels because a dot on the same line as an eleven
 -- pixel number is a dot, and at seven it is a button.
 local DOTS = 3
 local DOT = 5
 
--- How much of the page's width the figure stands in, between the two columns.
--- The model is behind everything now rather than boxed between them, so this is
--- not the model's width: it is the gap the two columns leave in the middle,
--- which is the only part of the figure nothing is drawn over.
-local MIDDLE = 190
-
--- How far apart two squares in a column sit, and the air between a column and
--- the portrait.
+-- How far apart two rows in a column sit.
 local GAP = 4
 
--- The narrowest the stats column may be and still be worth drawing, and it is
--- the row added up rather than a taste: a scroll bar, the indent, the widest
--- name the page prints beside a number, the gutter and the room the value is
--- pinned into. The window is built to hand the column exactly this, so the two
--- ends of a row sit as close as a right-aligned number can sit to its name.
--- Under it the name is what gets clipped, so a window too narrow to carry both
--- keeps the gear and drops the column rather than drawing half a word.
-local READING = 220
+--------------------------------------------------------------------------
+-- Everything else on this page is a share of the page's own height
+--
+-- Height and not width, and that is the whole of the layout. A character sheet
+-- is a person standing up with two lists beside him: how tall he can be decides
+-- how big he is, and everything drawn next to him should be the size it is
+-- against him. Sized off the width instead, an ultrawide gets a sheet with a
+-- giant on it and a four by three panel gets one with a doll, because the width
+-- of a monitor says nothing about how much room a figure has to stand in.
+--
+-- The shares are bounded at both ends, because a share of a screen is not a
+-- share of a name. A column has to hold "Bloodfang Spaulders of the Underworld"
+-- and there is no point in it holding twice that, so the ceiling is the longest
+-- name the game has and the floor is a disc with enough of a name beside it to
+-- be worth printing.
+--------------------------------------------------------------------------
 
--- The portrait's two bands. The top one is a line of text and is sized like
--- one; the bottom one is a number over a word, twice, plus the air round them.
-local RIBBON = M.row
-local CELL = M.heading + M.small + 12
-local BAR = 4
-local CELLPAD = 4
+-- How much of the page's height the figure stands in, and how wide the frame
+-- around him has to be for that to be his whole height.
+--
+-- The client scales a model to the width of the frame holding it, so the width
+-- is what decides how big the figure comes out and the height is only whether
+-- there is room for all of him. A landscape frame is therefore a giant cropped
+-- at the crown and the knees, which is what filling the page with him produced.
+--
+-- BUILD is narrower than a person is, deliberately. A standing humanoid is
+-- about one wide to two tall, so a frame at that ratio is a figure that exactly
+-- fills it and crops on the first tabard that hangs low or headdress that
+-- stands up. Under it, the height has room to spare and the air is above his
+-- head and under his feet where it belongs.
+local FIGURE = 0.80
+local BUILD = 0.46
+
+-- One column of rows: the disc, a gutter and the name.
+local COLUMN, COLUMN_MIN, COLUMN_MAX = 0.26, 170, 280
+
+-- The stats column. Read as the row added up: a scroll bar, the widest name the
+-- page prints beside a number, the gutter, and the room the value is pinned
+-- into.
+local READING, READING_MIN, READING_MAX = 0.28, 220, 320
+
+-- The narrowest the figure is ever squeezed to. Under this the page is not a
+-- character sheet, it is two lists with a keyhole between them, and the two
+-- columns are what give way.
+local STAGE_MIN = 160
+
+-- A share of the height, held between the two widths it is worth having.
+local function Share(height, fraction, least, most)
+	return math.max(math.min(math.floor(height * fraction), most), least)
+end
+
+-- The head of that column, top to bottom: your name, the line under it saying
+-- what you are, the air before the badges, the badges themselves and the word
+-- under each one.
+local NAME = M.heading + 5
+local BADGE = 44
+local BADGERIM = 2
+local HEAD = NAME + 2 + M.small + M.gutter + BADGE + 2 + M.small
 
 -- Three quarters on, which is how the client poses the model on its own sheet
 -- and is the angle a shoulder actually reads at. Dead ahead is a chest and two
@@ -222,8 +258,9 @@ local function Face(box)
 end
 
 -- The name of what is in the slot, the line under it, and the sockets on that
--- line. Only the sixteen sided slots get one: the three weapons sit centred
--- under the figure where a row of text has nowhere to go and would cross it.
+-- line. Every slot has one, weapons included: the three that used to sit under
+-- the figure as bare discs are rows in the left column now, for the reason
+-- Character/Worn.lua gives where the arrangement is written down.
 --
 -- Everything is anchored here rather than in Resize, off the face at one end and
 -- the row's own far edge at the other, so a row that changes width takes its
@@ -266,28 +303,16 @@ local function Square(pane, entry)
 	box:SetSize(SQUARE, SQUARE)
 	box.face = Face(box)
 	box.face:SetPoint("TOP" .. (entry.side == "right" and "RIGHT" or "LEFT"))
+	Words(box, entry)
 
-	-- The three weapons are a side of their own and get no words. They sit
-	-- centred under the figure, where a line of text has nowhere to go and would
-	-- be drawn across the model rather than beside it.
-	if entry.side ~= "hands" then
-		Words(box, entry)
-	end
-
-	-- Under the name where there is one, and a chord across the foot of the disc
-	-- where there is not. Durability is the one fact about a piece that changes
-	-- while you play, so it belongs on the line you are already reading, and a
-	-- two pixel rule under an item's name is that line's own underscore rather
-	-- than a bar competing with it.
+	-- Under the name. Durability is the one fact about a piece that changes while
+	-- you play, so it belongs on the line you are already reading, and a two pixel
+	-- rule under an item's name is that line's own underscore rather than a bar
+	-- competing with it.
 	box.wear = ns.Fill(box, "OVERLAY", C.tick[1], C.tick[2], C.tick[3], 1)
 	box.wear:SetHeight(WEAR)
-	if box.name then
-		local near = entry.side == "right" and "RIGHT" or "LEFT"
-		box.wear:SetPoint("BOTTOM" .. near, box.name, "BOTTOM" .. near, 0, -1)
-	else
-		box.wear:SetPoint("BOTTOM")
-		box.wear:SetWidth(WEARSPAN)
-	end
+	box.wear:SetPoint("BOTTOM" .. (entry.side == "right" and "RIGHT" or "LEFT"),
+		box.name, "BOTTOM" .. (entry.side == "right" and "RIGHT" or "LEFT"), 0, -1)
 	box.wear:Hide()
 
 	-- The line the client already knows. `/use 16` is what every sharpening
@@ -434,20 +459,18 @@ local function PaintSquare(box)
 	-- The name of the thing, in the colour of the thing. An empty slot says what
 	-- the slot is for instead, dimmed, because a blank line beside a silhouette
 	-- is a row you have to work out and the label is already in the entry.
-	if box.name then
-		local tone = quality and UI.Quality[quality] or C.dim
-		box.name:SetText(link and (ns.ItemInfo(link)) or entry.label)
-		box.name:SetTextColor(tone[1], tone[2], tone[3])
-		local level = link and ns.ItemLevel(link)
-		box.note:SetText(level and level > 0 and ("%d"):format(level) or "")
-		PaintDots(box, link)
-	end
+	local tone = quality and UI.Quality[quality] or C.dim
+	box.name:SetText(link and (ns.ItemInfo(link)) or entry.label)
+	box.name:SetTextColor(tone[1], tone[2], tone[3])
+	local level = link and ns.ItemLevel(link)
+	box.note:SetText(level and level > 0 and ("%d"):format(level) or "")
+	PaintDots(box, link)
 
 	local has, of = ns.Worn.Durability(entry.slot)
 	if has then
 		local fraction = has / of
-		local span = box.name and box.name:GetWidth() or (SQUARE - INSET * 2)
-		box.wear:SetWidth(math.max(UI.Round(box, span * fraction), 1))
+		box.wear:SetWidth(math.max(
+			UI.Round(box, box.name:GetWidth() * fraction), 1))
 		UI.Tint(box.wear, WearTone(fraction))
 		box.wear:Show()
 	else
@@ -458,9 +481,9 @@ end
 --------------------------------------------------------------------------
 -- The four readings
 --
--- Four cells along the foot of the portrait, in this order, always. A number
+-- Four badges at the head of the stats column, in this order, always. A number
 -- that moves is a number you have to read the label of; these four never move,
--- so after a week you read the second cell rather than the word durability.
+-- so after a week you read the second badge rather than the word durability.
 --------------------------------------------------------------------------
 
 local LABELS = { "item level", "durability", "empty", "miss" }
@@ -498,71 +521,103 @@ local function Readings()
 end
 
 --------------------------------------------------------------------------
--- The portrait
+-- The head of the stats column
+--
+-- Your name, what you are, and the four readings as discs under it. It is the
+-- top of the right hand column rather than anything drawn on the figure,
+-- because a page with no ground has nowhere to put a caption except beside the
+-- other captions, and because these four numbers are read against the stats
+-- under them rather than against the picture.
 --------------------------------------------------------------------------
 
--- One band of shadow over the model. A frame rather than a texture on the
--- panel, because a texture belongs to the panel's own layers and the client
--- draws a model over every one of them. Frame level is the only thing a model
--- is behind.
-local function Band(panel, level)
-	local band = CreateFrame("Frame", nil, panel)
-	band:SetFrameLevel(level)
-	band.bg = ns.Fill(band, "BACKGROUND",
-		C.shadow[1], C.shadow[2], C.shadow[3], C.shadow[4])
-	band.bg:SetAllPoints()
-	return band
-end
+-- One reading. A disc with the number in it, a ring of colour round the disc,
+-- the word under it, and the sentence in the hover.
+--
+-- Discs rather than the cells this was, for the same reason a gear slot is a
+-- disc: the page has one shape on it and a rectangle in the middle of nineteen
+-- circles is the one thing on it that looks borrowed.
+local function Badge(head, index)
+	local badge = CreateFrame("Frame", nil, head)
+	badge:EnableMouse(true)
 
--- One reading. The number, the word under it, a hairline off its left where
--- there is a cell before it, and the sentence in the hover.
-local function Cell(foot, index, level)
-	local cell = CreateFrame("Frame", nil, foot)
-	cell:SetFrameLevel(level)
-	cell:EnableMouse(true)
+	badge.ring = UI.Disc(badge, "BACKGROUND")
+	badge.ring:SetSize(BADGE, BADGE)
+	badge.ring:SetPoint("TOP")
 
-	cell.value = UI.Label(cell, M.heading, C.accent, "CENTER", UI.SHADOW)
-	UI.Wrap(cell.value, false)
-	cell.value:SetPoint("TOPLEFT", 0, -CELLPAD)
-	cell.value:SetPoint("TOPRIGHT", 0, -CELLPAD)
+	-- The dark inside the ring, so the number is read against the theme's own
+	-- sunken rather than against whatever the player is standing on. It is the
+	-- one opaque shape on the page and it is forty-four pixels across.
+	badge.face = UI.Disc(badge, "ARTWORK")
+	badge.face:SetPoint("TOPLEFT", badge.ring, "TOPLEFT", BADGERIM, -BADGERIM)
+	badge.face:SetPoint("BOTTOMRIGHT", badge.ring, "BOTTOMRIGHT", -BADGERIM, BADGERIM)
+	badge.face:SetVertexColor(C.sunken[1], C.sunken[2], C.sunken[3], 0.85)
 
-	cell.label = UI.Label(cell, M.small, C.dim, "CENTER", UI.SHADOW)
-	UI.Wrap(cell.label, false)
-	cell.label:SetPoint("TOPLEFT", cell.value, "BOTTOMLEFT", 0, -2)
-	cell.label:SetPoint("TOPRIGHT", cell.value, "BOTTOMRIGHT", 0, -2)
-	cell.label:SetText(LABELS[index])
+	badge.value = UI.Label(badge, M.font, C.accent, "CENTER", UI.SHADOW)
+	UI.Wrap(badge.value, false)
+	badge.value:SetPoint("LEFT", badge.ring, "LEFT", 2, 0)
+	badge.value:SetPoint("RIGHT", badge.ring, "RIGHT", -2, 0)
 
-	if index > 1 then
-		cell.rule = UI.Rule(cell, C.edge, true)
-		cell.rule:SetPoint("TOPLEFT", 0, -CELLPAD)
-		cell.rule:SetPoint("BOTTOMLEFT", 0, CELLPAD)
-	end
+	-- Anchored to the badge rather than to the disc, because "item level" is
+	-- wider than forty-four pixels and the cell it sits in is not.
+	badge.label = UI.Label(badge, M.small, C.dim, "CENTER", UI.SHADOW)
+	UI.Wrap(badge.label, false)
+	badge.label:SetPoint("TOPLEFT", 0, -(BADGE + 2))
+	badge.label:SetPoint("TOPRIGHT", 0, -(BADGE + 2))
+	badge.label:SetText(LABELS[index])
 
-	cell:SetScript("OnEnter", function(self)
+	badge:SetScript("OnEnter", function(self)
 		ns.Tip.Open(self, { kind = "note", title = LABELS[index],
 			lines = { { self.note or "", color = C.dim } } }, true)
 	end)
-	cell:SetScript("OnLeave", function()
+	badge:SetScript("OnLeave", function()
 		ns.Tip.Close()
 	end)
 
-	return cell
+	return badge
 end
 
--- The model, the two bands and the durability line along the foot. Everything
--- inside the panel is placed against its own edges, so the only thing Resize
--- has to hand it is a size.
+-- The level is handed in and set before anything is put on the head, because a
+-- frame takes its parent's level at the moment it is created and the badges
+-- have to come out over the figure rather than under it.
+local function Head(parent, level)
+	local head = CreateFrame("Frame", nil, parent)
+	head:SetFrameLevel(level)
+
+	head.name = UI.Label(head, NAME, C.heading, "CENTER", UI.SHADOW)
+	UI.Wrap(head.name, false)
+	head.name:SetPoint("TOPLEFT")
+	head.name:SetPoint("TOPRIGHT")
+
+	head.level = UI.Label(head, M.small, C.text, "CENTER", UI.SHADOW)
+	UI.Wrap(head.level, false)
+	head.level:SetPoint("TOPLEFT", head.name, "BOTTOMLEFT", 0, -2)
+	head.level:SetPoint("TOPRIGHT", head.name, "BOTTOMRIGHT", 0, -2)
+
+	head.badges = {}
+	for index = 1, #LABELS do
+		head.badges[index] = Badge(head, index)
+	end
+	return head
+end
+
+--------------------------------------------------------------------------
+-- The portrait
+--------------------------------------------------------------------------
+
+-- The figure and nothing else. It used to be a sunken box with a hairline round
+-- it and two bands of shadow laid over it, and all three went when the sheet
+-- stopped being a window: a panel behind a model standing on the world is a
+-- rectangle of paint cut out of the scenery, and a band of shadow across the
+-- figure is a smear on the one thing the page is built around.
 local function Portrait(parent)
-	local panel = UI.Box(parent, C.sunken, C.edge)
-	local level = (panel:GetFrameLevel() or 0) + 5
+	local panel = CreateFrame("Frame", nil, parent)
 
 	-- PlayerModel is a frame type rather than a template, so it costs nothing
 	-- to exist on either client, and both calls on it are probed. A client that
 	-- will not draw a model leaves the panel empty and every square around it
 	-- still works, which is the honest degradation.
 	local model = CreateFrame("PlayerModel", nil, panel)
-	model:SetPoint("TOPLEFT", INSET, -INSET)
-	model:SetPoint("BOTTOMRIGHT", -INSET, INSET)
+	model:SetAllPoints()
 	local function Dress()
 		if model.SetUnit then
 			pcall(model.SetUnit, model, "player")
@@ -584,145 +639,123 @@ local function Portrait(parent)
 	model:SetScript("OnShow", Dress)
 	panel.model = model
 	panel.Dress = Dress
-
-	panel.top = Band(panel, level)
-	panel.top:SetPoint("TOPLEFT", INSET, -INSET)
-	panel.top:SetPoint("TOPRIGHT", -INSET, -INSET)
-	panel.top:SetHeight(RIBBON)
-
-	panel.name = UI.Label(panel.top, M.heading, C.heading, "LEFT", UI.SHADOW)
-	UI.Wrap(panel.name, false)
-	panel.name:SetPoint("LEFT", CELLPAD, 0)
-	panel.level = UI.Label(panel.top, M.small, C.text, "RIGHT", UI.SHADOW)
-	UI.Wrap(panel.level, false)
-	panel.level:SetPoint("RIGHT", -CELLPAD, 0)
-
-	panel.foot = Band(panel, level)
-	panel.foot:SetPoint("BOTTOMLEFT", INSET, INSET)
-	panel.foot:SetPoint("BOTTOMRIGHT", -INSET, INSET)
-	panel.foot:SetHeight(CELL + BAR)
-
-	panel.track = ns.Fill(panel.foot, "ARTWORK",
-		C.sunken[1], C.sunken[2], C.sunken[3], 1)
-	panel.track:SetPoint("BOTTOMLEFT")
-	panel.track:SetPoint("BOTTOMRIGHT")
-	panel.track:SetHeight(BAR)
-	panel.fill = ns.Fill(panel.foot, "OVERLAY", C.tick[1], C.tick[2], C.tick[3], 1)
-	panel.fill:SetPoint("BOTTOMLEFT")
-	panel.fill:SetHeight(BAR)
-
-	panel.cells = {}
-	for index = 1, #LABELS do
-		panel.cells[index] = Cell(panel.foot, index, level + 1)
-	end
 	return panel
 end
 
 --------------------------------------------------------------------------
 
 function Paperdoll.New(parent)
-	local pane = setmetatable({ squares = {}, left = {}, right = {}, hands = {},
+	local pane = setmetatable({ squares = {}, left = {}, right = {},
 		worn = {} }, Pane)
 	pane.frame = CreateFrame("Frame", nil, parent)
 
-	-- Sorted into the three groups once, because which group a slot is in is a
+	-- Sorted into the two columns once, because which column a slot is in is a
 	-- fact about the slot and not about the width the page came out at.
 	for _, entry in ipairs(ns.Worn.Slots()) do
 		local box = Square(pane, entry)
 		pane.squares[#pane.squares + 1] = box
-		local group = pane[entry.side] or pane.hands
+		local group = pane[entry.side]
 		group[#group + 1] = box
 	end
 
 	pane.panel = Portrait(pane.frame)
 
-	-- Every row sits over the figure, and that is what putting the model behind
-	-- the page costs. A model is drawn over every texture layer of the frame that
-	-- holds it, so frame level is the only thing it goes behind: this is the same
-	-- sentence Band above is written for, applied to nineteen rows. The secure
-	-- button goes one higher than its row, because a click has to reach it
-	-- through the name as well as through the disc.
+	-- Everything on the page sits over the figure, and that is what putting the
+	-- model behind the page costs. A model is drawn over every texture layer of
+	-- the frame that holds it, so frame level is the only thing it goes behind.
+	-- The secure button goes one higher than its row, because a click has to
+	-- reach it through the name as well as through the disc.
 	local level = pane.panel:GetFrameLevel() + 5
 	for index = 1, #pane.squares do
 		pane.squares[index]:SetFrameLevel(level)
 		pane.squares[index].button:SetFrameLevel(level + 1)
 	end
 
+	-- Who you are and what your gear adds up to, at the top of the right hand
+	-- column. Over the figure by the same rule as the rows: the model is wider
+	-- than the gap it stands in on a narrow screen, and a name drawn under it
+	-- would be a name that vanishes when the sheet is opened on a laptop.
+	pane.head = Head(pane.frame, level)
+
 	-- The same readout the stats tab was, hosted here instead and drawn compact:
 	-- a line a row, with the sentence under it moved into the hover. It keeps
-	-- its own scroll view, so a long sheet on a short window scrolls beside a
-	-- portrait that does not move.
+	-- its own scroll view, so a long sheet on a short screen scrolls beside a
+	-- figure that does not move.
 	pane.stats = ns.CharReadout.New(pane.frame, { compact = true })
 	return pane
 end
 
--- Left column down the left, right column beside the portrait, the portrait
--- between them, the three weapons centred under it, and the stats down the rest
--- of the width. Placed rather than stacked, because this is one arrangement of a
--- fixed number of squares and a layout engine would be a layer between the
--- numbers and the picture.
+-- Ten rows down the left, nine down the right, the figure standing between
+-- them, and the readings and the stats down the far right. Placed rather than
+-- stacked, because this is one arrangement of a fixed number of rows and a
+-- layout engine would be a layer between the numbers and the picture.
+--
+-- Nothing here is measured against the width it is handed. The page is the
+-- screen, so that width is a different number on every machine and says nothing
+-- about how much room the page needs: the three columns and the stage between
+-- them are shares of the height, held between the two widths each is worth
+-- having, and what is left over is margin split evenly. A wider monitor is a
+-- sheet with more air round it and the same sheet in the middle, which is the
+-- only answer that does not put the name of your helmet a third of a screen
+-- away from the helmet.
 function Pane:Resize(width, height)
 	self.frame:SetSize(width, height)
 
-	-- The stats column takes what it needs off the right and the gear area is
-	-- everything else. Inside that, the two columns of rows sit against its two
-	-- edges and MIDDLE is the gap left between them, which is the strip of the
-	-- figure nothing is drawn over.
-	--
-	-- There is no narrow arrangement to fall back to. This window's width is a
-	-- constant in Character/Window.lua and its zoom scales the frame rather than
-	-- resizing it, so the column is the same number of units on every screen the
-	-- page is ever drawn on. A fallback here would be a second layout nothing
-	-- exercises, which is a second layout nobody would notice going wrong.
-	local stats = width - READING - M.gutter >= SQUARE * 2 + MIDDLE and READING or 0
-	local gutter = stats > 0 and M.gutter or 0
-	local gear = math.max(width - stats - gutter, 1)
-	local column = math.max(UI.Round(self.frame, (gear - MIDDLE) / 2), SQUARE)
+	-- The stats column comes off the right first, because it is the one thing on
+	-- the page that is a fixed shape: a name, a number, and the gutter between
+	-- them. Then the two columns, then whatever the figure is left with, and only
+	-- the figure gives way, because a name clipped in half is worse than a
+	-- smaller character.
+	local reading = Share(height, READING, READING_MIN, READING_MAX)
+	local gear = math.max(width - reading - M.gutter, 1)
+	local column = math.min(Share(height, COLUMN, COLUMN_MIN, COLUMN_MAX),
+		math.max(UI.Round(self.frame, (gear - STAGE_MIN) / 2), SQUARE))
+
+	-- How much room the figure has and how much of it he uses. The panel is a
+	-- portrait rather than the whole page: the client fits a model to the frame
+	-- it is in, so a frame as wide as the gear area is a figure whose head and
+	-- feet are off the top and bottom of it.
+	local tall = UI.Round(self.frame, height * FIGURE)
+	local stage = math.max(
+		math.min(UI.Round(self.frame, tall * BUILD), gear - column * 2), STAGE_MIN)
+	local block = column * 2 + stage
+	local edge = math.max(UI.Round(self.frame, (gear - block) / 2), 0)
 	self.width = gear
 
-	-- Under the top band, not level with it. The band carries your name and it
-	-- runs the full width now, so a first row starting at the top of the page
-	-- would be drawn across it.
-	local top = RIBBON + GAP
+	-- The rows are centred down the height rather than stacked from the top.
+	-- On a screen this tall a column pinned to the top edge is ten rows and
+	-- half a monitor of nothing under them, and the eye reads a column against
+	-- the figure beside it rather than against the ceiling.
+	local rows = math.max(#self.left, #self.right)
+	local top = math.max(UI.Round(self.frame,
+		(height - (rows * SQUARE + (rows - 1) * GAP)) / 2), 0)
 
 	for index = 1, #self.left do
 		self.left[index]:SetSize(column, SQUARE)
 		self.left[index]:ClearAllPoints()
-		self.left[index]:SetPoint("TOPLEFT", 0, -(top + (index - 1) * (SQUARE + GAP)))
+		self.left[index]:SetPoint("TOPLEFT", edge, -(top + (index - 1) * (SQUARE + GAP)))
 	end
 	for index = 1, #self.right do
 		self.right[index]:SetSize(column, SQUARE)
 		self.right[index]:ClearAllPoints()
 		self.right[index]:SetPoint("TOPRIGHT", self.frame, "TOPLEFT",
-			gear, -(top + (index - 1) * (SQUARE + GAP)))
+			edge + block, -(top + (index - 1) * (SQUARE + GAP)))
 	end
 
-	-- The figure is behind the whole gear area rather than boxed between the two
-	-- columns, which is the change that makes this one picture instead of three
-	-- panels in a row. Its two bands run the full width with it: the name along
-	-- the top and the four readings along the foot are about the page, not about
-	-- the middle third of it.
+	-- The figure in the gap the two columns leave, centred on it, with the air
+	-- the page's height did not give him split above his head and under his feet.
 	self.panel:ClearAllPoints()
-	self.panel:SetPoint("TOPLEFT")
-	self.panel:SetSize(gear, math.max(height - SQUARE - GAP, 1))
-	self.inner = self:Cells()
+	self.panel:SetPoint("TOPLEFT", edge + column,
+		-UI.Round(self.frame, (height - tall) / 2))
+	self.panel:SetSize(stage, math.max(tall, 1))
 
+	self.head:ClearAllPoints()
+	self.head:SetPoint("TOPRIGHT")
+	self.head:SetSize(reading, HEAD)
+	self:Badges(reading)
 	self.stats.frame:ClearAllPoints()
-	self.stats.frame:SetPoint("TOPRIGHT")
-	if stats > 0 then
-		self.stats.frame:Show()
-		self.stats:Resize(stats, height)
-	else
-		self.stats.frame:Hide()
-	end
-
-	local span = #self.hands * SQUARE + math.max(#self.hands - 1, 0) * GAP
-	for index = 1, #self.hands do
-		self.hands[index]:SetSize(SQUARE, SQUARE)
-		self.hands[index]:ClearAllPoints()
-		self.hands[index]:SetPoint("TOP", self.panel, "BOTTOM",
-			(index - 1) * (SQUARE + GAP) + (SQUARE - span) / 2, -GAP)
-	end
+	self.stats.frame:SetPoint("TOPRIGHT", self.head, "BOTTOMRIGHT", 0, -M.gutter)
+	self.stats:Resize(reading, math.max(height - HEAD - M.gutter, 1))
 
 	-- Sized, not painted. This runs at login on a window nobody has opened, and
 	-- the paint behind it walked nineteen slots, every stat and the durability of
@@ -732,46 +765,42 @@ function Pane:Resize(width, height)
 	return true
 end
 
--- The four cells across the foot of the portrait, an equal slice each. The last
--- one takes the remainder, so the row ends on the panel's edge rather than a
--- rounding error short of it.
-function Pane:Cells()
-	local cells = self.panel.cells
-	local inner = math.max(self.width - INSET * 2, 1)
-	local slice = math.floor(inner / #cells)
+-- The four badges across the head of the stats column, an equal slice each. The
+-- last one takes the remainder, so the row ends on the column's own edge rather
+-- than a rounding error short of it.
+function Pane:Badges(width)
+	local badges = self.head.badges
+	local slice = math.floor(width / #badges)
 
-	for index = 1, #cells do
-		local last = (index == #cells)
-		cells[index]:ClearAllPoints()
-		cells[index]:SetPoint("TOPLEFT", (index - 1) * slice, 0)
-		cells[index]:SetSize(last and (inner - slice * (#cells - 1)) or slice, CELL)
+	for index = 1, #badges do
+		local last = (index == #badges)
+		badges[index]:ClearAllPoints()
+		badges[index]:SetPoint("TOPLEFT", self.head, "TOPLEFT",
+			(index - 1) * slice, -(NAME + 2 + M.small + M.gutter))
+		badges[index]:SetSize(last and (width - slice * (#badges - 1)) or slice,
+			BADGE + 2 + M.small)
 	end
-	return inner
+	return width
 end
 
-function Pane:PaintPortrait()
-	local panel = self.panel
-	panel.name:SetText(UnitName("player") or "You")
-	panel.level:SetText(("level %d %s")
+-- Your name, what you are, and the four readings. The tone is on the ring as
+-- well as on the number, because a durability badge that has gone amber is a
+-- thing you want to catch out of the corner of an eye while you are reading
+-- something else, and eleven pixels of coloured text is not that.
+function Pane:PaintHead()
+	local head = self.head
+	head.name:SetText(UnitName("player") or "You")
+	head.level:SetText(("level %d %s")
 		:format(UnitLevel("player") or 0, ns.Class.Label()))
 
 	local read = Readings()
-	for index = 1, #panel.cells do
-		local cell = panel.cells[index]
+	for index = 1, #head.badges do
+		local badge = head.badges[index]
 		local tone = read[index].tone or C.accent
-		cell.value:SetText(read[index].value)
-		cell.value:SetTextColor(tone[1], tone[2], tone[3])
-		cell.note = read[index].note
-	end
-
-	local wear = read[2]
-	if wear.fraction then
-		panel.fill:SetWidth(math.max(
-			UI.Round(panel, (self.inner or 1) * wear.fraction), 1))
-		UI.Tint(panel.fill, wear.tone)
-		panel.fill:Show()
-	else
-		panel.fill:Hide()
+		badge.value:SetText(read[index].value)
+		badge.value:SetTextColor(tone[1], tone[2], tone[3])
+		badge.ring:SetVertexColor(tone[1], tone[2], tone[3], 1)
+		badge.note = read[index].note
 	end
 end
 
@@ -809,9 +838,7 @@ function Pane:Paint()
 	for index = 1, #self.squares do
 		PaintSquare(self.squares[index])
 	end
-	if self.inner then
-		self:PaintPortrait()
-	end
+	self:PaintHead()
 	-- Only while the page is up, and that is a measurement rule rather than a
 	-- saving: a sentence under a row is measured against the width it wraps to,
 	-- and a font string on a page nobody has shown yet is not obliged to answer

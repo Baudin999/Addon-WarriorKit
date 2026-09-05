@@ -74,9 +74,15 @@ ns.Register({
 		-- 1.3, and it was 1.25 when every window in the addon shared one number.
 		-- A tenth is the step now and 1.25 is not on one, so a default that
 		-- stayed there would be a value the page cannot reach and the reset
-		-- cannot restore. A window at 1 is a window you lean in to read on the
-		-- panel most people are playing on, and the screen height already
-		-- doubles this where a panel is tall enough to need it.
+		-- cannot restore.
+		--
+		-- It means something different here than on the other eleven windows,
+		-- and the slider is the same slider. The sheet is the size of the screen
+		-- whatever this is set to, so turning it up does not make the sheet
+		-- bigger: it makes the type, the discs and the figure bigger and leaves
+		-- less room round them, because the units the page is laid out in shrink
+		-- by exactly this factor. At 1 the sheet is the monitor in pixels, which
+		-- is a lot of very small writing on the panel most people are playing on.
 		characterZoom = 1.3,
 
 		-- On. The client's own sheet spends its largest area on a picture of

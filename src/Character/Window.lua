@@ -71,24 +71,30 @@ local C, M = UI.Color, UI.Metric
 -- model, which is where nearly all of the cost was.
 --------------------------------------------------------------------------
 
--- Wide enough for the gear page to carry an item's name beside every slot, the
--- figure behind them and the stats column against the right edge. The other
--- three tabs are a list in a scroll view and take whatever width they are given.
+-- There are no two numbers here any more.
 --
--- It is not a round number and it never was: it is the padding, two columns of
--- rows, the gap the figure stands in, a gutter and the narrowest column
--- Paperdoll will draw a stat into, added up. 24 + 190 + 190 + 190 + 8 + 220.
+-- This was 860 by 520, arrived at by adding up a padding, two columns of rows,
+-- the gap the figure stood in, a gutter and the narrowest column the stats
+-- would draw into. Every one of those additions was an argument about how
+-- little the page could be given and still work, and the page it produced was a
+-- character standing in a box the size of a dialog with his gear listed round
+-- the edges. The sheet this is drawn against is not a dialog. It is the screen,
+-- with the figure standing in it and the gear read off the world either side.
 --
--- It grew by two hundred and sixty when the squares became rows. A name is the
--- one thing both of the sheets this page was drawn against have and this page
--- did not, and a name is worth about a hundred and ninety units next to a
--- thirty six unit disc. The alternative was a page that draws half of "Bloodfang
--- Spaulders" and stops, which is worse than the icons alone.
+-- So the size is the monitor and `screen` in UI/Window.lua is what makes it so.
+-- The zoom is still the player's and still means what it always meant: turn it
+-- up and the type and the discs get bigger while the sheet still covers the
+-- screen, because the units it is laid out in shrink by the same factor.
+-- Character/Paperdoll.lua takes whatever width comes out and gives the figure
+-- everything the three columns of text do not want.
 --
--- Taller by forty at the same time, and for the figure rather than for the
--- rows. Eight rows a column was already the count; behind them there is now a
--- person standing up, and 480 cut him off at the knee.
-local WIDTH, HEIGHT = 860, 520
+-- The other three tabs are the exception, and PAGE is how wide they get. They
+-- are lists of prose on a ground of their own, and prose is read at a column's
+-- width however much room there is: a weapon skill with its sentence under it
+-- laid across an ultrawide is a line your eye loses on the way back. It is the
+-- old window's content width, which is what those three were always drawn at
+-- and the only number from it worth keeping.
+local PAGE = 836
 
 -- The four, in the order they are drawn. `fill` is what the tab's pane is
 -- handed on a repaint, and the two that have none are the two that are not
@@ -176,7 +182,9 @@ local function Select(index)
 end
 
 local function Chrome()
-	footer = UI.Label(window.footer, M.small, C.dim, "LEFT", UI.FLAT)
+	-- The rim rather than the flat face, because this line is printed along the
+	-- bottom of the screen over whatever the player is standing on.
+	footer = UI.Label(window.footer, M.small, C.dim, "LEFT", UI.SHADOW)
 	UI.Wrap(footer, false)
 	footer:SetPoint("LEFT")
 end
@@ -184,9 +192,14 @@ end
 -- Refused in a fight, and put right when it drops.
 --
 -- Sizing the gear pane sizes the frame nineteen secure buttons hang off, which
--- is the same protected act as showing it. Nothing here is urgent: a window
--- laid out for the old width is a window with a wide margin until the fight
--- ends, and PLAYER_REGEN_ENABLED below runs the pass again.
+-- is the same protected act as showing it. Nothing here is urgent: a sheet laid
+-- out for the old screen is a sheet with a wide margin until the fight ends,
+-- and PLAYER_REGEN_ENABLED below runs the pass again.
+--
+-- The resize is what re-reads the monitor. A screen window is not asked how big
+-- it wants to be, so this hands it the two numbers it will ignore and takes back
+-- the ones it came out at, which is how a sheet built at one resolution still
+-- covers the screen after a monitor swap or a drag of the zoom slider.
 function Window.Fit()
 	if not window then
 		return false
@@ -195,17 +208,24 @@ function Window.Fit()
 		pending = true
 		return false
 	end
+	window:Resize(window.width, window.height)
 	local width = window.width - M.pad * 2
 	local body = window:Body() - M.pad * 2
 	local under = body - (tabs:Resize(width) + M.gutter)
 
 	for index = 1, #TABS do
 		local pane = panes[index]
-		pane.frame:SetSize(width, under)
+		-- The gear page is the sheet and takes the whole of it. The other three
+		-- are lists of prose on an opaque ground, and a list of prose is read at
+		-- a column's width whatever the monitor is: given the screen they would
+		-- be twenty skills laid across an ultrawide on a panel that has painted
+		-- the game out from edge to edge.
+		local room = index == GEAR and width or math.min(width, PAGE)
+		pane.frame:SetSize(room, under)
 		if pane.Resize then
-			pane:Resize(width, under)
+			pane:Resize(room, under)
 		else
-			pane.view:Resize(width, under)
+			pane.view:Resize(room, under)
 		end
 	end
 	return true
@@ -218,9 +238,19 @@ function Window.Build()
 
 	window = UI.Window({
 		name = "WarriorKitCharacter",
-		title = "Character",
-		width = WIDTH,
-		height = HEIGHT,
+		-- The size of the monitor, fixed to it, with no title bar, no line round
+		-- the outside, no ground and no saved point, at the floor of the frame
+		-- pile so every window the player opens flows over the top of it.
+		-- UI/Window.lua carries the whole of what that means; what it means here
+		-- is that no width and no height are passed, because neither would be
+		-- read.
+		--
+		-- No title bar is no close box, and a window without one owes the player
+		-- another way out. This one has two, and both were here before the cross
+		-- was: Escape, through UISpecialFrames, and the key that opened it, which
+		-- is C unless the player has moved it and is a snippet either way, so it
+		-- shuts the sheet in a fight as well as out of one.
+		screen = true,
 		zoom = function() return ns.Zoom("characterZoom") end,
 		-- The grid moved: the screen changed size, combat let go of a frame, or
 		-- this sheet's own zoom was dragged. The rezoom is handed over rather
@@ -244,9 +274,17 @@ function Window.Build()
 		-- holds both halves of that.
 		secure = true,
 	})
-	ns.Remember(window)
+	-- No ns.Remember, because there is nothing to remember. A sheet the size of
+	-- the screen is already where it goes and cannot be dragged off it, so the
+	-- only thing a saved point could do is put it somewhere wrong. Whatever an
+	-- older version wrote against this name is dropped rather than left to rot in
+	-- the account file behind a reader that no longer exists.
+	ns.db.windowSpots["WarriorKitCharacter"] = nil
 
-	tabs = UI.TabStrip(window.content, { onSelect = Select })
+	-- The words rather than a strip of buttons. This sheet is a backdrop with
+	-- the game showing through it, and a row of filled tabs across the top is the
+	-- one thing left on the page that would still read as a dialog.
+	tabs = UI.TabStrip(window.content, { onSelect = Select, bare = true })
 	tabs.frame:SetPoint("TOPLEFT", M.pad, -M.pad)
 
 	panes[GEAR] = ns.Paperdoll.New(window.content)
@@ -262,9 +300,13 @@ function Window.Build()
 			pane:Show()
 		else
 			-- Over the gear page, opaque, and it eats the mouse. See Select for
-			-- why the page underneath is never taken down instead. The fill is
-			-- the window's own colour at the window's own alpha, so a covered
-			-- page is the same surface as an empty one.
+			-- why the page underneath is never taken down instead.
+			--
+			-- The cover stays now that the sheet itself has no ground, and it is
+			-- the one place on the sheet where a panel is the right answer. These
+			-- three pages are lists of prose: a weapon skill with its sentence
+			-- under it, a faction with a bar. The gear page has a figure and a
+			-- disc for every line and reads against grass; a paragraph does not.
 			pane:SetFrameLevel(window.content:GetFrameLevel() + 10)
 			pane:EnableMouse(true)
 			local cover = ns.Fill(pane, "BACKGROUND",

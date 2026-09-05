@@ -269,6 +269,13 @@ read_globals = {
 	-- change without being told about one. UIParent:GetWidth() answers the
 	-- same number on a client and nothing at all under the harness stub.
 	"GetScreenWidth",
+	-- And the height in the same units, which on its own is 768 on every client
+	-- and says nothing. It is read beside the width above, in UI/Pixel.lua, and
+	-- the pair is what the aspect ratio is: both are in UIParent's units, so the
+	-- scale divides out of the ratio and what is left is the shape of the
+	-- monitor. That is how a window the size of the screen works out how wide the
+	-- screen is without a second resolution CVar to parse.
+	"GetScreenHeight",
 	-- the four totem slots, read by Standing/Standing.lua. Probed by name
 	-- rather than called outright, because nothing installed on this disk
 	-- calls it and the client's own documentation marks it as a call that may

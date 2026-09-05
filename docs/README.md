@@ -366,10 +366,11 @@ name of none of them.
                              skills tab, the reputation tab and the stats column
                              on the gear page are all this, the last of them
                              compact: a line a row, the sentence in the hover
-    Character/Paperdoll.lua  the gear page: nineteen squares, the four numbers
-                             the client's own sheet has never drawn, and the
-                             stats down the right of them
-    Character/Window.lua     four tabs over one window, one painted at a time
+    Character/Paperdoll.lua  the gear page: nineteen rows either side of the
+                             figure, the four numbers the client's own sheet has
+                             never drawn, and the stats down the right of them
+    Character/Window.lua     four tabs over one sheet, one painted at a time, and
+                             the sheet is the screen rather than a window on it
     Character/Blizzard.lua   the client's own sheet in the attic, and the C key
                              redirected to the matching tab
     Character/Feature.lua
@@ -2897,7 +2898,8 @@ panel that cannot see into your bank.
 
 **Character sheet.** Nine files under `Character/`, replacing the client's own
 window: gear with the stats beside it, skills, reputation and loadouts, on four
-tabs the C key opens. The stats had a tab of their own and lost it: what a stat
+tabs the C key opens. It is not a window. It is a backdrop the size of the
+monitor that the player stands in, with the gear read off it either side. The stats had a tab of their own and lost it: what a stat
 answers is what the piece you just put on did, so the readout is a column down
 the right of the squares that move it. It is drawn compact, which is a mode of
 `Character/Readout.lua` rather than a second widget: a row is one line, and the
@@ -2950,13 +2952,37 @@ client answers a spell crit chance and a mana regen for a warrior in plate, both
 off intellect nobody chose to have. Rows of nought are how a page teaches you to
 stop reading it.
 
-**The gear page is nineteen squares and four numbers.** The four are item level,
-durability, empty slots and the miss chance, and none of them is on the client's
-own sheet. There is no character model in the middle, which is the largest area
-of the client's version: what you are wearing is already drawn in the two columns
-either side at the size you can read the names of. The loadout tab does draw one,
-and the two differ for a reason: there the model is showing you the pair of
-weapons you just put in its hands, which is the whole subject of that page.
+**The gear page is nineteen rows, a figure and four numbers.** A row is a round
+icon, the item's name beside it in its quality colour, and under the name the
+item level, the sockets and the durability. Ten rows down the left, nine down the
+right, and between them your character standing up. The four numbers are item
+level, durability, empty slots and the miss chance, none of which is on the
+client's own sheet, and they are discs at the head of the stats column with the
+word under each one.
+
+**The sheet is the screen rather than a window on it.** No title bar, no border,
+no ground and no saved point: it is the size of the monitor less a photograph's
+margin, fixed to it, at the floor of the frame pile so everything else the player
+opens flows over the top, and it does not take the mouse, so a mob behind it is
+still a mob you can click. `UI/Window.lua` carries that as `screen` and says
+there why each piece of chrome came off. It cannot be dragged, and that is not a
+missing feature: a frame the size of the screen is already where it goes, so the
+drag and the saved corner are gone rather than left as an invisible grip the
+width of the monitor. Escape closes it and so does the key that opened it.
+
+**Every width on it is a share of the height.** A character sheet is a person
+standing up with two lists beside him: how tall he can be is what decides how big
+everything else should be. Sized off the width, an ultrawide would get a giant
+and a four by three panel a doll. So the two columns, the stats and the stage the
+figure stands in are fractions of the page's height, each held between the two
+widths it is worth having, and what is left over is margin split evenly. The
+figure's own frame is narrower than a person is on purpose: the client scales a
+model to the width of the frame holding it, so a frame at a person's proportions
+is a person cropped by the first headdress that stands up.
+
+The zoom slider means something slightly different here than on the other eleven
+windows. It does not resize the sheet, which is always the screen. It decides how
+much fits on it.
 
 Every square carries the durability of what is in it as a line along its bottom
 edge, green over 50%, amber to 20%, red under it. Three stops rather than a

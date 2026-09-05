@@ -41,6 +41,14 @@ local C, M = UI.Color, UI.Metric
 -- is a page you scroll past rather than read, and the stats are a column you
 -- glance at while you swap a ring. The two tabs that are a page in their own
 -- right, skills and reputation, keep their sentences on the page.
+--
+-- **A compact row is banded, and the band is doing two jobs.** It is what tells
+-- one line of numbers from the line under it once the air between them has been
+-- taken away, which is the whole of what compact did to them. And it is the
+-- only ground the column has: the character sheet it is drawn on is a backdrop
+-- over the game world with no panel behind it, so a stat printed on nothing is
+-- a stat you read against grass. Two tones alternating, both of them the
+-- palette's own, both low enough that the world still shows through.
 --------------------------------------------------------------------------
 
 -- The bar under a row that has a fraction, and the air around it. Short,
@@ -90,22 +98,36 @@ end
 local function Line(pane)
 	local frame = CreateFrame("Frame", nil, pane.view.canvas)
 
-	frame.title = UI.Label(frame, M.heading, C.heading, "LEFT", UI.FLAT)
+	-- Under everything else on the row, and only on a compact one. It is sized
+	-- and coloured by the repaint, because how tall a row came out and which of
+	-- the two tones it takes are both facts about this paint rather than about
+	-- the frame.
+	if pane.compact then
+		frame.band = ns.Fill(frame, "BACKGROUND", C.band[1], C.band[2], C.band[3], C.band[4])
+		frame.band:SetPoint("TOPLEFT")
+		frame.band:SetPoint("TOPRIGHT")
+	end
+
+	frame.title = UI.Label(frame, M.heading, C.heading, "LEFT",
+		pane.compact and UI.SHADOW or UI.FLAT)
 	UI.Wrap(frame.title, false)
 	frame.title:SetPoint("TOPLEFT")
 	frame.rule = UI.Rule(frame, C.hairline)
 	frame.rule:SetPoint("TOPLEFT", 0, -(M.heading + M.rowGap))
 	frame.rule:SetPoint("TOPRIGHT", 0, -(M.heading + M.rowGap))
 
-	frame.label = UI.Label(frame, M.font, C.text, "LEFT", UI.FLAT)
+	frame.label = UI.Label(frame, M.font, C.text, "LEFT",
+		pane.compact and UI.SHADOW or UI.FLAT)
 	UI.Wrap(frame.label, false)
 	frame.label:SetPoint("TOPLEFT")
 
-	frame.value = UI.Label(frame, M.font, C.accent, "RIGHT", UI.FLAT)
+	frame.value = UI.Label(frame, M.font, C.accent, "RIGHT",
+		pane.compact and UI.SHADOW or UI.FLAT)
 	UI.Wrap(frame.value, false)
 	frame.value:SetPoint("TOPRIGHT")
 
-	frame.note = UI.Label(frame, M.small, C.dim, "LEFT", UI.FLAT)
+	frame.note = UI.Label(frame, M.small, C.dim, "LEFT",
+		pane.compact and UI.SHADOW or UI.FLAT)
 	UI.Wrap(frame.note, true)
 	frame.note:SetSpacing(2)
 
@@ -136,6 +158,9 @@ local function Blank(frame)
 	frame.value:Hide()
 	frame.note:Hide()
 	frame.track:Hide()
+	if frame.band then
+		frame.band:Hide()
+	end
 end
 
 -- One heading. Its own height, because a heading is a rule with a word over it
@@ -151,7 +176,7 @@ end
 -- One row, and the height it came out at. The note is given its width before it
 -- is measured, which is the rule every wrapping string in the addon is written
 -- against: a height taken against the last layout's width is the overflow bug.
-local function PaintRow(frame, row, width, compact)
+local function PaintRow(frame, row, width, compact, stripe)
 	Blank(frame)
 	-- What the hover reads, and nothing at all on a pane that draws its own
 	-- sentences: a tooltip that repeats the line under the cursor is furniture.
@@ -186,6 +211,14 @@ local function PaintRow(frame, row, width, compact)
 		height = height + UI.TextHeight(frame.note, M.small) + M.rowGap
 	end
 
+	-- Last, because the band is the whole row's ground and the row's height is
+	-- not known until everything on it has been placed.
+	if frame.band then
+		UI.Tint(frame.band, stripe and C.band or C.bandAlt)
+		frame.band:SetHeight(height)
+		frame.band:Show()
+	end
+
 	return height
 end
 
@@ -199,6 +232,10 @@ function Readout.New(parent, opts)
 	pane.compact = opts and opts.compact and true or false
 	pane.gap = pane.compact and 0 or M.rowGap
 	pane.pad = pane.compact and M.rowGap or M.gutter
+	-- The band runs the row's whole width, so a compact row starts at the
+	-- pane's own edge. Indented, the stripe would begin twelve pixels in and the
+	-- column would read as a list inside a box that is not drawn.
+	pane.indent = pane.compact and 0 or M.indent
 	pane.frame = CreateFrame("Frame", nil, parent)
 	pane.view = UI.ScrollView(pane.frame)
 	pane.view.frame:SetPoint("TOPLEFT")
@@ -249,11 +286,14 @@ function Pane:Paint()
 			-- Placed and sized before it is painted, so the note inside it is
 			-- measured against the width it will be drawn at.
 			row:ClearAllPoints()
-			row:SetPoint("TOPLEFT", self.view.canvas, "TOPLEFT", M.indent, -y)
-			row:SetSize(math.max(width - M.indent, 1), M.row)
+			row:SetPoint("TOPLEFT", self.view.canvas, "TOPLEFT", self.indent, -y)
+			row:SetSize(math.max(width - self.indent, 1), M.row)
 			row:Show()
-			local tall = PaintRow(row, group.rows[slot], width - M.indent,
-				self.compact)
+			-- Odd rows take the stronger of the two tones, so a group always
+			-- opens on one and the stripe restarts under every heading rather
+			-- than running on from whatever the last group ended at.
+			local tall = PaintRow(row, group.rows[slot], width - self.indent,
+				self.compact, slot % 2 == 1)
 			row:SetHeight(tall)
 			y = y + tall + self.gap
 		end

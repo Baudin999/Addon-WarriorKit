@@ -170,9 +170,15 @@ do
 		("the helmet is item level 60 and its line reads %s")
 			:format(tostring(head.note:GetText())))
 
-	-- The three weapons are centred under the figure and carry no words at all,
-	-- because a row of text there has nowhere to go and would cross the model.
-	check(hand.name == nil, "a weapon under the figure drew a name across it")
+	-- The weapons are rows in the left column now rather than three bare discs
+	-- centred under the figure, so every one of the nineteen says what is in it.
+	-- That was the last place on the page you could not read what you were
+	-- holding, and it is the arrangement both of the sheets this page is drawn
+	-- against have.
+	check(hand.name ~= nil, "a weapon is still a nameless disc under the figure")
+	check(hand.entry.side == "left",
+		("the main hand is drawn in the %s group and the columns are the only two")
+			:format(tostring(hand.entry.side)))
 
 	-- Every row is over the figure. A model is drawn over every texture layer of
 	-- the frame holding it, so a row left at the pane's own level is a row the
@@ -184,12 +190,55 @@ do
 		"the secure button is under its own row, so a click on the name misses it")
 
 	-- Two columns, and they are apart rather than adjacent: the gap between them
-	-- is the strip of the figure nothing is drawn over.
+	-- is where the figure stands.
 	local left, right = pane.left[1], pane.right[1]
 	check(left:GetWidth() > 36 and right:GetWidth() > 36,
 		"a column came out no wider than its disc, so no name would fit in it")
 	check(left:GetWidth() + right:GetWidth() < pane.width,
 		"the two columns fill the gear area and leave the figure nothing to stand in")
+end
+
+----------------------------------------------------------------------
+-- The shape of the page, on a screen rather than in a window
+--
+-- The sheet is the size of the monitor now, and the three things that went
+-- wrong the first time it was drawn on one all went wrong the same way: the
+-- layout tracked the width it was handed rather than sizing itself. The figure
+-- filled the page and was cropped at the crown and the knees, the two columns
+-- were flung at the far edges of an ultrawide, and the stats fell off the side.
+-- Every check here is one of those three, and none of them fails visibly: a
+-- cropped model, a column against an edge and a column past the edge all draw
+-- perfectly and measure fine.
+----------------------------------------------------------------------
+
+do
+	local pane = Window.Pane(GEAR)
+	local page = pane.frame:GetHeight()
+
+	-- A portrait, not a landscape. The client scales a model to the width of its
+	-- frame, so a panel wider than a person is a person taller than the panel.
+	check(pane.panel:GetHeight() > pane.panel:GetWidth() * 1.9,
+		("the figure stands in a %d by %d panel and a person is about one to two")
+			:format(pane.panel:GetWidth(), pane.panel:GetHeight()))
+	check(pane.panel:GetHeight() < page,
+		"the figure fills the page top to bottom, so his head and his feet are off it")
+
+	-- And the block is in the middle of the page rather than pinned to its
+	-- edges. Measured off the row nearest each edge, because that is what a
+	-- player sees: the name of a helmet a third of a screen from the helmet.
+	local leftEdge = pane.left[1]:GetLeft() - pane.frame:GetLeft()
+	check(leftEdge > 0,
+		("the first column starts %d units from the page edge and the page is %d wide")
+			:format(leftEdge, pane.frame:GetWidth()))
+
+	-- The stats are still on the page. They came off it once, when the column
+	-- was only drawn if the width left room for it after two columns and a
+	-- stage, and nothing on the page said so.
+	check(pane.stats.frame:IsShown() and pane.stats.frame:GetWidth() > 0,
+		"the stats column is not drawn at all")
+	check(pane.head:IsShown(), "your name and the four readings are not drawn at all")
+	check(pane.stats.frame:GetRight() <= pane.frame:GetRight() + 1,
+		"the stats column runs off the right of the page")
 end
 
 ----------------------------------------------------------------------

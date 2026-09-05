@@ -107,6 +107,30 @@ function UI.ScreenHeight()
 	return physical
 end
 
+-- The same across, and worked out from the height rather than probed again.
+--
+-- The height is probed because the whole grid is built off it: every frame in
+-- the addon is scaled against that one number, so it has to come from the
+-- client and it has to be the same answer every time it is asked. The width is
+-- wanted by one caller, a window the size of the monitor, and nothing is scaled
+-- off it. So it is the height times the shape of the screen, and the shape is
+-- the two calls the client answers in its own units: their ratio is the aspect
+-- whatever the resolution and whatever the UI scale, because both are in the
+-- same units and the scale divides out.
+--
+-- A square screen is the fallback, and it is a fallback nothing reaches: the
+-- two calls are on every client this addon loads on. It is here because a nil
+-- multiplied is a Lua error at login on the one window that would have shown
+-- the player their gear.
+function UI.ScreenWidth()
+	local across = type(GetScreenWidth) == "function" and GetScreenWidth() or nil
+	local down = type(GetScreenHeight) == "function" and GetScreenHeight() or nil
+	if not across or not down or down <= 0 then
+		return physical
+	end
+	return physical * (across / down)
+end
+
 -- Whether this client will let a frame off its parent's scale. Everything below
 -- degrades to plain fractional units when it will not, which is the look the
 -- addon had before, rather than to a wrong size.

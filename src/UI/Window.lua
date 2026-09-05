@@ -125,8 +125,14 @@ local function Surface(window, frame, opts)
 	-- is a property of that window. The panel wants to be read and takes the
 	-- palette's own alpha; a chat window sits over the world all night and the
 	-- player decides how much of the world comes through it.
-	window.bg = ns.Fill(frame, "BACKGROUND", C.window[1], C.window[2], C.window[3], C.window[4])
-	window.bg:SetAllPoints()
+	--
+	-- A screen window has none. It is the size of the screen, so a ground on it
+	-- is the game painted out, and what it draws is meant to be read against the
+	-- world rather than against a panel.
+	if not opts.screen then
+		window.bg = ns.Fill(frame, "BACKGROUND", C.window[1], C.window[2], C.window[3], C.window[4])
+		window.bg:SetAllPoints()
+	end
 
 	local px = ns.Pixel(frame)
 	-- A hairline round the outside, unless the caller says no.
@@ -138,7 +144,7 @@ local function Surface(window, frame, opts)
 	-- so the line is not marking a boundary you needed marking, it is a bright
 	-- rectangle drawn round the trees. Take it off and the window is what is
 	-- written in it, which is what a chat window should be.
-	if opts.edge ~= false then
+	if opts.edge ~= false and not opts.screen then
 		window.edges = ns.Outline(frame, C.edge[1], C.edge[2], C.edge[3], 1)
 		ns.EdgeSize(window.edges, px)
 	end
@@ -185,11 +191,17 @@ end
 -- the caller decides, and eight lines of it inside the constructor is eight
 -- lines nobody reading how a window is assembled needs to step through. Every
 -- window has one, bare or not, because the chat window's way out lives in it.
-local function Footer(window, frame)
+local function Footer(window, frame, opts)
 	window.footer = CreateFrame("Frame", nil, frame)
 	window.footer:SetPoint("BOTTOMLEFT", M.pad, 0)
 	window.footer:SetPoint("BOTTOMRIGHT", -M.pad, 0)
 	window.footer:SetHeight(window.foot)
+	-- The line over it is there to part the footer from the page above it, and
+	-- a screen window has no page: it is a line the width of the monitor drawn
+	-- across the world, which is the loudest piece of chrome it could carry.
+	if opts.screen then
+		return
+	end
 	window.footerRule = UI.Rule(frame, C.hairline)
 	window.footerRule:SetPoint("BOTTOMLEFT", M.pad, window.foot)
 	window.footerRule:SetPoint("BOTTOMRIGHT", -M.pad, window.foot)
@@ -234,9 +246,51 @@ end
 -- never threaded through it. Window:Show does the same lift, because the
 -- window you just opened is the one you want on top and a click is not what
 -- opened it.
+--
+-- A screen window is the floor of the pile and stays there. It is a backdrop
+-- the size of the monitor, so every window the player opens has to flow over
+-- the top of it, and a toplevel frame lifted on a click would put the backdrop
+-- over the bags the moment you clicked a gear square.
 local function Pile(frame, opts)
+	if opts.screen then
+		frame:SetFrameStrata(opts.strata or "BACKGROUND")
+		frame:SetToplevel(false)
+		return
+	end
 	frame:SetFrameStrata(opts.strata or "DIALOG")
 	frame:SetToplevel(true)
+end
+
+-- Where a window can be dragged to, and whether it can be dragged at all.
+--
+-- Dragged through UI/Placeable.lua, which owns placing for every frame in the
+-- addon that can be moved, windows included. Its header says why that is one
+-- file and not two. No name, because a window has a bar across its top to grab
+-- it by and answers the mouse whether or not you are placing it. /wk lock does
+-- not reach a window unless the window asks it to, which the chat window is the
+-- only one to do. Locking a quest log would be locking a window rather than
+-- placing the HUD.
+--
+-- A screen window gets none of it. It is the size of the monitor and fixed to
+-- it: there is nothing to grab, nowhere to drag it to and no point worth
+-- saving, and a placeable with no chrome the width of the screen is an
+-- invisible drag target across the whole game.
+--
+-- Beside TitleBar and Footer for the reason both of those are: it is one piece
+-- of what a window is, and the argument for the shape it has is a paragraph
+-- nobody reading how a window is assembled has to step through.
+local function Drag(window, frame, opts)
+	if window.screen then
+		return
+	end
+	window.place = UI.Placeable(frame, {
+		moved = opts.moved,
+		lockable = opts.lockable == true,
+		-- Which of the two drags this window gets. A secure one is dragged from
+		-- a snippet, because moving a window that holds a protected frame is
+		-- refused in combat the same way showing it is.
+		secure = window.secure,
+	})
 end
 
 -- opts.zoom is a number or a getter returning one, and a getter is what every
@@ -301,6 +355,25 @@ function UI.Window(opts)
 	-- snippet through the attribute template the frame is built with here.
 	window.secure = opts.secure == true
 
+	-- Whether this is a window on the screen or the screen itself.
+	--
+	-- One asks and one ever will: the character sheet. It is a backdrop the
+	-- player stands in with their gear read off it, so it has none of what makes
+	-- a window a window. No ground, because a ground the size of the monitor is
+	-- the game painted out. No line round the outside, because there is no
+	-- outside. No title bar, because there is nothing to name and nothing to grab
+	-- it by. No point to save and no drag, because a frame the size of the screen
+	-- is already where it goes and the only thing a drag could do is take it off.
+	-- And the floor of the pile, so everything the player opens over it flows
+	-- over the top.
+	--
+	-- It does not eat the mouse either. Every other window in the addon does,
+	-- because a click that lands on a panel should stop there; this one covers
+	-- the monitor, so a click it swallowed would be a mob you could not target
+	-- while your sheet was up. What is on it answers for itself: the gear squares
+	-- and the stat rows enable their own mouse.
+	window.screen = opts.screen == true
+
 	-- The attribute template rather than the drag one, because the drag a secure
 	-- window gets is not a drag the client runs: the restricted environment has
 	-- no StartMoving in it, so UI/Placeable.lua writes the point it wants into an
@@ -312,23 +385,8 @@ function UI.Window(opts)
 	UI.Adopt(frame, zoom)
 
 	frame:SetPoint("CENTER")
-	frame:EnableMouse(true)
-	-- Dragged through UI/Placeable.lua, which owns placing for every frame in
-	-- the addon that can be moved, windows included. Its header says why that
-	-- is one file and not two. No name, because a window has a bar across its
-	-- top to grab it by and answers the mouse whether or not you are placing it.
-	-- /wk lock does not reach a window unless the window asks it to, which the
-	-- chat window is the only one to do. Locking a quest log would be locking a
-	-- window rather than placing the HUD.
-	window.place = UI.Placeable(frame, {
-		moved = opts.moved,
-		lockable = opts.lockable == true,
-		-- Which of the two drags this window gets. A secure one is dragged from
-		-- a snippet, because moving a window that holds a protected frame is
-		-- refused in combat the same way showing it is, and a sheet you can open
-		-- mid pull and not move is half a window.
-		secure = window.secure,
-	})
+	frame:EnableMouse(not window.screen)
+	Drag(window, frame, opts)
 	Pile(frame, opts)
 	Dismissals(frame)
 	frame:Hide()
@@ -346,10 +404,10 @@ function UI.Window(opts)
 	-- evening drawing the thing it is named after. A window that asks for bare
 	-- owes its player some other way out, and the chat window's is a cross at
 	-- the foot of its own rail.
-	window.chrome = opts.bare and 0 or M.title
+	window.chrome = (opts.bare or window.screen) and 0 or M.title
 	window.foot = opts.footer or M.footer
 
-	if not opts.bare then
+	if not opts.bare and not window.screen then
 		TitleBar(window, px, opts.title)
 	end
 
@@ -358,7 +416,7 @@ function UI.Window(opts)
 	window.content = CreateFrame("Frame", nil, frame)
 	window.content:SetPoint("TOPLEFT", 0, -window.chrome)
 
-	Footer(window, frame)
+	Footer(window, frame, opts)
 
 	window:Resize(opts.width or 540, opts.height or 450)
 
@@ -383,21 +441,57 @@ end
 -- the zoom, so the screen has to be converted into them before they can be
 -- compared.
 function Window:Resize(width, height)
-	-- On the grid the window's units are pixels over the zoom, so the screen has
-	-- to be converted into them. Off it, on a client with no
-	-- SetIgnoreParentScale, the window is in UIParent's units and UIParent is
-	-- what to ask. Getting this the wrong way round on the second client puts a
-	-- window taller than the screen on it and nothing here would say so.
-	local room = UI.Supported() and (UI.ScreenHeight() / self.zoom) or UIParent:GetHeight()
-	local budget = math.floor((room or UI.ScreenHeight()) * 0.86)
-	if height > budget then
-		height = budget
+	-- A screen window is not asked how big it wants to be. It is the monitor
+	-- converted into the window's own units, so the two numbers the caller passed
+	-- are dropped and the zoom is what decides how much fits: turn it up and the
+	-- sheet still covers the screen with larger type and fewer units in it.
+	--
+	-- Every route into a resize goes through here, so this is also what keeps it
+	-- covering the screen after a monitor swap or a drag of the zoom slider: the
+	-- caller re-runs its own layout and the size comes out of the new grid.
+	if self.screen then
+		width, height = self:Screen()
+	else
+		-- On the grid the window's units are pixels over the zoom, so the screen has
+		-- to be converted into them. Off it, on a client with no
+		-- SetIgnoreParentScale, the window is in UIParent's units and UIParent is
+		-- what to ask. Getting this the wrong way round on the second client puts a
+		-- window taller than the screen on it and nothing here would say so.
+		local room = UI.Supported() and (UI.ScreenHeight() / self.zoom) or UIParent:GetHeight()
+		local budget = math.floor((room or UI.ScreenHeight()) * 0.86)
+		if height > budget then
+			height = budget
+		end
 	end
 
 	self.width, self.height = width, height
 	self.frame:SetSize(width, height)
 	self.content:SetSize(width, self:Body(height))
 	return width, height
+end
+
+-- How much of the monitor a screen window takes, and it is not all of it.
+--
+-- Edge to edge is the wrong number twice. A line printed against the last pixel
+-- of the panel is a line you read the top half of, and the game's own window is
+-- not always the size of the monitor: a client running windowed under a
+-- compositor can hang forty pixels off the bottom, and everything the addon
+-- draws down there goes with it. Six percent is the same margin a photograph
+-- gets and it is enough for both.
+local SCREEN_MARGIN = 0.94
+
+-- The monitor in this window's own units, which after adoption are physical
+-- pixels over the zoom, less that margin. Off the grid, on a client with no
+-- SetIgnoreParentScale, the window is in UIParent's units and UIParent is what
+-- to ask, which is the same fork Resize takes above and for the same reason.
+function Window:Screen()
+	local across, down
+	if UI.Supported() then
+		across, down = UI.ScreenWidth() / self.zoom, UI.ScreenHeight() / self.zoom
+	else
+		across, down = UIParent:GetWidth() or 0, UIParent:GetHeight() or 0
+	end
+	return math.floor(across * SCREEN_MARGIN), math.floor(down * SCREEN_MARGIN)
 end
 
 -- How tall the content area is in a window of this height: everything the
@@ -502,7 +596,13 @@ end
 -- How much of the world comes through the window, as a fraction of the
 -- palette's own alpha rather than instead of it. A window at 1 is the window
 -- the theme describes; below that it is the same colour, thinner.
+-- A screen window has no ground to make more or less opaque, and asking one how
+-- see-through it should be is a question with no answer rather than a mistake:
+-- it is already the world with writing on it.
 function Window:SetOpacity(fraction)
+	if not self.bg then
+		return
+	end
 	local alpha = (C.window[4] or 1) * math.max(0, math.min(fraction or 1, 1))
 	self.bg:SetColorTexture(C.window[1], C.window[2], C.window[3], alpha)
 end
@@ -827,6 +927,14 @@ end
 -- A row that runs out of width wraps onto the next one and the strip grows by a
 -- whole tab, so eight of them is a taller strip rather than eight unreadable
 -- stubs.
+--
+-- **A bare strip is the same row with its chrome taken off**: no fill behind a
+-- tab, no line under the row, just the words and the accent bar under the one
+-- you are on. It is for the character sheet, which is a backdrop the size of
+-- the screen rather than a window, and where a strip of filled buttons over the
+-- world is the one thing on the page that still looks like a dialog. What a tab
+-- is stays exactly what it was: the colours already carry selected, hovered and
+-- unread on their own, and the fill was never the thing saying which was which.
 --------------------------------------------------------------------------
 
 local TABPAD = 10
@@ -835,33 +943,36 @@ local Tabs = {}
 Tabs.__index = Tabs
 
 local function PaintTab(button)
+	local fill = C.chrome
+	local tone = C.dim
 	if button.selected then
-		UI.Tint(button.bg, C.selected)
-		button.text:SetTextColor(C.heading[1], C.heading[2], C.heading[3])
+		fill, tone = C.selected, C.heading
 	elseif button.hovered then
-		UI.Tint(button.bg, C.hover)
-		button.text:SetTextColor(C.text[1], C.text[2], C.text[3])
+		fill, tone = C.hover, C.text
 	elseif button.unread then
 		-- A tab you are not on with something on it reads as the selected tab
 		-- reads, minus the accent bar under it. Anything louder is a chat window
 		-- that flashes at you all night; anything quieter is a tab you never
 		-- notice, which is the whole reason the mark exists.
-		UI.Tint(button.bg, C.chrome)
-		button.text:SetTextColor(C.text[1], C.text[2], C.text[3])
-	else
-		UI.Tint(button.bg, C.chrome)
-		button.text:SetTextColor(C.dim[1], C.dim[2], C.dim[3])
+		tone = C.text
 	end
+	if button.bg then
+		UI.Tint(button.bg, fill)
+	end
+	button.text:SetTextColor(tone[1], tone[2], tone[3])
 	button.mark:SetShown(button.selected and true or false)
 	button.dot:SetShown(button.unread and not button.selected)
 end
 
 function UI.TabStrip(parent, opts)
 	local tabs = setmetatable({ buttons = {}, onSelect = opts and opts.onSelect }, Tabs)
+	tabs.bare = opts and opts.bare and true or false
 	tabs.frame = CreateFrame("Frame", nil, parent)
-	tabs.rule = UI.Rule(tabs.frame, C.hairline)
-	tabs.rule:SetPoint("BOTTOMLEFT")
-	tabs.rule:SetPoint("BOTTOMRIGHT")
+	if not tabs.bare then
+		tabs.rule = UI.Rule(tabs.frame, C.hairline)
+		tabs.rule:SetPoint("BOTTOMLEFT")
+		tabs.rule:SetPoint("BOTTOMRIGHT")
+	end
 	return tabs
 end
 
@@ -869,8 +980,10 @@ function Tabs:Add(label)
 	local index = #self.buttons + 1
 	local button = CreateFrame("Button", nil, self.frame)
 	button:SetHeight(M.tab)
-	button.bg = ns.Fill(button, "BACKGROUND", C.chrome[1], C.chrome[2], C.chrome[3], 1)
-	button.bg:SetAllPoints()
+	if not self.bare then
+		button.bg = ns.Fill(button, "BACKGROUND", C.chrome[1], C.chrome[2], C.chrome[3], 1)
+		button.bg:SetAllPoints()
+	end
 	button.mark = ns.Fill(button, "ARTWORK", C.accent[1], C.accent[2], C.accent[3], 1)
 	button.mark:SetPoint("BOTTOMLEFT")
 	button.mark:SetPoint("BOTTOMRIGHT")
@@ -883,7 +996,11 @@ function Tabs:Add(label)
 	button.dot:SetPoint("TOPRIGHT", -3, -3)
 	button.dot:Hide()
 
-	button.text = UI.Label(button, M.font, C.dim, "CENTER", UI.FLAT)
+	-- Flat inside a window, shadowed on a bare strip. A flat word is right on a
+	-- filled button and unreadable on a bright afternoon, which is what a bare
+	-- strip is drawn over.
+	button.text = UI.Label(button, M.font, C.dim, "CENTER",
+		self.bare and UI.SHADOW or UI.FLAT)
 	button.text:SetPoint("CENTER")
 	UI.Wrap(button.text, false)
 	button.text:SetText(label)

@@ -51,29 +51,40 @@ ns.Worn = Worn
 -- the same way for the life of the session.
 --------------------------------------------------------------------------
 
--- The nineteen, in the order the page draws them: down the left, down the
--- right, then the three weapons under the middle. That is the client's own
--- arrangement and it is kept because it is the one every player already knows
--- where to look in.
+-- The nineteen, in the order the page draws them: ten down the left and nine
+-- down the right, with the figure standing in the gap between the two.
 --
 --   slot   the inventory number, which is what every call below takes
 --   key    the client's own name for the slot, which is how the empty art is
 --          asked for rather than written down as a texture path
 --   label  what this addon calls it, lower case like every other label here
---   side   which of the three groups it is drawn in
+--   side   which of the two columns it is drawn in
 --
--- Shirt and tabard are in the list and are left out of the two summaries at the
--- bottom of the page on purpose: neither has an item level, neither wears out,
--- and counting them would drag both numbers down for wearing a guild tabard.
+-- There were three groups and the third was the weapons, drawn as three bare
+-- discs centred under the figure with no words on them at all. That was the one
+-- place left on the page where you could not read what you were holding, and it
+-- was a shape the sheets this page is drawn against do not have: they put the
+-- weapons at the foot of the first column, in the same row shape as everything
+-- else. So do these. Nothing was gained by the middle group except three
+-- nameless circles and a durability chord that had to be drawn a special way
+-- because there was no name to underline.
+--
+-- Shirt and tabard are last in their columns and are left out of the two
+-- summaries the page draws on purpose: neither has an item level, neither wears
+-- out, and counting them would drag both numbers down for wearing a guild
+-- tabard. Last rather than sixth and seventh, which is where they were, because
+-- a piece that counts for nothing belongs under the pieces that do.
 local SLOTS = {
 	{ slot = 1,  key = "HeadSlot",          label = "head",      side = "left" },
 	{ slot = 2,  key = "NeckSlot",          label = "neck",      side = "left" },
 	{ slot = 3,  key = "ShoulderSlot",      label = "shoulder",  side = "left" },
 	{ slot = 15, key = "BackSlot",          label = "back",      side = "left" },
 	{ slot = 5,  key = "ChestSlot",         label = "chest",     side = "left" },
-	{ slot = 4,  key = "ShirtSlot",         label = "shirt",     side = "left", trim = true },
-	{ slot = 19, key = "TabardSlot",        label = "tabard",    side = "left", trim = true },
 	{ slot = 9,  key = "WristSlot",         label = "wrist",     side = "left" },
+	{ slot = 16, key = "MainHandSlot",      label = "main hand", side = "left" },
+	{ slot = 17, key = "SecondaryHandSlot", label = "off hand",  side = "left" },
+	{ slot = 18, key = "RangedSlot",        label = "ranged",    side = "left" },
+	{ slot = 4,  key = "ShirtSlot",         label = "shirt",     side = "left", trim = true },
 
 	{ slot = 10, key = "HandsSlot",         label = "hands",     side = "right" },
 	{ slot = 6,  key = "WaistSlot",         label = "waist",     side = "right" },
@@ -83,10 +94,7 @@ local SLOTS = {
 	{ slot = 12, key = "Finger1Slot",       label = "ring",      side = "right" },
 	{ slot = 13, key = "Trinket0Slot",      label = "trinket",   side = "right" },
 	{ slot = 14, key = "Trinket1Slot",      label = "trinket",   side = "right" },
-
-	{ slot = 16, key = "MainHandSlot",      label = "main hand", side = "hands" },
-	{ slot = 17, key = "SecondaryHandSlot", label = "off hand",  side = "hands" },
-	{ slot = 18, key = "RangedSlot",        label = "ranged",    side = "hands" },
+	{ slot = 19, key = "TabardSlot",        label = "tabard",    side = "right", trim = true },
 }
 
 -- The empty-slot pictures, asked for once each. A client that has no such call

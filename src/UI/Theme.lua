@@ -51,6 +51,22 @@ UI.Color = {
 	loss     = { 0.86, 0.38, 0.38, 1 },
 	shadow   = { 0, 0, 0, 0.55 },
 
+	-- The two tones a dense list of numbers alternates between, row by row.
+	--
+	-- They are the accent and they are not a second name for it. The accent is a
+	-- control you can press; these are the ground under a number, and the only
+	-- thing either has to do is tell one row from the row under it without being
+	-- read as anything. Two entries rather than one and an alpha at the call
+	-- site, because the pair is the thing: change one and the stripe stops
+	-- alternating, which is a decision about the palette and not about a row.
+	--
+	-- Low enough to be a tint over the world. The character sheet is a backdrop
+	-- with no ground of its own, so these bands are the only surface its numbers
+	-- have, and a band opaque enough to paint out the grass would be a panel
+	-- through the middle of the page.
+	band     = { 0.25, 0.62, 0.95, 0.20 },
+	bandAlt  = { 0.25, 0.62, 0.95, 0.09 },
+
 	-- Who a name belongs to. Three entries, and the mail window is what asks:
 	-- a character on your own account, somebody you know, and everybody else.
 	--

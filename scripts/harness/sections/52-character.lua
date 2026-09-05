@@ -593,49 +593,18 @@ do
 	check(ns.CharBlizzard.KeyText() == "ALT-C",
 		("the sheet calls its own key %s"):format(ns.CharBlizzard.KeyText()))
 
-	-- And the drag, which is the same rule one more time: moving a window that
-	-- holds a protected frame is refused in combat exactly as showing it is.
-	--
-	-- The drag used to be `self:StartMoving()` in a snippet, which the restricted
-	-- environment has no such call in: every drag on the sheet ended in a Lua
-	-- error out of RestrictedExecution instead of moving anything. It is a point
-	-- pushed at a snippet now, so what is checkable here is the whole Lua half of
-	-- it: the frame carries the snippet and the screen it anchors to, and a drag
-	-- across the screen writes the offsets the frame would land on.
+	-- And no drag at all, which is the other half of the same sentence. The sheet
+	-- is a backdrop the size of the monitor: there is nothing to grab, nowhere to
+	-- drag it to and no point worth saving, so the placing that used to be here
+	-- went with the title bar. It carried a secure drag, because moving a window
+	-- that holds a protected frame is refused in combat exactly as showing it is,
+	-- and what is asserted now is that none of that machinery is still hanging off
+	-- an invisible frame the width of the screen.
 	local frame = Window.Pane(GEAR).frame:GetParent():GetParent()
-	check(type(frame:GetAttribute("_onattributechanged")) == "string",
-		"the sheet carries no placing snippet, so it cannot be moved in a fight")
-	check(frame:GetFrameRef("screen") == _G.UIParent,
-		"the placing snippet was handed no screen to anchor the sheet to")
-
-	local point, _, relativePoint, wasX, wasY = frame:GetPoint()
-	local startX, startY = H.cursor.x, H.cursor.y
-	frame.scripts.OnDragStart(frame)
-	H.cursor.x, H.cursor.y = startX + 40, startY - 25
-	frame.scripts.OnUpdate(frame, 0.02)
-	local moves = frame:GetAttribute("wk-move")
-	-- A tick the cursor did not move through writes nothing at all, because a
-	-- point that has not changed is a snippet run and a re-anchor for nothing.
-	frame.scripts.OnUpdate(frame, 0.02)
-	check(frame:GetAttribute("wk-move") == moves,
-		"a still cursor still ran the snippet, once a frame, for the whole drag")
-	frame.scripts.OnDragStop(frame)
-	H.cursor.x, H.cursor.y = startX, startY
-	check(frame.scripts.OnUpdate == nil,
-		"the sheet is still following the cursor after the button came up")
-	check(frame:GetAttribute("wk-point") == point
-		and frame:GetAttribute("wk-rel") == relativePoint,
-		"the snippet was handed no corner to anchor the sheet by")
-	-- The cursor answers in pixels and the offsets are in the frame's own units,
-	-- so the distance it draws is the distance it was given divided by the scale
-	-- between the two. A drag that skipped that division is a window that walks
-	-- away from the cursor on every screen but the one it was written on.
-	local scale = _G.UIParent:GetEffectiveScale() / frame:GetEffectiveScale()
-	local wantX, wantY = ns.UI.Whole(wasX + 40 * scale), ns.UI.Whole(wasY - 25 * scale)
-	check(frame:GetAttribute("wk-x") == wantX and frame:GetAttribute("wk-y") == wantY,
-		("the drag handed the snippet %s, %s rather than %d, %d"):format(
-			tostring(frame:GetAttribute("wk-x")), tostring(frame:GetAttribute("wk-y")),
-			wantX, wantY))
+	check(frame.scripts.OnDragStart == nil and frame.dragButton == nil,
+		"the character sheet still takes a drag, and it is the size of the screen")
+	check(frame:GetAttribute("_onattributechanged") == nil,
+		"the character sheet still carries a placing snippet with nothing to place")
 
 	-- Open before the fight, because that is the state the tabs are tested in.
 	Window.Show(GEAR)

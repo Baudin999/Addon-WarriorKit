@@ -65,7 +65,6 @@ local WINDOWS = {
 	{ "WarriorKitMap", "the world map" },
 	{ "WarriorKitMail", "the mail window" },
 	{ "WarriorKitBreakdown", "the meter breakdown" },
-	{ "WarriorKitCharacter", "the character sheet" },
 	{ "WarriorKitClutter", "the destroy window" },
 	{ "WarriorKitAsk", "the confirmation window" },
 }
@@ -161,7 +160,6 @@ local KEEPS = {
 	{ "WarriorKitMap", "the world map" },
 	{ "WarriorKitMail", "the mail window" },
 	{ "WarriorKitBreakdown", "the meter breakdown" },
-	{ "WarriorKitCharacter", "the character sheet" },
 	{ "WarriorKitClutter", "the destroy window" },
 }
 
@@ -237,6 +235,19 @@ local at = { spare:GetPoint() }
 check(at[1] == "TOPRIGHT" and at[3] == "TOPRIGHT" and at[4] == -30 and at[5] == -70,
 	("a saved spot opened the window at %s %s, %s rather than TOPRIGHT at -30, -70")
 		:format(tostring(at[1]), tostring(at[4]), tostring(at[5])))
+
+-- The one window that has no drag and no spot at all. The character sheet is
+-- the size of the monitor and fixed to it, so there is nothing to grab, nothing
+-- to save and nothing a saved point could do but put it somewhere wrong. Both
+-- halves are asserted, because a frame with a drag button and no writer looks
+-- exactly like a frame nobody has moved yet.
+local sheet = _G.WarriorKitCharacter
+if sheet then
+	check(sheet.dragButton == nil,
+		"the character sheet has a drag on it and it is the size of the screen")
+	check(ns.db.windowSpots.WarriorKitCharacter == nil,
+		"the character sheet wrote down a spot, and it cannot be anywhere but the screen")
+end
 
 -- A saved variables file is edited by hand, carried between machines and
 -- written by whatever the addon was two releases ago. What a corrupt anchor

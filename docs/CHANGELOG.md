@@ -2,6 +2,56 @@
 
 ## Unreleased
 
+### The character sheet stops being a window and becomes the screen
+
+It was a dialog: a title bar with the word Character on it, a hairline round the
+outside, a ground opaque enough to paint the game out, eight hundred and sixty
+units wide because that was two columns of rows, a gap and a stats column added
+up. Inside it a person stood in a box the size of a bank teller's window. Every
+number on it was right and the whole thing read as a spreadsheet with a portrait
+stapled to the corner.
+
+It is a backdrop now. No title bar, no border, no ground, no fixed width: the
+sheet is the size of the monitor less a photograph's margin, and what is drawn
+on it is two columns of gear either side of a figure standing in the gap, with
+your name, the four readings and every stat down the right. It sits at the floor
+of the frame pile, so the bags, the map, the quest log and anything else you open
+flow over the top of it rather than shoving it out of the way, and it does not
+take the mouse, so a mob behind it is still a mob you can click.
+
+It cannot be moved, which follows from the same sentence. There is nothing to
+grab, nowhere to drag it to and no point worth saving, so the drag and the saved
+corner are gone rather than left as an invisible grip the width of the screen.
+Escape closes it and the key that opened it closes it, in a fight as well as out
+of one, which is what it always had.
+
+Every width on it is a share of the height, not of the width. A character sheet
+is a person standing up with two lists beside him: how tall he can be is what
+decides how big everything should be, and sized off the width instead an
+ultrawide gets a giant and a four by three panel gets a doll. So the two
+columns, the stats and the stage the figure stands in are all fractions of the
+page's height held between the two widths each is worth having, and what is left
+over is margin split evenly. The figure's frame is deliberately narrower than a
+person is, because the client scales a model to the width of its frame and a
+frame at a person's own proportions is a person cropped at the crown by the
+first headdress that stands up.
+
+The zoom slider still works and now means something slightly different: it does
+not resize the sheet, it decides how much fits on it.
+
+Three things moved with the panel. The weapons were three bare discs centred
+under the figure and are rows in the left column now, so all nineteen slots say
+what is in them; the shirt and the tabard went to the foot of their columns,
+where a piece that counts for nothing belongs. Your name and the four readings
+came off the two bands of shadow that used to be laid across the model and went
+to the head of the stats column, the readings as discs with the word under each
+one. And every stat row is banded, two tones alternating, which is what tells
+one line of numbers from the next now the air between them is gone and is the
+only ground the column has.
+
+The other three tabs keep an opaque ground and a column's width. They are lists
+of prose, and prose is read at a column's width however big the monitor is.
+
 ### The Escape menu is drawn by the addon
 
 There was one WarriorKit button at the foot of the client's game menu and it had
