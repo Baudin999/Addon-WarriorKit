@@ -62,8 +62,16 @@ end
 -- stub prices at item level 60, so an average over four is 60 and a fifth piece
 -- would say nothing new; what the four buy is a filled slot in each of the
 -- three columns the page draws, plus one in a slot that wears out.
+--
+-- The helmet is the one with holes in it, and it has a gem in its second socket
+-- and none in its first. That is deliberate: GetItemGem answers nothing at one
+-- and something at two, so a reader that stopped at the first nil would report a
+-- bare piece, and the fixture that would have caught that is this one.
 ITEMS["Lionheart Helm"] = { id = 4001, classId = 4, equip = "INVTYPE_HEAD",
-	icon = "Interface\\Icons\\Helm", quality = 4, price = 12000 }
+	icon = "Interface\\Icons\\Helm", quality = 4, price = 12000,
+	gems = { nil, "Bold Living Ruby" }, open = 1 }
+ITEMS["Bold Living Ruby"] = { id = 4005, classId = 3,
+	icon = "Interface\\Icons\\Gem", quality = 3, price = 900 }
 ITEMS["Onyxia Tooth Pendant"] = { id = 4002, classId = 4, equip = "INVTYPE_NECK",
 	icon = "Interface\\Icons\\Neck", quality = 3, price = 8000 }
 ITEMS["Breastplate of Might"] = { id = 4003, classId = 4, equip = "INVTYPE_CHEST",

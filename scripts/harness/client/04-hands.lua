@@ -185,8 +185,41 @@ end
 -- Named locals rather than one wrapping the other: 40-loot-feed.lua takes the
 -- globals away to stand the addon on the newer client for a moment, and a
 -- C_Item that reached them through _G would go down with them.
+-- The two halves of a socket, which is the same split the client itself has.
+--
+-- GetItemGem walks what a link is carrying, and a hole is a nil in the middle of
+-- that walk rather than the end of it: the fixture's `gems` list is indexed
+-- straight, so an item written with a hole in its first socket answers nothing
+-- at one and a gem at two, which is the shape ns.ItemSockets must not stop on.
+--
+-- GetItemStats is the other half and only ever counts. There is no call that
+-- says which position is open, because a link with a hole in it has nothing in
+-- that position to name, so the fixture carries a number rather than an order.
+local function itemGem(link, index)
+	local name = type(link) == "string" and link:match("%\[(.-)%\]")
+	local item = name and ITEMS[name]
+	local gem = item and item.gems and item.gems[index]
+	if not gem then
+		return nil
+	end
+	return gem, itemLink(gem)
+end
+
+local function itemStats(link)
+	local name = type(link) == "string" and link:match("%\[(.-)%\]")
+	local item = name and ITEMS[name]
+	if not item or not item.open then
+		return nil
+	end
+	return { EMPTY_SOCKET_RED = item.open }
+end
+
 _G.GetItemInfo, _G.GetItemInfoInstant = itemInfo, itemInfoInstant
-_G.C_Item = { GetItemInfo = itemInfo, GetItemInfoInstant = itemInfoInstant }
+_G.GetItemGem, _G.GetItemStats = itemGem, itemStats
+_G.C_Item = {
+	GetItemInfo = itemInfo, GetItemInfoInstant = itemInfoInstant,
+	GetItemGem = itemGem, GetItemStats = itemStats,
+}
 
 -- The client's own word for a subclass, which is what a sub-pile is headed
 -- with. Four are carried, the four the fixtures above use, and every other

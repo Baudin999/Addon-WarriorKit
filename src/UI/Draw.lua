@@ -160,3 +160,65 @@ function UI.Icon(parent, layer)
 	texture:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
 	return UI.Crisp(texture)
 end
+
+--------------------------------------------------------------------------
+-- The disc
+--
+-- A gear icon on the character sheet is round and its last few texels fade out
+-- rather than stopping at a line. That is one file, src/Media/Round.tga, doing
+-- two jobs, and scripts/bake-round.sh writes it and argues the ramp.
+--
+-- As a mask it clips the icon. As an ordinary texture, drawn a little wider
+-- than the icon and vertex coloured, it is the quality colour the icon's fade
+-- lands on, which is the only reason the fade reads as soft rather than as an
+-- icon going missing at the edges.
+--------------------------------------------------------------------------
+
+local ROUND = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Round.tga"
+
+-- Clip a texture into the disc.
+--
+-- Named Clip rather than Round because UI/Pixel.lua already owns UI.Round, which
+-- is the pixel grid rounder thirty callers reach for. This file loads after that
+-- one, so the second definition was not a clash anything reported: it replaced
+-- the first and every layout in the addon started asking a number for its parent.
+--
+-- The mask is a texture of its own and has to live somewhere, so it is made on
+-- the icon's parent and pinned to the icon rather than to the frame: it then
+-- follows every resize and re-anchor the layout does, and no caller has to
+-- remember it is there.
+--
+-- CLAMPTOBLACKADDITIVE on both axes rather than the default wrap. A mask is
+-- sampled outside its own bounds wherever the texture under it reaches further,
+-- and the default repeats the disc out there, which draws the corners of the
+-- icon back in as four more circles.
+--
+-- Both calls are probed, the way UI.Crisp probes its two, and what comes back is
+-- checked as well as the name. They are on 2.5.6 and on the vanilla client, and
+-- a square icon is a worse page rather than a broken one. The return is worth a
+-- line of its own because the harness is exactly the client that has the name
+-- and not the thing: an unwritten method there answers a function that hands
+-- back nil, which is how this shipped its first crash.
+function UI.Clip(texture)
+	local parent = texture:GetParent()
+	if not parent.CreateMaskTexture or not texture.AddMaskTexture then
+		return texture
+	end
+	local mask = parent:CreateMaskTexture()
+	if not mask then
+		return texture
+	end
+	mask:SetTexture(ROUND, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+	mask:SetAllPoints(texture)
+	texture:AddMaskTexture(mask)
+	texture.mask = mask
+	return texture
+end
+
+-- The same disc as a texture. White in the file, so SetVertexColor is what
+-- gives it a colour and every caller of this is about to call that.
+function UI.Disc(parent, layer)
+	local texture = parent:CreateTexture(nil, layer or "BACKGROUND")
+	texture:SetTexture(ROUND)
+	return texture
+end

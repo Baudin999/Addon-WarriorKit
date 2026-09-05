@@ -248,109 +248,6 @@ do
 end
 
 ----------------------------------------------------------------------
--- The gear page
-----------------------------------------------------------------------
-
-do
-	Window.Show(GEAR)
-	local pane = Window.Pane(GEAR)
-	check(#pane.squares == 19,
-		("%d slots were drawn and the client has nineteen"):format(#pane.squares))
-
-	local head, neck
-	for _, box in ipairs(pane.squares) do
-		if box.entry.slot == 1 then
-			head = box
-		elseif box.entry.slot == 2 then
-			neck = box
-		end
-	end
-
-	check(head.icon:IsShown(), "the helmet slot is filled and drew no icon")
-	check(head.wear:IsShown(), "the helmet is at 40% durability and drew no wear line")
-	check(not neck.wear:IsShown(),
-		"a necklace does not wear out and the slot drew a wear line anyway")
-
-	-- Quality is read off the item rather than off the slot, so the edge round
-	-- an epic is the epic colour and not the chrome.
-	check(head.edges.r == ns.UI.Quality[4][1],
-		"the epic helmet is not edged in the epic colour")
-
-	local shirt
-	for _, box in ipairs(pane.squares) do
-		if box.entry.slot == 4 then
-			shirt = box
-		end
-	end
-	check(shirt.empty:IsShown() and not shirt.icon:IsShown(),
-		"an empty slot did not draw the client's own silhouette")
-
-	local wear, worst = Worn.Wear()
-	check(math.abs(wear - (40 + 95 + 12) / 300) < 1e-6,
-		("durability came to %.4f and the three worn pieces are 147 of 300"):format(wear))
-	check(worst ~= nil and worst.slot == 16,
-		"the worst piece is the main hand at twelve percent and something else was named")
-
-	local level, empty = Worn.Level()
-	check(level ~= nil and math.abs(level - 60) < 1e-6,
-		("the average item level came to %s"):format(tostring(level)))
-	check(empty > 0, "every slot came back full on a character wearing four pieces")
-
-	-- The stats, which are on this page rather than on a tab. The check is that
-	-- the column was given room and drew into it: a readout with no width paints
-	-- nothing and returns quietly, which is what the move could break without
-	-- anything else on the page noticing.
-	check(pane.stats ~= nil, "the gear page has no stats column")
-	check((pane.stats.width or 0) >= 204,
-		("the stats column came out %s wide"):format(tostring(pane.stats.width)))
-	check(pane.stats:Lines() > 0, "the stats column drew no lines beside the gear")
-
-	-- Compact means one line a row. The sentence that used to wrap underneath is
-	-- in the hover, so a row that grew past a single line is a row still drawing
-	-- prose the column no longer has the height for.
-	local tallest = 0
-	for index = 1, pane.stats:Lines() do
-		local line = pane.stats.lines[index]
-		if line:IsShown() then
-			tallest = math.max(tallest, line:GetHeight())
-		end
-	end
-	check(tallest > 0 and tallest <= ns.UI.Metric.row,
-		("the tallest row in the stats column is %d px and a compact row is one line")
-			:format(tallest))
-	H.carry.statsColumn = pane.stats.view.extent
-
-	-- And what the row keeps back is what a hover hands over: the value the
-	-- column may have clipped, then the sentence. A compact row with no hover is
-	-- the whole bargain broken and nothing else on the page would show it.
-	local row
-	for index = 1, pane.stats:Lines() do
-		local line = pane.stats.lines[index]
-		if line:IsShown() and line.hint and line.hint.note then
-			row = row or line
-		end
-	end
-	check(row ~= nil, "no row in the stats column carries a sentence for its hover")
-	ns.UI.Tooltip.Close(true)
-	row:GetScript("OnEnter")(row)
-	check(ns.UI.Tooltip.IsShown(), "hovering a stat said nothing")
-	check(ns.UI.Tooltip.Lines() >= 3,
-		("a stat's hover drew %d lines and it has a name, a value and a sentence")
-			:format(ns.UI.Tooltip.Lines()))
-	row:GetScript("OnLeave")(row)
-	ns.UI.Tooltip.Close(true)
-
-	-- And it is beside the block rather than over it: the two squares columns,
-	-- the portrait between them and the stats have to add up to no more than the
-	-- page was given. A column that overlapped the gear would still draw, still
-	-- measure and still pass every check above it.
-	local block = (36 + 4 * 2) * 2 + pane.width
-	check(block + pane.stats.frame:GetWidth() <= pane.frame:GetWidth(),
-		("the gear block and the stats column come to %d on a %d wide page")
-			:format(block + pane.stats.frame:GetWidth(), pane.frame:GetWidth()))
-end
-
-----------------------------------------------------------------------
 -- Clicking a slot
 --
 -- Half of what a click on a worn item does is open to an addon and half is not.
@@ -365,6 +262,10 @@ end
 ----------------------------------------------------------------------
 
 do
+	-- The tab, put up here rather than inherited. What the page draws moved to
+	-- 52-gear-page.lua and took the Show with it, and a block that reads a square
+	-- off a tab nobody raised reads it off a page that was never laid out.
+	Window.Show(GEAR)
 	local pane = Window.Pane(GEAR)
 	local head
 	for _, box in ipairs(pane.squares) do
@@ -808,6 +709,9 @@ end
 
 Window.Hide()
 
-print(("character %d slots, %d skill rows, stats %d px beside the gear; %s; %s")
+-- The stats column used to be read out here and is 52-gear-page.lua's line now.
+-- It moved with the block that measures it: a section cannot report a number a
+-- later section is the one to take.
+print(("character %d slots, %d skill rows; %s; %s")
 	:format(#Window.Pane(GEAR).squares, H.carry.characterRows or 0,
-		H.carry.statsColumn or 0, Worn.Describe(), Stats.Describe()))
+		Worn.Describe(), Stats.Describe()))

@@ -122,6 +122,31 @@ function Region:SetDrawLayer(layer, sublevel)
 	self.layer, self.sublevel = layer, sublevel or 0
 end
 function Region:GetDrawLayer() return self.layer, self.sublevel end
+
+-- A mask, which is a real object here for one reason: the PascalCase no-op above
+-- answers every unwritten method with a function returning nil, so a probe for
+-- CreateMaskTexture passes and the call hands back nothing. UI.Clip indexes what
+-- it gets back, and a stub that let that stay nil could not tell a client with
+-- masks from a client without one.
+--
+-- Deliberately not put in the parent's regions list, where CreateTexture puts
+-- what it makes. Both walks in Skin.lua and the font role report read that list,
+-- and a mask is not art anybody hides, recolours or measures: it is the shape
+-- another texture is cut to. Registering it there would have every region count
+-- in this harness move on the day the gear page rounded its icons.
+function Region:CreateMaskTexture(name)
+	local mask = region("texture", self, name)
+	mask.layer, mask.sublevel = "ARTWORK", 0
+	mask.isMask = true
+	return mask
+end
+
+-- Kept as a list rather than a flag, because a texture may carry more than one
+-- and a section that asserts on the shape wants to see which.
+function Region:AddMaskTexture(mask)
+	self.masks = self.masks or {}
+	self.masks[#self.masks + 1] = mask
+end
 -- Where the string was made, as the addon's own file and line.
 --
 -- A frame records loading.file, which is the TOC file that was being read when

@@ -309,6 +309,11 @@ local SECTIONS = {
 	-- section three dozen lines above, and the placing walk directly over it,
 	-- which counts this window among the six it holds to the lock.
 	"52-character",
+	-- Straight after it, and it opens the sheet itself. What the gear page draws
+	-- is a bigger subject than the rest of that window and it grew past the line
+	-- ceiling the section was already exempted from, so it is a file: the split
+	-- gave 52-character's exemption back rather than raising it.
+	"52-gear-page",
 	-- Last, and it has to be: it puts every setting in the account file back
 	-- to what the addon ships with, twice over, which is the one thing in the
 	-- suite that would pull the scene out from under every section above it.

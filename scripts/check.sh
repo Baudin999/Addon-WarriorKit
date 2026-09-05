@@ -1433,7 +1433,6 @@ sections/29-social.lua:817:one subject, the chat window; the rooms, what routes 
 client/02-text.lua:803:one class, the Region stub; every line is a method of the client's own frame, and a frame API split across two files is two halves of one object
 sections/39-party-raid.lua:950:one subject, two lists, two directions each; the party line and the raid grid share a tile, a roster fixture and a header model, and splitting them copies all three
 sections/42-cooldown-row.lua:734:one subject, the cooldown row; what is on it, what a square draws, when the row is up and what the tick costs are four readings of one row and every one of them moves when an entry does
-sections/52-character.lua:813:one subject, the character sheet; the miss maths, the gear squares, the figure and the key are four readings of one window and every one of them moves when a slot does
 sections/54-world-map.lua:809:one subject, the world map; the column, the picture, Questie's markers and the gestures over them are one window under one zone fixture, and splitting them copies the map tree, the standing position and the icon frames three ways
 "
 
