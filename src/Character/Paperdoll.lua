@@ -78,11 +78,20 @@ local C, M = UI.Color, UI.Metric
 -- bars shipped once already. The attribute is written, so the answer is this
 -- addon's and not a setting's.
 --
--- **Nothing here hands the right button to the camera.** UI.PassCamera is on
--- every other hoverable frame in the addon and it is deliberately not on these:
--- a square whose right click is an action cannot also pass the right button
--- through, and a square that did would draw and hover perfectly while its right
--- click went to the camera and nowhere else.
+-- **The action is the size of the icon, and the rest of the row is the
+-- camera's.** A square whose right click is an action cannot also pass the
+-- right button through: it would draw and hover perfectly while its right click
+-- went to the camera and nowhere else. That is a fair price on thirty-six
+-- pixels and a bad one on a row two hundred wide, and this page is the whole
+-- monitor now, so two columns of full width buttons is most of the left and
+-- right of the screen with no camera in it. So the button is the disc, which is
+-- where the client puts a slot's button and where a bag puts an item's, and the
+-- row it sits on is an ordinary frame that takes the mouse for the hover and
+-- hands the camera back with UI.PassCamera.
+--
+-- What that costs: a left click, a drag out and a drop in all want the icon
+-- rather than the item's name beside it. That is what every other item in the
+-- game already wants.
 --
 -- **Nineteen secure buttons are what closed this window in a fight, and the key
 -- is what opened it again.** A secure button is a protected frame, showing a
@@ -320,8 +329,11 @@ local function Square(pane, entry)
 	-- slots with the number changed.
 	local use = ("/use %d"):format(entry.slot)
 
+	-- The disc and not the row. See the note at the head of the file: the row is
+	-- the camera's and the button is the thirty-six pixels of icon in it.
 	local button = CreateFrame("Button", nil, pane.frame, "SecureActionButtonTemplate")
-	button:SetAllPoints(box)
+	button:SetAllPoints(box.face)
+	button:SetFrameLevel(box:GetFrameLevel() + 1)
 	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
 	-- Which edge the secure half acts on, said out loud rather than left to the
@@ -388,19 +400,35 @@ local function Square(pane, entry)
 			pane:Paint()
 		end
 	end)
-	button:SetScript("OnEnter", function(self)
+	-- Two frames answer the mouse over one row, the row and the disc on it, and
+	-- a hover is the same hover on either. Anchored to the box rather than to
+	-- whichever frame the cursor is in, so crossing onto the icon does not move
+	-- the tooltip.
+	--
+	-- On the square rather than in the corner. A worn piece is an object you are
+	-- pointing at, and comparing two of them means reading one box against the
+	-- square beside it.
+	local function Enter()
 		box.lit = true
 		Ring(box, box.tone)
-		-- On the square rather than in the corner. A worn piece is an object
-		-- you are pointing at, and comparing two of them means reading one box
-		-- against the square beside it.
-		ns.Tip.Open(self, Subject(entry), nil, ns.UI.Tooltip.BESIDE)
-	end)
-	button:SetScript("OnLeave", function()
+		ns.Tip.Open(box, Subject(entry), nil, ns.UI.Tooltip.BESIDE)
+	end
+
+	local function Leave()
 		box.lit = nil
 		Ring(box, box.tone)
 		ns.Tip.Close()
-	end)
+	end
+
+	button:SetScript("OnEnter", Enter)
+	button:SetScript("OnLeave", Leave)
+
+	-- The row. It answers nothing but the hover, so every button that lands on
+	-- it goes to the world and the right drag turns the camera.
+	box:EnableMouse(true)
+	box:SetScript("OnEnter", Enter)
+	box:SetScript("OnLeave", Leave)
+	UI.PassCamera(box)
 
 	-- What the trace needs and cannot ask for: this client has no call that
 	-- answers which edges a button registered, so the file that registered them
@@ -538,7 +566,12 @@ end
 -- circles is the one thing on it that looks borrowed.
 local function Badge(head, index)
 	local badge = CreateFrame("Frame", nil, head)
+
+	-- The mouse for the hover and every button back to the world. A reading
+	-- answers no click, and a disc that ate the right button would be a hole in
+	-- the middle of the screen the camera will not turn in.
 	badge:EnableMouse(true)
+	UI.PassCamera(badge)
 
 	badge.ring = UI.Disc(badge, "BACKGROUND")
 	badge.ring:SetSize(BADGE, BADGE)

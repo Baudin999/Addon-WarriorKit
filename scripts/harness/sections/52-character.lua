@@ -280,6 +280,18 @@ do
 	check(passed == nil or not passed["RightButton"],
 		"the square passes the right button through, so its right click turns the camera")
 
+	-- And the row it sits on has to hand it back. The button is the icon and the
+	-- rest of the row is an ordinary hover, because this page is the whole
+	-- monitor: two columns of button the full width of a column is most of the
+	-- left and right of the screen with no camera in it.
+	check(head:IsMouseEnabled(), "the gear row does not answer the mouse, so it has no hover")
+	local row = head:GetPassThroughButtons()
+	check(row and row["RightButton"] and row["MiddleButton"],
+		"the gear row keeps the camera's buttons, so a right drag on a row does not turn the camera")
+	check(head.button:GetWidth() < head:GetWidth(),
+		("the secure button is %s wide on a row of %s, so the action is the whole row again")
+			:format(tostring(head.button:GetWidth()), tostring(head:GetWidth())))
+
 	-- A right click takes the piece off, and it has to actually run: the line
 	-- is read out of what the client was sent rather than off the attribute,
 	-- because an attribute is what a dead square also has.
