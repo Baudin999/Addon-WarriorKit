@@ -35,14 +35,29 @@ ns.Floats = Floats
 -- then rebuilds.
 --------------------------------------------------------------------------
 
--- One row. Wide enough for an item name at twelve pixels without wrapping, and
--- tall enough for the icon beside it.
-local WIDTH, HEIGHT, ICON = 260, 24, 20
+-- One row, sized around the icon rather than around the text.
+--
+-- This is drawn over the world at arm's length from the thing that dropped it
+-- and read in the second before it goes, which is a different job from a row in
+-- a window you have opened and are looking at. So the picture is fifty pixels,
+-- two and a half times what the loot feed's column draws, and the name is
+-- twenty rather than the twelve every panel in the addon uses.
+--
+-- The width is what an item name fits in at that size with the icon beside it.
+-- It is a fixed number and not a measurement, because the lane rests a message
+-- by its far edge: a row that sized itself to the name in it would be a column
+-- whose left edge moved with every drop.
+local WIDTH, HEIGHT, ICON = 380, 50, 50
+
+-- The name, and the count after it. Both well over anything else in the addon,
+-- and neither is UI.Metric: those numbers are the size of a control in a window
+-- and this is a caption on the world.
+local NAME, COUNT = 20, 16
 
 -- His numbers, and the reason each one is a number rather than a setting is
 -- that nothing has asked for a second answer yet. They are the spec this was
 -- built to: in from forty pixels inside the right edge, invisible, to forty
--- pixels off the centre, solid, in half a second; a second on screen; a
+-- pixels short of the centre, solid, in half a second; a second on screen; a
 -- hundred pixels down from the top.
 local LANE = {
 	side = "RIGHT",
@@ -78,16 +93,21 @@ local function Build()
 	frame.icon:SetSize(ICON, ICON)
 	frame.icon:SetPoint("TOPLEFT")
 
-	-- Shadowed, not outlined and not flat. This is drawn over the world, which
-	-- is art the addon did not paint and cannot predict the brightness of, and
-	-- the outline role is barred under fourteen pixels because the rim closes
-	-- up the counters of Arial Narrow's own digits.
-	frame.name = UI.Label(frame, UI.Metric.font, UI.Color.text, "LEFT", UI.SHADOW)
-	frame.name:SetPoint("LEFT", frame.icon, "RIGHT", UI.Metric.gutter, 0)
-	frame.name:SetPoint("RIGHT", frame, "RIGHT", -UI.Metric.gutter, 0)
-
-	frame.count = UI.Label(frame, UI.Metric.font, UI.Color.dim, "RIGHT", UI.SHADOW)
+	-- Shadowed, not flat and not outlined. Flat is for a string on a surface
+	-- this addon painted and there is none here. Outlined is the role for text
+	-- over the world and would be defensible at these sizes, where the rim no
+	-- longer closes up Arial Narrow's own counters; a shadow is chosen anyway,
+	-- because a rim reads as a health number over a mob and this is a caption
+	-- that arrives and leaves.
+	frame.count = UI.Label(frame, COUNT, UI.Color.dim, "RIGHT", UI.SHADOW)
 	frame.count:SetPoint("RIGHT")
+
+	frame.name = UI.Label(frame, NAME, UI.Color.text, "LEFT", UI.SHADOW)
+	frame.name:SetPoint("LEFT", frame.icon, "RIGHT", UI.Metric.gutter, 0)
+	-- Up to the count rather than to the row's own edge. Both were pinned to
+	-- the right edge and the count is drawn over the name, so a stack of eight
+	-- linen put its own number through the last letters of the word.
+	frame.name:SetPoint("RIGHT", frame.count, "LEFT", -UI.Metric.gutter, 0)
 	return frame
 end
 

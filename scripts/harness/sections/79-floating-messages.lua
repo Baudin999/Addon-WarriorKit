@@ -66,11 +66,16 @@ local function at(frame)
 	return x, y
 end
 
--- What forty pixels off the centre of this screen is, worked out here rather
--- than read back off the lane, because a test that asks the file under test
--- what the answer is has not asked anything. The row's own width never enters
--- it: a message is anchored by the same corner it is anchored to.
-local REST = ns.UI.Whole(-(GetScreenWidth() / 2 - 40))
+-- Where a message comes to rest on this screen, worked out here rather than
+-- read back off the lane, because a test that asks the file under test what the
+-- answer is has not asked anything.
+--
+-- The width is in it, and that is the whole of what was wrong the first time. A
+-- message is pinned by the corner nearest the edge it came from, so stopping
+-- that corner forty short of the centre puts the rest of the message across it.
+-- Forty short means the far edge, and the far edge is a width away.
+local WIDTH = 380
+local REST = ns.UI.Whole(-(GetScreenWidth() / 2 - 40 - WIDTH))
 
 ----------------------------------------------------------------------
 -- The event reached it, and the scene drains
@@ -111,6 +116,10 @@ do
 		("a message coming in from the right is pinned %s to %s")
 			:format(tostring(point), tostring(relativePoint)))
 
+	check(frame:GetWidth() == WIDTH,
+		("a message is %s wide and the rest offset above was worked out for %d")
+			:format(tostring(frame:GetWidth()), WIDTH))
+
 	local x, y = at(frame)
 	check(x == -40 and y == -100,
 		("a message starts at %s,%s and the lane said 40 in from the right edge, 100 down")
@@ -122,7 +131,7 @@ do
 	beat(0.6)
 	x, y = at(frame)
 	check(x == REST and y == -100,
-		("a message came to rest at %s and forty off the centre of this screen is %d")
+		("a message came to rest at %s and forty short of the centre of this screen is %d")
 			:format(tostring(x), REST))
 	check(frame:GetAlpha() == 1,
 		("a message rests at %.2f alpha rather than solid"):format(frame:GetAlpha()))
@@ -154,10 +163,10 @@ do
 	local _, one = at(first)
 	local _, two = at(second)
 	local _, three = at(third)
-	-- Twenty four tall with four of air, summed rather than multiplied, because
-	-- the rows are not promised to be the same height.
-	check(one == -100 and two == -128 and three == -156,
-		("the column sits at %s, %s and %s, and it is 100, 128 and 156 down")
+	-- Fifty tall with four of air, summed rather than multiplied, because the
+	-- rows are not promised to be the same height.
+	check(one == -100 and two == -154 and three == -208,
+		("the column sits at %s, %s and %s, and it is 100, 154 and 208 down")
 			:format(tostring(one), tostring(two), tostring(three)))
 
 	-- One frame. The first is travelling and the other two have not been let
@@ -194,7 +203,7 @@ do
 	local second = show("Bloodspiller")
 
 	local _, y = at(second)
-	check(y == -128, ("the second message opened at %s rather than under the first")
+	check(y == -154, ("the second message opened at %s rather than under the first")
 		:format(tostring(y)))
 
 	-- The first is 0.8 in, holds until 1.5 and has faded by 2.05.
@@ -335,6 +344,6 @@ check(Floats.Count() == 0 and ns.UI.Ticking("anim") == nil,
 	"the lane did not clear and hand the tick back")
 
 print(("float  in from 40 inside the right edge to %d, 100 down, 0.5s travel and"
-	.. " 1s on screen; three stack at 100, 128 and 156 and climb when the top"
+	.. " 1s on screen; three stack at 100, 154 and 208 and climb when the top"
 	.. " one goes; %.2f KB to walk 200 frames, %.2f KB of anchors to cross three"
 	.. " pixels"):format(REST, walk, writes))

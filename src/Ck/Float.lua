@@ -25,11 +25,19 @@ ns.Ck.Float = Float
 -- message comes in from an edge and rests near the middle, and those are two
 -- different questions. `enterEdge` is how far inside the screen's edge it
 -- starts, which is a fact about the edge it is coming from; `restCentre` is how
--- far from the screen's centre it stops, which is a fact about where the eye
--- is. Expressing both against one anchor would mean the caller doing the
+-- far short of the screen's centre it stops, which is a fact about where the
+-- eye is. Expressing both against one anchor would mean the caller doing the
 -- screen-width arithmetic, and doing it again on every resolution change. Both
 -- are resolved here, at the moment a message is pushed, so a lane written once
 -- is right on every monitor.
+--
+-- **They are also measured to different edges of the message, which is the part
+-- that was wrong first.** A message is pinned by the corner nearest the side it
+-- came from, so the entry offset is a distance to that corner and needs no
+-- width. The rest offset is not: the eye reads the message by its far edge, and
+-- a lane that stopped the near corner forty pixels short of the centre put two
+-- hundred and twenty pixels of message across it. So the rest offset is
+-- measured to the far edge and the width is taken off.
 --
 -- **Why the frames belong to the caller.** This file draws nothing. A loot row
 -- is an icon, a name in the item's own colour and a count; an achievement is a
@@ -55,7 +63,7 @@ local CORNER = { RIGHT = "TOPRIGHT", LEFT = "TOPLEFT" }
 
 -- spec.side        "RIGHT" or "LEFT", the edge messages come in from
 -- spec.enterEdge   pixels inside that edge where a message starts
--- spec.restCentre  pixels from the screen's centre where it stops
+-- spec.restCentre  pixels short of the screen's centre where it stops
 -- spec.enterAlpha  how solid it is at the start
 -- spec.restAlpha   how solid it is once it has landed
 -- spec.seconds     how long the travel and each fade take
@@ -247,11 +255,17 @@ function Lane:Push(frame, height)
 	-- survives a resolution change and a UI scale change without being told
 	-- about either.
 	local half = GetScreenWidth() / 2
+	-- Width read off the frame where height is asked for, and the difference is
+	-- not an inconsistency. A caller sets a width, because a message that grew
+	-- to fit its own text would be a message whose left edge moves with the
+	-- name in it. A height it cannot set, because a row that wraps has not been
+	-- laid out at the moment it is pushed.
+	local width = frame:GetWidth() or 0
 	local enterX, restX
 	if self.side == "RIGHT" then
-		enterX, restX = -self.enterEdge, -(half - self.restCentre)
+		enterX, restX = -self.enterEdge, -(half - self.restCentre - width)
 	else
-		enterX, restX = self.enterEdge, half - self.restCentre
+		enterX, restX = self.enterEdge, half - self.restCentre - width
 	end
 	row.restX = restX
 
