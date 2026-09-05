@@ -339,6 +339,370 @@ it was already built: the colour floor, the kinds and the profession list in
 `Comfort/Wanted.lua`, and the destroy in `Comfort/Leftovers.lua`. What was
 missing was the price floor and the switch on the window.
 
+Items 53 to 59 came out of an ask on 2026-09-04: write down what every class and
+every build needs before any of them is written, so that a class file is one
+sitting rather than a research project. Nine classes and twenty-seven builds.
+Four files on disk cover four classes and twelve of the builds, and the five
+missing files are one item each below.
+
+Four things settle most of what follows and are worth stating once.
+
+A class file is facts and a class file is one file. `src/Class/Class.lua:27`
+says a class that registers nothing is a supported class and that adding one is
+additive: one file, no edits anywhere else. That holds for eleven of the twelve
+fields. `standing` is the exception and item 53 says what it costs.
+
+The twelve fields and who reads each are listed at `src/Class/Warrior.lua:11`.
+Eight of them are facts about the class and four are facts about the build.
+`forms`, `charge`, `reactive`, `requires`, `swing`, `upkeep`, `suggested` and
+`standing` go at the top of a class file; `cooldowns`, `rotation`, `debuffs` and
+`loadout` go inside a spec, and a spec writes only what it disagrees with. The
+caps are eight on the cooldown row, six on the rotation line and four on the
+upkeep row, they are asserts inside `Cooldowns.All` and `Upkeep.Fixed`, and they
+fire at PLAYER_LOGIN as a Lua error in somebody's game.
+
+No item below carries a spell id, and no name below is final. Every id is baked
+at implementation from Wowhead's TBC Classic database, rank 1, and read back by
+name, which is the rule every entry in `src/Class/Warrior.lua` already keeps and
+which one letter of Deep Wound already cost. A name that this client cannot
+resolve is dropped rather than guessed, the way three of the shaman's four long
+cooldowns are dropped on Era. An ability with no cooldown comes off the rotation
+line before the list is written, because a clock on a spell that is always ready
+is a square that never says anything.
+
+No item below writes a bar plan. `src/Class/Shaman.lua:37` and
+`src/Class/Priest.lua:17` both refuse a plan for a build nobody here has played,
+on the argument that a plan taken off a talent calculator fills your bars with a
+guess and takes a backup you then have to put back. That argument covers
+twenty-four of the twenty-seven builds and it still holds. `loadout` is named in
+every item below only to say it is not being written, and each stays unwritten
+until somebody levels the character and presses the keys.
+
+Signatures are the same refusal one level down. `src/Class/Spec.lua:54` wants a
+talent with one rank at the foot of a tree, and takes the tree count where there
+is none, which is what arms does and what costs arms nothing. A signature
+guessed from memory that turns out to carry six ranks is a build that resolves
+wrong for the character sitting on rank two. So every item below names the tree,
+which always answers for anyone who has spent points, and leaves the signature
+to be confirmed one rank at a time or left out.
+
+53. The stance row, and the second reader.
+
+    Item 52 built `Standing/` around a table of readers at
+    `src/Standing/Standing.lua:56` and shipped one, `totem`. Its whole claim was
+    that a warrior's three stances are one more plan and one more reader rather
+    than a second part of the addon. This is the item that finds out.
+
+    The reader is `stance`, and it is the one every shapeshifting class uses:
+    warrior here, druid in item 55, and a rogue's Stealth and a priest's
+    Shadowform if either is ever wanted. It walks `GetShapeshiftFormInfo` and
+    matches each slot's spell name against the bar, rather than indexing into
+    it. That is the correction this item makes to item 52's guess.
+    `GetShapeshiftForm` answers one number, and the number is a position on a
+    bar that holds only the forms you have learned, so a level 10 warrior stands
+    in stance 1 and owns nothing else. A slot matched by name and found missing
+    draws empty, which is exactly what an empty totem slot already draws.
+
+    The reader contract is five values and a stance fills three: filled, art and
+    the name. `src/Standing/Row.lua:261` already reads the two it will not get
+    as `expires[index] or 0` and `span[index] or 0`, so nothing in `Row.lua`
+    changes for a reader with no clock.
+
+    `GetShapeshiftFormInfo` and `GetNumShapeshiftForms` are not in the harness.
+    `GetShapeshiftForm` is, at `scripts/harness/client/05-quests.lua:691`, and
+    the two new stubs belong beside it rather than in `03-player.lua`, which is
+    where the totem stub is.
+
+    The plan goes in `src/Class/Warrior.lua` beside `forms`: three slots in the
+    order that file already writes them in, `kind = "stance"`, `word = "stances"`
+    and `one = "stance"`. The colours are the three the addon already uses for
+    the three stances if there are any, and three hues far enough apart to be
+    told apart in one pixel of hairline if there are not.
+
+    One thing this item finds that item 52 did not.
+    `src/Standing/Feature.lua:105` writes its slash words out, `totems` and
+    `stances`, and `ns.Register` runs at file load, before the client will say
+    what class this is. So the words cannot be built off the plan and every
+    class's word has to be in that table: `forms` for a druid, `aspects` for a
+    hunter, `poisons` for a rogue, `auras` for a paladin, `demon` for a warlock.
+    That table is the one file outside `Class/` a new class edits, which is a
+    hole in the promise at `src/Class/Class.lua:27`, and the fix is a gate
+    rather than a redesign. Hold every `word` and `one` a plan registers against
+    the table, and fail on a word in the table that no plan claims.
+
+54. What a fifth class file costs the gate, before the fifth one lands.
+
+    `scripts/check.sh:1354` reads the class tokens off `Class/*.lua` and the
+    spec keys off each file, and runs the harness once per shape. Thirteen runs
+    today, twelve builds and a hunter. Nine classes at three builds each is
+    twenty-eight, and the harness is the slowest thing in `check.sh`. Measure
+    one run before item 56 lands and again after, because a gate that takes four
+    minutes is a gate somebody starts reaching around.
+
+    HUNTER is written out at `scripts/check.sh:1377` and that run is the whole
+    proof that the class-agnostic parts stand up with nothing registered. Item
+    56 writes a hunter file and takes the proof away silently: the loop keeps
+    passing, and what it stops covering is not in its output. Replace it in the
+    same commit with a token no class file can ever claim, and say in the
+    comment above the loop that the token is deliberately not a class, so that
+    the next class file does not quietly eat it again.
+
+55. Druid: forms, and the first plan a spec overrides.
+
+    Six of the eight class-wide fields, and it is the class that exercises the
+    registry hardest.
+
+    `forms` is written in learn order, Bear, Aquatic, Cat, Travel, because the
+    `stance:` macro conditional counts positions on the same bar the reader
+    walks and a druid learns those four in that order. The prefix holds while
+    levelling: a druid who knows the first two has them at 1 and 2. Moonkin and
+    Tree come after Travel and are talents, so they go at the end. Confirm the
+    order in game by reading `GetShapeshiftFormInfo` back at 70 and at 25, and
+    if it does not hold, drop `forms` entirely rather than generating a macro
+    against a moving number. Nothing but the loadouts page reads it on this
+    class, and `src/Core/Stance.lua:20` already supports a weapon set with no
+    stance on it.
+
+    `standing` is the second user of the `stance` reader and the first field in
+    the addon that a spec overrides for a reason other than a number. All three
+    builds get bear, aquatic, cat and travel. Balance writes the field again with
+    Moonkin Form on the end and restoration with Tree of Life, because a square
+    for a form the character cannot take is a square that stays dark for the life
+    of the character.
+
+    No `charge`, no `swing`, no `requires`. `reactive` is worth a look and is not
+    on this item: nothing a druid owns opens on a dodge or a parry the way
+    Overpower and Revenge do, and Omen of Clarity lands as a buff rather than
+    down the combat log, which is a second kind of `on` and belongs with the
+    warlock's Nightfall in item 59.
+
+    `upkeep` gets one entry, the mark, and any of Mark of the Wild and Gift of
+    the Wild clears it, on the shaman's shield argument: which one you are
+    running is a group question and standing there with neither is never right.
+
+    `suggested` is every debuff a druid lands: Moonfire, Insect Swarm, Faerie
+    Fire and its feral form, Entangling Roots, Rake, Rip, Pounce, Lacerate,
+    Mangle, Demoralizing Roar, Hibernate, Cyclone.
+
+    Balance, tree 1. Cooldowns are Innervate, Force of Nature, Barkskin and
+    Rebirth. The rotation line is thin and honest: Hurricane and Force of
+    Nature are the two with real clocks, Moonfire and Starfire have none.
+    Debuffs are Moonfire, Insect Swarm and Faerie Fire.
+
+    Feral, tree 2, and the fullest of the three. Cooldowns are Innervate,
+    Barkskin, Rebirth and Enrage. Rotation is Mangle, Feral Charge, Swipe and
+    Faerie Fire (Feral). Debuffs are Rake, Rip, Lacerate, Mangle, Faerie Fire
+    and Demoralizing Roar, which is six and at the cap.
+
+    Restoration, tree 3. Cooldowns are Innervate, Nature's Swiftness, Rebirth
+    and Tranquility. Rotation is Swiftmend and Nature's Swiftness. Debuffs are
+    Faerie Fire and Entangling Roots, which is the shortest row in the addon and
+    correct: a resto druid is not putting anything on a mob.
+
+56. Hunter: aspects, the pet, and the second class to fill `reactive`.
+
+    This is the file that takes the no-file proof away, so item 54 lands first
+    or in the same commit.
+
+    Two new readers. `buff` matches a list of spell names against
+    `UnitAura("player")` and reports the first that is up, with the client's own
+    icon and expiry, which is what an aspect slot needs and what item 57's aura,
+    seal and blessing slots need after it. `pet` answers `UnitExists("pet")`
+    with the pet's name and portrait and no clock, which item 59 uses for the
+    demon. Neither call is stubbed for the pet half: `UnitAura` is at
+    `scripts/harness/client/03-player.lua:205`, and `UnitCreatureFamily`,
+    `GetPetHappiness` and a pet unit in the roster are not there at all.
+
+    `standing` is two slots, aspect and pet, `word = "aspects"`. The aspect slot
+    carries every aspect this client has, Hawk, Monkey, Cheetah, Pack, Wild,
+    Beast and Viper, and the reader lights whichever is up: the question a
+    hunter asks a row is which one, not whether. The pet slot is dark when the
+    pet is dead or dismissed, which is the one fact on the row worth a glance
+    mid-pull.
+
+    `reactive` is the finding on this item. Mongoose Bite opens when you dodge
+    and Counterattack opens when you parry, which is Overpower and Revenge with
+    the names swapped, and `src/Buttons/Reaction.lua` already owns the combat
+    log parse and knows no ability. Confirm the window against the five seconds
+    the warrior file argues for at length; the two abilities may not share it.
+
+    No `charge`, no `forms`, no `swing`. `requires` gets nothing: every candidate
+    on a hunter is a range or an aim rule the client already answers, and a
+    square greyed on a rule the addon guessed at is worse than one that says
+    nothing.
+
+    `upkeep` gets nothing either. The aspect is on the row above and a bare
+    ranged weapon is not a thing this client tracks.
+
+    `suggested` is Hunter's Mark, Serpent Sting, Viper Sting, Scorpid Sting,
+    Wyvern Sting, Concussive Shot, Wing Clip, Scatter Shot, Silencing Shot,
+    Intimidation, Freezing Trap and Explosive Trap.
+
+    Beast mastery, tree 1. Cooldowns are Bestial Wrath, Intimidation, Rapid Fire
+    and Misdirection. Rotation is Arcane Shot, Multi-Shot and Kill Command if
+    this client has it. Debuffs are Hunter's Mark, Serpent Sting and the
+    Intimidation stun.
+
+    Marksmanship, tree 2. Cooldowns are Rapid Fire, Readiness, Misdirection and
+    Silencing Shot. Rotation is Aimed Shot, Arcane Shot, Multi-Shot and
+    Silencing Shot. Debuffs are Hunter's Mark, Serpent Sting and Scatter Shot.
+
+    Survival, tree 3. Cooldowns are Rapid Fire, Misdirection, Deterrence and
+    Readiness if the talent is not marksmanship-only on this client. Rotation is
+    Mongoose Bite, Counterattack, Wyvern Sting, Arcane Shot and Explosive Trap.
+    Debuffs are Hunter's Mark, Serpent Sting, Wyvern Sting and Wing Clip.
+
+57. Paladin: the aura, the seal and the blessing, and the second user of
+    `requires`.
+
+    `standing` is three slots and `word = "auras"`, on the `buff` reader item 56
+    writes. The aura slot carries every aura, the seal slot every seal, and the
+    blessing slot every blessing that lands on you. Three squares that answer
+    the only three questions a paladin has about themselves, and the seal is the
+    one with a clock on it because it runs for thirty seconds and lapses in the
+    middle of a pull without saying so.
+
+    `upkeep` gets the seal as well, and that is not a duplicate. The row is a
+    square and the upkeep entry is the nag, which is the same split Battle Shout
+    and the stance row already sit on either side of for a warrior. Any seal
+    clears it.
+
+    `requires` is the finding. Hammer of Wrath is castable below twenty percent
+    and nothing else moves that number, which is Execute's rule word for word
+    and makes this the second entry in a field `src/Buttons/Requires.lua` built
+    for one. Nothing else on a paladin meets the bar.
+
+    No `charge`, no `forms`, no `swing`, no `reactive`. Reckoning and Redoubt are
+    procs that land as buffs rather than windows opened by a dodge, so they go
+    with Nightfall in item 59 or nowhere.
+
+    `suggested` is Judgement of Light, Judgement of Wisdom, Judgement of the
+    Crusader, Judgement of Justice, Hammer of Justice, Repentance, Avenger's
+    Shield, Holy Vengeance and its Horde spelling, Turn Evil and Exorcism if
+    either lands an aura.
+
+    Holy, tree 1. Cooldowns are Avenging Wrath, Divine Favor, Divine
+    Illumination, Lay on Hands and Divine Shield. Rotation is Holy Shock and
+    Hammer of Justice. Debuffs are the judgement you are running and Hammer of
+    Justice.
+
+    Protection, tree 2. Cooldowns are Avenging Wrath, Divine Shield, Divine
+    Protection and Lay on Hands. Rotation is Avenger's Shield, Holy Shield,
+    Consecration, Judgement and Hammer of Justice. Debuffs are Judgement of
+    Wisdom, Judgement of Light, Hammer of Justice and the Avenger's Shield
+    daze.
+
+    Retribution, tree 3. Cooldowns are Avenging Wrath, Divine Shield, Lay on
+    Hands and Repentance. Rotation is Crusader Strike, Judgement, Hammer of
+    Wrath, Exorcism and Hammer of Justice. Debuffs are the judgement, Hammer of
+    Justice and Repentance.
+
+58. Rogue: the two poisons, and a rotation line that is nearly empty.
+
+    `standing` is two slots, main hand and off hand, `word = "poisons"`, on a
+    fourth reader called `enchant`. It reads `GetWeaponEnchantInfo`, which
+    `src/Buffs/Upkeep.lua:439` already documents across the three shapes that
+    call has had, and `src/Buffs/Upkeep.lua:479` already picks the stride at
+    runtime. Reuse that reading rather than writing a second one.
+
+    The limit is worth writing into the reader. `GetWeaponEnchantInfo` says
+    whether a hand is enchanted, for how long, and how many charges are left. It
+    does not say which poison, so the square cannot draw a poison's icon and
+    must draw the weapon's own, off `GetInventoryItemTexture`. A rogue reads the
+    charges anyway, which is the number the client's own buff frame buries.
+
+    `reactive` gets one entry, Riposte, which opens when you parry and is
+    Revenge with a different name. Third class into that field, and the second
+    that wants the parry trigger `src/Class/Warrior.lua` already spells
+    `defended`.
+
+    No `charge`, no `forms`, no `swing`, no `requires`. Stealth is a shapeshift
+    form and is deliberately not on the row, on `src/Class/Shaman.lua:12`'s Ghost
+    Wolf argument: the screen already says you are stealthed and a square
+    repeating it is furniture.
+
+    `upkeep` gets nothing. A rogue with a bare weapon is already the first entry
+    on the shipped buff nag, which is the same call and the same slot.
+
+    `suggested` is Rupture, Garrote, Expose Armor, Hemorrhage, Deadly Poison,
+    Crippling Poison, Wound Poison, Mind-numbing Poison, Cheap Shot, Kidney
+    Shot, Gouge, Blind and Sap.
+
+    The honest finding is that the rotation line does not fit this class. Almost
+    nothing a rogue presses has a cooldown, and the number that decides every
+    press is the combo point count, which nothing in this addon draws. Write the
+    three lists short rather than padding them, and if a rogue is played here the
+    thing worth building is a combo point row, which is a new part and a new
+    item rather than a field on this file.
+
+    Assassination, tree 1. Cooldowns are Cold Blood, Vanish, Evasion and Blind.
+    Rotation is Mutilate and Kidney Shot. Debuffs are Rupture, Garrote, Deadly
+    Poison and Kidney Shot.
+
+    Combat, tree 2. Cooldowns are Adrenaline Rush, Blade Flurry, Evasion and
+    Vanish. Rotation is Riposte, Kick and Gouge. Debuffs are Rupture, Expose
+    Armor, Crippling Poison and Kidney Shot.
+
+    Subtlety, tree 3. Cooldowns are Preparation, Shadowstep, Vanish and Evasion.
+    Rotation is Shadowstep and Premeditation. Debuffs are Rupture, Hemorrhage,
+    Cheap Shot and Kidney Shot.
+
+59. Warlock: the demon, and the two things `reactive` and `requires` cannot say
+    yet.
+
+    `standing` is one slot, the demon, `word = "demon"`, on the `pet` reader item
+    56 writes. One square, and it is the right size: a warlock has one demon out
+    and the whole question is which and whether.
+
+    Soul shards are deliberately not on the row. A shard count is a number in a
+    bag rather than a slot with something standing in it, and the reader contract
+    at `src/Standing/Standing.lua:41` has nowhere to put it. If the count is
+    wanted it goes on the upkeep row as a floor, or nowhere.
+
+    `upkeep` gets the armor, and it is the mage's entry with different names:
+    Fel Armor, Demon Armor and Demon Skin, matched the way
+    `src/Class/Mage.lua:142` matches its four. Standing there with none is never
+    right and the client says nothing about it.
+
+    Two findings, and both are extensions rather than entries.
+
+    `reactive` cannot say Nightfall. The field watches the combat log for a
+    dodge or a block, and Nightfall arrives as Shadow Trance, a buff on you with
+    a ten second clock. That is a second kind of `on`, it is the same shape as
+    the druid's Omen of Clarity and the paladin's Reckoning, and it wants
+    `on = "buff"` with a spell id, read off `UnitAura("player")` by the reader
+    item 56 writes. Three classes want it. Write it here or write it as its own
+    item first.
+
+    `requires` cannot say Conflagrate. The field compares the target's health to
+    a number, and Conflagrate needs your Immolate on the target, which is an
+    aura and not a percentage. `src/Buttons/Requires.lua` owns what a condition
+    means and knows none of the abilities, so a second condition kind belongs
+    there: `needs = <spell>` on the target, matched by name, mine only. Shadowburn
+    and Death Coil need nothing and stay off.
+
+    No `charge`, no `forms`, no `swing`.
+
+    `suggested` is Corruption, Immolate, Curse of Agony, Curse of the Elements,
+    Curse of Weakness, Curse of Tongues, Curse of Doom, Siphon Life, Unstable
+    Affliction, Seed of Corruption, Fear, Howl of Terror, Banish and Death Coil.
+
+    Affliction, tree 1. Cooldowns are Curse of Doom, Death Coil, Howl of Terror
+    and Amplify Curse. Rotation is Death Coil and Howl of Terror, which is two,
+    because an affliction warlock's whole rotation is dots with no clocks on
+    them. Debuffs are Corruption, Curse of Agony, Siphon Life, Immolate and
+    Unstable Affliction.
+
+    Demonology, tree 2. Cooldowns are Fel Domination, Soulshatter, Death Coil
+    and Howl of Terror. Rotation is Shadowburn if the character has it, Death
+    Coil and Howl of Terror. Debuffs are Corruption, Immolate, Curse of Agony
+    and Curse of the Elements.
+
+    Destruction, tree 3. Cooldowns are Soulshatter, Death Coil, Howl of Terror
+    and Shadowfury. Rotation is Conflagrate, Shadowburn, Shadowfury and Death
+    Coil. Debuffs are Immolate, Corruption, Curse of the Elements and the
+    Shadowfury stun.
+
 ## Deliberately not on this list
 
 The architecture review turned up two more repeats and both are right as they
