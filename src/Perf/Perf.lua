@@ -68,6 +68,11 @@ local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast
 	"castsweep", "tip", "settle", "chart", "skin", "skinread", "party", "partyread", "meter",
 	"buffs", "cooldowns", "standing", "stream", "world", "trace", "hide", "clock", "bagstack",
 	"vendor", "thanks", "sampler", "feed", "adhoc",
+	-- Every tween in the addon, on one tick that stops itself when nothing is
+	-- moving. One slot rather than one per animation: a caller arms a tween, it
+	-- does not arm a ticker, so what a reader wants on the tab is what movement
+	-- costs in total on the frames there is any.
+	"anim",
 	-- The three the frame trace is made of. "frame" is the recorder itself,
 	-- which runs on every frame and is the one tick in the addon whose cost has
 	-- to be subtracted from what it reports. "hud" is the window painting

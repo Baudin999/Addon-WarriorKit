@@ -96,6 +96,18 @@ UI\Pixel.lua
 # hand. Loads with the pixel grid because it is the same layer and because a
 # part that draws may want a tick before anything else it uses exists.
 UI\Ticker.lua
+# The animation library, which is its own thing rather than part of the drawing
+# layer. Ck\Animations.lua is a tween engine: a frame, a duration, an easing and
+# up to two channels, advanced on one tick that stops itself when nothing is
+# moving. Ck\Float.lua is the first thing built on it, a column of messages that
+# slide in from an edge, hold and fade.
+#
+# Everything under Ck\ is written to know nothing about WarriorKit, so lifting
+# it into an addon of its own is a change to one line and to these two lists.
+# After UI\Ticker.lua, which is the tick it runs on, and after UI\Pixel.lua,
+# whose UI.Whole is what snaps a travelling coordinate to a whole pixel.
+Ck\Animations.lua
+Ck\Float.lua
 UI\Draw.lua
 
 # The gauge, between the drawing primitives and anything that puts a bar up. A
@@ -551,6 +563,11 @@ Feeds\Auction.lua
 Feeds\Worth.lua
 Feeds\Loot.lua
 Feeds\Combat.lua
+# What you just picked up, floated across the screen. The second reader of
+# ns.LootLine after Feeds\Loot.lua, answering to its own switch because a drop
+# the feed's quality chips filtered out is still a drop you want to see. After
+# Ck\Float.lua, which is the column it pushes into.
+Feeds\Floats.lua
 Feeds\Feature.lua
 
 # The breakdown. What this character does, counted out of the combat log and

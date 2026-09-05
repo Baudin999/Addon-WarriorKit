@@ -484,6 +484,12 @@ local function Panel(ui)
 		end)
 	ui.Hint("What you carry, what the account carries between it, and gold an hour since you logged in. Hover it for the list.")
 
+	ui.Divider()
+
+	ui.Check("float a drop across the screen", function() return ns.db.lootFloat end,
+		function(on) ns.db.lootFloat = on end)
+	ui.Hint("In from the right edge, a second beside the middle of the screen, then gone. Your own drops only, and it answers to nothing above: an item the chips have filtered out of the column still floats past.")
+
 	ui.Reading("rows so far", function()
 		return tostring(ns.LootFeed.Counts())
 	end)
@@ -531,6 +537,9 @@ for key, value in pairs(LootFeed.Defaults()) do
 	defaults[key] = value
 end
 for key, value in pairs(CombatFeed.Defaults()) do
+	defaults[key] = value
+end
+for key, value in pairs(ns.Floats.Defaults()) do
 	defaults[key] = value
 end
 

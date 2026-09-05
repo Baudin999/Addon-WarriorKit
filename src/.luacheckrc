@@ -262,6 +262,13 @@ read_globals = {
 	-- would, and falls back where a client defines neither.
 	"CONTAINER_OFFSET_X", "CONTAINER_OFFSET_Y",
 	"IsAltKeyDown", "GetShapeshiftForm",
+	-- How wide the screen is in UIParent's own units, which is what a frame
+	-- anchored to UIParent measures its offsets in. Ck/Float.lua reads it to
+	-- turn "forty pixels off the centre" into an offset from the edge, and it
+	-- reads it per message rather than once, so a lane survives a resolution
+	-- change without being told about one. UIParent:GetWidth() answers the
+	-- same number on a client and nothing at all under the harness stub.
+	"GetScreenWidth",
 	-- the four totem slots, read by Standing/Standing.lua. Probed by name
 	-- rather than called outright, because nothing installed on this disk
 	-- calls it and the client's own documentation marks it as a call that may

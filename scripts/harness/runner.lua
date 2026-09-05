@@ -421,6 +421,11 @@ local SECTIONS = {
 	-- login and reads nothing it touched. It fills every totem slot and empties
 	-- them again, so nothing after it would find a scene it did not expect.
 	"78-standing-row",
+	-- Last, and it has to be. It drains everything the loot sections left
+	-- floating and then runs the animation tick out to nothing, which is a
+	-- state no section above it expects to find and none below it would
+	-- survive.
+	"79-floating-messages",
 }
 
 -- Naming a section runs every section up to and including it, rather than that
