@@ -71,19 +71,24 @@ local C, M = UI.Color, UI.Metric
 -- model, which is where nearly all of the cost was.
 --------------------------------------------------------------------------
 
--- Wide enough for the gear page to carry the stats beside it: the block of
--- squares and the portrait want three hundred and forty eight of that, and what
--- is left is the column they are read against. The other three tabs are a list
--- in a scroll view and take whatever width they are given.
+-- Wide enough for the gear page to carry an item's name beside every slot, the
+-- figure behind them and the stats column against the right edge. The other
+-- three tabs are a list in a scroll view and take whatever width they are given.
 --
--- The stats column takes whatever the gear block leaves over, which makes this
--- number and nothing else the distance between a stat's name and its number.
--- So it is not a round number: it is the padding, the gear block, a gutter and
--- the narrowest column Paperdoll will still draw, added up. Every pixel past
--- that lands in the middle of every row, and at forty of them strength and a
--- hundred and forty four stop reading as one line and become two columns you
--- pair up by eye.
-local WIDTH, HEIGHT = 600, 480
+-- It is not a round number and it never was: it is the padding, two columns of
+-- rows, the gap the figure stands in, a gutter and the narrowest column
+-- Paperdoll will draw a stat into, added up. 24 + 190 + 190 + 190 + 8 + 220.
+--
+-- It grew by two hundred and sixty when the squares became rows. A name is the
+-- one thing both of the sheets this page was drawn against have and this page
+-- did not, and a name is worth about a hundred and ninety units next to a
+-- thirty six unit disc. The alternative was a page that draws half of "Bloodfang
+-- Spaulders" and stops, which is worse than the icons alone.
+--
+-- Taller by forty at the same time, and for the figure rather than for the
+-- rows. Eight rows a column was already the count; behind them there is now a
+-- person standing up, and 480 cut him off at the knee.
+local WIDTH, HEIGHT = 860, 520
 
 -- The four, in the order they are drawn. `fill` is what the tab's pane is
 -- handed on a repaint, and the two that have none are the two that are not

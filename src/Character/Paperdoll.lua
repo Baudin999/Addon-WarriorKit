@@ -110,21 +110,27 @@ local RIM = 3
 -- read without being shouted at, and the hover is what takes one to full.
 local REST = 0.55
 
--- How wide the durability line under an icon is. A chord rather than the width
+-- How wide the durability line under a weapon is. A chord rather than the width
 -- of the square, because the square draws as a disc now and a line the full
--- width of it would stick out of both sides.
+-- width of it would stick out of both sides. The sixteen sided slots do not use
+-- it: theirs runs the width of the item's name.
 local WEARSPAN = 14
+
+-- The socket dots. Three because three is the most holes anything in this
+-- expansion has, and five pixels because a dot on the same line as an eleven
+-- pixel number is a dot, and at seven it is a button.
+local DOTS = 3
+local DOT = 5
+
+-- How much of the page's width the figure stands in, between the two columns.
+-- The model is behind everything now rather than boxed between them, so this is
+-- not the model's width: it is the gap the two columns leave in the middle,
+-- which is the only part of the figure nothing is drawn over.
+local MIDDLE = 190
 
 -- How far apart two squares in a column sit, and the air between a column and
 -- the portrait.
 local GAP = 4
-
--- The widest the portrait is allowed to get, and the whole of what stops this
--- page spreading. A model is a figure standing up, so a panel much past this is
--- not a bigger portrait, it is the same figure on a wider stage, and it pushes
--- the two columns of squares a window apart. Given more room than the block
--- needs, the block keeps this width and the rest goes to the stats column.
-local PORTRAIT = 260
 
 -- The narrowest the stats column may be and still be worth drawing, and it is
 -- the row added up rather than a taste: a scroll bar, the indent, the widest
@@ -183,20 +189,23 @@ local function Ring(box, color)
 		box.lit and 1 or REST)
 end
 
-local function Square(pane, entry)
-	local box = CreateFrame("Frame", nil, pane.frame)
-	box:SetSize(SQUARE, SQUARE)
+-- The disc and what is drawn on it, in a frame of its own so the row can put it
+-- at either end. Everything on it is still reached as box.ring, box.icon and
+-- box.empty, because a repaint has no business knowing there is a face frame.
+local function Face(box)
+	local face = CreateFrame("Frame", nil, box)
+	face:SetSize(SQUARE, SQUARE)
 
 	-- The disc, and the whole reason the icon over it can afford to go soft at
 	-- its own edge. The icon is inset by RIM, so a band of this shows all the way
 	-- round and the icon's last few texels fade onto purple or onto green rather
 	-- than onto the panel. It carries the quality colour, which is what the box
 	-- edges carried before there were no edges to carry it.
-	box.ring = UI.Disc(box, "BACKGROUND")
+	box.ring = UI.Disc(face, "BACKGROUND")
 	box.ring:SetAllPoints()
 	Ring(box, nil)
 
-	box.icon = UI.Clip(UI.Icon(box, "ARTWORK"))
+	box.icon = UI.Clip(UI.Icon(face, "ARTWORK"))
 	box.icon:SetPoint("TOPLEFT", RIM, -RIM)
 	box.icon:SetPoint("BOTTOMRIGHT", -RIM, RIM)
 
@@ -204,14 +213,81 @@ local function Square(pane, entry)
 	-- the shape it draws at, and cropping it the way an item icon is cropped
 	-- eats its own border. Rounded all the same, because a square silhouette in
 	-- a round ring is the one slot on the page that looks like a mistake.
-	box.empty = UI.Clip(box:CreateTexture(nil, "ARTWORK"))
+	box.empty = UI.Clip(face:CreateTexture(nil, "ARTWORK"))
 	box.empty:SetPoint("TOPLEFT", RIM, -RIM)
 	box.empty:SetPoint("BOTTOMRIGHT", -RIM, RIM)
 	box.empty:SetVertexColor(1, 1, 1, 0.3)
 
+	return face
+end
+
+-- The name of what is in the slot, the line under it, and the sockets on that
+-- line. Only the sixteen sided slots get one: the three weapons sit centred
+-- under the figure where a row of text has nowhere to go and would cross it.
+--
+-- Everything is anchored here rather than in Resize, off the face at one end and
+-- the row's own far edge at the other, so a row that changes width takes its
+-- text with it and Resize places nineteen frames and nothing inside one.
+--
+-- The dots run in from the far edge and the item level sits at the near one, so
+-- the two never collide on a name long enough to clip: what gets cut is the
+-- middle of the line, which is empty.
+local function Words(box, entry)
+	local near = entry.side == "right" and "RIGHT" or "LEFT"
+	local far = entry.side == "right" and "LEFT" or "RIGHT"
+	local sign = entry.side == "right" and -1 or 1
+
+	box.name = UI.Label(box, M.font, C.text, near, UI.SHADOW)
+	UI.Wrap(box.name, false)
+	box.name:SetPoint("TOP" .. near, box.face, "TOP" .. far, sign * M.gutter, -2)
+	box.name:SetPoint("TOP" .. far, box, "TOP" .. far, 0, -2)
+
+	box.note = UI.Label(box, M.small, C.dim, near, UI.SHADOW)
+	UI.Wrap(box.note, false)
+	box.note:SetPoint("TOP" .. near, box.name, "BOTTOM" .. near, 0, -1)
+	box.note:SetPoint("TOP" .. far, box.name, "BOTTOM" .. far, 0, -1)
+
+	-- One per socket a piece in this slot could carry. Made at build and shown
+	-- by the repaint, because a texture made on a repaint is a texture made
+	-- nineteen times every time anything you are wearing moves.
+	box.dots = {}
+	for index = 1, DOTS do
+		local dot = UI.Disc(box, "OVERLAY")
+		dot:SetSize(DOT, DOT)
+		dot:SetPoint(far, box, far, sign * -((index - 1) * (DOT + 2)), 0)
+		dot:SetPoint("TOP", box.note, "TOP", 0, 0)
+		dot:Hide()
+		box.dots[index] = dot
+	end
+end
+
+local function Square(pane, entry)
+	local box = CreateFrame("Frame", nil, pane.frame)
+	box:SetSize(SQUARE, SQUARE)
+	box.face = Face(box)
+	box.face:SetPoint("TOP" .. (entry.side == "right" and "RIGHT" or "LEFT"))
+
+	-- The three weapons are a side of their own and get no words. They sit
+	-- centred under the figure, where a line of text has nowhere to go and would
+	-- be drawn across the model rather than beside it.
+	if entry.side ~= "hands" then
+		Words(box, entry)
+	end
+
+	-- Under the name where there is one, and a chord across the foot of the disc
+	-- where there is not. Durability is the one fact about a piece that changes
+	-- while you play, so it belongs on the line you are already reading, and a
+	-- two pixel rule under an item's name is that line's own underscore rather
+	-- than a bar competing with it.
 	box.wear = ns.Fill(box, "OVERLAY", C.tick[1], C.tick[2], C.tick[3], 1)
-	box.wear:SetPoint("BOTTOM")
-	box.wear:SetSize(WEARSPAN, WEAR)
+	box.wear:SetHeight(WEAR)
+	if box.name then
+		local near = entry.side == "right" and "RIGHT" or "LEFT"
+		box.wear:SetPoint("BOTTOM" .. near, box.name, "BOTTOM" .. near, 0, -1)
+	else
+		box.wear:SetPoint("BOTTOM")
+		box.wear:SetWidth(WEARSPAN)
+	end
 	box.wear:Hide()
 
 	-- The line the client already knows. `/use 16` is what every sharpening
@@ -325,6 +401,22 @@ local function WearTone(fraction)
 	return C.tick
 end
 
+-- The dots under a name. Filled first, in the gem's own quality colour, then
+-- the holes in the panel's edge colour, which is the order the client can
+-- actually answer: a link says what is in it and how many are open, and never
+-- which position an open one is.
+local function PaintDots(box, link)
+	local filled, open = ns.ItemSockets(link)
+	local count = filled and #filled or 0
+	for index = 1, DOTS do
+		local dot = box.dots[index]
+		local gem = filled and filled[index]
+		local tone = gem and UI.Quality[ns.ItemValue(gem) or 1] or C.edge
+		dot:SetVertexColor(tone[1], tone[2], tone[3], gem and 1 or 0.7)
+		dot:SetShown(index <= count + open)
+	end
+end
+
 local function PaintSquare(box)
 	local entry = box.entry
 	local icon = ns.Worn.Icon(entry.slot)
@@ -339,10 +431,23 @@ local function PaintSquare(box)
 	local quality = link and ns.ItemValue(link) or nil
 	Ring(box, quality and UI.Quality[quality] or nil)
 
+	-- The name of the thing, in the colour of the thing. An empty slot says what
+	-- the slot is for instead, dimmed, because a blank line beside a silhouette
+	-- is a row you have to work out and the label is already in the entry.
+	if box.name then
+		local tone = quality and UI.Quality[quality] or C.dim
+		box.name:SetText(link and (ns.ItemInfo(link)) or entry.label)
+		box.name:SetTextColor(tone[1], tone[2], tone[3])
+		local level = link and ns.ItemLevel(link)
+		box.note:SetText(level and level > 0 and ("%d"):format(level) or "")
+		PaintDots(box, link)
+	end
+
 	local has, of = ns.Worn.Durability(entry.slot)
 	if has then
 		local fraction = has / of
-		box.wear:SetWidth(math.max(UI.Round(box, (SQUARE - INSET * 2) * fraction), 1))
+		local span = box.name and box.name:GetWidth() or (SQUARE - INSET * 2)
+		box.wear:SetWidth(math.max(UI.Round(box, span * fraction), 1))
 		UI.Tint(box.wear, WearTone(fraction))
 		box.wear:Show()
 	else
@@ -530,6 +635,19 @@ function Paperdoll.New(parent)
 	end
 
 	pane.panel = Portrait(pane.frame)
+
+	-- Every row sits over the figure, and that is what putting the model behind
+	-- the page costs. A model is drawn over every texture layer of the frame that
+	-- holds it, so frame level is the only thing it goes behind: this is the same
+	-- sentence Band above is written for, applied to nineteen rows. The secure
+	-- button goes one higher than its row, because a click has to reach it
+	-- through the name as well as through the disc.
+	local level = pane.panel:GetFrameLevel() + 5
+	for index = 1, #pane.squares do
+		pane.squares[index]:SetFrameLevel(level)
+		pane.squares[index].button:SetFrameLevel(level + 1)
+	end
+
 	-- The same readout the stats tab was, hosted here instead and drawn compact:
 	-- a line a row, with the sentence under it moved into the hover. It keeps
 	-- its own scroll view, so a long sheet on a short window scrolls beside a
@@ -546,30 +664,47 @@ end
 function Pane:Resize(width, height)
 	self.frame:SetSize(width, height)
 
-	-- The block asks for what it wants and the stats column gets the remainder,
-	-- so the two columns of squares sit the same distance apart on every window
-	-- this page is ever given. Everything in the block is placed off the left
-	-- edge for the same reason: the right hand edge belongs to the stats now,
-	-- and a square anchored to it would drift with the column's width.
-	local column = SQUARE + GAP * 2
-	local room = width - (column * 2 + PORTRAIT) - M.gutter
-	local stats = room >= READING and room or 0
+	-- The stats column takes what it needs off the right and the gear area is
+	-- everything else. Inside that, the two columns of rows sit against its two
+	-- edges and MIDDLE is the gap left between them, which is the strip of the
+	-- figure nothing is drawn over.
+	--
+	-- There is no narrow arrangement to fall back to. This window's width is a
+	-- constant in Character/Window.lua and its zoom scales the frame rather than
+	-- resizing it, so the column is the same number of units on every screen the
+	-- page is ever drawn on. A fallback here would be a second layout nothing
+	-- exercises, which is a second layout nobody would notice going wrong.
+	local stats = width - READING - M.gutter >= SQUARE * 2 + MIDDLE and READING or 0
 	local gutter = stats > 0 and M.gutter or 0
-	self.width = math.max(math.min(width - stats - gutter - column * 2, PORTRAIT), 1)
-	local right = column * 2 + self.width - SQUARE
+	local gear = math.max(width - stats - gutter, 1)
+	local column = math.max(UI.Round(self.frame, (gear - MIDDLE) / 2), SQUARE)
+	self.width = gear
+
+	-- Under the top band, not level with it. The band carries your name and it
+	-- runs the full width now, so a first row starting at the top of the page
+	-- would be drawn across it.
+	local top = RIBBON + GAP
 
 	for index = 1, #self.left do
+		self.left[index]:SetSize(column, SQUARE)
 		self.left[index]:ClearAllPoints()
-		self.left[index]:SetPoint("TOPLEFT", 0, -((index - 1) * (SQUARE + GAP)))
+		self.left[index]:SetPoint("TOPLEFT", 0, -(top + (index - 1) * (SQUARE + GAP)))
 	end
 	for index = 1, #self.right do
+		self.right[index]:SetSize(column, SQUARE)
 		self.right[index]:ClearAllPoints()
-		self.right[index]:SetPoint("TOPLEFT", right, -((index - 1) * (SQUARE + GAP)))
+		self.right[index]:SetPoint("TOPRIGHT", self.frame, "TOPLEFT",
+			gear, -(top + (index - 1) * (SQUARE + GAP)))
 	end
 
+	-- The figure is behind the whole gear area rather than boxed between the two
+	-- columns, which is the change that makes this one picture instead of three
+	-- panels in a row. Its two bands run the full width with it: the name along
+	-- the top and the four readings along the foot are about the page, not about
+	-- the middle third of it.
 	self.panel:ClearAllPoints()
-	self.panel:SetPoint("TOPLEFT", column, 0)
-	self.panel:SetSize(self.width, math.max(height - SQUARE - GAP, 1))
+	self.panel:SetPoint("TOPLEFT")
+	self.panel:SetSize(gear, math.max(height - SQUARE - GAP, 1))
 	self.inner = self:Cells()
 
 	self.stats.frame:ClearAllPoints()
@@ -583,6 +718,7 @@ function Pane:Resize(width, height)
 
 	local span = #self.hands * SQUARE + math.max(#self.hands - 1, 0) * GAP
 	for index = 1, #self.hands do
+		self.hands[index]:SetSize(SQUARE, SQUARE)
 		self.hands[index]:ClearAllPoints()
 		self.hands[index]:SetPoint("TOP", self.panel, "BOTTOM",
 			(index - 1) * (SQUARE + GAP) + (SQUARE - span) / 2, -GAP)

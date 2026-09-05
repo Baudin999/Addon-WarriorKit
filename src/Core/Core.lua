@@ -1512,6 +1512,62 @@ function ns.ItemLevel(link)
 	return level
 end
 
+-- What is in a piece's sockets, and how many are still open.
+--
+-- Sockets arrived with the Burning Crusade and this addon has never read one.
+-- The gear page draws a dot per hole under an item's name, which needs both
+-- halves of the answer, and no single call gives both.
+--
+-- GetItemGem walks what the link is carrying. A hole is a nil in the middle of
+-- that walk rather than the end of it, so an item with an empty first socket and
+-- a gem in its second answers nothing then something, and a loop that stopped at
+-- the first nil would report a bare piece. It does not stop.
+--
+-- The open ones are only ever a count. GetItemStats is where the client puts
+-- them, one entry per colour, and there is no call that says which position is
+-- open: a link with a hole in it has nothing in that position to name. So the
+-- dots draw filled first and open after, which is the only order the client can
+-- support and is the order the tooltip uses anyway.
+--
+-- Both halves answer nothing on the vanilla client, which has no sockets. That
+-- is the right answer there and it draws no dots.
+local SOCKETS = 3
+local OPEN = {
+	EMPTY_SOCKET_RED = true, EMPTY_SOCKET_YELLOW = true,
+	EMPTY_SOCKET_BLUE = true, EMPTY_SOCKET_META = true,
+}
+
+function ns.ItemSockets(link)
+	if type(link) ~= "string" then
+		return nil, 0
+	end
+
+	local gem = (C_Item and C_Item.GetItemGem) or _G.GetItemGem
+	local filled
+	if type(gem) == "function" then
+		for index = 1, SOCKETS do
+			local _, gemLink = gem(link, index)
+			if gemLink then
+				filled = filled or {}
+				filled[#filled + 1] = gemLink
+			end
+		end
+	end
+
+	local stats = (C_Item and C_Item.GetItemStats) or _G.GetItemStats
+	local open = 0
+	if type(stats) == "function" then
+		local read = stats(link)
+		for key, count in pairs(read or {}) do
+			if OPEN[key] then
+				open = open + count
+			end
+		end
+	end
+
+	return filled, open
+end
+
 -- What level you have to be to put the thing on.
 --
 -- The fifth thing GetItemInfo answers, and the one number that says an item is
