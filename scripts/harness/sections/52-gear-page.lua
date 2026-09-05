@@ -126,6 +126,20 @@ do
 	row:GetScript("OnLeave")(row)
 	ns.UI.Tooltip.Close(true)
 
+	-- And the row that carries the hover must not carry the click. This column is
+	-- three hundred pixels wide and runs the height of the monitor: a row that
+	-- took clicks the ordinary way was a band down the right of the sheet with no
+	-- camera in it. Same flag on the four readings across the head, which are
+	-- forty-four pixel discs in the middle of the same band.
+	check(row:IsMouseEnabled() and not row:IsMouseClickEnabled(),
+		"a stat row takes clicks, so a right drag begun on the stats column does not turn the camera")
+	for index = 1, #pane.head.badges do
+		local badge = pane.head.badges[index]
+		check(badge:IsMouseEnabled() and not badge:IsMouseClickEnabled(),
+			("reading %d takes clicks, so a right drag begun on it does not turn the camera")
+				:format(index))
+	end
+
 	-- And it is beside the gear rather than over it. pane.width is the whole area
 	-- the figure stands behind now rather than the portrait's own slice, so it
 	-- and the stats column are the two numbers that have to add up to no more

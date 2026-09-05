@@ -284,10 +284,15 @@ do
 	-- rest of the row is an ordinary hover, because this page is the whole
 	-- monitor: two columns of button the full width of a column is most of the
 	-- left and right of the screen with no camera in it.
+	--
+	-- Read off the click flag and not off SetPassThroughButtons, which is what
+	-- this block used to check. That call is 10.1.5 and the live client is 2.5.6,
+	-- so the assertion passed against a stub of a call the game does not have
+	-- while every row in the game ate the drag. The flag is the one the client
+	-- carries: mouse on for the hover, clicks off so the buttons reach the world.
 	check(head:IsMouseEnabled(), "the gear row does not answer the mouse, so it has no hover")
-	local row = head:GetPassThroughButtons()
-	check(row and row["RightButton"] and row["MiddleButton"],
-		"the gear row keeps the camera's buttons, so a right drag on a row does not turn the camera")
+	check(not head:IsMouseClickEnabled(),
+		"the gear row takes clicks, so a right drag on a row does not turn the camera")
 	check(head.button:GetWidth() < head:GetWidth(),
 		("the secure button is %s wide on a row of %s, so the action is the whole row again")
 			:format(tostring(head.button:GetWidth()), tostring(head:GetWidth())))

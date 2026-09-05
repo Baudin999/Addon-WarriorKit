@@ -112,10 +112,10 @@ end
 -- that had not. The symptom is the bottom of a feed you have just resized
 -- quietly refusing to open a tooltip.
 function Region:EnableMouse(on)
-	self.mouseEnabled = on and true or false
+	self.mouse = on and true or false
 end
 function Region:IsMouseEnabled()
-	return self.mouseEnabled and true or false
+	return self.mouse and true or false
 end
 function Region:SetHitRectInsets(l, r, t, b)
 	self.insets = { l, r, t, b } -- a stub, and this runs on a relayout rather than a tick
@@ -154,13 +154,6 @@ function Region:GetTexCoord()
 end
 function Region:SetTexture(path) self.texture = path end
 function Region:GetTexture() return self.texture end
--- Which way the texture is turned, in radians. The client has both halves and
--- the stub had neither, so the one thing on the map that is ever rotated was
--- drawn by code no run reached: the arrow's angle was kept in the addon's own
--- field and the write to the texture went nowhere. A mark that came out of the
--- pool still on its side was invisible to every reading here.
-function Region:SetRotation(radians) self.rotation = radians or 0 end
-function Region:GetRotation() return self.rotation or 0 end
 -- Which way the texture is turned, in radians. The client has both halves and
 -- the stub had neither, so the one thing on the map that is ever rotated was
 -- drawn by code no run reached: the arrow's angle was kept in the addon's own
@@ -404,10 +397,17 @@ function Region:SetPassThroughButtons(...)
 end
 function Region:GetPassThroughButtons() return self.passed end
 
+-- Whether a frame takes clicks, a separate flag from whether it takes the
+-- mouse at all. Off with the mouse on is a frame that hovers and hands every
+-- button to the world, which is how this client puts a tooltip on something
+-- without eating the drag that turns the camera. The pair above it is the
+-- 10.1.5 call for the same job and 2.5.6 does not carry it.
+function Region:SetMouseClickEnabled(v) self.mouseClicks = v and true or false end
+function Region:IsMouseClickEnabled() return self.mouseClicks ~= false end
+
 -- Whether a frame takes the mouse. Recorded for the same reason: a frame laid
 -- over an icon that answers the mouse is a button you cannot press, and it
 -- looks identical to one you can.
-function Region:EnableMouse(value) self.mouse = value and true or false end
 -- Recorded, not swallowed: a frame that was never made movable answers every
 -- drag by doing nothing, and looks exactly like one that was.
 function Region:SetMovable(value) self.movable = value and true or false end
@@ -417,7 +417,6 @@ function Region:SetMovable(value) self.movable = value and true or false end
 -- so the empty call has to be recorded as a value rather than ignored.
 function Region:RegisterForDrag(button) self.dragButton = button end
 function Region:IsDraggable() return self.dragButton ~= nil end
-function Region:IsMouseEnabled() return self.mouse end
 
 function Region:SetAttribute(key, value)
 	self.attributes = self.attributes or {}

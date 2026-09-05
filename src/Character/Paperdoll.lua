@@ -425,10 +425,14 @@ local function Square(pane, entry)
 
 	-- The row. It answers nothing but the hover, so every button that lands on
 	-- it goes to the world and the right drag turns the camera.
-	box:EnableMouse(true)
+	--
+	-- UI.HoverOnly and not EnableMouse with the camera's buttons handed back:
+	-- this client has no SetPassThroughButtons, so that pair was a row two hundred
+	-- and eighty pixels wide swallowing the drag, nineteen times, on a sheet the
+	-- size of the monitor. UI/Tip.lua carries which call the client actually has.
+	UI.HoverOnly(box)
 	box:SetScript("OnEnter", Enter)
 	box:SetScript("OnLeave", Leave)
-	UI.PassCamera(box)
 
 	-- What the trace needs and cannot ask for: this client has no call that
 	-- answers which edges a button registered, so the file that registered them
@@ -570,8 +574,7 @@ local function Badge(head, index)
 	-- The mouse for the hover and every button back to the world. A reading
 	-- answers no click, and a disc that ate the right button would be a hole in
 	-- the middle of the screen the camera will not turn in.
-	badge:EnableMouse(true)
-	UI.PassCamera(badge)
+	UI.HoverOnly(badge)
 
 	badge.ring = UI.Disc(badge, "BACKGROUND")
 	badge.ring:SetSize(BADGE, BADGE)

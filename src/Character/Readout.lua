@@ -141,8 +141,13 @@ local function Line(pane)
 	-- keeping anything back. A row on the skills tab has its sentence under it
 	-- already, and a hover that repeated it would cost the right button drag
 	-- that turns the camera for nothing.
+	--
+	-- Hover only, because a compact row is the full width of the stats column and
+	-- that column runs the height of the sheet. A row that took the mouse the
+	-- ordinary way was a band down the right of the screen the camera would not
+	-- turn in.
 	if pane.compact then
-		frame:EnableMouse(true)
+		UI.HoverOnly(frame)
 		ns.Tip.Hang(frame, Hint)
 	end
 

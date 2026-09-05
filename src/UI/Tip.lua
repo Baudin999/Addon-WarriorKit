@@ -567,16 +567,27 @@ end
 -- drag starts, so a tooltip bought at the price of a camera that will not turn
 -- is a bad trade made silently.
 --
--- SetPassThroughButtons hands the two the camera wants back. It arrived in
--- 1.14.4 and 10.0 and neither target client is proven to carry it, so it is
--- probed and then pcalled rather than trusted: a name that exists while
--- refusing these arguments would raise once per hoverable frame at login.
+-- There are two shapes of this and the client answers only one of them.
 --
--- Where the client has neither, a right drag begun on one of these frames does
--- not turn the camera. That is the real price of every tooltip in the addon and
--- it is worth saying out loud rather than discovering. It was written once in
--- Buffs/Nag.lua for the four squares of a nag row; a feed of four hundred rows
--- is the same trap at forty times the area, which is what moved it here.
+-- **A frame that answers a click and wants the other buttons back** is
+-- UI.PassCamera, and SetPassThroughButtons is the only call that does it. That
+-- one arrived in 10.1.5 and this client is 2.5.6: nothing on disk calls it
+-- outside a retail path, and Questie's map library stubs it to a no-op for a
+-- retail bug. So it is probed, and on the live client the probe fails and a
+-- right drag begun on such a frame still stops there. Those frames are buttons
+-- inside windows and none of them is large.
+--
+-- **A frame whose whole answer is the hover** is UI.HoverOnly, and that one the
+-- client does have. Motion and clicks are separate flags: turn the clicks off
+-- and every button that lands on the frame falls through to the world, while
+-- OnEnter and OnLeave still fire. SetMouseClickEnabled arrived in 9.0 and was
+-- backported; OPie ships `## Interface: 20506` and calls it unguarded on a
+-- slider thumb it hangs OnEnter on, which is the same frame in the same shape.
+--
+-- The difference is worth the two functions because the character sheet is the
+-- size of the monitor. Nineteen gear rows, four readings and a column of stats
+-- answer nothing but the hover, and passed through SetPassThroughButtons alone
+-- they were most of a screen the camera would not turn in.
 --------------------------------------------------------------------------
 
 function UI.PassCamera(owner)
@@ -584,6 +595,22 @@ function UI.PassCamera(owner)
 		return false
 	end
 	return pcall(owner.SetPassThroughButtons, owner, "RightButton", "MiddleButton")
+end
+
+-- The mouse for the hover and nothing else. EnableMouse first because that is
+-- what turns motion on, then the clicks off, because a frame with no clicks and
+-- no motion is a frame with no mouse at all.
+--
+-- Falls back to handing the camera its two buttons where the client has no
+-- click flag, which is the most a caller could have asked for before this
+-- existed.
+function UI.HoverOnly(owner)
+	owner:EnableMouse(true)
+	if type(owner.SetMouseClickEnabled) == "function"
+		and pcall(owner.SetMouseClickEnabled, owner, false) then
+		return true
+	end
+	return UI.PassCamera(owner)
 end
 
 -- The convenience for the ordinary case: a frame whose whole answer to the
