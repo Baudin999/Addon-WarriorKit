@@ -25,6 +25,12 @@ local ADDON, ns = ...
 -- only ever be added to, and a profession you dropped would keep its reagents
 -- on the filter until you cleared the whole list by hand.
 --
+-- The best difficulty any recipe wanting an id has is written down beside the
+-- profession, because "tailoring uses this" and "tailoring can still gain a
+-- point from this" are different answers and only the second one is worth six
+-- stacks of linen in a bag. The word is the client's own: optimal, medium,
+-- easy or trivial, and trivial is the one that means no.
+--
 -- It scans whether or not the filter is switched on, and that is the one place
 -- this part does work for nothing. A list that only filled while the setting
 -- was on would be empty at the moment somebody turns the setting on, and the
@@ -76,30 +82,61 @@ local walked = {}
 -- on the evidence of a window that could see all of them.
 --------------------------------------------------------------------------
 
+-- A list written before an entry carried a difficulty, whose values are
+-- profession names rather than tables. One entry decides it: every entry on the
+-- list was written by the same walk, so the first one answers for the rest and
+-- this stays one lookup on a path the loot filter takes for every slot on a
+-- corpse.
+local function Stale(list)
+	local _, entry = next(list)
+	return entry ~= nil and type(entry) ~= "table"
+end
+
 -- This character's list, made on first use. ns.dbc is not there until Core has
 -- merged the saved variables, which is before PLAYER_LOGIN and therefore before
 -- anything below can run, but the guard is here because a nil ns.dbc is a
 -- silent nothing and an indexed nil is a Lua error in somebody's game.
+--
+-- A list in the old shape is dropped rather than read across. What it costs is
+-- one profession window per profession, which is the recovery the throttle
+-- below already assumes and the same state a character who has never opened one
+-- is in; what reading it across would cost is a difficulty invented for every
+-- id on it, and an invented difficulty is the one thing this list must not say.
 local function List()
 	if not ns.dbc then
 		return nil
 	end
 	local list = ns.dbc.lootReagents
-	if type(list) ~= "table" then
+	if type(list) ~= "table" or Stale(list) then
 		list = {}
 		ns.dbc.lootReagents = list
 	end
 	return list
 end
 
--- Every reagent one recipe wants, onto the table this walk is filling. A link
--- the client will not hand over is skipped rather than guessed at: an id the
--- filter invented is an item it keeps for a reason nobody can read back.
-local function Recipe(found, index, count, link)
+-- How much a recipe still has to teach you, worst first. A reagent is kept at
+-- the best word any recipe wanting it answered, because one orange recipe is a
+-- point still there however many grey ones sit beside it.
+--
+-- A word this does not know ranks below all four and is still written down. An
+-- unranked difficulty is a client saying something new, and taking that for
+-- "not worth a point" would drop a reagent off the feed on the strength of a
+-- word nobody here has read.
+local RANK = { trivial = 1, easy = 2, medium = 3, optimal = 4 }
+
+local function Better(kind, than)
+	return than == nil or (RANK[kind] or 0) > (RANK[than] or 0)
+end
+
+-- Every reagent one recipe wants, onto the table this walk is filling, under
+-- that recipe's difficulty. A link the client will not hand over is skipped
+-- rather than guessed at: an id the filter invented is an item it keeps for a
+-- reason nobody can read back.
+local function Recipe(found, index, count, link, kind)
 	for which = 1, count(index) do
 		local itemId = ns.ItemKind(link(index, which))
-		if itemId then
-			found[itemId] = true
+		if itemId and Better(kind, found[itemId]) then
+			found[itemId] = kind
 		end
 	end
 end
@@ -113,25 +150,30 @@ local function Walk(profession, count, row, reagents, reagent)
 		return
 	end
 
+	-- A row the client will not name at all is skipped rather than walked. It
+	-- has no reagents to find, which is why it cost nothing to walk before, and
+	-- a nil difficulty is not a word to file a reagent under.
 	local found, whole = {}, true
 	for index = 1, count() do
 		local kind, expanded = row(index)
-		if kind ~= "header" then
-			Recipe(found, index, reagents, reagent)
-		elseif not expanded then
-			whole = false
+		if kind == "header" then
+			if not expanded then
+				whole = false
+			end
+		elseif kind then
+			Recipe(found, index, reagents, reagent, kind)
 		end
 	end
 
 	if whole then
-		for itemId, owner in pairs(list) do
-			if owner == profession then
+		for itemId, entry in pairs(list) do
+			if entry.owner == profession then
 				list[itemId] = nil
 			end
 		end
 	end
-	for itemId in pairs(found) do
-		list[itemId] = profession
+	for itemId, kind in pairs(found) do
+		list[itemId] = { owner = profession, kind = kind }
 	end
 end
 
@@ -189,6 +231,23 @@ function Reagents.Has(itemId)
 	return (list and list[itemId]) ~= nil
 end
 
+-- What the list knows about one id: which profession named it, and whether a
+-- recipe wanting it can still gain that profession a point. Nil for an id no
+-- profession of yours wants.
+--
+-- Trivial is the whole reason this is not Has with the profession read back.
+-- Six stacks of linen is a reagent tailoring uses and has not given you a point
+-- for in twelve levels, and a row that says tailoring about it is a row telling
+-- you to keep something you should be selling.
+function Reagents.Skill(itemId)
+	local list = List()
+	local entry = list and list[itemId]
+	if not entry then
+		return nil
+	end
+	return entry.owner, entry.kind ~= "trivial"
+end
+
 function Reagents.Count()
 	local list = List()
 	if not list then
@@ -209,10 +268,10 @@ function Reagents.Professions()
 	local names, seen = {}, {}
 	local list = List()
 	if list then
-		for _, owner in pairs(list) do
-			if not seen[owner] then
-				seen[owner] = true
-				names[#names + 1] = owner
+		for _, entry in pairs(list) do
+			if not seen[entry.owner] then
+				seen[entry.owner] = true
+				names[#names + 1] = entry.owner
 			end
 		end
 	end

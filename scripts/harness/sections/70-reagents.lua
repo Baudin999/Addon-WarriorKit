@@ -22,8 +22,17 @@ local Reagents = ns.Reagents
 local FORGE = { 7001, 7002, 7003, 7004 }
 local DUST = { 7005, 7006 }
 
+-- Read off the saved table rather than through Reagents.Skill, so the shape the
+-- list is written in is asserted here and not only the reading of it.
 local function owner(itemId)
-	return ns.dbc.lootReagents[itemId]
+	local entry = ns.dbc.lootReagents[itemId]
+	return entry and entry.owner
+end
+
+-- Whether a recipe wanting this id can still gain a point.
+local function point(itemId)
+	local _, gains = Reagents.Skill(itemId)
+	return gains
 end
 
 -- Every id in the list is filed under that profession, and the first one that
@@ -39,6 +48,20 @@ local function wrong(ids, profession)
 end
 
 ----------------------------------------------------------------------
+-- A list written in the old shape
+----------------------------------------------------------------------
+
+-- An entry was the profession's name and is now that name and a difficulty. A
+-- list from before the change is dropped on sight rather than read across,
+-- because reading it across means inventing a difficulty for every id on it.
+-- What proves it went is that it answers for nothing: the next profession
+-- window writes it back.
+ns.dbc.lootReagents = { [7001] = "Blacksmithing" }
+check(not Reagents.Has(7001), "a list in the old shape was read as this one")
+check(Reagents.Count() == 0,
+	("the old list left %d ids behind"):format(Reagents.Count()))
+
+----------------------------------------------------------------------
 -- Nothing opened yet
 ----------------------------------------------------------------------
 
@@ -48,6 +71,8 @@ check(Reagents.Count() == 0,
 check(Reagents.Describe() == "none scanned yet, open each profession once",
 	"an empty list reads: " .. Reagents.Describe())
 check(not Reagents.Has(7001), "an empty list says it holds Copper Bar")
+check(Reagents.Skill(7001) == nil,
+	"an empty list named a profession for Copper Bar")
 
 ----------------------------------------------------------------------
 -- One window
@@ -60,6 +85,14 @@ check(Reagents.Count() == 4,
 	("blacksmithing put %d ids on the list and its fixture names 4")
 		:format(Reagents.Count()))
 check(Reagents.Has(7003), "the list does not hold Silver Bar after the walk")
+
+-- Every recipe in the fixture is orange until a check below makes one grey, so
+-- the reading names the profession and says the point is there.
+local named, gains = Reagents.Skill(7003)
+check(named == "Blacksmithing" and gains == true,
+	("Silver Bar reads %s, point %s"):format(tostring(named), tostring(gains)))
+check(Reagents.Skill(7099) == nil,
+	"an id no recipe wants came back with a profession")
 
 -- The two category rows are skipped rather than read as recipes. A header has
 -- no reagents at all, so a walk that read one would have asked for reagent
@@ -181,8 +214,46 @@ for index = #held, 1, -1 do
 end
 shop.link(false)
 
+----------------------------------------------------------------------
+-- A recipe with nothing left to teach
+----------------------------------------------------------------------
+
+-- The sharpening stone and the breastplate go grey. Rough stone is wanted by
+-- the sharpening stone and by nothing else, so it stops being worth a point;
+-- silver and coarse stone are the breastplate's alone and go with it. Copper
+-- bar is the one that matters: the grey breastplate wants it and so does the
+-- orange belt, and one orange recipe is a point still there however many grey
+-- ones sit beside it.
+recipes[2].kind = "trivial"
+recipes[5].kind = "trivial"
+
+advance(2)
+shop.update()
+check(point(7001) == true,
+	"a grey recipe took Copper Bar's point off an orange one")
+check(point(7002) == false and point(7003) == false and point(7004) == false,
+	("the grey recipes read %s, %s and %s"):format(tostring(point(7002)),
+		tostring(point(7003)), tostring(point(7004))))
+
+-- Still on the list, still blacksmithing's, and still kept by the loot filter.
+-- What the difficulty changes is the reason a feed can give for an item, not
+-- whether the addon knows the item is a reagent.
+check(Reagents.Has(7002) and owner(7002) == "Blacksmithing",
+	"a grey recipe took its reagent off the list")
+check(Reagents.Count() == 6,
+	("the grey recipes left %d ids where 6 were"):format(Reagents.Count()))
+
+-- A window nobody walked again still says what it said, which is the half of
+-- this that is saved rather than worked out on the spot.
+check(point(7005) == true and point(7006) == true,
+	"the blacksmithing walk changed enchanting's answer")
+
+recipes[2].kind = nil
+recipes[5].kind = nil
+
 print(("reagents %s, over two windows; a recipe dropped took its ids and left"
-	.. " the rest, and a window that was somebody else's took nothing")
+	.. " the rest, a window that was somebody else's took nothing, and a grey"
+	.. " recipe kept its reagent and lost its point")
 	:format(Reagents.Describe()))
 
 ----------------------------------------------------------------------

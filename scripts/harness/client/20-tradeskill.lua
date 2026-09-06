@@ -119,12 +119,16 @@ _G.GetNumTradeSkills = function()
 	return #tradeRows()
 end
 
+-- A recipe answers optimal unless the fixture names a difficulty, which is how
+-- a section makes one recipe grey without a second fixture to keep in step with
+-- this one.
 _G.GetTradeSkillInfo = function(index)
 	local row = tradeRows()[index]
 	if not row then
 		return nil
 	end
-	return row.name, row.header and "header" or "optimal", 1, row.expanded and true or false
+	return row.name, row.header and "header" or (row.kind or "optimal"), 1,
+		row.expanded and true or false
 end
 
 _G.GetTradeSkillNumReagents = function(index)
@@ -159,7 +163,7 @@ _G.GetCraftInfo = function(index)
 	if not row then
 		return nil
 	end
-	return row.name, nil, row.header and "header" or "optimal", 1,
+	return row.name, nil, row.header and "header" or (row.kind or "optimal"), 1,
 		row.expanded and true or false
 end
 
