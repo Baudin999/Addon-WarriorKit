@@ -325,6 +325,22 @@ function Log.Detail(key)
 	}
 end
 
+-- What one quest still wants, without the text and the rewards beside it.
+--
+-- Detail above is the window's reading and takes four borrows of the shared
+-- cursor, because three columns are drawn off it. The tracker draws one of the
+-- four, for every quest in the zone you are standing in, so it asks the
+-- narrower question rather than paying for three answers it throws away. Same
+-- door, same index lookup for the same reason, one borrow.
+function Log.Objectives(key)
+	local quest = Log.Quest(key)
+	if not quest then
+		return nil
+	end
+	local index = Client.IndexOf(quest.id) or quest.index
+	return Client.Objectives(index) or {}
+end
+
 -- Which quest to show when the window opens or when the one it was showing has
 -- gone. The first one ready to hand in, because that is the one you opened the
 -- log to find, and the first quest in the log otherwise.

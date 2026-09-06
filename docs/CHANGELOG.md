@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### A tracker of the addon's own
+
+A column over the world with the quests you are standing in the middle of on
+it: the name of each one, what it still wants under it, and a gold bar down the
+left of the ones you have pinned. Drag it where you want it with the addon
+unlocked and it remembers. Click a row and the quest log opens on that quest,
+which is the same swap a click in Questie's tracker already made.
+
+It is up under the box that switches Questie's tracker off, and there is no
+second switch. One switch and one tracker: the moment there were two boxes
+there would be an evening where both trackers are on the screen and no rule
+about which one a quest name belongs to.
+
+It shows what the client filed under the place you are standing in. Walk into
+Elwynn Forest and it is Elwynn's quests; stand somewhere no header in your log
+names and it is not on the screen at all. The client's log header is a sort
+category rather than a place, so a dungeon quest is under the dungeon's name
+and a class quest under the class, and that is worth knowing before it looks
+like a bug. Putting a quest where its next step is standing rather than where
+the client filed it is a later change.
+
+Everything on it comes off the same reading of the log the quest window draws
+from, so the two cannot disagree about what you are on. Nothing here runs on a
+clock. The log changes on events and this redraws on those.
+
 ### A pin is ours, and the client's five slots are left alone
 
 Shift left click a quest in the log's left column and it is pinned. The button

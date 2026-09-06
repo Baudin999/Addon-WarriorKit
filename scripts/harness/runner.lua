@@ -535,6 +535,13 @@ local SECTIONS = {
 	-- Questie; this is the one section that writes to it. It puts the global,
 	-- the setting and both switches back at the foot of the file.
 	"84-questie-tracker",
+	-- Last, and under 84-questie-tracker because it throws the same switch: the
+	-- box that takes Questie's tracker off the screen is the box that puts this
+	-- addon's own tracker up, and this is the half of that pair which draws.
+	-- It walks you through three zones, empties the client's log and puts it
+	-- back, pins a quest and unpins it, and moves the addon's lock. Every one of
+	-- those, and where you were standing, is handed back at the foot of the file.
+	"85-quest-column",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

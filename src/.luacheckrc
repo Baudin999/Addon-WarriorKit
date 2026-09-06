@@ -182,6 +182,12 @@ globals = {
 	-- reference to its own pool.
 	"WarriorKitQuests",
 	"WarriorKitQuestList",
+	-- This addon's own quest tracker, the column of the zone you are standing
+	-- in drawn over the world. Named for the reason every placeable frame here
+	-- is: a frame with no chrome that has landed off the edge of the monitor is
+	-- findable from a macro by its name and by nothing else, and the harness
+	-- measures its rows through the same name.
+	"WarriorKitQuestColumn",
 	-- The two scrolling columns beside that list. Named for the same reason and
 	-- for one more: the three of them share the window's width between four
 	-- equal margins, and that arithmetic is only checkable from outside if each

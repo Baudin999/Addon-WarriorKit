@@ -794,6 +794,13 @@ Mail\Feature.lua
 # switch, TrackerOff.lua switches that tracker off through Questie's own call
 # under a switch of its own, and Feature.lua last, as everywhere else.
 #
+# Column.lua is the tracker itself, and it is a different thing from the file
+# beside it: Tracker.lua is about somebody else's tracker, and this is a column
+# of the quests you are standing in, drawn over the world under the same switch
+# that takes Questie's off the screen. It reads Log.lua's zones and nothing
+# else, and it is after Window.lua because a click on one of its rows opens that
+# window through Tracker.lua's swap.
+#
 # After Core\Attic.lua, which is where Blizzard's window goes, and after the UI
 # layer, which is what the window is built out of. Both are far above this line.
 Quests\Client.lua
@@ -806,6 +813,7 @@ Quests\Window.lua
 Quests\Blizzard.lua
 Quests\Tracker.lua
 Quests\TrackerOff.lua
+Quests\Column.lua
 Quests\Feature.lua
 
 # Why an item matters to you: an objective in your log it feeds, a reagent a

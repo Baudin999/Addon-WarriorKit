@@ -15,6 +15,7 @@ local function SetQuests(value)
 	ns.QuestBlizzard.Apply()
 	ns.QuestTracker.Apply()
 	ns.QuestTrackerOff.Apply()
+	ns.QuestColumn.Apply()
 end
 
 local function SetHide(value)
@@ -23,9 +24,13 @@ local function SetHide(value)
 	ns.QuestTracker.Apply()
 end
 
+-- One switch and one tracker. Questie's goes off through Questie's own call and
+-- this addon's goes up in its place, so the box is thrown once and the screen
+-- never holds both.
 local function SetTrackerOff(value)
 	ns.db.questsTrackerOff = value
 	ns.QuestTrackerOff.Apply()
+	ns.QuestColumn.Apply()
 end
 
 --------------------------------------------------------------------------
@@ -114,6 +119,11 @@ ns.Register({
 		-- Quests/TrackerOff.lua carries the argument in full.
 		questsTrackerOff = false,
 
+		-- Where this addon's own tracker sits, which is the one setting it has.
+		-- Up the right of the screen, where a quest tracker has been in this
+		-- game since 2004 and the first place anybody will look for it.
+		questsColumnPoint = { "RIGHT", "UIParent", "RIGHT", -20, 100 },
+
 		-- Whether this addon is the one holding that tracker off. A record and
 		-- not a preference, so Core/Core.lua keeps it out of the reset: it is
 		-- the only note of whether Questie's setting is ours to put back.
@@ -151,6 +161,10 @@ ns.Register({
 		"quests party, what can say how many of your group are on a quest",
 	},
 
+	lock = function()
+		ns.QuestColumn.Lock()
+	end,
+
 	status = function()
 		-- Questie's tracker is named here because this is the one setting the
 		-- addon moves that belongs to somebody else. A player who cannot see
@@ -171,12 +185,13 @@ ns.Register({
 		ui.Check("switch Questie's own tracker off",
 			function() return ns.db.questsTrackerOff end,
 			SetTrackerOff)
-		ui.Hint("This is Questie's own Enable Tracker switch, so it reloads the interface both when you tick it and when you untick it.")
+		ui.Hint("This is Questie's own Enable Tracker switch, so it reloads the interface both ways, and this addon's own tracker takes the screen it leaves.")
 		ui.Reading("your log", ns.QuestLog.Describe)
 		-- The pin's cost, said where the pin count is read. Questie's icons are
 		-- the only place the client's watch list is worth anything to this
 		-- addon's player, and a pin never reaches it.
 		ui.Hint("Shift click a quest to pin it, or press pin under it. Pins are this character's and uncapped. The cost is Questie: its map icons can be filtered to tracked quests and a pin is not one.")
+		ui.Reading("this addon's own tracker", ns.QuestColumn.Describe)
 		ui.Reading("a creature's quest drops", ns.QuestDrops.Describe)
 		ui.Reading("the where column and the map", ns.QuestWhere.Describe)
 		ui.Reading("who else in your group is on a quest", ns.QuestParty.Describe)

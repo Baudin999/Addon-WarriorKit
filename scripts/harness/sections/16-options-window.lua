@@ -774,6 +774,13 @@ if window then
 	-- one reports another addon's saved variable and which of us moved it last.
 	-- Without it a tracker that is gone reads as Questie having broken. 31,000
 	-- is that measurement plus a hint's worth of room again.
+	--
+	-- This addon's own tracker arrived and the number did not move. It is not a
+	-- page and it is not a control: it rides the switch above, because one
+	-- switch and one tracker is the whole of the design, so what it costs is a
+	-- clause on that hint saying which tracker takes the screen, and a reading,
+	-- and readings are not counted here. Twenty two characters, to 30,830, paid
+	-- out of the room the last raise left.
 	check(prose < 31000,
 		("the window holds %d characters of prose and the budget is 31,000"):format(prose))
 
