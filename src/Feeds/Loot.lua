@@ -112,6 +112,12 @@ local UNKNOWN = "Interface\\Icons\\INV_Misc_QuestionMark"
 -- header over the filter is an argument against the second.
 local FOLD_WINDOW = 60
 
+-- Need/Need.lua's word for the one reason this feed draws differently from the
+-- other two. Written as the word rather than tested some other way, because the
+-- brightness of a ring is the only thing in this file that has to tell the three
+-- answers apart and the word is what the call hands over.
+local TRASH = "trash"
+
 
 
 --------------------------------------------------------------------------
@@ -414,10 +420,18 @@ local seen = 0
 -- reason on its own, which is what the ring already does for trash everywhere
 -- else this answer is drawn.
 --
--- Asked with no loot slot, so the trash source is never reached. CHAT_MSG_LOOT
--- is the server saying what reached your bags and there is no corpse behind it
--- to ask the filter about; a grey ring on the greys would also be this column
--- back where it started, which is the argument the chips already won.
+-- Asked with no loot slot, because CHAT_MSG_LOOT is the server saying what
+-- reached your bags and the corpse behind it is gone by the time it arrives.
+-- Trash still answers: Comfort/Loot.lua wrote down what the filter refused at
+-- the moment it refused it, and Need/Need.lua reads that back by link. This is
+-- the only window in the addon that ever sees a slot the filter binned, and a
+-- rule set too tight is otherwise a rule nobody finds out about.
+--
+-- Trash is also the one reason that does not light the ring. It is the
+-- commonest answer of the three and the one nobody is looking for, so it is
+-- drawn at the row's own brightness with the stripe rather than held at full: a
+-- column of greys each wearing a bright ring is this feed back where it started,
+-- which is the argument the chips already won.
 --
 -- The ring falls back to the quest colour for an item the client files as a
 -- quest item. Core/Need.lua matches an objective by the name the client writes
@@ -432,10 +446,10 @@ local seen = 0
 -- that, and it is written here rather than at the arrival so a row that folded
 -- into a reason it did not have keeps its ring lit.
 local function Reason(entry)
-	local _, phrase, tone = ns.Need(entry.link)
+	local why, phrase, tone = ns.Need(entry.link)
 	entry.note = phrase
 	entry.ring = tone or (entry.quest and C.quest) or nil
-	entry.look = entry.ring and true or nil
+	entry.look = (entry.ring and why ~= TRASH) and true or nil
 end
 
 -- Whether an entry the feed is holding is the row a fresh one belongs on.

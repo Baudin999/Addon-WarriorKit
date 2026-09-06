@@ -56,10 +56,12 @@ local ADDON, ns = ...
 -- item; the whole cache is dropped on the events that change either, which are
 -- the quest log's, SKILL_LINES_CHANGED and the trade window's.
 --
--- The trash answer is not in it and could not be. It is a fact about a slot on
--- a corpse in front of you rather than about the item, so it is asked live and
--- costs a handful of table reads, which is what Comfort/Loot.lua already pays
--- per slot.
+-- The trash answer is not in it and could not be. It is a fact about a corpse
+-- rather than about the item, so it is asked live and costs a handful of table
+-- reads, which is what Comfort/Loot.lua already pays per slot. The memory it
+-- falls back to for a caller with no slot ages out on its own, which is a thing
+-- a cache emptied by events could not do: no event fires when a corpse you
+-- walked away from stops being the corpse in front of you.
 --------------------------------------------------------------------------
 
 -- What the log is waiting for, by the name the client writes on the objective,
@@ -169,15 +171,36 @@ local function Skill(itemId)
 	return nil
 end
 
--- Whether the loot filter would have left this slot where it lay. Take answers
--- true, false or nil, and nil is "the client cannot price it yet": only a plain
--- false is the filter refusing something.
-local function Trash(slot)
-	local wanted = ns.Wanted
-	if not wanted or type(slot) ~= "number" then
-		return false
+-- What trash says on a hover, which is the only place it says anything at all.
+--
+-- Worded as the filter's doing and not as a verdict on the item. The filter is
+-- a rule you wrote, and the row a grey turns up on is where you find out you
+-- wrote it too tight; "junk" would be the addon telling you what your own
+-- settings already decided.
+local LEFT = "your loot filter would have left it"
+
+-- Whether the loot filter would have left this where it lay, asked two ways
+-- because two callers hold two halves of the one fact.
+--
+-- With a slot there is a corpse in front of you and Comfort/Wanted.lua answers
+-- live. Take answers true, false or nil, and nil is "the client cannot price it
+-- yet": only a plain false is the filter refusing something.
+--
+-- Without one the answer is Comfort/Loot.lua's memory of the slot it refused a
+-- moment ago. That is the loot feed's half and it is the only one it can have:
+-- CHAT_MSG_LOOT is the server naming what reached your bags, the corpse behind
+-- it is already gone, and asking Take harder would not put one back.
+--
+-- Neither half speaks while the filter is off. Take answers true on its first
+-- line and nothing is written down, so a feed with the filter off marks nothing,
+-- which is the whole column it would otherwise be marking.
+local function Trash(link, slot)
+	if type(slot) == "number" then
+		local wanted = ns.Wanted
+		return wanted ~= nil and wanted.Take(slot) == false
 	end
-	return wanted.Take(slot) == false
+	local loot = ns.Loot
+	return loot ~= nil and loot.Refused(link) == true
 end
 
 --------------------------------------------------------------------------
@@ -188,17 +211,19 @@ end
 -- that word is drawn in and the sentence a tooltip has room for, or nothing at
 -- all.
 --
--- The slot is optional and is the loot slot the item is sitting in. Without one
--- there is no corpse to ask about, so the trash source is not asked and an item
--- with no other reason answers nothing. Comfort/Loot.lua and the loot feed have
--- a slot; a bag square never will.
+-- The slot is optional and is the loot slot the item is sitting in. With one the
+-- filter is asked about the corpse in front of you; without one the trash source
+-- reads what Comfort/Loot.lua refused off the last corpse instead, which is the
+-- loot feed's only way to the answer and is why it is a source a caller with a
+-- link alone can still have.
 --
 -- Two of the three carry no phrase, and for the same reason from opposite ends.
 -- Trash is the commonest answer and the one nobody is looking for, so a column
 -- of grey rows each captioned "trash" is the feed back where it started. Skill
 -- is a profession's own name in the player's own language, which is 104 units
--- of a column that is never wider than 81. Both are a colour and nothing else,
--- and the sentence is where skill says which profession.
+-- of a column that is never wider than 81. Both are a colour on the row and a
+-- line on the hover, and the hover is where skill names the profession and trash
+-- names the filter.
 --
 -- Quest is the one reason with a number in it, which is the one thing a colour
 -- cannot carry and a row has room for. Its two forms are the same fact spelled
@@ -232,8 +257,8 @@ function ns.Need(link, slot)
 	if found then
 		return found, phrase[itemId], ns.UI.Color[found], sentence[itemId]
 	end
-	if Trash(slot) then
-		return "trash", nil, ns.UI.Color.trash, nil
+	if Trash(link, slot) then
+		return "trash", nil, ns.UI.Color.trash, LEFT
 	end
 	return nil
 end

@@ -140,6 +140,8 @@ local ALLOWED = {
 	  why = "and then with whether a profession of yours still gains from it" },
 	{ from = "Need", sym = "Wanted", uses = 1,
 	  why = "and then with whether the loot filter would have left it behind" },
+	{ from = "Need", sym = "Loot", uses = 1,
+	  why = "and with what the fast loot already refused, for a caller holding a link and no slot" },
 	{ from = "Feeds", sym = "Need", uses = 2,
 	  why = "a loot row draws why the item on it matters, and its hover says it" },
 	{ from = "Map", sym = "QuestWhere", uses = 1,

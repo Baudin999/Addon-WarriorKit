@@ -18,6 +18,11 @@ local ADDON, ns = ...
 -- one slot at a time, and this file is the loop that asks it: emptying a
 -- corpse and choosing what to empty out of it are two questions, and only the
 -- first one has anything to do with the loot window being drawn.
+--
+-- What the filter refused is written down as well as acted on, which is the one
+-- thing here that is not about emptying a corpse. Nothing else in the addon
+-- ever holds a loot slot, and a corpse emptied before the window is drawn is a
+-- rule set too tight that nobody finds out about.
 
 local Loot = {}
 ns.Loot = Loot
@@ -44,6 +49,28 @@ local last = 0
 -- real one, and a second LootSlot on it is at best nothing.
 local waiting = {}
 
+-- What the filter refused, by item id and when.
+--
+-- The refusal is known here and nowhere else. Feeds/Loot.lua runs off
+-- CHAT_MSG_LOOT, which is the server naming what reached your bags, and by the
+-- time that sentence arrives there is no corpse left to ask Comfort/Wanted.lua
+-- about. So the answer is kept at the moment it is made and Need/Need.lua reads
+-- it back by link, which is how a bin the filter emptied quietly reaches the one
+-- window that shows what went into it.
+--
+-- By the id inside the link rather than by the link itself. The loot window's
+-- link and the server's sentence are two strings built in two places and the id
+-- is the only part of them promised to agree.
+--
+-- Ninety seconds, which is the loot feed's fold window of sixty and room round
+-- it. A row folds a repeat for a minute and asks again on every fold, so a
+-- memory that ran out at sixty would drop the mark off the last fold it allows.
+--
+-- Pruned on the way in rather than on a ticker, because this part owns nothing
+-- that runs and the table holds one corpse's worth of ids at a time.
+local REMEMBER = 90
+local refused = {}
+
 -- Whether this click asked for auto loot. autoLootDefault is the setting and
 -- AUTOLOOTTOGGLE is the modifier that inverts it for one click, so the two
 -- disagreeing is the player asking for auto loot either way round. Emptying a
@@ -69,6 +96,28 @@ local function MasterLooting()
 	return nil
 end
 
+-- One refusal written down.
+--
+-- Here rather than beside the discard, because the leftovers rule is off unless
+-- you turned it on and the fact is the same either way: an item left on the
+-- corpse and taken off it by hand a moment later is still one the filter did not
+-- want, and the row it lands on should say so.
+local function Refuse(slot)
+	local _, link = ns.LootKind(slot)
+	local itemId = link and ns.ItemKind(link)
+	if not itemId then
+		return
+	end
+
+	local now = GetTime()
+	for id, at in pairs(refused) do
+		if now - at > REMEMBER then
+			refused[id] = nil
+		end
+	end
+	refused[itemId] = now
+end
+
 -- One slot, taken if the filter wants it and refused if it does not.
 --
 -- A refused slot is where the leftovers rule gets its turn. It is off unless
@@ -89,6 +138,7 @@ local function Consider(slot)
 		LootSlot(slot)
 		return
 	end
+	Refuse(slot)
 	if ns.dbc.lootDestroy then
 		ns.Leftovers.Discard(slot)
 	end
@@ -198,6 +248,15 @@ function Loot.Waiting()
 		count = count + 1
 	end
 	return count
+end
+
+-- Whether the filter left this item on a corpse in the last minute and a half.
+-- Need/Need.lua asks, on behalf of a loot row that has a link and no slot and
+-- so can ask Comfort/Wanted.lua nothing at all.
+function Loot.Refused(link)
+	local itemId = ns.ItemKind(link)
+	local at = itemId and refused[itemId]
+	return at ~= nil and (GetTime() - at) <= REMEMBER
 end
 
 function Loot.Describe()

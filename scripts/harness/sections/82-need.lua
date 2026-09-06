@@ -206,18 +206,21 @@ end
 -- the one nobody is looking for. It carries no phrase at all: a column of grey
 -- rows each captioned in words is the feed back where it started.
 do
-	local reason, phrase, tone = ns.Need(link("Cracked Fang"), FANG)
+	local reason, phrase, tone, said = ns.Need(link("Cracked Fang"), FANG)
 	check(reason == "trash", "the fang on the corpse reads " .. read("Cracked Fang", FANG))
 	check(phrase == nil, "the trash answer carried the phrase " .. tostring(phrase))
-	check(select(4, ns.Need(link("Cracked Fang"), FANG)) == nil,
-		"the trash answer carried a sentence")
 	check(tone == ns.UI.Color.trash,
 		"the trash answer was not drawn in the palette's trash colour")
+	-- The word, and it is on the hover because the row has no room for one. A
+	-- ring in a colour nobody can decode is a mark that says nothing, and this
+	-- is the sentence that turns it into a reading of your own filter.
+	check(said == "your loot filter would have left it",
+		"the trash answer's sentence is " .. tostring(said))
 end
 
--- The same item with no slot named, which is what a bag square can offer. There
--- is no corpse to ask about, so there is no answer, and this is the one source
--- of the three that a caller without a slot cannot have.
+-- The same item with no slot named and nothing refused off a corpse yet, which
+-- is what a bag square can offer. Neither half of the source has anything to
+-- say, so there is no answer.
 check(ns.Need(link("Cracked Fang")) == nil,
 	"a fang with no loot slot behind it reads " .. read("Cracked Fang"))
 
@@ -237,6 +240,36 @@ ns.dbc.lootWorth = 1
 check(ns.Need(link("Cracked Fang"), FANG) == nil,
 	"the filter kept the fang and it was still marked: " .. read("Cracked Fang", FANG))
 ns.dbc.lootWorth = 0
+
+-- And the half a loot row has to live on, which is the whole of item 88.
+--
+-- A corpse is emptied at LOOT_READY and the server's sentence about it arrives
+-- afterwards with no slot in it, so the answer has to survive the corpse.
+-- Comfort/Loot.lua writes down what it refused at the moment it refused it and
+-- Need reads it back off the link alone.
+--
+-- One slot on the corpse for the length of this, and it is the fang, because
+-- the liver and the thread would be taken and land in bags a later section
+-- counts. The corpse goes straight back.
+do
+	loot.Set({ { quality = 0, item = "Cracked Fang" } })
+	advance(1)
+	fire("LOOT_READY")
+	loot.Set(SLOTS)
+
+	local reason, phrase, tone, said = ns.Need(link("Cracked Fang"))
+	check(reason == "trash",
+		"the fang the filter just refused reads " .. read("Cracked Fang"))
+	check(phrase == nil and tone == ns.UI.Color.trash and said ~= nil,
+		"the remembered answer is not the same answer a slot gives")
+
+	-- And it is a memory rather than a fact about the item, so it ages out. A
+	-- fang looted off a vendor an hour later is not a fang the filter refused,
+	-- and no event fires to say the corpse is gone.
+	advance(91)
+	check(ns.Need(link("Cracked Fang")) == nil,
+		"a refusal a minute and a half old still reads " .. read("Cracked Fang"))
+end
 
 ----------------------------------------------------------------------
 -- The cache

@@ -337,6 +337,61 @@ check(took() == expect(COINS, QUEST),
 state.lootMethod = "group"
 
 ----------------------------------------------------------------------
+-- What it left, said out loud
+--
+-- The corpse is emptied before the loot window is drawn, so the one thing the
+-- filter can never tell you is what it decided. A rule set too tight is a rule
+-- nobody finds out about, and the loot feed is the only window that ever sees a
+-- slot that went.
+--
+-- The seam is a link and not a slot. Comfort/Loot.lua writes the refusal down at
+-- the moment it makes it and CHAT_MSG_LOOT arrives afterwards carrying the item
+-- and no corpse at all, so what is asserted here is that the two halves meet.
+-- 82-need.lua holds the answer's own order and its expiry, and 40-loot-feed.lua
+-- holds what a row draws.
+----------------------------------------------------------------------
+
+local feed = ns.LootFeed.Stream():Feed()
+local FEMUR = ("You receive loot: %s."):format(_G.WarriorKitItemLink("Splintered Femur"))
+
+do
+	nothing()
+	pass()
+	feed:Clear()
+	fire("CHAT_MSG_LOOT", FEMUR)
+
+	local entry = feed:At(0) or {}
+	check(entry.ring == ns.UI.Color.trash,
+		"a grey the filter refused off the corpse reached the feed with no trash ring")
+	check(entry.note == nil,
+		("the trash mark put %s in the row's own column"):format(tostring(entry.note)))
+	-- Quiet on purpose. `look` is what holds a ring at full while the stripe
+	-- beside it rests, and trash is the commonest answer of the three and the
+	-- one nobody is looking for: a column of greys each wearing a bright ring is
+	-- the feed back where it started.
+	check(entry.look == nil, "the trash ring is held at full brightness")
+end
+
+-- And nothing at all while the filter is off, which is the state this addon
+-- ships in. Take answers true on its first line, so no refusal is ever written
+-- down and the greys reach the feed unmarked.
+--
+-- Past the memory first, because it outlives the switch by design: a refusal
+-- made a moment ago was still a refusal, and the state being read here is a
+-- corpse emptied with the filter already off.
+do
+	ns.dbc.lootFilter = false
+	advance(91)
+	pass()
+	feed:Clear()
+	fire("CHAT_MSG_LOOT", FEMUR)
+	check((feed:At(0) or {}).ring == nil,
+		"the filter switched off still marked a grey as trash")
+	ns.dbc.lootFilter = true
+	feed:Clear()
+end
+
+----------------------------------------------------------------------
 -- The reading
 ----------------------------------------------------------------------
 
