@@ -46,14 +46,13 @@ local H = ...
 local ns, check = H.ns, H.check
 
 local Window, Worn = ns.CharWindow, ns.Worn
-local GEAR = 1
 
 -- What the line at the foot reports.
 local minutes, scanned = 0, 0
 
 do
-	Window.Show(GEAR)
-	local pane = Window.Pane(GEAR)
+	Window.Show()
+	local pane = Window.Pane()
 	local own, swing = H.own, H.swing
 	local head, neck, ring, hand
 	for _, box in ipairs(pane.squares) do
@@ -219,7 +218,7 @@ do
 	tick:Beat(1)
 	check(hand.note:GetText() == "shut",
 		"the tick wrote on a row nobody can see, so it is reading the row's own flag rather than the window's")
-	Window.Show(GEAR)
+	Window.Show()
 
 	-- Left as it was found.
 	H.tooltips.item[helmLink] = nil
