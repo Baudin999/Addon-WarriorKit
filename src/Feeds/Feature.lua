@@ -521,10 +521,6 @@ local function FloatPage(ui)
 	ui.Hint("A name too long for it is cut rather than wrapped.")
 
 	ui.Size("picture", 16, 96, 2, Knob("lootFloatIcon"))
-
-	ui.Opacity("colour back in", Knob("lootFloatLift"))
-	ui.Hint("Adding the picture takes its black square off and drains the colour; this puts it back.")
-
 	ui.Size("name", 8, 36, 1, Knob("lootFloatName"))
 	ui.Size("count", 8, 36, 1, Knob("lootFloatCount"))
 	ui.Hint("A row is as tall as the tallest of the three and the column is laid out by summing the rows.")
