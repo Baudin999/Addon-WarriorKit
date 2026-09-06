@@ -64,6 +64,7 @@ local CHURN = {
 	swing = 0.05,
 	buffs = 0.05,
 	cooldowns = 0.05,
+	trinket = 0.05,
 	standing = 0.30,
 	cast = 0.05,
 	numbers = 0.05,

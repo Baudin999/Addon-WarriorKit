@@ -291,3 +291,144 @@ function UI.Disc(parent, layer)
 	texture:SetTexture(ROUND)
 	return texture
 end
+
+--------------------------------------------------------------------------
+-- The arc
+--
+-- A wedge of that same disc, whole when a wait begins and eaten away clockwise
+-- from twelve as it runs down. Laid between a ring and the icon sitting inside
+-- it, the only part of the wedge anybody sees is the band, and a band cut like
+-- that is an arc.
+--
+-- The client will not draw one. A Cooldown frame draws its swipe over the
+-- square it is on, there is no primitive for a sector, and the swipe texture
+-- call that would round it off is Legion's: nothing installed here calls it
+-- with a TBC interface, and a call the documentation has and the disk does not
+-- is how this addon shipped a bug already. So the arc is built, and the build
+-- is OPie's, out of UI/Mirage.lua, which does exactly this under
+-- `## Interface: 20506`.
+--
+-- Two textures and two masks. Each texture is half the disc, pinned so its
+-- straight edge is down the middle. Each mask is a white rectangle over the
+-- right half, and a rectangle turned about the middle of its own left edge is a
+-- half plane whose boundary sweeps: at no turn it keeps the right half, at half
+-- a turn the left. So the right half of the disc is cut by a mask turning
+-- through the first half of the wait, the left half by one turning through the
+-- second, and between them they are one wedge with one moving edge.
+--
+-- The rectangle is half the frame wide and all of it tall, which is exactly the
+-- half plane and not a pixel more: every point of a disc inscribed in that
+-- frame lies within half a width along the mask's own axis and half a height
+-- across it, whichever way it is turned. On a frame that is not square the disc
+-- is an ellipse and the far corners of the sweep are approximate. Nothing here
+-- draws one on anything but a square.
+--
+-- A client with no masks gets the whole ring dark while the wait runs and the
+-- ring back when it ends. That says the thing worth saying and not how much
+-- longer, which is the trade every probe in this file makes.
+--------------------------------------------------------------------------
+
+-- A solid white texture the client ships, and a mask cut from it keeps every
+-- pixel inside its own rectangle and nothing outside. Minimap/Shape.lua hands
+-- the same file to the map for the same reason.
+local WEDGE = "Interface\\Buttons\\WHITE8X8"
+
+-- What a mask turns about, in its own texture's coordinates: the middle of its
+-- left edge, which the anchors below put on the middle of the disc.
+local PIVOT = { x = 0, y = 0.5 }
+local TURN = math.pi * 2
+
+-- How far the boundary has to move before the two rotations are worth writing,
+-- which is a pixel. A thirty-six pixel disc has a hundred and thirteen pixels
+-- of edge round it, so a hundred and twenty eighth of a turn is where the
+-- moving end of the arc lands on the next pixel and anything finer is a redraw
+-- of the same picture.
+local STEP = 1 / 128
+
+-- One half's mask, or nil on a client that will not make one.
+--
+-- Probed the way UI.Clip probes its pair, and what comes back is checked as
+-- well as the name: the harness is exactly the client that has the name and not
+-- the thing, and an unwritten method there answers a function handing back nil.
+local function Cut(frame, half)
+	if not frame.CreateMaskTexture or not half.AddMaskTexture then
+		return nil
+	end
+	local mask = frame:CreateMaskTexture()
+	if not mask then
+		return nil
+	end
+	mask:SetTexture(WEDGE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+	mask:SetPoint("TOPLEFT", frame, "TOP")
+	mask:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT")
+	half:AddMaskTexture(mask)
+	return mask
+end
+
+-- The two halves, their two masks and the colour all of it is drawn in. Sized
+-- and placed off the frame it is made on, so an arc follows every resize its
+-- ring does and no caller has to place it.
+--
+-- Hidden at build. An arc is the exception on a page rather than the rule:
+-- most of what a player is wearing has nothing to press.
+function UI.Arc(frame, layer, color)
+	local arc = { masks = {} }
+	for index = 1, 2 do
+		local right = index == 1
+		local half = frame:CreateTexture(nil, layer or "BORDER")
+		half:SetTexture(ROUND)
+		half:SetTexCoord(right and 0.5 or 0, right and 1 or 0.5, 0, 1)
+		half:SetPoint("TOPLEFT", frame, right and "TOP" or "TOPLEFT")
+		half:SetPoint("BOTTOMRIGHT", frame, right and "BOTTOMRIGHT" or "BOTTOM")
+		half:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
+		half:Hide()
+		arc[index] = half
+		arc.masks[index] = Cut(frame, half)
+	end
+
+	-- Both or neither. One half cut and the other whole is a sweep that is right
+	-- for half of every wait and a solid disc for the other half, which reads
+	-- worse than the flat answer and takes longer to work out.
+	if not (arc.masks[1] and arc.masks[2]) then
+		arc.masks = nil
+	end
+	return arc
+end
+
+-- How much of the ring is still dark: one where a wait has just begun, nothing
+-- where it has ended.
+--
+-- Quantised to the step above before anything is compared, so a pass that has
+-- not moved the boundary a pixel reads as the same number and writes nothing.
+-- Both ends survive the rounding exactly, which is what keeps the start and the
+-- finish of a wait a write rather than something lost to it.
+--
+-- Answers whether it wrote. That is what the tick driving it wants to know and
+-- what the harness reads: at four passes a second against a two minute trinket,
+-- three passes in four have nothing to say.
+function UI.Sweep(arc, fraction)
+	local want = fraction < 0 and 0 or (fraction > 1 and 1 or fraction)
+	want = math.floor(want / STEP + 0.5) * STEP
+	if arc.at == want then
+		return false
+	end
+	arc.at = want
+
+	if arc.masks then
+		-- One mask holds the moving edge and the other is parked at whichever end
+		-- of its own half it has reached, which is what makes the pair one wedge:
+		-- the first turns through the first half of the wait and the second waits
+		-- at a half turn until the first has finished.
+		local spent = 1 - want
+		arc.masks[1]:SetRotation((1 - (spent < 0.5 and spent or 0.5)) * TURN, PIVOT)
+		arc.masks[2]:SetRotation((1 - (spent > 0.5 and spent or 0.5)) * TURN, PIVOT)
+	end
+
+	local lit = want > 0
+	if arc.lit ~= lit then
+		arc.lit = lit
+		arc[1]:SetShown(lit)
+		arc[2]:SetShown(lit)
+	end
+	return true
+end

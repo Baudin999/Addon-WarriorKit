@@ -162,12 +162,12 @@ function Region:GetTexCoord()
 end
 function Region:SetTexture(path) self.texture = path end
 function Region:GetTexture() return self.texture end
--- Which way the texture is turned, in radians. The client has both halves and
--- the stub had neither, so the one thing on the map that is ever rotated was
--- drawn by code no run reached: the arrow's angle was kept in the addon's own
--- field and the write to the texture went nowhere. A mark that came out of the
--- pool still on its side was invisible to every reading here.
-function Region:SetRotation(radians) self.rotation = radians or 0 end
+-- Which way the texture is turned, in radians, and what it turns about. The
+-- client has both halves and the stub had neither, so the map's arrow kept its
+-- angle in the addon's own field and the write went nowhere. The pivot is the
+-- second half and UI.Arc is the whole of why it is kept: a mask turning about
+-- its own middle draws a band across a disc rather than a wedge out of one.
+function Region:SetRotation(radians, pivot) self.rotation, self.pivot = radians or 0, pivot end
 function Region:GetRotation() return self.rotation or 0 end
 function Region:SetColorTexture(r, g, b, a)
 	-- A colour texture answers no file path, which is the readback Skin.lua's

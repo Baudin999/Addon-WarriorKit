@@ -338,24 +338,109 @@ local STEP = 0.1
 local CLOSEST = 0.5
 local SINK = -0.35
 
+--------------------------------------------------------------------------
+-- The wait on a slot you press
+--
+-- Two trinkets, an engineering helm and a weapon with a use on it, and the
+-- sheet is where a player looks to see whether the trinket they are about to
+-- pull with is off cooldown. The client answers per slot through
+-- ns.InventoryCooldown, which was written, probed and called by nothing on this
+-- page.
+--
+-- Drawn on the ring the disc already has rather than as a swipe over the icon.
+-- A Cooldown frame draws a square wedge and every square on this page is round,
+-- so the swipe would hang out past the disc at four corners; UI.Arc cuts the
+-- same wedge out of the same circle the ring is, and its own head says how.
+--
+-- Only a slot holding something you press. A passive trinket with a proc on it
+-- carries a cooldown too, and a dark ring on a trinket you cannot spend is the
+-- page saying wait about nothing. ns.ItemSpell is the call that tells them
+-- apart and Core.lua argues it where it is written.
+--------------------------------------------------------------------------
+
+-- What the arc is drawn in. The theme's own sunken, opaque, because the whole
+-- read is the difference between a ring that is its item's colour and a ring
+-- that is not: at half strength both states are the quality colour and the
+-- player is comparing two shades of purple across a column.
+local COOL = C.sunken
+
+-- How often it is redrawn, and the number is the shortest wait worth an arc.
+-- Thirty seconds on a weapon moves the boundary about four pixels a second
+-- round a thirty-six pixel disc, so a quarter second is a pixel of movement and
+-- anything finer is a write UI.Sweep throws away. On a two minute trinket three
+-- passes in four already do nothing.
+local SWEEP = 0.25
+
+-- The shortest wait that belongs to the item. A slot answers the global
+-- cooldown as well as its own, so a trinket you have just pressed an ability
+-- over reads a second and a half, and nineteen rings blinking on every
+-- Bloodthirst says nothing about any trinket. Cooldowns/Cooldowns.lua draws the
+-- line in the same place.
+local OWN = 1.5
+
 local Pane = {}
 Pane.__index = Pane
 
--- The one gear page there is, so the tick that counts the oil down can find it.
+-- The one gear page there is, so the two ticks that hang off ns.UI.Forever can
+-- find it.
 --
--- A file local rather than the frame the tick hangs off, which is how the turn
+-- A file local rather than the frame a tick hangs off, which is how the turn
 -- above reaches its model and how every other instance-owned tick in the addon
--- reaches its instance. This one hangs off ns.UI.Forever instead: three rows
--- once a second is not worth a frame of its own, and a tick on a frame of its
--- own owes scripts/check.sh an entry defending a frame that can hide. The
--- visibility test at the top of Lapse is what that entry would have said,
--- written as one comparison a second.
+-- reaches its instance. Neither of the two below hangs off a frame at all:
+-- three rows once a second and a disc or two four times a second are not worth
+-- a frame each, and a tick on a frame of its own owes scripts/check.sh an entry
+-- defending a frame that can hide. The visibility test at the top of Lapse and
+-- of Sweep is what that entry would have said, written as one comparison a
+-- tick.
 --
 -- Character/Window.lua builds exactly one of these and never takes it down,
 -- because the page holds nineteen secure buttons and hiding one of those in a
 -- fight is a protected act. A second page would be a second thing this pointed
 -- at and the sheet has no way to grow one.
 local page
+
+-- How much of a slot's wait is left, as a share of the whole of it, and nothing
+-- for a slot with nothing to wait for.
+local function Waiting(entry)
+	local start, duration, enabled = ns.InventoryCooldown(entry.slot)
+	if not enabled or duration <= OWN or start <= 0 then
+		return 0
+	end
+	local left = (start + duration) - GetTime()
+	if left <= 0 then
+		return 0
+	end
+	return left / duration
+end
+
+-- Every slot on the page that holds something you press, four times a second,
+-- and only while the sheet is on screen. The visibility test is Lapse's and is
+-- there for the reason its comment gives.
+--
+-- The list is what the repaint left, so the tick walks two squares on most
+-- characters rather than nineteen, and it never asks what is in a slot: that is
+-- the dirty bit's job and the answer only moves when your gear does. Pane's own
+-- Cooling switches this off outright for a character wearing nothing with a use
+-- on it, which is a question about gear rather than about the window and is why
+-- there are two switches on one tick.
+--
+-- Two ticks on this page and not one, and the rates are the argument. An arc
+-- has a moving edge, and a quarter second is one pixel of it on the shortest
+-- wait anything in this expansion carries; a stone counts in whole minutes for
+-- all but its last one, and the turn on the figure wants every frame there is.
+-- Folding any two of the three together is either a walk run four times as
+-- often as it has anything to say or a picture that steps.
+local function Sweep()
+	if not page or not page.frame:IsVisible() then
+		return false
+	end
+	local list = page.cooling
+	for index = 1, #list do
+		local box = list[index]
+		UI.Sweep(box.arc, Waiting(box.entry))
+	end
+	return true
+end
 
 --------------------------------------------------------------------------
 -- One slot
@@ -826,6 +911,32 @@ local function PaintWash(box, link, letters)
 	return true
 end
 
+-- Whether this slot is one that waits, and how much of the wait is left.
+--
+-- The arc is built on the first repaint that finds something pressable in the
+-- slot and never again, rather than at build with the rest of the square. An
+-- arc is four objects, most of nineteen slots never hold anything with a use on
+-- it, and seventy-six textures on a page that draws two arcs is the whole of
+-- what building them up front would buy. Once is once: the branch is on the arc
+-- and not on the item, so a trinket swapped for another trinket reuses the one
+-- the slot already has.
+--
+-- A function of its own rather than six lines at the foot of the repaint, for
+-- the reason PaintWash and PaintDots are: the repaint is at its own branch
+-- ceiling and these are three more decisions about a subject it does not
+-- otherwise have.
+local function PaintWait(box, link)
+	local use = link and ns.ItemSpell(link) and true or false
+	box.use = use
+	if use and not box.arc then
+		box.arc = UI.Arc(box.face, "BORDER", COOL)
+	end
+	if box.arc then
+		UI.Sweep(box.arc, use and Waiting(box.entry) or 0)
+	end
+	return use
+end
+
 local function PaintSquare(box)
 	local entry = box.entry
 	local icon = ns.Worn.Icon(entry.slot)
@@ -887,6 +998,7 @@ local function PaintSquare(box)
 		box.wear:Hide()
 	end
 
+	PaintWait(box, link)
 	return PaintWash(box, link, letters)
 end
 
@@ -1208,7 +1320,7 @@ end
 
 function Paperdoll.New(parent)
 	local pane = setmetatable({ squares = {}, left = {}, right = {},
-		hands = {}, worn = {} }, Pane)
+		hands = {}, worn = {}, cooling = {} }, Pane)
 	pane.frame = CreateFrame("Frame", nil, parent)
 
 	-- Sorted into the two columns once, because which column a slot is in is a
@@ -1253,6 +1365,11 @@ function Paperdoll.New(parent)
 	-- figure that does not move.
 	pane.stats = ns.CharReadout.New(pane.frame, { compact = true })
 
+	-- Armed and stopped, the same way the turn on the figure is: a ticker starts
+	-- running and this one has nothing to do until the sheet is open with
+	-- something on it you can press.
+	pane.sweep = UI.Ticker(UI.Forever, SWEEP, "trinket", Sweep)
+	pane.sweep:Stop()
 	page = pane
 	return pane
 end
@@ -1435,6 +1552,34 @@ local function Column()
 	return groups
 end
 
+-- Which squares the sweep has to walk, and whether it runs at all.
+--
+-- Taken off the repaint rather than worked out on the tick, because what is in
+-- a slot changes when your gear does and a tick that asked would be walking
+-- nineteen links four times a second to be told the same thing.
+--
+-- Stopped where nothing on the page can be pressed, which is most characters:
+-- the tick is not gated on something actually being on cooldown, because a
+-- cooldown starting is exactly what nothing here would otherwise notice.
+function Pane:Cooling()
+	local list = self.cooling
+	for index = #list, 1, -1 do
+		list[index] = nil
+	end
+	for index = 1, #self.squares do
+		local box = self.squares[index]
+		if box.use then
+			list[#list + 1] = box
+		end
+	end
+	if #list > 0 then
+		self.sweep:Start()
+	else
+		self.sweep:Stop()
+	end
+	return #list
+end
+
 function Pane:Paint()
 	self:Redress()
 	for index = 1, #self.squares do
@@ -1449,6 +1594,7 @@ function Pane:Paint()
 	for index = 1, #self.hands do
 		Lapsed(self.hands[index])
 	end
+	self:Cooling()
 	self:PaintHead()
 	-- Only while the page is up, and that is a measurement rule rather than a
 	-- saving: a sentence under a row is measured against the width it wraps to,

@@ -97,6 +97,11 @@ local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast
 	-- on all but one second a minute it finds the same whole number it left and
 	-- writes nothing.
 	"oil",
+	-- The trinkets on that same page, sweeping. Four times a second while the
+	-- sheet is open and something on it is a thing you press, and stopped
+	-- otherwise, which on a character wearing nothing with a use on it is
+	-- always. It walks the squares the repaint found rather than all nineteen.
+	"trinket",
 	-- The one slot that is not a ticker. Bags/Window.lua brackets its refresh,
 	-- which the bag events book up to ten times a second at a vendor, and
 	-- scripts/check.sh reads a literal ns.Perf.Start as a slot for that reason.

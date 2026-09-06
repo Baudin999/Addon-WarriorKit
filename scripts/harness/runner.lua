@@ -334,6 +334,18 @@ local SECTIONS = {
 	-- It shuts it again, and it puts the setting it turns off back, so what the
 	-- reset below inherits is the scene the addon ships with.
 	"52-screen-dark",
+	-- Under those, and it opens the same sheet again. What it reads is the one
+	-- thing on a gear square that moves while nobody touches it: the arc a slot
+	-- you press draws while its cooldown runs. It puts a trinket on cooldown,
+	-- runs the wait down, takes the trinket off and puts it back, so the scene
+	-- it hands on is the one it was given. A file of its own because
+	-- 52-gear-page.lua is at its own line ceiling and this is a subject rather
+	-- than a block: two halves, two masks and a tick that has to stop.
+	--
+	-- Over the enchant section rather than under it, because this one reads the
+	-- character client/13-character.lua dressed and that one is the section that
+	-- redresses him.
+	"52-trinket-sweep",
 	-- Last of the sheet's sections, because it dresses the character in
 	-- enchanted pieces and puts a stone on a hand. Every assertion above reads
 	-- a character wearing what client/13-character.lua put on, so a scene that
