@@ -27,7 +27,7 @@
 -- addon with that addon named beside it.
 
 local H = ...
-local ns, fire, check = H.ns, H.fire, H.check
+local ns, fire, check, advance = H.ns, H.fire, H.check, H.advance
 
 local Loot = ns.LootFeed
 local lootStream = Loot.Stream()
@@ -392,6 +392,118 @@ check(said("Auctionator") == nil, "an item the scanner has never seen drew a pri
 -- a pcall failure, which is the same answer as no price.
 _G.Auctionator = nil
 ns.UI.Tooltip.Close()
+
+----------------------------------------------------------------------
+-- Twelve bandages on one row
+--
+-- A craft hands you one bandage a second and the client says so every time.
+-- Twelve rows of the same sentence is a column that told you one thing and
+-- spent eleven rows doing it, so the second one folds into the first: the
+-- number on the row climbs, the row keeps the place it already had, and the
+-- window inside which two of the same item are one pickup is sixty seconds.
+--
+-- The hover is the other half of the fold and the half that is easy to lose. A
+-- row reading `x12` whose tooltip says `12` and nothing else has thrown the
+-- fold away. What the row cannot hold is that twelve of them came off three
+-- separate pickups, and which one of the three the clock on it is about.
+----------------------------------------------------------------------
+
+local LINEN = _G.WarriorKitItemLink("Linen Cloth")
+
+feed:Clear()
+local tally = Loot.Counts()
+drop("You receive loot: %s.", LINEN)
+drop("You receive loot: %s.", LINEN)
+drop("You receive loot: %sx4.", LINEN)
+check(feed:Count() == 1, ("three arrivals of one item made %d rows"):format(feed:Count()))
+check(newest().count == 6 and newest().amount == "x6",
+	("the folded row reads %s off a count of %s")
+		:format(tostring(newest().amount), tostring(newest().count)))
+-- A pickup that folded still reached the feed, which is what the panel's
+-- number is a count of.
+check(Loot.Counts() == tally + 3,
+	("the feed's tally moved by %d over three arrivals"):format(Loot.Counts() - tally))
+
+-- A different item between two of the same does not end the run, and the row
+-- that folds does not climb over the one above it.
+drop("You receive loot: %s.", _G.WarriorKitItemLink("Aegis"))
+drop("You receive loot: %s.", LINEN)
+check(feed:Count() == 2, "an item in between made the next one of them a new row")
+check(feed:At(0).name == "Aegis" and feed:At(1).count == 7,
+	"the folded row jumped to the top rather than climbing where it stood")
+
+-- Half a minute on is the same pickup, and the clock on the row moves to the
+-- one that just landed rather than staying on the one that started it.
+local was = feed:At(1).at
+advance(30)
+drop("You receive loot: %s.", LINEN)
+check(feed:Count() == 2 and feed:At(1).count == 8,
+	"half a minute later was read as a different afternoon")
+check(feed:At(1).at == _G.GetTime() and feed:At(1).at > was,
+	"the folded row is still about the first one you picked up")
+
+-- Past sixty seconds it is a second trip and gets a second row.
+advance(61)
+drop("You receive loot: %s.", LINEN)
+check(feed:Count() == 3, "a minute past the window and the row is still folding")
+check(newest().count == 1 and newest().amount == "x1",
+	("the row past the window opened at %s"):format(tostring(newest().amount)))
+
+-- What the row stopped being able to say.
+feed:Clear()
+drop("You receive loot: %sx8.", LINEN)
+hover()
+check(said("Stack") == "8",
+	("a stack that arrived whole says %s"):format(tostring(said("Stack"))))
+drop("You receive loot: %sx4.", LINEN)
+hover()
+check(said("Stack") == "12 in 2 pickups",
+	("a row of twelve off two pickups says %s"):format(tostring(said("Stack"))))
+check(said("Looted") == ns.Stream.Clock(_G.GetTime()),
+	("the hover dates the fold at %s and it landed at %s")
+		:format(tostring(said("Looted")), ns.Stream.Clock(_G.GetTime())))
+
+advance(5)
+drop("You receive loot: %s.", LINEN)
+hover()
+check(said("Stack") == "13 in 3 pickups",
+	("a third pickup left the hover saying %s"):format(tostring(said("Stack"))))
+-- Five seconds on, and the line is the arrival that just landed. The check
+-- above says the hover reads now; this one says it is not the pickup before
+-- last, which is what a clock left on the arrival that opened the row says and
+-- which reads as a perfectly good time.
+check(said("Looted") ~= ns.Stream.Clock(_G.GetTime() - 5),
+	"the hover is dating the row by the pickup before last")
+
+ns.UI.Tooltip.Close()
+
+-- One item, two looters, two rows.
+--
+-- `who` is nil on your own pickup and a name on somebody else's, and the hover
+-- draws it as "Went to". A fold that read the link and the clock alone would
+-- put your linen and a party member's on one row, and that row would count
+-- three of them and name one player. The group column is the one feature whose
+-- whole job is answering who got it.
+do
+	local wasGroup = ns.db.lootFeedGroup
+	ns.db.lootFeedGroup = true
+	feed:Clear()
+	drop("You receive loot: %s.", LINEN)
+	drop("%s receives loot: %s.", "Bram", LINEN)
+	check(feed:Count() == 2, "one item off two looters inside the window is one row")
+
+	-- And each of them folds on its own.
+	drop("You receive loot: %s.", LINEN)
+	drop("%s receives loot: %sx2.", "Bram", LINEN)
+	check(feed:Count() == 2, "a second pickup each opened a row rather than folding")
+	check(feed:At(0).who == "Bram" and feed:At(0).count == 3,
+		("the group row says %s of them went to %s")
+			:format(tostring(feed:At(0).count), tostring(feed:At(0).who)))
+	check(feed:At(1).who == nil and feed:At(1).count == 2,
+		("your own row folded to %s and somebody else's pickup is in it")
+			:format(tostring(feed:At(1).count)))
+	ns.db.lootFeedGroup = wasGroup
+end
 
 print(("loot   no word and no line, %d chips over %d rows, icon %d px on a %d px row,"
 	.. " vendor price per item and per stack, a stub scanner asked for the auction")

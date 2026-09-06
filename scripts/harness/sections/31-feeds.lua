@@ -128,7 +128,8 @@ check(feed:Count() == held, "a sentence with no item link in it became a row")
 
 drop("You receive loot: %s.", _G.WarriorKitItemLink("Bloodspiller"))
 local rare = newest().color
-drop("You receive loot: %s.", _G.WarriorKitItemLink("Aegis"))
+-- Enchanted, so it is its own link rather than a fold into the Aegis above.
+drop("You receive loot: %s.", _G.WarriorKitItemLink("Aegis", 12))
 check(newest().color == rare, "two rares came back with different colour tables")
 drop("You receive loot: %s.", _G.WarriorKitItemLink("Chipped Boar Tusk"))
 check(newest().color ~= rare, "a grey and a rare came back the same colour")
@@ -201,7 +202,7 @@ check(feed:Row(1).name:GetText() == "Arcanite Reaper",
 feed:Clear()
 
 for index = 1, ns.db.lootFeedRows + 6 do
-	drop("You receive item: %sx%d.", _G.WarriorKitItemLink("Aegis"), index)
+	drop("You receive item: %sx%d.", _G.WarriorKitItemLink("Aegis", index), index)
 end
 
 -- The newest is the top row and the one before it is the second, which is
@@ -251,8 +252,8 @@ feed:ToTop()
 
 local lap = feed.cap
 local slot = feed:At(0)
-for _ = 1, lap do
-	drop("You receive loot: %s.", _G.WarriorKitItemLink("Aegis"))
+for index = 1, lap do
+	drop("You receive loot: %s.", _G.WarriorKitItemLink("Aegis", index))
 end
 check(feed:At(0) == slot,
 	"a full lap of the ring did not come back to the same table, so every drop allocates")

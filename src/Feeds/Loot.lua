@@ -91,6 +91,16 @@ local COIN = "Interface\\Icons\\INV_Misc_Coin_01"
 -- question mark is the client's own way of saying it does not know yet.
 local UNKNOWN = "Interface\\Icons\\INV_Misc_QuestionMark"
 
+-- How long two of the same item are one pickup rather than two rows.
+--
+-- Sixty seconds, and it is a number rather than the whole ring for the reason
+-- Feed:Fold is bounded at sixteen entries. Bandages come off a craft one a
+-- second and belong on one row; a vendor run an hour ago is a different
+-- afternoon and belongs on its own. The window is not a setting, because a
+-- slider on it would be the third control over what this column shows and the
+-- header over the filter is an argument against the second.
+local FOLD_WINDOW = 60
+
 
 
 --------------------------------------------------------------------------
@@ -221,9 +231,20 @@ local function Fill(entry)
 	if entry.quest then
 		lines[#lines + 1] = { "Quest item", color = QUEST }
 	end
+	-- The last of them, on a row that folded. `at` moved to the newest pickup
+	-- when it folded, so this line answers "when did I last get one" rather
+	-- than "when did this row start", which is the question a stack that is
+	-- still growing raises.
 	lines[#lines + 1] = { "Looted", ns.Stream.Clock(entry.at) }
 	if (entry.count or 1) > 1 then
-		lines[#lines + 1] = { "Stack", tostring(entry.count) }
+		-- The half of the fold the row cannot hold. A row reading `x12` and a
+		-- tooltip reading `12` has thrown the fold away: the number is on the
+		-- row already, and what is not is that twelve of them came off three
+		-- separate pickups.
+		local picks = entry.picks or 1
+		lines[#lines + 1] = { "Stack", picks > 1
+			and ("%d in %d pickups"):format(entry.count, picks)
+			or tostring(entry.count) }
 	end
 	if entry.who then
 		lines[#lines + 1] = { "Went to", entry.who }
@@ -330,6 +351,25 @@ end
 
 local seen = 0
 
+-- Whether an entry the feed is holding is the row a fresh one belongs on.
+--
+-- Three things, and the third is the one the item this was written for did not
+-- ask for. The link is the item; the window is read off the held entry alone,
+-- because the slot the caller has filled has no `at` yet and that is written by
+-- the push this fold is deciding against; and the looter is `who`, which is nil
+-- on your own pickup and a name on somebody else's. Without it your linen and a
+-- party member's land on one row, and the row that says three of them says
+-- "Went to" about one player. That is a column of arithmetic saying something
+-- untrue, in the one feature that exists to answer who got it.
+--
+-- The moment sits beside this rather than inside it, so a corpse full of loot
+-- is one function here and not a closure per arrival.
+local foldAt = 0
+local function Repeated(held, fresh)
+	return held.link == fresh.link and held.who == fresh.who
+		and held.at ~= nil and (foldAt - held.at) <= FOLD_WINDOW
+end
+
 local function AddItem(who, link, count)
 	local quality, price = ns.ItemValue(link)
 	local name, icon = ns.ItemInfo(link)
@@ -359,7 +399,27 @@ local function AddItem(who, link, count)
 	entry.quest = (class == QUEST_CLASS) or nil
 	entry.ring = entry.quest and QUEST or nil
 	entry.price = price
-	stream:Feed():Push()
+
+	-- The same item again inside the window is the row you are already looking
+	-- at rather than a second one under it.
+	foldAt = GetTime()
+	local into = stream:Feed():Fold(Repeated)
+
+	if into then
+		-- What the row says and what the tooltip says, and nothing else. The
+		-- three the filter reads are this same item's already and were counted
+		-- with the old answer, and the entry itself is the feed's slot rather
+		-- than something to keep past this call.
+		into.count = (into.count or 1) + count
+		into.amount = "x" .. into.count
+		into.picks = (into.picks or 1) + 1
+		-- The row is now about the last one you picked up, which is what the
+		-- tooltip's clock reads and what the next arrival's window is measured
+		-- against.
+		into.at = foldAt
+	else
+		stream:Feed():Push()
+	end
 
 	seen = seen + 1
 	return true
