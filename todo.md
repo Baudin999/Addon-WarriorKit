@@ -1,21 +1,24 @@
 # Todo
 
-Each piece is built by one agent in its own worktree under `.worktrees/`,
-on a branch named `worktree-<name>`, and merged into main when
-`./scripts/check.sh` comes back at zero. The worktrees stay after the merge.
+Each item is built by one agent in its own worktree under `.worktrees/`,
+on a branch named `worktree-<name>`, and merged into master when
+`./scripts/check.sh` comes back at zero. That gate is the gate for every open
+item below and no item repeats it.
+
+## How this file works
+
+A finished item folds to one line: number, title, hash. The commit is the
+record, `git show <hash>` gives back everything the checklist said, and a
+checklist kept beside it is a second copy that drifts. Open items keep only
+what git cannot: the files to touch and the decisions already made. Numbers are
+identifiers, not positions, so gaps are correct.
+
+The long text of every item is in this file at `a9d743e`; item 10's is at
+`d05546c` and item 62's at `17b6427`. What each landed item fixed is in
+`docs/CHANGELOG.md`, and what is still unconfirmed in game is in the README's
+untested list.
 
 ## Landed
-
-A title and the commit that finished it. Where an item took several commits the
-hash is the last of them. What was wrong and what fixed it is in
-`docs/CHANGELOG.md` and `docs/README.md`, what is still unconfirmed in game is
-in the README's untested list, and the full text of each item is this file at
-`e7ef4ca` for 1 to 6, 8, 11 and 12, at `ca59a77` for 7, 9 and 13, at
-`44c79ef` for 15, at `a7772af` for 16, at `c37c149` for 19, at `b5d2277` for
-17, at `30a42cb` for 28, at `2210d8f` for 18, at `f3222c6` for 32 to 45 and at
-`1ad54d1` for 46, at `229a60f` for 47, at `c76af91` for 73 to 77, 79 and 83 to
-86 and at `d4a2bbb` for 87 and 88. Items 14, 23 and 31 were never written longer
-than they are here.
 
 1. Weapon swing timer. `8be9a43`
 2. Deep Wounds missing from the enemy bar debuffs. `05e40ec`
@@ -24,743 +27,438 @@ than they are here.
 5. Enemy cast bar. `89a3e45`
 6. Party and raid frames, ours off a secure group header. `e3de603`
 7. Cooldown row for the long cooldowns, out of the class registry. `2245a01`
-8. The target block linked to the player block, reflected about the middle of
-   the screen rather than pinned a fixed distance off it. `2a999b5`
+8. The target block reflected about the middle of the screen. `2a999b5`
 9. Our own buff and debuff rows on the skinned frames. `1871fa6`
-11. Split `Skin.lua`, which had three subjects and came apart into four.
-    `a5624de`
+11. `Skin.lua`, which had three subjects, split into four. `a5624de`
 12. The chat window, reimagined as a rail of rooms. `1c4de0e`
-13. What the class split left behind, down to the `Class.Label()` fallback.
-    `fc6c0e5`
-14. check.sh derives its class shapes from `Class/*.lua` rather than naming
-    them. `371d82d`
+13. What the class split left behind, down to `Class.Label()`. `fc6c0e5`
+14. check.sh derives its class shapes from `Class/*.lua`. `371d82d`
 15. A placeable HUD frame, named at last. `80528bc`
-16. `ns.RegisterUnitEvent` in Core, where the other thirty shims live.
-    `3df1df1`
+16. `ns.RegisterUnitEvent` in Core, where the other thirty shims live. `3df1df1`
 17. The slash dispatchers, off a table rather than a chain of ifs. `abddb67`
-19. `UI.Window` re-zooms its own frame, and every screen sizes on its own.
-    `da4a01a`
+18. One ticker, and a HOT list walked rather than typed. `903350d`
+19. `UI.Window` re-zooms its own frame, and every screen sizes on its own. `da4a01a`
+21. A client probe outside `Core/` fails check.sh, path-keyed with a reason each. `7bb75c2`
 23. A ceiling only moves down, in `scripts/ratchet.lua`. `271f8e6`
 28. One Questie probe, in Core, and a gate that keeps it one. `07c4401`
-18. One ticker, and a HOT list walked rather than typed. `903350d`
 31. The four tick-path exemptions, all four allow-listed by name. `395e38a`
-32. The action ticker armed once, and `UI.Ticker` refusing a second of one
-    name. `86603a3`
-33. The action squares drawn on a dirty bit from Blizzard's own events, the
-    tick down to range and the count. `86603a3`, the merge fixed at `4021112`
-34. Enemy bar threat compared as numbers, level cached per GUID, unit events
-    on the plate, the reading at 1 Hz. `7140091`
-35. The cast sweep walks the open chambers and stops when there are none.
-    `7140091`
-36. One combat log reader in Core, six subscribers, off the event when nobody
-    listens. `d352b0c`
-37. The options window built on first open and refreshed only where visible.
-    `9e6accd`
-38. Skin and party frames told by unit events, the bar texture hooked rather
-    than read back. `eb884ee`
-39. `Charge.State` memoised per frame, `Known` cached on SPELLS_CHANGED, the
-    draw gated on events. `cd91ccc`
-40. Caged frames hooked on SetParent and Show, the verify pass at 5 s.
-    `cd91ccc`
+32. The action ticker armed once, `UI.Ticker` refusing a second of one name. `86603a3`
+33. The action squares drawn on a dirty bit from Blizzard's own events. `86603a3`, merge fixed at `4021112`
+34. Enemy bar threat as numbers, level cached per GUID, the reading at 1 Hz. `7140091`
+35. The cast sweep walks the open chambers and stops when there are none. `7140091`
+36. One combat log reader in Core, six subscribers, off the event when idle. `d352b0c`
+37. The options window built on first open, refreshed only where visible. `9e6accd`
+38. Skin and party frames told by unit events, the bar texture hooked. `eb884ee`
+39. `Charge.State` memoised per frame, `Known` cached, the draw gated. `cd91ccc`
+40. Caged frames hooked on SetParent and Show, the verify pass at 5 s. `cd91ccc`
 41. Feeds and chat rooms mark on arrival and draw once a frame. `2d08eeb`
-44. Eleven smaller costs, and a gate that every ticker name has a Perf slot.
-    `ba87227`
-43. One frame for the ticks that never stop, and a gate that a tick on a frame
-    of its own says why. `156dede`
-42. The sheet, the book, the aura squares, the feeds, the meters, the swing
-    bars and the cooldown row built on first open or first switch. `d87c42d`,
-    the last of three
-45. Twelve event handlers seeded as hot roots, and a string built on a hot
-    path counted as the allocation it is. `f89b5be`, the second of two
-46. A right click on a whisper room turned the camera and left the room;
-    a row that answers the right button keeps it, and the harness presses
-    rows the way the client does. `673d78c`
-47. A bag pickup filter switched from the bag window: a price floor for greys
-    and whites, one button that throws the filter and the leftovers together,
-    and the title bar's buttons as marks with a sentence on hover. `547a5f8`
-48. The tooltip goes with the pointer, the way the client's own does: the
-    linger ships at zero and stays a setting for whoever reads slowly.
-    `06cd212`
-49. Chrome waits for the hand to stop: tabs, close marks, chips and settings
-    hints open after four tenths of a second held still, through the settle
-    the bags already use. `cce5ebc`
-50. Ad hoc bars: a bar of your own on a key, hidden until the key is pressed
-    and hidden again after a press on one of its squares, holding only what
-    you dragged onto it, up to six bars of sixteen per character. Shown,
-    hidden, moved and put away from snippets so it works mid fight. `66ce6fc`
-
-51. Ctrl-R, taken off the client and given a window: the last four seconds of
-    frames as a strip, what the last second went on, and a log of the frames
-    that went wrong with a measured reason on each. `b32bd7c`
-52. A totem bar: the four slots in a fixed order with a hole where one is
-    missing, built so a warrior's three stances are one more plan and one more
-    reader rather than a second part. `245bbee`
-60. `UI.Clip`, a round icon with a mask that fades it out at its own rim, and
-    `scripts/bake-round.sh` to write the mask. `b220ad6`
-61. The gear page as nineteen rows: a name in its quality colour, the level and
-    the socket dots under it, the durability as the name's own underscore, and
-    the figure behind all of it rather than boxed between the columns.
-    `7b8373a`
-63. A typeface of the addon's own: Noto Sans shipped in `src/Media/`, and the
-    forty windows that were laid out against a narrower face. `89de0a6`
+42. Every window and row built on first open or first switch. `d87c42d`
+43. One frame for the ticks that never stop, and a gate on the exceptions. `156dede`
+44. Eleven smaller costs, and a gate that every ticker has a Perf slot. `ba87227`
+45. Twelve handlers seeded as hot roots, a hot-path string counted. `f89b5be`
+46. A row that answers the right button keeps it, and the harness presses like the client. `673d78c`
+47. A bag pickup filter switched from the bag window, with a price floor. `547a5f8`
+48. The tooltip goes with the pointer, the linger shipped at zero. `06cd212`
+49. Chrome opens after four tenths of a second held still. `cce5ebc`
+50. Ad hoc bars: six bars of sixteen per character, on a key, from snippets. `66ce6fc`
+51. Ctrl-R given a window: four seconds of frames, and a reason on each bad one. `b32bd7c`
+52. A totem bar: four slots in a fixed order with a hole where one is missing. `245bbee`
+60. `UI.Clip`, a round icon masked at its own rim, and `scripts/bake-round.sh`. `b220ad6`
+61. The gear page as nineteen rows over the figure. `7b8373a`
+63. Noto Sans shipped in `src/Media/`, and forty windows relaid against it. `89de0a6`
 64. The loadouts come out, with the tab that hosted them. `3b31e1c`
-65. One page, the tab strip gone, the skills folded into the stats column and
-    the standings given a window on `/wk reputation`. `d667d93`
-66. A name is read on a gradient rather than on the grass, out of `UI.Wash`.
-    `2b55319`
-67. The world darkens behind the sheet, on a frame that never takes the
-    mouse. `ff5816d`
-68. A gear change is watched: the row dips where a link moved and the two
-    columns arrive from their own sides. `fdb49e3`
-69. The socket carries its gem rather than a mark saying one is there.
-    `7c6fb88`
-70. The enchant on the line under the name, and the oil counting down on the
-    weapon. `0e17925`
-71. A trinket says when it is up, swept on the disc's own ring out of
-    `UI.Arc`. `8b18daa`
+65. One page: no tab strip, skills in the stats column, standings on `/wk reputation`. `d667d93`
+66. A name read on a gradient rather than on the grass, out of `UI.Wash`. `2b55319`
+67. The world darkens behind the sheet, on a frame that never takes the mouse. `ff5816d`
+68. A gear change is watched: the row dips and the columns arrive from their sides. `fdb49e3`
+69. The socket carries its gem rather than a mark saying one is there. `7c6fb88`
+70. The enchant under the name, and the oil counting down on the weapon. `0e17925`
+71. A trinket says when it is up, swept on the disc's ring out of `UI.Arc`. `8b18daa`
 72. The figure is yours to turn, and the pose is remembered. `fe3c4ce`
-
-73. A feed folds a repeat into the row it is already on, bounded at sixteen and
-    left where it is. `d65fcdd`
-74. The loot feed folds on the link, the looter and a minute, and the tooltip
-    keeps the total, the pickups and the last of them. `a36b893`
-75. Coin folds on being coin, the row rebuilt from a running total that
-    `Core/Loot.lua` reads back out of the client's own amount strings.
-    `1ab1e8d`
-76. Every feed row is read on a gradient that ends where the text ends, and the
-    panel behind them goes. `cafa7d8`
-77. Every string in a feed comes off the rim and onto that ground, in the same
-    commit, because the state between the two is the worst of the three.
-    `cafa7d8`
-79. The feed's quality stripe rests where the sheet's does and the hover takes
-    it to full, off a `rest` the two windows now share. `0fa0cb2`
-83. One answer to why an item matters, in the fixed order quest, skill, trash,
-    nothing, cached per item id. `463afe8`, moved out of Core the same day by
-    `4eafa88`
+73. A feed folds a repeat into the row it is on, bounded at sixteen. `d65fcdd`
+74. The loot feed folds on link, looter and minute, the tooltip keeping the total. `a36b893`
+75. Coin folds on being coin, off a running total `Core/Loot.lua` reads back. `1ab1e8d`
+76. Every feed row read on a gradient that ends where the text ends. `cafa7d8`
+77. Every feed string off the rim and onto that ground, in the same commit. `cafa7d8`
+79. The feed's quality stripe rests where the sheet's does, off a shared `rest`. `0fa0cb2`
+83. One answer to why an item matters: quest, skill, trash, nothing. `463afe8`, moved out of Core by `4eafa88`
 84. A reagent says whether it is still worth a point. `4ed288f`
-85. An objective read into a name and two numbers, off the client's own format
-    strings. `afcc248`
-86. The loot row says why it matters, in the dim column and on the icon ring,
-    read again on every fold. `c76af91`
-87. A chip that draws any row with a reason on it, whatever its quality chip
-    says. `e97217d`
-88. What the loot filter refused, carried from the corpse's slot to a feed that
-    only ever sees a link. `bffc7a1`
+85. An objective read into a name and two numbers, off the client's format strings. `afcc248`
+86. The loot row says why it matters, in the dim column and on the icon ring. `c76af91`
+87. A chip that draws any row with a reason on it. `e97217d`
+88. What the loot filter refused, carried from the corpse's slot to the feed. `bffc7a1`
+89. The one part of Questie that promises not to move. `726f79c`
+90. Questie's tracker goes off, by its own hand. `57386bf`
+91. A tracker of our own, off the log we already read. `024bdf7`, moved to the
+    top left corner by `7a77cff`
+92. Where you are, asked once. `d7d7262`
+94. A list row knows which button and which modifier. `ee45b34`
+95. A pin is ours, and the client's five slots are left alone. `2aeafd8`
+96. The pin, drawn where you can see it. `fb6240f`
+97. Who nearby has a quest you have never taken. `ae85182`
+98. The line that says why not finish this one. `dbf2168`
+99. What the friend will not do, held by a gate rather than by a comment. `116ae93`
+100. A feed row draws a whole word or none of it. `b003b3c`
 
-Item 10, the Slam mark carried out of item 1, was dropped rather than
-finished. Nothing tracks it now. Its text is in this file at `d05546c`.
+The options window's prose budget was deleted rather than raised again, at
+`4bed7d6`. It counted every sentence in the window against a number that had
+been raised eight times, each raise defined as the measurement plus a hint's
+worth of room. The per-string caps stay: a lede at 160 characters, a hint at
+200. Each page gets tuned on its own when the addon is done.
 
-Items 23 and 31 were never in the Open list. Both came out of reading this file
-against the code on 2026-09-02, and their numbers are where they were worked
-rather than where a review found them.
-
-Item 31 is item 18's gate read back. Item 18 counted its two markers exactly and
-let scripts/ratchet.lua refuse a raise, which left no legal way to add a ninth
-`cold:` in any number of commits: the raise fails the ratchet, and lowering the
-number first fails the equality. Meanwhile the per-line `-- unguarded:` and
-`-- allocates:` exemptions the same scan honours were uncounted, fifteen of them.
-The strict door was shut and the unmeasured one was open, which is where the
-next exemption would have gone. All four are path-keyed allow-lists now, one
-entry per marked function, counted per file and cross-checked against what src/
-carries, so an addition is a new key and reviewable and a raise still fails.
+Item 10, the Slam mark, and item 62, a loadout carrying a whole set of gear,
+were dropped rather than finished. Nothing tracks either.
 
 ## Open
 
-Items 16 to 22 came out of an architecture review on 2026-08-29. Items 16, 17,
-18 and 19 landed on 2026-09-02 and are above, with 23. Item 18 had undercounted
-the hand-written closure: it said about ninety-five function names and there
-were two hundred by the time it was worked, which is the same lesson item 15
-taught in the other direction. Read an item against the code before working it. Every one is a duplication
-or a rule the addon already believes in and does not enforce. None is a bug: the
-addon draws the right thing today. They are the shapes that make the next change
-cost more than it should, ordered so the one that drags the most out with it
-goes first. Item 15 undercounted its own sites by five and asked for a fix
-`0312cf3` had already made.
+Items 20 to 30 came out of architecture reviews on 2026-08-29 and 2026-09-02,
+the second run against LCOM over shared module state, a token clone detector and
+fan-in and fan-out on `ns`. None is a bug. Read an item against the code before
+working it: item 15 undercounted its sites by five and item 18 undercounted its
+closure by half. `ns.db` measured clean, 215 keys with four read outside the
+folder that declares them, and file-level LCOM4 is 1 almost everywhere.
 
 20. `EachTexture` into Core, beside `ns.Strip`.
 
     `src/Artwork/Artwork.lua:59` and `src/UnitFrames/Art.lua:248` are the same
     pcall-guarded walk over a frame's texture regions, differing only in Art's
-    `keep` set. Artwork's copy opens with "pcall guarded for the same reason
-    `ns.Measure` is", which is the author noticing where it belongs and not
-    moving it. It goes next to `ns.Strip`, `ns.Unstrip` and `ns.Blocked`, which
-    are the three calls it exists to feed.
-
-21. One layering rule, gated rather than commented.
-
-    Item 16 has landed, so the rule it leaves behind can be gated. Outside
-    `src/Core/`, no file probes the client for a call it means to make. It
-    belongs with the GameTooltip rule and with the `src/UI/` rule item 15
-    wrote, which are the same idea already written down and already enforced.
-
-    Item 28 gated the Questie half on 2026-09-02: `QuestieLoader` and
-    `ImportModule` outside `Core/Core.lua` fail `check.sh`. The client half
-    landed on 2026-09-04 and is `PROBED_ALLOWED` in `check.sh`. The count the
-    item asked for first came back at 78, not 286: `_G` is read 365 times
-    outside `src/Core/` and most of those are a frame fetched by name, which is
-    the client's own naming scheme and not a probe. The gate names the shape
-    instead, `type(_G.Foo)` or `type(_G[name])`, which is 78 sites in 39 files
-    and holds exactly, in the path-keyed shape items 18 and 31 already use. It
-    ships as an error with every file on it and a reason on every entry, so it
-    is a migration state that drains: a probe moved into Core comes off the list
-    in the same commit, a raise fails `scripts/ratchet.lua`, and a probe in a
-    file that is not listed fails outright. Item 26 retires four of the entries
-    on its own, the `SetOverrideBindingClick` pairs in `Character`, `Spellbook`
-    and `Talents`, and `Feeds/Auction.lua` is two other addons' price calls and
-    wants `ns.Questie`'s shape rather than Core's shims.
-
-    The other rule this item asked for is one of those two now.
-
-    Item 18 added a third of the same kind on 2026-09-02: a frame handler names
-    a function and never opens a closure in place. It is the same shape as the
-    two above, a rule the addon already believed in, and it is worth reading
-    before this one is written because it shows what the client half costs. That
-    gate was one grep and it worked because the shape it refuses is exact.
+    `keep` set. It goes beside `ns.Strip`, `ns.Unstrip` and `ns.Blocked`, the
+    three calls it exists to feed.
 
 22. `Core/Menu.lua` registers a feature from inside Core.
 
-    `src/Core/Core.lua:8` promises that Core knows nothing about any feature and
-    that an eighth part must not mean editing this file. Twenty-five parts keep
-    that promise by registering from `<Folder>/Feature.lua`. `Core/Menu.lua:275`
-    is the one that does not. It is a small file and a real feature, with a
-    slash word and a status line, and it wants a folder like everything else.
-    Worth doing last, when the three items above have already proved the
-    registry does not need Core's help.
-
-Items 24 to 30 came out of a second architecture review on 2026-09-02, run
-against three measurements rather than a reading: LCOM over shared module state,
-a token clone detector across every pair of files, and fan-in and fan-out on
-`ns`. Item 28 landed the same day and is above. Two of the three came back quiet
-and that is worth writing down. `ns.db` is not the god object it looks like: 215
-keys read, and only four read from outside the folder whose `defaults` declares
-them, of which `locked` is Core's and meant to be. File-level LCOM4 is 1 almost
-everywhere, so the folders hold together. What the measurements did find is one
-file that is three modules and five mechanisms each written out between two and
-nine times, and they are below in that order.
+    `src/Core/Core.lua:8` promises Core knows nothing about any feature, and
+    twenty-five parts keep that by registering from `<Folder>/Feature.lua`.
+    `src/Core/Menu.lua:275` does not, and wants a folder like the rest. Last,
+    after 20 and 26 have proved the registry needs no help from Core.
 
 24. `UnitFrames/EnemyBars.lua` is three modules in one file.
 
-    2,450 lines, 72 top-level functions, 25 mutable module locals, and 26
-    distinct `ns.*` names, which is the largest fan-out in the addon. Its own
-    section headers name five subjects, at `:269`, `:578`, `:774`, `:1482` and
-    `:1734`, and two of the five touch none of the other three's state.
+    2,450 lines, 72 top-level functions, 25 mutable module locals, 26 distinct
+    `ns.*` names, the largest fan-out in the addon. Its own headers are at
+    `:269`, `:578`, `:774`, `:1482` and `:1734`.
 
-    The tracked spell list at `:269` is 17 functions over `trackedNames`,
-    `trackedIcons` and `unresolved`, and nothing else. It is a saved list with
-    Add, Remove, Reset, Repair and Resolve on it, no frame anywhere in it, and
-    it is sitting inside a nameplate widget.
+    - `:269` is 17 functions over `trackedNames`, `trackedIcons` and
+      `unresolved` with no frame in any of them: a saved list with Add, Remove,
+      Reset, Repair and Resolve, inside a nameplate widget.
+    - `:1482` is 8 functions over `stripped`, `pending` and `passThrough`,
+      sharing one name with the modes block. The ninth `Blizzard.lua`, filed
+      under another name inside the file it hides plates for.
 
-    The Blizzard plate handling at `:1482` is 8 functions over `stripped`,
-    `pending` and `passThrough`, and it shares exactly one name, `stripped`,
-    with the modes block under it. It is the ninth `Blizzard.lua`, filed under a
-    different name and inside the file it hides plates for.
-
-    Worth measuring the way it was found, because a file-level LCOM4 reads this
-    file as cohesive: the call graph glues the three together even though the
-    state does not. On state alone it is five components.
+    File-level LCOM4 reads it as cohesive because the call graph glues it
+    together. On state alone it is five components, so measure it that way.
 
 25. Nine `*/Blizzard.lua` files, one contract, written down nowhere.
 
-    2,292 lines. Seven of the nine define the same three public calls, `Wanted`,
-    `Apply` and `Describe`, over the same two private ones, `Frame` and
-    `Remember`. Two mechanisms sit under that: park the frame off the screen at
-    no alpha, or put it in the attic and take its key.
-
+    2,292 lines. Seven of the nine define `Wanted`, `Apply` and `Describe` over
+    `Frame` and `Remember`, on two mechanisms: park the frame off screen at no
+    alpha, or put it in the attic and take its key.
     `src/Mail/Blizzard.lua:65-160` and `src/Merchant/Blizzard.lua:68-198` are
-    the same 90 lines of park. Run both through `diff` with the words `mail` and
-    `merchant` substituted out and what is left is Merchant's drift check and
-    two spellings of the same early return. `src/Map/Blizzard.lua:55-190` and
-    `src/Quests/Blizzard.lua:60-165` are the same cage and key swap, and the
-    only real difference is that Map opens the dungeon window when you are
-    standing in one.
+    the same 90 lines of park, minus Merchant's drift check.
+    `src/Map/Blizzard.lua:55-190` and `src/Quests/Blizzard.lua:60-165` are the
+    same cage, minus Map opening the dungeon window.
 
-    The consequence is already on disk. Five of the seven end with
-    `ns.BlizzHide.Also(Blizz.Apply)`; Mail and Quests do not, and are driven
-    instead by seven hand-written `Apply()` calls across their `Feature.lua`
-    and `Window.lua`. Nothing says whether that is deliberate, and the only way
-    to find out is to open seven files side by side.
+    Five of the seven end with `ns.BlizzHide.Also(Blizz.Apply)`. Mail and Quests
+    take seven hand-written `Apply()` calls across their `Feature.lua` and
+    `Window.lua` instead, and nothing says whether that is deliberate.
 
 26. Taking a key off the client, written eight times.
 
     `SetOverrideBindingClick` onto a secure button, `ClearOverrideBindings`
-    before it, a `Holds(key)` that reads the override layer back through
-    `GetBindingAction` rather than trusting the set, and a record of the binding
-    that got displaced. That is four calls with a subtle contract, and it is
-    written out in `src/Targeting/Switch.lua:74`, `src/Charge/Icon.lua:275`,
+    before it, a `Holds(key)` reading the override layer back through
+    `GetBindingAction`, and a record of the displaced binding, at
+    `src/Targeting/Switch.lua:74`, `src/Charge/Icon.lua:275`,
     `src/Hover/Cast.lua:194`, `src/Dungeons/Key.lua:57`,
     `src/Marking/Keys.lua:74`, `src/Buttons/Bars.lua:371` and
-    `src/Character/Blizzard.lua:167`. It was nine until item 64 deleted
-    `src/Loadouts/Loadouts.lua`.
-    `src/Dungeons/Key.lua:60-90` and `src/Targeting/Switch.lua:74-104` are the
-    same 30 lines down to the comment above `Holds`.
+    `src/Character/Blizzard.lua:167`. The first two match down to the comment
+    above `Holds`.
 
-    `ns.Rebind` at `src/Core/Core.lua:1459` already centralises the half that
-    hurt: the re-take after `UPDATE_BINDINGS`, with the frame's delay and the
-    latch that collapses the storm. Six files register with it. Two do not.
-    `src/Buttons/Bars.lua:813` answers the event itself and Core's own comment
-    at `:1434` allows for that. `src/Character/Blizzard.lua:200` is the one
-    worth looking at: a second frame, a second `UPDATE_BINDINGS` registration,
-    and a `dirty` flag picked up on `BlizzHide`'s tick, which is Core's
-    mechanism rebuilt beside Core's mechanism.
-
-    So the shared piece is the take, not the re-take. `ns.TakeKey(button, key,
-    name)` returning the displaced binding, with `ns.Rebind` called from inside
-    it, retires seven copies and makes the registration impossible to forget.
+    The shared piece is the take, not the re-take: `ns.Rebind` at
+    `src/Core/Core.lua:1459` already owns the re-take after `UPDATE_BINDINGS`.
+    `ns.TakeKey(button, key, name)` returns the displaced binding and calls
+    `ns.Rebind` inside itself, which retires seven copies and the three probe
+    entries in `scripts/check.sh` that name it. `src/Buttons/Bars.lua:813`
+    answers the event itself and Core's comment at `:1434` allows that;
+    `src/Character/Blizzard.lua:200` is Core's mechanism rebuilt beside Core's
+    and goes.
 
 27. A window has no lifecycle, so twelve files invented one.
 
-    `UI.Window` hands back an object with `Show`, `Hide` and `IsShown` on it at
-    `src/UI/Window.lua:493-504`. Twelve files call `UI.Window(` and every one of
-    them wraps that object in its own `Show`, `Hide`, `Shown` and `Toggle` over
-    a file-local named `window`.
+    `UI.Window` hands back `Show`, `Hide` and `IsShown` at
+    `src/UI/Window.lua:493-504`, and twelve callers wrap that in their own
+    `Show`, `Hide`, `Shown` and `Toggle` over a file-local `window`. Four
+    spellings of one boolean came out of it, and `src/Mail/Window.lua:1097`
+    reaches past the object into `window.frame:IsShown()`, which breaks the day
+    the object grows a wrapper. `src/Breakdown/Window.lua` carries five names
+    for two states; `src/Dungeons/Window.lua:847-864` and
+    `src/Map/Window.lua:406-423` are identical line for line.
 
-    Four spellings of one boolean came out of it. `window ~= nil and
-    window:IsShown()` in Map, Quests, Dungeons and Character. `(window and
-    window:IsShown()) and true or false` in Bags and Merchant. `built and
-    window:IsShown() and true or false` in Chat. And
-    `src/Mail/Window.lua:1097`, which reaches past the object into
-    `window.frame:IsShown()`, which is the one that will break when the object
-    grows a wrapper.
-
-    The names went too. `src/Breakdown/Window.lua` carries `Open`, `Close`,
-    `IsShown`, `Shown` and `Toggle`, which is five names for two states in one
-    file. `src/Dungeons/Window.lua:847-864` and `src/Map/Window.lua:406-423`,
-    which are `Hide`, `Shown` and `Toggle`, are identical line for line.
-
-    The fix is on the object, not in Core: `Toggle`, a `Shown` that is the one
-    spelling, and an optional `onShow` for the parts that paint on the way up.
+    The fix is on the object, not in Core: `Toggle`, one spelling of `Shown`,
+    and an optional `onShow` for the parts that paint on the way up.
 
 29. The spell row on the options page, twice.
 
     `src/Buffs/Feature.lua:119-156` and `src/UnitFrames/Panel.lua:31-68` are the
     same 38 lines: a `Spell()` closure over a slot index, an icon, a remove
-    button, a label pinned between them, and a measure function returning zero
-    height for an empty slot. The comments differ in wording and agree in
-    argument. Two lists, one row, and it wants to be `ui.SpellRow` in
-    `UI/Widgets.lua` beside the other controls the panel builds.
+    button, a label pinned between them, and a measure returning zero height for
+    an empty slot. It wants to be `ui.SpellRow` in `src/UI/Widgets.lua`.
 
 30. `Bags/Grid.lua` and `Merchant/Grid.lua` are one grid.
 
     The same functions in the same order: `Subject`, `Enter`, `Leave`, `Build`,
     `Paint`, `Place`, `Trim`, then `Attach`, `Paint`, the pool, `Headers` and
-    `Describe` public. The pile walk at the bottom of each is the same walk.
+    `Describe`.
 
-    Weaker than it was, and it is worth saying why rather than deleting it. The
-    merchant's unit is a card now: a square with the item's name, the price and
-    what is left of the supply beside it, laid out in columns worked out from the
-    window's width. The bag window's unit is a bare square in a column count you
-    set. So the shared thing left is the pile walk and the pool, and the parts
-    that differ have grown. Ranked last of the seven, and the way to find out is
-    still to write the shared grid and see what will not fit through it.
-
-
-Items 32 to 45 came out of a performance review on 2026-09-02, read from source
-against a five-man pull with fifteen plates up. The numbers are client calls per
-second at steady state, counted from the code rather than measured on the live
-client, and the Perf tab is where to check them before and after. One of them
-is a bug. The rest are polls that should be events, formats that run before the
-compare that would have skipped them, and windows built at login for a session
-that never opens them. Ordered by what they cost, with the one that grows all
-session first. The full review with every citation is off-tree
-
-All fourteen landed on 2026-09-03, one agent per item in its own
-worktree, and are above. Item 45 went last on purpose: it seeds markers on
-functions the other thirteen touched, so its counts had to be taken after
-them. Its prediction missed in three places worth keeping: there are six
-combat-log subscribers, not five; `Breakdown.lua` allocates once per spell
-and not once per event; and the seven writes in `Attach` and `Release` could
-not take `-- cold:` because those two are the seeded roots, so they are
-per-line reasons instead. The Ticker refusal it asked for had already landed
-with item 32.
-
-The architecture question the review raised is answered in item 36 and item 33
-together. The client is already the event stream. What the addon lacks is not
-a bus of its own on top of it but two things narrower than that: one shared
-reader in front of each raw source whose read is the cost, and a dirty bit per
-widget so that events mark and a tick draws. A general addon-wide stream would
-re-broadcast client events through one more dispatch that every handler pays
-for, and it would not have found a single item below.
-
-Item 46 is a bug found in game on 2026-09-03, the first on this list that was
-one, and it landed the same day and is above. The harness had passed it, and
-the fix is the gate as much as the code: the stub now refuses a press on a
-button the frame passes through, the way it refuses one never registered for.
-
-Item 47 was asked for in game on 2026-09-03, a mode for a run of an old
-dungeon rather than a fix, and it landed the same day and is above. Most of
-it was already built: the colour floor, the kinds and the profession list in
-`Comfort/Wanted.lua`, and the destroy in `Comfort/Leftovers.lua`. What was
-missing was the price floor and the switch on the window.
+    Weaker than it was. The merchant's unit is a card in columns worked out from
+    the window's width and the bag's is a bare square in a column count you set,
+    so what is shared is the pile walk and the pool. Ranked last of the seven,
+    and the way to find out is to write the shared grid and see what will not
+    fit through it.
 
 Items 53 to 59 came out of an ask on 2026-09-04: write down what every class and
-every build needs before any of them is written, so that a class file is one
-sitting rather than a research project. Nine classes and twenty-seven builds.
-Four files on disk cover four classes and twelve of the builds, and the five
-missing files are one item each below.
+build needs before any of them is written. Nine classes, twenty-seven builds,
+four class files on disk. Five rules settle most of it.
 
-Four things settle most of what follows and are worth stating once.
-
-A class file is facts and a class file is one file. `src/Class/Class.lua:27`
-says a class that registers nothing is a supported class and that adding one is
-additive: one file, no edits anywhere else. That holds for eleven of the twelve
-fields. `standing` is the exception and item 53 says what it costs.
-
-The twelve fields and who reads each are listed at `src/Class/Warrior.lua:11`.
-Eight of them are facts about the class and four are facts about the build.
-`forms`, `charge`, `reactive`, `requires`, `swing`, `upkeep`, `suggested` and
-`standing` go at the top of a class file; `cooldowns`, `rotation`, `debuffs` and
-`loadout` go inside a spec, and a spec writes only what it disagrees with. The
-caps are eight on the cooldown row, six on the rotation line and four on the
-upkeep row, they are asserts inside `Cooldowns.All` and `Upkeep.Fixed`, and they
-fire at PLAYER_LOGIN as a Lua error in somebody's game.
-
-No item below carries a spell id, and no name below is final. Every id is baked
-at implementation from Wowhead's TBC Classic database, rank 1, and read back by
-name, which is the rule every entry in `src/Class/Warrior.lua` already keeps and
-which one letter of Deep Wound already cost. A name that this client cannot
-resolve is dropped rather than guessed, the way three of the shaman's four long
-cooldowns are dropped on Era. An ability with no cooldown comes off the rotation
-line before the list is written, because a clock on a spell that is always ready
-is a square that never says anything.
-
-No item below writes a bar plan. `src/Class/Shaman.lua:37` and
-`src/Class/Priest.lua:17` both refuse a plan for a build nobody here has played,
-on the argument that a plan taken off a talent calculator fills your bars with a
-guess and takes a backup you then have to put back. That argument covers
-twenty-four of the twenty-seven builds and it still holds. `loadout` is named in
-every item below only to say it is not being written, and each stays unwritten
-until somebody levels the character and presses the keys.
-
-Signatures are the same refusal one level down. `src/Class/Spec.lua:54` wants a
-talent with one rank at the foot of a tree, and takes the tree count where there
-is none, which is what arms does and what costs arms nothing. A signature
-guessed from memory that turns out to carry six ranks is a build that resolves
-wrong for the character sitting on rank two. So every item below names the tree,
-which always answers for anyone who has spent points, and leaves the signature
-to be confirmed one rank at a time or left out.
+- A class file is facts and one file, `src/Class/Class.lua:27`. That holds for
+  eleven of the twelve fields; `standing` is the exception and item 53 says what
+  it costs.
+- The fields are listed at `src/Class/Warrior.lua:11`. `forms`, `charge`,
+  `reactive`, `requires`, `swing`, `upkeep`, `suggested` and `standing` go at
+  the top; `cooldowns`, `rotation`, `debuffs` and `loadout` go inside a spec,
+  which writes only what it disagrees with. Caps are eight, six and four,
+  asserted in `Cooldowns.All` and `Upkeep.Fixed`, and they fire at PLAYER_LOGIN
+  as a Lua error in somebody's game.
+- No item carries a spell id. Bake them at implementation from Wowhead's TBC
+  Classic database, rank 1, and read each back by name; drop what this client
+  cannot resolve rather than guessing. An ability with no cooldown comes off the
+  rotation line.
+- No item writes a `loadout`. `src/Class/Shaman.lua:37` and
+  `src/Class/Priest.lua:17` refuse a plan for a build nobody here has played,
+  which covers twenty-four of the twenty-seven.
+- No item writes a signature. `src/Class/Spec.lua:54` wants a one-rank talent at
+  the foot of a tree; each item names the tree instead, and the signature is
+  confirmed a rank at a time or left out.
 
 53. The stance row, and the second reader.
 
-    Item 52 built `Standing/` around a table of readers at
-    `src/Standing/Standing.lua:56` and shipped one, `totem`. Its whole claim was
-    that a warrior's three stances are one more plan and one more reader rather
-    than a second part of the addon. This is the item that finds out.
+    The reader is `stance`, in the table at `src/Standing/Standing.lua:56`, and
+    every shapeshifting class uses it. It walks `GetShapeshiftFormInfo` and
+    matches each slot's spell name against the bar rather than indexing into it,
+    which is the correction to item 52's guess: `GetShapeshiftForm` answers a
+    position on a bar holding only the forms you have learned. A slot matched
+    and missing draws empty, the way an empty totem slot already does.
 
-    The reader is `stance`, and it is the one every shapeshifting class uses:
-    warrior here, druid in item 55, and a rogue's Stealth and a priest's
-    Shadowform if either is ever wanted. It walks `GetShapeshiftFormInfo` and
-    matches each slot's spell name against the bar, rather than indexing into
-    it. That is the correction this item makes to item 52's guess.
-    `GetShapeshiftForm` answers one number, and the number is a position on a
-    bar that holds only the forms you have learned, so a level 10 warrior stands
-    in stance 1 and owns nothing else. A slot matched by name and found missing
-    draws empty, which is exactly what an empty totem slot already draws.
+    A stance fills three of the five reader values, and
+    `src/Standing/Row.lua:261` already reads the other two as `expires[index] or
+    0` and `span[index] or 0`, so `Row.lua` does not change.
+    `GetShapeshiftFormInfo` and `GetNumShapeshiftForms` are not in the harness;
+    they go beside `GetShapeshiftForm` at
+    `scripts/harness/client/05-quests.lua:691`, not in `03-player.lua`.
 
-    The reader contract is five values and a stance fills three: filled, art and
-    the name. `src/Standing/Row.lua:261` already reads the two it will not get
-    as `expires[index] or 0` and `span[index] or 0`, so nothing in `Row.lua`
-    changes for a reader with no clock.
+    The plan goes in `src/Class/Warrior.lua` beside `forms`: three slots in that
+    file's order, `kind = "stance"`, `word = "stances"`, `one = "stance"`.
 
-    `GetShapeshiftFormInfo` and `GetNumShapeshiftForms` are not in the harness.
-    `GetShapeshiftForm` is, at `scripts/harness/client/05-quests.lua:691`, and
-    the two new stubs belong beside it rather than in `03-player.lua`, which is
-    where the totem stub is.
-
-    The plan goes in `src/Class/Warrior.lua` beside `forms`: three slots in the
-    order that file already writes them in, `kind = "stance"`, `word = "stances"`
-    and `one = "stance"`. The colours are the three the addon already uses for
-    the three stances if there are any, and three hues far enough apart to be
-    told apart in one pixel of hairline if there are not.
-
-    One thing this item finds that item 52 did not.
-    `src/Standing/Feature.lua:105` writes its slash words out, `totems` and
-    `stances`, and `ns.Register` runs at file load, before the client will say
-    what class this is. So the words cannot be built off the plan and every
-    class's word has to be in that table: `forms` for a druid, `aspects` for a
-    hunter, `poisons` for a rogue, `auras` for a paladin, `demon` for a warlock.
-    That table is the one file outside `Class/` a new class edits, which is a
-    hole in the promise at `src/Class/Class.lua:27`, and the fix is a gate
-    rather than a redesign. Hold every `word` and `one` a plan registers against
-    the table, and fail on a word in the table that no plan claims.
+    `src/Standing/Feature.lua:105` writes its slash words at file load, before
+    the client will say what class this is, so every class's word lives in that
+    table: `forms`, `aspects`, `poisons`, `auras`, `demon`. That is the one file
+    outside `Class/` a new class edits, and the fix is a gate: hold every `word`
+    and `one` a plan registers against the table, and fail on a table word no
+    plan claims.
 
 54. What a fifth class file costs the gate, before the fifth one lands.
 
-    `scripts/check.sh:1354` reads the class tokens off `Class/*.lua` and the
-    spec keys off each file, and runs the harness once per shape. Thirteen runs
-    today, twelve builds and a hunter. Nine classes at three builds each is
-    twenty-eight, and the harness is the slowest thing in `check.sh`. Measure
-    one run before item 56 lands and again after, because a gate that takes four
-    minutes is a gate somebody starts reaching around.
+    `scripts/check.sh:1354` reads the class tokens off `Class/*.lua` and runs
+    the harness once per shape: thirteen runs today, twenty-eight at nine
+    classes, and the harness is the slowest thing in `check.sh`. Measure one run
+    before item 56 lands and again after.
 
-    HUNTER is written out at `scripts/check.sh:1377` and that run is the whole
-    proof that the class-agnostic parts stand up with nothing registered. Item
-    56 writes a hunter file and takes the proof away silently: the loop keeps
-    passing, and what it stops covering is not in its output. Replace it in the
-    same commit with a token no class file can ever claim, and say in the
-    comment above the loop that the token is deliberately not a class, so that
-    the next class file does not quietly eat it again.
+    HUNTER at `scripts/check.sh:1377` is the proof that the class-agnostic parts
+    stand up with nothing registered, and item 56 eats it silently. Replace it
+    in the same commit with a token no class file can claim, and say in the
+    comment above the loop that the token is deliberately not a class.
 
 55. Druid: forms, and the first plan a spec overrides.
 
-    Six of the eight class-wide fields, and it is the class that exercises the
-    registry hardest.
+    `forms` in learn order, Bear, Aquatic, Cat, Travel, because the `stance:`
+    conditional counts positions on the bar the reader walks and the prefix
+    holds while levelling. Moonkin and Tree are talents and go last. Confirm the
+    order at 70 and at 25, and if it does not hold drop `forms` rather than
+    generate a macro against a moving number; only the loadouts page reads it
+    here and `src/Core/Stance.lua:20` already allows a weapon set with no stance.
 
-    `forms` is written in learn order, Bear, Aquatic, Cat, Travel, because the
-    `stance:` macro conditional counts positions on the same bar the reader
-    walks and a druid learns those four in that order. The prefix holds while
-    levelling: a druid who knows the first two has them at 1 and 2. Moonkin and
-    Tree come after Travel and are talents, so they go at the end. Confirm the
-    order in game by reading `GetShapeshiftFormInfo` back at 70 and at 25, and
-    if it does not hold, drop `forms` entirely rather than generating a macro
-    against a moving number. Nothing but the loadouts page reads it on this
-    class, and `src/Core/Stance.lua:20` already supports a weapon set with no
-    stance on it.
+    `standing` is the second `stance` user and the first field a spec overrides
+    for something other than a number: all three builds get bear, aquatic, cat
+    and travel, balance appends Moonkin Form and restoration Tree of Life.
 
-    `standing` is the second user of the `stance` reader and the first field in
-    the addon that a spec overrides for a reason other than a number. All three
-    builds get bear, aquatic, cat and travel. Balance writes the field again with
-    Moonkin Form on the end and restoration with Tree of Life, because a square
-    for a form the character cannot take is a square that stays dark for the life
-    of the character.
+    `upkeep` is one entry, the mark, cleared by Mark of the Wild or Gift of the
+    Wild. No `charge`, `swing` or `requires`; Omen of Clarity lands as a buff,
+    so it is item 59's `on = "buff"` or nothing.
 
-    No `charge`, no `swing`, no `requires`. `reactive` is worth a look and is not
-    on this item: nothing a druid owns opens on a dodge or a parry the way
-    Overpower and Revenge do, and Omen of Clarity lands as a buff rather than
-    down the combat log, which is a second kind of `on` and belongs with the
-    warlock's Nightfall in item 59.
+    `suggested`: Moonfire, Insect Swarm, Faerie Fire and its feral form,
+    Entangling Roots, Rake, Rip, Pounce, Lacerate, Mangle, Demoralizing Roar,
+    Hibernate, Cyclone.
 
-    `upkeep` gets one entry, the mark, and any of Mark of the Wild and Gift of
-    the Wild clears it, on the shaman's shield argument: which one you are
-    running is a group question and standing there with neither is never right.
-
-    `suggested` is every debuff a druid lands: Moonfire, Insect Swarm, Faerie
-    Fire and its feral form, Entangling Roots, Rake, Rip, Pounce, Lacerate,
-    Mangle, Demoralizing Roar, Hibernate, Cyclone.
-
-    Balance, tree 1. Cooldowns are Innervate, Force of Nature, Barkskin and
-    Rebirth. The rotation line is thin and honest: Hurricane and Force of
-    Nature are the two with real clocks, Moonfire and Starfire have none.
-    Debuffs are Moonfire, Insect Swarm and Faerie Fire.
-
-    Feral, tree 2, and the fullest of the three. Cooldowns are Innervate,
-    Barkskin, Rebirth and Enrage. Rotation is Mangle, Feral Charge, Swipe and
-    Faerie Fire (Feral). Debuffs are Rake, Rip, Lacerate, Mangle, Faerie Fire
-    and Demoralizing Roar, which is six and at the cap.
-
-    Restoration, tree 3. Cooldowns are Innervate, Nature's Swiftness, Rebirth
-    and Tranquility. Rotation is Swiftmend and Nature's Swiftness. Debuffs are
-    Faerie Fire and Entangling Roots, which is the shortest row in the addon and
-    correct: a resto druid is not putting anything on a mob.
+    - Balance, tree 1. Cooldowns Innervate, Force of Nature, Barkskin, Rebirth.
+      Rotation Hurricane and Force of Nature, the only two with real clocks.
+      Debuffs Moonfire, Insect Swarm, Faerie Fire.
+    - Feral, tree 2. Cooldowns Innervate, Barkskin, Rebirth, Enrage. Rotation
+      Mangle, Feral Charge, Swipe, Faerie Fire (Feral). Debuffs Rake, Rip,
+      Lacerate, Mangle, Faerie Fire, Demoralizing Roar, at the cap.
+    - Restoration, tree 3. Cooldowns Innervate, Nature's Swiftness, Rebirth,
+      Tranquility. Rotation Swiftmend, Nature's Swiftness. Debuffs Faerie Fire,
+      Entangling Roots.
 
 56. Hunter: aspects, the pet, and the second class to fill `reactive`.
 
-    This is the file that takes the no-file proof away, so item 54 lands first
-    or in the same commit.
+    Lands with item 54 or after it, because it takes the no-file proof away.
 
-    Two new readers. `buff` matches a list of spell names against
-    `UnitAura("player")` and reports the first that is up, with the client's own
-    icon and expiry, which is what an aspect slot needs and what item 57's aura,
-    seal and blessing slots need after it. `pet` answers `UnitExists("pet")`
-    with the pet's name and portrait and no clock, which item 59 uses for the
-    demon. Neither call is stubbed for the pet half: `UnitAura` is at
-    `scripts/harness/client/03-player.lua:205`, and `UnitCreatureFamily`,
+    Two new readers. `buff` matches a list of names against `UnitAura("player")`
+    and reports the first that is up, with the client's own icon and expiry;
+    item 57 needs it too. `pet` answers `UnitExists("pet")` with the pet's name
+    and portrait and no clock; item 59 needs it. `UnitAura` is stubbed at
+    `scripts/harness/client/03-player.lua:205`; `UnitCreatureFamily`,
     `GetPetHappiness` and a pet unit in the roster are not there at all.
 
     `standing` is two slots, aspect and pet, `word = "aspects"`. The aspect slot
-    carries every aspect this client has, Hawk, Monkey, Cheetah, Pack, Wild,
-    Beast and Viper, and the reader lights whichever is up: the question a
-    hunter asks a row is which one, not whether. The pet slot is dark when the
-    pet is dead or dismissed, which is the one fact on the row worth a glance
-    mid-pull.
+    carries Hawk, Monkey, Cheetah, Pack, Wild, Beast and Viper and lights
+    whichever is up, because the question is which and not whether. The pet slot
+    is dark when the pet is dead or dismissed.
 
-    `reactive` is the finding on this item. Mongoose Bite opens when you dodge
-    and Counterattack opens when you parry, which is Overpower and Revenge with
-    the names swapped, and `src/Buttons/Reaction.lua` already owns the combat
-    log parse and knows no ability. Confirm the window against the five seconds
-    the warrior file argues for at length; the two abilities may not share it.
+    `reactive` is the finding: Mongoose Bite opens on a dodge and Counterattack
+    on a parry, which is Overpower and Revenge with the names swapped, and
+    `src/Buttons/Reaction.lua` already owns the parse. Confirm the window
+    against the warrior's five seconds; the two may not share it.
 
-    No `charge`, no `forms`, no `swing`. `requires` gets nothing: every candidate
-    on a hunter is a range or an aim rule the client already answers, and a
-    square greyed on a rule the addon guessed at is worse than one that says
-    nothing.
+    No `charge`, `forms`, `swing`, `requires` or `upkeep`. Every `requires`
+    candidate here is a range or aim rule the client already answers, and the
+    aspect is on the row above.
 
-    `upkeep` gets nothing either. The aspect is on the row above and a bare
-    ranged weapon is not a thing this client tracks.
-
-    `suggested` is Hunter's Mark, Serpent Sting, Viper Sting, Scorpid Sting,
+    `suggested`: Hunter's Mark, Serpent Sting, Viper Sting, Scorpid Sting,
     Wyvern Sting, Concussive Shot, Wing Clip, Scatter Shot, Silencing Shot,
-    Intimidation, Freezing Trap and Explosive Trap.
+    Intimidation, Freezing Trap, Explosive Trap.
 
-    Beast mastery, tree 1. Cooldowns are Bestial Wrath, Intimidation, Rapid Fire
-    and Misdirection. Rotation is Arcane Shot, Multi-Shot and Kill Command if
-    this client has it. Debuffs are Hunter's Mark, Serpent Sting and the
-    Intimidation stun.
+    - Beast mastery, tree 1. Cooldowns Bestial Wrath, Intimidation, Rapid Fire,
+      Misdirection. Rotation Arcane Shot, Multi-Shot, Kill Command if this
+      client has it. Debuffs Hunter's Mark, Serpent Sting, Intimidation stun.
+    - Marksmanship, tree 2. Cooldowns Rapid Fire, Readiness, Misdirection,
+      Silencing Shot. Rotation Aimed Shot, Arcane Shot, Multi-Shot, Silencing
+      Shot. Debuffs Hunter's Mark, Serpent Sting, Scatter Shot.
+    - Survival, tree 3. Cooldowns Rapid Fire, Misdirection, Deterrence,
+      Readiness if the talent is not marksmanship-only here. Rotation Mongoose
+      Bite, Counterattack, Wyvern Sting, Arcane Shot, Explosive Trap. Debuffs
+      Hunter's Mark, Serpent Sting, Wyvern Sting, Wing Clip.
 
-    Marksmanship, tree 2. Cooldowns are Rapid Fire, Readiness, Misdirection and
-    Silencing Shot. Rotation is Aimed Shot, Arcane Shot, Multi-Shot and
-    Silencing Shot. Debuffs are Hunter's Mark, Serpent Sting and Scatter Shot.
+57. Paladin: the aura, the seal and the blessing.
 
-    Survival, tree 3. Cooldowns are Rapid Fire, Misdirection, Deterrence and
-    Readiness if the talent is not marksmanship-only on this client. Rotation is
-    Mongoose Bite, Counterattack, Wyvern Sting, Arcane Shot and Explosive Trap.
-    Debuffs are Hunter's Mark, Serpent Sting, Wyvern Sting and Wing Clip.
+    `standing` is three slots and `word = "auras"`, on item 56's `buff` reader:
+    every aura, every seal, every blessing that lands on you. The seal carries
+    the clock, because it runs thirty seconds and lapses mid-pull silently.
 
-57. Paladin: the aura, the seal and the blessing, and the second user of
-    `requires`.
+    `upkeep` gets the seal as well, cleared by any seal. Not a duplicate: the
+    row is a square and the upkeep entry is the nag, the same split Battle Shout
+    and the stance row sit either side of.
 
-    `standing` is three slots and `word = "auras"`, on the `buff` reader item 56
-    writes. The aura slot carries every aura, the seal slot every seal, and the
-    blessing slot every blessing that lands on you. Three squares that answer
-    the only three questions a paladin has about themselves, and the seal is the
-    one with a clock on it because it runs for thirty seconds and lapses in the
-    middle of a pull without saying so.
+    `requires` is the finding. Hammer of Wrath is castable below twenty percent,
+    which is Execute's rule word for word and the second entry in a field
+    `src/Buttons/Requires.lua` built for one. Nothing else here meets the bar.
 
-    `upkeep` gets the seal as well, and that is not a duplicate. The row is a
-    square and the upkeep entry is the nag, which is the same split Battle Shout
-    and the stance row already sit on either side of for a warrior. Any seal
-    clears it.
+    No `charge`, `forms`, `swing` or `reactive`; Reckoning and Redoubt land as
+    buffs, so they go with item 59's `on = "buff"` or nowhere.
 
-    `requires` is the finding. Hammer of Wrath is castable below twenty percent
-    and nothing else moves that number, which is Execute's rule word for word
-    and makes this the second entry in a field `src/Buttons/Requires.lua` built
-    for one. Nothing else on a paladin meets the bar.
+    `suggested`: Judgement of Light, of Wisdom, of the Crusader and of Justice,
+    Hammer of Justice, Repentance, Avenger's Shield, Holy Vengeance and its
+    Horde spelling, Turn Evil and Exorcism if either lands an aura.
 
-    No `charge`, no `forms`, no `swing`, no `reactive`. Reckoning and Redoubt are
-    procs that land as buffs rather than windows opened by a dodge, so they go
-    with Nightfall in item 59 or nowhere.
-
-    `suggested` is Judgement of Light, Judgement of Wisdom, Judgement of the
-    Crusader, Judgement of Justice, Hammer of Justice, Repentance, Avenger's
-    Shield, Holy Vengeance and its Horde spelling, Turn Evil and Exorcism if
-    either lands an aura.
-
-    Holy, tree 1. Cooldowns are Avenging Wrath, Divine Favor, Divine
-    Illumination, Lay on Hands and Divine Shield. Rotation is Holy Shock and
-    Hammer of Justice. Debuffs are the judgement you are running and Hammer of
-    Justice.
-
-    Protection, tree 2. Cooldowns are Avenging Wrath, Divine Shield, Divine
-    Protection and Lay on Hands. Rotation is Avenger's Shield, Holy Shield,
-    Consecration, Judgement and Hammer of Justice. Debuffs are Judgement of
-    Wisdom, Judgement of Light, Hammer of Justice and the Avenger's Shield
-    daze.
-
-    Retribution, tree 3. Cooldowns are Avenging Wrath, Divine Shield, Lay on
-    Hands and Repentance. Rotation is Crusader Strike, Judgement, Hammer of
-    Wrath, Exorcism and Hammer of Justice. Debuffs are the judgement, Hammer of
-    Justice and Repentance.
+    - Holy, tree 1. Cooldowns Avenging Wrath, Divine Favor, Divine Illumination,
+      Lay on Hands, Divine Shield. Rotation Holy Shock, Hammer of Justice.
+      Debuffs the judgement you are running, Hammer of Justice.
+    - Protection, tree 2. Cooldowns Avenging Wrath, Divine Shield, Divine
+      Protection, Lay on Hands. Rotation Avenger's Shield, Holy Shield,
+      Consecration, Judgement, Hammer of Justice. Debuffs Judgement of Wisdom,
+      Judgement of Light, Hammer of Justice, the Avenger's Shield daze.
+    - Retribution, tree 3. Cooldowns Avenging Wrath, Divine Shield, Lay on
+      Hands, Repentance. Rotation Crusader Strike, Judgement, Hammer of Wrath,
+      Exorcism, Hammer of Justice. Debuffs the judgement, Hammer of Justice,
+      Repentance.
 
 58. Rogue: the two poisons, and a rotation line that is nearly empty.
 
     `standing` is two slots, main hand and off hand, `word = "poisons"`, on a
     fourth reader called `enchant`. It reads `GetWeaponEnchantInfo`, which
-    `src/Buffs/Upkeep.lua:439` already documents across the three shapes that
-    call has had, and `src/Buffs/Upkeep.lua:479` already picks the stride at
-    runtime. Reuse that reading rather than writing a second one.
+    `src/Buffs/Upkeep.lua:439` already documents across that call's three shapes
+    and `:479` already picks the stride for at runtime, so reuse that reading.
 
-    The limit is worth writing into the reader. `GetWeaponEnchantInfo` says
-    whether a hand is enchanted, for how long, and how many charges are left. It
-    does not say which poison, so the square cannot draw a poison's icon and
-    must draw the weapon's own, off `GetInventoryItemTexture`. A rogue reads the
-    charges anyway, which is the number the client's own buff frame buries.
+    Write the limit into the reader: the call says whether a hand is enchanted,
+    for how long and how many charges are left, but not which poison, so the
+    square draws the weapon's own icon off `GetInventoryItemTexture`. The
+    charges are the number the client's buff frame buries.
 
-    `reactive` gets one entry, Riposte, which opens when you parry and is
-    Revenge with a different name. Third class into that field, and the second
-    that wants the parry trigger `src/Class/Warrior.lua` already spells
-    `defended`.
+    `reactive` gets Riposte, which opens on a parry and is Revenge under another
+    name, and wants the `defended` trigger `src/Class/Warrior.lua` spells.
 
-    No `charge`, no `forms`, no `swing`, no `requires`. Stealth is a shapeshift
-    form and is deliberately not on the row, on `src/Class/Shaman.lua:12`'s Ghost
-    Wolf argument: the screen already says you are stealthed and a square
-    repeating it is furniture.
+    No `charge`, `forms`, `swing`, `requires` or `upkeep`. Stealth stays off the
+    row on `src/Class/Shaman.lua:12`'s Ghost Wolf argument, and a bare weapon is
+    already the first entry on the shipped buff nag.
 
-    `upkeep` gets nothing. A rogue with a bare weapon is already the first entry
-    on the shipped buff nag, which is the same call and the same slot.
-
-    `suggested` is Rupture, Garrote, Expose Armor, Hemorrhage, Deadly Poison,
+    `suggested`: Rupture, Garrote, Expose Armor, Hemorrhage, Deadly Poison,
     Crippling Poison, Wound Poison, Mind-numbing Poison, Cheap Shot, Kidney
-    Shot, Gouge, Blind and Sap.
+    Shot, Gouge, Blind, Sap.
 
-    The honest finding is that the rotation line does not fit this class. Almost
-    nothing a rogue presses has a cooldown, and the number that decides every
-    press is the combo point count, which nothing in this addon draws. Write the
-    three lists short rather than padding them, and if a rogue is played here the
-    thing worth building is a combo point row, which is a new part and a new
-    item rather than a field on this file.
+    The rotation line does not fit this class: almost nothing a rogue presses
+    has a cooldown, and the number that decides every press is the combo point
+    count, which nothing here draws. Write the lists short rather than padding
+    them; a combo point row is a new part and a new item.
 
-    Assassination, tree 1. Cooldowns are Cold Blood, Vanish, Evasion and Blind.
-    Rotation is Mutilate and Kidney Shot. Debuffs are Rupture, Garrote, Deadly
-    Poison and Kidney Shot.
+    - Assassination, tree 1. Cooldowns Cold Blood, Vanish, Evasion, Blind.
+      Rotation Mutilate, Kidney Shot. Debuffs Rupture, Garrote, Deadly Poison,
+      Kidney Shot.
+    - Combat, tree 2. Cooldowns Adrenaline Rush, Blade Flurry, Evasion, Vanish.
+      Rotation Riposte, Kick, Gouge. Debuffs Rupture, Expose Armor, Crippling
+      Poison, Kidney Shot.
+    - Subtlety, tree 3. Cooldowns Preparation, Shadowstep, Vanish, Evasion.
+      Rotation Shadowstep, Premeditation. Debuffs Rupture, Hemorrhage, Cheap
+      Shot, Kidney Shot.
 
-    Combat, tree 2. Cooldowns are Adrenaline Rush, Blade Flurry, Evasion and
-    Vanish. Rotation is Riposte, Kick and Gouge. Debuffs are Rupture, Expose
-    Armor, Crippling Poison and Kidney Shot.
+59. Warlock: the demon, and two things the fields cannot say yet.
 
-    Subtlety, tree 3. Cooldowns are Preparation, Shadowstep, Vanish and Evasion.
-    Rotation is Shadowstep and Premeditation. Debuffs are Rupture, Hemorrhage,
-    Cheap Shot and Kidney Shot.
+    `standing` is one slot, the demon, `word = "demon"`, on item 56's `pet`
+    reader. Soul shards stay off: a count is a number in a bag and the reader
+    contract at `src/Standing/Standing.lua:41` has nowhere to put it. If it is
+    wanted it goes on the upkeep row as a floor.
 
-59. Warlock: the demon, and the two things `reactive` and `requires` cannot say
-    yet.
+    `upkeep` gets the armor, Fel Armor, Demon Armor and Demon Skin, matched the
+    way `src/Class/Mage.lua:142` matches its four. No `charge`, `forms`, `swing`.
 
-    `standing` is one slot, the demon, `word = "demon"`, on the `pet` reader item
-    56 writes. One square, and it is the right size: a warlock has one demon out
-    and the whole question is which and whether.
+    Two findings, both extensions rather than entries.
 
-    Soul shards are deliberately not on the row. A shard count is a number in a
-    bag rather than a slot with something standing in it, and the reader contract
-    at `src/Standing/Standing.lua:41` has nowhere to put it. If the count is
-    wanted it goes on the upkeep row as a floor, or nowhere.
+    - `reactive` cannot say Nightfall, which arrives as Shadow Trance, a buff
+      with a ten second clock, rather than down the combat log. That wants
+      `on = "buff"` with a spell id read off `UnitAura("player")` by item 56's
+      reader. Three classes want it, so write it here or as its own item first.
+    - `requires` cannot say Conflagrate, which needs your Immolate on the target
+      rather than a health percentage. A second condition kind belongs in
+      `src/Buttons/Requires.lua`: `needs = <spell>` on the target, matched by
+      name, mine only. Shadowburn and Death Coil need nothing and stay off.
 
-    `upkeep` gets the armor, and it is the mage's entry with different names:
-    Fel Armor, Demon Armor and Demon Skin, matched the way
-    `src/Class/Mage.lua:142` matches its four. Standing there with none is never
-    right and the client says nothing about it.
+    `suggested`: Corruption, Immolate, Curse of Agony, of the Elements, of
+    Weakness, of Tongues, of Doom, Siphon Life, Unstable Affliction, Seed of
+    Corruption, Fear, Howl of Terror, Banish, Death Coil.
 
-    Two findings, and both are extensions rather than entries.
+    - Affliction, tree 1. Cooldowns Curse of Doom, Death Coil, Howl of Terror,
+      Amplify Curse. Rotation Death Coil and Howl of Terror, which is two
+      because the rest is dots with no clocks. Debuffs Corruption, Curse of
+      Agony, Siphon Life, Immolate, Unstable Affliction.
+    - Demonology, tree 2. Cooldowns Fel Domination, Soulshatter, Death Coil,
+      Howl of Terror. Rotation Shadowburn if the character has it, Death Coil,
+      Howl of Terror. Debuffs Corruption, Immolate, Curse of Agony, Curse of the
+      Elements.
+    - Destruction, tree 3. Cooldowns Soulshatter, Death Coil, Howl of Terror,
+      Shadowfury. Rotation Conflagrate, Shadowburn, Shadowfury, Death Coil.
+      Debuffs Immolate, Corruption, Curse of the Elements, the Shadowfury stun.
 
-    `reactive` cannot say Nightfall. The field watches the combat log for a
-    dodge or a block, and Nightfall arrives as Shadow Trance, a buff on you with
-    a ten second clock. That is a second kind of `on`, it is the same shape as
-    the druid's Omen of Clarity and the paladin's Reckoning, and it wants
-    `on = "buff"` with a spell id, read off `UnitAura("player")` by the reader
-    item 56 writes. Three classes want it. Write it here or write it as its own
-    item first.
-
-    `requires` cannot say Conflagrate. The field compares the target's health to
-    a number, and Conflagrate needs your Immolate on the target, which is an
-    aura and not a percentage. `src/Buttons/Requires.lua` owns what a condition
-    means and knows none of the abilities, so a second condition kind belongs
-    there: `needs = <spell>` on the target, matched by name, mine only. Shadowburn
-    and Death Coil need nothing and stay off.
-
-    No `charge`, no `forms`, no `swing`.
-
-    `suggested` is Corruption, Immolate, Curse of Agony, Curse of the Elements,
-    Curse of Weakness, Curse of Tongues, Curse of Doom, Siphon Life, Unstable
-    Affliction, Seed of Corruption, Fear, Howl of Terror, Banish and Death Coil.
-
-    Affliction, tree 1. Cooldowns are Curse of Doom, Death Coil, Howl of Terror
-    and Amplify Curse. Rotation is Death Coil and Howl of Terror, which is two,
-    because an affliction warlock's whole rotation is dots with no clocks on
-    them. Debuffs are Corruption, Curse of Agony, Siphon Life, Immolate and
-    Unstable Affliction.
-
-    Demonology, tree 2. Cooldowns are Fel Domination, Soulshatter, Death Coil
-    and Howl of Terror. Rotation is Shadowburn if the character has it, Death
-    Coil and Howl of Terror. Debuffs are Corruption, Immolate, Curse of Agony
-    and Curse of the Elements.
-
-    Destruction, tree 3. Cooldowns are Soulshatter, Death Coil, Howl of Terror
-    and Shadowfury. Rotation is Conflagrate, Shadowburn, Shadowfury and Death
-    Coil. Debuffs are Immolate, Corruption, Curse of the Elements and the
-    Shadowfury stun.
-
-Items 60 to 62 came out of a redesign asked for on 2026-09-05, against two
-retail character sheets and one armory page. Items 60 and 61 landed the same
-day and are above. Item 62, a loadout that carried a whole set of gear rather
-than two weapons, is dropped rather than finished. Item 64 deletes the part it
-was an extension of. Its text is in this file at `17b6427`.
+Items 78 to 82 came out of the sheet redesign of 2026-09-05 and the feed work
+after it. They are one finding twice: two windows drew one picture, and the
+numbers behind it were typed at the call site.
 
 78. A badge is a widget, not a thing the paperdoll has.
 
@@ -768,532 +466,98 @@ was an extension of. Its text is in this file at `17b6427`.
     `src/Character/Paperdoll.lua:544` with `BADGE` and `BADGERIM` at `:197`, and
     the three numbers along the bottom of the loot feed, built in
     `Instance:BuildStatus` at `src/Feeds/Stream.lua:264` off `Purse.Line` at
-    `src/Feeds/Purse.lua:322`, are the same picture: a number, a word under it,
-    a tone the number earned, and a hover that explains it.
+    `src/Feeds/Purse.lua:322`, are one picture: a number, a word under it, a
+    tone the number earned, a hover that explains it.
 
     `UI.Badge` in `src/UI/Widgets.lua` takes a value, a label, a tone and a
-    tooltip, and both call it. The sheet's four keep their fraction, which the
-    durability badge draws as a bar; the feed's three have no fraction and pass
-    none.
-
-    Item 65 landed on 2026-09-05 and this is no longer waiting on anything.
-    Items 76 and 77 changed what it inherits: the strip's three readings are
-    shadowed rather than rimmed and sit on a wash of their own, driven off the
-    same slider as the rows, so a badge widget has ground under it already and
-    has to keep it.
-
-    This lands with item 65 and not before it. That item is already moving the
-    four badges up into the room the tab strip leaves, which means it is already
-    rewriting their placement, and doing the extraction in a separate commit is
-    placing them twice.
-
-    The tones stay where they are. `WearTone` is a fact about durability and
-    `Tone` in `Purse.lua` is a fact about whether your afternoon paid, and
-    neither belongs in a widget that draws a number.
-
-    `./scripts/check.sh` green before committing.
+    tooltip. The sheet's four keep their fraction, which the durability badge
+    draws as a bar; the feed's three pass none. Items 76 and 77 put the strip's
+    readings on a wash driven off the row slider, so the widget inherits ground
+    under it and has to keep it. The tones stay where they are: `WearTone` is a
+    fact about durability and `Tone` in `Purse.lua` about whether the afternoon
+    paid.
 
 80. The palette takes the colours twelve files still write by hand.
 
     Forty-seven fractional colour literals outside `src/UI/Theme.lua` and
-    `src/Unit/Color.lua`, in twelve files. `src/UI/Ability.lua` has twelve,
-    `src/Feeds/Combat.lua` seven, `src/Swing/Gauges.lua` six,
-    `src/Meter/Window.lua`, `src/Class/Shaman.lua` and `src/Buttons/Look.lua`
-    four each, `src/CombatText/Numbers.lua` three, `src/Character/Paperdoll.lua`
-    and `src/Buffs/Nag.lua` two, and one each in `src/Perf/Hud.lua`,
-    `src/Mail/Window.lua` and `src/Feeds/Loot.lua`.
+    `src/Unit/Color.lua`: twelve in `src/UI/Ability.lua`, seven in
+    `src/Feeds/Combat.lua`, six in `src/Swing/Gauges.lua`, four each in
+    `src/Meter/Window.lua`, `src/Class/Shaman.lua` and `src/Buttons/Look.lua`,
+    three in `src/CombatText/Numbers.lua`, two each in
+    `src/Character/Paperdoll.lua` and `src/Buffs/Nag.lua`, one each in
+    `src/Perf/Hud.lua`, `src/Mail/Window.lua` and `src/Feeds/Loot.lua`. Stale by
+    two: item 83 gave `quest`, `skill` and `trash` a home in `UI.Color` and item
+    79 moved `REST` into `UI.Metric` as `rest`.
 
-    They are not all the same kind of thing and the commit has to sort them.
-    `QUEST` at `src/Feeds/Loot.lua:62` is a palette entry with one reader and
-    item 86 makes it two, so it goes to `UI.Color`. `REST` and `RIM` at
-    `src/Character/Paperdoll.lua:126` are a strength and a distance, so they go
-    to `UI.Metric` where item 79 needs them. `Feeds/Combat.lua`'s seven grade a
-    kind of event, which is a palette that file owns the way `Unit/Color.lua`
-    owns power colours, so it becomes a named table with a header rather than
-    seven literals at seven sites. A class colour is the client's and stays.
-
-    The numbers the sheet invented and the feed will want go with them:
-    `DENSE`, `TIGHT` and `VALUE` at `src/Character/Readout.lua:79`, `:72` and
-    `:64` are the addon's dense-list metrics and there is now a second dense
-    list.
-
-    Two of those moves are already made and the count above is stale by them.
-    Item 83 put `quest`, `skill` and `trash` into `UI.Color` rather than write a
-    second orange into a new file, so `QUEST` in `Feeds/Loot.lua` has a home
-    waiting and only its own local is left. Item 79 moved `REST` into
-    `UI.Metric` as `rest`, with the paragraph that justified the 0.55, and the
-    sheet reads it from there.
-
-    Item 81 is the gate and it is the next commit rather than this one. Land the
-    move first, count what is left, then write the rule against the number that
-    is actually there.
-
-    `./scripts/check.sh` green before committing.
+    Sort them by kind. `QUEST` at `src/Feeds/Loot.lua:62` is a palette entry and
+    goes to `UI.Color`. `RIM` at `src/Character/Paperdoll.lua:126` is a distance
+    and goes to `UI.Metric`, with `DENSE`, `TIGHT` and `VALUE` at
+    `src/Character/Readout.lua:79`, `:72` and `:64`, which are the dense-list
+    metrics and now have a second reader. `src/Feeds/Combat.lua`'s seven grade a
+    kind of event, so they become a named table with a header in that file, the
+    way `Unit/Color.lua` owns power colours. A class colour is the client's and
+    stays. Land the move, count what is left, then write item 81.
 
 81. A colour written by hand is an error.
 
     `scripts/check.sh` refuses a fractional colour triple outside
     `src/UI/Theme.lua` and `src/Unit/Color.lua`: a table constructor of three or
     four numbers with a fraction in it, and the same shape passed to
-    `SetColorTexture`, `SetTextColor` or `SetVertexColor`.
+    `SetColorTexture`, `SetTextColor` or `SetVertexColor`. A fraction, not any
+    triple, because `SetVertexColor(1, 1, 1)` is a reset and
+    `SetColorTexture(0, 0, 0, 0.55)` is a shadow.
 
-    A fraction, not any triple. `SetVertexColor(1, 1, 1)` is a reset and
-    `SetColorTexture(0, 0, 0, 0.55)` is a shadow, and a rule that caught those
-    would be a rule people learn to work around.
-
-    Whatever item 80 leaves behind is allow-listed by file with a one-line
-    reason each, in the shape the eight rules above it already use, and the
-    length of that list is a ceiling in `scripts/ratchet.lua`. A file that
-    clears its last literal comes off the list in the same commit that clears
-    it.
-
-    Error, not warning. The rule is worth nothing as a warning: the whole
-    argument for it is that a colour typed at a call site is invisible until two
-    windows are open side by side, which is the moment this addon has just spent
-    ten items getting to.
-
-    `./scripts/check.sh` green before committing.
+    Whatever item 80 leaves is allow-listed by file with a one-line reason each,
+    in the shape the eight rules above it use, and the length of that list is a
+    ceiling in `scripts/ratchet.lua`. A file that clears its last literal comes
+    off the list in the same commit. Error, not warning: a colour typed at a
+    call site is invisible until two windows are open side by side.
 
 82. `/wk style`, the page that draws the palette.
 
-    `src/Settings/Style.lua`, registered by `src/Settings/Feature.lua` the way
-    every other word is, built on first open. Not in `src/UI/`: no file in that
-    folder registers a feature and that layering is worth more than the
-    convenience.
-
-    It draws itself out of the tables rather than describing them. Every entry
-    of `UI.Color` as a swatch with its key under it, every `UI.Metric` as a rule
-    of that many pixels with its number, the three font sizes in the shipped
-    face, `UI.Quality` as eight names in eight colours, a wash, a badge, a chip,
-    a feed row and a readout row side by side.
-
-    Side by side is the whole feature. Nothing on this page is information you
-    could not get by reading `src/UI/Theme.lua`; what you cannot get by reading
-    it is whether the feed row and the sheet row look like they came from the
-    same addon, which is a thing eyes answer in a second and a file never
-    answers at all.
-
-    It is after items 76 to 79 because a page drawn now would be a page missing
-    the wash, the badge and the rest brightness, which are the three things that
-    made the two rows disagree.
-
-    A page with no settings on it. It reads the tables and shows them, and the
-    day a colour on it is editable is the day `UI.Theme`'s header stops being
-    true.
-
-    `./scripts/check.sh` green before committing.
-
-Items 89 to 99 came out of an ask on 2026-09-06. The quest log is the addon's
-best window and it no longer looks like the rest of the addon, Questie's tracker
-sitting beside it looks like neither, and the questing itself is three questions
-nothing answers: what is here, what am I always watching, and what would I walk
-past without noticing.
-
-**Questie is not reskinned and will not be.** `src/Quests/Where.lua` and
-`src/Quests/Drops.lua` are the pattern and it is the right one: read the
-database, draw in our own style, degrade to nil when it is not there. Its
-tracker is two thousand lines with its own line pool, its own options tree and
-its own layout pass, and a hook that repainted it would break on the next
-release and would leave this addon owning frames it did not build. Its tracker
-goes off through its own call, ours goes on, and its world and minimap icons
-stay exactly where they are. Those icons are why Questie is installed.
-
-The reading behind these items was of the live install, Questie 11.37.1 at
-`_anniversary_/Interface/AddOns/Questie`, not of the v6 copy in `~/Downloads`.
-Three things came out of it that were not known when `Where.lua` was written. It
-now ships a declared-stable API in `Public/`, which v6 had nothing of.
-`QuestieTracker:Disable` at `Modules/Tracker/QuestieTracker.lua:482` is the call
-its own options checkbox makes. And `AvailableQuests.__availableQuestsByNpc`
-knows every quest you could pick up and have not, keyed by the person holding
-it.
-
-89. The one part of Questie that promises not to move.
-
-    `Public/` is new in v11 and its README says what everything else in that
-    addon does not: what is in this folder is stable and safe to use. Four
-    things are: `Questie.API.isReady`, `Questie.API.RegisterOnReady(callback)`,
-    `Questie.API.RegisterForQuestUpdates(callback)` and
-    `Questie.API.GetQuestObjectiveIconForUnit(guid)`.
-
-    `ns.Questie` at `src/Core/Core.lua:1048` cannot reach any of it. It asks
-    `QuestieLoader` for a module by name, and `Questie.API` is a plain table on
-    a global. So this adds `ns.QuestieAPI(name)` beside it, the same shape and
-    the same silence: the global, the field, the type check, nil for all three
-    failures.
-
-    The quest update callback is what it buys. `src/Quests/Window.lua` redraws
-    off the client's four events, and the client's are the wrong grain: it fires
-    `QUEST_LOG_UPDATE` several times a second while you are killing things, and
-    `Where.lua:243` carries what that already cost once. Questie's fires on
-    accept, update, turn-in and abandon, with the quest id and the objective
-    index, out of `Questie.API.Enums.QuestUpdateTriggerReason`.
-
-    The client's events stay. Questie may not be installed, and a quest log that
-    only redraws when another addon says so is a quest log that is blank without
-    it. This is a second source that makes the redraws sharper, not a
-    replacement for the first.
-
-    `RegisterOnReady` replaces the probe-every-time rule for the one question it
-    answers. Nothing else changes: the header of `ns.Questie` argues that a
-    cached answer taken before the database compiles is wrong for the session,
-    and this callback is the database saying it has finished compiling.
-
-    `./scripts/check.sh` green before committing.
-
-90. Questie's tracker goes off, by its own hand.
-
-    `QuestieTracker:Disable()` at `Modules/Tracker/QuestieTracker.lua:482`, with
-    `Enable()` at `:469` putting it back. Both are what the "Enable Tracker"
-    checkbox in Questie's own options calls, at
-    `Modules/Options/TrackerTab/QuestieOptionsTracker.lua:101`.
-
-    Its own call and nothing else. No `Hide` on its frame, no `SetParent` into
-    the attic, no `EachTexture`. `src/Core/Attic.lua` exists for Blizzard's
-    frames, which nobody else is going to re-show behind our back, and Questie
-    re-shows its tracker on a dozen of its own events. A frame we hid would come
-    back on the first quest accepted and we would be hiding it forever.
-
-    It writes another addon's saved setting, which is a thing this addon has
-    never done, and that is the reason it needs a switch of its own and a line
-    in `/wk status`. `Questie.db.profile.trackerEnabled` is the player's
-    setting; a feature that turned it off and did not say so is a feature that
-    looks like Questie broke.
-
-    Off the switch, `Enable()` is called and the setting goes back to true, once
-    and not on every login. It follows the same rule
-    `src/Quests/Blizzard.lua`'s attic does: the switch is what owns the state,
-    and the file's job is that the two ends agree.
-
-    In combat neither call is made. Questie's own options disable that checkbox
-    on `InCombatLockdown` and the reason is its tracker builds frames.
-
-    `./scripts/check.sh` green before committing.
-
-91. A tracker of our own, off the log we already read.
-
-    A placeable column over the world: the quest name, its objectives under it,
-    a mark on the pinned ones. `src/UI/Placeable.lua`, `src/UI/Stack.lua` for
-    the rows, and item 76's `UI.Wash` under them, because this is a third window
-    the addon draws over the world and the ground under it is settled by then.
-
-    **It draws from `ns.QuestLog`'s zones and nothing else.** That file already
-    turns the client's flat run of rows into zones holding quests and already
-    caches it, `src/Quests/Log.lua:41`, and the quest window's left column is
-    already its only reader. A tracker with a second reading of the log is the
-    sheet and the loot feed all over again: two pictures of one thing, drifting
-    apart in the details nobody looks at until they are side by side. One
-    reading, two drawings.
-
-    So this file owns placement, rows and the pin mark, and asks `ns.QuestLog`
-    for everything it says.
-
-    It does not open on a quest. Clicking a row is `src/Quests/Tracker.lua`'s
-    existing swap arriving from our own frame instead of Questie's, which is one
-    call and no new path.
-
-    Nothing on a ticker. The log changes on events, item 89 adds a better one,
-    and a tracker is not a compass.
-
-    `./scripts/check.sh` green before committing.
-
-92. Where you are, asked once.
-
-    `ns.QuestHere`, answering the place you are standing in as a map id, a name
-    and whether it is a dungeon.
-
-    Off the map id and never off a name, which `src/Dungeons/Here.lua:12` argues
-    at length and is right about: `GetInstanceInfo` hands back Blizzard's name
-    in the player's language, it is a different name from the book's for eight
-    of the forty dungeons, and matching English text is a feature that works on
-    one client in ten.
-
-    The dungeon half is `ns.DungeonHere` and is not rewritten. The open world
-    half is `GetBestMapForUnit`, which `src/Map/Zones.lua:182` and
-    `src/UI/Chart.lua:497` already probe the same way, and this is the third
-    reader rather than a third probe.
-
-    Questie's `ZoneDB` is what joins the two number spaces. Its
-    `GetAreaIdByUiMapId` at `Database/Zones/zoneDB.lua:98` turns the client's
-    map id into the area id the quest database is keyed on, and
-    `ZoneDB.IsDungeonZone` at `:158` and `GetParentZoneId` at `:164` are the
-    other two. `src/Quests/Where.lua:529` already goes the other way through
-    `GetUiMapIdByAreaId` and this is that reader's opposite number.
-
-    In Core because two folders read it, `Quests` and eventually `Map`, and a
-    part may not name a file outside its own tree.
-
-    `./scripts/check.sh` green before committing.
-
-93. A quest is where its next step is, not where the client filed it.
-
-    The client's log header is a sort category. It is the zone for most quests,
-    the dungeon's name for a dungeon quest and a class name for a class quest,
-    and it says nothing about where the thing you still have to do is standing.
-    Scope the tracker on the second, not the first.
-
-    `Where.Nearest` at `src/Quests/Where.lua:292` already answers it. It reads
-    Questie's `DistanceUtils.GetNearestSpawnForQuest`, which walks the open
-    objectives, and returns the area, the name and the yardage. The area is what
-    this item wants and it is already coming back.
-
-    So a quest is on the tracker when its nearest open thing is in the place
-    `ns.QuestHere` names, and a quest whose header says Winterspring but whose
-    next step is a Felwood innkeeper is on the tracker in Felwood. That case is
-    the whole argument for doing it this way and it is common.
-
-    Fall back to the header when Questie is not installed or has not compiled.
-    The header is a worse answer and it is a great deal better than an empty
-    tracker.
-
-    Mind the cost, which is item 97's whole problem arriving early. Read
-    `Where.lua:243` before writing a line of this: the walk is hundreds of
-    coordinate transforms per quest, it is memoised for one quest for one
-    second, and a tracker that asked it about twenty quests on a paint would be
-    a stutter in the world rather than anything visibly wrong in the window. The
-    scoping reading is per quest per zone change, held until the zone changes,
-    and it is not on the paint path.
-
-    `./scripts/check.sh` green before committing.
-
-94. A list row knows which button and which modifier.
-
-    `UI.List` at `src/UI/Window.lua:1414` hands `onSelect` an id and nothing
-    else. It already carries `onRight` and `onBack` for the gestures that were
-    wanted before this one, so the shape is settled: `onSelect` gains the button
-    and the modifier state, and every existing caller ignores the extra
-    arguments.
-
-    Read `RegisterForClicks` against `OnMouseUp` before choosing. The rows here
-    are frames rather than buttons and the modifier is read at the moment of the
-    press either way, but the two disagree about which presses arrive at all,
-    and the wrong one of them is a gesture that silently does nothing on one of
-    the two clients.
-
-    One widget, so the chat rail, the dungeon shelf, the mail list and the quest
-    log all gain the same gesture vocabulary at once. That is the argument for
-    doing it in the widget rather than in the quest window: a shift click that
-    means one thing in one list and nothing in the next is a worse interface
-    than no shift click at all.
-
-    `./scripts/check.sh` green before committing.
-
-95. A pin is ours, and the client's five slots are left alone.
-
-    Shift left click on a row of the quest log's left column pins the quest.
-    Saved per character, uncapped, keyed on the quest id for the reason
-    `src/Quests/Log.lua:20` gives about indices: an index is a position that
-    moves on every turn-in and a window holding one changes what it is showing
-    while you read it.
-
-    **The client's watch list stops being written.** `Client.Watch` at
-    `src/Quests/Client.lua:288` calls `AddQuestWatch`, the client caps that at
-    five, and Questie replaces the global `GetNumQuestWatches` outright to get
-    around the cap. That is a fight with the client and this addon is not
-    joining it. The `track` button at `src/Quests/Window.lua:808` becomes `pin`
-    and the `watched` field on a row becomes `pinned`.
-
-    Say the cost out loud in the panel, because there is one. Questie's map
-    icons can be filtered to tracked quests only, and a player using that filter
-    will find our pins do not reach it. `Client.Watch` stays on the file
-    unused rather than deleted, so the day that trade turns out to be the wrong
-    one it is one line to write both.
-
-    `./scripts/check.sh` green before committing.
-
-96. The pin, drawn where you can see it.
-
-    Two drawings of one fact. On the row, the mark `UI.List` already builds for
-    `opts.marks`, in the addon's heading gold. And at the top of the left
-    column, pinned quests as their own group above the zones, in the order they
-    were pinned.
-
-    The group is the half that matters. A mark on a row is a thing you find by
-    scrolling to the row; a group is the answer to "what am I always watching"
-    without looking for it, which is the question the pin exists to answer.
-
-    An empty group is not drawn. A heading with nothing under it is a row of the
-    column spent saying you have not used a feature.
-
-    A pinned quest also draws in its zone, and does not vanish out of the list
-    it was in. A quest that moved when you pinned it is a quest you then have to
-    find again.
-
-    On the tracker, item 91's mark, and pinned quests are shown wherever you are
-    standing. That is what pinning is for: item 93 takes everything else off the
-    tracker when you leave the zone, and this is the exception you asked for by
-    hand.
-
-    `./scripts/check.sh` green before committing.
-
-97. How far away everything is, on a budget.
-
-    `ns.QuestNear`, a list of what is close to you, ordered by distance, over
-    two sources.
-
-    Your log, through `Where.Nearest`, which is the existing reader and is not
-    duplicated.
-
-    And what you have not picked up, which is the half worth building this for.
-    `AvailableQuests.__availableQuestsByNpc` in
-    `Modules/Quest/AvailableQuests/AvailableQuests.lua:57` is every quest
-    Questie says you could accept, keyed by the npc holding it, and
-    `QuestieDB:GetNPC(npcId).spawns` is where that npc stands.
-    `DistanceUtils.GetNearestSpawn(spawns)` takes exactly that table and hands
-    back the yardage. That path is far cheaper than the log's, because an npc
-    has spawns and a quest has objectives that have spawns.
-
-    Two fields rather than functions, so `ns.Questie`'s function check does not
-    cover them and this file checks the types itself, at the read, which is the
-    rule in that function's own header.
-
-    **The budget is the design.** `Where.lua:243` measured the cost of the log
-    half already: hundreds of zone-to-world transforms per quest, memoised one
-    quest deep for one second, and a twenty quest log walked on a paint is
-    thousands of them. So this walks a few entries per tick off `UI.Ticker`,
-    keeps the answer, and finishes a full pass in a couple of seconds rather
-    than blocking on one. It gets a name and a `Perf` slot, which item 44's gate
-    requires of every ticker in the addon.
-
-    It never runs on a paint and never on `QUEST_LOG_UPDATE`. Both are the
-    mistake this file exists downstream of.
-
-    In yards, unranked, unsorted into a route. Ordering is item 98's and the
-    restraint is item 99's.
-
-    `./scripts/check.sh` green before committing.
-
-98. The line that says why not finish this one.
-
-    One line at the foot of the tracker, naming one thing that is close to you.
-    Either something in your log you are near, or somebody standing nearby with
-    a quest you have never taken.
-
-    It is a friend and not a route planner, and the phrasing carries that. "The
-    last two Deadwood Trappers are close by, north" rather than "127.4 yards".
-    The distance is Euclidean over world coordinates, `QuestieLib.Euclid`
-    through HereBeDragons, and a cliff or a lake between you and the murloc
-    makes sixty yards a three minute walk. A number sounds like a promise the
-    data cannot keep. A direction and a nearness are true.
-
-    Direction is the addon's own arithmetic off the player facing and the
-    spawn's bearing, and it is eight words rather than a compass. It is the one
-    number here the game will actually confirm as you walk.
-
-    Anything past `ELSEWHERE` at `src/Quests/Where.lua:46` is not close and is
-    not mentioned. Questie adds half a million yards to a spawn outside your
-    instance so that local things sort first, and that constant is already on
-    the file for exactly this reason.
-
-    It speaks when the answer changes. Not on a clock, and not again for the
-    thing it just named.
-
-    `./scripts/check.sh` green before committing.
-
-99. What the friend will not do, held by a gate rather than by a comment.
-
-    Item 98 is one sentence of code and a page of restraint, and every piece of
-    that restraint is the kind that erodes in a refactor nobody meant anything
-    by. So it is a section in `scripts/harness/` and a rule in
-    `scripts/check.sh`, which is the two layers every other gate in this repo
-    lives in.
-
-    Four things, and each of them is the feature rather than a tidiness:
-
-      one thing    the line names a single quest. A second name in it is a list,
-                   a list is a route, and a route is the module this was
-                   explicitly not going to be.
-      quiet        it does not speak twice inside its own quiet period, and it
-                   does not repeat the thing it just named.
-      silent       nothing in combat, and nothing while `ns.QuestHere` says you
-                   are in a dungeon, where everything is thirty yards away and
-                   the friend would be a chatterbox.
-      no order     nothing in `src/Quests/` sorts the log by distance, by
-                   experience or by level. The gate reads for it, the way the
-                   `GameTooltip` rule reads comments, because the sort that
-                   makes this a levelling addon is four lines and would arrive
-                   looking like a convenience.
-
-    The harness proves the first three by driving the reading rather than by
-    reading the source: feed it two things at the same distance and one line
-    comes out, ask twice inside the period and the second is silent, set the
-    dungeon flag and nothing comes out at all.
-
-    Written while it is already satisfied, which is the only cheap moment, and
-    that is the same argument the rule at `scripts/check.sh:845` makes about
-    itself.
-
-    `./scripts/check.sh` green before committing.
-
-Item 100 came out of item 86 measuring a column on 2026-09-06. It is a bug the
-addon has drawn since the note column was written and nothing had ever put a
-ruler on it.
-
-100. A feed row draws a whole word or none of it.
-
-     `src/Feeds/Combat.lua` asks for 96 units of note column and its widest
-     string, "from Plains Creeper", measures 123 in the shipped face at a row's
-     text size. It clips today, at the width the feed ships at, before anything
-     is resized. The loot feed does not, because item 86 measured its column
-     against the longest thing that can reach it and cut the phrase to fit.
-
-     The rule belongs in `Feed:Resize` rather than in the two streams: a note
-     that does not fit is not drawn. `geom.note` is already clamped to half the
-     free width there, so a column that fits at the shipped size clips anyway at
-     the size somebody plays at, and a per-stream number cannot answer that.
-
-     It deletes the combat feed's note column at its default width, which is the
-     honest reading of what that column is doing now, and a stream that wants
-     one back asks for a width its strings fit in. Say that in the message; it
-     is a feature going quiet rather than a fix nobody sees.
-
-     `./scripts/check.sh` green before committing.
+    `src/Settings/Style.lua`, registered by `src/Settings/Feature.lua`, built on
+    first open. Not in `src/UI/`, where no file registers a feature.
+
+    It draws itself out of the tables rather than describing them: every
+    `UI.Color` entry as a swatch with its key, every `UI.Metric` as a rule of
+    that many pixels with its number, the three font sizes in the shipped face,
+    `UI.Quality` as eight names in eight colours, and a wash, a badge, a chip, a
+    feed row and a readout row side by side. Side by side is the feature:
+    whether the feed row and the sheet row look like one addon is a thing eyes
+    answer in a second and a file never answers.
+
+    A page with no settings on it. The day a colour on it is editable is the day
+    `UI.Theme`'s header stops being true. After items 78 to 81.
 
 ## Deliberately not on this list
 
-The architecture review turned up two more repeats and both are right as they
-stand. `src/Progress/Progress.lua:70` and `src/Quests/Client.lua:43` hold the
-same four-line probed call, and the comment above the first one argues that
-each is written against its own returns and that a prober in Core would be a
-call every part reaches through rather than a seam each part draws. That
-argument holds. `src/UI/Feed.lua`, `src/UI/Log.lua` and `src/UI/Stack.lua` each
-open by saying why they are not one of the others, and each of those three
-arguments holds too.
-
-This review adds three more that measured badly and read fine. `src/Class/*.lua`
-files repeat each other because each is a registry of one class's spells, and
-the repeats are the table shape rather than the data. `UI.Quality` in
-`src/UI/Theme.lua:100` and `Color.power` in `src/Unit/Color.lua:355` are two
-palettes that happen to be the same size. And ten parts open a placeable HUD
-frame with the same four calls, `CreateFrame`, `ns.UI.Adopt`, `ns.UI.Unit` and
-`ns.UI.Placeable`, which is four lines with no logic in them and is what a
-constructor already looks like.
-
-The performance review adds two more that were looked at and left alone.
-Stripping comments from the shipped files: all 230 compile in 26 ms in stock
-Lua 5.1 with the comments in, so the 45 percent of lines that are comment or
-blank cost under 10 ms a login and a build step would buy nothing. And the saved
-variables: chat history, quest drops, dungeon drops, breakdown spells and
-loadouts are all capped, most at 400, and nothing logs a growing feed or combat
-sample, so there is no serialise-on-logout cost to chase.
-
-The Narcissus reading adds most of that addon. Its photo mode is nine of its
-files and the reason it exists: a camera you drive with the keyboard, a spell
-visual browser, an NPC browser, an animation browser, a weapon browser, speech
-balloons, stickers, letterbox filters and a turntable. None of it is on this
-list and none of it should be. The same goes for its AFK screen, its
-achievement pages, its minimap button, its own tooltip, its guide and its
-NPC and item databases, which are the four largest folders it ships. What is
-taken from it is what makes a character sheet legible and alive, which is the
-ten items above and nothing else.
-
-Two of its mechanisms were looked at and refused. It parks the whole Blizzard
-UI off `UIParent` while the sheet is up, at `Main.lua:98-145`, so that hiding
-the interface leaves its own page standing. That is a photo booth feature with
-a real cost: a frame taken off `UIParent` and put back is a frame whose scale,
-strata and parent this addon then owns, and `src/UnitFrames/Blizzard.lua`,
-which owns `ns.BlizzHide`, already carries what that costs when it is done to
-one window rather than to all of them. And it draws its stats as a radar
-chart, `Narci_RadarTemplate` in `Narcissus.xml:136`. A radar chart of five
-stats is a shape you compare against a shape you remember, and nobody
-remembers last week's pentagon. The column of numbers beside the figure
-answers the question the chart is drawn to answer.
+- `src/Progress/Progress.lua:70` and `src/Quests/Client.lua:43` hold the same
+  four-line probed call. Each is written against its own returns, and a prober
+  in Core would be a call every part reaches through rather than a seam.
+- `src/UI/Feed.lua`, `src/UI/Log.lua` and `src/UI/Stack.lua` each open by saying
+  why they are not one of the others, and each argument holds.
+- `src/Class/*.lua` files repeat each other because each is a registry of one
+  class's spells. The repeat is the table shape, not the data.
+- `UI.Quality` at `src/UI/Theme.lua:100` and `Color.power` at
+  `src/Unit/Color.lua:355` are two palettes that happen to be the same size.
+- Ten parts open a placeable HUD frame with the same four calls, `CreateFrame`,
+  `ns.UI.Adopt`, `ns.UI.Unit`, `ns.UI.Placeable`. That is what a constructor
+  already looks like.
+- Stripping comments from the shipped files. All 230 compile in 26 ms in stock
+  Lua 5.1 with the comments in, so a build step buys under 10 ms a login.
+- Chasing a serialise-on-logout cost. Chat history, quest drops, dungeon drops,
+  breakdown spells and loadouts are all capped, most at 400.
+- Item 93, scoping the tracker on where a quest's next open objective stands. It
+  is the better answer and it costs hundreds of coordinate transforms per quest
+  against a memo one quest deep. The tracker scopes on the log header, item 96's
+  pin is the escape hatch, item 99 gates the walk to its one caller.
+- Most of Narcissus: its photo mode is nine files and the reason it exists, and
+  its AFK screen, achievement pages, minimap button, tooltip, guide and two
+  databases are its largest folders. What was taken from it is items 60 to 72.
+- Narcissus parking the whole Blizzard UI off `UIParent` while the sheet is up,
+  `Main.lua:98-145`. A frame taken off `UIParent` and put back is a frame whose
+  scale, strata and parent this addon then owns, and
+  `src/UnitFrames/Blizzard.lua` already carries what that costs for one window.
+- Narcissus drawing its stats as a radar chart, `Narci_RadarTemplate` in
+  `Narcissus.xml:136`. Nobody remembers last week's pentagon; the column of
+  numbers beside the figure answers the question the chart is drawn for.
