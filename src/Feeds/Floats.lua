@@ -116,10 +116,17 @@ end
 -- setting says thirty, and a pool that dressed its rows once would show both
 -- sizes on screen at the same time. This is five calls on an event that fires
 -- when something drops, not on a tick.
+--
+-- The rim's four edges are given a length as well as a thickness, which almost
+-- nowhere else in the addon does. ns.EdgeSize says why: an edge pinned to two
+-- corners takes its length from a frame that was laid out once, and this frame
+-- is resized under it every drop.
 local function Dress(frame)
 	local db = ns.db
 	frame:SetSize(db.lootFloatWidth, Height())
-	frame.icon:SetSize(db.lootFloatIcon, db.lootFloatIcon)
+	frame.face:SetSize(db.lootFloatIcon, db.lootFloatIcon)
+	ns.EdgeSize(frame.face.edges, ns.Pixel(frame.face),
+		db.lootFloatIcon, db.lootFloatIcon)
 	frame.name:SetFontObject(UI.Font(db.lootFloatName, UI.SHADOW))
 	frame.count:SetFontObject(UI.Font(db.lootFloatCount, UI.SHADOW))
 end
@@ -128,15 +135,43 @@ local function Build()
 	local frame = CreateFrame("Frame", nil, UIParent)
 	frame:Hide()
 
-	frame.icon = UI.Icon(frame)
-	frame.icon:SetPoint("TOPLEFT")
-	-- Added rather than blended, which is the only way a black background comes
-	-- off an icon. An item icon is a painting on a dark square with no alpha
-	-- channel in it at all, so there is nothing for the usual blend to make
-	-- transparent and every drop crossed the world as a black tile. Additive
-	-- blending multiplies nothing by the destination where the source is black,
-	-- so the square goes and the object stays.
-	frame.icon:SetBlendMode("ADD")
+	-- The picture, and the rim round it that says what dropped.
+	--
+	-- Blended, which is to say left alone. This was drawn additively for a
+	-- while, because an item icon is a painting with no alpha channel in it at
+	-- all and a blend has nothing to make transparent, so a drop crossed the
+	-- world as a black tile. Adding hid the tile by making dark pixels
+	-- contribute nothing to what was behind them, and it cost the picture: on
+	-- snow, where the destination is already near white, there is no headroom
+	-- left to add into and every drop washed out to a pale ghost.
+	--
+	-- The rim is the answer instead. An opaque square is what the action bar,
+	-- the bag slot and the client's own loot toast all draw, and a square with
+	-- a line round it reads as an icon rather than as a hole in the world. It
+	-- is also somewhere to put the grade, which the name beside it was carrying
+	-- alone.
+	--
+	-- A frame rather than a bare texture, because ns.Outline pins its four
+	-- edges to a frame's corners and the picture needs corners of its own. The
+	-- row's are 380 pixels apart and a rim round those is a rectangle round
+	-- nothing.
+	frame.face = CreateFrame("Frame", nil, frame)
+	frame.face:SetPoint("TOPLEFT")
+
+	frame.icon = UI.Icon(frame.face)
+	frame.icon:SetAllPoints()
+
+	-- On OVERLAY, so the line lands on the picture's outermost pixels rather
+	-- than beside them. Insetting the art by a pixel a side is the other answer
+	-- and it is the wrong one here: UI.IconSizes is the list of drawn sizes
+	-- where one stored texel is one screen pixel, the icon setting is meant to
+	-- sit on that list, and an inset takes 50 to 48 and puts the picture
+	-- halfway between two stored copies. The rim is a hairline and it is
+	-- covering the crop's own outer row, which is border art in the file.
+	--
+	-- Built in the theme's edge colour and repainted per drop by Show.
+	local rim = UI.SlotEdge(nil)
+	frame.face.edges = ns.Outline(frame.face, rim[1], rim[2], rim[3], 1, "OVERLAY")
 
 	-- Shadowed, not flat and not outlined. Flat is for a string on a surface
 	-- this addon painted and there is none here. Outlined is the role for text
@@ -153,7 +188,7 @@ local function Build()
 	frame.count:SetPoint("RIGHT")
 
 	frame.name = UI.Label(frame, ns.db.lootFloatName, UI.Color.text, "LEFT", UI.SHADOW)
-	frame.name:SetPoint("LEFT", frame.icon, "RIGHT", UI.Metric.gutter, 0)
+	frame.name:SetPoint("LEFT", frame.face, "RIGHT", UI.Metric.gutter, 0)
 	-- Up to the count rather than to the row's own edge. Both were pinned to
 	-- the right edge and the count is drawn over the name, so a stack of eight
 	-- linen put its own number through the last letters of the word.
@@ -225,6 +260,13 @@ end
 -- The quality colour is ns.UI.Quality, which is the same table the feed's rows
 -- and the quest log's rewards read. Identity matters there and not here, but
 -- two palettes for one fact is how one of them ends up wrong.
+--
+-- The name and the rim take that grade by two different rules, and the split is
+-- UI/Slot.lua's rather than this file's. A name has to be readable, so a grey
+-- item's is grey and a white item's is white. A rim only has to be quiet, so
+-- anything the client grades below green gets the theme's edge instead: a white
+-- hairline round a picture of a bear organ is the brightest thing on the screen
+-- and it would be shouting about the least interesting drop of the pull.
 function Floats.Show(link, count)
 	if not lane then
 		lane = Float.Lane(Spec())
@@ -237,6 +279,7 @@ function Floats.Show(link, count)
 	local color = UI.Quality[quality or 1] or UI.Quality[1]
 
 	frame.icon:SetTexture(icon)
+	ns.Recolor(frame.face.edges, UI.SlotEdge(quality))
 	frame.name:SetText(name or link)
 	frame.name:SetTextColor(color[1], color[2], color[3])
 	-- Nothing at all for a single item. "x1" beside every drop is a column of

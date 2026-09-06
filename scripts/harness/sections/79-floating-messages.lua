@@ -397,9 +397,13 @@ do
 
 	local new = show("Bloodspiller")
 	check(new ~= old, "the second message re-used the frame the first is still holding")
-	check(new:GetWidth() == 200 and new.icon:GetWidth() == 24,
+	-- The face rather than the icon on it. The picture is pinned to all four of
+	-- that frame's corners now, so the frame is what the setting sizes and the
+	-- texture takes its width from anchors the stub deliberately does not
+	-- resolve.
+	check(new:GetWidth() == 200 and new.face:GetWidth() == 24,
 		("the new row is %s wide with a %s icon, and the settings said 200 and 24")
-			:format(tostring(new:GetWidth()), tostring(new.icon:GetWidth())))
+			:format(tostring(new:GetWidth()), tostring(new.face:GetWidth())))
 	check(at(new) == -40,
 		("the new message came in at %s rather than 40 inside the right edge")
 			:format(tostring(at(new))))
@@ -417,9 +421,64 @@ do
 	Floats.Apply()
 
 	local back = show("Aegis")
-	check(back:GetWidth() == WIDTH and back.icon:GetWidth() == 50,
+	check(back:GetWidth() == WIDTH and back.face:GetWidth() == 50,
 		("a pooled row came back %s wide with a %s icon and was not re-dressed")
-			:format(tostring(back:GetWidth()), tostring(back.icon:GetWidth())))
+			:format(tostring(back:GetWidth()), tostring(back.face:GetWidth())))
+	-- The rim is re-dressed with everything else, and it is the one part of the
+	-- row whose size is not the size of anything: ns.Outline hands back four
+	-- edges a unit thick, and a hairline that stayed a unit is four pixels on a
+	-- scaled frame.
+	check(back.face.edges[1]:GetHeight() == ns.Pixel(back.face),
+		("the rim came back %s thick and a pixel here is %s")
+			:format(tostring(back.face.edges[1]:GetHeight()),
+				tostring(ns.Pixel(back.face))))
+	beat(4)
+	check(Floats.Count() == 0, "the lane did not clear")
+end
+
+----------------------------------------------------------------------
+-- The rim carries the grade
+--
+-- The picture is blended rather than added, which makes it an opaque square,
+-- and a square gets a hairline round it the way every other icon in the addon
+-- does. That line is where the item's grade goes.
+--
+-- Two rules rather than one, and the split is UI/Slot.lua's: green and up take
+-- the grade, anything under it takes the theme's edge. A white drop with a
+-- white rim would put the brightest line on the screen round the least
+-- interesting item of the pull.
+--
+-- The pool is what makes this a scene rather than a line. One frame draws both
+-- colours over its life, so a repaint that only ran when a row was built would
+-- leave an epic's purple round the next grey out of the pool, and nothing else
+-- in this section would notice.
+----------------------------------------------------------------------
+
+do
+	local EPIC = ns.UI.Quality[4]
+	local EDGE = ns.UI.Color.edge
+
+	local function rim(frame)
+		local edge = frame.face.edges[1]
+		return edge.r, edge.g, edge.b
+	end
+
+	local epic = show("Arcanite Reaper")
+	local r, g, b = rim(epic)
+	check(r == EPIC[1] and g == EPIC[2] and b == EPIC[3],
+		("an epic's rim came out %s,%s,%s and the palette says %s,%s,%s")
+			:format(tostring(r), tostring(g), tostring(b),
+				EPIC[1], EPIC[2], EPIC[3]))
+	beat(4)
+
+	local white = show("Linen Cloth")
+	check(white == epic,
+		"the white drop got a second frame, so this says nothing about repainting")
+	r, g, b = rim(white)
+	check(r == EDGE[1] and g == EDGE[2] and b == EDGE[3],
+		("a white drop's rim came out %s,%s,%s and the theme's edge is %s,%s,%s")
+			:format(tostring(r), tostring(g), tostring(b),
+				EDGE[1], EDGE[2], EDGE[3]))
 	beat(4)
 	check(Floats.Count() == 0, "the lane did not clear")
 end
