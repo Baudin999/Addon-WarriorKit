@@ -109,10 +109,14 @@ written longer than they are here.
     `2b55319`
 67. The world darkens behind the sheet, on a frame that never takes the
     mouse. `ff5816d`
+68. A gear change is watched: the row dips where a link moved and the two
+    columns arrive from their own sides. `fdb49e3`
 69. The socket carries its gem rather than a mark saying one is there.
     `7c6fb88`
 70. The enchant on the line under the name, and the oil counting down on the
     weapon. `0e17925`
+71. A trinket says when it is up, swept on the disc's own ring out of
+    `UI.Arc`. `8b18daa`
 72. The figure is yours to turn, and the pose is remembered. `fe3c4ce`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
@@ -729,76 +733,6 @@ retail character sheets and one armory page. Items 60 and 61 landed the same
 day and are above. Item 62, a loadout that carried a whole set of gear rather
 than two weapons, is dropped rather than finished. Item 64 deletes the part it
 was an extension of. Its text is in this file at `17b6427`.
-
-Items 63 to 72 came out of an ask on 2026-09-06. Make the sheet as good to look
-at as Narcissus, take none of its photo booth, and cut the three pages nobody
-wants to look at. Eight of the ten landed the same day and are above; these two
-are what is left of that block.
-
-Narcissus is installed on this machine, in the anniversary client's AddOns
-folder, and every mechanism named below was read out of that copy rather than
-remembered. It is a retail addon with a TBC toc, so what it calls, this
-client has. The paths below are relative to that folder.
-
-Neither of these is a bug. The sheet draws the right thing today.
-
-They were ordered last of the ten on purpose and the order still holds. Item 68
-fades and slides rows whose contents items 66, 69 and 70 finished building, so
-it wanted them built first. Item 71 draws on the icon disc item 69 reshaped.
-Both are measured against the face item 63 landed, which is Noto Sans out of
-`src/Media/Sans.ttf` and not the Arial Narrow the numbers in this file were
-written against.
-
-68. A gear change is watched, not just redrawn.
-
-    Put a ring on and the name changes between two frames. Narcissus fades the
-    old string out over two tenths, sets the text on the animation's finish,
-    and fades the new one in, at `Main.lua:1727-1745`, and cross-fades the icon
-    through a second texture drawn over the first, which is the `Icon` and
-    `IconOverlay` pair in `NarciSlotButtonTemplate` in `Narcissus.xml`.
-
-    The addon has its own tween library for exactly this and does not need the
-    client's animation groups: `ns.Ck.Animations` in `src/Ck/Animations.lua`,
-    with an alpha channel, a position channel, and a tween armed once and
-    re-armed forever rather than built per run. Its header says why the
-    client's groups were refused, and every reason holds here.
-
-    Two motions, one per channel. A repaint that finds the link in a slot
-    changed fades that row's name, note and icon down and back up, which is the
-    alpha channel. The page coming up slides the two columns in from their own
-    sides, which is the position channel and is the `animOut` group on
-    `NarciSlotButtonLeftTemplate` in `Narcissus.xml`: a hundred and twenty
-    pixels over six tenths, staggered a few hundredths a row so nineteen rows
-    arrive as a sweep rather than as a block.
-
-    Only where something moved. `Pane:Redress` at
-    `src/Character/Paperdoll.lua:881` already compares nineteen links against
-    what it drew last time, which is the question this needs answered and the
-    reason it is cheap.
-
-    Refuse both in combat, and not for a protection reason. The sheet comes up
-    mid pull to be read, and nineteen rows sliding in over a fight is nineteen
-    rows you cannot read for half a second.
-
-    `./scripts/check.sh` green before committing.
-
-71. A trinket says when it is up.
-
-    `ns.InventoryCooldown` at `src/Core/Core.lua:1467` is written, probed and
-    called by nothing on this page. Narcissus sweeps a cooldown over the slot's
-    own icon at `Main.lua:1929`.
-
-    Two trinkets, an engineering helm and a weapon with a use on it are the
-    slots this answers for, and the sheet is where a player checks whether the
-    trinket they are about to pull with is off cooldown. The disc already has a
-    ring round it, so the sweep is that ring drawn as an arc rather than a
-    square swipe laid over a round icon.
-
-    On the same dirty bit as everything else, and off a ticker. A cooldown that
-    is running is a number that changes every second, which is `UI.Ticker` and
-    a Perf slot, and item 44's gate wants a name for it.
-
-    `./scripts/check.sh` green before committing.
 
 73. A feed folds a repeat into the row it is already on.
 
