@@ -78,6 +78,7 @@ end
 -- setting. Shared by the two drags below, because a secure drag lands in the
 -- same place an ordinary one does.
 local function Landed(place, frame)
+	place.placed = true
 	if not place.moved then
 		return
 	end
@@ -341,6 +342,7 @@ end
 -- The setting is not written back. This is the anchor coming out of it.
 function Placeable:Place(anchor)
 	local frame = self.frame
+	self.placed = true
 	if not self.secure then
 		frame:ClearAllPoints()
 		frame:SetPoint(anchor[1], UIParent, anchor[3], anchor[4], anchor[5])
@@ -352,6 +354,19 @@ function Placeable:Place(anchor)
 	frame:SetAttribute("wk-x", anchor[4])
 	frame:SetAttribute("wk-y", anchor[5])
 	frame:SetAttribute("wk-move", self.moves)
+end
+
+-- Whether the player has put this frame anywhere, by a drag or by an anchor out
+-- of the account file.
+--
+-- One caller and it is UI/Window.lua. A window that sizes itself off the
+-- monitor has to place itself off the monitor too, and it does that out of
+-- every resize, because the resize is where a monitor swap and a zoom both
+-- land. A frame the player has already moved must not be caught by that: a
+-- sheet that walked back to the corner it ships in every time the zoom slider
+-- moved would be a sheet with a drag that does not hold.
+function Placeable:Placed()
+	return self.placed == true
 end
 
 -- Who to tell, when the frame is told after it is built.

@@ -271,18 +271,96 @@ end
 -- only one to do. Locking a quest log would be locking a window rather than
 -- placing the HUD.
 --
--- A screen window gets none of it. It is a share of the monitor pinned to one
--- edge of it: there is nothing to grab, nowhere to drag it to and no point
--- worth saving, and a placeable with no chrome covering half the game is an
--- invisible drag target the size of a wall.
+-- A screen window is dragged by a strip along its top and by nothing else.
+--
+-- It had no drag at all while it was the whole monitor, which was right then: a
+-- frame the size of the screen is already where it goes. It is half the screen
+-- now, and half a screen is a thing a player has an opinion about, so the drag
+-- is back. What it must not be is the frame: a placeable with no chrome covering
+-- half the game is an invisible drag target the size of a wall, with the left
+-- button and the camera's right drag gone out of all of it.
+--
+-- So the grip is the row across the top where the tabs sit, which is a title bar
+-- in everything but the paint. The tabs are in the content frame and the content
+-- is a level above this, so a click on a tab is still a click on the tab and
+-- only the strip either side of them is a grab.
+--
+-- It says so under the cursor rather than all the time. A panel with nothing
+-- drawn on it cannot carry a permanent bar without becoming the dialog this
+-- sheet stopped being, so the strip lights while you are on it and is not there
+-- otherwise, which is the trade the gear rows already make with their rings.
 --
 -- Beside TitleBar and Footer for the reason both of those are: it is one piece
 -- of what a window is, and the argument for the shape it has is a paragraph
 -- nobody reading how a window is assembled has to step through.
-local function Drag(window, frame, opts)
-	if window.screen then
-		return
+local function Grip(window, frame)
+	local grip = CreateFrame("Frame", nil, frame)
+	grip:SetPoint("TOPLEFT")
+	grip:SetPoint("TOPRIGHT")
+	grip:SetHeight(M.title)
+	grip:EnableMouse(true)
+
+	local lit = ns.Fill(grip, "BACKGROUND",
+		C.chrome[1], C.chrome[2], C.chrome[3], 0.7)
+	lit:SetAllPoints()
+	lit:Hide()
+	grip:SetScript("OnEnter", function() lit:Show() end)
+	grip:SetScript("OnLeave", function() lit:Hide() end)
+
+	-- The one part of a screen window that answers the mouse at all, so it is
+	-- also the only place a click can be the way out of an open dropdown. Every
+	-- other window gets this on the frame, which a screen window's is not
+	-- listening for.
+	Dismissals(grip)
+
+	window.grip = grip
+	return grip
+end
+
+-- How much of the window is chrome, what draws it, and the page under it.
+--
+-- Beside Surface, TitleBar and Footer, and it calls the last two, because the
+-- three numbers and the three frames are one decision: a window with no title
+-- bar has no twenty four pixels of chrome and its page starts at the top edge,
+-- and splitting that across the constructor made the reader hold the chrome
+-- height in their head from where it is worked out to where it is used.
+--
+-- Both numbers rather than the two constants they used to be, because the chat
+-- window wants neither of the defaults: no title bar at all, and a footer sized
+-- for one line of text instead of for a row of buttons.
+--
+-- **A bare window has no title bar and no close box.** A title bar says which
+-- window this is, which is worth twenty four pixels in a settings window you
+-- opened on purpose and worth nothing in a window that is up all evening
+-- drawing the thing it is named after. A window that asks for bare owes its
+-- player some other way out, and the chat window's is a cross at the foot of
+-- its own rail.
+local function Chrome(window, frame, px, opts)
+	window.chrome = (opts.bare or window.screen) and 0 or M.title
+	window.foot = opts.footer or M.footer
+
+	if not opts.bare and not window.screen then
+		TitleBar(window, px, opts.title)
 	end
+
+	-- Everything between the title bar and the footer. Content parents to this,
+	-- so nothing below has to know how tall the chrome is.
+	window.content = CreateFrame("Frame", nil, frame)
+	window.content:SetPoint("TOPLEFT", 0, -window.chrome)
+
+	-- The grip under the page, said here rather than where the grip is made,
+	-- because the content frame it has to be under does not exist yet at that
+	-- point and the strata the window is filed in is set between the two. A
+	-- child may sit at its parent's own level, and content takes the level above
+	-- it, so everything on the page answers a click before the strip does.
+	if window.grip then
+		window.grip:SetFrameLevel(frame:GetFrameLevel())
+	end
+
+	Footer(window, frame, opts)
+end
+
+local function Drag(window, frame, opts)
 	window.place = UI.Placeable(frame, {
 		moved = opts.moved,
 		lockable = opts.lockable == true,
@@ -290,6 +368,9 @@ local function Drag(window, frame, opts)
 		-- a snippet, because moving a window that holds a protected frame is
 		-- refused in combat the same way showing it is.
 		secure = window.secure,
+		-- A window with chrome is grabbed by its own chrome, so the frame is the
+		-- grip. A screen window has none, and names the strip above instead.
+		grip = window.screen and Grip(window, frame) or nil,
 	})
 end
 
@@ -362,10 +443,14 @@ function UI.Window(opts)
 	-- a window a window. No ground, because a ground under half the monitor is
 	-- that half of the game painted out. No line round the outside, because it is
 	-- read as part of the scene rather than as a panel over it. No title bar,
-	-- because there is nothing to name and nothing to grab it by. No point to
-	-- save and no drag, because the panel is sized and placed off the monitor and
-	-- the only thing a drag could do is take it off the edge. And the floor of
-	-- the pile, so everything the player opens over it flows over the top.
+	-- because there is nothing to name. And the floor of the pile, so everything
+	-- the player opens over it flows over the top.
+	--
+	-- It is still dragged and it still remembers where you put it. Both came back
+	-- when it stopped being the whole monitor and became half of one: a frame the
+	-- size of the screen is already where it goes, half a screen is a corner the
+	-- player has an opinion about. With no title bar to grab, Grip below hands it
+	-- a strip along its top instead.
 	--
 	-- It does not eat the mouse either. Every other window in the addon does,
 	-- because a click that lands on a panel should stop there; this one has no
@@ -394,30 +479,7 @@ function UI.Window(opts)
 
 	local px = Surface(window, frame, opts)
 
-	-- How much of the window is chrome, top and bottom. Both are numbers rather
-	-- than the two constants they used to be, because the chat window wants
-	-- neither of the defaults: no title bar at all, and a footer sized for one
-	-- line of text instead of for a row of buttons.
-	--
-	-- **A bare window has no title bar and no close box.** A title bar says
-	-- which window this is, which is worth twenty four pixels in a settings
-	-- window you opened on purpose and worth nothing in a window that is up all
-	-- evening drawing the thing it is named after. A window that asks for bare
-	-- owes its player some other way out, and the chat window's is a cross at
-	-- the foot of its own rail.
-	window.chrome = (opts.bare or window.screen) and 0 or M.title
-	window.foot = opts.footer or M.footer
-
-	if not opts.bare and not window.screen then
-		TitleBar(window, px, opts.title)
-	end
-
-	-- Everything between the title bar and the footer. Content parents to this,
-	-- so nothing below has to know how tall the chrome is.
-	window.content = CreateFrame("Frame", nil, frame)
-	window.content:SetPoint("TOPLEFT", 0, -window.chrome)
-
-	Footer(window, frame, opts)
+	Chrome(window, frame, px, opts)
 
 	window:Resize(opts.width or 540, opts.height or 450)
 
@@ -524,7 +586,13 @@ function Window:Resize(width, height)
 	-- the new grid, and the point is re-set below off the same numbers.
 	if self.screen then
 		width, height = self:Panel()
-		Anchor(self)
+		-- Where it ships, and only until the player has said otherwise. This runs
+		-- out of every resize, which is where a monitor swap and a drag of the
+		-- zoom slider both land, so without the question a sheet would walk back
+		-- to the right hand edge every time either of them moved.
+		if not (self.place and self.place:Placed()) then
+			Anchor(self)
+		end
 	else
 		-- On the grid the window's units are pixels over the zoom, so the screen has
 		-- to be converted into them. Off it, on a client with no

@@ -67,14 +67,30 @@ local WINDOWS = {
 	{ "WarriorKitBreakdown", "the meter breakdown" },
 	{ "WarriorKitClutter", "the destroy window" },
 	{ "WarriorKitAsk", "the confirmation window" },
+	{ "WarriorKitCharacter", "the character sheet" },
 }
+
+-- What the client delivers the drag to, which is not always the frame being
+-- moved. A window with chrome is grabbed by its own chrome. The character sheet
+-- has none and names a strip across its top instead, so the scripts are on the
+-- strip and the frame is what they move. Asked of UI.Windows rather than
+-- guessed at, because a sheet that quietly stopped naming a grip and let the
+-- whole frame take the drag would pass every check below by accident.
+local function grip(frame)
+	for _, entry in ipairs(ns.UI.Windows) do
+		if entry.frame == frame then
+			return entry.grip or frame
+		end
+	end
+	return frame
+end
 
 local function draggable(name)
 	local frame = _G[name]
 	if not frame then
 		return nil
 	end
-	return frame.dragButton ~= nil
+	return grip(frame).dragButton ~= nil
 end
 
 local was = ns.db.locked
@@ -161,13 +177,15 @@ local KEEPS = {
 	{ "WarriorKitMail", "the mail window" },
 	{ "WarriorKitBreakdown", "the meter breakdown" },
 	{ "WarriorKitClutter", "the destroy window" },
+	{ "WarriorKitCharacter", "the character sheet" },
 }
 
 local function drop(frame, x, y)
-	frame.scripts.OnDragStart(frame)
+	local by = grip(frame)
+	by.scripts.OnDragStart(by)
 	frame:ClearAllPoints()
 	frame:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT", x, y)
-	frame.scripts.OnDragStop(frame)
+	by.scripts.OnDragStop(by)
 end
 
 local function replace(frame, anchor)

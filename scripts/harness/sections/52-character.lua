@@ -645,18 +645,68 @@ do
 	check(ns.CharBlizzard.KeyText() == "ALT-C",
 		("the sheet calls its own key %s"):format(ns.CharBlizzard.KeyText()))
 
-	-- And no drag at all, which is the other half of the same sentence. The sheet
-	-- is a backdrop the size of the monitor: there is nothing to grab, nowhere to
-	-- drag it to and no point worth saving, so the placing that used to be here
-	-- went with the title bar. It carried a secure drag, because moving a window
-	-- that holds a protected frame is refused in combat exactly as showing it is,
-	-- and what is asserted now is that none of that machinery is still hanging off
-	-- an invisible frame the width of the screen.
+	-- And a drag, which is the other half of the same sentence. It is a secure
+	-- drag, because moving a window that holds a protected frame is refused in
+	-- combat exactly as showing it is, so the point is written into an attribute
+	-- and a snippet is what places the frame.
+	--
+	-- The half worth gating is where the drag is delivered. The sheet has no
+	-- title bar to grab, and the answer to that must not be the frame: a mouse
+	-- enabled frame swallows every button that lands on it, and this one covers
+	-- half the game, so a drag on the frame would take the left button and the
+	-- camera's right drag out of that whole half. It is the strip across the top
+	-- instead, and these three checks are the three ways that can go wrong.
 	local frame = Window.Pane(GEAR).frame:GetParent():GetParent()
-	check(frame.scripts.OnDragStart == nil and frame.dragButton == nil,
-		"the character sheet still takes a drag, and it is the size of the screen")
-	check(frame:GetAttribute("_onattributechanged") == nil,
-		"the character sheet still carries a placing snippet with nothing to place")
+	local sheet
+	for _, entry in ipairs(ns.UI.Windows) do
+		if entry.frame == frame then
+			sheet = entry
+		end
+	end
+	check(sheet ~= nil and sheet.grip ~= nil, "the character sheet has no grip to drag it by")
+	check(frame.dragButton == nil,
+		"the whole sheet takes a drag, so half the screen is an invisible handle")
+	check(sheet.grip.dragButton ~= nil, "the sheet's grip was never given the drag")
+	check(frame:GetAttribute("_onattributechanged") ~= nil,
+		"the sheet is dragged from a snippet and carries none")
+
+	-- Under the page rather than over it. The tabs and the close cross are in the
+	-- content frame, and a grip drawn above them is a title bar you cannot press
+	-- a tab through.
+	check(sheet.grip:GetFrameLevel() < sheet.content:GetFrameLevel(),
+		("the grip sits at level %d and the page at %d")
+			:format(sheet.grip:GetFrameLevel(), sheet.content:GetFrameLevel()))
+
+	-- And where you drop it is where it stays. The sheet sizes and places itself
+	-- off the monitor out of every resize, which is where a screen change and a
+	-- drag of the zoom slider both land, so the corner it ships in has to be a
+	-- default the drag overrides rather than a rule the drag loses to. A sheet
+	-- that walked back to the right hand edge the next time the slider moved
+	-- would look exactly like a drag that never took.
+	local home = { frame:GetPoint() }
+	local spot = ns.db.windowSpots["WarriorKitCharacter"]
+	local was = sheet.place.placed
+	sheet.grip.scripts.OnDragStart(sheet.grip)
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT", 60, -30)
+	sheet.grip.scripts.OnDragStop(sheet.grip)
+	check(ns.db.windowSpots["WarriorKitCharacter"] ~= nil,
+		"the sheet was dropped somewhere and wrote down nothing")
+
+	Window.Fit()
+	local point, _, relativePoint, x, y = frame:GetPoint()
+	check(point == "TOPLEFT" and relativePoint == "TOPLEFT" and x == 60 and y == -30,
+		("a refit put the sheet back to %s %s, %s after it was dropped at TOPLEFT 60, -30")
+			:format(tostring(point), tostring(x), tostring(y)))
+
+	frame:ClearAllPoints()
+	frame:SetPoint(home[1], home[2] or _G.UIParent, home[3], home[4], home[5])
+	ns.db.windowSpots["WarriorKitCharacter"] = spot
+	-- And the flag, which the drop above set and nothing else clears. Left true,
+	-- the sheet would decline to re-anchor for the rest of the run, and a later
+	-- section asking where it sits off the monitor would be reading the corner
+	-- this check dropped it in.
+	sheet.place.placed = was
 
 	-- Open before the fight, because that is the state the tabs are tested in.
 	Window.Show(GEAR)

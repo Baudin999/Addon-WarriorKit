@@ -254,6 +254,11 @@ function Window.Build()
 		-- was: Escape, through UISpecialFrames, and the key that opened it, which
 		-- is C unless the player has moved it and is a snippet either way, so it
 		-- shuts the sheet in a fight as well as out of one.
+		--
+		-- No title bar is also nothing to grab, so UI/Window.lua hands a screen
+		-- window a grip instead: the strip across its top that the tabs sit in,
+		-- which lights under the cursor and is the only part of the sheet a drag
+		-- starts on.
 		screen = true,
 		zoom = function() return ns.Zoom("characterZoom") end,
 		-- The grid moved: the screen changed size, combat let go of a frame, or
@@ -278,12 +283,19 @@ function Window.Build()
 		-- holds both halves of that.
 		secure = true,
 	})
-	-- No ns.Remember, because there is nothing to remember. A sheet the size of
-	-- the screen is already where it goes and cannot be dragged off it, so the
-	-- only thing a saved point could do is put it somewhere wrong. Whatever an
-	-- older version wrote against this name is dropped rather than left to rot in
-	-- the account file behind a reader that no longer exists.
-	ns.db.windowSpots["WarriorKitCharacter"] = nil
+	-- And it remembers where you put it, the same as the other seven windows
+	-- that can be moved. It did not while it was the whole monitor, because a
+	-- frame the size of the screen is already where it goes. Half a screen is
+	-- not: the corner it ships in is a default rather than an answer, and a
+	-- sheet you have to shove out of the way of your own bags every evening is
+	-- one nobody moves twice.
+	--
+	-- The anchor comes back through the snippet rather than through a SetPoint,
+	-- because every one of the nineteen gear squares is protected and so is the
+	-- window holding them. UI/Placeable.lua carries which of the two paths a
+	-- frame takes and why; what it means here is that the sheet can be put back
+	-- where you left it while you are being hit.
+	ns.Remember(window)
 
 	-- The words rather than a strip of buttons. This sheet is a backdrop with
 	-- the game showing through it, and a row of filled tabs across the top is the
