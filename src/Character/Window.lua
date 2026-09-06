@@ -218,8 +218,14 @@ function Window.Build()
 	-- Hooked rather than set: UI/Window.lua puts the fade that darkens the world
 	-- behind a screen window on this same script, for the same reason this paint
 	-- is here, and a SetScript would take it off again.
+	-- And slid in, after it. The two columns come in from their own sides of the
+	-- page whenever the sheet comes up, which is the same three routes the paint
+	-- above covers and the reason both hang here rather than on Window.Show:
+	-- in a fight the sheet is opened by a snippet that runs no Lua of ours at
+	-- all. Character/Paperdoll.lua owns what moves and refuses in combat.
 	window.frame:HookScript("OnShow", function()
 		Window.Paint()
+		page:Arrive()
 	end)
 
 	Chrome()

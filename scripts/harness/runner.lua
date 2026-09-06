@@ -475,6 +475,13 @@ local SECTIONS = {
 	-- because three sections above it fire combat log lines that this part has
 	-- been reading since login.
 	"80-floating-numbers",
+	-- Under both of them, and it has to be. It drives a tween library on the
+	-- gear page, and the sheet's other five sections all run above
+	-- 79-floating-messages, which asserts that a dozen looted drops are still
+	-- in the air and unticked: a beat of the animation tick from up there would
+	-- expire them and read as that section's failure. Here the list is empty
+	-- when it starts and empty when it hands over.
+	"81-gear-arrival",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

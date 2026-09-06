@@ -378,6 +378,75 @@ local SWEEP = 0.25
 -- line in the same place.
 local OWN = 1.5
 
+--------------------------------------------------------------------------
+-- The two motions
+--
+-- Nothing on this page moved. Put a ring on and the word under the disc is a
+-- different word between two frames, which you see only if you happened to be
+-- looking at that row; open the sheet and nineteen rows and a figure are all
+-- there at once, with nowhere for the eye to start.
+--
+-- Narcissus answers both and answers them apart, which is the half worth
+-- taking. A slot whose item changed fades its string out over two tenths, sets
+-- the new text on the animation's finish and fades that in, at
+-- Main.lua:1727-1745. A slot arriving with the page comes in from its own side
+-- of the screen, which is the `animOut` group on NarciSlotButtonLeftTemplate:
+-- a hundred and twenty pixels over six tenths.
+--
+-- So two motions on the two channels of Ck/Animations.lua and no third. That
+-- file's header says why the client's own animation groups were refused and
+-- every reason holds here: nineteen rows would be nineteen groups built rather
+-- than nineteen tweens armed, each carrying a closure for its own finish, and
+-- a group gives nothing back that says where the frame it moved has got to.
+--
+-- **The fade is a dip and not two runs.** Narcissus can write the new string
+-- on the finish because the string is its own to hold back. Here the repaint
+-- has already written the row by the time anything can be armed, and holding
+-- the text back for a fifth of a second would be a page whose words are behind
+-- every caller that reads them. So the curve goes down and comes back up: one
+-- tween armed once, nothing on the tick path to call, and the trough is the
+-- moment Narcissus does its swap.
+--
+-- **The whole row dips rather than three regions of it.** The name, the line
+-- under it and the icon are what changed, and so did the sockets, the
+-- durability rule and the shadow the two strings are read on, because all six
+-- describe the piece that moved. Half a row fading reads as broken rather than
+-- as changed, and one tween a row is cheaper than three. The secure button is
+-- not a child of the row and takes none of it.
+--
+-- **Both are refused in a fight, and nothing here is protected.** The sheet is
+-- opened mid pull to be read: what is left on the weapon, what is about to
+-- break, what the badges at the head of the column say. Nineteen rows sliding
+-- in over six tenths of a second is nineteen rows you cannot read while they
+-- do it, and a row dipping to nothing is the one you were reading going away.
+--------------------------------------------------------------------------
+
+local Animations = ns.Ck.Animations
+
+-- Down and back up as one curve.
+--
+-- The alpha channel is armed from one to nought and multiplies this, so nought
+-- at both ends of the run is a row at full strength at both ends of the fade.
+-- Straight lines rather than a rounded trough: the trough is one frame out of
+-- four tenths of a second and a curve through it is arithmetic nobody sees.
+local function Dip(t)
+	return 1 - math.abs(1 - 2 * t)
+end
+
+-- Two tenths down and two tenths back, which is Narcissus's own fade twice.
+local FADE = 0.4
+
+-- How far a row travels to arrive, how long it is travelling, and how much
+-- later each row down a column starts than the one above it.
+--
+-- The lead is the whole difference between a sweep and a block. Ten rows at
+-- three hundredths is three tenths between the top of a column and its foot
+-- against six tenths of travel, so a column is always moving as a whole and
+-- never lands as a line.
+local SLIDE = 120
+local ARRIVE = 0.6
+local STAGGER = 0.03
+
 local Pane = {}
 Pane.__index = Pane
 
@@ -589,23 +658,15 @@ local function Words(box, entry)
 	end
 end
 
-local function Square(pane, entry)
-	local box = CreateFrame("Frame", nil, pane.frame)
-	box:SetSize(SQUARE, SQUARE)
-	box.face = Face(box)
-	box.face:SetPoint("TOP" .. (entry.side == "right" and "RIGHT" or "LEFT"))
-	Words(box, entry)
-
-	-- Under the name. Durability is the one fact about a piece that changes while
-	-- you play, so it belongs on the line you are already reading, and a two pixel
-	-- rule under an item's name is that line's own underscore rather than a bar
-	-- competing with it.
-	box.wear = ns.Fill(box, "OVERLAY", C.tick[1], C.tick[2], C.tick[3], 1)
-	box.wear:SetHeight(WEAR)
-	box.wear:SetPoint("TOP" .. (entry.side == "right" and "RIGHT" or "LEFT"),
-		box.name, "BOTTOM" .. (entry.side == "right" and "RIGHT" or "LEFT"), 0, -1)
-	box.wear:Hide()
-
+-- The thirty-six pixels of a row that answer a click.
+--
+-- Its own function rather than a block in the row's, and it is the seam the
+-- head of this file already argues for: everything here is the secure half,
+-- the row around it answers nothing but the hover, and the two are held apart
+-- by which of them the client will let an addon touch in a fight. Nothing
+-- below is written twice, so the split cost nothing; what it bought is a row
+-- builder you can see the ends of at once.
+local function Press(pane, entry, box)
 	-- The line the client already knows. `/use 16` is what every sharpening
 	-- stone macro in the game carries, and it is the same line for all nineteen
 	-- slots with the number changed.
@@ -682,6 +743,28 @@ local function Square(pane, entry)
 			pane:Paint()
 		end
 	end)
+	return button
+end
+
+local function Square(pane, entry)
+	local box = CreateFrame("Frame", nil, pane.frame)
+	box:SetSize(SQUARE, SQUARE)
+	box.face = Face(box)
+	box.face:SetPoint("TOP" .. (entry.side == "right" and "RIGHT" or "LEFT"))
+	Words(box, entry)
+
+	-- Under the name. Durability is the one fact about a piece that changes while
+	-- you play, so it belongs on the line you are already reading, and a two pixel
+	-- rule under an item's name is that line's own underscore rather than a bar
+	-- competing with it.
+	box.wear = ns.Fill(box, "OVERLAY", C.tick[1], C.tick[2], C.tick[3], 1)
+	box.wear:SetHeight(WEAR)
+	box.wear:SetPoint("TOP" .. (entry.side == "right" and "RIGHT" or "LEFT"),
+		box.name, "BOTTOM" .. (entry.side == "right" and "RIGHT" or "LEFT"), 0, -1)
+	box.wear:Hide()
+
+	local button = Press(pane, entry, box)
+
 	-- Two frames answer the mouse over one row, the row and the disc on it, and
 	-- a hover is the same hover on either. Anchored to the box rather than to
 	-- whichever frame the cursor is in, so crossing onto the icon does not move
@@ -723,7 +806,29 @@ local function Square(pane, entry)
 
 	box.button = button
 	box.entry = entry
+
+	-- One tween a channel, built with the row and re-armed forever after. The
+	-- library's header is emphatic about this and this page is the case it
+	-- describes: a row that dips every time you loot a bracer is one table
+	-- filled in again, and the collector never hears about it.
+	box.fade = Animations.New(box)
+	box.slide = Animations.New(box)
 	return box
+end
+
+-- One row told that what is in it moved.
+--
+-- Armed and left to run. Nothing stops it, so a second change while the first
+-- dip is still going re-arms the same tween from wherever the row stands,
+-- which is a row that dips again rather than one that stutters.
+local function Flash(box)
+	if InCombatLockdown() then
+		return false
+	end
+	Animations.Arm(box.fade, FADE, Dip)
+	Animations.Alpha(box.fade, 1, 0)
+	Animations.Start(box.fade)
+	return true
 end
 
 -- What colour a durability line is at a given fraction. Three stops rather than
@@ -1374,6 +1479,67 @@ function Paperdoll.New(parent)
 	return pane
 end
 
+-- Where a row comes to rest, placed and written down in one go.
+--
+-- The arrival needs both ends of a path and only one of them is a fact about
+-- the row: the far end is wherever the layout below just put it, which is
+-- three shares of the page's width and a count of the rows over it. Kept on
+-- the row rather than worked out a second time, because the second copy of
+-- that sum is the one that goes stale.
+--
+-- And whatever was carrying the row is stopped first. A resize landing in the
+-- middle of an arrival is a tween writing the old page's coordinates over the
+-- new page's anchor for the rest of its run, and the resize is the answer that
+-- should win: it is the player changing the sheet, and the slide is the sheet
+-- saying hello.
+local function Rest(box, parent, point, x, y)
+	Animations.Stop(box.slide)
+	box.point, box.restX, box.restY = point, x, y
+	box:ClearAllPoints()
+	box:SetPoint(point, parent, "TOPLEFT", x, y)
+end
+
+-- Where a row is put down at the end of its travel.
+--
+-- The tween writes whole units and the layout works in the frame's own pixel,
+-- and those are the same number only on a page at a scale of one. A row left
+-- where the last frame of the slide put it is a row up to half a unit off the
+-- grid, which on this page is most of a physical pixel and is a name that
+-- draws soft for the rest of the session. So the arrival finishes on the
+-- layout's own number rather than on the interpolation's, which is where
+-- Narcissus writes the end of its own fade too.
+--
+-- The comparison is not a formality: on a screen where the two numbers agree
+-- this writes nothing at all, and the whole of what a row arriving costs after
+-- that is the comparison.
+-- hot: Landed is a tween's onDone, called back through the field when a row has finished arriving
+local function Landed(tween)
+	local box = tween.frame
+	if tween.atX ~= box.restX or tween.atY ~= box.restY then
+		box:SetPoint(box.point, box:GetParent(), "TOPLEFT", box.restX, box.restY)
+	end
+end
+
+-- One column on its way in from its own side of the page.
+--
+-- The row is written to the start of its path here rather than left standing
+-- where the layout put it. A tween inside its delay is not written to at all,
+-- so a row waiting its turn would be drawn at rest and then thrown a hundred
+-- and twenty pixels sideways on the first frame the tick touched it, which is
+-- every row in the column except the one at the top of it.
+local function Slide(column, parent, sign)
+	for index = 1, #column do
+		local box = column[index]
+		local from = box.restX + sign * SLIDE
+		box:SetPoint(box.point, parent, "TOPLEFT", from, box.restY)
+		Animations.Arm(box.slide, ARRIVE, Animations.Ease.out, (index - 1) * STAGGER)
+		Animations.Path(box.slide, box.point, parent, "TOPLEFT",
+			from, box.restY, box.restX, box.restY)
+		Animations.Start(box.slide, Landed)
+	end
+	return #column
+end
+
 -- Ten rows down the left, nine down the right, the figure standing between
 -- them, and the readings and the stats down the far right. Placed rather than
 -- stacked, because this is one arrangement of a fixed number of rows and a
@@ -1423,13 +1589,12 @@ function Pane:Resize(width, height)
 
 	for index = 1, #self.left do
 		self.left[index]:SetSize(column, SQUARE)
-		self.left[index]:ClearAllPoints()
-		self.left[index]:SetPoint("TOPLEFT", edge, -(top + (index - 1) * (SQUARE + GAP)))
+		Rest(self.left[index], self.frame, "TOPLEFT",
+			edge, -(top + (index - 1) * (SQUARE + GAP)))
 	end
 	for index = 1, #self.right do
 		self.right[index]:SetSize(column, SQUARE)
-		self.right[index]:ClearAllPoints()
-		self.right[index]:SetPoint("TOPRIGHT", self.frame, "TOPLEFT",
+		Rest(self.right[index], self.frame, "TOPRIGHT",
 			edge + block, -(top + (index - 1) * (SQUARE + GAP)))
 	end
 
@@ -1583,8 +1748,24 @@ end
 function Pane:Paint()
 	self:Redress()
 	for index = 1, #self.squares do
-		PaintSquare(self.squares[index])
+		-- Read before the repaint, which is what clears it, and acted on after,
+		-- because a row is dipped to say that what it is showing is new and it is
+		-- only new once PaintSquare has written it.
+		--
+		-- And not on the first paint of the session. Redress compares nineteen
+		-- links against what it drew last time and the first time it has drawn
+		-- nothing, so every slot with a piece in it comes back changed. Fifteen
+		-- rows dipping on the first open is the page announcing itself rather
+		-- than announcing a swap, and the arrival below is what that moment
+		-- already has.
+		local box = self.squares[index]
+		local moved = box.fresh
+		PaintSquare(box)
+		if moved and self.drew then
+			Flash(box)
+		end
 	end
+	self.drew = true
 	-- And the three hands again, straight after, rather than waiting for the
 	-- tick. A sheet opened after an evening shut would otherwise show the figure
 	-- the tick last wrote for up to a second, and the one it wrote is an hour
@@ -1603,6 +1784,26 @@ function Pane:Paint()
 	if self.frame:IsShown() then
 		self.stats:Set(Column())
 	end
+	return true
+end
+
+-- The page coming up, which is the other of the two motions.
+--
+-- Called by whoever showed the sheet rather than worked out here, because the
+-- page's own frame is shown once at login and never hidden again: what comes
+-- and goes is the window over it, and Character/Window.lua hangs this off the
+-- same OnShow it hangs the paint off, so the key, the snippet and the slash
+-- word all arrive the same way.
+--
+-- After the paint and not before it. A row is placed off the page by the line
+-- below and put back by the tick, and a paint in between would size the shadow
+-- under a name against a row that is halfway home.
+function Pane:Arrive()
+	if InCombatLockdown() then
+		return false
+	end
+	Slide(self.left, self.frame, -1)
+	Slide(self.right, self.frame, 1)
 	return true
 end
 

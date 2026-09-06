@@ -392,6 +392,7 @@ HOT_ALLOWED="
 Breakdown/Breakdown.lua:1:Breakdown.OnLog is a combat log reader, called back out of ns.CombatLog's list
 Buffs/Upkeep.lua:1:Upkeep.Scan runs on every UNIT_AURA on the player, off an OnEvent closure
 Buttons/Reaction.lua:1:OnLog is a combat log reader, called back out of ns.CombatLog's list
+Character/Paperdoll.lua:1:Landed is a tween's onDone, called back through the field when a gear row has finished sliding in
 Chat/Feed.lua:1:Feed.Handle runs on every chat line, off this file's OnEvent closure
 Ck/Float.lua:2:Expire is a tween's onDone, called back through the field when a message's time on screen runs out
 Ck/Float.lua:2:Leave is a tween's onDone, called back through the field when a message has finished fading
