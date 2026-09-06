@@ -240,6 +240,104 @@ do
 end
 
 ----------------------------------------------------------------------
+-- The wash a name is read on
+--
+-- The page has no ground, so a name is drawn over whatever the player is
+-- standing on and a white name on snow is a name you lean in to read. Each
+-- filled row carries a black gradient the size of its own two strings, solid at
+-- the disc and gone by the far end of the text.
+--
+-- Every check here is one that fails silently. A wash sized off the wrong
+-- string, one that never grew after the repaint set the text, one drawn under
+-- the word "trinket" on an empty row and one running backwards along the right
+-- hand column all draw a rectangle and all measure fine. The direction is the
+-- worst of them: a right hand row washed the wrong way is solid where there is
+-- no text and clear under every letter, which is worse than no wash at all.
+----------------------------------------------------------------------
+
+do
+	local pane = Window.Pane(GEAR)
+	local M, C = ns.UI.Metric, ns.UI.Color
+	local head, shirt, ring
+	for _, box in ipairs(pane.squares) do
+		if box.entry.slot == 1 then
+			head = box
+		elseif box.entry.slot == 4 then
+			shirt = box
+		elseif box.entry.slot == 11 then
+			ring = box
+		end
+	end
+
+	check(head.wash ~= nil, "a filled row has no wash under its name")
+	check(head.wash:IsShown(), "the helmet's name is drawn on the grass")
+	check(head.wash.layer == "BACKGROUND",
+		("the wash is on %s, so it is drawn over the name it is meant to be under")
+			:format(tostring(head.wash.layer)))
+
+	-- As tall as the two strings plus eighteen. Not the row: the row is the disc,
+	-- thirty-six pixels, and a wash cut to that is a name with its ascenders out
+	-- in the open.
+	local tall = ns.UI.TextHeight(head.name, M.font) + ns.UI.TextHeight(head.note, M.small)
+	check(math.abs(head.wash:GetHeight() - (tall + 18)) <= 0.01,
+		("the wash came out %.1f tall and the two strings are %.1f")
+			:format(head.wash:GetHeight(), tall))
+
+	-- And as wide as the wider of them plus forty-eight, off the letters rather
+	-- than off the frame. A name is anchored at both ends so it can clip, which
+	-- makes its frame the width of the column every time: taken off that, every
+	-- wash on the page would be the same width and it would be the whole row.
+	local letters = math.min(head.name:GetStringWidth(), head.name:GetWidth())
+	local note = head.note:GetStringWidth()
+	check(math.abs(head.wash:GetWidth() - (math.max(letters, note) + 48)) <= 0.01,
+		("the wash came out %.1f wide and the longer string is %.1f")
+			:format(head.wash:GetWidth(), math.max(letters, note)))
+	check(head.wash:GetWidth() <= head:GetWidth() + 4,
+		"the wash is wider than the row it is under, so it runs out over the figure")
+
+	-- A different name is a different width. One wash the size of the longest
+	-- name on the page would pass every arithmetic check above on the row that
+	-- name is in.
+	check(head.wash:GetWidth() ~= ring.wash:GetWidth(),
+		"two rows with different names drew the same wash, so it is not measured per row")
+
+	-- Re-measured by the repaint and not only at build. The strings take their
+	-- text in the repaint, so a wash sized once at build is a wash sized against
+	-- an empty string, and the row it is worst on is the one whose item changed
+	-- while the page was open.
+	head.wash:SetSize(7, 7)
+	pane:Paint()
+	check(math.abs(head.wash:GetWidth() - (math.max(letters, note) + 48)) <= 0.01,
+		("a repaint left the wash %.1f wide, so it is sized at build and never again")
+			:format(head.wash:GetWidth()))
+
+	-- Nothing in the slot, nothing under it. The row still says what the slot is
+	-- for, dimmed, and eight of the nineteen are empty on most characters.
+	check(not shirt.wash:IsShown(),
+		"an empty slot drew a shadow under the word it puts there instead of a name")
+
+	-- Which end is solid. The client runs a horizontal gradient min at the left,
+	-- so a left hand row is solid at min and a right hand row is solid at max,
+	-- and the far end of both is the same colour at no alpha rather than black.
+	local wash = head.wash:GetGradient()
+	check(wash ~= nil and wash.orientation == "HORIZONTAL",
+		"the wash under a row runs down the page rather than along the row")
+	check(wash.min[4] == C.shadow[4] and wash.max[4] == 0,
+		("a left hand row washes from %s to %s and the disc is on its left")
+			:format(tostring(wash.min[4]), tostring(wash.max[4])))
+	check(wash.max[1] == C.shadow[1] and wash.max[2] == C.shadow[2]
+		and wash.max[3] == C.shadow[3],
+		"the wash fades to a different colour rather than to nothing")
+
+	check(ring.entry.side == "right",
+		"the ring is not in the right hand column, so nothing below measures the other direction")
+	local other = ring.wash:GetGradient()
+	check(other.min[4] == 0 and other.max[4] == C.shadow[4],
+		("a right hand row washes from %s to %s and its disc is on the right")
+			:format(tostring(other.min[4]), tostring(other.max[4])))
+end
+
+----------------------------------------------------------------------
 -- The shape of the page, on a screen rather than in a window
 --
 -- The sheet is the size of the monitor now, and the three things that went

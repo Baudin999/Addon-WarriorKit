@@ -92,6 +92,75 @@ function ns.Recolor(edges, color)
 end
 
 --------------------------------------------------------------------------
+-- The wash
+--
+-- A rectangle that is solid at one edge and gone at the other. It is what a
+-- window puts under its own text when there is no window: the character sheet
+-- has no ground by design, so nineteen item names are read against whatever the
+-- player happens to be standing on, and a white name on snow is a name you lean
+-- in to read.
+--
+-- Not a texture file with the ramp painted into it, and the third reason is the
+-- one that decided it. A file is a fixed number of texels and a row is as wide
+-- as its own name, so nineteen rows would stretch one ramp by nineteen amounts
+-- and the fade would begin in a different place on each. A file has to be
+-- baked, shipped and kept in step with UI.Color, and the colour it would carry
+-- is the palette's shadow, which is a decision that lives in Theme.lua and not
+-- in art. And the client draws the ramp for nothing: a gradient is four colours
+-- on the corners of a quad the hardware was going to interpolate anyway.
+--
+-- Not a stroke round the letters either. A rim thickens every glyph, costs a
+-- second draw of the whole string, and says nothing about where the text ends,
+-- which is the half a reader uses to find the row under it.
+--
+-- Which edge is solid is the caller's, because a row in a right hand column
+-- runs the other way. A wash that always ran left to right would put its solid
+-- end where that row has no text at all.
+--------------------------------------------------------------------------
+
+-- The axis each solid edge implies, and which of those edges is the gradient's
+-- own min end. The client runs a horizontal gradient min at the left and a
+-- vertical one min at the bottom.
+local WASH_AXIS = {
+	LEFT = "HORIZONTAL", RIGHT = "HORIZONTAL",
+	BOTTOM = "VERTICAL", TOP = "VERTICAL",
+}
+local WASH_MIN = { LEFT = true, BOTTOM = true }
+
+-- A texture the caller still has to place and size.
+--
+-- Unanchored and unsized on purpose. The sheet re-measures its washes after
+-- every repaint, off strings that only just took their text, and a primitive
+-- that guessed at either would be overwritten on the first paint and misleading
+-- until then.
+--
+-- The far end is the same colour at zero alpha rather than black. A ramp to
+-- black goes grey through the middle over anything that is not black, which is
+-- exactly the case this exists for: what is behind it is the world.
+--
+-- White and solid first, because a gradient tints what is drawn rather than
+-- replacing it, and a texture with no file and no colour has nothing to tint.
+--
+-- A client with no gradient gets a flat wash of the same colour at half
+-- strength. That is worse and it is legible, which is the trade every probe in
+-- this addon makes.
+function UI.Wash(parent, color, edge, layer)
+	local texture = parent:CreateTexture(nil, layer or "BACKGROUND")
+	edge = WASH_AXIS[edge] and edge or "LEFT"
+	local solid = { color[1], color[2], color[3], color[4] or 1 }
+	local gone = { color[1], color[2], color[3], 0 }
+	local min, max = solid, gone
+	if not WASH_MIN[edge] then
+		min, max = gone, solid
+	end
+	texture:SetColorTexture(1, 1, 1, 1)
+	if not ns.Gradient(texture, WASH_AXIS[edge], min, max) then
+		texture:SetColorTexture(solid[1], solid[2], solid[3], solid[4] * 0.5)
+	end
+	return texture
+end
+
+--------------------------------------------------------------------------
 -- Art the client drew
 --
 -- A solid colour is one texel stretched over a rectangle and there is nothing

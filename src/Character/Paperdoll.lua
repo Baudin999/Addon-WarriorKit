@@ -142,6 +142,21 @@ local DOT = 5
 -- How far apart two rows in a column sit.
 local GAP = 4
 
+-- The wash under a row's two strings: how much taller it is than the pair of
+-- them, and how much wider than the longer of them.
+--
+-- Eighteen is a line of air over the name and the same under the item level,
+-- which is what stops the shadow reading as an underline. Forty-eight is the
+-- disc and its gutter at the near end, where the wash is solid, plus what is
+-- left over at the far end, where it has already faded to nothing.
+--
+-- Forty-eight is also why nothing clamps the total to the row. The name is
+-- measured clamped to the room it had, which is the row less the disc and the
+-- gutter, so the widest this can come out is the row plus twelve less that
+-- gutter of eight: four pixels, at the transparent end.
+local WASH_TALL = 18
+local WASH_WIDE = 48
+
 --------------------------------------------------------------------------
 -- Everything else on this page is a share of the page's own width
 --
@@ -329,6 +344,22 @@ local function Words(box, entry)
 	local near = entry.side == "right" and "RIGHT" or "LEFT"
 	local far = entry.side == "right" and "LEFT" or "RIGHT"
 	local sign = entry.side == "right" and -1 or 1
+
+	-- The ground the two strings are read on, because the page has none. Solid
+	-- at the disc and gone by the far end of the name, so it is a shadow the
+	-- size of the thing casting it rather than a panel behind the row.
+	--
+	-- Its direction is the row's. A left hand row reads outward from the disc on
+	-- the left, a right hand row reads inward from the disc on the right, and a
+	-- wash pinned to one of those runs backwards under the other: solid where
+	-- there is no text and clear under every letter.
+	--
+	-- On the row itself and on BACKGROUND, so it passes under the disc's frame,
+	-- under the strings and under the durability rule without anything having to
+	-- be raised over it. Made here and sized by the repaint, because how wide it
+	-- has to be is how wide the name came out.
+	box.wash = UI.Wash(box, C.shadow, near)
+	box.wash:SetPoint(near, box, near)
 
 	box.name = UI.Label(box, M.font, C.text, near, UI.SHADOW)
 	UI.Wrap(box.name, false)
@@ -551,27 +582,52 @@ local function PaintSquare(box)
 	box.note:SetText(level and level > 0 and ("%d"):format(level) or "")
 	PaintDots(box, link)
 
+	-- The string and not the frame. A name is anchored at both ends so it can
+	-- clip rather than wrap, which makes GetWidth the width of the column every
+	-- time: the rule under a full piece was drawn from the name across the whole
+	-- row and out into the middle of the page. GetStringWidth is how much of that
+	-- the letters actually used, which is what an underscore is meant to be as
+	-- wide as. Clamped to the row, because a name longer than the column measures
+	-- at its full length and the rule would run out past the edge the letters are
+	-- cut off at.
+	--
+	-- Read once here rather than inside the durability branch. The wash wants the
+	-- same number for the same reason, and two readings of one measurement are
+	-- two things to get wrong: the rule was already right and a wash taken off
+	-- the unclamped width would have hung off the end of every long name.
+	local room = box.name:GetWidth() or 0
+	local letters = box.name:GetStringWidth() or 0
+	if room > 0 and letters > room then
+		letters = room
+	end
+
 	local has, of = ns.Worn.Durability(entry.slot)
 	if has then
 		local fraction = has / of
-		-- The string and not the frame. A name is anchored at both ends so it can
-		-- clip rather than wrap, which makes GetWidth the width of the column
-		-- every time: the rule under a full piece was drawn from the name across
-		-- the whole row and out into the middle of the page. GetStringWidth is
-		-- how much of that the letters actually used, which is what an underscore
-		-- is meant to be as wide as. Clamped to the row, because a name longer
-		-- than the column measures at its full length and the rule would run out
-		-- past the edge the letters are cut off at.
-		local room = box.name:GetWidth() or 0
-		local letters = box.name:GetStringWidth() or 0
-		if room > 0 and letters > room then
-			letters = room
-		end
 		box.wear:SetWidth(math.max(UI.Round(box, letters * fraction), 1))
 		UI.Tint(box.wear, WearTone(fraction))
 		box.wear:Show()
 	else
 		box.wear:Hide()
+	end
+
+	-- And the wash under both strings, measured now that both have their text.
+	-- Every string on this page is a string over the world, so the size is the
+	-- whole of the answer: a wash wider than the letters is a smear beside the
+	-- name, and one narrower is a name half on the shadow and half on the grass.
+	--
+	-- Not drawn at all on an empty slot. The row still says what the slot is for,
+	-- dimmed, and a shadow under the word trinket is a shadow under nothing;
+	-- eight of the nineteen rows are empty on most characters and nineteen of
+	-- them would be a second page laid over the first.
+	if link then
+		local note = box.note:GetStringWidth() or 0
+		box.wash:SetSize(math.max(letters, note) + WASH_WIDE,
+			UI.TextHeight(box.name, M.font) + UI.TextHeight(box.note, M.small)
+				+ WASH_TALL)
+		box.wash:Show()
+	else
+		box.wash:Hide()
 	end
 end
 

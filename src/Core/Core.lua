@@ -448,6 +448,46 @@ function ns.Threat(source, unit)
 	return UnitDetailedThreatSituation(source, unit)
 end
 
+-- A texture whose colour runs out along one axis.
+--
+-- The first gradient in the addon, and it is a client call rather than a file
+-- because UI/Draw.lua's UI.Wash argues that trade where it uses it.
+--
+-- Probed, and probed harder than most, because this is a call that was
+-- rewritten rather than added. It used to take its two colours as eight loose
+-- numbers, that form was taken away, and what is on 2.5.6 is the three
+-- argument shape: an orientation and two colour objects. Both callers installed
+-- here agree on it. OPie's Libs/TenSettings.lua passes plain {r=,g=,b=,a=}
+-- tables and Narcissus's NarciDB/ClassicAPI.lua wraps CreateColor round its
+-- numbers, and both work, because a colour object is that table with methods
+-- hung on it.
+--
+-- CreateColor is the shape taken here. A raw table is a guess at which fields
+-- this build reads and the guess is only right until it is not; the constructor
+-- is the client saying what it wants, and a build with the new SetGradient has
+-- it. It is what the probe asks for, so a client with neither answers false
+-- once rather than raising per texture.
+--
+-- The colours are the addon's own array shape, r g b a, so no part of the
+-- interface has to learn the client's. Answers whether it drew, because a
+-- texture left flat is a texture the caller has to colour some other way, and
+-- nothing else about it says so.
+local CreateColor = _G.CreateColor
+
+function ns.HasGradient()
+	return type(CreateColor) == "function"
+end
+
+function ns.Gradient(texture, orientation, min, max)
+	if type(CreateColor) ~= "function" or type(texture.SetGradient) ~= "function" then
+		return false
+	end
+	texture:SetGradient(orientation,
+		CreateColor(min[1], min[2], min[3], min[4] or 1),
+		CreateColor(max[1], max[2], max[3], max[4] or 1))
+	return true
+end
+
 --------------------------------------------------------------------------
 -- Incoming heals
 --

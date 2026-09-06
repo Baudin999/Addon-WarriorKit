@@ -188,6 +188,44 @@ function Region:AddMaskTexture(mask)
 	self.masks = self.masks or {}
 	self.masks[#self.masks + 1] = mask
 end
+
+-- The client's colour object, which is what the surviving form of SetGradient
+-- takes. Four fields and the two readers, because that is every part of it the
+-- addon or the stub below touches, and a table wearing more methods than that
+-- would be this file claiming to know a shape it has not read.
+function _G.CreateColor(r, g, b, a)
+	local color = { r = r, g = g, b = b, a = a or 1 }
+	function color:GetRGB() return self.r, self.g, self.b end
+	function color:GetRGBA() return self.r, self.g, self.b, self.a end
+	return color
+end
+
+-- A gradient, recorded rather than dropped on the PascalCase floor.
+--
+-- Dropping it would have been the usual harmless no-op and it is not, because a
+-- wash is nothing but its gradient: the texture under it is flat white, so every
+-- pixel a reader sees is the ramp, and a section without this could assert only
+-- that some call had been made. A wash running the wrong way along a right hand
+-- row draws perfectly and measures perfectly, and the direction read back here
+-- is the one thing that tells it from a right one.
+--
+-- The colours are unpacked into numbers on the way in. What arrives is whatever
+-- the caller built, and the assertion worth having is that the fields the client
+-- reads are on it rather than that a table turned up.
+--
+-- Here and not beside SetColorTexture in 02-text.lua, which is where the rest of
+-- a texture's colour lives. That file is at its own line ceiling, and this file
+-- already owns what a texture is: it makes one, it makes the mask another is cut
+-- to, and it is what every other client file builds on.
+function Region:SetGradient(orientation, min, max)
+	self.gradient = {
+		orientation = orientation,
+		min = { min.r, min.g, min.b, min.a },
+		max = { max.r, max.g, max.b, max.a },
+	}
+end
+function Region:GetGradient() return self.gradient end
+
 -- Where the string was made, as the addon's own file and line.
 --
 -- A frame records loading.file, which is the TOC file that was being read when
