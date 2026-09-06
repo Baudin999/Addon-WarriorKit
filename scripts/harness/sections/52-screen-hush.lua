@@ -29,6 +29,17 @@
 -- one failure here worth more than the feature. Read on the way down and on the
 -- way up, and again after the sheet is closed by a second route.
 --
+-- **The unit blocks go by the other route and have to arrive anyway.** They
+-- cannot come into the room: each one is an anchor of ours with a secure unit
+-- button inside it, so it is neither reparented nor hidden from Lua in a fight,
+-- and a snippet on the guard is what takes it away. That is the half of this
+-- feature reading cannot check, which is what harness/client/21-restricted.lua
+-- exists for: the body runs in the sandbox, so a snippet that reaches for a
+-- call the restricted environment has never had fails here rather than in a
+-- pull. What is read is the same three questions the rows are read on, plus the
+-- one the rows do not have: the button's own flag is the unit watch's answer
+-- and nothing here may write it.
+--
 -- **The sheet has to be over them when the setting is off.** Off is for the
 -- player who wants his swing timer while he reads a number off the sheet, and
 -- it is only worth offering because the strata answer holds on its own: a
@@ -71,6 +82,30 @@ for _, name in ipairs(ROWS) do
 end
 check(#held > 0, "not one row over the world was built in this run, so there is nothing to read")
 
+-- The three unit blocks, by the anchor that is hidden and the button inside it
+-- that must not be. A run builds all three or none: the client stub either
+-- carries SecureUnitButtonTemplate or it does not.
+local BLOCKS = {
+	{ anchor = "WarriorKitPlayerFrame", button = "WarriorKitPlayerButton" },
+	{ anchor = "WarriorKitTargetFrame", button = "WarriorKitTargetButton" },
+	{ anchor = "WarriorKitTargetOfTargetFrame", button = "WarriorKitTargetOfTargetButton" },
+}
+
+local guard = _G.WarriorKitHushGuard
+check(guard ~= nil, "no guard was ever built, so the unit blocks draw over the sheet")
+
+local blocks = {}
+for _, spec in ipairs(BLOCKS) do
+	local anchor = _G[spec.anchor]
+	if anchor then
+		blocks[#blocks + 1] = spec
+		check(anchor:GetParent() ~= room,
+			("%s was put in the room, and the room is shut by a Lua Hide the client refuses on a frame holding a secure button")
+				:format(spec.anchor))
+	end
+end
+check(#blocks > 0, "not one unit block was built in this run, so there is nothing to read")
+
 ----------------------------------------------------------------------
 -- Down with the sheet, and back up after it
 ----------------------------------------------------------------------
@@ -97,6 +132,38 @@ do
 	for _, name in ipairs(held) do
 		check(_G[name]:IsShown() == was[name],
 			("%s came back in a different state from the one it went away in"):format(name))
+	end
+end
+
+----------------------------------------------------------------------
+-- The unit blocks, which the snippet takes away
+----------------------------------------------------------------------
+
+do
+	local was = {}
+	for _, spec in ipairs(blocks) do
+		was[spec.button] = _G[spec.button]:IsShown()
+		check(_G[spec.anchor]:IsShown(),
+			("%s is down before the sheet is up, so nothing here reads anything")
+				:format(spec.anchor))
+	end
+
+	Window.Show()
+	for _, spec in ipairs(blocks) do
+		check(not _G[spec.anchor]:IsShown(),
+			("%s is still on screen with the sheet up"):format(spec.anchor))
+		check(_G[spec.button]:IsShown() == was[spec.button],
+			("%s had its own shown flag written, so the unit watch's answer was overwritten")
+				:format(spec.button))
+	end
+
+	Window.Hide()
+	for _, spec in ipairs(blocks) do
+		check(_G[spec.anchor]:IsShown(),
+			("%s stayed away after the sheet went down"):format(spec.anchor))
+		check(_G[spec.button]:IsShown() == was[spec.button],
+			("%s came back in a different state from the one it went away in")
+				:format(spec.button))
 	end
 end
 
@@ -131,13 +198,24 @@ do
 	Window.Quiet()
 	check(room:IsVisible(),
 		"the setting was turned off with the sheet up and the HUD stayed away")
+	for _, spec in ipairs(blocks) do
+		check(_G[spec.anchor]:IsShown(),
+			("the setting was turned off with the sheet up and %s stayed away")
+				:format(spec.anchor))
+	end
 
 	Window.Hide()
 	Window.Show()
 	check(room:IsVisible(),
 		"the sheet was opened with the setting off and put the HUD away anyway")
+	for _, spec in ipairs(blocks) do
+		check(_G[spec.anchor]:IsShown(),
+			("the sheet was opened with the setting off and put %s away anyway")
+				:format(spec.anchor))
+	end
 
 	ns.db.characterQuiet = ns.DefaultCopy("characterQuiet")
+	Window.Hide()
 end
 
 ----------------------------------------------------------------------
@@ -153,5 +231,5 @@ check(not sheet:IsToplevel(),
 
 Window.Hide()
 
-print(("hush   %d rows over the world into a room shut behind the sheet, their own shown flags untouched, and back on every route down; the sheet at %s over them either way")
-	:format(#held, sheet:GetFrameStrata()))
+print(("hush   %d rows over the world into a room shut behind the sheet and %d unit blocks hidden by the snippet that may do it in a fight, their own shown flags untouched, and back on every route down; the sheet at %s over them either way")
+	:format(#held, #blocks, sheet:GetFrameStrata()))

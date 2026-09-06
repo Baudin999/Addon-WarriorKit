@@ -39,16 +39,27 @@ local UI = ns.UI
 -- answer has to be the same either way. Scale is already independent:
 -- UI/Pixel.lua's Adopt sets SetIgnoreParentScale on every frame that arrives.
 --
--- **Nothing secure comes here.** Reparenting is one of the calls the client
--- refuses an addon mid fight on a protected frame, and the sheet is opened in a
--- fight by a snippet. The action bars, the unit frames and the gear squares are
--- all protected and none of them is registered. What is registered is the seven
--- rectangles the addon draws for itself, and the room is only ever hidden and
--- shown, which the client does not care about on a frame with nothing
--- protected inside it.
+-- **Nothing secure comes into the room.** Reparenting is one of the calls the
+-- client refuses an addon mid fight on a protected frame, and the sheet is
+-- opened in a fight by a snippet. The action bars, the unit frames and the gear
+-- squares are all protected. What the room holds is the rectangles the addon
+-- draws for itself, and it is only ever hidden and shown, which the client does
+-- not care about on a frame with nothing protected inside it.
+--
+-- **The unit frames stand down by snippet instead.** The player block and the
+-- target block are the two rectangles most likely to be under a sheet pinned to
+-- an edge of the monitor, and they are the two this file could not touch: each
+-- one is an anchor of ours with a secure unit button inside it, so it cannot be
+-- reparented and it cannot be hidden from Lua in a fight, which is the fight
+-- the sheet is most often opened in. They register through UI.HushableSecure
+-- below and a snippet on the guard hides them, which is the sanctioned way an
+-- addon does a protected thing in combat and the same way UI/Placeable.lua
+-- moves the sheet itself. The anchor is what the snippet hides and never the
+-- button: the button is driven by the client's own unit watch, and a hidden
+-- parent leaves that answer alone the way it leaves a row's own flag alone.
 --------------------------------------------------------------------------
 
-local holder
+local holder, guard
 
 -- Who has asked for quiet, keyed by the frame that asked.
 --
@@ -58,12 +69,64 @@ local holder
 -- way to read. A set can be written the same way twice and still be right.
 local asked = {}
 
+-- The frames the guard hides, in the order they registered, and how many times
+-- it has been told to. The count is what the snippet acts on and it is why the
+-- turn exists at all: the client drops a SetAttribute that writes the value the
+-- attribute already holds, so a snippet hung off the flag itself would sit
+-- still on the one write that has to land, which is a block registering while
+-- the sheet is already up.
+local hushed = {}
+local turns = 0
+
+-- Hide them, or give them back, from inside the restricted environment.
+--
+-- Read off the guard rather than passed in, because the value that arrives with
+-- the turn is the turn. Frame refs are the only handles a snippet has, so the
+-- registration below writes one per frame under a name this can count through.
+local QUIET = [[
+	if name ~= "wk-turn" then return end
+	local down = self:GetAttribute("wk-down")
+	local count = self:GetAttribute("wk-count") or 0
+	for index = 1, count do
+		local frame = self:GetFrameRef("wk-" .. index)
+		if frame then
+			if down then
+				frame:Hide()
+			else
+				frame:Show()
+			end
+		end
+	end
+]]
+
 local function Room()
 	if not holder then
 		holder = CreateFrame("Frame", "WarriorKitHush", UIParent)
 		holder:SetAllPoints(UIParent)
 	end
 	return holder
+end
+
+local function Guard()
+	if not guard then
+		guard = CreateFrame("Frame", "WarriorKitHushGuard", UIParent,
+			"SecureHandlerAttributeTemplate")
+		guard:SetAttribute("_onattributechanged", QUIET)
+	end
+	return guard
+end
+
+-- Push the answer at the snippet. The flag first and the turn last, for the
+-- reason UI/Placeable.lua writes its offsets before its count: the turn is what
+-- runs the snippet and the snippet reads the flag.
+local function Drive(quiet)
+	if #hushed == 0 then
+		return
+	end
+	local watcher = Guard()
+	turns = turns + 1
+	watcher:SetAttribute("wk-down", quiet)
+	watcher:SetAttribute("wk-turn", turns)
 end
 
 -- A frame that stands down while a screen window is up.
@@ -74,6 +137,21 @@ end
 -- part off hides its own frame.
 function UI.Hushable(frame)
 	frame:SetParent(Room())
+end
+
+-- The same, for a frame that holds something protected.
+--
+-- Called once and out of combat, the same as the room's own registration, and
+-- for a harder reason: handing a snippet a frame reference is an attribute
+-- write on a secure handler and the count it reads is another. Driven on the
+-- way out so a block built while a sheet is already up goes away with it rather
+-- than waiting for the next open.
+function UI.HushableSecure(frame)
+	hushed[#hushed + 1] = frame
+	local watcher = Guard()
+	watcher:SetFrameRef("wk-" .. #hushed, frame)
+	watcher:SetAttribute("wk-count", #hushed)
+	Drive(UI.Hushed())
 end
 
 -- Ask for quiet, or give it back, on behalf of one window.
@@ -91,6 +169,7 @@ function UI.Hush(who, on)
 	else
 		room:Show()
 	end
+	Drive(quiet)
 	return quiet
 end
 

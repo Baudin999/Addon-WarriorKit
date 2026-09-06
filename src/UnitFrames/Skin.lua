@@ -289,6 +289,13 @@ local function Build(spec)
 	button:RegisterForClicks("AnyUp")
 	button:Hide()
 
+	-- And it stands down while a screen window is up. UI/Hush.lua carries the
+	-- reasoning; the second call rather than the first is because the anchor
+	-- holds a secure button, so it cannot go into the room the rows go into and
+	-- a snippet is what takes it away instead. The anchor and not the button:
+	-- the button is the client's to show and hide, through the unit watch.
+	ns.UI.HushableSecure(anchor)
+
 	local entry = {
 		spec = spec,
 		anchor = anchor,

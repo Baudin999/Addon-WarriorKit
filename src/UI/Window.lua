@@ -172,9 +172,10 @@ end
 --
 -- The wash above puts the world behind the sheet in shadow and can do nothing
 -- at all about the addon's own rectangles, because those are frames over the
--- world rather than part of it. UI/Hush.lua is the other half: the seven rows
--- this addon draws over the world go into a room that is shut for as long as
--- the sheet is up, so the page is read against scenery and nothing else.
+-- world rather than part of it. UI/Hush.lua is the other half: the rows this
+-- addon draws over the world go into a room that is shut for as long as the
+-- sheet is up, the unit blocks go away by snippet because they cannot come into
+-- that room, so the page is read against scenery and nothing else.
 --
 -- Its own function beside Darkness rather than four more lines inside it. They
 -- are two answers to the same question and the caller switches them separately:
