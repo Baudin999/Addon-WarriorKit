@@ -1,4 +1,4 @@
--- Four things the window grew after the history did
+-- Five things the window grew after the history did
 --
 -- Does the rail follow the picture. The setting moves one number and three
 -- rectangles are laid out off it: the picture, the row it sits in and the
@@ -19,6 +19,14 @@
 -- same hook a loot line does and the prefix is the whole of what tells them
 -- apart, so the assertion is one of each, each in its own room and not in the
 -- other's.
+--
+-- And does a row say which button and which modifier pressed it. The rail is
+-- the oldest UI.List in the addon and the gesture is the widget's, so it is
+-- asserted on a column built here: the two arguments have no reader until a
+-- quest is pinned with them, and an argument nothing reads is an argument that
+-- can be wrong for a release. The case that pays for the block is a click on
+-- the row already selected, which Select refuses and which a player aiming at
+-- the quest they are reading makes constantly.
 
 local H = ...
 local ns, fire, check = H.ns, H.fire, H.check
@@ -199,6 +207,81 @@ do
 	Window.Apply()
 	check(not Rooms.Exists(Rooms.KIT),
 		"the WarriorKit room is still offered with Blizzard's window on screen")
+end
+
+----------------------------------------------------------------------
+-- What a row knows about the press
+----------------------------------------------------------------------
+
+-- The widget rather than this window, on a column of its own, because what is
+-- being asserted is the contract every list in the addon now shares and the
+-- chat rail's own onSelect ignores the two arguments this is about. A list
+-- built here has an onSelect that records what it was handed, which is the
+-- only way to read the button and the modifier back.
+do
+	local told = {}
+	local shelf = ns.UI.List(_G.UIParent, {
+		onSelect = function(id, which, mods)
+			told[#told + 1] = { id = id, which = which, mods = mods }
+		end,
+		onRight = function(id) told[#told + 1] = { id = id, right = true } end,
+	})
+	shelf:Set({ { id = "one", label = "One" }, { id = "two", label = "Two" } })
+
+	-- A plain left click: the row, the button, and three modifiers nobody was
+	-- holding.
+	check(shelf:Click("one", "LeftButton"), "a list row took no left click")
+	local first = told[#told]
+	check(#told == 1 and first.id == "one" and first.which == "LeftButton",
+		("a left click told the caller %s with %s")
+			:format(tostring(first and first.id), tostring(first and first.which)))
+	check(first.mods and first.mods.shift == false
+		and first.mods.ctrl == false and first.mods.alt == false,
+		"a click nobody modified came through as a modified one")
+
+	-- Shift held. The key is asked of the client inside the handler, so a row
+	-- that cached it at build time answers false here.
+	_G.WarriorKitShift(true)
+	check(shelf:Click("two", "LeftButton"), "a list row took no shift left click")
+	local shifted = told[#told]
+	check(#told == 2 and shifted.mods and shifted.mods.shift == true,
+		"a shift left click reached the caller as an unmodified one")
+
+	-- The row you are already reading. Select refuses this move and would tell
+	-- nobody, which is a shift click on the selected quest pinning nothing.
+	check(shelf:Selected() == "two", "the second click did not move the selection")
+	check(shelf:Click("two", "LeftButton"), "the selected row took no click")
+	local again = told[#told]
+	check(#told == 3 and again.id == "two" and again.mods and again.mods.shift == true,
+		"a modified click on the row already selected told the caller nothing")
+	_G.WarriorKitShift(false)
+
+	-- And the modifier goes away with the key, rather than staying on the row
+	-- it was last pressed with.
+	check(shelf:Click("two", "LeftButton"), "the selected row took no second click")
+	check(#told == 4 and told[4].mods and told[4].mods.shift == false,
+		"a plain click after a shift click still came through as shifted")
+
+	-- The right button belongs to onRight and never reaches the selection.
+	check(shelf:Click("one", "RightButton"), "a list row took no right click")
+	local pressed = told[#told]
+	check(#told == 5 and pressed.right == true,
+		"a right click on a row did not reach onRight")
+	check(shelf:Selected() == "two",
+		"a right click moved the selection as well as answering onRight")
+
+	-- A selection moved by code carries no button and no modifier, which is
+	-- what a caller checks before it reads one: every window here hands Select
+	-- the id it is already showing on each repaint, and a gesture that fired
+	-- there would fire without a hand on the mouse.
+	check(shelf:Select("one"), "the list refused a selection moved by code")
+	local quiet = told[#told]
+	check(#told == 6 and quiet.which == nil and quiet.mods == nil,
+		"a selection moved by code arrived looking like a click")
+	check(not shelf:Select("one"), "the list moved the selection to where it already was")
+	check(#told == 6, "a selection that did not move told the caller anyway")
+
+	shelf.frame:Hide()
 end
 
 ns.db.hideBlizzChat = heldHide

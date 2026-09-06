@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### A list row knows which button and which modifier
+
+Every column in the addon is one widget. It told the window that owned it which
+row you clicked and nothing else, so a shift click and a plain click were the
+same event, and a click on the row you were already reading was no event at all.
+That second half is the one that would have cost a release. The list refuses a
+selection that is already where it is being put, which is right for a repaint
+and wrong for a hand, and a gesture aimed at the quest you are reading would
+have done nothing while every other row worked.
+
+The row now hands its caller the id, the button it was pressed with and what was
+held down at the press. `List:Press` is the click, `List:Select` is the code
+moving the cursor, and only the first fills the last two arguments in. So a
+caller checks the button before it reads a modifier and cannot mistake a repaint
+for a press. The modifier is asked of the client inside the handler, because a
+key remembered from the last click is the wrong answer for this one.
+
+The chat rail, the dungeon shelf and the quest log gain it together, which is
+the argument for putting it in the widget. A shift click that means one thing in
+one column and nothing in the next is worse than no shift click at all.
+
+No row registers for a button it did not register for before. The right button
+still belongs to the way back and to the row's own right click, and the columns
+that take neither still hand it to the camera, which is a trade `UI.PassCamera`
+has a comment about and this gesture had no reason to reopen.
+
 ### A feed row draws a whole word or none of it
 
 A row in a feed is an icon, a name, a dim middle column and a number. Nothing

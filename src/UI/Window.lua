@@ -1490,6 +1490,11 @@ local function PaintListRow(button)
 	PaintCount(button)
 end
 
+-- opts.onSelect is handed (id, which, mods): the row, the button it was pressed
+-- with, and what was held down at the press. The last two are nil where the
+-- selection moved without a click, so a caller reading a modifier checks the
+-- button first. See List:Press, which is the only thing that fills them in.
+--
 -- opts.icons draws a picture per row instead of a word, which is what the chat
 -- window's rail is: thirteen rooms down a column twenty six pixels wide, and
 -- the name of each in its hover. A header is a hairline there rather than a
@@ -1673,6 +1678,26 @@ local function RowMarks(list, button)
 	return right, "LEFT", 0
 end
 
+-- One modifier, asked of the client rather than remembered. A key held is a
+-- state the client already keeps and this widget has no event that would keep
+-- it correctly: a modifier cached at the last press is the modifier of the last
+-- press, and the row would answer a plain click as a shift click for as long as
+-- nobody pressed shift again.
+local function Down(ask)
+	return type(ask) == "function" and ask() and true or false
+end
+
+-- What was held at the moment of the press. Read here rather than in the
+-- caller's own handler, because by the time the caller runs the key may be up:
+-- the press is the only moment the answer is the player's.
+local function Held()
+	return {
+		shift = Down(IsShiftKeyDown),
+		ctrl = Down(IsControlKeyDown),
+		alt = Down(IsAltKeyDown),
+	}
+end
+
 local function ListRow(list, index)
 	local button = CreateFrame("Button", nil, list.stack.frame)
 	button.bg = ns.Fill(button, "BACKGROUND", C.rail[1], C.rail[2], C.rail[3], 1)
@@ -1718,6 +1743,18 @@ local function ListRow(list, index)
 	-- under the cursor is a gesture that works nowhere: a row is a button, a
 	-- button with no right click registered eats the press, and nothing behind
 	-- it is ever told.
+	--
+	-- The list stays here and does not register both on every row, which was
+	-- the other way to give onSelect a button to report. A row that takes the
+	-- right button keeps it, and the price is written above UI.PassCamera: a
+	-- right drag begun over that column stops dead instead of turning the
+	-- camera. The quest log's left column is two hundred pixels of the screen
+	-- and that trade is not worth an argument nothing reads yet.
+	--
+	-- A modifier costs nothing here either way. RegisterForClicks names the
+	-- button and the edge and says nothing about shift, so a shift left click
+	-- arrives at OnClick as "LeftButton" on a row registered for the left
+	-- button and on a row that registered nothing.
 	if list.onBack or list.onRight then
 		button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	end
@@ -1731,7 +1768,9 @@ local function ListRow(list, index)
 			return
 		end
 		if this.id then
-			list:Select(this.id)
+			-- Press rather than Select, and the difference is the whole of
+			-- this gesture. See List:Press.
+			list:Press(this.id, which, Held())
 		end
 	end)
 	-- The hover paints as well as describes, so the two scripts are hung here
@@ -1992,21 +2031,60 @@ function List:Resize(width, height)
 	self:Set(self.rows)
 end
 
--- The row with this id, if it is drawn. Selecting one that is not there keeps
--- the id anyway, because the caller's own state is what decides which rooms
--- exist and this widget is not the place to argue with it.
-function List:Select(id)
-	if self.selected == id then
+-- Move the cursor to this id and repaint every row against it. Answers whether
+-- it moved, which is what says a caller has to be told.
+local function Cursor(list, id)
+	if list.selected == id then
 		return false
 	end
-	self.selected = id
-	for index = 1, #self.pool do
-		local button = self.pool[index]
+	list.selected = id
+	for index = 1, #list.pool do
+		local button = list.pool[index]
 		button.selected = (button.id ~= nil and button.id == id)
 		PaintListRow(button)
 	end
+	return true
+end
+
+-- The row with this id, if it is drawn. Selecting one that is not there keeps
+-- the id anyway, because the caller's own state is what decides which rooms
+-- exist and this widget is not the place to argue with it.
+--
+-- Nothing is fired for a selection that is already where it is being put. That
+-- refusal is what makes this safe to call from a paint: every window here hands
+-- Select the id it is already showing on each repaint, and a callback fired
+-- there would be a paint calling the thing that paints.
+function List:Select(id)
+	if not Cursor(self, id) then
+		return false
+	end
 	if self.onSelect then
 		self.onSelect(id)
+	end
+	return true
+end
+
+-- A click on the row with this id, which is not the same thing as putting the
+-- selection on it, and the two are separate calls for one reason: a click on
+-- the row you are already reading is still a click. Select refuses that move
+-- and is right to, so a gesture hung on the selected row through Select alone
+-- is a gesture that does nothing exactly where the player aimed it.
+--
+--   which  the button the row was pressed with, "LeftButton" today: the right
+--          button belongs to onRight and onBack, which answer it before the
+--          selection is ever reached, and a row on a list offering neither of
+--          those never registered for it and never sees the press at all.
+--   mods   { shift, ctrl, alt }, each a boolean, read off the client at the
+--          moment of the press.
+--
+-- Both are nil when the selection was moved by code rather than by a hand, and
+-- they arrive together or not at all. So `which` is the guard: a caller that
+-- checks it before reading `mods` cannot mistake a repaint for a gesture, and
+-- a pin that fires on a repaint is a pin the player did not ask for.
+function List:Press(id, which, mods)
+	Cursor(self, id)
+	if self.onSelect then
+		self.onSelect(id, which, mods)
 	end
 	return true
 end
