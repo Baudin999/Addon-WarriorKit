@@ -93,6 +93,84 @@ _G.QuestieLoader = {
 	end,
 }
 
+-- Questie's other half: the declared-stable API it ships in Public/.
+--
+-- The loader above cannot reach any of it. `Questie.API` is a plain table on
+-- the Questie global, written there by Modules/VersionCheck.lua at load and
+-- filled in by the four files under Public/, so the two halves of that addon
+-- are two globals here for the same reason they are two on a real client.
+--
+-- Not ready at load, which is the state this matters in. Questie flips isReady
+-- at the end of its own third init stage, minutes after login on a cold
+-- database, and every part of this addon that asks Questie something at
+-- PLAYER_LOGIN is asking before there is an answer. A stub that came up ready
+-- would make the queue below unreachable and the wait untested.
+--
+-- Both registers throw on a non-function, because Questie's own do. It is the
+-- only way a caller finds out it passed the wrong thing, and a stub that took
+-- anything would let a bad call through here and fail in somebody's game.
+local questiePublic = { waiting = {}, updates = {} }
+
+_G.Questie = {
+	API = {
+		isReady = false,
+		Enums = {
+			QuestUpdateTriggerReason = {
+				QUEST_ACCEPTED = 1,
+				QUEST_UPDATED = 2,
+				QUEST_TURNED_IN = 3,
+				QUEST_ABANDONED = 4,
+			},
+		},
+		RegisterOnReady = function(callback)
+			if type(callback) ~= "function" then
+				error("RegisterOnReady: callback must be a function", 0)
+			end
+			if _G.Questie.API.isReady then
+				callback()
+				return
+			end
+			questiePublic.waiting[#questiePublic.waiting + 1] = callback
+		end,
+		RegisterForQuestUpdates = function(callback)
+			if type(callback) ~= "function" then
+				error("RegisterForQuestUpdates: callback must be a function", 0)
+			end
+			questiePublic.updates[#questiePublic.updates + 1] = callback
+		end,
+	},
+}
+
+-- The database finishing, and the queue emptied by it. Questie drains the list
+-- rather than keeping it, so a callback registered before ready runs exactly
+-- once and one registered after runs immediately, and both paths are here.
+function questiePublic.Ready()
+	local waiting = questiePublic.waiting
+	_G.Questie.API.isReady = true
+	questiePublic.waiting = {}
+	for _, callback in ipairs(waiting) do
+		callback()
+	end
+	return #waiting
+end
+
+-- One quest update, in the shape Questie propagates it: the quest, the
+-- objective that moved or nil, and one of the four reasons.
+function questiePublic.Update(questId, objectiveIndex, reason)
+	for _, callback in ipairs(questiePublic.updates) do
+		callback(questId, objectiveIndex, reason)
+	end
+	return #questiePublic.updates
+end
+
+-- How many are listening, which is the only way to tell a register that
+-- happened from one that was refused.
+function questiePublic.Listening()
+	return #questiePublic.waiting, #questiePublic.updates
+end
+
+H.questie = questiePublic
+
 _G.GetNumQuestLogEntries = function() return #QUEST_LOG end
 _G.GetQuestLogTitle = function(index)
 	local questId = QUEST_LOG[index]

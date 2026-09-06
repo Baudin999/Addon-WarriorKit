@@ -60,7 +60,10 @@ local Log, Where, Chart = ns.QuestLog, ns.QuestWhere, UI.Chart
 -- any. It is the same argument UI/Window.lua's list makes, one layer down.
 --
 -- **Nothing here is on a ticker.** The log changes when the server says it
--- changed, which is four events, and every one of them ends in Refresh. The
+-- changed, which is four events, and every one of them ends in Refresh.
+-- Questie's own quest update is a fifth and is not a ticker either: it says a
+-- quest was accepted, updated, turned in or abandoned, and it says it after
+-- Questie has redone the answers the right column draws. The
 -- distance in the right column is the one number that goes stale between
 -- events, and it is redrawn when you click a quest rather than five times a
 -- second, because a quest log open on the screen is not a compass.
@@ -1206,6 +1209,53 @@ function Window.Refresh()
 	return false
 end
 
+-- Questie's quest updates, hung off the same paint as a second source.
+--
+-- The four events below are the client's and they are the wrong grain.
+-- QUEST_LOG_UPDATE is not the log changing: it is the client saying it looked,
+-- several times a second while you are killing things, and Quests/Where.lua's
+-- one-second slot at the top of Soonest is what that already cost once.
+-- Questie's fires four times a quest, on accept, update, turn-in and abandon.
+--
+-- What it buys is the order the right column is drawn in. Two of its three
+-- lines are Questie's answers, and Questie works those out off the same client
+-- events this file listens to, so the redraw the client asks for is a redraw
+-- taken before the other addon has finished thinking. This one arrives after,
+-- which is the only moment "who takes this back" and "how far to the nearest
+-- one left" are the new answers rather than the previous quest's.
+--
+-- The client's four stay. Questie may not be installed, may be v6, and may be
+-- twenty seconds from compiling its database at the moment you press L, and a
+-- quest log that redraws only when another addon says so is a blank window on
+-- all three. This sharpens the first source; it does not replace it.
+--
+-- The three arguments go unread. Questie hands over the quest id, an objective
+-- index and one of Questie.API.Enums.QuestUpdateTriggerReason, and all four of
+-- those reasons change what the left column says, so there is no reason to
+-- refuse any of them and no partial repaint to spend one on.
+--
+-- Readiness is the one question this addon does not probe again for. The rule
+-- at ns.Questie is that nothing about Questie is cached, because the database
+-- compiles minutes after login and an answer taken before it is wrong for the
+-- rest of the session; RegisterOnReady is that same argument answered from the
+-- other end, by the database itself, once, at the moment it finishes.
+function Window.Attach()
+	local ready = ns.QuestieAPI("RegisterOnReady")
+	if not ready then
+		return false
+	end
+	ready.RegisterOnReady(function()
+		local updates = ns.QuestieAPI("RegisterForQuestUpdates")
+		if not updates then
+			return
+		end
+		updates.RegisterForQuestUpdates(function()
+			Window.Refresh()
+		end)
+	end)
+	return true
+end
+
 function Window.Describe()
 	if not ns.db.quests then
 		return "off"
@@ -1238,6 +1288,11 @@ events:SetScript("OnEvent", function(_, event)
 		-- addon has loaded yet.
 		ns.QuestBlizzard.Apply()
 		ns.QuestTracker.Apply()
+		-- And the quest updates for the reason the line above it is here.
+		-- The list this puts a callback on is on that addon's own global,
+		-- and login is the first moment anything promises the global is
+		-- there.
+		Window.Attach()
 		return
 	end
 	Window.Refresh()

@@ -286,6 +286,11 @@ local SECTIONS = {
 	"45-chat-keys",
 	"46-mail",
 	"47-quest-log",
+	-- Under it, and it leaves Questie ready for good. Everything above this
+	-- line runs against a Questie whose database has not finished compiling,
+	-- which is the state a login is in and the one worth testing the addon in;
+	-- nothing below reads the flag.
+	"47-questie-api",
 	-- Last, and it registers a source of its own that stays registered. A
 	-- section after this one would be reading tooltips with the harness's own
 	-- line hooked into them.

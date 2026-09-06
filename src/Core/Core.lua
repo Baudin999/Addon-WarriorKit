@@ -1062,6 +1062,37 @@ function ns.Questie(name, ...)
 	return module
 end
 
+-- The one part of Questie that promises not to move, or nil, asked for by the
+-- call you mean to make.
+--
+-- `Public/` is new in v11 and its README says what nothing else in that addon
+-- says: what is exposed on `Questie.API` is stable and safe to use. The probe
+-- above cannot reach a line of it. It asks QuestieLoader for a module by name,
+-- and `Questie.API` is a plain table written onto the `Questie` global by
+-- Modules/VersionCheck.lua, which the loader has never heard of.
+--
+-- So the same three questions as above, asked of the other half of that addon:
+-- the global, the field, the call. Nil for each, and nothing said.
+--
+-- The table comes back rather than the function, because `isReady` is the
+-- fourth stable thing on it and it is a boolean field rather than a call. A
+-- caller that wants it reads it off what this hands back, next to the read,
+-- which is the rule the header above sets for currentQuestlog.
+--
+-- v6 is what the name argument is for. That install has a `Questie` global and
+-- no `Public/` at all, so the field is what tells the two apart on a client
+-- where the addon is running perfectly well and simply predates the promise.
+function ns.QuestieAPI(name)
+	local questie = _G.Questie
+	if type(questie) ~= "table" or type(questie.API) ~= "table" then
+		return nil
+	end
+	if type(questie.API[name]) ~= "function" then
+		return nil
+	end
+	return questie.API
+end
+
 ------------------------------------------------------------------------
 -- Money
 --

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### The quest log redraws when Questie says a quest changed
+
+Questie 11 ships a folder called `Public` whose README says the one thing
+nothing else in that addon says: what is on `Questie.API` is stable and safe to
+call. One of the four things on it fires when a quest is accepted, updated,
+turned in or abandoned. The quest log listens to it now.
+
+The client's own four events still drive the window and always will. Questie may
+not be installed, may be the version from before the promise, and may still be
+compiling its database at the moment you press L, and a quest log that redraws
+only when another addon speaks is a blank window on all three. What the second
+source is worth is the order. Two of the lines in the right column are Questie's
+answers, worked out off the same client events this addon hears, so a redraw
+taken the instant the client speaks is a redraw taken before the other addon has
+finished thinking. This one arrives after. Hand a quest in and the line naming
+who takes the next one back is right on the first paint rather than the second.
+
+The log waits to be told rather than asking. Questie's database compiles minutes
+after login, so instead of testing whether it is ready on every draw, the window
+registers for the moment it finishes and is answered once, by the database
+itself.
+
 ### The character sheet stops being a window and becomes the screen
 
 It was a dialog: a title bar with the word Character on it, a hairline round the
