@@ -1,10 +1,17 @@
 # Built by scripts/release.sh, never edited by hand.
 dist/
 
-# The same scratch checkouts, in the location the worktree tooling actually
-# uses at the repo root. The directory is already here and empty; without this
-# rule the first agent to check out into it commits a repo inside the repo.
+# Scratch checkouts. They are real git worktrees of this same repo, so
+# committing one embeds a repository inside itself and a clone gets a directory
+# it cannot fill. Tooling-specific scratch paths live in .git/info/exclude,
+# which stays on the machine that made them.
 .worktrees/
+
+# The CurseForge upload token, read by scripts/deploy.sh. It is a credential
+# that can publish a file under this project's name, this repository is public,
+# and a token in a commit is a token that has to be revoked. It belongs on the
+# machine that uploads and nowhere else.
+.curseforge-token
 
 # Merge and patch leftovers. They are byte-identical copies of tracked files
 # and get committed by a wide `git add` before anyone notices.
