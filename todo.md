@@ -878,39 +878,14 @@ was an extension of. Its text is in this file at `17b6427`.
 
     `./scripts/check.sh` green before committing.
 
-87. A chip that leaves only what you needed.
-
-    A seventh chip in `Chips` at `src/Feeds/Loot.lua:162`, past the break with
-    the quest and coin chips, on when item 83 gave the row a reason.
-
-    It is an override the way the quest chip is, not a quality. On, a row with a
-    reason is drawn whatever its quality chip says, which is the combination
-    that matters: greys and whites off, the chip on, and the column is the six
-    things you picked up this hour that you were actually looking for.
-
-    The quest chip is now a special case of it and stays anyway. Somebody who
-    wants quest items and not reagents has to be able to say so, and the two
-    chips together are what says it.
-
-    `Passes` gains one branch, `Feature.lua`'s panel page gains a check box and
-    a slash word at `LootWords`, because a chip without both is a switch that
-    disagrees with the page describing it. The line numbers above are from
-    before items 74, 75, 79 and 86 moved that file; read them off it.
-
-    The branch is `entry.ring`. Item 86 landed `Reason` in `Feeds/Loot.lua`,
-    which writes `note` and `ring` on the arrival and again on every fold, so
-    "has a reason" is already a field on the entry and this chip does not ask
-    `ns.Need` anything.
-
-    What the chip promises is not all there until item 88. From the feed
-    `ns.Need` is called with a link and no loot slot, so it answers quest or
-    skill and never trash, and until 88 finds a slot the chip means "counted or
-    craftable" rather than "worth keeping". Land it anyway; the promise widens
-    under it without the chip changing.
-
-    `./scripts/check.sh` green before committing.
-
 88. What the addon left on the corpse, said out loud.
+
+    Before item 87, which is written below it and keeps its number. The
+    chip filters on a row having a reason, and until this item lands a row
+    can only ever have two of the three: the feed calls `ns.Need` with a
+    link and no loot slot, so trash is never the answer and the chip would
+    ship promising something it cannot do. Numbers here are names, not
+    positions.
 
     `Wanted.Take(slot)` at `src/Comfort/Wanted.lua:103` is the question the
     auto-loot asks per slot, and its four answers are a quality floor, a kind
@@ -941,6 +916,35 @@ was an extension of. Its text is in this file at `17b6427`.
     trash is the same shape or less. Trash is the reason nobody is looking for
     and it is the commonest answer on the list, so a column of loud grey rows is
     the feed back where it started.
+
+    `./scripts/check.sh` green before committing.
+
+87. A chip that leaves only what you needed.
+
+    A seventh chip in `Chips` at `src/Feeds/Loot.lua:162`, past the break with
+    the quest and coin chips, on when item 83 gave the row a reason.
+
+    It is an override the way the quest chip is, not a quality. On, a row with a
+    reason is drawn whatever its quality chip says, which is the combination
+    that matters: greys and whites off, the chip on, and the column is the six
+    things you picked up this hour that you were actually looking for.
+
+    The quest chip is now a special case of it and stays anyway. Somebody who
+    wants quest items and not reagents has to be able to say so, and the two
+    chips together are what says it.
+
+    `Passes` gains one branch, `Feature.lua`'s panel page gains a check box and
+    a slash word at `LootWords`, because a chip without both is a switch that
+    disagrees with the page describing it. The line numbers above are from
+    before items 74, 75, 79 and 86 moved that file; read them off it.
+
+    The branch is `entry.ring`. Item 86 landed `Reason` in `Feeds/Loot.lua`,
+    which writes `note` and `ring` on the arrival and again on every fold, so
+    "has a reason" is already a field on the entry and this chip does not ask
+    `ns.Need` anything.
+
+    Item 88 is above this one and lands first, so all three reasons exist by
+    the time the chip is written and it means what it says.
 
     `./scripts/check.sh` green before committing.
 
