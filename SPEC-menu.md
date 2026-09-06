@@ -381,8 +381,8 @@ into a section of their own. The rail fits without scrolling for the first time.
 
 ## Gates
 
-Three layers, as everywhere else in this repo: a harness section, the pre-commit
-hook and `check.sh`.
+Two layers, as everywhere else in this repo: a harness section and `check.sh`,
+which runs the harness once per class and spec.
 
 `scripts/harness/sections/16-options-window.lua` already walks every rail entry,
 every section and every row and measures what came out. It grows six assertions,

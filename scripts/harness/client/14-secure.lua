@@ -1,6 +1,7 @@
 local H = ...
 
 local Region = H.Region
+local input = H.input
 
 --------------------------------------------------------------------------
 -- A press on a button
@@ -68,7 +69,20 @@ end
 -- PreClick, the client's own half, OnClick, PostClick, in the client's order.
 -- That order is why anything reading the world before the click changes it is
 -- written into PreClick and anything tidying up after one into PostClick.
+-- The client delivering a press, so the nine handlers 01-widgets.lua wraps are
+-- reachable for as long as this runs. Region:Click is the client's own call and
+-- a section may make it; what it may not do is reach past it to the handler.
 function Region:Click(button, down)
+	input.depth = input.depth + 1
+	local ok, err = pcall(self.Press, self, button, down)
+	input.depth = input.depth - 1
+	if not ok then
+		error(err, 0)
+	end
+	return err
+end
+
+function Region:Press(button, down)
 	button = button or "LeftButton"
 	local edge = down and "Down" or "Up"
 	-- A button the frame hands through to whatever is behind it never reaches
@@ -99,11 +113,21 @@ function Region:Click(button, down)
 	if self.secure then
 		secure(self, button, down)
 	end
+	-- The template's own OnClick, which is where a SecureHandlerClickTemplate
+	-- button runs its snippet, and the wrapper a header put around the script.
+	-- Both sit here rather than beside the addon's OnClick because both are the
+	-- client's half of the press: the pre body runs before whatever the button
+	-- was going to do and the post body after it, which is the order AdHoc's
+	-- close snippet is written against.
+	local edgeDown = down and true or false
+	H.snippet.Wrapped(self, "OnClick", "pre", button, edgeDown)
+	H.snippet.Click(self, button, edgeDown)
 	if scripts and scripts.OnClick then
-		scripts.OnClick(self, button, down and true or false)
+		scripts.OnClick(self, button, edgeDown)
 	end
+	H.snippet.Wrapped(self, "OnClick", "post", button, edgeDown)
 	if scripts and scripts.PostClick then
-		scripts.PostClick(self, button, down and true or false)
+		scripts.PostClick(self, button, edgeDown)
 	end
 	return true
 end
@@ -114,8 +138,8 @@ end
 -- bar after the cast, and that snippet is the whole of what makes a bar go
 -- away on a press. A no-op here would let a wrap on the wrong script, or no
 -- wrap at all, pass every assertion. The bodies are kept as strings, the way
--- SetAttribute keeps a snippet, so a section can read them back; nothing here
--- runs them, which is the same limit the state driver stub states.
+-- SetAttribute keeps a snippet, so a section can read them back, and Click
+-- above runs both halves through 21-restricted.lua on the press.
 function Region:WrapScript(frame, script, preBody, postBody)
 	frame.wraps = frame.wraps or {}
 	frame.wraps[script] = { header = self, pre = preBody, post = postBody }

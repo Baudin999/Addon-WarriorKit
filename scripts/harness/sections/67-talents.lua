@@ -306,7 +306,7 @@ do
 	local arms = Window.Board(ARMS)
 	local before = #model.learned
 	local ms = arms:At(7, 2)
-	ms:GetScript("OnClick")(ms)
+	H.mouse.On(ms)
 	check(#model.learned == before + 1, "pressing a reachable talent did not reach the client")
 	local call = model.learned[#model.learned]
 	check(call and call.tab == 1 and call.index == 17,
@@ -320,7 +320,7 @@ do
 
 	-- A locked one is refused without a call.
 	local shut = Window.Board(PROT):At(2, 1)
-	shut:GetScript("OnClick")(shut)
+	H.mouse.On(shut)
 	check(#model.learned == before + 1, "pressing a locked talent reached the client")
 
 	-- With nothing waiting, nothing is reachable and the whole tree greys.
@@ -330,7 +330,7 @@ do
 	local rend = arms:At(1, 3)
 	check(rend.learnable == false and rend.dim == true,
 		"with no points waiting an unlearned talent still reads as reachable")
-	rend:GetScript("OnClick")(rend)
+	H.mouse.On(rend)
 	check(#model.learned == before + 1, "pressing with no points waiting reached the client")
 	model.unspent = had
 	fire("CHARACTER_POINTS_CHANGED")
@@ -403,7 +403,7 @@ do
 		("in the second spec a talent full in the first reads %s"):format(tostring(full.tally:GetText())))
 	check(full.learnable == false, "a talent in the spec you are not standing in reads as reachable")
 	local before = #model.learned
-	full:GetScript("OnClick")(full)
+	H.mouse.On(full)
 	check(#model.learned == before, "pressing a talent in the other spec reached the client")
 	check(arms.points:GetText() == "no points",
 		("the other spec's first tree reads %s"):format(tostring(arms.points:GetText())))
@@ -420,9 +420,7 @@ do
 		end
 	end
 	check(button ~= nil and button:IsShown(), "the activate button is not up while viewing the other spec")
-	if button then
-		button:GetScript("OnClick")(button)
-	end
+	H.mouse.On(button)
 	check(#model.activated == pressed + 1 and model.activated[#model.activated] == 2,
 		"the activate button did not ask the client for the second group")
 	check(model.active == 2 and Window.Viewing() == 2,

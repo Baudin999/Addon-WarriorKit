@@ -346,7 +346,7 @@ do
 		return one.scripts.OnMouseUp ~= nil
 	end)
 	check(port ~= nil, "the map has nothing on it that answers the mouse")
-	port.scripts.OnMouseUp(port, "RightButton")
+	H.mouse.On(port, "RightButton")
 	check(Window.Page() == "shelf",
 		("a right click on the map left the window on the %s page"):format(Window.Page()))
 
@@ -548,10 +548,13 @@ do
 	check(GetBindingAction("SHIFT-L", true) == carries,
 		("Shift-L carries %q"):format(GetBindingAction("SHIFT-L", true)))
 
+	-- Pressed with the client's own Click, on the release, which is the edge
+	-- this button registered and the edge a bound key reaches it on. It takes no
+	-- mouse and sits nowhere on the screen, so there is no point to aim at.
 	Window.Hide()
-	_G[button].scripts.OnClick(_G[button], "LeftButton")
+	check(_G[button]:Click("LeftButton"), "the key button refused the press")
 	check(Window.Shown(), "the key did not open the dungeon log")
-	_G[button].scripts.OnClick(_G[button], "LeftButton")
+	_G[button]:Click("LeftButton")
 	check(not Window.Shown(), "the key did not close the dungeon log again")
 
 	-- Bound somewhere else, and the old key gives the override up. A part that

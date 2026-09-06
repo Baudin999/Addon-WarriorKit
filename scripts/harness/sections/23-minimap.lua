@@ -140,19 +140,36 @@ check(point == "TOPRIGHT" and relative == map,
 
 -- The wheel does the zoom buttons' job now that they are gone. Both ends
 -- clamp, because a client asked for a zoom it does not have raises.
-local wheel = map:GetScript("OnMouseWheel")
-check(wheel ~= nil, "the zoom buttons came off and nothing took their place")
-if wheel then
-	map.zoom = 2
-	wheel(map, 1)
-	check(map.zoom == 3, ("a wheel up moved the zoom to %d, not 3"):format(map.zoom))
-	map.zoom = 4
-	wheel(map, 1)
-	check(map.zoom == 4, "a wheel up past the last zoom level was not clamped")
-	map.zoom = 0
-	wheel(map, -1)
-	check(map.zoom == 0, "a wheel down past the first zoom level was not clamped")
+check(map:GetScript("OnMouseWheel") ~= nil,
+	"the zoom buttons came off and nothing took their place")
+
+-- Turned over a point on the map rather than by calling its handler, so the
+-- claim is that the wheel reaches the map and not only that the handler is
+-- right. The map is square here and covered by nothing, and a bezel or a
+-- button laid over it would show up as a turn that never arrives.
+-- Turned through the client's own dispatch rather than by naming the handler,
+-- which is the gate that matters here: a wheel handler nobody can call by hand
+-- is a wheel handler the client has to deliver.
+--
+-- Not aimed at a point, and that is worth saying out loud. The stub's Blizzard
+-- frames and the addon's unit frames are placed by fixtures rather than laid out
+-- as a screen, and in this one the target block sits over the minimap's corner,
+-- so a hit test here would be measuring the fixture. Where the scene is the
+-- section's own, every other file aims.
+local function turn(delta)
+	check(H.mouse.Deliver(map, "OnMouseWheel", delta),
+		"the map has no wheel handler for the client to deliver to")
 end
+
+map.zoom = 2
+turn(1)
+check(map.zoom == 3, ("a wheel up moved the zoom to %d, not 3"):format(map.zoom))
+map.zoom = 4
+turn(1)
+check(map.zoom == 4, "a wheel up past the last zoom level was not clamped")
+map.zoom = 0
+turn(-1)
+check(map.zoom == 0, "a wheel down past the first zoom level was not clamped")
 
 -- The size is a number rather than a scale, so the frame takes it directly
 -- and the cluster under it grows by the same amount.

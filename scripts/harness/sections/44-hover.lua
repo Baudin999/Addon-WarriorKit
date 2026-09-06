@@ -408,10 +408,15 @@ check(knows == nil or type(knows) == "boolean",
 
 ns.db.hoverDebug = true
 Cast.Watch()
-local trace = button:GetScript("PostClick")
-check(trace ~= nil, "the log is on and nothing is watching the button")
-check(pcall(trace, button, "wk1", true), "a press with the log on threw instead of saying what it found")
-check(pcall(trace, button, "LeftButton", true),
+check(button:GetScript("PostClick") ~= nil, "the log is on and nothing is watching the button")
+-- Pressed with the client's own Click on the down edge, which is what a bound
+-- key does to this button: it is off screen and takes no mouse, so there is no
+-- point to aim at, and the press has to name the virtual click the binding
+-- carries. Reaching PostClick by name skipped the registration, and this button
+-- is registered for one edge only.
+check(pcall(button.Click, button, "wk1", true),
+	"a press with the log on threw instead of saying what it found")
+check(pcall(button.Click, button, "LeftButton", true),
 	"a click under a name no binding owns threw instead of being ignored")
 ns.db.hoverDebug = false
 Cast.Watch()

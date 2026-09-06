@@ -179,18 +179,28 @@ if window then
 		end
 	end
 	check(button ~= nil, "the Settings page has no shipped defaults button")
-
 	if button then
+		-- Aimed at the button rather than handed to its handler. The page it is
+		-- on is opened above, which is what makes the point on the screen a
+		-- point a player could put a pointer on.
 		local function press()
-			button:GetScript("OnClick")(button)
+			H.mouse.On(button)
 		end
 
 		-- Nothing moved, so the label says so rather than offering to do
 		-- nothing, and a press is not the first half of anything.
+		--
+		-- A greyed control takes no mouse at all: UI.Button dims it and calls
+		-- EnableMouse(false), so a press aimed at it goes to whatever is under
+		-- it. That is what is checked here, and calling the handler could not
+		-- check it, because a disabled button still carries one.
 		ns.Options.Refresh()
 		check(button.text:GetText() == "already at the shipped answers",
 			("with nothing moved the button reads %q"):format(tostring(button.text:GetText())))
-		press()
+		check(not button:IsMouseEnabled(),
+			"the button says there is nothing to put back and still answers the mouse")
+		check(H.mouse.Click(H.mouse.Point(button)) ~= button,
+			"a press reached the button while it was greyed out")
 		check(state.reloads == reloads + 1, "the button reloaded with nothing to put back")
 
 		ns.db.swingWidth = 200

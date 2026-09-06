@@ -102,16 +102,24 @@ check(ns.Options.Find("what it printed") >= 1, "the readout is findable by its l
 -- keyboard with everything selected and the Ctrl-C left to the player. The
 -- button is pressed the way the panel presses it, and the field it hands back
 -- is read for what was selected.
-local copy
+local copy, page
 for _, entry in ipairs(ns.Options.Indexed()) do
 	local label = type(entry.label) == "function" and entry.label() or entry.label
 	if label and label:find("Ctrl-C", 1, true) then
-		copy = entry.widget
+		copy, page = entry.widget, entry.section.title
 	end
 end
 check(copy ~= nil, "the copy button is on the page")
+-- Opened, because the press below goes to a point on the screen and the panel
+-- keeps one section up and hides the rest. A button on a section nobody
+-- selected is a button no pointer can reach.
+check(ns.Options.Open(page), "the panel would not open the section the copy button is on")
 say("console run print(7 * 6)")
-local out = copy and copy.scripts.OnClick(copy)
+-- Pressed at a point, and the readout is found the way the client finds it:
+-- whichever box has the keyboard afterwards. Reading it off the handler's return
+-- value is what made this a call rather than a press.
+H.mouse.On(copy)
+local out = _G.GetCurrentKeyBoardFocus()
 check(out ~= nil and out:HasFocus(), "the copy button puts the keyboard in the readout")
 check(out and out:GetText() == "42", "the readout holds what the last run printed")
 local range = out and out:GetHighlighted()

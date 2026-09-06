@@ -31,6 +31,37 @@ local chat = {
 }
 local loading = { file = "?" }
 
+-- Handlers the client alone fires.
+--
+-- A section used to reach a drag by calling grip.scripts.OnDragStart(grip) and
+-- then moving the frame itself with SetPoint. That is not a drag. It skips
+-- RegisterForDrag, so a grip the client would never deliver to passes; it skips
+-- the hit test, so a grip buried under the page passes; and it skips the
+-- snippet that does the real move, so both halves of a secure drag go
+-- untested. The character sheet shipped with all three wrong and this file said
+-- nothing, twice.
+--
+-- So these nine are wrapped at SetScript and the wrapper refuses a call that
+-- did not come from the client's own delivery. The real function is kept beside
+-- it and 22-mouse.lua is what reaches it: a section names a point on the screen
+-- and the stub works out which frame would get the press, the way the client
+-- does. Everything else, OnUpdate and OnEvent and the two hover scripts among
+-- them, is stored as it arrives.
+local DELIVERED = {
+	OnClick = true, PreClick = true, PostClick = true,
+	OnDragStart = true, OnDragStop = true, OnReceiveDrag = true,
+	OnMouseDown = true, OnMouseUp = true, OnMouseWheel = true,
+}
+
+-- How deep inside a delivery we are. A count rather than a flag, because a
+-- handler may click another button and that press is still the client's.
+local input = { depth = 0 }
+
+-- Which frame was made first. The draw order inside one strata and one level is
+-- the order the frames were made in, later on top, and the hit test needs it to
+-- break a tie the way the client breaks one.
+local serial = 0
+
 local Region = {}
 Region.__index = Region
 
@@ -65,8 +96,10 @@ local TYPES = {
 -- just put in it.
 local function region(kind, parent, name)
 	kind = kind:lower()
+	serial = serial + 1
 	local self = setmetatable({
 		kind = kind, parent = parent, name = name, scripts = {}, shown = true,
+		serial = serial, handlers = {},
 		width = 0, height = 0, scale = 1, ignoreScale = false, frameLevel = 0,
 		regions = {}, children = {}, colorWrites = 0,
 		-- The slider and status bar fields, present on every region so the
@@ -77,21 +110,29 @@ local function region(kind, parent, name)
 	if name then
 		_G[name] = self
 	end
-	return self
-end
-
--- A frame's own textures and font strings answer GetRegions; its child frames
--- answer GetChildren. Both walks in Skin.lua need the two kept apart, because
--- one is what gets hidden and the other is what gets recursed into.
-local function child(kind, parent, name)
-	local self = region(kind, parent, name)
-	if kind == "texture" or kind == "fontstring" then
-		parent.regions[#parent.regions + 1] = self
-	else
-		parent.children[#parent.children + 1] = self
+	-- A frame's own textures and font strings answer GetRegions; its child
+	-- frames answer GetChildren. Both walks in Skin.lua need the two kept
+	-- apart, because one is what gets hidden and the other is what gets
+	-- recursed into.
+	--
+	-- Filed here rather than in a second constructor beside this one, which is
+	-- what the two used to be. A region made through that one was in its
+	-- parent's list and a region made through this one was not, and the
+	-- difference was invisible until a hit test walked the tree: Blizzard's own
+	-- minimap is built here with UIParent as its parent, was in nobody's list,
+	-- and the pointer could not find it. A frame with a parent is a child of
+	-- it, and there was never a second answer to that.
+	if parent then
+		if kind == "texture" or kind == "fontstring" then
+			parent.regions[#parent.regions + 1] = self
+		else
+			parent.children[#parent.children + 1] = self
+		end
 	end
 	return self
 end
+
+local child = region
 
 function Region:GetObjectType() return TYPES[self.kind] or "Frame" end
 function Region:GetRegions() return unpack(self.regions) end
@@ -244,7 +285,39 @@ function Region:SetDrawBling(on) self.cdBling = on and true or false end
 function Region:SetSwipeColor(r, g, b, a)
 	self.cdColor = { r, g, b, a }
 end
-function Region:SetScript(name, fn) self.scripts[name] = fn end
+-- The handler as the frame's owner wrote it, past the wrapper the nine names
+-- above wear. Both halves of SetScript and both halves of HookScript go through
+-- this pair, so a hook on a delivered script chains the real functions and the
+-- wrapper stays the only thing a caller can reach.
+local function raw(self, name)
+	if DELIVERED[name] then
+		return self.handlers[name]
+	end
+	return self.scripts[name]
+end
+
+local function write(self, name, fn)
+	if not DELIVERED[name] then
+		self.scripts[name] = fn
+		return
+	end
+	self.handlers[name] = fn
+	if fn == nil then
+		self.scripts[name] = nil
+		return
+	end
+	self.scripts[name] = function(...)
+		if input.depth == 0 then
+			error(("%s on %s was called by hand. It is a handler the client "
+				.. "delivers, so drive it through H.mouse and let the stub work "
+				.. "out which frame the press lands on.")
+				:format(name, self.name or self:GetObjectType()), 2)
+		end
+		return self.handlers[name](...)
+	end
+end
+
+function Region:SetScript(name, fn) write(self, name, fn) end
 function Region:GetScript(name) return self.scripts[name] end
 
 -- Whether a frame takes the keyboard, and whether a key it took walks on.
@@ -271,15 +344,15 @@ function Region:GetPropagateKeyboardInput() return self.propagate == true end
 -- reads exactly like a frame that was hooked, and a party block that answers no
 -- marks at all would pass every assertion in the suite.
 function Region:HookScript(name, fn)
-	local existing = self.scripts[name]
+	local existing = raw(self, name)
 	if not existing then
-		self.scripts[name] = fn
+		write(self, name, fn)
 		return
 	end
-	self.scripts[name] = function(...)
+	write(self, name, function(...)
 		existing(...)
 		fn(...)
-	end
+	end)
 end
 function Region:SetSize(w, h) self.width, self.height = w, h end
 function Region:SetWidth(w) self.width = w end
@@ -287,6 +360,7 @@ function Region:SetHeight(h) self.height = h end
 function Region:GetWidth() return self.width end
 function Region:GetHeight() return self.height end
 
+H.input, H.raw = input, raw
 H.frames, H.events, H.chat = frames, events, chat
 H.loading, H.Region, H.region = loading, Region, region
 H.child = child

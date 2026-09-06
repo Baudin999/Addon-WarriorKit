@@ -179,11 +179,25 @@ do
 	check(not playerButton:IsMouseEnabled(),
 		"the frames are unlocked and the player button still takes the mouse over its anchor")
 
+	-- A drag, delivered to a point on the screen and travelling the distance
+	-- that lands the anchor's top left corner where the caller asked for it.
+	--
+	-- It used to call the two drag scripts by name and put the frame where it
+	-- wanted with SetPoint in between, which asserts the addon's OnDragStop and
+	-- nothing else: not that the anchor is where the pointer can reach it, not
+	-- that it is registered for a drag, and not that the client would move it.
+	-- The button that has to give the mouse up for this to work is checked
+	-- directly above and had no bearing on the old drag at all.
 	local function drop(anchor, x, y)
-		anchor.scripts.OnDragStart(anchor)
-		anchor:ClearAllPoints()
-		anchor:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT", x, y)
-		anchor.scripts.OnDragStop(anchor)
+		local own = anchor:GetEffectiveScale()
+		local grabX, grabY = H.mouse.Point(anchor)
+		local took, dragging = H.mouse.Grab(grabX, grabY, "LeftButton")
+		check(took == anchor,
+			("a drag aimed at an anchor landed on %s"):format(
+				took and (took:GetName() or took:GetObjectType()) or "nothing"))
+		check(dragging, "the anchor under the pointer took no left drag")
+		H.mouse.Drop(grabX + (x - anchor:GetLeft()) * own,
+			grabY + (y - anchor:GetTop()) * own)
 	end
 
 	-- The sideways part of the drag is deliberate: the drop has to be pulled
@@ -217,11 +231,24 @@ do
 	check(own ~= nil and own[2] == _G.UIParent and own[1] == corner[1]
 		and own[4] == corner[4] and own[5] == corner[5],
 		"the link came off and the target did not go to its own corner")
+	-- The corner written down is the frame's own, not one the test picked.
+	-- StartMoving keeps the anchor a frame already has and moves its offsets, so
+	-- a target sitting on the TOPRIGHT it ships on is still on TOPRIGHT when you
+	-- let go. The old drag here set TOPLEFT by hand in the middle of the gesture
+	-- and then asserted TOPLEFT came back, which is the test reading its own
+	-- write.
 	drop(targetAnchor, 500, -120)
 	local stored = ns.db.skinTargetPoint
-	check(stored[1] == "TOPLEFT" and stored[4] == 500 and stored[5] == -120,
-		("an unlinked drag of the target wrote %s at %s, %s and was dropped at TOPLEFT 500, -120")
-			:format(tostring(stored[1]), tostring(stored[4]), tostring(stored[5])))
+	local at, _, against, x, y = targetAnchor:GetPoint()
+	check(stored[1] == at and stored[3] == against
+			and stored[4] == ns.UI.Whole(x) and stored[5] == ns.UI.Whole(y),
+		("an unlinked drag wrote %s at %s, %s and the frame sits on %s at %s, %s")
+			:format(tostring(stored[1]), tostring(stored[4]), tostring(stored[5]),
+				tostring(at), tostring(x), tostring(y)))
+	check(math.abs(targetAnchor:GetLeft() - 500) < 1e-6
+			and math.abs(targetAnchor:GetTop() + 120) < 1e-6,
+		("the target was dropped at 500, -120 and landed at %.2f, %.2f")
+			:format(targetAnchor:GetLeft(), targetAnchor:GetTop()))
 	check(ns.db.skinLevel == ns.DefaultFor("skinLevel"),
 		"an unlinked drag of the target moved the level")
 	ns.db.skinTargetPoint = ns.DefaultCopy("skinTargetPoint")

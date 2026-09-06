@@ -326,12 +326,11 @@ and zero errors is the bar, and it passes, so any finding is yours.
 Builds `dist/WarriorKit-<version>.zip`. Add `--upload` to publish it to
 CurseForge. It refuses to build anything if `check.sh` fails.
 
-Commits run the gate. `scripts/hooks/pre-commit` is tracked, and wired up with
-
-    git config core.hooksPath scripts/hooks
-
-which is already set in this clone. A broken tree cannot be committed without
-`--no-verify`.
+There is no commit hook. There was one, and it ran `check.sh` and the harness
+on every commit, which is the same two runs `check.sh` already does for every
+class and spec: the harness went past twenty times a day for one answer. Run the
+line above before you commit. The gate is the same gate; what is gone is running
+it twice for the same tree.
 
 Version lives in three places on purpose, `ns.version` in `src/Core/Core.lua`
 and `## Version:` in both TOCs. `check.sh` fails if they drift, which is how

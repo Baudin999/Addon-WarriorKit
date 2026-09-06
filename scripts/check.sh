@@ -1430,9 +1430,11 @@ HARNESS_LINE_LIMIT=800
 
 # path:ceiling:why it is exempt
 HARNESS_LINE_ALLOWED="
-sections/05-action-bars.lua:1061:one subject, five bars; splits at the keys, the paging and the churn
 sections/29-social.lua:817:one subject, the chat window; the rooms, what routes into them, what is unread in them and what each one draws are four readings of the same scene
-client/02-text.lua:802:one class, the Region stub; every line is a method of the client's own frame, and a frame API split across two files is two halves of one object
+client/02-text.lua:776:one class, the Region stub; every line is a method of the client's own frame, and a frame API split across two files is two halves of one object
+sections/05-action-bars.lua:1061:one subject, five bars; splits at the keys, the paging and the churn
+sections/52-character.lua:868:one subject, the character sheet window; the gear page is already a file of its own, and what is left is the sheet's key, its secure drag and its tabs, which are one window's chrome and move together
+sections/55-bags.lua:806:one subject, the bag window; what it draws, what a square answers and where the window sits are one window and one bag fixture
 sections/39-party-raid.lua:950:one subject, two lists, two directions each; the party line and the raid grid share a tile, a roster fixture and a header model, and splitting them copies all three
 sections/42-cooldown-row.lua:734:one subject, the cooldown row; what is on it, what a square draws, when the row is up and what the tick costs are four readings of one row and every one of them moves when an entry does
 sections/54-world-map.lua:809:one subject, the world map; the column, the picture, Questie's markers and the gestures over them are one window under one zone fixture, and splitting them copies the map tree, the standing position and the icon frames three ways

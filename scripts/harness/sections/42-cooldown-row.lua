@@ -392,7 +392,7 @@ do
 	-- that is the frame the widget layer enables the mouse on.
 	local function drop(w, book)
 		_G.WarriorKitCarrySpell(book, "spell")
-		w.button.scripts.OnReceiveDrag(w.button)
+		H.mouse.Give(w.button)
 	end
 
 	-- Which square on the page is holding one entry. Walked rather than worked
@@ -446,8 +446,10 @@ do
 	-- nothing, and the entry stays off the row.
 	local off = held("spell" .. REND)
 	check(off ~= nil, "the page is not holding the square the row is")
-	off.button.scripts.OnDragStart(off.button)
-	off.button.scripts.OnDragStop(off.button)
+	-- Let go of off the screen, because the point is that it comes up over
+	-- nothing at all.
+	H.mouse.Grab(H.mouse.Point(off.button))
+	H.mouse.Drop(-5000, 5000)
 	tick()
 	check(place("spell" .. REND) == nil, "a square dragged off the row is still on it")
 	check(Cooldowns.Count() == baseline,
@@ -478,15 +480,13 @@ do
 	end
 
 	-- And back, onto the square the button came up over, which is the half of
-	-- the gesture that can only be answered by the frame under the cursor. Asked
-	-- under GetMouseFoci, the name this client may carry instead: read under one
-	-- name only, a trinket could not be moved between the lines at all.
-	local foci = _G.GetMouseFoci
-	_G.GetMouseFoci = function() return { square(1).button } end
+	-- the gesture only the frame under the cursor can answer. Asked under
+	-- GetMouseFoci, the name this client may carry instead of GetMouseFocus.
+	-- Nothing stands in for GetMouseFoci any more: the client stub answers it off
+	-- the same hit test the pointer travels through, so the frame the drag lands
+	-- on is the one the page reads back rather than one the test named.
 	local w = Page.Shelved(under)
-	w.button.scripts.OnDragStart(w.button)
-	w.button.scripts.OnDragStop(w.button)
-	_G.GetMouseFoci = foci
+	H.mouse.Onto(w.button, square(1).button)
 	tick()
 	at, line = place("spell" .. REND)
 	check(at == 1 and line == Cooldowns.ROTATION,
@@ -497,12 +497,12 @@ do
 	-- that survives a client answering neither name for the frame under the
 	-- cursor. Off from a square on the row, back on from one under it.
 	local w2 = held("spell" .. REND)
-	w2.button.scripts.OnClick(w2.button, "RightButton")
+	H.mouse.On(w2.button, "RightButton")
 	tick()
 	check(place("spell" .. REND) == nil, "right clicking a square left it on the row")
 	local back = Page.Shelved(1)
 	check(back and back.entry ~= nil, "nothing is under the row to put back")
-	back.button.scripts.OnClick(back.button, "RightButton")
+	H.mouse.On(back.button, "RightButton")
 	tick()
 	check(place("spell" .. REND) ~= nil,
 		"right clicking a square under the row did not put it back on")

@@ -564,7 +564,7 @@ meterTicker:Beat(0.25)
 -- The header carries two clicks. The right one is the whole of the toggle;
 -- the left one opens the breakdown, and is asserted where the breakdown is.
 check(damagePane.button ~= nil, "the damage header is not clickable")
-damagePane.button.scripts.OnClick(damagePane.button, "RightButton")
+H.mouse.On(damagePane.button, "RightButton")
 check(ns.db.meterMode == "hps", "right clicking the header did not swap to healing")
 meterTicker:Beat(0.25)
 check(damagePane.left:GetText() == "HPS", "the pane swapped and the header did not")
@@ -574,7 +574,7 @@ check(damagePane.rows[1].name:GetText() == "Frostbite",
 -- sitting on it at zero.
 check(not damagePane.rows[2]:IsShown(),
 	"a member who healed nothing kept their row when the pane swapped to healing")
-damagePane.button.scripts.OnClick(damagePane.button, "RightButton")
+H.mouse.On(damagePane.button, "RightButton")
 
 -- The left button on the same strip opens the breakdown. It is asserted
 -- here rather than in the breakdown's own section because what is being
@@ -582,11 +582,11 @@ damagePane.button.scripts.OnClick(damagePane.button, "RightButton")
 -- not run into each other.
 check(not ns.BreakdownWindow.IsShown(),
 	"the breakdown window was open before anything opened it")
-damagePane.button.scripts.OnClick(damagePane.button, "LeftButton")
+H.mouse.On(damagePane.button, "LeftButton")
 check(ns.BreakdownWindow.IsShown(),
 	"a left click on the meter header did not open the breakdown")
 check(ns.db.meterMode == "dps", "opening the breakdown also swapped the meter")
-damagePane.button.scripts.OnClick(damagePane.button, "LeftButton")
+H.mouse.On(damagePane.button, "LeftButton")
 check(not ns.BreakdownWindow.IsShown(),
 	"a second left click on the meter header did not close the breakdown")
 

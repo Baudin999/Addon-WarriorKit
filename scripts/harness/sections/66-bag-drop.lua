@@ -32,9 +32,26 @@ Window.Show()
 Window.Refresh()
 
 local frame = _G.WarriorKitBags
-local drag, up = frame:GetScript("OnReceiveDrag"), frame:GetScript("OnMouseUp")
-check(type(drag) == "function", "the bag window has no handler for a drag let go of over it")
-check(type(up) == "function", "the bag window has no handler for a click with an item in hand")
+check(type(frame:GetScript("OnReceiveDrag")) == "function",
+	"the bag window has no handler for a drag let go of over it")
+check(type(frame:GetScript("OnMouseUp")) == "function",
+	"the bag window has no handler for a click with an item in hand")
+
+-- Both gestures land on the title bar rather than in the middle of the window,
+-- because the middle of it is thirty-four bag squares and a press there is a
+-- press on a square. Aiming eight units in from the corner is where the window
+-- itself is the frame under the pointer, which is the whole of what makes these
+-- two handlers reachable at all.
+local function letGo()
+	return H.mouse.Give(frame, 8, -8)
+end
+
+local function clickOn()
+	local took = H.mouse.Click(H.mouse.Point(frame, 8, -8))
+	check(took == frame, ("a click on the bag window's bar landed on %s")
+		:format(took and (took:GetName() or took:GetObjectType()) or "nothing"))
+	return took
+end
 
 -- Nothing in hand. The click that dismisses a dropdown must not become a move.
 local before = {}
@@ -44,9 +61,7 @@ for bag = 0, 3 do
 		before[bag][slot] = CARRIED[bag][slot]
 	end
 end
-if up then
-	up(frame)
-end
+clickOn()
 local moved = false
 for bag = 0, 3 do
 	for slot = 1, #CARRIED[bag] do
@@ -62,9 +77,7 @@ check(not moved, "a click on the window with nothing in hand moved something")
 local carried = CARRIED[0][1]
 _G.PickupContainerItem(0, 1)
 check(_G.GetCursorInfo() == "item", "the pickup left nothing on the cursor")
-if drag then
-	drag(frame)
-end
+letGo()
 check(_G.GetCursorInfo() == nil, "the drop left the item on the cursor")
 check(CARRIED[3][1] == carried,
 	("the item landed in the wrong place: the third bag holds %s")
@@ -76,9 +89,7 @@ check(CARRIED[0][1] == false, "the item is still in the slot it was picked up fr
 -- which is where the client's own backpack button would put it too.
 carried = CARRIED[0][2]
 _G.PickupContainerItem(0, 2)
-if up then
-	up(frame)
-end
+clickOn()
 check(_G.GetCursorInfo() == nil, "a click with an item in hand left it on the cursor")
 check(CARRIED[0][1] == carried and CARRIED[0][2] == false,
 	"the second drop did not take the first free slot, at the front of the backpack")
@@ -89,9 +100,7 @@ CARRIED[0][2] = "Chipped Boar Tusk"
 CARRIED[3][2], CARRIED[3][3] = "Chipped Boar Tusk", "Chipped Boar Tusk"
 carried = CARRIED[0][3]
 _G.PickupContainerItem(0, 3)
-if drag then
-	drag(frame)
-end
+letGo()
 check(_G.GetCursorInfo() == "item", "a drop with no room anywhere took the item somewhere")
 check(CARRIED[0][3] == carried, "a drop with no room anywhere emptied the source slot")
 _G.ClearCursor()

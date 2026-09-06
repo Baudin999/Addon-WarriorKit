@@ -221,8 +221,17 @@ do
 		("the foot does not count the lowered square: %s"):format(Window.Ranks()))
 
 	-- And the drag picks that rank up, by its book index.
+	-- Begun at a point on the square. The book is a window of rows and the
+	-- square is the icon on one of them, so which of the two the client hands
+	-- the drag to is a real question and calling the handler never asked it.
 	local before = #fixture.pickups
-	row.square:GetScript("OnDragStart")(row.square)
+	do
+		local took, dragging = H.mouse.Grab(H.mouse.Point(row.square))
+		check(took == row.square, ("a drag on the rank square landed on %s")
+			:format(took and (took:GetName() or took:GetObjectType()) or "nothing"))
+		check(dragging, "the rank square is not registered for a left drag")
+		H.mouse.Drop(-5000, 5000)
+	end
 	check(#fixture.pickups == before + 1, "a drag off the square picked nothing up")
 	check(fixture.pickups[#fixture.pickups] == rend.ranks[1].index,
 		("the drag picked up index %s and the square holds index %d")
@@ -263,7 +272,12 @@ do
 	check(row.rank:GetText() == enrage.ranks[1].label, ("the word under a passive reads %s"):format(tostring(row.rank:GetText())))
 
 	local before = #fixture.pickups
-	row.square:GetScript("OnDragStart")(row.square)
+	do
+		local took = H.mouse.Grab(H.mouse.Point(row.square))
+		check(took == row.square, ("a drag on a passive's square landed on %s")
+			:format(took and (took:GetName() or took:GetObjectType()) or "nothing"))
+		H.mouse.Drop(-5000, 5000)
+	end
 	check(#fixture.pickups == before, "a drag off a passive picked something up")
 
 	check(not Window.View(3), "a tab the book does not have was drawn")

@@ -61,9 +61,12 @@ do
 	end
 	check(Page.Square(1) ~= nil, "the page built no squares to drag")
 
+	-- A spell off the book, let go of over a square. The release is aimed at the
+	-- square rather than handed to its handler, so a square under something else
+	-- refuses it here the way it would in the game.
 	local function drop(w, book)
 		_G.WarriorKitCarrySpell(book, "spell")
-		w.button.scripts.OnReceiveDrag(w.button)
+		H.mouse.Give(w.button)
 	end
 
 	-- The square holding one entry on one line.
@@ -79,12 +82,22 @@ do
 
 	-- A drag from one square to wherever the button comes up, answered under
 	-- GetMouseFoci, the name this client may carry instead of GetMouseFocus.
+	-- A drag from one square to wherever the button comes up. Where that is is
+	-- answered by GetMouseFoci, which the client stub now backs with the same
+	-- hit test the press goes through, so the pointer's travel and the answer
+	-- the addon reads cannot disagree. A drag with nowhere named lets go over
+	-- the square it started on, which is the gesture that puts an entry back.
 	local function drag(w, onto)
-		local foci = _G.GetMouseFoci
-		_G.GetMouseFoci = function() return { onto and onto.button or nil } end
-		w.button.scripts.OnDragStart(w.button)
-		w.button.scripts.OnDragStop(w.button)
-		_G.GetMouseFoci = foci
+		local x, y = H.mouse.Point(w.button)
+		H.mouse.Grab(x, y, "LeftButton")
+		if onto then
+			H.mouse.Drop(H.mouse.Point(onto.button))
+		else
+			-- Off the screen, which is the gesture that takes an entry off a
+			-- line: the button comes up over nothing at all and the page reads
+			-- that back off GetMouseFoci.
+			H.mouse.Drop(-5000, 5000)
+		end
 	end
 
 	-- The empty square at the end of a line, which is one past that line's own.
@@ -133,7 +146,7 @@ do
 
 	-- Right click takes it off that line only.
 	local w = held(rend.key, Upkeep.IN)
-	w.button.scripts.OnClick(w.button, "RightButton")
+	H.mouse.On(w.button, "RightButton")
 	tick()
 	check(Upkeep.Lines(rend) == Upkeep.OUT, "right clicking a square took it off both lines")
 
@@ -150,7 +163,7 @@ do
 	-- Right clicked under the row, it goes back where it shipped: yours ship on
 	-- the out line.
 	local back = Page.Shelved(under)
-	back.button.scripts.OnClick(back.button, "RightButton")
+	H.mouse.On(back.button, "RightButton")
 	tick()
 	check(Upkeep.Watched(rend.key) and Upkeep.Lines(rend) == Upkeep.OUT,
 		"right clicking a square under the row did not put it back where it shipped")
@@ -193,11 +206,8 @@ tick()
 check(Nag.Shown() > 0, "nothing is drawn to click")
 local window = ns.Options.Window()
 ns.Options.Hide()
-local press = Nag.Icon(1):GetScript("OnMouseUp")
-check(press ~= nil, "a nag square has no click")
-if press then
-	press(Nag.Icon(1), "LeftButton")
-end
+check(Nag.Icon(1):GetScript("OnMouseUp") ~= nil, "a nag square has no click")
+H.mouse.Click(H.mouse.Point(Nag.Icon(1)))
 check(window.frame:IsShown(), "clicking a square did not open the options window")
 check(window.header.text:GetText() == "Missing buffs",
 	"the window opened on " .. tostring(window.header.text:GetText()) .. " rather than the row's page")

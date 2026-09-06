@@ -127,21 +127,29 @@ function Region:GetHitRectInsets()
 	end
 	return insets[1], insets[2], insets[3], insets[4]
 end
-function Region:SetParent(p) self.parent = p end
+-- Re-parenting moves the frame between the two lists as well as writing the
+-- field, which it did not before.
+--
+-- Both readings have to agree or the tree is two different trees. GetChildren
+-- answers the list and the hit test in 22-mouse.lua walks it, so a row built on
+-- one frame and re-parented onto another was still hanging off the first one as
+-- far as either of them could tell: it drew inside the window and the pointer
+-- found the window under it.
+function Region:SetParent(p)
+	local was = self.parent
+	if was and was.children then
+		for index = #was.children, 1, -1 do
+			if was.children[index] == self then
+				table.remove(was.children, index)
+			end
+		end
+	end
+	self.parent = p
+	if p and p.children and self.kind ~= "texture" and self.kind ~= "fontstring" then
+		p.children[#p.children + 1] = self
+	end
+end
 function Region:GetParent() return self.parent end
-function Region:SetFrameLevel(l) self.frameLevel = l end
-function Region:GetFrameLevel() return self.frameLevel end
--- Recorded, not modelled. The harness has no sibling order to lift a frame
--- above; a section that cares asks whether the window was raised at all.
-function Region:SetToplevel(on) self.toplevel = on end
-function Region:IsToplevel() return self.toplevel == true end
-function Region:Raise() self.raised = (self.raised or 0) + 1 end
--- Recorded rather than constant, because a strata is what the bar 1 drop bug
--- turned out to be: MainActionBar sits mouse enabled in TOOLTIP, the top strata
--- there is, and no frame level a cloned bar can be given wins that argument.
--- A fixture that answered MEDIUM for everything could not model it.
-function Region:SetFrameStrata(value) self.strata = value end
-function Region:GetFrameStrata() return self.strata or "MEDIUM" end
 function Region:SetTexCoord(a, b, c, d) self.texcoord = { a, b, c, d } end
 -- Eight values, the way the client answers, and the first of them is the left
 -- crop, which is what the skin's tick reads back before it writes.
@@ -258,111 +266,6 @@ function Region:GetShadowOffset()
 	end
 	return 0, 0
 end
--- Real anchors, because the skin reads Blizzard's back out of its own snapshot
--- and places the whole block on the first of them. Answering nothing dropped
--- the block to its fallback and left the one conversion in the file that
--- matters unexercised.
---
--- All three shapes the client takes. SetPoint("TOPLEFT", x, y) is the parent's
--- own corner at that offset, and stored as it arrived the offsets landed where
--- GetPoint hands back the relative frame and the relative point, so every inset
--- in the addon read as zero. SetPoint("CENTER") alone means the parent and the
--- same corner, and the stored nils left an anchor nothing can be placed against
--- and no drag can re-anchor. And an anchor is keyed by the corner it names: a
--- second SetPoint on that corner moves it, one on another corner is a second
--- anchor beside it. Appending both put a stale anchor in front of the live one,
--- replacing both made a frame that cannot be pinned by two corners at all,
--- which is the arrangement a secure header leaves behind.
-function Region:SetPoint(point, relative, relativePoint, x, y)
-	if type(relative) == "number" then
-		relative, relativePoint, x, y = self.parent, point, relative, relativePoint
-	elseif type(relativePoint) == "number" then
-		relativePoint, x, y = point, relativePoint, x
-	end
-	self.points = self.points or {}
-	for index = 1, #self.points do
-		if self.points[index][1] == point then
-			self.points[index] = { point, relative or self.parent,
-				relativePoint or point, x or 0, y or 0 }
-			return
-		end
-	end
-	self.points[#self.points + 1] = { point, relative or self.parent,
-		relativePoint or point, x or 0, y or 0 }
-end
-function Region:ClearAllPoints() self.points, self.allPoints = nil, nil end
-function Region:GetNumPoints() return self.points and #self.points or 0 end
-function Region:GetPoint(index)
-	local pt = self.points and self.points[index or 1]
-	if not pt then
-		return "CENTER", nil, "CENTER", 0, 0
-	end
-	return pt[1], pt[2], pt[3], pt[4], pt[5]
-end
-function Region:SetAllPoints(other)
-	self.allPoints = other or self.parent
-	self.points = { { "TOPLEFT", self.allPoints, "TOPLEFT", 0, 0 },
-		{ "BOTTOMRIGHT", self.allPoints, "BOTTOMRIGHT", 0, 0 } }
-end
-
--- Where a frame actually landed, resolved through the chain of anchors it was
--- given rather than answered as a constant.
---
--- The frame link needs it. Dropping the target in Edit Mode is read back as a
--- gap and a level by measuring four edges and taking two differences, and both
--- frames are on different scales, so a stub answering nil made the derivation
--- untestable and one answering a constant made it pass. UI/Tooltip.lua and
--- UI/Widgets.lua ask the same four when they pick a side to open on.
---
--- The walk follows the first anchor only, which is the one the addon places a
--- frame on. Both offsets are in the anchored frame's own units, the way the
--- client reads them, and the walk stops at UIParent or at a frame with no
--- anchor at all, either of which sits at the origin. Not modelled: a frame
--- sized by a pair of opposing anchors, and the client's own origin, which is
--- the bottom left of the screen where this is the top left of UIParent. Every
--- reader takes a difference between two of these, and a difference is the same
--- on both.
-local function corner(point, width, height)
-	local x = width / 2
-	if point:find("LEFT") then
-		x = 0
-	elseif point:find("RIGHT") then
-		x = width
-	end
-	local y = -height / 2
-	if point:find("TOP") then
-		y = 0
-	elseif point:find("BOTTOM") then
-		y = -height
-	end
-	return x, y
-end
-
-local function origin(self)
-	if self == _G.UIParent or self:GetNumPoints() == 0 then
-		return 0, 0
-	end
-	local point, relative, relativePoint, x, y = self:GetPoint(1)
-	relative = relative or self.parent or _G.UIParent
-	local scale, theirs = self:GetEffectiveScale(), relative:GetEffectiveScale()
-	local rx, ry = origin(relative)
-	local ax, ay = corner(relativePoint, relative:GetWidth(), relative:GetHeight())
-	local mx, my = corner(point, self:GetWidth(), self:GetHeight())
-	return rx + ax * theirs + (x - mx) * scale, ry + ay * theirs + (y - my) * scale
-end
-
-function Region:GetLeft()
-	return (origin(self)) / self:GetEffectiveScale()
-end
-function Region:GetTop()
-	local _, y = origin(self)
-	return y / self:GetEffectiveScale()
-end
-function Region:GetRight() return self:GetLeft() + self:GetWidth() end
-function Region:GetBottom() return self:GetTop() - self:GetHeight() end
-function Region:GetCenter()
-	return self:GetLeft() + self:GetWidth() / 2, self:GetTop() - self:GetHeight() / 2
-end
 -- Stored rather than swallowed by the metatable, because a secure button's
 -- macro is written as an attribute and reading it back is the only way to
 -- assert what a key press would actually send.
@@ -389,12 +292,38 @@ function Region:GetRegisteredClicks() return self.clicks end
 -- recorded for the reason RegisterForClicks above is. A frame that passes the
 -- right button through and registers for it as well draws perfectly, hovers
 -- perfectly, and answers a right click by turning the camera.
-function Region:SetPassThroughButtons(...)
-	self.passed = {}
-	for index = 1, select("#", ...) do
-		self.passed[select(index, ...)] = true
-	end
+-- And this client refuses the call.
+--
+-- SetPassThroughButtons arrived in 10.1.5 and the client this stub is of is
+-- 2.5.6, where the method is not on the widget at all. That cannot be modelled
+-- by leaving it out: the PascalCase catch-all in 01-widgets.lua answers any
+-- method name with a no-op, so a probe of the shape `type(f.SetPassThroughButtons)
+-- == "function"` passes on every frame whatever this file does. Raising reaches
+-- the same place through the other half of every caller's guard, which is a
+-- pcall, and both callers in the addon have one.
+--
+-- What that is worth is a bug the stub was hiding. UI.PassCamera answered true
+-- here, so the meter's header handed the right button to the camera and the
+-- right click that swaps damage for healing never ran. On the live client the
+-- probe fails and the swap works, so the harness was failing a feature the game
+-- has; on a client that does carry the call it is a real dead click, and
+-- ns.Tip.Hang passes the button through with no regard for whether the frame
+-- answers it. UI/Window.lua guards exactly that case and Tip.Hang does not.
+--
+-- H.passThrough is the way to model a client that has it, for the sections that
+-- want to say what a passed button does to a press.
+function Region:SetPassThroughButtons()
+	error("this client has no SetPassThroughButtons", 2)
 end
+
+local function passThrough(frame, ...)
+	frame.passed = {}
+	for index = 1, select("#", ...) do
+		frame.passed[select(index, ...)] = true
+	end
+	return frame
+end
+H.passThrough = passThrough
 function Region:GetPassThroughButtons() return self.passed end
 
 -- Whether a frame takes clicks, a separate flag from whether it takes the
@@ -408,19 +337,31 @@ function Region:IsMouseClickEnabled() return self.mouseClicks ~= false end
 -- Whether a frame takes the mouse. Recorded for the same reason: a frame laid
 -- over an icon that answers the mouse is a button you cannot press, and it
 -- looks identical to one you can.
--- Recorded, not swallowed: a frame that was never made movable answers every
--- drag by doing nothing, and looks exactly like one that was.
-function Region:SetMovable(value) self.movable = value and true or false end
--- Recorded for the reason above it: a frame that registered no drag button
--- answers every drag by doing nothing and looks exactly like one that did.
--- RegisterForDrag with no arguments is how the addon takes a drag away again,
--- so the empty call has to be recorded as a value rather than ignored.
-function Region:RegisterForDrag(button) self.dragButton = button end
-function Region:IsDraggable() return self.dragButton ~= nil end
 
+-- An attribute write, which is not the plain table store it looks like.
+--
+-- The client drops a write whose value is what is already there. It does not
+-- store it again and it does not run _onattributechanged, and that rule is the
+-- whole reason UI/Placeable.lua carries a `moves` counter: the four attributes
+-- a secure drag writes are a corner name, two offsets and a count, and a drag
+-- straight up the screen changes y and never changes x, so a snippet hung off
+-- the offsets would sit still. Nothing here proved that counter was needed
+-- while every write landed and every write fired.
+--
+-- The snippet runs from here because this is where the client runs it. It is
+-- reached through H rather than by name because 21-restricted.lua is loaded
+-- after this file, and it answers false on a frame carrying no secure handler,
+-- which is its own bug worth failing on.
 function Region:SetAttribute(key, value)
 	self.attributes = self.attributes or {}
+	if self.attributes[key] == value then
+		return false
+	end
 	self.attributes[key] = value
+	if H.snippet then
+		H.snippet.Attribute(self, key, value)
+	end
+	return true
 end
 function Region:GetAttribute(key)
 	return self.attributes and self.attributes[key]
@@ -576,6 +517,15 @@ end
 -- while you are typing was an assertion about a state the harness could not
 -- reach. One frame holds the focus at a time, the way the client's does.
 local focused
+
+-- Which edit box has the keyboard, which the client answers and this did not.
+--
+-- A section that presses a button and wants the box the press put the cursor in
+-- used to read the handler's own return value, which meant calling the handler
+-- rather than making the press. The client has a call for it and now so does
+-- this.
+_G.GetCurrentKeyBoardFocus = function() return focused end
+
 function Region:SetFocus()
 	if focused == self then
 		return
@@ -663,6 +613,16 @@ end
 _G.UIParent = region("frame")
 _G.UIParent.scale = UI_SCALE
 _G.UIParent.ignoreScale = true
+-- The screen, in the units GetScreenWidth and GetScreenHeight answer.
+--
+-- It was a point at the origin, which is what a frame nobody sized answers, and
+-- that made every anchor to UIParent's middle resolve to its top left corner.
+-- Nothing noticed while the only readings taken were differences between two
+-- frames anchored the same way. The hit test in 22-mouse.lua takes absolute
+-- positions, and on a screen with no width every window in the addon was piled
+-- on one point with Blizzard's minimap under them.
+_G.UIParent.width = 3440 * 768 / state.SCREEN_H
+_G.UIParent.height = 768
 _G.WorldFrame = region("frame")
 _G.GameTooltip = region("frame")
 
@@ -679,6 +639,20 @@ function _G.CreateFrame(kind, name, parent, template)
 	f.origin = loading.file
 	f.template = template
 	f.secure = template ~= nil and template:find("SecureActionButton", 1, true) ~= nil
+	-- What the client gives a button nobody registered: the left button on the
+	-- release, and nothing else. It used to be nil here, which Region:Click read
+	-- as "every edge of every button", so a right click on a button that never
+	-- asked for one ran its handler and passed. The addon registers both buttons
+	-- on the widgets that want both, and this is the answer for the ones that
+	-- did not ask.
+	--
+	-- A button takes the mouse without being told to, for the same reason: it is
+	-- the client's own default and a stub that started every button inert would
+	-- refuse presses the game delivers.
+	if kind:lower() == "button" then
+		f.clicks = { LeftButtonUp = true }
+		f.mouse = true
+	end
 	frames[#frames + 1] = f
 	return f
 end

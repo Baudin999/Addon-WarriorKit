@@ -1926,10 +1926,14 @@ function List:Act(id, at)
 	for index = 1, #self.pool do
 		local button = self.pool[index]
 		if button.id ~= nil and button.id == id and button.actions then
+			-- Pressed rather than called. Click is the client's own, so the
+			-- mark answers on the edge and the button it registered for and a
+			-- mark wired to a click it never asked for stays silent here the way
+			-- it would on screen. Reaching its OnClick by name answered for the
+			-- handler and for nothing else.
 			local mark = button.actions[at]
-			local press = mark and mark:IsShown() and mark:GetScript("OnClick")
-			if press then
-				press(mark)
+			if mark and mark:IsShown() then
+				mark:Click("LeftButton")
 				return true
 			end
 		end

@@ -432,8 +432,20 @@ do
 	check(main.button.dragButton == "LeftButton",
 		"a gear square does not take a left drag, so nothing can be pulled out of it")
 
+	-- Grabbed at a point on the square and let go of over nothing, which is what
+	-- pulling a weapon out of a slot is. The square is one of nineteen on a page
+	-- half the monitor wide, so which frame takes the press is a real question.
+	local function pull(box)
+		local took, dragging = H.mouse.Grab(H.mouse.Point(box.button))
+		check(took == box.button, ("a drag on the %s square landed on %s")
+			:format(tostring(box.entry.slot),
+				took and (took:GetName() or took:GetObjectType()) or "nothing"))
+		check(dragging, ("the %s square took no left drag"):format(tostring(box.entry.slot)))
+		H.mouse.Drop(-5000, 5000)
+	end
+
 	local picked = #moved.picked
-	main.button.scripts.OnDragStart(main.button)
+	pull(main)
 	check(#moved.picked == picked + 1 and moved.picked[#moved.picked] == 16,
 		"dragging out of the main hand did not pick the weapon up")
 
@@ -452,12 +464,12 @@ do
 	_G.InCombatLockdown = function() return true end
 
 	picked = #moved.picked
-	main.button.scripts.OnDragStart(main.button)
+	pull(main)
 	check(#moved.picked == picked + 1 and moved.picked[#moved.picked] == 16,
 		"a weapon could not be pulled out of its square in a fight")
 
 	picked = #moved.picked
-	chest.button.scripts.OnDragStart(chest.button)
+	pull(chest)
 	check(#moved.picked == picked, "a drag out of the chest square moved armour in combat")
 
 	_G.InCombatLockdown = real
@@ -697,19 +709,76 @@ do
 	local home = { frame:GetPoint() }
 	local spot = ns.db.windowSpots["WarriorKitCharacter"]
 	local was = sheet.place.placed
-	sheet.grip.scripts.OnDragStart(sheet.grip)
-	frame:ClearAllPoints()
-	frame:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT", 60, -30)
-	sheet.grip.scripts.OnDragStop(sheet.grip)
+	local wasShown = frame:IsShown()
+
+	-- Open, because it used to be dragged shut: a gesture nobody can make, and
+	-- invisible while the drag was two handlers called by name.
+	Window.Show(GEAR)
+
+	-- Grabbed at the far end of the strip, away from the tabs over its left. The
+	-- press goes to a point and the stub says which frame is really there, so a
+	-- grip under the page fails here rather than passing. That is the
+	-- arrangement that shipped, and this file asserted it as the requirement.
+	local own = frame:GetEffectiveScale()
+	local grabX, grabY = H.mouse.Point(sheet.grip,
+		sheet.grip:GetWidth() - 20, -sheet.grip:GetHeight() / 2)
+	local took, dragging = H.mouse.Grab(grabX, grabY, "LeftButton")
+	check(took == sheet.grip, ("a drag on the sheet's strip landed on %s")
+		:format(took and (took:GetName() or took:GetObjectType()) or "nothing"))
+	check(dragging, "the strip under the pointer is not registered for a left drag")
+
+	-- Straight down the screen first, and the direction is the point: x never
+	-- changes on this leg, so a snippet hung off the offsets would sit still.
+	-- What it hangs off is the count UI/Placeable.lua keeps.
+	local top = frame:GetTop()
+	local pointerX, pointerY = grabX, grabY - 40 * own
+	H.mouse.Move(pointerX, pointerY)
+	check(math.abs(frame:GetTop() - (top - 40)) < 1e-6,
+		("a drag 40 down the screen moved the sheet from %.2f to %.2f")
+			:format(top, frame:GetTop()))
+	check(frame:GetNumPoints() == 1,
+		("the snippet left the sheet on %d anchors, so it is pinned rather than placed")
+			:format(frame:GetNumPoints()))
+
+	H.mouse.Drop(pointerX + (60 - frame:GetLeft()) * own,
+		pointerY + (-30 - frame:GetTop()) * own)
 	check(ns.db.windowSpots["WarriorKitCharacter"] ~= nil,
 		"the sheet was dropped somewhere and wrote down nothing")
+	check(math.abs(frame:GetLeft() - 60) < 1e-6 and math.abs(frame:GetTop() + 30) < 1e-6,
+		("the sheet was dropped at 60, -30 and landed at %.2f, %.2f")
+			:format(frame:GetLeft(), frame:GetTop()))
 
 	Window.Fit()
-	local point, _, relativePoint, x, y = frame:GetPoint()
-	check(point == "TOPLEFT" and relativePoint == "TOPLEFT" and x == 60 and y == -30,
-		("a refit put the sheet back to %s %s, %s after it was dropped at TOPLEFT 60, -30")
-			:format(tostring(point), tostring(x), tostring(y)))
+	check(math.abs(frame:GetLeft() - 60) < 1e-6 and math.abs(frame:GetTop() + 30) < 1e-6,
+		("a refit put the sheet back to %.2f, %.2f after it was dropped at 60, -30")
+			:format(frame:GetLeft(), frame:GetTop()))
 
+	-- And the count is what places it. A new offset with no new count moves
+	-- nothing, and the same count written twice is not a change at all, so the
+	-- client drops the write and the snippet does not run again. Both halves are
+	-- why that counter exists and nothing proved either.
+	local count = frame:GetAttribute("wk-move")
+	local function offset()
+		return select(4, frame:GetPoint())
+	end
+	local before = offset()
+	frame:SetAttribute("wk-x", 200)
+	check(offset() == before,
+		"a new offset placed the sheet without the count that the snippet reads")
+	frame:SetAttribute("wk-move", count + 1)
+	check(offset() == 200,
+		("the count moved and the sheet is anchored at %s rather than 200")
+			:format(tostring(offset())))
+	frame:SetAttribute("wk-x", 300)
+	frame:SetAttribute("wk-move", count + 1)
+	check(offset() == 200,
+		("the same count written twice ran the snippet again and the sheet is at %s")
+			:format(tostring(offset())))
+	sheet.place.moves = count + 1
+
+	if not wasShown then
+		frame:Hide()
+	end
 	frame:ClearAllPoints()
 	frame:SetPoint(home[1], home[2] or _G.UIParent, home[3], home[4], home[5])
 	ns.db.windowSpots["WarriorKitCharacter"] = spot

@@ -177,15 +177,74 @@ local KEEPS = {
 	{ "WarriorKitMail", "the mail window" },
 	{ "WarriorKitBreakdown", "the meter breakdown" },
 	{ "WarriorKitClutter", "the destroy window" },
-	{ "WarriorKitCharacter", "the character sheet" },
 }
 
+-- The character sheet is the eighth and it is not in that list, because opening
+-- it costs something 52-character.lua measures: the first open is what loads the
+-- figure on the gear page, and a drag here would spend that before the section
+-- that counts it runs. That section drags the sheet by its own grip and asserts
+-- the same thing this loop does, which is the only reason it can be left out.
+
+-- A drag, aimed at the strip the window is grabbed by and travelling far enough
+-- to put the window's top left corner where the caller asked.
+--
+-- Three things it does that the old one could not. The window is opened first,
+-- because a window nobody can see is a window nobody can drag and the old
+-- version dragged all seven of them shut. The press goes to a point, so a grip
+-- buried under the page it belongs to fails here rather than passing. And
+-- nothing moves the frame by hand: the client moves a plain one and a snippet
+-- moves the secure one, which is the half of the character sheet's drag that
+-- had never run.
+--
+-- The corner the window lands on is its own. StartMoving keeps the anchor a
+-- frame already has, so a window that opens on CENTER writes CENTER down, and
+-- the caller reads the anchor back rather than assuming TOPLEFT.
 local function drop(frame, x, y)
 	local by = grip(frame)
-	by.scripts.OnDragStart(by)
-	frame:ClearAllPoints()
-	frame:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT", x, y)
-	by.scripts.OnDragStop(by)
+	-- Unlocked for the length of the gesture. The chat window is the one of the
+	-- nine here that the lock reaches, and with the lock on it carries no drag
+	-- button at all, so the client hands it nothing. The old drag called the
+	-- handler by name and never asked.
+	local locked = ns.db.locked
+	ns.db.locked = false
+	ns.Each("lock")
+	-- One window at a time, because the drag is aimed at a point and a window
+	-- open over this one takes the press. That is the client being right rather
+	-- than the test being awkward: the settings panel was over the quest log and
+	-- the chat window under it, and a player would close one before dragging the
+	-- other. Everything goes back at the foot of the gesture.
+	local open = {}
+	for _, entry in ipairs(ns.UI.Windows) do
+		if entry.frame ~= frame and entry.frame:IsShown() then
+			open[#open + 1] = entry.frame
+			entry.frame:Hide()
+		end
+	end
+	local wasShown = frame:IsShown()
+	frame:Show()
+	-- Over whatever is left, which is what the client does when a window comes
+	-- up and is why two windows on screen at once do not fight.
+	frame:Raise()
+	local own = frame:GetEffectiveScale()
+	-- Aimed at the top left of the strip rather than at its middle, because a
+	-- window with no grip of its own is grabbed by the frame and the middle of
+	-- the frame is the page inside it. Eight units in from the corner is the
+	-- title bar on the five windows with chrome and inside the strip on the two
+	-- without.
+	local took, dragging = H.mouse.DragTo(by, frame, x, y, "LeftButton", 8, -8)
+	check(took == by, ("a drag on %s landed on %s")
+		:format(tostring(frame:GetName()),
+			took and (took:GetName() or took:GetObjectType()) or "nothing"))
+	check(dragging, ("%s is open and the strip under the pointer took no drag")
+		:format(tostring(frame:GetName())))
+	if not wasShown then
+		frame:Hide()
+	end
+	for index = 1, #open do
+		open[index]:Show()
+	end
+	ns.db.locked = locked
+	ns.Each("lock")
 end
 
 local function replace(frame, anchor)
@@ -205,9 +264,18 @@ for index, entry in ipairs(KEEPS) do
 		check(spot ~= nil, entry[2] .. " was dropped somewhere and wrote down nothing")
 		if spot then
 			kept = kept + 1
-			check(spot[1] == "TOPLEFT" and spot[4] == x and spot[5] == y,
-				("%s wrote down %s at %s, %s and was dropped at TOPLEFT %d, %d"):format(
-					entry[2], tostring(spot[1]), tostring(spot[4]), tostring(spot[5]), x, y))
+			-- The corner is the window's own: a drag keeps the anchor a frame
+			-- has and moves its offsets, so a window that opens on CENTER
+			-- writes CENTER down rather than the TOPLEFT this loop used to
+			-- assert after setting it by hand.
+			local at, _, _, ax, ay = frame:GetPoint()
+			check(spot[1] == at and spot[4] == ns.UI.Whole(ax) and spot[5] == ns.UI.Whole(ay),
+				("%s wrote down %s at %s, %s and sits on %s at %s, %s"):format(
+					entry[2], tostring(spot[1]), tostring(spot[4]), tostring(spot[5]),
+					tostring(at), tostring(ax), tostring(ay)))
+			check(math.abs(ax - x) < 1e-6 and math.abs(ay - y) < 1e-6,
+				("%s was dropped at %d, %d and landed at %.2f, %.2f"):format(
+					entry[2], x, y, ax, ay))
 		end
 		replace(frame, home)
 		ns.db.windowSpots[entry[1]] = nil
@@ -226,8 +294,11 @@ if chat then
 	drop(chat, 8, -8)
 	check(ns.db.windowSpots.WarriorKitChat == nil,
 		"the chat window wrote its corner into the shared list as well as its own setting")
-	check(ns.db.chatPoint[4] == 8,
-		"the chat window stopped writing its own corner down")
+	local at, _, _, ax = chat:GetPoint()
+	check(ns.db.chatPoint[1] == at and ns.db.chatPoint[4] == 8 and ax == 8,
+		("the chat window wrote %s at %s down and sits on %s at %s"):format(
+			tostring(ns.db.chatPoint[1]), tostring(ns.db.chatPoint[4]),
+			tostring(at), tostring(ax)))
 	ns.db.chatPoint = chatWas
 	replace(chat, chatWas)
 end

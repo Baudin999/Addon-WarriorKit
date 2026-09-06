@@ -335,10 +335,18 @@ check(_G.GetCursorInfo() == "merchant" and select(2, _G.GetCursorInfo()) == wate
 	"a left click on the water did not put the water on the cursor")
 _G.ClearCursor()
 
--- The drag is the same pickup, through the script the card hangs on it.
-water.scripts.OnDragStart(water)
-check(_G.GetCursorInfo() == "merchant",
-	"a drag begun on the water did not put the water on the cursor")
+-- The drag is the same pickup, begun at a point on the card rather than by
+-- naming the script it hangs on: the card has to be reachable and registered
+-- for a left drag before the client sends it one.
+do
+	local took, dragging = H.mouse.Grab(H.mouse.Point(water))
+	check(took == water, ("a drag on the water landed on %s")
+		:format(took and (took:GetName() or took:GetObjectType()) or "nothing"))
+	check(dragging, "the water card is not registered for a left drag")
+	check(_G.GetCursorInfo() == "merchant",
+		"a drag begun on the water did not put the water on the cursor")
+	H.mouse.Drop(-5000, 5000)
+end
 _G.ClearCursor()
 
 check(water:Click("RightButton") == true,

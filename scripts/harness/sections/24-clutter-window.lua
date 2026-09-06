@@ -207,13 +207,13 @@ check(card.count:GetText() == "1 of 4",
 	("the counter opened on %q rather than 1 of 4"):format(tostring(card.count:GetText())))
 
 local before = #destroyed
-card.skip.scripts.OnClick()
+H.mouse.On(card.skip)
 check(#destroyed == before, "skip destroyed something")
 check(card.count:GetText() == "2 of 4",
 	("skip left the counter on %q"):format(tostring(card.count:GetText())))
 
 advance(1)
-card.destroy.scripts.OnClick()
+H.mouse.On(card.destroy)
 check(#destroyed == before + 1, "the destroy button destroyed nothing")
 check(destroyed[#destroyed]:find("Old Cipher", 1, true) ~= nil,
 	"destroy took an item other than the one on the card")
@@ -222,7 +222,7 @@ check(destroyed[#destroyed]:find("Old Cipher", 1, true) ~= nil,
 -- card the moment the first lands, so without the debounce the second falls
 -- on an item nobody looked at.
 local held = #destroyed
-card.destroy.scripts.OnClick()
+H.mouse.On(card.destroy)
 check(#destroyed == held, "a second click in the same instant destroyed another item")
 
 ----------------------------------------------------------------------
@@ -237,7 +237,7 @@ QUESTBAG[1] = "Unknown Trinket"
 held = #destroyed
 local touched = pickups
 advance(1)
-card.destroy.scripts.OnClick()
+H.mouse.On(card.destroy)
 check(#destroyed == held, "the window destroyed whatever had replaced the item on the card")
 check(QUESTBAG[1] == "Unknown Trinket", "the replacement item was destroyed")
 -- And it never reached the cursor. The cursor check would have caught this
@@ -253,7 +253,7 @@ local realPickup = _G.PickupContainerItem
 _G.PickupContainerItem = function() realPickup(2, 7) end
 held = #destroyed
 advance(1)
-card.destroy.scripts.OnClick()
+H.mouse.On(card.destroy)
 check(#destroyed == held, "a cursor holding the wrong item was deleted anyway")
 check(_G.GetCursorInfo() == nil, "the cursor was left holding an item")
 _G.PickupContainerItem = realPickup
@@ -267,7 +267,7 @@ local realDelete = _G.DeleteCursorItem
 _G.DeleteCursorItem = nil
 held = #destroyed
 advance(1)
-card.destroy.scripts.OnClick()
+H.mouse.On(card.destroy)
 check(#destroyed == held, "something was destroyed on a client with no delete call")
 check(_G.GetCursorInfo() == nil, "the cursor was left holding an item")
 _G.DeleteCursorItem = realDelete

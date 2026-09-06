@@ -203,10 +203,10 @@ check(feed:Shown() == 2, "turning the grey chip back on did not bring the grey b
 do
 	local chip = feed:Chip(1)
 	check(chip ~= nil, "the loot feed has no chips over it")
-	chip:GetScript("OnClick")(chip)
+	H.mouse.On(chip)
 	check(not Loot.Lit(0), "clicking the first chip did not turn the poor quality off")
 	check(feed:Shown() == 1, "clicking the first chip did not take the grey off the column")
-	chip:GetScript("OnClick")(chip)
+	H.mouse.On(chip)
 	check(Loot.Lit(0), "clicking the first chip twice did not put it back")
 	check(feed:Shown() == 2, "clicking the first chip twice did not bring the grey back")
 

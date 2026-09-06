@@ -163,12 +163,18 @@ do
 			tostring(opened[1]), tostring(opened[4]), tostring(opened[5])))
 
 	-- And the other half: dropped somewhere else, it writes the new corner down.
-	frame.scripts.OnDragStart(frame)
-	frame:ClearAllPoints()
-	frame:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT", 111, -222)
-	frame.scripts.OnDragStop(frame)
+	-- Grabbed by the title bar, which on a window with no grip of its own is the
+	-- frame with nothing over it, and moved by the pointer. The corner written
+	-- down is the window's own: a drag keeps a frame's anchor and moves its
+	-- offsets.
+	local took, dragging = H.mouse.DragTo(frame, frame, 111, -222, "LeftButton", 8, -8)
+	check(took == frame, ("a drag on the bag window's bar landed on %s")
+		:format(took and (took:GetName() or took:GetObjectType()) or "nothing"))
+	check(dragging, "the bag window is open and its bar took no left drag")
+
 	local dropped = ns.db.windowSpots.WarriorKitBags
-	check(dropped and dropped[1] == "TOPLEFT" and dropped[4] == 111 and dropped[5] == -222,
+	local at = frame:GetPoint()
+	check(dropped and dropped[1] == at and dropped[4] == 111 and dropped[5] == -222,
 		"the bag window was dragged and wrote down " .. (dropped
 			and ("%s at %s, %s"):format(tostring(dropped[1]), tostring(dropped[4]),
 				tostring(dropped[5])) or "nothing"))

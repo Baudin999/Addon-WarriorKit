@@ -148,7 +148,7 @@ do
 	-- The keys
 	--------------------------------------------------------------------------
 
-	local claimed, missed = 0, 0
+	local claimed, missed = 0, {}
 	for index = 1, #bars do
 		local entry = bars[index]
 		for slot = 1, 12 do
@@ -157,18 +157,27 @@ do
 			for _, key in ipairs(_G.WarriorKitBindings[entry.def.command:format(slot)] or {}) do
 				claimed = claimed + 1
 				if _G.GetBindingAction(key, true) ~= ("CLICK %s:LeftButton"):format(name) then
-					missed = missed + 1
+					missed[#missed + 1] = key
 				end
 			end
 		end
 	end
 	check(claimed == 37,
 		("the stub binds 37 keys across the bars it has on and %d were read"):format(claimed))
-	check(missed == 0,
-		("%d of %d keys did not reach the square they were put on"):format(missed, claimed))
-	check(Bars.Keys() == claimed,
-		("the clone reports holding %d keys and the override layer carries %d")
-			:format(Bars.Keys(), claimed))
+
+	-- One key of the 37 does not reach a square on a warrior: the charge button
+	-- ships holding it, and Buttons/Bars.lua reads the binding layer back before
+	-- claiming a key, so the square gives it up. Nothing saw that until the
+	-- binder's snippet ran, and no other class has a charge button.
+	local lent = _G.WarriorKitChargeButton and ns.db.chargeKey or nil
+	local away = lent and 1 or 0
+	check(#missed == away and (not lent or (missed[1] == lent
+			and _G.GetBindingAction(lent, true) == "CLICK WarriorKitChargeButton:LeftButton")),
+		("%d of %d keys did not reach the square they were put on: %s")
+			:format(#missed, claimed, table.concat(missed, ", ")))
+	check(Bars.Keys() == claimed - away,
+		("the clone holds %d keys of the %d the override layer carries")
+			:format(Bars.Keys(), claimed - away))
 
 	-- The secondary key is a key the player set on purpose and is the one a
 	-- clone drops silently.
@@ -321,17 +330,18 @@ do
 	check(bars[1].frame.movable == true, "the bar was never made movable, so a drag does nothing")
 
 	-- A drag writes an override, and the override is what draws.
+	-- Delivered to a point rather than to the handle's script by name, which is
+	-- the difference between "the handler is right" and "the player can reach
+	-- it": the handle is a frame laid over the bar in HIGH and every square in
+	-- the bar takes the mouse. Dropped on a fraction on purpose, because the bar
+	-- is on the pixel grid and a fractional offset puts every icon and glyph
+	-- across two rows of pixels, so this is where position is made whole.
 	local one = found.bar1
-	one.handle:GetScript("OnDragStart")()
-	one.frame.points = nil
-	-- Dropped on a fraction on purpose. A drag lands wherever the cursor was,
-	-- and the bar is on the pixel grid, where a fractional offset puts every
-	-- icon and every glyph on it across two rows of pixels. The grid buys exact
-	-- sizes and nothing at all about position, so this is the one place
-	-- position is made whole and it has to be asserted with a number that would
-	-- survive not being.
-	one.frame:SetPoint("BOTTOM", _G.UIParent, "BOTTOM", 40.4, 259.6)
-	one.handle:GetScript("OnDragStop")()
+	local took, dragging = H.mouse.DragTo(one.handle, one.frame, 40.4, 259.6)
+	check(took == one.handle and dragging,
+		("a drag on the middle of bar 1 landed on %s, dragging %s")
+			:format(took and (took:GetName() or took:GetObjectType()) or "nothing",
+				tostring(dragging)))
 	local saved = ns.db.barPoints.bar1
 	check(saved and saved[4] == 40 and saved[5] == 260,
 		("a drag to 40.4, 259.6 recorded %s, %s"):format(
@@ -628,28 +638,28 @@ do
 	-- Dragging a spell onto a square
 	--
 	-- The only way to fill one by hand, because the Blizzard button underneath
-	-- is hidden and cannot be dropped on. Driven end to end across two squares
-	-- rather than by asserting the scripts exist: a pickup that never fills the
-	-- cursor and a drop that never moves a slot look exactly like a bar you
-	-- cannot drop on, and that is the state this replaces.
+	-- is hidden and cannot be dropped on. Driven end to end across two squares:
+	-- a pickup that never fills the cursor and a drop that never moves a slot
+	-- look exactly like a bar you cannot drop on.
 	--------------------------------------------------------------------------
 
 	local other = found.bar1.buttons[3]
 	local there = other:GetAttribute("action")
-	local pick, drop = square:GetScript("OnDragStart"), other:GetScript("OnReceiveDrag")
-	check(pick and drop,
-		"a bar square has no drag scripts, so nothing can be moved onto it")
+	check(square.dragButton ~= nil and other.dragButton ~= nil,
+		"a bar square is not registered for a drag, so nothing can be moved onto it")
 
+	-- Picked up and put down by the pointer, one square to another, rather than
+	-- by two scripts called by name.
 	slots[seat] = { texture = ART }
 	slots[there] = nil
-	if pick then
-		pick(square)
-	end
+	local function carry(from) return H.mouse.Grab(H.mouse.Point(from)) end
+	local function put(target) return H.mouse.Drop(H.mouse.Point(target)) end
+
+	check(carry(square) == square,
+		"the pointer over a square found something else on top of it")
 	check(GetCursorInfo() ~= nil, "dragging a square picked nothing up")
 	check(slots[seat] == nil, "the slot kept its ability while the cursor carried it")
-	if drop then
-		drop(other)
-	end
+	put(other)
 	check(slots[there] ~= nil and slots[there].texture == ART,
 		"dropping on an empty square did not fill it")
 	check(GetCursorInfo() == nil, "the cursor is still full after a drop onto an empty slot")
@@ -659,26 +669,19 @@ do
 	-- destroy it.
 	local OTHER_ART = "Interface\\Icons\\Ability_Warrior_Cleave"
 	slots[seat] = { texture = OTHER_ART }
-	if pick then
-		pick(square)
-	end
-	if drop then
-		drop(other)
-	end
+	H.mouse.Onto(square, other)
 	check(slots[there] ~= nil and slots[there].texture == OTHER_ART,
 		"a drop onto a filled square did not replace what was there")
 	check(GetCursorInfo() ~= nil, "the displaced ability was destroyed instead of handed back")
 	ClearCursor()
 
 	-- Refused in combat, where PickupAction cannot be called at all. The clone
-	-- shares Layout's probe, so this is the same refusal that stops a loadout
-	-- writing mid-fight.
+	-- shares Layout's probe, so it is the refusal that stops a loadout writing
+	-- mid-fight.
 	slots[seat] = { texture = ART }
 	local realLockdown = _G.InCombatLockdown
 	_G.InCombatLockdown = function() return true end
-	if pick then
-		pick(square)
-	end
+	H.mouse.Onto(square, square)
 	_G.InCombatLockdown = realLockdown
 	check(GetCursorInfo() == nil, "a square let go of its ability in combat")
 	check(slots[seat] ~= nil, "a slot was emptied by a drag started in combat")
@@ -689,14 +692,11 @@ do
 	--------------------------------------------------------------------------
 	-- A drop that goes nowhere, said out loud
 	--
-	-- What this pays for: bar 1 hovered, named what was on it and pushed under
-	-- a click, and took no drop at all, through two fixes written by reading
-	-- the code. Every one of those failures printed nothing, so the three ways
-	-- a drop can die looked identical on screen and the only tool left was
-	-- another theory.
-	--
-	-- Driven rather than asserted, for the reason the drag above is driven: a
-	-- message that is never reached is worth the same as no message.
+	-- What this pays for: bar 1 hovered, named what was on it and pushed under a
+	-- click, and took no drop at all, through two fixes written by reading the
+	-- code. Every one of those failures printed nothing, so the three ways a drop
+	-- can die looked identical on screen. Driven rather than asserted, for the
+	-- reason the drag above is: a message never reached is worth no message.
 	--------------------------------------------------------------------------
 
 	local chat = _G.DEFAULT_CHAT_FRAME.AddMessage
@@ -717,10 +717,10 @@ do
 	-- slot it will not write looks like from this side.
 	local realPlace = _G.PlaceAction
 	slots[seat] = { texture = ART }
-	pick(square)
+	carry(square)
 	_G.PlaceAction = function() end
 	heard = {}
-	drop(other)
+	put(other)
 	_G.PlaceAction = realPlace
 	check(Heard("changed nothing"),
 		"a drop the client did nothing with said nothing either")
@@ -734,9 +734,9 @@ do
 	local held = other:GetAttribute("action")
 	other:SetAttribute("action", nil)
 	slots[seat] = { texture = ART }
-	pick(square)
+	carry(square)
 	heard = {}
-	drop(other)
+	put(other)
 	check(Heard("not pointing at an action slot"),
 		"a square with no slot behind it swallowed a drop in silence")
 	other:SetAttribute("action", held)
@@ -746,9 +746,9 @@ do
 	-- And a drop that worked says nothing at all, because a bar that talks
 	-- every time it works is a bar nobody reads when it stops working.
 	slots[seat] = { texture = ART }
-	pick(square)
+	carry(square)
 	heard = {}
-	drop(other)
+	put(other)
 	check(#heard == 0,
 		("a drop that worked printed %d lines"):format(#heard))
 	ClearCursor()
@@ -765,7 +765,7 @@ do
 	check(not ns.BarTrace.Running(), "the trace ships switched on")
 	slots[seat] = { texture = ART }
 	heard = {}
-	pick(square)
+	H.mouse.Onto(square, square)
 	check(#heard == 0, "the trace talks with its switch off")
 	ClearCursor()
 	slots[seat] = nil
@@ -789,19 +789,16 @@ do
 
 	slots[seat] = { texture = ART }
 	heard = {}
-	pick(square)
-	drop(other)
+	H.mouse.Onto(square, other)
 	check(Heard("pick up from slot " .. seat) and Heard("drop on slot " .. there),
 		"the trace missed the gesture it exists to print")
 
 	-- A click, which is how a spell is dropped as often as a drag is, and which
 	-- the first version of this file could not see at all.
 	heard = {}
-	local click = other:GetScript("PostClick")
-	check(click, "a square has no PostClick, so a drop made by clicking is invisible")
-	if click then
-		click(other, "LeftButton")
-	end
+	check(other:GetScript("PostClick"),
+		"a square has no PostClick, so a drop made by clicking is invisible")
+	H.mouse.On(other, "LeftButton")
 	check(Heard("click LeftButton on slot " .. there),
 		"the trace missed a click on a square")
 
@@ -824,7 +821,10 @@ do
 	ns.BarTrace.Set(true)
 	heard = {}
 	ns.BarTrace.Sample(nil, 1)
-	check(Heard("ActionButton1") and Heard("MEDIUM"),
+	-- TOOLTIP rather than MEDIUM, and the button never asked for it: it hangs off
+	-- MainActionBar, which sits in the top strata, and a strata is inherited
+	-- where nobody sets one.
+	check(Heard("ActionButton1") and Heard("TOOLTIP"),
 		"the sampler did not name the frame the client says is under the cursor")
 	-- and it says it once rather than five times a second for as long as the
 	-- cursor sits still, which is what makes it readable at all.

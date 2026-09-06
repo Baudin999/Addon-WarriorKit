@@ -189,6 +189,11 @@ local H = {
 for _, part in ipairs({
 	"01-widgets",
 	"02-text",
+	-- Straight after it, because it is the half of the Region stub that answers
+	-- where a frame is: its anchors, the size those give it, which frame is over
+	-- which, and the drag the client runs. It reads the Region table 01-widgets
+	-- exported and nothing else, and everything below it places frames.
+	"02-place",
 	"03-player",
 	"04-hands",
 	"05-quests",
@@ -267,6 +272,18 @@ for _, part in ipairs({
 	-- link out of a bag does, and the link builder that makes one. It installs
 	-- nothing any file above it touches and makes no frame.
 	"20-tradeskill",
+	-- Last of the client's own parts, and it wants every one of them: it runs
+	-- the addon's secure snippets, and a snippet reaches frames, attributes,
+	-- frame references and the override binding layer, which the files above
+	-- install between them. 02-text.lua and 14-secure.lua call into it through
+	-- H rather than by name for that reason.
+	"21-restricted",
+	-- Last, and it reads the whole tree rather than any one file: a press goes
+	-- to a point on the screen and it works out which frame the client would
+	-- hand it to. It wants 01-widgets.lua's delivery gate and 02-text.lua's
+	-- geometry, and everything under it has to have finished putting Blizzard's
+	-- own frames on the screen before a hit test means anything.
+	"22-mouse",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

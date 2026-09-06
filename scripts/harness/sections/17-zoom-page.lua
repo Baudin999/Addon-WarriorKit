@@ -87,6 +87,10 @@ if window then
 		wanted[zoom.label] = true
 	end
 
+	-- Which section each row is filed under, kept so a row can be opened before
+	-- it is pressed. The panel shows one section at a time and hides the rest,
+	-- so a button on a section nobody selected is a button no pointer can reach.
+	local pages = {}
 	local rows, sliders, nudged = {}, 0, 0
 	for _, entry in ipairs(window.indexed) do
 		if entry.widget.slider then
@@ -100,6 +104,7 @@ if window then
 					("the zoom page draws a row called %s and no part registered it")
 						:format(tostring(entry.widget.label)))
 				rows[entry.widget.label] = entry.widget
+				pages[entry.widget.label] = entry.section.title
 			end
 		end
 	end
@@ -249,9 +254,18 @@ if window then
 		local down, up = Nudges(panel)
 		check(down ~= nil and up ~= nil, "the panel's zoom row has no nudge buttons")
 
+		-- Opened before either button is pressed, because every press below goes
+		-- to a point on the screen and the stub picks whichever frame is really
+		-- there. The panel keeps one section up and hides the other ten, so the
+		-- row this walk found off the registry is not on screen until the rail is
+		-- told to show it, and a press aimed at a hidden button is a press no
+		-- player can make.
+		check(ns.Options.Open(pages["Options panel"]),
+			"the panel would not open the section its own zoom row is on")
+
 		if down and up then
 			for _ = 1, 10 do
-				up:GetScript("OnClick")(up)
+				H.mouse.On(up)
 			end
 			check(ns.db.panelZoom == 2,
 				("ten presses of + from 1 landed on %.17g, not 2")
@@ -259,7 +273,7 @@ if window then
 			check(ns.UI.Exact(screen * ns.db.panelZoom),
 				"ten presses of + left the panel off a stop the page calls exact")
 			for _ = 1, 40 do
-				down:GetScript("OnClick")(down)
+				H.mouse.On(down)
 			end
 			check(ns.db.panelZoom == Settings.LOW,
 				("the minus button ran past the low end to %s")
@@ -402,16 +416,23 @@ if window then
 			local fell, rose = Nudges(row)
 			check(fell ~= nil and rose ~= nil, "the fallback row has no nudge buttons")
 
+			-- Pressed with Region:Click rather than aimed at, and this is the one
+			-- place in the file that is. The row above is a kit stood up here to
+			-- reach one branch of UI/Widgets.lua and it is never a page anybody
+			-- opens, so there is no point on the screen to put a pointer on. The
+			-- press still runs the client's own half: the registration decides
+			-- whether the button answers at all and the release is the edge it
+			-- answers on.
 			if fell and rose then
-				fell:GetScript("OnClick")(fell)
+				fell:Click("LeftButton")
 				check(math.abs(held - (1 - Settings.STEP)) < 1e-9,
 					("the fallback minus button moved the value to %s"):format(tostring(held)))
-				rose:GetScript("OnClick")(rose)
-				rose:GetScript("OnClick")(rose)
+				rose:Click("LeftButton")
+				rose:Click("LeftButton")
 				check(math.abs(held - (1 + Settings.STEP)) < 1e-9,
 					("the fallback plus button moved the value to %s"):format(tostring(held)))
 				for _ = 1, 40 do
-					fell:GetScript("OnClick")(fell)
+					fell:Click("LeftButton")
 				end
 				check(math.abs(held - Settings.LOW) < 1e-9,
 					("the fallback buttons ran past the low end to %s"):format(tostring(held)))

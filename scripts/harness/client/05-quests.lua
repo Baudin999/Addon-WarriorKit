@@ -516,11 +516,15 @@ _G.GetNumMacros = function() return 0, 0 end
 -- combat and a stance change happens in combat. A no-op here would leave the
 -- snippet's arithmetic, and which frames it walks, tested by nothing at all.
 --
--- So the registration is recorded and the snippet is run as ordinary Lua with
--- the three locals the client puts in scope. What that proves is what the
--- snippet does. What it cannot prove is that the restricted environment accepts
--- it, which is why DrivePages probes for the template and CanPage reports which
--- path came up.
+-- So the registration is recorded and the snippet is run, through the sandbox
+-- in 21-restricted.lua rather than as ordinary Lua. It used to be ordinary Lua
+-- and that was its own lie: a body running under _G reaches every method on the
+-- frame, including the PascalCase no-op that answers any call at all, so a
+-- snippet calling something the restricted environment does not carry passed
+-- here and failed in the game. What the run proves is what the snippet does.
+-- What it cannot prove is that the client's own parser accepts the body, which
+-- is why DrivePages probes for the template and CanPage reports which path came
+-- up.
 local drivers = {}
 
 _G.RegisterStateDriver = function(frame, state, macro)
@@ -562,13 +566,7 @@ end
 
 -- One state transition, as the client would deliver it.
 _G.WarriorKitDriveState = function(frame, state, newstate)
-	local body = frame:GetAttribute("_onstate-" .. state)
-	if type(body) ~= "string" then
-		return false
-	end
-	local run = assert(loadstring("local self, stateid, newstate = ...\n" .. body))
-	run(frame, state, newstate)
-	return true
+	return H.snippet.State(frame, state, newstate)
 end
 
 -- The binding set, which is what a bar clone reads its keys off. Separate from

@@ -233,6 +233,16 @@ end
 do
 	local map = region("frame", _G.UIParent, "Minimap")
 	map:SetSize(140, 140)
+	-- Where the client puts it, and it takes the mouse, because both are what
+	-- the wheel that replaced the zoom buttons needs: a frame with no anchor
+	-- sits on UIParent's top left corner along with everything else that has
+	-- none, and a frame that does not answer the mouse is not there as far as a
+	-- pointer is concerned.
+	map:SetPoint("TOPRIGHT", _G.UIParent, "TOPRIGHT", -20, -20)
+	map:EnableMouse(true)
+
+	local cluster = region("frame", _G.UIParent, "MinimapCluster")
+	cluster:SetPoint("TOPRIGHT", _G.UIParent, "TOPRIGHT", 0, 0)
 	map.zoom, map.zoomLevels = 2, 5
 	map.GetZoom = function(self) return self.zoom end
 	map.GetZoomLevels = function(self) return self.zoomLevels end
@@ -240,7 +250,6 @@ do
 	map.SetMaskTexture = function(self, path) self.mask = path end
 	map.mask = "Textures\\MinimapMask"
 
-	local cluster = region("frame", _G.UIParent, "MinimapCluster")
 	cluster:SetSize(192, 192)
 
 	for _, name in ipairs({ "MinimapBorder", "MinimapBorderTop", "MinimapNorthTag",
