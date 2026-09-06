@@ -94,6 +94,12 @@ written longer than they are here.
 52. A totem bar: the four slots in a fixed order with a hole where one is
     missing, built so a warrior's three stances are one more plan and one more
     reader rather than a second part. `245bbee`
+60. `UI.Clip`, a round icon with a mask that fades it out at its own rim, and
+    `scripts/bake-round.sh` to write the mask. `b220ad6`
+61. The gear page as nineteen rows: a name in its quality colour, the level and
+    the socket dots under it, the durability as the name's own underscore, and
+    the figure behind all of it rather than boxed between the columns.
+    `7b8373a`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
@@ -704,118 +710,1104 @@ to be confirmed one rank at a time or left out.
     Shadowfury stun.
 
 Items 60 to 62 came out of a redesign asked for on 2026-09-05, against two
-retail character sheets and one armory page. The gear page already answers
-every question those pictures answer and draws none of it the way they do:
-nineteen squares in two columns, a portrait boxed between them, and the name of
-what you are wearing nowhere on the page at all. These three make it that page
-without copying it. The hex frames in the references are deliberately not here.
-Round, with the icon fading out at its own edge, is what was asked for instead.
+retail character sheets and one armory page. Items 60 and 61 landed the same
+day and are above. Item 62, a loadout that carried a whole set of gear rather
+than two weapons, is dropped rather than finished. Item 64 deletes the part it
+was an extension of. Its text is in this file at `17b6427`.
 
-60. A round icon that fades out, and the mask that draws it.
+Items 63 to 72 came out of an ask on 2026-09-06. Make the sheet as good to look
+at as Narcissus, take none of its photo booth, and cut the three pages nobody
+wants to look at.
 
-    `UI.Icon` at `src/UI/Draw.lua:158` is a square texture with the client's
-    5/64 crop on it and every icon in the addon is one. This adds `UI.Round`
-    beside it, which is the same texture with a mask on it. A mask rather than
-    a circular border, because the ask is that the icon go soft at the rim
-    rather than stop at a line.
+Narcissus is installed on this machine, in the anniversary client's AddOns
+folder, and every mechanism named below was read out of that copy rather than
+remembered. It is a retail addon with a TBC toc, so what it calls, this
+client has. The paths below are relative to that folder.
 
-    The mask is a texture the addon ships: 64 by 64, RGBA, alpha ramping from
-    opaque at the middle to nothing at the rim over the outer few pixels.
-    `src/Media/Icon.tga` is already that format and already in the folder the
-    .toc ships, so the new one sits beside it as `Media/Round.tga` and
-    `scripts/bake-round.sh` writes it with ImageMagick in the same shape as
-    `scripts/bake-glyphs.sh`. Baked rather than committed, so the falloff is a
-    number in a script and not a binary nobody can read.
+What is worth taking from it is smaller than it looks, because item 61 already
+landed the arrangement: rows with names in them, sockets, and the figure behind
+the page. Six of the ten items below are the finish on that arrangement rather
+than a new one. What Narcissus has that this sheet does not is that every
+string on it is legible against anything, every change to it is seen happening,
+and the figure is posed rather than placed.
 
-    `CreateMaskTexture` and `AddMaskTexture` both work on 2.5.6. Baganator's
-    GW2 skin and OPie's ring call them on this install, and a mask with a real
-    alpha ramp rather than a hard cut is what
-    `AdventureGuideClassic/ui/EncounterFrame.lua:25` puts on its instance
-    buttons, which is the same client asking the same question.
+Nothing below is a bug. The sheet draws the right thing today.
 
-    Check one square before all nineteen. A mask and `SetTexCoord` on the same
-    texture do not reliably compose, and `UI.Icon` sets texcoords for the crop.
-    If the crop comes out ignored, the crop goes into the mask instead, as a
-    circle whose radius stops short of the icon's own border, and `UI.Round`
-    does not call `SetTexCoord` at all.
+The order is the font, then the two removals, then the eight that draw. The
+font goes first because every number the other nine add to the page is a
+measurement of a string, and item 63 says the rest of that argument.
 
-    The quality colour has to move. `src/Character/Paperdoll.lua:302` recolours
-    the box edges, and an icon that fades out has no edge to colour. It becomes
-    a ring drawn under the icon at BACKGROUND, wider than the icon by a pixel
-    or two, so the fade lands on the quality colour rather than on the panel.
-    That is also what makes an epic readable from across the page, which four
-    grey squares and one purple square already were and eighteen icons on a
-    dark panel would not be.
+63. A typeface of the addon's own.
 
-61. The gear page, with the names on it.
+    Arial Narrow is what ships in the game and the addon draws every string in
+    it, at `src/UI/Text.lua:28`. Narcissus ships Source Sans Pro and the
+    difference between the two sheets is a third that font.
 
-    A slot stops being a square and becomes a row: the round icon, the item's
-    name beside it in its quality colour, and under the name the item level and
-    the sockets. That is the one thing both references have and this page does
-    not, and it is the whole reason they read as a character sheet rather than
-    as a grid. `Square` at `src/Character/Paperdoll.lua:160` keeps its secure
-    button, its two click edges, its drag and its hover unchanged. Only what is
-    drawn inside it moves.
+    One constant and one file. `src/Media/` already carries a ttf and the toc
+    already ships the folder, so this is a licensed face beside `Glyphs.ttf`
+    and a new `PATH`. The fallback at `src/UI/Text.lua:196` is what covers a
+    client that will not load it and it is already written.
 
-    Sockets are real in TBC and nothing in the addon reads them yet.
-    `GetItemGem(link, index)` answers what is in each one, and they draw as
-    small dots under the name, empty ones included, because an empty socket is
-    the one thing on a piece of gear you can still fix.
+    It changes every string in the addon and not just the sheet, and that is
+    the argument for doing it and the argument for doing it first. Forty
+    windows are laid out against the metrics of a narrow face, and a wider one
+    at the same pixel height clips a label somewhere. Every number the nine
+    items under this one add to the sheet is a measurement of a string: how
+    wide a gradient has to be, how much room a row of nineteen leaves the
+    figure, where a socket sits on the line the level is on. Land the face last
+    and all of it is measured twice.
 
-    The durability line moves with them. It is `box.wear` today, two pixels
-    along the bottom of a square, and in a row it belongs under the name beside
-    the item level rather than under an icon that no longer has a straight edge
-    to sit on.
+    Read `scripts/harness/sections/36-font-roles.lua` first, which is the gate
+    that knows what a font role is, and expect to spend the commit on the
+    fallout rather than on the change. That fallout is the cost of going first
+    and it is paid once either way.
 
-    The model goes behind the page rather than in a box between the columns.
-    `Portrait` at `src/Character/Paperdoll.lua:412` is a panel the two columns
-    are placed either side of, and the references put the figure behind
-    everything with the rows over it. Frame level is the only thing a model is
-    behind, which `Band` at `src/Character/Paperdoll.lua:365` already proves and
-    already says: the rows become frames above the model's level rather than
-    textures on a panel underneath it.
+    Pick the face for a screen at 11 pixels rather than for a page. Source Sans
+    Pro is what Narcissus uses and it is a reasonable answer. So is Noto Sans,
+    which it also ships.
 
-    `Pane:Resize` at `src/Character/Paperdoll.lua:508` is where all of this
-    lands, and the two numbers it is built on both change. `PORTRAIT` is 260
-    because a wider stage was not a bigger figure, and with the figure behind
-    the page that argument no longer holds: the model takes the width it is
-    given. `READING` is 220 and stays, but the stats column now competes with
-    two columns of rows rather than two columns of squares, so the width the
-    page wants at all goes up and `src/Character/Window.lua` has to give it.
-    A window too narrow for names drops back to the square it draws today
-    rather than clipping every name on the page.
+    `./scripts/check.sh` green before committing.
 
-62. A loadout that carries a whole set.
+64. The loadouts come out.
 
-    `src/Loadouts/Loadouts.lua:22` says nothing in that file calls
-    `EquipItemByName` and nothing in it needs to. That was true when a loadout
-    was two weapons and a stance, and it stops being true at nineteen slots:
-    a macro is 255 characters, `/equipslot 16 <name>` is twenty to forty five
-    of them, and four lines is the ceiling. The macro cannot carry a set and
-    no arrangement of it will.
+    `src/Loadouts/` is three files and 764 lines: two weapons and a stance on a
+    key, a secure button per set, a macro per button, and a page. It goes, with
+    the tab that hosts it.
 
-    Out of combat there is a second path and `src/Character/Worn.lua:260`
-    already walks it. `ns.PickupContainerItem(bag, slot)` then
-    `PickupInventoryItem(slot)` is the cursor swap the client's own sheet
-    makes, it is what every square on the gear page already does, and it has
-    no macro in it and no length limit on it.
+    Deleted: the folder, its three lines in each of `src/WarriorKit.toc` and
+    `src/WarriorKit_Vanilla.toc` with the two comments that name it,
+    `scripts/harness/sections/20-loadouts.lua` entire, the two checks at
+    `scripts/harness/sections/52-character.lua:555` and `:559`, and the
+    `Loadouts` pane at `src/Character/Window.lua:130-162` with its entry in
+    `TABS` at `:107` and the `LOADOUTS` constant at `:114`.
 
-    It is one slot at a time, not a loop. A swap locks the bag slot until the
-    server answers, so a set is a queue drained on the event, which is the
-    shape `src/Comfort/Vendor.lua:73` already uses to sell a bag and the reason
-    that file is worth reading first.
+    One commit and not two. The registry runs at file load, so a folder taken
+    out of the toc while its tab still calls `ns.LoadoutPage.Build` is a Lua
+    error at login, which on this client is a feature that silently does not
+    appear. The gate would pass. The game would not.
 
-    The macro stays and keeps its job. A key press in a fight still puts a
-    shield in your off hand, because that is the half the client allows and it
-    is the half that matters mid pull. The other seventeen slots are refused
-    with the reason said out loud, the way `Worn.Swap` already refuses rather
-    than going quiet.
+    `loadout` in `src/Class/*.lua` is a different thing with the same name. It
+    is a bar plan, read by `src/Buttons/Layout.lua`, and nothing about it
+    changes. The reference at `src/Buttons/Bars.lua:988` is a comment pointing
+    at `ns.Loadouts.All` for its shape, and it wants a different example.
 
-    Saving a set is nineteen links off `ns.Worn.Link`. Finding a piece again is
-    a walk of the bags matching the link, which `src/Core/Gear.lua` already
-    does for the two weapons and is the same question for the other seventeen.
-    A slot left empty in a saved set means leave what is there alone, which is
-    the rule the panel already states and the one nothing about this changes.
+    Item 26 loses one of its eight sites with this, and its list wants the
+    correction: `src/Loadouts/Loadouts.lua:278` will not exist.
+
+    `./scripts/check.sh` green before committing.
+
+65. One page, and the tab strip goes with the other three.
+
+    The sheet is the gear page. `UI.TabStrip` comes off it, and with it the
+    opaque cover at `src/Character/Window.lua:329-334`, the `PAGE` ceiling at
+    `:101` and the `Select` switch at `:178`. What that leaves is a window with
+    one pane in it, which is what `src/Character/Paperdoll.lua` already is.
+
+    Skills are a group in the stats column, not a page. `Skills.Groups()` at
+    `src/Character/Skills.lua:98` already hands back `{ title, rows }`, which
+    is the shape `Stats.Groups()` hands back at `src/Character/Stats.lua:463`,
+    so the fold is appending one list to another and the readout beside the
+    figure draws it unchanged. Weapon skill belongs there anyway: it is the
+    number the miss badge at the head of that column is computed from, and the
+    two have been on separate pages since the sheet was built.
+
+    Reputation is not a stat and does not go in that column. It gets a window
+    of its own on `/wk reputation`, which is a word nothing has taken, built on
+    first open like every other window in the addon except this one, hosting
+    the same `ns.CharReadout` pane with the same `Rep.Groups()` filling it.
+    `src/Character/Reputation.lua` does not change. Only its host does.
+
+    One fewer press is the small half of what this buys. The sheet stops
+    needing a strip of words across its top, so the grip that
+    `src/UI/Window.lua` hands a screen window can be the whole top edge, and the
+    four badges can move up into the room the strip was using.
+
+    `./scripts/check.sh` green before committing.
+
+66. A name is read on a gradient rather than on the grass.
+
+    This is the largest of the ten and it is the one Narcissus is built on. The
+    sheet has no ground under it by design, so nineteen item names are drawn
+    over whatever the player happens to be standing on, and a white name on
+    snow is a name you lean in to read. Every string on this page takes
+    `UI.SHADOW` for that reason, and a rim on a stroke is a patch, not an
+    answer.
+
+    Narcissus draws a black gradient behind each row, opaque at the icon and
+    gone by the far end of the text. The `GradientBackground` texture on
+    `NarciSlotButtonLeftTemplate` at `Narcissus.xml:787` is the shape, and
+    `Main.lua:1764` is the whole of the sizing: the gradient is as tall as the
+    two font strings plus eighteen and as wide as the wider of them plus
+    forty-eight, re-measured after each repaint sets the text. So it is a
+    shadow the exact size of what it is under, and on a row with nothing in the
+    slot it is not drawn at all.
+
+    The call is `texture:SetGradient(orientation, minColor, maxColor)` and it
+    is on this client. OPie calls it at `Libs/TenSettings.lua:245` with plain
+    `{r=, g=, b=, a=}` tables, and Narcissus wraps `CreateColor` around it at
+    `NarciDB/ClassicAPI.lua:385`. Take the `CreateColor` shape and probe it in
+    `src/Core/Core.lua` beside the other shims, because `src/UI/Theme.lua` has
+    no gradient in it and this is the first one in the addon.
+
+    It goes in `UI.Box`'s neighbourhood in `src/UI/Draw.lua` as `UI.Wash`: a
+    texture, a direction, and a colour that runs to nothing. The sheet is the
+    first caller and it will not be the last, because every window the addon
+    draws over the world has the same problem in a smaller form.
+
+    The second caller is named and it is the loot feed. Item 76 is that call
+    and items 76 to 82 are all downstream of this one, so write `UI.Wash` as a
+    thing a feed row can take as well as a gear row: a direction either way, a
+    strength the caller passes rather than one this file picks, and no
+    assumption that the frame under it is as tall as two font strings.
+
+    The row's own copy is placed in `Words` at `src/Character/Paperdoll.lua:286`
+    and sized at the end of `PaintSquare` at `:488`, off `GetStringWidth` of the
+    name and the note, which that function already reads for the durability
+    rule. Mind the direction: `entry.side` decides which end is opaque, and the
+    right column runs the other way.
+
+    `./scripts/check.sh` green before committing.
+
+67. The world darkens behind the sheet.
+
+    Narcissus dims the screen either side of the figure and it is why its page
+    reads as one thing rather than as text scattered on scenery.
+    `Narcissus.xml:2011` is the frame, three textures at `BACKGROUND` under
+    everything, faded in on the way up.
+
+    The sheet is half the monitor against the right edge, so this is one wash
+    across that half: dark at the outer edge, gone by the middle where the
+    figure stands. Item 66's `UI.Wash` is what draws it, which is why it is
+    ordered after. It belongs to the window rather than to the page, so it goes
+    in `src/UI/Window.lua` behind the `screen` flag, off a setting, and every
+    screen window the addon grows later gets it.
+
+    Fade it in with `ns.Ck.Animations` rather than showing it, because a
+    rectangle of shadow that appears instantly on a key press is the one thing
+    on this page that will read as a bug.
+
+    It has to stop at the window's own edge and not creep across the half of
+    the screen the player is playing in. That half is what `312cbd2` gave back.
+
+    And it must not take the mouse. This is the one item on the list that can
+    cost the player the world behind the sheet, and it would do it silently:
+    the sheet is click-through everywhere except its rows because
+    `src/UI/Window.lua:484` turns the mouse off on a screen window's frame, and
+    a shadow laid over half the monitor on a frame that answers the pointer is
+    half a monitor you can no longer target, loot or turn the camera in. It
+    draws and it hovers exactly the same either way, so nothing about looking
+    at it says which one shipped.
+
+    So it is a texture on a frame that never calls `EnableMouse`, and the gate
+    is what proves it rather than the comment above it. `IsMouseEnabled` on the
+    frame is the floor. The real check is the pointer harness at
+    `scripts/harness/client/22-mouse.lua`, which already walks the tree for the
+    frame a click at a point would land on and already knows the three ways a
+    frame refuses one: a point on the sheet's half that is not on a row, a
+    badge or the grip has to come back with nothing under it, with the wash up
+    and faded in.
+
+    This one does not reach the loot feed and is not meant to. A screen window
+    is half the monitor and dimming behind it costs nothing you were looking
+    at; a feed is a column against an edge that is up while you are playing,
+    and a wash under its rows is item 76 rather than this. The same texture,
+    two arguments.
+
+    `./scripts/check.sh` green before committing.
+
+68. A gear change is watched, not just redrawn.
+
+    Put a ring on and the name changes between two frames. Narcissus fades the
+    old string out over two tenths, sets the text on the animation's finish,
+    and fades the new one in, at `Main.lua:1727-1745`, and cross-fades the icon
+    through a second texture drawn over the first, which is the `Icon` and
+    `IconOverlay` pair in `NarciSlotButtonTemplate` in `Narcissus.xml`.
+
+    The addon has its own tween library for exactly this and does not need the
+    client's animation groups: `ns.Ck.Animations` in `src/Ck/Animations.lua`,
+    with an alpha channel, a position channel, and a tween armed once and
+    re-armed forever rather than built per run. Its header says why the
+    client's groups were refused, and every reason holds here.
+
+    Two motions, one per channel. A repaint that finds the link in a slot
+    changed fades that row's name, note and icon down and back up, which is the
+    alpha channel. The page coming up slides the two columns in from their own
+    sides, which is the position channel and is the `animOut` group on
+    `NarciSlotButtonLeftTemplate` in `Narcissus.xml`: a hundred and twenty
+    pixels over six tenths, staggered a few hundredths a row so nineteen rows
+    arrive as a sweep rather than as a block.
+
+    Only where something moved. `Pane:Redress` at
+    `src/Character/Paperdoll.lua:881` already compares nineteen links against
+    what it drew last time, which is the question this needs answered and the
+    reason it is cheap.
+
+    Refuse both in combat, and not for a protection reason. The sheet comes up
+    mid pull to be read, and nineteen rows sliding in over a fight is nineteen
+    rows you cannot read for half a second.
+
+    `./scripts/check.sh` green before committing.
+
+69. The socket carries its gem.
+
+    Item 61 drew sockets as three five-pixel dots under the name, filled in the
+    gem's quality colour and open in the panel's edge colour. It says what to
+    fix and not what is in it.
+
+    Narcissus draws the gem itself: the gem's own icon in a coloured ring
+    outside the item's icon, at `Main.lua:1693`, with an empty socket drawn as
+    the ring alone. `ns.ItemSockets` at `src/Core/Core.lua:1557` already walks
+    `GetItemGem` and hands back the filled ones and the count of holes, so the
+    data is here and only the drawing changes.
+
+    The dot becomes a disc of `DOT` at twelve or so, with the gem's icon
+    clipped into it by `UI.Clip`, which is the round mask item 60 landed. A
+    hole is the same disc with nothing in it and the ring at half alpha.
+
+    An empty socket is drawn neutral, and that is a limit rather than a
+    choice. A socket's colour is meta, red, yellow or blue and it is a fact
+    about the item, not about the gem, and an item link says what is sitting in
+    each hole and nothing about the holes that are empty. So the ring takes the
+    gem's colour where there is a gem and the panel's edge colour where there
+    is not, and the hover is where a socket is named.
+
+    Keep the count at three. `DOTS` is three because three is the most holes
+    anything in this expansion carries, and that is still true.
+
+    `./scripts/check.sh` green before committing.
+
+70. The enchant on the line under the name, and the oil on the weapon.
+
+    The note line under an item's name says its level and nothing else. On a
+    TBC character every piece is enchanted and the sheet is where you find out
+    which one you forgot.
+
+    Narcissus reads the enchant off the item link and prints it beside the item
+    level on that same line, at `Main.lua:1607-1626`. The link carries an
+    enchant id and not a name, so the name comes off a tooltip scan, which is
+    `UI.Scan` at `src/UI/Scan.lua` and its `item` kind at `:89`. That file is
+    the only one in the addon allowed to name GameTooltip and this does not
+    change it.
+
+    The temporary enchant is the half a warrior actually watches. A sharpening
+    stone, an oil or a poison runs for an hour and lapses in the middle of a
+    raid, and `GetWeaponEnchantInfo` says whether a hand has one, how long is
+    left and how many charges. `src/Buffs/Upkeep.lua:439` already documents that
+    call across the three shapes it has had and `:479` already picks the stride
+    at runtime, so read it from there rather than writing a second reader. It
+    draws on the three weapon rows only, as the time left where the level sits.
+
+    A scan is not cached, on purpose, and this is nineteen of them per repaint.
+    Scan on the repaint that found a link changed, which is the same question
+    item 68 asks and the same answer `Pane:Redress` already has.
+
+    `./scripts/check.sh` green before committing.
+
+71. A trinket says when it is up.
+
+    `ns.InventoryCooldown` at `src/Core/Core.lua:1467` is written, probed and
+    called by nothing on this page. Narcissus sweeps a cooldown over the slot's
+    own icon at `Main.lua:1929`.
+
+    Two trinkets, an engineering helm and a weapon with a use on it are the
+    slots this answers for, and the sheet is where a player checks whether the
+    trinket they are about to pull with is off cooldown. The disc already has a
+    ring round it, so the sweep is that ring drawn as an arc rather than a
+    square swipe laid over a round icon.
+
+    On the same dirty bit as everything else, and off a ticker. A cooldown that
+    is running is a number that changes every second, which is `UI.Ticker` and
+    a Perf slot, and item 44's gate wants a name for it.
+
+    `./scripts/check.sh` green before committing.
+
+72. The figure is yours to turn.
+
+    `Portrait` at `src/Character/Paperdoll.lua:671` sets the unit, faces it at
+    0.5 radians and never touches it again. Every character sheet in the game
+    since 2004 lets you drag the figure round, and this one is built on a
+    figure standing in the middle of the screen.
+
+    Left drag turns him, the wheel walks him nearer and further, and the pose
+    is remembered per character so the sheet opens the way you left it. Right
+    drag is the camera's and stays the camera's, which is what `UI.PassCamera`
+    already arranges for the rows.
+
+    `SetRotation` is called already. `SetPosition` and `SetCamDistanceScale`
+    are the other two and both are probed the way `Dress` probes the two it
+    uses, because a client that will not draw a model has to leave the page
+    working.
+
+    The sheathe is the one worth adding beyond that: `SetSheathed` puts the
+    weapons in his hands, which is the only way to look at a weapon you are
+    wearing, and it is a mark in the corner of the figure rather than a
+    setting.
+
+    `./scripts/check.sh` green before committing.
+
+Items 73 to 88 came out of an ask on 2026-09-06, about the loot feed. Three
+things were asked for and the third is the one that decides whether the module
+is worth having. Group the repeats, because crafting sixty bandages is sixty
+rows of the same bandage. Make the feed and the character sheet look like one
+addon. And answer the question the feed is actually opened for, which is not
+what dropped but whether you needed it.
+
+The middle of those three is why seven of these items are about surfaces rather
+than about loot. The sheet and the loot feed are the only two things this addon
+draws over the world with no ground under them, and items 66 and 67 gave the
+sheet a good answer to that while the feed kept the old one: a background slider
+shipping at 15 and `UI.OUTLINE` on every string, which is the patch item 66
+refuses in its second paragraph.
+
+Those two landed while these were being written, at `2b55319` and `ff5816d`, so
+items 76 to 82 are not waiting on anything. `UI.Wash` is on
+`src/UI/Draw.lua:147` now and it came out with the two arguments the feed needs:
+an edge naming which end is opaque, and a colour whose alpha is the strength.
+Items 73 to 75 touch no pixel and are still the cheapest place to start.
+
+73. A feed folds a repeat into the row it is already on.
+
+    `src/UI/Feed.lua` is the only file that can do this, because the ring is
+    what has to stay honest: `written` at `Feed:Push` `:859`, the offset it
+    nudges when you are reading history, and the `matching` count that
+    `Feed:Entry` `:823` decrements when an entry falls out of the ring.
+
+    `Feed:Fold(match)` takes a function and a filled slot. It walks back from
+    the newest through a bounded lookback, hands each held entry and the new one
+    to `match`, and on the first yes it lets the caller add to that entry in
+    place and marks the feed. Nothing is pushed, `written` does not move, the
+    offset does not move, and `matching` is already right because the entry it
+    folded into was already counted.
+
+    Bounded, and the bound is this file's. A walk of the whole ring per arrival
+    is four hundred comparisons on the path a pull drives, which is the cost
+    `Feed:Window` `:782` exists to avoid. Sixteen entries back is a corpse and
+    the two before it, which is the whole of what a fold is for.
+
+    In place and not to the top. An entry that folded and then jumped to the
+    newest row would reorder the column under the eyes of somebody reading it,
+    which is the thing `Feed:Push`'s offset arithmetic is written to prevent.
+    The bandage row stays where it is and its number climbs.
+
+    The slot `Feed:Entry` handed out is left unpushed, which that function's own
+    header already says is safe: the next caller wipes it.
+
+    `./scripts/check.sh` green before committing.
+
+74. The loot feed folds on the item, and the tooltip says what the row stopped
+    saying.
+
+    `AddItem` at `src/Feeds/Loot.lua:333` asks `Feed:Fold` first and pushes only
+    if nothing took it. Two entries are the same drop when the link is the same
+    and the older one arrived inside the window; the link is already on the
+    entry and `Stream.Clock` already reads `entry.at`.
+
+    Sixty seconds, and it is a number rather than the whole ring for the reason
+    item 73 is bounded. Bandages come off a craft one a second and a vendor run
+    an hour ago is a different afternoon. The window is not a setting. A slider
+    on it would be the third control over what the column shows and the header
+    of `Passes` at `:150` is an argument against the second.
+
+    `entry.count` becomes the running total and `entry.amount` at `:347` is
+    written from it, so the row reads `x12` where it read `x1` twelve times.
+    `entry.at` moves to the newest of them, because a row that folded is a row
+    about the last one you picked up.
+
+    The tooltip at `Fill` `:218` keeps what the row can no longer hold. The
+    `Stack` line at `:226` becomes the total and how many pickups made it, and
+    the `Looted` line says the last one. A row reading `x12` with a tooltip
+    saying `12` and nothing else has thrown the fold away.
+
+    `./scripts/check.sh` green before committing.
+
+75. Coin folds too.
+
+    `AddMoney` at `src/Feeds/Loot.lua:368` folds on being coin at all rather
+    than on a link, inside the same window, and the row's name is rebuilt from
+    the running total through `ns.Coined` rather than from the client's phrase.
+
+    That loses the client's own sentence, which is what the comment at `:375`
+    picked on purpose, and it is the right trade only because the total is the
+    thing being kept. A folded coin row saying "12 Silver, 39 Copper" when three
+    corpses paid is a lie in the one column that is arithmetic.
+
+    The purse along the bottom is unaffected. It reads `GetMoney` and a ledger,
+    never the rows.
+
+    `./scripts/check.sh` green before committing.
+
+76. The feed's rows are read on a gradient, and the slider behind them goes.
+
+    `UI.Wash(parent, color, edge, layer)` at `src/UI/Draw.lua:147` under each
+    row of `src/UI/Feed.lua`, sized to the row and running from the stripe out,
+    so a drop is read against something the addon painted rather than against
+    grass. The edge is `"LEFT"`, which is that function's own default and is the
+    way a feed row reads.
+
+    A client with no gradient gets a flat wash at half strength, which that
+    function already arranges and this one does not have to think about. It is
+    the worse picture and it is legible, and it is the only state where the
+    outline coming off in item 77 is a real loss.
+
+    `lootFeedAlpha`, which ships at 15 at `src/Feeds/Loot.lua:293`, becomes the
+    wash's strength rather than a panel's alpha. It is the same slider on the
+    same page saying the same thing, and the comment above that default already
+    describes the wash without knowing the word: almost nothing behind it,
+    because a panel was covering scenery to hold up text that did not need
+    holding up. A gradient is what holds up text without a panel.
+
+    Every stream gets it, not the loot one. The combat feed is over the world by
+    the same argument and `Feeds/Combat.lua` never asked for a different answer.
+
+    Watch the ends. A wash as wide as the row is a black bar with a fade on one
+    side, which is a panel again. It ends where the text ends, which the row
+    already measures per resize in `Resize` and hands out as `geom`.
+
+    `./scripts/check.sh` green before committing.
+
+77. Every string in a feed comes off the rim and onto the shadow.
+
+    `UI.OUTLINE` at ten sites in `src/UI/Feed.lua` and three in
+    `Instance:BuildStatus` at `src/Feeds/Stream.lua:264` becomes `UI.SHADOW`,
+    which is what the character sheet draws in and what item 66 argues for: a
+    rim on a stroke is a patch for having no ground, and after item 76 there is
+    ground.
+
+    `UI.OutlineFloor` at `src/UI/Text.lua:269` stops applying to a feed row,
+    which is the point. The floor is why `FEED_ICON_LOW` is 16 at `:97`, and a
+    row that no longer needs an outlined glyph can go smaller than a row that
+    does. Do not lower it in this commit. Measure it first with the wash
+    actually under the text, and if it comes down, item 23's ratchet is where
+    the new number is written.
+
+    This is one commit with item 76 or it is a regression. Text with no rim and
+    no wash under it is the worst of the three states and it is what the
+    intermediate commit ships.
+
+    `./scripts/check.sh` green before committing.
+
+78. A badge is a widget, not a thing the paperdoll has.
+
+    The four readings at the head of the stats column, `LABELS` at
+    `src/Character/Paperdoll.lua:544` with `BADGE` and `BADGERIM` at `:197`, and
+    the three numbers along the bottom of the loot feed, built in
+    `Instance:BuildStatus` at `src/Feeds/Stream.lua:264` off `Purse.Line` at
+    `src/Feeds/Purse.lua:322`, are the same picture: a number, a word under it,
+    a tone the number earned, and a hover that explains it.
+
+    `UI.Badge` in `src/UI/Widgets.lua` takes a value, a label, a tone and a
+    tooltip, and both call it. The sheet's four keep their fraction, which the
+    durability badge draws as a bar; the feed's three have no fraction and pass
+    none.
+
+    This lands with item 65 and not before it. That item is already moving the
+    four badges up into the room the tab strip leaves, which means it is already
+    rewriting their placement, and doing the extraction in a separate commit is
+    placing them twice.
+
+    The tones stay where they are. `WearTone` is a fact about durability and
+    `Tone` in `Purse.lua` is a fact about whether your afternoon paid, and
+    neither belongs in a widget that draws a number.
+
+    `./scripts/check.sh` green before committing.
+
+79. Quality is one picture in both windows.
+
+    The sheet draws an item's grade as a band round the icon at `REST` 0.55,
+    `src/Character/Paperdoll.lua:126`, and the hover takes it to full. The feed
+    draws the same grade as a stripe down the row and a ring round the icon, at
+    full strength always, `src/UI/Feed.lua:236` and `:255`. Two answers to one
+    question, and after item 76 they are on two surfaces that finally match.
+
+    The feed takes the sheet's: the stripe and the ring rest at `REST` and the
+    hover takes the row to full, which the row already has a hook for at
+    `Feed:Enter`. Nineteen quality colours at full strength is a page of
+    coloured lights, and thirteen rows of it is a column of them.
+
+    The quest ring is the exception and stays at full. It is not a quality, it
+    is the one thing on the row that is telling you to look, and item 86 gives
+    it company rather than taking it away.
+
+    `./scripts/check.sh` green before committing.
+
+80. The palette takes the colours twelve files still write by hand.
+
+    Forty-seven fractional colour literals outside `src/UI/Theme.lua` and
+    `src/Unit/Color.lua`, in twelve files. `src/UI/Ability.lua` has twelve,
+    `src/Feeds/Combat.lua` seven, `src/Swing/Gauges.lua` six,
+    `src/Meter/Window.lua`, `src/Class/Shaman.lua` and `src/Buttons/Look.lua`
+    four each, `src/CombatText/Numbers.lua` three, `src/Character/Paperdoll.lua`
+    and `src/Buffs/Nag.lua` two, and one each in `src/Perf/Hud.lua`,
+    `src/Mail/Window.lua` and `src/Feeds/Loot.lua`.
+
+    They are not all the same kind of thing and the commit has to sort them.
+    `QUEST` at `src/Feeds/Loot.lua:62` is a palette entry with one reader and
+    item 86 makes it two, so it goes to `UI.Color`. `REST` and `RIM` at
+    `src/Character/Paperdoll.lua:126` are a strength and a distance, so they go
+    to `UI.Metric` where item 79 needs them. `Feeds/Combat.lua`'s seven grade a
+    kind of event, which is a palette that file owns the way `Unit/Color.lua`
+    owns power colours, so it becomes a named table with a header rather than
+    seven literals at seven sites. A class colour is the client's and stays.
+
+    The numbers the sheet invented and the feed will want go with them:
+    `DENSE`, `TIGHT` and `VALUE` at `src/Character/Readout.lua:79`, `:72` and
+    `:64` are the addon's dense-list metrics and there is now a second dense
+    list.
+
+    Item 81 is the gate and it is the next commit rather than this one. Land the
+    move first, count what is left, then write the rule against the number that
+    is actually there.
+
+    `./scripts/check.sh` green before committing.
+
+81. A colour written by hand is an error.
+
+    `scripts/check.sh` refuses a fractional colour triple outside
+    `src/UI/Theme.lua` and `src/Unit/Color.lua`: a table constructor of three or
+    four numbers with a fraction in it, and the same shape passed to
+    `SetColorTexture`, `SetTextColor` or `SetVertexColor`.
+
+    A fraction, not any triple. `SetVertexColor(1, 1, 1)` is a reset and
+    `SetColorTexture(0, 0, 0, 0.55)` is a shadow, and a rule that caught those
+    would be a rule people learn to work around.
+
+    Whatever item 80 leaves behind is allow-listed by file with a one-line
+    reason each, in the shape the eight rules above it already use, and the
+    length of that list is a ceiling in `scripts/ratchet.lua`. A file that
+    clears its last literal comes off the list in the same commit that clears
+    it.
+
+    Error, not warning. The rule is worth nothing as a warning: the whole
+    argument for it is that a colour typed at a call site is invisible until two
+    windows are open side by side, which is the moment this addon has just spent
+    ten items getting to.
+
+    `./scripts/check.sh` green before committing.
+
+82. `/wk style`, the page that draws the palette.
+
+    `src/Settings/Style.lua`, registered by `src/Settings/Feature.lua` the way
+    every other word is, built on first open. Not in `src/UI/`: no file in that
+    folder registers a feature and that layering is worth more than the
+    convenience.
+
+    It draws itself out of the tables rather than describing them. Every entry
+    of `UI.Color` as a swatch with its key under it, every `UI.Metric` as a rule
+    of that many pixels with its number, the three font sizes in the shipped
+    face, `UI.Quality` as eight names in eight colours, a wash, a badge, a chip,
+    a feed row and a readout row side by side.
+
+    Side by side is the whole feature. Nothing on this page is information you
+    could not get by reading `src/UI/Theme.lua`; what you cannot get by reading
+    it is whether the feed row and the sheet row look like they came from the
+    same addon, which is a thing eyes answer in a second and a file never
+    answers at all.
+
+    It is after items 76 to 79 because a page drawn now would be a page missing
+    the wash, the badge and the rest brightness, which are the three things that
+    made the two rows disagree.
+
+    A page with no settings on it. It reads the tables and shows them, and the
+    day a colour on it is editable is the day `UI.Theme`'s header stops being
+    true.
+
+    `./scripts/check.sh` green before committing.
+
+83. One question: why does this item matter to you.
+
+    `ns.Need(link)` in `src/Core/`, answering a reason, a short phrase and a
+    colour, or nothing at all. Four sources, each of which already exists and
+    none of which knows about the others.
+
+      quest      an objective in your log this item feeds, and how far along it
+                 is. Item 85 is the reading.
+      skill      a reagent a profession of yours uses, and whether the recipes
+                 using it can still gain you a point. Item 84 is the reading.
+      trash      something `Comfort/Wanted.lua` would have left on the corpse.
+                 Item 88.
+      nothing    which is most items, and is answered fast.
+
+    In Core because three parts outside `src/Feeds/` are going to want it and a
+    part may not name a file outside its own tree. The bag window is the first
+    of them and it is not on this list.
+
+    One answer per item, in that order, because a wolf liver that is also a
+    leatherworking reagent is a wolf liver you need eight of. Ordered here and
+    not left to the caller: two callers ranking the same item differently is the
+    thing this function exists to stop.
+
+    Cached per item id and thrown away on the events that change the answer,
+    which are the quest log's, `SKILL_LINES_CHANGED` and the trade window's.
+    `AddItem` at `src/Feeds/Loot.lua:333` calls this on a path a pull drives,
+    and a walk of the quest log per drop is what that path cannot afford.
+
+    `./scripts/check.sh` green before committing.
+
+84. A reagent says whether it is still worth a point.
+
+    `Walk` at `src/Comfort/Reagents.lua:110` reads the difficulty of every
+    recipe and throws it away. `ns.TradeSkillRow` at `src/Core/Core.lua:1997`
+    returns it as `kind`, which is the client's `optimal`, `medium`, `easy` or
+    `trivial`, and the walk uses it only to tell a header from a row.
+
+    Keep the best of it. `ns.dbc.lootReagents` maps an item id to a profession
+    name at `List` `:83`; it becomes the profession and the best difficulty any
+    recipe wanting that reagent has, so `Reagents.Has` at `:187` still answers
+    what it answers and a new reading says whether the point is still there.
+
+    Trivial is the whole value of the change. Six stacks of linen is a reagent
+    tailoring uses and has not given you a point for in twelve levels, and a
+    feed that says "tailoring" about it is a feed telling you to keep something
+    you should be selling.
+
+    The saved shape changes, so the old table has to be readable or dropped on
+    sight. Dropped: it is rebuilt the next time the trade window opens, which
+    is the same recovery the throttle at `Due` `:139` already assumes.
+
+    `./scripts/check.sh` green before committing.
+
+85. An objective is a name and two numbers.
+
+    `Client.Objectives` at `src/Quests/Client.lua:191` hands back the client's
+    own sentence, its kind and whether it is finished. "Boar Hide: 3/8" is one
+    string, and the three and the eight are inside it.
+
+    Read them with the client's own format strings, the way `Core/Loot.lua`
+    reads a loot line and for the same reason: those are what the client built
+    the sentence from, turning one into a pattern reads a German client by
+    German rules, and typing a colon and a slash here is an addon that captures
+    nothing outside English. There are three and the kind says which:
+    `QUEST_ITEMS_NEEDED` for an `item`, `QUEST_MONSTERS_KILLED` for a `monster`
+    and `QUEST_OBJECTS_FOUND` for an `object`. Only the first matters to a loot
+    row and all three are cheap.
+
+    Questie on disk carries the one thing that will otherwise cost an evening.
+    `Modules/Quest/QuestieQuest.lua:1191` and `:1204` match the pattern and then
+    check whether the name came back as a number, with the comment "SOME
+    objectives are reversed in TBC": the two captures arrive the other way round
+    on some quests on this client. Handle it the way that file does rather than
+    finding it in the field.
+
+    It goes beside the existing call as a second reading rather than replacing
+    it, because the tracker and the quest window both draw the sentence whole
+    and neither wants it taken apart.
+
+    Matching an objective to an item is by name, which is what the client gives.
+    That is right for the great majority and wrong for the handful whose
+    objective is worded differently from the item. Questie knows the real
+    mapping and `src/Quests/Drops.lua` already reads it; this item does not, and
+    the reason is that a feed which says nothing about one item in fifty is
+    worth shipping and a Questie dependency on the loot path is not.
+
+    `./scripts/check.sh` green before committing.
+
+86. The loot row says why it matters.
+
+    The dim middle column already exists. `row.note` is built on every feed row
+    at `src/UI/Feed.lua:272` and the loot stream asks for zero width of it
+    through `opts.note` at `:354`, so this is a width and a string rather than a
+    region.
+
+    The string is item 83's phrase: `4/8` for a quest objective, the profession
+    for a reagent that can still gain you a point, nothing for an item with no
+    reason. It is short by design, because the column it goes in takes its width
+    off the name.
+
+    The ring round the icon takes the reason's colour and stops being the quest
+    ring. It is already the right shape, already shown per row, and orange is
+    already the reason colour; a second ring for a second reason would be a row
+    with two rings on it.
+
+    The tooltip says it as a sentence, in `Fill` at `src/Feeds/Loot.lua:218`,
+    above the `Looted` line. "Wolf Liver, 4 of 8" is the sentence, and the row
+    is the glance.
+
+    Folding and this have to agree. A row that folded twelve bandages and shows
+    `4/8` is showing a count that moved while it folded, so the note is read on
+    the fold as well as on the arrival, which item 73 makes cheap by handing the
+    caller the entry it folded into.
+
+    `./scripts/check.sh` green before committing.
+
+87. A chip that leaves only what you needed.
+
+    A seventh chip in `Chips` at `src/Feeds/Loot.lua:162`, past the break with
+    the quest and coin chips, on when item 83 gave the row a reason.
+
+    It is an override the way the quest chip is, not a quality. On, a row with a
+    reason is drawn whatever its quality chip says, which is the combination
+    that matters: greys and whites off, the chip on, and the column is the six
+    things you picked up this hour that you were actually looking for.
+
+    The quest chip is now a special case of it and stays anyway. Somebody who
+    wants quest items and not reagents has to be able to say so, and the two
+    chips together are what says it.
+
+    `Passes` at `:150` gains one branch, `Feature.lua`'s panel page gains a
+    check box at `:556` and a slash word at `LootWords` `:214`, because a chip
+    without both is a switch that disagrees with the page describing it.
+
+    `./scripts/check.sh` green before committing.
+
+88. What the addon left on the corpse, said out loud.
+
+    `Wanted.Take(slot)` at `src/Comfort/Wanted.lua:103` is the question the
+    auto-loot asks per slot, and its four answers are a quality floor, a kind
+    your professions use, a vendor price and a quest flag. The loot feed asks
+    the overlapping question and neither has ever heard of the other.
+
+    Item 83's `trash` reason is this call, so a drop the filter would have
+    refused is marked in the column as what it is. And the feed becomes the only
+    place the filter can be checked: `Comfort/Loot.lua` empties a corpse before
+    a window is drawn, so what it decided is invisible by design, and a rule set
+    too tight is a rule set nobody finds out about.
+
+    The mark is quiet. Trash is the reason nobody is looking for, it is the
+    commonest answer on the list, and a column of loud grey rows is the feed
+    back where it started.
+
+    `./scripts/check.sh` green before committing.
+
+Items 89 to 99 came out of an ask on 2026-09-06. The quest log is the addon's
+best window and it no longer looks like the rest of the addon, Questie's tracker
+sitting beside it looks like neither, and the questing itself is three questions
+nothing answers: what is here, what am I always watching, and what would I walk
+past without noticing.
+
+**Questie is not reskinned and will not be.** `src/Quests/Where.lua` and
+`src/Quests/Drops.lua` are the pattern and it is the right one: read the
+database, draw in our own style, degrade to nil when it is not there. Its
+tracker is two thousand lines with its own line pool, its own options tree and
+its own layout pass, and a hook that repainted it would break on the next
+release and would leave this addon owning frames it did not build. Its tracker
+goes off through its own call, ours goes on, and its world and minimap icons
+stay exactly where they are. Those icons are why Questie is installed.
+
+The reading behind these items was of the live install, Questie 11.37.1 at
+`_anniversary_/Interface/AddOns/Questie`, not of the v6 copy in `~/Downloads`.
+Three things came out of it that were not known when `Where.lua` was written. It
+now ships a declared-stable API in `Public/`, which v6 had nothing of.
+`QuestieTracker:Disable` at `Modules/Tracker/QuestieTracker.lua:482` is the call
+its own options checkbox makes. And `AvailableQuests.__availableQuestsByNpc`
+knows every quest you could pick up and have not, keyed by the person holding
+it.
+
+89. The one part of Questie that promises not to move.
+
+    `Public/` is new in v11 and its README says what everything else in that
+    addon does not: what is in this folder is stable and safe to use. Four
+    things are: `Questie.API.isReady`, `Questie.API.RegisterOnReady(callback)`,
+    `Questie.API.RegisterForQuestUpdates(callback)` and
+    `Questie.API.GetQuestObjectiveIconForUnit(guid)`.
+
+    `ns.Questie` at `src/Core/Core.lua:1048` cannot reach any of it. It asks
+    `QuestieLoader` for a module by name, and `Questie.API` is a plain table on
+    a global. So this adds `ns.QuestieAPI(name)` beside it, the same shape and
+    the same silence: the global, the field, the type check, nil for all three
+    failures.
+
+    The quest update callback is what it buys. `src/Quests/Window.lua` redraws
+    off the client's four events, and the client's are the wrong grain: it fires
+    `QUEST_LOG_UPDATE` several times a second while you are killing things, and
+    `Where.lua:243` carries what that already cost once. Questie's fires on
+    accept, update, turn-in and abandon, with the quest id and the objective
+    index, out of `Questie.API.Enums.QuestUpdateTriggerReason`.
+
+    The client's events stay. Questie may not be installed, and a quest log that
+    only redraws when another addon says so is a quest log that is blank without
+    it. This is a second source that makes the redraws sharper, not a
+    replacement for the first.
+
+    `RegisterOnReady` replaces the probe-every-time rule for the one question it
+    answers. Nothing else changes: the header of `ns.Questie` argues that a
+    cached answer taken before the database compiles is wrong for the session,
+    and this callback is the database saying it has finished compiling.
+
+    `./scripts/check.sh` green before committing.
+
+90. Questie's tracker goes off, by its own hand.
+
+    `QuestieTracker:Disable()` at `Modules/Tracker/QuestieTracker.lua:482`, with
+    `Enable()` at `:469` putting it back. Both are what the "Enable Tracker"
+    checkbox in Questie's own options calls, at
+    `Modules/Options/TrackerTab/QuestieOptionsTracker.lua:101`.
+
+    Its own call and nothing else. No `Hide` on its frame, no `SetParent` into
+    the attic, no `EachTexture`. `src/Core/Attic.lua` exists for Blizzard's
+    frames, which nobody else is going to re-show behind our back, and Questie
+    re-shows its tracker on a dozen of its own events. A frame we hid would come
+    back on the first quest accepted and we would be hiding it forever.
+
+    It writes another addon's saved setting, which is a thing this addon has
+    never done, and that is the reason it needs a switch of its own and a line
+    in `/wk status`. `Questie.db.profile.trackerEnabled` is the player's
+    setting; a feature that turned it off and did not say so is a feature that
+    looks like Questie broke.
+
+    Off the switch, `Enable()` is called and the setting goes back to true, once
+    and not on every login. It follows the same rule
+    `src/Quests/Blizzard.lua`'s attic does: the switch is what owns the state,
+    and the file's job is that the two ends agree.
+
+    In combat neither call is made. Questie's own options disable that checkbox
+    on `InCombatLockdown` and the reason is its tracker builds frames.
+
+    `./scripts/check.sh` green before committing.
+
+91. A tracker of our own, off the log we already read.
+
+    A placeable column over the world: the quest name, its objectives under it,
+    a mark on the pinned ones. `src/UI/Placeable.lua`, `src/UI/Stack.lua` for
+    the rows, and item 76's `UI.Wash` under them, because this is a third window
+    the addon draws over the world and the ground under it is settled by then.
+
+    **It draws from `ns.QuestLog`'s zones and nothing else.** That file already
+    turns the client's flat run of rows into zones holding quests and already
+    caches it, `src/Quests/Log.lua:41`, and the quest window's left column is
+    already its only reader. A tracker with a second reading of the log is the
+    sheet and the loot feed all over again: two pictures of one thing, drifting
+    apart in the details nobody looks at until they are side by side. One
+    reading, two drawings.
+
+    So this file owns placement, rows and the pin mark, and asks `ns.QuestLog`
+    for everything it says.
+
+    It does not open on a quest. Clicking a row is `src/Quests/Tracker.lua`'s
+    existing swap arriving from our own frame instead of Questie's, which is one
+    call and no new path.
+
+    Nothing on a ticker. The log changes on events, item 89 adds a better one,
+    and a tracker is not a compass.
+
+    `./scripts/check.sh` green before committing.
+
+92. Where you are, asked once.
+
+    `ns.QuestHere`, answering the place you are standing in as a map id, a name
+    and whether it is a dungeon.
+
+    Off the map id and never off a name, which `src/Dungeons/Here.lua:12` argues
+    at length and is right about: `GetInstanceInfo` hands back Blizzard's name
+    in the player's language, it is a different name from the book's for eight
+    of the forty dungeons, and matching English text is a feature that works on
+    one client in ten.
+
+    The dungeon half is `ns.DungeonHere` and is not rewritten. The open world
+    half is `GetBestMapForUnit`, which `src/Map/Zones.lua:182` and
+    `src/UI/Chart.lua:497` already probe the same way, and this is the third
+    reader rather than a third probe.
+
+    Questie's `ZoneDB` is what joins the two number spaces. Its
+    `GetAreaIdByUiMapId` at `Database/Zones/zoneDB.lua:98` turns the client's
+    map id into the area id the quest database is keyed on, and
+    `ZoneDB.IsDungeonZone` at `:158` and `GetParentZoneId` at `:164` are the
+    other two. `src/Quests/Where.lua:529` already goes the other way through
+    `GetUiMapIdByAreaId` and this is that reader's opposite number.
+
+    In Core because two folders read it, `Quests` and eventually `Map`, and a
+    part may not name a file outside its own tree.
+
+    `./scripts/check.sh` green before committing.
+
+93. A quest is where its next step is, not where the client filed it.
+
+    The client's log header is a sort category. It is the zone for most quests,
+    the dungeon's name for a dungeon quest and a class name for a class quest,
+    and it says nothing about where the thing you still have to do is standing.
+    Scope the tracker on the second, not the first.
+
+    `Where.Nearest` at `src/Quests/Where.lua:292` already answers it. It reads
+    Questie's `DistanceUtils.GetNearestSpawnForQuest`, which walks the open
+    objectives, and returns the area, the name and the yardage. The area is what
+    this item wants and it is already coming back.
+
+    So a quest is on the tracker when its nearest open thing is in the place
+    `ns.QuestHere` names, and a quest whose header says Winterspring but whose
+    next step is a Felwood innkeeper is on the tracker in Felwood. That case is
+    the whole argument for doing it this way and it is common.
+
+    Fall back to the header when Questie is not installed or has not compiled.
+    The header is a worse answer and it is a great deal better than an empty
+    tracker.
+
+    Mind the cost, which is item 97's whole problem arriving early. Read
+    `Where.lua:243` before writing a line of this: the walk is hundreds of
+    coordinate transforms per quest, it is memoised for one quest for one
+    second, and a tracker that asked it about twenty quests on a paint would be
+    a stutter in the world rather than anything visibly wrong in the window. The
+    scoping reading is per quest per zone change, held until the zone changes,
+    and it is not on the paint path.
+
+    `./scripts/check.sh` green before committing.
+
+94. A list row knows which button and which modifier.
+
+    `UI.List` at `src/UI/Window.lua:1414` hands `onSelect` an id and nothing
+    else. It already carries `onRight` and `onBack` for the gestures that were
+    wanted before this one, so the shape is settled: `onSelect` gains the button
+    and the modifier state, and every existing caller ignores the extra
+    arguments.
+
+    Read `RegisterForClicks` against `OnMouseUp` before choosing. The rows here
+    are frames rather than buttons and the modifier is read at the moment of the
+    press either way, but the two disagree about which presses arrive at all,
+    and the wrong one of them is a gesture that silently does nothing on one of
+    the two clients.
+
+    One widget, so the chat rail, the dungeon shelf, the mail list and the quest
+    log all gain the same gesture vocabulary at once. That is the argument for
+    doing it in the widget rather than in the quest window: a shift click that
+    means one thing in one list and nothing in the next is a worse interface
+    than no shift click at all.
+
+    `./scripts/check.sh` green before committing.
+
+95. A pin is ours, and the client's five slots are left alone.
+
+    Shift left click on a row of the quest log's left column pins the quest.
+    Saved per character, uncapped, keyed on the quest id for the reason
+    `src/Quests/Log.lua:20` gives about indices: an index is a position that
+    moves on every turn-in and a window holding one changes what it is showing
+    while you read it.
+
+    **The client's watch list stops being written.** `Client.Watch` at
+    `src/Quests/Client.lua:288` calls `AddQuestWatch`, the client caps that at
+    five, and Questie replaces the global `GetNumQuestWatches` outright to get
+    around the cap. That is a fight with the client and this addon is not
+    joining it. The `track` button at `src/Quests/Window.lua:808` becomes `pin`
+    and the `watched` field on a row becomes `pinned`.
+
+    Say the cost out loud in the panel, because there is one. Questie's map
+    icons can be filtered to tracked quests only, and a player using that filter
+    will find our pins do not reach it. `Client.Watch` stays on the file
+    unused rather than deleted, so the day that trade turns out to be the wrong
+    one it is one line to write both.
+
+    `./scripts/check.sh` green before committing.
+
+96. The pin, drawn where you can see it.
+
+    Two drawings of one fact. On the row, the mark `UI.List` already builds for
+    `opts.marks`, in the addon's heading gold. And at the top of the left
+    column, pinned quests as their own group above the zones, in the order they
+    were pinned.
+
+    The group is the half that matters. A mark on a row is a thing you find by
+    scrolling to the row; a group is the answer to "what am I always watching"
+    without looking for it, which is the question the pin exists to answer.
+
+    An empty group is not drawn. A heading with nothing under it is a row of the
+    column spent saying you have not used a feature.
+
+    A pinned quest also draws in its zone, and does not vanish out of the list
+    it was in. A quest that moved when you pinned it is a quest you then have to
+    find again.
+
+    On the tracker, item 91's mark, and pinned quests are shown wherever you are
+    standing. That is what pinning is for: item 93 takes everything else off the
+    tracker when you leave the zone, and this is the exception you asked for by
+    hand.
+
+    `./scripts/check.sh` green before committing.
+
+97. How far away everything is, on a budget.
+
+    `ns.QuestNear`, a list of what is close to you, ordered by distance, over
+    two sources.
+
+    Your log, through `Where.Nearest`, which is the existing reader and is not
+    duplicated.
+
+    And what you have not picked up, which is the half worth building this for.
+    `AvailableQuests.__availableQuestsByNpc` in
+    `Modules/Quest/AvailableQuests/AvailableQuests.lua:57` is every quest
+    Questie says you could accept, keyed by the npc holding it, and
+    `QuestieDB:GetNPC(npcId).spawns` is where that npc stands.
+    `DistanceUtils.GetNearestSpawn(spawns)` takes exactly that table and hands
+    back the yardage. That path is far cheaper than the log's, because an npc
+    has spawns and a quest has objectives that have spawns.
+
+    Two fields rather than functions, so `ns.Questie`'s function check does not
+    cover them and this file checks the types itself, at the read, which is the
+    rule in that function's own header.
+
+    **The budget is the design.** `Where.lua:243` measured the cost of the log
+    half already: hundreds of zone-to-world transforms per quest, memoised one
+    quest deep for one second, and a twenty quest log walked on a paint is
+    thousands of them. So this walks a few entries per tick off `UI.Ticker`,
+    keeps the answer, and finishes a full pass in a couple of seconds rather
+    than blocking on one. It gets a name and a `Perf` slot, which item 44's gate
+    requires of every ticker in the addon.
+
+    It never runs on a paint and never on `QUEST_LOG_UPDATE`. Both are the
+    mistake this file exists downstream of.
+
+    In yards, unranked, unsorted into a route. Ordering is item 98's and the
+    restraint is item 99's.
+
+    `./scripts/check.sh` green before committing.
+
+98. The line that says why not finish this one.
+
+    One line at the foot of the tracker, naming one thing that is close to you.
+    Either something in your log you are near, or somebody standing nearby with
+    a quest you have never taken.
+
+    It is a friend and not a route planner, and the phrasing carries that. "The
+    last two Deadwood Trappers are close by, north" rather than "127.4 yards".
+    The distance is Euclidean over world coordinates, `QuestieLib.Euclid`
+    through HereBeDragons, and a cliff or a lake between you and the murloc
+    makes sixty yards a three minute walk. A number sounds like a promise the
+    data cannot keep. A direction and a nearness are true.
+
+    Direction is the addon's own arithmetic off the player facing and the
+    spawn's bearing, and it is eight words rather than a compass. It is the one
+    number here the game will actually confirm as you walk.
+
+    Anything past `ELSEWHERE` at `src/Quests/Where.lua:46` is not close and is
+    not mentioned. Questie adds half a million yards to a spawn outside your
+    instance so that local things sort first, and that constant is already on
+    the file for exactly this reason.
+
+    It speaks when the answer changes. Not on a clock, and not again for the
+    thing it just named.
+
+    `./scripts/check.sh` green before committing.
+
+99. What the friend will not do, held by a gate rather than by a comment.
+
+    Item 98 is one sentence of code and a page of restraint, and every piece of
+    that restraint is the kind that erodes in a refactor nobody meant anything
+    by. So it is a section in `scripts/harness/` and a rule in
+    `scripts/check.sh`, which is the two layers every other gate in this repo
+    lives in.
+
+    Four things, and each of them is the feature rather than a tidiness:
+
+      one thing    the line names a single quest. A second name in it is a list,
+                   a list is a route, and a route is the module this was
+                   explicitly not going to be.
+      quiet        it does not speak twice inside its own quiet period, and it
+                   does not repeat the thing it just named.
+      silent       nothing in combat, and nothing while `ns.QuestHere` says you
+                   are in a dungeon, where everything is thirty yards away and
+                   the friend would be a chatterbox.
+      no order     nothing in `src/Quests/` sorts the log by distance, by
+                   experience or by level. The gate reads for it, the way the
+                   `GameTooltip` rule reads comments, because the sort that
+                   makes this a levelling addon is four lines and would arrive
+                   looking like a convenience.
+
+    The harness proves the first three by driving the reading rather than by
+    reading the source: feed it two things at the same distance and one line
+    comes out, ask twice inside the period and the second is silent, set the
+    dungeon flag and nothing comes out at all.
+
+    Written while it is already satisfied, which is the only cheap moment, and
+    that is the same argument the rule at `scripts/check.sh:845` makes about
+    itself.
+
+    `./scripts/check.sh` green before committing.
 
 ## Deliberately not on this list
 
@@ -844,3 +1836,25 @@ blank cost under 10 ms a login and a build step would buy nothing. And the saved
 variables: chat history, quest drops, dungeon drops, breakdown spells and
 loadouts are all capped, most at 400, and nothing logs a growing feed or combat
 sample, so there is no serialise-on-logout cost to chase.
+
+The Narcissus reading adds most of that addon. Its photo mode is nine of its
+files and the reason it exists: a camera you drive with the keyboard, a spell
+visual browser, an NPC browser, an animation browser, a weapon browser, speech
+balloons, stickers, letterbox filters and a turntable. None of it is on this
+list and none of it should be. The same goes for its AFK screen, its
+achievement pages, its minimap button, its own tooltip, its guide and its
+NPC and item databases, which are the four largest folders it ships. What is
+taken from it is what makes a character sheet legible and alive, which is the
+ten items above and nothing else.
+
+Two of its mechanisms were looked at and refused. It parks the whole Blizzard
+UI off `UIParent` while the sheet is up, at `Main.lua:98-145`, so that hiding
+the interface leaves its own page standing. That is a photo booth feature with
+a real cost: a frame taken off `UIParent` and put back is a frame whose scale,
+strata and parent this addon then owns, and `src/UnitFrames/Blizzard.lua`,
+which owns `ns.BlizzHide`, already carries what that costs when it is done to
+one window rather than to all of them. And it draws its stats as a radar
+chart, `Narci_RadarTemplate` in `Narcissus.xml:136`. A radar chart of five
+stats is a shape you compare against a shape you remember, and nobody
+remembers last week's pentagon. The column of numbers beside the figure
+answers the question the chart is drawn to answer.
