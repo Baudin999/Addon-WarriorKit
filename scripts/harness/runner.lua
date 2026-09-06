@@ -536,6 +536,12 @@ local SECTIONS = {
 	-- back, pins a quest and unpins it, and moves the addon's lock. Every one of
 	-- those, and where you were standing, is handed back at the foot of the file.
 	"85-quest-column",
+	-- Last, and it wants the gear 13-character.lua put on you: the one piece in
+	-- this client with holes in it is the helmet, and the session this section
+	-- opens is opened on the slot that helmet is worn in. It stands a fourth bag
+	-- of gems up and takes it down again at the foot of the file, the way
+	-- 65-bag-piles.lua hands its fifth bag back.
+	"86-sockets",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

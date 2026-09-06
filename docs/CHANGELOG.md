@@ -39,6 +39,48 @@ defaults table itself: the next reset put a window back where you last left it
 rather than where it ships. `dungeonSeen` joins the records the reset keeps,
 beside `questDrops`, for the reason written against that list.
 
+### Shift-click a piece and socket it here
+
+Shift-clicking a piece of gear opened Blizzard's socketing frame right up until
+this addon replaced the character sheet. Blizzard reads that modifier on their
+own paperdoll square, ours is a different square, and the gesture had quietly
+been an unequip for as long as the gear page has existed.
+
+It works again, and what it opens is a window of the addon's own. The piece at
+the top, its holes under that as squares, and every gem in your bags under
+those, with the ones that go in the hole you are pointing at first. Click a
+hole, click a gem, press apply. Right click a hole to take a gem back out.
+
+Three things the client's frame does not do. It does not know what you are
+carrying, so putting a gem in means finding it in your bags and dragging it
+across the screen; here the gems are already on the page. It says whether a gem
+matched with a sparkle that is over in half a second; here one line says whether
+the item would pay its socket bonus once you applied, which is the yes or no you
+are socketing for, and it is read off the client's own answer for each hole
+rather than off the addon's colour table. And it names the gem you are about to
+destroy nowhere at all; here that is the line beside the apply button, and it is
+also the question you have to answer before the press goes through.
+
+Nothing is spent until apply. The client keeps what is in a hole apart from what
+you have put in front of it, which is what makes the window worth having, and
+the accent bar under a hole is what says the gem in it is not paid for yet.
+
+Blizzard's frame is moved off the side of the screen rather than hidden, for the
+same reason the merchant window is: hiding it is what ends the socketing
+session, and the addon would then be drawing three empty holes. `/wk sockets
+hide off` puts it back.
+
+The whole of the client's socketing conversation is `Core/Sockets.lua`, beside
+the container shims, because it is thirteen loose client globals and a feature
+file does not probe the client for a call it means to make. The colour rule that
+decides which gems a hole is offered first is in there too, and the subclass
+numbers behind it were read out of Questie's TBC item database rather than typed
+from memory.
+
+Classic Era has no sockets. On that client `ns.Sockets.Available` answers false,
+the shift click stays the unequip it has always been, and this part registers no
+event.
+
 ### The tracker says nothing about who is standing nearby
 
 The line at the foot of the quest tracker is gone. It named one person near you

@@ -34,9 +34,10 @@ local C, M = UI.Color, UI.Metric
 -- tab changes the list beside it and moves nothing else. Character/Paperdoll.lua
 -- carries what the four are and why.
 --
--- What the strip across the top paid for is the top edge. With nothing drawn in
--- it the grip UI/Window.lua hands a screen window is the whole of it, and the
--- four badges moved up into the room the tabs were using.
+-- What taking the tabs off paid for is the top edge. With nothing drawn up
+-- there the four badges moved into the room the tab row was using, and the grip
+-- UI/Window.lua hands a screen window took the whole edge before it took the
+-- whole window.
 --
 -- **This window opens in a fight, and everything below that says `secure` or
 -- `InCombatLockdown` is there for that one sentence.** The gear page carries
@@ -164,10 +165,11 @@ local function Sheet()
 		-- shuts the sheet in a fight as well as out of one.
 		--
 		-- No title bar is also nothing to grab, so UI/Window.lua hands a screen
-		-- window a grip instead: the strip across its top, which lights under the
-		-- cursor and is the only part of the sheet a drag starts on. Nothing is
-		-- drawn in it now that the tabs are gone, so the whole of the top edge is
-		-- a handle.
+		-- window a grip instead, and the grip is the background: anywhere on the
+		-- sheet the page has not put something starts a drag. Nothing is drawn to
+		-- say so, because there is no one place to point at. The page keeps what is
+		-- its own, because the grip sits underneath it: the gear squares still take
+		-- their clicks and the figure still turns under the left drag.
 		screen = true,
 		zoom = function() return ns.Zoom("characterZoom") end,
 		-- The grid moved: the screen changed size, combat let go of a frame, or

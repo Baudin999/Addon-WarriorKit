@@ -453,13 +453,13 @@ end
 -- bracketed like every other tick in the addon so the performance tab accounts
 -- for it rather than leaving it as the one pass nobody can see.
 --
--- The seven Blizz.Also registrants ride the same change and none of them needed
--- a hook of its own. Five of the seven put their frames in the attic and are
+-- The eight Blizz.Also registrants ride the same change and none of them needed
+-- a hook of its own. Five of the eight put their frames in the attic and are
 -- covered by its hook exactly. Bags/Blizzard.lua swaps globals rather than
 -- moving a frame, so there is nothing for anybody to re-parent. Merchant
--- /Blizzard.lua parks a frame it may not cage, and it already hooks that frame's
--- own OnShow for the one thing that moves it, which is the client relaying its
--- panels.
+-- /Blizzard.lua and Sockets/Blizzard.lua each park a frame they may not cage,
+-- and both already hook that frame's own OnShow for the one thing that moves
+-- it, which is the client relaying its panels.
 --------------------------------------------------------------------------
 
 local INTERVAL = 5.0

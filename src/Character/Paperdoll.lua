@@ -606,6 +606,33 @@ local function Act(entry)
 	return ok
 end
 
+-- Whether a left click on this square opens the socketing session instead of
+-- taking the piece off.
+--
+-- Shift is the client's own gesture for this. Blizzard's paperdoll reads it as
+-- the EXPANDITEM modified click and answers with SocketInventoryItem, and that
+-- gesture stopped working the day this page replaced theirs: a shift click here
+-- unequipped the helmet you were trying to put a gem in. So the modifier goes
+-- back on the square, and what it opens is Sockets/Window.lua rather than the
+-- client's frame.
+--
+-- Three things have to hold and each is a reason to fall through to the swap.
+-- The shift key, because an unmodified click is still the swap. The client
+-- having sockets at all, which Classic Era does not. And the piece having a
+-- hole in it, because SocketInventoryItem on a plain sword opens no session,
+-- fires no event and would read as a click that did nothing.
+local function Socketed(entry)
+	if not IsShiftKeyDown() or not ns.Sockets.Available() then
+		return false
+	end
+	local link = ns.Worn.Link(entry.slot)
+	if not link then
+		return false
+	end
+	local filled, open = ns.ItemSockets(link)
+	return (filled or open > 0) and true or false
+end
+
 -- What colour the ring behind an icon is, and how bright.
 --
 -- Two things decide it and they change at different times: a repaint sets the
@@ -788,7 +815,11 @@ local function Press(pane, entry, box)
 	button:SetScript("PostClick", function(self, which)
 		local swapped = false
 		if which == "LeftButton" and not self.armed then
-			swapped = Act(entry)
+			if Socketed(entry) then
+				ns.Sockets.Open(entry.slot)
+			else
+				swapped = Act(entry)
+			end
 		end
 		self.armed = nil
 		ns.CharTrace.Release(self, which, swapped)

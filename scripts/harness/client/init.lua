@@ -285,6 +285,12 @@ for _, part in ipairs({
 	-- geometry, and everything under it has to have finished putting Blizzard's
 	-- own frames on the screen before a hit test means anything.
 	"22-mouse",
+	-- Last, and it reads what 04-hands.lua and 13-character.lua left: the item
+	-- table it adds four gems to, the link builder that makes one, and the
+	-- helmet with two holes in it that this file gives the socketing session its
+	-- colours for. It makes one frame, Blizzard's own socketing window, which
+	-- the addon parks off the side of the screen.
+	"23-sockets",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

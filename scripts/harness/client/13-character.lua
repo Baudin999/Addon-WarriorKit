@@ -91,7 +91,11 @@ end
 ITEMS["Lionheart Helm"] = { id = 4001, classId = 4, equip = "INVTYPE_HEAD",
 	icon = "Interface\\Icons\\Helm", quality = 4, price = 12000,
 	gems = { nil, "Bold Living Ruby" }, open = 1 }
-ITEMS["Bold Living Ruby"] = { id = 4005, classId = 3,
+-- Subclass 0 is red, which is the colour of the hole it is in. It carried no
+-- subclass at all until the socketing window needed one: the gear page reads
+-- the gem's picture and its link and nothing else, and a gem with no colour is
+-- a gem the client would never say matched its hole.
+ITEMS["Bold Living Ruby"] = { id = 4005, classId = 3, subClassId = 0,
 	icon = "Interface\\Icons\\Gem", quality = 3, price = 900 }
 ITEMS["Onyxia Tooth Pendant"] = { id = 4002, classId = 4, equip = "INVTYPE_NECK",
 	icon = "Interface\\Icons\\Neck", quality = 3, price = 8000 }

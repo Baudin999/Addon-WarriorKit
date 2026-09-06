@@ -72,8 +72,8 @@ local WINDOWS = {
 
 -- What the client delivers the drag to, which is not always the frame being
 -- moved. A window with chrome is grabbed by its own chrome. The character sheet
--- has none and names a strip across its top instead, so the scripts are on the
--- strip and the frame is what they move. Asked of UI.Windows rather than
+-- has none and names a grip over its own background instead, so the scripts are
+-- on the grip and the frame is what they move. Asked of UI.Windows rather than
 -- guessed at, because a sheet that quietly stopped naming a grip and let the
 -- whole frame take the drag would pass every check below by accident.
 local function grip(frame)
@@ -226,11 +226,10 @@ local function drop(frame, x, y)
 	-- up and is why two windows on screen at once do not fight.
 	frame:Raise()
 	local own = frame:GetEffectiveScale()
-	-- Aimed at the top left of the strip rather than at its middle, because a
-	-- window with no grip of its own is grabbed by the frame and the middle of
-	-- the frame is the page inside it. Eight units in from the corner is the
-	-- title bar on the five windows with chrome and inside the strip on the two
-	-- without.
+	-- Aimed at the top left corner rather than at the middle, because a window
+	-- with no grip of its own is grabbed by the frame and the middle of the frame
+	-- is the page inside it. Eight units in from the corner is the title bar on
+	-- the five windows with chrome and empty background on the two without.
 	local took, dragging = H.mouse.DragTo(by, frame, x, y, "LeftButton", 8, -8)
 	check(took == by, ("a drag on %s landed on %s")
 		:format(tostring(frame:GetName()),

@@ -28,6 +28,18 @@ A warrior addon for TBC Anniversary (2.5.6) and Classic Era (1.15.9).
   click a slot to take a piece off, drag one on to put it on, and neither works
   in a fight because the client will not allow it. Blizzard's own sheet goes off
   the screen, and one tick box puts it back.
+- **A socketing window that knows what you are carrying.** Shift-click a piece
+  on the gear page and it opens on that piece's holes with every gem in your
+  bags underneath, the ones that go in the hole you are pointing at first.
+  Click a hole, click a gem, press apply. Blizzard's own frame gives you three
+  holes and a drag: you find the gem in your bags yourself, the sparkle that
+  says it matched is gone in half a second, and the gem you are about to
+  destroy is named nowhere. Here the line beside the apply button says what
+  applying costs you, by name and by count, and whether the item would pay its
+  socket bonus afterwards, which is the number you are socketing for. Right
+  click a hole to take a gem back out. Nothing is spent until you press apply.
+  TBC only: Classic Era has no sockets, and on that client this part registers
+  no event at all.
 - **A dungeon log, where there has never been one.** Neither of these clients
   has an adventure guide. Shift-L opens three columns: every boss in the game
   down the left, grouped by dungeon and in level order, so the column answers
@@ -295,6 +307,19 @@ hunter as it does on a warrior, the swing bars included.
 
 Unzip into `Interface/AddOns`, so that the folder is
 `Interface/AddOns/WarriorKit` with `WarriorKit.toc` directly inside it.
+
+[Questie](https://www.curseforge.com/wow/addons/questie) is the one other addon
+this one asks anything, and it is worth having. Both TOCs name it under
+`## OptionalDeps` and the CurseForge upload declares it an optional dependency,
+so an addon manager offers it alongside this download and the client loads it
+first where it is there. Install it by hand if you took the zip.
+
+Nothing here needs it. The quest log window, the tracker and the bag lanes all
+draw off the client on their own. What Questie adds is the map pin for where a
+quest is turned in, the drop rate under an item something wanted, a party
+member's progress on a quest you share, and the quest a finished item belongs
+to on a clutter card. Each of those says in the panel that Questie is not
+answering rather than showing you a blank.
 
 ## Repo layout
 

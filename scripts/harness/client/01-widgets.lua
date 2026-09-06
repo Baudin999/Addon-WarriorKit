@@ -392,6 +392,23 @@ function Region:HookScript(name, fn)
 		fn(...)
 	end)
 end
+-- Whether a button answers a press, with the client's own default: a button is
+-- enabled until something disables it. Real rather than the metatable's
+-- PascalCase no-op, because the no-op made a disabled button indistinguishable
+-- from an enabled one, and the whole of "apply is off until a gem is waiting"
+-- is that difference. Region:Press below refuses a press on a disabled button
+-- the way the client does.
+function Region:Enable() self.enabled = true end
+function Region:Disable() self.enabled = false end
+function Region:IsEnabled() return self.enabled ~= false end
+
+-- Whether a texture is drawn in grey. Recorded rather than swallowed, for the
+-- reason the keyboard flags above are: it is the whole of what UI.SlotPaint's
+-- `dim` does, three windows pass it, and a no-op here reads exactly like a
+-- window that never dimmed anything.
+function Region:SetDesaturated(on) self.desaturated = on and true or false end
+function Region:GetDesaturated() return self.desaturated == true end
+
 function Region:SetSize(w, h) self.width, self.height = w, h end
 function Region:SetWidth(w) self.width = w end
 function Region:SetHeight(h) self.height = h end

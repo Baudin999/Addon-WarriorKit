@@ -371,43 +371,44 @@ end
 -- only one to do. Locking a quest log would be locking a window rather than
 -- placing the HUD.
 --
--- A screen window is dragged by a strip along its top and by nothing else.
+-- A screen window is dragged by its background: every pixel of it the page has
+-- not put something on.
 --
 -- It had no drag at all while it was the whole monitor, which was right then: a
 -- frame the size of the screen is already where it goes. It is half the screen
 -- now, and half a screen is a thing a player has an opinion about, so the drag
--- is back. What it must not be is the frame: a placeable with no chrome covering
--- half the game is an invisible drag target the size of a wall, with the left
--- button and the camera's right drag gone out of all of it.
+-- is back.
 --
--- So the grip is the row across the top of the window, which is a title bar in
--- everything but the paint. It sits over the page rather than under it, and it
--- is the whole of that edge: the sheet used to draw its tabs in the strip and
--- lift them one level over it, so only the ends either side of the words were a
--- grab. There is one page now and nothing is drawn up there, so every pixel of
--- the top edge takes the drag.
+-- The first answer was a strip along the top, twenty four pixels of title bar in
+-- everything but the paint, kept narrow because a drag target the size of a wall
+-- takes the left button and the camera's right drag out of half the game. That
+-- is a real cost and the strip is still worse: a handle you cannot see, on a
+-- window with no chrome to say where it is, and the player has to find it before
+-- the sheet moves at all.
 --
--- It says so under the cursor rather than all the time. A panel with nothing
--- drawn on it cannot carry a permanent bar without becoming the dialog this
--- sheet stopped being, so the strip lights while you are on it and is not there
--- otherwise, which is the trade the gear rows already make with their rings.
+-- So the grip is the whole window and it sits under the page instead of over it.
+-- Under is what makes it safe to be that big. Everything the page draws that
+-- answers the mouse wins the click: the nineteen gear squares still use what is
+-- in them, the figure still turns under the left drag and zooms under the wheel,
+-- and the readings still hover. What is left is background, and background is
+-- the handle. The one thing the sheet gives up is the world behind it, which it
+-- used to hand every click it did not want; while the sheet is up, a click on it
+-- moves the sheet rather than reaching the mob. This client has no
+-- SetPassThroughButtons to split that, and UI/Tip.lua carries why.
+--
+-- Nothing is drawn for it. The strip that used to light under the cursor was
+-- there to point at a handle you could not otherwise find; a handle that is the
+-- whole window has nothing to point at, and a bar along the top would now be
+-- saying the drag lives up there when it lives everywhere. The sheet is a page
+-- drawn on the world and it keeps no chrome it does not need.
 --
 -- Beside TitleBar and Footer for the reason both of those are: it is one piece
 -- of what a window is, and the argument for the shape it has is a paragraph
 -- nobody reading how a window is assembled has to step through.
 local function Grip(window, frame)
 	local grip = CreateFrame("Frame", nil, frame)
-	grip:SetPoint("TOPLEFT")
-	grip:SetPoint("TOPRIGHT")
-	grip:SetHeight(M.title)
+	grip:SetAllPoints(frame)
 	grip:EnableMouse(true)
-
-	local lit = ns.Fill(grip, "BACKGROUND",
-		C.chrome[1], C.chrome[2], C.chrome[3], 0.7)
-	lit:SetAllPoints()
-	lit:Hide()
-	grip:SetScript("OnEnter", function() lit:Show() end)
-	grip:SetScript("OnLeave", function() lit:Hide() end)
 
 	-- The one part of a screen window that answers the mouse at all, so it is
 	-- also the only place a click can be the way out of an open dropdown. Every
@@ -450,21 +451,18 @@ local function Chrome(window, frame, px, opts)
 	window.content = CreateFrame("Frame", nil, frame)
 	window.content:SetPoint("TOPLEFT", 0, -window.chrome)
 
-	-- The grip over the page, said here rather than where the grip is made,
-	-- because the content frame it is placed against does not exist yet at that
-	-- point and the strata the window is filed in is set between the two.
+	-- The page over the grip, said here rather than where the grip is made,
+	-- because the content frame this lifts does not exist yet at that point and
+	-- the strata the window is filed in is set between the two.
 	--
-	-- Over, not under. Under was the first answer and it does not work: the
-	-- bottom of a window's stack is under the page, under anything the page
-	-- lifts above itself, and under every button on it, so a strip down there is
-	-- a strip nothing ever reaches.
-	--
-	-- So the strip is above all of it, and nothing has to beat it. The character
-	-- sheet used to draw a tab row in the strip and lift it one level over the
-	-- grip, because a tab you cannot press is worse than a sheet you cannot drag.
-	-- That sheet is one page now and the top edge is a handle end to end.
+	-- The grip is the whole window, so the page has to beat it everywhere the page
+	-- has something to answer with, and the content frame is where that is decided
+	-- once for all of it: every widget the page builds is a child of this and
+	-- comes up above it. Lifting the page rather than lowering the grip because a
+	-- frame may not sit below the parent it hangs off, and the grip's parent is
+	-- the window.
 	if window.grip then
-		window.grip:SetFrameLevel(window.content:GetFrameLevel() + 20)
+		window.content:SetFrameLevel(window.content:GetFrameLevel() + 20)
 	end
 
 	Footer(window, frame, opts)
@@ -562,12 +560,13 @@ function UI.Window(opts)
 	-- player has an opinion about. With no title bar to grab, Grip below hands it
 	-- a strip along its top instead.
 	--
-	-- It does not eat the mouse either. Every other window in the addon does,
-	-- because a click that lands on a panel should stop there; this one has no
-	-- panel, so a click it swallowed would be a mob you could not target through
-	-- a page you can see straight through. What is on it answers for itself: the
-	-- gear squares take their own clicks and everything else on the page takes
-	-- the hover and hands the buttons back to the world.
+	-- Its own frame does not take the mouse. What is on it answers for itself:
+	-- the gear squares take their own clicks, the figure takes the drag that turns
+	-- it, and everything else on the page takes the hover only. Under all of that
+	-- is the grip, which is the window's background and takes what the page did
+	-- not, so the sheet is dragged from wherever the player grabbed it. That is
+	-- the one thing a screen window stopped handing back to the world, and it is
+	-- handed back again the moment the sheet is shut.
 	window.screen = opts.screen == true
 
 	-- The attribute template rather than the drag one, because the drag a secure

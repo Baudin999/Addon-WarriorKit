@@ -15,15 +15,14 @@
 --
 -- Four things about the wash fail silently and all four are here.
 --
--- **It must not take the mouse.** This is the one thing on the sheet that could
--- cost the player the world behind it: a screen window turns the mouse off on
--- its own frame so a click reaches the mob, and a shadow over half the monitor
--- on a frame that answered the pointer would be half a monitor you can no
--- longer target, loot or turn the camera in. It draws and it hovers exactly the
--- same either way, so nothing about looking at it says which one shipped. The
--- floor is IsMouseEnabled on the frame; the check is a press at a point, and
--- the grid below sweeps the whole sheet so that the only thing hanging directly
--- off the frame the pointer ever reaches is the grip.
+-- **It must not take the mouse.** The wash is a texture on the window's own
+-- frame and that frame answers nothing, which is what keeps the shadow a
+-- drawing rather than a surface. It draws and it hovers exactly the same either
+-- way, so nothing about looking at it says which one shipped. The floor is
+-- IsMouseEnabled on the frame; the check is a press at a point, and the grid
+-- below sweeps the whole sheet so that the only thing hanging directly off the
+-- frame the pointer ever reaches is the grip, which is the background the sheet
+-- is dragged by and is the one surface allowed to be that big.
 --
 -- **It fades.** A rectangle of shadow that arrives between one frame and the
 -- next on a key press reads as a bug, and a fade is the difference between
@@ -130,13 +129,18 @@ end
 -- And it never answers the pointer
 --
 -- Every point on the sheet, on a grid: the frame itself must never be what a
--- press lands on, and the only child of it that may is the strip the sheet is
+-- press lands on, and the only child of it that may is the grip the sheet is
 -- dragged by. Written as a sweep rather than as one aimed press because the
--- page under it is redrawn every few weeks and a single point that happened to
--- be free would quietly stop covering anything.
+-- page under it is redrawn every few weeks and a single aimed point would
+-- quietly stop covering anything.
+--
+-- The sweep also says the grip is everywhere. The sheet used to hand every press
+-- it did not want back to the world and it does not any more: while it is up,
+-- a press on it either does what the page put there or moves the sheet, so a
+-- point that reaches nothing is a hole in the handle.
 ----------------------------------------------------------------------
 
-local free = 0
+local grabbed = 0
 
 do
 	check(not frame:IsMouseEnabled(),
@@ -147,9 +151,12 @@ do
 			local x, y = mouse.Point(frame,
 				frame:GetWidth() * across / 10, -frame:GetHeight() * down / 10)
 			local under = mouse.At(x, y, "LeftButton")
-			if under == nil then
-				free = free + 1
+			if under == held.grip then
+				grabbed = grabbed + 1
 			end
+			check(under ~= nil,
+				("a press %d across and %d down the sheet reached nothing, so the background there drags it nowhere")
+					:format(across, down))
 			check(under ~= frame,
 				("a press %d across and %d down the sheet landed on the sheet itself")
 					:format(across, down))
@@ -158,8 +165,8 @@ do
 					:format(across, down, under and under:GetObjectType() or "nothing"))
 		end
 	end
-	check(free > 0,
-		"no point on the sheet hands the press back to the world, so nothing behind it can be clicked")
+	check(grabbed > 0,
+		"no point on the sheet reaches the grip, so the background is not a handle anywhere")
 end
 
 ----------------------------------------------------------------------
@@ -185,5 +192,5 @@ end
 
 Window.Hide()
 
-print(("dark   half the monitor washed behind the sheet, solid at the outer edge and gone by the middle, faded in over 0.2s; %d of 121 points on it hand the press back to the world")
-	:format(free))
+print(("dark   half the monitor washed behind the sheet, solid at the outer edge and gone by the middle, faded in over 0.2s; %d of 121 points on it are background the sheet drags by")
+	:format(grabbed))

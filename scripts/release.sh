@@ -167,7 +167,27 @@ changelog_file="docs/CHANGELOG.md"
 changelog="Release $version."
 if [ -f "$changelog_file" ]; then changelog=$(cat "$changelog_file"); fi
 
-metadata=$(CHANGELOG="$changelog" DISPLAY="WarriorKit $version" TYPE="$release_type" IDS="$ids" python3 - <<'PY'
+# The other addons this one talks to, declared to CurseForge so that the
+# project page lists them and an addon manager offers to fetch them alongside
+# this one. That offer is the whole of "install Questie with WarriorKit". The
+# client has no package manager and an addon cannot install another addon, so
+# the manager is the only thing in the chain that can.
+#
+# optionalDependency, not requiredDependency. Every feature that asks Questie
+# a question says in words when it is not answering, and a required dependency
+# would push Questie on a player who wants the character sheet and the meters
+# and nothing to do with quests. src/WarriorKit*.toc carries the same name in
+# ## OptionalDeps and check.sh fails if the two ever disagree.
+#
+# Slug, not id, because a slug is the last part of the project URL and stays
+# put. legacy.curseforge.com/wow/addons/questie is Questie's.
+relations=$(python3 - <<'REL'
+import json
+print(json.dumps({"projects": [{"slug": "questie", "type": "optionalDependency"}]}))
+REL
+)
+
+metadata=$(CHANGELOG="$changelog" DISPLAY="WarriorKit $version" TYPE="$release_type" IDS="$ids" RELATIONS="$relations" python3 - <<'META'
 import json, os
 print(json.dumps({
     "changelog": os.environ["CHANGELOG"],
@@ -175,8 +195,9 @@ print(json.dumps({
     "displayName": os.environ["DISPLAY"],
     "gameVersions": json.loads(os.environ["IDS"]),
     "releaseType": os.environ["TYPE"],
+    "relations": json.loads(os.environ["RELATIONS"]),
 }))
-PY
+META
 )
 
 response=$(curl -sS -w '\n%{http_code}' \

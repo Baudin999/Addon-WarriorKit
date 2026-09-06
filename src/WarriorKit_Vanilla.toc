@@ -1,11 +1,12 @@
 ## Interface: 11509
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a character sheet of the addon's own with your gear, your skills, your standings and how often you miss on it, a talent window with all three trees side by side and nothing to scroll and what unlearning them would cost along the bottom, a spell book with one row per spell and every rank you know folded behind a button beside it, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, two rows of cooldowns, a shaman's four totem slots with a hole where one is missing, the seconds a fight is made of over the minutes, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, the addon's own tooltip on a creature you point at in the world with where you stand on it under the name, a mail window that colours a recipient green for one of yours, blue for somebody you know and red for a stranger and splits more than twelve attachments across as many mails as it takes, a quest log three columns wide with every quest you are on down the left grouped by zone, what this one wants in the middle and what it pays on the right, a dungeon log the same three columns wide with every boss in the game down the left in level order, the dungeon's own map in the middle with the ones you have looted marked on it and what this one drops on the right, one window for your bags with what you are carrying sorted into piles and how many slots are free counted along the bottom, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a whispered thank you to a stranger who buffs you, five seconds of the eighties every time you level, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a character sheet of the addon's own with your gear, your skills, your standings and how often you miss on it, a socketing window opened by shift-clicking a piece on that sheet with every gem in your bags under its holes, a talent window with all three trees side by side and nothing to scroll and what unlearning them would cost along the bottom, a spell book with one row per spell and every rank you know folded behind a button beside it, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, two rows of cooldowns, a shaman's four totem slots with a hole where one is missing, the seconds a fight is made of over the minutes, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, the addon's own tooltip on a creature you point at in the world with where you stand on it under the name, a mail window that colours a recipient green for one of yours, blue for somebody you know and red for a stranger and splits more than twelve attachments across as many mails as it takes, a quest log three columns wide with every quest you are on down the left grouped by zone, what this one wants in the middle and what it pays on the right, a dungeon log the same three columns wide with every boss in the game down the left in level order, the dungeon's own map in the middle with the ones you have looted marked on it and what this one drops on the right, one window for your bags with what you are carrying sorted into piles and how many slots are free counted along the bottom, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a whispered thank you to a stranger who buffs you, five seconds of the eighties every time you level, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
 ## SavedVariables: WarriorKitDB
 ## SavedVariablesPerCharacter: WarriorKitCharDB
+## OptionalDeps: Questie
 ## X-Category: Combat
 
 # The Classic Era TOC, 1.15.9, interface 11509. A client takes Name_<Flavour>.toc
@@ -13,6 +14,18 @@
 # WarriorKit.toc is what everything else falls back to. Same file list on
 # purpose: the differences between the two clients are handled in the code, by
 # ns.vanilla and by the probes, not by loading different files.
+
+# OptionalDeps rather than Dependencies. Questie fills in the turn-in map under
+# a quest, the drop rate under a wanted item, a party member's progress on a
+# quest you share and the reason written on a clutter card, and every one of
+# those says in words that it is not answering when Questie is absent. A hard
+# dependency would take the character sheet, the meters and the frames off a
+# player who does not run Questie, and buy nothing the code does not already
+# handle. What the line does buy is load order. The client loads Questie first
+# where it is installed, so the tracker hookup at PLAYER_LOGIN is not asking a
+# loader that has not run yet. Installing it is the addon manager's job, and
+# scripts/release.sh declares the same relation on the CurseForge project so
+# the managers offer it.
 
 # Core first. It creates ns.db, the API shims and the registry every feature
 # signs into, and the panel walks that registry at PLAYER_LOGIN.
@@ -49,7 +62,7 @@ Class\Mage.lua
 Class\Shaman.lua
 Class\Priest.lua
 
-# Seven shared files that own no setting and draw nothing, the same shape
+# Eight shared files that own no setting and draw nothing, the same shape
 # ns.ItemInfo has. Gear is what the client will let into each hand and which
 # number that hand is; Stance reads your class's own form list off the registry
 # above and hands back their localised names and which one you are standing in.
@@ -68,14 +81,21 @@ Class\Priest.lua
 # row, a bag square and the chip over both of them ask about an item: why it
 # matters to you, answered off the quest log, the reagent list and the loot
 # filter in that order, so that two of them cannot rank the same item
-# differently. Every one of them was a part's private knowledge until a second
-# part needed the same answer, and all seven load before anything that asks.
+# differently. Sockets is the whole of the client's socketing conversation:
+# opening one on an item, reading what is in each hole and what you have put in
+# front of it, putting a gem there and paying for it, plus the walk that finds
+# every gem in your bags that goes in a hole. It is here rather than beside the
+# window that draws it because it is thirteen loose client globals and a part
+# does not probe the client for a call it means to make. Every one of them was a
+# part's private knowledge until a second part needed the same answer, and all
+# eight load before anything that asks.
 Core\Gear.lua
 Core\Stance.lua
 Core\Piles.lua
 Core\QuestItems.lua
 Core\Loot.lua
 Core\CombatLog.lua
+Core\Sockets.lua
 
 # Where you are standing, asked once and held until you walk out of it: the map
 # id, what this client calls that map, whether it is an instance, and the area
@@ -280,11 +300,11 @@ Core\BlizzHide.lua
 # The two ways a part takes one of the client's windows off the screen, written
 # once. A frame that is a live session with the server is parked off the side at
 # no opacity, because hiding it is what ends the session; a frame that is only a
-# picture goes into Core\Attic.lua and the key that opened it comes too. Every
-# part that took a window down was a copy of one of those two, and the copies
-# had drifted on the wording rather than on the mechanism. After Core\Attic.lua,
-# which is where a caged frame actually goes, and after Core\BlizzHide.lua,
-# whose switch list every descriptor signs into.
+# picture goes into Core\Attic.lua and the key that opened it comes too. Eight
+# parts were eight copies of one of those two, and the copies drifted on the
+# wording rather than on the mechanism. After Core\Attic.lua, which is where a
+# caged frame actually goes, and after Core\BlizzHide.lua, whose switch list
+# every descriptor signs into.
 Core\BlizzAdapter.lua
 
 Core\Command.lua
@@ -1051,6 +1071,25 @@ Merchant\Grid.lua
 Merchant\Window.lua
 Merchant\Blizzard.lua
 Merchant\Feature.lua
+
+# The holes in a piece of gear, and every gem in your bags that goes in one.
+# Window.lua is the whole of it: the item at the top, its holes under that as
+# squares you click, the gems you are carrying under those with the ones that
+# fit the hole you picked first, and one line along the bottom saying what
+# pressing apply costs you. It is opened by the client's own socketing event
+# rather than by whatever made the gesture, so the shift click on the gear page
+# and a shift click on a bag square both land in the same window.
+# Blizzard.lua moves the client's own socketing frame off the side of the
+# screen, which is the one mechanism of the three that works on it, for the
+# reason the merchant's carries above: hiding that frame and caging it both end
+# the session. Feature.lua last, as everywhere else.
+#
+# After Merchant, whose Blizzard.lua this one is a copy of the argument from,
+# and after Core\BlizzHide.lua, which is where the once-a-second pass
+# Blizzard.lua registers on lives.
+Sockets\Window.lua
+Sockets\Blizzard.lua
+Sockets\Feature.lua
 
 # The numbers that float off your character. Anchors.lua is the three
 # rectangles they come from, which are the only thing here you can see with the

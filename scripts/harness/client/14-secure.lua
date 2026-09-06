@@ -93,6 +93,12 @@ function Region:Press(button, down)
 	if self.passed and self.passed[button] then
 		return false
 	end
+	-- A disabled button answers nothing at all, which is what the client does
+	-- and is the only way a section can tell one from a button that took the
+	-- press and decided to do nothing.
+	if self.enabled == false then
+		return false
+	end
 	local scripts = self.scripts
 	-- OnMouseDown and OnMouseUp fire for every button on a frame that takes
 	-- the mouse, registered or not; RegisterForClicks decides OnClick alone.

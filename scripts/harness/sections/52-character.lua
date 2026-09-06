@@ -524,11 +524,11 @@ do
 	-- and a snippet is what places the frame.
 	--
 	-- The half worth gating is where the drag is delivered. The sheet has no
-	-- title bar to grab, and the answer to that must not be the frame: a mouse
-	-- enabled frame swallows every button that lands on it, and this one covers
-	-- half the game, so a drag on the frame would take the left button and the
-	-- camera's right drag out of that whole half. It is the strip across the top
-	-- instead, and these three checks are the three ways that can go wrong.
+	-- title bar to grab, so it is dragged by its background: a grip the size of
+	-- the window, sitting under the page so everything the page answers with wins
+	-- the click first. What it must not be is the frame itself. That one takes the
+	-- mouse for the whole window with nothing able to beat it, so a drag hung there
+	-- would cost the gear squares their clicks and the figure its turn.
 	local frame = Window.Pane().frame:GetParent():GetParent()
 	local sheet
 	for _, entry in ipairs(ns.UI.Windows) do
@@ -543,12 +543,19 @@ do
 	check(frame:GetAttribute("_onattributechanged") ~= nil,
 		"the sheet is dragged from a snippet and carries none")
 
-	-- Over the page. It started out under it and shipped a sheet nobody could
-	-- drag: the bottom of the stack is under the page, under anything the page
-	-- lifts above itself, and under all nineteen gear squares.
-	check(sheet.grip:GetFrameLevel() > sheet.content:GetFrameLevel(),
-		("the grip sits at level %d and the page at %d, so the page is over the strip")
-			:format(sheet.grip:GetFrameLevel(), sheet.content:GetFrameLevel()))
+	-- Under the page, and the size of the window. The two go together: a grip this
+	-- big over the page would be the sheet swallowing every click on it, and a grip
+	-- this big under the page is only the pixels the page left empty. A grip that
+	-- shrank back to a strip fails the first line, and one that floated over the
+	-- gear squares fails the second.
+	check(math.abs(sheet.grip:GetWidth() - frame:GetWidth()) < 1e-6
+		and math.abs(sheet.grip:GetHeight() - frame:GetHeight()) < 1e-6,
+		("the grip is %.0f by %.0f on a sheet %.0f by %.0f, so most of the background drags nothing")
+			:format(sheet.grip:GetWidth(), sheet.grip:GetHeight(),
+				frame:GetWidth(), frame:GetHeight()))
+	check(sheet.content:GetFrameLevel() > sheet.grip:GetFrameLevel(),
+		("the page sits at level %d and the grip at %d, so the grip is over the page")
+			:format(sheet.content:GetFrameLevel(), sheet.grip:GetFrameLevel()))
 
 	-- And the page hangs off the window rather than off a row of tabs. It was
 	-- anchored to the bottom of the strip, which is how it knew to start below it;
@@ -576,24 +583,33 @@ do
 	-- invisible while the drag was two handlers called by name.
 	Window.Show()
 
-	-- The far end of the strip, which is where the drag was aimed while the tabs
-	-- had the other end. It still has to take the press, so it is asked first and
-	-- on its own, by hit test rather than by handler.
-	local farX, farY = H.mouse.Point(sheet.grip,
-		sheet.grip:GetWidth() - 20, -sheet.grip:GetHeight() / 2)
+	-- The far end of the top edge, which is where the drag was aimed while the
+	-- strip was the whole of it. It still has to take the press, so it is asked
+	-- first and on its own, by hit test rather than by handler.
+	local strip = ns.UI.Metric.title / 2
+	local farX, farY = H.mouse.Point(sheet.grip, sheet.grip:GetWidth() - 20, -strip)
 	check(H.mouse.Within(frame, farX, farY, "LeftButton") == sheet.grip,
 		"the far end of the sheet's top edge is not the grip")
 
-	-- And the near end, which is what taking the tabs off bought. Twenty units in
-	-- from the left corner is where the first tab was drawn, over the grip and a
-	-- level above it, so this press used to land on the tab row. A sheet that grew
-	-- a strip of words again fails here rather than quietly costing that edge.
+	-- And the bottom edge, which is the half of this the strip never gave. The
+	-- footer is chrome the page does not reach into and nothing in it answers the
+	-- mouse, so a press down there is a press on background, and background is the
+	-- handle. A grip that went back to being a strip along the top lands on nothing
+	-- here.
+	local footX, footY = H.mouse.Point(frame,
+		frame:GetWidth() / 2, -(frame:GetHeight() - 6))
+	check(H.mouse.Within(frame, footX, footY, "LeftButton") == sheet.grip,
+		"a press on the foot of the sheet does not reach the grip, so only the top edge drags it")
+
+	-- And the drag itself, from the near end of the top edge. Twenty units in from
+	-- the left corner is where the first tab was drawn, over the grip and a level
+	-- above it, so this press used to land on the tab row.
 	local own = frame:GetEffectiveScale()
-	local grabX, grabY = H.mouse.Point(sheet.grip, 20, -sheet.grip:GetHeight() / 2)
+	local grabX, grabY = H.mouse.Point(sheet.grip, 20, -strip)
 	local took, dragging = H.mouse.Grab(grabX, grabY, "LeftButton")
-	check(took == sheet.grip, ("a drag on the near end of the sheet's strip landed on %s")
+	check(took == sheet.grip, ("a drag on the near end of the sheet's top edge landed on %s")
 		:format(took and (took:GetName() or took:GetObjectType()) or "nothing"))
-	check(dragging, "the strip under the pointer is not registered for a left drag")
+	check(dragging, "the background under the pointer is not registered for a left drag")
 
 	-- Straight down the screen first, and the direction is the point: x never
 	-- changes on this leg, so a snippet hung off the offsets would sit still.
