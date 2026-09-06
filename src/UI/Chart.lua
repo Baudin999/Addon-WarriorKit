@@ -410,13 +410,22 @@ local function Placed(ok, at)
 	return x * 100, y * 100
 end
 
--- The one vector the world position is handed over in, filled in place. Spot
--- is on the tick, ten times a second per person, and a fresh vector each time
--- is garbage on the same terms a table is. The mixin's own constructor where
--- the client has one, because that is what the call is documented to take; a
--- bare pair of fields where it does not, because that is all the mixin is.
-local world = type(_G.CreateVector2D) == "function"
-	and _G.CreateVector2D(0, 0) or { x = 0, y = 0 }
+-- The vectors a world position is handed over in, filled in place. Spot is on
+-- the tick, ten times a second per person, and a fresh vector each time is
+-- garbage on the same terms a table is. The mixin's own constructor where the
+-- client has one, because that is what the call is documented to take; a bare
+-- pair of fields where it does not, because that is all the mixin is.
+--
+-- Two of them, and the second is not a saving. Both conversions below take a
+-- vector and only one of them is ever in flight, so one would do; two mean the
+-- yards and the map fraction are never the same fields, and the field names
+-- are the whole of what says which of the two a number is.
+local function Vector()
+	return type(_G.CreateVector2D) == "function" and _G.CreateVector2D(0, 0)
+		or { x = 0, y = 0 }
+end
+
+local world, fraction = Vector(), Vector()
 
 -- Somebody in your group, placed on one map by way of where they are standing
 -- in the world.
@@ -461,6 +470,52 @@ function Chart.Spot(map, unit)
 		return nil
 	end
 	return Placed(pcall(api.GetPlayerMapPosition, map, unit))
+end
+
+-- Where a place on a map is standing, in the world's own yards.
+--
+-- The other direction from Standing above, through the client's own call for
+-- it: C_Map.GetWorldPosFromMapPos takes a map id and a fraction of that map
+-- and answers the instance and a world vector. It is on 2.5.6, and it is what
+-- Questie's tracker and HereBeDragons both go through on this install, which
+-- is how a signature is read here rather than remembered.
+--
+-- **The two axes are named here because nothing in the client names them.**
+-- The vector's first number grows to the north and its second grows to the
+-- west, which is the frame GetPlayerFacing counts in: nought is north and the
+-- number rises anticlockwise. So the bearing from one of these to another is
+-- atan2 of the second difference over the first, with no sign to get wrong,
+-- and that is the whole reason this answers yards and not a map fraction. A
+-- map fraction is a percentage of a rectangle whose two sides are different
+-- numbers of yards, and an angle taken in it is skewed by the ratio between
+-- them.
+--
+-- Read off HereBeDragons on disk rather than from memory. Its zone to world
+-- transform writes `left - width * x` for the east-west number, so that number
+-- falls as you walk east and rises as you walk west, and `top - height * y`
+-- for the other, so that one falls as you walk south.
+--
+-- The instance comes back with the pair and is the caller's to compare. Two
+-- places in different instances have world coordinates that mean nothing to
+-- each other, which is the same fact Questie spends half a million yards
+-- saying.
+function Chart.World(map, x, y)
+	local api = Api()
+	if not api or type(map) ~= "number" or type(x) ~= "number"
+		or type(y) ~= "number" or type(api.GetWorldPosFromMapPos) ~= "function" then
+		return nil
+	end
+	fraction.x, fraction.y = x / 100, y / 100
+	local ok, instance, at = pcall(api.GetWorldPosFromMapPos, map, fraction)
+	if not ok or type(instance) ~= "number" or type(at) ~= "table"
+		or type(at.GetXY) ~= "function" then
+		return nil
+	end
+	local read, north, west = pcall(at.GetXY, at)
+	if not read or type(north) ~= "number" or type(west) ~= "number" then
+		return nil
+	end
+	return north, west, instance
 end
 
 -- Where your corpse is on one map, in the same coordinates a unit is answered

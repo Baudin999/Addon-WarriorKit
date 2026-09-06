@@ -23,13 +23,21 @@ local Log = ns.QuestLog
 -- somebody else's tracker: that file points Questie's clicks at this addon's
 -- window. This file is the tracker.
 --
--- **It draws from ns.QuestLog's zones and nothing else.** Quests/Log.lua turns
--- the client's flat run of rows into zones holding quests and caches the
--- answer, and until now the quest window's left column was its only reader.
--- Log.Zones() is the one door this file goes through. A tracker that read the
--- client's log itself would be the sheet and the loot feed again: two pictures
--- of one thing, drifting apart in the details nobody looks at until they are
--- side by side. One reading, two drawings.
+-- **The quests on it come from ns.QuestLog's zones and nothing else.**
+-- Quests/Log.lua turns the client's flat run of rows into zones holding quests
+-- and caches the answer, and until now the quest window's left column was its
+-- only reader. Log.Zones() is the one door this file goes through. A tracker
+-- that read the client's log itself would be the sheet and the loot feed
+-- again: two pictures of one thing, drifting apart in the details nobody looks
+-- at until they are side by side. One reading, two drawings.
+--
+-- **One sentence at the foot of it is not a quest and is not from the log.**
+-- ns.QuestFriend names somebody standing near you with a quest that has never
+-- been in your log, which is the half of "what is close" the client cannot
+-- answer at all, and every rule about what that sentence may say is in
+-- Quests/Friend.lua rather than here. What this file decides is where it goes
+-- and whether it is asked for: at the foot, and only where the column already
+-- has a quest on it.
 --
 -- **It scopes on the client's log header, and the pin is the one exception.**
 -- A pinned quest is on this column wherever you are standing, which is the
@@ -54,10 +62,12 @@ local Log = ns.QuestLog
 -- worth saying because Quests/Window.lua hangs a second redraw off them: what
 -- that callback buys that file is the order its right column is drawn in, since
 -- two of its three lines are Questie's answers and the client's event arrives
--- before Questie has finished thinking. Nothing on this column is Questie's.
--- The name and the objectives are the client's own, so the client's own events
--- are already the right grain, and a second source registered for a redraw that
--- would say the same thing is one more thing to keep in step.
+-- before Questie has finished thinking. Every quest name and every objective on
+-- this column is the client's own, so the client's own events are already the
+-- right grain, and a second source registered for a redraw that would say the
+-- same thing is one more thing to keep in step. The foot line is Questie's and
+-- it does not change that: it holds itself still for twenty seconds at a time,
+-- so a redraw hung off Questie would repaint the same sentence.
 --
 -- **It follows ns.QuestTrackerOff.Wanted().** One switch, one tracker: the box
 -- that takes Questie's tracker off the screen is the box that puts this one up,
@@ -89,9 +99,14 @@ local LINE_TEXT = 11
 -- gold edge says "yours" at a glance over grass, which is the whole job.
 local PIN = 2
 
+-- The air to the left of every row's text: the pin's own two pixels with a gap
+-- either side, so an unpinned name starts where a pinned one does and the
+-- column has one left edge rather than two.
+local LEAD = M.rowGap + PIN + M.rowGap
+
 --------------------------------------------------------------------------
 
-local frame, stack, place, wash
+local frame, stack, place, wash, note
 local heads, lines = {}, {}
 local built = false
 
@@ -247,6 +262,34 @@ local function Spare(pool, used)
 	end
 end
 
+-- The one wrapping row, put on the stack or taken off it.
+--
+-- Wrapped rather than clipped, and measured after its width is set, which is
+-- the rule UI/Stack.lua's header states: a font string asked how tall it is
+-- before it has been given a width answers one line, and a row sized off that
+-- writes over the frame under it. Here that frame is the world.
+--
+-- It takes no mouse at all, so there is nothing for Column.Lock to hand back
+-- and forth. Clicking a quest opens that quest; there is no window this
+-- sentence could open, because the quest it is about is not in your log.
+local function Aside(text)
+	if not text then
+		note:Hide()
+		return
+	end
+	note.text:SetText(text)
+	note:Show()
+	-- Air over it, because it is an aside and not the next objective down.
+	stack:Space(M.rowGap)
+	stack:Add(note, {
+		gap = M.rowGap,
+		measure = function(cell)
+			note.text:SetWidth(math.max(stack.width - cell.indent - LEAD - M.rowGap, 1))
+			return UI.TextHeight(note.text, LINE)
+		end,
+	})
+end
+
 -- Whether the rows answer the pointer at all. They give it up while the frame
 -- is unlocked, for the reason Progress/Rails.lua gives: a row that took the
 -- press would swallow the drag that is the whole point of unlocking.
@@ -268,7 +311,7 @@ local function Fill()
 	local head, line = 0, 0
 	for _, quest in ipairs(quests) do
 		head = head + 1
-		local row = Take(heads, head, TITLE_TEXT, M.rowGap + PIN + M.rowGap)
+		local row = Take(heads, head, TITLE_TEXT, LEAD)
 		local tone = Tone(quest)
 		row.quest = quest.id
 		row.text:SetText(quest.title or "")
@@ -279,8 +322,7 @@ local function Fill()
 
 		for _, step in ipairs(Log.Objectives(quest.key) or {}) do
 			line = line + 1
-			local under = Take(lines, line, LINE_TEXT,
-				M.rowGap + PIN + M.rowGap + M.indent)
+			local under = Take(lines, line, LINE_TEXT, LEAD + M.indent)
 			local shade = step.done and C.quiet or C.dim
 			under.quest = quest.id
 			under.text:SetText(step.text or "")
@@ -290,9 +332,25 @@ local function Fill()
 		end
 	end
 
-	-- Item 98's line goes on the foot of this stack, here, after the quests and
-	-- before the two Spare calls: one more cell, naming one thing that is close
-	-- to you, and the pools below are what it takes its row from.
+	-- The friend's line, at the foot of the stack.
+	--
+	-- **Asked only where there is a tracker to put it at the foot of.** The
+	-- sentence is an aside to a column of quests and reads as one; on its own
+	-- over the grass it is a floating instruction. Asking has a second cost
+	-- besides the sentence: ns.QuestNear stops walking half a minute after the
+	-- last reader, so a paint that asks in a zone with nothing in your log
+	-- keeps a walk warm for a row that would never be drawn.
+	--
+	-- Its own row rather than one out of the pools above, because it is the one
+	-- thing on this column that wraps. A quest name that does not fit is
+	-- clipped, which is the right answer for a name you already know; a
+	-- sentence clipped mid-word is a sentence nobody can read.
+	if head > 0 then
+		Aside(ns.QuestFriend.Line())
+	else
+		note:Hide()
+	end
+
 	Spare(heads, head)
 	Spare(lines, line)
 	return #quests
@@ -348,6 +406,16 @@ function Column.Build()
 	wash:SetAllPoints(frame)
 
 	stack = UI.Stack(frame, WIDTH)
+
+	-- The friend's line. One frame, made here rather than pooled, because there
+	-- is only ever one of it and it is the only row on this column that wraps.
+	-- Dim, so it reads as an aside to the quests above it rather than as
+	-- another one of them.
+	note = CreateFrame("Frame", nil, stack.frame)
+	note.text = UI.Wrap(UI.Label(note, LINE_TEXT, C.dim, "LEFT", UI.SHADOW), true)
+	note.text:SetPoint("TOPLEFT", LEAD, 0)
+	note.text:SetPoint("TOPRIGHT", -M.rowGap, 0)
+	note:Hide()
 
 	place = UI.Placeable(frame, {
 		name = "WarriorKit quest tracker",
@@ -486,6 +554,12 @@ events:RegisterEvent("UNIT_QUEST_LOG_CHANGED")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("ZONE_CHANGED")
 events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+-- The two edges of a fight, for the foot line rather than for the quests. It
+-- goes quiet in combat, and the swords coming out is not otherwise an event
+-- this column hears: without these the sentence would sit over the fight until
+-- the next QUEST_LOG_UPDATE happened to arrive, and hang about after it.
+events:RegisterEvent("PLAYER_REGEN_DISABLED")
+events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:SetScript("OnEvent", OnEvent)
 
 -- A resolution change moves every size in this file at once, the same way it

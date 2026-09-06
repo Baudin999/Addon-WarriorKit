@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### A line at the foot of the tracker, from a friend rather than a map
+
+One sentence under the quests you are standing in the middle of, naming one
+person nearby with a quest that has never been in your log: "Farmer Furlbrow,
+ahead and to your right, has a quest you have never taken." It is the half of
+"what is close" the client cannot answer at all, and it is the reason to finish
+the quest you are on before walking out of the zone.
+
+No yardage in it, ever. Questie's distance is a straight line drawn over world
+coordinates, so a cliff or a lake between you and the murloc turns sixty yards
+into a three minute walk. The number is honest enough to pick who gets named
+and dishonest as soon as it is printed. What is printed instead is a direction
+in eight words, worked out here from where the spawn is and which way you are
+pointing, and it is the one thing on that line the game confirms as you walk:
+turn, and it was right or it was not.
+
+One person, never two. A second name would be a list, a list is a route, and
+routing you round a zone is a different addon. It names somebody, stands for
+twenty seconds and then stops; walking past the same farmer all evening is not
+news. It says nothing while you are fighting and nothing while you are indoors,
+where everything is thirty yards away and a friend would be a chatterbox. It
+says nothing about anyone on another continent.
+
 ### The pin, drawn where you can see it
 
 A pin now draws in two places. The row it is on wears a gold dot in the mark

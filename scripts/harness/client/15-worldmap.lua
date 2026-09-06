@@ -251,6 +251,30 @@ api.GetMapPosFromWorldPos = function(continent, world, override)
 	return target, { GetXY = function() return x / 100, y / 100 end }
 end
 
+-- The same conversion the other way, which is the call on 2.5.6 that turns a
+-- place on a map into yards: the instance and a world vector, in that order.
+-- Questie's own tracker and HereBeDragons both go through it on the live
+-- client, which is why it is worth a fixture.
+--
+-- Written as the exact inverse of the call above, so a coordinate that goes
+-- out through one and back through the other lands where it started. The frame
+-- it inverts is that call's own and is not the world's: the map id is folded
+-- into the first number and the two axes are the map's rather than the
+-- compass's, so what a section can honestly assert against it is a bearing
+-- against another bearing, and never which way is north.
+api.GetWorldPosFromMapPos = function(map, at)
+	if type(at) ~= "table" or type(at.x) ~= "number" or type(at.y) ~= "number" then
+		return nil
+	end
+	-- The tree above is the world map's and the quest fixture's two zones are
+	-- not in it, so a map with no continent over it is on the one world rather
+	-- than nowhere. The real call always answers a number here, and a caller
+	-- that compares two of them is asking whether two places are in the same
+	-- instance, which on this fixture they are.
+	local north, west = map * 1000 + at.y * 100, at.x * 100
+	return continentOf(map) or 0, { GetXY = function() return north, west end }
+end
+
 --------------------------------------------------------------------------
 -- Where your corpse is
 --------------------------------------------------------------------------

@@ -542,6 +542,14 @@ local SECTIONS = {
 	-- back, pins a quest and unpins it, and moves the addon's lock. Every one of
 	-- those, and where you were standing, is handed back at the foot of the file.
 	"85-quest-column",
+	-- Straight after 85-quest-column, because it reads that column: the line it
+	-- is about is a row at the foot of the same tracker, drawn under the same
+	-- switch, and this section stands you in the zone that section leaves a
+	-- quest in. It also drives ns.QuestNear's walk by hand, cuts Questie's offer
+	-- table down four times, turns you round, puts you in an instance and puts
+	-- you in combat. Every one of those, and where you were standing, is handed
+	-- back at the foot of the file.
+	"86-quest-friend",
 }
 
 -- Naming a section runs every section up to and including it, rather than that
