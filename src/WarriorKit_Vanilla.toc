@@ -67,7 +67,6 @@ Core\Gear.lua
 Core\Stance.lua
 Core\Piles.lua
 Core\QuestItems.lua
-Core\Need.lua
 Core\Loot.lua
 Core\CombatLog.lua
 
@@ -789,6 +788,20 @@ Quests\Window.lua
 Quests\Blizzard.lua
 Quests\Tracker.lua
 Quests\Feature.lua
+
+# Why an item matters to you: an objective in your log it feeds, a reagent a
+# profession of yours still gains from, or something the loot filter would have
+# left on the corpse. One answer in a fixed order, so two callers cannot rank
+# the same item differently.
+#
+# A tree of its own rather than a file in Core, which is where it was written.
+# It reads Quests\Client.lua, Comfort\Reagents.lua and Comfort\Wanted.lua, and a
+# base that every part names may not depend on three parts: every window that
+# wants a colour would depend on the quest log through the floor.
+# scripts/trees.lua refuses that outright and it is the one rule there with no
+# allow-list. After all three of the parts it reads, and before the windows
+# that ask.
+Need\Need.lua
 
 # The character sheet.
 #

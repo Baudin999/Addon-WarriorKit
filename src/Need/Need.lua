@@ -16,13 +16,24 @@ local ADDON, ns = ...
 --   trash    something Comfort/Wanted.lua would have left on the corpse.
 --   nothing  which is most items, and is answered out of a table.
 --
--- **It is in Core because three parts outside src/Feeds/ are going to want it
--- and a part may not name a file outside its own tree.** This is the shape
--- Core/QuestItems.lua has: it wraps readings other parts own, owns no setting
--- and draws nothing. Nothing here knows what a loot row or a bag square looks
--- like, and every source is reached through ns rather than named as a file, so
--- a build missing one of those parts answers "no" for that source and the rest
--- still work.
+-- **It is a tree of its own because three parts outside src/Feeds/ are going to
+-- want it and a part may not name a file outside its own tree.** It was written
+-- in Core for the first half of that sentence, on the model of
+-- Core/QuestItems.lua, and Core is the one place it cannot go. Core is the base
+-- every other tree names freely, and this file reads Quests/Client.lua,
+-- Comfort/Reagents.lua and Comfort/Wanted.lua: put it in the base and every
+-- window that wants a colour on a row depends on the quest log through the
+-- floor. scripts/trees.lua refuses that outright and it is the one rule there
+-- that carries no allow-list, because a base that reaches back into a feature
+-- is not a base.
+--
+-- So it is src/Need/, loading after all three parts it reads, and a window that
+-- asks carries one allow-listed edge saying so. The rest of what the Core
+-- version claimed is still true: it wraps readings other parts own, owns no
+-- setting and draws nothing. Nothing here knows what a loot row or a bag square
+-- looks like, and every source is reached through ns rather than named as a
+-- file, so a build missing one of those parts answers "no" for that source and
+-- the rest still work.
 --
 -- **The order is fixed here and not left to the caller.** A wolf liver that is
 -- also a leatherworking reagent is a wolf liver you need eight of, and two

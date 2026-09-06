@@ -134,6 +134,12 @@ local ALLOWED = {
 	  why = "the merchant row pays for mending through Comfort's" },
 
 	-- A feature reading another feature's data.
+	{ from = "Need", sym = "QuestClient", uses = 1,
+	  why = "why an item matters starts with what your quest log is waiting for" },
+	{ from = "Need", sym = "Reagents", uses = 1,
+	  why = "and then with whether a profession of yours still gains from it" },
+	{ from = "Need", sym = "Wanted", uses = 1,
+	  why = "and then with whether the loot filter would have left it behind" },
 	{ from = "Map", sym = "QuestWhere", uses = 1,
 	  why = "the map pins the quest log's own answer for where a quest is" },
 	{ from = "Map", sym = "QuestClient", uses = 1,
