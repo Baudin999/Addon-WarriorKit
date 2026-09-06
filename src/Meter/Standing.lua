@@ -94,4 +94,45 @@ ns.Tip.Source({
 		end
 		return Standing(unit)
 	end,
+	-- What makes this line move, for UI/Fresh.lua. It is the only line in the
+	-- addon that changes on its own while you are reading it: a pull runs for
+	-- half a minute and the percentage under the pointer was true on the frame
+	-- you arrived and false a second later.
+	--
+	-- Floored to the whole percent because that is what the line prints. Threat
+	-- wanders continuously and `%d%%` does not, so a mob whose share drifts
+	-- between 61.2 and 61.8 is one stamp and no rebuild, and the box is built
+	-- again exactly as often as a digit on screen changes.
+	--
+	-- The two states with no percentage are numbers of their own rather than a
+	-- shared nil, because "nothing on it yet" and "yours, and nobody is close"
+	-- are opposite sentences that both come back without a figure, and a stamp
+	-- that could not tell them apart would leave the wrong one on screen for as
+	-- long as you looked at the mob.
+	--
+	-- On Era it is who the mob is swinging at, by GUID, which is exactly what
+	-- that client's half of the line says. What neither half catches is a
+	-- challenger changing while their share rounds to the same whole number:
+	-- the name moves and the digit does not. A stamp catches what it names.
+	stamp = function(subject)
+		local unit = subject.unit
+		if type(unit) ~= "string" or not UnitExists(unit) then
+			return nil
+		end
+		if not UnitCanAttack("player", unit) then
+			return nil
+		end
+		if not Threat.Ready() then
+			local _, victim = Threat.Swinging(unit)
+			return victim and UnitGUID(victim) or false
+		end
+		local tone, percent = Threat.State(unit)
+		if not tone or tone == Shade.idle then
+			return -1
+		end
+		if not percent then
+			return -2
+		end
+		return math.floor(percent)
+	end,
 })

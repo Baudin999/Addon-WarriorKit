@@ -65,7 +65,8 @@ local SAMPLE_RATE = 1.0
 -- written to find them. scripts/check.sh compares this list against every
 -- ns.UI.Ticker call in the addon now, in both directions.
 local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast",
-	"castsweep", "tip", "settle", "chart", "skin", "skinread", "party", "partyread", "meter",
+	"castsweep", "tip", "settle", "fresh", "chart", "skin", "skinread", "party",
+	"partyread", "meter",
 	"buffs", "cooldowns", "standing", "stream", "world", "trace", "hide", "clock", "bagstack",
 	"vendor", "thanks", "sampler", "feed", "adhoc",
 	-- Every tween in the addon, on one tick that stops itself when nothing is

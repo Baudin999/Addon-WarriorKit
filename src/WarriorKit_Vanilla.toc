@@ -170,7 +170,7 @@ UI\Scroll.lua
 # locals as it loads, the same as everything else on this layer.
 UI\Log.lua
 
-# The tooltip, in three files. Every hover in the addon went to GameTooltip
+# The tooltip, in four files. Every hover in the addon went to GameTooltip
 # until this existed, which meant a parchment scroll with a gold border rising
 # out of an interface that has neither anywhere else.
 #
@@ -189,11 +189,22 @@ UI\Log.lua
 # calling ns.Tip.Source once at load. It loads after the box because it calls
 # it, and before every part because every part registers into it.
 #
-# All three after UI\Theme.lua for the palette and UI\Text.lua for the fonts,
-# and before every part that answers the mouse.
+# Fresh.lua keeps an open box true. A tooltip here was built once, at the moment
+# the pointer arrived, and never again: the threat percentage on a mob you held
+# through a whole pull was the figure it had been on the frame you got there.
+# This reads a stamp a few times a second, one cheap number per thing in the box
+# that can move, and builds the box again on the tick a stamp differs and on no
+# other tick. It is a file of its own rather than a tick inside Tip.lua because
+# a rebuild has to be marked cold and Tip.lua's one cold marker is already
+# spoken for by the settle.
+#
+# All four after UI\Theme.lua for the palette and UI\Text.lua for the fonts,
+# and before every part that answers the mouse. Fresh.lua last of the four: it
+# is the only one that calls the other three rather than being called by them.
 UI\Scan.lua
 UI\Tooltip.lua
 UI\Tip.lua
+UI\Fresh.lua
 
 # A column of things that happened, newest at the top, older below it, scrolled
 # by the wheel. It is not UI\Log.lua, which holds strings and cannot carry an

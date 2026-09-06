@@ -566,6 +566,12 @@ ns.Tip.Source({
 	fill = function(subject)
 		return Drops.Lines(subject.unit)
 	end,
+	-- See Drops.Epoch. The unit is not read at all: a hover cannot change which
+	-- creature it is about, and everything else these lines are built from moves
+	-- only when the quest log does.
+	stamp = function()
+		return Drops.Epoch()
+	end,
 })
 
 --------------------------------------------------------------------------
@@ -597,6 +603,12 @@ ns.Tip.Source({
 -- answer was no" is a hit and not a miss. A creature with nothing on it is the
 -- overwhelming majority of what a plate is put up for.
 local badges = {}
+
+-- How many times that table has been thrown away. It is the version of
+-- everything this file will say about a creature, and UI/Fresh.lua reads it
+-- through Drops.Epoch to find out whether a hover still on screen has gone out
+-- of date.
+local epoch = 0
 
 -- Whether the second of two objectives is the one the plate should carry.
 --
@@ -655,6 +667,20 @@ end
 -- clear a cache would be testing the event frame rather than the cache.
 function Drops.Forget()
 	badges = {}
+	epoch = epoch + 1
+end
+
+-- How many times that has happened, which is the whole of what makes these
+-- lines move.
+--
+-- Nothing this source draws can change except through the quest log, and the
+-- client says when the quest log changed. So the stamp is a counter rather than
+-- a walk: reading it is one field, and it is exact in both directions, where a
+-- comparison of the lines themselves would mean building them on every tick to
+-- find out whether they were worth building. Standing/Standing.lua's epoch is
+-- the same idea against the same kind of cache.
+function Drops.Epoch()
+	return epoch
 end
 
 local log = CreateFrame("Frame")

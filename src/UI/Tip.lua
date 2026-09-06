@@ -120,6 +120,13 @@ end
 local sources = {}
 local taken = {}
 
+-- The subset of the above that declared a stamp, kept as its own list rather
+-- than found by walking `sources` every tick. UI/Fresh.lua reads it a few times
+-- a second for as long as a box is on screen, and most sources have no stamp:
+-- walking the whole list to skip four of them is a cost paid on the tick to
+-- save four table reads at load.
+local stamped = {}
+
 -- What the hover that is up was opened with, so a key going down can redraw it.
 -- See Tip.Again.
 local open
@@ -184,6 +191,14 @@ function Tip.Source(source)
 			:format(source.name))
 	assert(type(source.fill) == "function",
 		("%s registered no fill, so it can never say anything"):format(source.name))
+	-- Optional, and the only optional field on a source. A line that cannot
+	-- change while you look at it needs none, which is most of them; a line
+	-- carrying a figure that moves declares what makes it move, and UI/Fresh.lua
+	-- reads that rather than rebuilding the box to find out. What a stamp is
+	-- worth and why it is floored is written in that file's header.
+	assert(source.stamp == nil or type(source.stamp) == "function",
+		("%s registered a stamp that is not a function, and a stamp is read on a tick")
+			:format(source.name))
 
 	local key = source.band .. ":" .. source.order
 	assert(not taken[key],
@@ -195,7 +210,18 @@ function Tip.Source(source)
 	table.sort(sources, function(a, b)
 		return a.order < b.order
 	end)
+	if source.stamp then
+		stamped[#stamped + 1] = source
+	end
 	return source
+end
+
+-- Every source that declared a stamp, handed out rather than copied because
+-- UI/Fresh.lua walks it on a tick and a copy per pass is the allocation this
+-- whole mechanism exists to avoid. Nothing else reads it, and nothing may
+-- write it.
+function Tip.Stamped()
+	return stamped
 end
 
 --------------------------------------------------------------------------
@@ -368,11 +394,17 @@ end
 function Tip.Open(owner, subject, above, place)
 	if type(subject) ~= "table" then
 		open = nil
+		UI.Fresh.Stop()
 		return UI.Tooltip.Show(owner, nil)
 	end
 	-- Held so a modifier pressed while the box is already up can redraw it. See
 	-- Tip.Again below, which is the only reader.
 	open = { owner = owner, subject = subject, above = above, place = place }
+	-- After the box is built and before it is handed over, and armed on the
+	-- subject rather than on the box: a rebuild comes back through here with the
+	-- same subject table and must not read as a new hover. UI/Fresh.lua's Arm
+	-- says what happens if it does.
+	UI.Fresh.Arm(subject)
 	return UI.Tooltip.Show(owner, Tip.Build(subject), above or subject.above,
 		place or subject.place, Beside(subject))
 end
@@ -436,7 +468,15 @@ local DRIFT = 2
 -- stop and a thing waits for nothing. This is the number the furniture waits,
 -- and it is one number rather than four so that every bit of chrome in the
 -- addon answers a held pointer at the same moment.
-Tip.HOLD = 0.4
+--
+-- It was 0.4, which is long enough to feel like the addon thinking about it.
+-- Four tenths of a second is roughly a deliberate pause, and what the number
+-- has to be instead is the shortest gap that reads as a hand stopping rather
+-- than a hand passing through: a pointer crossing a row of chips on its way
+-- somewhere else is over each of them for a few dozen milliseconds, and one
+-- that has arrived is over one of them for good. 0.15 clears the first and is
+-- under what anybody reports as a delay.
+Tip.HOLD = 0.15
 
 -- What the wait will open, filled in at the arm.
 local pending = { owner = nil, subject = nil, above = nil, place = nil }
@@ -469,6 +509,11 @@ end
 function Tip.Close(now)
 	open = nil
 	Cancel()
+	-- The box lingers and the refresh does not. What is on screen for the next
+	-- second is a description of something you have already looked away from,
+	-- and keeping a figure inside it moving would be the addon paying to correct
+	-- a sentence nobody is reading any more.
+	UI.Fresh.Stop()
 	return UI.Tooltip.Close(now)
 end
 

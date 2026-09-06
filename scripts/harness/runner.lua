@@ -295,6 +295,12 @@ local SECTIONS = {
 	-- tooltip without the harness's own line in it.
 	"48-key-line",
 	"48-tooltips",
+	-- Straight after it and for the same reason it is late: this registers a
+	-- source of its own that stays registered too. Its line answers only a note
+	-- carrying a `stamped` field and nothing below writes one, and its stamp
+	-- answers the same number for every other note, so what the sections under
+	-- here inherit is a tick that arms on a note hover and rebuilds nothing.
+	"48-tooltip-fresh",
 	"49-world-hover",
 	-- After 48-tooltips, which is fine and is worth saying why: what that
 	-- section leaves registered is a source that answers only a subject
