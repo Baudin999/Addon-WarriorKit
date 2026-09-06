@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Blocks a commit that does not pass the gate.
+#
+# Tracked rather than left in .git/hooks, because a hook that lives only in
+# .git is a hook that exists on one machine and for one author. It is wired up
+# with:
+#
+#   git config core.hooksPath scripts/hooks
+#
+# This checks the working tree, not the staged tree. A partial `git add -p` can
+# therefore commit something the gate never saw. Fixing that means stashing the
+# unstaged half, and a stash in a hook loses work when the hook is killed, so
+# the honest trade is to check what is on disk and say so.
+set -uo pipefail
+
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root"
+
+if ! ./scripts/check.sh; then
+	echo >&2
+	echo "commit blocked: scripts/check.sh failed." >&2
+	echo "Fix it, or run git commit --no-verify if you know why you are bypassing it." >&2
+	exit 1
+fi
+
+# check.sh reads the source. The harness runs it, which is the half that catches
+# a stacking order, a colour or an allocation, and it costs about twenty
+# milliseconds. A gate that only one of the two layers enforces is a gate that
+# is off on whichever machine forgot to run the other one.
+if ! lua5.1 scripts/harness.lua src; then
+	echo >&2
+	echo "commit blocked: scripts/harness.lua failed." >&2
+	echo "Fix it, or run git commit --no-verify if you know why you are bypassing it." >&2
+	exit 1
+fi
