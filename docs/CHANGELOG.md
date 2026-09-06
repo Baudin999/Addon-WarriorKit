@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Who nearby has a quest you have never taken
+
+The client will tell you what is in your quest log and nothing whatever about
+what is not. Questie knows both halves: it keeps a table of every quest you
+could accept right now, keyed on the npc holding it, and it knows where that
+npc stands. `ns.QuestNear` reads those two and answers the people near you with
+a quest that has never been in your log, in whole yards, in no order.
+
+The budget is the design. Questie offers a couple of thousand npcs and each one
+costs a coordinate transform per spawn, so the walk takes twenty five of them
+per tick and finishes a pass in about four seconds instead of blocking on one.
+It has a row on the performance tab like every other tick in the addon. It runs
+on neither of the two paths that made the quest window expensive: never on a
+paint, and never on `QUEST_LOG_UPDATE`, which is the client saying it looked
+rather than the log changing, and which it says several times a second while
+you are killing things.
+
+Three states cost nothing at all. Nothing has read the answer in half a minute,
+Questie has not finished compiling its database, or you are standing in an
+instance. The last one is not politeness. Questie adds half a million yards to
+every spawn outside the instance you are in, so a pass run in a dungeon
+measures a thousand npcs and throws every one of them away.
+
+Nothing draws this yet. It is the reading the tracker's next line is built on.
+
 ### Questie's tracker goes off, by its own hand
 
 Two quest trackers on one screen is one too many. There is a tick box on the

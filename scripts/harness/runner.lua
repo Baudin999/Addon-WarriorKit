@@ -505,6 +505,12 @@ local SECTIONS = {
 	-- which map you are on answers. It puts every one of those back at the foot
 	-- of the file, including where you were standing when it started.
 	"83-quest-here",
+	-- Straight after 83-quest-here, because it reads what that section leaves:
+	-- the map you are standing on and the instance flag over it, both put back
+	-- at the foot of that file. It drives one ticker by hand rather than through
+	-- the frame, takes Questie away twice and breaks four of its names one at a
+	-- time, and hands every one of them back before it prints.
+	"84-quest-near",
 	-- Last, because it takes Questie away three ways and reaches into that
 	-- addon's own saved settings to do it. Everything above this line reads
 	-- Questie; this is the one section that writes to it. It puts the global,

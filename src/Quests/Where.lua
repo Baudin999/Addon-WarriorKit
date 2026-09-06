@@ -50,6 +50,11 @@ ns.QuestWhere = Where
 -- distance would put "483,204 yards" under a quest name.
 local ELSEWHERE = 500000
 
+-- Handed out because Near.lua makes the same cut on the npc half of "what is
+-- near you", off the same distance function. One constant rather than two
+-- spellings of half a million in one folder.
+Where.ELSEWHERE = ELSEWHERE
+
 -- What a place on the map is for. Taken from the widget that draws them rather
 -- than written out again here: UI/Chart.lua keys its palette on these three
 -- strings, and two copies of the same word is one edit away from a dot with no

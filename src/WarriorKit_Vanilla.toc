@@ -780,7 +780,9 @@ Mail\Feature.lua
 # gives degrades to nil rather than to an error. The picture those places are
 # drawn on is UI\Chart.lua, far above this line: it takes a map id and a list of
 # points and knows nothing about quests, which is why it is in the kit and not
-# here. Window.lua draws the three
+# here. Near.lua is the other direction and reads only Questie: who is standing
+# near you with a quest that has never been in your log, walked a few npcs a
+# tick off one ticker rather than asked all at once. Window.lua draws the three
 # columns, Blizzard.lua puts the client's own log in the attic and redirects the
 # L key, Tracker.lua points Questie's tracker at this window under the same
 # switch, TrackerOff.lua switches that tracker off through Questie's own call
@@ -792,6 +794,7 @@ Quests\Client.lua
 Quests\Party.lua
 Quests\Log.lua
 Quests\Where.lua
+Quests\Near.lua
 Quests\Drops.lua
 Quests\Window.lua
 Quests\Blizzard.lua
