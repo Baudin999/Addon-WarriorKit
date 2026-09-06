@@ -805,6 +805,7 @@ Character\Readout.lua
 Character\Trace.lua
 Character\Paperdoll.lua
 Character\Window.lua
+Character\RepWindow.lua
 Character\Blizzard.lua
 Character\Feature.lua
 

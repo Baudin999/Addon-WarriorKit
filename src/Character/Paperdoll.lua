@@ -28,13 +28,15 @@ local C, M = UI.Color, UI.Metric
 -- number this layout is built on: a column is as wide as an item's name wants
 -- to be, and the middle is everything left over.
 --
--- **The stats are the right hand column.** They were a tab of their own, which
--- meant the two halves of one question lived on two pages: the squares say what
--- you are wearing and the numbers say what wearing it does, and swapping a ring
--- to see the second one move is a tab press away from the first. So the stats
--- readout is a column down the right of this page, filled from the same
--- Character/Stats.lua and drawn by the same Character/Readout.lua that drew the
--- tab.
+-- **The stats and the skills are the right hand column.** Both were tabs of
+-- their own, which meant the two halves of one question lived on two pages: the
+-- squares say what you are wearing and the numbers say what wearing it does, and
+-- swapping a ring to see the second one move is a tab press away from the first.
+-- The skills went the same way and for a sharper version of the same reason: the
+-- miss badge at the head of this column is computed from your weapon skill. So
+-- the readout is a column down the right of this page, filled from
+-- Character/Stats.lua and Character/Skills.lua and drawn by the same
+-- Character/Readout.lua that drew both tabs.
 --
 -- **The four readings are badges at the head of that column, over your name.**
 -- They were four cells along the foot of the portrait, drawn on a band of
@@ -1187,6 +1189,26 @@ function Pane:Redress()
 	return changed
 end
 
+-- The stats, and then the skills under them, as one list.
+--
+-- Skills were a tab. They are a group in this column now, and the fold is one
+-- list appended to another because Character/Skills.lua and Character/Stats.lua
+-- already hand back the same shape: a title and a list of rows. The readout
+-- draws whatever it is given and did not change.
+--
+-- They belong here rather than on a page of their own for the same reason the
+-- stats do. The miss badge at the head of this column is computed from your
+-- weapon skill, and the two had been on separate pages since the sheet was
+-- built, so the number and what it is made of were one press apart.
+local function Column()
+	local groups = ns.CharStats.Groups()
+	local skills = ns.CharSkills.Groups()
+	for index = 1, #skills do
+		groups[#groups + 1] = skills[index]
+	end
+	return groups
+end
+
 function Pane:Paint()
 	self:Redress()
 	for index = 1, #self.squares do
@@ -1198,7 +1220,7 @@ function Pane:Paint()
 	-- and a font string on a page nobody has shown yet is not obliged to answer
 	-- honestly. Character/Readout.lua keeps the other half of the same rule.
 	if self.frame:IsShown() then
-		self.stats:Set(ns.CharStats.Groups())
+		self.stats:Set(Column())
 	end
 	return true
 end

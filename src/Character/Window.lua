@@ -9,59 +9,60 @@ local C, M = UI.Color, UI.Metric
 --------------------------------------------------------------------------
 -- The character window
 --
--- Three tabs over one window: what you are wearing and what it adds up to,
--- what you are skilled at, and who likes you.
+-- One page: what you are wearing, what it adds up to, and what you are skilled
+-- at, all of it on the screen at once.
 --
 -- **It replaces the client's sheet rather than sitting beside it.** The client
--- draws three of these four and draws them as three separate windows wearing one
--- frame, with a picture of your back taking the largest area of the first one
--- and the number everybody actually wants, how often you miss, on none of them.
--- Blizzard.lua puts that frame in the attic and takes the C key, behind the one
--- switch on the page where every other Blizzard frame this addon replaces is
--- switched.
+-- draws this as three separate windows wearing one frame, with a picture of your
+-- back taking the largest area of the first one and the number everybody
+-- actually wants, how often you miss, on none of them. Blizzard.lua puts that
+-- frame in the attic and takes the C key, behind the one switch on the page
+-- where every other Blizzard frame this addon replaces is switched.
 --
--- **The stats are not a tab.** They were, and a tab was the wrong shape for
--- them: what a stat answers is what the piece you just put on did, and a number
--- you have to change page to read is a number you read once a week. So the
--- readout is a column down the right of the gear page, next to the squares that
--- move it. Character/Paperdoll.lua hosts it, Character/Readout.lua still draws
--- it, and this window is one tab narrower and one window wider for it.
+-- **There are no tabs.** There were four, and each one was a press between two
+-- halves of the same question. The stats went first, into a column down the
+-- right of the gear page, because what a stat answers is what the piece you just
+-- put on did. The skills followed it into that column: a weapon skill under the
+-- cap is the number the miss badge at the head of the column is computed from,
+-- and the two had been on separate pages since the sheet was built. Reputation
+-- is not a stat and did not belong in that column at all, so it took a window of
+-- its own on /wk reputation, which Character/RepWindow.lua hosts. What is left
+-- here is one window with one pane in it, and Character/Paperdoll.lua is that
+-- pane.
 --
--- **One pane is painted at a time.** A font string on a hidden frame will not
--- say how tall it wraps to on this client, so a tab painted while another one
--- was up would lay its prose out one line high and keep that height when you
--- opened it. Selecting a tab shows it and then paints it, in that order.
+-- What the strip of words across the top paid for is the top edge. With nothing
+-- drawn in it the grip UI/Window.lua hands a screen window is the whole of it,
+-- and the four badges moved up into the room the tabs were using.
 --
 -- **This window opens in a fight, and everything below that says `secure` or
 -- `InCombatLockdown` is there for that one sentence.** The gear page carries
 -- nineteen secure buttons because using what is in a slot is protected, a frame
 -- built from a secure template is protected, and every protected thing an addon
 -- does in combat is refused: showing this window, hiding it, moving it, sizing
--- it, taking its gear page down to put another tab up. Blizzard's own sheet does
--- all of that in a fight because Blizzard's code is allowed to.
+-- it. Blizzard's own sheet does all of that in a fight because Blizzard's code
+-- is allowed to.
 --
 -- An addon is allowed to borrow the permission one way, which is to have the
 -- press run a snippet. So there are three answers here and no fourth. The key
 -- is bound to a secure button whose snippet shows and hides the window, and the
--- cross on the title bar is the same button in the corner. The gear page is
--- never hidden, and the other two tabs are drawn over it. Everything that
+-- cross on the title bar is the same button in the corner. Everything that
 -- would have to move a protected frame, the layout and the zoom, waits for
 -- PLAYER_REGEN_ENABLED. The Lua way in still exists and still refuses in a
 -- fight, and says which key does work.
 --
 -- **Nothing here is on a ticker.** Your gear changes when the server says it
--- did, which is six events, and every one of them ends in a repaint of the tab
--- that happens to be up. A window nobody has open is not repainted at all, and
--- neither is one nobody has opened yet: Window.Paint refuses while the window
--- is down and the window's own OnShow is what pays the first one.
+-- did, which is six events, and every one of them ends in a repaint of the page.
+-- A window nobody has open is not repainted at all, and neither is one nobody
+-- has opened yet: Window.Paint refuses while the window is down and the window's
+-- own OnShow is what pays the first one.
 --
 -- **The frames are built at login and that is deliberate.** Every other window
 -- in the addon waits for the first open. This one cannot: the key press runs a
 -- snippet, a snippet may only touch a frame it has been handed a reference to,
 -- and neither the window nor the reference can be made in a fight. A sheet
 -- built on first press would be a C key that does nothing the first time it is
--- pressed in a pull. What login no longer pays for is the two paints and the
--- model, which is where nearly all of the cost was.
+-- pressed in a pull. What login no longer pays for is the paint and the model,
+-- which is where nearly all of the cost was.
 --------------------------------------------------------------------------
 
 -- There are no two numbers here any more.
@@ -84,54 +85,11 @@ local C, M = UI.Color, UI.Metric
 -- is laid out in shrink by the same factor. Character/Paperdoll.lua takes
 -- whatever width comes out and splits it between the three columns and the
 -- figure.
---
--- The other two tabs are the exception, and PAGE is how wide they get. They
--- are lists of prose on a ground of their own, and prose is read at a column's
--- width however much room there is: a weapon skill with its sentence under it
--- laid across an ultrawide is a line your eye loses on the way back. It is the
--- old window's content width, which is what those two were always drawn at
--- and the only number from it worth keeping.
-local PAGE = 836
 
--- The three, in the order they are drawn. `fill` is what the tab's pane is
--- handed on a repaint, and the one that has none is the one that is not a
--- readout: the gear page draws itself, stats and all.
-local TABS = {
-	{ label = "gear" },
-	{ label = "skills", fill = function() return ns.CharSkills.Groups() end },
-	{ label = "reputation", fill = function() return ns.CharRep.Groups() end },
-}
-
-local GEAR, SKILLS, REPUTATION = 1, 2, 3
-
-local window, tabs, footer, key
-local panes = {}
-local showing = GEAR
+local window, page, footer, key
 local pending = false
 
 --------------------------------------------------------------------------
-
--- Which page is on top.
---
--- The gear pane is never hidden and the other two are drawn over it. That is
--- not a layout preference, it is what lets a tab be pressed in a fight: the gear
--- pane holds nineteen secure buttons, hiding a frame with a protected one inside
--- it is itself a protected act, and an addon may not do one of those in combat.
--- Two ordinary frames going up and down over it is ordinary Lua and holds in a
--- fight like anything else here.
---
--- The two that cover it are opaque and take the mouse, so nothing shows
--- through and no click falls past them onto a gear square. Build sets that up
--- once; this is only the switch.
-local function Select(index)
-	showing = index
-	for slot = 1, #TABS do
-		if slot ~= GEAR then
-			panes[slot].frame:SetShown(slot == index)
-		end
-	end
-	return Window.Paint()
-end
 
 local function Chrome()
 	-- The rim rather than the flat face, because this line is printed along the
@@ -143,7 +101,7 @@ end
 
 -- Refused in a fight, and put right when it drops.
 --
--- Sizing the gear pane sizes the frame nineteen secure buttons hang off, which
+-- Sizing the gear page sizes the frame nineteen secure buttons hang off, which
 -- is the same protected act as showing it. Nothing here is urgent: a sheet laid
 -- out for the old screen is a sheet with a wide margin until the fight ends,
 -- and PLAYER_REGEN_ENABLED below runs the pass again.
@@ -162,20 +120,9 @@ function Window.Fit()
 	end
 	window:Resize(window.width, window.height)
 	local width = window.width - M.pad * 2
-	local body = window:Body() - M.pad * 2
-	local under = body - (tabs:Resize(width) + M.gutter)
-
-	for index = 1, #TABS do
-		local pane = panes[index]
-		-- The gear page is the sheet and takes the whole of it. The other two
-		-- are lists of prose on an opaque ground, and a list of prose is read at
-		-- a column's width whatever the monitor is: given the screen they would
-		-- be twenty skills laid across an ultrawide on a panel that has painted
-		-- the game out from edge to edge.
-		local room = index == GEAR and width or math.min(width, PAGE)
-		pane.frame:SetSize(room, under)
-		pane:Resize(room, under)
-	end
+	local under = window:Body() - M.pad * 2
+	page.frame:SetSize(width, under)
+	page:Resize(width, under)
 	return true
 end
 
@@ -200,9 +147,10 @@ function Window.Build()
 		-- shuts the sheet in a fight as well as out of one.
 		--
 		-- No title bar is also nothing to grab, so UI/Window.lua hands a screen
-		-- window a grip instead: the strip across its top that the tabs sit in,
-		-- which lights under the cursor and is the only part of the sheet a drag
-		-- starts on.
+		-- window a grip instead: the strip across its top, which lights under the
+		-- cursor and is the only part of the sheet a drag starts on. Nothing is
+		-- drawn in it now that the tabs are gone, so the whole of the top edge is
+		-- a handle.
 		screen = true,
 		zoom = function() return ns.Zoom("characterZoom") end,
 		-- The grid moved: the screen changed size, combat let go of a frame, or
@@ -241,42 +189,12 @@ function Window.Build()
 	-- where you left it while you are being hit.
 	ns.Remember(window)
 
-	-- The words rather than a strip of buttons. This sheet is a backdrop with
-	-- the game showing through it, and a row of filled tabs across the top is the
-	-- one thing left on the page that would still read as a dialog.
-	tabs = UI.TabStrip(window.content, { onSelect = Select, bare = true })
-	tabs.frame:SetPoint("TOPLEFT", M.pad, -M.pad)
-	-- Over the grip, so the strip that drags the sheet does not eat the tabs
-	-- drawn in it. UI/Window.lua's Chrome says why the grip is above the page.
-	tabs.frame:SetFrameLevel(window.grip:GetFrameLevel() + 1)
-
-	panes[GEAR] = ns.Paperdoll.New(window.content)
-	panes[SKILLS] = ns.CharReadout.New(window.content)
-	panes[REPUTATION] = ns.CharReadout.New(window.content)
-
-	for index = 1, #TABS do
-		local pane = panes[index].frame
-		tabs:Add(TABS[index].label)
-		pane:SetPoint("TOPLEFT", tabs.frame, "BOTTOMLEFT", 0, -M.gutter)
-		if index == GEAR then
-			pane:Show()
-		else
-			-- Over the gear page, opaque, and it eats the mouse. See Select for
-			-- why the page underneath is never taken down instead.
-			--
-			-- The cover stays now that the sheet itself has no ground, and it is
-			-- the one place on the sheet where a panel is the right answer. These
-			-- three pages are lists of prose: a weapon skill with its sentence
-			-- under it, a faction with a bar. The gear page has a figure and a
-			-- disc for every line and reads against grass; a paragraph does not.
-			pane:SetFrameLevel(window.content:GetFrameLevel() + 10)
-			pane:EnableMouse(true)
-			local cover = ns.Fill(pane, "BACKGROUND",
-				C.window[1], C.window[2], C.window[3], C.window[4])
-			cover:SetAllPoints()
-			pane:Hide()
-		end
-	end
+	-- The page, at the padding and nothing above it. It used to start under a row
+	-- of tabs, and the room that row was using is what the badges at the head of
+	-- the stats column moved up into.
+	page = ns.Paperdoll.New(window.content)
+	page.frame:SetPoint("TOPLEFT", M.pad, -M.pad)
+	page.frame:Show()
 
 	-- Painted whenever the window comes up, by whatever route. In a fight the
 	-- route is the snippet on the key, which runs no Lua of ours at all, so this
@@ -287,33 +205,23 @@ function Window.Build()
 
 	Chrome()
 	Window.Fit()
-	tabs:Select(showing)
 	return window
 end
 
 --------------------------------------------------------------------------
 
--- The tab that is up, and the line along the bottom. Nothing else, because
--- every other pane is behind this one and cannot be measured while it is.
+-- The page and the line along the bottom.
 --
 -- And nothing at all while the window is shut. This is nineteen slots, every
--- stat, every skill or every faction depending on the tab, and it ran twice at
--- login on a window nobody had opened: once out of the fit and once out of the
--- tab strip choosing its first tab. The window's own OnShow is what pays for it
--- now, so the sheet is painted when it comes up and not before.
+-- stat and every skill, and it ran twice at login on a window nobody had
+-- opened: once out of the fit and once out of the tab strip choosing its first
+-- tab. The window's own OnShow is what pays for it now, so the sheet is painted
+-- when it comes up and not before.
 function Window.Paint()
 	if not window or not window:IsShown() then
 		return false
 	end
-	local tab = TABS[showing]
-	local pane = panes[showing]
-
-	if tab.fill then
-		pane:Set(tab.fill())
-	else
-		pane:Paint()
-	end
-
+	page:Paint()
 	footer:SetText(("%s. %s."):format(ns.Worn.Describe(), ns.CharStats.Describe()))
 	return true
 end
@@ -382,14 +290,13 @@ end
 
 --------------------------------------------------------------------------
 
--- Opened on a tab, which is what the C key needs: the client's own key carries
--- which of its pages it meant, and a key that always landed on the gear tab
--- would be a worse key than the one it replaced.
+-- In a fight this cannot open the window and says so. The key can, because the
+-- key is a snippet.
 --
--- In a fight this cannot open the window and says so. The key can, and a tab
--- change on a window that is already up is ordinary, so that half falls
--- through: pressing the skills key mid pull on an open sheet still works.
-function Window.Show(tab)
+-- It took a tab number once, which is what the client's own key carries: C on
+-- the skills page meant the skills page. There is one page now, so every route
+-- in lands on it and the argument the parameter settled has gone with the tabs.
+function Window.Show()
 	Window.Build()
 	if InCombatLockdown() and not window:IsShown() then
 		ns.Print(("the character sheet opens on %s in a fight."):format(ns.CharBlizzard.KeyText()))
@@ -401,11 +308,7 @@ function Window.Show(tab)
 	if not window:IsShown() then
 		window:Show()
 	end
-	if tab and TABS[tab] then
-		tabs:Select(tab)
-	else
-		Window.Paint()
-	end
+	Window.Paint()
 	return true
 end
 
@@ -424,26 +327,22 @@ function Window.Hide()
 	return true
 end
 
-function Window.Toggle(tab)
-	if Window.Shown() and (tab == nil or tab == showing) then
+function Window.Toggle()
+	if Window.Shown() then
 		return Window.Hide()
 	end
-	return Window.Show(tab)
+	return Window.Show()
 end
 
-function Window.Tab()
-	return showing
-end
-
--- One tab's pane, handed out rather than answered about.
+-- The page, handed out rather than answered about.
 --
 -- What the harness checks here is the picture: how many squares the gear page
 -- drew, which of them are showing a durability line, how tall a row came out
 -- once its sentence wrapped. None of that is a boolean this file could compute
 -- without computing it the same way twice, which is a test that agrees with
 -- itself. Same reason ns.Attic.Frame hands the room over.
-function Window.Pane(index)
-	return panes[index]
+function Window.Pane()
+	return page
 end
 
 -- Repainted only while it is up. Every event below fires whether or not
@@ -463,7 +362,7 @@ function Window.Describe()
 	if not window then
 		return "not built yet"
 	end
-	return Window.Shown() and ("open on " .. TABS[showing].label) or "closed"
+	return Window.Shown() and "open" or "closed"
 end
 
 --------------------------------------------------------------------------
@@ -485,7 +384,6 @@ local WATCHED = {
 	"UNIT_RESISTANCES",
 	"COMBAT_RATING_UPDATE",
 	"SKILL_LINES_CHANGED",
-	"UPDATE_FACTION",
 	"PLAYER_LEVEL_UP",
 }
 

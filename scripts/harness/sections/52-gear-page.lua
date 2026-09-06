@@ -24,20 +24,38 @@ local H = ...
 local ns, check = H.ns, H.check
 
 local Window, Worn = ns.CharWindow, ns.Worn
-local GEAR = 1
+local Stats = ns.CharStats
 
 -- What the line at the foot reports, filled in by the blocks that measure it.
 -- Locals rather than H.carry: that table is for a number one section hands to a
 -- later one, and every one of these is taken and read out in this file.
 local column, stats, readout, dots, turned = 0, 0, 0, 0, 0
 
+-- The heading the three miss rows sit under, named because the fold below reads
+-- it twice and 52-character.lua reads it six times: the two files are looking at
+-- the same group from either end.
+local MISSING = "Missing a boss, three levels up"
+
+local function Find(groups, title, label)
+	for _, group in ipairs(groups) do
+		if group.title == title then
+			for _, row in ipairs(group.rows) do
+				if row.label == label then
+					return row
+				end
+			end
+		end
+	end
+	return nil
+end
+
 ----------------------------------------------------------------------
 -- The nineteen slots
 ----------------------------------------------------------------------
 
 do
-	Window.Show(GEAR)
-	local pane = Window.Pane(GEAR)
+	Window.Show()
+	local pane = Window.Pane()
 	check(#pane.squares == 19,
 		("%d slots were drawn and the client has nineteen"):format(#pane.squares))
 
@@ -116,19 +134,32 @@ do
 		("the stats column came out %s wide"):format(tostring(pane.stats.width)))
 	check(pane.stats:Lines() > 0, "the stats column drew no lines beside the gear")
 
-	-- Compact means one line a row. The sentence that used to wrap underneath is
-	-- in the hover, so a row that grew past a single line is a row still drawing
-	-- prose the column no longer has the height for.
-	local tallest = 0
+	-- Compact means one line a row, and a bar under it where the row has a
+	-- fraction. The sentence that used to wrap underneath is in the hover, so a
+	-- plain row taller than one line is a row still drawing prose the column no
+	-- longer has the height for.
+	--
+	-- Both kinds are on this column since the skills folded into it: a stat is a
+	-- name and a number, a weapon skill is that with how far along it is under
+	-- it. So the two are measured apart, because one ceiling over both would be
+	-- the taller one and would stop saying anything about the plain rows.
+	local plain, withBar = 0, 0
 	for index = 1, pane.stats:Lines() do
 		local line = pane.stats.lines[index]
-		if line:IsShown() then
-			tallest = math.max(tallest, line:GetHeight())
+		if line:IsShown() and line.label:IsShown() then
+			if line.track:IsShown() then
+				withBar = math.max(withBar, line:GetHeight())
+			else
+				plain = math.max(plain, line:GetHeight())
+			end
 		end
 	end
-	check(tallest > 0 and tallest <= ns.UI.Metric.row,
-		("the tallest row in the stats column is %d px and a compact row is one line")
-			:format(tallest))
+	check(plain > 0 and plain <= ns.UI.Metric.row,
+		("the tallest plain row in the stats column is %d px and a compact row is one line")
+			:format(plain))
+	check(withBar > plain and withBar <= ns.UI.Metric.row + 12,
+		("a skill row came out %d px against a plain row's %d, and it is one line plus a bar")
+			:format(withBar, plain))
 	readout = pane.stats.view.extent
 	column = pane.left[1]:GetWidth()
 	stats = pane.stats.frame:GetWidth()
@@ -183,7 +214,7 @@ end
 ----------------------------------------------------------------------
 
 do
-	local pane = Window.Pane(GEAR)
+	local pane = Window.Pane()
 	local head, shirt, hand
 	for _, box in ipairs(pane.squares) do
 		if box.entry.slot == 1 then
@@ -256,7 +287,7 @@ end
 ----------------------------------------------------------------------
 
 do
-	local pane = Window.Pane(GEAR)
+	local pane = Window.Pane()
 	local M, C = ns.UI.Metric, ns.UI.Color
 	local head, shirt, ring
 	for _, box in ipairs(pane.squares) do
@@ -351,7 +382,7 @@ end
 ----------------------------------------------------------------------
 
 do
-	local pane = Window.Pane(GEAR)
+	local pane = Window.Pane()
 	local page = pane.frame:GetHeight()
 
 	-- A portrait, not a landscape. The client scales a model to the width of its
@@ -381,6 +412,104 @@ do
 end
 
 ----------------------------------------------------------------------
+-- Skills
+--
+-- Here rather than in 52-character.lua because this is the page they are drawn
+-- on. Character/Skills.lua answers on its own, without the column, and every
+-- claim below is about the list it hands over rather than about the rows the
+-- fold under it puts on the screen.
+----------------------------------------------------------------------
+
+do
+	local groups = ns.CharSkills.Groups()
+	check(#groups == 2, ("%d skill groups were drawn and the client listed two"):format(#groups))
+	check(H.expandedSkills() == 1,
+		("the skill headers were expanded %d times and once is the whole of it")
+			:format(H.expandedSkills()))
+
+	local axes = Find(groups, "Weapon Skills", "Axes")
+	local swords = Find(groups, "Weapon Skills", "Swords")
+	check(axes ~= nil and axes.note == nil,
+		"a weapon skill at the cap for your level still carries a sentence")
+	check(swords ~= nil and swords.note ~= nil and swords.note:find("10 points short", 1, true),
+		("a weapon skill ten points short reads %s"):format(tostring(swords and swords.note)))
+	check(axes.fraction ~= nil and math.abs(axes.fraction - 1) < 1e-6,
+		"a skill at the cap did not draw a full bar")
+
+	-- A profession is told from a weapon skill by what it caps at and whether
+	-- it can be abandoned, not by the header it sits under, because every
+	-- header on this page is a localised string.
+	local craft = Find(groups, "Professions", "Blacksmithing")
+	check(craft ~= nil and craft.note == nil,
+		"a profession was treated as a weapon skill and told what it costs you")
+
+	local behind, worst = ns.CharSkills.Behind()
+	check(behind == 1 and worst == 10,
+		("%d weapon skills behind by at most %d, and one by ten is the fixture")
+			:format(behind, worst))
+end
+
+----------------------------------------------------------------------
+-- The fold
+--
+-- Skills were a tab and are a group in the stats column. Two lists appended,
+-- which is only a fold at all because both sides already hand back the same
+-- shape, so what is worth asserting is the seam: that both are in the column,
+-- that the stats come first, and that nothing was dropped in the join.
+--
+-- The order is the argument for the fold rather than a preference. The badge at
+-- the head of this column says how often you miss, a weapon skill under the cap
+-- is what that number is computed from, and the two were a tab press apart. Put
+-- the skills above the miss rows and they are a list you scroll past to reach
+-- the number they explain.
+----------------------------------------------------------------------
+
+do
+	Window.Show()
+	local groups = Window.Pane().stats.groups
+
+	check(Find(groups, MISSING, "a special") ~= nil,
+		"the stats are not in the column the sheet draws down its right")
+	check(Find(groups, "Weapon Skills", "Swords") ~= nil,
+		"the skills tab is gone and its rows did not land in the stats column")
+	check(Find(groups, "Professions", "Blacksmithing") ~= nil,
+		"only the weapon skills came across, so a profession is on no page at all")
+
+	local missAt, skillAt
+	for index = 1, #groups do
+		if groups[index].title == MISSING then
+			missAt = index
+		elseif groups[index].title == "Weapon Skills" then
+			skillAt = index
+		end
+	end
+	check(missAt ~= nil and skillAt ~= nil and skillAt > missAt,
+		("the miss rows are group %s and the weapon skills group %s, so the column opens on the skills")
+			:format(tostring(missAt), tostring(skillAt)))
+	check(#groups == #Stats.Groups() + #ns.CharSkills.Groups(),
+		("the column holds %d groups and the two lists have %d between them")
+			:format(#groups, #Stats.Groups() + #ns.CharSkills.Groups()))
+
+	-- The sentence under a weapon skill went into the hover with it. A compact
+	-- row draws one line and keeps the rest, which is the bargain the stats
+	-- column already made, so a skill ten points short still says what that
+	-- costs and says it by being pointed at.
+	local swords
+	local pane = Window.Pane().stats
+	for index = 1, pane:Lines() do
+		local line = pane.lines[index]
+		if line.hint and line.hint.label == "Swords" then
+			swords = line
+		end
+	end
+	check(swords ~= nil, "no row in the stats column is the Swords skill")
+	check(swords.hint.note ~= nil and swords.hint.note:find("10 points short", 1, true),
+		"the skill row in the column carries nothing for its hover to say")
+	check(swords.note:IsShown() == false,
+		"a compact row drew the sentence on the page as well as in the hover")
+end
+
+----------------------------------------------------------------------
 -- Sockets
 --
 -- The Burning Crusade put holes in gear and this addon has never read one. Two
@@ -402,7 +531,7 @@ end
 ----------------------------------------------------------------------
 
 do
-	local pane = Window.Pane(GEAR)
+	local pane = Window.Pane()
 	local head, neck
 	for _, box in ipairs(pane.squares) do
 		if box.entry.slot == 1 then
@@ -527,7 +656,7 @@ end
 ----------------------------------------------------------------------
 
 do
-	local pane = Window.Pane(GEAR)
+	local pane = Window.Pane()
 	local model = pane.panel.model
 	local mouse = H.mouse
 	local x, y = mouse.Point(model)
@@ -619,4 +748,4 @@ end
 Window.Hide()
 
 print(("gear   %d slots in two columns %d wide, the figure behind them turning to %.2f rad, %d px of stats beside; %d socket discs under the helmet, one of them the gem's own icon, %d px of readout")
-	:format(#Window.Pane(GEAR).squares, column, turned, stats, dots, readout))
+	:format(#Window.Pane().squares, column, turned, stats, dots, readout))

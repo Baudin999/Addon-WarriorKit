@@ -1,7 +1,14 @@
 -- The character window
 --
--- Four tabs replacing a window of the client's, and most of this section is
--- about the one number on them the client has never drawn.
+-- One page replacing a window of the client's, and most of this section is
+-- about the one number on it the client has never drawn.
+--
+-- **There are no tabs left.** The sheet had four and every one of them went
+-- somewhere better: the stats and then the skills into the column down the
+-- right of the gear page, which 52-gear-page.lua asserts the fold of, the
+-- loadouts out of the addon, the standings into a window of their own that
+-- 52-standings.lua covers. What is left here is the window rather than the
+-- switch, and the top edge the tabs used to sit in, which is the drag now.
 --
 -- **The miss maths is asserted against published figures rather than against
 -- itself.** A character at the weapon skill their level allows misses 5.5% one
@@ -13,10 +20,9 @@
 -- ignored weapon skill would pass one half of that and fail the other.
 --
 -- **Everything else is what a page cannot say about itself.** How many squares
--- were drawn and which of them lit a durability line, whether the row a
--- sentence wrapped inside came out taller than one line, whether the client's
--- own sheet is off the screen and its key redirected, and whether a click in a
--- fight refused instead of calling.
+-- were drawn and which of them lit a durability line, whether the client's own
+-- sheet is off the screen and its three page names redirected, and whether a
+-- click in a fight refused instead of calling.
 --
 -- What this cannot prove: that the client agrees about any of the thirty calls
 -- behind it. The stub answers what client/13-character.lua says it answers, and
@@ -28,11 +34,6 @@ local ns, check, state, fire = H.ns, H.check, H.state, H.fire
 local sheet, moved = H.sheet, H.moved
 
 local Window, Stats, Worn = ns.CharWindow, ns.CharStats, ns.Worn
--- The two tabs this section drives by number, plus the last one so the pane
--- sweep below has a bound. The reputation page is read through its own module
--- rather than through a tab, and the stats are not a tab at all any more: they
--- are a column on the gear page.
-local GEAR, SKILLS, REPUTATION = 1, 2, 3
 
 -- The heading the three miss rows sit under. It carries the three levels so the
 -- rows underneath do not have to, and it is named here because six checks below
@@ -65,7 +66,7 @@ end
 ----------------------------------------------------------------------
 
 do
-	local model = Window.Pane(GEAR).panel.model
+	local model = Window.Pane().panel.model
 	check((model.dressed or 0) == 0, "the figure was loaded before the sheet was opened")
 
 	Window.Show()
@@ -125,17 +126,22 @@ do
 			:format(x, frame:GetWidth()))
 end
 
-for index = GEAR, REPUTATION do
-	check(Window.Pane(index) ~= nil, ("tab %d has no pane"):format(index))
-end
+-- One pane, and it is the gear page. Pane took a tab number and takes none, so
+-- a sheet that grew a second page would have to grow a second way of asking for
+-- it, and what it hands back is the paperdoll: nineteen squares and a figure are
+-- on nothing else in the addon.
+check(Window.Pane() ~= nil, "the character window has no page in it")
+check(#Window.Pane().squares == 19 and Window.Pane().panel ~= nil,
+	("the page the window handed over drew %d squares")
+		:format(#Window.Pane().squares))
 
--- And there is no fourth. The loadouts were a tab on this window and they are
--- gone: the folder, the page and the secure buttons behind it. A pane at 4 is
--- the page coming back, and so is the namespace it drew into, which is checked
--- because the tab was only ever the host and the file could return without one.
-check(Window.Pane(REPUTATION + 1) == nil, "the character window has grown a fourth tab")
+-- The loadouts left the addon: the folder, the page and the secure buttons
+-- behind it. The namespace is what is checked, because the tab was only ever the
+-- host and the file could return without one. The standings left the window
+-- instead, and 52-standings.lua is where they went.
 check(ns.Loadouts == nil and ns.LoadoutPage == nil,
 	"the loadouts are loaded again and nothing on this window hosts them")
+check(ns.CharRepWindow ~= nil, "the standings have no window to be on")
 
 ----------------------------------------------------------------------
 -- Missing, against the three published figures
@@ -240,58 +246,6 @@ do
 end
 
 ----------------------------------------------------------------------
--- Skills
-----------------------------------------------------------------------
-
-do
-	local groups = ns.CharSkills.Groups()
-	check(#groups == 2, ("%d skill groups were drawn and the client listed two"):format(#groups))
-	check(H.expandedSkills() == 1,
-		("the skill headers were expanded %d times and once is the whole of it")
-			:format(H.expandedSkills()))
-
-	local axes = Find(groups, "Weapon Skills", "Axes")
-	local swords = Find(groups, "Weapon Skills", "Swords")
-	check(axes ~= nil and axes.note == nil,
-		"a weapon skill at the cap for your level still carries a sentence")
-	check(swords ~= nil and swords.note ~= nil and swords.note:find("10 points short", 1, true),
-		("a weapon skill ten points short reads %s"):format(tostring(swords and swords.note)))
-	check(axes.fraction ~= nil and math.abs(axes.fraction - 1) < 1e-6,
-		"a skill at the cap did not draw a full bar")
-
-	-- A profession is told from a weapon skill by what it caps at and whether
-	-- it can be abandoned, not by the header it sits under, because every
-	-- header on this page is a localised string.
-	local craft = Find(groups, "Professions", "Blacksmithing")
-	check(craft ~= nil and craft.note == nil,
-		"a profession was treated as a weapon skill and told what it costs you")
-
-	local behind, worst = ns.CharSkills.Behind()
-	check(behind == 1 and worst == 10,
-		("%d weapon skills behind by at most %d, and one by ten is the fixture")
-			:format(behind, worst))
-end
-
-----------------------------------------------------------------------
--- Reputation
-----------------------------------------------------------------------
-
-do
-	local groups = ns.CharRep.Groups()
-	check(H.expandedFactions() == 1,
-		"the collapsed faction header was not expanded, so nothing under it could be listed")
-	check(#groups == 1 and #groups[1].rows == 2,
-		("the reputation page drew %d groups"):format(#groups))
-
-	local thrallmar = Find(groups, "Outland", "Thrallmar")
-	check(thrallmar ~= nil and thrallmar.value:find("Honored", 1, true) ~= nil,
-		("a standing the client names reads %s"):format(tostring(thrallmar and thrallmar.value)))
-	check(thrallmar.fraction ~= nil and math.abs(thrallmar.fraction - 0.4) < 1e-6,
-		("Thrallmar is 2400 of 6000 into Honored and the bar reads %.3f")
-			:format(thrallmar.fraction or -1))
-end
-
-----------------------------------------------------------------------
 -- Clicking a slot
 --
 -- Half of what a click on a worn item does is open to an addon and half is not.
@@ -306,11 +260,11 @@ end
 ----------------------------------------------------------------------
 
 do
-	-- The tab, put up here rather than inherited. What the page draws moved to
+	-- The window, put up here rather than inherited. What the page draws moved to
 	-- 52-gear-page.lua and took the Show with it, and a block that reads a square
-	-- off a tab nobody raised reads it off a page that was never laid out.
-	Window.Show(GEAR)
-	local pane = Window.Pane(GEAR)
+	-- off a window nobody opened reads it off a page that was never laid out.
+	Window.Show()
+	local pane = Window.Pane()
 	local head
 	for _, box in ipairs(pane.squares) do
 		if box.entry.slot == 1 then
@@ -378,7 +332,7 @@ end
 ----------------------------------------------------------------------
 
 do
-	local pane = Window.Pane(GEAR)
+	local pane = Window.Pane()
 	local main
 	for _, box in ipairs(pane.squares) do
 		if box.entry.slot == 16 then
@@ -430,7 +384,7 @@ end
 ----------------------------------------------------------------------
 
 do
-	local pane = Window.Pane(GEAR)
+	local pane = Window.Pane()
 	local main
 	for _, box in ipairs(pane.squares) do
 		if box.entry.slot == 16 then
@@ -494,7 +448,7 @@ end
 ----------------------------------------------------------------------
 
 do
-	local pane = Window.Pane(GEAR)
+	local pane = Window.Pane()
 	local main
 	for _, box in ipairs(pane.squares) do
 		if box.entry.slot == 16 then
@@ -541,26 +495,27 @@ end
 
 ----------------------------------------------------------------------
 -- The rows the readout draws
+--
+-- The column is the compact pane now that both prose tabs have gone, and what it
+-- draws is 52-gear-page.lua's subject. What is left here is the number the line
+-- at the foot reports and the grid the rows are placed on: a row sits at the
+-- running height of everything above it, so one fractional row puts every row
+-- under it half off the grid and a blurred column is the only symptom.
 ----------------------------------------------------------------------
 
 do
-	Window.Show(SKILLS)
-	local pane = Window.Pane(SKILLS)
-	check(pane:Lines() > 0, "the skills tab drew no lines at all")
+	Window.Show()
+	local pane = Window.Pane().stats
+	check(pane:Lines() > 0, "the stats column drew no lines at all")
 
-	local tallest, fractional = 0, 0
+	local fractional = 0
 	for index = 1, pane:Lines() do
 		local line = pane.lines[index]
-		if line:IsShown() then
-			if not whole(line:GetHeight()) then
-				fractional = fractional + 1
-			end
-			tallest = math.max(tallest, line:GetHeight())
+		if line:IsShown() and not whole(line:GetHeight()) then
+			fractional = fractional + 1
 		end
 	end
 	check(fractional == 0, ("%d rows are not a whole number of pixels tall"):format(fractional))
-	check(tallest > ns.UI.Metric.row,
-		"no row grew, so the sentence under a weapon skill is being drawn into one line's worth of room")
 	H.carry.characterRows = pane:Lines()
 end
 
@@ -577,18 +532,28 @@ do
 		"the client's own pages were left out of the attic")
 
 	-- The C key. The client's own function is gone and ours is in its place, and
-	-- ours carries which page was asked for.
+	-- two of its three page names now land on the same window: the skills are a
+	-- group in the sheet's own column, so the client's skill page opens the sheet.
 	Window.Hide()
 	_G.ToggleCharacter("SkillFrame")
-	check(Window.Shown() and Window.Tab() == SKILLS,
-		("C on the skills page opened tab %d"):format(Window.Tab()))
+	check(Window.Shown(), "the client's skill page did not open the sheet the skills are on")
 	check(sheetFrame:IsVisible() == false, "the client's sheet came back on a key press")
 
-	-- The two pages this window does not draw. Neither opens a tab and neither
-	-- puts the client's window back: what happens is a sentence.
+	-- The third name is the one that does not. The standings left this window, so
+	-- the client's reputation page has to reach the window they left for.
+	Window.Hide()
+	_G.ToggleCharacter("ReputationFrame")
+	check(ns.CharRepWindow.Shown(),
+		"the client's reputation page opened nothing")
+	check(not Window.Shown(),
+		"the client's reputation page opened the gear sheet, which no longer draws it")
+	ns.CharRepWindow.Hide()
+
+	-- The two pages this addon does not draw. Neither opens a window and neither
+	-- puts the client's back: what happens is a sentence.
 	Window.Hide()
 	_G.ToggleCharacter("PetPaperDollFrame")
-	check(not Window.Shown(), "the pet sheet opened a tab this window does not have")
+	check(not Window.Shown(), "the pet sheet opened a window this addon does not have")
 
 	-- And off, all the way back to what was there before.
 	ns.db.hideBlizzCharacter = false
@@ -611,13 +576,12 @@ end
 --
 -- The gear page is nineteen secure buttons, and the client refuses an addon
 -- every protected thing while it is in combat: showing this window, hiding it,
--- and taking the gear page down to put another tab up. That is what shut the
--- sheet mid pull, which is when the durability line is worth the most.
+-- sizing it. That is what shut the sheet mid pull, which is when the durability
+-- line is worth the most.
 --
--- What answers it is a snippet on a bound button, so what is checked here is
--- the button, the binding under it, that a tab still moves in a fight without
--- the gear page going anywhere, and that the two Lua ways in now refuse out
--- loud rather than calling something the client will drop.
+-- What answers it is a snippet on a bound button, so what is checked here is the
+-- button, the binding under it, that a repaint in a fight leaves the gear page
+-- standing, and that the two Lua ways in now refuse out loud.
 --
 -- What this cannot prove: that the client runs the snippet. No stub does. The
 -- shape is what is checkable here, and the shape is what has been wrong twice.
@@ -658,7 +622,7 @@ do
 	-- half the game, so a drag on the frame would take the left button and the
 	-- camera's right drag out of that whole half. It is the strip across the top
 	-- instead, and these three checks are the three ways that can go wrong.
-	local frame = Window.Pane(GEAR).frame:GetParent():GetParent()
+	local frame = Window.Pane().frame:GetParent():GetParent()
 	local sheet
 	for _, entry in ipairs(ns.UI.Windows) do
 		if entry.frame == frame then
@@ -672,23 +636,23 @@ do
 	check(frame:GetAttribute("_onattributechanged") ~= nil,
 		"the sheet is dragged from a snippet and carries none")
 
-	-- Over the page, and the tab row over the grip. This started out the other
-	-- way round on the argument that a strip above the tabs is a tab you cannot
-	-- press, and it shipped a sheet nobody could drag: the bottom of the stack is
-	-- under the page, under the pages the sheet lifts to content plus ten, and
-	-- under all nineteen gear squares, so the strip was never reached by anything.
-	--
-	-- Both halves are checked because either one alone is a bug. A grip under the
-	-- page cannot be grabbed. A grip over the tabs eats every tab press.
+	-- Over the page. It started out under it and shipped a sheet nobody could
+	-- drag: the bottom of the stack is under the page, under anything the page
+	-- lifts above itself, and under all nineteen gear squares.
 	check(sheet.grip:GetFrameLevel() > sheet.content:GetFrameLevel(),
 		("the grip sits at level %d and the page at %d, so the page is over the strip")
 			:format(sheet.grip:GetFrameLevel(), sheet.content:GetFrameLevel()))
-	-- Reached through the gear page, which is anchored to the bottom of the tab
-	-- row, rather than through an export added for one check.
-	local _, row = Window.Pane(GEAR).frame:GetPoint()
-	check(row:GetFrameLevel() > sheet.grip:GetFrameLevel(),
-		("the tab row sits at level %d and the grip at %d, so the strip eats the tabs")
-			:format(row:GetFrameLevel(), sheet.grip:GetFrameLevel()))
+
+	-- And the page hangs off the window rather than off a row of tabs. It was
+	-- anchored to the bottom of the strip, which is how it knew to start below it;
+	-- there is no strip, so it starts at the padding and the badges have the room.
+	local at, anchor, _, _, offset = Window.Pane().frame:GetPoint()
+	check(anchor == sheet.content and at == "TOPLEFT",
+		("the page is anchored %s to %s rather than to the top of the window")
+			:format(tostring(at), tostring(anchor and anchor:GetObjectType())))
+	check(math.abs(offset + ns.UI.Metric.pad) < 1e-6,
+		("the page starts %.1f units down the window and the padding is %d")
+			:format(-offset, ns.UI.Metric.pad))
 
 	-- And where you drop it is where it stays. The sheet sizes and places itself
 	-- off the monitor out of every resize, which is where a screen change and a
@@ -703,17 +667,24 @@ do
 
 	-- Open, because it used to be dragged shut: a gesture nobody can make, and
 	-- invisible while the drag was two handlers called by name.
-	Window.Show(GEAR)
+	Window.Show()
 
-	-- Grabbed at the far end of the strip, away from the tabs over its left. The
-	-- press goes to a point and the stub says which frame is really there, so a
-	-- grip under the page fails here rather than passing. That is the
-	-- arrangement that shipped, and this file asserted it as the requirement.
-	local own = frame:GetEffectiveScale()
-	local grabX, grabY = H.mouse.Point(sheet.grip,
+	-- The far end of the strip, which is where the drag was aimed while the tabs
+	-- had the other end. It still has to take the press, so it is asked first and
+	-- on its own, by hit test rather than by handler.
+	local farX, farY = H.mouse.Point(sheet.grip,
 		sheet.grip:GetWidth() - 20, -sheet.grip:GetHeight() / 2)
+	check(H.mouse.At(farX, farY, "LeftButton") == sheet.grip,
+		"the far end of the sheet's top edge is not the grip")
+
+	-- And the near end, which is what taking the tabs off bought. Twenty units in
+	-- from the left corner is where the first tab was drawn, over the grip and a
+	-- level above it, so this press used to land on the tab row. A sheet that grew
+	-- a strip of words again fails here rather than quietly costing that edge.
+	local own = frame:GetEffectiveScale()
+	local grabX, grabY = H.mouse.Point(sheet.grip, 20, -sheet.grip:GetHeight() / 2)
 	local took, dragging = H.mouse.Grab(grabX, grabY, "LeftButton")
-	check(took == sheet.grip, ("a drag on the sheet's strip landed on %s")
+	check(took == sheet.grip, ("a drag on the near end of the sheet's strip landed on %s")
 		:format(took and (took:GetName() or took:GetObjectType()) or "nothing"))
 	check(dragging, "the strip under the pointer is not registered for a left drag")
 
@@ -778,17 +749,20 @@ do
 	-- this check dropped it in.
 	sheet.place.placed = was
 
-	-- Open before the fight, because that is the state the tabs are tested in.
-	Window.Show(GEAR)
+	-- Open before the fight, because a repaint on an open sheet is the one thing
+	-- here that has to keep working while the client refuses everything else.
+	Window.Show()
 	check(Window.Shown(), "the window would not open out of combat")
 
 	local real = _G.InCombatLockdown
 	_G.InCombatLockdown = function() return true end
 
-	local gear = Window.Pane(GEAR).frame
-	Window.Show(SKILLS)
-	check(Window.Tab() == SKILLS, "a tab would not move in a fight")
-	check(gear:IsShown(), "switching tab in a fight hid the gear page and its secure buttons")
+	-- The page is never taken down, which used to be a tab rule and is now a fight
+	-- rule with nothing left to qualify it: the frame nineteen secure buttons hang
+	-- off may not be hidden by an addon in combat.
+	local gear = Window.Pane().frame
+	check(Window.Paint() and gear:IsShown(),
+		"a repaint in a fight took the gear page and its secure buttons down")
 
 	check(Window.Hide() == false and Window.Shown(),
 		"Lua closed a window holding a protected frame in a fight")
@@ -796,11 +770,11 @@ do
 	_G.InCombatLockdown = real
 	Window.Hide()
 	_G.InCombatLockdown = function() return true end
-	check(Window.Show(GEAR) == false and not Window.Shown(),
+	check(Window.Show() == false and not Window.Shown(),
 		"Lua opened a window holding a protected frame in a fight")
 	_G.InCombatLockdown = real
 
-	Window.Show(GEAR)
+	Window.Show()
 	check(Window.Shown(), "the window would not open again once the fight was over")
 end
 
@@ -809,9 +783,9 @@ end
 --
 -- The squares are repainted on six events and the model was redressed on none
 -- of them, so a weapon swapped with the sheet open changed the square and left
--- the figure holding the old one. It used to hide itself right by accident,
--- because switching tab took the page down and put it back; the page does not
--- go down any more, so the redress is deliberate and is checked here.
+-- the figure holding the old one. It used to hide itself right by accident, on a
+-- tab change that took the page down and put it back; there are no tabs, so the
+-- redress is deliberate and is checked here.
 --
 -- The other half is the cost. SetUnit reloads the model, UNIT_INVENTORY_CHANGED
 -- fires on a bag moving as well, and a page that reloaded on every looted grey
@@ -820,7 +794,7 @@ end
 ----------------------------------------------------------------------
 
 do
-	local pane = Window.Pane(GEAR)
+	local pane = Window.Pane()
 	local model = pane.panel.model
 	local real, dressed = model.SetUnit, 0
 	model.SetUnit = function(self, unit)
@@ -854,5 +828,5 @@ Window.Hide()
 -- It moved with the block that measures it: a section cannot report a number a
 -- later section is the one to take.
 print(("character %d slots, %d skill rows; %s; %s")
-	:format(#Window.Pane(GEAR).squares, H.carry.characterRows or 0,
+	:format(#Window.Pane().squares, H.carry.characterRows or 0,
 		Worn.Describe(), Stats.Describe()))

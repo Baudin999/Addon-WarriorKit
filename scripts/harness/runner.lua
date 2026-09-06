@@ -313,6 +313,11 @@ local SECTIONS = {
 	-- scene changes, so it goes under everything that reads either: the hide
 	-- section three dozen lines above, and the placing walk directly over it,
 	-- which counts this window among the six it holds to the lock.
+	-- Before it, and that is the whole of why it is a file of its own rather
+	-- than a block in it. The first thing it asserts is that the standings
+	-- window does not exist, and 52-character reaches that window through the
+	-- client's own reputation page name a hundred lines in.
+	"52-standings",
 	"52-character",
 	-- Straight after it, and it opens the sheet itself. What the gear page draws
 	-- is a bigger subject than the rest of that window and it grew past the line

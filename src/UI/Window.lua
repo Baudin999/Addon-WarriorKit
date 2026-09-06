@@ -280,10 +280,12 @@ end
 -- half the game is an invisible drag target the size of a wall, with the left
 -- button and the camera's right drag gone out of all of it.
 --
--- So the grip is the row across the top where the tabs sit, which is a title bar
--- in everything but the paint. It sits over the page rather than under it, and
--- the tab row is lifted one level over the grip in turn, so a click on a tab is
--- still a click on the tab and only the strip either side of them is a grab.
+-- So the grip is the row across the top of the window, which is a title bar in
+-- everything but the paint. It sits over the page rather than under it, and it
+-- is the whole of that edge: the sheet used to draw its tabs in the strip and
+-- lift them one level over it, so only the ends either side of the words were a
+-- grab. There is one page now and nothing is drawn up there, so every pixel of
+-- the top edge takes the drag.
 --
 -- It says so under the cursor rather than all the time. A panel with nothing
 -- drawn on it cannot carry a permanent bar without becoming the dialog this
@@ -355,14 +357,12 @@ local function Chrome(window, frame, px, opts)
 	-- Over, not under. Under was the first answer and it does not work: the
 	-- bottom of a window's stack is under the page, under anything the page
 	-- lifts above itself, and under every button on it, so a strip down there is
-	-- a strip nothing ever reaches. The character sheet's own pages sit at
-	-- content plus ten, which is the sort of number that makes "under the page"
-	-- a race rather than a rule.
+	-- a strip nothing ever reaches.
 	--
-	-- So the strip is above all of it and the one thing that has to beat it says
-	-- so out loud. Character/Window.lua puts its tab row a level over the grip,
-	-- because tabs are the only thing drawn in the strip and a tab you cannot
-	-- press is worse than a sheet you cannot drag.
+	-- So the strip is above all of it, and nothing has to beat it. The character
+	-- sheet used to draw a tab row in the strip and lift it one level over the
+	-- grip, because a tab you cannot press is worse than a sheet you cannot drag.
+	-- That sheet is one page now and the top edge is a handle end to end.
 	if window.grip then
 		window.grip:SetFrameLevel(window.content:GetFrameLevel() + 20)
 	end

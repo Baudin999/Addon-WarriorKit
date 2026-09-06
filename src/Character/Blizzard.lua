@@ -23,8 +23,8 @@ ns.CharBlizzard = Blizz
 -- client's own toggle is a character sheet you cannot open, which is worse than
 -- either window on its own. ToggleCharacter is a plain global on both of these
 -- clients and it carries which page it meant, so it is replaced with one that
--- opens the matching tab of this addon's window, and the original is kept so
--- the switch can hand it back exactly.
+-- opens the addon's window for that page, and the original is kept so the
+-- switch can hand it back exactly.
 --
 -- That is the second global function swap in the addon, after the quest log's,
 -- and it is here for the same reason: one file, named after the frame it is
@@ -50,13 +50,17 @@ local FRAMES = {
 	"HonorFrame",
 }
 
--- Which of this window's tabs the client's own page name opens. The two that
--- answer nothing are the two this addon does not draw, and they get a sentence
--- rather than a tab.
+-- Which window the client's own page name opens.
+--
+-- It was a tab number each. There are no tabs now: the gear and the skills are
+-- one page, so two of these three land on the same window, and the standings
+-- have a window of their own. The two names that answer nothing are the two
+-- this addon does not draw, and they get a sentence below rather than an entry
+-- here.
 local PAGES = {
-	PaperDollFrame = 1,
-	SkillFrame = 2,
-	ReputationFrame = 3,
+	PaperDollFrame = function() ns.CharWindow.Toggle() end,
+	SkillFrame = function() ns.CharWindow.Toggle() end,
+	ReputationFrame = function() ns.CharRepWindow.Toggle() end,
 }
 
 local MISSING = {
@@ -122,7 +126,10 @@ local function Toggle(page)
 			:format(missing))
 		return
 	end
-	ns.CharWindow.Toggle(PAGES[page])
+	-- A name this table does not carry is the sheet, which is what the bare key
+	-- means and what every caller that passes nothing at all wants.
+	local open = PAGES[page] or PAGES.PaperDollFrame
+	open()
 end
 
 -- Every key the client has on its own character page, in the order it answers
