@@ -396,7 +396,14 @@ do
 	-- And the block is in the middle of the page rather than pinned to its
 	-- edges. Measured off the row nearest each edge, because that is what a
 	-- player sees: the name of a helmet a third of a screen from the helmet.
-	local leftEdge = pane.left[1]:GetLeft() - pane.frame:GetLeft()
+	--
+	-- Where the row rests and not where it is. The columns arrive from a hundred
+	-- and twenty units off their own edge of the page, so a row asked its live
+	-- position on the frame the sheet opened on answers from outside the sheet.
+	-- That used to pass because the page had three hundred units of margin to
+	-- start inside; the page is the size of its contents now and the margin is
+	-- eight, which is the layout being right and the measurement being wrong.
+	local leftEdge = pane.left[1].restX
 	check(leftEdge > 0,
 		("the first column starts %d units from the page edge and the page is %d wide")
 			:format(leftEdge, pane.frame:GetWidth()))

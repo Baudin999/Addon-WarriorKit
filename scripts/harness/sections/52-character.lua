@@ -91,7 +91,7 @@ check(whole(frame:GetWidth()) and whole(frame:GetHeight()),
 check(frame:GetHeight() * ns.Zoom("characterZoom") <= state.SCREEN_H,
 	"the character window is taller than the screen")
 
--- Half the monitor, on the right, at four by three.
+-- The size of the page, on the right, and never more than half the monitor.
 --
 -- It was the whole monitor, and all three of the things the player could see
 -- wrong with it came from that: the stats column stood against the last pixel
@@ -99,16 +99,36 @@ check(frame:GetHeight() * ns.Zoom("characterZoom") <= state.SCREEN_H,
 -- helmet sat a third of a screen from the helmet, and there was no part of the
 -- game left to click on with the sheet up. None of the three fails visibly, so
 -- all three are numbers here.
+--
+-- Then it was half the monitor at four by three, and this is where that was
+-- caught: on a 3440 pixel panel that shape gave the sheet 1290 pixels of height
+-- to draw 396 pixels of gear into, and nine hundred of them stayed empty. So
+-- the sheet is the page's own size now, and the two numbers this checks are the
+-- ones that used to be assumed. The page is asked what it wanted and the window
+-- has to have come out at that plus its own padding and its footer, and the
+-- ceiling has to still be a ceiling.
 do
 	local zoom = ns.Zoom("characterZoom")
 	local wide = (_G.GetPhysicalScreenSize())
 	local across = frame:GetWidth() * zoom
-	check(math.abs(across - wide / 2) <= zoom,
-		("the sheet is %d of %d pixels across and it is meant to be half")
+	local pane = Window.Pane()
+	local wantWide, wantTall = pane:Natural()
+	local pad = ns.UI.Metric.pad * 2
+	local foot
+	for _, entry in ipairs(ns.UI.Windows) do
+		if entry.frame == frame then
+			foot = entry.foot
+		end
+	end
+	check(frame:GetWidth() == wantWide + pad,
+		("the page asked for %d across and the sheet came out %d, which is not that plus %d of padding")
+			:format(wantWide, frame:GetWidth(), pad))
+	check(foot ~= nil and frame:GetHeight() == wantTall + pad + foot,
+		("the page asked for %d down and the sheet came out %d, which is not that plus %d of padding and %s of footer")
+			:format(wantTall, frame:GetHeight(), pad, tostring(foot)))
+	check(across <= wide / 2 + zoom,
+		("the sheet is %d of %d pixels across and half the monitor is the most it may take")
 			:format(across, wide))
-	check(math.abs(frame:GetWidth() / frame:GetHeight() - 4 / 3) < 0.02,
-		("the sheet came out %d by %d, which is not four by three")
-			:format(frame:GetWidth(), frame:GetHeight()))
 
 	-- On the right, which is the half of the screen the player's own character
 	-- is not standing in. The point itself rather than the four edges: the sheet
@@ -674,7 +694,7 @@ do
 	-- on its own, by hit test rather than by handler.
 	local farX, farY = H.mouse.Point(sheet.grip,
 		sheet.grip:GetWidth() - 20, -sheet.grip:GetHeight() / 2)
-	check(H.mouse.At(farX, farY, "LeftButton") == sheet.grip,
+	check(H.mouse.Within(frame, farX, farY, "LeftButton") == sheet.grip,
 		"the far end of the sheet's top edge is not the grip")
 
 	-- And the near end, which is what taking the tabs off bought. Twenty units in

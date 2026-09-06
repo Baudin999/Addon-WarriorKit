@@ -70,21 +70,24 @@ local C, M = UI.Color, UI.Metric
 -- This was 860 by 520, arrived at by adding up a padding, two columns of rows,
 -- the gap the figure stood in, a gutter and the narrowest column the stats
 -- would draw into. Every one of those additions was an argument about how
--- little the page could be given and still work, and the page it produced was a
--- character standing in a box the size of a dialog with his gear listed round
--- the edges. The sheet this is drawn against is not a dialog. It is the screen,
--- with the figure standing in it and the gear read off the world either side.
+-- little the page could be given and still work.
 --
--- It was the whole monitor for a while, and that was one step too far. A page
--- the size of the screen is a page with your helmet's name a third of a monitor
--- from the helmet, and it leaves the player nothing left to click on. So it is
--- half the monitor across, at four by three, against the right hand edge, and
--- `screen` in UI/Window.lua is what makes it so. The zoom is still the player's
--- and still means what it always meant: turn it up and the type and the discs
--- get bigger while the panel keeps its half of the screen, because the units it
--- is laid out in shrink by the same factor. Character/Paperdoll.lua takes
--- whatever width comes out and splits it between the three columns and the
--- figure.
+-- Then it was the whole monitor, which is a page with your helmet's name a third
+-- of a monitor from the helmet and nothing left for the player to click on.
+-- Then it was half the monitor across at four by three, which is the same
+-- mistake sized down: a page whose height comes from the player's hardware, over
+-- contents whose height comes from ten squares the client draws at thirty-six
+-- pixels. On a 3440 wide panel that put four hundred and fifty pixels of nothing
+-- over the gear and the same again under it.
+--
+-- So the sheet asks the page how big it is worth drawing at and is made that
+-- size, plus this window's padding and the line along its bottom. `screen` in
+-- UI/Window.lua now means where it sits and what chrome it does without, and the
+-- half-a-monitor number it used to be sized by is the ceiling it is clamped to
+-- on a screen too small for the page. The zoom is still the player's and still
+-- means what it always meant: turn it up and the type and the discs get bigger,
+-- and the window grows with them, because the page asks for the same count of
+-- units and each unit is worth more pixels.
 
 local window, page, footer, key
 local pending = false
@@ -106,19 +109,26 @@ end
 -- out for the old screen is a sheet with a wide margin until the fight ends,
 -- and PLAYER_REGEN_ENABLED below runs the pass again.
 --
--- The resize is what re-reads the monitor. A screen window is not asked how big
--- it wants to be, so this hands it the two numbers it will ignore and takes back
--- the ones it came out at, which is how a sheet built at one resolution still
--- covers the screen after a monitor swap or a drag of the zoom slider.
+-- The resize is what re-reads the monitor. The page says how big it is worth
+-- drawing at, this adds the window's own padding and its footer to that, and
+-- UI/Window.lua hands back whatever of it the screen could give: the full
+-- request on a monitor with room for it, half the width and the height less the
+-- margin on one without. Taking the answer back rather than assuming it is how a
+-- sheet built at one resolution is still the right size after a monitor swap or
+-- a drag of the zoom slider.
 function Window.Fit()
-	if not window then
+	-- Both, and not just the window: this is handed to UI/Window.lua as the
+	-- rescale for a frame that exists from the moment the window does, and the
+	-- page is built after it.
+	if not (window and page) then
 		return false
 	end
 	if InCombatLockdown() then
 		pending = true
 		return false
 	end
-	window:Resize(window.width, window.height)
+	local wide, tall = page:Natural()
+	window:Resize(wide + M.pad * 2, tall + M.pad * 2 + window.foot)
 	local width = window.width - M.pad * 2
 	local under = window:Body() - M.pad * 2
 	page.frame:SetSize(width, under)
@@ -135,12 +145,13 @@ end
 local function Sheet()
 	return UI.Window({
 		name = "WarriorKitCharacter",
-		-- Half the monitor, against its right hand edge, with no title bar, no
-		-- line round the outside, no ground and no saved point, at the floor of
-		-- the frame pile so every window the player opens flows over the top of
-		-- it. UI/Window.lua carries the whole of what that means; what it means
-		-- here is that no width and no height are passed, because neither would
-		-- be read.
+		-- Against the right hand edge of the monitor, with no title bar, no line
+		-- round the outside, no ground and no saved point, at the floor of the
+		-- frame pile so every window the player opens flows over the top of it.
+		-- UI/Window.lua carries the whole of what that means; what it means here
+		-- is that no width and no height are passed at construction, because the
+		-- page they would describe has not been built yet. Fit above is what
+		-- sizes this window, and Build calls it once the page exists.
 		--
 		-- No title bar is no close box, and a window without one owes the player
 		-- another way out. This one has two, and both were here before the cross

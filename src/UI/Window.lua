@@ -580,7 +580,7 @@ end
 -- gets and it is enough for both.
 local SCREEN_MARGIN = 0.94
 
--- How much of the monitor a screen window takes, and what shape it takes it in.
+-- The most of the monitor a screen window may take.
 --
 -- It took all of it, and all of it was too much. A sheet the size of the screen
 -- puts the name of your helmet a third of a monitor from the helmet, puts the
@@ -588,16 +588,20 @@ local SCREEN_MARGIN = 0.94
 -- carry it off the edge entirely, and leaves the player with no part of the
 -- game left to click on. The page was right and the canvas was wrong.
 --
--- So it is half the monitor across, on the right, at four by three. Half is the
--- most a panel can take and still leave a screen to play on. Four by three is
--- the shape the page is drawn at rather than the shape the monitor happens to
--- be: a sheet that took the monitor's own ratio would be a letterbox on an
--- ultrawide and a portrait on a rotated panel, and the nineteen rows of gear
--- need a fixed number of pixels of height whatever the panel is. The ratio wins
--- when the two disagree, so on a screen too short to hold that shape it is the
--- width that gives way and the panel stays a panel.
+-- Then it was half the monitor across at four by three, and that was the same
+-- mistake with a smaller number. A share of the monitor is a size chosen by the
+-- player's hardware, and the page's contents do not know what hardware they are
+-- on: ten rows of gear are 396 pixels tall on every screen ever made, so half of
+-- a 3440 wide panel at four by three gave that page 1290 pixels of height and
+-- nine hundred of them stayed empty all evening.
+--
+-- So this is a ceiling now rather than a size. A screen window asks Resize for
+-- the size its own contents want and gets that, or gets this if that would not
+-- fit: half the monitor across, never taller than the monitor less its margin.
+-- Half is still the most a panel can take and still leave a screen to play on,
+-- and it now binds on the small screens it was written for instead of on all of
+-- them.
 local SCREEN_SHARE = 0.5
-local SCREEN_ASPECT = 4 / 3
 
 -- The whole monitor in this window's own units, which after adoption are
 -- physical pixels over the zoom. Off the grid, on a client with no
@@ -613,18 +617,13 @@ function Window:Screen()
 	return math.floor(across), math.floor(down)
 end
 
--- The box a screen window fills: its share of the monitor's width, at the shape
--- above, never taller than the monitor less its margin. Clamped by height
--- second and by width after that, so the shape holds on a screen of any ratio.
+-- The largest box a screen window is allowed to be: half the monitor's width,
+-- and the monitor's height less its margin. The two are independent now, which
+-- they could not be while this was a shape as well as a size.
 function Window:Panel()
 	local across, down = self:Screen()
-	local room = math.floor(down * SCREEN_MARGIN)
-	local width = math.floor(across * SCREEN_SHARE)
-	local height = math.floor(width / SCREEN_ASPECT)
-	if height > room then
-		width, height = math.floor(room * SCREEN_ASPECT), room
-	end
-	return math.max(width, 1), math.max(height, 1)
+	return math.max(math.floor(across * SCREEN_SHARE), 1),
+		math.max(math.floor(down * SCREEN_MARGIN), 1)
 end
 
 -- Where it sits, which is against the right hand edge with the same margin off
@@ -646,17 +645,21 @@ end
 -- the zoom, so the screen has to be converted into them before they can be
 -- compared.
 function Window:Resize(width, height)
-	-- A screen window is not asked how big it wants to be. It is a share of the
-	-- monitor in the window's own units, so the two numbers the caller passed are
-	-- dropped and the zoom is what decides how much fits: turn it up and the
-	-- sheet keeps its half of the screen with larger type and fewer units in it.
+	-- A screen window is asked how big it wants to be and then told what it may
+	-- have. Both numbers are in the window's own units, which are physical pixels
+	-- over the zoom, so the zoom still decides how much of the monitor a page of a
+	-- given size covers: turn it up and the sheet asks for the same number of
+	-- units and each one is worth more pixels, which is larger type on a larger
+	-- panel rather than more room for rows nobody added.
 	--
 	-- Every route into a resize goes through here, so this is also what keeps the
-	-- panel the right shape in the right corner after a monitor swap or a drag of
-	-- the zoom slider: the caller re-runs its own layout and the size comes out of
-	-- the new grid, and the point is re-set below off the same numbers.
+	-- panel in the right corner at the right size after a monitor swap or a drag
+	-- of the zoom slider: the caller re-runs its own layout and asks again, and
+	-- the point is re-set below off the same numbers.
 	if self.screen then
-		width, height = self:Panel()
+		local most, tallest = self:Panel()
+		width = math.min(width or most, most)
+		height = math.min(height or tallest, tallest)
 		-- Where it ships, and only until the player has said otherwise. This runs
 		-- out of every resize, which is where a monitor swap and a drag of the
 		-- zoom slider both land, so without the question a sheet would walk back

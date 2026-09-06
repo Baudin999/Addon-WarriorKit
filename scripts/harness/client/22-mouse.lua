@@ -137,6 +137,19 @@ local function at(x, y, button)
 	return search(_G.UIParent, x, y, button, nil)
 end
 
+-- The same question asked of one window instead of the screen.
+--
+-- What takes a press is a fact about the whole screen, and for most of what the
+-- harness aims at that is the point: a square covered by another addon's frame
+-- is a square you cannot click. It is the wrong question for a check on one
+-- window's own stacking order, where the answer wanted is "the grip, and not the
+-- badges drawn over it", and a second window that happens to overlap the corner
+-- being aimed at turns that check into a check on where the fixtures put their
+-- windows.
+local function within(root, x, y, button)
+	return search(root, x, y, button, nil)
+end
+
 -- A point on the screen, in the units above. Called with a frame alone it is
 -- the middle of it, which is where a player aims; the two offsets are in the
 -- frame's own units and are how a section aims at a corner.
@@ -422,7 +435,7 @@ local function onto(from, to, button)
 	return drag(x, y, toX, toY, button)
 end
 
-H.mouse = { At = at, Point = point, Move = move, Place = place, On = on, Onto = onto,
+H.mouse = { At = at, Within = within, Point = point, Move = move, Place = place, On = on, Onto = onto,
 	Give = give, Where = where, DragTo = dragTo,
 	Grab = grab, Drop = drop, Drag = drag, Click = click, Wheel = wheel,
 	Deliver = deliver, Rect = rect, Inside = inside }

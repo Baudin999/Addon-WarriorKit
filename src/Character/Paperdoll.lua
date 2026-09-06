@@ -231,29 +231,44 @@ local WASH_TALL = 18
 local WASH_WIDE = 48
 
 --------------------------------------------------------------------------
--- Everything else on this page is a share of the page's own width
+-- The page is the size of what is on it
 --
--- Width, and it used to be height. Height was the right answer while the page
--- was the monitor: the sheet was handed whatever ratio the player's panel
--- happened to be, and the width of a monitor says nothing about how much room a
--- figure has to stand in, so the figure and the columns beside him were sized
--- off the one number that meant something.
+-- It was a share of the monitor twice, and both times the page was the wrong
+-- size on somebody's screen. First it was the whole panel, which put the name
+-- of your helmet a third of a monitor from the helmet. Then it was half the
+-- monitor's width at four by three, which is 960 by 720 on a 1080p panel and
+-- 1720 by 1290 on a 3440 wide one. The rows did not grow with it. Ten squares
+-- and nine gaps are 396 pixels tall on every monitor there is, so on the
+-- ultrawide the gear stood in the middle of the page with four hundred and
+-- fifty pixels of nothing over it and the same again underneath, and the
+-- figure floated in the hole between the columns with his head and his feet a
+-- long way from either edge.
 --
--- The page is not the monitor any more. It is half of it at four by three, so
--- its shape is fixed and known here, and the number the three columns and the
--- figure are actually competing for is the width. Splitting the width is what
--- that competition is, and doing it in the units it happens in is what stops
--- three columns adding up to more page than there is.
+-- So the page asks for its own size instead, and Natural below is the whole of
+-- the question. Ten rows of gear is the height. The three columns at the width
+-- each is worth having, with the figure standing in what a person's build asks
+-- for at that height, is the width. UI/Window.lua still says the sheet may
+-- never take more than half the monitor and never more than the monitor is
+-- tall, and on a small enough screen that ceiling is what binds; on any screen
+-- larger than the page, the page wins and the rest of the monitor is left to
+-- play on.
 --
--- The shares are bounded at both ends, because a share of a page is not a share
+-- What that costs is the stats column, which is the one thing on the page
+-- taller than ten rows of gear. It has scrolled since it was folded out of the
+-- tabs and it scrolls further now. That is the trade: the sheet is a panel you
+-- read at a glance with one column you run down, rather than a panel two
+-- thirds empty with one column that happens to fit.
+--
+-- The widths are bounded at both ends, because a share of a page is not a share
 -- of a name. A column has to hold "Bloodfang Spaulders of the Underworld" and
 -- there is no point in it holding twice that, so the ceiling is the longest
 -- name the game has and the floor is a disc with enough of a name beside it to
--- be worth printing.
+-- be worth printing. The ceiling is what the page is built at and the floor is
+-- what a screen too small for it falls back to.
 --------------------------------------------------------------------------
 
--- How much of the page's height the figure stands in, and how wide the frame
--- around him has to be for that to be his whole height.
+-- How wide the frame around the figure has to be for the page's height to be
+-- his whole height.
 --
 -- The client scales a model to the width of the frame holding it, so the width
 -- is what decides how big the figure comes out and the height is only whether
@@ -263,25 +278,57 @@ local WASH_WIDE = 48
 -- BUILD is narrower than a person is, deliberately. A standing humanoid is
 -- about one wide to two tall, so a frame at that ratio is a figure that exactly
 -- fills it and crops on the first tabard that hangs low or headdress that
--- stands up. Under it, the height has room to spare and the air is above his
--- head and under his feet where it belongs.
-local FIGURE = 0.80
+-- stands up. At forty-six hundredths he draws to about eleven twelfths of the
+-- frame and the twelfth left over is the air over his crown and under his
+-- heels.
+--
+-- There was a FIGURE beside this, eight tenths, saying how much of the page's
+-- height he stood in. The other two tenths were the air a page taller than its
+-- own contents had to put somewhere, and the page is not taller than its
+-- contents any more. The room over his head is BUILD's now, which is where it
+-- was always being decided.
 local BUILD = 0.46
 
 -- One column of rows: the disc, a gutter and the name.
-local COLUMN, COLUMN_MIN, COLUMN_MAX = 0.225, 130, 280
+local COLUMN_MIN, COLUMN_MAX = 130, 280
 
 -- The stats column. Read as the row added up: a scroll bar, the widest name the
 -- page prints beside a number, the gutter, and the room the value is pinned
 -- into.
-local READING, READING_MIN, READING_MAX = 0.27, 165, 320
+local READING_MIN, READING_MAX = 165, 320
 
 -- The narrowest the figure is ever squeezed to. Under this the page is not a
 -- character sheet, it is two lists with a keyhole between them, and the two
 -- columns are what give way.
 local STAGE_MIN = 150
 
+-- The margin between the gear block and the page's own edge, one each side.
+-- Not padding for its own sake: the page's width is a sum of five things that
+-- are each rounded to a whole pixel, and without a couple of units of slack the
+-- rounding lands on the first disc and shaves it.
+local EDGE = 8
+
+-- The air over the top of the rows and under the bottom of them.
+--
+-- The page was the gear and nothing else for about ten minutes, and a page that
+-- is exactly its contents is a page with no contents to spare. The top row sat
+-- on the edge, the bottom row sat on the footer rule, and the figure had only
+-- the twelfth BUILD keeps him for his own crown, which is sixteen pixels and
+-- less than a troll's headdress.
+--
+-- Both ends and not just the top, which is what makes the rows come out centred
+-- in Resize without a case of their own. A column pinned thirty units down and
+-- flush at the bottom is a column that looks like it slipped.
+local CROWN = 30
+
 -- A share of a number, held between the two widths it is worth having.
+--
+-- The fraction is not a constant any more. Every column's share is its own best
+-- width over the page's best width, which Resize works out from Natural, so a
+-- page squeezed under the size it asked for squeezes every column on it by the
+-- same factor and a page at its own size gives every column exactly what it
+-- asked for. Two hand-picked fractions used to say that and only said it at one
+-- width.
 local function Share(room, fraction, least, most)
 	return math.max(math.min(math.floor(room * fraction), most), least)
 end
@@ -438,6 +485,12 @@ local FADE = 0.4
 -- three hundredths is three tenths between the top of a column and its foot
 -- against six tenths of travel, so a column is always moving as a whole and
 -- never lands as a line.
+--
+-- The travel is further than the page has margin, and deliberately: a row starts
+-- outside the sheet and comes in from under its edge, which is what "in from its
+-- own side" means and what the eye reads as a slide. Twenty units of travel is a
+-- twitch. It only works because Paperdoll.New clips the page, and the day that
+-- clip is dropped this number is what draws nineteen squares over the world.
 local SLIDE = 120
 local ARRIVE = 0.6
 local STAGGER = 0.03
@@ -1423,6 +1476,16 @@ function Paperdoll.New(parent)
 		hands = {}, worn = {}, cooling = {} }, Pane)
 	pane.frame = CreateFrame("Frame", nil, parent)
 
+	-- Nothing draws outside the page. The two columns arrive from a hundred and
+	-- twenty units off their own edge and the page has eight units of margin, so
+	-- without this a sheet opening throws nineteen gear squares across whatever
+	-- the player is standing in front of for six tenths of a second. Guarded the
+	-- way UI/Scroll.lua guards it, and the same fallback: a client without the
+	-- method draws the arrival and nothing else on the page is out of bounds.
+	if type(pane.frame.SetClipsChildren) == "function" then
+		pane.frame:SetClipsChildren(true)
+	end
+
 	-- Sorted into the two columns once, because which column a slot is in is a
 	-- fact about the slot and not about the width the page came out at.
 	--
@@ -1535,52 +1598,91 @@ local function Slide(column, parent, sign)
 	return #column
 end
 
+-- The size this page is worth drawing at, which is the size the window is made.
+--
+-- The height is the gear, and only the gear. Ten squares and nine gaps is a
+-- number the client fixed when it drew a slot at thirty-six pixels, so it is
+-- the same number on a laptop and on an ultrawide, and it is the one thing on
+-- the page that cannot be given more room to any purpose. The figure is drawn
+-- to it and the stats column scrolls inside it.
+--
+-- The width is the four things standing side by side at the width each is worth
+-- having: the stats column, a gear column each side of the figure, and the
+-- figure at what BUILD asks for. Nothing here is a share of anything. A share
+-- was how the page got to be twice the size of its contents on a wide monitor.
+--
+-- Character/Window.lua hands these two numbers to the window and UI/Window.lua
+-- clamps them to what the screen can hold, so this is a request rather than an
+-- answer. Resize below is written to be given less.
+function Pane:Natural()
+	local rows = math.max(#self.left, #self.right)
+	local band = math.max(rows * SQUARE + (rows - 1) * GAP, 1)
+	-- The band and not the page. The figure stands in the same air the rows do,
+	-- so what BUILD is asked about is how tall he is rather than how tall the
+	-- page around him came out, and asking the page would reserve width for a
+	-- figure sixty units taller than the one that gets drawn.
+	local stage = math.max(math.floor(band * BUILD), STAGE_MIN)
+	return READING_MAX + M.gutter + COLUMN_MAX * 2 + stage + EDGE * 2, band + CROWN * 2
+end
+
 -- Ten rows down the left, nine down the right, the figure standing between
 -- them, and the readings and the stats down the far right. Placed rather than
 -- stacked, because this is one arrangement of a fixed number of rows and a
 -- layout engine would be a layer between the numbers and the picture.
 --
--- The three columns and the stage between them are shares of the width, held
--- between the two widths each is worth having, and what is left over is margin
--- split evenly. The order they are cut in is the order they give way in: the
--- stats come off the right first because they are the one fixed shape on the
--- page, then a column each side, and the figure takes what is left, because a
--- name clipped in half is worse than a smaller character.
+-- The three columns and the stage between them are the widths Natural asked
+-- for, scaled down together if the screen could not give the page that much,
+-- and what is left over is margin split evenly. The order they are cut in is
+-- the order they give way in: the stats come off the right first because they
+-- are the one fixed shape on the page, then a column each side, and the figure
+-- takes what is left, because a name clipped in half is worse than a smaller
+-- character.
 --
--- It was shares of the height, which was the right answer for a page that was
--- the whole monitor and the wrong one for a page with a shape of its own. The
--- head of the metrics block carries that argument.
+-- It was shares of the height once, then two hand-picked shares of the width.
+-- The head of the metrics block carries what was wrong with both.
 function Pane:Resize(width, height)
 	self.frame:SetSize(width, height)
+
+	-- What every column's width is measured against. At the page's own size the
+	-- division is one and each column gets exactly the width it asked for; below
+	-- it every column loses the same fraction, which is the one behaviour that
+	-- keeps the page looking like itself on a screen too small for it.
+	local best = self:Natural()
 
 	-- The stats column comes off the right first, because it is the one thing on
 	-- the page that is a fixed shape: a name, a number, and the gutter between
 	-- them. Then the two columns, then whatever the figure is left with, and only
 	-- the figure gives way, because a name clipped in half is worse than a
 	-- smaller character.
-	local reading = Share(width, READING, READING_MIN, READING_MAX)
+	local reading = Share(width, READING_MAX / best, READING_MIN, READING_MAX)
 	local gear = math.max(width - reading - M.gutter, 1)
-	local column = math.min(Share(width, COLUMN, COLUMN_MIN, COLUMN_MAX),
+	local column = math.min(Share(width, COLUMN_MAX / best, COLUMN_MIN, COLUMN_MAX),
 		math.max(UI.Round(self.frame, (gear - STAGE_MIN) / 2), SQUARE))
 
-	-- How much room the figure has and how much of it he uses. The panel is a
-	-- portrait rather than the whole page: the client fits a model to the frame
-	-- it is in, so a frame as wide as the gear area is a figure whose head and
-	-- feet are off the top and bottom of it.
-	local tall = UI.Round(self.frame, height * FIGURE)
+	-- The air over the rows, and the same again under them. Centring them says
+	-- that in one line: on a page at its own size the arithmetic comes out at
+	-- CROWN, on a page that did not get the height it asked for it comes out at
+	-- less, and on one shorter than its own rows it comes out at nothing and the
+	-- bottom of the column is what goes.
+	local rows = math.max(#self.left, #self.right)
+	local top = math.max(UI.Round(self.frame,
+		(height - (rows * SQUARE + (rows - 1) * GAP)) / 2), 0)
+
+	-- How much room the figure has, which is what the rows have: he stands beside
+	-- them and he stands on the same two lines. Taking it off the rows' own air
+	-- rather than off CROWN is what keeps that true on a page squeezed under the
+	-- height it asked for.
+	--
+	-- The panel is a portrait rather than the whole page: the client fits a model
+	-- to the frame it is in, so a frame as wide as the gear area is a figure whose
+	-- head and feet are off the top and bottom of it, and BUILD is what keeps the
+	-- frame narrow enough that they are not.
+	local tall = math.max(height - top * 2, 1)
 	local stage = math.max(
 		math.min(UI.Round(self.frame, tall * BUILD), gear - column * 2), STAGE_MIN)
 	local block = column * 2 + stage
 	local edge = math.max(UI.Round(self.frame, (gear - block) / 2), 0)
 	self.width = gear
-
-	-- The rows are centred down the height rather than stacked from the top.
-	-- On a screen this tall a column pinned to the top edge is ten rows and
-	-- half a monitor of nothing under them, and the eye reads a column against
-	-- the figure beside it rather than against the ceiling.
-	local rows = math.max(#self.left, #self.right)
-	local top = math.max(UI.Round(self.frame,
-		(height - (rows * SQUARE + (rows - 1) * GAP)) / 2), 0)
 
 	for index = 1, #self.left do
 		self.left[index]:SetSize(column, SQUARE)
@@ -1593,12 +1695,13 @@ function Pane:Resize(width, height)
 			edge + block, -(top + (index - 1) * (SQUARE + GAP)))
 	end
 
-	-- The figure in the gap the two columns leave, centred on it, with the air
-	-- the page's height did not give him split above his head and under his feet.
+	-- The figure in the gap the two columns leave, standing on the same two lines
+	-- the rows do. The offset is the rows' own, so a page squeezed under the
+	-- height it asked for takes the air off his crown and off the top row
+	-- together rather than off one of them.
 	self.panel:ClearAllPoints()
-	self.panel:SetPoint("TOPLEFT", edge + column,
-		-UI.Round(self.frame, (height - tall) / 2))
-	self.panel:SetSize(stage, math.max(tall, 1))
+	self.panel:SetPoint("TOPLEFT", edge + column, -top)
+	self.panel:SetSize(stage, tall)
 
 	self.head:ClearAllPoints()
 	self.head:SetPoint("TOPRIGHT")
