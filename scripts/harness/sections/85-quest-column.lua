@@ -201,10 +201,10 @@ Column.Refresh()
 ----------------------------------------------------------------------
 
 -- The mark is a gold bar down the left of the name, hidden on every other row.
--- Item 95 moves the pin off the client's watch list onto a store of this
--- addon's own and item 96 draws the group above the zones; what is asserted
--- here is the one thing that does not change under either, which is that the
--- tracker reads a pin and draws it on the quest that carries it.
+-- Item 95 moved the pin off the client's watch list onto a store of this
+-- addon's own and item 96 drew the group above the zones in the window; what is
+-- asserted here is the one thing that does not change under either, which is
+-- that the tracker reads a pin and draws it on the quest that carries it.
 do
 	-- Elwynn Forest, because it is the one zone here with two quests left in it
 	-- and a mark is only worth anything against a row that does not carry one.
@@ -239,6 +239,69 @@ do
 	Log.Pin("q201", wasThere)
 	standing.map = WESTFALL
 	Column.Refresh()
+end
+
+----------------------------------------------------------------------
+-- Pinned, wherever you are standing
+----------------------------------------------------------------------
+
+-- The one exception to the scope, and the whole of what a pin buys. Everything
+-- else comes off this column when you walk out of the zone, so a quest you want
+-- in front of you in the next zone is a quest you pin.
+--
+-- Asserted from Westfall against a quest the client filed under Elwynn Forest,
+-- and then from Stormwind City, which the log has no header for at all. The
+-- second one is the case that fails first: a scope that reached the pins by
+-- filtering the zone's own quests would draw nothing in a zone with no quests
+-- in it, which is most of the zones a player pins a quest to walk through.
+do
+	local was = Log.Pinned("q102")
+	standing.map = WESTFALL
+	Column.Refresh()
+	local alone = #drawn()
+	check(not says("The Missing Diplomat"),
+		"an unpinned Elwynn quest is on the tracker in Westfall before anything is pinned")
+
+	Log.Pin("q102", true)
+	check(Column.Refresh(), "a pinned quest emptied the tracker")
+	check(says("The Missing Diplomat"),
+		"a pinned quest from another zone is not on the tracker in Westfall")
+	check(says("The Defias Brotherhood"),
+		"the pinned quest took this zone's own quest off the tracker")
+	check(#drawn() > alone,
+		("the column drew %d rows pinned where it drew %d unpinned")
+			:format(#drawn(), alone))
+
+	-- The zone first and the pin under it. What is under your feet is what you
+	-- can act on now, and five pins above it would push it off the top.
+	check(drawn()[1] == "The Defias Brotherhood",
+		("the tracker leads with %s rather than with the quest you are standing in")
+			:format(tostring(drawn()[1])))
+	check(row("The Missing Diplomat").mark:IsShown(),
+		"the quest that is only on the tracker because it is pinned wears no mark")
+	check(Column.Describe() == "one quest, in Westfall, and one pinned elsewhere",
+		("the reading says %q"):format(Column.Describe()))
+
+	-- Stormwind City, where the log has no header and the pin is the only row.
+	standing.map = STORMWIND
+	check(Column.Refresh(),
+		"a pinned quest is not on the tracker where the log has no header for you")
+	check(says("The Missing Diplomat"),
+		"the pin is counted in a zone with no header and not drawn in it")
+	check(frame:IsShown(),
+		"the tracker is off the screen in a zone whose only row is a pinned quest")
+	check(Column.Describe() == "nothing in your log is in Stormwind City, and one pinned elsewhere",
+		("the reading says %q"):format(Column.Describe()))
+	seen[#seen + 1] = Column.Describe()
+
+	Log.Pin("q102", was)
+	standing.map = WESTFALL
+	Column.Refresh()
+	check(not says("The Missing Diplomat"),
+		"unpinning left the quest on the tracker in a zone it is not in")
+	check(#drawn() == alone,
+		("the tracker drew %d rows after the pin came off where it drew %d before it went on")
+			:format(#drawn(), alone))
 end
 
 ----------------------------------------------------------------------

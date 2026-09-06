@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### The pin, drawn where you can see it
+
+A pin now draws in two places. The row it is on wears a gold dot in the mark
+column down the left edge of the log, and a group headed Pinned sits above the
+zones at the top of the left column with your pinned quests in it, in the order
+you pinned them.
+
+The group is the half worth having. A mark on a row is something you find by
+scrolling to the row. The group answers what you are always watching the moment
+the window opens, which is the question the pin is for.
+
+Nothing is drawn when nothing is pinned, so an unused feature costs you no rows.
+A pinned quest also stays under its own zone, because a quest that moved when
+you pinned it is a quest you then have to go and find.
+
+There is one glyph column and three things want it. A quest ready to hand in
+keeps its tick and a failed one keeps its exclamation, and the pin gives way to
+both, because the group at the top says it for every pinned quest whatever
+state it is in.
+
+The tracker over the world takes the pin as its one exception to the zone rule.
+Everything else comes off it when you walk out of the zone. A pinned quest is on
+it in Silithus, under whatever the zone you are standing in still has for you,
+and in a zone your log has no header for at all it is the only thing on the
+column. The options page reads "one quest, in Westfall, and one pinned
+elsewhere".
+
 ### The options window stops counting its own characters
 
 A check in the harness added up every sentence in the options window and failed

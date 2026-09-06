@@ -1,6 +1,6 @@
 -- The pin
 --
--- Five questions about a list this addon keeps rather than about the log the
+-- Six questions about a list this addon keeps rather than about the log the
 -- client hands over, which is why none of them belongs in the section above.
 --
 -- Does the gesture reach it. Shift left click on a row, driven through the
@@ -20,9 +20,15 @@
 -- Is it uncapped. The client's own watch list holds five, and holding what you
 -- put in it is the whole argument for this being ours.
 --
--- And is the client's list left alone. AddQuestWatch is the call this addon
+-- Is the client's list left alone. AddQuestWatch is the call this addon
 -- stopped making, so what is counted is every write over the whole run rather
 -- than a state read at the end: a single write from anywhere fails this.
+--
+-- And is it drawn where it can be seen. A pin nobody can find is a preference,
+-- so the two drawings are asserted off Window.Rows: the group above the zones
+-- and the mark on the row. The group is the half that matters and the half a
+-- reader cannot check, because a group in pin order and a group in log order
+-- are the same picture on the day you pin them in log order.
 
 local H = ...
 local ns, check, quests = H.ns, H.check, H.quests
@@ -192,6 +198,101 @@ do
 	end
 	check(wrong == 0,
 		("%d of six pins came back somewhere other than where they were put"):format(wrong))
+end
+
+----------------------------------------------------------------------
+-- The group above the zones, and the mark on the row
+----------------------------------------------------------------------
+
+-- Two drawings of one fact, both read off Window.Rows, which is what the left
+-- column is handed and the only place either of them is decided.
+--
+-- Everything here is pinned by hand rather than left over from the block above,
+-- because the order the group draws in is the assertion and an order somebody
+-- else chose is an order this file cannot name.
+do
+	for _, quest in ipairs(Log.Pins()) do
+		Log.Pin(quest.key, false)
+	end
+	Window.Paint()
+
+	-- An empty group is not drawn at all. A heading over nothing is a row of a
+	-- 250 pixel column spent telling a player they have not used a feature, and
+	-- the first row of the log has to be a zone the moment nothing is pinned.
+	local first = Window.Rows()[1]
+	check(first.header ~= nil and first.header ~= "Pinned",
+		("the first row of an unpinned log is %s"):format(tostring(first.header)))
+
+	-- Two, and the second one pinned second, so pin order and log order
+	-- disagree: Hogger is above the Diplomat in Elwynn Forest and is pinned
+	-- under it here. Hogger is also the one quest in this log ready to hand in,
+	-- which is the other half of what it is here for.
+	Log.Pin("q102", true)
+	Log.Pin("q201", true)
+	Window.Paint()
+
+	local rows = Window.Rows()
+	check(rows[1].header == "Pinned",
+		("the pinned group is headed %s"):format(tostring(rows[1].header)))
+	check(rows[2].id == "q102" and rows[3].id == "q201",
+		("the group came back as %s, %s, which is log order rather than pin order")
+			:format(tostring(rows[2].id), tostring(rows[3].id)))
+	check(rows[4].header ~= nil and rows[4].header ~= "Pinned",
+		"the group runs on past the quests that were pinned into it")
+
+	-- Both drawings, counted. A pinned quest that left its zone would be a
+	-- quest that moved when you pinned it, which is a quest you then have to go
+	-- and find, and it reads as correct from every other assertion in this file.
+	local seen, elsewhere = 0, 0
+	for _, row in ipairs(rows) do
+		if row.id == "q102" then
+			seen = seen + 1
+		end
+		if row.id == "q201" then
+			elsewhere = elsewhere + 1
+		end
+	end
+	check(seen == 2 and elsewhere == 2,
+		("the two pinned quests are drawn %d and %d times where twice each is the point")
+			:format(seen, elsewhere))
+
+	-- The mark, in the addon's heading gold, and it is a letter the glyph face
+	-- carries a mark on. The cmap of Media/Glyphs.ttf is rewritten to a handful
+	-- of letters and every other one draws an empty rectangle in silence, so a
+	-- pin cut onto a letter nobody baked is a gold nothing.
+	check(rows[2].mark ~= "" and ns.UI.GLYPHS:find(rows[2].mark, 1, true),
+		("a pinned quest is marked %q, which the glyph face has no mark for")
+			:format(rows[2].mark or ""))
+	check(rows[2].markColor == ns.UI.Color.heading,
+		"a pinned quest's mark is not the heading colour the tracker's bar is")
+
+	-- One glyph column and three things wanting it. A quest ready to hand in
+	-- keeps the tick, because that is the fact the row colour could not carry
+	-- and the group at the top says the other one for every pinned quest.
+	check(rows[3].markColor == ns.UI.Color.tick,
+		"pinning a quest that is ready to hand in took its tick away")
+
+	local plain
+	for _, row in ipairs(rows) do
+		if row.id == "q202" then
+			plain = row
+		end
+	end
+	check(plain ~= nil and plain.mark == "",
+		("a quest nobody pinned is marked %q"):format(plain and plain.mark or ""))
+
+	-- And off again, both of them, which is the state the section under this
+	-- one reads the same log in.
+	Log.Pin("q102", false)
+	Log.Pin("q201", false)
+	Window.Paint()
+	local after = Window.Rows()
+	check(after[1].header ~= "Pinned",
+		"unpinning the last quest left the group heading on the column")
+	for _, row in ipairs(after) do
+		check(row.id ~= "q102" or row.mark == "",
+			"a quest that was unpinned is still wearing the mark")
+	end
 end
 
 ----------------------------------------------------------------------

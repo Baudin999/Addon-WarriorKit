@@ -23,6 +23,13 @@ local Log, Where, Chart = ns.QuestLog, ns.QuestWhere, UI.Chart
 -- So the left column is the log, all of it, zone by zone, and it does not move
 -- when you click something. Sixty rows fit where the client drew six.
 --
+-- Above the zones go the quests you have pinned, in the order you pinned them,
+-- and only where you have pinned one. That group is the answer to "what am I
+-- always watching" without scrolling for it, which is the question the pin is
+-- there to answer; a mark on a row is only an answer once you have found the
+-- row. A pinned quest is drawn in the group and again under its zone, because
+-- a quest that moved when you pinned it is a quest you then have to find.
+--
 -- **The middle column is the objectives first and the story second.** The
 -- client puts the giver's four paragraphs at the top and the list of what to
 -- kill underneath, which is the right order the first time you read it and the
@@ -92,6 +99,19 @@ local SLOT, MARK = 22, 10
 -- `V` is what a client that refuses the font draws instead. Nothing here has to
 -- know either of those things beyond this line.
 local TICK = "V"
+
+-- The pin's own mark, and the heading it draws under.
+--
+-- A circle because Media/Glyphs.ttf is a subset of seventeen marks and none of
+-- them is a pin. Adding one means rebaking the font and moving the list
+-- scripts/check.sh holds UI.GLYPHS to, which is a change to the font policy
+-- rather than to this window. A gold dot in the same column the tick uses says
+-- "yours" at a glance and costs nothing.
+local PIN = "o"
+
+-- What the pinned group is called. One word, because the column is 250 pixels
+-- wide and the zone headers beside it are place names.
+local PINNED = "Pinned"
 
 local window, list
 local page, pay
@@ -295,12 +315,22 @@ end
 -- row, finished or not, so the levels stay in a column. It was a "+" until the
 -- glyph face learned a tick, and a plus is the mark for adding a thing rather
 -- than for having finished one.
+--
+-- The pin is third of three and takes the column only where the quest has
+-- nothing more urgent to say. One glyph fits and a quest ready to hand in has
+-- to keep the tick: that is the fact the colour could not carry and the reason
+-- this region exists. The pin loses nothing by giving way, because the group at
+-- the top of the column says it for every pinned quest whatever its state, and
+-- the group is the drawing that answers "what am I always watching".
 local function Mark(quest)
 	if quest.complete then
 		return TICK
 	end
 	if quest.failed then
 		return "!"
+	end
+	if quest.pinned then
+		return PIN
 	end
 	return ""
 end
@@ -318,6 +348,9 @@ local function MarkTint(quest)
 	end
 	if quest.failed then
 		return C.loss
+	end
+	if quest.pinned then
+		return C.heading
 	end
 	return C.quiet
 end
@@ -344,6 +377,26 @@ local function Tint(quest)
 	return ns.Unit.Level.WorthOf(quest.level)
 end
 
+-- One quest's row, wherever it is drawn. A pinned quest is drawn twice and both
+-- drawings are the same row: same id, same colour, same marks. That is what
+-- makes the duplicate harmless to the list, which keeps its selection by id and
+-- lights both copies of the quest you are reading.
+local function Row(quest)
+	local company = #(quest.party or {})
+	return {
+		id = quest.key,
+		label = Label(quest),
+		color = Tint(quest),
+		mark = Mark(quest),
+		markColor = MarkTint(quest),
+		-- How many of the people you are playing with are on this one. Absent
+		-- rather than nought, because nobody having it and nothing being able to
+		-- say are drawn the same and only one of them is a fact.
+		-- Quests/Party.lua carries that.
+		note = company > 0 and tostring(company) or nil,
+	}
+end
+
 -- What the left column holds, as the rows UI.List draws.
 --
 -- Public for the reason the aura rows and the meter are named: the harness has
@@ -351,25 +404,36 @@ end
 -- out a reference to the list widget itself. It is also the one place the two
 -- facts a log is read at a glance for are decided, so a section can hold both
 -- to a colour rather than to a screenshot.
+--
+-- The pinned quests come first, as a group of their own above the zones, in the
+-- order they were pinned. That order is the store's and is read through
+-- Log.Pins rather than off ns.dbc, which is the door and the only one: a group
+-- that walked the saved table itself would draw pins whose quests have left the
+-- log.
+--
+-- The group is drawn only where something is in it. A heading over nothing is a
+-- row of a 250 pixel column spent saying you have not used a feature.
+--
+-- And a pinned quest still draws under its zone. Taking it out would mean that
+-- pinning a quest moved it, and a quest that moved when you pinned it is a
+-- quest you then have to go and find. The cost is one duplicated row, which the
+-- list handles because both rows carry the same id; see Row above.
 function Window.Rows()
 	local rows = {}
+
+	local pins = Log.Pins()
+	if #pins > 0 then
+		rows[#rows + 1] = { header = PINNED }
+		for _, quest in ipairs(pins) do
+			rows[#rows + 1] = Row(quest)
+		end
+	end
+
 	for _, zone in ipairs(Log.Zones()) do
 		if #zone.quests > 0 then
 			rows[#rows + 1] = { header = zone.name }
 			for _, quest in ipairs(zone.quests) do
-				local company = #(quest.party or {})
-				rows[#rows + 1] = {
-					id = quest.key,
-					label = Label(quest),
-					color = Tint(quest),
-					mark = Mark(quest),
-					markColor = MarkTint(quest),
-					-- How many of the people you are playing with are on this
-					-- one. Absent rather than nought, because nobody having it
-					-- and nothing being able to say are drawn the same and only
-					-- one of them is a fact. Quests/Party.lua carries that.
-					note = company > 0 and tostring(company) or nil,
-				}
+				rows[#rows + 1] = Row(quest)
 			end
 		end
 	end

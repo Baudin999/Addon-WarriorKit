@@ -31,7 +31,11 @@ local Log = ns.QuestLog
 -- of one thing, drifting apart in the details nobody looks at until they are
 -- side by side. One reading, two drawings.
 --
--- **It scopes on the client's log header.** zone.name is the string the client
+-- **It scopes on the client's log header, and the pin is the one exception.**
+-- A pinned quest is on this column wherever you are standing, which is the
+-- thing pinning is for: the rule takes everything off the tracker when you walk
+-- out of the zone, and the pin is how a player asks for one quest back. It is
+-- read through Log.Pins() and never off the saved table. zone.name is the string the client
 -- filed the quest under, ns.QuestHere.Now().name is C_Map's name for the map
 -- you are standing on, and both come out of the same client in the same
 -- language, which is what makes comparing them safe. It is the only name
@@ -127,22 +131,38 @@ local function Tone(quest)
 end
 
 -- The quests on the tracker right now: the ones the client filed under the
--- place you are standing in, in the log's own order.
+-- place you are standing in, in the log's own order, and then whatever you have
+-- pinned that is not already among them.
 --
--- Item 96 adds the other half of this. A pinned quest is on the tracker
--- wherever you stand, which is the exception the pin exists to buy, and it
--- appends here rather than anywhere in the drawing below.
+-- The pins are the exception to the scope and they are the whole of why the pin
+-- exists. Everything else comes off the tracker when you walk out of the zone,
+-- which is the rule; a pinned quest is the one you asked to keep in front of
+-- you, so it is here in Silithus as well as in Westfall.
+--
+-- After the zone rather than before it. What is under your feet is what you can
+-- act on now, and a group of five pins pushing this zone's quests off the top
+-- of the column would be the tracker answering a question you asked once with
+-- one you ask every time you look at it.
+--
+-- Read through Log.Pins, which returns the pinned quests that are in the log,
+-- oldest pin first. The saved table is never walked here: it holds keys, some
+-- of them for quests you handed in an hour ago.
 function Column.Quests()
-	local out = {}
+	local out, here = {}, {}
 	local name = Standing()
-	if not name then
-		return out
-	end
-	for _, zone in ipairs(Log.Zones()) do
-		if zone.name == name then
-			for _, quest in ipairs(zone.quests) do
-				out[#out + 1] = quest
+	if name then
+		for _, zone in ipairs(Log.Zones()) do
+			if zone.name == name then
+				for _, quest in ipairs(zone.quests) do
+					out[#out + 1] = quest
+					here[quest.key] = true
+				end
 			end
+		end
+	end
+	for _, quest in ipairs(Log.Pins()) do
+		if not here[quest.key] then
+			out[#out + 1] = quest
 		end
 	end
 	return out
@@ -404,14 +424,35 @@ function Column.Describe()
 	if not name then
 		return "waiting to hear where you are standing"
 	end
-	local count = #Column.Quests()
-	if count == 0 then
-		return ("nothing in your log is in %s"):format(name)
+	-- Counted in two halves, because the column holds two kinds of row and one
+	-- number over both would say "3 quests, in Westfall" about a column with one
+	-- Westfall quest on it. The reading is the only place a player finds out
+	-- what the tracker thinks it is looking at, so it has to be able to say that
+	-- what it is looking at is somewhere else.
+	local here, away = 0, 0
+	for _, quest in ipairs(Column.Quests()) do
+		if quest.zone == name then
+			here = here + 1
+		else
+			away = away + 1
+		end
 	end
-	if count == 1 then
-		return ("one quest, in %s"):format(name)
+
+	local said
+	if here == 0 then
+		said = ("nothing in your log is in %s"):format(name)
+	elseif here == 1 then
+		said = ("one quest, in %s"):format(name)
+	else
+		said = ("%d quests, in %s"):format(here, name)
 	end
-	return ("%d quests, in %s"):format(count, name)
+
+	if away == 1 then
+		return said .. ", and one pinned elsewhere"
+	elseif away > 1 then
+		return said .. (", and %d pinned elsewhere"):format(away)
+	end
+	return said
 end
 
 --------------------------------------------------------------------------
