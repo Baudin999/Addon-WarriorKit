@@ -392,6 +392,56 @@ do
 end
 
 ----------------------------------------------------------------------
+-- And the chip that leaves it standing
+--
+-- Trash is one of the three reasons, so the chip over rows with a ring draws a
+-- grey the filter would have left whatever the grey chip says. That is the
+-- point of it and not a leak. This feed is the only place a rule set too tight
+-- is ever found out, and the combination that finds it out is the greys off and
+-- this chip on.
+--
+-- The chip is the ring on the entry rather than the question asked again, so
+-- the assertion that carries the weight is the second one: a grey nobody has a
+-- reason for goes off the column with its quality and stays off.
+--
+-- 40-loot-feed.lua holds the strip itself and the quest half of the same
+-- override. What is here is the half that needs a corpse.
+----------------------------------------------------------------------
+
+do
+	nothing()
+	pass()
+	feed:Clear()
+	fire("CHAT_MSG_LOOT", FEMUR)
+
+	ns.LootFeed.Light(0, false)
+	feed:Chipped()
+	check(feed:Shown() == 1,
+		("the greys are off, the reason chip is on and the column draws %d rows")
+			:format(feed:Shown()))
+
+	ns.db.lootFeedReason = false
+	feed:Chipped()
+	check(feed:Shown() == 0, "the reason chip is off and a refused grey is still drawn")
+	ns.db.lootFeedReason = true
+
+	-- The same grey off a corpse the filter never looked at, which is the row
+	-- this chip must not bring back.
+	ns.dbc.lootFilter = false
+	advance(91)
+	pass()
+	feed:Clear()
+	fire("CHAT_MSG_LOOT", FEMUR)
+	feed:Chipped()
+	check(feed:Shown() == 0, "the reason chip drew a grey the filter never refused")
+
+	ns.dbc.lootFilter = true
+	ns.LootFeed.Light(0, true)
+	feed:Chipped()
+	feed:Clear()
+end
+
+----------------------------------------------------------------------
 -- The reading
 ----------------------------------------------------------------------
 

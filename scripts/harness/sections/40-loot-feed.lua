@@ -420,8 +420,8 @@ feed:Chipped()
 --
 -- Class 12 and white, which is the whole problem: it is the same colour as a
 -- stack of linen and the row that hands in your chain of five kills reads
--- exactly like the row that hands you a bandage. So it gets a ring, and a
--- chip that draws it whatever the white chip says.
+-- exactly like the row that hands you a bandage. So it gets a ring, and two
+-- chips draw it whatever the white chip says: its own, and the ring's.
 ----------------------------------------------------------------------
 
 feed:Clear()
@@ -441,10 +441,10 @@ feed:Chipped()
 check(feed:Shown() == 1, "turning the whites off left something other than the quest item")
 check(feed:At(0).quest, "the row left standing is not the quest item")
 
-ns.db.lootFeedQuest = false
+ns.db.lootFeedQuest, ns.db.lootFeedReason = false, false
 feed:Chipped()
-check(feed:Shown() == 0, "the quest chip is off and a white quest item is still drawn")
-ns.db.lootFeedQuest = true
+check(feed:Shown() == 0, "both overrides are off and a white quest item is still drawn")
+ns.db.lootFeedQuest, ns.db.lootFeedReason = true, true
 Loot.Light(1, true)
 feed:Chipped()
 

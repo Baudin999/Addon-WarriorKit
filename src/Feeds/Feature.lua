@@ -209,9 +209,9 @@ local function SharedWords(entry)
 	}
 end
 
--- The words only the loot feed answers to: who it counts, and which of the six
--- kinds of row it draws. The five quality chips are one entry each off the same
--- list the chips themselves are drawn from.
+-- The words only the loot feed answers to: who it counts, and which kinds of row
+-- it draws. The five quality chips are one entry each off the same list the
+-- chips themselves are drawn from.
 local function LootWords()
 	local words = {
 		{ "group", toggle = true, key = "lootFeedGroup", apply = false,
@@ -226,6 +226,13 @@ local function LootWords()
 			return "quest items are " .. (on
 				and "drawn whatever their own quality chip says."
 				or "graded by their own quality like anything else.")
+		  end },
+
+		{ "reason", toggle = true, key = "lootFeedReason", apply = Chipped,
+		  say = function(on)
+			return "anything the addon has a reason for is " .. (on
+				and "drawn whatever its own quality chip says."
+				or "graded by its own quality like anything else.")
 		  end },
 
 		{ "money", toggle = true, key = "lootFeedMoney", apply = Chipped,
@@ -541,7 +548,7 @@ local function Panel(ui)
 			ns.db.lootFeedFilters = on
 			STREAMS.loot.stream:Apply()
 		end)
-	ui.Hint("Six squares in the quality colours, plus one for quest items. Off, the strip goes and the column draws everything it holds.")
+	ui.Hint("Five in the quality colours, then quest, reason and coin. Off, the strip goes and the column draws what it holds.")
 
 	for level = LOW_QUALITY, HIGH_QUALITY do
 		ui.Check(QualityWord(level):lower(),
@@ -559,7 +566,17 @@ local function Panel(ui)
 			ns.db.lootFeedQuest = on
 			Chipped()
 		end)
-	ui.Hint("A quest item is white, the same white as linen. It gets a ring round its icon, and this keeps it on screen once the whites are off.")
+	ui.Hint("A quest item is white, the same white as linen, so this is what keeps it on screen once the whites are off.")
+
+	-- The ring is said once, here, for the switch that is about every reason
+	-- rather than about the one of them the box above it names.
+	ui.Check("anything with a reason whatever its quality",
+		function() return ns.db.lootFeedReason end,
+		function(on)
+			ns.db.lootFeedReason = on
+			Chipped()
+		end)
+	ui.Hint("An objective in your log, a reagent a profession uses, or what your loot filter would have left. Each wears a ring.")
 
 	ui.Check("the group's drops too", function() return ns.db.lootFeedGroup end,
 		function(on) ns.db.lootFeedGroup = on end)
@@ -681,7 +698,8 @@ ns.Register({
 		-- "why can I not see this" that brings somebody to a reset button, and
 		-- unlike the switch beside it, it is not a decision about what the
 		-- addon records.
-		for _, key in ipairs({ "lootFeedShow", "lootFeedQuest", "lootFeedMoney" }) do
+		for _, key in ipairs({ "lootFeedShow", "lootFeedQuest", "lootFeedReason",
+			"lootFeedMoney" }) do
 			ns.db[key] = ns.DefaultCopy(key)
 		end
 		Chipped()

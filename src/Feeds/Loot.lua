@@ -72,12 +72,13 @@ local QUEST_CLASS = 12
 -- marker you have to work out. This is the only orange in the addon.
 local QUEST = { 0.98, 0.55, 0.15 }
 
--- The three letters the glyph face draws the chips' marks on. A gem for the
--- thing that grades an item, the quest bang, and a stack of coins. Named rather
+-- The four letters the glyph face draws the chips' marks on. A gem for the
+-- thing that grades an item, the quest bang, a stack of coins, and the circle
+-- for the ring an item wears when the addon has a reason for it. Named rather
 -- than written at the call site because scripts/bake-glyphs.sh is what decides
 -- which letter carries which mark, and a literal `*` sitting in a table would
 -- give nobody reading this file a way to find that out.
-local GEM, BANG, COINS = "*", "!", "$"
+local GEM, BANG, COINS, RING = "*", "!", "$", "o"
 
 -- What the client calls each quality in its own language. ITEM_QUALITY0_DESC
 -- and its siblings are the strings the client's own tooltips use, so a player
@@ -123,9 +124,9 @@ local TRASH = "trash"
 --------------------------------------------------------------------------
 -- What the column shows
 --
--- Six chips over the rows: one per quality, and one for coin. Each is on or
--- off, each says which of them it is by its colour, and between them they are
--- the whole of what is drawn.
+-- Eight chips over the rows: one per quality, two that override them and one
+-- for coin. Each is on or off, each says which of them it is by its colour, and
+-- between them they are the whole of what is drawn.
 --
 -- **The feed records everything either way.** There was a quality floor here
 -- and it worked at the door: an item under it never became a row and could not
@@ -141,6 +142,28 @@ local TRASH = "trash"
 -- whatever its own quality chip says. That is the combination that makes the
 -- feed useful while questing, which is turning the whites off and still seeing
 -- the five wolf livers you need.
+--
+-- **A reason is not a quality either, and it is the same override.**
+-- Need/Need.lua answers quest, skill or trash for an item and the row wears
+-- that answer as the ring round its icon, so this chip is that field: on, a row
+-- with a ring is drawn whatever its quality chip says. Greys and whites off
+-- with it on is the column cut down to the handful of things this hour that you
+-- were actually looking for.
+--
+-- The quest chip is a special case of this one and stays. Somebody who wants
+-- quest items and not reagents has to be able to say so, and the two chips
+-- together are what says it.
+--
+-- Trash is one of the three, so a grey the loot filter would have left comes
+-- through this chip with the grey chip off. That is the point of it rather than
+-- a leak. Comfort/Loot.lua empties a corpse before a window is drawn, so this
+-- feed is the only place a rule set too tight is ever found out, and the row
+-- stays quiet at that: trash sets no `look`, so its ring rests with the stripe
+-- instead of being held at full.
+--
+-- It wears none of the three reason colours, because it stands for all three
+-- and a chip in the orange would be claiming the quest chip's job. The mark is
+-- the ring itself, which is the thing on the row this switch decides about.
 --
 -- The five qualities are one saved number rather than five saved booleans. A
 -- table of five would be five keys the defaults have to backfill and five
@@ -181,6 +204,12 @@ local function Passes(entry)
 	if entry.quest and ns.db.lootFeedQuest then
 		return true
 	end
+	-- The ring rather than ns.Need again. Reason writes the field on the arrival
+	-- and again on every fold, so having a reason is already a fact on the entry,
+	-- and this is the function UI/Feed.lua walks the whole ring with.
+	if entry.ring and ns.db.lootFeedReason then
+		return true
+	end
 	return Lit(math.min(entry.quality or 1, QUALITIES))
 end
 
@@ -215,6 +244,16 @@ local function Chips()
 			.. " one of these.",
 		get = function() return ns.db.lootFeedQuest end,
 		set = function(on) ns.db.lootFeedQuest = on end,
+	}
+	chips[#chips + 1] = {
+		color = C.text,
+		mark = RING,
+		tip = "Anything this addon has a reason for, whatever its quality chip"
+			.. " says: an objective in your log, a reagent one of your"
+			.. " professions uses, and something your loot filter would have"
+			.. " left. The ring round an icon is the same answer in colour.",
+		get = function() return ns.db.lootFeedReason end,
+		set = function(on) ns.db.lootFeedReason = on end,
 	}
 	chips[#chips + 1] = {
 		color = C.heading,
@@ -390,6 +429,11 @@ function LootFeed.Defaults()
 	-- to turn the whites off is the linen and the reason not to is the wolf
 	-- liver, and this is the switch that has both.
 	defaults.lootFeedQuest = true
+
+	-- And anything else the addon has a reason for, on for the reason above it
+	-- is. It changes nothing while every quality is lit, and the moment you turn
+	-- a quality off it is what leaves the rows you were looking for standing.
+	defaults.lootFeedReason = true
 
 	defaults.lootFeedMoney = true
 
