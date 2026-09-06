@@ -155,6 +155,71 @@ local BAND = 2
 -- How far apart two rows in a column sit.
 local GAP = 4
 
+--------------------------------------------------------------------------
+-- The line under a name
+--
+-- It said the item level and nothing else. On a character at the level cap
+-- every piece is enchanted, and the sheet is where you go to find out which one
+-- you forgot: an unenchanted pair of boots is invisible on the figure, absent
+-- from every number on the page, and worth as much as the difference between
+-- two tiers of the same slot.
+--
+-- So the line carries three things now and they read near end first: the item
+-- level, how long is left on the stone or the oil, and what is enchanted on it.
+--
+-- **The order mirrors with the column.** The right hand rows are justified to
+-- their own disc, so the string ends at the disc rather than starting there,
+-- and printing the three in the same order on both sides would put the level
+-- against the disc on the left and against the middle of the page on the right.
+-- Narcissus swaps the pair at Main.lua:1621 for the same reason on the same
+-- line, and what it buys is that the number you scan a column for is always the
+-- one nearest the picture.
+--
+-- **The enchant is the half that gives way.** Something long, like the name of
+-- a two hander's spell damage enchant, is at the far end in both columns, where
+-- a row that is too narrow for it clips it. The level and the time are short
+-- and never lose a digit.
+--
+-- The two spaces are the gap between them. A separator would be a third thing
+-- on a line that already carries three, and the strings are three different
+-- colours already.
+local SPACE = "  "
+
+-- A palette entry as the escape the client colours part of a string with.
+--
+-- One string of three, so the escapes rather than three font strings. Three
+-- strings would each need an anchor to the end of the one before it, which is a
+-- width nothing knows until the repaint has set the text, and the wash under
+-- the row is measured off the note's own width: it would have to add three of
+-- them up and get the gaps right as well. The client already colours a run
+-- inside a font string and counts none of it in GetStringWidth.
+local function Ink(color)
+	return ("|cff%02x%02x%02x"):format(
+		math.floor(color[1] * 255), math.floor(color[2] * 255), math.floor(color[3] * 255))
+end
+
+-- Green for the enchant, because green is what the client's own tooltip writes
+-- that line in and the page is not going to teach a second colour for it. The
+-- level and a healthy time keep the note's own dim, so the enchant is the only
+-- thing on the line that asks to be read.
+local ENCHANT_INK = Ink(C.tick)
+
+-- And red once there is not enough left to be worth planning around. A stone
+-- runs an hour, so five minutes is the point where the answer stops being "it
+-- is fine" and starts being "do it before the pull".
+local LAPSING_INK = Ink(C.loss)
+local LAPSING = 5
+
+-- How often the time left is looked at again, and it is the smallest useful
+-- number rather than the cheapest.
+--
+-- The line counts in whole minutes for an hour and in whole seconds for the
+-- last one, so a tick slower than a second would show a stale figure through
+-- the part of the countdown anybody is watching. What it costs is one pass over
+-- three rows a second while the sheet is open, and the write behind it happens
+-- fifty nine times an hour rather than once a second.
+local LAPSE = 1
+
 -- The wash under a row's two strings: how much taller it is than the pair of
 -- them, and how much wider than the longer of them.
 --
@@ -275,6 +340,22 @@ local SINK = -0.35
 
 local Pane = {}
 Pane.__index = Pane
+
+-- The one gear page there is, so the tick that counts the oil down can find it.
+--
+-- A file local rather than the frame the tick hangs off, which is how the turn
+-- above reaches its model and how every other instance-owned tick in the addon
+-- reaches its instance. This one hangs off ns.UI.Forever instead: three rows
+-- once a second is not worth a frame of its own, and a tick on a frame of its
+-- own owes scripts/check.sh an entry defending a frame that can hide. The
+-- visibility test at the top of Lapse is what that entry would have said,
+-- written as one comparison a second.
+--
+-- Character/Window.lua builds exactly one of these and never takes it down,
+-- because the page holds nineteen secure buttons and hiding one of those in a
+-- fight is a protected act. A second page would be a second thing this pointed
+-- at and the sheet has no way to grow one.
+local page
 
 --------------------------------------------------------------------------
 -- One slot
@@ -609,6 +690,142 @@ local function PaintDots(box, link)
 	end
 end
 
+-- The line under one row's name, out of the three things that row might have.
+--
+-- Every join sits behind the test for the piece it joins. That is the rule
+-- every function a tick can reach is held to, and here it costs nothing to
+-- keep: sixteen of the nineteen rows have a level and nothing else, and on
+-- those this allocates the level's own string and stops.
+local function Note(box)
+	local named
+	if box.enchant then
+		named = ENCHANT_INK .. box.enchant .. "|r"
+	end
+
+	-- Coloured first and ordered after, because the two are swapped and the
+	-- escape belongs to the enchant rather than to the end of the line it lands
+	-- on. Swapping the two before either is dressed puts the green on the item
+	-- level in one of the two columns, which is a page that reads perfectly and
+	-- says the wrong thing on half of it.
+	local first, last = box.level, named
+	if box.entry.side == "right" then
+		first, last = named, box.level
+	end
+
+	local line = first or ""
+	if box.oil then
+		local time = box.oil .. box.oilUnit
+		if box.oilUnit == "s" or box.oil <= LAPSING then
+			time = LAPSING_INK .. time .. "|r"
+		end
+		line = line ~= "" and (line .. SPACE .. time) or time
+	end
+	if last then
+		line = line ~= "" and (line .. SPACE .. last) or last
+	end
+	return line
+end
+
+-- One weapon row's time left, written only where the figure on it moved.
+--
+-- The count and its unit are kept apart rather than the string being kept,
+-- because the comparison has to be on the number. A tick that builds its label
+-- and then compares the label has already paid for the label, and the
+-- comparison reads as a guard while letting every tick through; that is item
+-- 34, found on the threat percentage and the same shape here.
+--
+-- Whole minutes for the hour a stone runs and whole seconds for the last one.
+-- Minutes alone would spend the last minute saying 1 through the part of it
+-- anybody is watching, and seconds alone are four digits nobody reads.
+local function Lapsed(box)
+	local left = ns.Worn.Oil(box.entry.slot)
+	local count, unit
+	if left then
+		if left < 60 then
+			count, unit = math.floor(left), "s"
+		else
+			count, unit = math.floor(left / 60), "m"
+		end
+	end
+	if count ~= box.oil or unit ~= box.oilUnit then
+		box.oil, box.oilUnit = count, unit
+		box.note:SetText(Note(box))
+		return true
+	end
+	return false
+end
+
+-- The three weapon rows, once a second, and only while the sheet is on screen.
+--
+-- The page's own frame is shown from the moment it is built and never hidden
+-- again, so its flag says nothing about whether anybody can see it. What can be
+-- seen is the window above it, which is why this asks the question the whole way
+-- up the chain rather than of the row it is about to write on.
+local function Lapse()
+	if not page or not page.frame:IsVisible() then
+		return false
+	end
+	local hands = page.hands
+	local moved = false
+	for index = 1, #hands do
+		if Lapsed(hands[index]) then
+			moved = true
+		end
+	end
+	return moved
+end
+
+UI.Ticker(UI.Forever, LAPSE, "oil", Lapse)
+
+-- How much of a string the row actually draws.
+--
+-- Every string on a row is anchored at both ends so it can clip rather than
+-- wrap, which makes its frame the width of the column every time and makes its
+-- own measurement the full length of the text however much of that is cut off.
+-- Neither number on its own is the answer: what the rule under a name and the
+-- shadow under the pair of them are as wide as is the part you can see, and
+-- that is the smaller of the two.
+--
+-- One function because it was one idea written twice. The name has been clamped
+-- since the rule under it was drawn across the whole row; the line under it was
+-- two digits then and could not reach the end of the shortest row on the page.
+-- It carries an enchant's name now, which is longer than plenty of item names,
+-- and the second copy of this is the one that would have been left out.
+local function Drawn(text)
+	local letters = text:GetStringWidth() or 0
+	local room = text:GetWidth() or 0
+	if room > 0 and letters > room then
+		return room
+	end
+	return letters
+end
+
+-- The shadow the row's two strings are read on, sized now that both have their
+-- text.
+--
+-- Every string on this page is a string over the world, so the size is the
+-- whole of the answer: a wash wider than the letters is a smear beside the
+-- name, and one narrower is a name half on the shadow and half on the grass.
+--
+-- Not drawn at all on an empty slot. The row still says what the slot is for,
+-- dimmed, and a shadow under the word trinket is a shadow under nothing; eight
+-- of the nineteen rows are empty on most characters and nineteen of them would
+-- be a second page laid over the first.
+--
+-- The name's width is handed in rather than measured again, because the rule
+-- under the name wants the same number and two readings of one measurement are
+-- two things to get wrong.
+local function PaintWash(box, link, letters)
+	if not link then
+		box.wash:Hide()
+		return false
+	end
+	box.wash:SetSize(math.max(letters, Drawn(box.note)) + WASH_WIDE,
+		UI.TextHeight(box.name, M.font) + UI.TextHeight(box.note, M.small) + WASH_TALL)
+	box.wash:Show()
+	return true
+end
+
 local function PaintSquare(box)
 	local entry = box.entry
 	local icon = ns.Worn.Icon(entry.slot)
@@ -630,27 +847,35 @@ local function PaintSquare(box)
 	box.name:SetText(link and (ns.ItemInfo(link)) or entry.label)
 	box.name:SetTextColor(tone[1], tone[2], tone[3])
 	local level = link and ns.ItemLevel(link)
-	box.note:SetText(level and level > 0 and ("%d"):format(level) or "")
+	box.level = level and level > 0 and ("%d"):format(level) or nil
+
+	-- And the enchant, on the repaint that found the link changed and on no
+	-- other.
+	--
+	-- A name for an enchant costs a tooltip scan, because the link carries the
+	-- id and no client call turns one into a word. Nineteen of those on every
+	-- repaint is nineteen tooltips filled and read back every time you loot a
+	-- grey, and UI/Scan.lua does not cache on purpose: an item's text is the
+	-- client's and a cache between the two is one more thing that can be stale
+	-- while the page says otherwise.
+	--
+	-- So the question is asked where the answer can have changed, and Redress
+	-- above already knows where that is. It compares the nineteen links against
+	-- what the page drew last, for the figure, and the same comparison answers
+	-- this: an enchant is part of the link, so a link that did not move carries
+	-- the enchant it carried before.
+	if box.fresh then
+		box.fresh = false
+		box.enchant = link and ns.Worn.Enchant(link) or nil
+	end
+
+	box.note:SetText(Note(box))
 	PaintDots(box, link)
 
-	-- The string and not the frame. A name is anchored at both ends so it can
-	-- clip rather than wrap, which makes GetWidth the width of the column every
-	-- time: the rule under a full piece was drawn from the name across the whole
-	-- row and out into the middle of the page. GetStringWidth is how much of that
-	-- the letters actually used, which is what an underscore is meant to be as
-	-- wide as. Clamped to the row, because a name longer than the column measures
-	-- at its full length and the rule would run out past the edge the letters are
-	-- cut off at.
-	--
-	-- Read once here rather than inside the durability branch. The wash wants the
-	-- same number for the same reason, and two readings of one measurement are
-	-- two things to get wrong: the rule was already right and a wash taken off
-	-- the unclamped width would have hung off the end of every long name.
-	local room = box.name:GetWidth() or 0
-	local letters = box.name:GetStringWidth() or 0
-	if room > 0 and letters > room then
-		letters = room
-	end
+	-- The rule under the name is an underscore, so it is as wide as the letters
+	-- and never as wide as the row. Read once here rather than inside the branch
+	-- below, because the wash wants the same number.
+	local letters = Drawn(box.name)
 
 	local has, of = ns.Worn.Durability(entry.slot)
 	if has then
@@ -662,24 +887,7 @@ local function PaintSquare(box)
 		box.wear:Hide()
 	end
 
-	-- And the wash under both strings, measured now that both have their text.
-	-- Every string on this page is a string over the world, so the size is the
-	-- whole of the answer: a wash wider than the letters is a smear beside the
-	-- name, and one narrower is a name half on the shadow and half on the grass.
-	--
-	-- Not drawn at all on an empty slot. The row still says what the slot is for,
-	-- dimmed, and a shadow under the word trinket is a shadow under nothing;
-	-- eight of the nineteen rows are empty on most characters and nineteen of
-	-- them would be a second page laid over the first.
-	if link then
-		local note = box.note:GetStringWidth() or 0
-		box.wash:SetSize(math.max(letters, note) + WASH_WIDE,
-			UI.TextHeight(box.name, M.font) + UI.TextHeight(box.note, M.small)
-				+ WASH_TALL)
-		box.wash:Show()
-	else
-		box.wash:Hide()
-	end
+	return PaintWash(box, link, letters)
 end
 
 --------------------------------------------------------------------------
@@ -1000,16 +1208,24 @@ end
 
 function Paperdoll.New(parent)
 	local pane = setmetatable({ squares = {}, left = {}, right = {},
-		worn = {} }, Pane)
+		hands = {}, worn = {} }, Pane)
 	pane.frame = CreateFrame("Frame", nil, parent)
 
 	-- Sorted into the two columns once, because which column a slot is in is a
 	-- fact about the slot and not about the width the page came out at.
+	--
+	-- And the three that can carry a stone into a third list, so the tick that
+	-- counts one down walks three rows rather than nineteen. Which three is
+	-- Character/Worn.lua's word, marked on the slot beside the column it is in,
+	-- because both are facts about the slot.
 	for _, entry in ipairs(ns.Worn.Slots()) do
 		local box = Square(pane, entry)
 		pane.squares[#pane.squares + 1] = box
 		local group = pane[entry.side]
 		group[#group + 1] = box
+		if entry.hand then
+			pane.hands[#pane.hands + 1] = box
+		end
 	end
 
 	pane.panel = Portrait(pane.frame)
@@ -1036,6 +1252,8 @@ function Paperdoll.New(parent)
 	-- its own scroll view, so a long sheet on a short screen scrolls beside a
 	-- figure that does not move.
 	pane.stats = ns.CharReadout.New(pane.frame, { compact = true })
+
+	page = pane
 	return pane
 end
 
@@ -1173,13 +1391,21 @@ end
 -- UNIT_INVENTORY_CHANGED fires on a bag moving as well, and a model that
 -- reloaded on every looted grey would flicker all evening. Comparing costs
 -- nineteen table lookups and allocates nothing.
+-- The row is told as well as the model, because the same comparison answers a
+-- second question. PaintSquare has to scan a tooltip to name what is enchanted
+-- on a piece, and an enchant is part of the link: a row whose link did not move
+-- is a row whose enchant did not either. The flag is set here and cleared by
+-- the repaint that reads it, so nineteen scans happen on the paint that found
+-- something moved and none at all on the eight a minute that did not.
 function Pane:Redress()
 	local changed = false
 	for index = 1, #self.squares do
-		local slot = self.squares[index].entry.slot
+		local box = self.squares[index]
+		local slot = box.entry.slot
 		local link = ns.Worn.Link(slot)
 		if self.worn[slot] ~= link then
 			self.worn[slot] = link
+			box.fresh = true
 			changed = true
 		end
 	end
@@ -1213,6 +1439,15 @@ function Pane:Paint()
 	self:Redress()
 	for index = 1, #self.squares do
 		PaintSquare(self.squares[index])
+	end
+	-- And the three hands again, straight after, rather than waiting for the
+	-- tick. A sheet opened after an evening shut would otherwise show the figure
+	-- the tick last wrote for up to a second, and the one it wrote is an hour
+	-- old. Lapsed is asked directly rather than through Lapse, because Lapse
+	-- refuses to run on a page nobody can see and this is the paint that puts one
+	-- up.
+	for index = 1, #self.hands do
+		Lapsed(self.hands[index])
 	end
 	self:PaintHead()
 	-- Only while the page is up, and that is a measurement rule rather than a

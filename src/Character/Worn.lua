@@ -60,6 +60,10 @@ ns.Worn = Worn
 --          asked for rather than written down as a texture path
 --   label  what this addon calls it, lower case like every other label here
 --   side   which of the two columns it is drawn in
+--   hand   a slot a temporary enchant can be on, which is the three weapons and
+--          nothing else. Marked here rather than counted at the call site,
+--          because "which rows are weapons" is a fact about the slots and the
+--          page already reads its rows out of this table
 --
 -- There were three groups and the third was the weapons, drawn as three bare
 -- discs centred under the figure with no words on them at all. That was the one
@@ -82,9 +86,9 @@ local SLOTS = {
 	{ slot = 15, key = "BackSlot",          label = "back",      side = "left" },
 	{ slot = 5,  key = "ChestSlot",         label = "chest",     side = "left" },
 	{ slot = 9,  key = "WristSlot",         label = "wrist",     side = "left" },
-	{ slot = 16, key = "MainHandSlot",      label = "main hand", side = "left" },
-	{ slot = 17, key = "SecondaryHandSlot", label = "off hand",  side = "left" },
-	{ slot = 18, key = "RangedSlot",        label = "ranged",    side = "left" },
+	{ slot = 16, key = "MainHandSlot",      label = "main hand", side = "left", hand = true },
+	{ slot = 17, key = "SecondaryHandSlot", label = "off hand",  side = "left", hand = true },
+	{ slot = 18, key = "RangedSlot",        label = "ranged",    side = "left", hand = true },
 	{ slot = 4,  key = "ShirtSlot",         label = "shirt",     side = "left", trim = true },
 
 	{ slot = 10, key = "HandsSlot",         label = "hands",     side = "right" },
@@ -155,6 +159,91 @@ function Worn.Durability(slot)
 		return nil
 	end
 	return current, maximum
+end
+
+--------------------------------------------------------------------------
+-- What has been put on the piece since you got it
+--
+-- Two different questions with two different answers and one word between them.
+-- The permanent enchant is part of the item: it is in the link, it survives a
+-- logout, and the only thing missing from the link is what it is called. The
+-- temporary one is a stone, an oil or a poison, it is on a hand rather than on
+-- an item, it runs for an hour and it is the one a warrior is actually watching
+-- go.
+--------------------------------------------------------------------------
+
+-- The client's own "Enchanted: %s" line, as a pattern with the blank half
+-- captured.
+--
+-- Read off the client rather than typed, for the reason Feeds/Loot.lua reads
+-- the loot sentences off the client: the string is localised, and a file that
+-- typed the English would capture nothing on every other client and would not
+-- say so. Escaped before the %s is opened up, because a locale is free to put a
+-- bracket or a dash in its own wording and every one of those is a pattern
+-- character here.
+--
+-- Built once at load. A client with no such string leaves it nil, and the
+-- reader below answers nil the way it does for a client that will not fill a
+-- tooltip at all: the row prints the level and nothing beside it.
+local ENCHANTED = _G.ENCHANTED_TOOLTIP_LINE
+local ENCHANT_LINE
+if type(ENCHANTED) == "string" then
+	local safe = (ENCHANTED:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1"))
+	ENCHANT_LINE = "^" .. (safe:gsub("%%%%s", "(.+)")) .. "$"
+end
+
+-- What is enchanted onto a piece, by name, or nil for a piece with nothing on
+-- it.
+--
+-- Asked of the link and not of the slot, so the caller that already has the
+-- link does not make the client find it twice.
+--
+-- **The id comes first and it is the whole of the saving.** An item link
+-- carries the enchant as a number in its second field and carries no name at
+-- all, so a name costs a tooltip scan; but the number is free, and a piece with
+-- nothing on it says so in the link before anything is asked of a tooltip. On a
+-- character wearing eleven enchanted pieces out of nineteen that is eight scans
+-- that never happen, and on a fresh one it is all nineteen.
+function Worn.Enchant(link)
+	if type(link) ~= "string" or not ENCHANT_LINE then
+		return nil
+	end
+	local id = link:match("item:%d+:(%d+)")
+	if not id or id == "0" then
+		return nil
+	end
+	return ns.UI.Scan.Match("item", ENCHANT_LINE, link)
+end
+
+-- How many seconds are left on the stone, the oil or the poison on this hand.
+--
+-- Nil for a hand with nothing on it, for the ranged slot and for a client with
+-- no such call, and the caller draws all three the same way, which is nothing
+-- at all. Zero would be wrong for every one of them: a hand at zero seconds is
+-- a hand whose enchant has just lapsed, which is a thing worth saying, and a
+-- hand nobody can ask about is not.
+--
+-- Buffs/Upkeep.lua is the reader and this is its second caller. That file
+-- already counts how many values GetWeaponEnchantInfo answers with on this
+-- client and picks the stride from the count, and its header says at length why
+-- reading the call positionally on a guess is the failure worth avoiding. A
+-- second reader here would be a second guess.
+--
+-- The ranged slot answers nothing and that is the client rather than a gap
+-- here. The call has covered a ranged hand since Cataclysm and this is 2.5.6;
+-- there is no stone, oil or poison in this expansion that goes on a bow.
+function Worn.Oil(slot)
+	if slot ~= 16 and slot ~= 17 then
+		return nil
+	end
+	local mine, mineLeft, other, otherLeft = ns.Upkeep.Enchants()
+	if mine == nil then
+		return nil
+	end
+	if slot == 16 then
+		return mine and mineLeft or nil
+	end
+	return other and otherLeft or nil
 end
 
 --------------------------------------------------------------------------

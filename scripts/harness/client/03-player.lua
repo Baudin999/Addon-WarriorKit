@@ -632,8 +632,12 @@ local function carrying(bag, slot)
 	return held or nil
 end
 
-local function itemLink(name)
-	return ("|cffff8000|Hitem:1::::::::60:::::|h[%s]|h|r"):format(name)
+-- The second field is the enchant, empty on every link but the ones a section
+-- writes one into. It is a number and not a name, which is the whole reason the
+-- gear page has to scan a tooltip to say what a piece is enchanted with, and a
+-- fixture with the field always blank would have left that path unreachable.
+local function itemLink(name, enchant)
+	return ("|cffff8000|Hitem:1:%s:::::::60:::::|h[%s]|h|r"):format(enchant or "", name)
 end
 _G.WarriorKitItemLink = itemLink
 

@@ -92,6 +92,11 @@ local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast
 	-- button is down and nothing at all otherwise, which is the one tick on this
 	-- list a player arms on purpose and can stop by letting go.
 	"figure",
+	-- The stone, the oil or the poison on a hand, counting down on the three
+	-- weapon rows of the same page. Once a second and it walks three rows, and
+	-- on all but one second a minute it finds the same whole number it left and
+	-- writes nothing.
+	"oil",
 	-- The one slot that is not a ticker. Bags/Window.lua brackets its refresh,
 	-- which the bag events book up to ten times a second at a vendor, and
 	-- scripts/check.sh reads a literal ns.Perf.Start as a slot for that reason.

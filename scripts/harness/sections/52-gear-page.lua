@@ -319,7 +319,7 @@ do
 	-- makes its frame the width of the column every time: taken off that, every
 	-- wash on the page would be the same width and it would be the whole row.
 	local letters = math.min(head.name:GetStringWidth(), head.name:GetWidth())
-	local note = head.note:GetStringWidth()
+	local note = math.min(head.note:GetStringWidth(), head.note:GetWidth())
 	check(math.abs(head.wash:GetWidth() - (math.max(letters, note) + 48)) <= 0.01,
 		("the wash came out %.1f wide and the longer string is %.1f")
 			:format(head.wash:GetWidth(), math.max(letters, note)))

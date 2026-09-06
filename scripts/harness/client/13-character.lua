@@ -100,6 +100,16 @@ ITEMS["Breastplate of Might"] = { id = 4003, classId = 4, equip = "INVTYPE_CHEST
 ITEMS["Band of the Eternal"] = { id = 4004, classId = 4, equip = "INVTYPE_FINGER",
 	icon = "Interface\\Icons\\Ring", quality = 4, price = 15000 }
 
+-- What the client writes on the line of an item's tooltip that names its
+-- enchant.
+--
+-- The real enUS string, for the reason the loot sentences in 03-player are the
+-- real ones: Character/Worn.lua turns this into a pattern rather than typing
+-- one, so the thing under test is that the pattern it builds reads the line the
+-- client wrote. A fixture that said something convenient here would agree with
+-- a reader that had typed the English in.
+_G.ENCHANTED_TOOLTIP_LINE = "Enchanted: %s"
+
 -- Straight into the table 04-hands reads for every slot that is not a hand, so
 -- there is one GetInventoryItemLink in this client rather than two wrapping
 -- each other.

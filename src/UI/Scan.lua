@@ -178,6 +178,41 @@ local function Ask(frame, entry, a, b)
 	return pcall(frame[entry.method], frame, a)
 end
 
+-- The tooltip with this thing written into it, and how many lines it came to.
+--
+-- Nil for every way of not getting an answer, which the three readers below all
+-- treat as one: a kind nobody declared, a client with no such setter, a caller
+-- that passed nothing, and a link the setter raised on. Zero lines with a frame
+-- is the other case and it is not the same one, so it comes back as a frame and
+-- a count rather than as a second nil.
+--
+-- Here because there were three copies of it. Read, Has and Match ask the
+-- client exactly the same question and differ only in what they do with the
+-- answer, and the fourth copy is the one that would have drifted: the guard on
+-- `b` is easy to leave out and reads as working, because a setter called with
+-- one argument where it wanted two answers a tooltip about nothing rather than
+-- raising.
+local function Filled(kind, a, b)
+	local entry = KINDS[kind]
+	if not entry then
+		return nil, 0
+	end
+	local frame = Frame()
+	if not frame or type(frame[entry.method]) ~= "function" then
+		return nil, 0
+	end
+	if a == nil or (entry.args == 2 and b == nil) then
+		return nil, 0
+	end
+	if not Ask(frame, entry, a, b) then
+		return nil, 0
+	end
+
+	local total = frame:NumLines() or 0
+	answered = total >= 1
+	return frame, total
+end
+
 -- The client's text for one thing, as an array of lines.
 --
 -- Each line is `{ left, lr, lg, lb, right, rr, rg, rb }`, which is the shape
@@ -186,27 +221,10 @@ end
 -- empty array is a thing with no text, a nil is a question this client will not
 -- take, and the caller falls back differently for each.
 function Scan.Read(kind, a, b)
-	local entry = KINDS[kind]
-	if not entry then
+	local frame, total = Filled(kind, a, b)
+	if not frame or total < 1 then
 		return nil
 	end
-	local frame = Frame()
-	if not frame or type(frame[entry.method]) ~= "function" then
-		return nil
-	end
-	if a == nil or (entry.args == 2 and b == nil) then
-		return nil
-	end
-	if not Ask(frame, entry, a, b) then
-		return nil
-	end
-
-	local total = frame:NumLines() or 0
-	if total < 1 then
-		answered = false
-		return nil
-	end
-	answered = true
 
 	local lines = {}
 	for index = 1, total do
@@ -238,27 +256,13 @@ end
 -- a client that will not take the question, false is a tooltip with no such
 -- line, and only true is the line being there.
 function Scan.Has(kind, text, a, b)
-	local entry = KINDS[kind]
-	if not entry or type(text) ~= "string" then
+	if type(text) ~= "string" then
 		return nil
 	end
-	local frame = Frame()
-	if not frame or type(frame[entry.method]) ~= "function" then
+	local frame, total = Filled(kind, a, b)
+	if not frame then
 		return nil
 	end
-	if a == nil or (entry.args == 2 and b == nil) then
-		return nil
-	end
-	if not Ask(frame, entry, a, b) then
-		return nil
-	end
-
-	local total = frame:NumLines() or 0
-	if total < 1 then
-		answered = false
-		return false
-	end
-	answered = true
 
 	for index = 1, total do
 		local string = _G[NAME .. "TextLeft" .. index]
@@ -267,6 +271,45 @@ function Scan.Has(kind, text, a, b)
 		end
 	end
 	return false
+end
+
+-- The first capture of the client's own line matching this pattern.
+--
+-- Between the two above and it is neither of them. Read hands back every line
+-- as a table of eight fields, and a caller after one word out of an item's
+-- tooltip throws away fourteen of those tables per item; Has answers yes or no
+-- about a line whose whole text the caller already holds. An enchant is the
+-- third shape: one line the client publishes the format of and nothing at all
+-- about the half that format leaves blank, which is the only half worth
+-- printing.
+--
+-- The pattern belongs to the caller because the format string does. The client
+-- hands over ENCHANTED_TOOLTIP_LINE and its siblings in whatever language it is
+-- running in, and a file here that built "Enchanted: (.+)" for itself would
+-- read nothing at all on a German client and would say nothing about why.
+--
+-- Nil three ways and the caller cannot tell them apart, which is right: a
+-- client that will not take the question, a tooltip with no such line, and a
+-- line whose capture came back empty are one answer to a row that has nothing
+-- to print.
+function Scan.Match(kind, pattern, a, b)
+	if type(pattern) ~= "string" then
+		return nil
+	end
+	local frame, total = Filled(kind, a, b)
+	if not frame then
+		return nil
+	end
+
+	for index = 1, total do
+		local string = _G[NAME .. "TextLeft" .. index]
+		local body = string and type(string.GetText) == "function" and string:GetText()
+		local found = body and body ~= "" and body:match(pattern)
+		if found and found ~= "" then
+			return found
+		end
+	end
+	return nil
 end
 
 --------------------------------------------------------------------------

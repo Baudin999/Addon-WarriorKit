@@ -334,6 +334,11 @@ local SECTIONS = {
 	-- It shuts it again, and it puts the setting it turns off back, so what the
 	-- reset below inherits is the scene the addon ships with.
 	"52-screen-dark",
+	-- Last of the sheet's sections, because it dresses the character in
+	-- enchanted pieces and puts a stone on a hand. Every assertion above reads
+	-- a character wearing what client/13-character.lua put on, so a scene that
+	-- changes what is in four slots goes below all of them and puts it back.
+	"52-gear-enchant",
 	-- Last, and it has to be: it puts every setting in the account file back
 	-- to what the addon ships with, twice over, which is the one thing in the
 	-- suite that would pull the scene out from under every section above it.
