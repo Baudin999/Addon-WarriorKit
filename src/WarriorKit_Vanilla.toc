@@ -1,6 +1,6 @@
 ## Interface: 11509
 ## Title: WarriorKit
-## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a character sheet of the addon's own with your gear, your skills, your standings, your weapon loadouts and how often you miss on it, a talent window with all three trees side by side and nothing to scroll and what unlearning them would cost along the bottom, a spell book with one row per spell and every rank you know folded behind a button beside it, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, two rows of cooldowns, a shaman's four totem slots with a hole where one is missing, the seconds a fight is made of over the minutes, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, the addon's own tooltip on a creature you point at in the world with where you stand on it under the name, a mail window that colours a recipient green for one of yours, blue for somebody you know and red for a stranger and splits more than twelve attachments across as many mails as it takes, a quest log three columns wide with every quest you are on down the left grouped by zone, what this one wants in the middle and what it pays on the right, a dungeon log the same three columns wide with every boss in the game down the left in level order, the dungeon's own map in the middle with the ones you have looted marked on it and what this one drops on the right, one window for your bags with what you are carrying sorted into piles and how many slots are free counted along the bottom, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a whispered thank you to a stranger who buffs you, five seconds of the eighties every time you level, a longer camera, a carried Edit Mode layout and stripped bar art.
+## Notes: Ctrl-click raid marking, casting on what the mouse is over with a key you bound by dragging the spell into a slot, a Charge button that aims by camera out of combat, a character sheet of the addon's own with your gear, your skills, your standings and how often you miss on it, a talent window with all three trees side by side and nothing to scroll and what unlearning them would cost along the bottom, a spell book with one row per spell and every rank you know folded behind a button beside it, a warrior bar loadout, threat-coloured enemy bars, damage healing and threat meters, a nag for the sharpening stone and the racial you forgot, two rows of cooldowns, a shaman's four totem slots with a hole where one is missing, the seconds a fight is made of over the minutes, square class-coloured player and target frames, party and raid blocks ordered by role, your own cast bar, a square minimap with the addon buttons collected behind one square, a chat window of the addon's own with a room per conversation in place of the client's, groups for the people who matter and a voice channel joined at login, a loot stream and a combat log drawn as scrolling feeds with the addon's own tooltips on them, the addon's own tooltip on a creature you point at in the world with where you stand on it under the name, a mail window that colours a recipient green for one of yours, blue for somebody you know and red for a stranger and splits more than twelve attachments across as many mails as it takes, a quest log three columns wide with every quest you are on down the left grouped by zone, what this one wants in the middle and what it pays on the right, a dungeon log the same three columns wide with every boss in the game down the left in level order, the dungeon's own map in the middle with the ones you have looted marked on it and what this one drops on the right, one window for your bags with what you are carrying sorted into piles and how many slots are free counted along the bottom, a filter for the red text in the middle of the screen, fast looting, trash selling, repairs paid for you, a whispered thank you to a stranger who buffs you, five seconds of the eighties every time you level, a longer camera, a carried Edit Mode layout and stripped bar art.
 ## Author: baudin
 ## IconTexture: Interface\AddOns\WarriorKit\Media\Icon.tga
 ## Version: 1.9
@@ -307,16 +307,9 @@ Charge\Feature.lua
 Targeting\Switch.lua
 Targeting\Feature.lua
 
-Loadouts\Loadouts.lua
-# The page, which the character window hosts. It draws into the widget kit and
-# knows nothing about which window is holding it.
-Loadouts\Page.lua
-Loadouts\Feature.lua
-
 # Bars you made yourself, each on a key. AdHoc.lua is the list, Bars.lua the
 # secure frames, the keys and the tick, Panel.lua the page you design one on,
-# and Feature.lua last as everywhere else. After Loadouts, which is the part
-# whose key-per-row shape this borrows, and it reads Hover\Hover.lua for what
+# and Feature.lua last as everywhere else. It reads Hover\Hover.lua for what
 # the cursor is carrying and Buttons\Castable.lua on its tick, both far above.
 AdHoc\AdHoc.lua
 AdHoc\Bars.lua
@@ -789,7 +782,7 @@ Quests\Blizzard.lua
 Quests\Tracker.lua
 Quests\Feature.lua
 
-# The character sheet, and the loadout page that moved onto it.
+# The character sheet.
 #
 # Worn.lua is what you have on and the two calls that change it, Compare.lua is
 # shift held over a piece of gear anywhere in the addon, Stats.lua works
@@ -797,12 +790,12 @@ Quests\Feature.lua
 # Reputation.lua read the two lists the client's own sheet keeps behind tabs,
 # Readout.lua is the column of headed rows those three are drawn in, Paperdoll.lua
 # is the gear page and hosts the stats column down the right of it, Window.lua is
-# the four tabs over one window, Blizzard.lua puts the client's own sheet in the
+# the three tabs over one window, Blizzard.lua puts the client's own sheet in the
 # attic and takes the C key, and Feature.lua last, as everywhere else.
 #
 # After UnitFrames\Blizzard.lua, which owns the switch list Blizzard.lua signs
-# into, and after Loadouts\Page.lua, which is the last tab. Both are above this
-# line. Core\Attic.lua, where the client's sheet goes, is far above it.
+# into and which is above this line. Core\Attic.lua, where the client's sheet
+# goes, is far above it.
 Character\Worn.lua
 Character\Compare.lua
 Character\Stats.lua

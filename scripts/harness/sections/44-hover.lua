@@ -59,8 +59,7 @@ local button = _G.WarriorKitHoverButton
 -- The bar's side of the key this section binds first. The square SHIFT-BUTTON3
 -- presses, which is bar 1's first; what the binding layer says when the bar
 -- holds the key itself; and how many keys the bars hold before this section
--- takes one, because a loadout key from an earlier section already holds one
--- of the stub's 37.
+-- takes one, because the bars themselves already hold some of the stub's 37.
 local bar = {
 	square = ns.Bars.All()[1].buttons[1]:GetName(),
 	keys = ns.Bars.Keys(),

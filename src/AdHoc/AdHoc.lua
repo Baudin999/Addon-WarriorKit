@@ -14,13 +14,13 @@ ns.AdHoc = AdHoc
 -- This file is the list and nothing else. It knows what a bar holds and what
 -- the cursor is carrying; it does not know what a frame is. Bars.lua builds the
 -- frames, the squares and the keys off this list, and Panel.lua draws the page
--- you design a bar on. That is the split Loadouts/Loadouts.lua and
--- Loadouts/Page.lua already have, and for the same reason: a list you can read
--- in a harness without a screen is a list whose rules can be asserted.
+-- you design a bar on. The split is what makes the rules assertable: a list you
+-- can read in a harness without a screen is a list whose rules can be checked
+-- without drawing anything.
 --
 -- Everything is per character. A trade skill is the character's, a totem is the
 -- class's, and a bar of either written into the account would be a bar of
--- spells another character does not know. Loadouts made the same call.
+-- spells another character does not know.
 --
 -- A square holds a spell by name and never by id. `/cast Frost Shock` with no
 -- rank named casts the best rank you know, so a bar never goes stale after a
@@ -45,8 +45,8 @@ AdHoc.PER_BAR = 16
 AdHoc.COLUMNS = 8
 
 -- The two the binding system must never lose, refused here for the reason
--- Marking/Keys.lua and Loadouts/Loadouts.lua refuse them: a bare mouse button
--- binding eats plain targeting and the camera drag.
+-- Marking/Keys.lua refuses them: a bare mouse button binding eats plain
+-- targeting and the camera drag.
 local BARE = { BUTTON1 = true, BUTTON2 = true }
 AdHoc.BARE = BARE
 
@@ -66,9 +66,9 @@ function AdHoc.Count()
 	return #ns.dbc.adhocBars
 end
 
--- Which one the panel is showing. Clamped on read rather than on delete, the
--- way Loadouts.Shown is, so a saved index from a longer list lands somewhere
--- real and nothing has to remember to fix it.
+-- Which one the panel is showing. Clamped on read rather than on delete, so a
+-- saved index from a longer list lands somewhere real and nothing has to
+-- remember to fix it.
 function AdHoc.Shown()
 	local count = AdHoc.Count()
 	if count == 0 then

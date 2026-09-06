@@ -45,8 +45,7 @@ local C = ns.UI.Color
 -- cannot be. A bar you delete keeps its frame and the next bar you add takes
 -- it, so the pool never grows past the cap, and every attribute on it is
 -- written again from the list on every Apply, which is what makes a deleted
--- bar's key land on the right frame: Loadouts/Loadouts.lua makes the same
--- argument for its ten buttons.
+-- bar's key land on the right frame.
 --------------------------------------------------------------------------
 
 local MAX = ns.AdHoc.MAX
@@ -342,10 +341,9 @@ local function Arrange(entry, bar)
 	entry.place:Place(bar.point or DEFAULT_POINT)
 end
 
--- Everything protected in one function, the shape Loadouts/Loadouts.lua's
--- Apply has. Attributes, anchors and override bindings are all refused under
--- lockdown, so in combat this sets pending and PLAYER_REGEN_ENABLED runs it
--- for real.
+-- Everything protected in one function. Attributes, anchors and override
+-- bindings are all refused under lockdown, so in combat this sets pending and
+-- PLAYER_REGEN_ENABLED runs it for real.
 --
 -- Every frame is rewritten from the list every time rather than the one that
 -- changed, because deleting a bar shifts every bar under it onto a different

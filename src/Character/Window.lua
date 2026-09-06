@@ -9,8 +9,8 @@ local C, M = UI.Color, UI.Metric
 --------------------------------------------------------------------------
 -- The character window
 --
--- Four tabs over one window: what you are wearing and what it adds up to, what
--- you are skilled at, who likes you, and the weapon sets you have put on keys.
+-- Three tabs over one window: what you are wearing and what it adds up to,
+-- what you are skilled at, and who likes you.
 --
 -- **It replaces the client's sheet rather than sitting beside it.** The client
 -- draws three of these four and draws them as three separate windows wearing one
@@ -26,13 +26,6 @@ local C, M = UI.Color, UI.Metric
 -- readout is a column down the right of the gear page, next to the squares that
 -- move it. Character/Paperdoll.lua hosts it, Character/Readout.lua still draws
 -- it, and this window is one tab narrower and one window wider for it.
---
--- **The last tab is the loadouts.** They were a section of the options window,
--- which is where you go to change how opaque the chat window is. A loadout is a
--- pair of weapons on a key, so it belongs where your weapons are. The page
--- itself did not change: Loadouts/Page.lua hands the same rows to the same
--- widget kit, and this window is the host instead of the options window. That
--- is the whole of what the kit's host contract was written for.
 --
 -- **One pane is painted at a time.** A font string on a hidden frame will not
 -- say how tall it wraps to on this client, so a tab painted while another one
@@ -51,7 +44,7 @@ local C, M = UI.Color, UI.Metric
 -- press run a snippet. So there are three answers here and no fourth. The key
 -- is bound to a secure button whose snippet shows and hides the window, and the
 -- cross on the title bar is the same button in the corner. The gear page is
--- never hidden, and the other three tabs are drawn over it. Everything that
+-- never hidden, and the other two tabs are drawn over it. Everything that
 -- would have to move a protected frame, the layout and the zoom, waits for
 -- PLAYER_REGEN_ENABLED. The Lua way in still exists and still refuses in a
 -- fight, and says which key does work.
@@ -92,26 +85,24 @@ local C, M = UI.Color, UI.Metric
 -- whatever width comes out and splits it between the three columns and the
 -- figure.
 --
--- The other three tabs are the exception, and PAGE is how wide they get. They
+-- The other two tabs are the exception, and PAGE is how wide they get. They
 -- are lists of prose on a ground of their own, and prose is read at a column's
 -- width however much room there is: a weapon skill with its sentence under it
 -- laid across an ultrawide is a line your eye loses on the way back. It is the
--- old window's content width, which is what those three were always drawn at
+-- old window's content width, which is what those two were always drawn at
 -- and the only number from it worth keeping.
 local PAGE = 836
 
--- The four, in the order they are drawn. `fill` is what the tab's pane is
--- handed on a repaint, and the two that have none are the two that are not
--- readouts: the gear page draws itself, stats and all, and the loadout page is a
--- widget kit.
+-- The three, in the order they are drawn. `fill` is what the tab's pane is
+-- handed on a repaint, and the one that has none is the one that is not a
+-- readout: the gear page draws itself, stats and all.
 local TABS = {
 	{ label = "gear" },
 	{ label = "skills", fill = function() return ns.CharSkills.Groups() end },
 	{ label = "reputation", fill = function() return ns.CharRep.Groups() end },
-	{ label = "loadouts" },
 }
 
-local GEAR, SKILLS, REPUTATION, LOADOUTS = 1, 2, 3, 4
+local GEAR, SKILLS, REPUTATION = 1, 2, 3
 
 local window, tabs, footer, key
 local panes = {}
@@ -119,60 +110,17 @@ local showing = GEAR
 local pending = false
 
 --------------------------------------------------------------------------
--- The loadout tab
---
--- A stack in a scroll view, a kit over the stack, and the page drawn into it.
--- Everything the options window does for a section, in eleven lines, which is
--- what makes the kit worth having rather than a settings window's private
--- helper.
---------------------------------------------------------------------------
-
-local function Loadouts(parent)
-	local pane = {}
-	pane.frame = CreateFrame("Frame", nil, parent)
-	pane.view = UI.ScrollView(pane.frame)
-	pane.view.frame:SetPoint("TOPLEFT")
-	pane.stack = UI.Stack(pane.view.canvas, 1)
-
-	pane.host = {
-		stack = pane.stack,
-		-- A dropdown has to sit over the window rather than inside the pane it
-		-- was opened from, or it is clipped by the viewport the moment the list
-		-- is longer than the room under the control.
-		Popup = function() return window and window.frame or UIParent end,
-	}
-	pane.host.Refresh = function()
-		pane.kit.Refresh()
-		pane.Reflow()
-	end
-
-	function pane.Reflow()
-		if not pane.frame:IsShown() then
-			return 0
-		end
-		pane.stack:SetWidth(pane.view.width or 1)
-		local height = pane.stack:Reflow()
-		pane.view:Update(height)
-		return height
-	end
-
-	pane.kit = UI.Kit(pane.host)
-	ns.LoadoutPage.Build(pane.kit)
-	return pane
-end
-
---------------------------------------------------------------------------
 
 -- Which page is on top.
 --
--- The gear pane is never hidden and the other three are drawn over it. That is
+-- The gear pane is never hidden and the other two are drawn over it. That is
 -- not a layout preference, it is what lets a tab be pressed in a fight: the gear
 -- pane holds nineteen secure buttons, hiding a frame with a protected one inside
 -- it is itself a protected act, and an addon may not do one of those in combat.
--- Three ordinary frames going up and down over it is ordinary Lua and holds in a
+-- Two ordinary frames going up and down over it is ordinary Lua and holds in a
 -- fight like anything else here.
 --
--- The three that cover it are opaque and take the mouse, so nothing shows
+-- The two that cover it are opaque and take the mouse, so nothing shows
 -- through and no click falls past them onto a gear square. Build sets that up
 -- once; this is only the switch.
 local function Select(index)
@@ -219,18 +167,14 @@ function Window.Fit()
 
 	for index = 1, #TABS do
 		local pane = panes[index]
-		-- The gear page is the sheet and takes the whole of it. The other three
+		-- The gear page is the sheet and takes the whole of it. The other two
 		-- are lists of prose on an opaque ground, and a list of prose is read at
 		-- a column's width whatever the monitor is: given the screen they would
 		-- be twenty skills laid across an ultrawide on a panel that has painted
 		-- the game out from edge to edge.
 		local room = index == GEAR and width or math.min(width, PAGE)
 		pane.frame:SetSize(room, under)
-		if pane.Resize then
-			pane:Resize(room, under)
-		else
-			pane.view:Resize(room, under)
-		end
+		pane:Resize(room, under)
 	end
 	return true
 end
@@ -309,7 +253,6 @@ function Window.Build()
 	panes[GEAR] = ns.Paperdoll.New(window.content)
 	panes[SKILLS] = ns.CharReadout.New(window.content)
 	panes[REPUTATION] = ns.CharReadout.New(window.content)
-	panes[LOADOUTS] = Loadouts(window.content)
 
 	for index = 1, #TABS do
 		local pane = panes[index].frame
@@ -367,8 +310,6 @@ function Window.Paint()
 
 	if tab.fill then
 		pane:Set(tab.fill())
-	elseif pane.Reflow then
-		pane.host.Refresh()
 	else
 		pane:Paint()
 	end

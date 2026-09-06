@@ -28,10 +28,11 @@ local ns, check, state, fire = H.ns, H.check, H.state, H.fire
 local sheet, moved = H.sheet, H.moved
 
 local Window, Stats, Worn = ns.CharWindow, ns.CharStats, ns.Worn
--- The three tabs this section drives by number. The reputation page is read
--- through its own module rather than through a tab, so it needs none, and the
--- stats are not a tab at all any more: they are a column on the gear page.
-local GEAR, SKILLS, LOADOUTS = 1, 2, 4
+-- The two tabs this section drives by number, plus the last one so the pane
+-- sweep below has a bound. The reputation page is read through its own module
+-- rather than through a tab, and the stats are not a tab at all any more: they
+-- are a column on the gear page.
+local GEAR, SKILLS, REPUTATION = 1, 2, 3
 
 -- The heading the three miss rows sit under. It carries the three levels so the
 -- rows underneath do not have to, and it is named here because six checks below
@@ -124,9 +125,17 @@ do
 			:format(x, frame:GetWidth()))
 end
 
-for index = GEAR, LOADOUTS do
+for index = GEAR, REPUTATION do
 	check(Window.Pane(index) ~= nil, ("tab %d has no pane"):format(index))
 end
+
+-- And there is no fourth. The loadouts were a tab on this window and they are
+-- gone: the folder, the page and the secure buttons behind it. A pane at 4 is
+-- the page coming back, and so is the namespace it drew into, which is checked
+-- because the tab was only ever the host and the file could return without one.
+check(Window.Pane(REPUTATION + 1) == nil, "the character window has grown a fourth tab")
+check(ns.Loadouts == nil and ns.LoadoutPage == nil,
+	"the loadouts are loaded again and nothing on this window hosts them")
 
 ----------------------------------------------------------------------
 -- Missing, against the three published figures
@@ -553,25 +562,6 @@ do
 	check(tallest > ns.UI.Metric.row,
 		"no row grew, so the sentence under a weapon skill is being drawn into one line's worth of room")
 	H.carry.characterRows = pane:Lines()
-end
-
-----------------------------------------------------------------------
--- The loadout tab
-----------------------------------------------------------------------
-
-do
-	Window.Show(LOADOUTS)
-	local pane = Window.Pane(LOADOUTS)
-	check(#pane.kit.widgets > 0, "the loadout page put no rows on the character window")
-	check(pane.stack.height > 0, "the loadout page laid out to nothing")
-	check(ns.LoadoutPage ~= nil, "the loadout page is not a file of its own")
-
-	-- It is the same page, so it is still driving the same secure buttons. A
-	-- tab that had quietly become a copy would pass every layout check above.
-	local before = ns.Loadouts.Count()
-	pane.host.Refresh()
-	check(ns.Loadouts.Count() == before,
-		"refreshing the loadout tab changed the list under it")
 end
 
 ----------------------------------------------------------------------

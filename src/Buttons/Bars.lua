@@ -985,7 +985,7 @@ function Bars.Describe()
 end
 
 -- The bars this file built, for the panel and for scripts/harness.lua. Handed
--- out read only, the way ns.Loadouts.All is: nothing outside this file writes an
+-- out read only, the way ns.AdHoc.All is: nothing outside this file writes an
 -- entry, and nothing outside this file knows a square's name.
 function Bars.All()
 	return order

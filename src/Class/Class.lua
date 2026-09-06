@@ -126,8 +126,9 @@ end
 -- Ask at PLAYER_LOGIN or later, never at file scope, and never cache the answer
 -- of your own. A nil here does not mean no, it means the client has not said
 -- yet, so anything that would turn a nil into a decision it then writes down
--- has to ask for the token first: Loadouts\Loadouts.lua is the one place in the
--- addon that keeps such an answer, and it is the one place that checks.
+-- has to ask for the token first. UnitFrames\EnemyBars.lua is the shape of that:
+-- it seeds a saved list off the spec the first time the list is read, so it asks
+-- for the token before it writes anything down and records nothing on a nil.
 --
 -- There was a Class.Is(want) here that answered true on a nil for that reason,
 -- and nothing called it. Every part that decides at login goes through Class.Of,

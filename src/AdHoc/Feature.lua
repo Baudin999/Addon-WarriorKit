@@ -5,10 +5,9 @@ local ADDON, ns = ...
 -- page, and this file is the registration and the slash word. It draws
 -- nothing.
 
--- What `/wk adhoc <bar> <key>` says back. Three sentences rather than one, for
--- the reason Loadouts/Feature.lua gives: a key this addon takes is a key
--- something else was using, and saying which is what stops somebody
--- wondering all evening why their jump is gone.
+-- What `/wk adhoc <bar> <key>` says back. Three sentences rather than one,
+-- because a key this addon takes is a key something else was using, and saying
+-- which is what stops somebody wondering all evening why their jump is gone.
 local function BindWord(index, key)
 	local bar = ns.AdHoc.Get(index)
 	local displaced, why = ns.AdHocBars.Bind(index, key)
@@ -104,9 +103,9 @@ ns.Register({
 		adhocZoom = 1.4,
 	},
 
-	-- A bar is the character's, the way a loadout is: a trade skill belongs to
-	-- one character and a totem to one class, and a bar of either written into
-	-- the account would be a bar of spells another character does not know.
+	-- A bar is the character's: a trade skill belongs to one character and a
+	-- totem to one class, and a bar of either written into the account would be
+	-- a bar of spells another character does not know.
 	--
 	-- The list starts empty rather than carrying a bar here, because
 	-- ApplyDefaults copies a default one level deep and a list of tables would

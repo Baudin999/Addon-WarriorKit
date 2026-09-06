@@ -228,7 +228,7 @@ check(math.abs(ns.Swing.Remaining(ns.Swing.MAIN) - held) < 1e-6,
 	"an aura event that moved no speed still moved the swing")
 
 -- A weapon swap is the same arithmetic arriving by another door, and it is
--- the one this addon causes itself off a loadout key.
+-- the one this addon causes itself out of the charge macro.
 swing.main = 3.4
 fire("UNIT_ATTACK_SPEED", "player")
 check(math.abs(ns.Swing.Speed(ns.Swing.MAIN) - 3.4) < 1e-6,

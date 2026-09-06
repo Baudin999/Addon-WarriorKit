@@ -51,7 +51,6 @@ end
 -- repo.
 local NO_SWITCH = {
 	targeting = "its only setting is a key binding, and a key nobody bound is already off",
-	loadouts = "a loadout is a row in a list, and an empty list draws nothing",
 	feeds = "two feeds, each with its own collect and its own show; one switch would name whichever came first and lie about the other",
 	artwork = "its boolean turns Blizzard's art on rather than this part's own drawing, so a lit rail dot would mean the opposite of what it means everywhere else",
 	comfort = "six unrelated chores, each with a switch of its own and no seventh boolean over them",

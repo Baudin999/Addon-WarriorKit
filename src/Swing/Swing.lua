@@ -303,7 +303,7 @@ events:RegisterEvent("PLAYER_REGEN_ENABLED")
 -- the single most common thing a warrior's swing timer gets wrong. So the
 -- player's own aura changes are read too, and every one of them ends in a
 -- comparison against the speed already held. The third is a weapon swap, which
--- this addon does itself from the loadout keys.
+-- this addon does itself out of the charge macro.
 --
 -- Filtered to the player where the client can filter, which is ns.RegisterUnitEvent
 -- in Core. Unfiltered, UNIT_AURA is every aura on every unit in range, which in

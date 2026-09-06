@@ -1683,7 +1683,7 @@ function UI.Kit(host)
 			button.text:SetTextColor(color[1], color[2], color[3])
 		end
 
-		-- One tab. The last one is the plus that makes a new loadout and it is a
+		-- One tab. The last one is the plus that makes a new row and it is a
 		-- mark rather than a word, which is the only thing the flag decides.
 		local function Make(onClick, glyph)
 			local button = CreateFrame("Button", nil, row)

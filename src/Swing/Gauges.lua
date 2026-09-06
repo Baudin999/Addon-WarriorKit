@@ -420,7 +420,7 @@ events = CreateFrame("Frame")
 
 events:RegisterEvent("PLAYER_LOGIN")
 -- A weapon swap changes how many bars there are and how long each of them is,
--- and this addon swaps weapons itself off the loadout keys. Both events are
+-- and this addon swaps weapons itself out of the charge macro. Both events are
 -- taken because one of them is the client telling you the item moved and the
 -- other is it telling you the speed did, and neither implies the other on
 -- these clients.

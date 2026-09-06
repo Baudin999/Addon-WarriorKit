@@ -7,18 +7,15 @@ ns.Stance = Stance
 -- The forms you can stand in
 --
 -- Which spell each one is, what it is called in this client's language, and
--- which one you are standing in. Two parts ask: the charge button swaps stance
--- on the way to Charge, Intervene and Intercept, and the loadouts page offers
--- one per stance to bind a weapon set to. Held in one place so the two cannot
--- disagree about what stance 2 is called.
+-- which one you are standing in. One part asks: the charge button swaps stance
+-- on the way to Charge, Intervene and Intercept. Held in one place anyway, so
+-- nothing that wants the name of stance 2 has to work one out for itself.
 --
 -- Which forms exist is a fact about your class and lives in Class\<yours>.lua
 -- as `forms`. The index is the number the `stance:` macro conditional counts
 -- in, so the order that file writes them in is the order the generated macros
--- are written against. A class with no forms answers zero here and both callers
--- fall away: the charge macro is not built at all on that class, and the
--- loadouts page offers a weapon set with no stance on it, which is a thing it
--- already supports.
+-- are written against. A class with no forms answers zero here and the caller
+-- falls away: the charge macro is not built at all on that class.
 --
 -- Nothing here is read at load. The class is not reliably known while the files
 -- load, so a form list taken then would be empty for the session.

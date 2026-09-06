@@ -6,8 +6,8 @@ ns.AdHocPanel = Panel
 --------------------------------------------------------------------------
 -- Designing a bar, on the page
 --
--- One bar at a time, picked off a strip of tabs with a plus on the end, the
--- way the loadout page picks a loadout. Under the strip: the name, the key,
+-- One bar at a time, picked off a strip of tabs with a plus on the end. Under
+-- the strip: the name, the key,
 -- and the bar itself drawn as a line of squares you drop things onto, with an
 -- empty square on the end for the next one. Drag a spell out of the book or an
 -- item out of a bag onto the empty square to add it, onto a full one to

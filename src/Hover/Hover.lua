@@ -91,7 +91,7 @@ end
 -- written from the documentation with any confidence.
 --
 -- For an item it answers the kind, the id and the link, and UI/Widgets.lua has
--- been reading it that way since the loadout page shipped. For a spell it
+-- been reading it that way since the first page took a drop. For a spell it
 -- answers the spellbook index and which book it is in, and newer builds put the
 -- spell id in a fourth slot. Nothing installed on this machine proves which of
 -- those 2.5.6 hands back, so all three readings are tried and the first one that

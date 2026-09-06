@@ -625,8 +625,8 @@ local function Build()
 			-- The section on screen. A row that snapped a measurement to the
 			-- pixel of the old zoom keeps it until something asks it again, and
 			-- what asks is this on the page you are looking at and the refresh
-			-- every other page gets on its way up. The tab strip inside the
-			-- Loadouts page is the one that shows: its buttons are rounded to
+			-- every other page gets on its way up. The tab strip inside the ad
+			-- hoc bars page is the one that shows: its buttons are rounded to
 			-- whole pixels when they are laid out, so after a size change they
 			-- sat on thirds of a pixel until you clicked onto that page. The
 			-- click that takes you there is what puts them right now.

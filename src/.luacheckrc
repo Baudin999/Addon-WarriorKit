@@ -63,15 +63,6 @@ globals = {
 	-- scripts/harness.lua without Hover/Sheet.lua handing out its row pool.
 	"WarriorKitHoverButton",
 	"WarriorKitHoverSheet",
-	-- one per loadout, each a secure button carrying that loadout's macro. All
-	-- ten are made at load: a button cannot be given attributes in combat, and a
-	-- name is what SetOverrideBindingClick binds to, so they are named and they
-	-- exist before anyone needs one.
-	"WarriorKitLoadout1Button", "WarriorKitLoadout2Button",
-	"WarriorKitLoadout3Button", "WarriorKitLoadout4Button",
-	"WarriorKitLoadout5Button", "WarriorKitLoadout6Button",
-	"WarriorKitLoadout7Button", "WarriorKitLoadout8Button",
-	"WarriorKitLoadout9Button", "WarriorKitLoadout10Button",
 	-- One per square on a cloned action bar, plus the cooldown frame each square
 	-- carries, which UI/Ability.lua names after it. Both are made by CreateFrame
 	-- with a name built by concatenation, so luacheck never sees the write;

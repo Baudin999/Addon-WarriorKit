@@ -250,7 +250,6 @@ local SECTIONS = {
 	"17-zoom-page",
 	"18-which-bar",
 	"19-resolution-change",
-	"20-loadouts",
 	"21-which-class",
 	"22-chores",
 	"23-minimap",

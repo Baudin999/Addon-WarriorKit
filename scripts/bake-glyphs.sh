@@ -66,7 +66,7 @@ PICK = {
     0xF078: "v",  # chevron-down, a group folded open
     0xF054: ">",  # chevron-right, a group folded shut
     0xF00D: "x",  # xmark, the close button
-    0xF067: "+",  # plus, a stepper and the loadout list
+    0xF067: "+",  # plus, a stepper and the ad hoc bar list
     0xF068: "-",  # minus, a stepper
     0xF3A5: "*",  # gem, one per quality on the loot feed's filter strip
     0xF12A: "!",  # exclamation, the quest chip and the ring it turns on

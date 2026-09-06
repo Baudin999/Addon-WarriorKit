@@ -76,7 +76,7 @@ end
 -- The groups page
 --
 -- Two strips of tabs, one under the other: your groups, and who is in the one
--- you picked. It is the loadouts page's shape twice over, because it is the
+-- you picked. It is the ad hoc bars page's shape twice over, because it is the
 -- same job twice over, and a person is one name so there is one field under
 -- each.
 --------------------------------------------------------------------------

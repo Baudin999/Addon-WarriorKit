@@ -879,11 +879,10 @@ ns.Register({
 		-- character. One account cannot hold one answer to a question that is
 		-- about which spells you have.
 		--
-		-- Empty here and seeded on first read, the way Loadouts/Feature.lua
-		-- seeds its rows and for the same reason: what belongs in it is
-		-- ns.Class.Of("debuffs"), the class is not reliably known while the
-		-- files load, and a list written at load would be the wrong one for
-		-- everybody. Core's migration carries an account-wide list over on the
+		-- Empty here and seeded on first read rather than written down as a
+		-- default: what belongs in it is ns.Class.Of("debuffs"), the class is
+		-- not reliably known while the files load, and a list written at load
+		-- would be the wrong one for everybody. Core's migration carries an account-wide list over on the
 		-- first login after this moved, and a list that arrives with something
 		-- in it counts as seeded so nothing you edited is overwritten.
 		barsSpells = {},

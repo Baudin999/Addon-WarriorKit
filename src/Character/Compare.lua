@@ -110,8 +110,8 @@ end
 --
 -- **And so is the piece you are already wearing.** A link is the whole item
 -- down to its enchant, so two identical strings are one object seen twice:
--- hovering your own weapon in a loadout list would otherwise put that weapon
--- next to itself.
+-- hovering a piece you already have on would otherwise put that piece next to
+-- itself.
 local function For(subject)
 	if not enabled or subject.kind ~= "item" or not subject.link then
 		return nil

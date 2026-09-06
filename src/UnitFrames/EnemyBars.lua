@@ -438,10 +438,10 @@ end
 -- asked for.
 --
 -- Seeded here rather than in the defaults table because the class is not
--- reliably known while the files load, which is the rule Class.lua states and
--- the reason Loadouts.All seeds its rows the same way. Asked before the client
--- will say what you are, this hands back the empty list and records nothing, so
--- a read that early cannot latch a warrior onto no debuffs for the session.
+-- reliably known while the files load, which is the rule Class.lua states.
+-- Asked before the client will say what you are, this hands back the empty list
+-- and records nothing, so a read that early cannot latch a warrior onto no
+-- debuffs for the session.
 --
 -- A list that already has something in it counts as seeded whether this put it
 -- there or Core's migration carried it over from the account file, because the

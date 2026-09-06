@@ -472,7 +472,7 @@ end
 -- Three items in the backpack and empty hands. Enough for the gear scan to
 -- have something to offer, and chosen so all three rules it enforces are
 -- reachable: a main hander, a shield, and a two hander that must keep the
--- off hand line out of a loadout's macro.
+-- off hand line out of a generated macro.
 -- Every item carries its own id and the class the client files it under, both
 -- of which the addon reads. The id matters more than it looks: the clutter
 -- window asks the cursor which item it picked up and compares ids, so a stub
@@ -588,7 +588,7 @@ local QUESTBAG = {
 	"Rogue's Token", "Old Cipher", "Unknown Trinket",
 }
 
--- Bag 0 is the gear the loadouts pick from, bag 1 is the trash, bag 2 is the
+-- Bag 0 is the gear the charge macro picks from, bag 1 is the trash, bag 2 is the
 -- quest items. Kept apart so a sale never moves what the paperdoll tests are
 -- counting and a destroy never moves what the vendor tests are counting.
 local CARRIED = { [0] = BAG, [1] = JUNK, [2] = QUESTBAG }

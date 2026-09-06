@@ -2131,9 +2131,9 @@ end
 -- login after PLAYER_LOGIN has already run.
 --
 -- That last one is the whole bug. A key taken at PLAYER_LOGIN was dropped a
--- moment later by a build nothing here was watching for, so every loadout key
--- was dead before the player could press it and rebinding it by hand was the
--- only thing that appeared to work. It appeared to work because a rebind is
+-- moment later by a build nothing here was watching for, so every key this
+-- addon took was dead before the player could press it and rebinding it by
+-- hand was the only thing that appeared to work. It appeared to work because a rebind is
 -- the first take the client has not already thrown away.
 --
 -- So a key taken with SetOverrideBindingClick has to be taken again whenever

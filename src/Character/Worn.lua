@@ -12,7 +12,8 @@ ns.Worn = Worn
 --
 -- **This is not Core/Gear.lua and the two do not overlap.** Gear answers "what
 -- in your bags will the client let into a hand", which is a question about
--- things you are not wearing, asked so a loadout can name one in a macro line.
+-- things you are not wearing, asked so the charge macro can name one in a
+-- macro line.
 -- This answers "what is on you right now", which is a question about the
 -- eighteen slots that have nothing to do with a macro. They meet at slots 16
 -- and 17 and disagree about nothing: Gear names the two by number and this file
