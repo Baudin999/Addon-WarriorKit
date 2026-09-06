@@ -383,6 +383,10 @@ function Instance:Build()
 	local frame = CreateFrame("Frame", self.name, UIParent)
 	self.frame = frame
 	UI.Adopt(frame, self:Setting("zoom"))
+	-- And it stands down while a screen window is up. UI/Hush.lua carries the
+	-- whole of what that means; what it means here is that the character sheet
+	-- is read against the world rather than against this row.
+	UI.Hushable(frame)
 	self.unit = UI.Unit(frame)
 
 	-- Under the tooltip and above the world. A feed is furniture, the same as

@@ -330,6 +330,14 @@ local SECTIONS = {
 	-- client's own reputation page name a hundred lines in.
 	"52-standings",
 	"52-character",
+	-- Straight after it, and it was a block in the middle of it. The numbers on
+	-- the stats column are arithmetic against three published figures rather than
+	-- a reading of the window, and nothing that file does after the block ran
+	-- moves one of them: it puts the weapon skill, the off hand and the ratings
+	-- back where it found them, and so does this. A file of its own because it is
+	-- a second subject and because 52-character.lua was over its own line ceiling
+	-- carrying both.
+	"52-stats-page",
 	-- Straight after it, and it opens the sheet itself. What the gear page draws
 	-- is a bigger subject than the rest of that window and it grew past the line
 	-- ceiling the section was already exempted from, so it is a file: the split
@@ -345,6 +353,12 @@ local SECTIONS = {
 	-- It shuts it again, and it puts the setting it turns off back, so what the
 	-- reset below inherits is the scene the addon ships with.
 	"52-screen-dark",
+	-- Straight after the wash, because it is the same question about the same
+	-- window from the other side: the wash owns the world behind the sheet and
+	-- this owns the addon's own rectangles in front of it. It opens the sheet the
+	-- way that section does and shuts it again, and it puts its own setting back,
+	-- so the reset below still inherits the scene the addon ships with.
+	"52-screen-hush",
 	-- Under those, and it opens the same sheet again. What it reads is the one
 	-- thing on a gear square that moves while nobody touches it: the arc a slot
 	-- you press draws while its cooldown runs. It puts a trinket on cooldown,

@@ -10,6 +10,11 @@ local function SetDim(value)
 	ns.CharWindow.Darken()
 end
 
+local function SetQuiet(value)
+	ns.db.characterQuiet = value
+	ns.CharWindow.Quiet()
+end
+
 local function SetCharacter(value)
 	ns.db.character = value
 	if value then
@@ -132,6 +137,18 @@ ns.Register({
 		-- them nothing else: the sheet is see-through and click-through either way.
 		characterDim = true,
 
+		-- On, and it is the other half of what makes the sheet readable. The
+		-- wash above puts the world behind it in shadow and can do nothing about
+		-- the addon's own rectangles, because a cooldown row is a frame over the
+		-- world rather than part of it. This puts the seven of them away for as
+		-- long as the sheet is up: the buff row, the cooldowns, the swing bars,
+		-- the meters, the standing row and both feeds.
+		--
+		-- Off is for the player who opens the sheet mid pull to read a number off
+		-- it and wants his swing timer while he does. It costs him nothing else:
+		-- the sheet is over all seven either way now.
+		characterQuiet = true,
+
 		-- Blizzard's own goes in the attic, and C opens this one.
 		--
 		-- The switch itself is drawn on the Blizzard page with the other nine,
@@ -194,6 +211,9 @@ ns.Register({
 		ui.Check("darken the world behind the sheet",
 			function() return ns.db.characterDim end,
 			SetDim)
+		ui.Check("put the addon's own rows away while the sheet is up",
+			function() return ns.db.characterQuiet end,
+			SetQuiet)
 		ui.Reading("what you are wearing", ns.Worn.Describe)
 		ui.Reading("hit and miss", ns.CharStats.Describe)
 		ui.Reading("weapon skills", ns.CharSkills.Describe)

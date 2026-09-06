@@ -163,6 +163,10 @@ end
 local function Build()
 	frame = CreateFrame("Frame", FRAME_NAME, UIParent)
 	ns.UI.Adopt(frame, ns.db.swingZoom)
+	-- And it stands down while a screen window is up. UI/Hush.lua carries the
+	-- whole of what that means; what it means here is that the character sheet
+	-- is read against the world rather than against this row.
+	ns.UI.Hushable(frame)
 	unit = ns.UI.Unit(frame)
 	place = ns.UI.Placeable(frame, {
 		name = "WarriorKit swing",

@@ -168,6 +168,35 @@ local function Darkness(window, frame, opts)
 	end)
 end
 
+-- The rest of the screen while a screen window is up.
+--
+-- The wash above puts the world behind the sheet in shadow and can do nothing
+-- at all about the addon's own rectangles, because those are frames over the
+-- world rather than part of it. UI/Hush.lua is the other half: the seven rows
+-- this addon draws over the world go into a room that is shut for as long as
+-- the sheet is up, so the page is read against scenery and nothing else.
+--
+-- Its own function beside Darkness rather than four more lines inside it. They
+-- are two answers to the same question and the caller switches them separately:
+-- a player who wants to watch the world behind the sheet turns the wash off and
+-- still wants the cooldown row out of the middle of his gear.
+--
+-- Hooked rather than set, because Darkness set OnShow one line above and
+-- Dismissals set OnHide before either of them ran. Both are this library's own
+-- scripts on this library's own frame, and chaining is what stops the second
+-- piece of chrome quietly deleting the first.
+local function Clearing(window, frame, opts)
+	window.quietOf = opts.quiet or function() return false end
+	frame:HookScript("OnShow", function()
+		window:Quiet()
+	end)
+	-- Whatever route the sheet went down by, including Escape and the snippet on
+	-- the key, which is the same list Darken is written for.
+	frame:HookScript("OnHide", function()
+		UI.Hush(frame, false)
+	end)
+end
+
 -- The bar across the top: the strip, the name on it and the close box. Its own
 -- function because it is the whole of what a window that is not bare has and
 -- none of what a bare one does, so the alternative is fifteen lines of one
@@ -193,6 +222,7 @@ local function Surface(window, frame, opts)
 		window.bg:SetAllPoints()
 	else
 		Darkness(window, frame, opts)
+		Clearing(window, frame, opts)
 	end
 
 	local px = ns.Pixel(frame)
@@ -308,13 +338,21 @@ end
 -- window you just opened is the one you want on top and a click is not what
 -- opened it.
 --
--- A screen window is the floor of the pile and stays there. It is a backdrop
--- laid over half the monitor, so every window the player opens has to flow over
--- the top of it, and a toplevel frame lifted on a click would put the backdrop
--- over the bags the moment you clicked a gear square.
+-- A screen window is never lifted and stays under every window the player
+-- opens, which is what SetToplevel(false) buys: a sheet that jumped a strata on
+-- a click would put itself over the bags the moment you clicked a gear square.
+--
+-- It is not the floor any more, and BACKGROUND is what it used to be. A screen
+-- window has no ground, so the pile it was at the bottom of was the whole
+-- screen: every rectangle this addon draws over the world sits at MEDIUM or
+-- HIGH, so did the client's, and all of them drew over the page. HIGH is above
+-- the HUD and below DIALOG, which is the two facts a screen window needs to be
+-- true at once. UI/Hush.lua is the other half of the same answer and shuts the
+-- addon's own rows away while the sheet is up; this is what covers everything
+-- neither file owns.
 local function Pile(frame, opts)
 	if opts.screen then
-		frame:SetFrameStrata(opts.strata or "BACKGROUND")
+		frame:SetFrameStrata(opts.strata or "HIGH")
 		frame:SetToplevel(false)
 		return
 	end
@@ -833,6 +871,24 @@ function Window:Darken()
 	Animations.Alpha(self.darkening, 0, 1)
 	Animations.Start(self.darkening)
 	return true
+end
+
+-- The addon's own rows out of the way of a screen window, or back.
+--
+-- The counterpart to Darken and written the same way for the same reasons: run
+-- out of the frame's own OnShow so the snippet on the key gets it too, and run
+-- again by whoever owns the setting when the player turns it off, because a
+-- tick box that does nothing until you shut the sheet and open it again is a
+-- tick box you press twice.
+--
+-- Reads the frame rather than trusting the caller. A settings page can reach
+-- this on a sheet that is not up, and asking for quiet on a hidden window is a
+-- HUD that never comes back.
+function Window:Quiet()
+	if not self.quietOf then
+		return false
+	end
+	return UI.Hush(self.frame, self.frame:IsShown() and self.quietOf())
 end
 
 -- Raised as well as shown, for the reason Pile gives. Not in combat for a

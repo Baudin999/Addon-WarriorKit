@@ -231,6 +231,12 @@ UI\Chart.lua
 
 UI\Widgets.lua
 
+# The room the addon's own rows over the world go into while a screen window is
+# up. Nothing but a hidden parent, so it needs no other file and could load
+# anywhere; it is here because UI\Window.lua is what shuts it and the seven
+# parts that go into it are all built after both.
+UI\Hush.lua
+
 # The frame you can unlock and drag, which is twelve parts of this addon and was
 # twelve copies of the same block. Placing and chrome are two things: this file
 # owns the first, UI\Window.lua owns the second and is a caller of this one.

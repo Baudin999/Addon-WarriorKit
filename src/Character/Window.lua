@@ -196,6 +196,12 @@ local function Sheet()
 		-- the same reason the zoom above is one: the next screen window this addon
 		-- grows hands over its own answer and gets the same wash.
 		dark = function() return ns.db.characterDim end,
+		-- Whether the addon's own rows over the world stand down while the sheet
+		-- is up. A getter for the same reason the wash above is one, and a
+		-- separate answer because they are separate questions: the wash is about
+		-- the scenery behind the page and this is about the seven rectangles
+		-- drawn on top of it.
+		quiet = function() return ns.db.characterQuiet end,
 	})
 end
 
@@ -278,6 +284,16 @@ function Window.Darken()
 		return false
 	end
 	return window:Darken()
+end
+
+-- The addon's own rows out of the way of the sheet, re-read where it stands.
+-- The same call as Darken above, from the tick box next to it, and for the same
+-- reason: a setting the player changes with the sheet open answers on the click.
+function Window.Quiet()
+	if not window then
+		return false
+	end
+	return window:Quiet()
 end
 
 function Window.Shown()
