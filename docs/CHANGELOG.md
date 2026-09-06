@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### One answer for where you are standing
+
+Three parts of the addon were about to work out where you are standing on their
+own. Three readings of one thing drift apart in the details nobody looks at
+until they are side by side, so there is one reading now. `ns.QuestHere` answers
+the map id, what this client calls that map, whether you are inside an instance,
+and the area id Questie's database is keyed on.
+
+Every join in it is a number. `GetInstanceInfo` hands back Blizzard's own name
+for a place, in the player's language, and for eight of the forty dungeons that
+is a different name from the one the dungeon book uses. A part that matched
+English text would work on one client in ten, so nothing here decides anything
+on a name.
+
+The dungeon flag is `IsInInstance` rather than the book. Anything that means to
+go quiet indoors wants raids and battlegrounds as well, and the book has forty
+dungeons and neither of those. Questie's own zone table answers the same
+question on a client that does not carry the call.
+
+Without Questie the area id is missing and the rest of the answer is not. An
+answer with no area id is held for a few seconds rather than until you walk out
+of the zone, because Questie compiles its database minutes after login and
+standing still through that would otherwise cost you the area for the evening.
+
 ### The quest log redraws when Questie says a quest changed
 
 Questie 11 ships a folder called `Public` whose README says the one thing

@@ -493,6 +493,12 @@ local SECTIONS = {
 	-- there. It hands every one of them back at the foot of the file the way they
 	-- were handed over, so it can go on being last when the next one arrives.
 	"82-need",
+	-- Last, because it walks you round the map tree: it stands you in four
+	-- zones and three dungeons, takes IsInInstance off the client and puts
+	-- Questie away twice, and ends by asking what a client that will not say
+	-- which map you are on answers. It puts every one of those back at the foot
+	-- of the file, including where you were standing when it started.
+	"83-quest-here",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

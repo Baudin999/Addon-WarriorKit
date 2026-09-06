@@ -1,7 +1,7 @@
 -- The dungeon log: which dungeon maps this client has, a loot window over a
 -- boss, and the item lookups answering by id.
 --
--- Three fixtures, and each one is a question the part cannot be read for.
+-- Four fixtures, and each one is a question the part cannot be read for.
 --
 -- **The dungeon maps this client has.** The addon draws a dungeon out of a
 -- baked table of texture paths, because neither of the two clients will answer
@@ -31,6 +31,14 @@
 -- out of and what was in it. Both are absent until a section installs them, on
 -- purpose: they are absent on a real client until something is being looted,
 -- and every other section runs with a loot window that has no sources on it.
+--
+-- **Where you are standing, in both number spaces.** ns.QuestHere reads the map
+-- id off the client, asks whether the place around you is an instance, and
+-- joins the map id to the area id Questie's database is keyed on. None of the
+-- three is installed above this line, and the join is the reason all three are
+-- here rather than beside the world map: it has to answer for 15-worldmap.lua's
+-- zones and for this file's dungeons out of one table, so it can only be built
+-- after the last of the three C_Map layers.
 
 local H = ...
 
@@ -194,10 +202,111 @@ local function Unloot()
 	_G.GetLootSlotLink = link
 end
 
+--------------------------------------------------------------------------
+-- Whether you are inside an instance
+--------------------------------------------------------------------------
+
+-- IsInInstance, which nothing above this line installs and which is the whole
+-- of the dungeon flag on a client that carries the call. The real one answers
+-- a boolean and the kind of instance, and the kind is "none" in the open
+-- world rather than nothing at all.
+local instance
+
+local function inInstance()
+	return instance ~= nil, instance or "none"
+end
+
+_G.IsInInstance = inInstance
+
+-- Set by a section. A string stands you inside an instance of that kind, nil
+-- puts you back outdoors, and false takes the call off the client altogether,
+-- which is the branch where the flag has to come off Questie's own table
+-- instead. Every section that moves it puts it back.
+-- An `if` and not `and or`, because the value being chosen is nil and `x and
+-- nil or y` is always y. That one cost a run: the call stayed installed, the
+-- fallback was never reached, and two checks that read as passing were passing
+-- for the wrong reason.
+local function Inside(kind)
+	instance = kind or nil
+	if kind == false then
+		_G.IsInInstance = nil
+	else
+		_G.IsInInstance = inInstance
+	end
+end
+
+--------------------------------------------------------------------------
+-- Questie's number space, joined to the client's
+--------------------------------------------------------------------------
+
+-- 12-questlog.lua stubs GetUiMapIdByAreaId, which is the direction the quest
+-- window's zone list goes. This is the other one, and the values are read off
+-- the installed Questie's own generated tables rather than typed from memory:
+-- Database/Zones/data/areaIdToUiMapId.lua for the join, dungeons.lua for which
+-- areas are dungeons and which alternative ids they carry, and
+-- subZoneToParentZone.lua for the parent.
+--
+-- It is not the inverse of that file's ATLAS and must not be read as one.
+-- 12-questlog.lua files Westfall under map 52 and this tree files it under
+-- 1436, because the quest window's fixture was written against the older id
+-- space and the map tree was written against the one 2.5.6 really uses. Every
+-- id here is the live client's.
+--
+-- 9001 is deliberately absent, and it is the branch that matters most. The real
+-- ZoneDB:GetAreaIdByUiMapId falls through to a scan by name and then calls
+-- error() outright for a map it has no row for, so a caller without a pcall
+-- takes the frame down. The stub errors for the same id the world map tree
+-- already has no picture for.
+local AREAS = {
+	[1429] = 12,   -- Elwynn Forest
+	[1436] = 40,   -- Westfall
+	[1453] = 1519, -- Stormwind City
+	[1411] = 14,   -- Durotar
+	[291] = 1581,  -- The Deadmines
+	[292] = 10029, -- its second floor, which Questie files under its own area
+	[225] = 717,   -- The Stockade
+}
+
+-- dungeons.lua has a row for each of these, which is what IsDungeonZone reads,
+-- and 10029 reaches it through the alternative id table rather than directly.
+local DUNGEONS = { [1581] = true, [10029] = true, [717] = true }
+
+-- What GetParentZoneId really answers, which is not the dungeon's zone. It
+-- reads the alternative id table and then the subzone table, so a top level
+-- zone and a top level dungeon both come back with nothing, and only the
+-- second floor of the Deadmines has a parent.
+local PARENTS = { [10029] = 1581 }
+
+local zones = _G.QuestieLoader:ImportModule("ZoneDB")
+
+zones.GetAreaIdByUiMapId = function(_, map)
+	local area = AREAS[map]
+	if not area then
+		error("No AreaId found for UiMapId: " .. tostring(map))
+	end
+	return area
+end
+
+-- No self, and that is not a slip. ZoneDB.IsDungeonZone is declared with a dot
+-- where the two beside it are declared with a colon, and a stub that took a
+-- self here would certify a call the addon makes wrongly.
+zones.IsDungeonZone = function(area)
+	return DUNGEONS[area] == true
+end
+
+zones.GetParentZoneId = function(_, area)
+	return PARENTS[area]
+end
+
 H.dungeons = {
 	NODES = NODES,
 	Asked = function() return asked end,
 	-- A corpse over a creature id, with the items that were on it.
 	Loot = Loot,
 	Unloot = Unloot,
+	-- The kind of instance you are standing in, or nil for the open world, or
+	-- false for a client with no IsInInstance at all.
+	Inside = Inside,
+	-- The join, so a section can read what it is asserting against.
+	AREAS = AREAS,
 }

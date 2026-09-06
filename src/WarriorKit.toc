@@ -68,6 +68,14 @@ Core\QuestItems.lua
 Core\Loot.lua
 Core\CombatLog.lua
 
+# Where you are standing, asked once and held until you walk out of it: the map
+# id, what this client calls that map, whether it is an instance, and the area
+# id Questie's database keys on. Down here rather than in Quests because the
+# quest tracker and the map window both want it and neither may name the
+# other's files. Reads UI\Chart.lua and Core\Core.lua's Questie door, both
+# inside its own functions, so it loads anywhere above the parts that ask.
+Core\Here.lua
+
 # The shared unit layer. What a mob or a group member is, asked once: the
 # palette, the level tag, who is in the group, what they have spent their points
 # on, which role that makes them and what the threat API says. Between Core and
