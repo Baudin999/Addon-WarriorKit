@@ -1,8 +1,5 @@
 local ADDON, ns = ...
 
-local Blizz = {}
-ns.TalentBlizzard = Blizz
-
 --------------------------------------------------------------------------
 -- Blizzard's talent frame, out of the way
 --
@@ -45,148 +42,38 @@ local FRAMES = {
 	"TalentFrame",
 }
 
--- The addon of Blizzard's own that builds the frame, watched so a frame that
--- arrives after login goes straight up rather than waiting for the pass.
-local LOADS = "Blizzard_TalentUI"
-
--- What the client's N key called before this addon took it.
-local original = nil
-
--- The client's own binding for its talent window. Two names because the two
--- clients this addon runs on do not agree.
-local BINDINGS = { "TOGGLETALENTS", "TOGGLETALENTFRAME" }
-
-local function Frame(name)
-	local frame = _G[name]
-	if type(frame) ~= "table" or type(frame.GetParent) ~= "function" then
-		return nil
-	end
-	return frame
-end
-
---------------------------------------------------------------------------
--- The key
---------------------------------------------------------------------------
-
--- Whoever is holding ToggleTalentFrame now, remembered once. Called before the
--- swap and never after, so a second addon that wrapped the same global after
--- us is not swallowed by a later re-apply.
-local function Remember()
-	if original == nil and type(_G.ToggleTalentFrame) == "function" then
-		original = _G.ToggleTalentFrame
-	end
-	return original ~= nil
-end
-
--- What N does while the switch is on. Declared once at load rather than built
--- inside TakeKey, because the pass below runs once a second forever.
+-- What N does while the switch is on. A named function at file scope rather
+-- than a closure made at the swap, because the swap runs on a pass that goes
+-- once a second forever.
 local function Toggle()
 	ns.TalentWindow.Toggle()
 end
 
-local function TakeKey()
-	if not Remember() then
-		return false
-	end
-	if _G.ToggleTalentFrame ~= Toggle then
-		_G.ToggleTalentFrame = Toggle
-	end
-	return true
-end
-
--- Only ever hands back what this file took. A client where somebody else is
--- holding the global is a client this file leaves alone.
-local function GiveKey()
-	if type(original) ~= "function" or _G.ToggleTalentFrame ~= Toggle then
-		return false
-	end
-	_G.ToggleTalentFrame = original
-	return true
-end
-
--- What to call the key in a sentence: the first key the client answers, or the
--- letter it ships with where it answers none.
-function Blizz.KeyText()
-	if type(_G.GetBindingKey) ~= "function" then
-		return "N"
-	end
-	for index = 1, #BINDINGS do
-		local key = GetBindingKey(BINDINGS[index])
-		if key then
-			return key
-		end
-	end
-	return "N"
-end
-
---------------------------------------------------------------------------
--- The frames
---------------------------------------------------------------------------
-
--- Whether the client's window should be out of the way right now. Two things
--- and no third: our window has to be built at all, and the switch has to be on.
-function Blizz.Wanted()
-	return (ns.db.talents and ns.db.hideBlizzTalents) and true or false
-end
-
--- Run on every pass rather than only where the answer changed, which is the
--- rule Core/BlizzHide.lua's header argues for at length: a pass that
--- remembers what it did cannot see a frame the client built since.
-function Blizz.Apply()
-	local wanted = Blizz.Wanted()
-	if wanted then
-		TakeKey()
-	else
-		GiveKey()
-	end
-
-	local complete = true
-	local act = wanted and ns.Attic.Vanish or ns.Attic.Return
-	for index = 1, #FRAMES do
-		local frame = Frame(FRAMES[index])
-		if frame and not act(frame) then
-			complete = false
-		end
-	end
-	return complete
-end
-
--- Whether the client's frame is in the attic right now, or would be the moment
--- it existed.
-function Blizz.Caged()
-	for index = 1, #FRAMES do
-		local frame = Frame(FRAMES[index])
-		if frame then
-			return ns.Attic.Held(frame)
-		end
-	end
-	return Blizz.Wanted() and _G.ToggleTalentFrame == Toggle
-end
-
-function Blizz.Describe()
-	if not ns.db.hideBlizzTalents then
-		return "on screen, and " .. Blizz.KeyText() .. " opens it"
-	end
-	if not ns.db.talents then
-		return "on screen, because this addon's own window is off"
-	end
-	if type(original) ~= "function" then
-		return "never loaded, and this client has no ToggleTalentFrame to redirect"
-	end
-	return ("never loaded, and %s opens this one"):format(Blizz.KeyText())
-end
-
---------------------------------------------------------------------------
-
--- The frame arriving after login, caged the moment it does.
-local watcher = CreateFrame("Frame")
-watcher:RegisterEvent("ADDON_LOADED")
-watcher:SetScript("OnEvent", function(_, _, name)
-	if name == LOADS and ns.db then
-		Blizz.Apply()
-	end
-end)
-
--- Registered with the switch it belongs to, so `/wk hide talents`, the panel's
--- own line and `/wk reset` all reach this file without any of them naming it.
-ns.BlizzHide.Also(Blizz.Apply)
+-- The mechanism is Core/BlizzAdapter.lua's cage shape, which the quest log's,
+-- the map's, the sheet's and the book's use as well. Everything above is why
+-- this frame is on that shape rather than the park one, and what is left for
+-- this file to say is which frames, which switch, and what N does instead.
+--
+-- No `bind`, for the reason above: there is no secure button here for an
+-- override binding to land on. The binding names stay because the switch's own
+-- line names the key that opens this window, and two of them because the two
+-- clients disagree about what it is filed under.
+--
+-- `held` and "never loaded" are the same fact twice: the frame is usually never
+-- built, so the flag a cage would set says nothing and the global standing in
+-- for it is the next best answer there is. `loads` is the other half, for the
+-- evening a second addon pulls Blizzard_TalentUI in for reasons of its own.
+ns.TalentBlizzard = ns.BlizzAdapter.Cage({
+	frames = FRAMES,
+	feature = "talents",
+	switch = "hideBlizzTalents",
+	global = "ToggleTalentFrame",
+	Toggle = Toggle,
+	bindings = { "TOGGLETALENTS", "TOGGLETALENTFRAME" },
+	fallback = "N",
+	pass = true,
+	held = true,
+	loads = "Blizzard_TalentUI",
+	place = "never loaded",
+	off = "on screen, because this addon's own window is off",
+})

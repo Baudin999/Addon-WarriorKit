@@ -1,8 +1,5 @@
 local ADDON, ns = ...
 
-local Blizz = {}
-ns.MerchantBlizzard = Blizz
-
 --------------------------------------------------------------------------
 -- Blizzard's merchant window, out of the way
 --
@@ -57,159 +54,20 @@ ns.MerchantBlizzard = Blizz
 -- can, and it is one tick box away.
 --------------------------------------------------------------------------
 
--- Far enough right that nothing of the client's window shows, and anchored to
--- the screen's own edge rather than to a number, so it is off the side of a 4K
--- panel as well as a laptop.
-local PARK = 400
-
-local parked, hooked = false, false
-local anchors = nil
-
-local function Frame()
-	local frame = _G.MerchantFrame
-	if type(frame) ~= "table" or type(frame.SetPoint) ~= "function" then
-		return nil
-	end
-	return frame
-end
-
--- Where the client had it, recorded once before it is ever moved. Restoring the
--- points it actually had beats putting it back at a number this file guessed,
--- and the client relays it on the next show anyway.
-local function Remember(frame)
-	if anchors or type(frame.GetNumPoints) ~= "function" then
-		return
-	end
-	anchors = {}
-	for index = 1, frame:GetNumPoints() do
-		local point, relative, relativePoint, x, y = frame:GetPoint(index)
-		anchors[index] = { point, relative, relativePoint, x, y }
-	end
-end
-
-local function Move(frame)
-	frame:ClearAllPoints()
-	frame:SetPoint("TOPLEFT", UIParent, "TOPRIGHT", PARK, 0)
-	frame:SetAlpha(0)
-end
-
-local function Park()
-	local frame = Frame()
-	if not frame then
-		return false
-	end
-	Remember(frame)
-	-- A clamped frame snaps back onto the screen, which would undo the move and
-	-- leave a window at no opacity swallowing clicks in the middle of the game.
-	if type(frame.SetClampedToScreen) == "function" then
-		frame:SetClampedToScreen(false)
-	end
-	Move(frame)
-
-	if not hooked and type(frame.HookScript) == "function" then
-		hooked = pcall(frame.HookScript, frame, "OnShow", function(this)
-			if parked then
-				Move(this)
-			end
-		end)
-	end
-	return true
-end
-
-local function Unpark()
-	local frame = Frame()
-	if not frame then
-		return false
-	end
-	frame:SetAlpha(1)
-	if anchors then
-		frame:ClearAllPoints()
-		for index = 1, #anchors do
-			local held = anchors[index]
-			frame:SetPoint(held[1], held[2], held[3], held[4], held[5])
-		end
-	end
-	return true
-end
-
--- Whether the client has put it back on the screen since the last pass.
+-- The mechanism is Core/BlizzAdapter.lua's park shape, which the mailbox's and
+-- the socketing window's use as well. Everything above is why this frame is on
+-- that shape rather than the cage one, and what is left for this file to say is
+-- which frame, which switch, and that it is walked.
 --
--- Read rather than written, which is what lets the re-park sit on a once-a-
--- second walk without being a write per second forever. The frame is parked off
--- the right hand edge, so anything whose left edge is inside the screen has
--- been moved back by somebody, and a client that will not answer either
--- question is one this cannot make a claim about and leaves alone.
-local function Drifted(frame)
-	local left, edge = frame:GetLeft(), UIParent:GetRight()
-	if not left or not edge then
-		return false
-	end
-	return left < edge or (frame:GetAlpha() or 0) > 0
-end
-
-local function Repark()
-	local frame = Frame()
-	if not frame or not Drifted(frame) then
-		return false
-	end
-	Move(frame)
-	return true
-end
-
---------------------------------------------------------------------------
-
--- Whether the client's window should be out of the way right now. Three things
--- have to hold, and the third is what keeps this safe: ours has to be open, or
--- there would be no merchant window on the screen at all.
-function Blizz.Wanted()
-	return (ns.db.merchant and ns.db.merchantHideBlizz
-		and ns.MerchantWindow.Shown()) and true or false
-end
-
--- Walked on every pass rather than only when the switch moves, and always true.
---
--- Both halves are Bags/Blizzard.lua's argument. The pass reads false as work a
--- combat lockdown refused and puts the whole thing on the PLAYER_REGEN_ENABLED
--- retry, and nothing here can be refused that way: moving an unprotected frame
--- and setting its alpha are allowed in a fight. So the guard is inside rather
--- than in the return, and what it guards on is whether the frame has actually
--- moved, which is two reads.
-function Blizz.Apply()
-	local wanted = Blizz.Wanted()
-	if wanted ~= parked then
-		parked = wanted
-		if wanted then
-			Park()
-		else
-			Unpark()
-		end
-		return true
-	end
-	if wanted then
-		Repark()
-	end
-	return true
-end
-
-function Blizz.Parked()
-	return parked
-end
-
-function Blizz.Describe()
-	if not ns.db.merchantHideBlizz then
-		return "on screen"
-	end
-	if not parked then
-		return "on screen while this window is closed"
-	end
-	if not hooked then
-		return "moved aside, and this client would not let the addon keep it there"
-	end
-	return "moved aside"
-end
-
--- On the once-a-second pass, beside Mail/Blizzard.lua, which is on it for the
--- same reason: the client relays its panels out whenever one opens, and a park
+-- **On the once-a-second walk.** The client relays its panels out whenever one
+-- opens, and opening your own bags at a vendor is enough to do it, so a park
 -- applied only when the switch moves is a park that lasts until the next time
--- you open your bags.
-ns.BlizzHide.Also(Blizz.Apply)
+-- you open your bags. The walk is also where the drift correction runs, which
+-- is two reads on a frame that has not moved.
+ns.MerchantBlizzard = ns.BlizzAdapter.Park({
+	frame = "MerchantFrame",
+	feature = "merchant",
+	switch = "merchantHideBlizz",
+	window = "MerchantWindow",
+	pass = true,
+})

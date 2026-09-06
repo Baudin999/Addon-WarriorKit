@@ -732,7 +732,6 @@ Bags/Session.lua:1:GetZoneText, absent early in login on one flavour
 Buttons/Layout.lua:1:an action button global fetched by name and checked before it is hooked
 Buttons/Ranks.lua:1:an action button global fetched by name and checked before it is hooked
 Buttons/Slot.lua:1:an action button global fetched by name and checked before it is hooked
-Character/Blizzard.lua:3:ToggleCharacter and the binding pair, which item 26 retires into ns.TakeKey
 Character/Reputation.lua:2:GetNumFactions, which the two flavours spell differently
 Character/Worn.lua:1:PickupInventoryItem, guarded because the drag path runs under the stub too
 Chat/Blizzard.lua:1:hooksecurefunc, the one call that has to exist before anything else can be said
@@ -753,13 +752,9 @@ Hover/Hover.lua:2:GetSpellBookItemName and SecureCmdOptionParse, both flavour-sp
 Mail/Send.lua:1:SetSendMailMoney, absent on the flavour with no attachments
 Mail/Who.lua:2:the friend list pair, which changed name between the two
 Mail/Window.lua:1:CloseMail, guarded because the window closes under the stub as well
-Map/Blizzard.lua:1:ToggleWorldMap, the call the cage gives its key back to
 Perf/Cause.lua:2:GetScriptCPUUsage, which is off unless the player turned it on
-Quests/Blizzard.lua:1:ToggleQuestLog, the call the cage gives its key back to
 Quests/Client.lua:4:four quest log calls, and Progress/Progress.lua argues on disk why each part reads its own returns
-Spellbook/Blizzard.lua:3:ToggleSpellBook and the binding pair, which item 26 retires into ns.TakeKey
 Spellbook/Read.lua:1:SPELL_PASSIVE, a client string constant rather than a call
-Talents/Blizzard.lua:2:ToggleTalentFrame and GetBindingKey, which item 26 retires into ns.TakeKey
 Talents/Read.lua:10:the whole dual-spec API, which one flavour has and the other does not
 Talents/Window.lua:2:TALENT_SPEC_PRIMARY and SECONDARY, client string constants rather than calls
 UI/Chart.lua:3:the world position trio, which decides whether a map can be drawn at all

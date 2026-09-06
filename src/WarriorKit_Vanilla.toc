@@ -270,6 +270,16 @@ UI\Amount.lua
 # after UI\\Ticker.lua for the pass it arms.
 Core\BlizzHide.lua
 
+# The two ways a part takes one of the client's windows off the screen, written
+# once. A frame that is a live session with the server is parked off the side at
+# no opacity, because hiding it is what ends the session; a frame that is only a
+# picture goes into Core\Attic.lua and the key that opened it comes too. Every
+# part that took a window down was a copy of one of those two, and the copies
+# had drifted on the wording rather than on the mechanism. After Core\Attic.lua,
+# which is where a caged frame actually goes, and after Core\BlizzHide.lua,
+# whose switch list every descriptor signs into.
+Core\BlizzAdapter.lua
+
 Core\Command.lua
 Core\Panel.lua
 

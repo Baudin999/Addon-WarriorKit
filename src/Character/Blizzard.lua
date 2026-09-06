@@ -1,8 +1,5 @@
 local ADDON, ns = ...
 
-local Blizz = {}
-ns.CharBlizzard = Blizz
-
 --------------------------------------------------------------------------
 -- Blizzard's character sheet, out of the way
 --
@@ -68,57 +65,11 @@ local MISSING = {
 	HonorFrame = "the honour tab",
 }
 
--- What the client's C key called before this addon took it.
-local original = nil
-
--- Whether the secure button's binding needs looking at. True at login and
--- whenever the client says the bindings moved, false once they have been taken.
---
--- A flag rather than a comparison, and that is not tidiness: the pass that calls
--- this runs once a second forever, and asking the client for its keys and
--- joining them into a string on every one of those passes is a string a second
--- for the collector to walk. The harness's allocation gate caught exactly that.
-local dirty = true
-
--- The first key this file is currently holding, or nil where it holds none.
--- Both a flag, for the hand back, and the answer to what the key is called: once
--- an override is on a key the client stops answering that key for the command
--- underneath, so asking again after binding would name the wrong letter.
-local bound = nil
-
--- The client's own binding for its character page. Two names because the two
--- clients this addon runs on do not agree: the numbered one is what a modern
--- Bindings.xml carries and the bare one is the fallback, and a client that has
--- neither leaves the secure button unbound and the global doing the work.
-local BINDINGS = { "TOGGLECHARACTER0", "TOGGLECHARACTER" }
-
-local function Frame(name)
-	local frame = _G[name]
-	if type(frame) ~= "table" or type(frame.GetParent) ~= "function" then
-		return nil
-	end
-	return frame
-end
-
---------------------------------------------------------------------------
--- The key
---------------------------------------------------------------------------
-
--- Whoever is holding ToggleCharacter now, remembered once. Called before the
--- swap and never after, so a second addon that wrapped the same global after us
--- is not swallowed by a later re-apply.
-local function Remember()
-	if original == nil and type(_G.ToggleCharacter) == "function" then
-		original = _G.ToggleCharacter
-	end
-	return original ~= nil
-end
-
 -- What C does while the switch is on. Declared once at load rather than built
--- inside TakeKey, and that is not tidiness: the pass below runs once a second
--- forever, and a closure made on every pass is a function object a second for
--- the collector to walk. It was three kilobytes per fifty ticks and the
--- harness's allocation gate caught it.
+-- at the swap, and that is not tidiness: the pass this file signs into below
+-- runs once a second forever, and a closure made on every pass is a function
+-- object a second for the collector to walk. It was three kilobytes per fifty
+-- ticks and the harness's allocation gate caught it.
 local function Toggle(page)
 	local missing = MISSING[page]
 	if missing then
@@ -132,167 +83,36 @@ local function Toggle(page)
 	open()
 end
 
--- Every key the client has on its own character page, in the order it answers
--- them. Called when the bindings have moved and never on the idle pass.
-local function Keys()
-	local keys = {}
-	if type(_G.GetBindingKey) ~= "function" then
-		return keys
-	end
-	for index = 1, #BINDINGS do
-		local first, second = GetBindingKey(BINDINGS[index])
-		if first then
-			keys[#keys + 1] = first
-		end
-		if second then
-			keys[#keys + 1] = second
-		end
-	end
-	return keys
-end
-
--- The key on the secure button as well as on the global.
+-- The mechanism is Core/BlizzAdapter.lua's cage shape, which the book's, the
+-- talent window's, the quest log's and the map's use as well. Everything above
+-- is why these frames are on that shape rather than the park one, and what is
+-- left for this file to say is which frames, which switch, and what C does
+-- instead.
 --
--- The global is what every other caller of ToggleCharacter reaches and it is
--- ordinary Lua, so it cannot show this window in a fight: the sheet has secure
--- buttons on its gear page and showing a window with a protected frame in it is
--- protected. The press itself has to arrive somewhere else, and an override
--- binding onto a secure button is that somewhere: the client sends the press to
--- the button, the button's snippet shows the window, and a snippet is allowed to
--- in combat because a snippet is secure code.
+-- `bind` is the half the quest log and the map do not take: the gear page is
+-- secure buttons, showing a window with one inside it is protected, and only a
+-- snippet may do that in a fight. Character/Window.lua owns the button the
+-- override binding lands on, which is what `window` names.
 --
--- An override binding rather than SetBinding, because this is a key this addon
--- is borrowing rather than a key the player set: it is not written to their
--- bindings, and clearing it hands the key straight back to whatever they had.
---
--- Refused in lockdown, like every binding call, and the pass that runs once a
--- second and again when combat drops puts it right.
-local function Bind()
-	if not dirty then
-		return true
-	end
-	if type(_G.SetOverrideBindingClick) ~= "function" then
-		return false
-	end
-	local button = ns.CharWindow.Key()
-	if not button or InCombatLockdown() then
-		return false
-	end
-	ClearOverrideBindings(button)
-	local keys = Keys()
-	for index = 1, #keys do
-		SetOverrideBindingClick(button, true, keys[index], ns.CharWindow.KeyName(), "LeftButton")
-	end
-	dirty, bound = false, keys[1]
-	return bound ~= nil
-end
-
-local function Unbind()
-	if not bound then
-		return false
-	end
-	local button = ns.CharWindow.Key()
-	if not button or InCombatLockdown() then
-		return false
-	end
-	ClearOverrideBindings(button)
-	dirty, bound = true, nil
-	return true
-end
-
--- The client's own binding set moved, so whatever this file took has to be
--- taken again off the new one. The pass does the work; this only says that
--- there is work.
-local watcher = CreateFrame("Frame")
-watcher:RegisterEvent("UPDATE_BINDINGS")
-watcher:SetScript("OnEvent", function()
-	dirty = true
-end)
-
-local function TakeKey()
-	if not Remember() then
-		return false
-	end
-	if _G.ToggleCharacter ~= Toggle then
-		_G.ToggleCharacter = Toggle
-	end
-	return Bind()
-end
-
--- Only ever hands back what this file took. A client where somebody else is
--- holding the global is a client this file leaves alone, which is the same rule
--- Remember keeps at the other end.
-local function GiveKey()
-	Unbind()
-	if type(original) ~= "function" or _G.ToggleCharacter ~= Toggle then
-		return false
-	end
-	_G.ToggleCharacter = original
-	return true
-end
-
--- What to call the key in a sentence. The first one the client answers, or the
--- letter it ships with where it answers none, because a line telling somebody to
--- press nothing is worse than a line naming the wrong key.
-function Blizz.KeyText()
-	if bound then
-		return bound
-	end
-	local keys = Keys()
-	return keys[1] or "C"
-end
-
---------------------------------------------------------------------------
--- The frames
---------------------------------------------------------------------------
-
--- Whether the client's window should be out of the way right now. Two things,
--- and no third: our window has to be built at all, and the switch has to be on.
--- Unlike the chat window's there is no "and ours is open" clause, because the
--- key opens ours, so there is never a moment where the sheet is unreachable.
-function Blizz.Wanted()
-	return (ns.db.character and ns.db.hideBlizzCharacter) and true or false
-end
-
--- Run on every pass rather than only where the answer changed, which is the
--- rule Core/BlizzHide.lua's header argues for at length: a pass that
--- remembers what it did cannot see a frame the client built since, and cannot
--- see one the client put back by a route the hide did not cover.
-function Blizz.Apply()
-	local wanted = Blizz.Wanted()
-	if wanted then
-		TakeKey()
-	else
-		GiveKey()
-	end
-
-	local complete = true
-	local act = wanted and ns.Attic.Vanish or ns.Attic.Return
-	for index = 1, #FRAMES do
-		local frame = Frame(FRAMES[index])
-		if frame and not act(frame) then
-			complete = false
-		end
-	end
-	return complete
-end
-
-function Blizz.Describe()
-	if not ns.db.hideBlizzCharacter then
-		return "on screen, and C opens it"
-	end
-	if not ns.db.character then
-		return "on screen, because this addon's own sheet is off"
-	end
-	if type(original) ~= "function" then
-		return "in the attic, and this client has no ToggleCharacter to redirect"
-	end
-	return ("in the attic, and %s opens this one"):format(Blizz.KeyText())
-end
-
---------------------------------------------------------------------------
-
--- Registered with the switch it belongs to, so `/wk hide character`, the
--- panel's own line and `/wk reset` all reach this file without any of them
--- naming it.
-ns.BlizzHide.Also(Blizz.Apply)
+-- `offKey` is the letter rather than the key the client answers, and it is the
+-- one place this part's wording differs from the book's and the talent
+-- window's. With the switch off nothing here is holding a key, so the sentence
+-- is about the client's own binding and this file has never claimed to have
+-- read it. The key the switch names with the switch on is read, because by then
+-- it is a key this part took.
+ns.CharBlizzard = ns.BlizzAdapter.Cage({
+	frames = FRAMES,
+	feature = "character",
+	switch = "hideBlizzCharacter",
+	global = "ToggleCharacter",
+	Toggle = Toggle,
+	bindings = { "TOGGLECHARACTER0", "TOGGLECHARACTER" },
+	fallback = "C",
+	bind = true,
+	window = "CharWindow",
+	pass = true,
+	held = true,
+	place = "in the attic",
+	off = "on screen, because this addon's own sheet is off",
+	offKey = "C",
+})

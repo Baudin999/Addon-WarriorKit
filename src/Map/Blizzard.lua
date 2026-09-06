@@ -1,8 +1,5 @@
 local ADDON, ns = ...
 
-local Blizz = {}
-ns.MapBlizzard = Blizz
-
 --------------------------------------------------------------------------
 -- Blizzard's world map, out of the way
 --
@@ -46,34 +43,6 @@ local FRAMES = {
 	"WorldMapTooltip",
 }
 
--- What the client's M key called before this addon took it. Kept rather than
--- rebuilt, because the switch has to be able to hand it back exactly.
-local original = nil
-
-local caged = false
-
-local function Frame(name)
-	local frame = _G[name]
-	if type(frame) ~= "table" or type(frame.GetParent) ~= "function" then
-		return nil
-	end
-	return frame
-end
-
---------------------------------------------------------------------------
--- The key
---------------------------------------------------------------------------
-
--- Whoever is holding ToggleWorldMap now, remembered once. Called before the
--- swap and never after, so a second addon that wrapped the same global after us
--- is not swallowed by a later re-apply.
-local function Remember()
-	if original == nil and type(_G.ToggleWorldMap) == "function" then
-		original = _G.ToggleWorldMap
-	end
-	return original ~= nil
-end
-
 -- What the key does while this addon holds it. A named function at file scope
 -- rather than a closure made at the swap, because the swap is on a pass that
 -- runs once a second and a fresh closure a second is garbage the collector has
@@ -98,97 +67,29 @@ local function Ours()
 	ns.MapWindow.Toggle()
 end
 
-local function TakeKey()
-	if _G.ToggleWorldMap == Ours then
-		return true
-	end
-	if not Remember() then
-		return false
-	end
-	_G.ToggleWorldMap = Ours
-	return true
-end
-
-local function GiveKey()
-	if _G.ToggleWorldMap ~= Ours or type(original) ~= "function" then
-		return false
-	end
-	_G.ToggleWorldMap = original
-	return true
-end
-
---------------------------------------------------------------------------
--- The frames
---------------------------------------------------------------------------
-
--- Every frame in the list where it should be. One walk for both directions,
--- because the two used to be two functions saying the same thing about the same
--- list and the only difference between them was which call they made.
-local function Move(wanted)
-	local act = wanted and ns.Attic.Vanish or ns.Attic.Return
-	local complete = true
-	for index = 1, #FRAMES do
-		local frame = Frame(FRAMES[index])
-		if frame and not act(frame) then
-			complete = false
-		end
-	end
-	return complete
-end
-
---------------------------------------------------------------------------
-
--- Whether the client's map should be out of the way right now. Two things, and
--- no third, for the reason Quests/Blizzard.lua gives: the key opens ours, so
--- there is never a moment where the map is unreachable, and a map caged only
--- while our window happens to be up would flicker Blizzard's frame onto the
--- screen every time ours closed.
-function Blizz.Wanted()
-	return (ns.db.worldMap and ns.db.worldMapHideBlizz) and true or false
-end
-
--- Walked on every call rather than only when the switch moves, and that is the
--- whole reason this is registered on the once-a-second pass rather than called
--- once at login.
+-- The mechanism is Core/BlizzAdapter.lua's cage shape, which the quest log's,
+-- the sheet's, the book's and the talent window's use as well. Everything above
+-- is why this frame is on that shape rather than the park one, and what is left
+-- for this file to say is which frames, which switch, and what M does instead.
 --
--- Two frames the client may not have built yet. WorldMapFrame is behind a
--- load-on-demand addon on some of these builds, so at PLAYER_LOGIN there may be
--- nothing to cage and a one-shot apply would leave the client's map on the
--- screen for the session. WorldMapTooltip does not exist on every build at all.
--- Both are the case the second exists for, and it is the same case the chat
--- window's own apply is written round.
+-- **On the once-a-second walk, and that is not a nicety.** WorldMapFrame is
+-- behind a load-on-demand addon on some of these builds, so at PLAYER_LOGIN
+-- there may be nothing to cage and a one-shot apply would leave the client's map
+-- on the screen for the session. WorldMapTooltip does not exist on every build
+-- at all. Both are the case the walk exists for, and everything it does is a
+-- comparison once it has taken: the strip is a flag on the frame, the cage is a
+-- parent test, and the key is a function identity.
 --
--- Everything below is a comparison once it has taken: the strip is a flag on
--- the frame, the cage is a parent test, and the key is a function identity.
-function Blizz.Apply()
-	local wanted = Blizz.Wanted()
-	if wanted then
-		TakeKey()
-	else
-		GiveKey()
-	end
-	caged = wanted
-	return Move(wanted)
-end
-
-function Blizz.Caged()
-	return caged
-end
-
--- On the once-a-second pass, for the reason written over Blizz.Apply. Beside
--- Chat/Blizzard.lua and Character/Blizzard.lua, which are on it for the same
--- reason: a frame the client had not built at the last pass.
-ns.BlizzHide.Also(Blizz.Apply)
-
-function Blizz.Describe()
-	if not ns.db.worldMapHideBlizz then
-		return "on screen, and M opens it"
-	end
-	if not caged then
-		return "on screen"
-	end
-	if type(original) ~= "function" then
-		return "in the attic, and this client has no ToggleWorldMap to redirect"
-	end
-	return "in the attic, and M opens this one"
-end
+-- M is spelled out rather than read off the client, because this part has never
+-- taken an override binding and has nothing to name a key with.
+ns.MapBlizzard = ns.BlizzAdapter.Cage({
+	frames = FRAMES,
+	feature = "worldMap",
+	switch = "worldMapHideBlizz",
+	global = "ToggleWorldMap",
+	Toggle = Ours,
+	place = "in the attic",
+	offKey = "M",
+	onKey = "M",
+	pass = true,
+})

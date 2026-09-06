@@ -1,8 +1,5 @@
 local ADDON, ns = ...
 
-local Blizz = {}
-ns.MailBlizzard = Blizz
-
 --------------------------------------------------------------------------
 -- Blizzard's mail window, out of the way
 --
@@ -54,115 +51,19 @@ ns.MailBlizzard = Blizz
 -- can, and it is one tick box away.
 --------------------------------------------------------------------------
 
--- Far enough right that nothing of a four hundred pixel window shows, and
--- anchored to the screen's own edge rather than to a number, so it is off the
--- side of a 4K panel as well as a laptop.
-local PARK = 400
-
-local parked, hooked = false, false
-local anchors = nil
-
-local function Frame()
-	local frame = _G.MailFrame
-	if type(frame) ~= "table" or type(frame.SetPoint) ~= "function" then
-		return nil
-	end
-	return frame
-end
-
--- Where the client had it, recorded once before it is ever moved. Restoring the
--- points it actually had beats putting it back at a number this file guessed,
--- and the client relays it on the next show anyway.
-local function Remember(frame)
-	if anchors or type(frame.GetNumPoints) ~= "function" then
-		return
-	end
-	anchors = {}
-	for index = 1, frame:GetNumPoints() do
-		local point, relative, relativePoint, x, y = frame:GetPoint(index)
-		anchors[index] = { point, relative, relativePoint, x, y }
-	end
-end
-
-local function Move(frame)
-	frame:ClearAllPoints()
-	frame:SetPoint("TOPLEFT", UIParent, "TOPRIGHT", PARK, 0)
-	frame:SetAlpha(0)
-end
-
-local function Park()
-	local frame = Frame()
-	if not frame then
-		return false
-	end
-	Remember(frame)
-	-- A clamped frame snaps back onto the screen, which would undo the move and
-	-- leave a window at no opacity swallowing clicks in the middle of the game.
-	if type(frame.SetClampedToScreen) == "function" then
-		frame:SetClampedToScreen(false)
-	end
-	Move(frame)
-
-	if not hooked and type(frame.HookScript) == "function" then
-		hooked = pcall(frame.HookScript, frame, "OnShow", function(this)
-			if parked then
-				Move(this)
-			end
-		end)
-	end
-	return true
-end
-
-local function Unpark()
-	local frame = Frame()
-	if not frame then
-		return false
-	end
-	frame:SetAlpha(1)
-	if anchors then
-		frame:ClearAllPoints()
-		for index = 1, #anchors do
-			local held = anchors[index]
-			frame:SetPoint(held[1], held[2], held[3], held[4], held[5])
-		end
-	end
-	return true
-end
-
---------------------------------------------------------------------------
-
--- Whether the client's window should be out of the way right now. Three things
--- have to hold, and the third is what keeps this safe: ours has to be open, or
--- there would be no mail window on the screen at all.
-function Blizz.Wanted()
-	return (ns.db.mail and ns.db.mailHideBlizz and ns.MailWindow.Shown()) and true or false
-end
-
-function Blizz.Apply()
-	local wanted = Blizz.Wanted()
-	if wanted == parked then
-		return false
-	end
-	parked = wanted
-	if wanted then
-		return Park()
-	end
-	return Unpark()
-end
-
-function Blizz.Parked()
-	return parked
-end
-
-function Blizz.Describe()
-	if not ns.db.mailHideBlizz then
-		return "on screen"
-	end
-	if not parked then
-		return "on screen while this window is closed"
-	end
-	if not hooked then
-		return "moved aside, and this client would not let the addon keep it there"
-	end
-	return "moved aside"
-end
+-- The mechanism is Core/BlizzAdapter.lua's park shape, which the merchant's and
+-- the socketing window's use as well. Everything above is why this frame is on
+-- that shape rather than the cage one, and the only thing this file has to say
+-- besides is which frame and which switch.
+--
+-- **Off the once-a-second walk, unlike the other two.** The mailbox is opened by
+-- standing at one, and the window is closed by the part's own code rather than
+-- by the client relaying its panels underneath it, so the park is applied when
+-- the switch moves and answers whether it moved anything. Mail/Window.lua and
+-- Mail/Feature.lua are what call it.
+ns.MailBlizzard = ns.BlizzAdapter.Park({
+	frame = "MailFrame",
+	feature = "mail",
+	switch = "mailHideBlizz",
+	window = "MailWindow",
+})

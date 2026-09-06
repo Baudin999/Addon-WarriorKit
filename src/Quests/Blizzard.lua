@@ -1,8 +1,5 @@
 local ADDON, ns = ...
 
-local Blizz = {}
-ns.QuestBlizzard = Blizz
-
 --------------------------------------------------------------------------
 -- Blizzard's quest log, out of the way
 --
@@ -51,118 +48,32 @@ local FRAMES = {
 	"QuestLogDetailFrame",
 }
 
--- What the client's L key called before this addon took it. Kept rather than
--- rebuilt, because the switch has to be able to hand it back exactly.
-local original = nil
-
-local caged = false
-
-local function Frame(name)
-	local frame = _G[name]
-	if type(frame) ~= "table" or type(frame.GetParent) ~= "function" then
-		return nil
-	end
-	return frame
+-- What L does while the switch is on. A named function at file scope rather
+-- than a closure made at the swap, which is what makes "are we already holding
+-- it" a comparison.
+local function Toggle()
+	ns.QuestWindow.Toggle()
 end
 
---------------------------------------------------------------------------
--- The key
---------------------------------------------------------------------------
-
--- Whoever is holding ToggleQuestLog now, remembered once. Called before the
--- swap and never after, so a second addon that wrapped the same global after us
--- is not swallowed by a later re-apply.
-local function Remember()
-	if original == nil and type(_G.ToggleQuestLog) == "function" then
-		original = _G.ToggleQuestLog
-	end
-	return original ~= nil
-end
-
-local function TakeKey()
-	if not Remember() then
-		return false
-	end
-	_G.ToggleQuestLog = function()
-		ns.QuestWindow.Toggle()
-	end
-	return true
-end
-
-local function GiveKey()
-	if type(original) ~= "function" then
-		return false
-	end
-	_G.ToggleQuestLog = original
-	return true
-end
-
---------------------------------------------------------------------------
--- The frames
---------------------------------------------------------------------------
-
-local function Cage()
-	local complete = true
-	for _, name in ipairs(FRAMES) do
-		local frame = Frame(name)
-		if frame and not ns.Attic.Vanish(frame) then
-			complete = false
-		end
-	end
-	return complete
-end
-
-local function Release()
-	local complete = true
-	for _, name in ipairs(FRAMES) do
-		local frame = Frame(name)
-		if frame and not ns.Attic.Return(frame) then
-			complete = false
-		end
-	end
-	return complete
-end
-
---------------------------------------------------------------------------
-
--- Whether the client's window should be out of the way right now.
+-- The mechanism is Core/BlizzAdapter.lua's cage shape, which the map's, the
+-- sheet's, the book's and the talent window's use as well. Everything above is
+-- why this frame is on that shape rather than the park one, and what is left
+-- for this file to say is which frames, which switch, and what L does instead.
 --
--- Two things, and no third. The mail window adds "and ours is open", because a
--- mailbox with no window at all is a mailbox you cannot use. This one does not
--- need it: the key opens ours, so there is never a moment where the log is
--- unreachable, and a log caged only while our window happens to be up would
--- flicker Blizzard's frame onto the screen every time ours closed.
-function Blizz.Wanted()
-	return (ns.db.quests and ns.db.questsHideBlizz) and true or false
-end
-
-function Blizz.Apply()
-	local wanted = Blizz.Wanted()
-	if wanted == caged then
-		return false
-	end
-	caged = wanted
-	if wanted then
-		TakeKey()
-		return Cage()
-	end
-	GiveKey()
-	return Release()
-end
-
-function Blizz.Caged()
-	return caged
-end
-
-function Blizz.Describe()
-	if not ns.db.questsHideBlizz then
-		return "on screen, and L opens it"
-	end
-	if not caged then
-		return "on screen"
-	end
-	if type(original) ~= "function" then
-		return "in the attic, and this client has no ToggleQuestLog to redirect"
-	end
-	return "in the attic, and L opens this one"
-end
+-- **Off the once-a-second walk.** The log is not a frame the client rebuilds
+-- underneath us and there is no load-on-demand addon behind it, so the cage is
+-- applied when the switch moves. Quests/Feature.lua and Quests/Window.lua are
+-- what call it.
+--
+-- L is spelled out rather than read off the client, because this part has never
+-- taken an override binding and has nothing to name a key with.
+ns.QuestBlizzard = ns.BlizzAdapter.Cage({
+	frames = FRAMES,
+	feature = "quests",
+	switch = "questsHideBlizz",
+	global = "ToggleQuestLog",
+	Toggle = Toggle,
+	place = "in the attic",
+	offKey = "L",
+	onKey = "L",
+})
