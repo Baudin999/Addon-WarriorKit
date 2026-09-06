@@ -89,6 +89,41 @@ check(whole(frame:GetWidth()) and whole(frame:GetHeight()),
 check(frame:GetHeight() * ns.Zoom("characterZoom") <= state.SCREEN_H,
 	"the character window is taller than the screen")
 
+-- Half the monitor, on the right, at four by three.
+--
+-- It was the whole monitor, and all three of the things the player could see
+-- wrong with it came from that: the stats column stood against the last pixel
+-- of the panel where a windowed client carries it off the edge, the name of a
+-- helmet sat a third of a screen from the helmet, and there was no part of the
+-- game left to click on with the sheet up. None of the three fails visibly, so
+-- all three are numbers here.
+do
+	local zoom = ns.Zoom("characterZoom")
+	local wide = (_G.GetPhysicalScreenSize())
+	local across = frame:GetWidth() * zoom
+	check(math.abs(across - wide / 2) <= zoom,
+		("the sheet is %d of %d pixels across and it is meant to be half")
+			:format(across, wide))
+	check(math.abs(frame:GetWidth() / frame:GetHeight() - 4 / 3) < 0.02,
+		("the sheet came out %d by %d, which is not four by three")
+			:format(frame:GetWidth(), frame:GetHeight()))
+
+	-- On the right, which is the half of the screen the player's own character
+	-- is not standing in. The point itself rather than the four edges: the sheet
+	-- ignores its parent's scale and UIParent does not, so the two are measured
+	-- in different units and a difference between them says nothing.
+	check(frame:GetNumPoints() == 1,
+		("the sheet is held by %d points and it wants one")
+			:format(frame:GetNumPoints()))
+	local point, relative, relativePoint, x = frame:GetPoint(1)
+	check(point == "RIGHT" and relativePoint == "RIGHT" and relative == _G.UIParent,
+		("the sheet is anchored %s to the screen's %s"):format(tostring(point),
+			tostring(relativePoint)))
+	check(x < 0 and math.abs(x) < frame:GetWidth() / 4,
+		("the sheet sits %d units off the right edge of a %d unit screen")
+			:format(x, frame:GetWidth()))
+end
+
 for index = GEAR, LOADOUTS do
 	check(Window.Pane(index) ~= nil, ("tab %d has no pane"):format(index))
 end

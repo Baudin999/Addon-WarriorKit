@@ -248,7 +248,7 @@ end
 -- opened it.
 --
 -- A screen window is the floor of the pile and stays there. It is a backdrop
--- the size of the monitor, so every window the player opens has to flow over
+-- laid over half the monitor, so every window the player opens has to flow over
 -- the top of it, and a toplevel frame lifted on a click would put the backdrop
 -- over the bags the moment you clicked a gear square.
 local function Pile(frame, opts)
@@ -271,10 +271,10 @@ end
 -- only one to do. Locking a quest log would be locking a window rather than
 -- placing the HUD.
 --
--- A screen window gets none of it. It is the size of the monitor and fixed to
--- it: there is nothing to grab, nowhere to drag it to and no point worth
--- saving, and a placeable with no chrome the width of the screen is an
--- invisible drag target across the whole game.
+-- A screen window gets none of it. It is a share of the monitor pinned to one
+-- edge of it: there is nothing to grab, nowhere to drag it to and no point
+-- worth saving, and a placeable with no chrome covering half the game is an
+-- invisible drag target the size of a wall.
 --
 -- Beside TitleBar and Footer for the reason both of those are: it is one piece
 -- of what a window is, and the argument for the shape it has is a paragraph
@@ -357,21 +357,22 @@ function UI.Window(opts)
 
 	-- Whether this is a window on the screen or the screen itself.
 	--
-	-- One asks and one ever will: the character sheet. It is a backdrop the
-	-- player stands in with their gear read off it, so it has none of what makes
-	-- a window a window. No ground, because a ground the size of the monitor is
-	-- the game painted out. No line round the outside, because there is no
-	-- outside. No title bar, because there is nothing to name and nothing to grab
-	-- it by. No point to save and no drag, because a frame the size of the screen
-	-- is already where it goes and the only thing a drag could do is take it off.
-	-- And the floor of the pile, so everything the player opens over it flows
-	-- over the top.
+	-- One asks and one ever will: the character sheet. It is a page drawn on the
+	-- world with the game still showing through it, so it has none of what makes
+	-- a window a window. No ground, because a ground under half the monitor is
+	-- that half of the game painted out. No line round the outside, because it is
+	-- read as part of the scene rather than as a panel over it. No title bar,
+	-- because there is nothing to name and nothing to grab it by. No point to
+	-- save and no drag, because the panel is sized and placed off the monitor and
+	-- the only thing a drag could do is take it off the edge. And the floor of
+	-- the pile, so everything the player opens over it flows over the top.
 	--
 	-- It does not eat the mouse either. Every other window in the addon does,
-	-- because a click that lands on a panel should stop there; this one covers
-	-- the monitor, so a click it swallowed would be a mob you could not target
-	-- while your sheet was up. What is on it answers for itself: the gear squares
-	-- and the stat rows enable their own mouse.
+	-- because a click that lands on a panel should stop there; this one has no
+	-- panel, so a click it swallowed would be a mob you could not target through
+	-- a page you can see straight through. What is on it answers for itself: the
+	-- gear squares take their own clicks and everything else on the page takes
+	-- the hover and hands the buttons back to the world.
 	window.screen = opts.screen == true
 
 	-- The attribute template rather than the drag one, because the drag a secure
@@ -436,21 +437,94 @@ function UI.Window(opts)
 	return window
 end
 
+-- The margin a screen window keeps off the edge of the monitor.
+--
+-- Edge to edge is the wrong number twice. A line printed against the last pixel
+-- of the panel is a line you read the top half of, and the game's own window is
+-- not always the size of the monitor: a client running windowed under a
+-- compositor can hang forty pixels off the bottom, and everything the addon
+-- draws down there goes with it. Six percent is the same margin a photograph
+-- gets and it is enough for both.
+local SCREEN_MARGIN = 0.94
+
+-- How much of the monitor a screen window takes, and what shape it takes it in.
+--
+-- It took all of it, and all of it was too much. A sheet the size of the screen
+-- puts the name of your helmet a third of a monitor from the helmet, puts the
+-- stats column against the last pixel of the panel where a windowed client can
+-- carry it off the edge entirely, and leaves the player with no part of the
+-- game left to click on. The page was right and the canvas was wrong.
+--
+-- So it is half the monitor across, on the right, at four by three. Half is the
+-- most a panel can take and still leave a screen to play on. Four by three is
+-- the shape the page is drawn at rather than the shape the monitor happens to
+-- be: a sheet that took the monitor's own ratio would be a letterbox on an
+-- ultrawide and a portrait on a rotated panel, and the nineteen rows of gear
+-- need a fixed number of pixels of height whatever the panel is. The ratio wins
+-- when the two disagree, so on a screen too short to hold that shape it is the
+-- width that gives way and the panel stays a panel.
+local SCREEN_SHARE = 0.5
+local SCREEN_ASPECT = 4 / 3
+
+-- The whole monitor in this window's own units, which after adoption are
+-- physical pixels over the zoom. Off the grid, on a client with no
+-- SetIgnoreParentScale, the window is in UIParent's units and UIParent is what
+-- to ask, which is the same fork Resize takes below and for the same reason.
+function Window:Screen()
+	local across, down
+	if UI.Supported() then
+		across, down = UI.ScreenWidth() / self.zoom, UI.ScreenHeight() / self.zoom
+	else
+		across, down = UIParent:GetWidth() or 0, UIParent:GetHeight() or 0
+	end
+	return math.floor(across), math.floor(down)
+end
+
+-- The box a screen window fills: its share of the monitor's width, at the shape
+-- above, never taller than the monitor less its margin. Clamped by height
+-- second and by width after that, so the shape holds on a screen of any ratio.
+function Window:Panel()
+	local across, down = self:Screen()
+	local room = math.floor(down * SCREEN_MARGIN)
+	local width = math.floor(across * SCREEN_SHARE)
+	local height = math.floor(width / SCREEN_ASPECT)
+	if height > room then
+		width, height = math.floor(room * SCREEN_ASPECT), room
+	end
+	return math.max(width, 1), math.max(height, 1)
+end
+
+-- Where it sits, which is against the right hand edge with the same margin off
+-- it. Its own function because it is re-run out of every resize: the offset is
+-- in the window's units, so it is a different number after a zoom.
+--
+-- The right rather than the middle. The middle is where the player's character
+-- is standing, and a sheet with a picture of that character laid over the
+-- character is the one place on the screen it must not be.
+local function Anchor(window)
+	local across = window:Screen()
+	window.frame:ClearAllPoints()
+	window.frame:SetPoint("RIGHT", UIParent, "RIGHT",
+		-math.floor(across * (1 - SCREEN_MARGIN) / 2), 0)
+end
+
 -- The requested size, clamped to what the screen can hold. Both numbers are in
 -- the window's own units, which after adoption are physical pixels divided by
 -- the zoom, so the screen has to be converted into them before they can be
 -- compared.
 function Window:Resize(width, height)
-	-- A screen window is not asked how big it wants to be. It is the monitor
-	-- converted into the window's own units, so the two numbers the caller passed
-	-- are dropped and the zoom is what decides how much fits: turn it up and the
-	-- sheet still covers the screen with larger type and fewer units in it.
+	-- A screen window is not asked how big it wants to be. It is a share of the
+	-- monitor in the window's own units, so the two numbers the caller passed are
+	-- dropped and the zoom is what decides how much fits: turn it up and the
+	-- sheet keeps its half of the screen with larger type and fewer units in it.
 	--
-	-- Every route into a resize goes through here, so this is also what keeps it
-	-- covering the screen after a monitor swap or a drag of the zoom slider: the
-	-- caller re-runs its own layout and the size comes out of the new grid.
+	-- Every route into a resize goes through here, so this is also what keeps the
+	-- panel the right shape in the right corner after a monitor swap or a drag of
+	-- the zoom slider: the caller re-runs its own layout and the size comes out of
+	-- the new grid, and the point is re-set below off the same numbers.
 	if self.screen then
-		width, height = self:Screen()
+		width, height = self:Panel()
+		Anchor(self)
 	else
 		-- On the grid the window's units are pixels over the zoom, so the screen has
 		-- to be converted into them. Off it, on a client with no
@@ -468,30 +542,6 @@ function Window:Resize(width, height)
 	self.frame:SetSize(width, height)
 	self.content:SetSize(width, self:Body(height))
 	return width, height
-end
-
--- How much of the monitor a screen window takes, and it is not all of it.
---
--- Edge to edge is the wrong number twice. A line printed against the last pixel
--- of the panel is a line you read the top half of, and the game's own window is
--- not always the size of the monitor: a client running windowed under a
--- compositor can hang forty pixels off the bottom, and everything the addon
--- draws down there goes with it. Six percent is the same margin a photograph
--- gets and it is enough for both.
-local SCREEN_MARGIN = 0.94
-
--- The monitor in this window's own units, which after adoption are physical
--- pixels over the zoom, less that margin. Off the grid, on a client with no
--- SetIgnoreParentScale, the window is in UIParent's units and UIParent is what
--- to ask, which is the same fork Resize takes above and for the same reason.
-function Window:Screen()
-	local across, down
-	if UI.Supported() then
-		across, down = UI.ScreenWidth() / self.zoom, UI.ScreenHeight() / self.zoom
-	else
-		across, down = UIParent:GetWidth() or 0, UIParent:GetHeight() or 0
-	end
-	return math.floor(across * SCREEN_MARGIN), math.floor(down * SCREEN_MARGIN)
 end
 
 -- How tall the content area is in a window of this height: everything the

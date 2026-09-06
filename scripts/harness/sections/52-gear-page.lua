@@ -55,6 +55,33 @@ do
 	check(not neck.wear:IsShown(),
 		"a necklace does not wear out and the slot drew a wear line anyway")
 
+	-- The rule is an underscore under the name, so it is measured against the
+	-- letters and never against the row. A name is anchored at both ends so it
+	-- can clip rather than wrap, which makes the frame's own width the width of
+	-- the column: taken off that, a full piece drew a green line from its name
+	-- across the row and out into the middle of the page, and nothing here said
+	-- so, because a rule that is too long draws perfectly and measures fine.
+	--
+	-- The helmet is at forty percent, so the check is the arithmetic itself
+	-- rather than a ceiling. It has to be: this stub does not model a region
+	-- sized by two opposing anchors, so the name answers nothing for its own
+	-- frame width and a ceiling taken off that would hold whichever width the
+	-- code had used.
+	local letters = head.name:GetStringWidth()
+	check(math.abs(head.wear:GetWidth() - letters * 0.4) <= 1,
+		("the wear line came out %d wide and 40%% of the name is %.1f")
+			:format(head.wear:GetWidth(), letters * 0.4))
+	check(head.wear:GetWidth() < head:GetWidth(),
+		"the wear line is as wide as the whole row rather than as wide as the name")
+
+	-- And it is between the name and the item level rather than through either.
+	-- Both used to hang off the name's own bottom edge, so the line was drawn
+	-- across the foot of the letters with the number sitting on top of it.
+	check(head.wear:GetTop() <= head.name:GetBottom(),
+		"the wear line is drawn through the name rather than under it")
+	check(head.wear:GetBottom() >= head.note:GetTop(),
+		"the wear line and the item level are drawn on top of each other")
+
 	-- Quality is the ring behind the icon now a square is a disc, read off tone
 	-- because the stub swallows a vertex write; a mask answers nothing about itself.
 	check(head.tone[1] == ns.UI.Quality[4][1], "the epic helmet is not ringed in the epic colour")

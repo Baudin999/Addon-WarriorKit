@@ -81,12 +81,16 @@ local C, M = UI.Color, UI.Metric
 -- the edges. The sheet this is drawn against is not a dialog. It is the screen,
 -- with the figure standing in it and the gear read off the world either side.
 --
--- So the size is the monitor and `screen` in UI/Window.lua is what makes it so.
--- The zoom is still the player's and still means what it always meant: turn it
--- up and the type and the discs get bigger while the sheet still covers the
--- screen, because the units it is laid out in shrink by the same factor.
--- Character/Paperdoll.lua takes whatever width comes out and gives the figure
--- everything the three columns of text do not want.
+-- It was the whole monitor for a while, and that was one step too far. A page
+-- the size of the screen is a page with your helmet's name a third of a monitor
+-- from the helmet, and it leaves the player nothing left to click on. So it is
+-- half the monitor across, at four by three, against the right hand edge, and
+-- `screen` in UI/Window.lua is what makes it so. The zoom is still the player's
+-- and still means what it always meant: turn it up and the type and the discs
+-- get bigger while the panel keeps its half of the screen, because the units it
+-- is laid out in shrink by the same factor. Character/Paperdoll.lua takes
+-- whatever width comes out and splits it between the three columns and the
+-- figure.
 --
 -- The other three tabs are the exception, and PAGE is how wide they get. They
 -- are lists of prose on a ground of their own, and prose is read at a column's
@@ -238,12 +242,12 @@ function Window.Build()
 
 	window = UI.Window({
 		name = "WarriorKitCharacter",
-		-- The size of the monitor, fixed to it, with no title bar, no line round
-		-- the outside, no ground and no saved point, at the floor of the frame
-		-- pile so every window the player opens flows over the top of it.
-		-- UI/Window.lua carries the whole of what that means; what it means here
-		-- is that no width and no height are passed, because neither would be
-		-- read.
+		-- Half the monitor, against its right hand edge, with no title bar, no
+		-- line round the outside, no ground and no saved point, at the floor of
+		-- the frame pile so every window the player opens flows over the top of
+		-- it. UI/Window.lua carries the whole of what that means; what it means
+		-- here is that no width and no height are passed, because neither would
+		-- be read.
 		--
 		-- No title bar is no close box, and a window without one owes the player
 		-- another way out. This one has two, and both were here before the cross

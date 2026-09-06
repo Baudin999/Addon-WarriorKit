@@ -135,18 +135,23 @@ local DOT = 5
 local GAP = 4
 
 --------------------------------------------------------------------------
--- Everything else on this page is a share of the page's own height
+-- Everything else on this page is a share of the page's own width
 --
--- Height and not width, and that is the whole of the layout. A character sheet
--- is a person standing up with two lists beside him: how tall he can be decides
--- how big he is, and everything drawn next to him should be the size it is
--- against him. Sized off the width instead, an ultrawide gets a sheet with a
--- giant on it and a four by three panel gets one with a doll, because the width
--- of a monitor says nothing about how much room a figure has to stand in.
+-- Width, and it used to be height. Height was the right answer while the page
+-- was the monitor: the sheet was handed whatever ratio the player's panel
+-- happened to be, and the width of a monitor says nothing about how much room a
+-- figure has to stand in, so the figure and the columns beside him were sized
+-- off the one number that meant something.
 --
--- The shares are bounded at both ends, because a share of a screen is not a
--- share of a name. A column has to hold "Bloodfang Spaulders of the Underworld"
--- and there is no point in it holding twice that, so the ceiling is the longest
+-- The page is not the monitor any more. It is half of it at four by three, so
+-- its shape is fixed and known here, and the number the three columns and the
+-- figure are actually competing for is the width. Splitting the width is what
+-- that competition is, and doing it in the units it happens in is what stops
+-- three columns adding up to more page than there is.
+--
+-- The shares are bounded at both ends, because a share of a page is not a share
+-- of a name. A column has to hold "Bloodfang Spaulders of the Underworld" and
+-- there is no point in it holding twice that, so the ceiling is the longest
 -- name the game has and the floor is a disc with enough of a name beside it to
 -- be worth printing.
 --------------------------------------------------------------------------
@@ -168,21 +173,21 @@ local FIGURE = 0.80
 local BUILD = 0.46
 
 -- One column of rows: the disc, a gutter and the name.
-local COLUMN, COLUMN_MIN, COLUMN_MAX = 0.26, 170, 280
+local COLUMN, COLUMN_MIN, COLUMN_MAX = 0.225, 130, 280
 
 -- The stats column. Read as the row added up: a scroll bar, the widest name the
 -- page prints beside a number, the gutter, and the room the value is pinned
 -- into.
-local READING, READING_MIN, READING_MAX = 0.28, 220, 320
+local READING, READING_MIN, READING_MAX = 0.27, 165, 320
 
 -- The narrowest the figure is ever squeezed to. Under this the page is not a
 -- character sheet, it is two lists with a keyhole between them, and the two
 -- columns are what give way.
-local STAGE_MIN = 160
+local STAGE_MIN = 150
 
--- A share of the height, held between the two widths it is worth having.
-local function Share(height, fraction, least, most)
-	return math.max(math.min(math.floor(height * fraction), most), least)
+-- A share of a number, held between the two widths it is worth having.
+local function Share(room, fraction, least, most)
+	return math.max(math.min(math.floor(room * fraction), most), least)
 end
 
 -- The head of that column, top to bottom: your name, the line under it saying
@@ -288,10 +293,16 @@ local function Words(box, entry)
 	box.name:SetPoint("TOP" .. near, box.face, "TOP" .. far, sign * M.gutter, -2)
 	box.name:SetPoint("TOP" .. far, box, "TOP" .. far, 0, -2)
 
+	-- Under the name and under the rule that goes under the name. The two used
+	-- to share a line: the rule was hung across the name's own bottom edge and
+	-- the level was hung one pixel under it, so a full piece had a green line
+	-- drawn through the foot of its own letters and a number sitting on top of
+	-- the line. Everything below the name drops by the height of the rule and
+	-- the row has the pixels to spare.
 	box.note = UI.Label(box, M.small, C.dim, near, UI.SHADOW)
 	UI.Wrap(box.note, false)
-	box.note:SetPoint("TOP" .. near, box.name, "BOTTOM" .. near, 0, -1)
-	box.note:SetPoint("TOP" .. far, box.name, "BOTTOM" .. far, 0, -1)
+	box.note:SetPoint("TOP" .. near, box.name, "BOTTOM" .. near, 0, -(WEAR + 3))
+	box.note:SetPoint("TOP" .. far, box.name, "BOTTOM" .. far, 0, -(WEAR + 3))
 
 	-- One per socket a piece in this slot could carry. Made at build and shown
 	-- by the repaint, because a texture made on a repaint is a texture made
@@ -320,7 +331,7 @@ local function Square(pane, entry)
 	-- competing with it.
 	box.wear = ns.Fill(box, "OVERLAY", C.tick[1], C.tick[2], C.tick[3], 1)
 	box.wear:SetHeight(WEAR)
-	box.wear:SetPoint("BOTTOM" .. (entry.side == "right" and "RIGHT" or "LEFT"),
+	box.wear:SetPoint("TOP" .. (entry.side == "right" and "RIGHT" or "LEFT"),
 		box.name, "BOTTOM" .. (entry.side == "right" and "RIGHT" or "LEFT"), 0, -1)
 	box.wear:Hide()
 
@@ -501,8 +512,20 @@ local function PaintSquare(box)
 	local has, of = ns.Worn.Durability(entry.slot)
 	if has then
 		local fraction = has / of
-		box.wear:SetWidth(math.max(
-			UI.Round(box, box.name:GetWidth() * fraction), 1))
+		-- The string and not the frame. A name is anchored at both ends so it can
+		-- clip rather than wrap, which makes GetWidth the width of the column
+		-- every time: the rule under a full piece was drawn from the name across
+		-- the whole row and out into the middle of the page. GetStringWidth is
+		-- how much of that the letters actually used, which is what an underscore
+		-- is meant to be as wide as. Clamped to the row, because a name longer
+		-- than the column measures at its full length and the rule would run out
+		-- past the edge the letters are cut off at.
+		local room = box.name:GetWidth() or 0
+		local letters = box.name:GetStringWidth() or 0
+		if room > 0 and letters > room then
+			letters = room
+		end
+		box.wear:SetWidth(math.max(UI.Round(box, letters * fraction), 1))
 		UI.Tint(box.wear, WearTone(fraction))
 		box.wear:Show()
 	else
@@ -726,14 +749,16 @@ end
 -- stacked, because this is one arrangement of a fixed number of rows and a
 -- layout engine would be a layer between the numbers and the picture.
 --
--- Nothing here is measured against the width it is handed. The page is the
--- screen, so that width is a different number on every machine and says nothing
--- about how much room the page needs: the three columns and the stage between
--- them are shares of the height, held between the two widths each is worth
--- having, and what is left over is margin split evenly. A wider monitor is a
--- sheet with more air round it and the same sheet in the middle, which is the
--- only answer that does not put the name of your helmet a third of a screen
--- away from the helmet.
+-- The three columns and the stage between them are shares of the width, held
+-- between the two widths each is worth having, and what is left over is margin
+-- split evenly. The order they are cut in is the order they give way in: the
+-- stats come off the right first because they are the one fixed shape on the
+-- page, then a column each side, and the figure takes what is left, because a
+-- name clipped in half is worse than a smaller character.
+--
+-- It was shares of the height, which was the right answer for a page that was
+-- the whole monitor and the wrong one for a page with a shape of its own. The
+-- head of the metrics block carries that argument.
 function Pane:Resize(width, height)
 	self.frame:SetSize(width, height)
 
@@ -742,9 +767,9 @@ function Pane:Resize(width, height)
 	-- them. Then the two columns, then whatever the figure is left with, and only
 	-- the figure gives way, because a name clipped in half is worse than a
 	-- smaller character.
-	local reading = Share(height, READING, READING_MIN, READING_MAX)
+	local reading = Share(width, READING, READING_MIN, READING_MAX)
 	local gear = math.max(width - reading - M.gutter, 1)
-	local column = math.min(Share(height, COLUMN, COLUMN_MIN, COLUMN_MAX),
+	local column = math.min(Share(width, COLUMN, COLUMN_MIN, COLUMN_MAX),
 		math.max(UI.Round(self.frame, (gear - STAGE_MIN) / 2), SQUARE))
 
 	-- How much room the figure has and how much of it he uses. The panel is a
