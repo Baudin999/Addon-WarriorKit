@@ -59,6 +59,20 @@ local RULES = {
 -- rather than this file's.
 local MONEY = { "YOU_LOOT_MONEY", "LOOT_MONEY_SPLIT" }
 
+-- The three denominations the coin phrase inside those two is written in, and
+-- what one of each is worth in copper.
+--
+-- Built from the client's own amount strings for the same reason the sentences
+-- above are: GOLD_AMOUNT is "%d Gold" here and something else on a German
+-- client, and a reader that types either counts nothing on the other. The
+-- phrase joins as many of them as the coin needed, "12 Silver, 39 Copper", and
+-- the comma between them is the client's business rather than this file's.
+local COIN = {
+	{ format = "GOLD_AMOUNT", worth = 10000 },
+	{ format = "SILVER_AMOUNT", worth = 100 },
+	{ format = "COPPER_AMOUNT", worth = 1 },
+}
+
 --------------------------------------------------------------------------
 -- Turning a format string into a pattern
 --
@@ -69,15 +83,23 @@ local MONEY = { "YOU_LOOT_MONEY", "LOOT_MONEY_SPLIT" }
 -- Nil for a format string this client does not carry, which is how the table
 -- above can name messages that exist on one flavour and not the other without
 -- either of them raising.
+--
+-- `loose` leaves the anchors off, because a denomination is one clause inside a
+-- longer phrase rather than the whole of a line. Anchoring "%d Copper" would
+-- read the copper off a coin phrase that was only copper and nothing off one
+-- that had silver in front of it.
 --------------------------------------------------------------------------
 
-local function Pattern(format)
+local function Pattern(format, loose)
 	if type(format) ~= "string" then
 		return nil
 	end
 	local body = format:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
 	body = body:gsub("%%%%s", "(.+)")
 	body = body:gsub("%%%%d", "(%%d+)")
+	if loose then
+		return body
+	end
 	return "^" .. body .. "$"
 end
 
@@ -102,6 +124,9 @@ function LootLine.Build()
 	end
 	for index, name in ipairs(MONEY) do
 		MONEY[index] = { format = name, pattern = Pattern(_G[name]) }
+	end
+	for _, coin in ipairs(COIN) do
+		coin.pattern = Pattern(_G[coin.format], true)
 	end
 	return true
 end
@@ -171,23 +196,47 @@ function LootLine.Read(text)
 	return nil, nil, nil
 end
 
+-- The coin phrase as a number, by reading each denomination back out of it
+-- with the string the client wrote it with.
+--
+-- Nil rather than nought where no denomination matched, because the two are
+-- different answers: nought is a phrase that really said nothing, and nil is a
+-- client whose amount strings are not in place or a locale this got wrong. A
+-- caller adding pickups up has to be able to tell them apart, or it adds
+-- nought to a running total and reports a sum that is short.
+local function Copper(phrase)
+	local sum, read = 0, false
+	for _, coin in ipairs(COIN) do
+		local amount = coin.pattern and phrase:match(coin.pattern)
+		if amount then
+			sum = sum + tonumber(amount) * coin.worth
+			read = true
+		end
+	end
+	return read and sum or nil
+end
+
 -- The client's own coin text out of a money line, which already reads "12
--- Silver, 39 Copper" in whatever language this client is. Nothing at all for a
--- line that is not about coin.
+-- Silver, 39 Copper" in whatever language this client is, and what that comes
+-- to in copper. Nothing at all for a line that is not about coin.
+--
+-- Both, rather than the phrase alone, because the phrase is what a row says and
+-- the number is what two of them add up to. The feed wants the sentence for one
+-- pickup and the sum for three.
 function LootLine.Money(text)
 	if type(text) ~= "string" then
-		return nil
+		return nil, nil
 	end
 	LootLine.Build()
 	for _, rule in ipairs(MONEY) do
 		if rule.pattern then
 			local phrase = text:match(rule.pattern)
 			if phrase then
-				return phrase
+				return phrase, Copper(phrase)
 			end
 		end
 	end
-	return nil
+	return nil, nil
 end
 
 -- How many of the sentences this client actually carries. The loot feed reports

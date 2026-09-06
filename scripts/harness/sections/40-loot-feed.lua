@@ -696,6 +696,80 @@ do
 	ns.db.lootFeedGroup = wasGroup
 end
 
+----------------------------------------------------------------------
+-- Three corpses on one coin row
+--
+-- Coin folds on being coin at all. There is no link to tell one copper from
+-- another and the client reports nobody else's coin, so the window is the
+-- whole of the match.
+--
+-- What it costs is the client's own sentence, and that is the point of this
+-- scene. "12 Silver, 39 Copper" is the right text for the pickup it was
+-- written about and the wrong text for a row three corpses have paid into, so
+-- the row that folds is written from the running total instead. A coin row
+-- still reading the first sentence while counting four pickups is the one
+-- column in this addon that is arithmetic saying something untrue.
+--
+-- The total is a number rather than a phrase because a phrase cannot be added
+-- up. Core/Loot.lua reads it back out of the client's own amount strings, so
+-- 1 Gold, 8 Copper is 10008 here and is 10008 on a German client.
+----------------------------------------------------------------------
+
+local function coin(text)
+	fire("CHAT_MSG_MONEY", text)
+	local tick = feed.frame:GetScript("OnUpdate")
+	if tick then
+		tick(feed.frame, FRAME)
+	end
+end
+
+feed:Clear()
+coin("You loot 12 Silver, 39 Copper")
+check(feed:Count() == 1 and newest().money, "coin did not reach the feed")
+check(newest().copper == 1239,
+	("the coin phrase came to %s copper"):format(tostring(newest().copper)))
+-- One pickup keeps the client's sentence. It is the better text, and nothing
+-- has been added to it for it to be wrong about.
+check(newest().name == "12 Silver, 39 Copper",
+	("a coin row that never folded reads %s"):format(tostring(newest().name)))
+
+coin("You loot 1 Gold, 8 Copper")
+check(feed:Count() == 1, "a second coin inside the window opened a second row")
+check(newest().copper == 11247,
+	("two pickups came to %s copper"):format(tostring(newest().copper)))
+check(newest().name == ns.Coined(11247),
+	("the folded coin row reads %s"):format(tostring(newest().name)))
+
+-- An item in between does not end the run, and coin does not fold onto it.
+drop("You receive loot: %s.", _G.WarriorKitItemLink("Arcanite Reaper"))
+coin("You loot 3 Copper")
+check(feed:Count() == 2, "coin landed on the item row above it or opened a row of its own")
+check(feed:At(1).copper == 11250,
+	("the coin row under the item holds %s copper"):format(tostring(feed:At(1).copper)))
+
+-- Past the window it is a second trip, and that row is the client's sentence
+-- again rather than the total of the one above it.
+advance(61)
+coin("You loot 7 Copper")
+check(feed:Count() == 3, "a minute past the window and the coin row is still folding")
+check(newest().copper == 7 and newest().name == "7 Copper",
+	("the coin row past the window reads %s"):format(tostring(newest().name)))
+
+-- What the row stopped being able to say. The total is on it; how many
+-- corpses paid it is not.
+feed:Clear()
+coin("You loot 5 Silver")
+hover()
+check(said("Coin") == nil, "a coin row off one pickup counted its pickups")
+coin("You loot 5 Silver")
+hover()
+check(said("Coin") == ("%s in 2 pickups"):format(ns.Coined(1000)),
+	("a coin row off two pickups says %s"):format(tostring(said("Coin"))))
+check(said("Looted") == ns.Stream.Clock(_G.GetTime()),
+	("the hover dates the coin fold at %s and it landed at %s")
+		:format(tostring(said("Looted")), ns.Stream.Clock(_G.GetTime())))
+ns.UI.Tooltip.Close()
+
 print(("loot   no word and no line, %d chips over %d rows, icon %d px on a %d px row,"
 	.. " vendor price per item and per stack, a stub scanner asked for the auction")
 	:format(#feed.chips, ns.db.lootFeedRows, ns.db.lootFeedIcon, feed.row))

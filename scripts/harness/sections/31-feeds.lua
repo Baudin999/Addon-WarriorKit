@@ -160,18 +160,18 @@ check(newest().money, "coin did not reach the feed")
 check(newest().name == "12 Silver, 39 Copper",
 	"the coin phrase did not survive the sentence around it: " .. tostring(newest().name))
 
--- Coin is recorded whatever its chip says, the same as everything else. What
--- the chip decides is whether it gets a row, and the purse along the bottom
--- has the number either way.
+-- Coin is recorded whatever its chip says, and the purse along the bottom has
+-- the number either way. The feed's tally is what says it arrived, because a
+-- second coin inside the fold window is the row above and rows cannot see it.
 ns.db.lootFeedMoney = false
 feed:Chipped()
-held, drawn = feed:Count(), feed:Shown()
+held, drawn = ns.LootFeed.Counts(), feed:Shown()
 fire("CHAT_MSG_MONEY", "You loot 4 Copper")
-check(feed:Count() == held + 1, "coin did not reach the ring with its chip off")
+check(ns.LootFeed.Counts() == held + 1, "coin did not reach the ring with its chip off")
 check(feed:Shown() == drawn, "coin got a row with its chip off")
 ns.db.lootFeedMoney = true
 feed:Chipped()
-check(feed:Shown() == drawn + 2, "turning the coin chip back on did not bring both coin rows back")
+check(feed:Shown() == drawn + 1, "turning the coin chip back on did not bring the coin row back")
 
 ----------------------------------------------------------------------
 -- Which way it reads, and scrolling back

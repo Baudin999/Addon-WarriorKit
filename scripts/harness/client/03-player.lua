@@ -669,6 +669,16 @@ _G.LOOT_ITEM_PUSHED_MULTIPLE = "%s receives item: %sx%d."
 _G.YOU_LOOT_MONEY = "You loot %s"
 _G.LOOT_MONEY_SPLIT = "You receive %s as your split."
 
+-- The coin phrase inside those two, one denomination at a time. The client
+-- joins as many of them as the coin needed and the addon reads them back out
+-- with the same three strings, which is how a coin row that folded knows what
+-- three corpses paid. The real enUS strings for the reason the sentences above
+-- are real: a stub that wrote "%dg" would certify a reader that works on
+-- nothing.
+_G.GOLD_AMOUNT = "%d Gold"
+_G.SILVER_AMOUNT = "%d Silver"
+_G.COPPER_AMOUNT = "%d Copper"
+
 -- The line the client writes on an item that has already bound to you, and the
 -- one it writes on an item that has not yet.
 --
