@@ -9,8 +9,19 @@
 -- **One line, and only one.** Two npcs stand at the same yardage on purpose.
 -- A second name in the sentence is a list, a list is a route, and a route is
 -- the module this was explicitly not going to be, so the count of friend lines
--- on the column is an assertion of its own rather than a string comparison
--- that happens to pass.
+-- on the column and the count of quests inside one of them are both assertions
+-- of their own rather than a string comparison that happens to pass.
+--
+-- **The quiet period is a number and both sides of it are driven.** Nineteen
+-- seconds in it is silent and twenty one seconds in it speaks, because a check
+-- that only ever steps clear of the period proves the line goes quiet and not
+-- for how long.
+--
+-- **The period holds who, not which way.** A line standing while the player
+-- turns has to keep the name and change the word. The word was cached with the
+-- name once and the symptom was a sentence saying "ahead of you" to somebody
+-- who had turned round, for twenty seconds, which is the promise the direction
+-- was chosen over a yardage to keep.
 --
 -- **The direction is arithmetic and is proved as arithmetic.** The same person
 -- is read twice from the same spot with the player turned half a circle
@@ -47,8 +58,11 @@ local WAS_LOCK = ns.db.locked
 -- yards away and three at two hundred and twenty.
 local WESTFALL = 52
 
--- Past the module's own quiet period, which is twenty seconds.
+-- Past the module's own quiet period, which is twenty seconds, and just short
+-- of it. Both, because the period is a number and a check that only ever steps
+-- clear of it proves the line goes quiet and not for how long.
 local PAST = 21
+local NEARLY = 19
 
 -- What the line says about the nearer of the two at sixty yards, from where the
 -- quest fixture stands you and facing north. Farmer Furlbrow rather than Salma
@@ -141,6 +155,17 @@ check(walk() == 5, ("the walk found %d npcs and the fixture offers five worth ha
 
 check(fresh() == FURLBROW, ("the line says %q"):format(tostring(Friend.Line())))
 
+-- One name in it and one quest in it, counted rather than inferred from the
+-- string above happening to match. Salma Saldean is standing the same sixty
+-- yards away and offering the same thing, and the sentence that mentions her
+-- too is the list this module refuses to be.
+local line = Friend.Line()
+check(not line:find("Salma Saldean", 1, true),
+	("the line named both of the two at sixty yards: %q"):format(line))
+check(select(2, line:gsub("has a quest", "")) == 1,
+	("the line names %d quests and one is the rule: %q")
+		:format(select(2, line:gsub("has a quest", "")), line))
+
 -- Off the frames, because a module that answered one sentence and a column that
 -- drew two would pass every assertion above.
 Column.Refresh()
@@ -176,6 +201,31 @@ check(not Friend.Line():find("%d"),
 	("the line has a number in it: %q"):format(Friend.Line()))
 
 ----------------------------------------------------------------------
+-- The quiet period holds who, not which way
+----------------------------------------------------------------------
+
+-- A line already standing, and the player turns without moving. The person is
+-- the same person and the name may not change; the word has to, because the
+-- direction is the one thing here the game confirms as you walk and a word
+-- cached with the name for twenty seconds points at where he was.
+advance(PAST / 2)
+worldmap.Face(math.pi)
+check(Friend.Line() == TURNED,
+	("turned round inside the quiet period the line says %q")
+		:format(tostring(Friend.Line())))
+check(Friend.Describe() == TURNED,
+	("turned round inside the quiet period the reading says %q")
+		:format(Friend.Describe()))
+
+worldmap.Face(0)
+check(Friend.Line() == FURLBROW,
+	"turning back inside the quiet period kept the word it was turned to")
+
+-- Said again from nothing, so the clock stamp the section below counts from is
+-- this line rather than the one before the turn.
+check(fresh() == FURLBROW, "the line did not say it again from a clean start")
+
+----------------------------------------------------------------------
 -- Not twice inside the quiet period
 ----------------------------------------------------------------------
 
@@ -189,8 +239,16 @@ check(Friend.Line() == nil,
 	("a second ask inside the quiet period said %q")
 		:format(tostring(Friend.Line())))
 
+-- Nineteen seconds is still inside twenty, and a check that only ever jumps
+-- clear of the period cannot tell a twenty second clock from a one second one.
+advance(NEARLY)
+Near.List()
+check(Friend.Line() == nil,
+	("%d seconds into the quiet period the line said %q")
+		:format(NEARLY, tostring(Friend.Line())))
+
 -- And past it, the person who is actually nearest gets the line.
-advance(PAST)
+advance(PAST - NEARLY)
 Near.List()
 check(Friend.Line() ~= nil, "the line stayed quiet after its own period had run out")
 check(Friend.Line():find("Salma Saldean", 1, true) ~= nil,
@@ -208,6 +266,8 @@ advance(PAST)
 Near.List()
 check(Friend.Line() == nil,
 	("the line named the same person again: %q"):format(tostring(Friend.Line())))
+check(Friend.Describe() == "quiet, having named the last one already",
+	("the reading says %q"):format(Friend.Describe()))
 
 Column.Refresh()
 check(#asides() == 0, "the column is still drawing a line the module has stopped saying")

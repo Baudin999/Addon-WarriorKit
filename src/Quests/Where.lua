@@ -248,10 +248,11 @@ end
 -- **Asked at most once a second, and that is not a nicety.** The walk behind
 -- it reads every spawn of every objective still open, through a zone to world
 -- coordinate transform per pair, which on an ordinary kill objective is
--- hundreds of them. Both callers below are in the quest window's paint, so a
--- paint used to cost two of these walks, and a paint is what QUEST_LOG_UPDATE
--- ends in. That event is not the log changing: it is the client saying it
--- looked, and it says so several times a second while you are killing things.
+-- hundreds of them. Two callers in the quest window's paint made a paint cost
+-- two of these walks. There is one caller now, drawing the one selected quest,
+-- and scripts/check.sh counts them so it stays one. A paint is what
+-- QUEST_LOG_UPDATE ends in, and that event is not the log changing: it is the
+-- client saying it looked, several times a second while you are killing things.
 -- The whole cost arrived the day the name above was corrected, because the
 -- wrong name cost nothing, and it landed as a stutter in the world rather than
 -- as anything wrong in the window.

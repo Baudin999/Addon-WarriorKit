@@ -50,6 +50,14 @@ local Where = ns.QuestWhere
 -- out fresh on every paint and drawn every time would be a sentence flickering
 -- over the world all evening.
 --
+-- **The quiet period holds which quest is named, not how it is described.**
+-- The pair is what stands for the twenty seconds; the direction is worked out
+-- again on every reading. Caching the finished string instead is the one bug
+-- the sentence above will not tolerate: turn round with a line standing and it
+-- says "ahead of you" about somebody now behind you, for the rest of its
+-- period, which is exactly the promise the direction was chosen over a yardage
+-- to keep.
+--
 -- Silent in combat, and silent indoors. Near.lua already idles in an instance
 -- because every spawn outside it is half a million yards away; this is the
 -- second layer over the same fact, and it is the one that covers a walk into a
@@ -87,10 +95,11 @@ local SLICE = TURN / #WORDS
 -- shorter and it is gone before you have looked away from the fight.
 local QUIET = 20.0
 
--- Who the line last named, when it named him, and what it said. The pair is
--- held rather than the entry it came off, for the reason in the header: the
--- entry belongs to Near.lua's walk and is written into again.
-local saidNpc, saidQuest, saidAt, said
+-- Who the line last named and when it named him. The pair is held rather than
+-- the entry it came off, for the reason in the header: the entry belongs to
+-- Near.lua's walk and is written into again. The sentence is not held at all,
+-- for the other reason in the header.
+local saidNpc, saidQuest, saidAt
 
 --------------------------------------------------------------------------
 -- Which way
@@ -169,6 +178,14 @@ local function Phrase(name, word)
 	return "Somebody near you has a quest you have never taken."
 end
 
+-- The sentence for one entry, worked out again on every reading rather than
+-- kept. The name is a fact about the person and stands for the quiet period;
+-- the word is a fact about where you are standing and which way you are
+-- pointing, and both change under a line that is still standing.
+local function Say(at)
+	return Phrase(at.name, Word(at.area, at.x, at.y))
+end
+
 --------------------------------------------------------------------------
 -- The line
 --------------------------------------------------------------------------
@@ -204,22 +221,22 @@ function Friend.Line()
 	if at.npc == saidNpc and at.quest == saidQuest then
 		-- The one it is already saying. It stands out its twenty seconds and
 		-- then it is done: walking past the same person for the rest of the
-		-- evening is not news.
-		return quiet and said or nil
+		-- evening is not news. Said again rather than repeated, so the
+		-- direction is the one you are facing now.
+		return quiet and Say(at) or nil
 	end
 	if quiet then
 		return nil
 	end
 	saidNpc, saidQuest, saidAt = at.npc, at.quest, now
-	said = Phrase(at.name, Word(at.area, at.x, at.y))
-	return said
+	return Say(at)
 end
 
 -- The clock and the name dropped, for the harness and for anything that has to
 -- watch the line decide again. Nothing in the addon calls it: the quiet period
 -- runs out on its own.
 function Friend.Forget()
-	saidNpc, saidQuest, saidAt, said = nil, nil, nil, nil
+	saidNpc, saidQuest, saidAt = nil, nil, nil
 end
 
 -- Short enough for a reading on the options page, which never wraps, and with
@@ -228,13 +245,18 @@ function Friend.Describe()
 	if Hushed() then
 		return "quiet, because you are fighting or standing indoors"
 	end
-	if not Nearest() then
+	local at = Nearest()
+	if not at then
 		return "nobody near you has a quest you have never taken"
 	end
-	if said and saidAt and (GetTime() - saidAt) < QUIET then
-		return said
+	-- The standing sentence, said the way the line would say it right now.
+	-- Anything else inside the period is the line refusing to speak, and the
+	-- reading says so rather than repeating what it said last.
+	if saidAt and (GetTime() - saidAt) < QUIET
+		and at.npc == saidNpc and at.quest == saidQuest then
+		return Say(at)
 	end
-	if said then
+	if saidNpc then
 		return "quiet, having named the last one already"
 	end
 	return "somebody near you has one, and the line is about to say so"

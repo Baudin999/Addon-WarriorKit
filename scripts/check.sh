@@ -805,6 +805,99 @@ probe_list() {
 
 probe_list PROBED_ALLOWED "$PROBED_ALLOWED"
 
+# The quest tree does not put the log in order.
+#
+# Quests/Friend.lua is one sentence of code holding up a page of restraint, and
+# the restraint is the feature. It names one person, once, and says which way to
+# turn. What it refuses to be is a route: a list of who to see next, in the
+# order that levels you fastest. That refusal is four lines away. Near.lua
+# already carries a yardage per npc and the log already carries a level and a
+# reward, so `table.sort` over either is a convenience somebody adds in an
+# afternoon, and it turns a friend into a plan the player is then behind on.
+#
+# Written while it is already satisfied, which is the only cheap moment, and
+# it is the same argument the placeable rule below makes about itself.
+#
+# Two halves, because the sort arrives in two shapes. Every sort in the tree is
+# counted and defended, so a new one cannot land unremarked whatever it is keyed
+# on. And a line saying it orders anything by how far, how much or how high
+# fails outright, comments read too, for the reason the GameTooltip rule reads
+# them: a file explaining the route it would offer is a file about to offer one.
+#
+# path:sorts in that file:what it puts in order and why that is not a route
+QUEST_SORT_ALLOWED="
+Quests/Drops.lua:2:a hover's lines by quest id and its objectives by Questie's own index, so the same mob draws the same tooltip twice running
+Quests/Party.lua:1:the names on a hover alphabetically, so the same party draws the same tooltip twice running
+"
+
+quest_sorts() {
+	grep -cE '(table\.sort|:sort)\(' "$1" || true
+}
+
+quest_sorted=$(grep -rlE '(table\.sort|:sort)\(' --include='*.lua' ./Quests \
+	| sed 's|^\./||' | sort)
+quest_listed=""
+
+while IFS= read -r entry; do
+	[ -n "$entry" ] || continue
+	marker_entry QUEST_SORT_ALLOWED "$entry" || continue
+
+	[ -n "${entry_why# }" ] || {
+		echo "QUEST_SORT_ALLOWED allow-lists $entry_path with no reason given"
+		status=1
+	}
+
+	held=$(quest_sorts "$entry_path")
+	if [ "$held" -ne "$entry_count" ]; then
+		echo "QUEST_SORT_ALLOWED says $entry_path sorts $entry_count times and it sorts $held: one added needs the count raised and defending as something other than a route, one removed needs it lowered in the same commit"
+		status=1
+	fi
+
+	quest_listed="$quest_listed$entry_path"$'\n'
+done <<< "$QUEST_SORT_ALLOWED"
+
+while IFS= read -r entry; do
+	[ -n "$entry" ] || continue
+	grep -qxF "$entry" <<< "$quest_listed" || {
+		echo "src/$entry puts the quest log in an order: the tracker is filed by zone and the friend names one person, so add an entry saying what this orders and why it is not a route"
+		status=1
+	}
+done <<< "$quest_sorted"
+
+while IFS= read -r bad; do
+	echo "nothing in Quests/ orders the log by how far, how much or how high, because that is the sort that makes this a levelling addon: $bad"
+	status=1
+done < <(grep -rniE '(sort|order|rank)[a-z]*[[:space:]]+([a-z]+[[:space:]]+){0,3}by[[:space:]]+(the[[:space:]]+)?(distance|yard|nearest|closest|xp|experience|reward|level)' \
+	--include='*.lua' ./Quests || true)
+
+# One thing walks every spawn in the log, and it draws one quest.
+#
+# Where.Nearest is the expensive call in the quest tree: a zone to world
+# transform for every spawn of every objective still open, which is hundreds of
+# pairs on an ordinary kill objective. Where.lua's own header tells the story of
+# the day it had two callers, both in the same paint, and a paint is what
+# QUEST_LOG_UPDATE ends in.
+#
+# So the count is the gate rather than the memo that made the second call cheap.
+# A second caller is a second walk and it does not have to be in a paint to
+# hurt: the memo holds one quest for one second, so two readers asking about two
+# quests miss each other every time and the second one pays in full.
+#
+# One caller, and it is the quest window drawing the quest you selected.
+# Quests/Friend.lua walks Near.lua's npc list instead and asks Where.Map only,
+# which is a table lookup.
+quest_walkers=$(grep -rn 'Where\.Nearest(' --include='*.lua' . \
+	| grep -v '^\./Quests/Where\.lua:[0-9]*:function Where\.Nearest(' || true)
+quest_walker_count=$(printf '%s' "$quest_walkers" | grep -c . || true)
+if [ "$quest_walker_count" -ne 1 ] \
+	|| ! printf '%s\n' "$quest_walkers" | grep -q '^\./Quests/Window\.lua:'; then
+	echo "Where.Nearest has $quest_walker_count callers and it may have one, the quest window's paint drawing the quest you selected:"
+	if [ -n "$quest_walkers" ]; then
+		printf '%s\n' "$quest_walkers" | sed 's/^/  /'
+	fi
+	status=1
+fi
+
 # No tooltip carries a blue line naming a switch.
 #
 # UI/Tip.lua used to build a fourth band called `hint`: one quiet blue sentence

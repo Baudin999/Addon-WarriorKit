@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### The friend's direction follows you, and what it will not do is now a gate
+
+Turn round under a line that is standing and the line turns with you. It held
+its direction for the whole twenty seconds it was up, so turning round left you
+being told "ahead of you" about somebody now behind you, which is the one
+failure a direction was chosen over a yardage to avoid. The quiet period holds
+which quest is named. The word it is named with is worked out on every reading.
+
+The rest of that sentence's restraint is checked rather than asked for. Nothing
+in the quest tree may put the log in order of distance, experience or level, and
+every sort still in there carries a written reason for what it orders. The walk
+that reads every spawn of every open objective has one caller, drawing the one
+quest you selected, and the count is now the gate rather than the memo that made
+a second call cheap. The harness drives the rest: two people at one distance
+make one line, nineteen seconds in is silent and twenty one speaks, and a fight
+or a dungeon takes the line off the tracker and leaves the quests on it.
+
 ### A line at the foot of the tracker, from a friend rather than a map
 
 One sentence under the quests you are standing in the middle of, naming one
