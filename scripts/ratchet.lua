@@ -51,10 +51,10 @@ local function Read(path)
 	return text
 end
 
--- Every ceiling a watched file declares, as a name and a number. Four shapes,
--- which is the two syntaxes each of the two files writes, and all four are run
--- over both files: a pattern that matches nothing costs nothing, and a file
--- that grows the other one's shape is covered the day it does.
+-- Every ceiling a watched file declares, as a name and a number. Five shapes,
+-- which is what the three watched files write between them, and all five are
+-- run over all of them: a pattern that matches nothing costs nothing, and a
+-- file that grows another one's shape is covered the day it does.
 --
 -- An allow-list entry is keyed by its list as well as its path. Nothing needed
 -- that while there were two lists and they named different trees; there are
@@ -126,6 +126,17 @@ local function Ceilings(text)
 							found[path .. " " .. fn .. " " .. what] = tonumber(value)
 						end
 					end
+				end
+
+				-- trees.lua's allow-list, in the same table under the same
+				-- name and keyed on the edge rather than on a path. An entry
+				-- says how many times one tree may name one symbol, and it
+				-- ratchets exactly like a length does.
+				local from = entry:match('from%s*=%s*"([^"]*)"')
+				local sym = entry:match('sym%s*=%s*"([^"]*)"')
+				local uses = entry:match("uses%s*=%s*(%d+)")
+				if from and sym and uses then
+					found[from .. " -> ns." .. sym .. " uses"] = tonumber(uses)
 				end
 			end
 		end

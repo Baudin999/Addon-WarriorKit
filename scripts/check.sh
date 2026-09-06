@@ -1289,6 +1289,23 @@ else
 	status=1
 fi
 
+# Which tree is allowed to name which.
+#
+# The addon is one namespace, so nothing in the language stops a feature from
+# reaching into another feature's file, and until this landed nothing else did
+# either: the rule was a sentence in a comment in Core/Piles.lua and there were
+# thirty-six edges crossing trees that nobody had decided on. scripts/trees.lua
+# derives who owns what from the source, holds the base set the rest may name
+# freely, and carries the reason for every crossing that is allowed.
+if [ -f ../scripts/trees.lua ]; then
+	if ! lua5.1 ../scripts/trees.lua $(find . -name '*.lua' -type f | sort); then
+		status=1
+	fi
+else
+	echo "scripts/trees.lua is missing and a feature can reach into any other"
+	status=1
+fi
+
 # And which way the numbers in those gates are allowed to move.
 #
 # Every ceiling in shape.lua and every one further down this file is a ratchet,
@@ -1304,7 +1321,7 @@ fi
 # only hole and it closes on the first commit.
 if [ -f ../scripts/ratchet.lua ]; then
 	if git rev-parse --verify HEAD >/dev/null 2>&1; then
-		for watched in scripts/shape.lua scripts/check.sh; do
+		for watched in scripts/shape.lua scripts/trees.lua scripts/check.sh; do
 			committed=$(mktemp)
 			if git show "HEAD:$watched" > "$committed" 2>/dev/null; then
 				lua5.1 ../scripts/ratchet.lua "$watched" "$committed" "../$watched" \

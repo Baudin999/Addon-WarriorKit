@@ -114,66 +114,9 @@ local function Slurp(path)
 	return text
 end
 
--- Where a long bracket ends: [[ ]], [=[ ]=] and so on, used by both long
--- strings and long comments. Returns the position after the closing bracket,
--- or nil when the file ends first, which luacheck reports better than this.
-local function LongBracket(text, start)
-	local level = text:match("^%[(=*)%[", start)
-	if not level then return nil end
-	local close = "]" .. level .. "]"
-	local from = text:find(close, start + #level + 2, true)
-	if not from then return nil end
-	return from + #close
-end
-
--- The word tokens of a file, in order, each with the line it sits on.
--- Comments, strings and everything that is not an identifier are dropped,
--- because the three measurements only ever ask about keywords.
-local function Words(text)
-	local out, line, i, n = {}, 1, 1, #text
-	while i <= n do
-		local c = text:sub(i, i)
-		if c == "\n" then
-			line = line + 1
-			i = i + 1
-		elseif text:sub(i, i + 1) == "--" then
-			local after = LongBracket(text, i + 2)
-			if after then
-				for _ in text:sub(i, after - 1):gmatch("\n") do line = line + 1 end
-				i = after
-			else
-				i = (text:find("\n", i, true) or n + 1)
-			end
-		elseif c == "[" and text:match("^%[=*%[", i) then
-			local after = LongBracket(text, i)
-			if not after then return out end
-			for _ in text:sub(i, after - 1):gmatch("\n") do line = line + 1 end
-			i = after
-		elseif c == "'" or c == '"' then
-			local j = i + 1
-			while j <= n do
-				local d = text:sub(j, j)
-				if d == "\\" then
-					j = j + 2
-				elseif d == c or d == "\n" then
-					break
-				else
-					j = j + 1
-				end
-			end
-			i = j + 1
-		else
-			local word, after = text:match("^([%a_][%w_]*)()", i)
-			if word then
-				out[#out + 1] = { word = word, line = line, pos = i }
-				i = after
-			else
-				i = i + 1
-			end
-		end
-	end
-	return out
-end
+-- The tokeniser, which scripts/trees.lua reads a file with as well. Its own
+-- header says why there is one of it rather than one per gate.
+local Words = dofile((arg[0]:gsub("[^/\\]+$", "words.lua")))
 
 -- The name a function reports itself under. Lua names a function four ways.
 -- Three of them put a dotted chain straight after the keyword and the fourth
