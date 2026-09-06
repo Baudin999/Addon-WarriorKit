@@ -140,14 +140,15 @@ ns.Register({
 		-- On, and it is the other half of what makes the sheet readable. The
 		-- wash above puts the world behind it in shadow and can do nothing about
 		-- the addon's own rectangles, because a cooldown row is a frame over the
-		-- world rather than part of it. This puts them away for as long as the
-		-- sheet is up: the buff row, the cooldowns, the swing bars, the meters,
-		-- the standing row, both feeds, and the three unit blocks, which are the
-		-- ones a sheet pinned to an edge of the monitor lands on top of.
+		-- world rather than part of it. This moves the ones the sheet is actually
+		-- on top of and leaves the rest where they are: the buff row, the
+		-- cooldowns, the swing bars, the meters, the standing row, both feeds and
+		-- the three unit blocks are all registered, and each one goes away for
+		-- exactly as long as the sheet overlaps it. UI/Hush.lua carries the test.
 		--
-		-- Off is for the player who opens the sheet mid pull to read a number off
-		-- it and wants his swing timer and his health while he does. It costs him
-		-- nothing else: the sheet is over all of them either way now.
+		-- Off is for the player who wants every one of them wherever the sheet
+		-- lands. It costs him nothing else: the sheet is over all of them either
+		-- way now.
 		characterQuiet = true,
 
 		-- Blizzard's own goes in the attic, and C opens this one.
@@ -212,7 +213,7 @@ ns.Register({
 		ui.Check("darken the world behind the sheet",
 			function() return ns.db.characterDim end,
 			SetDim)
-		ui.Check("put the addon's own HUD away while the sheet is up",
+		ui.Check("move the addon's own HUD out from under the sheet",
 			function() return ns.db.characterQuiet end,
 			SetQuiet)
 		ui.Reading("what you are wearing", ns.Worn.Describe)

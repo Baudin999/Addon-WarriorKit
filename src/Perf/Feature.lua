@@ -41,6 +41,7 @@ local ROWS = {
 	{ key = "buffs", label = "buff nag", hz = 10 },
 	{ key = "cooldowns", label = "cooldown row", hz = 10 },
 	{ key = "hide", label = "Blizzard frames held down", hz = 1 },
+	{ key = "hush", label = "the HUD out from under a window", hz = 10 },
 	{ key = "feed", label = "feeds", hz = 60, rate = "every frame" },
 
 	-- The three the frame trace is made of, on the list they measure. A part

@@ -68,6 +68,11 @@ local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast
 	"castsweep", "tip", "settle", "fresh", "chart", "skin", "skinread", "party",
 	"partyread", "meter",
 	"buffs", "cooldowns", "standing", "stream", "world", "trace", "hide", "clock", "bagstack",
+	-- Which of the addon's own rectangles are under a window the player has
+	-- opened. Ten times a second while one is up and nothing at all while none
+	-- is, and on most of those ticks it reads eight rectangles and writes
+	-- nothing, which is the number this row is here to keep honest.
+	"hush",
 	"vendor", "thanks", "sampler", "feed", "adhoc",
 	-- Every tween in the addon, on one tick that stops itself when nothing is
 	-- moving. One slot rather than one per animation: a caller arms a tween, it

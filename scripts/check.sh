@@ -1024,6 +1024,7 @@ Perf/Hud.lua:1:the repaint goes with the window it draws, which is the whole of 
 UI/Chart.lua:2:the follow and the drift both go with the board they are drawn on
 UI/Feed.lua:1:the repaint goes with the feed's own frame
 UI/Fresh.lua:1:the frame is hidden and shown to gate the refresh, which runs only while a box with something moving in it is on screen
+UI/Hush.lua:1:the frame is hidden and shown to gate the sweep, which runs only while a window the HUD has to get out from under is open
 UI/Tip.lua:1:the frame is hidden and shown to gate the wait, which is armed by a hover and runs for a few frames
 UI/Tooltip.lua:1:the frame is hidden and shown to gate the sweep, which is the whole of what hanging a tick off a frame buys
 World/World.lua:1:the frame is hidden and shown to gate the sweep
