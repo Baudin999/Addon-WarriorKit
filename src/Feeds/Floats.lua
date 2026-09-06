@@ -130,6 +130,13 @@ local function Build()
 
 	frame.icon = UI.Icon(frame)
 	frame.icon:SetPoint("TOPLEFT")
+	-- Added rather than blended, which is the only way a black background comes
+	-- off an icon. An item icon is a painting on a dark square with no alpha
+	-- channel in it at all, so there is nothing for the usual blend to make
+	-- transparent and every drop crossed the world as a black tile. Additive
+	-- blending multiplies nothing by the destination where the source is black,
+	-- so the square goes and the object stays.
+	frame.icon:SetBlendMode("ADD")
 
 	-- Shadowed, not flat and not outlined. Flat is for a string on a surface
 	-- this addon painted and there is none here. Outlined is the role for text
