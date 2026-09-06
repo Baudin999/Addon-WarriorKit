@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### A feed row draws a whole word or none of it
+
+A row in a feed is an icon, a name, a dim middle column and a number. Nothing
+had ever measured that middle column against what gets written into it. The
+combat feed asks for 96 units of it and its widest string, "from Plains
+Creeper", wants 131 in the face the addon ships, so the row drew "from Plains
+Cree" and stopped there. It has done that since the column was written.
+
+A note that does not fit its column is not drawn now. Half a mob's name is worse
+than no mob's name, and the row still has the icon, the spell, the number and
+the colour that says which way the blow went.
+
+The honest consequence is that the combat feed's middle column goes quiet at the
+width it ships at, and at every other width the panel offers. Dragged to the
+full 520 units the column gets the whole 96 it asked for, and 96 is short of 131.
+Who swung is on the hover, under From and To. The loot feed keeps its column,
+because that one was sized against the widest quest count an objective can carry
+and holds it at both ends of the slider. A stream that wants its own column back
+asks for a width its strings fit in.
+
 ### One answer for where you are standing
 
 Three parts of the addon were about to work out where you are standing on their

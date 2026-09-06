@@ -1046,6 +1046,41 @@ end
 -- rule UI/Scroll.lua and UI/Log.lua both state: handing the width back when the
 -- content fits would rewrap the rows, which can make them not fit, which brings
 -- the bar back. A layout that can argue with itself is a layout that flickers.
+
+-- Whether the middle column is drawn on this row, which is a question about the
+-- string as well as about the width.
+--
+-- A note is drawn whole or it is not drawn. The column is a width and the note
+-- is a measurement, and nothing here compared the two until this: a stream asks
+-- for the room it believes its widest string wants, Resize hands back half of
+-- what is left after the number at most, and a font string given less than its
+-- string needs drops the end of it without saying so. Feeds/Combat.lua asks for
+-- 96 units and "from Plains Creeper" measures 131 in the shipped face at a
+-- row's text size, so that column has clipped at every width that feed has ever
+-- been drawn at.
+--
+-- Measured rather than declared, and that is why the rule is here rather than a
+-- shorter string in the two streams. `geom.note` is clamped to half the free
+-- width in Resize, so the same string fits at one feed width and clips at the
+-- next one down, and a number a stream wrote once cannot answer a question the
+-- player moves.
+--
+-- What it does not do is give the room back to the name. The columns line up
+-- down the feed, and a name that grew on the rows whose note went missing is a
+-- feed with a ragged number column on it.
+--
+-- Asked on the three moves that can change the answer rather than on every
+-- paint: the resize, a new note written to the row and the swap back out of a
+-- marker. A row repainting the note it already has pays nothing.
+local function Noted(row)
+	if row.noted and not row.shownMark
+		and (row.note:GetStringWidth() or 0) <= row.notemax then
+		row.note:Show()
+	else
+		row.note:Hide()
+	end
+end
+
 -- One row given the geometry the resize worked out, which is every number about
 -- a row that is not the entry on it.
 --
@@ -1083,17 +1118,16 @@ local function ShapeRow(feed, row, index, geom)
 	row.caption:SetWidth(geom.caption * unit)
 
 	row.noted = geom.note > 0
+	row.notemax = geom.note * unit
 	if row.noted then
-		row.note:SetWidth(geom.note * unit)
+		row.note:SetWidth(row.notemax)
 	end
 	-- Written from here rather than left to the repaint, because whether
 	-- there is a middle column at all is decided by the width and a row that
-	-- is not repainting is a row that would keep the last answer.
-	if row.noted and not row.shownMark then
-		row.note:Show()
-	else
-		row.note:Hide()
-	end
+	-- is not repainting is a row that would keep the last answer. The width it
+	-- is decided against is kept on the row, because the other two callers of
+	-- Noted run nowhere near the geometry that produced it.
+	Noted(row)
 
 	-- What the stripe is on an entry and what it becomes on a marker, held
 	-- on the row so the repaint can swap between them without knowing the
@@ -1416,9 +1450,7 @@ local function Marked(row, mark)
 		row.icon:Show()
 		row.name:Show()
 		row.caption:Hide()
-		if row.noted then
-			row.note:Show()
-		end
+		Noted(row)
 	end
 	return true
 end
@@ -1481,6 +1513,9 @@ local function PaintRow(row, entry, faded)
 	if not mark and row.shownNote ~= entry.note then
 		row.shownNote = entry.note
 		row.note:SetText(entry.note or "")
+		-- Measured on the write, which is the only place a repaint can change
+		-- what the column is being asked to hold.
+		Noted(row)
 	end
 
 	if row.shownAmount ~= entry.amount then

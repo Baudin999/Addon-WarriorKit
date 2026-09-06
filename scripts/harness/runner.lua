@@ -267,6 +267,12 @@ local SECTIONS = {
 	-- bare, in a fight.
 	"30-buff-page",
 	"31-feeds",
+	-- Straight under it, and it is UI/Feed.lua's rule rather than either feed's:
+	-- a note the column cannot hold whole is not drawn at all. A file of its own
+	-- because 31-feeds.lua is at the line ceiling every section shares. It turns
+	-- the combat feed on and off the way that section does and puts both feeds'
+	-- widths back, so what it hands on is the scene it was given.
+	"31-feed-note",
 	"32-breakdown",
 	"33-anchors",
 	"34-game-menu",
