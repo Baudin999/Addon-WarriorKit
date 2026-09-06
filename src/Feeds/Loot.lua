@@ -398,6 +398,11 @@ local function AddItem(who, link, count)
 	entry.quality = quality
 	entry.quest = (class == QUEST_CLASS) or nil
 	entry.ring = entry.quest and QUEST or nil
+	-- And the ring stays at full while the stripe beside it rests. The stripe
+	-- is a grade and a column of grades is worth reading as a ribbon; the ring
+	-- is the one thing on the row telling you to look, and a thing telling you
+	-- to look at three fifths strength is furniture.
+	entry.look = entry.ring and true or nil
 	entry.price = price
 
 	-- The same item again inside the window is the row you are already looking

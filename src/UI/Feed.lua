@@ -1270,6 +1270,44 @@ function Feed:Mouse(on)
 	return true
 end
 
+-- How strongly one row paints the grade of what is on it.
+--
+-- Two things decide it and they change at different times, which is why this is
+-- a function and not a line in the repaint: the colour is the entry's and moves
+-- when a drop lands, the strength is the cursor's and moves when the mouse
+-- does. Character/Paperdoll.lua splits the sheet's quality band the same way,
+-- and rests it at the same M.rest, because a quality is one picture whichever
+-- window you meet it in.
+--
+-- What rests is what says a grade. Two things on a row say something else and
+-- both stay at full: a marker's band, which is a break in the timeline rather
+-- than a thing that happened, and a ring the entry has claimed with `look`.
+-- `look` is the entry's word rather than this file's test for a quest, so a
+-- feed can put a ring on a row for any reason it likes and still say the ring
+-- is the reason to read the row.
+--
+-- Nothing sets a strength when a row is built. A row is hidden until it has an
+-- entry, and taking one puts its mark somewhere it was not, so Marked reaches
+-- here before the row is ever on screen.
+--
+-- Both writes are guarded like every other write in this file, and the reopen
+-- in Paint is why rather than the arrival: it re-enters the row under the
+-- cursor five times a second for as long as a fight lasts, and every one of
+-- those is the same alpha the row already has.
+local function Tone(row)
+	local stripe = (row.lit or row.shownMark) and 1 or M.rest
+	if row.shownStripeAt ~= stripe then
+		row.shownStripeAt = stripe
+		row.stripe:SetAlpha(stripe)
+	end
+
+	local ring = (row.lit or row.shownLook) and 1 or M.rest
+	if row.shownRingAt ~= ring then
+		row.shownRingAt = ring
+		row.mark:SetAlpha(ring)
+	end
+end
+
 --------------------------------------------------------------------------
 -- The mouse
 --------------------------------------------------------------------------
@@ -1283,6 +1321,12 @@ function Feed:Enter(index)
 	end
 	self.hovered = index
 	row.glow:Show()
+	-- And the row's own colour to full, which is the other half of the answer
+	-- the glow gives. The column rests its stripes so thirteen qualities read as
+	-- a ribbon rather than as thirteen lights; the row you are pointing at is
+	-- the one you have asked to read.
+	row.lit = true
+	Tone(row)
 	-- When the box was last filled, which is what the reopen in Paint throttles
 	-- against. Stamped here rather than there so one place owns it: a hover is a
 	-- fill, and a reopen a frame after one is the case the throttle is for.
@@ -1311,6 +1355,8 @@ function Feed:Leave()
 		local row = self.rows[self.hovered]
 		if row then
 			row.glow:Hide()
+			row.lit = nil
+			Tone(row)
 		end
 		self.hovered = nil
 	end
@@ -1360,6 +1406,7 @@ local function Marked(row, mark)
 	row.shownMark = mark
 	row.shownName, row.shownColor, row.shownIcon, row.shownNote = nil, nil, nil, nil
 	row.stripe:SetWidth(mark and row.band or row.rib) -- unguarded: the return above compares the mark against what is drawn
+	Tone(row)
 	if mark then
 		row.icon:Hide()
 		row.name:Hide()
@@ -1373,6 +1420,38 @@ local function Marked(row, mark)
 			row.note:Show()
 		end
 	end
+	return true
+end
+
+-- The ring round the icon, and how strongly it is painted.
+--
+-- On the loot feed the ring means a quest item and on any other feed it means
+-- whatever the capture file decided to say with it. A marker has no icon, so it
+-- can never have one round it.
+--
+-- Whether it rests with the stripe is the entry's `look` and not a test for a
+-- quest in here. An entry that claims its ring is saying the ring is why the
+-- row is worth reading, and that is a thing a feed is allowed to mean for a
+-- reason other than a quest.
+--
+-- Its own function for the reason Marked is one. This is four branches of
+-- PaintRow's thirty and it changes about once a pickup, while everything left
+-- in PaintRow runs on every arrival.
+local function Ringed(row, mark, entry)
+	local ring = (not mark) and entry.ring or nil
+	local look = ring and entry.look or nil
+	if row.shownRing == ring and row.shownLook == look then
+		return false
+	end
+
+	row.shownRing, row.shownLook = ring, look
+	if ring then
+		ns.Recolor(row.mark.edges, ring)
+		row.mark:Show()
+	else
+		row.mark:Hide()
+	end
+	Tone(row)
 	return true
 end
 
@@ -1392,19 +1471,7 @@ local function PaintRow(row, entry, faded)
 		row.icon:SetTexture(entry.icon)
 	end
 
-	-- The ring, which on this feed means a quest item and on any other feed
-	-- means whatever the capture file decided to say with it. A marker has no
-	-- icon, so it can never have one round it.
-	local ring = (not mark) and entry.ring or nil
-	if row.shownRing ~= ring then
-		row.shownRing = ring
-		if ring then
-			ns.Recolor(row.mark.edges, ring)
-			row.mark:Show()
-		else
-			row.mark:Hide()
-		end
-	end
+	Ringed(row, mark, entry)
 
 	if row.shownName ~= entry.name then
 		row.shownName = entry.name

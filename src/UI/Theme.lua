@@ -218,6 +218,17 @@ UI.Metric = {
 	-- about two thirds of one, so matching the numbers would draw an arrow half
 	-- again the height of the word beside it.
 	glyph    = 10,
+
+	-- A strength rather than a length, and the only one in here.
+	--
+	-- How brightly a surface paints an item's grade with nothing pointing at
+	-- it. Nineteen quality colours at full strength is a page of coloured
+	-- lights and thirteen feed rows of it is a column of them; at this they are
+	-- a tint you read without being shouted at, and the hover is what takes one
+	-- to full. Character/Paperdoll.lua rests a quality band at it and UI/Feed.lua
+	-- rests a row's stripe at it, and the two windows are drawing the same
+	-- picture, so they are drawing it off the same number.
+	rest     = 0.55,
 }
 
 -- How much of its own alpha a surface is drawn at, kept on the texture rather

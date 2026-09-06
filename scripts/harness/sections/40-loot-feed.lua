@@ -435,6 +435,67 @@ Loot.Light(1, true)
 feed:Chipped()
 
 ----------------------------------------------------------------------
+-- One picture in both windows
+--
+-- Character/Paperdoll.lua rests the band round a worn item's icon at
+-- UI.Metric.rest and the hover takes it to full. A feed shows more quality at
+-- once than the sheet ever does, thirteen rows of it against nineteen squares
+-- you look at one at a time, so it rests its stripe at the same number off the
+-- same constant.
+--
+-- The ring is the exception and it is exempt by the entry's word rather than by
+-- being a quest. A ring nobody claims rests with the stripe, which is the room
+-- left for a ring that means something else.
+----------------------------------------------------------------------
+
+do
+	local C, M = ns.UI.Color, ns.UI.Metric
+
+	feed:Clear()
+	drop("You receive loot: %s.", _G.WarriorKitItemLink("Linen Cloth"))
+	local row = feed:Row(1)
+	check(row.stripe:GetAlpha() == M.rest,
+		("a resting stripe is at %s and the sheet rests a quality at %s")
+			:format(tostring(row.stripe:GetAlpha()), tostring(M.rest)))
+
+	feed:Enter(1)
+	check(row.stripe:GetAlpha() == 1, "the row under the cursor did not go to full")
+	feed:Leave()
+	check(row.stripe:GetAlpha() == M.rest,
+		"the stripe stayed lit after the cursor left the row")
+
+	-- The quest ring, which is the one thing on the row telling you to look and
+	-- is drawn at full whatever the cursor is on.
+	drop("You receive loot: %s.", _G.WarriorKitItemLink("Hogger's Claw"))
+	row = feed:Row(1)
+	check(row.mark:IsShown() and row.mark:GetAlpha() == 1,
+		("the quest ring is at %s rather than at full")
+			:format(tostring(row.mark:GetAlpha())))
+	check(row.stripe:GetAlpha() == M.rest,
+		"the stripe on a quest row is lit as well as the ring")
+	feed:Enter(1)
+	check(row.mark:GetAlpha() == 1 and row.stripe:GetAlpha() == 1,
+		"hovering the quest row left something short of full")
+	feed:Leave()
+	check(row.mark:GetAlpha() == 1, "the quest ring dimmed when the cursor left")
+
+	-- And a ring the entry has not claimed. Nothing pushes one today; item 86
+	-- turns the quest ring into a reason ring and this is the half of the
+	-- mechanism it needs, so it is asserted rather than left to be discovered.
+	local slot = feed:Entry()
+	slot.name, slot.amount = "Unclaimed", ""
+	slot.color, slot.stripe = C.text, C.text
+	slot.ring = C.heading
+	feed:Push()
+	feed:Paint()
+	check(feed:Row(1).mark:IsShown() and feed:Row(1).mark:GetAlpha() == M.rest,
+		("a ring no entry claimed is at %s rather than resting with the stripe")
+			:format(tostring(feed:Row(1).mark:GetAlpha())))
+
+	feed:Clear()
+end
+
+----------------------------------------------------------------------
 -- What an item is worth
 --
 -- Two numbers on the hover and they answer different questions. The vendor

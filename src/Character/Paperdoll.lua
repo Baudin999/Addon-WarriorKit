@@ -130,11 +130,6 @@ local WEAR = 2
 -- quality colour showing round it is.
 local RIM = 3
 
--- How bright that band is with nothing pointing at it. Nineteen quality colours
--- at full strength is a page of coloured lights; at this they are a tint you
--- read without being shouted at, and the hover is what takes one to full.
-local REST = 0.55
-
 -- The socket discs. Three because three is the most holes anything in this
 -- expansion has, and that has not changed.
 --
@@ -541,7 +536,7 @@ end
 local function Ring(box, color)
 	box.tone = color or C.edge
 	box.ring:SetVertexColor(box.tone[1], box.tone[2], box.tone[3],
-		box.lit and 1 or REST)
+		box.lit and 1 or M.rest)
 end
 
 -- The disc and what is drawn on it, in a frame of its own so the row can put it
