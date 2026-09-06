@@ -122,9 +122,15 @@ local CHIP_OFF = 0.3
 
 -- The number column, fixed rather than grown to fit. A string that sizes itself
 -- puts every number at a different distance from the edge, which is a ragged
--- column of damage. Six glyphs of Arial Narrow at the row size, which is a five
--- figure hit with a crit mark on it.
-local AMOUNT = 42
+-- column of damage. Six glyphs at the row size, which is a five figure hit with
+-- a crit mark on it.
+--
+-- 42 while the addon drew in Arial Narrow, whose digits are 0.456 em, so six of
+-- them at fourteen pixels came to 38 and the column carried four spare. Noto
+-- Sans is 0.572 and the same six come to 48, so the column is 52 and carries
+-- the same four. A five figure crit was the string this was sized for and it is
+-- the string that would have gone off the left edge of the row.
+local AMOUNT = 52
 
 -- Outlined, so both sizes sit at or above ns.UI.OutlineFloor. A feed is drawn
 -- over the world with whatever background the player asked for, and at zero

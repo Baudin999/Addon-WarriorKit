@@ -128,9 +128,9 @@ local TICK = "V"
 -- you are reading is.
 --
 -- Bigger than a quest's camp because it carries a number, and the number is
--- what joins the mark to the row in the left column. Fourteen pixels of Arial
--- Narrow needs about sixteen of square around it before the figure stops
--- touching the edge.
+-- what joins the mark to the row in the left column. A two digit boss number
+-- at the glyph size needs about sixteen of square around it before the figure
+-- stops touching the edge.
 local MARK, PICKED = 16, 20
 
 -- The most floors the strip under the map will offer. Blackrock Depths is the

@@ -27,8 +27,8 @@ local C, M = UI.Color, UI.Metric
 -- buffer since the first client and it is what every chat window in the game
 -- is made of, including Blizzard's.
 --
--- Everything around it is ours. The font is the addon's shared Arial Narrow
--- object rather than the client's serif, the bar beside it is UI.ScrollBar, the
+-- Everything around it is ours. The font is the addon's own shared font object
+-- rather than the client's serif, the bar beside it is UI.ScrollBar, the
 -- colours are the theme's, and the frame carries no template, no backdrop and
 -- no art. What the client contributes is the buffer and the wrap.
 --
@@ -160,9 +160,9 @@ function UI.Log(parent, opts)
 			end
 		end)
 		-- The addon's own box rather than the client's, which is the whole of
-		-- what a link in a chat line used to get wrong: a line drawn in Arial
-		-- Narrow on a flat black panel raised a gold-bordered parchment when
-		-- you hovered a word in it. UI/Scan.lua reads the item's real text off
+		-- what a link in a chat line used to get wrong: a line drawn in the
+		-- addon's own face on a flat black panel raised a gold-bordered
+		-- parchment when you hovered a word in it. UI/Scan.lua reads the item's real text off
 		-- the client and UI/Tooltip.lua draws it here, so the two look like one
 		-- interface. A malformed link is a link somebody typed, and it comes
 		-- back with nothing rather than raising, which opens no box at all.

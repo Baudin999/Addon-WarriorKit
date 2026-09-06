@@ -141,7 +141,7 @@ local function Build()
 	-- Shadowed, not flat and not outlined. Flat is for a string on a surface
 	-- this addon painted and there is none here. Outlined is the role for text
 	-- over the world and would be defensible at these sizes, where the rim no
-	-- longer closes up Arial Narrow's own counters; a shadow is chosen anyway,
+	-- longer closes up the face's own counters; a shadow is chosen anyway,
 	-- because a rim reads as a health number over a mob and this is a caption
 	-- that arrives and leaves.
 	--

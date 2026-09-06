@@ -8,10 +8,11 @@ local UI = ns.UI
 -- Three reasons this is not a SetFont call at each site.
 --
 -- One is sharpness. Friz Quadrata is the client's default and it is a serif cut
--- for a 2004 headline, not for a ten pixel number over a moving nameplate. Every
--- client since the first ships Arial Narrow at Fonts\ARIALN.TTF, which is what
--- nearly every legible Classic UI runs on, and it costs no asset in the addon
--- folder and no dependency to reach it.
+-- for a 2004 headline, not for a ten pixel number over a moving nameplate. The
+-- addon drew every string in Arial Narrow for a year instead, because every
+-- client ships it at Fonts\ARIALN.TTF and it costs no asset and no dependency
+-- to reach. It is still the fallback and it is still a defensible face. It is
+-- not this addon's face, and PATH below says why.
 --
 -- The second is that a glyph is drawn by three decisions and only one of them
 -- is the typeface. The other two are whether the rasteriser anti-aliases it and
@@ -25,7 +26,48 @@ local UI = ns.UI
 -- ones, and a font size change is six writes instead of one per string.
 --------------------------------------------------------------------------
 
-local PATH = "Fonts\\ARIALN.TTF"
+-- The text face.
+--
+-- Noto Sans Regular, version 2.000, shipped whole in Media/Sans.ttf under the
+-- SIL OFL with the licence beside it. Every string in the addon is drawn in
+-- this and it is the one line that decides that.
+--
+-- Picked at eleven pixels, which is UI.Metric.small: the hint under a control,
+-- the caption on a feed row, the count in a corner. At that height a face is
+-- two measurements and neither of them is the em size the caller passed.
+--
+-- The first is the x-height, because that is what the eye reads and the em box
+-- is not. Arial Narrow's is 0.519 em, so eleven pixels of it is 5.7 pixels of
+-- letter. Noto Sans is 0.536 and gets 5.9. Source Sans Pro, which is the other
+-- face Narcissus ships and the obvious answer, is 0.486 and gets 5.3, so every
+-- string in the addon would have come out smaller on the screen at the size it
+-- already asks for. That is the wrong direction for the one thing this change
+-- is for.
+--
+-- The second is whether the face carries instructions. Noto Sans is
+-- ttfautohinted and ships fpgm, prep, cvt and gasp, so the rasteriser is told
+-- where to put a stem rather than rounding each one on its own. The Source Sans
+-- Pro on this disk has none of those tables at all. The MONOCHROME gravestone
+-- further down is what an unhinted face at these sizes looks like, and shipping
+-- one deliberately after writing that note down would be a strange thing to do.
+--
+-- The cost is width. Over the addon's own strings Noto Sans averages 0.481 em
+-- per glyph against Arial Narrow's 0.379, so every label is about 27 per cent
+-- wider at the same pixel height. Two things were sized against the narrow face
+-- and clipped on the wide one: seven of the options window's section titles ran
+-- off the end of their line in the rail, and a five figure crit ran out of the
+-- feed's number column. Both were widened rather than the font shrunk to fit
+-- them, because a number that fits because the text got smaller is this change
+-- undone.
+local PATH = "Interface\\AddOns\\" .. ADDON .. "\\Media\\Sans.ttf"
+
+-- What a client that will not take the file falls back to, for both faces.
+--
+-- Arial Narrow is in the client rather than in the addon folder, so it is the
+-- one face here that cannot be missing. It is also what the addon drew until
+-- this commit, which makes the failure state the last known good one rather
+-- than Friz Quadrata.
+local NARROW = "Fonts\\ARIALN.TTF"
 
 -- The glyph face.
 --
@@ -191,9 +233,12 @@ function UI.Font(size, flags)
 	font = CreateFont(ADDON .. "Font" .. made)
 	font:SetFont(PATH, size, real)
 	-- SetFont answers differently across these two clients and a missing file
-	-- is silent on both, so the readback is what proves it took.
+	-- is silent on both, so the readback is what proves it took. This used to be
+	-- defensive and is now load bearing: PATH is in the addon folder rather than
+	-- in the client, which is the one place a font path can be missing on an
+	-- install that otherwise works.
 	if not font:GetFont() then
-		font:SetFont((GameFontNormal:GetFont()), size, real)
+		font:SetFont(NARROW, size, real)
 	end
 	if shadow then
 		font:SetShadowColor(0, 0, 0, 1)
@@ -213,10 +258,14 @@ end
 -- floor is not a switch, it is a minimum size, and a string that must be
 -- outlined must also be at least this tall.
 --
--- Fourteen is where a rim stops closing an Arial Narrow counter. An outline
--- costs a pixel on every stroke whatever the glyph is, so below it the hole in
--- a 6 and the waist of an 8 fill in and a 3 and an 8 stop being different
--- shapes.
+-- Fourteen is where a rim stops closing a counter. An outline costs a pixel on
+-- every stroke whatever the glyph is, so below it the hole in a 6 and the waist
+-- of an 8 fill in and a 3 and an 8 stop being different shapes.
+--
+-- The number was measured on Arial Narrow and it did not move when the face
+-- did. A counter closes at the height of the letter rather than at the size the
+-- caller asked for, and Noto Sans buys 0.017 em of x-height over Arial Narrow,
+-- which at fourteen pixels is a quarter of a pixel. Not a floor's worth.
 local OUTLINE_FLOOR = 14
 
 -- A number drawn over art the addon did not paint: the timer and the stack
@@ -249,11 +298,12 @@ function UI.GlyphFont(size)
 	font = CreateFont(ADDON .. "Font" .. made)
 	Justify(font)
 	font:SetFont(GLYPHS, size, "")
-	-- The same readback UI.Font does, and here it is load bearing rather than
-	-- defensive: this file is in the addon folder rather than in the client, so
-	-- it is the one font path that can be missing on a working install.
+	-- The same readback UI.Font does, and to the same place. Both faces are in
+	-- Media/ now, so a client that refused one is not a client to try the other
+	-- on: the fallback is the client's own Arial Narrow, which is the letter the
+	-- caller wrote before a mark was cut onto it.
 	if not font:GetFont() then
-		font:SetFont(PATH, size, "")
+		font:SetFont(NARROW, size, "")
 	end
 	glyphs[size] = font
 	return font
@@ -291,9 +341,13 @@ function UI.Glyph(parent, size, color, justify)
 	return String(parent, UI.GlyphFont(size), color, justify)
 end
 
+-- Whether the text face took, which is what tells a shipped install from one
+-- that lost Media/Sans.ttf in a bad update. Both answers are readable, so
+-- nothing else in the addon behaves differently on them and this string is the
+-- only way to tell them apart.
 function UI.FontName()
 	local path = UI.Font(10):GetFont()
-	return (path == PATH) and "Arial Narrow" or "the client default"
+	return (path == PATH) and "Noto Sans" or "Arial Narrow"
 end
 
 -- Whether the glyph face took, which is what tells a chevron from the letter v

@@ -654,8 +654,8 @@ HOTEOF
 
 # One file talks to Blizzard's tooltip, and it is UI/Scan.lua.
 #
-# The addon draws its own tooltip: a flat box, the theme's palette, Arial
-# Narrow, one physical pixel of edge. GameTooltip is a tiled parchment with a
+# The addon draws its own tooltip: a flat box, the theme's palette, the addon's
+# own sans, one physical pixel of edge. GameTooltip is a tiled parchment with a
 # gold border drawn off a corner sheet. Every file that named GameTooltip put
 # one of those on the screen beside the other, and there were six of them: the
 # action squares, the aura squares, the chat log's links, the minimap clock, the

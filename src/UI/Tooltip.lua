@@ -11,7 +11,7 @@ local C, M = UI.Color, UI.Metric
 -- parchment: a tiled background asset, a gold border drawn from a corner sheet, Friz
 -- Quadrata at whatever size the client's own tooltip scale says, and a shape
 -- this addon has spent its whole life replacing everywhere else. A window with
--- a one pixel edge and Arial Narrow on it that raises a parchment scroll when
+-- a one pixel edge and a flat sans on it that raises a parchment scroll when
 -- you hover a row is a window with two designs in it.
 --
 -- So this is the addon's own. Same palette, same metrics, same font cache,
@@ -77,15 +77,21 @@ local FRAME_NAME = "WarriorKitTooltip"
 -- it is a label that follows the cursor, it is read in the half second before
 -- you move on, and every unit of air in it is a unit of the game it is
 -- covering. The wrap width is the number that does the most work, because it
--- alone decides the shape of the box: 210 is about forty characters of Arial
--- Narrow, which is a sentence you take in without tracking back to the left
--- edge and is narrower than every item name in the game bar a few.
+-- alone decides the shape of the box: it holds about forty characters, which is
+-- a sentence you take in without tracking back to the left edge and is narrower
+-- than every item name in the game bar a few.
+--
+-- Forty characters is the number, not the pixels. 210 bought forty of Arial
+-- Narrow at twelve; the face is Noto Sans now and 210 buys thirty six, so a box
+-- kept at 210 answers a question about air with a different sentence shape than
+-- the one the paragraph above argues for. 266 buys the forty back. It is more
+-- of the fight covered and that is the trade this whole comment is about.
 local PAD = 6       -- the edge to the first glyph
 local GAP = 2       -- one line to the next
 local COLUMN = 16   -- the least air between a label and its value
 local RULE = 3      -- the air either side of the hairline under a title
 local SPACER = 4    -- a blank line, which is air rather than an empty line
-local MAX = 210     -- the widest a line is drawn before it wraps
+local MAX = 266     -- the widest a line is drawn before it wraps
 local OFFSET = 4    -- the owner to the tooltip
 -- The pointer's hotspot to the tooltip, which is a different number from the
 -- one above and has to be. A frame has an edge to open clear of; a cursor has
@@ -134,7 +140,7 @@ local TITLE_LEAD = M.heading - M.font
 
 -- The floor and the ceiling on that number, and the two sizes as they stand.
 --
--- Eight is where Arial Narrow stops resolving its own counters and eighteen is
+-- Eight is where the face stops resolving its own counters and eighteen is
 -- where a five line box is a quarter of the screen. Neither end is a size
 -- anybody should want; they are there so a saved variable edited by hand cannot
 -- draw a tooltip nobody can read or one nobody can see past.

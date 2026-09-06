@@ -401,9 +401,9 @@ end
 -- Every line carries a clock and no line carries a date, so without this the
 -- whisper you answered last night is the whisper at the top of this evening's
 -- log and reads as one that has just arrived. Plain hyphens rather than a rule
--- character: the client draws this in Arial Narrow and a glyph the face does
--- not carry is drawn as nothing at all, with nothing written anywhere saying
--- so.
+-- character: this is drawn in Media/Sans.ttf like everything else and a glyph
+-- the face does not carry is drawn as nothing at all, with nothing written
+-- anywhere saying so.
 local EARLIER = "|cff6b6b73-------- earlier --------|r"
 
 local function Replay(held, touched, order)

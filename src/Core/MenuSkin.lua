@@ -9,8 +9,8 @@ ns.MenuSkin = Skin
 -- The client's own menu, drawn in the addon's look.
 --
 -- Core/Menu.lua puts one button at the foot of the game menu, and that button
--- is the kit's: a flat grey rectangle, one physical pixel of edge, Arial
--- Narrow. Blizzard's nine above it are red glass on a parchment frame with
+-- is the kit's: a flat grey rectangle, one physical pixel of edge, the addon's
+-- own sans. Blizzard's nine above it are red glass on a parchment frame with
 -- gold corners. Stack the two and ours reads as something that got stapled on,
 -- which is exactly what the first screenshot of it showed.
 --

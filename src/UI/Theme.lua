@@ -138,7 +138,16 @@ UI.Metric = {
 	title    = 24, -- the title bar
 	tab      = 22, -- one button in the tab strip
 	railRow  = 22, -- one button in the side rail
-	rail     = 180, -- the folding column down the left of the options window
+	-- The folding column down the left of the options window, and the same
+	-- column down the left of the map.
+	--
+	-- 180 while the addon drew in Arial Narrow. The face is Noto Sans now and it
+	-- is 27 per cent wider at the same pixel height, so seven of the forty five
+	-- section titles ran off the end of their line. The fixed part of a rail row
+	-- is the indent and the air round it and none of that got wider, so the
+	-- column grew by what the letters grew by rather than by 27 per cent: 126
+	-- pixels of text room became 162.
+	rail     = 216,
 	-- The column of rooms down the left of the chat window. One icon wide, and
 	-- that is the whole of it: a word costs sixty pixels of every line anybody
 	-- said to name a room you already know by sight, and thirteen of them cost a
@@ -179,10 +188,13 @@ UI.Metric = {
 	-- a rim is dark on every side of every stroke. So this is the smallest size
 	-- at which the count is legible on any icon in the game, which is what it
 	-- has to be. It is also the largest that fits: three digits at fourteen is
-	-- twenty pixels across a twenty seven pixel picture.
+	-- twenty four pixels across a twenty seven pixel picture. That was twenty
+	-- before the face changed and it is the tightest this number has ever been.
+	-- It cannot come down to buy the room back either, because thirteen is under
+	-- the outline floor and the paragraph above is what that costs.
 	tally    = 14,
 	-- A chevron or a cross in the glyph face. Two under the body size, because a
-	-- Font Awesome mark fills its em box while a letter of Arial Narrow uses
+	-- Font Awesome mark fills its em box while a letter of the text face uses
 	-- about two thirds of one, so matching the numbers would draw an arrow half
 	-- again the height of the word beside it.
 	glyph    = 10,

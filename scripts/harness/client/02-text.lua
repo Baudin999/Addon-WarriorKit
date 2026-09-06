@@ -2,10 +2,10 @@
 --
 -- Not the client's. It has one property the client's has and that is the only
 -- one the layout depends on: a longer string in a narrower box is more lines,
--- and a row measured against it has to grow. Arial Narrow runs about 0.42 em
--- per glyph at panel sizes and a line box is the font size plus two, which is
--- close enough that a note wrapping to four lines here wraps to three or five
--- there and the row is tall enough either way.
+-- and a row measured against it has to grow. Media/Sans.ttf runs 0.481 em per
+-- glyph over the addon's own strings and this models 0.53, the eleven per cent
+-- of slack 0.42 left over Arial Narrow's 0.379. A line box is the font size
+-- plus two, and a note on four lines here is on three or five there.
 --
 -- Colour escapes are stripped before counting, because |cffd08040 is ten
 -- characters of nothing and the notes are full of them.
@@ -20,7 +20,7 @@ local UI_SCALE, PLAYER_CLASS, frames = H.UI_SCALE, H.PLAYER_CLASS, H.frames
 local events, chat, loading = H.events, H.chat, H.loading
 local Region, region, child = H.Region, H.region, H.child
 
-local ADVANCE, LEADING = 0.42, 2
+local ADVANCE, LEADING = 0.53, 2
 
 local function plain(s)
 	s = tostring(s or "")

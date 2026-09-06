@@ -22,7 +22,16 @@
 -- those is a string over the world that happens to look like it is not, and it
 -- was flat for exactly as long as it took to run this.
 --
--- Three rules, and each is a way this has already gone wrong.
+-- Four rules, and each is a way this has already gone wrong.
+--
+-- Every string is drawn in a face the addon ships. There are two of those,
+-- Media/Sans.ttf and Media/Glyphs.ttf, and UI/Text.lua is the only file that
+-- names either. The rule is here because the addon changed face and the only
+-- honest way to know a face change reached forty windows is to ask all two and
+-- a half thousand strings what they are drawn in. It keeps working after that:
+-- a caller that reaches SetFont itself instead of taking a shared font object
+-- lands on Friz Quadrata or on Arial Narrow, both of which are legible, so the
+-- screenshot looks fine and one panel is quietly in the wrong typeface.
 --
 -- An outlined string is at least UI.OutlineFloor() tall. A rim costs a pixel of
 -- every stroke whatever the glyph is, so under the floor it closes the hole in
@@ -43,8 +52,11 @@
 -- so it works at 9 as well as at 20. The allow-list is empty and the rule is
 -- the whole policy.
 --
--- Nothing is MONOCHROME. It was tried and it broke Arial Narrow's stems.
--- UI/Text.lua keeps the gravestone; this keeps the gate.
+-- Nothing is MONOCHROME. It was tried and it broke Arial Narrow's stems. The
+-- face has changed since and the rule has not, because what went wrong was a
+-- humanist face at eleven pixels with the rasteriser turned off and Noto Sans
+-- is another one of those. UI/Text.lua keeps the gravestone; this keeps the
+-- gate.
 --
 -- What is deliberately not checked: that a string with a surface behind it is
 -- flat. A shadow over an opaque bar is a defensible choice and UnitFrames makes
@@ -59,10 +71,20 @@ local frames = H.frames
 local UI = ns.UI
 local floor = UI.OutlineFloor()
 
+-- The two faces the addon ships, spelled the way the client spells them back.
+-- Written out here rather than read off UI/Text.lua's locals, because a gate
+-- that asks the code under test what the right answer is agrees with it by
+-- construction. A face change has to be made twice, and the second time is
+-- here.
+local ADDON_FACES = {
+	["Interface\\AddOns\\WarriorKit\\Media\\Sans.ttf"] = true,
+	["Interface\\AddOns\\WarriorKit\\Media\\Glyphs.ttf"] = true,
+}
+
 -- Sites this rule does not hold for, and why. An entry with no reason is the
 -- same invisible debt as a warning, so the reason is the value.
 -- Keyed by file and then by the rule it is exempt from, so a file excused one
--- of the three is still held to the other two. Keyed by file rather than by
+-- of the four is still held to the other three. Keyed by file rather than by
 -- line because a line number moves and an allow-list that goes stale silently
 -- is worse than no allow-list.
 --
@@ -203,6 +225,10 @@ local function Sweep(why)
 						bad[#bad + 1] = ("%s  %s"):format(at, what)
 					end
 
+					if not ADDON_FACES[path] then
+						fault("face", ("drawn in %s, which the addon does"
+							.. " not ship"):format(path))
+					end
 					if outlined and size and size < floor then
 						fault("floor", ("outlined at %d, under the floor of %d")
 							:format(size, floor))
@@ -258,6 +284,52 @@ for key, value in pairs(restore) do
 end
 for _, entry in ipairs(SLIDERS) do
 	pcall(entry[2])
+end
+
+------------------------------------------------------------
+-- And once with the client refusing the file
+------------------------------------------------------------
+--
+-- The text face is in the addon folder now rather than in the client, so it is
+-- a font path that can be missing on an install that otherwise works: a partial
+-- update, an unzip that dropped a binary, an antivirus that ate a ttf.
+-- UI/Text.lua answers that with a readback and no flag, and this is the run
+-- that proves the readback lands somewhere legible rather than leaving the font
+-- object empty.
+--
+-- Arial Narrow rather than the client default on purpose. It is what the addon
+-- drew for a year, so the failure state is the last thing that was known to fit
+-- rather than Friz Quadrata at a size chosen for a sans.
+--
+-- 16-options-window.lua drives the same branch for the glyph face. Both faces
+-- live in Media/ and neither is more likely to be missing than the other.
+do
+	local real = _G.CreateFont
+	_G.CreateFont = function(...)
+		local font = real(...)
+		local set = font.SetFont
+		font.SetFont = function(self, path, ...)
+			if path:find("Sans.ttf", 1, true) then
+				return false
+			end
+			return set(self, path, ...)
+		end
+		return font
+	end
+	-- Two sizes nothing else asks for, because UI.Font caches per size and a
+	-- size already made would hand back the object that loaded. One of each
+	-- role, so the fallback is proved to carry the flags through rather than
+	-- only the path.
+	local refused = UI.Font(93, UI.FLAT)
+	local rimmed = UI.Font(94, UI.OUTLINE)
+	_G.CreateFont = real
+
+	check(refused:GetFont() == "Fonts\\ARIALN.TTF",
+		("a client that refused the text face left the font at %s")
+			:format(tostring(refused:GetFont())))
+	check(select(3, rimmed:GetFont()) == UI.OUTLINE,
+		("the fallback dropped the outline and drew %s")
+			:format(tostring(select(3, rimmed:GetFont()))))
 end
 
 print(("fonts  %d strings drawn, %d wrong as it stands, %d wrong with every"

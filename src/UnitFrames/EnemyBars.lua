@@ -1298,7 +1298,7 @@ local function LayoutWidget(widget, width, onPlate)
 	-- Sized by their own content, so they are anchored rather than arranged
 	--------------------------------------------------------------------------
 
-	-- Given the width of "100%" and kept there. Arial Narrow is proportional and
+	-- Given the width of "100%" and kept there. The face is proportional and
 	-- the name's right edge is pinned to this string, so without a reserved
 	-- column the name re-measured and re-clipped on every percent change: the
 	-- mob's name walked as it died, once per bar per tick.

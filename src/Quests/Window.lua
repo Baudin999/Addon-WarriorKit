@@ -143,7 +143,7 @@ local function Cell(column, index)
 	row.icon:SetPoint("TOPLEFT")
 	row.icon:Hide()
 
-	-- The glyph face rather than Arial Narrow, because the mark against a
+	-- The glyph face rather than the text face, because the mark against a
 	-- finished objective is a tick and there is no tick in a text font. The
 	-- letters both sides of that pass through unchanged: `-` is a minus in
 	-- either face, and a client that will not take the font file draws a `V`
