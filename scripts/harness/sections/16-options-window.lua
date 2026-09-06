@@ -80,17 +80,6 @@ if window then
 
 	local rows, tabs, wrapped, tallest, shortest = 0, 0, 0, 0, math.huge
 	local titles, ledes, hints, readings, labels = {}, 0, 0, 0, {}
-	local prose = 0
-	-- Each sentence once. A switch's hint is drawn on the part's own page and
-	-- again under the same switch on On and off, and that is one sentence to
-	-- read wherever you happen to read it.
-	local counted = {}
-	local function Prose(said)
-		if not counted[said] then
-			counted[said] = true
-			prose = prose + #said
-		end
-	end
 
 	for index = 1, #window.groups do
 		local group = window.groups[index]
@@ -159,7 +148,6 @@ if window then
 
 			if page.lede then
 				ledes = ledes + 1
-				Prose(page.lede)
 				check(#page.lede <= 160,
 					("%s: its lede is %d characters"):format(where, #page.lede))
 			end
@@ -187,7 +175,6 @@ if window then
 						check(type(said) == "string" and said ~= "",
 							("%s: a hint answered %s"):format(where, tostring(said)))
 						if type(said) == "string" then
-							Prose(said)
 							check(#said <= 200,
 								("%s: a hint is %d characters: %s"):format(where, #said, said))
 						end
@@ -517,277 +504,11 @@ if window then
 			:format(tallest, window.view.height))
 	check(shortest <= window.view.height,
 		("every section overflows, so the bar was never asked to hide"))
-	-- How much reading the whole window asks for, in characters of lede and
-	-- hint. It is a budget rather than a ratchet, because the two things that
-	-- move it are not the same: a page that explains itself twice should come
-	-- back under, and a part that did not exist last week is entitled to a lede
-	-- and a hint per control it puts up.
-	--
-	-- So the number moves when a page arrives and never when one is edited. It
-	-- was 16,000 with forty-two sections. The cloned bars page arrived under it
-	-- and left it alone, at 15,908 across forty-eight. The party and raid page
-	-- costs 1,166 characters and took the window to 17,101 across forty-nine.
-	-- The cooldown row's four sections cost 793 and take it to 17,894 across
-	-- fifty-three, none of its strings longer than the ones already here. The
-	-- mouseover casting page costs 897 across three sections and takes it to
-	-- 18,685 across fifty-six. The mail page costs 683 across three controls and
-	-- took it to 19,147 across fifty-seven. The quest log page costs 444 across
-	-- two controls and takes it to 19,591 across fifty-eight. 19,750 is that
-	-- measurement plus a hint's worth of room, checked on the warrior run, which
-	-- is the class with the most sections. The world hover page arrived under it
-	-- and left it alone, at 19,733 across fifty-nine: one section, one switch
-	-- worded by the panel, one lede and one reading. The experience and
-	-- reputation page costs 495 across two checks and two sliders and takes it
-	-- to 20,228 across sixty. 20,400 is that measurement plus a hint's worth of
-	-- room again. The thanks page costs 505 across a check and a field and takes
-	-- it to 20,733 across sixty-one. 20,900 is that measurement plus a hint's
-	-- worth of room once more. The level up page costs 260 across one check and
-	-- takes it to 20,993 across sixty-two. 21,160 is that measurement plus a
-	-- hint's worth of room again. The shipped defaults section costs 338 across
-	-- one button and two readings and takes it to 21,331 across sixty-three,
-	-- which is the most any one section on the Settings page has cost and is
-	-- the right price for the one control that throws every setting away.
-	-- 21,500 is that measurement plus a hint's worth of room again. The hover
-	-- section grew by two controls, a linger slider and a text size, and their
-	-- two hints take it to 21,617 across sixty-three: no new page, but a section
-	-- that went from one switch to three controls and now has to say what each
-	-- of them costs. 21,800 is that measurement plus a hint's worth of room
-	-- again. The world map page costs 472 across two checks and four readings
-	-- and takes it to 22,102 across sixty-three: a new page, and the two hints
-	-- on it are the two sentences that say what the client's own map does
-	-- instead. 22,300 is that measurement plus a hint's worth of room again. The
-	-- bag page costs 501 across two checks, a count and four readings and takes
-	-- it to 22,603 across sixty-four: a new page, and the longer of its two
-	-- hints is the sentence that says what the piles are made of, which is the
-	-- one thing about the window nobody can work out by looking at it. 22,800 is
-	-- that measurement plus a hint's worth of room again. The dungeon page costs
-	-- 459 across a check, a key field, a button and six readings and takes it to
-	-- 23,062 across sixty-five: a new page, and the longest of its three hints
-	-- is the sentence saying the marks on the map are where you looted each
-	-- boss, which is the one thing about that window nobody can work out by
-	-- looking at it either. 23,300 is that measurement plus a hint's worth of
-	-- room again. The merchant page costs 635 across two checks and four
-	-- readings and takes it to 23,697 across sixty-six: a new page, and the
-	-- longer of its two hints is the sentence saying the client's own merchant
-	-- window is moved rather than hidden, which is the one thing about that
-	-- switch nobody can work out by looking at it. 23,900 is that measurement
-	-- plus a hint's worth of room again. The quest badge on the enemy bars costs
-	-- 196 across one check and takes it to 23,893 across sixty-six: no new page,
-	-- one more control on a section that already had six, and its hint is the
-	-- sentence saying Questie is what answers it, which is the one thing about
-	-- that switch nobody can work out by looking at a bar with no badge on it.
-	-- 24,100 is that measurement plus a hint's worth of room again. The party
-	-- preview costs 212 across one hint and one rewritten one and takes it to
-	-- 24,105 across sixty-six: no new page, no new control, and the hint is the
-	-- sentence saying the list stands a party and then a raid while it is
-	-- unlocked, which is the one thing about a frame that is empty out of a
-	-- group nobody can work out by looking at it. 24,300 is that measurement
-	-- plus a hint's worth of room again. Splitting the raid off the party costs
-	-- 960 across a page of its own and takes it to 25,065 across sixty-seven: a
-	-- new page, six controls, and the longest of its hints is the sentence
-	-- saying the grid shows in a raid and the line shows in a party, which is
-	-- the one thing about two frames that never appear together nobody can work
-	-- out by looking at either of them. 25,300 is that measurement plus a hint's
-	-- worth of room again. Setting your own cooldowns costs 471 across a
-	-- rewritten lede, a rewritten hint and two new ones, and takes it to 25,536
-	-- across sixty-seven: no new page, a section whose one control per entry
-	-- became five, and the longest of its hints is the sentence saying a spell id
-	-- is the last part of a Wowhead address, which is the one thing about a field
-	-- that takes a number nobody can work out by looking at it. 25,700 is that
-	-- measurement plus a hint's worth of room again. Dragging the squares around
-	-- instead gives 235 of it back and takes it to 25,301 across the same
-	-- sixty-seven: the five controls per entry are one picture of the row, two
-	-- hints and a reading went with them, and what a square does is on the square
-	-- rather than in a paragraph about it. 25,500 is that measurement plus a
-	-- hint's worth of room again, and it is a smaller number than the line above
-	-- it because prose that came out is prose that has to stay out. Splitting the
-	-- zoom onto every screen costs 1,285 across twenty three hints and takes it
-	-- to 26,785 across sixty-nine: two new pages, twenty three controls, and each
-	-- hint is the sentence saying which stop that screen is on and whether the
-	-- stop keeps a hairline sharp, which is the one thing about a zoom nobody can
-	-- work out by looking at the number. 27,000 is that measurement plus a hint's
-	-- worth of room again. Stacking your bags costs 179 across one hint and takes
-	-- it to 27,129 across the same sixty-nine: no new page, one more control on a
-	-- section that already had three, and the hint is the sentence saying twelve
-	-- cloth and eighteen come out twenty and ten, which is the one thing about a
-	-- button marked stack nobody can work out by pressing it once. 27,300 is that
-	-- measurement plus a hint's worth of room again.
-	--
-	-- That raise is the largest on this list and it is worth saying what it does
-	-- not measure. Those twenty three sentences replaced twenty three readings
-	-- that were on the page permanently, so the prose you actually see went down
-	-- while the number counted here went up: a hint is read one at a time, on the
-	-- row you hovered, and a reading is read whether you wanted it or not. This
-	-- counter does not tell those apart. Separating them is a change to what the
-	-- budget means and it is not being made in the commit that would benefit from
-	-- it, which is the only honest order to make it in.
-	--
-	-- Clearing your bags costs 508 across a rewritten lede, three hints and a
-	-- press, and takes it to 27,808 across the same sixty-nine: no new page, two
-	-- new controls on a section that had one, and the three hints are the three
-	-- sentences nobody can work out by pressing the button. Two of them are the
-	-- thresholds: what a bag slot has to be worth before a grey is offered, and
-	-- how far behind you a piece of gear has to be. A stepper reading 5 says
-	-- neither of those on its own, and both of them decide whether an item is
-	-- destroyed. 28,000 is that measurement plus a hint's worth of room again.
-	--
-	-- The places on the map cost 276 across a lede, a hint and a reading, and
-	-- take it to 28,084 across seventy: one new page, and its controls are not
-	-- counted because their labels are Questie's own words rather than this
-	-- addon's prose. The hint is the one sentence nobody can work out from a
-	-- row of tick boxes: that a tick here is a tick in Questie's menu, and not a
-	-- second setting that could disagree with it. 28,300 is that measurement
-	-- plus a hint's worth of room again.
-	--
-	-- Regrouping the window gave 2,085 back and takes it to 25,999 across
-	-- sixty-seven: seven pages lost the second check box they drew on their own
-	-- switch's key, and the hint each had hung on it moved onto the switch. The
-	-- two pages that held nothing but where a row sits folded into the page
-	-- that turns the row on, and the two bar pages became one. Three hints
-	-- arrived with the merges, saying what clone, match and put back do now
-	-- that they share a page with the rows they act on. The counter also
-	-- stopped counting a sentence twice when the switch that carries it is
-	-- drawn on On and off as well as on its own page. 26,200 is that
-	-- measurement plus a hint's worth of room again, and it is the smallest
-	-- number on this list since the forty-two section window, because prose
-	-- that came out is prose that has to stay out.
-	--
-	-- The missing-buff row's four sections became one and it is 25,727 across
-	-- sixty-five: two ledes and three hints went, the row is drawn instead of
-	-- listed, and the racial's page folded into the row's. 25,900 is that plus
-	-- the same room again.
-	--
-	-- The talent window arrived and it is 25,984 across sixty-six: a switch
-	-- sentence, a lede, four readings and one line on the Blizzard page, and
-	-- nothing else, because the window itself is where the talents are
-	-- explained. 26,100 is that plus the same room again.
-	--
-	-- The spell book arrived and it is 26,525 across sixty-eight: a switch
-	-- sentence, a lede, two readings and a line with a hint on the Blizzard
-	-- page, plus a lede for the zoom page's third list, which is the windows
-	-- list split in two because a thirteenth window no longer fit the view.
-	-- 26,700 is that plus the same room again.
-	--
-	-- The loot filter arrived and it is 27,244 across the same sixty-eight:
-	-- four hints on the page fast loot already had, and nothing else. It is
-	-- twelve new controls and none of them needed a sentence, because a colour,
-	-- seven kinds of trade good, what your professions use and a destroy are
-	-- their own labels. The four say what pressing a control cannot: that money
-	-- and a quest item come home whatever the rules below say and that none of
-	-- it runs unless the click asked for auto loot, that a corpse you left
-	-- something on keeps sparkling until it despawns, that the reagent list
-	-- writes itself the first time each profession window is open, and what the
-	-- destroy switch refuses to destroy. 27,450 is that plus a hint's worth of
-	-- room again.
-	--
-	-- The wait before a bag square's box arrived and it is 27,576 across the
-	-- same sixty-eight: one stepper and one hint on the bag page, and nothing
-	-- else. The hint is the half the stepper cannot say: not that the box waits,
-	-- which a number in milliseconds already says, but that crossing the window
-	-- opens nothing on the way. The hold at a merchant that landed with it
-	-- cost no prose at all, because a square that stays where it was when its
-	-- item sold is a thing you watch happen. 27,750 is that plus a hint's worth
-	-- of room again.
-	--
-	-- The price rule arrived and it is 27,762 across the same sixty-eight: one
-	-- field and one hint on the loot page, and one sentence more on its lede.
-	-- The hint is what the field cannot say, that the floor is read against the
-	-- whole slot and that nought is off. The lede's sentence is the one link
-	-- the page needs to the bag window, whose filter button throws this switch
-	-- and the leftovers one together; the button's own hover says the same
-	-- thing the other way round. 27,950 is that plus a hint's worth of room.
-	-- The frame trace arrived and it is 28,609 across the same sixty-eight: two
-	-- sections on the performance page, two ledes, four hints and six readings.
-	-- It is the largest single addition this budget has taken and every sentence
-	-- is one a control cannot say. The key hint says the binding is an override,
-	-- which is the difference between shadowing the client's own frame rate
-	-- display and overwriting it. The watch hint says why the trace runs with
-	-- the window shut, which is the whole feature: a stutter is over before you
-	-- can reach for a key. The dip hint gives the number fifty a reason. The
-	-- profiler hint says what turning a client wide setting on buys and what it
-	-- costs, which is the one control in the addon that reloads the interface.
-	-- 28,750 is that plus a hint's worth of room.
-	-- The game menu arrived and it is 28,897 across sixty-nine: one section on
-	-- The screen, one lede, one switch sentence and one reading. It is the
-	-- cheapest page this budget has taken, because the part has one control.
-	-- The switch sentence is the one thing the label cannot say and the one
-	-- thing somebody would want to know before throwing it: the paint does not
-	-- touch Blizzard's own buttons, so the two that log you out are still the
-	-- client's and still work in a fight. 29,100 is that plus a hint's worth
-	-- of room.
-	-- The floating message's own numbers arrived and it is 29,620 across the
-	-- same sixty-nine: fifteen controls under the switch the loot page already
-	-- had, and six hints. Fifteen controls for five hundred characters is the
-	-- cheapest ratio this budget has taken, because a label that says what it
-	-- sets needs nothing under it and nine of them do. The six are each the
-	-- half a label cannot carry. The rest offset is measured to the far edge of
-	-- the message rather than to the corner it is pinned by, which is the
-	-- arithmetic that was wrong the first time it was written. The two alphas
-	-- are the ends of one fade and not two states, so equal numbers mean a
-	-- message that does not fade at all. The stagger has a ceiling nothing on
-	-- its row shows: a burst larger than the column holds does not book a beat
-	-- per drop. The count says which message goes when the column is full, and
-	-- it is the oldest rather than the newest. The width says a long name is
-	-- cut and not wrapped. And the three sizes say that the tallest of them is
-	-- the row height, which is the one number here that is not a control.
-	-- 29,800 is that plus a hint's worth of room.
-	-- The floating numbers arrived and it is 30,383 across seventy-three: two
-	-- sections under Fighting, two ledes, five hints and two readings, over six
-	-- controls and three anchors you drag. The size hint says the number a big
-	-- hit is drawn at is not the one on the row, it is that one measured against
-	-- the biggest hit of the fight, and that the scale resets when the fight
-	-- does. The time hint says a critical outlives the setting by a third, so
-	-- the number on the row is not the longest anything is on screen. The merge
-	-- hint says four ticks of a bleed are one number, which is the whole
-	-- difference between this and every other floating number in the game. The
-	-- anchor hint says there are three of them and that unlocking is how you
-	-- reach them, because a rectangle you cannot see is not findable from a
-	-- button that says "put them back". And the calls hint names the two things
-	-- the client says yes to for a whole fight and means for a few seconds of
-	-- it, which is the only reason that half of the page exists.
-	-- 30,500 is that plus a hint's worth of room.
-	-- And it is 30,530 with one more control on the same page: the switch that
-	-- puts the client's own damage numbers away. That one earns its hint three
-	-- times over, because a control that edits your client config has to say
-	-- what it edits. It names how much it takes, which is the four settings
-	-- these numbers replace and not the master switch above them, so the dodges
-	-- and the combo points are still drawn. And it says the client gets its own
-	-- values back rather than the defaults when this goes off, which is the
-	-- difference between borrowing a setting and overwriting one.
-	-- 30,700 is that plus a hint's worth of room.
-	-- The floating numbers took a zoom row and the budget did not move. A zoom
-	-- row is a label and a live sentence under the `?`, so it costs a hint; the
-	-- list it went on was already fourteen deep and had to split, so it costs a
-	-- lede as well. Both are paid for out of the room the last raise left, and
-	-- the two ledes say the one thing the two lists cannot say for themselves,
-	-- which is where the line between them is: what a pull puts over the world,
-	-- and what was there before it. A budget that is only ever raised is a
-	-- budget, and a budget nothing is ever paid out of is a ceiling.
-	--
-	-- Switching Questie's tracker off costs 185 across a check box, a hint and a
-	-- reading, and takes it to 30,808 across the same seventy-five: no new page,
-	-- one more control on the quest log's section. The hint says the one thing a
-	-- tick box cannot, which is that this is Questie's own Enable Tracker switch
-	-- rather than a second one beside it, so the interface reloads on the way in
-	-- and on the way out. The reading is there because the setting is not ours:
-	-- every other reading here reports something this addon decided, and this
-	-- one reports another addon's saved variable and which of us moved it last.
-	-- Without it a tracker that is gone reads as Questie having broken. 31,000
-	-- is that measurement plus a hint's worth of room again.
-	--
-	-- This addon's own tracker arrived and the number did not move. It is not a
-	-- page and it is not a control: it rides the switch above, because one
-	-- switch and one tracker is the whole of the design, so what it costs is a
-	-- clause on that hint saying which tracker takes the screen, and a reading,
-	-- and readings are not counted here. Twenty two characters, to 30,830, paid
-	-- out of the room the last raise left.
-	check(prose < 31000,
-		("the window holds %d characters of prose and the budget is 31,000"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))
-	print(("panel  %d controls, %d switches, %d ledes, %d hints, %d readings, %d characters of prose")
-		:format(controls, switches, ledes, hints, readings, prose))
+	print(("panel  %d controls, %d switches, %d ledes, %d hints, %d readings")
+		:format(controls, switches, ledes, hints, readings))
 	print(("panel  every one of the %d findable by its own label"):format(searched))
 	print(("panel  %s at %d px, %d marks against %d words")
 		:format(ns.UI.GlyphName(), ns.UI.Metric.glyph, glyphed, lettered))

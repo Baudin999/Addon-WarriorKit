@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### The options window stops counting its own characters
+
+A check in the harness added up every sentence in the options window and failed
+the build when the total passed a number. The number was 16,000 when it was
+written and 31,000 by the time it came out, raised eight times, and every raise
+used the same phrase: that measurement plus a hint's worth of room again. A
+threshold defined as slightly more than whatever was just written does not hold
+a line. It records one.
+
+It also counted the wrong thing, and said so in its own comments. Twenty three
+hints once replaced twenty three permanent readings, which cut what a player
+actually reads and pushed the counted number up, because a hint is read once on
+the row you hovered and a reading sits on the screen whether you wanted it or
+not. The counter could not tell them apart.
+
+What stays is the pair of limits that measure something real: a lede is at most
+160 characters and a hint at most 200. Those bound a single sentence, on a
+single row, which is a thing a person experiences. The window-wide total is
+gone, along with the two hundred and sixty lines of comment arguing about where
+it should sit. Each page gets read on its own merits when the addon is done.
+
 ### A tracker of the addon's own
 
 A column over the world with the quests you are standing in the middle of on
