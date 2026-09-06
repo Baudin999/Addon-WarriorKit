@@ -109,6 +109,65 @@ end
 local Window = {}
 Window.__index = Window
 
+--------------------------------------------------------------------------
+-- The dark behind a screen window
+--
+-- A screen window has no ground, so what it is written on is the game. Narcissus
+-- dims the screen either side of its figure and it is the whole reason that page
+-- reads as one thing rather than as text scattered over scenery. This is that,
+-- for the half of the monitor a screen window takes: one wash, solid at the
+-- outer edge and gone by the middle where the player's character is standing.
+--
+-- It stops at the window's own edge, which is what the two anchors below are
+-- for. Half the monitor is the half the sheet was cut down to so the player
+-- keeps the other half to fight in, and a shadow that crept past the frame
+-- would be taking back the thing that cut was made to give.
+--
+-- **It never answers the pointer.** This is the one piece of chrome in the
+-- addon that could cost the player the world behind it and do it silently. A
+-- screen window turns the mouse off on its own frame precisely so a click on
+-- the sheet reaches the mob behind it, and a wash laid over half the monitor on
+-- a frame that took the mouse would be half a monitor you can no longer target,
+-- loot or turn the camera in. It draws the same either way and hovers the same
+-- either way, so nothing about looking at it says which one shipped. So it is a
+-- texture on the window's own frame rather than a frame of its own: there is no
+-- new surface for anyone to switch the mouse on later, and the pointer harness
+-- presses a point on the sheet's half and reads back nothing.
+--
+-- **Faded rather than shown.** A rectangle of shadow over half the screen that
+-- appears between one frame and the next on a key press is the one thing on
+-- this page that reads as a bug rather than as an interface.
+--------------------------------------------------------------------------
+
+-- How long the world takes to go dark. Long enough to be a fade and short
+-- enough that the sheet is readable by the time the eye has got to it.
+local DARK_SECONDS = 0.2
+
+-- The wash, and the one script that catches every way a screen window comes up.
+--
+-- OnShow rather than Window:Show, and that is the whole reason this is a script
+-- at all. The character sheet is opened in a fight by a secure snippet, which
+-- runs none of this file's Lua, so a fade hung off the method would be a fade
+-- that never happened on the key most people open the sheet with.
+--
+-- Set rather than hooked, because a window is this library's frame and the
+-- caller is the one chaining onto it. Character/Window.lua hooks its own paint
+-- under this, the way Mail/Window.lua already hooks OnHide.
+local function Darkness(window, frame, opts)
+	window.darkOf = opts.dark or function() return false end
+	window.dark = UI.Wash(frame, C.shadow, "RIGHT", "BACKGROUND")
+	window.dark:SetAllPoints()
+	window.dark:SetAlpha(0)
+	window.dark:Hide()
+	-- A tween on a texture rather than on a frame. The alpha channel is the only
+	-- one armed and SetAlpha is the only call it makes, so what it drives has to
+	-- answer that and nothing else.
+	window.darkening = ns.Ck.Animations.New(window.dark)
+	frame:SetScript("OnShow", function()
+		window:Darken()
+	end)
+end
+
 -- The bar across the top: the strip, the name on it and the close box. Its own
 -- function because it is the whole of what a window that is not bare has and
 -- none of what a bare one does, so the alternative is fifteen lines of one
@@ -132,6 +191,8 @@ local function Surface(window, frame, opts)
 	if not opts.screen then
 		window.bg = ns.Fill(frame, "BACKGROUND", C.window[1], C.window[2], C.window[3], C.window[4])
 		window.bg:SetAllPoints()
+	else
+		Darkness(window, frame, opts)
 	end
 
 	local px = ns.Pixel(frame)
@@ -733,6 +794,42 @@ function Window:SetOpacity(fraction)
 	end
 	local alpha = (C.window[4] or 1) * math.max(0, math.min(fraction or 1, 1))
 	self.bg:SetColorTexture(C.window[1], C.window[2], C.window[3], alpha)
+end
+
+-- The world behind a screen window, darkened or not, from wherever it stands.
+--
+-- Run out of the frame's own OnShow, so every route up fades from nothing: the
+-- method, Escape's counterpart on the key, and the secure snippet that is the
+-- only one of the three that works in a fight. Run again by whoever owns the
+-- setting when the player turns it off, because a tick box that does nothing
+-- until you shut the sheet and open it again is a tick box you press twice.
+--
+-- Off is instant and on is a fade, and that is not an oversight. On happens on
+-- a key press with the player looking at the world it covers; off happens on a
+-- settings page, where the shadow going away is the answer to the click that
+-- was just made and there is nothing for it to read as.
+function Window:Darken()
+	local dark = self.dark
+	if not dark then
+		return false
+	end
+	local Animations = ns.Ck.Animations
+	if not self.darkOf() then
+		Animations.Stop(self.darkening)
+		dark:SetAlpha(0)
+		dark:Hide()
+		return false
+	end
+	-- From nothing every time, rather than from wherever the last run left it.
+	-- The sheet is shut by Escape and by a snippet as well as by Window:Hide,
+	-- and a fade that resumed from the alpha it was at would come up solid on
+	-- every route this file does not own.
+	dark:SetAlpha(0)
+	dark:Show()
+	Animations.Arm(self.darkening, DARK_SECONDS, Animations.Ease.out)
+	Animations.Alpha(self.darkening, 0, 1)
+	Animations.Start(self.darkening)
+	return true
 end
 
 -- Raised as well as shown, for the reason Pile gives. Not in combat for a

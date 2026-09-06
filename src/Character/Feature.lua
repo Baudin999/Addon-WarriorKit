@@ -5,6 +5,11 @@ local ADDON, ns = ...
 -- Window.lua, RepWindow.lua and Blizzard.lua hold the behaviour, and this is
 -- the only file in the folder that names anything outside it.
 
+local function SetDim(value)
+	ns.db.characterDim = value
+	ns.CharWindow.Darken()
+end
+
 local function SetCharacter(value)
 	ns.db.character = value
 	if value then
@@ -117,6 +122,16 @@ ns.Register({
 		-- for, and everything this replaces it with is reversible in one press.
 		character = true,
 
+		-- On, and the sheet is barely a sheet without it. It has no ground by
+		-- design, so what nineteen item names and a column of numbers are read
+		-- against is whatever the player happens to be standing on, and a page
+		-- with no edge and no ground reads as text scattered over scenery rather
+		-- than as one thing. The wash is what makes it a page.
+		--
+		-- Off is for the player who wants to watch what is behind it, and it costs
+		-- them nothing else: the sheet is see-through and click-through either way.
+		characterDim = true,
+
 		-- Blizzard's own goes in the attic, and C opens this one.
 		--
 		-- The switch itself is drawn on the Blizzard page with the other nine,
@@ -170,6 +185,9 @@ ns.Register({
 	panel = function(ui)
 		ui.Section("Character", "Windows")
 		ui.Lede("Your gear, what it adds up to and your skills, on one page the C key opens. Your standings are on /wk reputation.")
+		ui.Check("darken the world behind the sheet",
+			function() return ns.db.characterDim end,
+			SetDim)
 		ui.Reading("what you are wearing", ns.Worn.Describe)
 		ui.Reading("hit and miss", ns.CharStats.Describe)
 		ui.Reading("weapon skills", ns.CharSkills.Describe)

@@ -126,12 +126,14 @@ function Window.Fit()
 	return true
 end
 
-function Window.Build()
-	if window then
-		return window
-	end
-
-	window = UI.Window({
+-- What kind of window this is, in the six answers UI/Window.lua asks for.
+--
+-- Its own function, the way UI/Window.lua splits its own chrome out of its own
+-- constructor and for the same reason: six of these answers carry a paragraph
+-- saying why the sheet is not an ordinary window, and none of that is something
+-- a reader following how the sheet is assembled has to step through.
+local function Sheet()
+	return UI.Window({
 		name = "WarriorKitCharacter",
 		-- Half the monitor, against its right hand edge, with no title bar, no
 		-- line round the outside, no ground and no saved point, at the floor of
@@ -174,7 +176,20 @@ function Window.Build()
 		-- instead of Lua, and the window is not dragged in a fight. UI/Window.lua
 		-- holds both halves of that.
 		secure = true,
+		-- Whether the world behind the sheet goes dark. A getter and not a key,
+		-- because UI/Window.lua is not allowed to know the name of a setting, and
+		-- the same reason the zoom above is one: the next screen window this addon
+		-- grows hands over its own answer and gets the same wash.
+		dark = function() return ns.db.characterDim end,
 	})
+end
+
+function Window.Build()
+	if window then
+		return window
+	end
+
+	window = Sheet()
 	-- And it remembers where you put it, the same as the other seven windows
 	-- that can be moved. It did not while it was the whole monitor, because a
 	-- frame the size of the screen is already where it goes. Half a screen is
@@ -199,7 +214,11 @@ function Window.Build()
 	-- Painted whenever the window comes up, by whatever route. In a fight the
 	-- route is the snippet on the key, which runs no Lua of ours at all, so this
 	-- is the only place a paint can be hung and still happen.
-	window.frame:SetScript("OnShow", function()
+	--
+	-- Hooked rather than set: UI/Window.lua puts the fade that darkens the world
+	-- behind a screen window on this same script, for the same reason this paint
+	-- is here, and a SetScript would take it off again.
+	window.frame:HookScript("OnShow", function()
 		Window.Paint()
 	end)
 
@@ -228,6 +247,16 @@ end
 
 function Window.Built()
 	return window ~= nil
+end
+
+-- The dark behind the sheet, re-read where it stands. Called by the tick box in
+-- the settings panel and by nothing else: every other route into it is the
+-- window coming up, which UI/Window.lua takes off the frame's own OnShow.
+function Window.Darken()
+	if not window then
+		return false
+	end
+	return window:Darken()
 end
 
 function Window.Shown()

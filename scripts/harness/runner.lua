@@ -324,6 +324,16 @@ local SECTIONS = {
 	-- ceiling the section was already exempted from, so it is a file: the split
 	-- gave 52-character's exemption back rather than raising it.
 	"52-gear-page",
+	-- After both of them, and it is the window rather than the page: the wash
+	-- UI/Window.lua lays over a screen window's own half of the monitor. It was
+	-- a block at the foot of the gear page and took that file over the line
+	-- ceiling, which is what noticed that it was in the wrong one.
+	--
+	-- Under 52-character rather than over it, because that section's first
+	-- assertion is that nothing has opened the sheet yet and this one opens it.
+	-- It shuts it again, and it puts the setting it turns off back, so what the
+	-- reset below inherits is the scene the addon ships with.
+	"52-screen-dark",
 	-- Last, and it has to be: it puts every setting in the account file back
 	-- to what the addon ships with, twice over, which is the one thing in the
 	-- suite that would pull the scene out from under every section above it.
