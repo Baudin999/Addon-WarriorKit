@@ -24,7 +24,6 @@ local H = ...
 local ns, check = H.ns, H.check
 
 local Window, Worn = ns.CharWindow, ns.Worn
-local Stats = ns.CharStats
 
 -- What the line at the foot reports, filled in by the blocks that measure it.
 -- Locals rather than H.carry: that table is for a number one section hands to a
@@ -139,10 +138,10 @@ do
 	-- plain row taller than one line is a row still drawing prose the column no
 	-- longer has the height for.
 	--
-	-- Both kinds are on this column since the skills folded into it: a stat is a
-	-- name and a number, a weapon skill is that with how far along it is under
-	-- it. So the two are measured apart, because one ceiling over both would be
-	-- the taller one and would stop saying anything about the plain rows.
+	-- Both kinds are on the standard tab: a stat is a name and a number, a trade
+	-- is that with how far along it is under it. So the two are measured apart,
+	-- because one ceiling over both would be the taller one and would stop
+	-- saying anything about the plain rows.
 	local plain, withBar = 0, 0
 	for index = 1, pane.stats:Lines() do
 		local line = pane.stats.lines[index]
@@ -450,6 +449,21 @@ do
 	check(craft ~= nil and craft.note == nil,
 		"a profession was treated as a weapon skill and told what it costs you")
 
+	-- The same arithmetic answers which tab a group lands on, and that is the
+	-- only thing about a group that is not drawn on it.
+	local trades, weapons
+	for _, group in ipairs(groups) do
+		if group.title == "Professions" then
+			trades = group
+		elseif group.title == "Weapon Skills" then
+			weapons = group
+		end
+	end
+	check(trades ~= nil and trades.trade == true,
+		"the header holding a profession was not marked as a trade group")
+	check(weapons ~= nil and not weapons.trade,
+		"the weapon skills were marked as trades and would draw beside your attributes")
+
 	local behind, worst = ns.CharSkills.Behind()
 	check(behind == 1 and worst == 10,
 		("%d weapon skills behind by at most %d, and one by ten is the fixture")
@@ -457,63 +471,89 @@ do
 end
 
 ----------------------------------------------------------------------
--- The fold
+-- The tabs
 --
--- Skills were a tab and are a group in the stats column. Two lists appended,
--- which is only a fold at all because both sides already hand back the same
--- shape, so what is worth asserting is the seam: that both are in the column,
--- that the stats come first, and that nothing was dropped in the join.
+-- Four lists down one column, and the split is by how often you look at a
+-- number rather than by where the client files it. Standard is your hit, your
+-- attributes and your trades; extended is the rating groups; skills is
+-- everything else the client calls a skill; standings is your reputation.
 --
--- The order is the argument for the fold rather than a preference. The badge at
--- the head of this column says how often you miss, a weapon skill under the cap
--- is what that number is computed from, and the two were a tab press apart. Put
--- the skills above the miss rows and they are a list you scroll past to reach
--- the number they explain.
+-- What is worth asserting is the split itself, because it is the one part of
+-- this that no call answers on its own. A trade is picked out by what it caps
+-- at and whether it can be abandoned, never by matching the English word
+-- "Professions", so the fixture's blacksmithing has to land beside the
+-- attributes and its swords have to land on the other tab. And the order on the
+-- standard tab is the argument the column was built on: the badge over it says
+-- how often you miss, so the miss rows open it.
 ----------------------------------------------------------------------
 
 do
 	Window.Show()
-	local groups = Window.Pane().stats.groups
+	local pane = Window.Pane()
 
+	pane.tabs:Select(1)
+	local groups = pane.stats.groups
 	check(Find(groups, MISSING, "a special") ~= nil,
-		"the stats are not in the column the sheet draws down its right")
-	check(Find(groups, "Weapon Skills", "Swords") ~= nil,
-		"the skills tab is gone and its rows did not land in the stats column")
+		"the standard tab does not open on what you still miss")
+	check(Find(groups, "Attributes", "strength") ~= nil,
+		"the standard tab is missing the attributes")
 	check(Find(groups, "Professions", "Blacksmithing") ~= nil,
-		"only the weapon skills came across, so a profession is on no page at all")
+		"a trade is not on the tab your attributes are on")
+	check(Find(groups, "Weapon Skills", "Swords") == nil,
+		"the weapon skills are on the standard tab as well as their own")
+	check(Find(groups, "Defence", "dodge") == nil,
+		"an extended group was drawn on the standard tab")
+	check(groups[1] ~= nil and groups[1].title == MISSING,
+		("the standard tab opens on %s rather than on the miss rows")
+			:format(tostring(groups[1] and groups[1].title)))
 
-	local missAt, skillAt
-	for index = 1, #groups do
-		if groups[index].title == MISSING then
-			missAt = index
-		elseif groups[index].title == "Weapon Skills" then
-			skillAt = index
-		end
-	end
-	check(missAt ~= nil and skillAt ~= nil and skillAt > missAt,
-		("the miss rows are group %s and the weapon skills group %s, so the column opens on the skills")
-			:format(tostring(missAt), tostring(skillAt)))
-	check(#groups == #Stats.Groups() + #ns.CharSkills.Groups(),
-		("the column holds %d groups and the two lists have %d between them")
-			:format(#groups, #Stats.Groups() + #ns.CharSkills.Groups()))
+	pane.tabs:Select(2)
+	groups = pane.stats.groups
+	check(Find(groups, "Defence", "dodge") ~= nil,
+		"the extended tab is missing the defence group")
+	check(Find(groups, "Attributes", "strength") == nil,
+		"the attributes were drawn on the extended tab as well as the standard one")
+
+	pane.tabs:Select(3)
+	groups = pane.stats.groups
+	check(Find(groups, "Weapon Skills", "Swords") ~= nil,
+		"the skills tab is missing the weapon skills")
+	check(Find(groups, "Professions", "Blacksmithing") == nil,
+		"a trade was drawn on the skills tab as well as the standard one")
+
+	pane.tabs:Select(4)
+	groups = pane.stats.groups
+	check(#groups > 0 and Find(groups, "Outland", "Thrallmar") ~= nil,
+		"the standings tab draws no factions at all")
+
+	-- Which tab is up is per character and survives the sheet being shut. Read
+	-- off the saved table rather than off the strip, because the strip is what
+	-- writes it and a check against the writer proves nothing.
+	check(ns.dbc.characterTab == 4,
+		("the sheet saved tab %s and the fourth is the one that was pressed")
+			:format(tostring(ns.dbc.characterTab)))
 
 	-- The sentence under a weapon skill went into the hover with it. A compact
 	-- row draws one line and keeps the rest, which is the bargain the stats
 	-- column already made, so a skill ten points short still says what that
 	-- costs and says it by being pointed at.
+	pane.tabs:Select(3)
 	local swords
-	local pane = Window.Pane().stats
-	for index = 1, pane:Lines() do
-		local line = pane.lines[index]
+	for index = 1, pane.stats:Lines() do
+		local line = pane.stats.lines[index]
 		if line.hint and line.hint.label == "Swords" then
 			swords = line
 		end
 	end
-	check(swords ~= nil, "no row in the stats column is the Swords skill")
+	check(swords ~= nil, "no row on the skills tab is the Swords skill")
 	check(swords.hint.note ~= nil and swords.hint.note:find("10 points short", 1, true),
 		"the skill row in the column carries nothing for its hover to say")
 	check(swords.note:IsShown() == false,
 		"a compact row drew the sentence on the page as well as in the hover")
+
+	-- Left as it was found, because which tab is up is saved state and the
+	-- sections after this one read a clean character file.
+	pane.tabs:Select(ns.DefaultCopy("characterTab"))
 end
 
 ----------------------------------------------------------------------

@@ -441,18 +441,30 @@ end
 
 --------------------------------------------------------------------------
 
--- Every group, in the order the page draws them, with the empty ones dropped.
+-- The groups, split the way the column's tabs are.
 --
--- Missing goes first, above the attributes the client's own sheet leads with,
--- and that is a decision rather than an accident: strength is a number you look
--- at once when you put a piece on, and hit is the number you came here for.
+-- Standard is the two things you look at when you have just put a piece on:
+-- what you still miss, and the five attributes the piece moved. Missing goes
+-- above the attributes the client's own sheet leads with, and that is a
+-- decision rather than an accident: strength is a number you check once when
+-- you swap a ring, and hit is the number you came here for.
 --
 -- The three levels are in the heading rather than on all three rows. A column
 -- that says "three levels up" three times running is a column three words wider
 -- than it needs to be, and the rows underneath are read as a set.
-local GROUPS = {
+--
+-- Extended is every rating the client will answer for, four groups of them.
+-- They were on the same list as the attributes and that list was forty rows
+-- long, which is a column you scroll rather than read. What they have in common
+-- is that none of them changes when you swap a ring in a way the attribute
+-- above it does not already say, so they are a tab you open when you are
+-- working out a set rather than one you have up while you build it.
+local STANDARD = {
 	{ title = "Missing a boss, three levels up", fill = Missing },
 	{ title = "Attributes", fill = Attributes },
+}
+
+local EXTENDED = {
 	{ title = "Melee", fill = Melee },
 	{ title = "Ranged", fill = Ranged },
 	{ title = "Spell", fill = Spell },
@@ -460,15 +472,26 @@ local GROUPS = {
 	{ title = "Resistance", fill = Resistance },
 }
 
-function Stats.Groups()
+-- One list of groups, in the order the page draws them, with the empty ones
+-- dropped. A group with nothing in it is a heading over air, and on a warrior
+-- the whole spell group is that.
+local function Build(list)
 	local groups = {}
-	for index = 1, #GROUPS do
-		local rows = GROUPS[index].fill({})
+	for index = 1, #list do
+		local rows = list[index].fill({})
 		if #rows > 0 then
-			groups[#groups + 1] = { title = GROUPS[index].title, rows = rows }
+			groups[#groups + 1] = { title = list[index].title, rows = rows }
 		end
 	end
 	return groups
+end
+
+function Stats.Standard()
+	return Build(STANDARD)
+end
+
+function Stats.Extended()
+	return Build(EXTENDED)
 end
 
 function Stats.Describe()

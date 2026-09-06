@@ -40,6 +40,21 @@ local Window, Stats, Worn = ns.CharWindow, ns.CharStats, ns.Worn
 -- read it.
 local MISSING = "Missing a boss, three levels up"
 
+-- Both halves of the stats as one list.
+--
+-- The sheet draws them on two tabs now, standard and extended, and every claim
+-- in this file is about a number rather than about which tab it lands on. The
+-- tabs are 52-gear-page.lua's subject; this is what the four constants add up
+-- to, and it wants all of them.
+local function Every()
+	local groups = Stats.Standard()
+	local extra = Stats.Extended()
+	for index = 1, #extra do
+		groups[#groups + 1] = extra[index]
+	end
+	return groups
+end
+
 local function whole(value)
 	return math.abs(value - math.floor(value + 0.5)) < 1e-6
 end
@@ -196,7 +211,7 @@ do
 end
 
 do
-	local groups = Stats.Groups()
+	local groups = Every()
 	local special = Find(groups, MISSING, "a special")
 	check(special ~= nil, "the stats page has no row for missing a special")
 	check(special.value == ("%.2f%%"):format(Stats.MeleeMiss(3) - sheet.hitMelee),
@@ -208,12 +223,12 @@ do
 	-- rather than about the target.
 	local was = H.swing.off
 	H.swing.off = 1.8
-	local swing = Find(Stats.Groups(), MISSING, "a white swing")
+	local swing = Find(Every(), MISSING, "a white swing")
 	check(swing.value == ("%.2f%%"):format(Stats.MeleeMiss(3) + 19 - sheet.hitMelee),
 		("dual wielding, a white swing reads %s"):format(tostring(swing.value)))
 	H.swing.off = was
 
-	local skill = Find(Stats.Groups(), MISSING, "weapon skill")
+	local skill = Find(Every(), MISSING, "weapon skill")
 	check(skill ~= nil and skill.note:find("Under the cap", 1, true) ~= nil,
 		"a weapon skill under the cap does not say so on the stats page")
 
@@ -231,10 +246,10 @@ do
 	local melee, spell = _G.CR_HIT_MELEE, _G.CR_HIT_SPELL
 	_G.CR_HIT_MELEE, _G.CR_HIT_SPELL = nil, nil
 
-	local row = Find(Stats.Groups(), MISSING, "hit off your gear")
+	local row = Find(Every(), MISSING, "hit off your gear")
 	check(row ~= nil and row.value:find("does not rate hit", 1, true) ~= nil,
 		("with no ratings the hit row reads %s"):format(tostring(row and row.value)))
-	local special = Find(Stats.Groups(), MISSING, "a special")
+	local special = Find(Every(), MISSING, "a special")
 	check(special.value == ("%.2f%%"):format(Stats.MeleeMiss(3)),
 		"with no ratings something was still taken off the miss chance")
 	check(Stats.Describe():find("no ratings", 1, true) ~= nil,
@@ -249,7 +264,7 @@ end
 -- whether its calls answered: rows of nought are how a page teaches you to stop
 -- reading it.
 do
-	local groups = Stats.Groups()
+	local groups = Every()
 	local spell
 	for _, group in ipairs(groups) do
 		if group.title == "Spell" then
@@ -258,7 +273,7 @@ do
 	end
 	check(spell == nil, "the spell group was drawn on a character with no spell power")
 	sheet.spellPower = 640
-	check(Find(Stats.Groups(), "Spell", "spell power") ~= nil,
+	check(Find(Every(), "Spell", "spell power") ~= nil,
 		"spell power on the gear and the spell group is still not drawn")
 	sheet.spellPower = 0
 	check(Find(groups, "Attributes", "strength") ~= nil, "the attributes group is missing")

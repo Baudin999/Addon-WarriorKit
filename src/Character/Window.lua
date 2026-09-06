@@ -19,20 +19,24 @@ local C, M = UI.Color, UI.Metric
 -- frame in the attic and takes the C key, behind the one switch on the page
 -- where every other Blizzard frame this addon replaces is switched.
 --
--- **There are no tabs.** There were four, and each one was a press between two
+-- **The window has no tabs.** It had four, and each one was a press between two
 -- halves of the same question. The stats went first, into a column down the
 -- right of the gear page, because what a stat answers is what the piece you just
 -- put on did. The skills followed it into that column: a weapon skill under the
 -- cap is the number the miss badge at the head of the column is computed from,
 -- and the two had been on separate pages since the sheet was built. Reputation
--- is not a stat and did not belong in that column at all, so it took a window of
--- its own on /wk reputation, which Character/RepWindow.lua hosts. What is left
--- here is one window with one pane in it, and Character/Paperdoll.lua is that
--- pane.
+-- went to a window of its own on /wk reputation, which Character/RepWindow.lua
+-- still hosts. What is left here is one window with one pane in it, and
+-- Character/Paperdoll.lua is that pane.
 --
--- What the strip of words across the top paid for is the top edge. With nothing
--- drawn in it the grip UI/Window.lua hands a screen window is the whole of it,
--- and the four badges moved up into the room the tabs were using.
+-- There is a strip of four words inside that column now and it is not this
+-- window's tabs coming back. A window tab took the gear off the screen; a column
+-- tab changes the list beside it and moves nothing else. Character/Paperdoll.lua
+-- carries what the four are and why.
+--
+-- What the strip across the top paid for is the top edge. With nothing drawn in
+-- it the grip UI/Window.lua hands a screen window is the whole of it, and the
+-- four badges moved up into the room the tabs were using.
 --
 -- **This window opens in a fight, and everything below that says `secure` or
 -- `InCombatLockdown` is there for that one sentence.** The gear page carries

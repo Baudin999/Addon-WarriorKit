@@ -28,15 +28,24 @@ local C, M = UI.Color, UI.Metric
 -- number this layout is built on: a column is as wide as an item's name wants
 -- to be, and the middle is everything left over.
 --
--- **The stats and the skills are the right hand column.** Both were tabs of
--- their own, which meant the two halves of one question lived on two pages: the
--- squares say what you are wearing and the numbers say what wearing it does, and
--- swapping a ring to see the second one move is a tab press away from the first.
--- The skills went the same way and for a sharper version of the same reason: the
--- miss badge at the head of this column is computed from your weapon skill. So
--- the readout is a column down the right of this page, filled from
--- Character/Stats.lua and Character/Skills.lua and drawn by the same
--- Character/Readout.lua that drew both tabs.
+-- **The stats and the skills are the right hand column.** Both were pages of
+-- their own, which meant the two halves of one question lived in two places:
+-- the squares say what you are wearing and the numbers say what wearing it
+-- does, and swapping a ring to see the second one move was a page away from the
+-- first. The skills went the same way and for a sharper version of the same
+-- reason: the miss badge at the head of this column is computed from your
+-- weapon skill. So the readout is a column down the right of this page, filled
+-- from Character/Stats.lua, Character/Skills.lua and Character/Reputation.lua
+-- and drawn by the same Character/Readout.lua that drew all three pages.
+--
+-- **That column has four tabs on it, and they are not the window's old ones
+-- back.** The window's tabs took the gear off the screen to show you a number;
+-- these leave the gear, the figure and the four readings exactly where they are
+-- and change one list. What they buy is that the column was forty rows deep
+-- once, and the four things in it are read at four different rates: your hit
+-- and attributes while you swap a ring, the rating groups while you work out a
+-- set, your languages twice a year. TABS below says which is which. Which tab
+-- is up is saved per character.
 --
 -- **The four readings are badges at the head of that column, over your name.**
 -- They were four cells along the foot of the portrait, drawn on a band of
@@ -340,6 +349,23 @@ local NAME = M.heading + 5
 local BADGE = 44
 local BADGERIM = 2
 local HEAD = NAME + 2 + M.small + M.gutter + BADGE + 2 + M.small
+
+-- The number inside a disc, and it is the only string in the addon smaller than
+-- M.small.
+--
+-- It was M.font, which is what every other number on the page is set in, and it
+-- did not fit. The disc is forty-four across and the string is pinned two
+-- inside each edge of it, so a reading has forty units to live in. Three of the
+-- four are short: "80.2", "100%" and a single digit. The fourth is "9.00%",
+-- which is four figures, a point and a per cent sign, and a per cent sign is
+-- the widest glyph in the face at any size. At twelve that came to forty-four
+-- units and painted itself onto the rim on both sides.
+--
+-- Ten rather than eleven because eleven is forty units on the nose, and a
+-- reading that exactly fills the room it has is a reading that clips on the
+-- first character who rolls a miss chance over ten per cent. At ten the longest
+-- of the four has two units of air each side and the other three have far more.
+local BADGEFONT = M.small - 1
 
 -- The mark in the corner of the figure. Wide enough for the longer of its two
 -- words at eleven pixels and no wider, because it stands on the figure and
@@ -1233,7 +1259,7 @@ local function Badge(head, index)
 	badge.face:SetPoint("BOTTOMRIGHT", badge.ring, "BOTTOMRIGHT", -BADGERIM, BADGERIM)
 	badge.face:SetVertexColor(C.sunken[1], C.sunken[2], C.sunken[3], 0.85)
 
-	badge.value = UI.Label(badge, M.font, C.accent, "CENTER", UI.SHADOW)
+	badge.value = UI.Label(badge, BADGEFONT, C.accent, "CENTER", UI.SHADOW)
 	UI.Wrap(badge.value, false)
 	badge.value:SetPoint("LEFT", badge.ring, "LEFT", 2, 0)
 	badge.value:SetPoint("RIGHT", badge.ring, "RIGHT", -2, 0)
@@ -1471,6 +1497,79 @@ end
 
 --------------------------------------------------------------------------
 
+-- What the column is showing, one tab at a time.
+--
+-- The whole of it was one list once: every stat, then every skill under them,
+-- forty-odd rows deep. That was right about where the numbers belong and wrong
+-- about how many of them you want at once. What you read while you swap a ring
+-- is your hit and your five attributes; the resistances and the four rating
+-- groups are a page you open when you are working out a set, and your languages
+-- and your armour proficiencies are a page you open twice a year.
+--
+-- So they are four tabs, and the split is by how often you look rather than by
+-- where the client keeps them. That is why your trades sit with your attributes
+-- and not with your weapon skills: cooking is something you check before you go
+-- out, and the header the client files it under is not.
+--
+-- Standings are the fourth and they are not a stat at all. They have a window
+-- of their own on /wk reputation and they keep it; what this adds is that you
+-- do not have to leave the sheet to read them, which was the whole argument for
+-- folding the other three tabs into this column in the first place.
+local TABS = {
+	{
+		label = "standard",
+		fill = function()
+			local groups = ns.CharStats.Standard()
+			local skills = ns.CharSkills.Groups()
+			for index = 1, #skills do
+				if skills[index].trade then
+					groups[#groups + 1] = skills[index]
+				end
+			end
+			return groups
+		end,
+	},
+	{
+		label = "extended",
+		fill = function() return ns.CharStats.Extended() end,
+	},
+	{
+		label = "skills",
+		fill = function()
+			local kept = {}
+			local skills = ns.CharSkills.Groups()
+			for index = 1, #skills do
+				if not skills[index].trade then
+					kept[#kept + 1] = skills[index]
+				end
+			end
+			return kept
+		end,
+	},
+	{
+		label = "standings",
+		fill = function() return ns.CharRep.Groups() end,
+	},
+}
+
+-- Which tab is up, held to the four that exist. The saved value is per
+-- character and comes back as whatever was in the file, so it is clamped here
+-- rather than trusted: a sheet that opened on tab seven would draw an empty
+-- column and no way to say what was wrong with it.
+local function Chosen()
+	local at = ns.dbc.characterTab
+	if type(at) ~= "number" or at < 1 or at > #TABS or at ~= math.floor(at) then
+		return 1
+	end
+	return at
+end
+
+local function Column()
+	return TABS[Chosen()].fill()
+end
+
+--------------------------------------------------------------------------
+
 function Paperdoll.New(parent)
 	local pane = setmetatable({ squares = {}, left = {}, right = {},
 		hands = {}, worn = {}, cooling = {} }, Pane)
@@ -1522,6 +1621,30 @@ function Paperdoll.New(parent)
 	-- would be a name that vanishes when the sheet is opened on a laptop.
 	pane.head = Head(pane.frame, level)
 
+	-- The strip that says which of the four lists is under it. Bare, which is
+	-- UI/Window.lua's word for a strip with no fill behind a tab and no line
+	-- under the row: this page is a backdrop the size of the screen rather than
+	-- a window, and four filled buttons over the world are the one thing on it
+	-- that still looks like a dialog. The level is set before the tabs are added
+	-- to it, because a frame takes its parent's level at the moment it is made
+	-- and these have to come out over the figure the same way the badges do.
+	--
+	-- Selecting a tab writes it down and repaints. It does not touch the gear,
+	-- the figure or the badges: the whole of what a tab changes is which list is
+	-- in the column under it, which is why the four of them are a strip here and
+	-- were four pages of the window once.
+	pane.tabs = UI.TabStrip(pane.frame, {
+		bare = true,
+		onSelect = function(index)
+			ns.dbc.characterTab = index
+			pane.stats:Set(Column())
+		end,
+	})
+	pane.tabs.frame:SetFrameLevel(level)
+	for index = 1, #TABS do
+		pane.tabs:Add(TABS[index].label)
+	end
+
 	-- The same readout the stats tab was, hosted here instead and drawn compact:
 	-- a line a row, with the sentence under it moved into the hover. It keeps
 	-- its own scroll view, so a long sheet on a short screen scrolls beside a
@@ -1533,6 +1656,11 @@ function Paperdoll.New(parent)
 	-- something on it you can press.
 	pane.sweep = UI.Ticker(UI.Forever, SWEEP, "trinket", Sweep)
 	pane.sweep:Stop()
+
+	-- After the readout, because selecting a tab fills it. Nothing is drawn by
+	-- it: the pane refuses to paint while it has no width and no page up, which
+	-- is exactly the state this runs in.
+	pane.tabs:Select(Chosen())
 	page = pane
 	return pane
 end
@@ -1707,9 +1835,20 @@ function Pane:Resize(width, height)
 	self.head:SetPoint("TOPRIGHT")
 	self.head:SetSize(reading, HEAD)
 	self:Badges(reading)
+
+	-- The strip between the readings and the list, and it is asked how tall it
+	-- came out rather than told. A tab is as wide as its own word, so four of
+	-- them wrap onto a second line on a narrow column and the strip grows by a
+	-- whole row when they do. Taking the answer back is what keeps the list
+	-- under it rather than behind it.
+	self.tabs.frame:ClearAllPoints()
+	self.tabs.frame:SetPoint("TOPRIGHT", self.head, "BOTTOMRIGHT", 0, -M.gutter)
+	local strip = self.tabs:Resize(reading)
+
 	self.stats.frame:ClearAllPoints()
-	self.stats.frame:SetPoint("TOPRIGHT", self.head, "BOTTOMRIGHT", 0, -M.gutter)
-	self.stats:Resize(reading, math.max(height - HEAD - M.gutter, 1))
+	self.stats.frame:SetPoint("TOPRIGHT", self.tabs.frame, "BOTTOMRIGHT", 0, -M.rowGap)
+	self.stats:Resize(reading,
+		math.max(height - HEAD - M.gutter - strip - M.rowGap, 1))
 
 	-- Sized, not painted. This runs at login on a window nobody has opened, and
 	-- the paint behind it walked nineteen slots, every stat and the durability of
@@ -1793,26 +1932,6 @@ function Pane:Redress()
 		self.panel.Dress()
 	end
 	return changed
-end
-
--- The stats, and then the skills under them, as one list.
---
--- Skills were a tab. They are a group in this column now, and the fold is one
--- list appended to another because Character/Skills.lua and Character/Stats.lua
--- already hand back the same shape: a title and a list of rows. The readout
--- draws whatever it is given and did not change.
---
--- They belong here rather than on a page of their own for the same reason the
--- stats do. The miss badge at the head of this column is computed from your
--- weapon skill, and the two had been on separate pages since the sheet was
--- built, so the number and what it is made of were one press apart.
-local function Column()
-	local groups = ns.CharStats.Groups()
-	local skills = ns.CharSkills.Groups()
-	for index = 1, #skills do
-		groups[#groups + 1] = skills[index]
-	end
-	return groups
 end
 
 -- Which squares the sweep has to walk, and whether it runs at all.

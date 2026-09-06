@@ -73,6 +73,33 @@ local function Kind(maximum, abandonable, level)
 	return "other"
 end
 
+-- Whether a line is a trade, which is what the sheet's standard tab keeps and
+-- its skills tab does without.
+--
+-- Told apart by the same arithmetic Kind uses and for the same reason: every
+-- header on this page is a localised string, and an addon that picked its
+-- professions out by matching the word "Professions" works in English and finds
+-- nothing at all in German. A primary trade can be abandoned and that settles
+-- it. A secondary one cannot, so what is left is the shape of its cap: cooking,
+-- first aid and fishing cap at a multiple of seventy-five and sit somewhere
+-- under it. Languages cap at three hundred as well and fail the second half,
+-- because a language is known or it is not and is always at its own cap.
+-- Armour proficiencies cap at one, and a weapon skill is already gone by then.
+--
+-- What it gets wrong is a character who has capped every secondary trade they
+-- have and taken no primary one, which draws cooking and first aid on the
+-- skills tab rather than the standard one. That is one press, once, and the
+-- alternative is a table of trade names in twelve languages.
+local function Trade(kind, rank, maximum)
+	if kind == "profession" then
+		return true
+	end
+	if kind ~= "other" or not maximum or maximum <= 0 then
+		return false
+	end
+	return maximum % 75 == 0 and rank < maximum
+end
+
 -- The sentence under a weapon skill, and nothing at all for one at the cap.
 --
 -- The number is the same one Stats.MeleeMiss is built on, asked the other way
@@ -95,6 +122,12 @@ end
 -- Every skill line, grouped under the client's own headers, in the shape the
 -- readout pane draws: a title and a list of rows, each row a label, a value, an
 -- optional sentence and an optional fraction that becomes a bar.
+--
+-- A group carries whether it holds trades, which is the one thing about it that
+-- is not on the page: the sheet's standard tab draws the trade groups beside
+-- your attributes and its skills tab draws the rest. The flag is on the group
+-- rather than the row because the client already grouped them and a header
+-- split down the middle would be the same word printed on two tabs.
 function Skills.Groups()
 	Expand()
 	local level = Ask("UnitLevel", "player") or 1
@@ -111,6 +144,7 @@ function Skills.Groups()
 			elseif current then
 				local total = (rank or 0) + (temporary or 0) + (modifier or 0)
 				local kind = Kind(maximum, abandonable, level)
+				current.trade = current.trade or Trade(kind, total, maximum)
 				current.rows[#current.rows + 1] = {
 					label = name,
 					value = ("%d of %d"):format(total, maximum or total),

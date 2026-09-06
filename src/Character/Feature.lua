@@ -158,6 +158,12 @@ ns.Register({
 		figureNear = 0,
 		-- Weapons away, which is how he stands in the world.
 		figureSheathed = true,
+
+		-- Which of the four tabs down the side of the sheet is up. The first,
+		-- which is your hit, your attributes and your trades, and it is per
+		-- character because what you keep open is: a tank leaves the sheet on
+		-- extended for the defence group and a cook leaves it on standard.
+		characterTab = 1,
 	},
 
 	words = {
