@@ -261,6 +261,32 @@ check(feed:Count() == lap,
 		:format(feed:Count(), lap))
 
 ----------------------------------------------------------------------
+-- Folding a repeat into the row it is already on
+----------------------------------------------------------------------
+
+do
+	feed:Scroll(2)
+	local into, shown, written = feed:Held(3), feed:Shown(), feed.written
+	local walked, fresh = 0, feed:Entry()
+	fresh.name, fresh.quality = into.name, into.quality
+	local took = feed:Fold(function(entry, one)
+		walked = walked + 1
+		return entry == into and one == fresh
+	end)
+	check(took == into and feed:Held(3) == into and walked == 4,
+		"a fold came back with the wrong entry, or moved the row it folded into")
+	check(feed.written == written and feed:Count() == lap and feed:Offset() == 2 and feed.stale,
+		"a fold pushed, scrolled the history under a reader, or left the column unmarked")
+	local counted = feed:Shown()
+	feed:Refilter()
+	check(counted == shown and feed:Shown() == shown,
+		("a fold left the count at %d, a recount says %d, from %d"):format(counted, feed:Shown(), shown))
+	check(feed:Fold(function() walked = walked + 1 end) == nil and walked == 20,
+		("a fold bounded at sixteen walked %d, the first fold's four included"):format(walked))
+	feed:ToTop()
+end
+
+----------------------------------------------------------------------
 -- What a row says to the mouse
 ----------------------------------------------------------------------
 

@@ -163,6 +163,14 @@ local WHEEL_ROWS = 3
 local MAX_ROWS = 24
 local HELD = 400
 
+-- How far back Feed:Fold looks for the row an arrival belongs on.
+--
+-- Sixteen entries is a corpse and the two before it, which is the whole of what
+-- a fold is for. The ring is the other number and it is four hundred: a walk of
+-- it per arrival is four hundred comparisons on the path a pull drives, which
+-- is the cost Feed:Window exists to avoid.
+local LOOKBACK = 16
+
 -- How often the box over a parked cursor is filled again.
 --
 -- With the mouse resting on the top row of a live feed the entry under it
@@ -873,6 +881,63 @@ function Feed:Push()
 
 	self.stale = true
 	return slot
+end
+
+-- Add to an entry the feed is already holding, rather than push a second row
+-- saying the same thing.
+--
+-- The caller has taken a slot from Feed:Entry and filled it. This walks back
+-- from the newest through LOOKBACK held entries, hands each of them and that
+-- filled slot to `match`, and on the first yes marks the column and returns the
+-- entry it stopped at. Nil is nobody having taken it, and the caller pushes as
+-- it always did.
+--
+-- What the caller may do with what comes back is write its own fields on it,
+-- `at` included, because a row that folded is a row about the last one that
+-- arrived. What it may not do is change a field the filter reads: `matching`
+-- was counted with the old answer and is not asked again, so a fold that turned
+-- a grey row into a quest one would leave the scrollbar one out until the next
+-- chip click. It may not keep the entry past the call either, for the reason
+-- Feed:Entry gives: it is a ring slot, and the push a lap from now writes over
+-- it.
+--
+-- Nothing is pushed. `written` does not move, so the row keeps its place and
+-- the offset keeps its place under somebody reading history. An entry that
+-- folded and then jumped to the newest row would reorder the column under their
+-- eyes, which is what Feed:Push's offset arithmetic is written to prevent, and
+-- the number on the bandage row climbs where the row already is.
+--
+-- The count is the one thing that has to be squared up. Feed:Entry took the
+-- oldest entry off `matching` on its way to handing that slot over, because a
+-- push was about to carry it out of the ring, and no push is coming. What the
+-- ring holds at that end now is the filled slot itself, so it is counted here
+-- with the comparison Feed:Push makes. Without that a feed that folds at a full
+-- ring loses one from the count per fold, and the oldest rows go out of reach
+-- of a scrollbar measuring against it.
+function Feed:Fold(match)
+	local fresh = self.ring[(self.written % self.cap) + 1]
+	if not fresh then
+		return nil
+	end
+
+	local depth = math.min(self:Count(), LOOKBACK)
+	for back = 0, depth - 1 do
+		local slot = self:Held(back)
+		-- Once round the ring, the oldest held slot is the one the caller has
+		-- just filled. It is the entry that left rather than one to fold into,
+		-- and only a cap shorter than the lookback walks that far.
+		if slot == fresh then
+			break
+		end
+		if match(slot, fresh) then
+			if self.matching and self.written >= self.cap and self.filter(fresh) then
+				self.matching = self.matching + 1
+			end
+			self.stale = true
+			return slot
+		end
+	end
+	return nil
 end
 
 -- A break in the timeline rather than a thing that happened.
