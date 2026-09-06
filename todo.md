@@ -100,6 +100,20 @@ written longer than they are here.
     the socket dots under it, the durability as the name's own underscore, and
     the figure behind all of it rather than boxed between the columns.
     `7b8373a`
+63. A typeface of the addon's own: Noto Sans shipped in `src/Media/`, and the
+    forty windows that were laid out against a narrower face. `89de0a6`
+64. The loadouts come out, with the tab that hosted them. `3b31e1c`
+65. One page, the tab strip gone, the skills folded into the stats column and
+    the standings given a window on `/wk reputation`. `d667d93`
+66. A name is read on a gradient rather than on the grass, out of `UI.Wash`.
+    `2b55319`
+67. The world darkens behind the sheet, on a frame that never takes the
+    mouse. `ff5816d`
+69. The socket carries its gem rather than a mark saying one is there.
+    `7c6fb88`
+70. The enchant on the line under the name, and the oil counting down on the
+    weapon. `0e17925`
+72. The figure is yours to turn, and the pose is remembered. `fe3c4ce`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
@@ -234,7 +248,7 @@ nine times, and they are below in that order.
     and `Window.lua`. Nothing says whether that is deliberate, and the only way
     to find out is to open seven files side by side.
 
-26. Taking a key off the client, written nine times.
+26. Taking a key off the client, written eight times.
 
     `SetOverrideBindingClick` onto a secure button, `ClearOverrideBindings`
     before it, a `Holds(key)` that reads the override layer back through
@@ -242,8 +256,9 @@ nine times, and they are below in that order.
     that got displaced. That is four calls with a subtle contract, and it is
     written out in `src/Targeting/Switch.lua:74`, `src/Charge/Icon.lua:275`,
     `src/Hover/Cast.lua:194`, `src/Dungeons/Key.lua:57`,
-    `src/Marking/Keys.lua:74`, `src/Buttons/Bars.lua:371`,
-    `src/Loadouts/Loadouts.lua:278` and `src/Character/Blizzard.lua:167`.
+    `src/Marking/Keys.lua:74`, `src/Buttons/Bars.lua:371` and
+    `src/Character/Blizzard.lua:167`. It was nine until item 64 deleted
+    `src/Loadouts/Loadouts.lua`.
     `src/Dungeons/Key.lua:60-90` and `src/Targeting/Switch.lua:74-104` are the
     same 30 lines down to the comment above `Holds`.
 
@@ -258,7 +273,7 @@ nine times, and they are below in that order.
 
     So the shared piece is the take, not the re-take. `ns.TakeKey(button, key,
     name)` returning the displaced binding, with `ns.Rebind` called from inside
-    it, retires eight copies and makes the registration impossible to forget.
+    it, retires seven copies and makes the registration impossible to forget.
 
 27. A window has no lifecycle, so twelve files invented one.
 
@@ -717,203 +732,22 @@ was an extension of. Its text is in this file at `17b6427`.
 
 Items 63 to 72 came out of an ask on 2026-09-06. Make the sheet as good to look
 at as Narcissus, take none of its photo booth, and cut the three pages nobody
-wants to look at.
+wants to look at. Eight of the ten landed the same day and are above; these two
+are what is left of that block.
 
 Narcissus is installed on this machine, in the anniversary client's AddOns
 folder, and every mechanism named below was read out of that copy rather than
 remembered. It is a retail addon with a TBC toc, so what it calls, this
 client has. The paths below are relative to that folder.
 
-What is worth taking from it is smaller than it looks, because item 61 already
-landed the arrangement: rows with names in them, sockets, and the figure behind
-the page. Six of the ten items below are the finish on that arrangement rather
-than a new one. What Narcissus has that this sheet does not is that every
-string on it is legible against anything, every change to it is seen happening,
-and the figure is posed rather than placed.
+Neither of these is a bug. The sheet draws the right thing today.
 
-Nothing below is a bug. The sheet draws the right thing today.
-
-The order is the font, then the two removals, then the eight that draw. The
-font goes first because every number the other nine add to the page is a
-measurement of a string, and item 63 says the rest of that argument.
-
-63. A typeface of the addon's own.
-
-    Arial Narrow is what ships in the game and the addon draws every string in
-    it, at `src/UI/Text.lua:28`. Narcissus ships Source Sans Pro and the
-    difference between the two sheets is a third that font.
-
-    One constant and one file. `src/Media/` already carries a ttf and the toc
-    already ships the folder, so this is a licensed face beside `Glyphs.ttf`
-    and a new `PATH`. The fallback at `src/UI/Text.lua:196` is what covers a
-    client that will not load it and it is already written.
-
-    It changes every string in the addon and not just the sheet, and that is
-    the argument for doing it and the argument for doing it first. Forty
-    windows are laid out against the metrics of a narrow face, and a wider one
-    at the same pixel height clips a label somewhere. Every number the nine
-    items under this one add to the sheet is a measurement of a string: how
-    wide a gradient has to be, how much room a row of nineteen leaves the
-    figure, where a socket sits on the line the level is on. Land the face last
-    and all of it is measured twice.
-
-    Read `scripts/harness/sections/36-font-roles.lua` first, which is the gate
-    that knows what a font role is, and expect to spend the commit on the
-    fallout rather than on the change. That fallout is the cost of going first
-    and it is paid once either way.
-
-    Pick the face for a screen at 11 pixels rather than for a page. Source Sans
-    Pro is what Narcissus uses and it is a reasonable answer. So is Noto Sans,
-    which it also ships.
-
-    `./scripts/check.sh` green before committing.
-
-64. The loadouts come out.
-
-    `src/Loadouts/` is three files and 764 lines: two weapons and a stance on a
-    key, a secure button per set, a macro per button, and a page. It goes, with
-    the tab that hosts it.
-
-    Deleted: the folder, its three lines in each of `src/WarriorKit.toc` and
-    `src/WarriorKit_Vanilla.toc` with the two comments that name it,
-    `scripts/harness/sections/20-loadouts.lua` entire, the two checks at
-    `scripts/harness/sections/52-character.lua:555` and `:559`, and the
-    `Loadouts` pane at `src/Character/Window.lua:130-162` with its entry in
-    `TABS` at `:107` and the `LOADOUTS` constant at `:114`.
-
-    One commit and not two. The registry runs at file load, so a folder taken
-    out of the toc while its tab still calls `ns.LoadoutPage.Build` is a Lua
-    error at login, which on this client is a feature that silently does not
-    appear. The gate would pass. The game would not.
-
-    `loadout` in `src/Class/*.lua` is a different thing with the same name. It
-    is a bar plan, read by `src/Buttons/Layout.lua`, and nothing about it
-    changes. The reference at `src/Buttons/Bars.lua:988` is a comment pointing
-    at `ns.Loadouts.All` for its shape, and it wants a different example.
-
-    Item 26 loses one of its eight sites with this, and its list wants the
-    correction: `src/Loadouts/Loadouts.lua:278` will not exist.
-
-    `./scripts/check.sh` green before committing.
-
-65. One page, and the tab strip goes with the other three.
-
-    The sheet is the gear page. `UI.TabStrip` comes off it, and with it the
-    opaque cover at `src/Character/Window.lua:329-334`, the `PAGE` ceiling at
-    `:101` and the `Select` switch at `:178`. What that leaves is a window with
-    one pane in it, which is what `src/Character/Paperdoll.lua` already is.
-
-    Skills are a group in the stats column, not a page. `Skills.Groups()` at
-    `src/Character/Skills.lua:98` already hands back `{ title, rows }`, which
-    is the shape `Stats.Groups()` hands back at `src/Character/Stats.lua:463`,
-    so the fold is appending one list to another and the readout beside the
-    figure draws it unchanged. Weapon skill belongs there anyway: it is the
-    number the miss badge at the head of that column is computed from, and the
-    two have been on separate pages since the sheet was built.
-
-    Reputation is not a stat and does not go in that column. It gets a window
-    of its own on `/wk reputation`, which is a word nothing has taken, built on
-    first open like every other window in the addon except this one, hosting
-    the same `ns.CharReadout` pane with the same `Rep.Groups()` filling it.
-    `src/Character/Reputation.lua` does not change. Only its host does.
-
-    One fewer press is the small half of what this buys. The sheet stops
-    needing a strip of words across its top, so the grip that
-    `src/UI/Window.lua` hands a screen window can be the whole top edge, and the
-    four badges can move up into the room the strip was using.
-
-    `./scripts/check.sh` green before committing.
-
-66. A name is read on a gradient rather than on the grass.
-
-    This is the largest of the ten and it is the one Narcissus is built on. The
-    sheet has no ground under it by design, so nineteen item names are drawn
-    over whatever the player happens to be standing on, and a white name on
-    snow is a name you lean in to read. Every string on this page takes
-    `UI.SHADOW` for that reason, and a rim on a stroke is a patch, not an
-    answer.
-
-    Narcissus draws a black gradient behind each row, opaque at the icon and
-    gone by the far end of the text. The `GradientBackground` texture on
-    `NarciSlotButtonLeftTemplate` at `Narcissus.xml:787` is the shape, and
-    `Main.lua:1764` is the whole of the sizing: the gradient is as tall as the
-    two font strings plus eighteen and as wide as the wider of them plus
-    forty-eight, re-measured after each repaint sets the text. So it is a
-    shadow the exact size of what it is under, and on a row with nothing in the
-    slot it is not drawn at all.
-
-    The call is `texture:SetGradient(orientation, minColor, maxColor)` and it
-    is on this client. OPie calls it at `Libs/TenSettings.lua:245` with plain
-    `{r=, g=, b=, a=}` tables, and Narcissus wraps `CreateColor` around it at
-    `NarciDB/ClassicAPI.lua:385`. Take the `CreateColor` shape and probe it in
-    `src/Core/Core.lua` beside the other shims, because `src/UI/Theme.lua` has
-    no gradient in it and this is the first one in the addon.
-
-    It goes in `UI.Box`'s neighbourhood in `src/UI/Draw.lua` as `UI.Wash`: a
-    texture, a direction, and a colour that runs to nothing. The sheet is the
-    first caller and it will not be the last, because every window the addon
-    draws over the world has the same problem in a smaller form.
-
-    The second caller is named and it is the loot feed. Item 76 is that call
-    and items 76 to 82 are all downstream of this one, so write `UI.Wash` as a
-    thing a feed row can take as well as a gear row: a direction either way, a
-    strength the caller passes rather than one this file picks, and no
-    assumption that the frame under it is as tall as two font strings.
-
-    The row's own copy is placed in `Words` at `src/Character/Paperdoll.lua:286`
-    and sized at the end of `PaintSquare` at `:488`, off `GetStringWidth` of the
-    name and the note, which that function already reads for the durability
-    rule. Mind the direction: `entry.side` decides which end is opaque, and the
-    right column runs the other way.
-
-    `./scripts/check.sh` green before committing.
-
-67. The world darkens behind the sheet.
-
-    Narcissus dims the screen either side of the figure and it is why its page
-    reads as one thing rather than as text scattered on scenery.
-    `Narcissus.xml:2011` is the frame, three textures at `BACKGROUND` under
-    everything, faded in on the way up.
-
-    The sheet is half the monitor against the right edge, so this is one wash
-    across that half: dark at the outer edge, gone by the middle where the
-    figure stands. Item 66's `UI.Wash` is what draws it, which is why it is
-    ordered after. It belongs to the window rather than to the page, so it goes
-    in `src/UI/Window.lua` behind the `screen` flag, off a setting, and every
-    screen window the addon grows later gets it.
-
-    Fade it in with `ns.Ck.Animations` rather than showing it, because a
-    rectangle of shadow that appears instantly on a key press is the one thing
-    on this page that will read as a bug.
-
-    It has to stop at the window's own edge and not creep across the half of
-    the screen the player is playing in. That half is what `312cbd2` gave back.
-
-    And it must not take the mouse. This is the one item on the list that can
-    cost the player the world behind the sheet, and it would do it silently:
-    the sheet is click-through everywhere except its rows because
-    `src/UI/Window.lua:484` turns the mouse off on a screen window's frame, and
-    a shadow laid over half the monitor on a frame that answers the pointer is
-    half a monitor you can no longer target, loot or turn the camera in. It
-    draws and it hovers exactly the same either way, so nothing about looking
-    at it says which one shipped.
-
-    So it is a texture on a frame that never calls `EnableMouse`, and the gate
-    is what proves it rather than the comment above it. `IsMouseEnabled` on the
-    frame is the floor. The real check is the pointer harness at
-    `scripts/harness/client/22-mouse.lua`, which already walks the tree for the
-    frame a click at a point would land on and already knows the three ways a
-    frame refuses one: a point on the sheet's half that is not on a row, a
-    badge or the grip has to come back with nothing under it, with the wash up
-    and faded in.
-
-    This one does not reach the loot feed and is not meant to. A screen window
-    is half the monitor and dimming behind it costs nothing you were looking
-    at; a feed is a column against an edge that is up while you are playing,
-    and a wash under its rows is item 76 rather than this. The same texture,
-    two arguments.
-
-    `./scripts/check.sh` green before committing.
+They were ordered last of the ten on purpose and the order still holds. Item 68
+fades and slides rows whose contents items 66, 69 and 70 finished building, so
+it wanted them built first. Item 71 draws on the icon disc item 69 reshaped.
+Both are measured against the face item 63 landed, which is Noto Sans out of
+`src/Media/Sans.ttf` and not the Arial Narrow the numbers in this file were
+written against.
 
 68. A gear change is watched, not just redrawn.
 
@@ -948,61 +782,6 @@ measurement of a string, and item 63 says the rest of that argument.
 
     `./scripts/check.sh` green before committing.
 
-69. The socket carries its gem.
-
-    Item 61 drew sockets as three five-pixel dots under the name, filled in the
-    gem's quality colour and open in the panel's edge colour. It says what to
-    fix and not what is in it.
-
-    Narcissus draws the gem itself: the gem's own icon in a coloured ring
-    outside the item's icon, at `Main.lua:1693`, with an empty socket drawn as
-    the ring alone. `ns.ItemSockets` at `src/Core/Core.lua:1557` already walks
-    `GetItemGem` and hands back the filled ones and the count of holes, so the
-    data is here and only the drawing changes.
-
-    The dot becomes a disc of `DOT` at twelve or so, with the gem's icon
-    clipped into it by `UI.Clip`, which is the round mask item 60 landed. A
-    hole is the same disc with nothing in it and the ring at half alpha.
-
-    An empty socket is drawn neutral, and that is a limit rather than a
-    choice. A socket's colour is meta, red, yellow or blue and it is a fact
-    about the item, not about the gem, and an item link says what is sitting in
-    each hole and nothing about the holes that are empty. So the ring takes the
-    gem's colour where there is a gem and the panel's edge colour where there
-    is not, and the hover is where a socket is named.
-
-    Keep the count at three. `DOTS` is three because three is the most holes
-    anything in this expansion carries, and that is still true.
-
-    `./scripts/check.sh` green before committing.
-
-70. The enchant on the line under the name, and the oil on the weapon.
-
-    The note line under an item's name says its level and nothing else. On a
-    TBC character every piece is enchanted and the sheet is where you find out
-    which one you forgot.
-
-    Narcissus reads the enchant off the item link and prints it beside the item
-    level on that same line, at `Main.lua:1607-1626`. The link carries an
-    enchant id and not a name, so the name comes off a tooltip scan, which is
-    `UI.Scan` at `src/UI/Scan.lua` and its `item` kind at `:89`. That file is
-    the only one in the addon allowed to name GameTooltip and this does not
-    change it.
-
-    The temporary enchant is the half a warrior actually watches. A sharpening
-    stone, an oil or a poison runs for an hour and lapses in the middle of a
-    raid, and `GetWeaponEnchantInfo` says whether a hand has one, how long is
-    left and how many charges. `src/Buffs/Upkeep.lua:439` already documents that
-    call across the three shapes it has had and `:479` already picks the stride
-    at runtime, so read it from there rather than writing a second reader. It
-    draws on the three weapon rows only, as the time left where the level sits.
-
-    A scan is not cached, on purpose, and this is nineteen of them per repaint.
-    Scan on the repaint that found a link changed, which is the same question
-    item 68 asks and the same answer `Pane:Redress` already has.
-
-    `./scripts/check.sh` green before committing.
-
 71. A trinket says when it is up.
 
     `ns.InventoryCooldown` at `src/Core/Core.lua:1467` is written, probed and
@@ -1020,50 +799,6 @@ measurement of a string, and item 63 says the rest of that argument.
     a Perf slot, and item 44's gate wants a name for it.
 
     `./scripts/check.sh` green before committing.
-
-72. The figure is yours to turn.
-
-    `Portrait` at `src/Character/Paperdoll.lua:671` sets the unit, faces it at
-    0.5 radians and never touches it again. Every character sheet in the game
-    since 2004 lets you drag the figure round, and this one is built on a
-    figure standing in the middle of the screen.
-
-    Left drag turns him, the wheel walks him nearer and further, and the pose
-    is remembered per character so the sheet opens the way you left it. Right
-    drag is the camera's and stays the camera's, which is what `UI.PassCamera`
-    already arranges for the rows.
-
-    `SetRotation` is called already. `SetPosition` and `SetCamDistanceScale`
-    are the other two and both are probed the way `Dress` probes the two it
-    uses, because a client that will not draw a model has to leave the page
-    working.
-
-    The sheathe is the one worth adding beyond that: `SetSheathed` puts the
-    weapons in his hands, which is the only way to look at a weapon you are
-    wearing, and it is a mark in the corner of the figure rather than a
-    setting.
-
-    `./scripts/check.sh` green before committing.
-
-Items 73 to 88 came out of an ask on 2026-09-06, about the loot feed. Three
-things were asked for and the third is the one that decides whether the module
-is worth having. Group the repeats, because crafting sixty bandages is sixty
-rows of the same bandage. Make the feed and the character sheet look like one
-addon. And answer the question the feed is actually opened for, which is not
-what dropped but whether you needed it.
-
-The middle of those three is why seven of these items are about surfaces rather
-than about loot. The sheet and the loot feed are the only two things this addon
-draws over the world with no ground under them, and items 66 and 67 gave the
-sheet a good answer to that while the feed kept the old one: a background slider
-shipping at 15 and `UI.OUTLINE` on every string, which is the patch item 66
-refuses in its second paragraph.
-
-Those two landed while these were being written, at `2b55319` and `ff5816d`, so
-items 76 to 82 are not waiting on anything. `UI.Wash` is on
-`src/UI/Draw.lua:147` now and it came out with the two arguments the feed needs:
-an edge naming which end is opaque, and a colour whose alpha is the strength.
-Items 73 to 75 touch no pixel and are still the cheapest place to start.
 
 73. A feed folds a repeat into the row it is already on.
 
