@@ -482,6 +482,12 @@ local SECTIONS = {
 	-- expire them and read as that section's failure. Here the list is empty
 	-- when it starts and empty when it hands over.
 	"81-gear-arrival",
+	-- Last, because it reads the state four sections above it left. It wants a
+	-- quest in the log, a profession window that has been walked and a corpse in
+	-- front of you at the same time, and 47, 69 and 70 are what put those three
+	-- there. It hands every one of them back at the foot of the file the way they
+	-- were handed over, so it can go on being last when the next one arrives.
+	"82-need",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

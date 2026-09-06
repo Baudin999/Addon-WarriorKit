@@ -40,7 +40,7 @@ Class\Mage.lua
 Class\Shaman.lua
 Class\Priest.lua
 
-# Six shared files that wrap a client API and own no setting, the same shape
+# Seven shared files that own no setting and draw nothing, the same shape
 # ns.ItemInfo has. Gear is what the client will let into each hand and which
 # number that hand is; Stance reads your class's own form list off the registry
 # above and hands back their localised names and which one you are standing in.
@@ -55,13 +55,17 @@ Class\Priest.lua
 # both turn on. CombatLog is the one call that hands over a combat log line,
 # made once per line and handed to whichever parts are reading; six of them made
 # it themselves, three for a feature that was switched off, and the client event
-# is unregistered while nobody is subscribed. Every one of them was a part's
-# private knowledge until a second part needed the same answer, and all six load
-# before anything that asks.
+# is unregistered while nobody is subscribed. Need is the one question a loot
+# row, a bag square and the chip over both of them ask about an item: why it
+# matters to you, answered off the quest log, the reagent list and the loot
+# filter in that order, so that two of them cannot rank the same item
+# differently. Every one of them was a part's private knowledge until a second
+# part needed the same answer, and all seven load before anything that asks.
 Core\Gear.lua
 Core\Stance.lua
 Core\Piles.lua
 Core\QuestItems.lua
+Core\Need.lua
 Core\Loot.lua
 Core\CombatLog.lua
 

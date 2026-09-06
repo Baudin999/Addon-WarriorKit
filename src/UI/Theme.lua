@@ -89,6 +89,26 @@ UI.Color = {
 	heading  = { 1.00, 0.82, 0.20 },
 	quiet    = { 0.42, 0.42, 0.47 },
 
+	-- Why an item matters to you, one colour per reason Core/Need.lua answers
+	-- and keyed by the word it answers, so a fourth reason is a fourth entry
+	-- here and nothing else.
+	--
+	-- The orange is the one the loot feed already rings a quest item with, and
+	-- it is the only orange in the addon: gold is what the coin rows are and
+	-- what the account's own accent is, and a quest marker in that colour is a
+	-- marker you have to work out. Green for a reagent still worth a point,
+	-- because the answer it stands for is yes. Grey for what the loot filter
+	-- would have left, because trash is the commonest of the three and the one
+	-- nobody is looking for.
+	--
+	-- Their own entries rather than the three above that are already those
+	-- hues, for the reason the three names above them have theirs: `heading`,
+	-- `tick` and `quiet` are a title, a box you ticked and a line you are meant
+	-- to skip, and none of the three is a reason to keep an item.
+	quest    = { 0.98, 0.55, 0.15, 1 },
+	skill    = { 0.45, 0.78, 0.52, 1 },
+	trash    = { 0.38, 0.38, 0.43, 1 },
+
 	-- The line in a tooltip that tells you what to type. It was a literal in
 	-- Buffs/Nag.lua, 0.55 0.72 1, one of exactly two colours that file wrote by
 	-- hand, and it came here when the tooltip it was written for became
