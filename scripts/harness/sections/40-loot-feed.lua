@@ -4,7 +4,7 @@
 -- move and a tooltip on the row under the cursor. Both feeds are that file and
 -- neither of them is this one.
 --
--- This is the half that is only ever true of loot. Five questions, and none of
+-- This is the half that is only ever true of loot. Seven questions, and none of
 -- them can be answered by reading Feeds/Loot.lua.
 --
 -- Does the column give the screen back. The loot feed ships with no word over
@@ -26,8 +26,18 @@
 -- of linen until something says otherwise, and a price out of somebody else's
 -- addon with that addon named beside it.
 --
+-- Does a repeat land on the row it is already on. Twelve bandages off one
+-- corpse is one row and a number that climbs, and the arithmetic under it is
+-- what a reading cannot check: the total, the pickups behind it, the looter it
+-- may not fold across, and the minute after which it is a different afternoon.
+-- Coin is the same question with no link to ask it with.
+--
+-- Is the column read against something the addon painted. The panel is gone and
+-- each row carries a gradient that has to end where the text ends, because a
+-- wash the width of the row is the panel again with a fade on one side.
+--
 -- And does the row say why you want it. The middle column and the ring are one
--- answer out of Core/Need.lua, and the half a reading cannot settle is that a
+-- answer out of Need/Need.lua, and the half a reading cannot settle is that a
 -- row which folded six of something reads the count as it stands now.
 
 local H = ...

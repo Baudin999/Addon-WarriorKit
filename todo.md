@@ -13,8 +13,8 @@ in the README's untested list, and the full text of each item is this file at
 `e7ef4ca` for 1 to 6, 8, 11 and 12, at `ca59a77` for 7, 9 and 13, at
 `44c79ef` for 15, at `a7772af` for 16, at `c37c149` for 19, at `b5d2277` for
 17, at `30a42cb` for 28, at `2210d8f` for 18, at `f3222c6` for 32 to 45 and at
-`1ad54d1` for 46 and at `229a60f` for 47. Items 14, 23 and 31 were never
-written longer than they are here.
+`1ad54d1` for 46, at `229a60f` for 47 and at `c76af91` for 73 to 77, 79 and
+83 to 86. Items 14, 23 and 31 were never written longer than they are here.
 
 1. Weapon swing timer. `8be9a43`
 2. Deep Wounds missing from the enemy bar debuffs. `05e40ec`
@@ -118,6 +118,29 @@ written longer than they are here.
 71. A trinket says when it is up, swept on the disc's own ring out of
     `UI.Arc`. `8b18daa`
 72. The figure is yours to turn, and the pose is remembered. `fe3c4ce`
+
+73. A feed folds a repeat into the row it is already on, bounded at sixteen and
+    left where it is. `d65fcdd`
+74. The loot feed folds on the link, the looter and a minute, and the tooltip
+    keeps the total, the pickups and the last of them. `a36b893`
+75. Coin folds on being coin, the row rebuilt from a running total that
+    `Core/Loot.lua` reads back out of the client's own amount strings.
+    `1ab1e8d`
+76. Every feed row is read on a gradient that ends where the text ends, and the
+    panel behind them goes. `cafa7d8`
+77. Every string in a feed comes off the rim and onto that ground, in the same
+    commit, because the state between the two is the worst of the three.
+    `cafa7d8`
+79. The feed's quality stripe rests where the sheet's does and the hover takes
+    it to full, off a `rest` the two windows now share. `0fa0cb2`
+83. One answer to why an item matters, in the fixed order quest, skill, trash,
+    nothing, cached per item id. `463afe8`, moved out of Core the same day by
+    `4eafa88`
+84. A reagent says whether it is still worth a point. `4ed288f`
+85. An objective read into a name and two numbers, off the client's own format
+    strings. `afcc248`
+86. The loot row says why it matters, in the dim column and on the icon ring,
+    read again on every fold. `c76af91`
 
 Item 10, the Slam mark carried out of item 1, was dropped rather than
 finished. Nothing tracks it now. Its text is in this file at `d05546c`.
@@ -734,127 +757,6 @@ day and are above. Item 62, a loadout that carried a whole set of gear rather
 than two weapons, is dropped rather than finished. Item 64 deletes the part it
 was an extension of. Its text is in this file at `17b6427`.
 
-73. A feed folds a repeat into the row it is already on.
-
-    `src/UI/Feed.lua` is the only file that can do this, because the ring is
-    what has to stay honest: `written` at `Feed:Push` `:859`, the offset it
-    nudges when you are reading history, and the `matching` count that
-    `Feed:Entry` `:823` decrements when an entry falls out of the ring.
-
-    `Feed:Fold(match)` takes a function and a filled slot. It walks back from
-    the newest through a bounded lookback, hands each held entry and the new one
-    to `match`, and on the first yes it lets the caller add to that entry in
-    place and marks the feed. Nothing is pushed, `written` does not move, the
-    offset does not move, and `matching` is already right because the entry it
-    folded into was already counted.
-
-    Bounded, and the bound is this file's. A walk of the whole ring per arrival
-    is four hundred comparisons on the path a pull drives, which is the cost
-    `Feed:Window` `:782` exists to avoid. Sixteen entries back is a corpse and
-    the two before it, which is the whole of what a fold is for.
-
-    In place and not to the top. An entry that folded and then jumped to the
-    newest row would reorder the column under the eyes of somebody reading it,
-    which is the thing `Feed:Push`'s offset arithmetic is written to prevent.
-    The bandage row stays where it is and its number climbs.
-
-    The slot `Feed:Entry` handed out is left unpushed, which that function's own
-    header already says is safe: the next caller wipes it.
-
-    `./scripts/check.sh` green before committing.
-
-74. The loot feed folds on the item, and the tooltip says what the row stopped
-    saying.
-
-    `AddItem` at `src/Feeds/Loot.lua:333` asks `Feed:Fold` first and pushes only
-    if nothing took it. Two entries are the same drop when the link is the same
-    and the older one arrived inside the window; the link is already on the
-    entry and `Stream.Clock` already reads `entry.at`.
-
-    Sixty seconds, and it is a number rather than the whole ring for the reason
-    item 73 is bounded. Bandages come off a craft one a second and a vendor run
-    an hour ago is a different afternoon. The window is not a setting. A slider
-    on it would be the third control over what the column shows and the header
-    of `Passes` at `:150` is an argument against the second.
-
-    `entry.count` becomes the running total and `entry.amount` at `:347` is
-    written from it, so the row reads `x12` where it read `x1` twelve times.
-    `entry.at` moves to the newest of them, because a row that folded is a row
-    about the last one you picked up.
-
-    The tooltip at `Fill` `:218` keeps what the row can no longer hold. The
-    `Stack` line at `:226` becomes the total and how many pickups made it, and
-    the `Looted` line says the last one. A row reading `x12` with a tooltip
-    saying `12` and nothing else has thrown the fold away.
-
-    `./scripts/check.sh` green before committing.
-
-75. Coin folds too.
-
-    `AddMoney` at `src/Feeds/Loot.lua:368` folds on being coin at all rather
-    than on a link, inside the same window, and the row's name is rebuilt from
-    the running total through `ns.Coined` rather than from the client's phrase.
-
-    That loses the client's own sentence, which is what the comment at `:375`
-    picked on purpose, and it is the right trade only because the total is the
-    thing being kept. A folded coin row saying "12 Silver, 39 Copper" when three
-    corpses paid is a lie in the one column that is arithmetic.
-
-    The purse along the bottom is unaffected. It reads `GetMoney` and a ledger,
-    never the rows.
-
-    `./scripts/check.sh` green before committing.
-
-76. The feed's rows are read on a gradient, and the slider behind them goes.
-
-    `UI.Wash(parent, color, edge, layer)` at `src/UI/Draw.lua:147` under each
-    row of `src/UI/Feed.lua`, sized to the row and running from the stripe out,
-    so a drop is read against something the addon painted rather than against
-    grass. The edge is `"LEFT"`, which is that function's own default and is the
-    way a feed row reads.
-
-    A client with no gradient gets a flat wash at half strength, which that
-    function already arranges and this one does not have to think about. It is
-    the worse picture and it is legible, and it is the only state where the
-    outline coming off in item 77 is a real loss.
-
-    `lootFeedAlpha`, which ships at 15 at `src/Feeds/Loot.lua:293`, becomes the
-    wash's strength rather than a panel's alpha. It is the same slider on the
-    same page saying the same thing, and the comment above that default already
-    describes the wash without knowing the word: almost nothing behind it,
-    because a panel was covering scenery to hold up text that did not need
-    holding up. A gradient is what holds up text without a panel.
-
-    Every stream gets it, not the loot one. The combat feed is over the world by
-    the same argument and `Feeds/Combat.lua` never asked for a different answer.
-
-    Watch the ends. A wash as wide as the row is a black bar with a fade on one
-    side, which is a panel again. It ends where the text ends, which the row
-    already measures per resize in `Resize` and hands out as `geom`.
-
-    `./scripts/check.sh` green before committing.
-
-77. Every string in a feed comes off the rim and onto the shadow.
-
-    `UI.OUTLINE` at ten sites in `src/UI/Feed.lua` and three in
-    `Instance:BuildStatus` at `src/Feeds/Stream.lua:264` becomes `UI.SHADOW`,
-    which is what the character sheet draws in and what item 66 argues for: a
-    rim on a stroke is a patch for having no ground, and after item 76 there is
-    ground.
-
-    `UI.OutlineFloor` at `src/UI/Text.lua:269` stops applying to a feed row,
-    which is the point. The floor is why `FEED_ICON_LOW` is 16 at `:97`, and a
-    row that no longer needs an outlined glyph can go smaller than a row that
-    does. Do not lower it in this commit. Measure it first with the wash
-    actually under the text, and if it comes down, item 23's ratchet is where
-    the new number is written.
-
-    This is one commit with item 76 or it is a regression. Text with no rim and
-    no wash under it is the worst of the three states and it is what the
-    intermediate commit ships.
-
-    `./scripts/check.sh` green before committing.
-
 78. A badge is a widget, not a thing the paperdoll has.
 
     The four readings at the head of the stats column, `LABELS` at
@@ -869,6 +771,12 @@ was an extension of. Its text is in this file at `17b6427`.
     durability badge draws as a bar; the feed's three have no fraction and pass
     none.
 
+    Item 65 landed on 2026-09-05 and this is no longer waiting on anything.
+    Items 76 and 77 changed what it inherits: the strip's three readings are
+    shadowed rather than rimmed and sit on a wash of their own, driven off the
+    same slider as the rows, so a badge widget has ground under it already and
+    has to keep it.
+
     This lands with item 65 and not before it. That item is already moving the
     four badges up into the room the tab strip leaves, which means it is already
     rewriting their placement, and doing the extraction in a separate commit is
@@ -877,25 +785,6 @@ was an extension of. Its text is in this file at `17b6427`.
     The tones stay where they are. `WearTone` is a fact about durability and
     `Tone` in `Purse.lua` is a fact about whether your afternoon paid, and
     neither belongs in a widget that draws a number.
-
-    `./scripts/check.sh` green before committing.
-
-79. Quality is one picture in both windows.
-
-    The sheet draws an item's grade as a band round the icon at `REST` 0.55,
-    `src/Character/Paperdoll.lua:126`, and the hover takes it to full. The feed
-    draws the same grade as a stripe down the row and a ring round the icon, at
-    full strength always, `src/UI/Feed.lua:236` and `:255`. Two answers to one
-    question, and after item 76 they are on two surfaces that finally match.
-
-    The feed takes the sheet's: the stripe and the ring rest at `REST` and the
-    hover takes the row to full, which the row already has a hook for at
-    `Feed:Enter`. Nineteen quality colours at full strength is a page of
-    coloured lights, and thirteen rows of it is a column of them.
-
-    The quest ring is the exception and stays at full. It is not a quality, it
-    is the one thing on the row that is telling you to look, and item 86 gives
-    it company rather than taking it away.
 
     `./scripts/check.sh` green before committing.
 
@@ -922,6 +811,13 @@ was an extension of. Its text is in this file at `17b6427`.
     `DENSE`, `TIGHT` and `VALUE` at `src/Character/Readout.lua:79`, `:72` and
     `:64` are the addon's dense-list metrics and there is now a second dense
     list.
+
+    Two of those moves are already made and the count above is stale by them.
+    Item 83 put `quest`, `skill` and `trash` into `UI.Color` rather than write a
+    second orange into a new file, so `QUEST` in `Feeds/Loot.lua` has a home
+    waiting and only its own local is left. Item 79 moved `REST` into
+    `UI.Metric` as `rest`, with the paragraph that justified the 0.55, and the
+    sheet reads it from there.
 
     Item 81 is the gate and it is the next commit rather than this one. Land the
     move first, count what is left, then write the rule against the number that
@@ -982,122 +878,6 @@ was an extension of. Its text is in this file at `17b6427`.
 
     `./scripts/check.sh` green before committing.
 
-83. One question: why does this item matter to you.
-
-    `ns.Need(link)` in `src/Core/`, answering a reason, a short phrase and a
-    colour, or nothing at all. Four sources, each of which already exists and
-    none of which knows about the others.
-
-      quest      an objective in your log this item feeds, and how far along it
-                 is. Item 85 is the reading.
-      skill      a reagent a profession of yours uses, and whether the recipes
-                 using it can still gain you a point. Item 84 is the reading.
-      trash      something `Comfort/Wanted.lua` would have left on the corpse.
-                 Item 88.
-      nothing    which is most items, and is answered fast.
-
-    In Core because three parts outside `src/Feeds/` are going to want it and a
-    part may not name a file outside its own tree. The bag window is the first
-    of them and it is not on this list.
-
-    One answer per item, in that order, because a wolf liver that is also a
-    leatherworking reagent is a wolf liver you need eight of. Ordered here and
-    not left to the caller: two callers ranking the same item differently is the
-    thing this function exists to stop.
-
-    Cached per item id and thrown away on the events that change the answer,
-    which are the quest log's, `SKILL_LINES_CHANGED` and the trade window's.
-    `AddItem` at `src/Feeds/Loot.lua:333` calls this on a path a pull drives,
-    and a walk of the quest log per drop is what that path cannot afford.
-
-    `./scripts/check.sh` green before committing.
-
-84. A reagent says whether it is still worth a point.
-
-    `Walk` at `src/Comfort/Reagents.lua:110` reads the difficulty of every
-    recipe and throws it away. `ns.TradeSkillRow` at `src/Core/Core.lua:1997`
-    returns it as `kind`, which is the client's `optimal`, `medium`, `easy` or
-    `trivial`, and the walk uses it only to tell a header from a row.
-
-    Keep the best of it. `ns.dbc.lootReagents` maps an item id to a profession
-    name at `List` `:83`; it becomes the profession and the best difficulty any
-    recipe wanting that reagent has, so `Reagents.Has` at `:187` still answers
-    what it answers and a new reading says whether the point is still there.
-
-    Trivial is the whole value of the change. Six stacks of linen is a reagent
-    tailoring uses and has not given you a point for in twelve levels, and a
-    feed that says "tailoring" about it is a feed telling you to keep something
-    you should be selling.
-
-    The saved shape changes, so the old table has to be readable or dropped on
-    sight. Dropped: it is rebuilt the next time the trade window opens, which
-    is the same recovery the throttle at `Due` `:139` already assumes.
-
-    `./scripts/check.sh` green before committing.
-
-85. An objective is a name and two numbers.
-
-    `Client.Objectives` at `src/Quests/Client.lua:191` hands back the client's
-    own sentence, its kind and whether it is finished. "Boar Hide: 3/8" is one
-    string, and the three and the eight are inside it.
-
-    Read them with the client's own format strings, the way `Core/Loot.lua`
-    reads a loot line and for the same reason: those are what the client built
-    the sentence from, turning one into a pattern reads a German client by
-    German rules, and typing a colon and a slash here is an addon that captures
-    nothing outside English. There are three and the kind says which:
-    `QUEST_ITEMS_NEEDED` for an `item`, `QUEST_MONSTERS_KILLED` for a `monster`
-    and `QUEST_OBJECTS_FOUND` for an `object`. Only the first matters to a loot
-    row and all three are cheap.
-
-    Questie on disk carries the one thing that will otherwise cost an evening.
-    `Modules/Quest/QuestieQuest.lua:1191` and `:1204` match the pattern and then
-    check whether the name came back as a number, with the comment "SOME
-    objectives are reversed in TBC": the two captures arrive the other way round
-    on some quests on this client. Handle it the way that file does rather than
-    finding it in the field.
-
-    It goes beside the existing call as a second reading rather than replacing
-    it, because the tracker and the quest window both draw the sentence whole
-    and neither wants it taken apart.
-
-    Matching an objective to an item is by name, which is what the client gives.
-    That is right for the great majority and wrong for the handful whose
-    objective is worded differently from the item. Questie knows the real
-    mapping and `src/Quests/Drops.lua` already reads it; this item does not, and
-    the reason is that a feed which says nothing about one item in fifty is
-    worth shipping and a Questie dependency on the loot path is not.
-
-    `./scripts/check.sh` green before committing.
-
-86. The loot row says why it matters.
-
-    The dim middle column already exists. `row.note` is built on every feed row
-    at `src/UI/Feed.lua:272` and the loot stream asks for zero width of it
-    through `opts.note` at `:354`, so this is a width and a string rather than a
-    region.
-
-    The string is item 83's phrase: `4/8` for a quest objective, the profession
-    for a reagent that can still gain you a point, nothing for an item with no
-    reason. It is short by design, because the column it goes in takes its width
-    off the name.
-
-    The ring round the icon takes the reason's colour and stops being the quest
-    ring. It is already the right shape, already shown per row, and orange is
-    already the reason colour; a second ring for a second reason would be a row
-    with two rings on it.
-
-    The tooltip says it as a sentence, in `Fill` at `src/Feeds/Loot.lua:218`,
-    above the `Looted` line. "Wolf Liver, 4 of 8" is the sentence, and the row
-    is the glance.
-
-    Folding and this have to agree. A row that folded twelve bandages and shows
-    `4/8` is showing a count that moved while it folded, so the note is read on
-    the fold as well as on the arrival, which item 73 makes cheap by handing the
-    caller the entry it folded into.
-
-    `./scripts/check.sh` green before committing.
-
 87. A chip that leaves only what you needed.
 
     A seventh chip in `Chips` at `src/Feeds/Loot.lua:162`, past the break with
@@ -1112,9 +892,21 @@ was an extension of. Its text is in this file at `17b6427`.
     wants quest items and not reagents has to be able to say so, and the two
     chips together are what says it.
 
-    `Passes` at `:150` gains one branch, `Feature.lua`'s panel page gains a
-    check box at `:556` and a slash word at `LootWords` `:214`, because a chip
-    without both is a switch that disagrees with the page describing it.
+    `Passes` gains one branch, `Feature.lua`'s panel page gains a check box and
+    a slash word at `LootWords`, because a chip without both is a switch that
+    disagrees with the page describing it. The line numbers above are from
+    before items 74, 75, 79 and 86 moved that file; read them off it.
+
+    The branch is `entry.ring`. Item 86 landed `Reason` in `Feeds/Loot.lua`,
+    which writes `note` and `ring` on the arrival and again on every fold, so
+    "has a reason" is already a field on the entry and this chip does not ask
+    `ns.Need` anything.
+
+    What the chip promises is not all there until item 88. From the feed
+    `ns.Need` is called with a link and no loot slot, so it answers quest or
+    skill and never trash, and until 88 finds a slot the chip means "counted or
+    craftable" rather than "worth keeping". Land it anyway; the promise widens
+    under it without the chip changing.
 
     `./scripts/check.sh` green before committing.
 
@@ -1126,14 +918,29 @@ was an extension of. Its text is in this file at `17b6427`.
     the overlapping question and neither has ever heard of the other.
 
     Item 83's `trash` reason is this call, so a drop the filter would have
-    refused is marked in the column as what it is. And the feed becomes the only
-    place the filter can be checked: `Comfort/Loot.lua` empties a corpse before
-    a window is drawn, so what it decided is invisible by design, and a rule set
-    too tight is a rule set nobody finds out about.
+    refused is marked as what it is. And the feed becomes the only place the
+    filter can be checked: `Comfort/Loot.lua` empties a corpse before a window
+    is drawn, so what it decided is invisible by design, and a rule set too
+    tight is a rule set nobody finds out about.
 
-    The mark is quiet. Trash is the reason nobody is looking for, it is the
-    commonest answer on the list, and a column of loud grey rows is the feed
-    back where it started.
+    The slot is the whole of the work and item 83 could not do it. `Wanted.Take`
+    takes a loot slot index; the loot feed runs off `CHAT_MSG_LOOT`, which is
+    the server saying what reached your bags and carries no corpse to ask about.
+    So `ns.Need(link, slot)` asks the trash source only when a slot is handed
+    in, and nothing hands one in today. `Comfort/Loot.lua` is the part of the
+    addon that has one, and carrying what it refused across to the feed, by
+    link, is this item.
+
+    `Wanted.Take` answers true the moment `ns.dbc.lootFilter` is off, so trash
+    is only ever an answer while the filter is on. A feed that marked every grey
+    as trash with the filter off would be marking the whole column.
+
+    The mark is quiet, and item 86 measured what quiet has to mean. That column
+    is 48 units and is never handed more than 81, which is why a profession name
+    at 104 did not go in it: a reagent is a ring and a word on the hover, and
+    trash is the same shape or less. Trash is the reason nobody is looking for
+    and it is the commonest answer on the list, so a column of loud grey rows is
+    the feed back where it started.
 
     `./scripts/check.sh` green before committing.
 
@@ -1477,6 +1284,30 @@ it.
     itself.
 
     `./scripts/check.sh` green before committing.
+
+Item 100 came out of item 86 measuring a column on 2026-09-06. It is a bug the
+addon has drawn since the note column was written and nothing had ever put a
+ruler on it.
+
+100. A feed row draws a whole word or none of it.
+
+     `src/Feeds/Combat.lua` asks for 96 units of note column and its widest
+     string, "from Plains Creeper", measures 123 in the shipped face at a row's
+     text size. It clips today, at the width the feed ships at, before anything
+     is resized. The loot feed does not, because item 86 measured its column
+     against the longest thing that can reach it and cut the phrase to fit.
+
+     The rule belongs in `Feed:Resize` rather than in the two streams: a note
+     that does not fit is not drawn. `geom.note` is already clamped to half the
+     free width there, so a column that fits at the shipped size clips anyway at
+     the size somebody plays at, and a per-stream number cannot answer that.
+
+     It deletes the combat feed's note column at its default width, which is the
+     honest reading of what that column is doing now, and a stream that wants
+     one back asks for a width its strings fit in. Say that in the message; it
+     is a feature going quiet rather than a fix nobody sees.
+
+     `./scripts/check.sh` green before committing.
 
 ## Deliberately not on this list
 
