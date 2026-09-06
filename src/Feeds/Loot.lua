@@ -9,7 +9,18 @@ local C = ns.UI.Color
 -- What dropped
 --
 -- Every item that reaches you, as a row: the icon, the name in the item's own
--- quality colour, and how many of it there were.
+-- quality colour, how many of it there were, and why you want it.
+--
+-- **The last of those is not this file's.** Core/Need.lua answers it, and what
+-- happens here is that its colour goes round the icon, its phrase goes in the
+-- dim middle column and its sentence goes on the hover. A quality colour says
+-- what the game thinks an item is worth and cannot say that eight of this one
+-- finishes a quest, which is the whole of what a loot feed is read for.
+--
+-- Only a quest reason reaches the column, because only a quest reason has a
+-- number in it. A reagent's answer is a profession's name in the player's own
+-- language, which measures 104 units against a column that is never wider than
+-- 81, so it is a green ring on the row and a word on the hover.
 --
 -- **Why this reads chat rather than the loot window.** The obvious source is
 -- the loot window itself, and it is the wrong one twice over. Comfort/Loot.lua
@@ -119,8 +130,8 @@ local FOLD_WINDOW = 60
 -- what you are looking at, and turning one back on brings its history with it.
 --
 -- **A quest item is not a quality.** It is white, the same white as a stack of
--- linen, so it gets a ring round its icon rather than a colour of its own, and
--- its chip is an override rather than a seventh tier: on, a quest item is drawn
+-- linen, so what says it is the ring rather than a colour of its own, and its
+-- chip is an override rather than a seventh tier: on, a quest item is drawn
 -- whatever its own quality chip says. That is the combination that makes the
 -- feed useful while questing, which is turning the whites off and still seeing
 -- the five wolf livers you need.
@@ -193,8 +204,9 @@ local function Chips()
 	chips[#chips + 1] = {
 		color = QUEST,
 		mark = BANG,
-		tip = "Quest items, whatever their own quality chip says. They are the"
-			.. " rows with a ring round the icon.",
+		tip = "Quest items, whatever their own quality chip says. The ring round"
+			.. " an icon says why an item matters to you, and orange on it is"
+			.. " one of these.",
 		get = function() return ns.db.lootFeedQuest end,
 		set = function(on) ns.db.lootFeedQuest = on end,
 	}
@@ -230,6 +242,18 @@ local function Fill(entry)
 
 	if entry.quest then
 		lines[#lines + 1] = { "Quest item", color = QUEST }
+	end
+	-- Why you want it, at the width a line has rather than the width a column
+	-- has. This is where a reagent says which profession, because the row can
+	-- only afford the green ring, and where a quest count is spelled out.
+	--
+	-- Asked here rather than read off the entry, because the answer the row was
+	-- painted with is as old as the pickup and an objective moves while a stack
+	-- is still growing.
+	local _, _, tone, said = ns.Need(entry.link)
+	if said then
+		lines[#lines + 1] = { ("%s, %s"):format(entry.name or "?", said),
+			color = tone }
 	end
 	-- The last of them, on a row that folded. `at` moved to the newest pickup
 	-- when it folded, so this line answers "when did I last get one" rather
@@ -276,6 +300,25 @@ local stream = ns.Stream.New({
 	name = "WarriorKitLootFeed",
 	title = "Loot",
 	empty = "nothing yet",
+	-- Forty eight units, and the number is a measurement rather than a guess.
+	-- The only thing this column ever draws is a quest count, and a count in the
+	-- shipped face at a row's text size is 8.03 units a digit and 5.14 for the
+	-- slash: 21 for `4/8`, 29 for `0/12`, 37 for `10/12` and 45 for `0/100`.
+	-- Forty eight holds the last of those whole, and nothing wider than that
+	-- exists as an item objective.
+	--
+	-- It has to hold at the narrow end as well, because UI/Feed.lua gives this
+	-- column half of what is left after the number at most and hands back less
+	-- than was asked for rather than saying so. Dragged to the panel's floor of
+	-- 200 units the column is 41 at the shipped icon, which still holds a four
+	-- digit count whole; the icon has to go past 33 at that same width before it
+	-- reaches 37 and a count starts to clip, and at that setting the item's name
+	-- has six characters and the row has lost more than its note.
+	--
+	-- The profession's name is not in this list because it cannot be. It
+	-- measures 104 units and this column is never wider than 81, so it is the
+	-- sentence on the hover and a green ring on the row.
+	note = 48,
 	onTooltip = Fill,
 	chips = Chips(),
 	filter = Passes,
@@ -359,6 +402,42 @@ end
 
 local seen = 0
 
+-- Why this item matters to you, onto the row's middle column and onto the ring
+-- round its icon.
+--
+-- Both off the one answer, because they are the one fact. A row saying `4/8` in
+-- the green a reagent is drawn in would be a row disagreeing with itself, and
+-- two rings for two reasons would be a row with two rings on it.
+--
+-- A reagent leaves the column empty, because Core/Need.lua gives it no phrase
+-- and no row can hold the one it would have given. That is the ring carrying a
+-- reason on its own, which is what the ring already does for trash everywhere
+-- else this answer is drawn.
+--
+-- Asked with no loot slot, so the trash source is never reached. CHAT_MSG_LOOT
+-- is the server saying what reached your bags and there is no corpse behind it
+-- to ask the filter about; a grey ring on the greys would also be this column
+-- back where it started, which is the argument the chips already won.
+--
+-- The ring falls back to the quest colour for an item the client files as a
+-- quest item. Core/Need.lua matches an objective by the name the client writes
+-- on it and says so in its own header, and the handful whose objective is
+-- worded differently from the item would otherwise lose a ring the feed has
+-- drawn round them since it was written.
+--
+-- The ring stays at full while the stripe beside it rests. The stripe is a
+-- grade and a column of grades is worth reading as a ribbon; the ring is the
+-- one thing on the row telling you to look, and a thing telling you to look at
+-- three fifths strength is furniture. `look` is what UI/Feed.lua reads for
+-- that, and it is written here rather than at the arrival so a row that folded
+-- into a reason it did not have keeps its ring lit.
+local function Reason(entry)
+	local _, phrase, tone = ns.Need(entry.link)
+	entry.note = phrase
+	entry.ring = tone or (entry.quest and C.quest) or nil
+	entry.look = entry.ring and true or nil
+end
+
 -- Whether an entry the feed is holding is the row a fresh one belongs on.
 --
 -- Three things, and the third is the one the item this was written for did not
@@ -413,18 +492,14 @@ local function AddItem(who, link, count)
 	entry.count = count
 	entry.who = who
 	-- The three the filter and the row read. Quality is what the chips grade it
-	-- by, quest is the ring round the icon and the chip that overrides them, and
-	-- the price is the vendor's, kept because the client will answer for an item
-	-- in your bags and go quiet about one you sold.
+	-- by, quest is the chip that overrides them, and the price is the vendor's,
+	-- kept because the client will answer for an item in your bags and go quiet
+	-- about one you sold.
 	entry.quality = quality
 	entry.quest = (class == QUEST_CLASS) or nil
-	entry.ring = entry.quest and QUEST or nil
-	-- And the ring stays at full while the stripe beside it rests. The stripe
-	-- is a grade and a column of grades is worth reading as a ribbon; the ring
-	-- is the one thing on the row telling you to look, and a thing telling you
-	-- to look at three fifths strength is furniture.
-	entry.look = entry.ring and true or nil
 	entry.price = price
+	-- After `quest`, which is one of the two things the ring is read off.
+	Reason(entry)
 
 	-- The same item again inside the window is the row you are already looking
 	-- at rather than a second one under it.
@@ -443,6 +518,16 @@ local function AddItem(who, link, count)
 		-- tooltip's clock reads and what the next arrival's window is measured
 		-- against.
 		into.at = foldAt
+		-- And why it matters, read again, because the count on an objective
+		-- moved while this row was folding. Twelve arrivals of a wolf liver is a
+		-- row that opened at 4/8 and is at 8/8 by the time it reads x12, and a
+		-- note written once is a row telling you to keep four more of something
+		-- you already have.
+		--
+		-- Cheap, because Core/Need.lua answers off a cache keyed by item id and
+		-- empties it on the quest log's own events. A fold that changed nothing
+		-- is two table reads.
+		Reason(into)
 	else
 		stream:Feed():Push()
 	end

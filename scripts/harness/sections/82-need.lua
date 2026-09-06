@@ -134,6 +134,13 @@ do
 	check(phrase == "4/8", "the wolf liver's phrase is " .. tostring(phrase))
 	check(tone == ns.UI.Color.quest,
 		"the quest answer was not drawn in the palette's quest colour")
+	-- The same fact spelled for a line rather than for a column. The slash is
+	-- what makes a count fit 48 units and the one thing a sentence has no use
+	-- for, and a tooltip building it out of the phrase would be the spelling
+	-- kept in the one place that cannot cache it.
+	check(select(4, ns.Need(link("Wolf Liver"))) == "4 of 8",
+		"the wolf liver's sentence is "
+			.. tostring(select(4, ns.Need(link("Wolf Liver")))))
 end
 
 -- The order, which is the whole reason this is one function. The liver is a
@@ -161,13 +168,19 @@ end
 -- A profession still wants it
 ----------------------------------------------------------------------
 
--- The phrase is the profession's name, which is the shortest true thing that
--- can be said about a reagent and is what a row has room for.
+-- The profession's name is the sentence and not the phrase, and the difference
+-- is a measurement. "Blacksmithing" is 93 units in the shipped face at a row's
+-- text size and "Leatherworking" is 104, against a loot row's column that is 48
+-- units and is never handed more than 81. There is no width at which a row can
+-- draw one, so a reagent answers a colour for the row and a word for the line,
+-- which is the shape trash has had since this file was written.
 do
-	local reason, phrase, tone = ns.Need(link("Sinew Thread"))
+	local reason, phrase, tone, said = ns.Need(link("Sinew Thread"))
 	check(reason == "skill", "the sinew thread reads " .. read("Sinew Thread"))
-	check(phrase == "Blacksmithing",
-		"the sinew thread's phrase is " .. tostring(phrase))
+	check(phrase == nil,
+		"the skill answer carried the phrase " .. tostring(phrase))
+	check(said == "Blacksmithing",
+		"the sinew thread's sentence is " .. tostring(said))
 	check(tone == ns.UI.Color.skill,
 		"the skill answer was not drawn in the palette's skill colour")
 end
@@ -196,6 +209,8 @@ do
 	local reason, phrase, tone = ns.Need(link("Cracked Fang"), FANG)
 	check(reason == "trash", "the fang on the corpse reads " .. read("Cracked Fang", FANG))
 	check(phrase == nil, "the trash answer carried the phrase " .. tostring(phrase))
+	check(select(4, ns.Need(link("Cracked Fang"), FANG)) == nil,
+		"the trash answer carried a sentence")
 	check(tone == ns.UI.Color.trash,
 		"the trash answer was not drawn in the palette's trash colour")
 end

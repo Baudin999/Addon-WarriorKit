@@ -3,10 +3,19 @@ local ADDON, ns = ...
 --------------------------------------------------------------------------
 -- One question: why does this item matter to you
 --
--- Asked of one item at a time and answered in a word, a short phrase and a
--- colour, or not answered at all, which is what most items get. Four sources,
--- each of which already exists somewhere else in the addon and none of which
--- knows about the others.
+-- Asked of one item at a time and answered in a word, a colour, a short phrase
+-- and a sentence, or not answered at all, which is what most items get. Four
+-- sources, each of which already exists somewhere else in the addon and none of
+-- which knows about the others.
+--
+-- **The phrase and the sentence are two answers and not one wrapped twice.**
+-- The phrase goes in a column a row can spare, which on the loot feed is 48
+-- units and never more than 81; the sentence goes on a line of a tooltip, which
+-- has as much room as it asks for. A profession's name measures 104 units in
+-- the shipped face at a row's text size and "Lederverarbeitung" measures 123, so
+-- there is no width at which a row can draw one, and a row that drew part of one
+-- would be drawing half a word. So skill answers a sentence and no phrase, and
+-- the reason it is worth saying at all on the row is the colour.
 --
 --   quest    an objective in your log this item feeds, and how far along it
 --            is. Quests/Client.lua does the reading.
@@ -63,13 +72,13 @@ local ADDON, ns = ...
 -- corpse is emptied.
 local objectives
 
--- The two cached answers, by item id. `false` in the first is an id both
+-- The three cached answers, by item id. `false` in the first is an id both
 -- sources have been asked about and neither claimed, which has to be told apart
 -- from an id nobody has asked about yet or every miss walks the log again.
 --
--- Two tables rather than one holding a pair, because a pair is a table per
+-- Three tables rather than one holding a triple, because a triple is a table per
 -- item and this fills on a path a pull drives.
-local reason, phrase = {}, {}
+local reason, phrase, sentence = {}, {}, {}
 
 -- Only an objective that counts items can be about an item. A kill count and a
 -- thing found in the world are named after a mob and a chest, and neither is a
@@ -175,17 +184,25 @@ end
 -- The answer
 --------------------------------------------------------------------------
 
--- Why this item matters: the word, a short phrase and the colour that word is
--- drawn in, or nothing at all.
+-- Why this item matters: the word, the phrase a row has room for, the colour
+-- that word is drawn in and the sentence a tooltip has room for, or nothing at
+-- all.
 --
 -- The slot is optional and is the loot slot the item is sitting in. Without one
 -- there is no corpse to ask about, so the trash source is not asked and an item
 -- with no other reason answers nothing. Comfort/Loot.lua and the loot feed have
 -- a slot; a bag square never will.
 --
--- Trash carries no phrase on purpose. It is the commonest answer of the three
--- and the one nobody is looking for, so it is a colour and nothing else; a
--- column of grey rows each captioned "trash" is the feed back where it started.
+-- Two of the three carry no phrase, and for the same reason from opposite ends.
+-- Trash is the commonest answer and the one nobody is looking for, so a column
+-- of grey rows each captioned "trash" is the feed back where it started. Skill
+-- is a profession's own name in the player's own language, which is 104 units
+-- of a column that is never wider than 81. Both are a colour and nothing else,
+-- and the sentence is where skill says which profession.
+--
+-- Quest is the one reason with a number in it, which is the one thing a colour
+-- cannot carry and a row has room for. Its two forms are the same fact spelled
+-- for two widths: `4/8` is what fits a column, "4 of 8" is what reads on a line.
 function ns.Need(link, slot)
 	local itemId = ns.ItemKind(link)
 	if not itemId then
@@ -197,10 +214,14 @@ function ns.Need(link, slot)
 		local counted = Quest(link)
 		if counted then
 			found, phrase[itemId] = "quest", counted
+			-- Spelled out once and kept, rather than on every hover. The slash
+			-- is what makes a count fit a column and the one thing a sentence
+			-- has no use for.
+			sentence[itemId] = (counted:gsub("/", " of "))
 		else
 			local profession = Skill(itemId)
 			if profession then
-				found, phrase[itemId] = "skill", profession
+				found, sentence[itemId] = "skill", profession
 			else
 				found = false
 			end
@@ -209,23 +230,24 @@ function ns.Need(link, slot)
 	end
 
 	if found then
-		return found, phrase[itemId], ns.UI.Color[found]
+		return found, phrase[itemId], ns.UI.Color[found], sentence[itemId]
 	end
 	if Trash(slot) then
-		return "trash", nil, ns.UI.Color.trash
+		return "trash", nil, ns.UI.Color.trash, nil
 	end
 	return nil
 end
 
 -- Everything worked out again from scratch next time somebody asks.
 --
--- Emptied rather than replaced, because these two tables are held as upvalues
--- and a fresh pair per event is two tables of garbage every time the quest log
+-- Emptied rather than replaced, because these three tables are held as upvalues
+-- and a fresh set per event is three tables of garbage every time the quest log
 -- so much as ticks.
 local function Forget()
 	objectives = nil
 	wipe(reason)
 	wipe(phrase)
+	wipe(sentence)
 end
 
 -- The three things that change an answer. The quest log's two are the count on

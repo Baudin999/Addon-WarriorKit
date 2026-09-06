@@ -4,7 +4,7 @@
 -- move and a tooltip on the row under the cursor. Both feeds are that file and
 -- neither of them is this one.
 --
--- This is the half that is only ever true of loot. Four questions, and none of
+-- This is the half that is only ever true of loot. Five questions, and none of
 -- them can be answered by reading Feeds/Loot.lua.
 --
 -- Does the column give the screen back. The loot feed ships with no word over
@@ -25,6 +25,10 @@
 -- per item and never per stack, a quest item that is the same white as a stack
 -- of linen until something says otherwise, and a price out of somebody else's
 -- addon with that addon named beside it.
+--
+-- And does the row say why you want it. The middle column and the ring are one
+-- answer out of Core/Need.lua, and the half a reading cannot settle is that a
+-- row which folded six of something reads the count as it stands now.
 
 local H = ...
 local ns, fire, check, advance = H.ns, H.fire, H.check, H.advance
@@ -770,6 +774,125 @@ check(said("Looted") == ns.Stream.Clock(_G.GetTime()),
 		:format(tostring(said("Looted")), ns.Stream.Clock(_G.GetTime())))
 ns.UI.Tooltip.Close()
 
+-- Why the row matters
+--
+-- The dim middle column is Core/Need.lua's phrase and the ring round the icon
+-- is its colour, and the point of them being one answer is that they cannot
+-- disagree: a row reading `4/8` in the green a reagent is drawn in is a row
+-- saying two things about one item.
+--
+-- Only a quest count reaches the column, and the reason is a measurement:
+-- "Leatherworking" is 104 units in the shipped face at a row's text size and
+-- this column is 48 and is never handed more than 81. So a reagent is a green
+-- ring and a word on the hover, and the row never draws part of a word.
+--
+-- 82-need.lua is where the answer itself is held to its order and its cache.
+-- What is asserted here is the half only a row can be wrong about, which is the
+-- fold. A row that folded six bandanas is showing a count that moved while it
+-- was folding, and a note written once on the arrival that opened the row would
+-- tell you to keep six more of something your log has stopped counting.
+----------------------------------------------------------------------
+
+-- Two items this part owns, at ids nothing else in the suite uses. The bandana
+-- is the name quest 203 is already counting in the log fixture, so the quest
+-- source answers with no fixture of its own; the ingot is a trade good and
+-- nothing more until the list below says otherwise.
+H.ITEMS["Red Silk Bandana"] = { id = 8401, classId = 15, subClassId = 0,
+	quality = 1, price = 30, icon = "Interface\\Icons\\Bandana" }
+H.ITEMS["Rough Ingot"] = { id = 8402, classId = 7, subClassId = 1,
+	quality = 1, price = 15, icon = "Interface\\Icons\\Ingot" }
+
+local BANDANA = _G.WarriorKitItemLink("Red Silk Bandana")
+local OBJECTIVE = H.quests.text[203].objectives[1]
+local COUNTING = OBJECTIVE[1]
+
+feed:Clear()
+fire("QUEST_LOG_UPDATE")
+drop("You receive loot: %s.", BANDANA)
+check(newest().note == COUNTING:match("(%d+/%d+)"),
+	("a bandana the log is counting reads %s"):format(tostring(newest().note)))
+check(newest().ring == ns.UI.Color.quest,
+	"the ring round a quest objective is not the palette's quest colour")
+check(feed:Row(1).note:GetText() == newest().note,
+	("the row drew %s in its middle column"):format(tostring(feed:Row(1).note:GetText())))
+check(feed:Row(1).note:IsShown(), "the loot feed asks for no middle column")
+
+-- The sentence, which is the half a column three characters wide cannot say.
+-- The row is the glance and the hover is the reading.
+hover()
+check(said("Red Silk Bandana, 0 of 6") == false,
+	"the hover does not name the item and the two numbers")
+ns.UI.Tooltip.Close()
+
+-- Most items, which is the answer that has to stay quiet. Nothing counts a
+-- stack of linen and no profession here has claimed it, so there is no phrase
+-- and no ring, and a feed that ringed everything would be a feed with no marks
+-- on it.
+drop("You receive loot: %s.", _G.WarriorKitItemLink("Linen Cloth"))
+check(newest().note == nil,
+	("an item with no reason reads %s"):format(tostring(newest().note)))
+check(newest().ring == nil, "an item with no reason got a ring round its icon")
+check(not feed:Row(1).mark:IsShown(), "the ring is drawn on a row with no reason")
+
+-- A reagent still worth a point: a green ring, an empty column and the
+-- profession on the hover. The column is the check that carries the weight.
+-- "Blacksmithing" is 93 units in the shipped face at a row's text size and the
+-- widest this column is ever handed is 81, so a row that drew it would be
+-- drawing part of a word, and part of a word is worse than none.
+--
+-- The list is written straight onto ns.dbc.lootReagents rather than walked out
+-- of a profession window, because a window opened here would leave
+-- 69-loot-filter.lua reading a list that section never asked for.
+do
+	local was = ns.dbc.lootReagents
+	ns.dbc.lootReagents = { [8402] = { owner = "Blacksmithing", kind = "optimal" } }
+	fire("SKILL_LINES_CHANGED")
+	drop("You receive loot: %s.", _G.WarriorKitItemLink("Rough Ingot"))
+	check(newest().note == nil,
+		("a blacksmithing reagent put %s in the row's column"):format(tostring(newest().note)))
+	check(feed:Row(1).note:GetText() == "",
+		("the row drew %s beside a reagent"):format(tostring(feed:Row(1).note:GetText())))
+	check(newest().ring == ns.UI.Color.skill,
+		"the ring round a reagent is not the palette's skill colour")
+	check(feed:Row(1).mark:IsShown(), "the ring round a reagent's icon is not drawn")
+	hover()
+	check(said("Rough Ingot, Blacksmithing") == false,
+		"the hover does not name the profession the row had no room for")
+	ns.UI.Tooltip.Close()
+	ns.dbc.lootReagents = was
+	fire("SKILL_LINES_CHANGED")
+end
+
+-- And the fold. Five more bandanas is one row and one count, and the note on it
+-- is the objective as it stands now rather than as it stood when the row opened.
+feed:Clear()
+fire("QUEST_LOG_UPDATE")
+drop("You receive loot: %s.", BANDANA)
+check(newest().note == "0/6", "the row did not open on the count it arrived with")
+
+OBJECTIVE[1] = "Red Silk Bandana: 5/6"
+fire("QUEST_LOG_UPDATE")
+advance(5)
+drop("You receive loot: %sx5.", BANDANA)
+check(feed:Count() == 1, "the second pickup of a bandana opened a second row")
+check(newest().count == 6, ("the folded row counts %s"):format(tostring(newest().count)))
+check(newest().note == "5/6",
+	("the folded row still says %s"):format(tostring(newest().note)))
+check(feed:Row(1).note:GetText() == "5/6",
+	("the row drew %s after the fold"):format(tostring(feed:Row(1).note:GetText())))
+hover()
+check(said("Red Silk Bandana, 5 of 6") == false,
+	"the hover after a fold is dating the note by the pickup that opened the row")
+ns.UI.Tooltip.Close()
+
+-- The fixture put back, because the objective is the log's and 47-quest-log.lua
+-- reads the same line.
+OBJECTIVE[1] = COUNTING
+fire("QUEST_LOG_UPDATE")
+
 print(("loot   no word and no line, %d chips over %d rows, icon %d px on a %d px row,"
-	.. " vendor price per item and per stack, a stub scanner asked for the auction")
-	:format(#feed.chips, ns.db.lootFeedRows, ns.db.lootFeedIcon, feed.row))
+	.. " vendor price per item and per stack, a stub scanner asked for the auction;"
+	.. " a %d unit note column holding a quest count and nothing else, a green ring"
+	.. " where the profession would not fit, and a fold that reread the count")
+	:format(#feed.chips, ns.db.lootFeedRows, ns.db.lootFeedIcon, feed.row,
+		lootStream.note))
