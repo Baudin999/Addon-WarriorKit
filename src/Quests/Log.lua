@@ -103,6 +103,121 @@ local function Company(quests)
 	return quests
 end
 
+--------------------------------------------------------------------------
+-- The pin
+--
+-- The quests you want in front of you, saved on this character and held here
+-- rather than in the client.
+--
+-- **The client's watch list is not written.** AddQuestWatch caps at five and
+-- Questie replaces GetNumQuestWatches outright to get out from under that cap,
+-- which is a fight with the client this addon is not joining. Client.Watch and
+-- Client.Watched stay on Quests/Client.lua unused, so the day the trade turns
+-- out to be the wrong one, writing both is one line here.
+--
+-- The cost of not writing it is real and the options panel says so: Questie's
+-- map icons can be filtered down to tracked quests, and a pin does not reach
+-- that filter because the client does not know about it.
+--
+-- Keyed on the quest key, which is the id where the client gives one, for the
+-- reason at the head of this file: an index is a position and every turn-in
+-- moves it. A list rather than a map, because the order you pinned them in is
+-- the order the pinned group draws and a map has no order. Uncapped, which is
+-- the whole point of it being ours.
+--------------------------------------------------------------------------
+
+local function Pins()
+	if not ns.dbc then
+		return nil
+	end
+	ns.dbc.questPins = ns.dbc.questPins or {}
+	return ns.dbc.questPins
+end
+
+local function PinAt(key)
+	local pins = key and Pins()
+	if not pins then
+		return nil
+	end
+	for at = 1, #pins do
+		if pins[at] == key then
+			return at
+		end
+	end
+	return nil
+end
+
+function Log.Pinned(key)
+	return PinAt(key) ~= nil
+end
+
+-- Pin or unpin one quest, and answer where it stands afterwards.
+--
+-- The key rather than the index, and unlike everything under "What you can do
+-- to one" this needs no index at all: nothing here is asked of the client.
+function Log.Pin(key, on)
+	local pins = key and Pins()
+	if not pins then
+		return false
+	end
+
+	local at = PinAt(key)
+	if on and not at then
+		pins[#pins + 1] = key
+	elseif not on and at then
+		table.remove(pins, at)
+	end
+
+	-- The row carries the answer too, because the window draws from the last
+	-- Read and a pin that only reached the saved table would not show until the
+	-- next event moved the log.
+	local quest = Log.Quest(key)
+	if quest then
+		quest.pinned = on and true or false
+	end
+	return on and true or false
+end
+
+-- The pinned quests that are in the log, in the order they were pinned.
+--
+-- This is the read side of the pin and the only door onto it worth using: the
+-- left column's pinned group and the tracker both draw this list, and neither
+-- walks the saved table itself. A pin whose quest is not in the log is not in
+-- here, which is what makes it safe to draw straight.
+function Log.Pins()
+	local held = {}
+	local pins = Pins()
+	if not pins then
+		return held
+	end
+	for at = 1, #pins do
+		local quest = byKey[pins[at]]
+		if quest then
+			held[#held + 1] = quest
+		end
+	end
+	return held
+end
+
+-- Drop the pins whose quests have left the log.
+--
+-- Only against a read that produced a log. A client mid-loading-screen answers
+-- with no rows at all, and a prune run on that answer would take every pin on
+-- the character with it, which is a saved table emptied by a loading screen.
+local function Forget()
+	local pins = Pins()
+	if not pins or total == 0 or not Client.Ready() then
+		return
+	end
+	for at = #pins, 1, -1 do
+		if not byKey[pins[at]] then
+			table.remove(pins, at)
+		end
+	end
+end
+
+--------------------------------------------------------------------------
+
 -- Read the whole log.
 --
 -- Every header is opened first, because a collapsed one hides its quests from
@@ -130,7 +245,7 @@ function Log.Read()
 			end
 			entry.key = Log.Key(entry)
 			entry.zone = zone.name
-			entry.watched = Client.Watched(index)
+			entry.pinned = Log.Pinned(entry.key)
 			zone.quests[#zone.quests + 1] = entry
 			byKey[entry.key] = entry
 			carried[#carried + 1] = entry
@@ -143,6 +258,7 @@ function Log.Read()
 	end
 
 	Company(carried)
+	Forget()
 	return zones
 end
 
@@ -243,16 +359,6 @@ local function Index(key)
 	return Client.IndexOf(quest.id) or quest.index
 end
 
-function Log.Watch(key, on)
-	local index = Index(key)
-	if not index then
-		return false
-	end
-	local quest = Log.Quest(key)
-	quest.watched = on and true or false
-	return Client.Watch(index, on)
-end
-
 function Log.Share(key)
 	local index = Index(key)
 	return index ~= nil and Client.Share(index)
@@ -283,5 +389,11 @@ function Log.Describe()
 	if total == 0 then
 		return "no quests"
 	end
-	return ("%d quests in %d zones, %d ready to hand in"):format(total, Log.Count(), done)
+	local said = ("%d quests in %d zones, %d ready to hand in")
+		:format(total, Log.Count(), done)
+	local pinned = #Log.Pins()
+	if pinned > 0 then
+		said = said .. (", %d pinned"):format(pinned)
+	end
+	return said
 end

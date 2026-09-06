@@ -302,7 +302,16 @@ _G.IsQuestWatched = function(index)
 	return (row and row.id and watched[row.id]) and true or false
 end
 
+-- How many times the addon has written the client's own watch list.
+--
+-- Counted rather than only recorded, because the answer this fixture exists to
+-- give is now zero: the pin is the addon's own list and the client's five
+-- slots are left where the player put them. A stub that only held the state
+-- would let a write back in without a word.
+local watchCalls = 0
+
 _G.AddQuestWatch = function(index)
+	watchCalls = watchCalls + 1
 	local row = Row(index)
 	if row and row.id then
 		watched[row.id] = true
@@ -310,6 +319,7 @@ _G.AddQuestWatch = function(index)
 end
 
 _G.RemoveQuestWatch = function(index)
+	watchCalls = watchCalls + 1
 	local row = Row(index)
 	if row and row.id then
 		watched[row.id] = nil
@@ -720,6 +730,8 @@ H.quests = {
 	-- How many clicks in Questie's tracker reached Blizzard's log rather than
 	-- this addon's window.
 	Tracked = function() return tracked end,
+	-- How many times AddQuestWatch or RemoveQuestWatch has been called.
+	WatchCalls = function() return watchCalls end,
 	company = COMPANY,
 	heard = HEARD,
 	-- Put the cursor somewhere and record where, so a section can take a

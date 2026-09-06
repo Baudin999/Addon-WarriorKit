@@ -127,6 +127,16 @@ ns.Register({
 		questDrops = {},
 	},
 
+	charDefaults = {
+		-- The quests you pinned, as Log.Key gives them, oldest pin first.
+		--
+		-- This character's, because a quest log is: a pin the account shared
+		-- would be a note about a quest most of your characters cannot see. Empty
+		-- and uncapped, and Quests/Log.lua argues on disk why it is this list
+		-- rather than the client's five watch slots.
+		questPins = {},
+	},
+
 	words = {
 		quests = QuestWord,
 	},
@@ -163,6 +173,10 @@ ns.Register({
 			SetTrackerOff)
 		ui.Hint("This is Questie's own Enable Tracker switch, so it reloads the interface both when you tick it and when you untick it.")
 		ui.Reading("your log", ns.QuestLog.Describe)
+		-- The pin's cost, said where the pin count is read. Questie's icons are
+		-- the only place the client's watch list is worth anything to this
+		-- addon's player, and a pin never reaches it.
+		ui.Hint("Shift click a quest to pin it, or press pin under it. Pins are this character's and uncapped. The cost is Questie: its map icons can be filtered to tracked quests and a pin is not one.")
 		ui.Reading("a creature's quest drops", ns.QuestDrops.Describe)
 		ui.Reading("the where column and the map", ns.QuestWhere.Describe)
 		ui.Reading("who else in your group is on a quest", ns.QuestParty.Describe)

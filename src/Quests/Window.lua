@@ -765,9 +765,18 @@ local function Column(parent, name)
 	return column
 end
 
-local function Select(key)
+local function Select(key, which, mods)
 	if painting then
 		return
+	end
+	-- Shift left click pins the quest as well as opening it, and UI.List's
+	-- Press is what makes that reachable on the row you are already reading.
+	--
+	-- `which` is nil on every move the code makes, and it and `mods` arrive
+	-- together, so this is the whole guard: a repaint cannot be mistaken for a
+	-- press and a pin cannot be put on a quest nobody clicked.
+	if which == "LeftButton" and mods.shift then
+		Log.Pin(key, not Log.Pinned(key))
 	end
 	showing = key
 	-- The zone, but not the tab. Zone three of the last quest is nothing at all
@@ -808,12 +817,12 @@ local function Chrome()
 	})
 	window.share:SetPoint("RIGHT", window.abandon, "LEFT", -M.rowGap, 0)
 
-	window.track = UI.Button(window.footer, {
-		label = "track",
+	window.pin = UI.Button(window.footer, {
+		label = "pin",
 		width = 60,
-		onClick = function() Window.Track() end,
+		onClick = function() Window.Pin() end,
 	})
-	window.track:SetPoint("RIGHT", window.share, "LEFT", -M.rowGap, 0)
+	window.pin:SetPoint("RIGHT", window.share, "LEFT", -M.rowGap, 0)
 end
 
 -- Every column sized off the window, in one place rather than nine, because a
@@ -960,9 +969,9 @@ function Window.PaintFooter(detail)
 	local quest = detail and detail.quest
 	local shareable = (detail and detail.shareable) and true or false
 
-	window.track.text:SetText(quest and quest.watched and "untrack" or "track")
-	window.track:EnableMouse(quest ~= nil)
-	window.track:SetAlpha(quest and 1 or 0.4)
+	window.pin.text:SetText(quest and quest.pinned and "unpin" or "pin")
+	window.pin:EnableMouse(quest ~= nil)
+	window.pin:SetAlpha(quest and 1 or 0.4)
 
 	window.share:EnableMouse(shareable)
 	window.share:SetAlpha(shareable and 1 or 0.4)
@@ -1032,12 +1041,15 @@ end
 -- The three buttons
 --------------------------------------------------------------------------
 
-function Window.Track()
+-- The footer's half of the gesture, for the quest you have open. The other
+-- half is the shift click on the row, and both go through Log.Pin so neither
+-- can pin a quest the other would not.
+function Window.Pin()
 	local quest = Log.Quest(showing)
 	if not quest then
 		return false
 	end
-	Log.Watch(showing, not quest.watched)
+	Log.Pin(showing, not Log.Pinned(showing))
 	Window.Paint()
 	return true
 end
@@ -1155,6 +1167,17 @@ end
 -- mark is, and a test that called this file's own closure would never ask.
 function Window.Press(key, at)
 	return list ~= nil and list:Act(key, at)
+end
+
+-- Click a quest's own row, with whatever the client says is held down.
+--
+-- The row's button rather than this file's Select, for the reason above and
+-- for one of its own: the pin is a shift left click, and the modifier is read
+-- off the client inside the widget's handler. A test that called Select with
+-- the arguments it expected would assert the branch and never the wiring, and
+-- the wiring is where a gesture goes missing.
+function Window.Click(key, which)
+	return list ~= nil and list:Click(key, which)
 end
 
 -- Which of the quest's zones the map is on, and a way to step to another. Same

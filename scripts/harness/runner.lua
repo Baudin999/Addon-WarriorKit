@@ -292,6 +292,11 @@ local SECTIONS = {
 	"45-chat-keys",
 	"46-mail",
 	"47-quest-log",
+	-- Straight under it, because it reads what that section leaves: the window
+	-- on screen, the log three quests short of what it started with, and the
+	-- footer button driven once per quest. It puts five rows into the log and
+	-- takes them out again, and it ends with nothing pinned.
+	"47-quest-pin",
 	-- Under it, and it leaves Questie ready for good. Everything above this
 	-- line runs against a Questie whose database has not finished compiling,
 	-- which is the state a login is in and the one worth testing the addon in;

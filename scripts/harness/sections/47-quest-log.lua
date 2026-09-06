@@ -328,7 +328,7 @@ end
 local before = ns.UI.Windows and #ns.UI.Windows or 0
 for _, zone in ipairs(Log.Zones()) do
 	for _, quest in ipairs(zone.quests) do
-		Window.Track()
+		Window.Pin()
 		Log.Detail(quest.key)
 	end
 end
@@ -400,15 +400,15 @@ do
 end
 
 ----------------------------------------------------------------------
--- Tracking, sharing and abandoning
+-- Pinning, sharing and abandoning
 ----------------------------------------------------------------------
 
-local watched = Log.Zones()[3].quests[1]
-local was = watched.watched
-Log.Watch(watched.key, not was)
+local pinned = Log.Zones()[3].quests[1]
+local was = pinned.pinned
+Log.Pin(pinned.key, not was)
 Log.Read()
-check(Log.Quest(watched.key).watched ~= was,
-	"the track button did not move the client's own watch")
+check(Log.Quest(pinned.key).pinned ~= was,
+	"the pin button did not move this character's own pin")
 
 Log.Share(Log.Zones()[2].quests[1].key)
 check(#quests.shared == 1,

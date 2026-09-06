@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### A pin is ours, and the client's five slots are left alone
+
+Shift left click a quest in the log's left column and it is pinned. The button
+under the column does the same for the quest you have open, and it is called
+pin now rather than track. Pins are saved on this character, there is no limit
+on how many you keep, and each one is held against the quest rather than
+against its place in the log. That last part is the one that matters: handing
+in a quest moves every row under it up by one, so a pin held as a position
+comes back pointing at the neighbour.
+
+The addon no longer writes the client's own watch list. `AddQuestWatch` stops
+at five, and Questie replaces `GetNumQuestWatches` outright to get out from
+under that cap, which is a fight with the client I would rather not join for a
+list this addon can keep itself. The cost is real and the quest log's page says
+it out loud: Questie's map icons can be filtered down to tracked quests, and a
+pinned quest never reaches that filter, because the client is never told.
+`Client.Watch` and `Client.Watched` stay on the file unused, so writing both
+lists is one line on the day that trade turns out to be the wrong one.
+
+Nothing draws a pin yet. `ns.QuestLog.Pins()` hands back the pinned quests that
+are in your log, oldest pin first, which is the order the pinned group and the
+tracker will draw them in. A pin whose quest has left the log is dropped on the
+next read that found a log, so handing one in takes its pin with it and a
+loading screen does not.
+
 ### Who nearby has a quest you have never taken
 
 The client will tell you what is in your quest log and nothing whatever about
