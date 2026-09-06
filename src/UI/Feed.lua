@@ -94,12 +94,15 @@ local PAD = 4       -- one text column to the next
 
 -- How small and how large a row's icon can be asked to go.
 --
--- The floor is the text, not the art. Every string on a row is outlined and
--- ns.UI.OutlineFloor puts an outlined glyph at 14 or above, so a row shorter
--- than 16 is a row whose name does not fit in it however small the picture
--- gets. The ceiling is one step past ns.UI.IconTexels halved, which is 27 and
--- the one size in this range that draws a stored texel per screen pixel; past
--- 40 a feed row is taller than the tooltip describing it.
+-- The floor is the text, not the art. It was ns.UI.OutlineFloor's: every string
+-- on a row carried a rim, a rim wants 14 pixels of glyph under it, and a row
+-- shorter than 16 was a row whose name did not fit in it however small the
+-- picture got. The rim is gone and the wash under the row is what holds the
+-- text off the world, so the floor is no longer a font's minimum; 16 stands
+-- until somebody measures a shorter row with the wash actually under it. The
+-- ceiling is one step past ns.UI.IconTexels halved, which is 27 and the one
+-- size in this range that draws a stored texel per screen pixel; past 40 a feed
+-- row is taller than the tooltip describing it.
 --
 -- Published rather than local because Feeds/Feature.lua puts the stepper on a
 -- panel page and a second copy of the range is a second thing to keep in step.
@@ -132,23 +135,19 @@ local CHIP_OFF = 0.3
 -- the string that would have gone off the left edge of the row.
 local AMOUNT = 52
 
--- Outlined, so both sizes sit at or above ns.UI.OutlineFloor. A feed is drawn
--- over the world with whatever background the player asked for, and at zero
--- background that is outlined text on grass. Flat text does not get softer
--- there, it goes.
--- Outlined, every string in this file, and both sizes at UI.OutlineFloor().
+-- Shadowed, every string in this file, and the wash under the row is why.
 --
 -- A feed looks like it is drawn on a surface, and it is not one this addon can
--- promise anything about: the background is a slider the player drags, it goes
--- to zero, and Feeds/Feature.lua tells them in writing that the text reads all
--- the way down to nothing. At zero a feed is rows of text over the world, so
--- the rim is the only thing holding them off it.
+-- promise anything about: the background is a slider the player drags and it
+-- goes to zero. Every string here was rimmed for that, and a rim is a patch for
+-- having no ground. There is ground now, painted by the row itself, so the
+-- glyph keeps the pixel of every stroke the rim was spending and takes a shadow
+-- instead, which is what the character sheet draws in over the same world.
 --
--- That is also why neither size is a setting and why both are 14 rather than
--- the panel's 12. An outlined glyph spends a pixel of every stroke on the rim,
--- so a string that must be outlined must also be tall enough to survive one,
--- and UI/Text.lua puts that floor at 14. Anything smaller here would be wrong
--- both ways at once: too small to carry a rim and unable to drop it.
+-- Both sizes stay at 14 and neither is a setting. The floor that used to hold
+-- them there is gone with the rim, and 14 is still what a name and a five
+-- figure number want in a 29 pixel row; a size a player could drag is a column
+-- whose three text columns stop lining up with each other.
 local ROW_TEXT = 14
 local HEADER_TEXT = 14
 
@@ -230,7 +229,25 @@ local function BuildRow(feed, index)
 	row:SetSize(1, 1)
 	row.index = index
 
-	-- Behind everything, and only while the mouse is on it. A feed you can
+	-- The ground the row's strings are read on, because the column has none it
+	-- can promise: the background behind a feed is a slider that reaches zero,
+	-- and at zero every row is text over grass. Solid at the stripe and gone by
+	-- the end of the text, which makes it a shadow the size of the row rather
+	-- than a panel behind the column.
+	--
+	-- Made before the glow rather than after it. Both are on BACKGROUND and the
+	-- client draws that layer in the order the textures were made, so a wash
+	-- made second would take the light back out of the left half of whichever
+	-- row the cursor is on.
+	--
+	-- Neither of its two numbers is written here. How wide it is follows the
+	-- icon and the text columns, which is ShapeRow's, and how strongly it is
+	-- painted is the background slider, which is Feed:Wash's.
+	row.wash = UI.Wash(row, C.shadow, "LEFT", "BACKGROUND")
+	row.wash:SetPoint("TOPLEFT")
+	row.wash:SetAlpha(feed.washAt)
+
+	-- Behind everything else, and only while the mouse is on it. A feed you can
 	-- hover has to answer the hover with something other than a tooltip
 	-- appearing off to one side, or there is no telling which row it is about.
 	row.glow = ns.Fill(row, "BACKGROUND", C.hover[1], C.hover[2], C.hover[3], 0.5)
@@ -275,20 +292,20 @@ local function BuildRow(feed, index)
 	-- The name is anchored in Resize rather than here, because where it starts
 	-- is behind the icon and the icon is a slider. The other two are pinned to
 	-- the right edge and do not move when the picture does.
-	row.name = UI.Label(row, ROW_TEXT, C.text, "LEFT", UI.OUTLINE)
+	row.name = UI.Label(row, ROW_TEXT, C.text, "LEFT", UI.SHADOW)
 
-	row.note = UI.Label(row, ROW_TEXT, C.dim, "RIGHT", UI.OUTLINE)
+	row.note = UI.Label(row, ROW_TEXT, C.dim, "RIGHT", UI.SHADOW)
 	row.note:SetPoint("RIGHT", row, "RIGHT", -(INSET + AMOUNT + PAD) * unit, 0)
 	row.note:Hide()
 
-	row.amount = UI.Label(row, ROW_TEXT, C.text, "RIGHT", UI.OUTLINE)
+	row.amount = UI.Label(row, ROW_TEXT, C.text, "RIGHT", UI.SHADOW)
 	row.amount:SetPoint("RIGHT", row, "RIGHT", -INSET * unit, 0)
 
 	-- The word on a marker, which starts where the icon would and therefore
 	-- cannot be the same font string as the name. Its own string rather than the
 	-- name moved, because moving it means a SetPoint on the repaint path and a
 	-- second font string per row is both cheaper and incapable of going stale.
-	row.caption = UI.Label(row, ROW_TEXT, C.text, "LEFT", UI.OUTLINE)
+	row.caption = UI.Label(row, ROW_TEXT, C.text, "LEFT", UI.SHADOW)
 	row.caption:SetPoint("LEFT", row, "LEFT", (STRIPE + INSET) * unit, 0)
 	row.caption:Hide()
 
@@ -314,13 +331,13 @@ end
 -- would grow by one per click. Feed:Chrome shows and hides them.
 local function BuildHeader(feed)
 	if feed.title then
-		feed.heading = UI.Label(feed.frame, HEADER_TEXT, C.dim, "LEFT", UI.OUTLINE)
+		feed.heading = UI.Label(feed.frame, HEADER_TEXT, C.dim, "LEFT", UI.SHADOW)
 		feed.heading:SetPoint("TOPLEFT", feed.frame, "TOPLEFT",
 			INSET * feed.unit, -INSET * feed.unit)
 		feed.heading:SetText(feed.title)
 	end
 
-	feed.tally = UI.Label(feed.frame, HEADER_TEXT, C.quiet, "RIGHT", UI.OUTLINE)
+	feed.tally = UI.Label(feed.frame, HEADER_TEXT, C.quiet, "RIGHT", UI.SHADOW)
 	feed.tally:SetPoint("TOPRIGHT", feed.frame, "TOPRIGHT",
 		-INSET * feed.unit, -INSET * feed.unit)
 
@@ -329,7 +346,7 @@ local function BuildHeader(feed)
 	feed.rule:SetPoint("TOPLEFT", feed.frame, "TOPLEFT", 0, -HEADER * feed.unit)
 	feed.rule:SetHeight(RULE * feed.unit)
 
-	feed.blank = UI.Label(feed.frame, ROW_TEXT, C.quiet, "LEFT", UI.OUTLINE)
+	feed.blank = UI.Label(feed.frame, ROW_TEXT, C.quiet, "LEFT", UI.SHADOW)
 	feed.blank:SetText(feed.empty or "")
 	return feed
 end
@@ -418,6 +435,11 @@ function UI.Feed(parent, opts)
 		chips = {},
 		-- What ShapeRow is told, filled in by every resize and never rebuilt.
 		geom = {},
+		-- How strongly the ground under a row is painted. Full until somebody
+		-- says otherwise, which Feeds/Stream.lua does from the setting a moment
+		-- after this: a feed built by anything else is one drawn over the world
+		-- with no slider in front of the player to turn it down.
+		washAt = 1,
 		-- On screen until told otherwise. Feeds/Stream.lua writes this from the
 		-- setting at login, and a feed built by anything else is one somebody is
 		-- looking at.
@@ -1042,6 +1064,17 @@ local function ShapeRow(feed, row, index, geom)
 	row.icon:SetSize(feed.icon * unit, feed.icon * unit)
 	ns.EdgeSize(row.mark.edges, ns.Pixel(row.mark))
 
+	-- The wash stops where the last text column does rather than at the row's
+	-- own right edge. The three units between the two are the inset the number
+	-- is held off the edge by, and a wash that took them would be solid at the
+	-- stripe and still painting past everything there is to read, which is a
+	-- panel with one soft edge.
+	--
+	-- Sized rather than pinned to both corners, because the row's own height is
+	-- a setting and a texture given two anchors is one whose height nothing in
+	-- this file ever wrote down.
+	row.wash:SetSize(geom.wash * unit, feed.row * unit)
+
 	row.name:ClearAllPoints()
 	row.name:SetPoint("LEFT", row, "LEFT",
 		(STRIPE + INSET + feed.icon + GUTTER) * unit, 0)
@@ -1113,6 +1146,12 @@ function Feed:Resize(width, rows, icon)
 	geom.note = note
 	geom.name = math.max(free - (note > 0 and note + PAD or 0), 1)
 	geom.caption = math.max(content - STRIPE - INSET * 2 - AMOUNT - PAD, 1)
+	-- Where the text ends, which is the right edge of the number column and one
+	-- inset short of the row. Worked out here with the other four rather than in
+	-- ShapeRow, because it is the sum of everything above it and a second file
+	-- adding those numbers up again is the one that goes stale when a column
+	-- moves.
+	geom.wash = math.max(content - INSET, 1)
 
 	-- The rows this feed is set to draw, built here the first time it is set to
 	-- draw that many. Twenty four were built at login whatever the setting said,
@@ -1140,6 +1179,36 @@ function Feed:Resize(width, rows, icon)
 	self:MouseRows()
 	self:Paint()
 	return width * unit, height * unit
+end
+
+-- How strongly the ground under each row is painted.
+--
+-- This is the background slider, and it paints a gradient under the text rather
+-- than a panel behind the column. The two are the same request and only one of
+-- them is a picture: a panel at any strength covers whatever the player is
+-- standing on all the way across the feed, and a wash covers the letters and
+-- lets go by the end of them.
+--
+-- The alpha of the texture rather than the alpha of the colour, because the
+-- ramp is built once when the row is and rebuilding it per drag is a gradient
+-- made twenty four times for a number the client will multiply for nothing.
+-- What that costs is that full strength is ns.UI.Color.shadow's own alpha and
+-- not black: a wash is a shadow and a slider that reached opaque would be the
+-- panel again at the top of its range.
+--
+-- Rows built after this take it in BuildRow, which is why the number is held on
+-- the feed. A stepper that makes four more rows would otherwise leave them at
+-- full strength under a column the player had turned down.
+function Feed:Wash(strength)
+	strength = math.max(0, math.min(strength or 1, 1))
+	if self.washAt == strength then
+		return false
+	end
+	self.washAt = strength
+	for index = 1, #self.rows do
+		self.rows[index].wash:SetAlpha(strength)
+	end
+	return true
 end
 
 -- Whether the rows take the mouse at all.

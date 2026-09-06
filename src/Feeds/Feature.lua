@@ -173,12 +173,13 @@ local function SharedWords(entry)
 			return ("the %s feed at %dx."):format(lower, zoom)
 		  end },
 
-		{ "alpha", key = prefix .. "Alpha", what = entry.title .. " background",
+		{ "alpha", key = prefix .. "Alpha",
+		  what = entry.title .. " ground under the rows",
 		  step = function()
 			return ns.UI.ALPHA_LOW, ns.UI.ALPHA_HIGH, ns.UI.ALPHA_STEP
 		  end,
 		  say = function(alpha)
-			return ("the %s feed background at %d%%."):format(lower, alpha)
+			return ("the %s feed's ground at %d%%."):format(lower, alpha)
 		  end },
 
 		-- Not a switch taking a value: `show` puts a hidden feed back on the
@@ -413,13 +414,13 @@ local function SharedPage(ui, entry)
 			Apply(entry)
 		end)
 
-	ui.Opacity("background",
+	ui.Opacity("ground under the rows",
 		function() return ns.db[prefix .. "Alpha"] end,
 		function(value)
 			ns.db[prefix .. "Alpha"] = value
 			Apply(entry)
 		end)
-	ui.Hint("The text is outlined either way and the line above goes with it, so at zero the feed is rows of text over the world.")
+	ui.Hint("Each row is read on a shadow of its own rather than on a panel, so this moves what is under the text and nothing else. The line above goes with it, and at zero the feed is rows over bare world.")
 
 	ui.Check("rows answer the mouse", function() return ns.db[prefix .. "Mouse"] end,
 		function(on)

@@ -75,12 +75,12 @@ local KEYS = {
 local STATUS = 20     -- the strip's own height
 local STATUS_RULE = 1 -- the hairline over it
 local STATUS_INSET = 4
--- UI.OutlineFloor(), and the strip is 20 to hold it. This was 12 in a 17 tall
--- strip and it is what the report about the purse's font was looking at: an
--- outlined glyph spends a pixel of every stroke on its rim, so at 12 the hole
--- in a 6 closed and the waist of an 8 filled in, on the one line in the window
--- that is nothing but digits. Written as the floor rather than as 14, because
--- the two numbers are the same rule and only one of them should be edited.
+-- The strip is 20 to hold it. This was 12 in a 17 tall strip and it is what the
+-- report about the purse's font was looking at: the strings carried a rim then,
+-- an outlined glyph spends a pixel of every stroke on it, and at 12 the hole in
+-- a 6 closed and the waist of an 8 filled in on the one line in the window that
+-- is nothing but digits. The rim is gone and the floor with it; 14 stays
+-- because these three read at a glance from across a room and 12 does not.
 local STATUS_TEXT = 14
 
 -- One second. The three readings behind this change about once a minute
@@ -271,6 +271,24 @@ function Instance:BuildStatus()
 	strip:SetHeight(STATUS * unit)
 	strip.stream = self
 
+	-- The ground the three readings are read on, which is the feed's own answer
+	-- applied to the row under the rows.
+	--
+	-- Up from the bottom rather than out from one end, and that is the whole of
+	-- the decision. A wash along the strip's length is solid at the edge it
+	-- starts from and gone by the other, and these three readings sit left,
+	-- centre and right: running it from the left grounds yours and abandons the
+	-- rate, and from the right it is the other way round. Up the strip's twenty
+	-- units the ramp crosses all three at the same height, so what darkens is
+	-- the foot of the window rather than a bar laid across it under one number.
+	--
+	-- Three washes cut to the three readings is the other answer and it is worse
+	-- here. The middle reading is centred and the two ends are cells a third of
+	-- the width, so what it would draw is three separate shadows with daylight
+	-- between them along a strip that is one strip.
+	self.statusWash = UI.Wash(strip, C.shadow, "BOTTOM", "BACKGROUND")
+	self.statusWash:SetAllPoints()
+
 	self.statusRule = ns.Fill(frame, "ARTWORK", C.hairline[1], C.hairline[2],
 		C.hairline[3], 1)
 	self.statusRule:SetPoint("BOTTOMLEFT", strip, "TOPLEFT", 0, 0)
@@ -281,16 +299,17 @@ function Instance:BuildStatus()
 	-- because it is context rather than news, and the rate on the right in
 	-- whatever colour the rate has earned.
 	--
-	-- Outlined, like every row of the feed above, and for the same reason: the
-	-- background under all of it is a slider that reaches zero, and at zero
-	-- this strip is three numbers over the world.
-	self.held = UI.Label(strip, STATUS_TEXT, C.heading, "LEFT", UI.OUTLINE)
+	-- Shadowed, like every row of the feed above, and the same argument moved
+	-- them both: a rim is what a string carries when it has no ground, it
+	-- thickens every stroke to say so, and there is ground under all four now.
+	-- The strip's is the wash above, on the same slider as the rows'.
+	self.held = UI.Label(strip, STATUS_TEXT, C.heading, "LEFT", UI.SHADOW)
 	self.held:SetPoint("LEFT", strip, "LEFT", STATUS_INSET * unit, 0)
 
-	self.hoard = UI.Label(strip, STATUS_TEXT, C.dim, "CENTER", UI.OUTLINE)
+	self.hoard = UI.Label(strip, STATUS_TEXT, C.dim, "CENTER", UI.SHADOW)
 	self.hoard:SetPoint("CENTER", strip, "CENTER", 0, 0)
 
-	self.rate = UI.Label(strip, STATUS_TEXT, C.quiet, "RIGHT", UI.OUTLINE)
+	self.rate = UI.Label(strip, STATUS_TEXT, C.quiet, "RIGHT", UI.SHADOW)
 	self.rate:SetPoint("RIGHT", strip, "RIGHT", -STATUS_INSET * unit, 0)
 
 	UI.Ticker(strip, BEAT, "stream", Beat)
@@ -382,8 +401,12 @@ function Instance:Build()
 		end,
 	})
 
-	self.bg = ns.Fill(frame, "BACKGROUND", C.window[1], C.window[2], C.window[3], 1)
-	self.bg:SetAllPoints()
+	-- No surface under the column. It had one, painted in the window colour at
+	-- whatever the background slider said, and the loot feed shipped it at 15
+	-- because a panel over open world was covering scenery to hold up text that
+	-- did not need holding up. UI/Feed.lua paints a gradient under each row
+	-- instead, the same slider says how strongly, and what the player gets back
+	-- is the ground between one row and the next.
 	self.edges = ns.Outline(frame, C.edge[1], C.edge[2], C.edge[3], C.edge[4])
 	ns.EdgeSize(self.edges, ns.Pixel(frame))
 
@@ -443,20 +466,24 @@ function Instance:Apply()
 	-- the only thing in here whose height is a decision rather than a setting.
 	self.frame:SetSize(width, height + self:Dress())
 
-	-- The edge follows the background and its own switch, and it needs both. At
-	-- zero opacity the player has asked for rows over the world, and a hairline
-	-- rectangle round nothing is a window frame with no window in it; with the
-	-- switch off they have asked for a surface with no line round it, which is
-	-- what the loot feed ships as.
+	-- The ground under the rows, and the edge that follows it and its own
+	-- switch. At zero the player has asked for rows over the world with nothing
+	-- painted under them at all, and a hairline rectangle round that is a window
+	-- frame with no window in it; with the switch off they have asked for a feed
+	-- with no line round it, which is what the loot feed ships as.
 	local alpha = self:Setting("alpha") / 100
 	local edged = (alpha > 0 and self:Setting("edge")) and 1 or 0
-	self.bg:SetColorTexture(C.window[1], C.window[2], C.window[3], alpha)
+	self.feed:Wash(alpha)
 	for index = 1, 4 do
 		self.edges[index]:SetAlpha(edged)
 	end
-	-- The strip's hairline goes with them, for the same reason. Over bare world
-	-- a line under the last row is a rule dividing nothing from nothing.
+	-- The strip's own ground is the same slider as the rows', so the foot of the
+	-- window darkens by as much as the column above it and the two never read as
+	-- two surfaces. Its hairline goes out at zero with the edge and for the same
+	-- reason: over bare world a line under the last row divides nothing from
+	-- nothing.
 	if self.statusRule then
+		self.statusWash:SetAlpha(alpha)
 		self.statusRule:SetAlpha(alpha > 0 and 1 or 0)
 	end
 

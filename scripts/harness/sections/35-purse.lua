@@ -63,23 +63,24 @@ check(strip:GetScript("OnUpdate") ~= nil, "the status strip registered no ticker
 check(strip:GetParent() == _G.WarriorKitLootFeed,
 	"the strip is not a child of the feed it hangs under")
 
--- All three cells outlined, and tall enough to carry the outline.
+-- All three cells shadowed, and all three at 14.
 --
--- This is the one that got reported by eye, and the first fix for it was wrong.
--- The strip looks like it is painted on a surface, but the surface is a slider
--- the player drags and it reaches zero, at which point the strip is three
--- numbers over the world. So the rim stays. What was actually wrong is the
--- size: 12, two under UI.OutlineFloor(), and an outline spends a pixel of every
--- stroke, so the hole in a 6 closed and the waist of an 8 filled in on the one
--- line in the window that is nothing but digits.
+-- This is the one that got reported by eye, and it took two fixes. The strip
+-- looks like it is painted on a surface, and the surface is a slider the player
+-- drags to zero, at which point the strip is three numbers over the world. The
+-- first fix read that as an argument for a rim and left the size at 12, two
+-- under what a rim needs: an outline spends a pixel of every stroke, so the
+-- hole in a 6 closed and the waist of an 8 filled in on the one line in the
+-- window that is nothing but digits.
 --
--- Both halves are asserted, because either on its own is the state that got
--- reported: an outline under the floor eats the digits, and no outline at all
--- loses them completely the moment the background goes.
+-- The second took the rim off. A rim is what a string carries when it has no
+-- ground, the feed above these three paints its own now, and a shadow holds a
+-- digit off whatever is behind it without spending a pixel of the digit. Flat
+-- is still the state that loses them completely the moment the background goes,
+-- which is why the shadow is asserted rather than assumed.
 --
 -- Checked here as well as by the grep in scripts/check.sh, because the grep
 -- reads the call and this reads the font the client actually ended up with.
-local floor = ns.UI.OutlineFloor()
 for _, entry in ipairs({
 	{ "the held cell", held },
 	{ "the account cell", hoard },
@@ -87,12 +88,48 @@ for _, entry in ipairs({
 }) do
 	local _, size, flags = entry[2]:GetFont()
 	flags = flags or ""
-	check(flags:find("OUTLINE", 1, true),
+	check(flags:find("OUTLINE", 1, true) == nil,
+		("%s still carries a rim, which costs a pixel of every stroke")
+			:format(entry[1]))
+	check(select(1, entry[2]:GetShadowOffset()) ~= 0,
 		("%s went flat, and the background under it slides to nothing")
 			:format(entry[1]))
-	check(size and size >= floor,
-		("%s is outlined at %s pixels, under the floor of %d")
-			:format(entry[1], tostring(size), floor))
+	check(size == 14,
+		("%s is %s pixels and the strip is 20 to hold 14")
+			:format(entry[1], tostring(size)))
+end
+
+-- And the ground that lets the rim come off, which is the row of rows getting
+-- what the rows got.
+--
+-- Up the strip rather than along it, and that is the check worth having. A wash
+-- running left to right is solid under the held reading and gone by the rate,
+-- and one running right to left abandons the held reading instead; both draw a
+-- rectangle, measure fine and leave one of the three numbers on the grass. Read
+-- back off the texture, because which end is solid is the one thing about a
+-- gradient that a call site cannot be asserted for.
+do
+	local wash = lootStream.statusWash
+	check(wash ~= nil, "the strip has no ground under its three readings")
+	check(wash.layer == "BACKGROUND",
+		("the strip's wash is on %s, so it is over the numbers rather than under them")
+			:format(tostring(wash.layer)))
+	check(wash.allPoints, "the strip's wash does not cover the strip")
+
+	local ramp = wash:GetGradient()
+	check(ramp ~= nil and ramp.orientation == "VERTICAL",
+		"the strip's wash runs along it, so it grounds one reading and abandons another")
+	check(ramp.min[4] == ns.UI.Color.shadow[4] and ramp.max[4] == 0,
+		("the strip washes from %s at its foot to %s at the hairline")
+			:format(tostring(ramp.min[4]), tostring(ramp.max[4])))
+
+	-- The same slider as the rows above, so the foot of the window darkens by
+	-- as much as the column and the two never read as two surfaces.
+	check(wash:GetAlpha() == ns.db.lootFeedAlpha / 100,
+		("the strip's ground is at %s and the slider says %d%%")
+			:format(tostring(wash:GetAlpha()), ns.db.lootFeedAlpha))
+	check(wash:GetAlpha() == lootStream:Feed():Row(1).wash:GetAlpha(),
+		"the strip and the rows are painted at different strengths")
 end
 
 -- One second of the client, which is one beat of the strip.

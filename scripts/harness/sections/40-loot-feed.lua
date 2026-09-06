@@ -130,6 +130,136 @@ do
 end
 
 ----------------------------------------------------------------------
+-- The ground a row is read on
+--
+-- The panel behind the column is gone and each row carries a gradient
+-- instead, solid at the stripe and gone by the end of the text, with the
+-- background slider saying how strongly it is painted. Every check here is
+-- one that fails silently.
+--
+-- A wash the width of the row draws a rectangle, measures fine and is the
+-- panel back with one soft edge. A wash made after the hover glow draws
+-- perfectly and takes the light out of the row under the cursor. A wash
+-- running the other way is solid where the number is and clear under the
+-- name, which is worse than none. One that ignored the slider would leave
+-- the loot feed's shipped 15 as a black bar under thirteen rows.
+--
+-- Built by UI/Feed.lua rather than by this stream, which is what makes it
+-- every feed's: the combat feed takes the same rows through the same
+-- resize and the same Feed:Wash off its own slider.
+----------------------------------------------------------------------
+
+do
+	local C = ns.UI.Color
+	local unit = ns.UI.Unit(_G.WarriorKitLootFeed)
+	local row = feed:Row(1)
+
+	check(lootStream.bg == nil,
+		"the stream still paints a panel behind the column, so the wash is a second surface")
+	check(row.wash ~= nil, "a row has no wash under its text")
+	check(row.wash.layer == "BACKGROUND",
+		("the wash is on %s, so it is drawn over the text it is meant to be under")
+			:format(tostring(row.wash.layer)))
+	check(row.stripe.layer == "ARTWORK" and row.icon.layer == "ARTWORK",
+		"the stripe and the icon left ARTWORK, so the wash is no longer under them")
+
+	-- Under the hover light rather than over it. Both are on BACKGROUND and
+	-- the client draws that layer in the order the textures were made.
+	do
+		local wash, glow
+		for index, region in ipairs(row.regions) do
+			if region == row.wash then wash = index end
+			if region == row.glow then glow = index end
+		end
+		check(wash and glow and wash < glow,
+			"the wash was made after the glow, so it darkens the row the cursor is on")
+	end
+
+	-- It stops where the text stops. The number is held one inset off the
+	-- row's right edge and the wash ends with it, so what is left over the
+	-- world is the three pixels nothing is written in.
+	check(math.abs(row.wash:GetRight() - row.amount:GetRight()) < 0.01,
+		("the wash ends at %.1f and the number ends at %.1f")
+			:format(row.wash:GetRight(), row.amount:GetRight()))
+	check(row.wash:GetWidth() < row:GetWidth(),
+		"the wash is as wide as the row, which is the panel again with one soft edge")
+	check(row.wash:GetWidth() % 1 == 0,
+		("the wash came out %.2f wide, which is not a whole number of pixels")
+			:format(row.wash:GetWidth()))
+	check(row.wash:GetHeight() == feed.row * unit,
+		"the wash is not the height of the row it is under")
+
+	-- Which end is solid. The client runs a horizontal gradient min at the
+	-- left, and the left of a feed row is the stripe the text reads out from.
+	do
+		local ramp = row.wash:GetGradient()
+		check(ramp ~= nil and ramp.orientation == "HORIZONTAL",
+			"the wash under a row runs down the column rather than along the row")
+		check(ramp.min[4] == C.shadow[4] and ramp.max[4] == 0,
+			("the row washes from %s at the stripe to %s at the number")
+				:format(tostring(ramp.min[4]), tostring(ramp.max[4])))
+		check(ramp.max[1] == C.shadow[1] and ramp.max[2] == C.shadow[2]
+			and ramp.max[3] == C.shadow[3],
+			"the wash fades to a different colour rather than to nothing")
+	end
+
+	-- And how strongly, which is the slider that used to paint the panel.
+	check(row.wash:GetAlpha() == ns.db.lootFeedAlpha / 100,
+		("the wash is at %s and the slider says %d%%")
+			:format(tostring(row.wash:GetAlpha()), ns.db.lootFeedAlpha))
+
+	local kept = ns.db.lootFeedAlpha
+	ns.db.lootFeedAlpha = 0
+	lootStream:Apply()
+	check(feed:Row(1).wash:GetAlpha() == 0,
+		"at zero the rows still have a shadow painted under them")
+
+	-- A row built after the slider moved takes the strength the feed is at.
+	-- The number is held on the feed for this: a stepper that makes four more
+	-- rows would otherwise leave them at full strength.
+	local grew = ns.db.lootFeedRows + 2
+	ns.db.lootFeedRows = grew
+	lootStream:Apply()
+	check(feed:Row(grew).wash:GetAlpha() == 0,
+		"a row built after the slider moved was painted at full strength")
+
+	ns.db.lootFeedAlpha, ns.db.lootFeedRows = kept, ns.DefaultFor("lootFeedRows")
+	lootStream:Apply()
+	check(feed:Row(1).wash:GetAlpha() == kept / 100,
+		"putting the slider back did not put the wash back")
+end
+
+----------------------------------------------------------------------
+-- What a row is written in
+--
+-- Shadowed, not rimmed. The rim was there because a feed had no ground it
+-- could promise, the wash above is that ground, and a rim on a stroke costs
+-- a pixel of every glyph to say the same thing worse.
+--
+-- 36-font-roles.lua holds the whole addon to "a string with nothing behind
+-- it carries a rim or a shadow" and a feed row passes that either way, which
+-- is why the claim that these four are shadowed has to be made here.
+----------------------------------------------------------------------
+
+do
+	local row = feed:Row(1)
+	for _, part in ipairs({ "name", "note", "amount", "caption" }) do
+		local flags = select(3, row[part]:GetFont()) or ""
+		check(flags:find("OUTLINE", 1, true) == nil,
+			("the row's %s still carries a rim"):format(part))
+		check(select(1, row[part]:GetShadowOffset()) ~= 0,
+			("the row's %s has neither a rim nor a shadow"):format(part))
+	end
+
+	-- The floor that held the icon at 16 was the rim's, and the rim is gone.
+	-- The number stands until somebody measures a shorter row with the wash
+	-- under it, which is a separate commit and a ratchet of its own.
+	check(ns.UI.FEED_ICON_LOW == 16,
+		("the smallest row is %d and this commit was not the one to move it")
+			:format(ns.UI.FEED_ICON_LOW))
+end
+
+----------------------------------------------------------------------
 -- The picture on it
 --
 -- The size of the square is not the picture in it, and this is the half that
