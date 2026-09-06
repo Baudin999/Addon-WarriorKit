@@ -158,6 +158,25 @@ local COUNT_TEXT_SIZE = 11
 local NAME_MAX = 8
 local RAID_ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 
+-- The PvP flag, one sheet per faction plus the free for all one, which is not
+-- a faction. The same three paths UnitFrames/Paint.lua hangs on the unit
+-- frames: a flag that means one thing over a nameplate and another over the
+-- target frame is two icons to learn instead of one.
+local PVP_TEXTURE = {
+	Alliance = "Interface\\TargetingFrame\\UI-PVP-Alliance",
+	Horde = "Interface\\TargetingFrame\\UI-PVP-Horde",
+	FFA = "Interface\\TargetingFrame\\UI-PVP-FFA",
+}
+
+-- How much bigger than the raid marker the flag is drawn.
+--
+-- The art carries a wide transparent margin, which is why Block.lua gives the
+-- same three files the largest scale of its three badges. Drawn at the
+-- marker's size the flag inside reads about two thirds of a raid icon, and a
+-- player who is allowed to kill you is not a two thirds size fact. At 1.8 the
+-- visible flag stands about as tall as the gauge beside it.
+local PVP_SCALE = 1.8
+
 -- The look: flat fills, one pixel edges, no gloss and no gradient. The bar is
 -- drawn from coloured rectangles rather than from UI-StatusBar, which is the
 -- 2007 glass texture and reads like it. Nothing here is a file path, so there
@@ -989,6 +1008,44 @@ local function Touched(widget, _, unit)
 	end
 end
 
+-- The three regions that hang off the box's edges, built. Where they go is
+-- PlaceOutside's, which is written against the same three and for the same
+-- reason: none of them may sit inside the box, because the box is the click
+-- target PlateFootprint hands the nameplate driver and a badge inside it either
+-- takes the room the mob's name is clipped into or grows the hit box by the
+-- width of a string nobody clicks.
+--
+--   marker    the raid target icon. SetRaidTargetIconTexture picks one of eight
+--             out of a single sheet, so it takes the sampling fix without the
+--             crop that comes with a spell icon.
+--   pvp       the faction's flag, and the loudest thing on the bar. Wanted() is
+--             what lets it be this blunt: an enemy player of the other faction
+--             gets a bar of ours only once the flag is up, so every bar
+--             carrying this is somebody who is allowed to start on you and no
+--             other part of the widget has to be read to tell that.
+--   questText what the mob is still wanted for, in gold, outlined because a
+--             string over the world has no fill behind it and a shadow has
+--             nothing to be darker than.
+--
+-- The flag and the quest badge share a point, and no bar can want both: the
+-- flag is only ever on a player and a quest objective is only ever on an npc.
+--
+-- Built here and not in CreateWidget because that one is at its line budget,
+-- and three regions that share a reason for hanging outside the box are the
+-- cheapest lines it has to give up. No marker of its own: CreateWidget is the
+-- only caller and it is cold, so the walk never reaches this.
+local function BuildOutside(widget)
+	widget.marker = ns.UI.Crisp(widget:CreateTexture(nil, "OVERLAY"))
+	widget.marker:SetTexture(RAID_ICON_TEXTURE)
+	widget.marker:Hide()
+
+	widget.pvp = ns.UI.Crisp(widget:CreateTexture(nil, "OVERLAY"))
+	widget.pvp:Hide()
+
+	widget.questText = Text(widget, PLATE_TEXT, QUEST_TEXT, "LEFT", ns.UI.OUTLINE)
+	widget.questText:Hide()
+end
+
 -- cold: builds one nameplate widget, on the tick a plate first appears.
 local function CreateWidget()
 	local widget = CreateFrame("Frame", nil, UIParent)
@@ -1042,22 +1099,7 @@ local function CreateWidget()
 	widget.healthText = Text(widget.health, PLATE_TEXT, HEALTH_TEXT, "RIGHT", ns.UI.FLAT)
 	widget.threatText = Text(widget, PLATE_TEXT, HEALTH_TEXT, "LEFT")
 
-	-- SetRaidTargetIconTexture picks one of eight out of a single sheet, so this
-	-- takes the sampling fix without the crop that comes with a spell icon.
-	widget.marker = ns.UI.Crisp(widget:CreateTexture(nil, "OVERLAY"))
-	widget.marker:SetTexture(RAID_ICON_TEXTURE)
-	widget.marker:Hide()
-
-	-- What this mob is still wanted for, in gold off the box's right edge: the
-	-- raid marker's mirror image. Both sit outside the box on purpose. The box
-	-- is what PlateFootprint hands the nameplate driver as the click target, so
-	-- a badge inside it would either take the room the mob's name is clipped
-	-- into or grow the hit box by the width of a string.
-	--
-	-- Outlined, which is the role a string over the world takes: there is no
-	-- fill behind this one and a shadow has nothing to be darker than.
-	widget.questText = Text(widget, PLATE_TEXT, QUEST_TEXT, "LEFT", ns.UI.OUTLINE)
-	widget.questText:Hide()
+	BuildOutside(widget)
 
 	-- Empty. The row is as long as the list and the list is a setting, so
 	-- FitIcons builds it and LayoutWidget calls FitIcons.
@@ -1126,12 +1168,15 @@ local function PlateFootprint(widget, width, unit)
 		ns.UI.Convert(height, widget, UIParent))
 end
 
--- The two regions that hang outside the box, one off each edge.
+-- The three regions that hang outside the box, one off the left edge and two
+-- sharing the right.
 --
 -- Off the box's left edge, which is now the widget's own: with the tag gone
 -- there is one line down the left of the assembly, and the marker is outside
--- it. The quest badge is the same three units off the other side, so the two
--- things that hang outside the bar hang by the same amount.
+-- it. The quest badge and the PvP flag are the same three units off the other
+-- side, so everything that hangs outside the bar hangs by the same amount.
+-- Those two share a point because no bar can carry both, which is the note in
+-- CreateWidget.
 --
 -- Both are outside on purpose and it is the same reason twice. The box is what
 -- PlateFootprint hands the nameplate driver as the click target, so anything
@@ -1145,6 +1190,10 @@ local function PlaceOutside(widget, font, unit, barHeight, pad)
 	widget.marker:ClearAllPoints()
 	widget.marker:SetSize(barHeight + pad, barHeight + pad)
 	widget.marker:SetPoint("RIGHT", widget.box, "LEFT", -3 * unit, 0)
+
+	widget.pvp:ClearAllPoints()
+	widget.pvp:SetSize((barHeight + pad) * PVP_SCALE, (barHeight + pad) * PVP_SCALE)
+	widget.pvp:SetPoint("LEFT", widget.box, "RIGHT", 3 * unit, 0)
 
 	widget.questText:SetFontObject(font)
 	widget.questText:ClearAllPoints()
@@ -1444,6 +1493,40 @@ local function PaintMarker(widget, unit)
 	end
 end
 
+-- The PvP flag, asked the way PlayerFrame.lua asks and the way Paint.lua asks
+-- for the unit frames: free for all first, then the unit's own faction while
+-- it is flagged, and nothing otherwise.
+--
+-- Guarded on the path, which is a constant per faction, so a flagged player
+-- standing there costs two client calls and a comparison per reading. Nil is
+-- every way of not being flagged, and it is also what a pooled widget gets the
+-- first time it is read out on a mob, which is how the flag comes off a
+-- widget that used to sit on a player.
+--
+-- The three calls are probed rather than called for the reason Wanted probes
+-- them: a client without one of them draws no flag rather than raising on
+-- every reading.
+local function PaintPvp(widget, unit)
+	local art = nil
+	if UnitIsPlayer(unit) then
+		if type(UnitIsPVPFreeForAll) == "function" and UnitIsPVPFreeForAll(unit) then
+			art = PVP_TEXTURE.FFA
+		elseif type(UnitIsPVP) == "function" and UnitIsPVP(unit) then
+			art = PVP_TEXTURE[type(UnitFactionGroup) == "function" and UnitFactionGroup(unit) or ""]
+		end
+	end
+	if widget.shownPvp == art then
+		return
+	end
+	widget.shownPvp = art
+	if art then
+		widget.pvp:SetTexture(art)
+		widget.pvp:Show()
+	else
+		widget.pvp:Hide()
+	end
+end
+
 -- What this mob is still wanted for, in the four characters a bar has room for.
 --
 -- The string itself is Quests/Drops.lua's, because working it out means reading
@@ -1626,6 +1709,7 @@ local function UpdateWidget(widget, unit, guid)
 	end
 
 	PaintMarker(widget, unit)
+	PaintPvp(widget, unit)
 	PaintQuest(widget, guid)
 
 	-- Your current target, said twice: brighter than everything else on the

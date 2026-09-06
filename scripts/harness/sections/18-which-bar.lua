@@ -202,6 +202,18 @@ fire("UNIT_FACTION", "nameplate2")
 check(ns.EnemyBars.WidgetFor("nameplate2") ~= nil,
 	"a player of the other faction flagged and got no bar")
 
+-- And the flag is on the bar, in the faction's own art. The gate above is
+-- what decides a bar is there at all, so a badge that never drew would leave
+-- the two kinds of bar on the screen looking the same, which is the thing the
+-- flag is for.
+Tick()
+local flag = ns.EnemyBars.WidgetFor("nameplate2").pvp
+check(flag:IsShown() and flag:GetTexture() == "Interface\\TargetingFrame\\UI-PVP-Horde",
+	("a flagged Horde player's bar drew %s where the Horde flag belongs")
+		:format(tostring(flag:IsShown() and flag:GetTexture() or "nothing")))
+check(flag:GetWidth() > ns.EnemyBars.WidgetFor("nameplate2").marker:GetWidth(),
+	"the flag is drawn no bigger than the raid marker, and the art it uses is mostly margin")
+
 -- The flag dropping is the tick's business as much as the event's: a bar on
 -- somebody who is no longer flagged goes on the next reading either way.
 pvpUnits.nameplate2 = nil
@@ -214,6 +226,10 @@ ffaUnits.nameplate2 = true
 fire("UNIT_FACTION", "nameplate2")
 check(ns.EnemyBars.WidgetFor("nameplate2") ~= nil,
 	"a free-for-all player of the other faction got no bar")
+Tick()
+check(ns.EnemyBars.WidgetFor("nameplate2").pvp:GetTexture()
+	== "Interface\\TargetingFrame\\UI-PVP-FFA",
+	"a free-for-all player's bar drew the faction flag instead of the skull")
 ffaUnits.nameplate2 = nil
 Tick()
 
@@ -223,8 +239,11 @@ unitFaction.nameplate2 = "Alliance"
 fire("UNIT_FACTION", "nameplate2")
 check(ns.EnemyBars.WidgetFor("nameplate2") ~= nil,
 	"an attackable player of your own faction got no bar without a flag")
+Tick()
+check(not ns.EnemyBars.WidgetFor("nameplate2").pvp:IsShown(),
+	"an unflagged player of your own faction carries the PvP flag")
 
-print("faction the other side gets a bar flagged or free-for-all, and none otherwise; your own side is the client's call")
+print("faction the other side gets a bar flagged or free-for-all, and none otherwise; your own side is the client's call; a flagged bar carries the faction's flag and a mob carries none")
 
 -- Back to a mob, so every section after this one sees the plate it always has.
 fire("NAME_PLATE_UNIT_REMOVED", "nameplate2")
@@ -233,6 +252,11 @@ fire("NAME_PLATE_UNIT_ADDED", "nameplate2")
 check(ns.EnemyBars.WidgetFor("nameplate2") ~= nil, "nameplate2 did not come back as a mob")
 Tick()
 Tick()
+-- The widget that sat on the flagged player is the one the pool handed back
+-- for the mob, so this is the badge coming off rather than a fresh widget
+-- never having drawn it.
+check(not ns.EnemyBars.WidgetFor("nameplate2").pvp:IsShown(),
+	"a pooled widget came back onto a mob still carrying the last player's flag")
 
 _G.UnitIsUnit = realIsUnit
 guids.target = nil
