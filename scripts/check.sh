@@ -807,13 +807,12 @@ probe_list PROBED_ALLOWED "$PROBED_ALLOWED"
 
 # The quest tree does not put the log in order.
 #
-# Quests/Friend.lua is one sentence of code holding up a page of restraint, and
-# the restraint is the feature. It names one person, once, and says which way to
-# turn. What it refuses to be is a route: a list of who to see next, in the
-# order that levels you fastest. That refusal is four lines away. Near.lua
-# already carries a yardage per npc and the log already carries a level and a
-# reward, so `table.sort` over either is a convenience somebody adds in an
-# afternoon, and it turns a friend into a plan the player is then behind on.
+# The tracker is filed by zone and the quest window draws the one quest you
+# clicked. What neither is, and what four lines would turn them into, is a
+# route: a list of what to do next, in the order that levels you fastest.
+# Questie carries a yardage per spawn and the log carries a level and a reward,
+# so `table.sort` over either is a convenience somebody adds in an afternoon,
+# and it turns a log into a plan the player is then behind on.
 #
 # Written while it is already satisfied, which is the only cheap moment, and
 # it is the same argument the placeable rule below makes about itself.
@@ -859,7 +858,7 @@ done <<< "$QUEST_SORT_ALLOWED"
 while IFS= read -r entry; do
 	[ -n "$entry" ] || continue
 	grep -qxF "$entry" <<< "$quest_listed" || {
-		echo "src/$entry puts the quest log in an order: the tracker is filed by zone and the friend names one person, so add an entry saying what this orders and why it is not a route"
+		echo "src/$entry puts the quest log in an order: the tracker is filed by zone, so add an entry saying what this orders and why it is not a route"
 		status=1
 	}
 done <<< "$quest_sorted"
@@ -884,8 +883,6 @@ done < <(grep -rniE '(sort|order|rank)[a-z]*[[:space:]]+([a-z]+[[:space:]]+){0,3
 # quests miss each other every time and the second one pays in full.
 #
 # One caller, and it is the quest window drawing the quest you selected.
-# Quests/Friend.lua walks Near.lua's npc list instead and asks Where.Map only,
-# which is a table lookup.
 quest_walkers=$(grep -rn 'Where\.Nearest(' --include='*.lua' . \
 	| grep -v '^\./Quests/Where\.lua:[0-9]*:function Where\.Nearest(' || true)
 quest_walker_count=$(printf '%s' "$quest_walkers" | grep -c . || true)

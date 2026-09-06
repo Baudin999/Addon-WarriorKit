@@ -31,14 +31,6 @@ local Log = ns.QuestLog
 -- again: two pictures of one thing, drifting apart in the details nobody looks
 -- at until they are side by side. One reading, two drawings.
 --
--- **One sentence at the foot of it is not a quest and is not from the log.**
--- ns.QuestFriend names somebody standing near you with a quest that has never
--- been in your log, which is the half of "what is close" the client cannot
--- answer at all, and every rule about what that sentence may say is in
--- Quests/Friend.lua rather than here. What this file decides is where it goes
--- and whether it is asked for: at the foot, and only where the column already
--- has a quest on it.
---
 -- **It scopes on the client's log header, and the pin is the one exception.**
 -- A pinned quest is on this column wherever you are standing, which is the
 -- thing pinning is for: the rule takes everything off the tracker when you walk
@@ -106,7 +98,7 @@ local LEAD = M.rowGap + PIN + M.rowGap
 
 --------------------------------------------------------------------------
 
-local frame, stack, place, wash, note
+local frame, stack, place, wash
 local heads, lines = {}, {}
 local built = false
 
@@ -262,34 +254,6 @@ local function Spare(pool, used)
 	end
 end
 
--- The one wrapping row, put on the stack or taken off it.
---
--- Wrapped rather than clipped, and measured after its width is set, which is
--- the rule UI/Stack.lua's header states: a font string asked how tall it is
--- before it has been given a width answers one line, and a row sized off that
--- writes over the frame under it. Here that frame is the world.
---
--- It takes no mouse at all, so there is nothing for Column.Lock to hand back
--- and forth. Clicking a quest opens that quest; there is no window this
--- sentence could open, because the quest it is about is not in your log.
-local function Aside(text)
-	if not text then
-		note:Hide()
-		return
-	end
-	note.text:SetText(text)
-	note:Show()
-	-- Air over it, because it is an aside and not the next objective down.
-	stack:Space(M.rowGap)
-	stack:Add(note, {
-		gap = M.rowGap,
-		measure = function(cell)
-			note.text:SetWidth(math.max(stack.width - cell.indent - LEAD - M.rowGap, 1))
-			return UI.TextHeight(note.text, LINE)
-		end,
-	})
-end
-
 -- Whether the rows answer the pointer at all. They give it up while the frame
 -- is unlocked, for the reason Progress/Rails.lua gives: a row that took the
 -- press would swallow the drag that is the whole point of unlocking.
@@ -330,25 +294,6 @@ local function Fill()
 			under:Show()
 			stack:Add(under, { height = LINE })
 		end
-	end
-
-	-- The friend's line, at the foot of the stack.
-	--
-	-- **Asked only where there is a tracker to put it at the foot of.** The
-	-- sentence is an aside to a column of quests and reads as one; on its own
-	-- over the grass it is a floating instruction. Asking has a second cost
-	-- besides the sentence: ns.QuestNear stops walking half a minute after the
-	-- last reader, so a paint that asks in a zone with nothing in your log
-	-- keeps a walk warm for a row that would never be drawn.
-	--
-	-- Its own row rather than one out of the pools above, because it is the one
-	-- thing on this column that wraps. A quest name that does not fit is
-	-- clipped, which is the right answer for a name you already know; a
-	-- sentence clipped mid-word is a sentence nobody can read.
-	if head > 0 then
-		Aside(ns.QuestFriend.Line())
-	else
-		note:Hide()
 	end
 
 	Spare(heads, head)
@@ -406,16 +351,6 @@ function Column.Build()
 	wash:SetAllPoints(frame)
 
 	stack = UI.Stack(frame, WIDTH)
-
-	-- The friend's line. One frame, made here rather than pooled, because there
-	-- is only ever one of it and it is the only row on this column that wraps.
-	-- Dim, so it reads as an aside to the quests above it rather than as
-	-- another one of them.
-	note = CreateFrame("Frame", nil, stack.frame)
-	note.text = UI.Wrap(UI.Label(note, LINE_TEXT, C.dim, "LEFT", UI.SHADOW), true)
-	note.text:SetPoint("TOPLEFT", LEAD, 0)
-	note.text:SetPoint("TOPRIGHT", -M.rowGap, 0)
-	note:Hide()
 
 	place = UI.Placeable(frame, {
 		name = "WarriorKit quest tracker",

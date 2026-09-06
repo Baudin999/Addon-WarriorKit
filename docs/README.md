@@ -6778,17 +6778,6 @@ Aiming at a mob out of combat with no target selected is the whole test.
 
 Everything below was written from the API contract and has never executed:
 
-- **Which way the tracker's friend line calls north.** The direction word on
-  the line at the foot of the quest tracker is this addon's own arithmetic off
-  the player facing and the npc's bearing, and the sign derivation was read out
-  of Questie's HereBeDragons in both directions rather than run. The harness
-  cannot settle it: its world-position fixture keeps the map's axes rather than
-  the compass's, so it proves the arithmetic is consistent (turn half a circle
-  and the word must become its opposite) and not that the word is right. Both
-  signs wrong reads as a friend who is always behind you; one sign wrong reads
-  as left and right swapped. What would settle it: switch Questie's tracker off
-  so ours is up, stand somewhere with an unmet quest giver in plain sight, face
-  him, and check the line says ahead of you.
 - **Where this client's game menu keeps its art, and whether the walk in
   `Core/MenuSkin.lua` finds all of it.** The walk takes every texture off the
   frame, off one level of boxes inside it and off each button, which is the

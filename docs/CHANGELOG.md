@@ -2,45 +2,19 @@
 
 ## Unreleased
 
-### The friend's direction follows you, and what it will not do is now a gate
+### The tracker says nothing about who is standing nearby
 
-Turn round under a line that is standing and the line turns with you. It held
-its direction for the whole twenty seconds it was up, so turning round left you
-being told "ahead of you" about somebody now behind you, which is the one
-failure a direction was chosen over a yardage to avoid. The quiet period holds
-which quest is named. The word it is named with is worked out on every reading.
+The line at the foot of the quest tracker is gone. It named one person near you
+with a quest you had never taken and said which way to turn, and over an
+evening it read as clutter over the world rather than as a friend: a sentence
+appearing under the quests every time you walked past somebody new.
 
-The rest of that sentence's restraint is checked rather than asked for. Nothing
-in the quest tree may put the log in order of distance, experience or level, and
-every sort still in there carries a written reason for what it orders. The walk
-that reads every spawn of every open objective has one caller, drawing the one
-quest you selected, and the count is now the gate rather than the memo that made
-a second call cheap. The harness drives the rest: two people at one distance
-make one line, nineteen seconds in is silent and twenty one speaks, and a fight
-or a dungeon takes the line off the tracker and leaves the quests on it.
-
-### A line at the foot of the tracker, from a friend rather than a map
-
-One sentence under the quests you are standing in the middle of, naming one
-person nearby with a quest that has never been in your log: "Farmer Furlbrow,
-ahead and to your right, has a quest you have never taken." It is the half of
-"what is close" the client cannot answer at all, and it is the reason to finish
-the quest you are on before walking out of the zone.
-
-No yardage in it, ever. Questie's distance is a straight line drawn over world
-coordinates, so a cliff or a lake between you and the murloc turns sixty yards
-into a three minute walk. The number is honest enough to pick who gets named
-and dishonest as soon as it is printed. What is printed instead is a direction
-in eight words, worked out here from where the spawn is and which way you are
-pointing, and it is the one thing on that line the game confirms as you walk:
-turn, and it was right or it was not.
-
-One person, never two. A second name would be a list, a list is a route, and
-routing you round a zone is a different addon. It names somebody, stands for
-twenty seconds and then stops; walking past the same farmer all evening is not
-news. It says nothing while you are fighting and nothing while you are indoors,
-where everything is thirty yards away and a friend would be a chatterbox. It
-says nothing about anyone on another continent.
+The walk behind it goes with it. `ns.QuestNear` read Questie's table of
+available quests twenty five npcs a tick, and it had one reader. Its tick is
+off the performance tab, its two harness sections are gone, and `UI/Chart.World`
+went with them because that sentence was the only thing that ever asked which
+way a spawn was. The tracker is the quests you are standing in the middle of
+and nothing else.
 
 ### The pin, drawn where you can see it
 
@@ -139,31 +113,6 @@ are in your log, oldest pin first, which is the order the pinned group and the
 tracker will draw them in. A pin whose quest has left the log is dropped on the
 next read that found a log, so handing one in takes its pin with it and a
 loading screen does not.
-
-### Who nearby has a quest you have never taken
-
-The client will tell you what is in your quest log and nothing whatever about
-what is not. Questie knows both halves: it keeps a table of every quest you
-could accept right now, keyed on the npc holding it, and it knows where that
-npc stands. `ns.QuestNear` reads those two and answers the people near you with
-a quest that has never been in your log, in whole yards, in no order.
-
-The budget is the design. Questie offers a couple of thousand npcs and each one
-costs a coordinate transform per spawn, so the walk takes twenty five of them
-per tick and finishes a pass in about four seconds instead of blocking on one.
-It has a row on the performance tab like every other tick in the addon. It runs
-on neither of the two paths that made the quest window expensive: never on a
-paint, and never on `QUEST_LOG_UPDATE`, which is the client saying it looked
-rather than the log changing, and which it says several times a second while
-you are killing things.
-
-Three states cost nothing at all. Nothing has read the answer in half a minute,
-Questie has not finished compiling its database, or you are standing in an
-instance. The last one is not politeness. Questie adds half a million yards to
-every spawn outside the instance you are in, so a pass run in a dungeon
-measures a thousand npcs and throws every one of them away.
-
-Nothing draws this yet. It is the reading the tracker's next line is built on.
 
 ### Questie's tracker goes off, by its own hand
 

@@ -784,26 +784,18 @@ Mail\Feature.lua
 # gives degrades to nil rather than to an error. The picture those places are
 # drawn on is UI\Chart.lua, far above this line: it takes a map id and a list of
 # points and knows nothing about quests, which is why it is in the kit and not
-# here. Near.lua is the other direction and reads only Questie: who is standing
-# near you with a quest that has never been in your log, walked a few npcs a
-# tick off one ticker rather than asked all at once. Window.lua draws the three
-# columns, Blizzard.lua puts the client's own log in the attic and redirects the
-# L key, Tracker.lua points Questie's tracker at this window under the same
-# switch, TrackerOff.lua switches that tracker off through Questie's own call
-# under a switch of its own, and Feature.lua last, as everywhere else.
-#
-# Friend.lua is the sentence Column.lua puts at the foot of its own column:
-# which of Near.lua's answers is worth naming, the eight words that say which
-# way he is standing, and when to say nothing at all. After Near.lua because
-# it reads that list and nowhere else.
+# here. Window.lua draws the three columns, Blizzard.lua puts the client's own
+# log in the attic and redirects the L key, Tracker.lua points Questie's tracker
+# at this window under the same switch, TrackerOff.lua switches that tracker off
+# through Questie's own call under a switch of its own, and Feature.lua last, as
+# everywhere else.
 #
 # Column.lua is the tracker itself, and it is a different thing from the file
 # beside it: Tracker.lua is about somebody else's tracker, and this is a column
 # of the quests you are standing in, drawn over the world under the same switch
 # that takes Questie's off the screen. Its quests are Log.lua's zones and
-# nothing else, its foot line is Friend.lua's, and it is after Window.lua
-# because a click on one of its rows opens that window through Tracker.lua's
-# swap.
+# nothing else, and it is after Window.lua because a click on one of its rows
+# opens that window through Tracker.lua's swap.
 #
 # After Core\Attic.lua, which is where Blizzard's window goes, and after the UI
 # layer, which is what the window is built out of. Both are far above this line.
@@ -811,8 +803,6 @@ Quests\Client.lua
 Quests\Party.lua
 Quests\Log.lua
 Quests\Where.lua
-Quests\Near.lua
-Quests\Friend.lua
 Quests\Drops.lua
 Quests\Window.lua
 Quests\Blizzard.lua

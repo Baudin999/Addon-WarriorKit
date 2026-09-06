@@ -285,12 +285,6 @@ for _, part in ipairs({
 	-- geometry, and everything under it has to have finished putting Blizzard's
 	-- own frames on the screen before a hit test means anything.
 	"22-mouse",
-	-- After the client's own parts and outside them: it makes no frame, touches
-	-- nothing Blizzard's, and adds three names to the Questie modules
-	-- 05-quests.lua and 12-questlog.lua already made. Two of the three are the
-	-- calls the walk over available quests is built on and the third is a field
-	-- on a module, which is the half ns.Questie's own check cannot cover.
-	"23-quest-near",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

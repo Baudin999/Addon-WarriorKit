@@ -97,13 +97,6 @@ local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast
 	-- on all but one second a minute it finds the same whole number it left and
 	-- writes nothing.
 	"oil",
-	-- The walk over everybody Questie says has a quest for you. Twenty times a
-	-- second while something is reading the answer, twenty five npcs a tick,
-	-- and nothing at all while nobody has asked in half a minute or while you
-	-- are standing in an instance. It is the one tick on this list whose cost
-	-- is set by another addon's database rather than by anything on screen,
-	-- which is exactly why it wants a row.
-	"near",
 	-- The trinkets on that same page, sweeping. Four times a second while the
 	-- sheet is open and something on it is a thing you press, and stopped
 	-- otherwise, which on a character wearing nothing with a use on it is

@@ -524,12 +524,6 @@ local SECTIONS = {
 	-- which map you are on answers. It puts every one of those back at the foot
 	-- of the file, including where you were standing when it started.
 	"83-quest-here",
-	-- Straight after 83-quest-here, because it reads what that section leaves:
-	-- the map you are standing on and the instance flag over it, both put back
-	-- at the foot of that file. It drives one ticker by hand rather than through
-	-- the frame, takes Questie away twice and breaks four of its names one at a
-	-- time, and hands every one of them back before it prints.
-	"84-quest-near",
 	-- Last, because it takes Questie away three ways and reaches into that
 	-- addon's own saved settings to do it. Everything above this line reads
 	-- Questie; this is the one section that writes to it. It puts the global,
@@ -542,14 +536,6 @@ local SECTIONS = {
 	-- back, pins a quest and unpins it, and moves the addon's lock. Every one of
 	-- those, and where you were standing, is handed back at the foot of the file.
 	"85-quest-column",
-	-- Straight after 85-quest-column, because it reads that column: the line it
-	-- is about is a row at the foot of the same tracker, drawn under the same
-	-- switch, and this section stands you in the zone that section leaves a
-	-- quest in. It also drives ns.QuestNear's walk by hand, cuts Questie's offer
-	-- table down four times, turns you round, puts you in an instance and puts
-	-- you in combat. Every one of those, and where you were standing, is handed
-	-- back at the foot of the file.
-	"86-quest-friend",
 }
 
 -- Naming a section runs every section up to and including it, rather than that
