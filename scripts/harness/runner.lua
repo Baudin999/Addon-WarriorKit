@@ -505,6 +505,11 @@ local SECTIONS = {
 	-- which map you are on answers. It puts every one of those back at the foot
 	-- of the file, including where you were standing when it started.
 	"83-quest-here",
+	-- Last, because it takes Questie away three ways and reaches into that
+	-- addon's own saved settings to do it. Everything above this line reads
+	-- Questie; this is the one section that writes to it. It puts the global,
+	-- the setting and both switches back at the foot of the file.
+	"84-questie-tracker",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

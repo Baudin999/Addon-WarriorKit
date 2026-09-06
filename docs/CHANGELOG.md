@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Questie's tracker goes off, by its own hand
+
+Two quest trackers on one screen is one too many. There is a tick box on the
+quest log's page that switches Questie's off, and it does it by calling
+`QuestieTracker:Disable()`, which is the same call Questie's own Enable Tracker
+box makes.
+
+Nothing is hidden and nothing is re-parented. Questie re-shows its tracker on a
+dozen of its own events, so a frame this addon hid would come back on the first
+quest you accepted, and the only way to keep it down would be to hide it again
+forever. The attic in this addon is for Blizzard's frames, which nobody else is
+holding.
+
+This writes another addon's saved setting, which the addon has never done
+before, and that is why it has a switch with its own name on it and a clause in
+`/wk status` saying which way the setting is and who put it there. Untick the
+box and the tracker comes back, once. A tracker you switched off in Questie's
+own options is left alone: this addon puts back what it took and nothing else.
+
+Questie reloads the interface at both ends of that, because its own Disable and
+Enable do. Neither is called while you are in combat, for the reason Questie
+greys its own box out then, and work refused that way runs when the fight ends.
+
 ### A list row knows which button and which modifier
 
 Every column in the addon is one widget. It told the window that owned it which

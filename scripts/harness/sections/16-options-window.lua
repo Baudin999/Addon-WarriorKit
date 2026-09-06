@@ -763,8 +763,19 @@ if window then
 	-- which is where the line between them is: what a pull puts over the world,
 	-- and what was there before it. A budget that is only ever raised is a
 	-- budget, and a budget nothing is ever paid out of is a ceiling.
-	check(prose < 30700,
-		("the window holds %d characters of prose and the budget is 30,700"):format(prose))
+	--
+	-- Switching Questie's tracker off costs 185 across a check box, a hint and a
+	-- reading, and takes it to 30,808 across the same seventy-five: no new page,
+	-- one more control on the quest log's section. The hint says the one thing a
+	-- tick box cannot, which is that this is Questie's own Enable Tracker switch
+	-- rather than a second one beside it, so the interface reloads on the way in
+	-- and on the way out. The reading is there because the setting is not ours:
+	-- every other reading here reports something this addon decided, and this
+	-- one reports another addon's saved variable and which of us moved it last.
+	-- Without it a tracker that is gone reads as Questie having broken. 31,000
+	-- is that measurement plus a hint's worth of room again.
+	check(prose < 31000,
+		("the window holds %d characters of prose and the budget is 31,000"):format(prose))
 
 	print(("panel  %.0f x %.0f px at zoom %d, %d groups, %d sections, %d rows, %d wrapped strings")
 		:format(window.width, window.height, window.zoom, #window.groups, tabs, rows, wrapped))

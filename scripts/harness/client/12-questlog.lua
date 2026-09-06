@@ -560,6 +560,80 @@ watching.ShowQuestLog = function()
 	tracked = tracked + 1
 end
 
+-- The tracker's own switch, which is a different fixture from the click above
+-- and is kept apart from it for that reason.
+--
+-- Three things are modelled and all three are read off the installed addon.
+--
+-- The setting lives on the Questie global rather than on the loader:
+-- Questie.lua's OnInitialize builds Questie.db out of AceDB, and
+-- Modules/VersionCheck.lua leaves a preinit placeholder there before it that
+-- carries a profile with nothing but a minimap flag in it. The placeholder is
+-- what `H.questieTracker.Preinit()` puts back, so a caller that took the table
+-- for an answer is caught.
+--
+-- Both calls write the setting themselves, which is the half that makes the
+-- addon's own record redundant on the second pass, and both reload the
+-- interface, which is the half that makes a loop visible: Disable ends in
+-- ReloadUI and Enable hands ReloadUI to ThreadLib as its callback.
+--
+-- Declared with a colon in Questie's source, so the fixture takes a self and
+-- ignores it. A caller that reached for them with a dot passes a nil self here
+-- and is none the wiser, which is exactly the mistake worth catching.
+local switching = questie:ImportModule("QuestieTracker")
+local questieTracker = { enabled = 0, disabled = 0 }
+
+-- Held on the fixture rather than as three more chunk locals, because this
+-- file is close to its name budget and these three are one thing: the Questie
+-- global and the two profiles it can be carrying.
+questieTracker.global = _G.Questie
+questieTracker.profile = { trackerEnabled = true }
+questieTracker.preinit = { minimap = { hide = false } }
+
+_G.Questie.db = { profile = questieTracker.profile, char = {} }
+
+switching.Enable = function()
+	questieTracker.enabled = questieTracker.enabled + 1
+	_G.Questie.db.profile.trackerEnabled = true
+	_G.ReloadUI()
+end
+
+switching.Disable = function()
+	questieTracker.disabled = questieTracker.disabled + 1
+	_G.Questie.db.profile.trackerEnabled = false
+	_G.Questie.db.char.TrackedQuests = {}
+	_G.ReloadUI()
+end
+
+-- How many times each was called, and the setting the player would see.
+function questieTracker.Counts()
+	return questieTracker.enabled, questieTracker.disabled
+end
+
+function questieTracker.Enabled()
+	return _G.Questie.db.profile.trackerEnabled
+end
+
+function questieTracker.Set(enabled)
+	_G.Questie.db.profile.trackerEnabled = enabled
+end
+
+-- Questie away in one of two ways, and they are different absences. `nil` is
+-- the addon not installed; "preinit" is it installed and not initialised, which
+-- is the state the placeholder above models. Both must be silent.
+function questieTracker.Away(how)
+	_G.Questie = questieTracker.global
+	if how == "preinit" then
+		_G.Questie.db = { profile = questieTracker.preinit }
+	elseif how then
+		_G.Questie = nil
+	else
+		_G.Questie.db = { profile = questieTracker.profile, char = {} }
+	end
+end
+
+H.questieTracker = questieTracker
+
 -- The join. Area 606 is deliberately absent.
 local ATLAS = { [12] = 37, [40] = 52 }
 placing.GetUiMapIdByAreaId = function(_, area) return ATLAS[area] end

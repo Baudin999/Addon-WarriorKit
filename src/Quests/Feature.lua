@@ -1,9 +1,9 @@
 local ADDON, ns = ...
 
 -- Everything Core and the panel need to know about the quest log. Client.lua,
--- Log.lua, Party.lua, Where.lua, Window.lua, Blizzard.lua and Tracker.lua hold
--- the behaviour, and this is the only file in the folder that names anything
--- outside it.
+-- Log.lua, Party.lua, Where.lua, Window.lua, Blizzard.lua, Tracker.lua and
+-- TrackerOff.lua hold the behaviour, and this is the only file in the folder
+-- that names anything outside it.
 
 local function SetQuests(value)
 	ns.db.quests = value
@@ -14,12 +14,18 @@ local function SetQuests(value)
 	end
 	ns.QuestBlizzard.Apply()
 	ns.QuestTracker.Apply()
+	ns.QuestTrackerOff.Apply()
 end
 
 local function SetHide(value)
 	ns.db.questsHideBlizz = value
 	ns.QuestBlizzard.Apply()
 	ns.QuestTracker.Apply()
+end
+
+local function SetTrackerOff(value)
+	ns.db.questsTrackerOff = value
+	ns.QuestTrackerOff.Apply()
 end
 
 --------------------------------------------------------------------------
@@ -32,6 +38,9 @@ local function QuestWord(arg, rawArg)
 	if word == "hide" then
 		SetHide(ns.Command.Toggle(rest))
 		ns.Print("Blizzard's quest log is " .. ns.QuestBlizzard.Describe() .. ".")
+	elseif word == "tracker" then
+		SetTrackerOff(ns.Command.Toggle(rest))
+		ns.Print("Questie's tracker is " .. ns.QuestTrackerOff.Describe() .. ".")
 	elseif word == "where" then
 		ns.Print(ns.QuestWhere.Describe() .. ".")
 	elseif word == "drops" then
@@ -48,7 +57,7 @@ local function QuestWord(arg, rawArg)
 		end
 		ns.QuestWindow.Toggle()
 	else
-		ns.Print("quests takes on, off, hide, where, drops or party.")
+		ns.Print("quests takes on, off, hide, tracker, where, drops or party.")
 	end
 	-- rawArg is the untouched line, which this word has no use for: every
 	-- sub-word above takes a switch rather than a name. Named so the signature
@@ -95,6 +104,21 @@ ns.Register({
 		-- Quests/Blizzard.lua carries the argument in full.
 		questsHideBlizz = true,
 
+		-- Questie's own tracker, left alone.
+		--
+		-- Off, unlike the switch above it, and the difference is whose setting
+		-- moves. Caging Blizzard's window is this addon's business and undoing
+		-- it is one tick box; switching Questie's tracker off writes that
+		-- addon's saved variable and reloads the interface doing it, which is
+		-- not a thing to ship as a default and find out about afterwards.
+		-- Quests/TrackerOff.lua carries the argument in full.
+		questsTrackerOff = false,
+
+		-- Whether this addon is the one holding that tracker off. A record and
+		-- not a preference, so Core/Core.lua keeps it out of the reset: it is
+		-- the only note of whether Questie's setting is ours to put back.
+		questsTrackerTook = false,
+
 		-- The drop ledger, empty. One row per creature Questie has said carries
 		-- a quest item, filled in as you loot. Registered here rather than in
 		-- Quests/Drops.lua because that file has no rail entry of its own and a
@@ -111,15 +135,20 @@ ns.Register({
 		"quests, open the quest log",
 		"quests on|off, the addon's quest log instead of the client's",
 		"quests hide on|off, put Blizzard's own log in the attic and take the L key",
+		"quests tracker on|off, switch Questie's own tracker off through Questie",
 		"quests where, whether Questie is answering for the where column and the map",
 		"quests drops, what a hover over a creature says about the quest items it carries",
 		"quests party, what can say how many of your group are on a quest",
 	},
 
 	status = function()
-		return ("%s; %s; Blizzard's %s"):format(
+		-- Questie's tracker is named here because this is the one setting the
+		-- addon moves that belongs to somebody else. A player who cannot see
+		-- which way it is and who put it there reads a missing tracker as
+		-- Questie having broken.
+		return ("%s; %s; Blizzard's %s; Questie's tracker is %s"):format(
 			ns.QuestWindow.Describe(), ns.QuestLog.Describe(),
-			ns.QuestBlizzard.Describe())
+			ns.QuestBlizzard.Describe(), ns.QuestTrackerOff.Describe())
 	end,
 
 	panel = function(ui)
@@ -129,11 +158,16 @@ ns.Register({
 			function() return ns.db.questsHideBlizz end,
 			SetHide)
 		ui.Hint("The L key opens this window while that is ticked. Untick it and both windows work, with the key opening Blizzard's.")
+		ui.Check("switch Questie's own tracker off",
+			function() return ns.db.questsTrackerOff end,
+			SetTrackerOff)
+		ui.Hint("This is Questie's own Enable Tracker switch, so it reloads the interface both when you tick it and when you untick it.")
 		ui.Reading("your log", ns.QuestLog.Describe)
 		ui.Reading("a creature's quest drops", ns.QuestDrops.Describe)
 		ui.Reading("the where column and the map", ns.QuestWhere.Describe)
 		ui.Reading("who else in your group is on a quest", ns.QuestParty.Describe)
-		ui.Reading("Questie's tracker", ns.QuestTracker.Describe)
+		ui.Reading("clicking Questie's tracker", ns.QuestTracker.Describe)
+		ui.Reading("Questie's tracker itself", ns.QuestTrackerOff.Describe)
 		ui.Reading("Blizzard's window", ns.QuestBlizzard.Describe)
 	end,
 })

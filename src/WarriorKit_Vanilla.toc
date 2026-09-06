@@ -783,7 +783,8 @@ Mail\Feature.lua
 # here. Window.lua draws the three
 # columns, Blizzard.lua puts the client's own log in the attic and redirects the
 # L key, Tracker.lua points Questie's tracker at this window under the same
-# switch, and Feature.lua last, as everywhere else.
+# switch, TrackerOff.lua switches that tracker off through Questie's own call
+# under a switch of its own, and Feature.lua last, as everywhere else.
 #
 # After Core\Attic.lua, which is where Blizzard's window goes, and after the UI
 # layer, which is what the window is built out of. Both are far above this line.
@@ -795,6 +796,7 @@ Quests\Drops.lua
 Quests\Window.lua
 Quests\Blizzard.lua
 Quests\Tracker.lua
+Quests\TrackerOff.lua
 Quests\Feature.lua
 
 # Why an item matters to you: an objective in your log it feeds, a reagent a

@@ -1093,6 +1093,44 @@ function ns.QuestieAPI(name)
 	return questie.API
 end
 
+-- Questie's own saved settings, or nil, asked for by the setting you mean to
+-- read.
+--
+-- The third door, and the one that is somebody else's saved variable rather
+-- than somebody else's code. `Questie.db.profile` is the player's Questie
+-- options, an AceDB profile written at that addon's OnInitialize, and neither
+-- probe above can reach it: the loader has never heard of it and it is not on
+-- `Questie.API`.
+--
+-- The name argument earns its keep here more than anywhere else.
+-- Modules/VersionCheck.lua writes `Questie.db = {profile = {minimap = {hide =
+-- false}}}` at load, before AceDB replaces it, and calls it a preinit
+-- placeholder in a comment beside the line. So a caller that checked only for
+-- the table would get one, read a nil setting off it and take that for the
+-- player's answer. Asking for the setting by name is what tells the placeholder
+-- from the profile.
+--
+-- The table comes back rather than the value, for the reason ns.QuestieAPI
+-- hands back `Questie.API`: a setting read once at login is a setting that goes
+-- stale the moment anybody moves it, and the caller reads the field next to the
+-- read. `nil` is the only absent answer, so a setting that is legitimately
+-- `false` still comes back.
+--
+-- Read-only by convention, and it is not enforced. Nothing in this addon writes
+-- another addon's setting by hand: Quests/TrackerOff.lua is the one caller and
+-- it moves the setting by calling the function Questie's own checkbox calls.
+function ns.QuestieProfile(name)
+	local questie = _G.Questie
+	if type(questie) ~= "table" or type(questie.db) ~= "table"
+		or type(questie.db.profile) ~= "table" then
+		return nil
+	end
+	if questie.db.profile[name] == nil then
+		return nil
+	end
+	return questie.db.profile
+end
+
 ------------------------------------------------------------------------
 -- Money
 --
@@ -2478,6 +2516,12 @@ local KEPT = {
 	-- still ours and this is the only record of what is under it.
 	chargeKeyDisplaced = true,
 	switchKeyDisplaced = true,
+
+	-- Whether this addon is the one holding Questie's tracker off. The same
+	-- kind as the three CVar notes: wiping it does not restore a default, it
+	-- loses the only record that another addon's setting is ours to put back,
+	-- and Questie's tracker would stay off with nothing left that knows why.
+	questsTrackerTook = true,
 
 	-- The staging area `./bake-ui.sh` reads the Edit Mode layout out of. A
 	-- step in a build rather than a setting anybody sees.
