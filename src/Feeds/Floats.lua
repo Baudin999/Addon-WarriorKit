@@ -88,6 +88,14 @@ local DEFAULTS = {
 	lootFloatMost = 5,
 	lootFloatWidth = 380,
 	lootFloatIcon = 50,
+	-- How much of the picture is added back over itself. Additive drawing is
+	-- what takes the black square off an item icon, and it lets the world
+	-- through the dark parts of the object too, which reads as a picture with
+	-- the colour drained out of it. A second additive pass puts the colour back
+	-- without putting the square back, because nothing added to black is still
+	-- black. A hundred is the picture twice over; nought is one pass and the
+	-- washed-out look the blend leaves on its own.
+	lootFloatLift = 60,
 	lootFloatName = 20,
 	lootFloatCount = 16,
 }
@@ -120,6 +128,10 @@ local function Dress(frame)
 	local db = ns.db
 	frame:SetSize(db.lootFloatWidth, Height())
 	frame.icon:SetSize(db.lootFloatIcon, db.lootFloatIcon)
+	-- The lane fades the row by setting the frame's alpha, and a texture's own
+	-- alpha is multiplied by its frame's, so the second pass fades with the
+	-- first rather than hanging on after it.
+	frame.lift:SetAlpha(db.lootFloatLift / 100)
 	frame.name:SetFontObject(UI.Font(db.lootFloatName, UI.SHADOW))
 	frame.count:SetFontObject(UI.Font(db.lootFloatCount, UI.SHADOW))
 end
@@ -137,6 +149,16 @@ local function Build()
 	-- blending multiplies nothing by the destination where the source is black,
 	-- so the square goes and the object stays.
 	frame.icon:SetBlendMode("ADD")
+
+	-- The same picture again, added over the first, which is where the colour
+	-- comes back. It is a texture of its own rather than a second SetTexture on
+	-- the first, because a vertex colour cannot go above one and this is asking
+	-- for more light than the file holds. Pinned to the icon so every size the
+	-- settings hand it is followed, and additive as well, so the black it is
+	-- carrying stays as transparent as the black underneath it.
+	frame.lift = UI.Icon(frame, "OVERLAY")
+	frame.lift:SetBlendMode("ADD")
+	frame.lift:SetAllPoints(frame.icon)
 
 	-- Shadowed, not flat and not outlined. Flat is for a string on a surface
 	-- this addon painted and there is none here. Outlined is the role for text
@@ -237,6 +259,7 @@ function Floats.Show(link, count)
 	local color = UI.Quality[quality or 1] or UI.Quality[1]
 
 	frame.icon:SetTexture(icon)
+	frame.lift:SetTexture(icon)
 	frame.name:SetText(name or link)
 	frame.name:SetTextColor(color[1], color[2], color[3])
 	-- Nothing at all for a single item. "x1" beside every drop is a column of
