@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### Reset gives you the screen the addon is built around
+
+A fresh install and `/wk defaults yes` used to land on whatever number each
+feature happened to be written with. Windows opened in the middle of the
+screen, the loot messages flew in from the right, and the twenty seven answers
+that make up an actual working layout were something you had to find one page
+at a time.
+
+They are captured now. `Core/Shipped.lua` holds every setting the author's own
+install answers differently from the feature that owns it: where the fourteen
+windows sit, which corner the floating numbers come off and how long they stay,
+the cooldown row, the party and raid blocks, the cast bar, the tooltip's scale.
+Core merges it over the registry at load and checks every key against it, so a
+capture that names a setting the addon has dropped is a login error rather than
+a key nothing reads.
+
+It is generated rather than written. Set the addon up in game, `/reload`, and
+run `./scripts/bake-defaults.sh`; the file it rewrites is deterministic, so
+baking an unchanged install produces an identical file. The gold ledger, the
+drop counts, your groups and every other record `/wk defaults` already keeps
+are stepped over, because the script asks the addon which keys are settings
+instead of holding a list of its own.
+
+Three things it will not carry. The action bar positions, row counts and clone
+flags are overrides on a plan that lives in `Buttons/Which.lua`, and an entry in
+them means "this bar was dragged"; a bar layout that should ship goes in the
+plan, which is what `/wk bars where` prints in the shape of. The three bottom
+bars stack from 83 rather than 29 for that reason. The nameplate distance is the
+fourth, because the client owns its ceiling and rewrites the setting down to it
+at every apply.
+
+`DefaultCopy` copies as deep as the value goes now. A captured screen is two
+levels, one table per window, and a copy a level short handed the drag the
+defaults table itself: the next reset put a window back where you last left it
+rather than where it ships. `dungeonSeen` joins the records the reset keeps,
+beside `questDrops`, for the reason written against that list.
+
 ### The tracker says nothing about who is standing nearby
 
 The line at the foot of the quest tracker is gone. It named one person near you

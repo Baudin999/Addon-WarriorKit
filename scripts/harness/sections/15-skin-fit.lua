@@ -259,10 +259,21 @@ do
 	ns.db.skinLink = true
 	ns.FrameSkin.Apply()
 	drop(playerAnchor, 300, -200)
+	-- Read back off the frame rather than typed, the way the target's drag is
+	-- above. A drag keeps the corner the frame is already anchored by, and the
+	-- corner it ships anchored by is Core\Shipped.lua's business: what this
+	-- line is about is that the drop was written down.
 	local mine = ns.db.skinPlayerPoint
-	check(mine[1] == "TOPLEFT" and mine[4] == 300 and mine[5] == -200,
-		("a drag of the player wrote %s at %s, %s and was dropped at TOPLEFT 300, -200")
-			:format(tostring(mine[1]), tostring(mine[4]), tostring(mine[5])))
+	local mineAt, _, _, mineX, mineY = playerAnchor:GetPoint()
+	check(mine[1] == mineAt
+			and mine[4] == ns.UI.Whole(mineX) and mine[5] == ns.UI.Whole(mineY),
+		("a drag of the player wrote %s at %s, %s and the frame sits on %s at %s, %s")
+			:format(tostring(mine[1]), tostring(mine[4]), tostring(mine[5]),
+				tostring(mineAt), tostring(mineX), tostring(mineY)))
+	check(math.abs(playerAnchor:GetLeft() - 300) < 1e-6
+			and math.abs(playerAnchor:GetTop() + 200) < 1e-6,
+		("the player was dropped at 300, -200 and landed at %.2f, %.2f")
+			:format(playerAnchor:GetLeft(), playerAnchor:GetTop()))
 	check(math.abs(axis() - middle()) / pixel() < 1e-6,
 		("the player moved and the mirror line sits %.2f pixels off the middle of"
 			.. " the screen"):format((axis() - middle()) / pixel()))

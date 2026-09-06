@@ -16,6 +16,13 @@
 # signs into, and the panel walks that registry at PLAYER_LOGIN.
 Core\Core.lua
 
+# The screen the addon ships with: every setting the author's own install
+# answers differently from the feature that owns it, captured by
+# ./scripts/bake-defaults.sh. It only assigns a table, which Core.lua merges
+# over the registry at ADDON_LOADED, so it loads straight after the file that
+# owns the registry and long before anything reads a setting.
+Core\Shipped.lua
+
 # Where a Blizzard frame goes when this addon draws it instead: one frame,
 # hidden at birth, that nothing can show. A frame re-parented into it is not
 # drawn whatever the client calls on it, which is the guarantee ns.Strip in

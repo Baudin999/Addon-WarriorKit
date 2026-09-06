@@ -23,6 +23,10 @@
 --   That the count is the count. Move settings, and DefaultsMoved says how
 --   many; restore, and it says none and returns the same figure.
 --
+--   That the screen the addon ships with is the screen a reset lands on.
+--   Core\Shipped.lua is a capture of one install rather than a set of
+--   authored numbers, and every key in it is read back off the reset.
+--
 --   That the records survive. Every key in Core's KEPT list is something the
 --   addon wrote down rather than something anybody chose, and a reset that
 --   deleted a gold ledger or a group would be a reset nobody presses twice.
@@ -53,6 +57,86 @@ check(ns.DefaultCopy("swingWidth") == ns.DefaultFor("swingWidth"),
 	"DefaultCopy changed a number on the way through")
 check(ns.DefaultCopy("nothing registers this") == nil,
 	"DefaultCopy invented a default for a key nobody registered")
+
+----------------------------------------------------------------------
+-- The screen the addon ships with
+--
+-- Core\Shipped.lua is a capture of one install, baked by
+-- ./scripts/bake-defaults.sh and merged over the registry at load. Whether
+-- every key in it is a setting this addon still has is asserted in Core at the
+-- moment it merges, so a stale capture is a run that never starts. What is
+-- left to ask here is whether the merge is what a player lands on, which is
+-- the whole point of it: the reset has to come out at the captured value
+-- rather than at the feature's own.
+----------------------------------------------------------------------
+
+-- One level, and every value in a capture that is not a scalar is an anchor or
+-- a record of them, so this walks. Written here rather than reaching into
+-- Core's own, because a comparison that borrows the code under test agrees
+-- with it by construction.
+local function Alike(held, want)
+	if type(held) ~= "table" or type(want) ~= "table" then
+		return held == want
+	end
+	for at, value in pairs(want) do
+		if not Alike(held[at], value) then
+			return false
+		end
+	end
+	for at in pairs(held) do
+		if want[at] == nil then
+			return false
+		end
+	end
+	return true
+end
+
+-- From a clean slate, because the sections above have dragged a great deal of
+-- what is about to be read.
+ns.RestoreDefaults()
+
+local captured = 0
+for key, want in pairs(ns.Shipped or {}) do
+	captured = captured + 1
+	check(Alike(ns.DefaultFor(key), want),
+		("the shipped screen captured %q and the addon defaults it elsewhere")
+			:format(key))
+	check(Alike(ns.db[key], want),
+		("a reset did not put %q back to what the addon ships with"):format(key))
+end
+
+-- The character's half, which the reset never reaches and so is only ever
+-- asked of a fresh file. Every value in it is a scalar, and that is the rule
+-- rather than an accident of what was captured: a table under a character
+-- names spells that character has, and the bake takes none.
+local capturedChar = 0
+for key, want in pairs(ns.ShippedChar or {}) do
+	capturedChar = capturedChar + 1
+	check(type(want) ~= "table",
+		("the shipped screen carries %q on the character as a table"):format(key))
+	check(ns.DefaultFor(key) == want,
+		("the shipped screen captured %q and the addon defaults it elsewhere")
+			:format(key))
+	check(ns.dbc[key] == want,
+		("a fresh character did not come up with the captured %q"):format(key))
+end
+
+-- A capture two levels deep, which is a depth no feature's own defaults reach
+-- and the reason DefaultCopy stopped copying one. windowSpots is an anchor per
+-- window and barLook a record per bar; Buttons\Look.lua writes a field into
+-- one of those records in place, so a copy a level short puts the drag in the
+-- defaults table and every reset after it restores wherever it was left.
+local spots = (ns.Shipped or {}).windowSpots
+if spots and next(spots) then
+	local name = next(spots)
+	ns.db.windowSpots[name][5] = 4321
+	check(ns.DefaultFor("windowSpots")[name][5] ~= 4321,
+		"dragging a window wrote through to the shipped screen")
+	ns.RestoreDefaults()
+	check(ns.db.windowSpots[name][5] == spots[name][5],
+		("the reset put %s back where it was dragged rather than where it ships")
+			:format(name))
+end
 
 ----------------------------------------------------------------------
 -- Every reset writes the registered default
@@ -248,5 +332,6 @@ end
 ns.RestoreDefaults()
 
 local restorable, records = ns.DefaultsShape()
-print(("defaults %d settings restorable, %d records kept back, %d reloads asked for")
-	:format(restorable, records, state.reloads))
+print(("defaults %d settings restorable, %d records kept back, %d on the shipped"
+	.. " screen and %d on its character, %d reloads asked for")
+	:format(restorable, records, captured, capturedChar, state.reloads))

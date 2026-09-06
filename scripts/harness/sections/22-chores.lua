@@ -682,7 +682,12 @@ do
 	check(sentCount() == 0, "the whisper went out in the same frame as the buff")
 	deliver()
 	check(sentCount() == 1, ("a stranger's buff sent %d whispers, one is right"):format(sentCount()))
-	check(last().text == "ty", ("the whisper said %q"):format(tostring(last().text)))
+	-- The word off the setting rather than typed. What it says is the shipped
+	-- screen's business and it is a capture; what this line is about is that
+	-- the thanks that went out is the one the setting holds.
+	check(last().text == ns.db.thankWord,
+		("the whisper said %q and the setting holds %q")
+			:format(tostring(last().text), tostring(ns.db.thankWord)))
 	check(last().kind == "WHISPER" and last().target == "Arcanist",
 		("the thank you went out as %s to %s"):format(tostring(last().kind), tostring(last().target)))
 

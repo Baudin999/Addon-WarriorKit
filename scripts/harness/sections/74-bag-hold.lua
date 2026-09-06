@@ -98,8 +98,15 @@ end
 ----------------------------------------------------------------------
 
 H.tipSettle()
-check(ns.db.bagHover == 50,
-	("the wait ships at %s and it ships at 50ms"):format(tostring(ns.db.bagHover)))
+
+-- Fifty milliseconds, written on rather than read off the shipped screen.
+--
+-- Every number in this scene is a fraction of the wait: twenty milliseconds in
+-- the box is still down, the whole wait and it is up. Core\Shipped.lua is a
+-- capture of one install and carries whatever that install's wait was set to,
+-- and against a longer one every one of those fractions is on the wrong side
+-- of the answer.
+ns.db.bagHover = 50
 
 local tusk = find("Chipped Boar Tusk")
 local cloth = find("Tattered Cloth")

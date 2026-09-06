@@ -118,9 +118,21 @@ do
 	check(point == "RIGHT" and relativePoint == "RIGHT" and relative == _G.UIParent,
 		("the sheet is anchored %s to the screen's %s"):format(tostring(point),
 			tostring(relativePoint)))
-	check(x < 0 and math.abs(x) < frame:GetWidth() / 4,
-		("the sheet sits %d units off the right edge of a %d unit screen")
-			:format(x, frame:GetWidth()))
+	-- Where it was left if the shipped screen left it somewhere, and on the
+	-- right corner it is designed around if not. Core\Shipped.lua is a capture
+	-- of one install and the sheet is one of the windows ns.Remember keeps, so
+	-- a spot in it is an answer somebody gave and this is not the place to
+	-- argue with it; what is left to assert either way is that the sheet opens
+	-- on the anchor the addon holds rather than on some third place.
+	local spot = ns.db.windowSpots.WarriorKitCharacter
+	if spot then
+		check(x == spot[4],
+			("the sheet was left at %s and opened at %d"):format(tostring(spot[4]), x))
+	else
+		check(x < 0 and math.abs(x) < frame:GetWidth() / 4,
+			("the sheet sits %d units off the right edge and it is %d units wide")
+				:format(x, frame:GetWidth()))
+	end
 end
 
 -- One pane, and it is the gear page. Pane took a tab number and takes none, so

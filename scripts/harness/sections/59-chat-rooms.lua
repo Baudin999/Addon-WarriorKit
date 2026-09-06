@@ -35,7 +35,7 @@ local M = ns.UI.Metric
 
 -- The scene: Blizzard's window hidden, ours up, so the forward and the two
 -- rooms that live off it are there to read.
-local heldHide, heldIcon = ns.db.hideBlizzChat, ns.db.chatIcon
+local heldHide = ns.db.hideBlizzChat
 ns.db.hideBlizzChat = true
 Window.Show()
 Window.Apply()
@@ -50,9 +50,13 @@ end
 
 do
 	local rail = _G.WarriorKitChatRooms
-	check(ns.db.chatIcon == M.roomIcon,
-		("the picture ships at %s and the theme draws it at %d")
-			:format(tostring(ns.db.chatIcon), M.roomIcon))
+
+	-- From the theme's own size rather than from whatever the shipped screen
+	-- carries. Core\Shipped.lua is a capture of one install, so the picture it
+	-- ships at is the one that install was set to; what this scene is about is
+	-- the rail following the setting, and it needs a number to move from.
+	ns.db.chatIcon = M.roomIcon
+	Window.Apply()
 
 	ns.db.chatIcon = M.roomIcon + 6
 	Window.Apply()
@@ -74,7 +78,7 @@ do
 		("the log is %s wide beside a rail six wider than the theme")
 			:format(tostring(wide)))
 
-	ns.db.chatIcon = heldIcon
+	ns.db.chatIcon = M.roomIcon
 	Window.Apply()
 	check(rail:GetWidth() == M.rooms,
 		("the rail stayed %s wide when the setting went back"):format(tostring(rail:GetWidth())))

@@ -58,20 +58,29 @@ ns.WhichBars = Which
 -- count per bar and the plan is what it falls back to, so what is written here
 -- is what the client draws that bar as and what a bar nobody has reshaped
 -- comes up as.
+--
+-- The three bottom bars stack from 83 rather than from 29 because the swing
+-- timer and the experience bar sit under them. That is a layout decision and it
+-- lives here rather than in Core\Shipped.lua with the rest of the shipped
+-- screen: an entry in barPoints means "this bar was dragged", every part of
+-- this feature reads an absent one as "the plan", and a capture that carried
+-- the drags would say every bar on a fresh install had been moved.
+-- scripts/bake-defaults.lua steps over the three keys for that reason and says
+-- so; `/wk bars where` prints a dragged position in the shape of a line here.
 Which.PLAN = {
 	{ key = "bar1", label = "bar 1", tab = "bar 1", pages = true,
 		buttons = "ActionButton%d", command = "ACTIONBUTTON%d",
-		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 29 },
+		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 83 },
 
 	{ key = "bottomleft", label = "bottom left bar", tab = "bottom left",
 		buttons = "MultiBarBottomLeftButton%d", command = "MULTIACTIONBAR1BUTTON%d",
 		frame = "MultiBarBottomLeft",
-		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 64 },
+		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 117 },
 
 	{ key = "bottomright", label = "bottom right bar", tab = "bottom right",
 		buttons = "MultiBarBottomRightButton%d", command = "MULTIACTIONBAR2BUTTON%d",
 		frame = "MultiBarBottomRight",
-		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 99 },
+		columns = 12, point = "BOTTOM", to = "BOTTOM", x = 0, y = 150 },
 
 	-- MultiBarRight is the client's "right bar" and MultiBarLeft is "right bar
 	-- 2", which sits to its left. The names are the wrong way round and have

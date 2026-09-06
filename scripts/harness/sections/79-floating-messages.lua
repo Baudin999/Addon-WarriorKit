@@ -89,26 +89,25 @@ local WIDTH = 380
 local REST = ns.UI.Whole(-(GetScreenWidth() / 2 - 40 - WIDTH))
 local LEFT_REST = ns.UI.Whole(GetScreenWidth() / 2 - 40 - WIDTH)
 
--- Every number the scenes below type out, asserted once against what the addon
--- actually starts at.
+-- Every number the scenes below type out, written onto the lane before the
+-- first message moves.
 --
--- They are typed rather than read off ns.db for the reason above. That leaves
--- one failure worth naming: a default moved and this section not moved with it,
--- which without this loop reads three scenes down as a position off by a number
--- nobody recognises. Here it reads as the name of the setting that moved.
-local DEFAULTS = {
+-- Typed rather than read off ns.db for the reason above, and written rather
+-- than asserted because what the addon starts at is not a fixed number any
+-- more: Core\Shipped.lua is a capture of one install, and this lane runs down
+-- the left of it at three quarters of a second a message. A section that
+-- happened to agree with the shipped screen was a section that stopped
+-- agreeing the first time somebody dragged something and re-baked, and every
+-- scene below would have failed as a position off by a number nobody
+-- recognises. The lane is the subject here; the screen it ships on is section
+-- 53's.
+local WRITTEN = {
 	lootFloatSide = "RIGHT", lootFloatEdge = 40, lootFloatRest = 40,
 	lootFloatTop = 100, lootFloatGap = 4, lootFloatEnter = 0,
 	lootFloatAlpha = 100, lootFloatSeconds = 0.5, lootFloatHold = 1,
 	lootFloatStagger = 0.08, lootFloatMost = 5, lootFloatWidth = 380,
 	lootFloatIcon = 50, lootFloatName = 20, lootFloatCount = 16,
 }
-
-for key, value in pairs(DEFAULTS) do
-	check(ns.db[key] == value,
-		("%s is %s and this section was written against %s"):format(
-			key, tostring(ns.db[key]), tostring(value)))
-end
 
 ----------------------------------------------------------------------
 -- The event reached it, and the scene drains
@@ -128,6 +127,13 @@ check(Floats.Count() == 0 and Animations.Running() == 0,
 		:format(Floats.Count(), Animations.Running()))
 check(ns.UI.Ticking("anim") == nil,
 	"the animation tick is still armed with nothing left to move")
+
+-- Written onto the lane once the screen is empty, because Floats.Apply builds
+-- it again and a message halfway across is a message the rebuild drops.
+for key, value in pairs(WRITTEN) do
+	ns.db[key] = value
+end
+Floats.Apply()
 
 ----------------------------------------------------------------------
 -- One message, from the edge to its rest
@@ -415,7 +421,7 @@ do
 
 	-- Back to the defaults, and the row that comes out of the pool next has to
 	-- be dressed in them rather than in what it was built as.
-	for key, value in pairs(DEFAULTS) do
+	for key, value in pairs(WRITTEN) do
 		ns.db[key] = value
 	end
 	Floats.Apply()

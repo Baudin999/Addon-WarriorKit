@@ -45,11 +45,11 @@ check(_G.WarriorKitChat:GetWidth() == ns.db.chatWidth,
 	("the chat window is %s wide and the setting says %s")
 		:format(tostring(_G.WarriorKitChat:GetWidth()), tostring(ns.db.chatWidth)))
 
--- The rail down the left, and the room behind it. Two numbers rather than a
--- screenshot: the column is a fixed width and everything else in the window is
--- laid out against it, so a rail that came out at nothing would put the log
--- under itself and nothing else here would notice.
+-- The rail down the left, at the theme's picture size rather than the one the
+-- shipped screen captured: every number below is that column plus the setting.
 local M = ns.UI.Metric
+ns.db.chatIcon = M.roomIcon
+Window.Apply()
 check(_G.WarriorKitChatRooms:GetWidth() == M.rooms,
 	("the room rail is %s wide and the theme says %d")
 		:format(tostring(_G.WarriorKitChatRooms:GetWidth()), M.rooms))

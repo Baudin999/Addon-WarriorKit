@@ -357,8 +357,8 @@ do
 
 	check(ns.Bars.ResetPlacing() == 1, "reset dropped no dragged position")
 	check(next(ns.db.barPoints) == nil, "reset left a dragged position behind")
-	local back = ns.Bars.Where()
-	check(back[1]:find("y = 29") and not back[1]:find("dragged"),
+	local back, planned = ns.Bars.Where(), ns.WhichBars.PLAN[1].y
+	check(back[1]:find("y = " .. planned) and not back[1]:find("dragged"),
 		"reset did not put bar 1 back on the plan: " .. tostring(back[1]))
 
 	ns.db.locked = shipped
@@ -619,7 +619,7 @@ do
 	if leave then
 		leave(square)
 	end
-	check(not Tip.IsShown(), "the box outlived the pointer with the linger shipped off")
+	check(Tip.Owner() == nil, "leaving the square left the box still anchored to it")
 	check(not H.tipSettle(), "the tooltip stays up after the cursor has left the square")
 
 	-- An empty slot fills nothing and would leave the last ability's tooltip on
