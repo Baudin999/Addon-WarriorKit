@@ -206,6 +206,87 @@ function Client.Objectives(index)
 	end)
 end
 
+--------------------------------------------------------------------------
+-- The same line as a name and two numbers
+--
+-- "Red Silk Bandana: 0/6" is one string with a name, a count and a total in
+-- it. This is beside Client.Objectives rather than inside it because the
+-- tracker and the quest window both draw the client's sentence whole and
+-- neither of them wants it taken apart.
+--
+-- The sentence is not typed out here, for the reason Core/Loot.lua gives about
+-- a loot line: the client hands over the format strings it built the sentence
+-- from, so QUEST_ITEMS_NEEDED becomes a pattern and a German client is read by
+-- German rules without a word of German anywhere in this addon. A colon and a
+-- slash written out here would be a reading that captures nothing outside
+-- English.
+--------------------------------------------------------------------------
+
+-- The counting sentence for each kind the client puts beside a line. An
+-- objective of any other kind, "event" and "reputation" among them, counts
+-- nothing and reads as nothing.
+local COUNTED = {
+	item = "QUEST_ITEMS_NEEDED",
+	monster = "QUEST_MONSTERS_KILLED",
+	object = "QUEST_OBJECTS_FOUND",
+}
+
+-- The patterns, kept by the sentence they were built from rather than by the
+-- kind. Same cost, and it is the sentence the pattern is a fact about.
+local patterns = {}
+
+-- One format string as a pattern, with a capture where each placeholder is and
+-- in the order the sentence puts them.
+--
+-- The capture indexes come off first. This client's deDE writes
+-- QUEST_ITEMS_NEEDED as "%1$s: %2$d/%3$d", which says which argument goes
+-- where and not where either of them lands in the text, and a `$` left in is a
+-- pattern that matches nothing on half of Europe. Questie strips them in
+-- QuestieLib:SanitizePattern for the same reason.
+--
+-- Nil for a format string this client does not carry, which is the same answer
+-- as a line that did not match: a reading nobody gets, rather than a raise.
+local function Pattern(format)
+	if type(format) ~= "string" then
+		return nil
+	end
+	if not patterns[format] then
+		local body = format:gsub("%%%d%$", "%%")
+		body = body:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+		body = body:gsub("%%%%s", "(.+)")
+		body = body:gsub("%%%%d", "(%%d+)")
+		patterns[format] = "^" .. body .. "$"
+	end
+	return patterns[format]
+end
+
+-- What one objective line counts, how many of them there are and how many are
+-- wanted. Nothing at all for a line that counts nothing.
+--
+-- Which capture holds the name is worked out rather than assumed, and that is
+-- the half worth reading. Questie's QuestieLib.TrimObjectiveText takes the same
+-- three captures and then asks whether the name came back a number, under the
+-- comment "SOME objectives are reversed in TBC, why blizzard?". The sentence
+-- this client built puts the name first and the client's own retail build
+-- writes the same objective as "5/12 Defias Trapper slain", so the capture that
+-- is not a number is the name and the other two are the count in the order they
+-- were written.
+function Client.Counted(text, kind)
+	local sentence = COUNTED[kind or ""]
+	local pattern = sentence and Pattern(_G[sentence])
+	if not pattern or type(text) ~= "string" then
+		return nil, nil, nil
+	end
+	local one, two, three = text:match(pattern)
+	if not three then
+		return nil, nil, nil
+	end
+	if tonumber(three) then
+		return one, tonumber(two), tonumber(three)
+	end
+	return three, tonumber(one), tonumber(two)
+end
+
 -- Seconds left on a timed quest, and nil for the great majority that are not.
 function Client.TimeLeft(index)
 	local seconds = Client.Borrow(index, function()

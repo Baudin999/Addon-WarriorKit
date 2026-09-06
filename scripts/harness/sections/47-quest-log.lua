@@ -131,6 +131,84 @@ check(type(taught.rewards.spell.texture) == "string" and taught.rewards.spell.te
 	"the spell reward came back with no texture, so its row can draw no icon")
 
 ----------------------------------------------------------------------
+-- The two numbers inside an objective
+----------------------------------------------------------------------
+
+-- Client.Objectives keeps handing the client's sentence over whole, because the
+-- tracker and the window both draw it that way, and Client.Counted is a second
+-- reading of the same line: what it counts, how many there are and how many are
+-- wanted. Both patterns are built from the client's own format strings, so what
+-- is measured here is a reader that never typed the punctuation, and three
+-- cases carry that. This client's deDE numbers its placeholders,
+-- "%1$s: %2$d/%3$d", and a pattern with the `$` left in matches nothing at all.
+-- The same client's retail build writes the count first, "5/12 Defias Trapper
+-- slain", which is what Questie's "SOME objectives are reversed in TBC" guard
+-- is for. And a line that counts nothing has to come back as nothing rather
+-- than as a name with two nils after it.
+
+-- One reading as one string, so a case is one line and a failure says what came
+-- back instead of only that something did not match.
+local function reading(text, kind)
+	local name, have, need = Client.Counted(text, kind)
+	return ("%s %s/%s"):format(tostring(name), tostring(have), tostring(need))
+end
+
+local killed, gathered = timed.objectives[1], timed.objectives[2]
+check(reading(killed.text, killed.kind) == "Defias Trapper 5/12",
+	("the monster line read as %s"):format(reading(killed.text, killed.kind)))
+check(reading(gathered.text, gathered.kind) == "Trapper's Rope 3/3",
+	("the item line read as %s"):format(reading(gathered.text, gathered.kind)))
+check(Client.Objectives(timed.index)[1].text == killed.text,
+	"the sentence handed to the tracker came back taken apart")
+
+-- An object, which the client counts with a sentence of its own and words
+-- exactly like an item. Nothing in the fixture's log is one, and the kind is
+-- what picks the sentence, so it is asked directly.
+check(reading("Battle Standard: 2/4", "object") == "Battle Standard 2/4",
+	("an object read as %s"):format(reading("Battle Standard: 2/4", "object")))
+
+-- A name with the sentence's own punctuation in it. The name capture is greedy
+-- for this: "Wanted: Hogger" is a quest on this client and a lazy capture hands
+-- back "Wanted".
+check(reading("Wanted: Hogger: 1/1", "item") == "Wanted: Hogger 1/1",
+	("a name with a colon in it read as %s"):format(reading("Wanted: Hogger: 1/1", "item")))
+
+-- The two lines that count nothing: one the client gives no counting kind at
+-- all and one whose kind counts but whose sentence has no numbers in it. Both
+-- are nothing, and a loot row asking about either has to get nothing rather
+-- than a name it can match on.
+check(reading("Speak to Baros Alexston", "event") == "nil nil/nil",
+	"a line the client counts nothing on came back with a name")
+check(reading("Hogger slain", "monster") == "nil nil/nil",
+	"an untallied kill came back counted")
+
+-- The German sentence of this same client, which numbers its placeholders. The
+-- capture indexes have to come off before the pattern is built.
+_G.QUEST_ITEMS_NEEDED = "%1$s: %2$d/%3$d"
+check(reading("Rotes Seidenkopftuch: 0/6", "item") == "Rotes Seidenkopftuch 0/6",
+	("a numbered placeholder read as %s")
+		:format(reading("Rotes Seidenkopftuch: 0/6", "item")))
+
+-- And the captures the other way round, which is the case Questie's guard is
+-- for. The name is whichever capture is not a number, so it is found in either
+-- place rather than counted to.
+_G.QUEST_MONSTERS_KILLED = "%2$d/%3$d %1$s slain"
+check(reading("5/12 Defias Trapper slain", "monster") == "Defias Trapper 5/12",
+	("a reversed line read as %s"):format(reading("5/12 Defias Trapper slain", "monster")))
+
+-- A sentence this client does not carry at all, which is a real state: the
+-- reading comes back empty rather than raising, the same way the loot rules do.
+_G.QUEST_OBJECTS_FOUND = nil
+check(reading("Battle Standard: 2/4", "object") == "nil nil/nil",
+	"a kind whose sentence the client is missing read as something")
+
+_G.QUEST_ITEMS_NEEDED = "%s: %d/%d"
+_G.QUEST_MONSTERS_KILLED = "%s slain: %d/%d"
+_G.QUEST_OBJECTS_FOUND = "%s: %d/%d"
+check(reading(killed.text, killed.kind) == "Defias Trapper 5/12",
+	"the client's own sentence stopped reading once another one had been through")
+
+----------------------------------------------------------------------
 -- The window
 ----------------------------------------------------------------------
 

@@ -207,6 +207,22 @@ _G.GetQuestLogLeaderBoard = function(at)
 	return line[1], line[2], line[3]
 end
 
+-- The three sentences the client counts an objective with, one per kind it
+-- reports beside a line.
+--
+-- The real enUS strings of this client, 2.5.6, rather than something
+-- convenient, because what is being modelled is Quests/Client.lua reading the
+-- format string instead of typing a colon and a slash. A stub holding "%s: %d"
+-- would agree with a reader that had typed the punctuation out and prove
+-- nothing about a client that punctuates differently.
+--
+-- Two of the three are the same sentence. That is the client's doing: an item
+-- and an object are both counted "Red Silk Bandana: 0/6", and only the kind
+-- beside the line says which of them it was.
+_G.QUEST_ITEMS_NEEDED = "%s: %d/%d"
+_G.QUEST_MONSTERS_KILLED = "%s slain: %d/%d"
+_G.QUEST_OBJECTS_FOUND = "%s: %d/%d"
+
 _G.GetQuestLogTimeLeft = function()
 	local row = Selected()
 	return row and row.seconds or nil
