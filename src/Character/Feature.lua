@@ -99,6 +99,25 @@ ns.Register({
 		hideBlizzCharacter = true,
 	},
 
+	-- How the figure on the gear page is standing when you open the sheet.
+	--
+	-- Per character because a pose is. The angle that reads on a tauren warrior
+	-- is not the angle that reads on a gnome, and the weapons you want in his
+	-- hands are the ones this character is carrying. Nothing here is worded
+	-- anywhere: the drag, the wheel and the mark in the corner of the figure are
+	-- the whole of the interface, and Character/Paperdoll.lua says what each
+	-- number does to the model.
+	charDefaults = {
+		-- Three quarters on, which is how the client poses the model on its own
+		-- sheet and is the angle a shoulder actually reads at. Dead ahead is a
+		-- chest and two arms.
+		figureFacing = 0.5,
+		-- As far back as the wheel goes, which is where the client frames him.
+		figureNear = 0,
+		-- Weapons away, which is how he stands in the world.
+		figureSheathed = true,
+	},
+
 	words = {
 		character = CharacterWord,
 	},

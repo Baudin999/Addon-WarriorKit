@@ -88,6 +88,10 @@ local ORDER = { "marker", "swing", "icon", "action", "bars", "cast", "playercast
 	-- way the bag window does, because a handler the client calls on every
 	-- event in the game is the one cost on this list nobody can guess at.
 	"frame", "hud", "census",
+	-- The character sheet's figure, turning under a drag. Every frame while the
+	-- button is down and nothing at all otherwise, which is the one tick on this
+	-- list a player arms on purpose and can stop by letting go.
+	"figure",
 	-- The one slot that is not a ticker. Bags/Window.lua brackets its refresh,
 	-- which the bag events book up to ten times a second at a vendor, and
 	-- scripts/check.sh reads a literal ns.Perf.Start as a slot for that reason.

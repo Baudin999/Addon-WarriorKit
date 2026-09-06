@@ -46,6 +46,27 @@ function H.Region:SetUnit(unit)
 	H.models.loaded = H.models.loaded + 1
 end
 
+-- The three other calls that pose that model, kept for the same reason SetUnit
+-- is counted and beside it for the same reason.
+--
+-- The widget stub answers any PascalCase name with a no-op returning nil, so the
+-- addon's probe on each of these passes under the harness whatever the client
+-- would have said, and a figure that was never walked nearer and never handed
+-- his weapons measures identically to one that was. What the gear page asserts
+-- is the number that actually reached the model, so this is where the number
+-- has to stop.
+--
+-- The fourth is SetRotation and it is already in 02-text.lua, because the client
+-- has one call for a model's facing and a texture's angle and the map found it
+-- first. Read back with GetRotation, the same way the arrow's is.
+function H.Region:SetCamDistanceScale(scale) self.camScale = scale end
+
+function H.Region:SetPosition(x, y, z) self.posX, self.posY, self.posZ = x, y, z end
+function H.Region:GetPosition() return self.posX, self.posY, self.posZ end
+
+function H.Region:SetSheathed(on) self.sheathed = on and true or false end
+function H.Region:GetSheathed() return self.sheathed == true end
+
 -- The cap a weapon skill has at this character's level, which every number
 -- below is written against rather than against a level written down here. The
 -- player is level 62 in this client and a fixture holding 310 would go quietly

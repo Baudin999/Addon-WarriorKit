@@ -927,6 +927,7 @@ fi
 #
 # path:how many ticks in that file hang off a frame of their own:why it can hide
 FRAMED_TICKERS_ALLOWED="
+Character/Paperdoll.lua:1:the turn hangs off the figure it turns, so a sheet shut mid drag stops it with no line anywhere to remember
 Feeds/Stream.lua:1:the strip is a region of the feed window and goes with it
 Perf/Hud.lua:1:the repaint goes with the window it draws, which is the whole of what hanging a tick off a frame buys
 UI/Chart.lua:2:the follow and the drift both go with the board they are drawn on

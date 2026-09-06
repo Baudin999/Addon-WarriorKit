@@ -46,6 +46,14 @@ local C, M = UI.Color, UI.Metric
 -- sentence each of them is worth is still in its hover and the window's own
 -- footer still says all four in a line.
 --
+-- **The figure is yours to turn.** Left drag turns him, the wheel walks him
+-- nearer and further, and a mark in his bottom corner puts his weapons in his
+-- hands. All three are remembered per character, so the sheet opens the way you
+-- left it, and the two the wheel drives stop at both ends: the page is half a
+-- monitor with no reset on it, and a figure wound out of that half is a bug the
+-- player can only undo by winding the wheel back. The right button is the
+-- camera's throughout, by the rule the rows keep.
+--
 -- **A square carries the durability of what is in it.** One line along the
 -- bottom edge, drawn only where the piece is worn at all, green through to red.
 -- Durability is the one fact about your gear that changes while you play and
@@ -198,10 +206,44 @@ local BADGE = 44
 local BADGERIM = 2
 local HEAD = NAME + 2 + M.small + M.gutter + BADGE + 2 + M.small
 
--- Three quarters on, which is how the client poses the model on its own sheet
--- and is the angle a shoulder actually reads at. Dead ahead is a chest and two
--- arms.
-local FACING = 0.5
+-- The mark in the corner of the figure. Wide enough for the longer of its two
+-- words at eleven pixels and no wider, because it stands on the figure and
+-- every pixel of it is a pixel of him.
+local SHEATHE = 52
+
+--------------------------------------------------------------------------
+-- The pose
+--
+-- Three numbers: which way he is facing, how near he stands, and whether his
+-- weapons are in his hands. They live in this character's own saved variables
+-- and Character/Feature.lua declares them, because a pose is not an account
+-- wide preference: the angle that reads on a tauren warrior is not the angle
+-- that reads on a gnome, and one number serving both is one of them wrong.
+--
+-- 0.010 radians to the pixel is Blizzard's own MODELFRAME_DRAG_ROTATION_CONSTANT
+-- out of the FrameXML this client ships. Matching it means a drag on this figure
+-- and a drag in the client's own dressing room move the same amount, which is
+-- the whole of what a player has already learnt about turning a model.
+local TURN = 0.010
+local TWOPI = math.pi * 2
+
+-- One notch of the wheel, and the two calls the number it writes turns into.
+--
+-- `near` runs from nothing to one and stops dead at both ends. The sheet is
+-- half the screen and there is no reset on the page, so a figure wound past
+-- either end is a camera inside his chest or a dot in the middle of a page,
+-- and neither is undone by anything except winding the wheel back.
+--
+-- Both calls, because one on its own does the wrong thing. SetCamDistanceScale
+-- brings the camera in on the model's own origin, which on a character is
+-- between his feet, so half distance on its own is a close look at a pair of
+-- boots. SetPosition moves the model, and positive z is up: Blizzard's own pan
+-- in ModelFrames.lua adds the cursor's rise to z and the figure follows it
+-- upward. So he sinks by as much as the camera comes in, and what fills the
+-- panel at the near end is a man rather than the ground he is standing on.
+local STEP = 0.1
+local CLOSEST = 0.5
+local SINK = -0.35
 
 local Pane = {}
 Pane.__index = Pane
@@ -663,6 +705,131 @@ end
 -- The portrait
 --------------------------------------------------------------------------
 
+-- The pose put on the model, and the only place in this file that writes one.
+--
+-- Every call is probed and then pcalled, which is the shape Dress already used
+-- for the two it makes and is here for the same reason: a client that will not
+-- draw a model has to leave the page working rather than raise in the middle of
+-- a drag. All three of SetRotation, SetPosition and SetCamDistanceScale are on
+-- 2.5.6: AdventureGuideClassic ships `## Interface: 20506` and calls the last
+-- two unguarded on a model frame. SetSheathed is the one even Narcissus asks
+-- for before it makes.
+local function Pose(model)
+	local near = ns.dbc.figureNear
+	if model.SetRotation then
+		pcall(model.SetRotation, model, ns.dbc.figureFacing)
+	end
+	if model.SetCamDistanceScale then
+		pcall(model.SetCamDistanceScale, model, 1 - near * (1 - CLOSEST))
+	end
+	if model.SetPosition then
+		pcall(model.SetPosition, model, 0, 0, near * SINK)
+	end
+	if model.SetSheathed then
+		pcall(model.SetSheathed, model, ns.dbc.figureSheathed)
+	end
+	return near
+end
+
+-- The turn itself, one frame at a time while the button is down. Where the
+-- cursor is now against where it was when the drag began, which is how the
+-- client's own Model_OnUpdate does it.
+--
+-- A ticker rather than an OnUpdate of its own, because ns.UI.Ticker is what the
+-- guard scan walks out from, and it hangs off the model rather than off
+-- ns.UI.Forever so that a sheet shut mid drag stops turning a figure nobody can
+-- see. The write is behind the comparison for the rule every tick in the addon
+-- keeps: a SetRotation costs the same whether or not the angle moved.
+local function Turn(_, model)
+	local grab = model.grabbed
+	if not grab then
+		return false
+	end
+	local x = GetCursorPosition()
+	local facing = (grab.facing + (x - grab.x) * TURN) % TWOPI
+	if facing ~= ns.dbc.figureFacing then
+		ns.dbc.figureFacing = facing
+		Pose(model)
+	end
+	return true
+end
+
+-- Left drag turns him and the right button is the camera's.
+--
+-- ns.UI.PassCamera is how every row on this page hands back the two buttons it
+-- does not want, and it is the most this client offers: SetPassThroughButtons
+-- arrived in 10.1.5, so on 2.5.6 the probe fails and a right drag begun on the
+-- figure still stops at him, exactly the way it stops at the model on Blizzard's
+-- own sheet. What is not left to that call is the half this file owns. A right
+-- press arms nothing, so the drag the player is making with it is not also
+-- spinning the figure underneath.
+local function Grab(model, button)
+	if button and button ~= "LeftButton" then
+		return false
+	end
+	model.grabbed = { x = GetCursorPosition(), facing = ns.dbc.figureFacing }
+	model.turning:Start()
+	return true
+end
+
+-- The way out, which is the button coming up or the sheet going down. One more
+-- pass through Turn before the tick stops, because the last one ran a frame
+-- before the button did and the figure would land a frame short of where it was
+-- let go.
+local function Drop(model, button)
+	if button and button ~= "LeftButton" then
+		return false
+	end
+	Turn(0, model)
+	model.grabbed = nil
+	model.turning:Stop()
+	return true
+end
+
+-- The wheel walks him nearer and further, between the two ends the head of this
+-- file argues for.
+local function Walk(model, delta)
+	local near = math.max(0, math.min(1, ns.dbc.figureNear + delta * STEP))
+	if near ~= ns.dbc.figureNear then
+		ns.dbc.figureNear = near
+		Pose(model)
+	end
+	return near
+end
+
+-- What the mark says. The word is what pressing it does rather than what the
+-- figure is doing, because a button is a verb.
+local function Wield(sheathed)
+	return sheathed and "draw" or "sheathe"
+end
+
+local function Bared(mark)
+	ns.dbc.figureSheathed = not ns.dbc.figureSheathed
+	mark.text:SetText(Wield(ns.dbc.figureSheathed))
+	return Pose(mark.model)
+end
+
+-- The weapons, and a mark in the corner of the figure rather than a row on a
+-- settings page. Putting a sword in his hands is the only way to look at a
+-- weapon you are wearing: a model with its weapons away hides the one piece of
+-- gear anybody actually chose behind his back, and nobody goes to a settings
+-- window to look at a sword.
+local function Mark(panel, model)
+	local mark = UI.Button(panel, {
+		width = SHEATHE, height = M.control,
+		label = Wield(ns.dbc.figureSheathed),
+		tip = "put your weapons in his hands, or back where they live",
+		onClick = Bared,
+	})
+	mark.model = model
+	mark:SetPoint("BOTTOMRIGHT")
+	-- Over the figure rather than under him, by the rule the rows are placed by:
+	-- a model is drawn over every texture layer of the frame holding it, so a
+	-- frame level is the only thing that puts anything in front of one.
+	mark:SetFrameLevel(panel:GetFrameLevel() + 5)
+	return mark
+end
+
 -- The figure and nothing else. It used to be a sunken box with a hairline round
 -- it and two bands of shadow laid over it, and all three went when the sheet
 -- stopped being a window: a panel behind a model standing on the world is a
@@ -672,7 +839,7 @@ local function Portrait(parent)
 	local panel = CreateFrame("Frame", nil, parent)
 
 	-- PlayerModel is a frame type rather than a template, so it costs nothing
-	-- to exist on either client, and both calls on it are probed. A client that
+	-- to exist on either client, and every call on it is probed. A client that
 	-- will not draw a model leaves the panel empty and every square around it
 	-- still works, which is the honest degradation.
 	local model = CreateFrame("PlayerModel", nil, panel)
@@ -681,9 +848,7 @@ local function Portrait(parent)
 		if model.SetUnit then
 			pcall(model.SetUnit, model, "player")
 		end
-		if model.SetRotation then
-			pcall(model.SetRotation, model, FACING)
-		end
+		Pose(model)
 	end
 	-- On the way up, never on a refresh: SetUnit reloads the model and a refresh
 	-- is every click anywhere in the window. Pane:Redress is the other caller and
@@ -695,9 +860,32 @@ local function Portrait(parent)
 	-- one nobody can see the result of. The first paint of the page dresses it,
 	-- because Redress compares nineteen links against a table that is empty until
 	-- then and finds all nineteen changed.
+	--
+	-- The pose goes on after the unit and on every reload, not once at login.
+	-- SetUnit builds the figure again from nothing, so an angle applied when the
+	-- panel was made would be gone the first time you put a ring on.
 	model:SetScript("OnShow", Dress)
+	-- And once more when the client says the figure is actually there. SetUnit
+	-- loads a model asynchronously, so a pose written in the same frame is a
+	-- pose written on nothing, and AdventureGuideClassic reapplies its own
+	-- preset off this script on this client for that reason.
+	model:SetScript("OnModelLoaded", Pose)
+
+	model:EnableMouse(true)
+	model:EnableMouseWheel(true)
+	UI.PassCamera(model)
+	-- Armed and immediately stopped, because a ticker starts running and this
+	-- one has nothing to do until a button is down on the figure.
+	model.turning = UI.Ticker(model, 0, "figure", Turn)
+	model.turning:Stop()
+	model:SetScript("OnMouseDown", Grab)
+	model:SetScript("OnMouseUp", Drop)
+	model:SetScript("OnHide", Drop)
+	model:SetScript("OnMouseWheel", Walk)
+
 	panel.model = model
 	panel.Dress = Dress
+	panel.mark = Mark(panel, model)
 	return panel
 end
 

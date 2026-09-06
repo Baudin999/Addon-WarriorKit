@@ -29,7 +29,7 @@ local GEAR = 1
 -- What the line at the foot reports, filled in by the blocks that measure it.
 -- Locals rather than H.carry: that table is for a number one section hands to a
 -- later one, and every one of these is taken and read out in this file.
-local column, stats, readout, dots = 0, 0, 0, 0
+local column, stats, readout, dots, turned = 0, 0, 0, 0, 0
 
 ----------------------------------------------------------------------
 -- The nineteen slots
@@ -324,7 +324,131 @@ do
 	end
 end
 
+----------------------------------------------------------------------
+-- The figure is yours to turn
+--
+-- Three gestures on one model, and none of them is visible in a rectangle. A
+-- turn, a walk nearer and a pair of weapons are four numbers handed to the
+-- client, so the client stub in client/13-character.lua keeps them and this
+-- reads them back. Without that they are four calls into a no-op and a figure
+-- that never moved would pass every assertion here.
+--
+-- What each block is for, and each one is a bug that has a name:
+--
+--   A right press arms nothing. The right button is the camera's and the sheet
+--   is half the screen, so a figure that took the right drag would spin every
+--   time the player tried to look around.
+--
+--   The wheel stops at both ends. There is no reset on this page and the sheet
+--   fills half a monitor: a figure wound out of that half is only undone by
+--   winding the wheel back, and a clamp that is off by a notch is invisible
+--   until somebody scrolls.
+--
+--   The pose survives a redress. SetUnit builds the figure again from nothing,
+--   so an angle applied once at login would be gone the first time you put a
+--   ring on, and the page would still measure perfectly.
+--
+--   And every one of the three is written to this character's own saved
+--   variables at the moment it moves, which is what "the sheet opens the way
+--   you left it" is made of.
+--
+-- Every press here is aimed at a point and delivered by H.mouse, so the stub
+-- decides who gets it. That matters more here than in most sections: the whole
+-- claim is that a press on the figure reaches the figure, and a handler called
+-- by name proves it about a frame that might be under the page.
+----------------------------------------------------------------------
+
+do
+	local pane = Window.Pane(GEAR)
+	local model = pane.panel.model
+	local mouse = H.mouse
+	local x, y = mouse.Point(model)
+
+	check(model:IsMouseEnabled(), "the figure answers no mouse, so no drag reaches him")
+	check(mouse.At(x, y, "LeftButton") == model,
+		"a press aimed at the middle of the figure lands on something else")
+	check(ns.UI.Ticking("figure", model) == nil,
+		"the figure is turning before anybody has touched him")
+
+	-- A right press arms no turn, and it is delivered rather than aimed.
+	--
+	-- The figure is handed to ns.UI.PassCamera like every row on this page and
+	-- the stub honours that call, so a right press aimed at him here goes past
+	-- him entirely. That is the 10.1.5 answer and not this client's: on 2.5.6 the
+	-- probe fails and the game hands the model the right button anyway. So the
+	-- half worth asserting is the guard inside the handler, which is the one that
+	-- runs in the game, and Deliver is how a press reaches a frame the call the
+	-- game does not have would have spared it.
+	mouse.Deliver(model, "OnMouseDown", "RightButton")
+	check(ns.UI.Ticking("figure", model) == nil,
+		"a right press armed the turn, so the drag that turns the camera spins the figure")
+
+	-- A left drag turns him, and the angle is written down as it moves.
+	local facing = model:GetRotation()
+	check(mouse.Grab(x, y, "LeftButton") == model,
+		"a left press aimed at the figure landed somewhere else")
+	check(ns.UI.Ticking("figure", model) ~= nil,
+		"a left press armed nothing, so a drag on the figure turns nothing")
+	mouse.Move(x + 100, y)
+	turned = model:GetRotation() or 0
+	check(turned ~= facing, "a hundred pixels of drag turned the figure nowhere")
+	check(ns.dbc.figureFacing == turned,
+		"the figure turned and this character's saved pose did not follow him")
+	mouse.Drop(x + 100, y)
+	check(ns.UI.Ticking("figure", model) == nil,
+		"the button came up and the figure is still turning")
+
+	-- The wheel walks him nearer, and stops.
+	check(select(1, mouse.Wheel(x, y, 1)) == model,
+		"a wheel notch over the figure reaches something else")
+	check(ns.dbc.figureNear > 0, "a notch of the wheel walked the figure nowhere")
+	check(model.camScale < 1 and select(3, model:GetPosition()) < 0,
+		"the wheel moved the camera or the figure but not both, so a close look is a look at his boots")
+
+	for _ = 1, 40 do
+		mouse.Wheel(x, y, 1)
+	end
+	check(ns.dbc.figureNear == 1 and model.camScale == 0.5,
+		("forty notches in left the camera at %s, and the near end is half distance")
+			:format(tostring(model.camScale)))
+
+	for _ = 1, 80 do
+		mouse.Wheel(x, y, -1)
+	end
+	check(ns.dbc.figureNear == 0 and model.camScale == 1
+		and select(3, model:GetPosition()) == 0,
+		("eighty notches out left the figure at %s, and the far end is where he starts")
+			:format(tostring(ns.dbc.figureNear)))
+
+	-- The weapons, on a mark in the corner of the figure rather than a row on a
+	-- settings page. Pressed where it is drawn, which is the assertion that it is
+	-- reachable at all: a mark on a model has to beat the model's own frame level
+	-- or it is paint.
+	local mark = pane.panel.mark
+	local away = model:GetSheathed()
+	mouse.On(mark, "LeftButton")
+	check(model:GetSheathed() ~= away, "the mark was pressed and the weapons did not move")
+	check(ns.dbc.figureSheathed == model:GetSheathed(),
+		"the weapons moved and this character's saved pose did not follow them")
+
+	-- And all of it survives the model being built again, which is every gear
+	-- swap.
+	mouse.Wheel(x, y, 3)
+	local walked = model.camScale
+	pane.panel.Dress()
+	check(model:GetRotation() == turned and model.camScale == walked
+		and model:GetSheathed() ~= away,
+		"a redress put the figure back the way the client draws him and lost the pose")
+
+	-- Left as it was found, because the pose is saved state and the sections
+	-- after this one read a clean character file.
+	ns.dbc.figureFacing = ns.DefaultCopy("figureFacing")
+	ns.dbc.figureNear = ns.DefaultCopy("figureNear")
+	ns.dbc.figureSheathed = ns.DefaultCopy("figureSheathed")
+	pane.panel.Dress()
+end
+
 Window.Hide()
 
-print(("gear   %d slots in two columns %d wide, the figure behind them, %d px of stats beside; %d dots under the helmet, %d px of readout")
-	:format(#Window.Pane(GEAR).squares, column, stats, dots, readout))
+print(("gear   %d slots in two columns %d wide, the figure behind them turning to %.2f rad, %d px of stats beside; %d dots under the helmet, %d px of readout")
+	:format(#Window.Pane(GEAR).squares, column, turned, stats, dots, readout))
