@@ -30,7 +30,7 @@ local CHURN = H.CHURN
 
 local Attic, Blizz = ns.Attic, ns.BlizzHide
 
--- The seconds UnitFrames/Blizzard.lua puts between passes. Written here rather
+-- The seconds Core/BlizzHide.lua puts between passes. Written here rather
 -- than read off the ticker, because the ticker is the thing being driven and a
 -- number taken from it would agree with itself whatever it was.
 local HIDE_INTERVAL = 5

@@ -14,6 +14,16 @@ ns.BlizzHide = Blizz
 -- it, without knowing that the skin is on, that a sweep exists, or that the
 -- two clients this addon runs on disagree about where a debuff lives.
 --
+-- **It is in Core because nine trees ask it and it is a fact about none of
+-- them.** It was UnitFrames/Blizzard.lua for as long as there were nine
+-- switches and unit frames owned most of them, and every window this addon
+-- drew after that had to name UnitFrames to take the client's copy of itself
+-- off the screen: the character sheet, the talent window, the spell book, the
+-- bags, the chat, the merchant, the map and the level bar, none of which know
+-- anything about a unit frame. scripts/trees.lua counted those eight edges and
+-- the answer to eight edges into one file is to move the file. It sits beside
+-- Core/Attic.lua, which is where a frame it takes down actually goes.
+--
 -- It used to be one setting that meant something different depending on what
 -- the skin was doing. That was the bug: a switch whose effect you cannot
 -- predict from its label is not a switch, and the honest fix was more of them

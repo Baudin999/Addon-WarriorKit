@@ -39,7 +39,7 @@ ns.FrameAuras = Auras
 -- gain its ninth debuff in a raid yet.
 --
 -- A button the client re-parents back out of the attic is caught by
--- ns.Attic.Sweep, which UnitFrames/Blizzard.lua runs once a second over
+-- ns.Attic.Sweep, which Core/BlizzHide.lua runs once a second over
 -- everything the attic holds. Nothing here has to keep its own watch.
 --
 -- The player has the same two rows under its own block. That was left out of
@@ -456,7 +456,7 @@ end
 -- on screen over the row already drawing it.
 --
 -- So the frames those buttons hang off go down as well, and that half lives in
--- UnitFrames/Blizzard.lua with the switch it answers to. Your buffs and your
+-- Core/BlizzHide.lua with the switch it answers to. Your buffs and your
 -- debuffs have a frame between them and the world; the target's do not, and
 -- for those the sweep here is the only handle there is.
 --

@@ -131,13 +131,12 @@ local PERMANENT = {
 	["Buttons/Bars.lua"] = true, ["Buttons/Trace.lua"] = true,
 	["Charge/Icon.lua"] = true, ["Charge/Marker.lua"] = true,
 	["Comfort/Thanks.lua"] = true, ["Comfort/Vendor.lua"] = true,
-	["Cooldowns/Row.lua"] = true, ["Meter/Window.lua"] = true,
-	["Minimap/Clock.lua"] = true, ["Perf/Perf.lua"] = true,
-	["Swing/Gauges.lua"] = true, ["UnitFrames/Blizzard.lua"] = true,
+	["Cooldowns/Row.lua"] = true, ["Core/BlizzHide.lua"] = true,
+	["Meter/Window.lua"] = true, ["Minimap/Clock.lua"] = true,
+	["Perf/Perf.lua"] = true, ["Swing/Gauges.lua"] = true,
 	["UnitFrames/EnemyBars.lua"] = true, ["UnitFrames/Group.lua"] = true,
 	["UnitFrames/PlayerCast.lua"] = true, ["UnitFrames/Skin.lua"] = true,
 }
-
 local Drive = ns.UI.Forever:GetScript("OnUpdate")
 check(Drive ~= nil,
 	"the frame the permanent tickers hang off carries no OnUpdate, so none of them runs")

@@ -18,7 +18,7 @@ ns.Attic = Attic
 -- code calling Show cannot put it back. It is the right tool for a texture and
 -- it has one hole that has now cost two bugs: `SetShown` is resolved in C and
 -- never reads the Lua field, so every FrameXML path written as
--- `frame:SetShown(true)` walks straight past it. UnitFrames/Blizzard.lua already
+-- `frame:SetShown(true)` walks straight past it. Core/BlizzHide.lua already
 -- knew this and had a hook on the raid manager for exactly that reason, which is
 -- a patch on one frame for a hole every frame has. `FCF_` uses SetShown on the
 -- chat window, which is why `/logout` put the client's chat back on the screen,
@@ -54,7 +54,7 @@ ns.Attic = Attic
 -- and puts back anything whose parent has drifted. It is the answer to the
 -- client this addon has not met: a frame that would not take a hook, a build
 -- where hooksecurefunc is not there at all. The hook makes it almost always find
--- nothing, which is what lets UnitFrames/Blizzard.lua run the clock at a fifth
+-- nothing, which is what lets Core/BlizzHide.lua run the clock at a fifth
 -- of the rate it used to.
 --------------------------------------------------------------------------
 

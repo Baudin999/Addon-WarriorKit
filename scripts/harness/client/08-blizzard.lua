@@ -100,10 +100,10 @@ end
 
 -- The client's own cast bar for your target, which this addon draws on the
 -- enemy bar instead. A child of the target frame, so it is the one frame in
--- UnitFrames/Blizzard.lua's list that a lockdown can refuse.
+-- Core/BlizzHide.lua's list that a lockdown can refuse.
 --
 -- Reachable under FrameXML's own parent key as well as under the global, because
--- that is the pair UnitFrames/Blizzard.lua resolves and a fixture carrying only
+-- that is the pair Core/BlizzHide.lua resolves and a fixture carrying only
 -- the global could not tell a client that renamed one from a client that renamed
 -- both. It is the same frame under both names, which is also worth modelling:
 -- the pass takes it down twice per call and that has to be free.
@@ -142,7 +142,7 @@ end
 child("statusbar", _G.UIParent, "CastingBarFrame")
 
 -- The client's own experience bar, with the reputation bar under it. Two of the
--- five names UnitFrames/Blizzard.lua looks for, which are the two 2.5.6 carries;
+-- five names Core/BlizzHide.lua looks for, which are the two 2.5.6 carries;
 -- the other three are the max level bar, the newer builds' StatusTrackingBarManager
 -- and the rested tick, and a fixture standing up all five would leave the
 -- "this client does not carry that name" half of the walk unreached.

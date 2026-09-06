@@ -34,11 +34,16 @@
 --   Perf    9 trees name it, and it names Core and UI
 --   Ck      4 trees name it, and it names UI
 --
--- Two trees look like base from the in-degree alone and are not. UnitFrames is
--- named by nine, and eight of those are ns.BlizzHide, which is a switchboard
--- over Core/Attic.lua that ended up in UnitFrames because unit frames wanted it
--- first. Buttons is named by six while itself naming six. A tree that reaches
--- into half the addon is a hub, not a floor, and calling one base would exempt
+-- UnitFrames used to look like base on in-degree alone and was not. Eight of its
+-- nine callers wanted ns.BlizzHide, a switchboard over Core/Attic.lua that
+-- landed in UnitFrames because unit frames asked for it first, and every other
+-- tree then had to name UnitFrames to hide a frame that had nothing to do with
+-- unit frames. It is Core/BlizzHide.lua now and those eight edges are gone.
+-- The move is what this gate is for: the fix for a service in the wrong tree is
+-- to move the file, never to write eight entries excusing the callers.
+--
+-- Buttons is the case still open. It is named by six trees while naming six
+-- itself, which is a hub rather than a floor, and calling one base would exempt
 -- every edge into it including the ones worth refusing.
 --
 -- Marking is the other side of the same test. It is a service by shape and
@@ -93,22 +98,6 @@ local BASE_WORDS = "Core, UI, Ck, Class, Unit and Perf"
 -- separately useful, and the entry is the documentation.
 local ALLOWED = {
 	-- A service in the wrong tree.
-	{ from = "Character", sym = "BlizzHide", uses = 2,
-	  why = "the sheet takes the client's character frame off the screen" },
-	{ from = "Talents", sym = "BlizzHide", uses = 2,
-	  why = "the talent window takes the client's off the screen" },
-	{ from = "Spellbook", sym = "BlizzHide", uses = 2,
-	  why = "the spell book takes the client's off the screen" },
-	{ from = "Progress", sym = "BlizzHide", uses = 1,
-	  why = "the level bar takes the client's own off the screen" },
-	{ from = "Bags", sym = "BlizzHide", uses = 1,
-	  why = "the bag window takes the client's bags off the screen" },
-	{ from = "Chat", sym = "BlizzHide", uses = 1,
-	  why = "the chat window takes the client's frames off the screen" },
-	{ from = "Merchant", sym = "BlizzHide", uses = 1,
-	  why = "the merchant window takes the client's off the screen" },
-	{ from = "Map", sym = "BlizzHide", uses = 1,
-	  why = "the map takes the client's world map off the screen" },
 	{ from = "Buffs", sym = "Castable", uses = 2,
 	  why = "the racial nag asks whether the racial is off cooldown" },
 	{ from = "AdHoc", sym = "Castable", uses = 1,

@@ -247,6 +247,16 @@ UI\Ask.lua
 # thing being counted on that file's square.
 UI\Amount.lua
 
+# Which of the client's own frames are on the screen: one switch each, the list
+# every part signs into, and the once-a-second pass that puts back anything
+# that moved. In Core because it is asked by nine trees and is a fact about none
+# of them. It lived in UnitFrames\\Blizzard.lua, which is where it was written
+# because unit frames wanted it first, and every other tree then had to name
+# UnitFrames to hide a frame that had nothing to do with unit frames.
+# After Core\\Attic.lua, which is where a frame it takes down actually goes, and
+# after UI\\Ticker.lua for the pass it arms.
+Core\BlizzHide.lua
+
 Core\Command.lua
 Core\Panel.lua
 
@@ -423,12 +433,6 @@ UnitFrames\EnemyBars.lua
 # for where an aura goes.
 UnitFrames\Auras.lua
 
-# The switches that take Blizzard's own copy of something this addon draws off
-# the screen: your buffs, your debuffs, the target's icons, the target's cast
-# bar. One table of frames and one Apply, so adding the next one is a line
-# rather than a file. Separate from Auras.lua because it answers on a client
-# with no skin at all and knows nothing about a row.
-UnitFrames\Blizzard.lua
 
 # The player, target and target of target frames, in three files. Skin.lua is
 # the part: it builds the three secure buttons, decides whether each one is
@@ -797,7 +801,7 @@ Quests\Feature.lua
 # the three tabs over one window, Blizzard.lua puts the client's own sheet in the
 # attic and takes the C key, and Feature.lua last, as everywhere else.
 #
-# After UnitFrames\Blizzard.lua, which owns the switch list Blizzard.lua signs
+# After Core\BlizzHide.lua, which owns the switch list Blizzard.lua signs
 # into and which is above this line. Core\Attic.lua, where the client's sheet
 # goes, is far above it.
 Character\Worn.lua
@@ -827,7 +831,7 @@ Character\Feature.lua
 # Feature.lua last, as everywhere else.
 #
 # After Character, whose Blizzard.lua this one is shaped like, and after
-# UnitFrames\Blizzard.lua, which owns the switch list Blizzard.lua signs into.
+# Core\BlizzHide.lua, which owns the switch list Blizzard.lua signs into.
 # UI\Slot.lua, whose square every talent is drawn on, and UI\Scan.lua, which
 # reads the client's own description of one, are far above this line.
 Talents\Read.lua
@@ -848,7 +852,7 @@ Talents\Feature.lua
 # as everywhere else.
 #
 # After Talents, whose Blizzard.lua this one is shaped like, and after
-# UnitFrames\Blizzard.lua, which owns the switch list Blizzard.lua signs into.
+# Core\BlizzHide.lua, which owns the switch list Blizzard.lua signs into.
 # UI\Slot.lua, whose square every row is drawn on, and UI\Widgets.lua, whose
 # dropdown the fold-out opens, are far above this line.
 Spellbook\Read.lua
@@ -955,7 +959,7 @@ Map\Feature.lua
 # the bottom of it, Blizzard.lua takes the nine calls the client opens and shuts
 # a bag through so B opens this one, and Feature.lua last, as everywhere else.
 #
-# After UnitFrames\Blizzard.lua, which is where the once-a-second pass
+# After Core\BlizzHide.lua, which is where the once-a-second pass
 # Blizzard.lua registers on lives, and after UI\Tip.lua, which is the box a
 # square opens. Both are far above this line.
 Bags\Bags.lua
@@ -985,7 +989,7 @@ Bags\Feature.lua
 # last, as everywhere else.
 #
 # After Bags, whose square this one copies and whose merchant row sells into the
-# same session, and after UnitFrames\Blizzard.lua, which is where the
+# same session, and after Core\BlizzHide.lua, which is where the
 # once-a-second pass Blizzard.lua registers on lives.
 Merchant\Stock.lua
 Merchant\Buyback.lua

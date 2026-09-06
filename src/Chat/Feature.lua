@@ -461,7 +461,7 @@ ns.Register({
 		--
 		-- Named the way the other six are and drawn on their page, because it
 		-- answers the same question they do. The mechanism is Chat/Blizzard.lua
-		-- and the switch is one line in UnitFrames/Blizzard.lua's table.
+		-- and the switch is one line in Core/BlizzHide.lua's table.
 		hideBlizzChat = true,
 
 		-- The room's own slash, put in the line when you start typing in it.

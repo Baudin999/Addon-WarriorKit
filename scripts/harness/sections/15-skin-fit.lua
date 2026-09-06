@@ -3,7 +3,7 @@
 -- The frames are ours, so turning the part off is three buttons down and
 -- three unit watches released, and turning it back on is the same three up at
 -- the size they had. Blizzard's own three are a different switch, in
--- UnitFrames/Blizzard.lua, and that half is asserted here too because the two
+-- Core/BlizzHide.lua, and that half is asserted here too because the two
 -- switches together are what leave you with exactly one set of frames.
 --
 -- The chain is the second half and the same kind of claim. The target block

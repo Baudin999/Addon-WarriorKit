@@ -821,14 +821,14 @@ probe_list PROBED_ALLOWED "$PROBED_ALLOWED"
 # UI/Widgets.lua is exempt and is a different thing wearing the same word:
 # `ui.Hint` is the sentence under a control in the settings window, it is drawn
 # in that window and not in a tooltip, and it is the place the deleted lines
-# should have been all along. UnitFrames/Blizzard.lua, Buffs/Upkeep.lua and the
+# should have been all along. Core/BlizzHide.lua, Buffs/Upkeep.lua and the
 # class files carry `hint` fields on their own tables that feed one of those or
 # feed a body line, so the rule reads assignments at the indentation a table
 # constructor puts them at rather than any mention of the word.
 while IFS= read -r bad; do
 	echo "the tooltip's blue hint line is gone, and a subject may not carry one: $bad"
 	status=1
-done < <(grep -rnE '^[[:space:]]+hint = ' --include='*.lua' . 	| grep -v '^\./UI/Widgets\.lua:' 	| grep -v '^\./UnitFrames/Blizzard\.lua:' 	| grep -v '^\./Buffs/Upkeep\.lua:' 	| grep -v '^\./Class/' || true)
+done < <(grep -rnE '^[[:space:]]+hint = ' --include='*.lua' . 	| grep -v '^\./UI/Widgets\.lua:' 	| grep -v '^\./Core/BlizzHide\.lua:' 	| grep -v '^\./Buffs/Upkeep\.lua:' 	| grep -v '^\./Class/' || true)
 
 # The drawing layer does not know the name of a setting.
 #

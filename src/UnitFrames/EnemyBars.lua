@@ -1726,7 +1726,7 @@ end
 -- never reads the Lua Show that ns.Strip put a Hide in, so the bar came back on
 -- the first cast of the session and stayed back for the rest of it: two cast
 -- bars for one cast, ours on the plate and Blizzard's under it. That is the
--- same bug UnitFrames/Blizzard.lua's header describes for the target's bar, on
+-- same bug Core/BlizzHide.lua's header describes for the target's bar, on
 -- the same mixin, found the same way.
 --
 -- Core/Attic.lua was the answer there and it is the answer here. A frame whose

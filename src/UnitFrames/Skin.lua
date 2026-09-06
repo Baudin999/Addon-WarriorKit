@@ -16,7 +16,7 @@ ns.FrameSkin = Skin
 -- the click and the menu through two attributes, the client's unit watch puts
 -- it up and down with the unit, and UI.Placeable drags it the way every other
 -- piece of this HUD is dragged. Blizzard's own three go to the attic through
--- the switch in UnitFrames/Blizzard.lua, like every other frame this addon
+-- the switch in Core/BlizzHide.lua, like every other frame this addon
 -- replaces.
 --
 -- Three files behind this one, each with one subject:

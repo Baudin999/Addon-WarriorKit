@@ -34,7 +34,7 @@ ns.BookBlizzard = Blizz
 --
 -- **The switch is the one on the Blizzard page.** There is one place in this
 -- addon where a frame of the client's is switched on or off, it is the list
--- in UnitFrames/Blizzard.lua, and this file registers into it the way the
+-- in Core/BlizzHide.lua, and this file registers into it the way the
 -- character sheet's and the talent window's do.
 --------------------------------------------------------------------------
 
@@ -202,7 +202,7 @@ function Blizz.Wanted()
 end
 
 -- Run on every pass rather than only where the answer changed, which is the
--- rule UnitFrames/Blizzard.lua's header argues for at length: a pass that
+-- rule Core/BlizzHide.lua's header argues for at length: a pass that
 -- remembers what it did cannot see a frame the client put back.
 function Blizz.Apply()
 	local wanted = Blizz.Wanted()

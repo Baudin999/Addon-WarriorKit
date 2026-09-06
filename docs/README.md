@@ -906,7 +906,7 @@ goes through `Feature.lua` or through the shared surface below:
                                  index and points. Was ns.MeterSpec
     ns.Marking.Watch(frame)      hook ctrl-click marking onto a frame this addon
                                  made after login, which is every party block
-    ns.BlizzHide.Apply()         every frame in UnitFrames/Blizzard.lua put
+    ns.BlizzHide.Apply()         every frame in Core/BlizzHide.lua put
                                  where its switch says. Not part of the skin: it
                                  answers with every Blizzard unit frame left
                                  alone
@@ -1732,7 +1732,7 @@ below is the whole of what runs.
     UnitFrames/Group.lua         1 Hz     every tile read from the top
     Feeds/Stream.lua             1 Hz     the strip under a feed
     Minimap/Clock.lua            1 Hz     the reading on the minimap square
-    UnitFrames/Blizzard.lua      1 Hz     every Blizzard frame the switches hide
+    Core/BlizzHide.lua      1 Hz     every Blizzard frame the switches hide
     Perf/Perf.lua                1 Hz     only while the performance tab is on screen
     Perf/Trace.lua           every frame  the frame trace, all session by default
     Perf/Hud.lua                10 Hz     only while the performance window is open
@@ -2006,7 +2006,7 @@ advance. `ns.Attic.Vanish` applies both handles, the cage and the strip, and
 The one call that undoes a cage is somebody else's `SetParent`, and nothing in
 the client is known to make one on these frames. That claim is checked rather
 than believed: `ns.Attic.Sweep` walks everything the attic holds, once a second,
-off the clock in `UnitFrames/Blizzard.lua`, and puts back anything whose parent
+off the clock in `Core/BlizzHide.lua`, and puts back anything whose parent
 has drifted. The same pass re-resolves every name, which is what catches a frame
 the client had not built yet, including the temporary chat window a whisper
 opens. So the guarantee is not "no path we thought of can show it". It is
@@ -3923,7 +3923,7 @@ five times a second regardless. A name this client has never heard of therefore
 costs a bar up to a fifth of a second late, and not a bar that never comes up.
 
 **Blizzard's own goes down through the same five switches as everything else.**
-`hide playercast` in `UnitFrames/Blizzard.lua`, which names `CastingBarFrame` and
+`hide playercast` in `Core/BlizzHide.lua`, which names `CastingBarFrame` and
 `PlayerCastingBarFrame` because 2.5.6 and the clients this Edit Mode was
 backported from call it different things. It is a plain boolean like the other
 four and it does not read the setting above it, which means both off is the one
@@ -4248,7 +4248,7 @@ the whole run above it on the screen. That is not theoretical: it is what put a
 Blizzard debuff over a row already drawing the same debuff, on a client that had
 moved your debuffs out of `BuffFrame` into a `DebuffFrame` of their own.
 
-So `UnitFrames/Blizzard.lua` takes the other handle, and holds every switch of
+So `Core/BlizzHide.lua` takes the other handle, and holds every switch of
 this shape in one table. A frame goes down by name, and every button inside it
 goes with its parent whatever it is called. `BuffFrame` is the awkward one: it
 holds both of your rows on 2.5.6, so it may only go down when both switches are

@@ -731,7 +731,7 @@ ns.Register({
 		-- All of them ship on, because an addon that draws your buffs under
 		-- your portrait and leaves the client's in the corner has not replaced
 		-- anything, it has added to it. The frames each one takes down are in
-		-- UnitFrames/Blizzard.lua.
+		-- Core/BlizzHide.lua.
 		hideBlizzUnitFrames = true,
 		hideBlizzBuffs = true,
 		hideBlizzDebuffs = true,

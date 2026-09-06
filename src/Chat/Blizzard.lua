@@ -7,7 +7,7 @@ ns.ChatBlizzard = Blizz
 -- Blizzard's chat window, off the screen
 --
 -- The switch is `hide Blizzard's chat window`, and it sits with the other six
--- in UnitFrames/Blizzard.lua, because a player who can see two chat windows
+-- in Core/BlizzHide.lua, because a player who can see two chat windows
 -- should find the line that turns one off on the page where every other line
 -- like it lives. What is here is the part that would not fit on that line.
 --
@@ -176,7 +176,7 @@ end
 -- remembered: every pass walks every name and reads what is on the screen.
 --
 -- Cheap enough to be the answer. Ten windows is thirty lookups plus seven, once
--- a second, off UnitFrames/Blizzard.lua's clock, and the attic is a comparison
+-- a second, off Core/BlizzHide.lua's clock, and the attic is a comparison
 -- against the parent for a frame it already holds.
 function Blizz.Apply()
 	local wanted = Blizz.Wanted()

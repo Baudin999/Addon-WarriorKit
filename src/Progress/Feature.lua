@@ -110,7 +110,7 @@ ns.Register({
 		progressPoint = { "BOTTOM", "UIParent", "BOTTOM", 0, 4 },
 
 		-- The client's own experience and reputation bars. On for the reason
-		-- every other switch in UnitFrames/Blizzard.lua's list ships on: this
+		-- every other switch in Core/BlizzHide.lua's list ships on: this
 		-- addon draws them now, and two copies of one reading is what that page
 		-- exists to answer. The frames it takes down are named there.
 		hideBlizzXP = true,
