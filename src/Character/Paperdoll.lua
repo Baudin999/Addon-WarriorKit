@@ -133,11 +133,22 @@ local RIM = 3
 -- read without being shouted at, and the hover is what takes one to full.
 local REST = 0.55
 
--- The socket dots. Three because three is the most holes anything in this
--- expansion has, and five pixels because a dot on the same line as an eleven
--- pixel number is a dot, and at seven it is a button.
+-- The socket discs. Three because three is the most holes anything in this
+-- expansion has, and that has not changed.
+--
+-- Twelve pixels and not five. Five was the width of a mark that says a socket
+-- is there, and a mark is all it could be while the disc was flat colour. It
+-- carries the gem's own icon now, and a gem icon at five pixels is four
+-- coloured dots and a rounding error. At twelve it is a picture you can name
+-- across a row, and it is still shorter than the name above it.
 local DOTS = 3
-local DOT = 5
+local DOT = 12
+
+-- How much of the disc the ring round the gem keeps for itself, which is the
+-- same bargain RIM strikes on the thirty-six pixel face and cannot be the same
+-- number: three of twelve is a quarter of the disc gone to its own edge. Two
+-- leaves a band of colour all the way round and eight pixels of gem inside it.
+local BAND = 2
 
 -- How far apart two rows in a column sit.
 local GAP = 4
@@ -377,16 +388,35 @@ local function Words(box, entry)
 	box.note:SetPoint("TOP" .. near, box.name, "BOTTOM" .. near, 0, -(WEAR + 3))
 	box.note:SetPoint("TOP" .. far, box.name, "BOTTOM" .. far, 0, -(WEAR + 3))
 
-	-- One per socket a piece in this slot could carry. Made at build and shown
-	-- by the repaint, because a texture made on a repaint is a texture made
-	-- nineteen times every time anything you are wearing moves.
+	-- One per socket a piece in this slot could carry, and each is two textures:
+	-- the disc, which is the ring, and the gem's own icon laid over it inset by
+	-- BAND so that a band of the disc shows all the way round. Both are made at
+	-- build and shown by the repaint, because a texture made on a repaint is a
+	-- texture made nineteen times every time anything you are wearing moves.
+	--
+	-- The icon is clipped to the same circle. A gem icon is a square picture and
+	-- the file has corners in it, and a square in a row of discs is the one that
+	-- reads as broken rather than as square.
 	box.dots = {}
 	for index = 1, DOTS do
 		local dot = UI.Disc(box, "OVERLAY")
 		dot:SetSize(DOT, DOT)
-		dot:SetPoint(far, box, far, sign * -((index - 1) * (DOT + 2)), 0)
-		dot:SetPoint("TOP", box.note, "TOP", 0, 0)
+		-- One point and not two. The far edge used to be pinned to the row and the
+		-- top to the item level under the name, which is one constraint on the
+		-- disc's middle and another on its top edge: over-constrained in y, so the
+		-- height the anchors imply wins over SetSize and a disc twelve wide came
+		-- out an ellipse twenty-two tall. The row's own far edge is the note's far
+		-- edge, because the note is anchored across the full width, so one point
+		-- on the note says both things and the disc keeps the size it was given.
+		dot:SetPoint(far, box.note, far, sign * -((index - 1) * (DOT + 2)), 0)
 		dot:Hide()
+
+		dot.gem = box:CreateTexture(nil, "OVERLAY", nil, 1)
+		dot.gem:SetSize(DOT - BAND * 2, DOT - BAND * 2)
+		dot.gem:SetPoint("CENTER", dot, "CENTER", 0, 0)
+		UI.Clip(dot.gem)
+		dot.gem:Hide()
+
 		box.dots[index] = dot
 	end
 end
@@ -542,19 +572,38 @@ local function WearTone(fraction)
 	return C.tick
 end
 
--- The dots under a name. Filled first, in the gem's own quality colour, then
--- the holes in the panel's edge colour, which is the order the client can
--- actually answer: a link says what is in it and how many are open, and never
--- which position an open one is.
+-- The discs under a name, and what is sitting in each one.
+--
+-- A filled socket is the gem: its own icon, clipped round, in a ring of its
+-- quality colour. A hole is the same disc with nothing in it and the ring at
+-- half strength, which is the difference between a thing and a place for one
+-- without either of them needing a label.
+--
+-- Filled first and holes after, which is the order the client can actually
+-- answer: a link says what is in it and how many are open, and never which
+-- position an open one is.
+--
+-- A hole is drawn neutral, and that is the data rather than a preference. A
+-- socket is meta, red, yellow or blue, and that colour is a fact about the
+-- item; an item link carries the gem sitting in each filled hole and says
+-- nothing whatever about the empty ones. There is no call that recovers it and
+-- guessing it from the slot is a colour the page would be making up. So the
+-- ring takes the gem's colour where there is a gem and the panel's edge where
+-- there is not, and the hover is where a socket gets named: the client writes
+-- "Yellow Socket" into the tooltip for the slot, and that tooltip is the one
+-- the row already opens.
 local function PaintDots(box, link)
 	local filled, open = ns.ItemSockets(link)
 	local count = filled and #filled or 0
 	for index = 1, DOTS do
 		local dot = box.dots[index]
 		local gem = filled and filled[index]
+		local icon = gem and select(2, ns.ItemInfo(gem)) or nil
 		local tone = gem and UI.Quality[ns.ItemValue(gem) or 1] or C.edge
-		dot:SetVertexColor(tone[1], tone[2], tone[3], gem and 1 or 0.7)
+		dot:SetVertexColor(tone[1], tone[2], tone[3], gem and 1 or 0.5)
 		dot:SetShown(index <= count + open)
+		dot.gem:SetTexture(icon)
+		dot.gem:SetShown(icon and index <= count and true or false)
 	end
 end
 

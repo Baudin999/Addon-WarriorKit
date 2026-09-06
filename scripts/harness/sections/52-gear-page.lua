@@ -387,6 +387,18 @@ end
 -- calls answer half each: the link says what is in it, GetItemStats says how
 -- many are open, and neither says which position an open one is. So the dots
 -- draw filled first and open after, which is the only order the client supports.
+--
+-- A disc carries the gem now rather than standing in for it, so what the
+-- helmet's first disc draws is the ruby's own icon cut to a circle, and its
+-- ring is the gem's quality colour. The count came first and is still here,
+-- because a disc that draws the right picture in the wrong number of places is
+-- the same bug it always was.
+--
+-- What cannot be asserted is the socket's own colour, and that is the data
+-- rather than a gap in this section: an item link carries the gem sitting in
+-- each filled hole and nothing whatever about the empty ones. So an empty disc
+-- is neutral on purpose, the assertion below says so, and the hover is where a
+-- socket gets named.
 ----------------------------------------------------------------------
 
 do
@@ -420,6 +432,64 @@ do
 		check(not neck.dots[index]:IsShown(),
 			"a piece with no sockets drew a dot under its name")
 	end
+
+	-- The gem itself. Filled first is what the block above measures, so the
+	-- helmet's ruby is the first disc whichever socket it is actually sitting in.
+	local gem = filled and filled[1]
+	local _, art = ns.ItemInfo(gem or "")
+	check(art and head.dots[1].gem:GetTexture() == art,
+		"the filled socket drew no gem icon, so the disc is still a mark saying a gem is there")
+	check(head.dots[1].gem.masks and #head.dots[1].gem.masks == 1,
+		"the gem icon carries no mask, so a square picture is sitting in a round hole")
+	check(head.dots[1].gem:GetWidth() < head.dots[1]:GetWidth(),
+		"the gem icon is as wide as its own disc, so there is no ring left to carry a colour")
+
+	local tone = ns.UI.Quality[ns.ItemValue(gem)]
+	local r, g, b, a = head.dots[1]:GetVertexColor()
+	check(tone and r == tone[1] and g == tone[2] and b == tone[3] and a == 1,
+		"a filled socket's ring is not the gem's own quality colour at full strength")
+
+	-- The hole is the same disc with nothing in it, and neutral because there is
+	-- no call that says what colour an empty socket is. Half strength is the
+	-- whole of what separates a place for a gem from a gem, so it is asserted
+	-- against the filled disc's alpha rather than against a number written here.
+	local edge = ns.UI.Color.edge
+	local hr, hg, hb, ha = head.dots[2]:GetVertexColor()
+	check(not head.dots[2].gem:IsShown(), "an empty socket drew a gem")
+	check(hr == edge[1] and hg == edge[2] and hb == edge[3],
+		"an empty socket is not the panel's edge colour, so the page invented a socket colour the link never carried")
+	check(ha < a, "an empty socket is as strong as a filled one, so a hole reads as a gem")
+
+	-- Where the socket is named, which is the row's hover and not a second one
+	-- hung off the disc. Aimed at rather than called: a disc is a texture and
+	-- takes no mouse, so the pointer over a disc is the pointer over the row, and
+	-- the day somebody makes a disc a frame to put its own tooltip on, this is
+	-- the line that says the row went quiet underneath it.
+	local mouse = H.mouse
+	local x, y = mouse.Point(head.dots[1])
+	check(mouse.At(x, y) == head,
+		"pointing at a socket disc does not reach the row, so the hover that names the socket never opens")
+
+	-- And what that hover has to carry is the line the disc cannot draw, seeded
+	-- here the way every other tooltip fixture is. The client writes it and the
+	-- addon only reads it: "Yellow Socket" exists nowhere else, in this harness
+	-- or in the game.
+	H.tooltips.inventory[H.tooltipKey("player", 1)] = {
+		{ "Lionheart Helm" }, { "Head, Plate" }, { "Yellow Socket" },
+	}
+	ns.UI.Tooltip.Close(true)
+	mouse.Deliver(head, "OnEnter")
+	check(ns.UI.Tooltip.IsShown(),
+		"the pointer is on the sockets and the row said nothing, so a hole has no name anywhere")
+	local named = false
+	for index = 1, ns.UI.Tooltip.Lines() do
+		named = named or (ns.UI.Tooltip.Text(index) or ""):find("Socket") ~= nil
+	end
+	check(named,
+		"the row's hover carries no socket line, so the colour a disc cannot draw is nowhere on the page")
+	mouse.Deliver(head, "OnLeave")
+	ns.UI.Tooltip.Close(true)
+	H.tooltips.inventory[H.tooltipKey("player", 1)] = nil
 end
 
 ----------------------------------------------------------------------
@@ -548,5 +618,5 @@ end
 
 Window.Hide()
 
-print(("gear   %d slots in two columns %d wide, the figure behind them turning to %.2f rad, %d px of stats beside; %d dots under the helmet, %d px of readout")
+print(("gear   %d slots in two columns %d wide, the figure behind them turning to %.2f rad, %d px of stats beside; %d socket discs under the helmet, one of them the gem's own icon, %d px of readout")
 	:format(#Window.Pane(GEAR).squares, column, turned, stats, dots, readout))
