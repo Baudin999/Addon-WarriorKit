@@ -120,9 +120,12 @@ ns.Register({
 		questsTrackerOff = false,
 
 		-- Where this addon's own tracker sits, which is the one setting it has.
-		-- Up the right of the screen, where a quest tracker has been in this
-		-- game since 2004 and the first place anybody will look for it.
-		questsColumnPoint = { "RIGHT", "UIParent", "RIGHT", -20, 100 },
+		-- The top left corner, fifteen pixels in from both edges. The right of
+		-- the screen is where this game has put a quest tracker since 2004 and
+		-- it is also where this addon already puts the loot feed, the cooldown
+		-- row and the player's own frame, so a column dropped there lands on top
+		-- of something on most screens. The top left is empty on all of them.
+		questsColumnPoint = { "TOPLEFT", "UIParent", "TOPLEFT", 15, -15 },
 
 		-- Whether this addon is the one holding that tracker off. A record and
 		-- not a preference, so Core/Core.lua keeps it out of the reset: it is
