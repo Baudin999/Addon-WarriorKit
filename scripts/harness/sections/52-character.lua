@@ -670,12 +670,23 @@ do
 	check(frame:GetAttribute("_onattributechanged") ~= nil,
 		"the sheet is dragged from a snippet and carries none")
 
-	-- Under the page rather than over it. The tabs and the close cross are in the
-	-- content frame, and a grip drawn above them is a title bar you cannot press
-	-- a tab through.
-	check(sheet.grip:GetFrameLevel() < sheet.content:GetFrameLevel(),
-		("the grip sits at level %d and the page at %d")
+	-- Over the page, and the tab row over the grip. This started out the other
+	-- way round on the argument that a strip above the tabs is a tab you cannot
+	-- press, and it shipped a sheet nobody could drag: the bottom of the stack is
+	-- under the page, under the pages the sheet lifts to content plus ten, and
+	-- under all nineteen gear squares, so the strip was never reached by anything.
+	--
+	-- Both halves are checked because either one alone is a bug. A grip under the
+	-- page cannot be grabbed. A grip over the tabs eats every tab press.
+	check(sheet.grip:GetFrameLevel() > sheet.content:GetFrameLevel(),
+		("the grip sits at level %d and the page at %d, so the page is over the strip")
 			:format(sheet.grip:GetFrameLevel(), sheet.content:GetFrameLevel()))
+	-- Reached through the gear page, which is anchored to the bottom of the tab
+	-- row, rather than through an export added for one check.
+	local _, row = Window.Pane(GEAR).frame:GetPoint()
+	check(row:GetFrameLevel() > sheet.grip:GetFrameLevel(),
+		("the tab row sits at level %d and the grip at %d, so the strip eats the tabs")
+			:format(row:GetFrameLevel(), sheet.grip:GetFrameLevel()))
 
 	-- And where you drop it is where it stays. The sheet sizes and places itself
 	-- off the monitor out of every resize, which is where a screen change and a

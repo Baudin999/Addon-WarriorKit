@@ -281,9 +281,9 @@ end
 -- button and the camera's right drag gone out of all of it.
 --
 -- So the grip is the row across the top where the tabs sit, which is a title bar
--- in everything but the paint. The tabs are in the content frame and the content
--- is a level above this, so a click on a tab is still a click on the tab and
--- only the strip either side of them is a grab.
+-- in everything but the paint. It sits over the page rather than under it, and
+-- the tab row is lifted one level over the grip in turn, so a click on a tab is
+-- still a click on the tab and only the strip either side of them is a grab.
 --
 -- It says so under the cursor rather than all the time. A panel with nothing
 -- drawn on it cannot carry a permanent bar without becoming the dialog this
@@ -348,13 +348,23 @@ local function Chrome(window, frame, px, opts)
 	window.content = CreateFrame("Frame", nil, frame)
 	window.content:SetPoint("TOPLEFT", 0, -window.chrome)
 
-	-- The grip under the page, said here rather than where the grip is made,
-	-- because the content frame it has to be under does not exist yet at that
-	-- point and the strata the window is filed in is set between the two. A
-	-- child may sit at its parent's own level, and content takes the level above
-	-- it, so everything on the page answers a click before the strip does.
+	-- The grip over the page, said here rather than where the grip is made,
+	-- because the content frame it is placed against does not exist yet at that
+	-- point and the strata the window is filed in is set between the two.
+	--
+	-- Over, not under. Under was the first answer and it does not work: the
+	-- bottom of a window's stack is under the page, under anything the page
+	-- lifts above itself, and under every button on it, so a strip down there is
+	-- a strip nothing ever reaches. The character sheet's own pages sit at
+	-- content plus ten, which is the sort of number that makes "under the page"
+	-- a race rather than a rule.
+	--
+	-- So the strip is above all of it and the one thing that has to beat it says
+	-- so out loud. Character/Window.lua puts its tab row a level over the grip,
+	-- because tabs are the only thing drawn in the strip and a tab you cannot
+	-- press is worse than a sheet you cannot drag.
 	if window.grip then
-		window.grip:SetFrameLevel(frame:GetFrameLevel())
+		window.grip:SetFrameLevel(window.content:GetFrameLevel() + 20)
 	end
 
 	Footer(window, frame, opts)

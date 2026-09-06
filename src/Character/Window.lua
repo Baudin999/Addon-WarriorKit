@@ -302,6 +302,9 @@ function Window.Build()
 	-- one thing left on the page that would still read as a dialog.
 	tabs = UI.TabStrip(window.content, { onSelect = Select, bare = true })
 	tabs.frame:SetPoint("TOPLEFT", M.pad, -M.pad)
+	-- Over the grip, so the strip that drags the sheet does not eat the tabs
+	-- drawn in it. UI/Window.lua's Chrome says why the grip is above the page.
+	tabs.frame:SetFrameLevel(window.grip:GetFrameLevel() + 1)
 
 	panes[GEAR] = ns.Paperdoll.New(window.content)
 	panes[SKILLS] = ns.CharReadout.New(window.content)
