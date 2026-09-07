@@ -7,8 +7,8 @@ title: The sets on the character page
 parent: 01M1Y4JDFMVHEB87QK9R1KP4BJ
 ---
 
-Phase 2 of the equipment manager. The sets get a face, on the page that is
-already about your gear.
+Phase 2 of `01M1Y4JDFMVHEB87QK9R1KP4BJ`, the equipment manager. The sets get
+a face, on the page that is already about your gear.
 
 ## What lands
 
