@@ -589,10 +589,18 @@ end
 -- One slot
 --------------------------------------------------------------------------
 
+-- The title is the fallback under the client's own text and not a second name
+-- for it: UI/Tip.lua draws it only where the scan came back with nothing. That
+-- is the second after login and the second after a fetch, when the client knows
+-- the slot holds an item and does not yet know what the item is, and a slot
+-- with no title had no box at all in that second. The name is read out of the
+-- link rather than looked up, the same way the row's own name is, because a
+-- link is text the client has already handed over and needs no cache behind it.
 local function Subject(entry)
 	local link = ns.Worn.Link(entry.slot)
 	if link then
-		return { kind = "inventory", unit = "player", slot = entry.slot }
+		return { kind = "inventory", unit = "player", slot = entry.slot,
+			title = (ns.ItemInfo(link)) or entry.label }
 	end
 	return { kind = "note", title = entry.label,
 		lines = { { "empty", color = C.dim } } }

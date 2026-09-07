@@ -202,6 +202,42 @@ do
 		("the secure button is %s wide on a row of %s, so the action is the whole row again")
 			:format(tostring(head.button:GetWidth()), tostring(head:GetWidth())))
 
+	-- And what that hover says about a piece the client cannot describe yet.
+	--
+	-- Every row on this page reads a worn slot, and a worn slot is read by
+	-- pointing the scanner at it: an item the server has not sent the data for
+	-- comes back with no text at all. A subject with nothing in any band is
+	-- refused rather than drawn empty, so pointing at your own helmet in that
+	-- second drew no box whatever, and this is the page where that shows first
+	-- because there are nineteen of them.
+	--
+	-- Two things answer it. The row's subject carries the name out of the link,
+	-- which is text the client has already handed over and needs no cache behind
+	-- it, so there is something to read while the fetch is out. And the box
+	-- fills in where it stands when the data lands, without the pointer moving:
+	-- 48-tooltip-arrival.lua asserts that half on its own, and this is the claim
+	-- that it reaches a worn slot rather than only a link.
+	H.tooltips.inventory[H.tooltipKey("player", 1)] = nil
+	ns.UI.Tooltip.Close(true)
+	H.mouse.Deliver(head, "OnEnter")
+	check(ns.UI.Tooltip.IsShown(),
+		"a worn piece the client cannot describe yet drew no box at all")
+	check(ns.UI.Tooltip.Text(1) == (ns.ItemInfo(Worn.Link(1))),
+		"the box on a slot with no text yet says " .. tostring(ns.UI.Tooltip.Text(1)))
+
+	H.tooltips.inventory[H.tooltipKey("player", 1)] = {
+		{ "Lionheart Helm" }, { "Head, Plate" }, { "165 Armor" },
+	}
+	fire("GET_ITEM_INFO_RECEIVED", 12640)
+	check(ns.UI.Tooltip.Lines() == 3,
+		("the worn piece drew %d lines after its item arrived"):format(ns.UI.Tooltip.Lines()))
+	check(ns.UI.Tooltip.Text(3) == "165 Armor",
+		"the client's own last line is missing: " .. tostring(ns.UI.Tooltip.Text(3)))
+
+	H.mouse.Deliver(head, "OnLeave")
+	ns.UI.Tooltip.Close(true)
+	H.tooltips.inventory[H.tooltipKey("player", 1)] = nil
+
 	-- A right click takes the piece off, and it has to actually run: the line
 	-- is read out of what the client was sent rather than off the attribute,
 	-- because an attribute is what a dead square also has.

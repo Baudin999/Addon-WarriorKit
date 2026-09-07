@@ -325,6 +325,75 @@ do
 	fire("UPDATE_MOUSEOVER_UNIT")
 
 	------------------------------------------------------------------
+	-- The box, taken over by something that owns a frame
+	--
+	-- The addon has one tooltip and every hover in it draws in that one frame,
+	-- so a bag square or a feed row crossed while a creature is under the
+	-- pointer takes the box and gives it back to nobody. This part cannot hear
+	-- that happen: there is no event for it, the token has not moved, and the
+	-- refusal above is written against what this file last did rather than
+	-- against what is on screen.
+	--
+	-- What that cost is the state asserted here. The box believed to be up was
+	-- somebody else's, the next event about the creature was turned away as a
+	-- repeat, and the suppression stayed armed: a mob under the pointer with
+	-- Blizzard's box held down and none of ours in its place. Three claims, and
+	-- the middle one is the defect.
+	--
+	--   The suppression comes off, because it is armed only in exchange for a
+	--   box of ours being on screen.
+	--   The creature's next event builds the box again rather than refusing.
+	--   And nothing here takes down the box that took this one over. It belongs
+	--   to whatever the pointer actually moved onto, and closing it would be
+	--   this part answering for a hover it knows nothing about.
+	------------------------------------------------------------------
+
+	local elsewhere = _G.CreateFrame("Frame", nil, _G.UIParent)
+	elsewhere:SetSize(30, 30)
+	elsewhere:SetPoint("CENTER", _G.UIParent, "CENTER", 0, 0)
+
+	check(ns.UI.Scan.Suppressing(), "the run reached the takeover with nothing of ours up")
+
+	ns.Tip.Open(elsewhere, { kind = "note", title = "A row somewhere else" })
+	check(Box.Owner() == elsewhere, "the hover that took the box over did not get it")
+
+	-- The creature stops existing while the pointer is on that row, which is
+	-- the close this part makes with a box on screen that is not its own.
+	guids.mouseover = nil
+	raw("UPDATE_MOUSEOVER_UNIT")
+	check(Box.IsShown() and Box.Owner() == elsewhere,
+		"the world hover closed a box belonging to whatever the pointer moved onto")
+	check(not ns.UI.Scan.Suppressing(),
+		"Blizzard's tooltip is still held down with a box that is not ours on screen")
+
+	-- And the sweep reaches the same state without the creature going anywhere,
+	-- which is the ordinary way round: the mob is still there, the pointer is on
+	-- a row over it, and the tick is the only thing that can notice.
+	guids.mouseover = MOB
+	fire("UPDATE_MOUSEOVER_UNIT")
+	check(Box.Owner() == Box.CURSOR, "the creature's box did not come back after the row")
+
+	ns.Tip.Open(elsewhere, { kind = "note", title = "A row somewhere else" })
+	ns.World.Sweep()
+	check(not ns.UI.Scan.Suppressing(),
+		"a sweep that found somebody else's box left Blizzard's held down")
+	check(Box.IsShown() and Box.Owner() == elsewhere,
+		"the sweep took down the box that had taken this one over")
+
+	-- The pointer goes back to the creature. The token never moved, so what
+	-- arrives is the same event about the same guid that used to be turned away
+	-- as a repeat.
+	ns.Tip.Close(true)
+	raw("UPDATE_MOUSEOVER_UNIT")
+	check(Box.IsShown(), "the creature under the pointer got no box back")
+	check(Box.Owner() == Box.CURSOR,
+		"the box that came back is not the world hover's")
+	check(Box.Text(1) == "Snarlmouth",
+		"the box that came back says " .. tostring(Box.Text(1)))
+	check(ns.UI.Scan.Suppressing(),
+		"our box is up again and Blizzard's is not being held down")
+
+	------------------------------------------------------------------
 	-- What the mob is wanted for
 	--
 	-- The one thing a creature hover can say that the client cannot: this boar

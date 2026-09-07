@@ -379,6 +379,56 @@ end
 -- Putting one up
 --------------------------------------------------------------------------
 
+-- The kinds an item arriving late can change, and whether the box that is up
+-- came out thin enough to be worth rebuilding when one does.
+--
+-- **The client does not always know what an item is at the moment you hover
+-- it.** An item is a number until the server has sent its data, and until then
+-- every setter in UI/Scan.lua answers about it with nothing at all or with the
+-- one line that says so. There is no way to ask the client to hurry and no way
+-- to tell from the answer that a better one is coming. The event is the only
+-- notice there is, and until this existed nothing in the addon was listening
+-- for it on behalf of a box already on screen: the head band was scanned once,
+-- at the moment the pointer arrived, and a hover held through the fetch showed
+-- whatever had been true a tenth of a second too early.
+--
+-- That is a tooltip with a name and no stats, and it is a tooltip with nothing
+-- in it at all where the caller had no title of its own to fall back on. Both
+-- are the same defect and this is the half that fixes it. UI/Fresh.lua's header
+-- says the head band has no stamp until somebody can say which call makes it
+-- stale; this is that call, and it is an event rather than a stamp, which is
+-- why it is here rather than there.
+--
+-- **Thin, rather than a comparison against the id that arrived.** An `item`
+-- subject carries a link and the id could be read out of it, but an `inventory`
+-- subject carries a slot and there is no id in a slot without another call, so
+-- half the hovers on the character sheet could not be matched at all. What is
+-- worth having instead is the state: a box whose head is thin is rebuilt when
+-- any item lands, and it stops being rebuilt the moment its own does, because
+-- the head is no longer thin. A box that already reads properly ignores the
+-- event outright, which is every hover in an evening bar the few seconds after
+-- one lands on something the client has never seen.
+local FETCHED = { item = true, inventory = true }
+
+-- What the client publishes in place of an item it has not fetched yet. Read
+-- through _G because a client that does not carry it is a client where the
+-- first test below is the whole answer, and a missing global is not an error.
+local function Retrieving()
+	local text = _G.RETRIEVING_ITEM_INFO
+	return type(text) == "string" and text or nil
+end
+
+local function Thin(subject, data)
+	if not FETCHED[subject.kind] then
+		return false
+	end
+	if not data or not data.scan or not data.scan[1] then
+		return true
+	end
+	local waiting = Retrieving()
+	return waiting ~= nil and data.scan[1][1] == waiting
+end
+
 -- Open on an owner, describing a subject.
 --
 -- `above` opens the box over the owner rather than beside it, which is what
@@ -397,15 +447,21 @@ function Tip.Open(owner, subject, above, place)
 		UI.Fresh.Stop()
 		return UI.Tooltip.Show(owner, nil)
 	end
-	-- Held so a modifier pressed while the box is already up can redraw it. See
-	-- Tip.Again below, which is the only reader.
-	open = { owner = owner, subject = subject, above = above, place = place }
+	-- Built here rather than inside the call below, because two things have to
+	-- read it before it is drawn: the arm underneath and the thinness test that
+	-- decides whether a late arriving item is worth rebuilding for.
+	local data = Tip.Build(subject)
+	-- Held so a modifier pressed while the box is already up can redraw it, and
+	-- so a client that answers about this thing a second later can. See
+	-- Tip.Again and Tip.Arrived below, which are the two readers.
+	open = { owner = owner, subject = subject, above = above, place = place,
+		thin = Thin(subject, data) }
 	-- After the box is built and before it is handed over, and armed on the
 	-- subject rather than on the box: a rebuild comes back through here with the
 	-- same subject table and must not read as a new hover. UI/Fresh.lua's Arm
 	-- says what happens if it does.
 	UI.Fresh.Arm(subject)
-	return UI.Tooltip.Show(owner, Tip.Build(subject), above or subject.above,
+	return UI.Tooltip.Show(owner, data, above or subject.above,
 		place or subject.place, Beside(subject))
 end
 
@@ -417,15 +473,49 @@ end
 -- second OnEnter coming, so whoever watches the key asks for the box again and
 -- it is rebuilt from the subject the hover named.
 --
--- False where nothing is up, which is most of the time and is why the watcher
--- may call this on every press without asking first.
+-- False where no hover is live, which is most of the time and is why the
+-- watcher may call this on every press without asking first.
+--
+-- **A live hover is `open` and not a box on screen**, and the two are different
+-- in the one case this has to serve. A hover whose client text had not arrived
+-- yet drew no box at all, because a subject with nothing in any band is refused
+-- rather than drawn empty, and that is precisely the box a late arriving item
+-- has to be able to put up. Reading IsShown here meant the boxes that most
+-- needed rebuilding were the ones that could not be. `open` is cleared by
+-- Tip.Close, so it says what the pointer is on rather than what is drawn.
 function Tip.Again()
-	if not open or not UI.Tooltip.IsShown() then
+	if not open then
 		return false
 	end
 	local held = open
 	Tip.Open(held.owner, held.subject, held.above, held.place)
 	return true
+end
+
+-- The client fetched an item, and the box on screen may have been waiting for
+-- it.
+--
+-- Answered as whether the box was built again, which is false on nearly every
+-- event: no hover is live, or the one that is already reads properly. See the
+-- Thin comment above for why the id that arrived is not compared against the
+-- one in the box.
+--
+-- Public because scripts/harness drives it. There is no other caller: the
+-- registration below is the whole of the wiring.
+function Tip.Arrived()
+	if not open or not open.thin then
+		return false
+	end
+	return Tip.Again()
+end
+
+-- Registered through pcall for the reason every client call in this addon is:
+-- the event is not on every flavour this addon loads on, and a client that
+-- refuses it is a client where a hover held through a fetch shows what it
+-- showed before this file existed rather than an error.
+local fetched = CreateFrame("Frame")
+if pcall(fetched.RegisterEvent, fetched, "GET_ITEM_INFO_RECEIVED") then
+	fetched:SetScript("OnEvent", Tip.Arrived)
 end
 
 --------------------------------------------------------------------------

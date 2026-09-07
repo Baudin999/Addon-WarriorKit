@@ -316,6 +316,12 @@ local SECTIONS = {
 	-- answers the same number for every other note, so what the sections under
 	-- here inherit is a tick that arms on a note hover and rebuilds nothing.
 	"48-tooltip-fresh",
+	-- Beside it, and for the same reason both are apart from 48-tooltips: this
+	-- is a box that has to change after it was drawn rather than a claim about
+	-- what a box says. It hovers an item the client has never heard of, which
+	-- is a link with no entry in the stub's item table, and leaves that table
+	-- as it found it.
+	"48-tooltip-arrival",
 	"49-world-hover",
 	-- After 48-tooltips, which is fine and is worth saying why: what that
 	-- section leaves registered is a source that answers only a subject

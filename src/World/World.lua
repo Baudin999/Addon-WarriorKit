@@ -87,6 +87,23 @@ function World.Wanted()
 	return ns.db.worldTips == true
 end
 
+-- Whether the box on screen is the one this file put there.
+--
+-- **The addon has one tooltip and every hover in it draws in that one frame.**
+-- A bag square, a unit frame, a feed row: each of them opens the same box on
+-- itself and takes it down again on the way out, and none of them tells this
+-- file that it did. So "our box is up" is not something this file may remember.
+-- It is something it has to ask, and the two calls below are the whole of the
+-- question.
+--
+-- Owner rather than IsShown alone, because a box counted down by the linger is
+-- still shown and belongs to nobody: UI/Tip.lua drops the owner the moment the
+-- pointer leaves what it was describing.
+local function Ours()
+	local Box = ns.UI.Tooltip
+	return Box.IsShown() and Box.Owner() == Box.CURSOR
+end
+
 -- Hidden, so nothing runs on an ordinary frame. Shown for as long as a box is
 -- on screen and taken down with it.
 local ticker = CreateFrame("Frame")
@@ -98,15 +115,25 @@ ticker:Hide()
 -- screen puts a zone between you and it, and the setting going off means the
 -- addon is not describing mobs any more. A second of a sentence about either is
 -- a second of a sentence about nothing.
+-- **And the box goes only if it is still ours.** Every other line here is this
+-- file's own state and is put back whatever is on screen, but the last one
+-- reaches into the frame every hover in the addon shares. A creature that stops
+-- existing while the pointer is over a bag square is this state coming down and
+-- somebody else's tooltip staying up, and the hover record inside UI/Tip.lua is
+-- already theirs by then: closing on their behalf would take down a box the
+-- player is reading and leave nothing to say why.
 function World.Close(now)
 	if not open then
 		return false
 	end
+	local ours = Ours()
 	open = false
 	looking = nil
 	ticker:Hide()
 	ns.UI.Scan.Suppress(false)
-	ns.Tip.Close(now)
+	if ours then
+		ns.Tip.Close(now)
+	end
 	return true
 end
 
@@ -124,8 +151,16 @@ function World.Open()
 	end
 	-- The same creature again, with our box already up for it. One call to find
 	-- that out against the whole build.
+	--
+	-- **And our box rather than a box**, which is the second test and is the
+	-- whole of what this refusal used to get wrong. A hover crossed on the way
+	-- past takes the frame over and takes it down again when you leave it, so
+	-- this file's `open` says what it last did rather than what is on screen.
+	-- Believing it left the creature under the pointer with no box of ours, no
+	-- event on its way to say so, and the suppression still holding Blizzard's
+	-- box down: a mob you were pointing straight at with no tooltip of any kind.
 	local guid = UnitGUID(UNIT)
-	if open and guid and guid == looking then
+	if open and guid and guid == looking and Ours() then
 		return true
 	end
 	if not ns.Tip.Open(ns.UI.Tooltip.CURSOR, Subject()) then
@@ -140,10 +175,37 @@ function World.Open()
 	return true
 end
 
+-- The box was taken over by a hover that owns a frame.
+--
+-- Everything World.Close does bar the one thing it must not do here: the box on
+-- screen is somebody else's now, and closing it would take down the tooltip of
+-- whatever the pointer actually moved onto. The suppression comes off, because
+-- it is armed only in exchange for a box of ours being up and there is no
+-- longer one, and this file goes back to believing nothing. The next time the
+-- token resolves, which for a live creature is the next time it or the camera
+-- moves, World.Open builds the box again rather than refusing as a repeat.
+local function Yield()
+	open = false
+	looking = nil
+	ticker:Hide()
+	ns.UI.Scan.Suppress(false)
+	return true
+end
+
+-- One pass, and it asks two questions rather than one.
+--
+-- The token going away is the pointer leaving the creature, and that closes.
+-- The box no longer being ours is another hover crossing over this one, and
+-- that yields. Both used to be one question, and the second was not asked at
+-- all.
 function World.Sweep()
 	if not UnitExists(UNIT) then
-		World.Close()
+		return World.Close()
 	end
+	if Ours() then
+		return false
+	end
+	return Yield()
 end
 
 ns.UI.Ticker(ticker, STEP, "world", World.Sweep)
