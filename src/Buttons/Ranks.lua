@@ -159,9 +159,15 @@ end
 --------------------------------------------------------------------------
 
 local function Replace(slot, id)
-	ClearCursor()
-	if not pcall(PickupSpell, id) or not GetCursorInfo() then
-		ClearCursor()
+	-- ns.CarrySpell rather than PickupSpell straight. The call answers to a
+	-- name on one client and to an id on the other, nothing installed here
+	-- proves which 2.5.6 is, and the shim tries both spellings and reads the
+	-- cursor back. Written straight against the id, a name-only client failed
+	-- every replace and the whole refresh came back as "could not place"
+	-- naming every spell on your bars, with no clue that the pickup was the
+	-- part that went wrong. Core/Core.lua holds the same guard for the same
+	-- reason and Buttons/Layout.lua already goes through it.
+	if not ns.CarrySpell(id) then
 		return false
 	end
 	PlaceAction(slot)

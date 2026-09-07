@@ -730,7 +730,7 @@ Bags/Blizzard.lua:2:the numbered ContainerFrame globals, hooked only on the flav
 Bags/Grid.lua:1:ContainerFrame_UpdateCooldown, which the vanilla flavour does not carry
 Bags/Session.lua:1:GetZoneText, absent early in login on one flavour
 Buttons/Layout.lua:1:an action button global fetched by name and checked before it is hooked
-Buttons/Ranks.lua:1:an action button global fetched by name and checked before it is hooked
+Buttons/Ranks.lua:1:the seven spell book and action calls the rank walk needs, named in one list
 Buttons/Slot.lua:1:an action button global fetched by name and checked before it is hooked
 Character/Reputation.lua:2:GetNumFactions, which the two flavours spell differently
 Character/Worn.lua:1:PickupInventoryItem, guarded because the drag path runs under the stub too
