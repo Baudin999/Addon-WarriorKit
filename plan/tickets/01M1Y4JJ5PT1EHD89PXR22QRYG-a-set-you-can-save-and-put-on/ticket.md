@@ -7,8 +7,9 @@ title: A set you can save and put on
 parent: 01M1Y4JDFMVHEB87QK9R1KP4BJ
 ---
 
-Phase 1 of the equipment manager. The model, the planner, the queue, and four
-slash words. No UI at all, and it is still a thing you can use for a week.
+Phase 1 of `01M1Y4JDFMVHEB87QK9R1KP4BJ`, the equipment manager. The model,
+the planner, the queue, and four slash words. No UI at all, and it is still
+a thing you can use for a week.
 
 ## What lands
 
