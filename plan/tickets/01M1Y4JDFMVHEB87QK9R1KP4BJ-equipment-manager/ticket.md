@@ -108,11 +108,13 @@ One line comes back:
 
 Five, each one a vertical you can use in game on its own.
 
-1. A set you can save and put on. Slash only, no UI.
-2. The sets on the character page.
-3. Editing a set on the doll.
-4. A key on a set, and the swap that waits for the fight.
-5. The set that follows your spec.
+1. `01M1Y4JJ5PT1EHD89PXR22QRYG` A set you can save and put on. Slash only,
+   no UI.
+2. `01M1Y4JJ84Y3J1NRFFSDMT3TDV` The sets on the character page.
+3. `01M1Y4JJADXT00H6V1Z6660YBG` Editing a set on the doll.
+4. `01M1Y4JJCMRCGEMB0DT4MET6W7` A key on a set, and the swap that waits for
+   the fight.
+5. `01M1Y4JJF3NH511BGFDH3N7JY9` The set that follows your spec.
 
 Phase 5 is the weakest and it should be built last or not at all. TBC has no
 dual spec. You respec at a trainer for gold, maybe once a week, and that is
