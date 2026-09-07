@@ -7,8 +7,8 @@ title: "A key on a set, and the swap that waits for the fight"
 parent: 01M1Y4JDFMVHEB87QK9R1KP4BJ
 ---
 
-Phase 4 of the equipment manager. The part that gets pressed forty times a
-night.
+Phase 4 of `01M1Y4JDFMVHEB87QK9R1KP4BJ`, the equipment manager. The part
+that gets pressed forty times a night.
 
 ## What lands
 
