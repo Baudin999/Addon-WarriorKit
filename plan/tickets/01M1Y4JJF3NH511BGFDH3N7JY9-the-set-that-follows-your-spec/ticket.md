@@ -7,7 +7,8 @@ title: The set that follows your spec
 parent: 01M1Y4JDFMVHEB87QK9R1KP4BJ
 ---
 
-Phase 5 of the equipment manager, and the one to build last or not at all.
+Phase 5 of `01M1Y4JDFMVHEB87QK9R1KP4BJ`, the equipment manager, and the one
+to build last or not at all.
 
 ## What lands
 
