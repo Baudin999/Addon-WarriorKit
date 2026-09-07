@@ -585,7 +585,7 @@ ns.Register({
 				RefreshRanks()
 			else
 				ns.Print("ranks: " .. ns.Ranks.Describe() .. ".")
-				ns.Print("ranks refresh moves every bar slot up to your best rank. Macros are left alone.")
+				ns.Print("ranks refresh moves a bar slot up to your best rank. A spell you carry two ranks of is left alone, and so are macros.")
 			end
 		end,
 
@@ -649,7 +649,7 @@ ns.Register({
 		end
 
 		ui.Section("Spell ranks", "Action bars")
-		ui.Lede("Moves any spell on a bar that is holding an old rank up to the best one you know.")
+		ui.Lede("Moves any spell on a bar that is holding an old rank up to the best one you know, unless you are carrying two ranks of it on purpose.")
 		ui.Action(
 			function()
 				local count = #ns.Ranks.Stale()
@@ -657,7 +657,7 @@ ns.Register({
 			end,
 			RefreshRanks,
 			function() return (ns.Ranks.CanApply()) and #ns.Ranks.Stale() > 0 end)
-		ui.Hint("Macros, items and empty slots are left alone. Only a spell whose rank is behind what you have trained is moved.")
+		ui.Hint("A spell you keep two ranks of, the way a healer keeps a cheap rank beside the big one, is left where you put it. Macros, items and empty slots are left alone too.")
 		ui.Reading("your bars", function()
 			local can, why = ns.Ranks.CanApply()
 			if not can then

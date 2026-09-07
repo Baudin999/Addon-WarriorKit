@@ -20,10 +20,12 @@
 -- square is armed with and what a section reads back off it. Nothing here is
 -- baked game data and none of it should be copied out.
 --
--- **Ranks.lua's probe now passes.** That file walks the tabs and used to be
--- refused at GetSpellTabInfo; with this book under it the walk runs, over a
--- bar whose slots hold nothing it recognises, and answers that every slot is
--- at its best rank. No section asserts on either answer.
+-- **Ranks.lua reads its ranks off this book.** That file walks the tabs and
+-- used to be refused at GetSpellTabInfo. With this book under it and the
+-- PickupSpell below beside it, both halves of that file run: 87-spell-ranks
+-- lays spells into the action slots 05-quests.lua models and presses the
+-- button. Three ranks of Rend and two of Battle Shout with a greyed third are
+-- what that section counts against, so moving an entry here moves it.
 
 local H = ...
 local region = H.region
@@ -106,9 +108,108 @@ end
 -- Onto the cursor, the way 05-quests.lua models a spell there: the book
 -- index and the book. Counted, so a section can tell a drag that picked
 -- something up from one that was refused.
+--
+-- The id goes with it so the thing on the cursor can be put down again. A
+-- pickup that filled the hands with something PlaceAction could not place read
+-- as a working drag right up until a slot came back empty.
 _G.PickupSpellBookItem = function(index, book)
 	H.spellbook.pickups[#H.spellbook.pickups + 1] = index
-	_G.WarriorKitCarrySpell(index, book)
+	local entry = Entry(index, book)
+	_G.WarriorKitCarrySpell(index, book, entry and entry.id)
+end
+
+-- The other way onto the cursor, and the one Buttons/Ranks.lua takes.
+--
+-- **This client takes an id and refuses a name.** That is one of the two
+-- shapes the call has across clients and nothing installed on this machine
+-- proves which 2.5.6 is, which is the whole reason ns.CarrySpell exists: it
+-- tries both spellings and reads the cursor back. Modelled as the strict one
+-- rather than as a call that takes anything, because a stub that answered to
+-- both would let a caller that guessed wrong pass, and a caller that guessed
+-- wrong is exactly the bug ns.CarrySpell was written to absorb.
+--
+-- A name reaches here from Buttons/Layout.lua, which composes a loadout out of
+-- spell names, so the fallback that turns a name into an id is on the tested
+-- path too and is not theory.
+--
+-- FUTURESPELL is refused. The trainer has not sold it to you, the client will
+-- not put it on the cursor, and a fixture that handed one over would let a
+-- reader that ignored the greyed ranks look the same as one that skipped them.
+_G.PickupSpell = function(id)
+	if type(id) ~= "number" then
+		error("this client's PickupSpell takes a spell id, not " .. type(id))
+	end
+	for index, entry in ipairs(ENTRIES) do
+		if entry.id == id and entry.kind == "SPELL" then
+			H.spellbook.pickups[#H.spellbook.pickups + 1] = index
+			_G.WarriorKitCarrySpell(index, "spell", id)
+			return
+		end
+	end
+	-- An id this book does not carry leaves the hands empty rather than
+	-- raising, which is what the client does for a spell you have not learnt.
+	_G.ClearCursor()
+end
+
+-- Present so Buttons/Layout.lua can answer that a loadout is writable at all,
+-- and modelled no further than that. Nothing in the suite composes a loadout,
+-- so a macro on the cursor has no reader; a stub that pretended otherwise
+-- would be a fixture asserting about itself.
+_G.PickupMacro = function()
+	_G.ClearCursor()
+end
+
+--------------------------------------------------------------------------
+-- The book, seen through GetSpellInfo
+--
+-- 03-player.lua answers that call off a flat table of ids it names, and every
+-- id it does not carry comes back as "Spell6547". That was fine while nothing
+-- compared the answer with a book entry. Buttons/Ranks.lua does exactly that,
+-- on every slot on your bars: it reads the id out of a slot, asks for its
+-- name, and looks the name up in the book it walked. Against the flat table
+-- every rank past the first three is a spell of its own with nobody else
+-- sharing its name, so nothing is ever behind anything and the whole feature
+-- reads as a bar that is already up to date.
+--
+-- Wrapped here rather than written into that file because the ranks are here.
+-- The earlier answer is kept for everything this book does not carry, which is
+-- most of the ids in the suite, so the two are one call and not a fork.
+--
+-- The name direction is the same lookup read backwards, and it is the seventh
+-- return. ns.CarrySpell reads the id there when PickupSpell has refused a
+-- name, which is the shape Buttons/Layout.lua reaches it in, so without it the
+-- name half of that shim has no answer on this client. The last entry wearing
+-- a name is the top rank you have trained, which is the rank the live call
+-- hands back when you ask it by name.
+--------------------------------------------------------------------------
+
+local function Look(want, field)
+	local found
+	for _, entry in ipairs(ENTRIES) do
+		if entry[field] == want and entry.kind == "SPELL" then
+			found = entry
+		end
+	end
+	return found
+end
+
+local Flat = _G.GetSpellInfo
+
+_G.GetSpellInfo = function(spell)
+	if type(spell) == "string" then
+		local entry = Look(spell, "name")
+		local name, rank, icon, cast = Flat(spell)
+		if not entry then
+			return name, rank, icon, cast
+		end
+		return entry.name, rank, icon, cast, nil, nil, entry.id
+	end
+	local entry = type(spell) == "number" and Look(spell, "id")
+	if not entry then
+		return Flat(spell)
+	end
+	local _, rank, icon, cast = Flat(spell)
+	return entry.name, rank, icon, cast, nil, nil, entry.id
 end
 
 --------------------------------------------------------------------------

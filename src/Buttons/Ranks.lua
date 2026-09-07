@@ -16,6 +16,11 @@ ns.Ranks = Ranks
 -- yours, its text is yours, and rewriting it is not this button's business.
 -- Items, companions and equipment sets are left alone for the same reason.
 --
+-- And a spell you carry two ranks of is left alone as well, both ranks of it,
+-- because two ranks on the bars is a decision about mana and this button is
+-- not entitled to overrule it. The rule is one rank on the bars, stated where
+-- it is implemented, above Scan.
+--
 -- Nothing here runs in combat, because PlaceAction is protected. A trainer
 -- visit is not a fight, so it refuses rather than queuing the write for later
 -- the way the charge button does.
@@ -102,7 +107,70 @@ local function HighestRanks()
 end
 
 --------------------------------------------------------------------------
+-- What is on the bars
+--
+-- Every slot holding a plain spell, gathered under the spell's name, with the
+-- ranks of that name counted as distinct ids rather than as slots.
+--
+-- Distinct ids and not slots, because the same rank in two places is the
+-- normal shape of a bar rather than a decision about ranks. A warrior has
+-- three stance pages of bar 1 and Heroic Strike sits on all three; a hunter
+-- has the same shot on the bar and on the pet bar's page. Counting slots would
+-- read every one of those as a spell whose ranks the player is managing by
+-- hand and would freeze the case this file was written for.
+--------------------------------------------------------------------------
+
+-- One slot filed under its spell's name. The id doubles as the key of the rank
+-- set, which is why the count is carried beside it rather than measured: the
+-- ids are numbers and the two book-keeping fields are strings, so they share a
+-- table without colliding and the group is one allocation instead of two.
+local function Note(held, name, slot, id)
+	local group = held[name]
+	if not group then
+		group = { ranks = 0, slots = {} }
+		held[name] = group
+	end
+	if not group[id] then
+		group[id] = true
+		group.ranks = group.ranks + 1
+	end
+	group.slots[#group.slots + 1] = { slot = slot, id = id }
+end
+
+local function OnBars()
+	local held = {}
+
+	for slot = 1, SLOTS do
+		if HasAction(slot) then
+			local kind, id = GetActionInfo(slot)
+			local name = kind == "spell" and id and GetSpellInfo(id)
+			if name then
+				Note(held, name, slot, id)
+			end
+		end
+	end
+
+	return held
+end
+
+--------------------------------------------------------------------------
 -- What is stale
+--
+-- A slot is stale when it is behind the best rank you know AND that spell has
+-- exactly one rank on your bars. Two or more and the whole name is left alone,
+-- every slot of it, including the ones already at the top.
+--
+-- That second half is the rule, not a hedge around it. Carrying two ranks of
+-- one spell is a decision: rank 1 Healing Touch costs a fifth of the mana of
+-- rank 11 and is what you top someone off with between pulls, and a downranked
+-- Frostbolt is a slow that does not pull. A player who laid that out and then
+-- pressed a button that quietly moved all of it to the top would have to build
+-- it again and would have no way to know what had happened. One rank on the
+-- bars says nothing was chosen, so a trainer visit is free to move it.
+--
+-- Left alone means silent, not reported. The panel's count and the reading
+-- both come off this list, so a downranked spell is not something the button
+-- offers to fix and then does not: it is simply not stale.
 --
 -- Cached, because the panel asks for the count on every refresh and a refresh
 -- is every click anywhere in the window. Dropped whenever a slot moves or the
@@ -115,22 +183,26 @@ local function Scan()
 	local best = HighestRanks()
 	local stale = {}
 
-	for slot = 1, SLOTS do
-		if HasAction(slot) then
-			local kind, id = GetActionInfo(slot)
-			if kind == "spell" and id then
-				local name = GetSpellInfo(id)
-				local top = name and best[name]
+	for name, group in pairs(OnBars()) do
+		local top = best[name]
+		if top and group.ranks == 1 then
+			for _, held in ipairs(group.slots) do
 				-- A rankless spell answers with the id already in the slot, so
 				-- the inequality is what separates "no better rank exists"
 				-- from "you are holding an old one".
-				if top and top ~= id then
-					stale[#stale + 1] = { slot = slot, from = id, to = top, name = name }
+				if held.id ~= top then
+					stale[#stale + 1] =
+						{ slot = held.slot, from = held.id, to = top, name = name }
 				end
 			end
 		end
 	end
 
+	-- Slot order, because pairs over the names above is whatever order the
+	-- table hands back and the panel prints this list. A refresh that named
+	-- the same two spells in a different order every time it was asked reads
+	-- as a list that is still changing.
+	table.sort(stale, function(a, b) return a.slot < b.slot end)
 	return stale
 end
 

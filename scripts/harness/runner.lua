@@ -548,6 +548,12 @@ local SECTIONS = {
 	-- of gems up and takes it down again at the foot of the file, the way
 	-- 65-bag-piles.lua hands its fifth bag back.
 	"86-sockets",
+	-- Last, and it wants the action slots every section above it has been
+	-- writing into: it empties all 120 of them, lays out a bar of its own and
+	-- hands back what it found at the foot of the file. Nothing above it reads
+	-- the spell book and the action slots together, which is the pair this one
+	-- is about.
+	"87-spell-ranks",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

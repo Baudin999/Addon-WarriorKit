@@ -212,8 +212,19 @@ end
 -- leaves there. Written onto the cursor above rather than onto one of its own,
 -- for the reason PickupAction writes onto it: everything that asks what the
 -- hands are holding asks that one upvalue.
-_G.WarriorKitCarrySpell = function(index, book)
-	cursor = index and { spell = index, book = book or "spell" } or nil
+--
+-- The third argument is what PlaceAction puts in the slot, and it is separate
+-- from the first because the two are different things: the index is what
+-- GetCursorInfo reports on this client and the id is what the slot ends up
+-- holding. Optional, because the readers that came first only ever asked what
+-- was in the hands and never put it down. A carry with no id behind it places
+-- an empty slot, which is what a client with nothing on the cursor does.
+_G.WarriorKitCarrySpell = function(index, book, id)
+	cursor = index and {
+		spell = index,
+		book = book or "spell",
+		action = id and { spell = id } or nil,
+	} or nil
 end
 
 _G.ClearCursor = function() cursor = nil end

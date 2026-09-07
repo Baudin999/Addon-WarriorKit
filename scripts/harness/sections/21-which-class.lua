@@ -150,9 +150,14 @@ check(ns.Layout.Refusal():find(Class.Label(), 1, true) ~= nil,
 
 -- The same refusal, in combat, which is where it went wrong. CanApply asks for
 -- the plan before it asks about the moment, so a class with no plan is told the
--- permanent thing rather than the passing one, and everyone else is told what
--- this stub is missing, which is PickupSpell. Read the pair rather than the
--- sentence: which of the two comes back is the whole ordering.
+-- permanent thing rather than the passing one, and everyone else is told about
+-- the fight. Read the pair rather than the sentence: which of the two comes
+-- back is the whole ordering.
+--
+-- It reads that way now because 19-spellbook.lua carries PickupSpell. Before
+-- it did, every class with a plan was refused over the missing call instead,
+-- which is a different sentence that happens to satisfy the same assertion,
+-- so this check passed while testing nothing about the order.
 --
 -- Then the status line itself, on every class, in the state that broke it. It
 -- used to page the plan it had just been refused over and index the length of a
