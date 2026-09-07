@@ -413,6 +413,17 @@ read_globals = {
 	-- the CVar out of combat and hands it back in. Both calls are pcalled: no
 	-- addon here proves SetCVar takes that name on 2.5.6.
 	"GetCVarBool", "GetCVar", "SetCVar",
+	-- Blizzard_CombatText's table of message types, which CombatText/Blizzard.lua
+	-- takes the heals and hits out of because the column it scrolls beside your
+	-- character gives those types no CVar to turn off. Nothing installed on this
+	-- machine touches it, so it is read off the client's own source rather than
+	-- off another addon's proof: Shared/CombatTextConstants.lua on the
+	-- classic_anniversary and classic_era branches, which are the two flavours
+	-- this addon ships for. The addon on demand, so the name answers nil at
+	-- login on a character who has never had the column on; the reader checks
+	-- for a table and Describe says so when the master switch is on and the
+	-- table is not there, which is what would witness the name being wrong.
+	"CombatTextTypeInfo",
 	"GetGameTime",
 	-- Looting, for the Comfort part. Leatrix Plus is loaded on both of these
 	-- clients and calls all five unguarded inside its own faster-looting

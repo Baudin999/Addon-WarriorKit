@@ -603,3 +603,32 @@ do
 		sheet:Show()
 	end
 end
+
+--------------------------------------------------------------------------
+-- The scrolling column's table of message types
+--
+-- Blizzard_CombatText loads on demand and this global is what it brings. Only
+-- the shape matters to the addon and both halves of it are here: a type with
+-- `show` and no `cvar` is one the client's own settings page cannot turn off,
+-- and a type naming a cvar is one it can. A section asserts the addon takes the
+-- first kind and leaves the second alone.
+--
+-- Read off Shared/CombatTextConstants.lua and Classic/CombatTextConstantsOverrides.lua
+-- on the classic_anniversary source rather than typed from memory.
+--------------------------------------------------------------------------
+
+_G.CombatTextTypeInfo = {
+	DAMAGE = { r = 1, g = 0.1, b = 0.1, isStaggered = 1, show = 1 },
+	DAMAGE_CRIT = { r = 1, g = 0.1, b = 0.1, show = 1 },
+	SPELL_DAMAGE = { r = 0.79, g = 0.3, b = 0.85, show = 1 },
+	SPELL_CAST = { r = 0.1, g = 1, b = 0.1, show = 1 },
+	SPLIT_DAMAGE = { r = 1, g = 1, b = 1, show = 1 },
+	DAMAGE_SHIELD = { r = 1, g = 1, b = 1 },
+	HEAL = { r = 0.1, g = 1, b = 0.1, show = 1 },
+	HEAL_CRIT = { r = 0.1, g = 1, b = 0.1, show = 1 },
+	PERIODIC_HEAL = { r = 0.1, g = 1, b = 0.1, show = 1 },
+	PERIODIC_HEAL_CRIT = { r = 0.1, g = 1, b = 0.1, show = 1 },
+	DODGE = { r = 1, g = 0.1, b = 0.1, isStaggered = 1, cvar = "floatingCombatTextDodgeParryMiss_v2" },
+	COMBO_POINTS = { r = 0.1, g = 0.1, b = 1, cvar = "floatingCombatTextComboPoints_v2" },
+	ENERGIZE = { r = 0.1, g = 0.1, b = 1, cvar = "floatingCombatTextEnergyGains_v2" },
+}

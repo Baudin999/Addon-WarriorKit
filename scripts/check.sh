@@ -366,7 +366,7 @@ Buttons/Trace.lua:3:Trace.Cursor reads what the cursor is holding, on the pass t
 Buttons/Trace.lua:3:Trace.Name names the frame under the cursor, on the pass that frame changed
 Buttons/Trace.lua:3:Trace.Say prints one trace line, and only while the trace switch is on
 Charge/Icon.lua:1:MacroText runs behind SyncMacro comparing target, weapon and spell
-CombatText/Anchors.lua:2:Anchors.Apply places three anchors, on a settings change and on the first number of a session
+CombatText/Anchors.lua:2:Anchors.Apply places four anchors, on a settings change and on the first number of a session
 CombatText/Anchors.lua:2:Build makes one anchor, on the first pass after the part is switched on
 CombatText/Numbers.lua:1:Build makes one number's frame, on the spawn a busier second than any before it needs another
 Cooldowns/Row.lua:1:Place is layout rather than tick

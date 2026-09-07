@@ -7,11 +7,10 @@
 --
 -- Ten questions, and not one is answerable by reading the files.
 --
--- Does a blow land on the right side. The rule is that a number is placed by
--- who it happened to and not by who caused it, so what is on the left is the
--- target's health moving and what is on the right is your own. A reader that
--- split on the source instead would look entirely correct until something
--- healed you.
+-- Does a blow land on the right side. Damage is placed by who it happened to
+-- and not by who caused it, so what is on the left is the target's health moving
+-- and what is on the right is your own. A reader that split on the source
+-- instead would look entirely correct until something healed you.
 --
 -- The two anchors are `dealt` and `taken` and the ids were `mine` and `theirs`.
 -- That rename is here rather than in a comment because it was a real inversion:
@@ -19,6 +18,20 @@
 -- feature said the opposite of what it did and the columns were the wrong way
 -- round. Nothing but an assertion that names one column and reads the anchor
 -- back can hold that still.
+--
+-- Does healing go somewhere else, and does it rise. It shipped in the right
+-- hand column with the damage you take, on the argument that both are your own
+-- health bar moving, and that argument does not survive being looked at: the
+-- right hand side is what the fight is doing to you and a heal is the one thing
+-- in it that is not. It has its own anchor, it travels up rather than down, and
+-- it does not bow. All three are assertions because all three are ways of
+-- putting good news where the eye is looking for bad.
+--
+-- Does a column lean one way. The stream alternates sides per number when
+-- nobody says otherwise, which is right for one stream and wrong for two: half
+-- of what you land bows across your character towards the other column. Each
+-- column names its own lean now, so what is asserted is that two numbers born
+-- together in one column bow the same way and the two columns bow apart.
 --
 -- Do they start above the character. A number falls ninety pixels from where it
 -- is born, so an anchor thirty below the middle of the screen spends the whole
@@ -48,11 +61,11 @@
 -- in the air at once measured against each other.
 --
 -- Do they curve, and are they scattered. A number bows out of its fall at the
--- halfway point and comes back, two born in the same frame bow apart, and each
--- one is born a step above or below the row. The bow alone was not enough of
--- it: eighteen pixels of it around a sixty pixel glyph is inside the glyph, so
--- two blows a tenth of a second apart still meshed. Both are what stands
--- between a burst and one unreadable pile.
+-- halfway point and comes back, and each one is born a step above or below the
+-- row. The bow alone was never enough of it: eighteen pixels of it around a
+-- sixty pixel glyph is inside the glyph, so two blows a tenth of a second apart
+-- still meshed. Now that a column leans, the height is the whole of what keeps
+-- two numbers in one column out of each other, so it is asserted on its own.
 --
 -- Does the same blow twice become one number. A bleed ticking four times is one
 -- number carrying the total, and two different spells stay two numbers. This is
@@ -61,6 +74,14 @@
 --
 -- Does the tick allocate nothing and give itself back. The addon spends most of
 -- an evening with nothing in the air.
+--
+-- Are the client's own numbers put away, both kinds of them. Four CVars cover
+-- what it draws over your target. The column it scrolls beside your character
+-- has no CVar at all: its heals and its hits carry `show` and name no setting,
+-- which is why healing was still drawn twice after the CVars went off. That
+-- half is a field on the client's own table, so what is asserted is that the
+-- addon takes the types it redraws, leaves the ones with a setting of their own
+-- alone, gives every one of them back, and finds the table when it arrives late.
 --
 -- And does off mean off: the switch takes the reader off the combat log rather
 -- than turning its handler into an early return.
@@ -226,13 +247,92 @@ do
 	check(Stream.Count() == held,
 		"a blow between two other creatures drew a number on your screen")
 
+	Stream.Clear()
+end
+
+----------------------------------------------------------------------
+-- Healing is its own stream, and it rises
+----------------------------------------------------------------------
+
+do
+	-- Every heal below is its own number, because two heals off one spell are
+	-- one number that grows and this asks where a heal goes rather than how
+	-- many of them there are.
+	ns.db.hitsMerge = false
+
+	local left, right, up = Anchors.Of("dealt"), Anchors.Of("taken"), Anchors.Of("heals")
+	check(up ~= left and up ~= right, "healing comes off one of the damage anchors")
+
+	-- Over the character rather than off to a side, which is the placing the
+	-- direction of travel depends on: a stream that rises out of a column would
+	-- fly up through the numbers already falling down it.
+	local heals = ns.DefaultCopy("hitsHealsPoint")
+	check(heals[4] == 0,
+		("healing ships %d off the middle and it belongs over the character"):format(heals[4]))
+
+	-- A heal on you. It used to come off the right hand anchor with the damage
+	-- an enemy lands, which put the one green number on the screen in the place
+	-- the eye reads as a threat.
 	spellHeal(ME, ME, 4321, 210)
-	check(isGreen(newest()), "a heal on you is not green")
-	local healAnchor = select(1, readAt(newest()))
-	check(healAnchor == right,
-		"a heal on you did not come off the same anchor the damage you take does")
+	local item = newest()
+	check(isGreen(item), "a heal on you is not green")
+	check(select(1, readAt(item)) == up,
+		"a heal on you did not come off the healing anchor")
+
+	-- And a heal you cast on somebody else is the same stream. It went out with
+	-- what you land, which drew a heal in the column that means a target's
+	-- health going down.
+	spellHeal(ME, MOB, 4321, 90)
+	check(select(1, readAt(newest())) == up,
+		"a heal you cast on somebody else did not come off the healing anchor")
+
+	-- Up, not down, and straight. Both are the style rather than the anchor, so
+	-- they are read off a number in flight: past the beat it has to be above
+	-- where it was born and still on the line it was born on. Read through
+	-- screenAt for the reason that helper exists, which is that a number's own
+	-- offsets are written in a scale that is moving under them.
+	local bornX, bornY = screenAt(item)
+	beat(0.05, 6)
+	local lateX, lateY = screenAt(item)
+	check(lateY > bornY,
+		("a heal fell rather than rose, %.1f to %.1f"):format(bornY, lateY))
+	check(lateX == bornX,
+		("a heal bowed out of its rise, %.1f to %.1f"):format(bornX, lateX))
 
 	Stream.Clear()
+	ns.db.hitsMerge = true
+end
+
+----------------------------------------------------------------------
+-- Each column leans one way, and the two lean apart
+----------------------------------------------------------------------
+
+do
+	ns.db.hitsMerge = false
+
+	-- Two blows in one column, born together. They used to alternate, which is
+	-- what one stream on its own wants and is wrong the moment there are two:
+	-- half of what you land bowed across your character towards the other
+	-- column.
+	spellHit(ME, MOB, 772, 100)
+	spellHit(ME, MOB, 1160, 100)
+	beat(0.05, 6)
+	local oneX = select(2, readAt(Stream.At(1)))
+	local twoX = select(2, readAt(Stream.At(2)))
+	check(oneX < 0 and twoX < 0,
+		("what you land bows at %d and %d and the left column leans left"):format(oneX, twoX))
+	Stream.Clear()
+
+	-- And the other column leans the other way, so the two open away from your
+	-- character rather than into it.
+	spellHit(MOB, ME, 772, 100)
+	beat(0.05, 6)
+	local takenX = select(2, readAt(Stream.At(1)))
+	check(takenX > 0,
+		("what lands on you bows at %d and the right column leans right"):format(takenX))
+
+	Stream.Clear()
+	ns.db.hitsMerge = true
 end
 
 ----------------------------------------------------------------------
@@ -331,8 +431,17 @@ do
 	-- up, holds where it landed and only then leaves. Within a unit of its own
 	-- offset, because the offset is rounded to a whole one and the scale it is
 	-- read in has moved under it.
+	--
+	-- The tolerance is half a unit of each of the two scales it was read in.
+	-- Both offsets are rounded to a whole unit of the frame's own scale, and
+	-- that scale has moved between the two reads, so half a unit each is the
+	-- exact width of "it did not move" rather than a number chosen to pass. It
+	-- was one unit of the birth scale, which is the smaller of the two and was
+	-- narrower than the reading can be.
 	local heldX, heldY = screenAt(item)
-	check(math.abs(heldY - bornY) <= bornScale and math.abs(heldX - bornX) <= bornScale,
+	local _, _, _, heldScale = readAt(item)
+	local slack = (bornScale + heldScale) * 0.5
+	check(math.abs(heldY - bornY) <= slack and math.abs(heldX - bornX) <= slack,
 		("a number left before it had held still, %.1f,%.1f to %.1f,%.1f")
 			:format(bornX, bornY, heldX, heldY))
 
@@ -456,12 +565,12 @@ do
 	spellHit(ME, MOB, 772, 100)
 	spellHit(ME, MOB, 1160, 100)
 
-	-- Apart before either of them has moved, which is the half the bow cannot
-	-- do. The bow is zero at birth and zero again at the end of the fall, and
-	-- with a beat in front of it there is a tenth of a second at the start
-	-- where it is zero as well: two numbers whose only difference was the bow
-	-- were drawn on top of each other for the whole of the part of the flight
-	-- the eye actually reads.
+	-- Apart before either of them has moved, and this is now the whole of what
+	-- keeps them apart. The bow used to alternate and that was half the answer;
+	-- a column that leans one way has given that half up on purpose, so the
+	-- height a number is born at is the only thing left. The bow is zero at
+	-- birth and zero again at the end of the fall, and with a beat in front of
+	-- it there is a tenth of a second at the start where it is zero as well.
 	local one, two = Stream.At(1), Stream.At(2)
 	local _, _, oneBorn = readAt(one)
 	local _, _, twoBorn = readAt(two)
@@ -473,8 +582,6 @@ do
 	local _, twoX, twoY = readAt(two)
 	check(oneX ~= twoX or oneY ~= twoY,
 		("two numbers born together are drawn at the same place, %d,%d"):format(oneX, oneY))
-	check(oneX * twoX <= 0,
-		("two numbers born together bow the same way, %d and %d"):format(oneX, twoX))
 
 	Stream.Clear()
 	ns.db.hitsMerge = true
@@ -566,12 +673,38 @@ do
 	check(_G.GetCVar("enableFloatingCombatText") ~= "0",
 		"the part took the client's whole combat text and not its damage numbers")
 
+	-- The other half, and the one no CVar reaches. The column the client
+	-- scrolls beside your character draws every heal and every hit that lands
+	-- on you, its own table gives those types no setting to turn off, and the
+	-- symptom is healing on screen twice with the four CVars saying it is
+	-- handled.
+	local types = _G.CombatTextTypeInfo
+	local hushed, howMany = Blizz.Hushed()
+	check(howMany > 0, "the harness has no scrolling column table to take")
+	check(hushed == howMany,
+		("%d of the %d types the client scrolls are still drawn"):format(howMany - hushed, howMany))
+	check(not types.HEAL.show and not types.PERIODIC_HEAL.show,
+		"the client is still scrolling healing beside your character")
+
+	-- And nothing it does not redraw. A dodge, a combo point and an energy gain
+	-- each name a CVar of their own, which is the player's setting and not this
+	-- addon's business; the spell name the column calls out is not a number at
+	-- all.
+	check(types.DODGE.cvar and types.COMBO_POINTS.cvar and types.ENERGIZE.cvar,
+		"the harness table has lost the types that carry a setting of their own")
+	check(types.SPELL_CAST.show and types.SPLIT_DAMAGE.show,
+		"the part took a message the client scrolls that it does not redraw")
+
 	ns.db.hits = false
 	Numbers.Apply()
 	down = Blizz.Quiet()
 	check(down == 0,
 		("%d of the client's damage number settings are still off after switching this part off")
 			:format(down))
+	hushed = Blizz.Hushed()
+	check(hushed == 0,
+		("%d of the types the client scrolls are still off after switching this part off")
+			:format(hushed))
 	for index = 1, #names do
 		check(_G.GetCVar(names[index]) == "1",
 			("%s came back as %s and it was 1"):format(names[index],
@@ -588,6 +721,32 @@ do
 
 	ns.db.hitsQuiet = true
 	Numbers.Apply()
+
+	-- The column arriving after the part has already been applied, which is the
+	-- real order: Blizzard_CombatText loads on demand, inside the client's own
+	-- handler for the event that opens a session. Apply returns early on a pass
+	-- where nothing moved, so a table that turns up late is a table nothing
+	-- would ever take without the watcher.
+	-- Off first, with the table still there, so the types go back to what they
+	-- were before it is taken away. Hiding the table under a part that is
+	-- holding it is not the order any client produces and it would leave the
+	-- section asserting against a table it had broken itself.
+	ns.db.hits = false
+	Numbers.Apply()
+	_G.CombatTextTypeInfo = nil
+	ns.db.hits = true
+	Numbers.Apply()
+	check(select(2, Blizz.Hushed()) == 0,
+		"the part found a scrolling column table that is not there")
+
+	_G.CombatTextTypeInfo = types
+	check(types.HEAL.show,
+		"the column came back with healing already off, so the switch-off did not give it back")
+	fire("ADDON_LOADED", "Blizzard_CombatText")
+	hushed, howMany = Blizz.Hushed()
+	check(howMany > 0 and hushed == howMany,
+		("%d of the %d scrolled types are drawn after the column loaded late")
+			:format(howMany - hushed, howMany))
 end
 
 ----------------------------------------------------------------------
@@ -619,8 +778,10 @@ end
 ns.db.hits, ns.db.hitsQuiet = true, true
 Numbers.Apply()
 
-print(("hits   left for what you land and right for what lands on you, white,"
-	.. " green and gold; a crushing blow reads off slot 20, %d styles that snap"
-	.. " up, hold and then fall, merging on, %d of the client's own %d damage"
-	.. " settings put away, %d in the air")
-	:format(3, select(1, Blizz.Quiet()), select(2, Blizz.Quiet()), Stream.Count()))
+print(("hits   left for what you land, right for what an enemy lands on you and"
+	.. " rising for healing, white, green and gold; each column leans outwards"
+	.. " and healing does not bow; a crushing blow reads off slot 20, %d styles"
+	.. " that snap up, hold and then fall, merging on, %d of the client's own %d"
+	.. " damage settings and %d of the %d types it scrolls put away, %d in the air")
+	:format(5, select(1, Blizz.Quiet()), select(2, Blizz.Quiet()),
+		select(1, Blizz.Hushed()), select(2, Blizz.Hushed()), Stream.Count()))

@@ -102,9 +102,8 @@ ns.Register({
 		-- On. Every other readout in this addon that ships off is one you can
 		-- get somewhere else; this replaces the client's own floating combat
 		-- text rather than adding to it, and a part that ships off is a part
-		-- somebody has to be told how to find. Turn the client's own damage
-		-- numbers off in its Interface options or you will read every hit
-		-- twice.
+		-- somebody has to be told how to find. It puts the client's own away
+		-- while it runs, which is the `quiet` setting below.
 		hits = true,
 
 		-- Thirty at a zoom of two, which is sixty physical pixels.
@@ -149,8 +148,10 @@ ns.Register({
 
 		-- On. Two parts drawing the same hit is worse than either alone, and a
 		-- part that replaces the client's readout and leaves it running has
-		-- replaced nothing. Only the four the client draws that this part
-		-- redraws; your dodges, combo points and energy are still its own.
+		-- replaced nothing. Only what this part redraws: the four over your
+		-- target, and the hits and heals the client scrolls beside you, which
+		-- have no setting of their own and were the half that was still doubled.
+		-- Your dodges, combo points and energy are still its own.
 		hitsQuiet = true,
 
 		-- A hundred and fifty pixels either side of you and forty above, which
@@ -163,8 +164,15 @@ ns.Register({
 		-- is read most goes where a left-to-right reader looks first. The calls
 		-- sit above your head, clear of both columns and of the nameplate over
 		-- whatever you are hitting.
+		--
+		-- Healing starts on the character and rises, so it begins where the two
+		-- columns begin their fall and travels the other way. That is the one
+		-- placing here that is a reading rather than a taste: three streams over
+		-- one character are told apart by direction before they are told apart
+		-- by colour, and a heal is the only one going up.
 		hitsDealtPoint = { "CENTER", "UIParent", "CENTER", -150, 40 },
 		hitsTakenPoint = { "CENTER", "UIParent", "CENTER", 150, 40 },
+		hitsHealsPoint = { "CENTER", "UIParent", "CENTER", 0, 0 },
 		hitsCallsPoint = { "CENTER", "UIParent", "CENTER", 0, 140 },
 	},
 
@@ -173,7 +181,7 @@ ns.Register({
 	},
 
 	help = {
-		"hits on|off, damage and healing floating off your character",
+		"hits on|off, damage floating off your character and healing rising over it",
 		"hits size 30, fall 90, curve 44, time 1.3",
 		"hits merge on|off, calls on|off, quiet on|off",
 	},
@@ -205,7 +213,7 @@ ns.Register({
 
 	panel = function(ui)
 		ui.Section("Floating numbers", "Fighting")
-		ui.Lede("What you land falls away on your left, what lands on you on the right. Damage is white, healing is green, and more than a hit is gold.")
+		ui.Lede("What you land falls left, what an enemy lands on you falls right, healing rises over your character. Damage is white, healing green, a big hit gold.")
 
 		ui.Size("size", SIZE_LOW, SIZE_HIGH, 1,
 			function() return ns.db.hitsSize end,
@@ -228,6 +236,7 @@ ns.Register({
 				ns.db.hitsArc = value
 				Restyle()
 			end)
+		ui.Hint("Each column bows outwards, away from your character. Healing rises straight whatever this says.")
 		-- A stepper and not a slider, which is the argument the zoom rows already
 		-- won: a tenth of a second is a step you click rather than a length you
 		-- aim at, and a slider four tenths wide is a control you overshoot.
@@ -254,7 +263,7 @@ ns.Register({
 				ns.db.hitsQuiet = on
 				Restyle()
 			end)
-		ui.Hint("The four it draws that these replace. Your dodges, combo points and energy stay the client's, and it gets its own settings back when this goes off.")
+		ui.Hint("The four over your target and the hits and heals it scrolls beside you. Your dodges, combo points and energy stay the client's, and it gets them all back when this goes off.")
 
 		ui.Reading("the numbers", function()
 			if not ns.CombatLog.Ready() then
@@ -267,10 +276,10 @@ ns.Register({
 			return ("%d in the air, biggest this fight %d"):format(Numbers.Count(), biggest)
 		end)
 
-		ui.Action(function() return "put the three spawn points back" end, function()
+		ui.Action(function() return "put the four spawn points back" end, function()
 			Anchors.Reset()
 		end)
-		ui.Hint("Three of them: what lands on you, what you land, and the calls. Unlock the frames to drag them.")
+		ui.Hint("Four of them: what you land, what lands on you, healing, and the calls. Unlock the frames to drag them.")
 
 		ui.Section("Combat calls", "Fighting")
 		ui.Lede("A word above your head the moment an ability comes up, once.")

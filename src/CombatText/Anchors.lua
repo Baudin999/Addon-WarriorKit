@@ -6,12 +6,13 @@ local Anchors = {}
 ns.CombatTextAnchors = Anchors
 
 --------------------------------------------------------------------------
--- The three places numbers come from
+-- The four places numbers come from
 --
--- Everything this part draws flies away from one of three points on the screen,
+-- Everything this part draws flies away from one of four points on the screen,
 -- and every one of them is a rectangle you can unlock and drag. What you land
--- on your target comes off the left one, what lands on you comes off the right
--- one, and a word about the fight comes off the one above your head.
+-- on your target comes off the left one, what an enemy lands on you comes off
+-- the right one, healing rises off the one over your character, and a word
+-- about the fight comes off the one above your head.
 --
 -- **They are named for the blow and not for the side.** `dealt` and `taken`
 -- say which half of the fight a number belongs to; where each one sits is a
@@ -22,18 +23,25 @@ ns.CombatTextAnchors = Anchors
 -- the wrong side of the screen for the whole of its life without a single
 -- identifier looking wrong.
 --
+-- **Healing is a stream of its own and not a column of damage.** It went out
+-- with what lands on you, on the argument that both are your own health bar
+-- moving. That argument is wrong on a screen: the right hand column is what the
+-- fight is doing to you, it is read as a threat, and a heal is the one thing
+-- there that is not. So it is its own anchor over the character, it rises, and
+-- the right hand side is enemies alone.
+--
 -- **Why the spawn point is the whole anchor.** A number's flight has two ends
 -- and only the first one is placed. Where it finishes is the start plus the
 -- fall, and the fall is a number on the settings page, so moving the anchor
--- moves the whole arc rather than stretching it. The alternative is six grab
--- handles for three streams, which is a placing session rather than a setting,
+-- moves the whole arc rather than stretching it. The alternative is eight grab
+-- handles for four streams, which is a placing session rather than a setting,
 -- and it cannot express the curve anyway: the far end of a bow is not a
 -- straight offset from the near one.
 --
--- **Why they are frames at all rather than four numbers.** A number is anchored
--- CENTER to CENTER on one of these, so the anchor is what the flight is
--- measured against and it survives a resolution change, a UI scale change and a
--- drag without any of the three being handled here. UI/Placeable.lua already
+-- **Why they are frames at all rather than a pair of numbers each.** A number
+-- is anchored CENTER to CENTER on one of these, so the anchor is what the flight
+-- is measured against and it survives a resolution change, a UI scale change and
+-- a drag without any of the three being handled here. UI/Placeable.lua already
 -- owns the drag, the rim, the name over it and writing the corner back into a
 -- setting, and this file is twelve lines of caller on top of it.
 --
@@ -48,17 +56,18 @@ ns.CombatTextAnchors = Anchors
 -- no effect at all once the frames are locked.
 local WIDTH, HEIGHT = 90, 28
 
--- The three, in the order they are drawn on the settings page.
+-- The four, in the order they are drawn on the settings page.
 --
 --   key    the setting its corner is written into
 --   name   what is written over it while the frames are unlocked
 --
--- A table walked by both Build and Apply rather than three of everything, which
+-- A table walked by both Build and Apply rather than four of everything, which
 -- is the shape this addon has had to be shown twice: UI/Placeable.lua exists
 -- because twelve parts wrote the same drag out longhand.
 local SPOTS = {
 	{ id = "dealt", key = "hitsDealtPoint", name = "WarriorKit hits you land" },
 	{ id = "taken", key = "hitsTakenPoint", name = "WarriorKit hits on you" },
+	{ id = "heals", key = "hitsHealsPoint", name = "WarriorKit healing" },
 	{ id = "calls", key = "hitsCallsPoint", name = "WarriorKit combat calls" },
 }
 
@@ -84,13 +93,13 @@ local function Build(spot)
 	return frame
 end
 
--- The three frames, made the first time anything asks for one.
+-- The four frames, made the first time anything asks for one.
 --
 -- Built on demand rather than at login for the reason Swing/Gauges.lua is: a
--- part that ships switched off should not be three frames and three drag
+-- part that ships switched off should not be four frames and four drag
 -- handlers on a character that never turns it on.
 --
--- cold: Anchors.Apply places three anchors, on a settings change and on the first number of a session
+-- cold: Anchors.Apply places four anchors, on a settings change and on the first number of a session
 function Anchors.Apply()
 	for index = 1, #SPOTS do
 		local spot = SPOTS[index]
@@ -128,7 +137,7 @@ function Anchors.Reset()
 end
 
 -- What the settings page says about where they are, and the only reason this
--- file answers a question at all: three rectangles you cannot see are three
+-- file answers a question at all: four rectangles you cannot see are four
 -- things a status line has to be able to name.
 function Anchors.Describe()
 	local anchor = ns.db.hitsDealtPoint

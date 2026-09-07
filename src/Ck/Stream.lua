@@ -43,6 +43,13 @@ ns.Ck.Stream = Stream
 -- start and the height are nudged per item, decided once at birth and never
 -- re-rolled, because a jitter re-rolled per frame is a number that vibrates.
 --
+-- **And which way it bows is the caller's, not the seed's.** A stream that
+-- alternates is one column of numbers opening both ways, which is what this
+-- shipped as and reads as a mess the moment there are two columns: half of one
+-- side leans into the other. So the caller says `lean` at the moment it throws,
+-- because it is the only thing that knows what the column means. The seed still
+-- decides when the caller has no opinion.
+--
 -- The bow alone was not enough of it. Two blows a tenth of a second apart came
 -- off the same point at the same height and crossed each other on the way down,
 -- and a bow of eighteen pixels around a sixty pixel glyph is inside the glyph.
@@ -278,10 +285,11 @@ end
 --   style   one of the tables Stream.Style made
 --   weight  a multiplier on the whole scale envelope, or nil for one
 --   key     what a later number has to match to merge into this one, or nil
+--   lean    -1 to bow left of the anchor, 1 to bow right, 0 or nil to alternate
 --
 -- Positional rather than a table of named fields, because this is called from a
 -- combat log reader and a table an argument is a table a line.
-function Stream.Push(anchor, frame, style, weight, key)
+function Stream.Push(anchor, frame, style, weight, key, lean)
 	assert(type(frame) == "table" and type(anchor) == "table", "a number flies from an anchor")
 
 	local item = Take()
@@ -299,11 +307,20 @@ function Stream.Push(anchor, frame, style, weight, key)
 	-- somewhere else in a previous life.
 	item.atX, item.atY, item.atScale, item.atAlpha = nil, nil, nil, nil
 
-	-- The seed, rolled once. Alternating sides rather than a random one, so two
-	-- numbers in the same frame always bow apart instead of sometimes bowing
-	-- together.
+	-- The seed, rolled once, and the side the caller asked for over it.
+	--
+	-- Alternating is what a stream on its own wants: two numbers in the same
+	-- frame always bow apart instead of sometimes bowing together. A caller
+	-- drawing two columns wants the opposite and knows it, so `lean` wins where
+	-- it is given. What separates two numbers in a leaning column is the height
+	-- and the reach below, which is the half of the scatter that never depended
+	-- on the side.
 	seed = seed + 1
-	item.side = (seed % 2 == 0) and 1 or -1
+	if lean and lean ~= 0 then
+		item.side = lean
+	else
+		item.side = (seed % 2 == 0) and 1 or -1
+	end
 	-- Seven tenths, seventeen twentieths, all of it, in a cycle. Enough spread
 	-- that a burst reads as several numbers and not enough that one of them
 	-- lands somewhere the anchor does not explain. It was 0.4, 0.7, 1.0 and the

@@ -11,15 +11,15 @@ ns.CombatTextNumbers = Numbers
 -- What the fight is doing to you, in numbers
 --
 -- Every blow you land on something falls away from a point beside your left
--- shoulder, and every blow that lands on you falls away from one on your right.
--- Damage is white, healing is green, and a hit the game itself calls more than
--- a hit is gold.
+-- shoulder, every blow an enemy lands on you falls away from one on your right,
+-- and healing rises off your character. Damage is white, healing is green, and
+-- a hit the game itself calls more than a hit is gold.
 --
--- **Where the split comes from.** A number is placed by who it happened to and
+-- **Where the split comes from.** Damage is placed by who it happened to and
 -- not by who caused it, which is the one rule that makes two columns readable
 -- at a glance: everything on the left is the target's health going down,
--- everything on the right is yours. A heal on yourself is on the right with the
--- damage taken for the same reason, because it is your own bar moving.
+-- everything on the right is an enemy taking yours. Healing is neither and gets
+-- a third stream of its own.
 --
 -- The two columns are named `dealt` and `taken` rather than by a side. What is
 -- read most is what you are doing, and what is read most goes where a
@@ -27,6 +27,14 @@ ns.CombatTextNumbers = Numbers
 -- placing and a placing is a setting, so the anchors could not be called left
 -- and right without every identifier here going stale the first time somebody
 -- dragged one across the screen.
+--
+-- **The right hand column is what the fight is doing to you and nothing else.**
+-- A heal shipped there, on the argument that health going up and health going
+-- down are both your own bar moving. On a screen that argument is worth
+-- nothing: the right hand side is read as a threat, out of the corner of an
+-- eye, and a green number in it is the one thing there that is good news. It
+-- rises over your character instead, in a straight line, whoever cast it and
+-- whoever it landed on.
 --
 -- **Only your own end of it.** The log names every creature in range and a
 -- reader that drew all of it would be four other people's numbers over your
@@ -48,7 +56,13 @@ ns.CombatTextNumbers = Numbers
 -- against the biggest one of the fight so far, which resets when you leave
 -- combat so that the last pull's boss does not flatten the next one's trash.
 --
--- Nothing here decides where the numbers come from. That is three rectangles in
+-- **Which way a number bows is the column's and not the number's.** The stream
+-- alternates when nobody says, and alternating is what two columns must not do:
+-- half of what you land bows towards the middle of the screen and half away, so
+-- the two sides read as leaning into each other over your character. Each column
+-- leans one way now, outwards, and healing does not bow at all.
+--
+-- Nothing here decides where the numbers come from. That is four rectangles in
 -- CombatText/Anchors.lua that you drag.
 --------------------------------------------------------------------------
 
@@ -109,6 +123,15 @@ local SHAPES = ns.CombatLog.SHAPES
 -- Whether a GUID is you or something of yours, which is the whole of the filter
 -- that keeps four other people's numbers off your screen.
 local Mine = ns.Unit.Roster.Mine
+
+-- Which way each stream bows out of its fall, handed to Stream.Push per number.
+--
+-- Outwards, so the two damage columns open away from your character rather than
+-- across it. Healing is a straight rise and asks for no side at all, which is
+-- the zero: the heal styles carry no arc, so the value is a statement rather
+-- than a setting, and it is here rather than nowhere so that the table answers
+-- for every stream this file throws.
+local LEAN = { dealt = -1, taken = 1, heals = 0 }
 
 local pool = {}
 local styles = {}
@@ -178,26 +201,48 @@ function Numbers.Reshape()
 	-- out of each other on the way down and the fall is how far down that is.
 	local scatter = drop * 0.4
 
-	styles.plain = Stream.Style({
-		seconds = life, drop = drop, arc = arc,
+	-- An ordinary hit and a critical, with everything about them settled but
+	-- which way they travel. Damage falls and bows; healing rises and does not.
+	-- That is two fields out of eleven, so the two shapes are written once here
+	-- and finished twice below rather than four tables sharing nine numbers by
+	-- eye. Stream.Style copies what it is given, so the spec can be filled in
+	-- again and handed over a second time.
+	local plain = {
+		seconds = life,
 		ground = ground, scatter = scatter,
 		fromScale = grow, toScale = 0.85 * grow,
 		birth = 0.6, rise = 0.055, over = 0.16, settle = 0.1, beat = 0.13,
 		onGone = Release,
-	})
+	}
 
 	-- Longer, taller and gold, and it hits nearly twice as hard on the way in.
 	-- Different in degree from an ordinary hit and not in kind: the same four
 	-- numbers, all of them larger, and a beat at the top twice as long so the
 	-- one that mattered is the one that holds still.
-	styles.big = Stream.Style({
-		seconds = life * 1.35, drop = drop * 1.1, arc = arc,
+	local big = {
+		seconds = life * 1.35,
 		ground = ground, scatter = scatter,
 		fromScale = 1.25 * grow, toScale = 0.98 * grow,
 		birth = 0.6, rise = 0.07, over = 0.3, settle = 0.15, beat = 0.2,
 		holdFor = 0.62,
 		onGone = Release,
-	})
+	}
+
+	plain.drop, plain.arc = drop, arc
+	styles.plain = Stream.Style(plain)
+	big.drop, big.arc = drop * 1.1, arc
+	styles.big = Stream.Style(big)
+
+	-- The same two shapes going the other way, with no bow at all. A negative
+	-- drop is a lift, which is the one place the stream's vocabulary reads oddly
+	-- and is better than a second field that means the same thing with the sign
+	-- the other way round. Healing rises in a straight line over your character
+	-- on purpose: it is the one readout here that is not a threat, and the eye
+	-- finds it by it being the only thing on the screen going up.
+	plain.drop, plain.arc = -drop, 0
+	styles.heal = Stream.Style(plain)
+	big.drop, big.arc = -drop * 1.1, 0
+	styles.healBig = Stream.Style(big)
 
 	-- A word rather than a number, so it rises instead of falling and does not
 	-- bow at all. A negative drop is a lift, which is the one place the stream's
@@ -266,12 +311,23 @@ end
 -- One number, on screen.
 --
 --   amount  what to draw
---   side    "dealt" for the left anchor, "taken" for the right
+--   side    "dealt", "taken" or "heals", which is an anchor and a lean both
 --   heal    whether it is health going up
 --   big     whether the game called it more than a hit
 --   key     what a later number has to match to merge into this one
+--
+-- `side` and `heal` say the same thing twice for the callers this file has, and
+-- they are still two arguments: the side is where a number is thrown from and
+-- the colour is what it means, and folding them together is what would have to
+-- be unpicked the first time a heal is drawn anywhere but the heal stream.
 function Numbers.Show(amount, side, heal, big, key)
-	local style = big and styles.big or styles.plain
+	local rising = side == "heals"
+	local style
+	if rising then
+		style = big and styles.healBig or styles.heal
+	else
+		style = big and styles.big or styles.plain
+	end
 	local color = DAMAGE
 	if heal then
 		color = HEAL
@@ -297,7 +353,7 @@ function Numbers.Show(amount, side, heal, big, key)
 	end
 
 	local frame = Dress(amount, color)
-	local item = Stream.Push(Anchors.Of(side), frame, style, weight, key)
+	local item = Stream.Push(Anchors.Of(side), frame, style, weight, key, LEAN[side])
 	item.amount = amount
 	return item
 end
@@ -330,9 +386,12 @@ function Numbers.OnLog(_, subevent, _, sourceGUID, _, _, _, destGUID,
 		return false
 	end
 
-	-- Which of the two columns, and the answer decides everything after it. A
-	-- blow is placed by who it happened to, so what is dealt is the target's
-	-- health moving and what is taken is your own.
+	-- Which of the three streams, and the answer decides everything after it.
+	-- Damage is placed by who it happened to, so what is dealt is the target's
+	-- health moving and what is taken is your own. Healing is placed by being
+	-- healing: the right hand column is what the fight is doing to you, and a
+	-- number in it that is good news is a number read as bad news for the
+	-- second it takes to see the colour.
 	local onMe = Mine(destGUID, me)
 	local byMe = Mine(sourceGUID, me)
 	if not onMe and not byMe then
@@ -359,13 +418,24 @@ function Numbers.OnLog(_, subevent, _, sourceGUID, _, _, _, destGUID,
 	-- The merge key, as arithmetic rather than as a joined string, because this
 	-- is the busiest event the client sends and a string a line is a string a
 	-- line. Three facts go into it and every one of them makes two blows a
-	-- different thing to look at: which spell, which side of you it landed on,
-	-- and whether the game called it more than a hit. A swing has no spell and
+	-- different thing to look at: which spell, which stream it went to, and
+	-- whether the game called it more than a hit. A swing has no spell and
 	-- shares zero, which merges a main hand and an off hand landing together and
 	-- is the right answer, because they draw on top of each other otherwise.
-	local key = ((shape.spell and a12 or 0) * 2 + (onMe and 1 or 0)) * 2
-		+ (big and 1 or 0)
-	Numbers.Show(amount, onMe and "taken" or "dealt", shape.heal, big and true, key)
+	--
+	-- The stream is in the key rather than the side of you it landed on, because
+	-- there are three of them now and two numbers in different places cannot be
+	-- one number wherever they came from.
+	local side, stream
+	if shape.heal then
+		side, stream = "heals", 2
+	elseif onMe then
+		side, stream = "taken", 1
+	else
+		side, stream = "dealt", 0
+	end
+	local key = ((shape.spell and a12 or 0) * 3 + stream) * 2 + (big and 1 or 0)
+	Numbers.Show(amount, side, shape.heal, big and true, key)
 	return true
 end
 
