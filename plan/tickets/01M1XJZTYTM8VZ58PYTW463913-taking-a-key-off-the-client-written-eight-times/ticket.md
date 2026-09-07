@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZTYTM8VZ58PYTW463913
-type: task
+type: feature
 status: todo
 title: "Taking a key off the client, written eight times."
 parent: 01M1XJZSDGJ90YGY9ZP6HBYPS9

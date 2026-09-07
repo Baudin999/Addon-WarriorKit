@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZWF6S2HNSB0R4J2WJB2A
-type: task
+type: feature
 status: todo
 title: "The stance row, and the second reader."
 parent: 01M1XJZW5CFY7JB9WKRNJC94H0

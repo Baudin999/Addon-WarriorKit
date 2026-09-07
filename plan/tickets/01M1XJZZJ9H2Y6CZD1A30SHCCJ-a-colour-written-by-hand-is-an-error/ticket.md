@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZZJ9H2Y6CZD1A30SHCCJ
-type: task
+type: feature
 status: todo
 title: A colour written by hand is an error.
 parent: 01M1XJZYMA3V0YPE58CH5H938J

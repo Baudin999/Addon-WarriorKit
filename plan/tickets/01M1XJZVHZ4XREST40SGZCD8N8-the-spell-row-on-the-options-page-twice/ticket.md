@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZVHZ4XREST40SGZCD8N8
-type: task
+type: feature
 status: todo
 title: "The spell row on the options page, twice."
 parent: 01M1XJZSDGJ90YGY9ZP6HBYPS9

@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZVVJYCKQKGS0DBE13KN7
-type: task
+type: feature
 status: todo
 title: `Bags/Grid.lua` and `Merchant/Grid.lua` are one grid.
 parent: 01M1XJZSDGJ90YGY9ZP6HBYPS9

@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZWS8MSHT2Q41R1HDZ5NV
-type: task
+type: feature
 status: todo
 title: "What a fifth class file costs the gate, before the fifth one lands."
 parent: 01M1XJZW5CFY7JB9WKRNJC94H0

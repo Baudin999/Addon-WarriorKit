@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZTMYRYN6A1THBPY15VSD
-type: task
+type: feature
 status: todo
 title: "Nine `*/Blizzard.lua` files, one contract, written down nowhere."
 parent: 01M1XJZSDGJ90YGY9ZP6HBYPS9

@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZZ8DP9JJJ1CN50SFQ9PB
-type: task
+type: feature
 status: todo
 title: The palette takes the colours twelve files still write by hand.
 parent: 01M1XJZYMA3V0YPE58CH5H938J

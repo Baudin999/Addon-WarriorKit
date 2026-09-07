@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZV8CGSQ7VJHSTTCE825X
-type: task
+type: feature
 status: todo
 title: "A window has no lifecycle, so twelve files invented one."
 parent: 01M1XJZSDGJ90YGY9ZP6HBYPS9

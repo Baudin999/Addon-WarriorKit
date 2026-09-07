@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZY0NVPQ13P0234YP0BW4
-type: task
+type: feature
 status: todo
 title: "Rogue: the two poisons, and a rotation line that is nearly empty."
 parent: 01M1XJZW5CFY7JB9WKRNJC94H0

@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZYYB2A66BPXG3N06C83Z
-type: task
+type: feature
 status: todo
 title: "A badge is a widget, not a thing the paperdoll has."
 parent: 01M1XJZYMA3V0YPE58CH5H938J

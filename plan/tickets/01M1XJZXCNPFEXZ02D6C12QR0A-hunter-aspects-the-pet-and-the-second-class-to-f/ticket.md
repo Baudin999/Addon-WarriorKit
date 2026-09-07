@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZXCNPFEXZ02D6C12QR0A
-type: task
+type: feature
 status: todo
 title: "Hunter: aspects, the pet, and the second class to fill `reactive`."
 parent: 01M1XJZW5CFY7JB9WKRNJC94H0

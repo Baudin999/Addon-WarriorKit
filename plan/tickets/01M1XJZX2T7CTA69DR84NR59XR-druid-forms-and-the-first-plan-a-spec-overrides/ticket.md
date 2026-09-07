@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZX2T7CTA69DR84NR59XR
-type: task
+type: feature
 status: todo
 title: "Druid: forms, and the first plan a spec overrides."
 parent: 01M1XJZW5CFY7JB9WKRNJC94H0

@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZZVREHXM4B6NDVMPRG3Z
-type: task
+type: feature
 status: todo
 title: "`/wk style`, the page that draws the palette."
 parent: 01M1XJZYMA3V0YPE58CH5H938J

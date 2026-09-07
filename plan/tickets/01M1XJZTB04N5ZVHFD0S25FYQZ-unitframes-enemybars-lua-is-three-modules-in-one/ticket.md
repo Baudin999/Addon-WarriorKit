@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZTB04N5ZVHFD0S25FYQZ
-type: task
+type: feature
 status: todo
 title: `UnitFrames/EnemyBars.lua` is three modules in one file.
 parent: 01M1XJZSDGJ90YGY9ZP6HBYPS9

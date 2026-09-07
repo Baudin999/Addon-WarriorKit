@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZYAD0DSDBH9VE9MEYXZG
-type: task
+type: feature
 status: todo
 title: "Warlock: the demon, and two things the fields cannot say yet."
 parent: 01M1XJZW5CFY7JB9WKRNJC94H0

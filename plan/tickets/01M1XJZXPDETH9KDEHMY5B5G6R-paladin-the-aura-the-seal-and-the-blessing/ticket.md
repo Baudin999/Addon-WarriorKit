@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZXPDETH9KDEHMY5B5G6R
-type: task
+type: feature
 status: todo
 title: "Paladin: the aura, the seal and the blessing."
 parent: 01M1XJZW5CFY7JB9WKRNJC94H0

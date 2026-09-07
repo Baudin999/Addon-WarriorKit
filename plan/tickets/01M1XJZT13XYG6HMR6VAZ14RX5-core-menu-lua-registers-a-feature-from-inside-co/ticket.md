@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZT13XYG6HMR6VAZ14RX5
-type: task
+type: feature
 status: todo
 title: `Core/Menu.lua` registers a feature from inside Core.
 parent: 01M1XJZSDGJ90YGY9ZP6HBYPS9

@@ -1,7 +1,7 @@
 ---
 revision: 1
 id: 01M1XJZSQ9RFZCH8SS8YRETP24
-type: task
+type: feature
 status: todo
 title: "`EachTexture` into Core, beside `ns.Strip`."
 parent: 01M1XJZSDGJ90YGY9ZP6HBYPS9
