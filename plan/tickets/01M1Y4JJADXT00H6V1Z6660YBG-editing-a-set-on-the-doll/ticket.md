@@ -7,8 +7,8 @@ title: Editing a set on the doll
 parent: 01M1Y4JDFMVHEB87QK9R1KP4BJ
 ---
 
-Phase 3 of the equipment manager. Build a set out of things you are not
-wearing, on the doll you already have.
+Phase 3 of `01M1Y4JDFMVHEB87QK9R1KP4BJ`, the equipment manager. Build a set
+out of things you are not wearing, on the doll you already have.
 
 ## What lands
 
