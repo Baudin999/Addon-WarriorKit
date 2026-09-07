@@ -2,7 +2,7 @@
 revision: 1
 id: 01M1B7JMRDSWKCGB3X18X7GVRZ
 type: feature
-status: todo
+status: dropped
 title: Loadout authoring and swapping
 parent: 01M1B7D84Q2BKFK2CHXKRZCH8B
 ---
