@@ -216,8 +216,8 @@ Window.Show()
 check(Window.Shown(), "the window did not come up")
 
 -- The left column is every quest and every zone that holds one: five rows and
--- three headers, all eight of them drawn at once. The client draws six of these
--- through a slot, and that is the whole argument for the part.
+-- three headers at once, where the client draws six of them through a slot. The
+-- "+" on 102's level is the elite mark, and Questie is what knows it.
 local drawn = Window.Rows()
 local headers, entries = 0, 0
 for _, row in ipairs(drawn) do
@@ -229,8 +229,8 @@ for _, row in ipairs(drawn) do
 end
 check(headers == 3 and entries == 5,
 	("the column drew %d headers over %d quests"):format(headers, entries))
-check(drawn[1].header == "Elwynn Forest" and drawn[2].label == "[20] The Missing Diplomat",
-	"a quest is not drawn under the header that precedes it, or without its level")
+check(drawn[1].header == "Elwynn Forest" and drawn[2].label == "[20+] The Missing Diplomat",
+	"a quest is not drawn under the header that precedes it, or without its level and tag")
 
 -- The two colours the log is actually read for at a glance, and the mark that
 -- carries the same fact in a character. A quest ready to hand in is the tick
@@ -384,7 +384,7 @@ do
 	-- of them would be a fact.
 	local company, alone
 	for _, row in ipairs(Window.Rows()) do
-		if row.label == "[20] The Missing Diplomat" then company = row end
+		if row.label == "[20+] The Missing Diplomat" then company = row end
 		if row.label == "[24] Wolves at the Gate" then alone = row end
 	end
 	check(company and company.note == "3",

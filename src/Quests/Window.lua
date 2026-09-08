@@ -358,8 +358,15 @@ end
 -- One row's words. The level first, because a column grouped by zone is still
 -- read down the level: what you can do now and what you came back for later is
 -- the first cut anybody makes over a quest log.
-local function Label(quest)
-	return ("[%d] %s"):format(quest.level, quest.title)
+--
+-- An elite quest carries a "+" inside the brackets, which is the same suffix
+-- Unit/Level.lua puts on an elite mob's level and is read the same way: a level
+-- you cannot take alone. It goes on the row rather than only in the line under
+-- the title because the question it answers is asked while scanning the column,
+-- not after clicking. Every other tag is a word and is left to Tagline, which
+-- has room for words.
+local function Label(quest, tag)
+	return ("[%d%s] %s"):format(quest.level, tag == Where.Elite and "+" or "", quest.title)
 end
 
 -- The colour a row is drawn in. Green for a quest you can hand in, red for one
@@ -383,9 +390,15 @@ end
 -- lights both copies of the quest you are reading.
 local function Row(quest)
 	local company = #(quest.party or {})
+	-- Asked here and read again in Tagline. The first ask about a quest always
+	-- answers nothing, because the client's own call does and Questie says so in
+	-- its wrapper; see Quests/Where.lua. Building the column is what warms the
+	-- cache, so the word is there by the time a quest is clicked, and the row
+	-- itself is right from the second build of a log that has not changed.
+	local tag = Where.Tag(quest.id)
 	return {
 		id = quest.key,
-		label = Label(quest),
+		label = Label(quest, tag),
 		color = Tint(quest),
 		mark = Mark(quest),
 		markColor = MarkTint(quest),
@@ -472,10 +485,18 @@ end
 local function Tagline(detail)
 	local quest = detail.quest
 	local parts = { quest.zone, ("level %d"):format(quest.level) }
+	-- The kind of quest, and it is Questie that is asked for it rather than the
+	-- row this log was read off. GetQuestLogTitle's third return is the
+	-- suggested group size on this client and never the word: a log built off
+	-- that alone can say "suggested group of 5" and cannot say "Elite", which is
+	-- the one tag anybody scans a quest log for. Both are drawn where the client
+	-- gives both, because a party of five and an elite camp are two facts.
+	local tag = Where.Tag(quest.id)
+	if tag then
+		parts[#parts + 1] = tag
+	end
 	if type(quest.tag) == "number" and quest.tag > 1 then
 		parts[#parts + 1] = ("suggested group of %d"):format(quest.tag)
-	elseif type(quest.tag) == "string" and quest.tag ~= "" then
-		parts[#parts + 1] = quest.tag
 	end
 	if detail.seconds then
 		parts[#parts + 1] = ("%d minutes left"):format(math.ceil(detail.seconds / 60))

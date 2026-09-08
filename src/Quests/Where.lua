@@ -201,6 +201,12 @@ end
 -- name for a tag it has never seen.
 local ELITE = 1
 
+-- The word itself, named here because two files test for it. Quests/Window.lua
+-- puts a "+" on an elite row's level and has to know which of the tags that is,
+-- and a second spelling of the string in that file is the disagreement this
+-- function exists to prevent.
+Where.Elite = "Elite"
+
 function Where.Tag(questId)
 	if type(questId) ~= "number" then
 		return nil
@@ -214,7 +220,7 @@ function Where.Tag(questId)
 		return nil
 	end
 	if id == ELITE then
-		return "Elite"
+		return Where.Elite
 	end
 	if type(word) ~= "string" or word == "" then
 		return nil
