@@ -9,7 +9,7 @@ ns.Artwork = Artwork
 -- is gone. On by default, because that is the look the loadout was designed
 -- for, and reversible in one call because every other part of this addon is.
 --
--- Three rules shape the file.
+-- Five rules shape the file.
 --
 --   Textures go, frames stay. Bar 1, the micro menu and the bag bar are all
 --   anchored to MainMenuBarArtFrame in both saved Edit Mode layouts, so hiding
@@ -22,22 +22,27 @@ ns.Artwork = Artwork
 --   through _G so a missing one is a skipped entry rather than an error.
 --
 --   The experience bar is not artwork. MainMenuExpBar and
---   StatusTrackingBarManager are deliberately absent from both lists.
+--   StatusTrackingBarManager are deliberately absent from all three lists.
 --
 --   A named region goes through the attic, a walked one does not. ns.Strip
 --   puts a region's own Hide where its Show was and loses to SetShown, which is
---   resolved in C and reads no Lua field; that is why the page arrows and the
---   page number were still on the screen with this switch in its default state.
---   Core/Attic.lua re-parents into a frame that can never be shown, which no
---   call on the frame itself undoes, and Core/BlizzHide.lua's sweep then keeps
---   them there for free. It only takes frames, so the endcaps and the sliding
---   textures fall back to ns.Strip inside the same call and the list does not
---   have to know which of the two this client made them.
+--   resolved in C and reads no Lua field. Core/Attic.lua re-parents into a
+--   frame that can never be shown, which no call on the frame itself undoes,
+--   and Core/BlizzHide.lua's sweep then keeps it there for free. The attic
+--   refuses a texture, so the endcaps fall back to ns.Strip inside the same
+--   call and neither list has to know which of the two this client made them.
 --
---   The textures inside the holders keep ns.Strip on purpose. A texture is a
---   region of the frame it was created on and re-parenting one takes it out of
---   that frame's draw order rather than off the screen, which is the rule
---   Core/Attic.lua's own header states.
+--   The textures inside the holders keep ns.Strip for a reason of their own. A
+--   texture is a region of the frame it was created on and re-parenting one
+--   takes it out of that frame's draw order rather than off the screen, which
+--   is the rule Core/Attic.lua's own header states.
+--
+--   A name is not the only handle, and on this client it is not the one that
+--   matters. The page arrows and the page number are three regions of a frame
+--   reached by parentKey and nothing else, so ART_KEYS below is a third list
+--   rather than five more spellings in the second. Its own comment says which
+--   key, where the key is written down, and why this one is not cleared off its
+--   owner the way Core/BlizzHide.lua clears the target's cast bar.
 
 --------------------------------------------------------------------------
 -- What gets stripped
@@ -57,11 +62,41 @@ local ART_HOLDERS = {
 local ART_REGIONS = {
 	"MainMenuBarLeftEndCap",
 	"MainMenuBarRightEndCap",
-	"MainMenuBarPageNumber",
-	"ActionBarUpButton",
-	"ActionBarDownButton",
-	"SlidingActionBarTexture0",
-	"SlidingActionBarTexture1",
+}
+
+-- What this client hangs off a frame instead of off a global.
+--
+-- The page switcher is one frame with three regions in it. Blizzard_ActionBar
+-- /Classic/MainActionBar.xml declares `ActionBarPageNumber` as a parentKey on
+-- MainActionBar and puts Text, UpButton and DownButton inside it, and not one
+-- of the four has a name a `_G` lookup can find. Both clients this addon ships
+-- for declare it that way.
+--
+-- That is why the switch left the arrows on the screen in its default state and
+-- nothing said so. This list used to name MainMenuBarPageNumber,
+-- ActionBarUpButton, ActionBarDownButton and the two sliding stance textures,
+-- which is what those four were called before the action bars were rewritten;
+-- all five resolve to nil on both clients, so the walk skipped them, `found`
+-- never counted them and the status line reported a clean strip of the two
+-- endcaps. Five names that cannot match anything are deleted rather than left
+-- as insurance, because insurance that has never once paid out is the thing
+-- that made this take a screenshot to find.
+--
+-- One key, not several, which is the rule Core/BlizzHide.lua states for the
+-- same mechanism: a key is read straight off a frame this addon does not own,
+-- so a guess that lands on the wrong field hides something nobody asked to
+-- hide. This one is written from the XML rather than guessed.
+--
+-- The key stays on the owner, which is where this differs from
+-- Core/BlizzHide.lua's use of the same idea. That file clears the field so the
+-- client stops reaching for a frame it can no longer see. Here the client must
+-- keep reaching: MainActionBar's own mixin writes to self.ActionBarPageNumber
+-- in four places with nothing guarding it, so clearing the field would trade a
+-- visible arrow for a Lua error on every page change. The cage is enough. It
+-- can be written to all it likes up there, and the font string goes with its
+-- parent, which is why the page number needs no handle of its own.
+local ART_KEYS = {
+	{ owner = "MainActionBar", key = "ActionBarPageNumber" },
 }
 
 --------------------------------------------------------------------------
@@ -114,12 +149,23 @@ local function Sweep(hide)
 		end
 	end
 
-	-- Picked once rather than branched on per region, which keeps the walk at
-	-- the depth the holders' walk above it already sits at.
+	-- Picked once rather than branched on per region, which keeps both walks at
+	-- the depth the holders' walk above them already sits at.
 	local move = hide and ns.Attic.Vanish or ns.Attic.Return
 	for _, name in ipairs(ART_REGIONS) do
 		local region = _G[name]
 		if region then
+			found = found + 1
+			if not move(region) then
+				complete = false
+			end
+		end
+	end
+
+	for _, slot in ipairs(ART_KEYS) do
+		local owner = _G[slot.owner]
+		local region = type(owner) == "table" and owner[slot.key] or nil
+		if type(region) == "table" then
 			found = found + 1
 			if not move(region) then
 				complete = false
