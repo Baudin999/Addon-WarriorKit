@@ -2,7 +2,7 @@
 revision: 1
 id: 01M20J18M6MPNFD1PVB8KSZRYQ
 type: task
-status: doing
+status: done
 title: "Action targeting on every class, not only warriors"
 ---
 
