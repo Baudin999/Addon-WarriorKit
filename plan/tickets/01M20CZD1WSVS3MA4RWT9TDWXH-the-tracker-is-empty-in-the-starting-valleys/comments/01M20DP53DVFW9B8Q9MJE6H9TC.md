@@ -1,0 +1,6 @@
+---
+revision: 1
+id: 01M20DP53DVFW9B8Q9MJE6H9TC
+---
+
+Cause. Column.Quests compared the log's header string against C_Map's name for the map you are standing on. The client files a starting zone's quests under a subzone (Northshire Valley, Coldridge Valley, Deathknell, Shadowglen, Valley of Trials, Camp Narache, Sunstrider Isle) and vanilla draws no map of any of them, so C_Map answers with the zone above and nothing matched. Column.Paint then hid the frame on count 0.  Fix. ns.QuestWhere.Sort folds a quest's zoneOrSort up through Questie's GetParentZoneId, and a zone lands on the column when that equals ns.QuestHere.Now().area. The name match stays in front of it for a client with no Questie. Both the paint and the options-page reading go through one Scope, so a subzone quest counts as one in front of you rather than as one pinned elsewhere.  Gate. scripts/check.sh at 0/0. 85-quest-column has the case: a Northshire Valley header on the Elwynn Forest map, three quests over five rows, and the quest does not follow you into Westfall. Quest 103 in client/05-quests.lua carries the zoneOrSort because that fixture is at its line ceiling; the parent 9 to 12 is copied into the ZoneDB stub in client/16-dungeons.lua.
