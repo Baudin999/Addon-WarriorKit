@@ -35,13 +35,21 @@ local Log = ns.QuestLog
 -- A pinned quest is on this column wherever you are standing, which is the
 -- thing pinning is for: the rule takes everything off the tracker when you walk
 -- out of the zone, and the pin is how a player asks for one quest back. It is
--- read through Log.Pins() and never off the saved table. zone.name is the string the client
--- filed the quest under, ns.QuestHere.Now().name is C_Map's name for the map
--- you are standing on, and both come out of the same client in the same
--- language, which is what makes comparing them safe. It is the only name
--- comparison in the addon and Core/Here.lua's header says why every other join
--- in that file is on a number. The name is taken off ns.QuestHere and never off
--- a second probe of the client.
+-- read through Log.Pins() and never off the saved table.
+--
+-- **The scope is two joins, and the name is the cheap one.** zone.name is the
+-- string the client filed the quest under and ns.QuestHere.Now().name is
+-- C_Map's name for the map you are standing on; both come out of the same
+-- client in the same language, which is what makes comparing them safe, and
+-- they are equal in most of the game. They are not equal in the one zone every
+-- character starts in. The client files the first quests of every race under a
+-- subzone, Northshire Valley or Coldridge Valley or Deathknell, and vanilla
+-- draws no map of any of them, so C_Map answers Elwynn Forest and a tracker
+-- that only compared names was blank for the first two levels of every
+-- character. So a zone also lands on the column when its own area folds up to
+-- the area you are standing in, which is ns.QuestWhere.Sort against
+-- ns.QuestHere.Now().area, and both of those are numbers. Core/Here.lua's
+-- header says why every join in that file is one.
 --
 -- The header is a sort category rather than a place: a dungeon quest is filed
 -- under the dungeon and a class quest under the class, and neither says where
@@ -137,6 +145,42 @@ local function Tone(quest)
 	return C.text
 end
 
+-- The area a zone's quests are filed under, or nothing.
+--
+-- Off the first quest, because a zone is one header and every quest under it
+-- carries the same one. It is a question for Questie's database rather than for
+-- the client, so ns.QuestWhere holds it and the answer is held there too: this
+-- runs once a zone on every paint.
+local function Under(zone)
+	local first = zone.quests[1]
+	return first and ns.QuestWhere.Sort(first.id) or nil
+end
+
+-- Which of the log's headers count as where you are standing, as a set of the
+-- header strings themselves, or nothing on a client that will not say where you
+-- are. Two joins: the client's own name for this map against the header, and
+-- the header's area folded up against this map's area.
+--
+-- A set rather than a test, because the reading has to answer the same question
+-- the scope does and it holds a header string per quest rather than a zone. Two
+-- copies of a rule that says which quests are in front of you is how the column
+-- and its own reading disagree, which is the shape a player reads as the number
+-- being wrong.
+local function Scope()
+	local at = ns.QuestHere.Now()
+	local name, area = at and at.name or nil, at and at.area or nil
+	if not name and not area then
+		return nil
+	end
+	local scope = {}
+	for _, zone in ipairs(Log.Zones()) do
+		if (name and zone.name == name) or (area and Under(zone) == area) then
+			scope[zone.name] = true
+		end
+	end
+	return scope
+end
+
 -- The quests on the tracker right now: the ones the client filed under the
 -- place you are standing in, in the log's own order, and then whatever you have
 -- pinned that is not already among them.
@@ -156,10 +200,10 @@ end
 -- of them for quests you handed in an hour ago.
 function Column.Quests()
 	local out, here = {}, {}
-	local name = Standing()
-	if name then
+	local scope = Scope()
+	if scope then
 		for _, zone in ipairs(Log.Zones()) do
-			if zone.name == name then
+			if scope[zone.name] then
 				for _, quest in ipairs(zone.quests) do
 					out[#out + 1] = quest
 					here[quest.key] = true
@@ -432,9 +476,10 @@ function Column.Describe()
 	-- Westfall quest on it. The reading is the only place a player finds out
 	-- what the tracker thinks it is looking at, so it has to be able to say that
 	-- what it is looking at is somewhere else.
+	local scope = Scope() or {}
 	local here, away = 0, 0
 	for _, quest in ipairs(Column.Quests()) do
-		if quest.zone == name then
+		if scope[quest.zone] then
 			here = here + 1
 		else
 			away = away + 1

@@ -257,9 +257,17 @@ end
 -- error() outright for a map it has no row for, so a caller without a pcall
 -- takes the frame down. The stub errors for the same id the world map tree
 -- already has no picture for.
+--
+-- The quest tree's two ids are here as well, and that is the one place the two
+-- spaces have to meet. The tracker folds a subzone header up to the area of the
+-- map you are standing on, so a section that stands in 12-questlog's Elwynn
+-- Forest needs an area for it, and a map with no area would leave that join
+-- untested rather than failing.
 local AREAS = {
 	[1429] = 12,   -- Elwynn Forest
 	[1436] = 40,   -- Westfall
+	[37] = 12,     -- Elwynn Forest, as the quest tree numbers it
+	[52] = 40,     -- Westfall, the same
 	[1453] = 1519, -- Stormwind City
 	[1411] = 14,   -- Durotar
 	[291] = 1581,  -- The Deadmines
@@ -275,7 +283,12 @@ local DUNGEONS = { [1581] = true, [10029] = true, [717] = true }
 -- reads the alternative id table and then the subzone table, so a top level
 -- zone and a top level dungeon both come back with nothing, and only the
 -- second floor of the Deadmines has a parent.
-local PARENTS = { [10029] = 1581 }
+--
+-- Northshire Valley is the second, and it is the row every character in the
+-- game starts on: the client files the first quests under it, vanilla draws no
+-- map of it, and Questie's own subZoneToParentZone is what puts them on
+-- Elwynn Forest. `[9] = 12` is that table's own line, copied.
+local PARENTS = { [10029] = 1581, [9] = 12 }
 
 local zones = _G.QuestieLoader:ImportModule("ZoneDB")
 

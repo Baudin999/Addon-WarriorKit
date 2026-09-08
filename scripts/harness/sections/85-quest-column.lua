@@ -193,6 +193,56 @@ check(Column.Describe() == "nothing in your log is in Stormwind City",
 	("the reading says %q"):format(Column.Describe()))
 seen[#seen + 1] = Column.Describe()
 
+----------------------------------------------------------------------
+-- A header the client files under a subzone
+----------------------------------------------------------------------
+
+-- The first two levels of every character in the game. The client files the
+-- starting quests under Northshire Valley, Coldridge Valley, Deathknell and the
+-- rest; vanilla draws no map of any of them, so C_Map answers with the zone
+-- above and the header and the map name never meet. A tracker that only
+-- compared strings was blank there, which is how this was found.
+--
+-- The join is Questie's, so the assertion is about numbers: the header's own
+-- area folded up through GetParentZoneId, against the area of the map you are
+-- standing on. The zone beside it is still matched by name in the same pass,
+-- because a level 2 human carries quests under both headers at once.
+do
+	-- 103 rather than an id of its own, because client/05-quests.lua is at its
+	-- ceiling: it is the one quest in that fixture carrying a zoneOrSort, and
+	-- the 9 on it is the area the client really files a human's first quests
+	-- under. Questie's own subZoneToParentZone hangs 9 off Elwynn Forest and
+	-- the stub in client/16-dungeons.lua copies that line.
+	local rows = quests.rows
+	rows[#rows + 1] = { header = "Northshire Valley" }
+	rows[#rows + 1] = { id = 103, title = "A Rogue's Deal", level = 2 }
+
+	standing.map = ELWYNN
+	check(Column.Refresh(), "the tracker is empty standing in the starting zone")
+	check(says("A Rogue's Deal"),
+		"a quest filed under a subzone is off the tracker on the map above it")
+	check(says("The Missing Diplomat"),
+		"matching a subzone header took the zone's own quests off the tracker")
+	check(#Column.Quests() == 3,
+		("%d quests are on the tracker where the subzone and the zone hold three")
+			:format(#Column.Quests()))
+	-- The reading counts the subzone's quest as one that is in front of you
+	-- rather than as one pinned somewhere else, which is what it is.
+	check(Column.Describe() == "3 quests, in Elwynn Forest",
+		("the reading says %q"):format(Column.Describe()))
+	seen[#seen + 1] = ("%s over %d rows"):format(Column.Describe(), #drawn())
+
+	-- And it is still a scope. Westfall is a zone of its own in the same table,
+	-- so a fold that answered any area at all would drag Northshire along.
+	standing.map = WESTFALL
+	Column.Refresh()
+	check(not says("A Rogue's Deal"),
+		"a subzone quest followed you into a zone that is not above it")
+
+	rows[#rows] = nil
+	rows[#rows] = nil
+end
+
 standing.map = WESTFALL
 Column.Refresh()
 

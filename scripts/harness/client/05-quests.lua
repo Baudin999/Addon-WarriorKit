@@ -14,7 +14,7 @@ local counted = H.counted
 local QUESTS = {
 	[101] = { name = "Wanted: Hogger", completed = true },
 	[102] = { name = "The Missing Diplomat", completed = false },
-	[103] = { name = "A Rogue's Deal", completed = false },
+	[103] = { name = "A Rogue's Deal", completed = false, zoneOrSort = 9 },
 	[104] = { name = "Ruins of Zul'Mamwe", completed = true },
 }
 

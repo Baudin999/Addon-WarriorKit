@@ -631,6 +631,51 @@ local function Atlas(zones, leader)
 	return out
 end
 
+-- The area the client filed a quest under, with a subzone folded up to the zone
+-- above it, or nothing where Questie cannot say.
+--
+-- **This is what the tracker scopes on in a starting zone.** The client files
+-- the first quests of every race under a subzone: Northshire Valley, Coldridge
+-- Valley, Deathknell, Shadowglen, Valley of Trials, Camp Narache, Sunstrider
+-- Isle. Vanilla draws no map of any of them, so C_Map answers with the zone
+-- above, and the header and the map name never meet. Questie's
+-- subZoneToParentZone is the join and GetParentZoneId is the door to it. It is
+-- not only level 1: Darkshire under Duskwood and Kharanos under Dun Morogh are
+-- the same row in the same table.
+--
+-- Negative is refused, and that is the field doing two jobs rather than a guard
+-- against bad data. zoneOrSort holds an area id for a quest that belongs to a
+-- place and a sort category for one that does not, and every class, profession
+-- and seasonal quest in the log is the second kind.
+--
+-- Held once answered, because a quest does not change the zone it was compiled
+-- under. Only an answer is held: Questie compiles its database minutes after
+-- login and a nil cached at that moment would be a quest missing from the
+-- tracker for the rest of the session.
+local sorts = {}
+
+function Where.Sort(questId)
+	if type(questId) ~= "number" then
+		return nil
+	end
+	if sorts[questId] then
+		return sorts[questId]
+	end
+	local area = Ask("QueryQuestSingle", questId, "zoneOrSort")
+	if type(area) ~= "number" or area <= 0 then
+		return nil
+	end
+	local zones = ns.Questie("ZoneDB", "GetParentZoneId")
+	if zones then
+		local ok, parent = pcall(zones.GetParentZoneId, zones, area)
+		if ok and type(parent) == "number" then
+			area = parent
+		end
+	end
+	sorts[questId] = area
+	return area
+end
+
 -- Which map the client draws one of Questie's area ids under.
 function Where.Map(area)
 	local zones = ns.Questie("ZoneDB", "GetUiMapIdByAreaId")
