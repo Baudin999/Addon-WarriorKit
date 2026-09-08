@@ -2,7 +2,7 @@
 revision: 1
 id: 01M20CZD1WSVS3MA4RWT9TDWXH
 type: bug
-status: todo
+status: doing
 title: The tracker is empty in the starting valleys
 ---
 
