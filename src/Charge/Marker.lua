@@ -119,7 +119,7 @@ end
 
 -- Said once, and only when it is switched off rather than merely unproven,
 -- because off is the one state you can do something about. Silent while
--- SoftTarget owns the CVar: there off out of combat means a write the client
+-- Targeting/Aim.lua owns the CVar: there off out of combat means a write the client
 -- refused, which that file has already said, and telling you to set a CVar the
 -- addon is driving is advice that fights itself.
 local function WarnIfSoftTargetOff()
@@ -128,7 +128,7 @@ local function WarnIfSoftTargetOff()
 	end
 	if ns.Charge.SoftTargetState() == "off" then
 		warnedSoftTarget = true
-		ns.Print("action targeting is off, so the marker only follows your target and your cursor. /wk charge soft on hands it to the addon, which turns it on out of combat and off in it.")
+		ns.Print("action targeting is off, so the marker only follows your target and your cursor. /wk aim on hands it to the addon, which turns it on out of combat and off in it.")
 	end
 end
 

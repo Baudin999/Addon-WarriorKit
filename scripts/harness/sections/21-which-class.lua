@@ -100,12 +100,14 @@ check((_G.WarriorKitChargeMarker ~= nil) == CHARGE,
 check(ns.Charge.Known("charge") == CHARGE,
 	("a %s %s Charge"):format(PLAYER_CLASS, CHARGE and "does not know" or "knows"))
 
--- Put the client's own value back under the addon and let it decide again. A
--- class with the button is out of combat here, so the setting says on; anyone
--- else has to come out of this with the same "0" they went in with.
+-- Put the client's own value back under the addon and let it decide again.
+-- Action targeting is not the charge button's any more, so every class comes
+-- out of this on: it is a setting about how the client picks a mob, and a mage
+-- walking up to one wants the camera aiming it as much as a warrior does. This
+-- is out of combat, so on is "3".
 cvars.SoftTargetEnemy = "0"
 fire("PLAYER_ENTERING_WORLD")
-check(cvars.SoftTargetEnemy == (CHARGE and "3" or "0"),
+check(cvars.SoftTargetEnemy == "3",
 	("action targeting came out at %s on a %s"):format(cvars.SoftTargetEnemy, PLAYER_CLASS))
 
 -- The key. Refused rather than accepted and dropped, because a binding the
@@ -225,7 +227,10 @@ for _, group in ipairs(window.groups) do
 	end
 end
 
-check(classPages == (CHARGE and 5 or 0),
+-- Four, since action targeting left for Targeting/Aim.lua. That one is not a
+-- class fact and never was, so it sits under Fighting with the switch key
+-- where every class can reach it.
+check(classPages == (CHARGE and 4 or 0),
 	("the charge part opened %d pages on a %s"):format(classPages, PLAYER_CLASS))
 
 if classGroup then

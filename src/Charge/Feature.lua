@@ -14,37 +14,17 @@ local function ApplyChargeChange()
 	ns.ChargeMarker.Forget()
 	ns.ChargeIcon.Update()
 	ns.ChargeMarker.Update()
-	ns.SoftTarget.Apply()
 end
 
 -- Every word this part answers to runs through here first. On another class
--- none of them has anything to act on: no button, no marker, and a CVar this
--- addon has deliberately left alone. Saying so once beats four settings that
--- take a value and then do nothing with it.
+-- none of them has anything to act on: no button and no marker. Saying so once
+-- beats four settings that take a value and then do nothing with it.
 local function Refuse()
 	if ns.Charge.Available() then
 		return false
 	end
 	ns.Print(ns.Charge.Refusal() .. ", so nothing here is running on this character.")
 	return true
-end
-
-local function SoftWord(sub)
-	local want = ns.Command.Toggle(sub)
-	if want == ns.db.softAuto then
-		ns.Print("action targeting is already " .. (want and "automatic" or "yours") .. ".")
-		return
-	end
-	ns.db.softAuto = want
-	if want then
-		ns.SoftTarget.Apply()
-		ns.Print("action targeting is the addon's now: on out of combat, off in it.")
-	else
-		-- Hand the CVar back at the value it had before the addon took it,
-		-- rather than leaving it wherever the last combat transition put it.
-		ns.SoftTarget.Restore()
-		ns.Print("action targeting is yours again, back at what it was.")
-	end
 end
 
 local MarkerWord = ns.Command.Word({
@@ -93,8 +73,6 @@ local ChargeWord = ns.Command.Word({
 
 	{ "marker", run = function(value) MarkerWord(value) end },
 
-	{ "soft", run = function(value) SoftWord((value:match("^(%S*)"))) end },
-
 	otherwise = { toggle = true, key = "charge",
 	  say = function(on)
 		return "charge icon " .. (on and "on" or "off") .. "."
@@ -125,10 +103,6 @@ ns.Register({
 		chargeMarker = true,   -- the icon in the world over the mob the Charge macro would pick
 		chargeMarkerSize = 30,
 		chargeMarkerOffset = 10, -- nudge the marker up or down the nameplate, -60 to 60
-		-- Action targeting, driven off combat. Charge is an out of combat
-		-- ability and Pick reads the cursor once combat is up, so the token
-		-- earns its keep on the pull and gets in the way after it.
-		softAuto = true,
 		-- A name here builds an /equipslot line into the macro, and a weapon
 		-- nobody on this account owns builds a line that silently does
 		-- nothing, which is what a fresh character gets and what it costs.
@@ -143,12 +117,6 @@ ns.Register({
 		chargeKeyDisplaced = "",
 		size = 52,
 		point = { "CENTER", "UIParent", "CENTER", 3, -190 },
-	},
-
-	-- SoftTargetEnemy is a character scoped CVar, so what it was before the
-	-- addon took it over is character scoped memory. Empty means not yet taken.
-	charDefaults = {
-		softPrior = "",
 	},
 
 	words = {
@@ -196,7 +164,6 @@ ns.Register({
 	help = {
 		"charge on|off, charge always|ready, charge marker on|off",
 		"charge marker size <16-96>, charge marker offset <-60-60>",
-		"charge soft on|off, action targeting driven off combat",
 		"charge weapon <name|none>, size <16-128>, bind <key|none>",
 	},
 
@@ -204,11 +171,10 @@ ns.Register({
 		if not ns.Charge.Available() then
 			return "off, " .. ns.Charge.Refusal()
 		end
-		return ("icon %s (%s), marker %s, key %s, action targeting %s, token %s")
+		return ("icon %s (%s), marker %s, key %s, token %s")
 			:format(ns.db.charge and "on" or "off", ns.db.chargeMode,
 				ns.db.chargeMarker and "on" or "off",
 				ns.db.chargeKey == "" and "unbound" or ns.db.chargeKey,
-				ns.SoftTarget.Describe(),
 				ns.Charge.SoftTargetState())
 	end,
 
@@ -303,22 +269,7 @@ ns.Register({
 				ns.db.chargeMarkerOffset = value
 				ns.ChargeMarker.ApplyLayout()
 			end)
-		ui.Hint("Height nudges the icon up or down its nameplate, for a UI where something else is already sitting there.")
-
-		ui.Section("Action targeting", ns.Options.CLASS)
-		ui.Lede("The client's own aim token, turned on out of combat and handed back the moment a fight starts.")
-		ui.Check("on out of combat, off in combat",
-			function() return ns.db.softAuto end,
-			function(value)
-				ns.db.softAuto = value
-				if value then
-					ns.SoftTarget.Apply()
-				else
-					ns.SoftTarget.Restore()
-				end
-			end)
-		ui.Hint("Charge is an out of combat ability, so the camera aims the pull and nothing re-aims you mid-fight. Off, the marker falls back to your target and your cursor.")
-		ui.Reading("the CVar", function() return ns.SoftTarget.Describe() end)
+		ui.Hint("Height nudges the icon up or down its nameplate, for a UI where something else is already sitting there. Which mob it sits on is action targeting's, under Fighting.")
 		ui.Reading("the token", function()
 			local state = ns.Charge.SoftTargetState()
 			if state == "on" then

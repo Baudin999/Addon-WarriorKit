@@ -378,10 +378,10 @@ Hover\Feature.lua
 Charge\Charge.lua
 Charge\Icon.lua
 Charge\Marker.lua
-Charge\SoftTarget.lua
 Charge\Feature.lua
 
 Targeting\Switch.lua
+Targeting\Aim.lua
 Targeting\Feature.lua
 
 # Bars you made yourself, each on a key. AdHoc.lua is the list, Bars.lua the

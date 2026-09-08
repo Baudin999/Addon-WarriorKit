@@ -409,7 +409,7 @@ read_globals = {
 	-- nothing and say nothing. Probed by name before it is called, because a
 	-- build without it loses that line of the log and nothing else.
 	"SecureCmdOptionParse",
-	-- SoftTargetEnemy is read and written by Charge/SoftTarget.lua, which owns
+	-- SoftTargetEnemy is read and written by Targeting/Aim.lua, which owns
 	-- the CVar out of combat and hands it back in. Both calls are pcalled: no
 	-- addon here proves SetCVar takes that name on 2.5.6.
 	"GetCVarBool", "GetCVar", "SetCVar",

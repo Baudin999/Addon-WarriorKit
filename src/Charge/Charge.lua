@@ -17,8 +17,12 @@ local GCD = 1.5
 -- Which abilities this button casts is a fact about your class and lives in
 -- Class\<yours>.lua as `charge`. Nil for a class that closes distance some
 -- other way or not at all, and nil is the whole gate: Feature.lua builds no
--- page, Icon.lua builds no secure button, Marker.lua scans no nameplates and
--- SoftTarget.lua leaves the client's own CVar exactly as it found it.
+-- page, Icon.lua builds no secure button and Marker.lua scans no nameplates.
+--
+-- Action targeting is not gated on this and used to be. It is a client setting
+-- about how you pick a mob, so it is Targeting/Aim.lua's now and it runs on
+-- every class; what is still here is only whether the token it switches on
+-- resolves, which is a question about this button's aiming.
 --
 -- Asked on demand rather than held at load. The class is not reliably known
 -- while the files load, and a nil taken then would leave a warrior without the
@@ -188,8 +192,8 @@ local softProven = false
 
 -- Whether the token resolves at all. That is a different question from whether
 -- the unit under it is one Charge could take, and both are worth asking
--- separately: Pick wants the second, and the reticle in SoftTarget.lua wants
--- the first, so it can prove the token against a critter or a corpse rather
+-- separately: Pick wants the second, and SoftTargetState wants the first, so
+-- the panel's reading can prove the token against a critter or a corpse rather
 -- than staying dark and looking like a client that has no token.
 --
 -- pcalled because an unknown unit token is not guaranteed to be a polite nil on

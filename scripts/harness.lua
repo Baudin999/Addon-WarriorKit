@@ -29,10 +29,10 @@
 -- The second argument is the class this run is, and the spec after a colon.
 -- It defaults to WARRIOR, which is every run this file has ever done. Two parts
 -- of the addon are warrior only, and both decide it once at PLAYER_LOGIN: the
--- charge button and the world marker are not built at all on another class, and
--- the action targeting CVar is never written. A decision taken at login cannot
--- be reached by flipping the class afterwards, so the only way to test it is to
--- come up as something else, and check.sh does every run.
+-- charge button and the world marker are not built at all on another class. A
+-- decision taken at login cannot be reached by flipping the class afterwards,
+-- so the only way to test it is to come up as something else, and check.sh
+-- does every run.
 --
 -- The spec is decided at login for the same reason and cannot be flipped
 -- afterwards either, and it decides more than the class does: the cooldown row,

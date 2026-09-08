@@ -1,21 +1,24 @@
 local ADDON, ns = ...
 
-local SoftTarget = {}
-ns.SoftTarget = SoftTarget
+local Aim = {}
+ns.Aim = Aim
 
--- Action targeting, held on out of combat and off in it.
+-- Action targeting, held on out of combat and off in it, on every class.
 --
--- Soft targeting is what makes the `softenemy` token resolve, and that token is
--- what lets the charge button aim by camera. It is worth having for the pull
--- and worth not having once the pull has landed: in combat Charge.Pick reads
--- the cursor rather than the camera, so the token buys nothing there, and a
--- client quietly re-aiming at whatever you glance at is the last thing you want
--- while holding a mob.
+-- Soft targeting is the client aiming at what the camera is pointed at rather
+-- than at what you clicked. It is worth having for the approach and worth not
+-- having once the fight has started: a client quietly re-aiming at whatever you
+-- glance at is the last thing you want while you are holding a mob.
 --
--- The split is the same one the rest of the Charge part already draws. Charge
--- is an out of combat ability, the world marker hides at PLAYER_REGEN_DISABLED,
--- and the macro's target line carries `nocombat`. This is that line moved down
--- into the client setting underneath it.
+-- This used to live in Charge/ and refuse to run on anything but a warrior,
+-- because the charge marker was the first thing that wanted the `softenemy`
+-- token the CVar makes resolve. That is a fact about which feature asked first
+-- and not about what the setting is, so it is a targeting setting now and the
+-- charge marker is one of the things that reads the result.
+--
+-- What is still Charge's: whether the token resolves at all. Charge.SoftUnit
+-- probes it and Charge.SoftTargetState reports it, because that is a question
+-- about the marker's aiming rather than about the CVar underneath it.
 --
 -- So the addon owns the CVar while the setting is on: it writes it on every
 -- combat transition and puts back whatever it found when you turn the setting
@@ -61,23 +64,18 @@ local function Remember()
 end
 
 -- Nil when the addon must not touch the CVar: the setting is off, so it is the
--- player's again, or this is not a warrior.
---
--- The class is part of the same question. This setting exists to serve the
--- charge button, which is not built on another class, so on a hunter the addon
--- would be editing a client CVar on every combat transition for a feature that
--- is not running. Gated here rather than at the event frame because Apply is
--- also called straight from the panel and the slash word, and one authority
--- for "should this be written" is what stops those three paths disagreeing.
+-- player's again. One authority for "should this be written", because Apply is
+-- called from the event frame, the panel and the slash word, and three paths
+-- that each decide for themselves are three paths that can disagree.
 local function Wanted()
-	if not ns.db.softAuto or not ns.Charge.Available() then
+	if not ns.db.softAuto then
 		return nil
 	end
 	return UnitAffectingCombat("player") and OFF or ON
 end
 
 -- Returns false when the client refused, so the caller can say so.
-function SoftTarget.Apply()
+function Aim.Apply()
 	local want = Wanted()
 	if not want then
 		return true
@@ -104,7 +102,7 @@ function SoftTarget.Apply()
 	if Read() ~= want then
 		if not warnedIgnored then
 			warnedIgnored = true
-			ns.Print("this client accepted the action targeting change and did not make it, so SoftTargetEnemy is not a CVar it honours. /wk charge soft off stops the addon trying.")
+			ns.Print("this client accepted the action targeting change and did not make it, so SoftTargetEnemy is not a CVar it honours. /wk aim off stops the addon trying.")
 		end
 		return false
 	end
@@ -116,7 +114,7 @@ end
 -- Put the character's own value back. Called when the setting is turned off,
 -- because a setting that leaves the CVar wherever it happened to land is a
 -- setting that quietly edits your client config.
-function SoftTarget.Restore()
+function Aim.Restore()
 	if not ns.dbc or ns.dbc.softPrior == "" then
 		applied = nil
 		return
@@ -129,16 +127,13 @@ end
 -- Always reports what the CVar actually says, never what this file meant to set
 -- it to. A status line that echoes intent cannot witness anything, and this one
 -- is the only witness there is until someone reads config-cache.wtf.
-function SoftTarget.Describe()
+function Aim.Describe()
 	local value = Read()
 	if value == nil then
 		return "this client will not say"
 	end
 	local on = (tonumber(value) or 0) > 0
 
-	if not ns.Charge.Available() then
-		return ("yours, currently %s"):format(on and "on" or "off")
-	end
 	if not ns.db.softAuto then
 		return ("manual, currently %s"):format(on and "on" or "off")
 	end
@@ -160,5 +155,5 @@ events:SetScript("OnEvent", function(_, event)
 	if event == "PLAYER_REGEN_ENABLED" and pending then
 		pending = nil
 	end
-	SoftTarget.Apply()
+	Aim.Apply()
 end)
