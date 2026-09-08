@@ -2,7 +2,7 @@
 revision: 1
 id: 01M20K80XAB6PZ5TV3J0ZS8W0R
 type: task
-status: doing
+status: done
 title: The enemy the camera picks has to become your target
 ---
 
