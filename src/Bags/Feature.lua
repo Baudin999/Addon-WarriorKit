@@ -199,6 +199,14 @@ ns.Register({
 		-- The client's own nine bag calls, taken, so B opens this window.
 		bagsHideBlizz = true,
 
+		-- And the six buttons on the bottom bar those calls used to be reached
+		-- from, taken down by Core/BlizzHide.lua. Two settings rather than one
+		-- because they are two claims: the line above says which window B
+		-- opens, this one says whether the client's bag bar is still on the
+		-- screen, and a player who wants the bar back should not have to hand
+		-- the nine calls back with it.
+		hideBlizzBagBar = true,
+
 		-- Ten across. Wide enough that the piles most people carry sit on one
 		-- line each and narrow enough that the window is not half the screen.
 		bagColumns = 10,

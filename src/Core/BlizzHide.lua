@@ -98,6 +98,18 @@ local SWITCHES = {
 	{ key = "hideBlizzXP", word = "xp",
 		label = "Blizzard's experience and reputation bars",
 		hint = "Progress/Rails.lua draws both instead. Its default is the bottom edge of the screen, which is roughly where these two were." },
+	-- The last two rows of the client's bottom bar, and neither of them is art.
+	-- Artwork/Artwork.lua takes the gryphons and the metal strip off
+	-- MainMenuBarArtFrame and leaves the frame standing, because these two and
+	-- bar 1's twelve are anchored to it. So the furniture goes there and the
+	-- buttons standing on it come here, which is the same division the header
+	-- draws between a texture and a frame.
+	{ key = "hideBlizzMicroMenu", word = "micro",
+		label = "Blizzard's micro menu",
+		hint = "C, P, N and L open this addon's own character sheet, spell book, talents and quest log, and Escape is still the game menu with a WarriorKit button on it." },
+	{ key = "hideBlizzBagBar", word = "bagbar",
+		label = "Blizzard's bag bar",
+		hint = "The backpack, the four bags on the belt and the key ring. B opens this addon's bag window instead, and that window does not draw a key ring, so untick this if you carry keys." },
 	-- The second switch in this list whose frames are not in FRAMES below, and
 	-- it is a file for the reason the chat window's is: the C key has to come
 	-- with the window, and a key swap is not a row in a table. Character
@@ -194,6 +206,33 @@ local FRAMES = {
 	-- idempotent and a name this client does not carry costs one lookup.
 	{ needs = { "hideBlizzXP" }, names = { "MainMenuExpBar", "ReputationWatchBar",
 		"MainMenuBarMaxLevelBar", "StatusTrackingBarManager", "ExhaustionTick" } },
+	-- The micro menu, one button at a time rather than the row.
+	--
+	-- There is no row to take. The buttons are anchored to each other and the
+	-- first of them to MainMenuBarArtFrame, which also carries the bag bar and
+	-- bar 1's twelve, so a switch that hid the frame would be three switches
+	-- wearing one label. Twelve names go up together and every anchor between
+	-- them is still an anchor, because the attic takes all twelve.
+	--
+	-- Twelve for a client that draws seven. TalentMicroButton is not on the
+	-- screen below level ten and PVPMicroButton and WorldMapMicroButton are
+	-- Classic Era's, which is the other TOC this file loads under. A name this
+	-- client does not carry costs one lookup against nil, and the alternative
+	-- is a list that is right on one of the two clients.
+	{ needs = { "hideBlizzMicroMenu" }, names = { "CharacterMicroButton",
+		"SpellbookMicroButton", "TalentMicroButton", "AchievementMicroButton",
+		"QuestLogMicroButton", "SocialsMicroButton", "GuildMicroButton",
+		"PVPMicroButton", "WorldMapMicroButton", "LFGMicroButton",
+		"MainMenuMicroButton", "HelpMicroButton" } },
+	-- The bag bar, one button at a time for the reason the micro menu is.
+	--
+	-- Bags/Blizzard.lua already holds the nine calls that open the client's bag
+	-- windows, so B and a merchant both land on this addon's window. Nothing
+	-- there touches the six buttons on the bar, which is why they were still on
+	-- the screen with every other switch on.
+	{ needs = { "hideBlizzBagBar" }, names = { "MainMenuBarBackpackButton",
+		"CharacterBag0Slot", "CharacterBag1Slot", "CharacterBag2Slot",
+		"CharacterBag3Slot", "KeyRingButton" } },
 }
 
 -- A part whose frames need more than a name in the table above, and whose

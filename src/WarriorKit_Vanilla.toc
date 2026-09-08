@@ -660,6 +660,12 @@ Breakdown\Breakdown.lua
 Breakdown\Window.lua
 Breakdown\Feature.lua
 
+# The 2007 furniture off the action bars: the two gryphons, the riveted strip
+# behind bar 1, the page arrows and the page number. After Core\Attic.lua,
+# because the arrows are frames and go in the cage rather than being argued
+# with one method at a time, and the textures beside them still take ns.Strip
+# out of Core\Core.lua. The buttons standing on the same frame, the micro menu
+# and the bag bar, are Core\BlizzHide.lua's and not this file's.
 Artwork\Artwork.lua
 Artwork\Feature.lua
 

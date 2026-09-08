@@ -30,6 +30,15 @@ ns.Register({
 		-- False means the gryphons and the metal strip are gone, which is the
 		-- point of the part and so the state it starts in.
 		blizzArt = false,
+
+		-- The micro menu, taken down by Core/BlizzHide.lua and defaulted here
+		-- because this is the part that owns the rest of the client's bottom
+		-- bar. On, for the reason every other hide switch ships on: an addon
+		-- that draws its own character sheet, spell book, talents and quest log
+		-- and leaves the client's row of buttons under them has added to the
+		-- screen rather than replaced anything, and the alternative was a
+		-- player finding Edit Mode.
+		hideBlizzMicroMenu = true,
 	},
 
 	words = {

@@ -23,6 +23,21 @@ ns.Artwork = Artwork
 --
 --   The experience bar is not artwork. MainMenuExpBar and
 --   StatusTrackingBarManager are deliberately absent from both lists.
+--
+--   A named region goes through the attic, a walked one does not. ns.Strip
+--   puts a region's own Hide where its Show was and loses to SetShown, which is
+--   resolved in C and reads no Lua field; that is why the page arrows and the
+--   page number were still on the screen with this switch in its default state.
+--   Core/Attic.lua re-parents into a frame that can never be shown, which no
+--   call on the frame itself undoes, and Core/BlizzHide.lua's sweep then keeps
+--   them there for free. It only takes frames, so the endcaps and the sliding
+--   textures fall back to ns.Strip inside the same call and the list does not
+--   have to know which of the two this client made them.
+--
+--   The textures inside the holders keep ns.Strip on purpose. A texture is a
+--   region of the frame it was created on and re-parenting one takes it out of
+--   that frame's draw order rather than off the screen, which is the rule
+--   Core/Attic.lua's own header states.
 
 --------------------------------------------------------------------------
 -- What gets stripped
@@ -99,11 +114,14 @@ local function Sweep(hide)
 		end
 	end
 
+	-- Picked once rather than branched on per region, which keeps the walk at
+	-- the depth the holders' walk above it already sits at.
+	local move = hide and ns.Attic.Vanish or ns.Attic.Return
 	for _, name in ipairs(ART_REGIONS) do
 		local region = _G[name]
 		if region then
 			found = found + 1
-			if not apply(region) then
+			if not move(region) then
 				complete = false
 			end
 		end
