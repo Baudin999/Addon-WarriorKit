@@ -437,24 +437,36 @@ end
 --                  other half hard to see
 --   the finisher   a spawn that comes from the database rather than from the
 --                  quest object, off a different call
+--   the icon       which of Questie's marks it drew the thing with. `Icon` is
+--                  the field a real spawn list entry carries and `Type` is not:
+--                  Questie builds these in objectiveSpawnListCallTable as an
+--                  id, a name, the spawns, the waypoints and one of its own
+--                  ICON_TYPE numbers, and it has never put the word "monster"
+--                  on one. The fixture said Type for a long time, which
+--                  certified a shape no install has.
 local questie = _G.QuestieLoader
 local knows = questie:ImportModule("QuestieDB")
 local carrying = questie:ImportModule("QuestiePlayer")
 local distancing = questie:ImportModule("DistanceUtils")
 local placing = questie:ImportModule("ZoneDB")
 
+local ICON = {
+	slay = _G.Questie.ICON_TYPE_SLAY,
+	object = _G.Questie.ICON_TYPE_OBJECT,
+	complete = _G.Questie.ICON_TYPE_COMPLETE,
+}
 local SPAWNS = {
-	miners = { Name = "Kobold Miner", Type = "monster", Spawns = {
+	miners = { Name = "Kobold Miner", Icon = ICON.slay, Spawns = {
 		[12] = { { 30, 40 }, { 30.4, 40.4 }, { 60, 20 }, { -1, -1 } },
 		[40] = { { 50, 50 } },
 		[606] = { { 10, 10 } },
 	} },
-	rope = { Name = "Trapper's Rope", Type = "object", Spawns = {
+	rope = { Name = "Trapper's Rope", Icon = ICON.object, Spawns = {
 		[12] = { { 90, 90 } },
 	} },
 	-- The one an objective with no counts sends you to. Questie files it at 0
 	-- of 0 like every other "speak to" step in the game.
-	baros = { Name = "Baros Alexston", Type = "monster", Spawns = {
+	baros = { Name = "Baros Alexston", Icon = ICON.slay, Spawns = {
 		[12] = { { 22, 70 } },
 	} },
 }
@@ -498,10 +510,16 @@ carrying.currentQuestlog = {
 		Id = 201,
 		Objectives = {},
 		SpecialObjectives = {},
+		--
+		-- The event row carries an `Icon` of its own, which is what Questie's
+		-- corrections leave on a row whose default mark is wrong for the step.
+		-- The other two carry none, so the icon has to come off the kind, and
+		-- both halves of that are reachable from here.
 		ObjectiveData = {
 			{ Type = "monster", Id = 901, Text = "Hogger slain" },
 			{ Type = "item", Id = 3010, Text = "Hogger's Head" },
 			{ Type = "event", Text = "Report to Dughan",
+				Icon = ICON.complete,
 				Coordinates = { [12] = { { 20, 60 } } } },
 		},
 	},

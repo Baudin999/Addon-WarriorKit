@@ -58,6 +58,49 @@ Where.TODO = ns.UI.Chart.TODO -- something you still have to kill, pick up or cl
 Where.BACK = ns.UI.Chart.BACK -- who the quest goes back to
 Where.YOU  = ns.UI.Chart.YOU  -- where you are standing, which no database knows
 
+-- Which of Questie's own marks a kind of objective is drawn with.
+--
+-- The map beside this one gets its icons for free: Map/Pins.lua walks Questie's
+-- own frames and the texture is on them. Nothing here has a frame to read. The
+-- places below come out of the database, one query at a time, for a quest
+-- Questie may never have drawn a single icon for, and what the database carries
+-- is the kind of thing rather than the picture.
+--
+-- So the kind is turned into the name Questie files its art under, and
+-- ns.QuestieIcon turns that into a path. The five names are Questie's own and
+-- the mapping is Questie's own too: its `objectiveSpawnListCallTable` gives a
+-- creature the slay icon, an object the object icon, an item the loot icon and
+-- a trigger the event icon, and a kill credit is a creature by another name.
+--
+-- Where the data says which icon rather than which kind, that wins. A live
+-- spawn list entry carries `Icon` and an ObjectiveData row carries one where
+-- Questie's corrections have overridden the default, and those are the whole
+-- reason a "kill the four guards" step draws a loot mark on the real map: the
+-- correction is the answer and the kind is the guess.
+local ART = {
+	monster = "slay",
+	object = "object",
+	item = "loot",
+	killcredit = "slay",
+	event = "event",
+}
+
+-- Who takes it back, which is the question mark every player has walked towards
+-- since the first client.
+local RETURN = "complete"
+
+-- One of the three shapes above turned into a texture, or nothing at all.
+--
+-- Nothing at all is the ordinary answer on a client with no Questie, and it is
+-- drawn as the coloured square this map drew before there were icons. A mark
+-- that is the wrong shape beats a mark that is not there.
+local function Art(which)
+	if which == nil then
+		return nil
+	end
+	return ns.QuestieIcon(which)
+end
+
 -- How near two spawns have to be before they count as one place.
 --
 -- A zone coordinate is a percentage, so this is a step of a hundred and fiftieth
@@ -335,28 +378,35 @@ end
 -- A coordinate of -1 is Questie saying the thing is inside an instance, whose
 -- entrance is a separate row it does not hand over here. Dropped rather than
 -- drawn at the top left corner of the zone, which is where a -1 lands.
-local function Mark(zone, x, y, name, kind)
+local function Mark(zone, x, y, name, kind, icon)
 	if type(x) ~= "number" or type(y) ~= "number" or x <= 0 or y <= 0 then
 		return false
 	end
 	if #zone.points >= CROWD then
 		return false
 	end
-	local step = ("%d.%d.%s"):format(math.floor(x / STEP), math.floor(y / STEP), kind)
+	-- The icon is part of what makes two spawns the same place, and it has to
+	-- be: the step exists so one camp is one dot, and a camp that holds the mob
+	-- you are killing and the chest you are opening is two errands standing in
+	-- the same five pixels. Keyed on the kind alone, the second one was dropped
+	-- and the map said the chest was somewhere else.
+	local step = ("%d.%d.%s.%s"):format(math.floor(x / STEP), math.floor(y / STEP),
+		kind, icon or "")
 	if zone.seen[step] then
 		return false
 	end
 	zone.seen[step] = true
-	zone.points[#zone.points + 1] = { x = x, y = y, name = name, kind = kind }
+	zone.points[#zone.points + 1] = { x = x, y = y, name = name, kind = kind,
+		icon = icon }
 	return true
 end
 
 -- One creature's or object's whole spawn table, which Questie keys by area id.
-local function Scatter(into, spawns, name, kind)
+local function Scatter(into, spawns, name, kind, icon)
 	for area, places in pairs(spawns) do
 		local zone = Bucket(into, area)
 		for _, at in ipairs(places) do
-			Mark(zone, at[1], at[2], name, kind)
+			Mark(zone, at[1], at[2], name, kind, icon)
 		end
 	end
 end
@@ -367,7 +417,11 @@ end
 local function FromList(into, spawnList, kind)
 	for _, entry in pairs(spawnList) do
 		if type(entry.Spawns) == "table" then
-			Scatter(into, entry.Spawns, entry.Name, kind)
+			-- `Icon` is what Questie drew this entry with, decided once when it
+			-- built the spawn list and already carrying whatever its
+			-- corrections had to say. It is the closest this file ever gets to
+			-- reading the icon off the frame, which is what the world map does.
+			Scatter(into, entry.Spawns, entry.Name, kind, Art(entry.Icon))
 		end
 	end
 end
@@ -413,7 +467,7 @@ local function FromFinisher(into, quest)
 	for _, id in ipairs(ids) do
 		local spawns = Ask(call, id, "spawns")
 		if type(spawns) == "table" then
-			Scatter(into, spawns, Ask(call, id, "name"), Where.BACK)
+			Scatter(into, spawns, Ask(call, id, "name"), Where.BACK, Art(RETURN))
 			drawn = true
 		end
 	end
@@ -441,19 +495,19 @@ end
 -- One creature or object, by id. The name is asked for as well as the spawns,
 -- because the database's name is the creature's and the objective's text is the
 -- line off the quest, and a dot wants the first one.
-local function FromThing(into, kind, id, text)
+local function FromThing(into, kind, id, text, icon)
 	local call = ASKS[kind]
 	local spawns = call and Ask(call, id, "spawns")
 	if type(spawns) ~= "table" then
 		return false
 	end
-	Scatter(into, spawns, Ask(call, id, "name") or text, Where.TODO)
+	Scatter(into, spawns, Ask(call, id, "name") or text, Where.TODO, icon)
 	return true
 end
 
-local function FromEach(into, ids, kind, text)
+local function FromEach(into, ids, kind, text, icon)
 	for _, id in ipairs(ids) do
-		FromThing(into, kind, id, text)
+		FromThing(into, kind, id, text, icon)
 	end
 end
 
@@ -462,11 +516,16 @@ end
 -- are where the coordinates are.
 local DROPPERS = { npcDrops = "monster", objectDrops = "object" }
 
-local function FromItem(into, id, text)
+local function FromItem(into, id, text, icon)
+	-- The loot mark rather than the mark for whatever carries it, and that is
+	-- the point of passing it down. What the step asks for is the item; the
+	-- creature is where it comes from, and a slay icon over a mob that drops
+	-- a quest item is Questie's answer to a different question.
+	icon = icon or Art(ART.item)
 	for key, kind in pairs(DROPPERS) do
 		local carriers = Ask("QueryItemSingle", id, key)
 		if type(carriers) == "table" then
-			FromEach(into, carriers, kind, text)
+			FromEach(into, carriers, kind, text, icon)
 		end
 	end
 	return true
@@ -480,24 +539,30 @@ local function FromRow(into, row)
 	if type(row) ~= "table" then
 		return false
 	end
+	-- The row's own icon where Questie's corrections put one there, and the
+	-- default for its kind where they did not. Worked out once at the top
+	-- rather than in each of the four branches, because the override outranks
+	-- the kind in all four and a branch that forgot it is a branch that draws a
+	-- mark the real map does not.
+	local icon = Art(row.Icon) or Art(ART[row.Type])
 	if row.Type == "event" then
 		if type(row.Coordinates) ~= "table" then
 			return false
 		end
-		Scatter(into, row.Coordinates, row.Text, Where.TODO)
+		Scatter(into, row.Coordinates, row.Text, Where.TODO, icon)
 		return true
 	end
 	if row.Type == "item" then
-		return FromItem(into, row.Id, row.Text)
+		return FromItem(into, row.Id, row.Text, icon)
 	end
 	if row.Type == "killcredit" then
 		if type(row.IdList) ~= "table" then
 			return false
 		end
-		FromEach(into, row.IdList, "monster", row.Text)
+		FromEach(into, row.IdList, "monster", row.Text, icon)
 		return true
 	end
-	return FromThing(into, row.Type, row.Id, row.Text)
+	return FromThing(into, row.Type, row.Id, row.Text, icon)
 end
 
 -- Nothing here is filtered by what you have already done, and that is the

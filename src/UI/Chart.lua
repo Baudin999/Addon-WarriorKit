@@ -75,8 +75,9 @@ local C, M = UI.Color, UI.Metric
 -- only way the edges of a zone can be made to work: the client's zone art runs
 -- over the border into whatever is next to it, and which strip of the picture
 -- belongs to which neighbour is a table inside the client that only C_Map will
--- read. A caller that passes no function gets a picture the mouse goes
--- straight through, which is what the quest log's map wants and what it had.
+-- read. A caller that passes no function gets the drag and the wheel and
+-- nothing on the button, which is what the quest log's map wants: it is a
+-- picture of one quest rather than a place you can navigate from.
 --
 -- **A drag with nothing to push moves the window it is in.** A frame that
 -- answers the mouse stops the frame under it from seeing the drag, and the
@@ -95,12 +96,18 @@ local C, M = UI.Color, UI.Metric
 -- larger than the canvas inside it on either axis, which is what keeps the
 -- picture off a scroll offset no client agrees about.
 --
--- **A point is a coloured square or somebody else's icon.** The quest log's
--- three kinds are named below and drawn as a square with a wash behind it. A
--- point carrying `icon` is drawn as that texture instead, at its own size and
--- with no wash and no ring, because the art is already a mark somebody
--- designed to be found on a map. That is the whole of what the world map
--- needed to reuse this file.
+-- **A point is a coloured square or somebody else's icon.** A point carrying
+-- `icon` is drawn as that texture, at its own size and with no wash and no
+-- ring, because the art is already a mark somebody designed to be found on a
+-- map. Both maps hand over Questie's own icons and both take the same route to
+-- them: the world map reads them off Questie's frames, the quest log's map
+-- resolves them out of the database through ns.QuestieIcon.
+--
+-- The square is what a point with no icon gets, and the kinds named below are
+-- its palette. It is the fallback rather than the ordinary case now: no
+-- Questie, no compiled database, or a version whose icon table moved is a map
+-- drawn in colours rather than a map with nothing on it. The dungeon log's
+-- numbered bosses are the one caller that means the square.
 --
 -- **A point may carry a unit, and one that does is taken again on the tick.**
 -- Everything else on the picture is a fact about the zone: where a camp is, and
@@ -866,13 +873,20 @@ local function Drift(_, frame)
 	frame.board:Pan()
 end
 
--- The mouse on the box: a click that asks the caller what is under it, and a
--- drag that pushes the picture or, where it has nowhere to go, the window.
+-- The mouse on the box, and the drag over it: the picture pushed under the
+-- viewport, or, where it has nowhere to go, the window pushed under the mouse.
 --
--- Hung only where the caller passed a function, because enabling the mouse is
--- not free of consequence: it is what stops the window under the picture from
--- seeing the click at all.
-local function Clicks(board)
+-- Hung on every board, and it did not used to be. It was half of the function
+-- below and went up only where the caller had passed something to do with a
+-- click, on the argument that enabling the mouse stops the window under the
+-- picture from seeing the drag. That argument is answered by Hand: a drag the
+-- picture has no room for is handed to the window and the window moves.
+--
+-- What the old arrangement cost was the quest log's map. It has the wheel, so
+-- it zooms; it had no drag, so at six times it was looking at a sixth of a zone
+-- with no way across it but to zoom out, find the next piece and zoom back in.
+-- A zoom you cannot pan is half a gesture.
+local function Grip(board)
 	local port = board.port
 	if type(port.EnableMouse) ~= "function" or type(port.SetScript) ~= "function" then
 		return false
@@ -906,6 +920,20 @@ local function Clicks(board)
 	port:SetScript("OnMouseDown", function()
 		board.dragging = false
 	end)
+	return true
+end
+
+-- What a click on the picture means, for the caller that has an answer.
+--
+-- Separate from the mouse above because the two are separate questions. Every
+-- board wants the drag; only a board you can navigate from wants the click, and
+-- the quest log's map is a picture of one quest rather than a place you can
+-- step out of.
+local function Taps(board)
+	local port = board.port
+	if type(port.SetScript) ~= "function" then
+		return false
+	end
 	-- On the way up rather than the way down, so a press that turns into a drag
 	-- of the window is not also a step into another zone.
 	--
@@ -970,8 +998,9 @@ function Chart.New(parent, name, onClick, onOut)
 	Wheel(board)
 	board.onClick = type(onClick) == "function" and onClick or nil
 	board.onOut = type(onOut) == "function" and onOut or nil
+	Grip(board)
 	if board.onClick or board.onOut then
-		Clicks(board)
+		Taps(board)
 	end
 	Follow(board)
 	return board

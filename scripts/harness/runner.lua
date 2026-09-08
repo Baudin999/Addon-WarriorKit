@@ -292,7 +292,12 @@ local SECTIONS = {
 	"45-chat-keys",
 	"46-mail",
 	"47-quest-log",
-	-- Straight under it, because it reads what that section leaves: the window
+	-- Straight under it, and reading the log exactly as that section leaves it.
+	-- The picture behind the tab is its own subject: the section above is the
+	-- fold, the shared cursor and one quest's own text, and this is a zone with
+	-- Questie's answer drawn on it under a wheel and a drag.
+	"47-quest-map",
+	-- Under that, because it reads what those two sections leave: the window
 	-- on screen, the log three quests short of what it started with, and the
 	-- footer button driven once per quest. It puts five rows into the log and
 	-- takes them out again, and it ends with nothing pinned.

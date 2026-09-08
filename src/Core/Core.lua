@@ -1093,6 +1093,82 @@ function ns.QuestieAPI(name)
 	return questie.API
 end
 
+-- The texture Questie draws one of its marks with, or nil.
+--
+-- The fourth door, and the only one that is somebody else's art rather than
+-- somebody else's code or settings. The world map gets these paths for free: it
+-- reads Questie's own icon frames and the texture is on them. The quest log's
+-- map is built out of the database instead, so it has the number Questie would
+-- have drawn and none of the art, and a mark that has to be found on a
+-- hillside is worth more than a coloured square.
+--
+-- Three shapes go in, because Questie has named an icon three ways across the
+-- two versions this addon ships for and the caller should not have to know
+-- which install it is on.
+--
+--   a number   v11's own `Questie.ICON_TYPE_*`, which is what an objective
+--              carries.
+--
+--   a name     "slay", "loot", "complete" and the rest. What a caller asks for
+--              when the data says what kind of thing it is and not which icon
+--              Questie picked. The name is turned into the number first, for
+--              the reason below, and only falls through to `Questie.icons`
+--              where the number is not there to be had.
+--
+--   a path     v6 had neither table. It wrote the paths onto plain globals at
+--              load, `ICON_TYPE_SLAY` and the five beside it, and put those
+--              strings straight onto the objective. So a string with a
+--              backslash in it is already the answer and is handed back.
+--
+-- **`usedIcons` before `icons`, always.** They are two tables of the same art
+-- and they disagree on the icons the player has changed: Questie lets a handful
+-- be replaced in its options and writes the replacement into `usedIcons` alone.
+-- `icons` is the stock art it shipped with. A map drawing the stock exclamation
+-- mark beside a minimap drawing somebody's chosen one is two answers to one
+-- question, and the whole point of asking Questie for the art is that there is
+-- only one.
+--
+-- Nil for anything else, and nil is drawn as the coloured square the map drew
+-- before this existed. Questie absent, not compiled, or a version whose icon
+-- table moved is a map that reads the way it always read.
+function ns.QuestieIcon(which)
+	if type(which) == "string" and which:find("\\", 1, true) then
+		return which
+	end
+	local questie = _G.Questie
+	-- Anything that is neither a name nor a number is refused here rather than
+	-- three lines further down. What comes in is a field off another addon's
+	-- table, so a version that puts something else there has to be a mark that
+	-- is not drawn rather than a concatenation that raises inside a repaint.
+	if type(questie) ~= "table"
+		or (type(which) ~= "string" and type(which) ~= "number") then
+		return nil
+	end
+	if type(which) == "string" then
+		local number = questie["ICON_TYPE_" .. which:upper()]
+		if type(number) == "number" then
+			which = number
+		end
+	end
+	if type(which) == "number" then
+		local used = questie.usedIcons
+		if type(used) ~= "table" or type(used[which]) ~= "string" then
+			return nil
+		end
+		return used[which]
+	end
+	local icons = questie.icons
+	if type(icons) == "table" and type(icons[which]) == "string" then
+		return icons[which]
+	end
+	-- v6, where the name is half of a global rather than a key in a table.
+	local named = _G["ICON_TYPE_" .. which:upper()]
+	if type(named) ~= "string" then
+		return nil
+	end
+	return named
+end
+
 -- Questie's own saved settings, or nil, asked for by the setting you mean to
 -- read.
 --

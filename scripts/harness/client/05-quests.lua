@@ -111,7 +111,51 @@ _G.QuestieLoader = {
 -- anything would let a bad call through here and fail in somebody's game.
 local questiePublic = { waiting = {}, updates = {} }
 
+-- Questie's icon table, and the numbers that index it.
+--
+-- Read off the installed v11 rather than remembered. `Questie.icons` is keyed
+-- by name and holds the art the addon ships with; `Questie.usedIcons` is keyed
+-- by one of the `ICON_TYPE_*` numbers and holds what the player is actually
+-- getting, which is the stock art until they replace one in Questie's options.
+-- An objective carries the number, so the number is what Core/Core.lua reads
+-- first and the name is the fallback.
+--
+-- Five icons, which is one per kind of objective the quest log's map can draw
+-- plus the hand-in. The paths are Questie's own, which matters: the point of
+-- the marks is that they are the same ones the minimap and the world map put
+-- on the same camp, and a fixture with invented paths would let a mapping that
+-- named art nobody ships pass.
+--
+-- One replaced icon, which is the whole reason `usedIcons` is read in
+-- preference to `icons`. Slay is pointed at a texture of the player's choosing
+-- here, so a reader that took the stock path out of `icons` comes out with a
+-- different string and is caught.
+local QUESTIE_ICONS = {
+	slay = "Interface\\Addons\\Questie\\Icons\\slay.blp",
+	loot = "Interface\\Addons\\Questie\\Icons\\loot.blp",
+	object = "Interface\\Addons\\Questie\\Icons\\object.blp",
+	event = "Interface\\Addons\\Questie\\Icons\\event.blp",
+	complete = "Interface\\Addons\\Questie\\Icons\\complete.blp",
+}
+
+-- The one the player has replaced, which is what `usedIcons` holds where
+-- `icons` still holds the stock art.
+local CHOSEN_SLAY = "Interface\\Icons\\Ability_Warrior_Cleave"
+
 _G.Questie = {
+	ICON_TYPE_SLAY = 1,
+	ICON_TYPE_LOOT = 2,
+	ICON_TYPE_EVENT = 3,
+	ICON_TYPE_OBJECT = 4,
+	ICON_TYPE_COMPLETE = 8,
+	icons = QUESTIE_ICONS,
+	usedIcons = {
+		[1] = CHOSEN_SLAY,
+		[2] = QUESTIE_ICONS.loot,
+		[3] = QUESTIE_ICONS.event,
+		[4] = QUESTIE_ICONS.object,
+		[8] = QUESTIE_ICONS.complete,
+	},
 	API = {
 		isReady = false,
 		Enums = {
@@ -170,6 +214,12 @@ function questiePublic.Listening()
 end
 
 H.questie = questiePublic
+
+-- The icon paths, so a section can name the art Questie ships rather than
+-- writing the five strings out a second time and testing that two copies of a
+-- typo agree.
+H.questieIcons = QUESTIE_ICONS
+H.questieChosenSlay = CHOSEN_SLAY
 
 _G.GetNumQuestLogEntries = function() return #QUEST_LOG end
 _G.GetQuestLogTitle = function(index)

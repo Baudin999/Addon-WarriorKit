@@ -76,7 +76,18 @@ local Log, Where, Chart = ns.QuestLog, ns.QuestWhere, UI.Chart
 -- second, because a quest log open on the screen is not a compass.
 --------------------------------------------------------------------------
 
-local WIDTH, HEIGHT = 810, 520
+-- How big the window is.
+--
+-- It grew, and the map is the whole reason. The two side columns are fixed, so
+-- every pixel of width and height added here lands on the middle one, and the
+-- middle one at 810 by 520 drew a zone about three hundred pixels across: wide
+-- enough to say which end of Westfall and not wide enough to say which side of
+-- the road. A zone at five hundred is the picture the wheel then works on top
+-- of rather than the picture the wheel has to rescue.
+--
+-- Still smaller than the dungeon log beside it, which is 1180 by 660, so this
+-- is not the widest thing the addon puts on the screen.
+local WIDTH, HEIGHT = 1000, 640
 
 -- The two fixed columns. The middle takes whatever is left, which is the way
 -- round it has to be: a zone name and an item name have a length the font
@@ -714,8 +725,9 @@ local function Note(quest, zones, drawn)
 	if drawn == 0 then
 		return "This client has no map picture for that zone."
 	end
-	return "Blue is what is left to do, green is who takes it back, gold is you."
-		.. " The wheel zooms in on whatever you are pointing at."
+	return "Questie's own marks: what is left to do, and the question mark is who"
+		.. " takes it back. The wheel zooms on whatever you are pointing at and"
+		.. " a drag moves the picture under the box."
 end
 
 -- The strip of zones under the map, or nothing at all.
@@ -1210,6 +1222,20 @@ function Window.Zoom(delta)
 		atlas.board:Zoom(delta, 0.5, 0.5)
 	end
 	return atlas.board:Level()
+end
+
+-- The picture pushed so many units right and so many up, and whether it moved.
+--
+-- Handed out for the reason the zoom above is: a harness has no cursor to hold
+-- a button down with, and what a drag does is the half of the gesture that
+-- cannot be seen in a picture of the map at rest. A zone that fits its box has
+-- nowhere to go and answers false, which is the state that hands the drag up
+-- to the window and moves the window instead.
+function Window.Drag(across, up)
+	if not atlas then
+		return false
+	end
+	return atlas.board:Drag(across, up)
 end
 
 function Window.Places()
