@@ -102,13 +102,6 @@ local RETIRED = {
 	softIcon = true,
 	softIconSize = true,
 
-	-- 1.2: what SoftTargetEnemy held before the addon took it, back when that
-	-- was the only CVar action targeting owned. It owns SoftTargetForce as
-	-- well now, so the record is a table keyed by CVar name under aimPrior. A
-	-- string left sitting where a table is indexed is the markKeys bug above,
-	-- and this one would have been read on the way out and written to a CVar.
-	softPrior = true,
-
 	-- 1.2: the breakdown ranked by damage, casts or hits off a chip on its
 	-- window. The other two rankings were answers to a question that table does
 	-- not ask, and a ranking by press count puts Battle Shout above Mortal
@@ -2863,6 +2856,27 @@ local function MigrateZooms()
 	return moved
 end
 
+-- softPrior was what SoftTargetEnemy held before the addon took it, back when
+-- that was the only CVar action targeting owned. It owns SoftTargetForce as
+-- well now, and the record is a table keyed by CVar name under aimPrior.
+--
+-- Carried across rather than retired, because the string is the one thing in
+-- the file nothing else can reconstruct: it is what this character's client was
+-- at before the addon ever wrote to it. Dropped, the next Remember would take
+-- its reading from a CVar the addon had already set, and turning the setting
+-- off would hand you back the addon's own value as though it were yours.
+--
+-- Runs once, because the key it reads is deleted on the way out, and it is a
+-- migration rather than an entry in RETIRED for that reason: RETIRED wipes both
+-- tables before anything has had a chance to read them.
+local function MigrateAimPrior()
+	local was = WarriorKitCharDB.softPrior
+	WarriorKitCharDB.softPrior = nil
+	if type(was) == "string" and was ~= "" and ns.dbc.aimPrior.SoftTargetEnemy == nil then
+		ns.dbc.aimPrior.SoftTargetEnemy = was
+	end
+end
+
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("ADDON_LOADED")
 loader:SetScript("OnEvent", function(self, _, name)
@@ -2877,6 +2891,7 @@ loader:SetScript("OnEvent", function(self, _, name)
 	ns.db = ApplyDefaults(WarriorKitDB, defaults)
 	ns.dbc = ApplyDefaults(WarriorKitCharDB, charDefaults)
 	MigrateZooms()
+	MigrateAimPrior()
 
 	-- Said here rather than beside the list, because every feature has
 	-- registered by now and not one of them had when the list was written. A

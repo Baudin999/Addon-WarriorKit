@@ -43,7 +43,9 @@ ns.Register({
 	-- Both CVars Aim.lua owns are character scoped, so what they held before
 	-- the addon took them is character scoped memory too. Keyed by CVar name,
 	-- and a name absent from it is one not taken yet. It was a bare string
-	-- while there was one CVar; softPrior is retired in Core/Core.lua.
+	-- while there was one CVar; MigrateAimPrior in Core/Core.lua carries that
+	-- one across, because it is the only reading of the client from before the
+	-- addon ever wrote to it.
 	charDefaults = {
 		aimPrior = {},
 	},
