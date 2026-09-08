@@ -2,7 +2,7 @@
 revision: 1
 id: 01M208VZCR8TZRA5ZFCJ06GBF9
 type: task
-status: doing
+status: done
 title: "The quest log's map is bigger, zooms and wears Questie's icons"
 ---
 
