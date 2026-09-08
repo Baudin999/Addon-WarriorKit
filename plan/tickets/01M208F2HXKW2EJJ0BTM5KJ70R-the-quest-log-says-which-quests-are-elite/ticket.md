@@ -2,7 +2,7 @@
 revision: 1
 id: 01M208F2HXKW2EJJ0BTM5KJ70R
 type: task
-status: doing
+status: done
 title: The quest log says which quests are elite
 ---
 
