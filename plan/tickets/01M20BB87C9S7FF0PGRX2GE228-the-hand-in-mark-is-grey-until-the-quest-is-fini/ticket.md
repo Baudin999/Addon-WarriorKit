@@ -2,7 +2,7 @@
 revision: 1
 id: 01M20BB87C9S7FF0PGRX2GE228
 type: task
-status: todo
+status: doing
 title: The hand-in mark is grey until the quest is finished
 ---
 
