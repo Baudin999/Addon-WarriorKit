@@ -85,9 +85,21 @@ local ART = {
 	event = "event",
 }
 
--- Who takes it back, which is the question mark every player has walked towards
--- since the first client.
-local RETURN = "complete"
+-- Who takes it back, in the two states Questie draws that person in.
+--
+-- Gold once the quest is done and grey while it is not, which is Questie's own
+-- rule rather than one invented here: its QuestgiverFrame picks between exactly
+-- these two icons for an NPC you already have the quest from, and the client
+-- has drawn a grey question mark over somebody with unfinished business since
+-- the first build. The mark on this map is the mark over their head.
+--
+-- The map draws the hand-in whether or not the quest is finished, which is
+-- where this addon and Questie part company: Questie puts nothing on the map
+-- until every objective is done, and knowing the hand-in is on the way back
+-- rather than across the zone is worth having while you are still killing
+-- things. Grey is what makes that honest. Gold on an unfinished quest says walk
+-- there now, and walking there now wastes the trip.
+local RETURN, WAITING = "complete", "incomplete"
 
 -- One of the three shapes above turned into a texture, or nothing at all.
 --
@@ -451,23 +463,45 @@ local function FromObjectives(into, objectives)
 	return true
 end
 
+-- Whether every objective is done, off the quest object's own call.
+--
+-- The call rather than a field, and the quest object rather than the database,
+-- because that is the one shape both versions of Questie agree on: v11 assigns
+-- QuestieDB.IsComplete onto the quest as a method, v6 writes the method out on
+-- the quest itself, and one is a dot and the other a colon on the module. Both
+-- answer 1 for finished, -1 for failed and 0 for neither.
+--
+-- Unfinished is the answer to every kind of doubt: no Questie, a version whose
+-- quest object has no such call, a call that raises. The mark is grey then, and
+-- grey is the state that tells you to keep killing things, which is what
+-- somebody looking at a quest they have not finished is doing.
+local function Finished(quest)
+	if type(quest) ~= "table" or type(quest.IsComplete) ~= "function" then
+		return false
+	end
+	local ok, state = pcall(quest.IsComplete, quest)
+	return ok and state == 1
+end
+
 -- Who takes it back, drawn whether or not the quest is finished.
 --
 -- Questie's own tracker only offers this once every objective is done, which is
 -- the right rule for a line of text that has room for one answer. A map has
--- room for both, and knowing that the hand-in is on the way back rather than
--- across the zone is worth having while you are still killing things.
+-- room for both, and the mark is what says which it is: the two states are
+-- above, and the choice is made once rather than per spawn because a quest is
+-- finished or it is not.
 local function FromFinisher(into, quest)
 	local kind, ids = Finishers(quest)
 	if not kind then
 		return false
 	end
 	local call = ASKS[kind]
+	local mark = Art(Finished(quest) and RETURN or WAITING)
 	local drawn = false
 	for _, id in ipairs(ids) do
 		local spawns = Ask(call, id, "spawns")
 		if type(spawns) == "table" then
-			Scatter(into, spawns, Ask(call, id, "name"), Where.BACK, Art(RETURN))
+			Scatter(into, spawns, Ask(call, id, "name"), Where.BACK, mark)
 			drawn = true
 		end
 	end

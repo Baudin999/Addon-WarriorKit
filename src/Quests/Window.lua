@@ -725,9 +725,9 @@ local function Note(quest, zones, drawn)
 	if drawn == 0 then
 		return "This client has no map picture for that zone."
 	end
-	return "Questie's own marks: what is left to do, and the question mark is who"
-		.. " takes it back. The wheel zooms on whatever you are pointing at and"
-		.. " a drag moves the picture under the box."
+	return "Questie's own marks: what is left to do, and a question mark for who"
+		.. " takes it back, grey until the quest is done. The wheel zooms where"
+		.. " you point and a drag moves the picture."
 end
 
 -- The strip of zones under the map, or nothing at all.

@@ -525,6 +525,26 @@ carrying.currentQuestlog = {
 	},
 }
 
+-- Whether the quest is finished, which is the one thing the hand-in's mark
+-- turns on: grey while there is anything left to do and gold when there is not.
+--
+-- A method on the quest object rather than a field, because that is what both
+-- versions of Questie put there. v11 assigns QuestieDB.IsComplete onto the
+-- quest as QO.IsComplete and v6 writes the method out on the quest itself, and
+-- the answer is 1, -1 or 0 either way. Modelled rather than stubbed at one
+-- value, because both marks are reachable defects and a fixture stuck on one of
+-- them would leave the other undrawn and untested.
+local finished = 0
+carrying.currentQuestlog[102].IsComplete = function() return finished end
+
+-- The switch, so a section can look at the same map either way round. It is not
+-- the client's own complete flag: that one belongs to the log's rows and this
+-- one belongs to Questie's quest object, and the map reads Questie's.
+H.questFinish = function(state)
+	finished = state or 0
+	return finished
+end
+
 -- The finisher's spawns come off the compiled database rather than off the
 -- quest object, which is why they are a second call and not a third field.
 local NPCS = {

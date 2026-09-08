@@ -113,29 +113,25 @@ local questiePublic = { waiting = {}, updates = {} }
 
 -- Questie's icon table, and the numbers that index it.
 --
--- Read off the installed v11 rather than remembered. `Questie.icons` is keyed
--- by name and holds the art the addon ships with; `Questie.usedIcons` is keyed
--- by one of the `ICON_TYPE_*` numbers and holds what the player is actually
--- getting, which is the stock art until they replace one in Questie's options.
--- An objective carries the number, so the number is what Core/Core.lua reads
--- first and the name is the fallback.
+-- Read off the installed v11 rather than remembered. `icons` is keyed by name
+-- and holds the art Questie ships; `usedIcons` is keyed by an `ICON_TYPE_*`
+-- number and holds what the player is getting, which is the same art until
+-- they replace one in Questie's options. Slay is replaced here, so a reader
+-- that took the stock path out of `icons` comes back with a different string
+-- and is caught.
 --
--- Five icons, which is one per kind of objective the quest log's map can draw
--- plus the hand-in. The paths are Questie's own, which matters: the point of
--- the marks is that they are the same ones the minimap and the world map put
--- on the same camp, and a fixture with invented paths would let a mapping that
--- named art nobody ships pass.
---
--- One replaced icon, which is the whole reason `usedIcons` is read in
--- preference to `icons`. Slay is pointed at a texture of the player's choosing
--- here, so a reader that took the stock path out of `icons` comes out with a
--- different string and is caught.
+-- Six of them: one per kind of objective the quest log's map draws, plus the
+-- hand-in in both of its states. The paths are Questie's own, because the whole
+-- point of the marks is that they are the ones the minimap and the world map
+-- put on the same camp, and invented paths would pass a mapping that named art
+-- nobody ships.
 local QUESTIE_ICONS = {
 	slay = "Interface\\Addons\\Questie\\Icons\\slay.blp",
 	loot = "Interface\\Addons\\Questie\\Icons\\loot.blp",
 	object = "Interface\\Addons\\Questie\\Icons\\object.blp",
 	event = "Interface\\Addons\\Questie\\Icons\\event.blp",
 	complete = "Interface\\Addons\\Questie\\Icons\\complete.blp",
+	incomplete = "Interface\\Addons\\Questie\\Icons\\incomplete.blp",
 }
 
 -- The one the player has replaced, which is what `usedIcons` holds where
@@ -148,6 +144,7 @@ _G.Questie = {
 	ICON_TYPE_EVENT = 3,
 	ICON_TYPE_OBJECT = 4,
 	ICON_TYPE_COMPLETE = 8,
+	ICON_TYPE_INCOMPLETE = 12,
 	icons = QUESTIE_ICONS,
 	usedIcons = {
 		[1] = CHOSEN_SLAY,
@@ -155,6 +152,7 @@ _G.Questie = {
 		[3] = QUESTIE_ICONS.event,
 		[4] = QUESTIE_ICONS.object,
 		[8] = QUESTIE_ICONS.complete,
+		[12] = QUESTIE_ICONS.incomplete,
 	},
 	API = {
 		isReady = false,

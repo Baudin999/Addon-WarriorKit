@@ -128,10 +128,27 @@ end
 check(marks[slay] == 3,
 	("%s places drew the icon the player put on slay, where three do")
 		:format(tostring(marks[slay])))
-check(marks[stock.complete] == 1,
-	"the hand-in did not draw Questie's own question mark")
+check(marks[stock.incomplete] == 1,
+	"the hand-in on an unfinished quest did not draw the grey question mark")
 check(marks["?"] == nil,
 	"a place on the map came back with no icon and would draw as a square")
+
+-- The other half of the hand-in's mark. The map draws it whether or not the
+-- quest is finished, which is where this addon and Questie part company, and
+-- the colour is what keeps that honest: grey says the trip is wasted today and
+-- gold says go. Both are drawn off the quest object's own IsComplete, so the
+-- switch is on the fixture rather than on the client's log row.
+H.questFinish(1)
+local done = ns.QuestWhere.Places(102)[2]
+local gold = 0
+for _, point in ipairs(done and done.points or {}) do
+	if point.icon == stock.complete then
+		gold = gold + 1
+	end
+end
+check(gold == 1,
+	("%d hand-ins went gold on a finished quest, where one does"):format(gold))
+H.questFinish(0)
 
 -- And the database path, where the row names a kind rather than an icon
 -- and one row carries a correction that outranks its kind. The event is
