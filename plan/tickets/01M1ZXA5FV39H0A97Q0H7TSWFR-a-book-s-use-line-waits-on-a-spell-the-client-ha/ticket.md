@@ -2,7 +2,7 @@
 revision: 1
 id: 01M1ZXA5FV39H0A97Q0H7TSWFR
 type: bug
-status: todo
+status: doing
 title: A book's Use line waits on a spell the client has not fetched
 ---
 
