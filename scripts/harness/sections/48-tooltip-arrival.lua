@@ -18,10 +18,17 @@
 -- bands, the sources and the placements, and it is at the line ceiling every
 -- section shares.
 --
--- Four claims, and the last is the sharp one. A box that was refused for want
--- of the client's text is exactly the box the event has to be able to put up,
--- and the rebuild used to be gated on a box being on screen: the hovers that
--- most needed it were the only ones that could not have it.
+-- The sharp claim in the first half is that a box refused for want of the
+-- client's text is exactly the box the event has to be able to put up. The
+-- rebuild used to be gated on a box being on screen: the hovers that most
+-- needed it were the only ones that could not have it.
+--
+-- The second half is the other fetch, and it is a different shape of the same
+-- defect. A spell's own text is fetched separately from the item that prints
+-- it, so a book teaching a profession draws a box with every line on it but the
+-- one it is carried for. That box looks finished, which is why the thinness
+-- test could not see it and why the addon has to ask the client for the
+-- sentence rather than wait for one nobody requested.
 
 local H = ...
 local ns, check, fire = H.ns, H.check, H.fire
@@ -105,5 +112,62 @@ do
 	H.tooltips.item[late] = nil
 	H.tooltips.inventory[H.tooltipKey("player", 5)] = nil
 
-	print("tips   a link with nothing behind it draws nothing, and fills in where it stands when the item lands")
+	------------------------------------------------------------------
+	-- The line the item is for, which is fetched after the item
+	--
+	-- A book that teaches a profession is a tooltip with a name, a level and a
+	-- requirement on it and nothing at all about what it does, because the Use
+	-- line is the spell's own sentence and the client fetches a spell's text
+	-- separately. Everything above is about a box with nothing in it; this is a
+	-- box that looks finished and is not, which is why the thinness test could
+	-- not see it and why the fix is a second question rather than a second
+	-- reading of the same one.
+	------------------------------------------------------------------
+
+	local book = _G.WarriorKitItemLink("Master First Aid - Doctor in the House")
+	local USE = "Use: Teaches you advanced first aid, allowing a maximum of 375 first aid skill."
+
+	-- Asked as whether the sentence is anywhere in the box rather than as a line
+	-- count, because the count is not this section's to predict: an item hover
+	-- carries whatever the sources registered for items had to say about it, and
+	-- a claim written as "three lines" is a claim that breaks when the seventh
+	-- source lands.
+	local function Says(text)
+		for index = 1, Box.Lines() do
+			if Box.Text(index) == text then
+				return true
+			end
+		end
+		return false
+	end
+
+	H.tooltips.item[book] = {
+		{ "Master First Aid - Doctor in the House" },
+		{ "Requires First Aid (300)" },
+	}
+	Tip.Open(owner, { kind = "item", link = book })
+	check(Says("Requires First Aid (300)"), "the book drew none of the client's own text")
+	check(Says(USE) == false, "the book's Use line was drawn before its spell arrived")
+
+	-- Asked for, and that is the half that has to be asserted separately: a box
+	-- that draws nothing about the book and never asks the client for the
+	-- sentence is a box that will draw nothing about it forever.
+	check(H.spellData.asked[#H.spellData.asked] == 27029,
+		"nothing asked the client for the spell the book's Use line describes")
+
+	H.spellData.cached[27029] = true
+	H.tooltips.item[book][3] = { USE }
+	fire("SPELL_DATA_LOAD_RESULT", 27029, true)
+	check(Says(USE), "what the book does is still missing after its spell landed")
+
+	-- And it stops. Every spell anybody loads fires this, and a box whose own
+	-- text is complete has nothing left to wait for.
+	check(Tip.Arrived() == false,
+		"a book that already says what it does rebuilt for a spell landing anyway")
+
+	Tip.Close(true)
+	H.tooltips.item[book] = nil
+	H.spellData.cached[27029] = nil
+
+	print("tips   a link with nothing behind it draws nothing, and fills in where it stands when the item lands; a book asks for the spell its Use line describes and says what it does when that lands too")
 end

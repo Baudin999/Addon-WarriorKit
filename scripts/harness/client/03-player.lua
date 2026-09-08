@@ -555,6 +555,15 @@ local ITEMS = {
 		use = "Increased Strength" },
 	["Mark of Tyranny"]   = { id = 4002, classId = 4, quality = 3, price = 0,
 		equip = "INVTYPE_TRINKET", icon = "Interface\\Icons\\Mark" },
+	-- The book, in no bag, hovered by 48-tooltip-arrival.lua. It carries a
+	-- `spell` beside its `use` and it is the only item here that does, which is
+	-- the whole fixture: the id is what the client is asked to fetch before it
+	-- will print the Use line, and an item table where every use effect was a
+	-- bare name left that ask untestable. The two numbers are the live ones for
+	-- Master First Aid - Doctor in the House and the spell it teaches.
+	["Master First Aid - Doctor in the House"] = { id = 22012, classId = 9,
+		quality = 1, price = 12500,
+		use = "Master First Aid", spell = 27029 },
 	-- What 65-bag-piles.lua stands a fifth bag up with, and in no bag otherwise.
 	-- The subclass is what cuts a pile into sub-piles and the rating is the
 	-- item level that orders one, so each pair here differs on exactly the

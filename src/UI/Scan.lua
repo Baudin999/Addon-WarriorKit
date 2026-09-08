@@ -313,6 +313,67 @@ function Scan.Match(kind, pattern, a, b)
 end
 
 --------------------------------------------------------------------------
+-- The sentence an item's Use line is still waiting for
+--
+-- A book that teaches a profession says what it is for in one line: "Use:
+-- Teaches you advanced first aid, allowing a maximum of 375 first aid skill."
+-- That line is not the item's. It is the spell's own sentence printed on the
+-- item, and the client does not hold every spell's text at all times. It
+-- fetches one when something asks for it, and until it lands the line is not on
+-- the tooltip at all.
+--
+-- Nothing above can see that. A scan is a moment, the tooltip that comes back
+-- has the name, the level and the requirement on it, and the only line missing
+-- is the one the item exists for. So the reader has to ask a second question,
+-- and it is asked here rather than in UI/Tip.lua because it is the same
+-- question the rest of this file asks: what is the client able to say about
+-- this thing right now.
+--
+-- **Why it is a book and not a potion.** A spell you have cast, or that sits on
+-- a bar, is already on the machine and its line is there on the first hover.
+-- What is missing is the spell nothing has ever asked for, which is exactly the
+-- one an unlearned book teaches. That is why this went unnoticed while every
+-- trinket and every flask read correctly.
+--
+-- The three calls are Syndicator's, in Search/CheckItem.lua, and it makes all
+-- three on this client rather than only on the newer one: the item's spell id,
+-- whether its text is here, and the ask for one that is not.
+--------------------------------------------------------------------------
+
+-- Whether the client is still fetching the spell behind this item's Use line,
+-- and an ask for it where it is.
+--
+-- False for an item with no use effect at all, which is most of them, and false
+-- on a client that will not take the question. Both are "nothing is coming",
+-- and a caller that told them apart would only be waiting on a fetch nobody
+-- ever started.
+function Scan.Waiting(link)
+	local _, id = ns.ItemSpell(link)
+	if type(id) ~= "number" then
+		return false
+	end
+
+	local space = _G.C_Spell
+	local cached = type(space) == "table" and space.IsSpellDataCached
+	if type(cached) ~= "function" then
+		return false
+	end
+	local asked, here = pcall(cached, id)
+	if not asked or here then
+		return false
+	end
+
+	-- The ask, and nothing is done with the answer. It is a request rather than
+	-- a read: the client says nothing back and fires SPELL_DATA_LOAD_RESULT when
+	-- the text has landed, which is what UI/Tip.lua listens for.
+	local fetch = space.RequestLoadSpellData
+	if type(fetch) == "function" then
+		pcall(fetch, id)
+	end
+	return true
+end
+
+--------------------------------------------------------------------------
 -- Holding the client's own tooltip down
 --
 -- Every other hover in this addon is replaced by replacing the frame it lands

@@ -43,15 +43,48 @@ _G.GetInventoryItemLink = function(unit, slot)
 	return worn[slot]
 end
 
--- The name of an item's use effect, or nil for one you merely wear. This is
--- what tells the cooldown row a trinket it can put on the row from a trinket it
--- cannot, and it is a field on the item rather than a guess off the link, so a
--- passive trinket is a real fixture rather than an absent one.
+-- The name of an item's use effect and the id behind it, or nil for one you
+-- merely wear. The name is what tells the cooldown row a trinket it can put on
+-- the row from a trinket it cannot, and both are fields on the item rather than
+-- a guess off the link, so a passive trinket is a real fixture rather than an
+-- absent one.
+--
+-- The id is the second return the client gives and it answers a different
+-- question: what has to be fetched before the item's Use line can be printed.
+-- Only the book fixture carries one, because it is the only item here whose
+-- line is worth waiting for.
 _G.GetItemSpell = function(link)
 	local name = type(link) == "string" and link:match("%\[(.-)%\]")
 	local item = name and ITEMS[name]
-	return item and item.use or nil
+	if not item or not item.use then
+		return nil
+	end
+	return item.use, item.spell
 end
+
+-- Whether a spell's own text is on the machine yet, and the ask for one that is
+-- not.
+--
+-- An item's Use line is the spell's sentence printed on the item, and the
+-- client leaves it off the tooltip until the spell has landed. Nothing else in
+-- this file models a fetch the client answers with an event rather than a
+-- value, so both halves are here: `cached` is what the client has, which a
+-- section fills in to say the text arrived, and `asked` is every id the addon
+-- requested, which is how a section proves it asked at all rather than merely
+-- drew nothing.
+--
+-- C_Spell is made here and carries these two calls alone. Core resolves the
+-- namespace at load and every read it does is guarded on the field, so a table
+-- with two entries in it is a client that has these and none of the rest.
+local spellData = { cached = {}, asked = {} }
+H.spellData = spellData
+
+_G.C_Spell = {
+	IsSpellDataCached = function(id) return spellData.cached[id] == true end,
+	RequestLoadSpellData = function(id)
+		spellData.asked[#spellData.asked + 1] = id
+	end,
+}
 
 -- A worn item's own cooldown, which is a different call from a spell's and is
 -- the one thing about a trinket square that cannot be read off a spell id.

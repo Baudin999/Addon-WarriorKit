@@ -418,6 +418,26 @@ local function Retrieving()
 	return type(text) == "string" and text or nil
 end
 
+-- The link the item behind a subject is asked about with.
+--
+-- An `item` carries one. An `inventory` is a worn slot and carries none, so it
+-- is asked for: a trinket you press has a Use line the same as a book does, and
+-- the character sheet is nineteen hovers that all read a slot.
+local function Carried(subject)
+	if type(subject.link) == "string" then
+		return subject.link
+	end
+	if subject.kind ~= "inventory" then
+		return nil
+	end
+	local lookup = _G.GetInventoryItemLink
+	if type(lookup) ~= "function" then
+		return nil
+	end
+	local asked, link = pcall(lookup, subject.unit, subject.slot)
+	return asked and link or nil
+end
+
 local function Thin(subject, data)
 	if not FETCHED[subject.kind] then
 		return false
@@ -426,7 +446,15 @@ local function Thin(subject, data)
 		return true
 	end
 	local waiting = Retrieving()
-	return waiting ~= nil and data.scan[1][1] == waiting
+	if waiting ~= nil and data.scan[1][1] == waiting then
+		return true
+	end
+	-- And the box that is complete except for the one line the item is for. A
+	-- Use line is the spell's own sentence and the client fetches that
+	-- separately, so a tooltip carrying the name, the level and the requirement
+	-- can still be a tooltip that has not finished. UI/Scan.lua's Waiting is
+	-- both halves of it: whether one is coming, and the ask that makes it come.
+	return UI.Scan.Waiting(Carried(subject))
 end
 
 -- Open on an owner, describing a subject.
@@ -513,8 +541,19 @@ end
 -- the event is not on every flavour this addon loads on, and a client that
 -- refuses it is a client where a hover held through a fetch shows what it
 -- showed before this file existed rather than an error.
+--
+-- Two events and one handler, because there are two fetches and a box waiting
+-- on either is in the same state. The item is the first: a link is a number
+-- until the server has sent what it stands for. The spell behind its Use line
+-- is the second and it is fetched separately, so a book whose item arrived long
+-- ago is still a box with the line it exists for missing. See Thin above and
+-- UI/Scan.lua's Waiting.
 local fetched = CreateFrame("Frame")
-if pcall(fetched.RegisterEvent, fetched, "GET_ITEM_INFO_RECEIVED") then
+local listening = pcall(fetched.RegisterEvent, fetched, "GET_ITEM_INFO_RECEIVED")
+if pcall(fetched.RegisterEvent, fetched, "SPELL_DATA_LOAD_RESULT") then
+	listening = true
+end
+if listening then
 	fetched:SetScript("OnEvent", Tip.Arrived)
 end
 

@@ -1547,13 +1547,18 @@ function ns.ItemInfo(link)
 	return name, icon, equip, color
 end
 
--- The name of an item's use effect, or nil for an item that has none.
+-- The name of an item's use effect and the id behind it, or nothing at all for
+-- an item that has neither.
 --
--- This is what tells a trinket you press from a trinket you wear. The client
--- answers a spell name for the first and nothing at all for the second, which
--- is a better test than a cooldown reading: a passive trinket with a proc on it
--- carries a cooldown too, and a square for a cooldown you cannot spend is a
--- square that says press me about nothing.
+-- The name is what tells a trinket you press from a trinket you wear. The
+-- client answers a spell name for the first and nothing at all for the second,
+-- which is a better test than a cooldown reading: a passive trinket with a proc
+-- on it carries a cooldown too, and a square for a cooldown you cannot spend is
+-- a square that says press me about nothing.
+--
+-- The id is the second half and it is a different question: what the client
+-- would have to fetch before it can print the item's Use line. Nothing but
+-- UI/Scan.lua's Waiting reads it, and that file's header says why one exists.
 function ns.ItemSpell(link)
 	if type(link) ~= "string" then
 		return nil
@@ -1562,7 +1567,8 @@ function ns.ItemSpell(link)
 	if type(lookup) ~= "function" then
 		return nil
 	end
-	return (lookup(link))
+	local name, id = lookup(link)
+	return name, id
 end
 
 -- What a worn item's own cooldown reads, by inventory slot, in the three values
