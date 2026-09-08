@@ -291,6 +291,10 @@ for _, part in ipairs({
 	-- colours for. It makes one frame, Blizzard's own socketing window, which
 	-- the addon parks off the side of the screen.
 	"23-sockets",
+	-- Last, and it wants nothing above it: no frame, no geometry and no name
+	-- any other file left. It takes IsAddOnLoaded over from 07-chat.lua, so it
+	-- has to be under it and is under everything else for no other reason.
+	"24-addons",
 }) do
 	load("client/" .. part .. ".lua")(H)
 end

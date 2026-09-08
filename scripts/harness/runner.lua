@@ -559,6 +559,14 @@ local SECTIONS = {
 	-- the spell book and the action slots together, which is the pair this one
 	-- is about.
 	"87-spell-ranks",
+	-- Last, and it is the only section that changes what the client says is
+	-- installed. Everything else here runs on a client with no other addon
+	-- loaded, which is the state the notice has to stay quiet in, so this one
+	-- loads three, reads what it says and unloads them again at the foot of the
+	-- file. It also fires PLAYER_LOGIN a second time, which is what the notice
+	-- being said once is measured on and is the reason it is under everything
+	-- rather than beside the other Core sections.
+	"88-other-addons",
 }
 
 -- Naming a section runs every section up to and including it, rather than that

@@ -406,12 +406,11 @@ _G.C_VoiceChat = {
 -- responsible for is asking for it, and a frame here would be a frame this file
 -- invented rather than one the client has.
 --
--- Blizzard_Channels is load on demand in the game, so the loaded probe answers
--- true and the load call is never reached. A run that reached it would be
--- testing this file's idea of LoadAddOn rather than the addon.
-_G.IsAddOnLoaded = function(name)
-	return name == "Blizzard_Channels"
-end
+-- Whether Blizzard_Channels is loaded is answered in client/24-addons.lua, with
+-- every other addon this client is running. It was two lines here, and here is
+-- where it was written because the voice window is what asked first: a file
+-- that owns the chat has no business being the one place that knows which
+-- addons are in memory.
 
 _G.ToggleChannelFrame = function()
 	chat.voice.channelWindow = (chat.voice.channelWindow or 0) + 1

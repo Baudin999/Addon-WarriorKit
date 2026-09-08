@@ -56,6 +56,7 @@ local NO_SWITCH = {
 	comfort = "six unrelated chores, each with a switch of its own and no seventh boolean over them",
 	interface = "its boolean is whether a layout is imported once at login, not whether anything is on screen",
 	settings = "one slider and no boolean at all",
+	["other addons"] = "its boolean is a note that the notice has been shown, not whether anything is on screen, and a switch on it would read as turning the addon list off",
 }
 
 if window then

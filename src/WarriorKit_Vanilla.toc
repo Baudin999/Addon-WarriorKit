@@ -318,6 +318,19 @@ Core\Panel.lua
 Core\MenuSkin.lua
 Core\Menu.lua
 
+# The one thing the addon says without being asked, and it says it once. This
+# addon draws the whole interface, so a player arriving from a folder of bag
+# addons and damage meters has two of each and nothing in the game tells them
+# why. It reads the client's addon list at login against a list of what it
+# draws over, puts one window up naming what it found, and writes down that it
+# did. Every login after that reads the flag and does nothing.
+#
+# After Core\Panel.lua, whose registry it signs into, and after the widget
+# layer far above, because the notice is a window built out of it. It has to be
+# above the parts for no reason but the one Core\Menu.lua is: it belongs to the
+# addon rather than to any of them.
+Core\Replaced.lua
+
 # The parts. Within each, behaviour first and Feature.lua last, because
 # Feature.lua is the only file that names anything outside its own folder.
 # Perf first among the parts, because Charge/Icon.lua and the three other

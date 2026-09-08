@@ -1017,6 +1017,36 @@ function ns.OutOfRange(answer)
 end
 
 ----------------------------------------------------------------------------
+-- Other addons
+--
+-- Whether another addon is running, asked by its folder name.
+--
+-- The call is spelled two ways across these builds, C_AddOns.IsAddOnLoaded on
+-- the newer one and a bare global on the older, so both are looked up and
+-- neither is assumed. It is here rather than beside its caller for the reason
+-- ns.Questie is: outside Core, a file does not probe the client for a call it
+-- means to make, and scripts/check.sh holds that rule.
+--
+-- Loaded rather than installed, and the difference is the whole of what the
+-- answer is worth. An addon the player has switched off in the addon list is
+-- not loaded and is not running, which is exactly the state Core/Replaced.lua
+-- wants to stop talking about. There is no call that says "installed but off"
+-- on either client, so nothing here pretends to know it.
+--
+-- Nothing is cached. Every caller asks once, at login, after the client has
+-- loaded everything it is going to.
+--------------------------------------------------------------------------
+function ns.AddOnRunning(name)
+	local addons = _G.C_AddOns
+	local loaded = (addons and addons.IsAddOnLoaded) or _G.IsAddOnLoaded
+	if type(loaded) ~= "function" then
+		return false
+	end
+	local ok, yes = pcall(loaded, name)
+	return (ok and yes) and true or false
+end
+
+----------------------------------------------------------------------------
 -- Questie
 --
 -- Every question this addon asks Questie goes through one door, and it is
@@ -2625,6 +2655,13 @@ local KEPT = {
 	-- Note says why it has to survive a reload: the failure it reports is one
 	-- where the window that would print it is the window that did not build.
 	chatWhy = true,
+
+	-- Whether the player has been told what else on their screen this addon
+	-- already draws. A note of something that happened rather than a number
+	-- anybody chose, and wiping it puts a notice back in front of somebody who
+	-- has read it and acted on it. Core/Replaced.lua's `replaces` word and the
+	-- button on its page are the two ways back to it.
+	replacedTold = true,
 }
 
 -- Whether two saved values are the same setting. As deep as Copy goes, and for
