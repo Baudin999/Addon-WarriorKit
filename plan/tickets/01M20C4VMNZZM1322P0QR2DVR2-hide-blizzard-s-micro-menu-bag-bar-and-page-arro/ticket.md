@@ -2,7 +2,7 @@
 revision: 1
 id: 01M20C4VMNZZM1322P0QR2DVR2
 type: task
-status: doing
+status: done
 title: "Hide Blizzard's micro menu, bag bar and page arrows at login"
 ---
 
