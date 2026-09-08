@@ -51,7 +51,7 @@ ns.Plates = Plates
 -- camera` and `bars clickthrough` manage.
 --
 -- All four are the player's, borrowed. Turning a setting off puts back what
--- was there, the same way Charge/SoftTarget.lua hands SoftTargetEnemy back.
+-- was there, the same way Targeting/Aim.lua hands its own CVars back.
 --------------------------------------------------------------------------
 
 local STACKING = "1"

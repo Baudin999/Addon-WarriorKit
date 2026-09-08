@@ -13,10 +13,11 @@
 -- class, and it is why this file takes the class on the command line instead of
 -- flipping one here. Both halves are decided once, at PLAYER_LOGIN.
 --
--- The CVar is the one worth stating plainly. Action targeting exists to serve
--- the charge button, so on a class without one the addon must leave the client's
--- own setting exactly as it found it, and "the addon does nothing" is only ever
--- provable by reading the thing it would have written.
+-- Action targeting is the one worth stating plainly, because it is the fact
+-- that changed. It used to serve the charge button and be left alone on a class
+-- without one; it is a pair of client settings about how you pick a mob, it
+-- lives in Targeting/ now, and every class comes out of this run with both of
+-- them on. Which is only ever provable by reading the things it writes.
 
 local H = ...
 local PLAYER_CLASS, WARRIOR, cvars = H.PLAYER_CLASS, H.WARRIOR, H.cvars
@@ -100,15 +101,47 @@ check((_G.WarriorKitChargeMarker ~= nil) == CHARGE,
 check(ns.Charge.Known("charge") == CHARGE,
 	("a %s %s Charge"):format(PLAYER_CLASS, CHARGE and "does not know" or "knows"))
 
--- Put the client's own value back under the addon and let it decide again.
+-- Put the client's own values back under the addon and let it decide again.
 -- Action targeting is not the charge button's any more, so every class comes
--- out of this on: it is a setting about how the client picks a mob, and a mage
--- walking up to one wants the camera aiming it as much as a warrior does. This
--- is out of combat, so on is "3".
-cvars.SoftTargetEnemy = "0"
+-- out of this on: it is a pair of settings about how the client picks a mob,
+-- and a mage walking up to one wants the camera aiming it as much as a warrior
+-- does.
+--
+-- Both halves, because half of it is worse than none. SoftTargetEnemy alone
+-- aims at a mob and leaves it unselected, so the cast lands and then there is
+-- nothing to auto attack; SoftTargetForce is what makes what the camera picked
+-- the target. That was the bug, and this is the assertion that would have
+-- caught it.
+--
+-- Both are put at 0 here rather than seeded in the client stub, and 0 rather
+-- than the client's own default. SoftTargetForce defaults to 1 in the game,
+-- which is exactly how owning one of the pair and not the other read as
+-- working for a release: starting either of them where the client starts it
+-- would leave a test that cannot tell a write from an inheritance.
+cvars.SoftTargetEnemy, cvars.SoftTargetForce = "0", "0"
 fire("PLAYER_ENTERING_WORLD")
 check(cvars.SoftTargetEnemy == "3",
-	("action targeting came out at %s on a %s"):format(cvars.SoftTargetEnemy, PLAYER_CLASS))
+	("soft targeting came out at %s on a %s"):format(cvars.SoftTargetEnemy, PLAYER_CLASS))
+check(cvars.SoftTargetForce == "1",
+	("the target does not follow what the camera picked on a %s: SoftTargetForce is %s")
+		:format(PLAYER_CLASS, cvars.SoftTargetForce))
+
+-- And a fight does not take it away again. The split this used to have wrote
+-- SoftTargetEnemy off at PLAYER_REGEN_DISABLED, which took the target that had
+-- been forced from it with it: you charged a mob and could not attack it.
+--
+-- Asked through the flag and a direct Apply rather than through
+-- PLAYER_REGEN_DISABLED, for the reason 10-unit-frame-skin.lua gives: every
+-- meter and clock in the addon hears that event and would count this as a
+-- fight for the rest of the run. Apply is the only writer, so a combat blind
+-- Apply is the whole of the claim.
+H.inCombat.player = true
+cvars.SoftTargetEnemy, cvars.SoftTargetForce = "0", "0"
+ns.Aim.Apply()
+check(cvars.SoftTargetEnemy == "3" and cvars.SoftTargetForce == "1",
+	("a fight took action targeting down to %s/%s on a %s")
+		:format(cvars.SoftTargetEnemy, cvars.SoftTargetForce, PLAYER_CLASS))
+H.inCombat.player = false
 
 -- The key. Refused rather than accepted and dropped, because a binding the
 -- panel shows and nothing presses is worse than being told why.
@@ -287,7 +320,8 @@ print(("class   %s: %s, charge button %s, action targeting %s, %d class page%s u
 	:format(PLAYER_CLASS,
 		mine and "a file of its own" or "no file, and none needed",
 		_G.WarriorKitChargeButton and "built" or "not built",
-		cvars.SoftTargetEnemy == "0" and "left alone" or ("driven to " .. cvars.SoftTargetEnemy),
+		cvars.SoftTargetEnemy == "0" and "left alone"
+			or ("aiming at " .. cvars.SoftTargetEnemy .. ", forcing at " .. cvars.SoftTargetForce),
 		classGroup and #classGroup.sections or 0,
 		(classGroup and #classGroup.sections or 0) == 1 and "" or "s",
 		classGroup and classGroup.name or "no rail entry"))

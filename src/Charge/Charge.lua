@@ -19,10 +19,10 @@ local GCD = 1.5
 -- other way or not at all, and nil is the whole gate: Feature.lua builds no
 -- page, Icon.lua builds no secure button and Marker.lua scans no nameplates.
 --
--- Action targeting is not gated on this and used to be. It is a client setting
--- about how you pick a mob, so it is Targeting/Aim.lua's now and it runs on
--- every class; what is still here is only whether the token it switches on
--- resolves, which is a question about this button's aiming.
+-- Action targeting is not gated on this and used to be. It is a pair of client
+-- settings about how you pick a mob, so they are Targeting/Aim.lua's now and
+-- they run on every class; what is still here is only whether the token they
+-- switch on resolves, which is a question about this button's aiming.
 --
 -- Asked on demand rather than held at load. The class is not reliably known
 -- while the files load, and a nil taken then would leave a warrior without the

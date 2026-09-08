@@ -206,10 +206,10 @@ local CHAR_RECORD = {
 	barsSpellsSeeded = true,
 	loadoutsSeeded = true,
 
-	-- What the client's own soft targeting CVar held before the addon wrote to
-	-- it, and the stamp on the last action bar backup. Both are notes of what
-	-- to put back, the same kind as the nameplate CVars on the account.
-	softPrior = true,
+	-- What the client's own soft targeting CVars held before the addon wrote
+	-- to them, and the stamp on the last action bar backup. Both are notes of
+	-- what to put back, the same kind as the nameplate CVars on the account.
+	aimPrior = true,
 	layoutStamp = true,
 
 	-- How many times this character has respecced and when it was last said out

@@ -39,7 +39,7 @@ local function Default()
 	return FALLBACK
 end
 
--- pcall for the same reason Charge/SoftTarget.lua pcalls its own SetCVar: a
+-- pcall for the same reason Targeting/Aim.lua pcalls its own SetCVar: a
 -- client that does not carry this CVar name raises rather than refusing, and a
 -- camera that will not zoom is worth less than an error at every login.
 function Camera.Apply()

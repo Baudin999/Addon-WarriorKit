@@ -128,7 +128,7 @@ local function WarnIfSoftTargetOff()
 	end
 	if ns.Charge.SoftTargetState() == "off" then
 		warnedSoftTarget = true
-		ns.Print("action targeting is off, so the marker only follows your target and your cursor. /wk aim on hands it to the addon, which turns it on out of combat and off in it.")
+		ns.Print("action targeting is off, so the marker only follows your target and your cursor. /wk aim on hands it to the addon, which aims by camera and makes what it finds your target.")
 	end
 end
 

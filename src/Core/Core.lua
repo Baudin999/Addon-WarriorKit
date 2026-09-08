@@ -97,10 +97,17 @@ local RETIRED = {
 	-- wrong scope in the first place.
 	buffRacial = true,
 
-	-- 1.2: the aim reticle, replaced by softAuto driving SoftTargetEnemy off
-	-- combat rather than drawing a box around what it resolved to.
+	-- 1.2: the aim reticle, replaced by softAuto driving SoftTargetEnemy
+	-- rather than drawing a box around what it resolved to.
 	softIcon = true,
 	softIconSize = true,
+
+	-- 1.2: what SoftTargetEnemy held before the addon took it, back when that
+	-- was the only CVar action targeting owned. It owns SoftTargetForce as
+	-- well now, so the record is a table keyed by CVar name under aimPrior. A
+	-- string left sitting where a table is indexed is the markKeys bug above,
+	-- and this one would have been read on the way out and written to a CVar.
+	softPrior = true,
 
 	-- 1.2: the breakdown ranked by damage, casts or hits off a chip on its
 	-- window. The other two rankings were answers to a question that table does

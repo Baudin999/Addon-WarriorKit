@@ -50,7 +50,7 @@ ns.CombatTextBlizzard = Blizzard
 --
 -- **What was there is remembered before anything is written**, per character
 -- and once, so turning this off puts a player's own choice back rather than the
--- default. That is the shape Charge/SoftTarget.lua already uses and the reason
+-- default. That is the shape Targeting/Aim.lua already uses and the reason
 -- it uses it: a part that leaves a CVar wherever it happened to land is a part
 -- that quietly edits your client config.
 --

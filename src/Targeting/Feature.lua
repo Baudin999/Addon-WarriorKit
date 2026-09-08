@@ -14,10 +14,10 @@ local function AimWord(sub)
 	ns.db.softAuto = want
 	if want then
 		ns.Aim.Apply()
-		ns.Print("action targeting is the addon's now: on out of combat, off in it.")
+		ns.Print("action targeting is the addon's now: the camera picks the enemy and the enemy it picks is your target.")
 	else
-		-- Hand the CVar back at the value it had before the addon took it,
-		-- rather than leaving it wherever the last combat transition put it.
+		-- Hand both CVars back at the values they had before the addon took
+		-- them, rather than leaving them wherever this file last put them.
 		ns.Aim.Restore()
 		ns.Print("action targeting is yours again, back at what it was.")
 	end
@@ -33,15 +33,19 @@ ns.Register({
 		-- fact about the keybinding set in front of us, not a preference, and
 		-- it is written the first time the bind lands.
 		switchKeyDisplaced = "",
-		-- Action targeting, driven off combat, on every class. It aims the
-		-- approach by camera and gets out of the way once a fight is on.
+		-- Action targeting: the camera picks the enemy and the enemy it picks
+		-- becomes your target. On every class, and held whether or not you are
+		-- in a fight, because the client's own MatchLocked is what stops the
+		-- camera choosing again once you hold something.
 		softAuto = true,
 	},
 
-	-- SoftTargetEnemy is a character scoped CVar, so what it was before the
-	-- addon took it over is character scoped memory. Empty means not yet taken.
+	-- Both CVars Aim.lua owns are character scoped, so what they held before
+	-- the addon took them is character scoped memory too. Keyed by CVar name,
+	-- and a name absent from it is one not taken yet. It was a bare string
+	-- while there was one CVar; softPrior is retired in Core/Core.lua.
 	charDefaults = {
-		softPrior = "",
+		aimPrior = {},
 	},
 
 	words = {
@@ -70,7 +74,7 @@ ns.Register({
 
 	help = {
 		"switch <key|none>, one key for the next enemy and the swing at it",
-		"aim on|off, action targeting driven off combat",
+		"aim on|off, the camera picks the enemy and it becomes your target",
 	},
 
 	status = function()
@@ -108,8 +112,8 @@ ns.Register({
 		end)
 
 		ui.Section("Action targeting", "Fighting")
-		ui.Lede("The client's own aim token, turned on out of combat and handed back the moment a fight starts.")
-		ui.Check("on out of combat, off in combat",
+		ui.Lede("The camera picks the enemy in front of you, and the enemy it picks becomes the one you are targeting.")
+		ui.Check("aim with the camera, and take what it finds",
 			function() return ns.db.softAuto end,
 			function(value)
 				ns.db.softAuto = value
@@ -119,7 +123,7 @@ ns.Register({
 					ns.Aim.Restore()
 				end
 			end)
-		ui.Hint("The camera aims what you walk up to, and nothing re-aims you mid-fight. Off, the client is yours again at whatever value it had before the addon took it.")
-		ui.Reading("the CVar", function() return ns.Aim.Describe() end)
+		ui.Hint("Two settings and both are needed: one aims, the other makes what it aimed at your target. Aiming alone casts at a mob you never selected. Holding a target stops the camera choosing again.")
+		ui.Reading("the client", function() return ns.Aim.Describe() end)
 	end,
 })
