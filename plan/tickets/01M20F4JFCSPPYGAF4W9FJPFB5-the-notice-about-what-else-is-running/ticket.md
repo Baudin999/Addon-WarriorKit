@@ -2,7 +2,7 @@
 revision: 1
 id: 01M20F4JFCSPPYGAF4W9FJPFB5
 type: task
-status: todo
+status: done
 title: The notice about what else is running
 ---
 
