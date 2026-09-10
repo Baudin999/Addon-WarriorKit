@@ -1,7 +1,7 @@
 ---
-revision: 1
+revision: 4
 id: 01M1B7D84Q2BKFK2CHXKRZCH8B
-type: block
+type: epic
 status: todo
 title: Create a character sheet
 ---

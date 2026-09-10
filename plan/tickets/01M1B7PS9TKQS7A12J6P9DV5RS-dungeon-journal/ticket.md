@@ -1,7 +1,7 @@
 ---
-revision: 1
+revision: 4
 id: 01M1B7PS9TKQS7A12J6P9DV5RS
-type: block
+type: epic
 status: done
 title: Dungeon Journal
 ---

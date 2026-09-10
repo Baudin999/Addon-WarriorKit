@@ -1,7 +1,7 @@
 ---
-revision: 1
+revision: 4
 id: 01M1XJZSDGJ90YGY9ZP6HBYPS9
-type: block
+type: epic
 status: todo
 title: Architecture review
 ---

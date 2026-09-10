@@ -1,7 +1,7 @@
 ---
-revision: 1
+revision: 4
 id: 01M1B7RTAFVTSQ3FARJZCD1PYK
-type: block
+type: epic
 status: todo
 title: Quest Mapper
 ---

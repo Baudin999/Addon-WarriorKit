@@ -1,7 +1,7 @@
 ---
-revision: 1
+revision: 4
 id: 01M1XJZYMA3V0YPE58CH5H938J
-type: block
+type: epic
 status: todo
 title: The palette
 ---
