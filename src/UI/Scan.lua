@@ -118,12 +118,6 @@ local function Frame()
 	built = false
 	local made, frame = pcall(CreateFrame, "GameTooltip", NAME, UIParent, "GameTooltipTemplate")
 	if made and frame and type(frame.NumLines) == "function" then
-		-- ANCHOR_NONE and never shown. This frame exists to be written to and
-		-- read back, and one that anchored itself to the cursor would flash a
-		-- second tooltip on every hover.
-		if type(frame.SetOwner) == "function" then
-			frame:SetOwner(UIParent, "ANCHOR_NONE")
-		end
 		tip, built = frame, true
 	end
 	return tip
@@ -165,7 +159,21 @@ function Scan.Ready(kind)
 end
 
 -- Ask the client, and hand back whether it took the question.
+--
+-- **Owned again on every ask, not once when the frame is made.** A GameTooltip
+-- that hides drops its owner, and one with no owner takes every setter and
+-- writes nothing. NumLines stays at nought, every hover in the addon falls back
+-- to its title, the bags file every bound item as unbound, and it stays that way
+-- until a reload. This frame is never shown on purpose, but the client hides it
+-- on its own terms: UIParent going down takes it along, and a setter asked about
+-- a slot whose item moved in the bag update a new item causes is the one that
+-- was reported. ANCHOR_NONE because a frame anchored to the cursor would flash a
+-- second tooltip on every hover. TitanRepair owns its scanner again before every
+-- read on this client, for the same reason.
 local function Ask(frame, entry, a, b)
+	if type(frame.SetOwner) == "function" then
+		frame:SetOwner(UIParent, "ANCHOR_NONE")
+	end
 	if type(frame.ClearLines) == "function" then
 		frame:ClearLines()
 	end

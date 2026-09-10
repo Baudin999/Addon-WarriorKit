@@ -75,17 +75,25 @@ end
 
 local function Setter(kind, key)
 	return function(self, a, b)
+		if not self.owner then
+			return 0
+		end
 		local at = key and key(a, b) or a
 		return Fill(self, tooltips[kind][at])
 	end
 end
 
+-- **A tooltip with no owner writes nothing, and hiding one takes its owner
+-- away.** The stub used to take any owner and never lose it, so a scanner that
+-- was owned once at creation passed here and went blank in the game the first
+-- time the client hid it, which a new item in the bags was enough to do. Every
+-- setter below answers nothing without an owner, and Hide clears it.
 local function Dress(frame)
 	frame.lines = {}
 
-	frame.SetOwner = function() return true end
+	frame.SetOwner = function(self, owner) self.owner = owner end
 	frame.Show = function(self) self.shown = true end
-	frame.Hide = function(self) self.shown = false end
+	frame.Hide = function(self) self.shown, self.owner = false, nil end
 
 	frame.ClearLines = function(self)
 		for index = 1, #self.lines do

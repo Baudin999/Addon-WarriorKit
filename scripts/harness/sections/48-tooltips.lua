@@ -355,6 +355,20 @@ do
 	check(Box.Text(1) == "Aegis",
 		"a stale bag slot did not fall back to the link: " .. tostring(Box.Text(1)))
 
+	-- The client hiding the scanner behind its back. A hidden tooltip loses its
+	-- owner and an unowned one writes nothing, so a scanner owned once when it was
+	-- made read blank from then on: every hover fell back to its title and every
+	-- bound item filed as unbound, until a reload. A new item in the bags was
+	-- enough to set it off. Hidden here the way the client does it, and the next
+	-- hover still has to come back with the client's words.
+	local scanner = _G.WarriorKitTooltipScan
+	check(scanner ~= nil, "the scanner frame is not where its name says")
+	scanner:Hide()
+	Tip.Open(owner, { kind = "item", link = link, bag = 0, slot = 3, title = "not this" })
+	said = drawn()
+	check(said[1] == "Aegis" and said[2] == "Soulbound",
+		"a hover after the client hid the scanner lost the client's text: " .. tostring(said[1]))
+
 	H.tooltips.bag[H.tooltipKey(0, 3)] = nil
 
 	-- A link somebody typed by hand. The client raises on one rather than
