@@ -2,7 +2,7 @@
 revision: 4
 id: 01M25AJKT5C5XDDD0QNP841656
 type: bug
-status: todo
+status: doing
 title: A new item in the bags blanks every tooltip until a reload
 ---
 
